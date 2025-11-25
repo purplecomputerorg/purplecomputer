@@ -306,6 +306,51 @@ Contributions welcome! Please:
 - Reference issues where applicable
 - Explain the "why" not just the "what"
 
+## Big Letter Mode
+
+Purple Computer includes **Big Letter Mode**, which automatically detects when Caps Lock is turned on and transforms all output to uppercase. This feature is especially helpful for young children who are learning to read, as uppercase letters are often easier to recognize.
+
+### How It Works
+
+1. **Automatic Detection**: When a child types with Caps Lock on, the system detects the predominantly uppercase input and automatically enables Big Letter Mode
+2. **Toggle Detection**: The system tracks when Caps Lock state changes and displays friendly messages:
+   - "🔠 BIG LETTERS ON" when Caps Lock is enabled
+   - "🔡 big letters off" when Caps Lock is disabled
+3. **Output Transformation**: When Big Letter Mode is active, all REPL output is converted to uppercase
+
+### Implementation Details
+
+Big Letter Mode is implemented in `autoinstall/files/ipython/00-big_letter_mode.py` and uses IPython hooks:
+
+- **`pre_run_cell` hook**: Detects case patterns in input to identify Caps Lock state changes
+- **Custom display hook**: Transforms output to uppercase when the mode is active
+- **State management**: Maintains a global `big_letter_mode` flag
+
+The implementation is modular and doesn't interfere with other modes (Speech, Emoji, Math, etc).
+
+### Manual Control
+
+For testing or troubleshooting, you can manually control Big Letter Mode:
+
+```python
+# Enable Big Letter Mode
+set_big_letter_mode(True)
+
+# Disable Big Letter Mode
+set_big_letter_mode(False)
+
+# Check current state
+get_big_letter_mode()
+```
+
+### Testing
+
+Run the Big Letter Mode test suite:
+
+```bash
+python3 purple_repl/test_big_letter_mode.py
+```
+
 ## Future Enhancements
 
 Potential additions:

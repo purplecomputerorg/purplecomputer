@@ -33,6 +33,15 @@ Your child can try different modes:
 - **Rainbow Mode**: Colorful text output
 - **Surprise Mode**: Random fun things happen
 
+### Big Letter Mode
+When your child presses the **Caps Lock** key, Purple Computer automatically switches to **Big Letter Mode**:
+- Everything they type appears in BIG UPPERCASE LETTERS
+- The computer's responses also come back in BIG LETTERS
+- The screen shows "🔠 BIG LETTERS ON" when they turn it on
+- The screen shows "🔡 big letters off" when they turn it off
+
+This is especially helpful for young kids (ages 3-5) who are still learning to recognize letters. Uppercase letters are often easier for beginning readers to identify and distinguish.
+
 ## Is It Safe?
 
 **Yes.** Purple Computer is designed to be completely safe:

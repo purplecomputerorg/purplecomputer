@@ -40,6 +40,7 @@ See [docs/autoinstall.md](docs/autoinstall.md) for:
 - **Speech**: Everything typed can be spoken aloud with pleasant voices
 - **Emoji Magic**: Pre-loaded emoji variables and pattern generators
 - **Creative Modes**: Switch between speech, emoji, math, rainbow, and surprise modes
+- **Big Letter Mode**: Automatically activates when Caps Lock is on, perfect for beginning readers
 - **Safe Environment**: Kids can't break out or damage the system
 - **Parent Controls**: Secret escape mechanism for adult access
 - **Offline**: Works completely offline once installed

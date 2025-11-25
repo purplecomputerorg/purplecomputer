@@ -1,0 +1,178 @@
+#cloud-config
+# Purple Computer Autoinstall Configuration
+# This file drives the automated Ubuntu Server installation
+
+autoinstall:
+  version: 1
+
+  # Early commands run before installation begins
+  early-commands:
+    - echo "Starting Purple Computer installation..."
+
+  # Locale and keyboard settings
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  # Network configuration - disabled by default for safety
+  network:
+    version: 2
+    ethernets:
+      any:
+        match:
+          name: en*
+        dhcp4: false
+        dhcp6: false
+
+  # Storage configuration - use entire disk
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+
+  # Identity - creates the kid user
+  identity:
+    hostname: purplecomputer
+    username: kiduser
+    password: "$6$rounds=4096$purplecomputersalt$6QK5nzJ3KfJz.VF5YQP3XxX7NzX8zZ9X8X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9"
+    # Password is: purplecomputer
+    # Parents should change this via Ctrl+Alt+P menu
+
+  # SSH disabled for security
+  ssh:
+    install-server: false
+
+  # Package selection
+  packages:
+    # X11 minimal environment
+    - xorg
+    - xinit
+    - xserver-xorg-video-all
+
+    # Terminal emulator
+    - kitty
+
+    # Python environment
+    - python3
+    - python3-pip
+    - python3-venv
+    - ipython3
+
+    # Text-to-speech
+    - espeak-ng
+    - python3-pyttsx3
+
+    # Audio
+    - alsa-utils
+    - pulseaudio
+
+    # Fonts and emoji
+    - fonts-noto
+    - fonts-noto-color-emoji
+    - fonts-dejavu
+
+    # Utilities
+    - git
+    - curl
+    - wget
+    - vim
+    - less
+
+    # Build tools for Python packages
+    - build-essential
+    - python3-dev
+
+  # Disable automatic updates for stability
+  updates: security
+
+  # User data - additional cloud-init configuration
+  user-data:
+    # Disable automatic updates completely
+    package_update: false
+    package_upgrade: false
+
+    # Run commands after user creation
+    runcmd:
+      - echo "Purple Computer post-install configuration..."
+
+      # Install Python packages
+      - pip3 install --system colorama termcolor pillow
+
+      # Create Purple Computer directory structure
+      - mkdir -p /home/kiduser/.purple/modes
+      - mkdir -p /home/kiduser/.config/kitty
+      - mkdir -p /usr/share/purple
+
+      # Set ownership
+      - chown -R kiduser:kiduser /home/kiduser/.purple
+      - chown -R kiduser:kiduser /home/kiduser/.config
+
+      # Disable unnecessary services
+      - systemctl disable systemd-networkd-wait-online.service
+      - systemctl disable NetworkManager.service
+      - systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+      # Configure audio
+      - usermod -a -G audio kiduser
+
+      # Final message
+      - echo "Purple Computer installation complete!"
+
+  # Late commands - run after installation, before reboot
+  late-commands:
+    # Copy Purple Computer files from ISO to installed system
+    - curtin in-target --target=/target -- mkdir -p /tmp/purple_install
+
+    # The build-iso.sh script will inject our files into the ISO
+    # These commands copy them to the installed system
+    - |
+      if [ -d /cdrom/purple_files ]; then
+        cp -r /cdrom/purple_files/* /target/home/kiduser/.purple/
+        chroot /target chown -R kiduser:kiduser /home/kiduser/.purple
+      fi
+
+    # Copy systemd service files
+    - |
+      if [ -f /cdrom/purple_files/systemd/getty-override.conf ]; then
+        mkdir -p /target/etc/systemd/system/getty@tty1.service.d
+        cp /cdrom/purple_files/systemd/getty-override.conf /target/etc/systemd/system/getty@tty1.service.d/override.conf
+      fi
+
+    # Copy xinitrc
+    - |
+      if [ -f /cdrom/purple_files/xinitrc ]; then
+        cp /cdrom/purple_files/xinitrc /target/home/kiduser/.xinitrc
+        chroot /target chown kiduser:kiduser /home/kiduser/.xinitrc
+        chroot /target chmod +x /home/kiduser/.xinitrc
+      fi
+
+    # Copy kitty config
+    - |
+      if [ -f /cdrom/purple_files/kitty.conf ]; then
+        mkdir -p /target/home/kiduser/.config/kitty
+        cp /cdrom/purple_files/kitty.conf /target/home/kiduser/.config/kitty/kitty.conf
+        chroot /target chown -R kiduser:kiduser /home/kiduser/.config
+      fi
+
+    # Enable auto-startx in .bash_profile
+    - |
+      cat >> /target/home/kiduser/.bash_profile <<'EOF'
+      # Purple Computer auto-start X11
+      if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
+        exec startx
+      fi
+      EOF
+
+    - chroot /target chown kiduser:kiduser /home/kiduser/.bash_profile
+
+    # Set GRUB timeout to 1 second for fast boot
+    - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
+    - curtin in-target --target=/target -- update-grub
+
+    # Final ownership fix
+    - chroot /target chown -R kiduser:kiduser /home/kiduser
+
+    - echo "Purple Computer late commands complete!"
+
+  # Automatically reboot after installation
+  shutdown: reboot

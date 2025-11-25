@@ -1,0 +1,29 @@
+#!/bin/bash
+# Purple Computer X11 Startup Script
+# This launches when the kiduser logs in and starts X11
+
+# Disable screen blanking and power management
+xset s off
+xset -dpms
+xset s noblank
+
+# Disable bell
+xset b off
+
+# Set keyboard repeat rate (faster for kid typing)
+xset r rate 300 30
+
+# Hide mouse cursor after 2 seconds of inactivity
+# (kids often don't use mouse in terminal)
+if command -v unclutter &> /dev/null; then
+    unclutter -idle 2 &
+fi
+
+# Set a nice purple background color
+xsetroot -solid "#800080"
+
+# Launch Kitty in fullscreen with Purple REPL
+# The -1 flag makes Kitty start in a single instance
+# The --start-as fullscreen makes it take the whole screen
+exec kitty --start-as=fullscreen --single-instance \
+    /home/kiduser/.purple/repl.py

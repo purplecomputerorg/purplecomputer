@@ -30,13 +30,16 @@ autoinstall:
       name: lvm
       sizing-policy: all
 
-  # Identity - creates the kid user
+  # Identity - creates the purple user
+  # NOTE: User will have NO PASSWORD (account is locked, auto-login only)
+  # Parent mode is protected by a separate parent password set on first use
   identity:
     hostname: purplecomputer
-    username: kiduser
-    password: "$6$rounds=4096$purplecomputersalt$6QK5nzJ3KfJz.VF5YQP3XxX7NzX8zZ9X8X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9X9"
-    # Password is: purplecomputer
-    # Parents should change this via Ctrl+Alt+P menu
+    username: purple
+    password: "$6$locked$locked"
+    # Password is locked - no login via password possible
+    # System uses auto-login on TTY1
+    # Parent mode uses separate password stored in ~/.purple/parent.json
 
   # SSH disabled for security
   ssh:
@@ -95,17 +98,30 @@ autoinstall:
     runcmd:
       - echo "Purple Computer post-install configuration..."
 
-      # Install Python packages
-      - pip3 install --system colorama termcolor pillow
+      # Install Python packages (including new dependencies)
+      - pip3 install --system colorama termcolor pillow packaging
+
+      # Lock the purple user account (no password login)
+      - passwd -l purple
 
       # Create Purple Computer directory structure
-      - mkdir -p /home/kiduser/.purple/modes
-      - mkdir -p /home/kiduser/.config/kitty
+      - mkdir -p /home/purple/.purple/modes
+      - mkdir -p /home/purple/.purple/packs
+      - mkdir -p /home/purple/.config/kitty
       - mkdir -p /usr/share/purple
 
+      # Create legacy kiduser for backwards compatibility
+      - useradd -m -s /bin/bash kiduser || true
+      - passwd -l kiduser
+      - mkdir -p /home/kiduser/.purple/modes
+      - mkdir -p /home/kiduser/.purple/packs
+      - mkdir -p /home/kiduser/.config/kitty
+
       # Set ownership
-      - chown -R kiduser:kiduser /home/kiduser/.purple
-      - chown -R kiduser:kiduser /home/kiduser/.config
+      - chown -R purple:purple /home/purple/.purple
+      - chown -R purple:purple /home/purple/.config
+      - chown -R kiduser:kiduser /home/kiduser/.purple || true
+      - chown -R kiduser:kiduser /home/kiduser/.config || true
 
       # Disable unnecessary services
       - systemctl disable systemd-networkd-wait-online.service
@@ -113,7 +129,8 @@ autoinstall:
       - systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
       # Configure audio
-      - usermod -a -G audio kiduser
+      - usermod -a -G audio purple
+      - usermod -a -G audio kiduser || true
 
       # Final message
       - echo "Purple Computer installation complete!"
@@ -127,8 +144,13 @@ autoinstall:
     # These commands copy them to the installed system
     - |
       if [ -d /cdrom/purple_files ]; then
-        cp -r /cdrom/purple_files/* /target/home/kiduser/.purple/
-        chroot /target chown -R kiduser:kiduser /home/kiduser/.purple
+        cp -r /cdrom/purple_files/* /target/home/purple/.purple/
+        chroot /target chown -R purple:purple /home/purple/.purple
+        # Also copy to kiduser for backwards compatibility
+        if [ -d /target/home/kiduser ]; then
+          cp -r /cdrom/purple_files/* /target/home/kiduser/.purple/
+          chroot /target chown -R kiduser:kiduser /home/kiduser/.purple
+        fi
       fi
 
     # Copy systemd service files
@@ -141,36 +163,58 @@ autoinstall:
     # Copy xinitrc
     - |
       if [ -f /cdrom/purple_files/xinitrc ]; then
-        cp /cdrom/purple_files/xinitrc /target/home/kiduser/.xinitrc
-        chroot /target chown kiduser:kiduser /home/kiduser/.xinitrc
-        chroot /target chmod +x /home/kiduser/.xinitrc
+        cp /cdrom/purple_files/xinitrc /target/home/purple/.xinitrc
+        chroot /target chown purple:purple /home/purple/.xinitrc
+        chroot /target chmod +x /home/purple/.xinitrc
+        if [ -d /target/home/kiduser ]; then
+          cp /cdrom/purple_files/xinitrc /target/home/kiduser/.xinitrc
+          chroot /target chown kiduser:kiduser /home/kiduser/.xinitrc
+          chroot /target chmod +x /home/kiduser/.xinitrc
+        fi
       fi
 
     # Copy kitty config
     - |
       if [ -f /cdrom/purple_files/kitty.conf ]; then
-        mkdir -p /target/home/kiduser/.config/kitty
-        cp /cdrom/purple_files/kitty.conf /target/home/kiduser/.config/kitty/kitty.conf
-        chroot /target chown -R kiduser:kiduser /home/kiduser/.config
+        mkdir -p /target/home/purple/.config/kitty
+        cp /cdrom/purple_files/kitty.conf /target/home/purple/.config/kitty/kitty.conf
+        chroot /target chown -R purple:purple /home/purple/.config
+        if [ -d /target/home/kiduser ]; then
+          mkdir -p /target/home/kiduser/.config/kitty
+          cp /cdrom/purple_files/kitty.conf /target/home/kiduser/.config/kitty/kitty.conf
+          chroot /target chown -R kiduser:kiduser /home/kiduser/.config
+        fi
       fi
 
     # Enable auto-startx in .bash_profile
     - |
-      cat >> /target/home/kiduser/.bash_profile <<'EOF'
+      cat >> /target/home/purple/.bash_profile <<'EOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
         exec startx
       fi
       EOF
 
-    - chroot /target chown kiduser:kiduser /home/kiduser/.bash_profile
+    - chroot /target chown purple:purple /home/purple/.bash_profile
+
+    - |
+      if [ -d /target/home/kiduser ]; then
+        cat >> /target/home/kiduser/.bash_profile <<'EOF'
+      # Purple Computer auto-start X11
+      if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
+        exec startx
+      fi
+      EOF
+        chroot /target chown kiduser:kiduser /home/kiduser/.bash_profile
+      fi
 
     # Set GRUB timeout to 1 second for fast boot
     - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
     - curtin in-target --target=/target -- update-grub
 
     # Final ownership fix
-    - chroot /target chown -R kiduser:kiduser /home/kiduser
+    - chroot /target chown -R purple:purple /home/purple
+    - chroot /target chown -R kiduser:kiduser /home/kiduser || true
 
     - echo "Purple Computer late commands complete!"
 

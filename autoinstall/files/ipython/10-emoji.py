@@ -1,154 +1,45 @@
 """
 Purple Computer IPython Startup - Emoji Variables
-Pre-loads common emoji as easy-to-type variables
+Loads emoji from pack registry into the global namespace
 """
 
-# Animals
-cat = "🐱"
-dog = "🐶"
-monkey = "🐵"
-lion = "🦁"
-tiger = "🐯"
-cow = "🐮"
-pig = "🐷"
-frog = "🐸"
-bird = "🐦"
-chicken = "🐔"
-penguin = "🐧"
-fish = "🐠"
-whale = "🐋"
-dolphin = "🐬"
-butterfly = "🦋"
-bee = "🐝"
-bug = "🐛"
-snail = "🐌"
-turtle = "🐢"
-snake = "🐍"
+import sys
+import os
+from pathlib import Path
 
-# Nature
-tree = "🌳"
-flower = "🌸"
-rose = "🌹"
-sunflower = "🌻"
-rainbow = "🌈"
-sun = "☀️"
-moon = "🌙"
-star = "⭐"
-cloud = "☁️"
-fire = "🔥"
-water = "💧"
+# Add purple_repl to path
+purple_dir = os.path.expanduser('~/.purple')
+if purple_dir not in sys.path:
+    sys.path.insert(0, purple_dir)
 
-# Food
-apple = "🍎"
-banana = "🍌"
-orange = "🍊"
-lemon = "🍋"
-grape = "🍇"
-strawberry = "🍓"
-cherry = "🍒"
-peach = "🍑"
-pineapple = "🍍"
-watermelon = "🍉"
-carrot = "🥕"
-corn = "🌽"
-pizza = "🍕"
-burger = "🍔"
-hotdog = "🌭"
-taco = "🌮"
-cake = "🍰"
-cookie = "🍪"
-donut = "🍩"
-icecream = "🍦"
-candy = "🍬"
+# Load emoji from registry
+try:
+    from pack_manager import get_registry
 
-# Objects
-ball = "⚽"
-balloon = "🎈"
-gift = "🎁"
-book = "📚"
-pencil = "✏️"
-crayon = "🖍️"
-paint = "🎨"
-music = "🎵"
-bell = "🔔"
-key = "🔑"
-crown = "👑"
-ring = "💍"
-gem = "💎"
-rocket = "🚀"
-car = "🚗"
-train = "🚂"
-airplane = "✈️"
-boat = "⛵"
-bike = "🚲"
+    registry = get_registry()
+    all_emoji = registry.get_all_emoji()
 
-# Symbols
-heart = "❤️"
-hearts = "💕"
-sparkle = "✨"
-sparkles = "✨✨✨"
-checkmark = "✅"
-cross = "❌"
-question = "❓"
-exclaim = "❗"
-plus = "➕"
-minus = "➖"
-multiply = "✖️"
-divide = "➗"
-arrow = "➡️"
+    # Add all registered emoji to globals
+    globals().update(all_emoji)
 
-# Faces
-smile = "😊"
-happy = "😄"
-laugh = "😂"
-love = "😍"
-cool = "😎"
-think = "🤔"
-wow = "😮"
-sleep = "😴"
-sick = "🤒"
-party = "🥳"
-wink = "😉"
+    # Build __all__ from registry
+    __all__ = list(all_emoji.keys())
 
-# Hands
-thumbsup = "👍"
-thumbsdown = "👎"
-clap = "👏"
-wave = "👋"
-point = "👉"
-ok = "👌"
-peace = "✌️"
+except Exception:
+    # Fallback: if registry isn't available, provide some defaults
+    # This ensures Purple Computer works even without packs
 
-# Make all emoji available
-__all__ = [
-    # Animals
-    'cat', 'dog', 'monkey', 'lion', 'tiger', 'cow', 'pig', 'frog',
-    'bird', 'chicken', 'penguin', 'fish', 'whale', 'dolphin',
-    'butterfly', 'bee', 'bug', 'snail', 'turtle', 'snake',
+    # Core emoji that should always be available
+    cat = "🐱"
+    dog = "🐶"
+    heart = "❤️"
+    star = "⭐"
+    rainbow = "🌈"
+    rocket = "🚀"
+    sparkle = "✨"
+    smile = "😊"
+    tree = "🌳"
+    flower = "🌸"
 
-    # Nature
-    'tree', 'flower', 'rose', 'sunflower', 'rainbow', 'sun', 'moon',
-    'star', 'cloud', 'fire', 'water',
-
-    # Food
-    'apple', 'banana', 'orange', 'lemon', 'grape', 'strawberry',
-    'cherry', 'peach', 'pineapple', 'watermelon', 'carrot', 'corn',
-    'pizza', 'burger', 'hotdog', 'taco', 'cake', 'cookie', 'donut',
-    'icecream', 'candy',
-
-    # Objects
-    'ball', 'balloon', 'gift', 'book', 'pencil', 'crayon', 'paint',
-    'music', 'bell', 'key', 'crown', 'ring', 'gem', 'rocket',
-    'car', 'train', 'airplane', 'boat', 'bike',
-
-    # Symbols
-    'heart', 'hearts', 'sparkle', 'sparkles', 'checkmark', 'cross',
-    'question', 'exclaim', 'plus', 'minus', 'multiply', 'divide', 'arrow',
-
-    # Faces
-    'smile', 'happy', 'laugh', 'love', 'cool', 'think', 'wow',
-    'sleep', 'sick', 'party', 'wink',
-
-    # Hands
-    'thumbsup', 'thumbsdown', 'clap', 'wave', 'point', 'ok', 'peace',
-]
+    __all__ = ['cat', 'dog', 'heart', 'star', 'rainbow', 'rocket',
+               'sparkle', 'smile', 'tree', 'flower']

@@ -17,33 +17,41 @@ It's offline, private, and runs on old hardware you already have.
 ## Quick Start
 
 ### For Parents
-See [docs/parents.md](docs/parents.md) for:
-- What to expect when your child uses Purple Computer
-- How to exit the kid environment (parent escape)
-- Simple troubleshooting
+- [docs/parents.md](docs/parents.md) - What to expect, basic usage
+- [docs/parent-mode.md](docs/parent-mode.md) - Parent mode guide, password setup, settings
+- [docs/packs.md](docs/packs.md) - Installing and creating content packs
+- [docs/updates.md](docs/updates.md) - How updates work
 
 ### For Developers
-See [docs/dev.md](docs/dev.md) for:
-- Development environment setup
-- Testing the REPL locally
-- Contributing guidelines
+- [docs/dev.md](docs/dev.md) - Development environment setup
+- [docs/architecture.md](docs/architecture.md) - System architecture and design
+- [docs/autoinstall.md](docs/autoinstall.md) - Building the installation ISO
 
-### Building the ISO
-See [docs/autoinstall.md](docs/autoinstall.md) for:
-- Creating a bootable USB drive
-- Automated installation process
-- System configuration details
+### Installing Purple Computer
+1. Download or build the ISO (see [docs/autoinstall.md](docs/autoinstall.md))
+2. Write to USB drive
+3. Boot from USB and walk away - installation is automatic
+4. System reboots into Purple Computer
+5. Set parent password on first parent mode access
 
 ## Features
 
+### For Kids
 - **Instant Boot**: Powers on directly into the kid-friendly environment
 - **Speech**: Everything typed can be spoken aloud with pleasant voices
 - **Emoji Magic**: Pre-loaded emoji variables and pattern generators
 - **Creative Modes**: Switch between speech, emoji, math, rainbow, and surprise modes
 - **Big Letter Mode**: Automatically activates when Caps Lock is on, perfect for beginning readers
+- **Expandable Content**: Emoji and definitions load from installed packs
 - **Safe Environment**: Kids can't break out or damage the system
-- **Parent Controls**: Secret escape mechanism for adult access
-- **Offline**: Works completely offline once installed
+
+### For Parents
+- **Password-Protected Parent Mode**: Manage system without kids accessing settings
+- **Pack System**: Install emoji packs, educational content, and more
+- **Update Manager**: Check for and install updates with one click
+- **No System Password**: Kid user auto-logs in instantly
+- **Parent Password**: Separate password protects parent-only features
+- **Offline First**: Works completely offline, updates are optional
 
 ## System Requirements
 
@@ -59,9 +67,28 @@ purplecomputer/
 ├── README.md                 # This file
 ├── LICENSE                   # MIT License
 ├── docs/                     # Documentation
+│   ├── architecture.md       # System architecture
+│   ├── packs.md              # Pack creation guide
+│   ├── updates.md            # Update system guide
+│   ├── parent-mode.md        # Parent mode documentation
+│   ├── autoinstall.md        # ISO building guide
+│   └── dev.md                # Development guide
 ├── autoinstall/              # Ubuntu autoinstall configs
+│   ├── autoinstall.yaml      # Ubuntu autoinstall configuration
+│   └── files/                # Files copied during install
 ├── purple_repl/              # The kid-friendly REPL
+│   ├── repl.py               # Main REPL
+│   ├── pack_manager.py       # Pack system
+│   ├── parent_auth.py        # Parent authentication
+│   ├── update_manager.py     # Update system
+│   ├── emoji_lib.py          # Emoji utilities
+│   ├── tts.py                # Text-to-speech
+│   └── modes/                # Interaction modes
+├── packs/                    # Example packs
+│   ├── core-emoji.purplepack
+│   └── education-basics.purplepack
 └── scripts/                  # Build and test utilities
+    └── build_pack.py         # Pack builder tool
 ```
 
 ## Philosophy
@@ -76,11 +103,23 @@ Purple Computer is built on these principles:
 
 MIT License - see [LICENSE](LICENSE) file for details.
 
+## New in Version 2.0
+
+- **Modular Pack System**: Install emoji, definitions, and content as packs
+- **Password-Protected Parent Mode**: Secure access to settings and updates
+- **Update Manager**: Fetch and install updates over HTTPS
+- **No System Password**: Instant boot with auto-login
+- **Registry Architecture**: Clean, extensible content management
+- **Pack Builder**: Create and share your own content packs
+
+See [docs/architecture.md](docs/architecture.md) for technical details.
+
 ## Getting Help
 
-- Check [docs/parents.md](docs/parents.md) for common questions
-- See [docs/dev.md](docs/dev.md) for technical documentation
-- File issues on GitHub for bugs or feature requests
+- **Parents**: Check [docs/parent-mode.md](docs/parent-mode.md) for common questions
+- **Pack Creators**: See [docs/packs.md](docs/packs.md) for pack creation
+- **Developers**: Read [docs/architecture.md](docs/architecture.md) for technical details
+- **Issues**: File bugs or feature requests on GitHub
 
 ---
 

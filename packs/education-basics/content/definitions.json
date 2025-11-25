@@ -1,0 +1,22 @@
+{
+  "computer": "A machine that can follow instructions and do math really fast!",
+  "code": "Instructions written in a special language that computers can understand",
+  "program": "A set of instructions that tells a computer what to do",
+  "bug": "A mistake in a computer program that makes it not work right",
+  "internet": "A way for computers all over the world to talk to each other",
+  "variable": "A box that holds information in a program, like a number or word",
+  "function": "A chunk of code that does a specific job and can be used over and over",
+  "loop": "Instructions that repeat over and over until they're told to stop",
+  "algorithm": "Step-by-step instructions for solving a problem",
+  "python": "A programming language that's easy to learn and fun to use!",
+  "robot": "A machine that can move and do tasks by following a program",
+  "data": "Information stored in a computer, like numbers, words, or pictures",
+  "memory": "Where a computer stores information so it can remember things",
+  "keyboard": "The part of the computer you type on with buttons for letters and numbers",
+  "mouse": "A device you move around to point and click on things on the screen",
+  "screen": "The part of the computer that shows you pictures and words",
+  "file": "A collection of information saved on a computer with a name",
+  "folder": "A place to organize and store files together",
+  "save": "To store your work on the computer so you don't lose it",
+  "open": "To load a file so you can see it and work with it"
+}

@@ -1,51 +1,69 @@
+# Purple Computer .gitignore
+
 # Python
+*.pyc
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyo
+*.pyd
 .Python
-env/
-venv/
-ENV/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.pytest_cache/
-.coverage
-htmlcov/
 *.egg-info/
 dist/
 build/
+venv/
+env/
+ENV/
 
-# IPython
-.ipynb_checkpoints
-.ipython/
+# Test environments
+.test_home/
+.docker-data/
 
-# Build artifacts
-autoinstall/*.iso
-autoinstall/build/
-autoinstall/mount/
-*.qcow2
-
-# OS
-.DS_Store
-Thumbs.db
+# IDEs
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
-.directory
 
-# IDE
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
+# OS files
+.DS_Store
+Thumbs.db
+
+# Purple Computer specific
+# Parent password (NEVER commit!)
+parent.json
+.purple/parent.json
+**/parent.json
+
+# Pack build artifacts
+*.purplepack.tmp
 
 # Logs
 *.log
-logs/
+pack_errors.log
 
-# Temp files
+# IPython
+.ipython/
+*.ipynb_checkpoints/
+
+# Temporary files
 tmp/
 temp/
 *.tmp
+
+# Cache
+.cache/
+*.cache
+.purple/cache/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Installation ISOs (too large for git)
+*.iso
+*.img
+
+# Build artifacts
+purple-computer.iso
+purple-computer-*.iso

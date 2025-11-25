@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  purple-computer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: purplecomputer:latest
+    container_name: purple-computer-test
+    stdin_open: true
+    tty: true
+    volumes:
+      # Mount Purple REPL for live editing during development
+      - ./purple_repl:/home/purple/.purple:ro
+      # Mount packs directory
+      - ./packs:/home/purple/packs:ro
+      # Persist parent password and installed packs
+      - purple-data:/home/purple/.purple/packs
+      - purple-config:/home/purple/.purple/parent.json
+    environment:
+      - HOME=/home/purple
+      - IPYTHONDIR=/home/purple/.ipython
+      - TERM=xterm-256color
+    # No network by default (matches real Purple Computer)
+    # Uncomment to enable network for testing updates
+    # network_mode: bridge
+
+volumes:
+  purple-data:
+  purple-config:

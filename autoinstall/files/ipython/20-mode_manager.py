@@ -99,39 +99,74 @@ def say(text):
     except:
         return f"🔇 (speech not available)"
 
-# Talk/Speech mode input transformer
-def transform_talk_or_speech_mode(lines):
-    """In talk or speech mode, speak everything typed"""
+# Combined input transformer for say/talk/speech
+def transform_say_and_modes(lines):
+    """Handle 'say word' and talk/speech modes"""
     global _talk_mode_active, _speech_mode_active
 
-    # Only active in talk or speech mode
-    if not (_talk_mode_active or _speech_mode_active) or not lines:
+    if not lines:
+        return lines
+
+    # Handle both string and list input
+    if isinstance(lines, str):
+        lines = [lines]
+
+    if not lines or not lines[0]:
         return lines
 
     text = lines[0].strip()
 
-    # Check if switching back to normal or changing modes
-    if text in ['normal', 'talk', 'speech', 'rainbow', 'surprise', 'emoji', 'math']:
-        return lines
+    # Debug: uncomment to see what we're getting
+    print(f"[DEBUG] Transform got: '{text}'")
 
-    # Skip if it's already a function call
-    if '(' in text:
-        return lines
+    # First priority: Handle 'say word' syntax (works in any mode)
+    import re
 
-    # Convert input to say() call
-    if text:
-        return [f'say("{text}")']
+    # Match: say word word (before autocall transforms it)
+    say_match = re.match(r'^say\s+(.+)$', text)
+    if say_match:
+        words = say_match.group(1).strip()
+        # Skip if already has parens/quotes
+        if not (words.startswith('(') or words.startswith('"') or words.startswith("'")):
+            transformed = f'say("{words}")'
+            print(f"[DEBUG] Transformed 'say word' to: '{transformed}'")
+            return [transformed]
+
+    # Also match: say(word) or say(multiple words) - after autocall has transformed it
+    autocall_match = re.match(r'^say\(([^"\'()].+?)\)$', text)
+    if autocall_match:
+        words = autocall_match.group(1).strip()
+        transformed = f'say("{words}")'
+        print(f"[DEBUG] Transformed autocall 'say({words})' to: '{transformed}'")
+        return [transformed]
+
+    # Second priority: Talk or speech mode
+    if _talk_mode_active or _speech_mode_active:
+        # Check if switching back to normal or changing modes
+        if text in ['normal', 'talk', 'speech', 'rainbow', 'surprise', 'emoji', 'math']:
+            return lines
+
+        # Skip if it's already a function call
+        if '(' in text:
+            return lines
+
+        # Convert input to say() call
+        if text:
+            return [f'say("{text}")']
 
     return lines
 
-# Install talk/speech mode transformer
+# Install combined say/talk/speech mode transformer
 try:
     from IPython import get_ipython
     ip = get_ipython()
     if ip:
-        ip.input_transformers_post.append(transform_talk_or_speech_mode)
-except:
-    pass
+        ip.input_transformers_post.append(transform_say_and_modes)
+        print(f"[SETUP] Say transformer installed! Total transformers: {len(ip.input_transformers_post)}")
+    else:
+        print("[SETUP] ERROR: No IPython instance found!")
+except Exception as e:
+    print(f"[SETUP] ERROR installing transformer: {e}")
 
 # Inject into IPython user namespace
 try:

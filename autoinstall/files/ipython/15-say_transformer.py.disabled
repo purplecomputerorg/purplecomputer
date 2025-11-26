@@ -14,10 +14,17 @@ def say_transformer(lines):
     if not lines:
         return lines
 
+    # Handle both list and string input
+    if isinstance(lines, str):
+        lines = [lines]
+
+    if not lines or not lines[0]:
+        return lines
+
     line = lines[0]
 
     # Match: say followed by words (but not already with parens)
-    match = re.match(r'^say\s+(.+?)(?:\s*#.*)?$', line.strip())
+    match = re.match(r'^say\s+(.+?)$', line.strip())
 
     if match:
         words = match.group(1).strip()

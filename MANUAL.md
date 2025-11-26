@@ -90,84 +90,130 @@ make clean          # Clean test environment
 
 ### What Are Packs?
 
-Packs are modular content bundles (`.purplepack` files) containing:
+Packs are modular content bundles (`.purplepack` files) that extend Purple Computer. All extensions—including core modes like Music Mode—use the pack format.
+
+Pack types:
 - **emoji** - Variable name → emoji mappings
 - **definitions** - Word → definition mappings
-- **modes** - Python mode classes
-- **sounds** - Audio files
+- **mode** - Interactive modes (keyboard instruments, drawing, games)
+- **sound** - Audio files for sound effects
+- **effect** - Visual effects and animations
 - **mixed** - Combination of above
+
+### Philosophy
+
+Purple Computer's pack system follows these principles:
+- **First-class extensions** - Even core modes are packs
+- **No passive media** - No videos, no images for passive consumption
+- **Interactive and creative** - Modes encourage active participation
+- **Child-friendly** - Simple, safe, and age-appropriate
+- **Offline-first** - Everything works without internet
 
 ### Pack Structure
 
 ```
 mypack.purplepack (tar.gz archive)
 ├── manifest.json
-└── content/
-    ├── emoji.json
-    ├── definitions.json
-    ├── modes/*.py
-    └── sounds/*.wav
+└── data/                    # Preferred (content/ also supported)
+    ├── emoji.json          # For emoji packs
+    ├── definitions.json    # For definition packs
+    ├── *.py                # Python modules for mode packs
+    └── sounds/*.wav        # Audio files for sound packs
 ```
+
+**Note:** Both `data/` (preferred) and `content/` (legacy) directories are supported.
 
 ### Creating a Pack
 
-**1. Create pack source:**
+**Example: Emoji Pack**
 ```bash
-mkdir -p mypack/content
+mkdir -p mypack/data
 
 cat > mypack/manifest.json <<EOF
 {
   "id": "mypack",
   "name": "My Pack",
   "version": "1.0.0",
-  "type": "emoji"
+  "type": "emoji",
+  "description": "My custom emoji pack"
 }
 EOF
 
-cat > mypack/content/emoji.json <<EOF
+cat > mypack/data/emoji.json <<EOF
 {
   "unicorn": "🦄",
   "dragon": "🐉"
 }
 EOF
-```
 
-**2. Build pack:**
-```bash
+# Build the pack
 ./scripts/build_pack.py mypack mypack.purplepack
 ```
 
-**3. Install pack:**
-- Run Purple Computer
-- Press Ctrl+C (parent mode)
-- Option 3: Install packs
-- Enter path to `mypack.purplepack`
+**Example: Mode Pack**
+```bash
+mkdir -p mymode/data
+
+cat > mymode/manifest.json <<EOF
+{
+  "id": "my-mode",
+  "name": "My Mode",
+  "version": "1.0.0",
+  "type": "mode",
+  "entrypoint": "data/mymode.py",
+  "description": "A custom interactive mode"
+}
+EOF
+
+cat > mymode/data/mymode.py <<'PYEOF'
+def activate():
+    print("✨ My Mode activated!")
+    # Your mode logic here
+    input("Press Enter to exit...")
+    return ""
+PYEOF
+
+# Build the pack
+./scripts/build_pack.py mymode mymode.purplepack
+```
+
+**Installing a Pack:**
+1. Run Purple Computer
+2. Press Ctrl+C (parent mode)
+3. Option 3: Install packs
+4. Enter path to `mypack.purplepack`
 
 ### Manifest Format
 
-Required fields:
+**Required fields:**
 ```json
 {
   "id": "unique-id",           // lowercase, hyphens only
   "name": "Display Name",
-  "version": "1.0.0",          // semantic versioning
-  "type": "emoji"              // emoji|definitions|mode|sounds|mixed
+  "version": "1.0.0",          // semantic versioning (x.y.z)
+  "type": "emoji"              // emoji|definitions|mode|sound|effect|mixed
 }
 ```
 
-Optional fields: `description`, `author`, `url`, `license`
+**Optional fields:**
+- `description` - Brief description of the pack
+- `author` - Creator name
+- `url` - Homepage or repository URL
+- `license` - License identifier (e.g., "MIT", "CC0")
+- `entrypoint` - **Required for mode packs** - Path to Python module (e.g., "data/mymode.py")
 
 ### Pack Types
 
-**Emoji Pack** (`content/emoji.json`):
+**Emoji Pack** (`data/emoji.json`):
 ```json
 {
   "cat": "🐱",
-  "dog": "🐶"
+  "dog": "🐶",
+  "star": "⭐"
 }
 ```
 
-**Definitions Pack** (`content/definitions.json`):
+**Definitions Pack** (`data/definitions.json`):
 ```json
 {
   "computer": "A machine that follows instructions",
@@ -175,19 +221,36 @@ Optional fields: `description`, `author`, `url`, `license`
 }
 ```
 
-**Mode Pack** (`content/modes/mymode.py`):
-```python
-class MyMode:
-    def __init__(self):
-        self.name = "My Mode"
+**Mode Pack** (`data/*.py`):
+Mode packs provide interactive experiences that can be activated from the Purple Computer prompt.
 
-    def activate(self):
-        print("✨ My Mode activated!")
+Requirements:
+- Must specify `entrypoint` in manifest pointing to the Python module
+- Module must have either:
+  - An `activate()` function that runs the mode, OR
+  - A `mode` attribute/function that can be called
+
+Example structure:
+```python
+def activate():
+    """Main entry point for the mode"""
+    print("🎨 Mode activated!")
+    # Your interactive logic here
+    # Can use raw keyboard input, graphics, sound, etc.
+    return ""  # Return empty string for clean IPython output
 ```
 
-**Sound Pack** (`content/sounds/`):
-- Supported: `.wav`, `.ogg`, `.mp3`
+Modes can:
+- Take over the terminal for raw keyboard input
+- Play sounds and music
+- Display interactive visuals
+- Run games and creative tools
+- Return control to Purple Computer when done
+
+**Sound Pack** (`data/sounds/`):
+- Supported formats: `.wav`, `.ogg`, `.mp3`
 - Each file becomes accessible by name
+- Used for sound effects, music snippets, etc.
 
 ### Pack Security
 
@@ -199,11 +262,45 @@ Packs are validated before installation:
 
 ### Example Packs
 
-Purple Computer includes:
+Purple Computer includes these packs:
+
+**Content Packs:**
 - **core-emoji** - 100+ emoji (animals, nature, food, symbols)
 - **education-basics** - CS definitions for kids
 
-Find them in `packs/` directory.
+**Core Mode Packs:**
+- **music-mode-basic** - Keyboard piano mode where each letter key plays a musical note
+
+All example packs are in the `packs/` directory.
+
+### Music Mode
+
+Music Mode is a core pack that demonstrates how modes work. It's an official mode that happens to be implemented as a pack.
+
+**Activating Music Mode:**
+```python
+💜 music_basic
+```
+
+(Note: The mode name is derived from the pack ID by converting to snake_case and removing redundant suffixes.)
+
+**Features:**
+- Each letter key (a-z) plays a different musical note
+- Real-time sound generation
+- Simple visual keyboard display
+- Press ESC to exit back to Purple Computer
+
+**How it works:**
+- Takes over the terminal for raw keyboard input
+- Generates sine wave tones programmatically
+- Plays sounds with minimal latency
+- Returns control to IPython when you exit
+
+This demonstrates the pack system's extensibility—future modes for drawing, games, and creative tools will follow the same pattern.
+
+### Updating Packs
+
+Packs can be updated through the update system (Parent Mode → Check for updates) or by reinstalling a newer version manually.
 
 ---
 

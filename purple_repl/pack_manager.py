@@ -7,6 +7,8 @@ import json
 import tarfile
 import hashlib
 import shutil
+import sys
+import importlib.util
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -87,7 +89,7 @@ class PackManager:
                 return False, f"Missing required field: {field}"
 
         # Validate pack type
-        valid_types = ['emoji', 'definitions', 'mode', 'sounds', 'mixed']
+        valid_types = ['emoji', 'definitions', 'mode', 'sounds', 'effect', 'mixed']
         if manifest['type'] not in valid_types:
             return False, f"Invalid pack type: {manifest['type']}"
 
@@ -97,6 +99,10 @@ class PackManager:
         if len(parts) != 3 or not all(p.isdigit() for p in parts):
             return False, f"Invalid version format: {version}"
 
+        # For mode packs, entrypoint is required
+        if manifest['type'] == 'mode' and 'entrypoint' not in manifest:
+            return False, "Mode packs require 'entrypoint' field"
+
         return True, "OK"
 
     def install_pack_from_file(self, pack_path: Path) -> tuple[bool, str]:
@@ -105,11 +111,11 @@ class PackManager:
 
         Pack format: tar.gz containing:
           - manifest.json (required)
-          - content/ (optional, depending on pack type)
-            - emoji.json
-            - definitions.json
-            - modes/*.py
-            - sounds/*.wav, *.ogg
+          - data/ (preferred) or content/ (legacy)
+            - emoji.json (for emoji packs)
+            - definitions.json (for definition packs)
+            - *.py (Python modules for mode packs)
+            - sounds/*.wav, *.ogg (for sound packs)
         """
         pack_path = Path(pack_path)
 
@@ -188,8 +194,13 @@ class PackManager:
             self.registry.register_pack(pack_id, manifest)
 
             # Load content based on pack type
+            # Support both 'data/' (new) and 'content/' (legacy) directories
+            data_dir = pack_dir / 'data'
             content_dir = pack_dir / 'content'
-            if not content_dir.exists():
+
+            if data_dir.exists():
+                content_dir = data_dir
+            elif not content_dir.exists():
                 return True, f"Pack loaded (no content): {pack_id}"
 
             pack_type = manifest['type']
@@ -220,6 +231,41 @@ class PackManager:
                         if sound_file.suffix in ['.wav', '.ogg', '.mp3']:
                             name = sound_file.stem
                             self.registry.add_sound(name, sound_file, pack_id)
+
+            # Load mode entrypoint
+            if pack_type == 'mode' and 'entrypoint' in manifest:
+                entrypoint = manifest['entrypoint']
+                mode_file = pack_dir / entrypoint
+
+                if not mode_file.exists():
+                    return False, f"Mode entrypoint not found: {entrypoint}"
+
+                try:
+                    # Load the Python module dynamically
+                    spec = importlib.util.spec_from_file_location(
+                        f"purple_pack_{pack_id}",
+                        mode_file
+                    )
+                    if spec and spec.loader:
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[f"purple_pack_{pack_id}"] = module
+                        spec.loader.exec_module(module)
+
+                        # Look for a mode activation function or class
+                        # Convention: module should have a 'mode' attribute or 'activate' function
+                        if hasattr(module, 'activate'):
+                            # Store the activate function
+                            mode_name = pack_id.replace('-', '_').replace('_mode', '')
+                            self.registry.add_mode(mode_name, module.activate, pack_id)
+                        elif hasattr(module, 'mode'):
+                            # Store the mode object/class
+                            mode_name = pack_id.replace('-', '_').replace('_mode', '')
+                            self.registry.add_mode(mode_name, module.mode, pack_id)
+                        else:
+                            return False, f"Mode module missing 'activate' function or 'mode' attribute"
+
+                except Exception as e:
+                    return False, f"Error loading mode from {entrypoint}: {str(e)}"
 
             return True, f"Pack loaded: {manifest['name']}"
 

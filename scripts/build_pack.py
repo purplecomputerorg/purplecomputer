@@ -17,7 +17,7 @@ def build_pack(source_dir: Path, output_file: Path):
     Expected structure:
         source_dir/
             manifest.json
-            content/
+            data/ (preferred) or content/ (legacy)
                 ... (pack-specific files)
     """
     source_dir = Path(source_dir)
@@ -53,9 +53,16 @@ def build_pack(source_dir: Path, output_file: Path):
             # Add manifest
             tar.add(manifest_path, arcname='manifest.json')
 
-            # Add content directory if it exists
+            # Add data directory (preferred) or content directory (legacy)
+            data_dir = source_dir / 'data'
             content_dir = source_dir / 'content'
-            if content_dir.exists():
+
+            if data_dir.exists():
+                for item in data_dir.rglob('*'):
+                    if item.is_file():
+                        arcname = 'data' / item.relative_to(data_dir)
+                        tar.add(item, arcname=str(arcname))
+            elif content_dir.exists():
                 for item in content_dir.rglob('*'):
                     if item.is_file():
                         arcname = 'content' / item.relative_to(content_dir)

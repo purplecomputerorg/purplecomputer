@@ -1,0 +1,9 @@
+{
+  "id": "music-mode-basic",
+  "name": "Basic Music Mode",
+  "version": "1.0.0",
+  "type": "mode",
+  "entrypoint": "data/music_mode.py",
+  "description": "A simple keyboard-as-instrument mode with a minimal visual interface.",
+  "author": "Purple Computer Team"
+}

@@ -49,6 +49,7 @@ build-packs:
 	@echo "Building example packs..."
 	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack"
 	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/education-basics packs/education-basics.purplepack"
+	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/music_mode_basic packs/music_mode_basic.purplepack"
 	@echo "✓ Packs built"
 
 clean:

@@ -198,12 +198,62 @@ try:
 except Exception:
     pass
 
+# Load pack-based modes from registry
+def load_pack_modes():
+    """Load modes from installed packs"""
+    try:
+        # Import pack registry
+        import sys
+        import os
+        purple_dir = os.path.expanduser('~/.purple')
+        repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+        # Add paths for imports
+        if repo_dir not in sys.path:
+            sys.path.insert(0, repo_dir)
+        if purple_dir not in sys.path:
+            sys.path.insert(0, purple_dir)
+
+        from pack_manager import get_registry
+
+        registry = get_registry()
+        pack_modes = {}
+
+        # Get all modes from the registry
+        for mode_name, mode_func in registry.modes.items():
+            # Create a simple wrapper that calls the mode function
+            class _PackModeWrapper:
+                def __init__(self, func, name):
+                    self.func = func
+                    self.name = name
+
+                def __repr__(self):
+                    """Called when accessed in IPython"""
+                    self.func()
+                    return ""
+
+                def __call__(self):
+                    """Allow calling as function"""
+                    self.func()
+                    return ""
+
+            pack_modes[mode_name] = _PackModeWrapper(mode_func, mode_name)
+
+        return pack_modes
+    except Exception as e:
+        # Silently fail if pack modes can't be loaded
+        return {}
+
+# Load pack-based modes
+pack_modes = load_pack_modes()
+
 # Inject into IPython user namespace
 try:
     from IPython import get_ipython
     ipython = get_ipython()
     if ipython:
-        ipython.push({
+        # Built-in modes
+        namespace = {
             'speech': speech,
             'emoji': emoji,
             'math': math,
@@ -212,9 +262,14 @@ try:
             'talk': talk,
             'normal': normal,
             'say': say,
-        })
+        }
+
+        # Add pack-based modes
+        namespace.update(pack_modes)
+
+        ipython.push(namespace)
 except:
     pass
 
 # Make mode functions and say available
-__all__ = ['speech', 'emoji', 'math', 'rainbow', 'surprise', 'talk', 'normal', 'say']
+__all__ = ['speech', 'emoji', 'math', 'rainbow', 'surprise', 'talk', 'normal', 'say'] + list(pack_modes.keys())

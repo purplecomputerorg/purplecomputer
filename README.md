@@ -37,6 +37,7 @@ Inside Purple Computer, try:
 cat + dog + heart    # 🐱🐶❤️
 2 + 2                # 4
 star * 10            # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
+music_basic          # Launch keyboard piano mode!
 ```
 
 Type `parent` at the prompt to access parent mode (first time: create a parent password).
@@ -77,6 +78,7 @@ Kids can:
 - Type words and see emoji
 - Do simple math
 - Create patterns
+- Play musical instruments with the keyboard
 - Explore Python interactively
 
 ### For Parents
@@ -105,7 +107,8 @@ Parent menu options:
 ### For Kids
 - **Instant Boot** - Powers on straight into kid-friendly interface
 - **Emoji Variables** - `cat`, `dog`, `star`, `heart` become emoji
-- **Creative Modes** - Switch between different interactive modes
+- **Creative Modes** - Music mode, speech mode, rainbow mode, and more
+- **Music Mode** - Turn your keyboard into a piano
 - **Big Letter Mode** - Auto-activates with Caps Lock for beginning readers
 - **Safe** - Kids can't break out or damage the system
 

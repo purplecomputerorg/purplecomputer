@@ -84,6 +84,32 @@ def normal():
     print("✨ Back to normal mode!")
     return ""
 
+# Helper function to sanitize text for kids (handle keyboard mashing)
+def sanitize_for_speech(text):
+    """Clean up text for speech - keep safe chars, remove junk"""
+    import re
+
+    # Convert to string just in case
+    text = str(text)
+
+    # Remove outer quotes if present (they're syntax, not content)
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+        text = text[1:-1]
+
+    # Keep only: letters, numbers, spaces, and natural punctuation
+    # Safe punctuation: ! ? . , - ' (apostrophes for contractions)
+    # This prevents code injection and handles keyboard mashing
+    text = re.sub(r'[^a-zA-Z0-9\s!?.,\-\'\s]+', '', text)
+
+    # Clean up excessive whitespace
+    text = ' '.join(text.split())
+
+    # Limit length (prevent super long mashing)
+    if len(text) > 200:
+        text = text[:200]
+
+    return text.strip()
+
 # Helper function for speaking text
 def say(text):
     """Say something out loud"""
@@ -94,8 +120,16 @@ def say(text):
         if purple_dir not in sys.path:
             sys.path.insert(0, purple_dir)
         from tts import speak
-        speak(str(text))
-        return f"🔊 {text}"
+
+        # Sanitize the text before speaking
+        clean_text = sanitize_for_speech(text)
+
+        # Only speak if there's actual content left
+        if clean_text:
+            speak(clean_text)
+            return f"🔊 {clean_text}"
+        else:
+            return "💭 (nothing to say)"
     except:
         return f"🔇 (speech not available)"
 
@@ -116,9 +150,6 @@ def transform_say_and_modes(lines):
 
     text = lines[0].strip()
 
-    # Debug: uncomment to see what we're getting
-    print(f"[DEBUG] Transform got: '{text}'")
-
     # First priority: Handle 'say word' syntax (works in any mode)
     import re
 
@@ -128,17 +159,13 @@ def transform_say_and_modes(lines):
         words = say_match.group(1).strip()
         # Skip if already has parens/quotes
         if not (words.startswith('(') or words.startswith('"') or words.startswith("'")):
-            transformed = f'say("{words}")'
-            print(f"[DEBUG] Transformed 'say word' to: '{transformed}'")
-            return [transformed]
+            return [f'say("{words}")']
 
     # Also match: say(word) or say(multiple words) - after autocall has transformed it
     autocall_match = re.match(r'^say\(([^"\'()].+?)\)$', text)
     if autocall_match:
         words = autocall_match.group(1).strip()
-        transformed = f'say("{words}")'
-        print(f"[DEBUG] Transformed autocall 'say({words})' to: '{transformed}'")
-        return [transformed]
+        return [f'say("{words}")']
 
     # Second priority: Talk or speech mode
     if _talk_mode_active or _speech_mode_active:
@@ -147,8 +174,14 @@ def transform_say_and_modes(lines):
             return lines
 
         # Skip if it's already a function call
-        if '(' in text:
+        if '(' in text and not text.startswith('"') and not text.startswith("'"):
             return lines
+
+        # Handle quoted strings - extract the content
+        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+            # Remove outer quotes
+            inner_text = text[1:-1]
+            return [f'say("{inner_text}")']
 
         # Convert input to say() call
         if text:
@@ -162,11 +195,8 @@ try:
     ip = get_ipython()
     if ip:
         ip.input_transformers_post.append(transform_say_and_modes)
-        print(f"[SETUP] Say transformer installed! Total transformers: {len(ip.input_transformers_post)}")
-    else:
-        print("[SETUP] ERROR: No IPython instance found!")
-except Exception as e:
-    print(f"[SETUP] ERROR installing transformer: {e}")
+except Exception:
+    pass
 
 # Inject into IPython user namespace
 try:

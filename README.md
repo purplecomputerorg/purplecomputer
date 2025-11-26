@@ -39,7 +39,7 @@ cat + dog + heart    # 🐱🐶❤️
 star * 10            # ⭐⭐⭐⭐⭐⭐⭐⭐⭐⭐
 ```
 
-Press **Ctrl+C** to access parent mode (first time: create a parent password).
+Type `parent` at the prompt to access parent mode (first time: create a parent password).
 
 ### For Installing (Parents)
 
@@ -81,7 +81,7 @@ Kids can:
 
 ### For Parents
 
-Access **Parent Mode** by pressing **Ctrl+C**.
+Access **Parent Mode** by typing `parent` at the 💜 prompt.
 
 First time: You'll create a parent password (write it down!).
 
@@ -255,7 +255,7 @@ make setup                   # Install dependencies
 ```
 
 **Parent mode won't open?**
-- Press Ctrl+C (not Ctrl+Alt+P - that's not implemented yet)
+- Type `parent` at the 💜 prompt (or press Ctrl+C as backup)
 
 **Forgot parent password?**
 ```bash

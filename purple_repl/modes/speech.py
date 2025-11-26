@@ -39,7 +39,7 @@ class SpeechMode:
         """Process input before execution"""
         # Speak the input
         if text.strip():
-            speak(text, wait=False)
+            speak(text)
         return text
 
     def process_output(self, result):

@@ -67,17 +67,25 @@ def create_config():
     # Behavior
     c.TerminalInteractiveShell.confirm_exit = False
     c.TerminalInteractiveShell.display_completions = 'readlinelike'
-    c.TerminalInteractiveShell.autocall = 1  # Smart autocall - no parens needed for simple commands
+    c.TerminalInteractiveShell.autocall = 2  # Full autocall - no parens needed for any commands
 
     # History
     c.TerminalInteractiveShell.history_length = 100
 
-    # Startup files - load our emoji and mode definitions
-    startup_dir = Path.home() / '.ipython' / 'profile_default' / 'startup'
-    if startup_dir.exists():
-        c.InteractiveShellApp.exec_files = [
-            str(f) for f in sorted(startup_dir.glob('*.py'))
-        ]
+    # Startup files - load Purple Computer core functions and pack content
+    startup_files = []
+
+    # Load Purple Computer core startup (parent command, etc.)
+    purple_startup_dir = Path(__file__).parent / 'startup'
+    if purple_startup_dir.exists():
+        startup_files.extend(sorted(purple_startup_dir.glob('*.py')))
+
+    # Load user-installed pack content
+    user_startup_dir = Path.home() / '.ipython' / 'profile_default' / 'startup'
+    if user_startup_dir.exists():
+        startup_files.extend(sorted(user_startup_dir.glob('*.py')))
+
+    c.InteractiveShellApp.exec_files = [str(f) for f in startup_files]
 
     # Exception handling - no tracebacks for kids!
     c.TerminalInteractiveShell.xmode = 'Minimal'
@@ -87,90 +95,86 @@ def create_config():
     return c
 
 
-def install_parent_escape():
-    """Install the parent escape mechanism (Ctrl+Alt+P)"""
+def show_parent_menu():
+    """Display parent menu with password protection"""
+    # Require parent authentication
+    auth = get_auth()
 
-    # This is a placeholder - actual implementation would use
-    # keyboard hooks or terminal control sequences
-    # For now, we rely on the user pressing Ctrl+C to exit
+    if not auth.prompt_for_password():
+        print("\n❌ Access denied. Returning to Purple Computer...\n")
+        return
 
-    def show_parent_menu():
-        """Display parent menu with password protection"""
-        # Require parent authentication
-        auth = get_auth()
+    # Show parent menu
+    while True:
+        print("\n" + "=" * 50)
+        print("PURPLE COMPUTER - PARENT MENU")
+        print("=" * 50)
+        print("\n1. Return to Purple Computer")
+        print("2. Check for updates")
+        print("3. Install packs")
+        print("4. List installed packs")
+        print("5. Change parent password")
+        print("6. Open system shell (advanced)")
+        print("7. Network settings (advanced)")
+        print("8. Shut down")
+        print("9. Restart")
+        print("\nEnter choice (1-9): ", end='')
 
-        if not auth.prompt_for_password():
-            print("\n❌ Access denied. Returning to Purple Computer...\n")
-            return
+        try:
+            choice = input().strip()
 
-        # Show parent menu
-        while True:
-            print("\n" + "=" * 50)
-            print("PURPLE COMPUTER - PARENT MENU")
-            print("=" * 50)
-            print("\n1. Return to Purple Computer")
-            print("2. Check for updates")
-            print("3. Install packs")
-            print("4. List installed packs")
-            print("5. Change parent password")
-            print("6. Open system shell (advanced)")
-            print("7. Network settings (advanced)")
-            print("8. Shut down")
-            print("9. Restart")
-            print("\nEnter choice (1-9): ", end='')
-
-            try:
-                choice = input().strip()
-
-                if choice == '1':
-                    print("\n✨ Returning to Purple Computer...\n")
-                    return
-
-                elif choice == '2':
-                    check_for_updates_menu()
-
-                elif choice == '3':
-                    install_pack_menu()
-
-                elif choice == '4':
-                    list_packs_menu()
-
-                elif choice == '5':
-                    change_password_menu()
-
-                elif choice == '6':
-                    print("\n🔧 Opening system shell...")
-                    print("Type 'exit' to return to parent menu\n")
-                    os.system('/bin/bash')
-
-                elif choice == '7':
-                    print("\n🌐 Network Settings")
-                    print("Use 'nmtui' to configure network (if NetworkManager is installed)")
-                    input("\nPress Enter to continue...")
-
-                elif choice == '8':
-                    confirm = input("\n⚠️  Really shut down? (yes/no): ")
-                    if confirm.lower() == 'yes':
-                        print("\n👋 Shutting down...")
-                        os.system('shutdown -h now')
-                    return
-
-                elif choice == '9':
-                    confirm = input("\n⚠️  Really restart? (yes/no): ")
-                    if confirm.lower() == 'yes':
-                        print("\n🔄 Restarting...")
-                        os.system('reboot')
-                    return
-
-                else:
-                    print("\n❌ Invalid choice. Try again.\n")
-
-            except (EOFError, KeyboardInterrupt):
+            if choice == '1':
                 print("\n✨ Returning to Purple Computer...\n")
                 return
 
+            elif choice == '2':
+                check_for_updates_menu()
+
+            elif choice == '3':
+                install_pack_menu()
+
+            elif choice == '4':
+                list_packs_menu()
+
+            elif choice == '5':
+                change_password_menu()
+
+            elif choice == '6':
+                print("\n🔧 Opening system shell...")
+                print("Type 'exit' to return to parent menu\n")
+                os.system('/bin/bash')
+
+            elif choice == '7':
+                print("\n🌐 Network Settings")
+                print("Use 'nmtui' to configure network (if NetworkManager is installed)")
+                input("\nPress Enter to continue...")
+
+            elif choice == '8':
+                confirm = input("\n⚠️  Really shut down? (yes/no): ")
+                if confirm.lower() == 'yes':
+                    print("\n👋 Shutting down...")
+                    os.system('shutdown -h now')
+                return
+
+            elif choice == '9':
+                confirm = input("\n⚠️  Really restart? (yes/no): ")
+                if confirm.lower() == 'yes':
+                    print("\n🔄 Restarting...")
+                    os.system('reboot')
+                return
+
+            else:
+                print("\n❌ Invalid choice. Try again.\n")
+
+        except (EOFError, KeyboardInterrupt):
+            print("\n✨ Returning to Purple Computer...\n")
+            return
+
+
+def install_parent_escape():
+    """Install the parent escape mechanism (Ctrl+C and 'parent' command)"""
+    # Install Ctrl+C handler as backup
     # Note: In production, this would hook Ctrl+Alt+P
-    # For development, we'll catch Ctrl+C
     import builtins
 
     original_input = builtins.input
@@ -183,6 +187,8 @@ def install_parent_escape():
             return ''
 
     builtins.input = wrapped_input
+
+    return show_parent_menu
 
 
 def check_for_updates_menu():
@@ -351,13 +357,13 @@ def main():
     # Set up timeout handling
     setup_timeout_handler()
 
-    # Install parent escape
+    # Install Ctrl+C handler for parent mode
     install_parent_escape()
 
     # Create config
     config = create_config()
 
-    # Start IPython
+    # Start IPython (parent command loaded via startup files)
     sys.exit(start_ipython(argv=[], config=config))
 
 

@@ -277,13 +277,13 @@ def _get_engine():
     return None
 
 
-def speak(text, wait=True):
+def speak(text, wait=False):
     """
     Speak the given text aloud
 
     Args:
         text: Text to speak
-        wait: If True, wait for speech to complete
+        wait: If True, wait for speech to complete (default: False)
     """
     if not text or not isinstance(text, str):
         return

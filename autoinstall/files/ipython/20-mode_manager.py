@@ -127,11 +127,11 @@ def say(text):
         # Only speak if there's actual content left
         if clean_text:
             speak(clean_text)
-            return f"🔊 {clean_text}"
+            return ""  # Don't echo the text back
         else:
-            return "💭 (nothing to say)"
+            return ""
     except:
-        return f"🔇 (speech not available)"
+        return ""
 
 # Combined input transformer for say/talk/speech
 def transform_say_and_modes(lines):

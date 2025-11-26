@@ -24,7 +24,8 @@ RUN pip3 install --no-cache-dir \
     colorama \
     termcolor \
     packaging \
-    traitlets
+    traitlets \
+    simple-term-menu
 
 # Create purple user (no password, matches real setup)
 RUN useradd -m -s /bin/bash purple && \
@@ -37,7 +38,10 @@ RUN mkdir -p /home/purple/.purple/packs && \
 
 # Copy Purple Computer files
 COPY purple_repl/ /home/purple/.purple/
-COPY autoinstall/files/ipython/*.py /home/purple/.ipython/profile_default/startup/
+
+# Copy IPython startup files from single source of truth
+RUN cp /home/purple/.purple/startup/*.py /home/purple/.ipython/profile_default/startup/
+
 COPY packs/*.purplepack /tmp/packs/ 2>/dev/null || true
 
 # Set ownership

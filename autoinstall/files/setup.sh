@@ -56,7 +56,7 @@ apt install -y \
 
 # Install Python packages
 echo_info "Installing Python packages..."
-pip3 install --system colorama termcolor
+pip3 install --system colorama termcolor simple-term-menu
 
 # Create purple user if doesn't exist
 # Note: Changed from 'kiduser' to 'purple' for cleaner branding
@@ -161,14 +161,14 @@ fi
 EOF
 fi
 
-# Copy IPython profile
+# Copy IPython profile (from purple_repl/startup - single source of truth)
 echo_info "Installing IPython configuration..."
-if [ -d "$SCRIPT_DIR/ipython" ]; then
+if [ -d "$SCRIPT_DIR/../../purple_repl/startup" ]; then
     mkdir -p /home/purple/.ipython/profile_default/startup
-    cp "$SCRIPT_DIR/ipython/"*.py /home/purple/.ipython/profile_default/startup/
+    cp "$SCRIPT_DIR/../../purple_repl/startup/"*.py /home/purple/.ipython/profile_default/startup/
     if [ -d "/home/kiduser" ]; then
         mkdir -p /home/kiduser/.ipython/profile_default/startup
-        cp "$SCRIPT_DIR/ipython/"*.py /home/kiduser/.ipython/profile_default/startup/
+        cp "$SCRIPT_DIR/../../purple_repl/startup/"*.py /home/kiduser/.ipython/profile_default/startup/
     fi
 fi
 

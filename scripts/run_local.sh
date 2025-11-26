@@ -67,11 +67,12 @@ mkdir -p "$TEST_HOME/.ipython/profile_default/startup"
 echo_info "Copying Purple REPL files..."
 cp -r "$PURPLE_DIR"/*.py "$TEST_HOME/.purple/" 2>/dev/null || true
 cp -r "$PURPLE_DIR/modes" "$TEST_HOME/.purple/" 2>/dev/null || true
+cp -r "$PURPLE_DIR/startup" "$TEST_HOME/.purple/" 2>/dev/null || true
 
-# Copy IPython startup files
+# Copy IPython startup files (from purple_repl/startup - single source of truth)
 echo_info "Setting up IPython environment..."
-if [ -d "$PROJECT_ROOT/autoinstall/files/ipython" ]; then
-    cp "$PROJECT_ROOT/autoinstall/files/ipython"/*.py "$TEST_HOME/.ipython/profile_default/startup/"
+if [ -d "$PURPLE_DIR/startup" ]; then
+    cp "$PURPLE_DIR/startup"/*.py "$TEST_HOME/.ipython/profile_default/startup/"
 fi
 
 # Install example packs if available
@@ -103,6 +104,7 @@ python3 -c "import IPython" 2>/dev/null || MISSING_DEPS+=("ipython")
 python3 -c "import colorama" 2>/dev/null || MISSING_DEPS+=("colorama")
 python3 -c "import termcolor" 2>/dev/null || MISSING_DEPS+=("termcolor")
 python3 -c "import packaging" 2>/dev/null || MISSING_DEPS+=("packaging")
+python3 -c "import simple_term_menu" 2>/dev/null || MISSING_DEPS+=("simple-term-menu")
 
 if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     echo_warn "Missing dependencies: ${MISSING_DEPS[*]}"

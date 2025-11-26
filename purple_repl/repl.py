@@ -104,6 +104,96 @@ def show_parent_menu():
         print("\n❌ Access denied. Returning to Purple Computer...\n")
         return
 
+    # Import simple-term-menu (installed dependency)
+    try:
+        from simple_term_menu import TerminalMenu
+    except ImportError:
+        # Fallback to old menu if simple-term-menu not available
+        _show_parent_menu_fallback()
+        return
+
+    # Show parent menu
+    while True:
+        menu_options = [
+            "Return to Purple Computer",
+            "Check for updates",
+            "Install packs",
+            "List installed packs",
+            "Change parent password",
+            "Open system shell (advanced)",
+            "Network settings (advanced)",
+            "Shut down",
+            "Restart"
+        ]
+
+        try:
+            terminal_menu = TerminalMenu(
+                menu_options,
+                title="PURPLE COMPUTER - PARENT MENU",
+                menu_cursor="→ ",
+                menu_cursor_style=("fg_cyan", "bold"),
+                menu_highlight_style=("bg_cyan", "fg_black"),
+                cycle_cursor=True,
+                clear_screen=False
+            )
+
+            choice = terminal_menu.show()
+
+            # Handle ESC or Ctrl+C (returns None)
+            if choice is None:
+                print("\n✨ Returning to Purple Computer...\n")
+                return
+
+            # Execute based on choice
+            if choice == 0:  # Return to Purple Computer
+                print("\n✨ Returning to Purple Computer...\n")
+                return
+
+            elif choice == 1:  # Check for updates
+                check_for_updates_menu()
+
+            elif choice == 2:  # Install packs
+                install_pack_menu()
+
+            elif choice == 3:  # List installed packs
+                list_packs_menu()
+
+            elif choice == 4:  # Change parent password
+                change_password_menu()
+
+            elif choice == 5:  # Open system shell
+                print("\n🔧 Opening system shell...")
+                print("Type 'exit' to return to parent menu\n")
+                os.system('/bin/bash')
+
+            elif choice == 6:  # Network settings
+                print("\n🌐 Network Settings")
+                print("Use 'nmtui' to configure network (if NetworkManager is installed)")
+                input("\nPress Enter to continue...")
+
+            elif choice == 7:  # Shut down
+                confirm = input("\n⚠️  Really shut down? (yes/no): ")
+                if confirm.lower() == 'yes':
+                    print("\n👋 Shutting down...")
+                    os.system('shutdown -h now')
+                return
+
+            elif choice == 8:  # Restart
+                confirm = input("\n⚠️  Really restart? (yes/no): ")
+                if confirm.lower() == 'yes':
+                    print("\n🔄 Restarting...")
+                    os.system('reboot')
+                return
+
+        except (EOFError, KeyboardInterrupt):
+            print("\n✨ Returning to Purple Computer...\n")
+            return
+
+
+def _show_parent_menu_fallback():
+    """Fallback parent menu using number input (if simple-term-menu not available)"""
+    auth = get_auth()
+
     # Show parent menu
     while True:
         print("\n" + "=" * 50)

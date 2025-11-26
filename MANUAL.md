@@ -21,15 +21,17 @@ Complete reference for developing, testing, installing, and using Purple Compute
 ### Quick Setup
 
 ```bash
-# One-time setup
+# One-time setup (creates .venv and installs dependencies)
 make setup
 
-# Run locally (Mac/Linux)
+# Run locally (Mac/Linux) - auto-activates venv
 make run
 
-# Run in Docker (full Ubuntu simulation)
+# Run in Docker (full Ubuntu simulation) - no venv needed
 make run-docker
 ```
+
+**Virtual Environment:** Purple Computer uses a Python venv (`.venv/`) to avoid conflicts with system packages. The scripts automatically activate it. This is standard Python practice and works on both Mac and Linux.
 
 ### Testing Modes
 
@@ -62,9 +64,15 @@ make run-docker
 ### Development Workflow
 
 1. Edit code in `purple_repl/`
-2. Run `make run` to test
+2. Run `make run` to test (venv auto-activates)
 3. Iterate
 4. Test in Docker before hardware deployment
+
+**Manual venv activation** (optional):
+```bash
+source .venv/bin/activate  # Activate venv
+deactivate                  # Deactivate when done
+```
 
 ### Available Scripts
 
@@ -707,13 +715,24 @@ alsamixer
 
 ### Development Issues
 
+**"externally-managed-environment" error on Mac**
+```bash
+# This happens on newer Homebrew Python installations
+# Solution: Use venv (already set up by make setup)
+make setup  # Creates .venv and installs dependencies
+
+# The scripts auto-activate venv:
+make run    # Automatically uses .venv/bin/activate
+```
+
 **Local runner fails**
 ```bash
-# Verify installation
+# Verify installation (checks venv)
 ./scripts/verify_install.sh
 
-# Check dependencies
-pip3 list | grep -E "ipython|colorama|termcolor|packaging"
+# Check dependencies (venv will auto-activate)
+source .venv/bin/activate
+pip list | grep -E "ipython|colorama|termcolor|packaging"
 
 # Clean and retry
 make clean

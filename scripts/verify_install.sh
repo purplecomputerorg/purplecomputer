@@ -45,11 +45,26 @@ echo ""
 
 # Python checks
 check "Python 3" "command -v python3"
-check "pip3" "command -v pip3"
-check "IPython module" "python3 -c 'import IPython'"
-check "colorama module" "python3 -c 'import colorama'"
-check "termcolor module" "python3 -c 'import termcolor'"
-check "packaging module" "python3 -c 'import packaging'"
+
+# Check venv
+echo -n "Checking virtual environment... "
+if [ -d "$PROJECT_ROOT/.venv" ]; then
+    echo -e "${GREEN}✓${NC}"
+    ((PASS++))
+
+    # Activate venv for module checks
+    source "$PROJECT_ROOT/.venv/bin/activate"
+
+    check "IPython module" "python -c 'import IPython'"
+    check "colorama module" "python -c 'import colorama'"
+    check "termcolor module" "python -c 'import termcolor'"
+    check "packaging module" "python -c 'import packaging'"
+else
+    echo -e "${RED}✗${NC} (not found)"
+    echo ""
+    echo_warn "Virtual environment not set up. Run: make setup"
+    ((FAIL++))
+fi
 
 echo ""
 echo "Core Files:"
@@ -75,8 +90,16 @@ if [ ! -f "$PROJECT_ROOT/packs/core-emoji.purplepack" ]; then
     echo ""
     echo "Building example packs..."
     cd "$PROJECT_ROOT"
-    python3 scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack
-    python3 scripts/build_pack.py packs/education-basics packs/education-basics.purplepack
+
+    # Use venv if available
+    if [ -d "$PROJECT_ROOT/.venv" ]; then
+        source "$PROJECT_ROOT/.venv/bin/activate"
+        python scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack
+        python scripts/build_pack.py packs/education-basics packs/education-basics.purplepack
+    else
+        python3 scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack
+        python3 scripts/build_pack.py packs/education-basics packs/education-basics.purplepack
+    fi
 fi
 
 check_file "core-emoji.purplepack" "$PROJECT_ROOT/packs/core-emoji.purplepack"

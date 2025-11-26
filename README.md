@@ -21,14 +21,16 @@ It's offline, private, and runs on old hardware.
 ### For Testing (Developers)
 
 ```bash
-# One-time setup
+# One-time setup (creates .venv and installs dependencies)
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 make setup
 
-# Run Purple Computer locally
+# Run Purple Computer locally (auto-activates venv)
 make run
 ```
+
+**Note:** Uses Python virtual environment (`.venv/`) - standard practice that avoids system package conflicts.
 
 Inside Purple Computer, try:
 ```python

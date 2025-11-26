@@ -23,7 +23,7 @@ help:
 	@echo "  make clean-docker   - Remove Docker containers and volumes"
 	@echo "  make clean-all      - Remove everything (test env + Docker)"
 	@echo ""
-	@echo "For more info, see QUICKSTART.md or docs/testing.md"
+	@echo "For more info, see README.md and MANUAL.md"
 
 setup:
 	@echo "Setting up Purple Computer development environment..."
@@ -47,8 +47,8 @@ docker-shell:
 
 build-packs:
 	@echo "Building example packs..."
-	python3 scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack
-	python3 scripts/build_pack.py packs/education-basics packs/education-basics.purplepack
+	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack"
+	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/education-basics packs/education-basics.purplepack"
 	@echo "✓ Packs built"
 
 clean:

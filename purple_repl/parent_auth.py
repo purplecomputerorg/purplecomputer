@@ -7,7 +7,7 @@ import json
 import hashlib
 import secrets
 from pathlib import Path
-from typing import Optional, tuple
+from typing import Optional
 
 
 class ParentAuth:

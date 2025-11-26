@@ -104,6 +104,10 @@ def install_big_letter_mode():
                     obj = uppercase_output(obj)
                 return self.original(obj)
 
+            def __getattr__(self, name):
+                """Proxy all other attributes to the original displayhook"""
+                return getattr(self.original, name)
+
         ipython.displayhook = BigLetterDisplayHook(original_displayhook)
 
     except Exception as e:

@@ -39,6 +39,24 @@ fi
 PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
 echo_info "Using Python $PYTHON_VERSION"
 
+# Activate venv if it exists
+if [ -d "$PROJECT_ROOT/.venv" ]; then
+    echo_info "Activating virtual environment..."
+    source "$PROJECT_ROOT/.venv/bin/activate"
+else
+    echo_warn "No .venv found. Run 'make setup' first."
+    echo ""
+    read -p "Run setup now? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        "$PROJECT_ROOT/scripts/setup_dev.sh"
+        source "$PROJECT_ROOT/.venv/bin/activate"
+    else
+        echo "Exiting. Run 'make setup' to create virtual environment."
+        exit 1
+    fi
+fi
+
 # Create test home directory
 echo_info "Creating test environment at $TEST_HOME"
 mkdir -p "$TEST_HOME/.purple/packs"
@@ -60,7 +78,7 @@ fi
 if [ -f "$PROJECT_ROOT/packs/core-emoji.purplepack" ]; then
     echo_info "Installing core emoji pack..."
     cd "$TEST_HOME/.purple"
-    python3 <<EOF
+    python <<EOF
 from pack_manager import PackManager, get_registry
 from pathlib import Path
 
@@ -111,9 +129,9 @@ sleep 1
 export HOME="$TEST_HOME"
 export IPYTHONDIR="$TEST_HOME/.ipython"
 
-# Run the REPL
+# Run the REPL (use 'python' since venv is activated)
 cd "$TEST_HOME/.purple"
-python3 repl.py
+python repl.py
 
 echo ""
 echo_info "Purple Computer session ended."

@@ -62,13 +62,12 @@ def create_config():
 
     # Appearance
     c.TerminalInteractiveShell.prompts_class = PurplePrompt
-    c.TerminalInteractiveShell.highlighting_style = 'monokai'
     c.TerminalInteractiveShell.true_color = True
 
     # Behavior
     c.TerminalInteractiveShell.confirm_exit = False
     c.TerminalInteractiveShell.display_completions = 'readlinelike'
-    c.TerminalInteractiveShell.autocall = 2  # Enable smart autocall for simple commands
+    c.TerminalInteractiveShell.autocall = 1  # Smart autocall - no parens needed for simple commands
 
     # History
     c.TerminalInteractiveShell.history_length = 100
@@ -80,8 +79,10 @@ def create_config():
             str(f) for f in sorted(startup_dir.glob('*.py'))
         ]
 
-    # Exception handling - make errors kid-friendly
-    c.TerminalInteractiveShell.xmode = 'Plain'
+    # Exception handling - no tracebacks for kids!
+    c.TerminalInteractiveShell.xmode = 'Minimal'
+    c.TerminalInteractiveShell.show_rewritten_input = False
+    c.InteractiveShell.colors = 'NoColor'  # Simpler error colors
 
     return c
 

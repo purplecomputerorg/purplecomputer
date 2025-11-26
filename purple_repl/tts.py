@@ -155,6 +155,53 @@ class EspeakTTS(TTSEngine):
         self.rate = max(80, min(400, rate))
 
 
+class MacOSTTS(TTSEngine):
+    """
+    macOS native TTS engine using the 'say' command
+    """
+
+    def __init__(self):
+        self.say_path = self._find_say()
+        self.voice = None  # Use default voice
+        self.rate = 150  # Slower rate for kids (150 wpm)
+
+    def _find_say(self):
+        """Find macOS say command"""
+        result = subprocess.run(['which', 'say'], capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return None
+
+    def speak(self, text, wait=True):
+        """Speak text using macOS say"""
+        if not self.say_path:
+            return False
+
+        try:
+            cmd = [self.say_path, '-r', str(self.rate)]
+            if self.voice:
+                cmd.extend(['-v', self.voice])
+            cmd.append(text)
+
+            if wait:
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+            return True
+
+        except Exception:
+            return False
+
+    def set_voice(self, voice):
+        """Set voice (e.g., 'Samantha', 'Alex', 'Victoria')"""
+        self.voice = voice
+
+    def set_rate(self, rate):
+        """Set speech rate in words per minute"""
+        self.rate = max(90, min(400, rate))
+
+
 class Pyttsx3TTS(TTSEngine):
     """
     Pyttsx3 TTS engine - Python wrapper for system TTS
@@ -201,19 +248,26 @@ def _get_engine():
         return _tts_engine
 
     # Try engines in order of preference
-    # 1. Piper (best quality)
+    # 1. macOS native TTS (if on Mac)
+    if sys.platform == 'darwin':
+        macos = MacOSTTS()
+        if macos.say_path:
+            _tts_engine = macos
+            return _tts_engine
+
+    # 2. Piper (best quality on Linux)
     piper = PiperTTS()
     if piper.piper_path and piper.model_path:
         _tts_engine = piper
         return _tts_engine
 
-    # 2. Espeak (good fallback)
+    # 3. Espeak (good Linux fallback)
     espeak = EspeakTTS()
     if espeak.espeak_path:
         _tts_engine = espeak
         return _tts_engine
 
-    # 3. Pyttsx3 (last resort)
+    # 4. Pyttsx3 (last resort)
     pyttsx = Pyttsx3TTS()
     if pyttsx.engine:
         _tts_engine = pyttsx

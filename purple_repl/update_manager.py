@@ -8,7 +8,7 @@ import hashlib
 import urllib.request
 import urllib.error
 from pathlib import Path
-from typing import List, Dict, Optional, tuple
+from typing import List, Dict, Optional
 from packaging import version as version_parser
 
 

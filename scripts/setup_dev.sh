@@ -58,24 +58,24 @@ fi
 PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
 echo_info "✓ Python $PYTHON_VERSION found"
 
-# Check pip
-if ! command -v pip3 &> /dev/null; then
-    echo_warn "pip3 not found. Installing..."
-    if [ "$OS" = "mac" ]; then
-        curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-        python3 get-pip.py
-        rm get-pip.py
-    else
-        sudo apt install python3-pip
-    fi
+# Create virtual environment
+echo_step "Setting up Python virtual environment..."
+if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+    echo_info "✓ Created .venv"
+else
+    echo_info "✓ .venv already exists"
 fi
 
-# Install Python dependencies
-echo_step "Installing Python dependencies..."
-pip3 install --upgrade pip
-pip3 install ipython colorama termcolor packaging traitlets
+# Activate venv
+source .venv/bin/activate
 
-echo_info "✓ Python dependencies installed"
+# Install Python dependencies
+echo_step "Installing Python dependencies into venv..."
+pip install --upgrade pip
+pip install ipython colorama termcolor packaging traitlets
+
+echo_info "✓ Python dependencies installed in virtual environment"
 
 # Build example packs
 echo_step "Building example packs..."
@@ -114,20 +114,21 @@ echo "╔═══════════════════════�
 echo "║   Setup Complete!                            ║"
 echo "╔══════════════════════════════════════════════╗"
 echo ""
+echo_info "Virtual environment created at .venv/"
+echo_info "Activate it with: source .venv/bin/activate"
+echo ""
 echo_info "You can now run Purple Computer:"
 echo ""
 echo "  1. Local mode (Mac/Linux):"
-echo "     ./scripts/run_local.sh"
+echo "     make run"
+echo "     (or ./scripts/run_local.sh)"
 echo ""
 
 if [ "$DOCKER_AVAILABLE" = true ]; then
     echo "  2. Docker mode (full simulation):"
-    echo "     ./scripts/run_docker.sh"
+    echo "     make run-docker"
+    echo "     (or ./scripts/run_docker.sh)"
     echo ""
 fi
 
-echo "  3. Run tests:"
-echo "     python3 -m pytest tests/  # (tests coming soon)"
-echo ""
-
-echo_info "See docs/testing.md for more information"
+echo_info "The scripts will automatically activate the venv"

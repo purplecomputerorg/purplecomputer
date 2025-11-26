@@ -32,36 +32,8 @@ class SpeechMode:
     def activate(self):
         """Called when entering speech mode"""
         print(self.banner)
+        print("Type 'normal' to exit\n")
         speak("Speech mode activated! I will read everything you type.")
-
-        # Install output hook to speak results
-        try:
-            from IPython import get_ipython
-            ipython = get_ipython()
-
-            if ipython:
-                # Store original display hook
-                original_hook = ipython.display_formatter.format
-
-                def speech_display(obj):
-                    """Custom display that speaks output"""
-                    # Get formatted output
-                    result = original_hook(obj)
-
-                    # Convert to text and speak
-                    if result and result[0]:
-                        text = str(obj)
-                        # Limit speech length
-                        if len(text) > 200:
-                            text = text[:200] + "..."
-                        speak(text, wait=False)
-
-                    return result
-
-                ipython.display_formatter.format = speech_display
-
-        except Exception:
-            pass
 
     def process_input(self, text):
         """Process input before execution"""

@@ -31,12 +31,16 @@ def show_welcome():
   • Type {Fore.GREEN}dog{Style.RESET_ALL} and press Enter  {Fore.MAGENTA}→ 🐶{Style.RESET_ALL}
   • Type {Fore.GREEN}star{Style.RESET_ALL} and press Enter {Fore.MAGENTA}→ ⭐{Style.RESET_ALL}
 
-{Fore.YELLOW}Switch modes:{Style.RESET_ALL}
+{Fore.YELLOW}Talk out loud:{Style.RESET_ALL}
 
-  • Type {Fore.GREEN}speech{Style.RESET_ALL}   → Everything is read aloud
-  • Type {Fore.GREEN}emoji{Style.RESET_ALL}    → Words become pictures
-  • Type {Fore.GREEN}rainbow{Style.RESET_ALL}  → Colorful output
-  • Type {Fore.GREEN}surprise{Style.RESET_ALL} → Random fun!
+  • Type {Fore.GREEN}say hello{Style.RESET_ALL} → Hear "hello" spoken!
+  • Type {Fore.GREEN}talk{Style.RESET_ALL} → Enter TALK MODE (everything spoken)
+
+{Fore.YELLOW}Fun modes:{Style.RESET_ALL}
+
+  • Type {Fore.GREEN}speech{Style.RESET_ALL}   → Read output aloud
+  • Type {Fore.GREEN}rainbow{Style.RESET_ALL}  → Colorful display
+  • Type {Fore.GREEN}normal{Style.RESET_ALL}   → Return to normal
 
 {Fore.CYAN}Type anything and explore! You can't break anything.{Style.RESET_ALL}
 

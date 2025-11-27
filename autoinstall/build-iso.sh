@@ -242,8 +242,9 @@ sudo xorriso -as mkisofs \
     -isohybrid-gpt-basdat \
     "$EXTRACT_DIR"
 
-# Make ISO readable by user
-sudo chown $USER:$USER "$OUTPUT_ISO"
+# Make ISO readable by user (get actual primary group instead of assuming it matches username)
+USER_GROUP=$(id -gn)
+sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
 
 # Cleanup
 echo_info "Cleaning up..."

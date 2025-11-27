@@ -160,18 +160,24 @@ autoinstall:
       if [ -d /cdrom/purple_files ]; then
         cp -r /cdrom/purple_files/* /target/home/purple/.purple/
         chroot /target chown -R purple:purple /home/purple/.purple
+        # Make all Python files executable
+        chroot /target find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
         # Also copy to kiduser for backwards compatibility
         if [ -d /target/home/kiduser ]; then
           cp -r /cdrom/purple_files/* /target/home/kiduser/.purple/
           chroot /target chown -R kiduser:kiduser /home/kiduser/.purple
+          chroot /target find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
         fi
       fi
 
-    # Copy systemd service files
+    # Copy systemd service files and enable auto-login
     - |
       if [ -f /cdrom/purple_files/systemd/getty-override.conf ]; then
         mkdir -p /target/etc/systemd/system/getty@tty1.service.d
         cp /cdrom/purple_files/systemd/getty-override.conf /target/etc/systemd/system/getty@tty1.service.d/override.conf
+        # Reload systemd and enable getty@tty1
+        chroot /target systemctl daemon-reload
+        chroot /target systemctl enable getty@tty1.service
       fi
 
     # Copy xinitrc

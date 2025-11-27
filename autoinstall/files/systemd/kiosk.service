@@ -1,6 +1,7 @@
 # Purple Computer Kiosk Service
 # This systemd service ensures the Purple Computer environment
 # starts automatically and restarts if it crashes
+# NOTE: Currently not used - we use getty auto-login instead
 
 [Unit]
 Description=Purple Computer Kiosk Mode
@@ -9,11 +10,11 @@ Wants=getty@tty1.service
 
 [Service]
 Type=simple
-User=kiduser
-Group=kiduser
-WorkingDirectory=/home/kiduser
+User=purple
+Group=purple
+WorkingDirectory=/home/purple
 Environment="DISPLAY=:0"
-Environment="XAUTHORITY=/home/kiduser/.Xauthority"
+Environment="XAUTHORITY=/home/purple/.Xauthority"
 
 # Start the Purple Computer environment
 # This assumes .xinitrc launches Kitty with the REPL
@@ -28,7 +29,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/kiduser/.purple /home/kiduser/.config
+ReadWritePaths=/home/purple/.purple /home/purple/.config
 
 [Install]
 WantedBy=multi-user.target

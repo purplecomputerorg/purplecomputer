@@ -279,7 +279,7 @@ def show_keyboard_visual(last_key='', last_note_info=None):
         print(f"                ", end='')
         for key in row:
             if key in NOTE_MAP:
-                freq, note_name, display = NOTE_MAP[key]
+                freq, note_name, display, instrument = NOTE_MAP[key]
                 if key == last_key:
                     print(f"  {BOLD}{YELLOW}┌──────┐{RESET}", end='')
                 else:
@@ -291,7 +291,7 @@ def show_keyboard_visual(last_key='', last_note_info=None):
         print(f"       {label_color}{BOLD}{label:>4}{RESET}     ", end='')
         for key in row:
             if key in NOTE_MAP:
-                freq, note_name, display = NOTE_MAP[key]
+                freq, note_name, display, instrument = NOTE_MAP[key]
                 if key == last_key:
                     print(f"  {BOLD}{YELLOW}│{display:^6}│{RESET}", end='')
                 else:

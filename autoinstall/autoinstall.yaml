@@ -11,6 +11,9 @@ autoinstall:
   # Early commands run before installation begins
   early-commands:
     - echo "Starting Purple Computer installation..."
+    # Stop snapd to avoid overlayfs conflicts
+    - systemctl stop snapd.socket snapd.service || true
+    - systemctl mask snapd.socket snapd.service || true
 
   # Locale and keyboard settings
   locale: en_US.UTF-8
@@ -151,90 +154,124 @@ autoinstall:
 
   # Late commands - run after installation, before reboot
   late-commands:
-    # Copy Purple Computer files from ISO to installed system
-    - curtin in-target --target=/target -- mkdir -p /tmp/purple_install
-
-    # The build-iso.sh script will inject our files into the ISO
-    # These commands copy them to the installed system
+    # Copy Purple Computer files to staging area (avoid overlayfs conflicts)
+    - mkdir -p /target/opt/purple_install
     - |
       if [ -d /cdrom/purple_files ]; then
-        cp -r /cdrom/purple_files/* /target/home/purple/.purple/
-        chroot /target chown -R purple:purple /home/purple/.purple
-        # Make all Python files executable
-        chroot /target find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
-        # Also copy to kiduser for backwards compatibility
-        if [ -d /target/home/kiduser ]; then
-          cp -r /cdrom/purple_files/* /target/home/kiduser/.purple/
-          chroot /target chown -R kiduser:kiduser /home/kiduser/.purple
-          chroot /target find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
+        cp -r /cdrom/purple_files /target/opt/purple_install/ || true
+      fi
+
+    # Create first-boot setup service that will run on initial boot
+    - |
+      cat > /target/etc/systemd/system/purple-first-boot.service <<'EOF'
+      [Unit]
+      Description=Purple Computer First Boot Setup
+      After=network.target
+      ConditionPathExists=/opt/purple_install/purple_files
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/local/bin/purple-first-boot.sh
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+
+    # Create first-boot setup script
+    - |
+      cat > /target/usr/local/bin/purple-first-boot.sh <<'FIRSTBOOT'
+      #!/bin/bash
+      set -e
+
+      echo "Purple Computer First Boot Setup..."
+
+      # Copy Purple Computer files to purple user
+      if [ -d /opt/purple_install/purple_files ]; then
+        mkdir -p /home/purple/.purple
+        cp -r /opt/purple_install/purple_files/* /home/purple/.purple/
+        chown -R purple:purple /home/purple/.purple
+        find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
+
+        # Copy to kiduser for backwards compatibility
+        if [ -d /home/kiduser ]; then
+          mkdir -p /home/kiduser/.purple
+          cp -r /opt/purple_install/purple_files/* /home/kiduser/.purple/
+          chown -R kiduser:kiduser /home/kiduser/.purple
+          find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
         fi
       fi
 
-    # Copy systemd service files and enable auto-login
-    - |
-      if [ -f /cdrom/purple_files/systemd/getty-override.conf ]; then
-        mkdir -p /target/etc/systemd/system/getty@tty1.service.d
-        cp /cdrom/purple_files/systemd/getty-override.conf /target/etc/systemd/system/getty@tty1.service.d/override.conf
-        # Reload systemd and enable getty@tty1
-        chroot /target systemctl daemon-reload
-        chroot /target systemctl enable getty@tty1.service
+      # Setup getty auto-login
+      if [ -f /opt/purple_install/purple_files/systemd/getty-override.conf ]; then
+        mkdir -p /etc/systemd/system/getty@tty1.service.d
+        cp /opt/purple_install/purple_files/systemd/getty-override.conf /etc/systemd/system/getty@tty1.service.d/override.conf
+        systemctl daemon-reload
+        systemctl enable getty@tty1.service
       fi
 
-    # Copy xinitrc
-    - |
-      if [ -f /cdrom/purple_files/xinitrc ]; then
-        cp /cdrom/purple_files/xinitrc /target/home/purple/.xinitrc
-        chroot /target chown purple:purple /home/purple/.xinitrc
-        chroot /target chmod +x /home/purple/.xinitrc
-        if [ -d /target/home/kiduser ]; then
-          cp /cdrom/purple_files/xinitrc /target/home/kiduser/.xinitrc
-          chroot /target chown kiduser:kiduser /home/kiduser/.xinitrc
-          chroot /target chmod +x /home/kiduser/.xinitrc
+      # Copy xinitrc
+      if [ -f /opt/purple_install/purple_files/xinitrc ]; then
+        cp /opt/purple_install/purple_files/xinitrc /home/purple/.xinitrc
+        chown purple:purple /home/purple/.xinitrc
+        chmod +x /home/purple/.xinitrc
+        if [ -d /home/kiduser ]; then
+          cp /opt/purple_install/purple_files/xinitrc /home/kiduser/.xinitrc
+          chown kiduser:kiduser /home/kiduser/.xinitrc
+          chmod +x /home/kiduser/.xinitrc
         fi
       fi
 
-    # Copy kitty config
-    - |
-      if [ -f /cdrom/purple_files/kitty.conf ]; then
-        mkdir -p /target/home/purple/.config/kitty
-        cp /cdrom/purple_files/kitty.conf /target/home/purple/.config/kitty/kitty.conf
-        chroot /target chown -R purple:purple /home/purple/.config
-        if [ -d /target/home/kiduser ]; then
-          mkdir -p /target/home/kiduser/.config/kitty
-          cp /cdrom/purple_files/kitty.conf /target/home/kiduser/.config/kitty/kitty.conf
-          chroot /target chown -R kiduser:kiduser /home/kiduser/.config
+      # Copy kitty config
+      if [ -f /opt/purple_install/purple_files/kitty.conf ]; then
+        mkdir -p /home/purple/.config/kitty
+        cp /opt/purple_install/purple_files/kitty.conf /home/purple/.config/kitty/kitty.conf
+        chown -R purple:purple /home/purple/.config
+        if [ -d /home/kiduser ]; then
+          mkdir -p /home/kiduser/.config/kitty
+          cp /opt/purple_install/purple_files/kitty.conf /home/kiduser/.config/kitty/kitty.conf
+          chown -R kiduser:kiduser /home/kiduser/.config
         fi
       fi
 
-    # Enable auto-startx in .bash_profile
-    - |
-      cat >> /target/home/purple/.bash_profile <<'EOF'
+      # Setup auto-startx in .bash_profile
+      cat >> /home/purple/.bash_profile <<'BASHEOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
         exec startx
       fi
-      EOF
+      BASHEOF
+      chown purple:purple /home/purple/.bash_profile
 
-    - chroot /target chown purple:purple /home/purple/.bash_profile
-
-    - |
-      if [ -d /target/home/kiduser ]; then
-        cat >> /target/home/kiduser/.bash_profile <<'EOF'
+      if [ -d /home/kiduser ]; then
+        cat >> /home/kiduser/.bash_profile <<'BASHEOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
         exec startx
       fi
-      EOF
-        chroot /target chown kiduser:kiduser /home/kiduser/.bash_profile
+      BASHEOF
+        chown kiduser:kiduser /home/kiduser/.bash_profile
       fi
+
+      # Final ownership fix
+      chown -R purple:purple /home/purple
+      chown -R kiduser:kiduser /home/kiduser 2>/dev/null || true
+
+      # Clean up staging area
+      rm -rf /opt/purple_install
+
+      # Disable this service after first run
+      systemctl disable purple-first-boot.service
+
+      echo "Purple Computer first boot setup complete!"
+      FIRSTBOOT
+
+    - chmod +x /target/usr/local/bin/purple-first-boot.sh
+    - chroot /target systemctl enable purple-first-boot.service
 
     # Set GRUB timeout to 1 second for fast boot
     - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
     - curtin in-target --target=/target -- update-grub
-
-    # Final ownership fix
-    - chroot /target chown -R purple:purple /home/purple
-    - chroot /target chown -R kiduser:kiduser /home/kiduser || true
 
     - echo "Purple Computer late commands complete!"
 

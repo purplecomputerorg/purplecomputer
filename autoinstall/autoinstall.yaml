@@ -123,12 +123,8 @@ autoinstall:
       - mkdir -p /home/kiduser/.config/kitty
 
       # Set ownership - IMPORTANT: fix /home/purple itself first, then subdirectories
-      - chown purple:purple /home/purple
-      - chown -R purple:purple /home/purple/.purple
-      - chown -R purple:purple /home/purple/.config
-      - chown kiduser:kiduser /home/kiduser || true
-      - chown -R kiduser:kiduser /home/kiduser/.purple || true
-      - chown -R kiduser:kiduser /home/kiduser/.config || true
+      - sh -c 'if id purple >/dev/null 2>&1; then chown purple:purple /home/purple; chown -R purple:purple /home/purple/.purple; chown -R purple:purple /home/purple/.config; fi'
+      - sh -c 'if id kiduser >/dev/null 2>&1; then chown kiduser:kiduser /home/kiduser; chown -R kiduser:kiduser /home/kiduser/.purple; chown -R kiduser:kiduser /home/kiduser/.config; fi'
 
       # Setup virtio-fs shared folder for VM development
       # This allows mounting host directories in the VM for live code editing
@@ -171,8 +167,9 @@ autoinstall:
       cat > /target/etc/systemd/system/purple-first-boot.service <<'EOF'
       [Unit]
       Description=Purple Computer First Boot Setup
-      After=network.target
+      After=network-online.target systemd-user-sessions.service
       Before=getty@tty1.service
+      Wants=network-online.target
       ConditionPathExists=!/etc/purple-computer-configured
       DefaultDependencies=no
 
@@ -221,7 +218,9 @@ autoinstall:
       echo "Installing Purple Computer files..."
       mkdir -p /home/purple/.purple
       cp -r /tmp/purplecomputer/purple_repl/* /home/purple/.purple/
-      chown -R purple:purple /home/purple/.purple
+      if id purple >/dev/null 2>&1; then
+        chown -R purple:purple /home/purple/.purple
+      fi
       find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
 
       # Backwards compatibility with kiduser
@@ -256,8 +255,10 @@ autoinstall:
       exec kitty --start-as=fullscreen --single-instance /home/purple/.purple/repl.py
       XINITRC
 
-      chown purple:purple /home/purple/.xinitrc
-      chmod +x /home/purple/.xinitrc
+      if id purple >/dev/null 2>&1; then
+        chown purple:purple /home/purple/.xinitrc
+        chmod +x /home/purple/.xinitrc
+      fi
 
       if [ -d /home/kiduser ]; then
         cp /home/purple/.xinitrc /home/kiduser/.xinitrc
@@ -279,7 +280,9 @@ autoinstall:
       foreground #eee8d5
       KITTY
 
-      chown -R purple:purple /home/purple/.config
+      if id purple >/dev/null 2>&1; then
+        chown -R purple:purple /home/purple/.config
+      fi
 
       if [ -d /home/kiduser ]; then
         mkdir -p /home/kiduser/.config/kitty
@@ -295,7 +298,9 @@ autoinstall:
         exec startx
       fi
       BASHEOF
-      chown purple:purple /home/purple/.bash_profile
+      if id purple >/dev/null 2>&1; then
+        chown purple:purple /home/purple/.bash_profile
+      fi
 
       if [ -d /home/kiduser ]; then
         cat >> /home/kiduser/.bash_profile <<'BASHEOF'
@@ -315,11 +320,14 @@ autoinstall:
       # Final ownership fix (CRITICAL for .Xauthority and X11 logs)
       echo "Finalizing setup..."
       # Fix home directories themselves first (prevents X11 permission errors)
-      chown purple:purple /home/purple
-      chown kiduser:kiduser /home/kiduser 2>/dev/null || true
-      # Then recursively fix all contents
-      chown -R purple:purple /home/purple
-      chown -R kiduser:kiduser /home/kiduser 2>/dev/null || true
+      if id purple >/dev/null 2>&1; then
+        chown purple:purple /home/purple
+        chown -R purple:purple /home/purple
+      fi
+      if id kiduser >/dev/null 2>&1; then
+        chown kiduser:kiduser /home/kiduser
+        chown -R kiduser:kiduser /home/kiduser
+      fi
 
       # Clean up staging area
       rm -rf /opt/purple_install

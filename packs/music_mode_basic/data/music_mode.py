@@ -13,38 +13,41 @@ import subprocess
 from pathlib import Path
 
 
-# Note frequencies for a simple chromatic scale (Hz)
-# Maps keyboard keys to (frequency, note_name)
+# Musical keyboard layout - C major scale spanning octaves
+# Low notes on left, high notes on right
+# Maps keyboard keys to (frequency, note_name, display_key)
 NOTE_MAP = {
-    # Top row
-    'q': (261.63, 'C'),
-    'w': (293.66, 'D'),
-    'e': (329.63, 'E'),
-    'r': (349.23, 'F'),
-    't': (392.00, 'G'),
-    'y': (440.00, 'A'),
-    'u': (493.88, 'B'),
-    'i': (523.25, 'C'),
-    'o': (587.33, 'D'),
-    'p': (659.25, 'E'),
-    # Middle row
-    'a': (261.63, 'C'),
-    's': (293.66, 'D'),
-    'd': (329.63, 'E'),
-    'f': (349.23, 'F'),
-    'g': (392.00, 'G'),
-    'h': (440.00, 'A'),
-    'j': (493.88, 'B'),
-    'k': (523.25, 'C'),
-    'l': (587.33, 'D'),
-    # Bottom row
-    'z': (329.63, 'E'),
-    'x': (349.23, 'F'),
-    'c': (392.00, 'G'),
-    'v': (440.00, 'A'),
-    'b': (493.88, 'B'),
-    'n': (523.25, 'C'),
-    'm': (587.33, 'D'),
+    # Bottom row - LOW notes (lower octave)
+    'z': (130.81, 'C', 'z→C'),
+    'x': (146.83, 'D', 'x→D'),
+    'c': (164.81, 'E', 'c→E'),
+    'v': (174.61, 'F', 'v→F'),
+    'b': (196.00, 'G', 'b→G'),
+    'n': (220.00, 'A', 'n→A'),
+    'm': (246.94, 'B', 'm→B'),
+
+    # Middle row - MIDDLE notes (middle octave)
+    'a': (261.63, 'C', 'a→C'),
+    's': (293.66, 'D', 's→D'),
+    'd': (329.63, 'E', 'd→E'),
+    'f': (349.23, 'F', 'f→F'),
+    'g': (392.00, 'G', 'g→G'),
+    'h': (440.00, 'A', 'h→A'),
+    'j': (493.88, 'B', 'j→B'),
+    'k': (523.25, 'C', 'k→C'),
+    'l': (587.33, 'D', 'l→D'),
+
+    # Top row - HIGH notes (higher octave)
+    'q': (523.25, 'C', 'q→C'),
+    'w': (587.33, 'D', 'w→D'),
+    'e': (659.25, 'E', 'e→E'),
+    'r': (698.46, 'F', 'r→F'),
+    't': (783.99, 'G', 't→G'),
+    'y': (880.00, 'A', 'y→A'),
+    'u': (987.77, 'B', 'u→B'),
+    'i': (1046.50, 'C', 'i→C'),
+    'o': (1174.66, 'D', 'o→D'),
+    'p': (1318.51, 'E', 'p→E'),
 }
 
 
@@ -173,67 +176,73 @@ def show_keyboard_visual(last_key='', last_note_info=None):
     BOLD = '\033[1m'
     RESET = '\033[0m'
 
-    # Move cursor to home position (top-left)
-    print("\033[H", end='')
+    # Clear screen and hide cursor
+    print("\033[2J\033[H\033[?25l", end='')
 
-    # Fun colorful header
+    # Fun colorful header - centered for ~100 char width
     print()
     print()
-    print(f"            {PURPLE}{BOLD}╔═══════════════════════════════════════╗{RESET}")
-    print(f"            {PURPLE}{BOLD}║                                       ║{RESET}")
-    print(f"            {PURPLE}{BOLD}║{RESET}     {CYAN}🎹  MUSIC MODE  🎹{RESET}            {PURPLE}{BOLD}║{RESET}")
-    print(f"            {PURPLE}{BOLD}║                                       ║{RESET}")
-    print(f"            {PURPLE}{BOLD}╚═══════════════════════════════════════╝{RESET}")
+    print(f"                     {PURPLE}{BOLD}╔═══════════════════════════════════════╗{RESET}")
+    print(f"                     {PURPLE}{BOLD}║                                       ║{RESET}")
+    print(f"                     {PURPLE}{BOLD}║{RESET}              {CYAN}{BOLD}MUSIC MODE{RESET}              {PURPLE}{BOLD}║{RESET}")
+    print(f"                     {PURPLE}{BOLD}║                                       ║{RESET}")
+    print(f"                     {PURPLE}{BOLD}╚═══════════════════════════════════════╝{RESET}")
     print()
-    print(f"                {YELLOW}Press keys to make music!{RESET}")
-    print(f"                  {GREEN}ESC to exit{RESET}")
+    print(f"                      {YELLOW}🎹 Press keys to make music! 🎹{RESET}")
+    print(f"                           {GREEN}ESC to exit{RESET}")
     print()
     print()
 
-    # Simple keyboard layout
+    # Keyboard layout with labels
     all_keys = [
         ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
         ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
         ['z', 'x', 'c', 'v', 'b', 'n', 'm']
     ]
 
-    # Colors for different keys (make it rainbow-like)
-    key_colors = {
-        'q': RED, 'w': RED, 'e': YELLOW, 'r': YELLOW, 't': YELLOW,
-        'y': GREEN, 'u': GREEN, 'i': CYAN, 'o': CYAN, 'p': BLUE,
-        'a': RED, 's': RED, 'd': YELLOW, 'f': YELLOW, 'g': GREEN,
-        'h': GREEN, 'j': CYAN, 'k': CYAN, 'l': BLUE,
-        'z': RED, 'x': YELLOW, 'c': YELLOW, 'v': GREEN,
-        'b': GREEN, 'n': CYAN, 'm': BLUE
-    }
+    row_labels = ['HIGH', 'MID', 'LOW']
+
+    # Colors for different rows
+    row_colors = [RED, GREEN, BLUE]
 
     # Draw keyboard
-    for row in all_keys:
-        print("              ", end='')
+    for idx, row in enumerate(all_keys):
+        label = row_labels[idx]
+        label_color = row_colors[idx]
+
+        # Top border
+        print(f"                ", end='')
         for key in row:
-            if key == last_key:
-                print(f"  {BOLD}{YELLOW}┌─────┐{RESET}", end='')
-            else:
-                color = key_colors.get(key, RESET)
-                print(f"  {color}┌─────┐{RESET}", end='')
+            if key in NOTE_MAP:
+                freq, note_name, display = NOTE_MAP[key]
+                if key == last_key:
+                    print(f"  {BOLD}{YELLOW}┌──────┐{RESET}", end='')
+                else:
+                    color = row_colors[idx]
+                    print(f"  {color}┌──────┐{RESET}", end='')
         print()
 
-        print("              ", end='')
+        # Middle with key labels - row label goes here (vertically centered)
+        print(f"       {label_color}{BOLD}{label:>4}{RESET}     ", end='')
         for key in row:
-            if key == last_key:
-                print(f"  {BOLD}{YELLOW}│  {key.upper()}  │{RESET}", end='')
-            else:
-                color = key_colors.get(key, RESET)
-                print(f"  {color}│  {key}  │{RESET}", end='')
+            if key in NOTE_MAP:
+                freq, note_name, display = NOTE_MAP[key]
+                if key == last_key:
+                    print(f"  {BOLD}{YELLOW}│{display:^6}│{RESET}", end='')
+                else:
+                    color = row_colors[idx]
+                    print(f"  {color}│{display:^6}│{RESET}", end='')
         print()
 
-        print("              ", end='')
+        # Bottom border
+        print(f"                ", end='')
         for key in row:
-            if key == last_key:
-                print(f"  {BOLD}{YELLOW}└─────┘{RESET}", end='')
-            else:
-                color = key_colors.get(key, RESET)
-                print(f"  {color}└─────┘{RESET}", end='')
+            if key in NOTE_MAP:
+                if key == last_key:
+                    print(f"  {BOLD}{YELLOW}└──────┘{RESET}", end='')
+                else:
+                    color = row_colors[idx]
+                    print(f"  {color}└──────┘{RESET}", end='')
         print()
         print()
 
@@ -241,10 +250,11 @@ def show_keyboard_visual(last_key='', last_note_info=None):
 
     # Now playing with fun emojis
     if last_note_info:
-        note_name, freq = last_note_info
-        print(f"                  {CYAN}{BOLD}♪ ♫ ♪  Playing: {note_name}  ♪ ♫ ♪{RESET}")
+        display_key, note_name = last_note_info
+        print(f"                      {CYAN}{BOLD}♪ ♫ ♪  {display_key} = {note_name} note!  ♪ ♫ ♪{RESET}")
     else:
-        print()
+        print(f"                          {CYAN}(Try pressing keys!){RESET}")
+    print()
     print()
 
     # Flush output
@@ -259,7 +269,7 @@ def activate():
     # Pre-generate tones for faster playback
     print("\nGenerating sounds...", flush=True)
     tone_cache = {}
-    for key, (freq, note_name) in NOTE_MAP.items():
+    for key, (freq, note_name, display) in NOTE_MAP.items():
         tone_cache[key] = generate_tone(freq, duration=0.3)
 
     last_key = ''
@@ -271,6 +281,7 @@ def activate():
         sys.stdout.write("\033[?1049h")  # Enter alternate buffer
         sys.stdout.write("\033[2J")      # Clear it
         sys.stdout.write("\033[H")       # Move cursor to top
+        sys.stdout.write("\033[?25l")    # Hide cursor
         sys.stdout.flush()
 
         # Show initial screen
@@ -289,8 +300,8 @@ def activate():
             # Play sound if it's a mapped key
             if key.lower() in tone_cache:
                 last_key = key.lower()
-                freq, note_name = NOTE_MAP[last_key]
-                last_note_info = (note_name, freq)
+                freq, note_name, display_key = NOTE_MAP[last_key]
+                last_note_info = (display_key, note_name)
                 play_sound(tone_cache[last_key])
                 # Redraw with highlighted key
                 show_keyboard_visual(last_key, last_note_info)
@@ -304,7 +315,8 @@ def activate():
         pass
 
     finally:
-        # Switch back to main screen buffer
+        # Show cursor and switch back to main screen buffer
+        sys.stdout.write("\033[?25h")    # Show cursor
         sys.stdout.write("\033[?1049l")  # Exit alternate buffer
         sys.stdout.flush()
 

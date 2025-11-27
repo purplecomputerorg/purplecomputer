@@ -1,6 +1,6 @@
 #!/bin/bash
 # Purple Computer X11 Startup Script
-# This launches when the kiduser logs in and starts X11
+# This launches when the purple user logs in and starts X11
 
 # Disable screen blanking and power management
 xset s off
@@ -26,4 +26,4 @@ xsetroot -solid "#800080"
 # The -1 flag makes Kitty start in a single instance
 # The --start-as fullscreen makes it take the whole screen
 exec kitty --start-as=fullscreen --single-instance \
-    /home/kiduser/.purple/repl.py
+    /home/purple/.purple/repl.py

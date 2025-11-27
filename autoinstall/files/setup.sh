@@ -2,6 +2,9 @@
 # Purple Computer Setup Script
 # Run this manually if you're installing Purple Computer on an existing Ubuntu system
 # (instead of using the autoinstall ISO)
+#
+# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + kitty fullscreen
+# No GUI, no window manager, no desktop bloat - just a fullscreen terminal
 
 set -e
 
@@ -31,6 +34,7 @@ echo_info "Updating package list..."
 apt update
 
 # Install required packages
+# IMPORTANT: Minimal Xorg only - NO desktop environment, NO window manager
 echo_info "Installing required packages..."
 apt install -y \
     xorg \

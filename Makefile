@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-docker build-packs clean test docker-build docker-shell
+.PHONY: help setup run run-docker build-packs build-iso clean test docker-build docker-shell clean-iso
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -16,12 +16,14 @@ help:
 	@echo ""
 	@echo "Building:"
 	@echo "  make build-packs    - Build example packs"
+	@echo "  make build-iso      - Build bootable ISO for VM/hardware install"
 	@echo "  make docker-build   - Rebuild Docker image"
 	@echo ""
 	@echo "Cleaning:"
 	@echo "  make clean          - Remove test environment"
 	@echo "  make clean-docker   - Remove Docker containers and volumes"
-	@echo "  make clean-all      - Remove everything (test env + Docker)"
+	@echo "  make clean-iso      - Remove ISO build artifacts"
+	@echo "  make clean-all      - Remove everything (test env + Docker + ISO)"
 	@echo ""
 	@echo "For more info, see README.md and MANUAL.md"
 
@@ -52,6 +54,17 @@ build-packs:
 	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/music_mode_basic packs/music_mode_basic.purplepack"
 	@echo "✓ Packs built"
 
+build-iso:
+	@echo "Building Purple Computer ISO..."
+	@echo "This will download Ubuntu Server ISO (~1.4GB) and create a bootable image"
+	@echo "Requirements: xorriso, isolinux, curl, wget"
+	@echo ""
+	./autoinstall/build-iso.sh
+	@echo ""
+	@echo "✓ ISO built successfully: purple-computer.iso"
+	@echo "  Boot in VM with virtio-fs shared folder for live development"
+	@echo "  See autoinstall/README.md for VM setup instructions"
+
 clean:
 	@echo "Cleaning local test environment..."
 	rm -rf .test_home/
@@ -64,7 +77,13 @@ clean-docker:
 	-docker volume rm purplecomputer_purple-config 2>/dev/null || true
 	@echo "✓ Docker cleaned (image preserved, use 'docker rmi purplecomputer:latest' to remove image)"
 
-clean-all: clean clean-docker
+clean-iso:
+	@echo "Cleaning ISO build artifacts..."
+	rm -rf autoinstall/build/
+	rm -f purple-computer.iso
+	@echo "✓ ISO build artifacts removed"
+
+clean-all: clean clean-docker clean-iso
 	@echo "✓ All test environments cleaned"
 
 test:

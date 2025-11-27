@@ -659,8 +659,9 @@ sudo reboot
 ### What Gets Installed
 
 **System:**
-- Ubuntu 22.04 LTS (minimal)
-- X11 + Kitty terminal
+- **Ubuntu Server 22.04 LTS** (no desktop environment, no GUI)
+- **Minimal Xorg** (X11 server only, no window manager, no desktop bloat)
+- **Kitty terminal** (launches fullscreen)
 - Python 3 + IPython
 
 **User:**
@@ -671,6 +672,8 @@ sudo reboot
 - REPL in `~/.purple/`
 - Packs in `~/.purple/packs/`
 - Parent config in `~/.purple/parent.json`
+
+**Architecture:** Ubuntu Server + minimal Xorg + kitty fullscreen. No GNOME, no KDE, no window manager, no GUI applications.
 
 ### System Requirements
 
@@ -706,6 +709,18 @@ qemu-system-x86_64 \
 ---
 
 ## Architecture
+
+### System Stack
+
+**No GUI. No Desktop Environment. No Window Manager.**
+
+Purple Computer uses a minimal stack:
+- **Ubuntu Server 22.04** - Base OS (no desktop packages)
+- **Minimal Xorg** - X11 server only (xorg, xinit, xserver-xorg-video-all)
+- **Kitty** - Terminal emulator (fullscreen mode)
+- **IPython** - Python REPL with Purple extensions
+
+The system boots directly from console to fullscreen terminal. No GNOME, no KDE, no window decorations, no GUI applications.
 
 ### System Overview
 
@@ -780,20 +795,26 @@ qemu-system-x86_64 \
 
 ### Startup Flow
 
-1. User logs in (auto-login, no password)
-2. `.bash_profile` runs → `startx`
-3. `.xinitrc` runs → `kitty`
-4. Kitty runs → `python3 ~/.purple/repl.py`
-5. repl.py:
+**Boot Sequence (Ubuntu Server → Xorg → Kitty fullscreen):**
+
+1. **GRUB** → boots Ubuntu Server (1 second timeout)
+2. **getty@tty1** → auto-login as `purple` user (no password)
+3. **`.bash_profile`** → runs `startx` (launches X11)
+4. **Xorg** → starts minimal X server (no window manager)
+5. **`.xinitrc`** → launches kitty fullscreen with purple background
+6. **Kitty** → runs `python3 ~/.purple/repl.py`
+7. **repl.py**:
    - Create PackRegistry
    - Create PackManager
    - Load all packs
    - Install parent escape handler
    - Start IPython
-6. IPython runs startup scripts:
+8. **IPython** runs startup scripts:
    - Load emoji from registry
    - Load modes
-7. Kid sees: 💜 prompt
+9. **Kid sees:** 💜 prompt
+
+Total boot time: < 5 seconds from power-on to REPL
 
 ### Security Design
 

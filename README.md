@@ -10,7 +10,9 @@ Purple Computer is a real computer for young kids. They type on a keyboard, run 
 - Creative exploration with code
 - How computers follow instructions
 
-No desktop. No apps. Just a purple terminal where they explore and create.
+**No desktop. No apps. No GUI.** Just a purple terminal where they explore and create.
+
+**Technical setup:** Ubuntu Server + minimal Xorg + kitty terminal fullscreen. No window manager, no desktop environment, no GUI bloat.
 
 It's offline, private, and runs on old hardware.
 
@@ -236,6 +238,8 @@ See [MANUAL.md](MANUAL.md#development--testing) for details.
 - 2GB RAM minimum (4GB recommended)
 - 8GB storage minimum (16GB recommended)
 - USB port for installation
+
+**Architecture:** Ubuntu Server 22.04 + minimal Xorg (no desktop environment) + kitty terminal fullscreen. No GUI, no window manager, no desktop bloat.
 
 ---
 

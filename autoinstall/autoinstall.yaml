@@ -1,6 +1,9 @@
 #cloud-config
 # Purple Computer Autoinstall Configuration
 # This file drives the automated Ubuntu Server installation
+#
+# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + kitty fullscreen
+# No GUI, no window manager, no desktop bloat - just a fullscreen terminal
 
 autoinstall:
   version: 1
@@ -46,13 +49,14 @@ autoinstall:
     install-server: false
 
   # Package selection
+  # IMPORTANT: Ubuntu Server base, NO desktop environment packages
   packages:
-    # X11 minimal environment
+    # X11 minimal (just the X server, no window manager, no desktop environment)
     - xorg
     - xinit
     - xserver-xorg-video-all
 
-    # Terminal emulator
+    # Terminal emulator (runs fullscreen via xinitrc)
     - kitty
 
     # Python environment
@@ -122,6 +126,16 @@ autoinstall:
       - chown -R purple:purple /home/purple/.config
       - chown -R kiduser:kiduser /home/kiduser/.purple || true
       - chown -R kiduser:kiduser /home/kiduser/.config || true
+
+      # Setup virtio-fs shared folder for VM development
+      # This allows mounting host directories in the VM for live code editing
+      - mkdir -p /mnt/purple
+      - |
+        cat >> /etc/fstab <<'FSTAB_EOF'
+        # Purple Computer shared folder (virtio-fs for VM testing)
+        purple /mnt/purple virtiofs defaults,nofail 0 0
+        FSTAB_EOF
+      - mount -a 2>/dev/null || true
 
       # Disable unnecessary services
       - systemctl disable systemd-networkd-wait-online.service

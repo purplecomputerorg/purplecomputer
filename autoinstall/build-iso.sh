@@ -1,15 +1,28 @@
 #!/bin/bash
 # Purple Computer ISO Builder
-# This script creates a bootable Ubuntu ISO with Purple Computer pre-configured
+# This script creates a bootable Ubuntu Server ISO with Purple Computer pre-configured
+# Architecture: Ubuntu Server + minimal Xorg (no desktop) + kitty fullscreen
+#
+# Run from project root: ./autoinstall/build-iso.sh
+# Or from autoinstall/: ./build-iso.sh
 
 set -e  # Exit on error
+
+# Determine script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [ "$(basename $SCRIPT_DIR)" = "autoinstall" ]; then
+    PROJECT_ROOT="$SCRIPT_DIR/.."
+    cd "$PROJECT_ROOT"
+else
+    PROJECT_ROOT="$SCRIPT_DIR"
+fi
 
 # Configuration
 UBUNTU_VERSION="22.04.3"
 UBUNTU_ISO_URL="https://releases.ubuntu.com/22.04/ubuntu-22.04.3-live-server-amd64.iso"
 UBUNTU_ISO_NAME="ubuntu-22.04.3-live-server-amd64.iso"
 OUTPUT_ISO="purple-computer.iso"
-WORK_DIR="build"
+WORK_DIR="autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
 
@@ -83,12 +96,22 @@ chmod -R u+w "$EXTRACT_DIR"
 echo_info "Copying Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
 
-# Copy files from parent directory
-cp -r ../files/* "$EXTRACT_DIR/purple_files/"
+# Copy Purple REPL code
+cp -r purple_repl/* "$EXTRACT_DIR/purple_files/"
+
+# Copy system configuration files
+cp -r autoinstall/files/systemd "$EXTRACT_DIR/purple_files/"
+cp autoinstall/files/xinit/xinitrc "$EXTRACT_DIR/purple_files/"
+cp autoinstall/files/kitty/kitty.conf "$EXTRACT_DIR/purple_files/"
 
 # Copy autoinstall configuration
 echo_info "Injecting autoinstall configuration..."
-cp ../autoinstall.yaml "$EXTRACT_DIR/autoinstall.yaml"
+cp autoinstall/autoinstall.yaml "$EXTRACT_DIR/autoinstall.yaml"
+
+# Create user-data and meta-data for cloud-init
+mkdir -p "$EXTRACT_DIR/nocloud"
+cp autoinstall/autoinstall.yaml "$EXTRACT_DIR/nocloud/user-data"
+touch "$EXTRACT_DIR/nocloud/meta-data"
 
 # Modify GRUB configuration for autoinstall
 echo_info "Modifying boot configuration..."
@@ -97,7 +120,7 @@ set timeout=5
 
 menuentry "Install Purple Computer (Automatic)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/ quiet splash ---
+    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
     initrd /casper/initrd
 }
 
@@ -115,7 +138,7 @@ default install
 label install
   menu label ^Install Purple Computer (Automatic)
   kernel /casper/vmlinuz
-  append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/ quiet splash ---
+  append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/nocloud/ quiet splash ---
 ISOLINUX_EOF
 fi
 

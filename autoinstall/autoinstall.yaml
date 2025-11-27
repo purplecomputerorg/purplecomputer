@@ -11,23 +11,21 @@ autoinstall:
   # Early commands run before installation begins
   early-commands:
     - echo "Starting Purple Computer installation..."
-    # Stop snapd to avoid overlayfs conflicts
-    - systemctl stop snapd.socket snapd.service || true
-    - systemctl mask snapd.socket snapd.service || true
 
   # Locale and keyboard settings
   locale: en_US.UTF-8
   keyboard:
     layout: us
 
-  # Network configuration - disabled by default for safety
+  # Network configuration - enabled for auto-updates and pack downloads
+  # Parents can manage network access via router/firewall or parent mode settings
   network:
     version: 2
     ethernets:
       any:
         match:
           name: en*
-        dhcp4: false
+        dhcp4: true
         dhcp6: false
 
   # Storage configuration - use entire disk
@@ -140,9 +138,8 @@ autoinstall:
         FSTAB_EOF
       - mount -a 2>/dev/null || true
 
-      # Disable unnecessary services
+      # Disable unnecessary services (NetworkManager stays enabled for auto-updates)
       - systemctl disable systemd-networkd-wait-online.service
-      - systemctl disable NetworkManager.service
       - systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
       # Configure audio
@@ -153,88 +150,143 @@ autoinstall:
       - echo "Purple Computer installation complete!"
 
   # Late commands - run after installation, before reboot
+  # NO file copying from /cdrom to avoid overlayfs conflicts with subiquity snap
   late-commands:
-    # Copy Purple Computer files to staging area (avoid overlayfs conflicts)
-    - mkdir -p /target/opt/purple_install
+    # Setup getty auto-login NOW (before first boot) so it works immediately
+    - mkdir -p /target/etc/systemd/system/getty@tty1.service.d
     - |
-      if [ -d /cdrom/purple_files ]; then
-        cp -r /cdrom/purple_files /target/opt/purple_install/ || true
-      fi
+      cat > /target/etc/systemd/system/getty@tty1.service.d/override.conf <<'GETTY'
+      # Getty Auto-Login Override for Purple Computer
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
+      StandardInput=tty
+      StandardOutput=tty
+      GETTY
 
-    # Create first-boot setup service that will run on initial boot
+    # Create first-boot setup service (blocks getty until setup completes)
     - |
       cat > /target/etc/systemd/system/purple-first-boot.service <<'EOF'
       [Unit]
       Description=Purple Computer First Boot Setup
       After=network.target
-      ConditionPathExists=/opt/purple_install/purple_files
+      Before=getty@tty1.service
+      ConditionPathExists=!/etc/purple-computer-configured
+      DefaultDependencies=no
 
       [Service]
       Type=oneshot
       RemainAfterExit=yes
       ExecStart=/usr/local/bin/purple-first-boot.sh
+      StandardOutput=journal+console
+      StandardError=journal+console
 
       [Install]
       WantedBy=multi-user.target
       EOF
 
-    # Create first-boot setup script
+    # Create first-boot setup script (embeds all configs inline)
     - |
       cat > /target/usr/local/bin/purple-first-boot.sh <<'FIRSTBOOT'
       #!/bin/bash
       set -e
 
-      echo "Purple Computer First Boot Setup..."
+      echo ""
+      echo "=========================================="
+      echo "  Purple Computer First Boot Setup"
+      echo "=========================================="
+      echo ""
+      echo "Setting up Purple Computer for the first time..."
+      echo "This will take about 1-2 minutes."
+      echo ""
 
-      # Copy Purple Computer files to purple user
-      if [ -d /opt/purple_install/purple_files ]; then
-        mkdir -p /home/purple/.purple
-        cp -r /opt/purple_install/purple_files/* /home/purple/.purple/
-        chown -R purple:purple /home/purple/.purple
-        find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
+      # Clone Purple Computer repository
+      echo "Downloading Purple Computer files..."
+      cd /tmp
+      if ! git clone https://github.com/purplecomputerorg/purplecomputer.git 2>&1; then
+        echo ""
+        echo "ERROR: Failed to download Purple Computer files."
+        echo "Please check your internet connection and try again."
+        echo ""
+        echo "Press Enter to get a login prompt..."
+        read
+        exit 1
+      fi
+      echo "✓ Download complete"
+      echo ""
 
-        # Copy to kiduser for backwards compatibility
-        if [ -d /home/kiduser ]; then
-          mkdir -p /home/kiduser/.purple
-          cp -r /opt/purple_install/purple_files/* /home/kiduser/.purple/
-          chown -R kiduser:kiduser /home/kiduser/.purple
-          find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
-        fi
+      # Copy Purple REPL to user directories
+      echo "Installing Purple Computer files..."
+      mkdir -p /home/purple/.purple
+      cp -r /tmp/purplecomputer/purple_repl/* /home/purple/.purple/
+      chown -R purple:purple /home/purple/.purple
+      find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
+
+      # Backwards compatibility with kiduser
+      if [ -d /home/kiduser ]; then
+        mkdir -p /home/kiduser/.purple
+        cp -r /tmp/purplecomputer/purple_repl/* /home/kiduser/.purple/
+        chown -R kiduser:kiduser /home/kiduser/.purple
+        find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
+      fi
+      echo "✓ Installation complete"
+      echo ""
+
+      # Getty auto-login is already configured in late-commands
+      # Just ensure it's enabled
+      echo "Configuring auto-login..."
+      systemctl daemon-reload
+      systemctl enable getty@tty1.service
+      echo "✓ Auto-login configured"
+      echo ""
+
+      # Create xinitrc (embed inline)
+      echo "Setting up X11 environment..."
+      cat > /home/purple/.xinitrc <<'XINITRC'
+      #!/bin/bash
+      # Purple Computer X11 Startup
+      xset s off
+      xset -dpms
+      xset s noblank
+      xset b off
+      xset r rate 300 30
+      xsetroot -solid "#800080"
+      exec kitty --start-as=fullscreen --single-instance /home/purple/.purple/repl.py
+      XINITRC
+
+      chown purple:purple /home/purple/.xinitrc
+      chmod +x /home/purple/.xinitrc
+
+      if [ -d /home/kiduser ]; then
+        cp /home/purple/.xinitrc /home/kiduser/.xinitrc
+        chown kiduser:kiduser /home/kiduser/.xinitrc
+        chmod +x /home/kiduser/.xinitrc
       fi
 
-      # Setup getty auto-login
-      if [ -f /opt/purple_install/purple_files/systemd/getty-override.conf ]; then
-        mkdir -p /etc/systemd/system/getty@tty1.service.d
-        cp /opt/purple_install/purple_files/systemd/getty-override.conf /etc/systemd/system/getty@tty1.service.d/override.conf
-        systemctl daemon-reload
-        systemctl enable getty@tty1.service
-      fi
+      # Create kitty config (embed inline)
+      mkdir -p /home/purple/.config/kitty
+      cat > /home/purple/.config/kitty/kitty.conf <<'KITTY'
+      # Purple Computer Kitty Configuration
+      font_family      monospace
+      font_size        14.0
+      cursor_blink_interval 0
+      enable_audio_bell no
+      window_padding_width 10
+      background_opacity 1.0
+      background #1a1a2e
+      foreground #eee8d5
+      KITTY
 
-      # Copy xinitrc
-      if [ -f /opt/purple_install/purple_files/xinitrc ]; then
-        cp /opt/purple_install/purple_files/xinitrc /home/purple/.xinitrc
-        chown purple:purple /home/purple/.xinitrc
-        chmod +x /home/purple/.xinitrc
-        if [ -d /home/kiduser ]; then
-          cp /opt/purple_install/purple_files/xinitrc /home/kiduser/.xinitrc
-          chown kiduser:kiduser /home/kiduser/.xinitrc
-          chmod +x /home/kiduser/.xinitrc
-        fi
-      fi
+      chown -R purple:purple /home/purple/.config
 
-      # Copy kitty config
-      if [ -f /opt/purple_install/purple_files/kitty.conf ]; then
-        mkdir -p /home/purple/.config/kitty
-        cp /opt/purple_install/purple_files/kitty.conf /home/purple/.config/kitty/kitty.conf
-        chown -R purple:purple /home/purple/.config
-        if [ -d /home/kiduser ]; then
-          mkdir -p /home/kiduser/.config/kitty
-          cp /opt/purple_install/purple_files/kitty.conf /home/kiduser/.config/kitty/kitty.conf
-          chown -R kiduser:kiduser /home/kiduser/.config
-        fi
+      if [ -d /home/kiduser ]; then
+        mkdir -p /home/kiduser/.config/kitty
+        cp /home/purple/.config/kitty/kitty.conf /home/kiduser/.config/kitty/kitty.conf
+        chown -R kiduser:kiduser /home/kiduser/.config
       fi
 
       # Setup auto-startx in .bash_profile
+      echo "Configuring auto-start..."
       cat >> /home/purple/.bash_profile <<'BASHEOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
@@ -252,18 +304,33 @@ autoinstall:
       BASHEOF
         chown kiduser:kiduser /home/kiduser/.bash_profile
       fi
+      echo "✓ Auto-start configured"
+      echo ""
+
+      echo "✓ Xorg environment configured"
+      echo ""
 
       # Final ownership fix
+      echo "Finalizing setup..."
       chown -R purple:purple /home/purple
       chown -R kiduser:kiduser /home/kiduser 2>/dev/null || true
 
       # Clean up staging area
       rm -rf /opt/purple_install
+      rm -rf /tmp/purplecomputer
 
-      # Disable this service after first run
+      # Mark as configured and disable this service
+      touch /etc/purple-computer-configured
       systemctl disable purple-first-boot.service
 
-      echo "Purple Computer first boot setup complete!"
+      echo "✓ Setup complete"
+      echo ""
+      echo "=========================================="
+      echo "  Purple Computer is ready!"
+      echo "=========================================="
+      echo ""
+      echo "Starting Purple Computer..."
+      sleep 2
       FIRSTBOOT
 
     - chmod +x /target/usr/local/bin/purple-first-boot.sh

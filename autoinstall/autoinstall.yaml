@@ -56,6 +56,7 @@ autoinstall:
     - xorg
     - xinit
     - xserver-xorg-video-all
+    - matchbox-window-manager
 
     # Terminal emulator (runs fullscreen via xinitrc)
     - kitty
@@ -252,6 +253,7 @@ autoinstall:
       xset b off
       xset r rate 300 30
       xsetroot -solid "#800080"
+      matchbox-window-manager &
       exec kitty --start-as=fullscreen --single-instance /home/purple/.purple/repl.py
       XINITRC
 

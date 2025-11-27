@@ -22,8 +22,11 @@ fi
 # Set a nice purple background color
 xsetroot -solid "#800080"
 
+# Start matchbox window manager in background
+# This minimal WM enables Kitty's fullscreen mode to work properly
+matchbox-window-manager &
+
 # Launch Kitty in fullscreen with Purple REPL
-# The -1 flag makes Kitty start in a single instance
-# The --start-as fullscreen makes it take the whole screen
+# The --start-as=fullscreen flag now works correctly with matchbox running
 exec kitty --start-as=fullscreen --single-instance \
     /home/purple/.purple/repl.py

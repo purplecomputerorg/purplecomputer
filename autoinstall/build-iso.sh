@@ -68,39 +68,8 @@ for cmd in $COMMANDS; do
     fi
 done
 
-# Check for isolinux.bin (provided by isolinux or syslinux package)
-echo_info "Checking for isolinux.bin..."
-ISOLINUX_FOUND=false
-ISOLINUX_PATHS=(
-    "/usr/lib/ISOLINUX/isolinux.bin"
-    "/usr/lib/syslinux/isolinux.bin"
-    "/usr/share/syslinux/isolinux.bin"
-    "/usr/lib/syslinux/bios/isolinux.bin"
-    "/usr/lib/SYSLINUX/isolinux.bin"
-)
-
-# Also check NixOS store if it exists
-if [ -d "/nix/store" ]; then
-    ISOLINUX_PATHS+=($( find /nix/store -path "*/share/syslinux/isolinux.bin" 2>/dev/null || true ))
-fi
-
-for path in "${ISOLINUX_PATHS[@]}"; do
-    if [ -f "$path" ]; then
-        ISOLINUX_FOUND=true
-        ISOLINUX_BIN="$path"
-        echo_info "Found isolinux.bin at: $path"
-        break
-    fi
-done
-
-if [ "$ISOLINUX_FOUND" = false ]; then
-    echo_error "isolinux.bin not found in standard locations."
-    echo "  Debian/Ubuntu: sudo apt install isolinux"
-    echo "  Fedora: sudo dnf install syslinux"
-    echo "  Arch: sudo pacman -S syslinux"
-    echo "  NixOS: Add 'syslinux' to your environment.systemPackages"
-    exit 1
-fi
+# Note: Ubuntu 24.04 uses GRUB for both BIOS and UEFI boot (no isolinux needed)
+echo_info "Ubuntu 24.04 uses GRUB for both BIOS and UEFI boot"
 
 # Create work directory
 echo_info "Creating work directory..."
@@ -261,22 +230,17 @@ find -type f -print0 | sudo xargs -0 md5sum | grep -v isolinux/boot.cat | sudo t
 echo_info "Building Purple Computer ISO..."
 cd "$WORK_DIR"
 sudo xorriso -as mkisofs \
-    -iso-level 3 \
-    -full-iso9660-filenames \
-    -volid "Purple Computer" \
-    -eltorito-boot isolinux/isolinux.bin \
-    -eltorito-catalog isolinux/boot.cat \
-    -no-emul-boot \
-    -boot-load-size 4 \
-    -boot-info-table \
+    -r -V "Purple Computer" \
+    -o "$OUTPUT_ISO" \
+    -J -l \
+    -c boot.catalog \
+    -b boot/grub/i386-pc/eltorito.img \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
     -eltorito-alt-boot \
-    -e boot/grub/efi.img \
+    -e EFI/boot/grubx64.efi \
     -no-emul-boot \
-    -append_partition 2 0xef boot/grub/efi.img \
-    -output "$OUTPUT_ISO" \
-    -graft-points \
-        "." \
-        "$EXTRACT_DIR"
+    -isohybrid-gpt-basdat \
+    "$EXTRACT_DIR"
 
 # Make ISO readable by user
 sudo chown $USER:$USER "$OUTPUT_ISO"

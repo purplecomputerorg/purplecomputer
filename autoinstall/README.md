@@ -259,7 +259,7 @@ sudo eject /dev/sdX
 
 **Missing dependencies:**
 ```bash
-sudo apt install xorriso isolinux curl wget
+sudo apt install xorriso curl wget rsync
 ```
 
 **Permission errors:**
@@ -352,7 +352,7 @@ Edit `autoinstall.yaml` before building:
 
 ### Manual Installation (without ISO)
 
-On existing Ubuntu 22.04 Server:
+On existing Ubuntu 24.04 Server:
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
@@ -385,12 +385,13 @@ sudo nmtui
 ## Build Process Details
 
 The build script:
-1. Downloads Ubuntu Server 22.04.3 ISO (~1.4GB)
-2. Extracts ISO contents
-3. Injects autoinstall.yaml (cloud-init config)
-4. Copies Purple Computer files
-5. Configures GRUB for autoinstall boot
-6. Rebuilds ISO with xorriso
+1. Downloads Ubuntu Server 24.04.3 ISO (~2.5GB)
+2. Verifies SHA256 checksum for integrity
+3. Extracts ISO contents
+4. Injects autoinstall.yaml (cloud-init config)
+5. Copies Purple Computer files
+6. Configures GRUB for hybrid BIOS/UEFI boot (Ubuntu 24.04 uses GRUB for both)
+7. Rebuilds ISO with xorriso
 
 First build: 5-10 minutes
 Subsequent builds: 2-3 minutes (reuses cached Ubuntu ISO)

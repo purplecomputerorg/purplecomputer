@@ -50,16 +50,25 @@ make run-docker
 - Complete experience with X11, auto-login, full screen
 - Build ISO: see [Installation](#installation) section
 
+**VM Runner** (Reproducible Testing)
+- Full Ubuntu 22.04 with X11/Kitty
+- Repo mounted from host (instant sync)
+- Reset script for fresh user state
+- Perfect for UI/UX testing
+- Run: See VM Testing section below
+
 ### Feature Comparison
 
-| Feature | Local | Docker | Hardware |
-|---------|-------|--------|----------|
-| REPL | ✅ | ✅ | ✅ |
-| Packs | ✅ | ✅ | ✅ |
-| Parent Mode | ✅ | ✅ | ✅ |
-| Ubuntu 22.04 | ❌ | ✅ | ✅ |
-| X11/Kitty | ❌ | ❌ | ✅ |
-| Auto-login | ❌ | ❌ | ✅ |
+| Feature | Local | Docker | VM | Hardware |
+|---------|-------|--------|-----|----------|
+| REPL | ✅ | ✅ | ✅ | ✅ |
+| Packs | ✅ | ✅ | ✅ | ✅ |
+| Parent Mode | ✅ | ✅ | ✅ | ✅ |
+| Ubuntu 22.04 | ❌ | ✅ | ✅ | ✅ |
+| X11/Kitty | ❌ | ❌ | ✅ | ✅ |
+| Auto-login | ❌ | ❌ | ❌ | ✅ |
+| Fresh state | ✅ | ✅ | ✅ | ❌ |
+| Code sync | Instant | Instant | Instant | Manual |
 
 ### Development Workflow
 
@@ -82,6 +91,128 @@ make run            # Run locally
 make run-docker     # Run in Docker
 make build-packs    # Build example packs
 make clean          # Clean test environment
+```
+
+### VM Testing (Reproducible Environment)
+
+For testing Purple Computer with full UI (Kitty + X11) in a reproducible environment where you can reset to a fresh user state.
+
+#### Why Use a VM?
+
+- **Full UI Testing**: Test Kitty terminal, fonts, emoji rendering
+- **Fresh State**: Reset to clean user environment with one script
+- **Host Editing**: Code lives on host, instantly visible in VM
+- **Reproducible**: Snapshot and restore VM instantly
+- **Realistic**: Closest to production without dedicated hardware
+
+#### Quick Setup (30 minutes one-time)
+
+**1. Install VM Software**
+
+macOS (recommended):
+```bash
+brew install --cask utm
+```
+
+Linux (recommended):
+```bash
+sudo apt install virtualbox virtualbox-guest-utils
+```
+
+**2. Create Ubuntu 22.04 VM**
+
+- Download Ubuntu 22.04 Desktop ISO
+- Create VM: 4GB RAM, 2 CPU cores, 20GB disk
+- Install Ubuntu (username: `purple`, password: `purple`)
+
+**3. Configure Shared Folder**
+
+UTM (macOS):
+- VM Settings → Sharing → Add directory
+- Name: `purple`, Path: `/path/to/purplecomputer`
+
+VirtualBox (Linux):
+- VM Settings → Shared Folders → Add
+- Name: `purple`, Path: `/path/to/purplecomputer`, Auto-mount: ✅
+
+**4. Mount Shared Folder in VM**
+
+UTM:
+```bash
+sudo apt update
+sudo apt install -y spice-vdagent spice-webdavd
+sudo mkdir -p /mnt/purple
+echo "purple /mnt/purple 9p trans=virtio,version=9p2000.L,rw,_netdev,nofail 0 0" | sudo tee -a /etc/fstab
+sudo mount -a
+ls /mnt/purple  # Verify
+```
+
+VirtualBox:
+```bash
+sudo apt install -y virtualbox-guest-utils virtualbox-guest-dkms
+sudo usermod -aG vboxsf $USER
+sudo reboot
+# After reboot: ls /media/sf_purple
+```
+
+**5. Install VM Dependencies**
+
+```bash
+# Install Kitty and fonts
+sudo apt install -y kitty fonts-noto-color-emoji fonts-dejavu python3 python3-pip python3-venv git
+
+# Configure Kitty
+mkdir -p ~/.config/kitty
+cp /mnt/purple/scripts/kitty-purple.conf ~/.config/kitty/kitty.conf
+
+# Copy reset script
+cp /mnt/purple/scripts/reset-purple-vm.sh ~/reset-purple.sh
+chmod +x ~/reset-purple.sh
+```
+
+**6. Create Snapshot**
+
+- **UTM**: Right-click VM → Take Snapshot → "Clean State"
+- **VirtualBox**: VM → Machine → Take Snapshot → "Clean State"
+
+#### Daily Workflow
+
+Edit code on host:
+```bash
+cd /path/to/purplecomputer
+git pull
+# Changes instantly visible in VM at /mnt/purple
+```
+
+Test in VM:
+```bash
+~/reset-purple.sh
+```
+
+The reset script:
+1. Wipes `~/.purple` and `~/.ipython` (fresh state)
+2. Copies latest code from `/mnt/purple`
+3. Creates fresh Python venv
+4. Installs dependencies and packs
+5. Launches Purple Computer in Kitty
+
+#### Troubleshooting VM Setup
+
+**Shared folder not mounting:**
+```bash
+# UTM: Check spice services
+ps aux | grep spice
+sudo systemctl restart spice-vdagentd
+
+# VirtualBox: Check group membership
+groups | grep vboxsf
+sudo usermod -aG vboxsf $USER && sudo reboot
+```
+
+**Emoji not displaying:**
+```bash
+sudo apt install --reinstall fonts-noto-color-emoji
+fc-cache -fv
 ```
 
 ---

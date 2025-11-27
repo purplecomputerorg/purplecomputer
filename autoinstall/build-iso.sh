@@ -8,14 +8,12 @@
 
 set -e  # Exit on error
 
-# Determine script directory and project root
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-if [ "$(basename $SCRIPT_DIR)" = "autoinstall" ]; then
-    PROJECT_ROOT="$SCRIPT_DIR/.."
-    cd "$PROJECT_ROOT"
-else
-    PROJECT_ROOT="$SCRIPT_DIR"
-fi
+# Get the directory where this script lives and determine project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Change to project root to ensure all relative paths work correctly
+cd "$PROJECT_ROOT"
 
 # Configuration
 UBUNTU_VERSION="24.04.3"

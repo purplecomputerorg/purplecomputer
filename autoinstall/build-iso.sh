@@ -18,9 +18,9 @@ else
 fi
 
 # Configuration
-UBUNTU_VERSION="22.04.3"
-UBUNTU_ISO_URL="https://releases.ubuntu.com/22.04/ubuntu-22.04.3-live-server-amd64.iso"
-UBUNTU_ISO_NAME="ubuntu-22.04.3-live-server-amd64.iso"
+UBUNTU_VERSION="24.04.3"
+UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso"
+UBUNTU_ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
 OUTPUT_ISO="purple-computer.iso"
 WORK_DIR="autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"

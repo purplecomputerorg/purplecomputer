@@ -205,21 +205,26 @@ chmod -R u+w "$EXTRACT_DIR"
 echo_info "Copying Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
 
+# Debug output
+echo_info "[DEBUG] Current directory: $(pwd)"
+echo_info "[DEBUG] PROJECT_ROOT: $PROJECT_ROOT"
+echo_info "[DEBUG] Checking for purple_repl: $(ls -d "$PROJECT_ROOT/purple_repl" 2>&1)"
+
 # Copy Purple REPL code
-cp -r purple_repl/* "$EXTRACT_DIR/purple_files/"
+cp -r "$PROJECT_ROOT/purple_repl"/* "$EXTRACT_DIR/purple_files/"
 
 # Copy system configuration files
-cp -r autoinstall/files/systemd "$EXTRACT_DIR/purple_files/"
-cp autoinstall/files/xinit/xinitrc "$EXTRACT_DIR/purple_files/"
-cp autoinstall/files/kitty/kitty.conf "$EXTRACT_DIR/purple_files/"
+cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
+cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
+cp "$PROJECT_ROOT/autoinstall/files/kitty/kitty.conf" "$EXTRACT_DIR/purple_files/"
 
 # Copy autoinstall configuration
 echo_info "Injecting autoinstall configuration..."
-cp autoinstall/autoinstall.yaml "$EXTRACT_DIR/autoinstall.yaml"
+cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/autoinstall.yaml"
 
 # Create user-data and meta-data for cloud-init
 mkdir -p "$EXTRACT_DIR/nocloud"
-cp autoinstall/autoinstall.yaml "$EXTRACT_DIR/nocloud/user-data"
+cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/nocloud/user-data"
 touch "$EXTRACT_DIR/nocloud/meta-data"
 
 # Modify GRUB configuration for autoinstall

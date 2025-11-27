@@ -4,7 +4,7 @@ Automated Ubuntu Server installation with Purple Computer pre-configured.
 
 ## Architecture
 
-**Ubuntu Server 22.04 + minimal Xorg (no desktop) + kitty fullscreen**
+**Ubuntu Server 24.04 LTS + minimal Xorg (no desktop) + kitty fullscreen**
 
 No GUI, no window manager, no desktop environment. Just a fullscreen terminal that boots directly into Purple Computer.
 
@@ -22,12 +22,12 @@ make build-iso
 ./autoinstall/build-iso.sh
 ```
 
-This creates `purple-computer.iso` (~1.4GB) - a bootable Ubuntu Server ISO with Purple Computer embedded.
+This creates `purple-computer.iso` (~2.5GB) - a bootable Ubuntu Server ISO with Purple Computer embedded.
 
 **Requirements:**
-- `xorriso`, `isolinux`, `curl`, `wget`
-- ~2GB free disk space
+- ~6GB free disk space (during build; ~5GB after cleanup)
 - Internet connection (downloads Ubuntu Server ISO)
+- The script will check for required tools and show install commands for your distro
 
 **Build time:** 5-10 minutes (first time), 2-3 minutes (subsequent builds with cached ISO)
 

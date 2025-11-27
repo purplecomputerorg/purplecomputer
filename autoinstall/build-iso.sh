@@ -20,8 +20,8 @@ UBUNTU_VERSION="24.04.3"
 UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso"
 UBUNTU_ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
 UBUNTU_SHA256_URL="https://releases.ubuntu.com/24.04/SHA256SUMS"
-OUTPUT_ISO="purple-computer.iso"
-WORK_DIR="autoinstall/build"
+OUTPUT_ISO="$PROJECT_ROOT/purple-computer.iso"
+WORK_DIR="$PROJECT_ROOT/autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
 
@@ -205,11 +205,6 @@ chmod -R u+w "$EXTRACT_DIR"
 echo_info "Copying Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
 
-# Debug output
-echo_info "[DEBUG] Current directory: $(pwd)"
-echo_info "[DEBUG] PROJECT_ROOT: $PROJECT_ROOT"
-echo_info "[DEBUG] Checking for purple_repl: $(ls -d "$PROJECT_ROOT/purple_repl" 2>&1)"
-
 # Copy Purple REPL code
 cp -r "$PROJECT_ROOT/purple_repl"/* "$EXTRACT_DIR/purple_files/"
 
@@ -264,7 +259,7 @@ find -type f -print0 | sudo xargs -0 md5sum | grep -v isolinux/boot.cat | sudo t
 
 # Build the new ISO
 echo_info "Building Purple Computer ISO..."
-cd ..
+cd "$WORK_DIR"
 sudo xorriso -as mkisofs \
     -iso-level 3 \
     -full-iso9660-filenames \
@@ -278,12 +273,10 @@ sudo xorriso -as mkisofs \
     -e boot/grub/efi.img \
     -no-emul-boot \
     -append_partition 2 0xef boot/grub/efi.img \
-    -output "../$OUTPUT_ISO" \
+    -output "$OUTPUT_ISO" \
     -graft-points \
         "." \
         "$EXTRACT_DIR"
-
-cd ..
 
 # Make ISO readable by user
 sudo chown $USER:$USER "$OUTPUT_ISO"
@@ -296,8 +289,8 @@ sudo rm -rf "$WORK_DIR/mount" "$WORK_DIR/extract"
 echo_info "======================================"
 echo_info "Purple Computer ISO built successfully!"
 echo_info "======================================"
-echo_info "ISO location: $(pwd)/$OUTPUT_ISO"
-echo_info "Size: $(du -h $OUTPUT_ISO | cut -f1)"
+echo_info "ISO location: $OUTPUT_ISO"
+echo_info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
 echo ""
 echo_info "Next steps:"
 echo_info "1. Write ISO to USB: sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress"

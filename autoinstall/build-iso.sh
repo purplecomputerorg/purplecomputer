@@ -21,10 +21,14 @@ fi
 UBUNTU_VERSION="24.04.3"
 UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso"
 UBUNTU_ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
+UBUNTU_SHA256_URL="https://releases.ubuntu.com/24.04/SHA256SUMS"
 OUTPUT_ISO="purple-computer.iso"
 WORK_DIR="autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
+
+# Cleanup trap to unmount ISO if script exits early
+trap 'sudo umount "$MOUNT_DIR" 2>/dev/null || true' EXIT
 
 # Colors for output
 RED='\033[0;31m'
@@ -105,14 +109,82 @@ echo_info "Creating work directory..."
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
+# Function to verify SHA256 checksum
+verify_iso_checksum() {
+    echo_info "Verifying ISO checksum..."
+
+    # Download SHA256SUMS if not present or if ISO was just downloaded
+    if [ ! -f "SHA256SUMS" ] || [ "$1" = "force" ]; then
+        echo_info "Downloading SHA256SUMS..."
+        wget -q -O "SHA256SUMS" "$UBUNTU_SHA256_URL" || {
+            echo_error "Failed to download SHA256SUMS"
+            return 1
+        }
+    fi
+
+    # Extract the checksum for our ISO
+    EXPECTED_SHA256=$(grep "$UBUNTU_ISO_NAME" SHA256SUMS | awk '{print $1}')
+
+    if [ -z "$EXPECTED_SHA256" ]; then
+        echo_error "Could not find checksum for $UBUNTU_ISO_NAME in SHA256SUMS"
+        return 1
+    fi
+
+    # Calculate actual checksum
+    echo_info "Calculating SHA256 checksum (this may take a minute)..."
+    ACTUAL_SHA256=$(sha256sum "$UBUNTU_ISO_NAME" | awk '{print $1}')
+
+    # Compare checksums
+    if [ "$EXPECTED_SHA256" = "$ACTUAL_SHA256" ]; then
+        echo_info "✓ Checksum verification passed"
+        return 0
+    else
+        echo_error "✗ Checksum verification failed!"
+        echo_error "Expected: $EXPECTED_SHA256"
+        echo_error "Got:      $ACTUAL_SHA256"
+        return 1
+    fi
+}
+
 # Download Ubuntu ISO if not present
-if [ ! -f "$UBUNTU_ISO_NAME" ]; then
-    echo_info "Downloading Ubuntu $UBUNTU_VERSION ISO..."
-    echo_warn "This is a large file (~1.4GB) and may take a while..."
-    wget -O "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL"
-else
-    echo_info "Ubuntu ISO already downloaded, skipping."
-fi
+DOWNLOAD_ATTEMPT=0
+MAX_ATTEMPTS=2
+
+while [ $DOWNLOAD_ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    if [ ! -f "$UBUNTU_ISO_NAME" ]; then
+        echo_info "Downloading Ubuntu $UBUNTU_VERSION ISO..."
+        echo_warn "This is a large file (~2GB) and may take a while..."
+
+        if wget -O "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL"; then
+            echo_info "Download complete"
+        else
+            echo_error "Download failed"
+            rm -f "$UBUNTU_ISO_NAME"
+            exit 1
+        fi
+    else
+        echo_info "Ubuntu ISO already downloaded"
+    fi
+
+    # Verify checksum
+    if verify_iso_checksum "force"; then
+        # Checksum passed, break out of loop
+        break
+    else
+        # Checksum failed
+        DOWNLOAD_ATTEMPT=$((DOWNLOAD_ATTEMPT + 1))
+
+        if [ $DOWNLOAD_ATTEMPT -lt $MAX_ATTEMPTS ]; then
+            echo_warn "Deleting corrupted ISO and retrying download (attempt $((DOWNLOAD_ATTEMPT + 1))/$MAX_ATTEMPTS)..."
+            rm -f "$UBUNTU_ISO_NAME" "SHA256SUMS"
+        else
+            echo_error "ISO verification failed after $MAX_ATTEMPTS attempts"
+            echo_error "Please check your network connection and try again"
+            rm -f "$UBUNTU_ISO_NAME" "SHA256SUMS"
+            exit 1
+        fi
+    fi
+done
 
 # Extract ISO
 echo_info "Extracting Ubuntu ISO..."

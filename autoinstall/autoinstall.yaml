@@ -68,7 +68,7 @@ autoinstall:
 
     # Text-to-speech
     - espeak-ng
-    - python3-pyttsx3
+    # pyttsx3 installed via pip in runcmd (not in apt repos for Ubuntu 24.04)
 
     # Audio
     - alsa-utils
@@ -104,7 +104,7 @@ autoinstall:
       - echo "Purple Computer post-install configuration..."
 
       # Install Python packages (including new dependencies)
-      - pip3 install --system colorama termcolor pillow packaging
+      - pip3 install --system colorama termcolor pillow packaging pyttsx3
 
       # Lock the purple user account (no password login)
       - passwd -l purple

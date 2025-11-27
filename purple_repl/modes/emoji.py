@@ -4,6 +4,21 @@ Converts words to emoji automatically
 """
 
 from colorama import Fore, Style
+import shutil
+import re
+
+
+def center_text(text):
+    """
+    Center text based on terminal width.
+    Strips ANSI codes when calculating width.
+    """
+    term_width = shutil.get_terminal_size().columns
+    # Strip ANSI codes for width calculation
+    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
+    text_width = len(visible_text)
+    padding = max(0, (term_width - text_width) // 2)
+    return ' ' * padding
 
 
 class EmojiMode:
@@ -11,18 +26,20 @@ class EmojiMode:
 
     def __init__(self):
         self.name = "Emoji"
-        self.banner = f"""
-{Fore.YELLOW}{Style.BRIGHT}
-╔═══════════════════════════════════════════╗
-║                                           ║
-║          ✨ EMOJI MODE ACTIVATED ✨       ║
-║                                           ║
-║      Type words and see them become       ║
-║              emoji magic!                 ║
-║                                           ║
-╚═══════════════════════════════════════════╝
-{Style.RESET_ALL}
-"""
+        # Build banner dynamically with centering
+        lines = [
+            "",
+            f"{Fore.YELLOW}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║          ✨ EMOJI MODE ACTIVATED ✨       ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║      Type words and see them become       ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║              emoji magic!                 ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.YELLOW}{Style.BRIGHT}╚═══════════════════════════════════════════╝{Style.RESET_ALL}",
+            "",
+        ]
+        self.banner = '\n'.join([center_text(line) + line for line in lines])
 
         # Word to emoji mapping
         self.word_map = {

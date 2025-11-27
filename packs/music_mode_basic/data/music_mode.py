@@ -11,6 +11,11 @@ import wave
 import tempfile
 import subprocess
 from pathlib import Path
+from rich.console import Console
+from rich.panel import Panel
+from rich.align import Align
+from rich.text import Text
+from rich import box
 
 
 # Musical keyboard layout - C major scale spanning octaves
@@ -89,12 +94,12 @@ def generate_tone(frequency, duration=0.3, sample_rate=44100, amplitude=0.25, in
             sample += 0.15 * math.sin(2 * math.pi * frequency * 3 * t)
 
         elif instrument == 'flute':
-            # Flute: pure tone with minimal harmonics, breathy
+            # Flute: pure tone with minimal harmonics
             sample = math.sin(2 * math.pi * frequency * t)
-            sample += 0.1 * math.sin(2 * math.pi * frequency * 2 * t)
-            # Add a bit of noise for breathiness
+            sample += 0.08 * math.sin(2 * math.pi * frequency * 2 * t)
+            # Very subtle breathiness
             import random
-            sample += 0.05 * (random.random() - 0.5)
+            sample += 0.01 * (random.random() - 0.5)
 
         elif instrument == 'bell':
             # Bell: metallic sound with inharmonic overtones
@@ -227,132 +232,111 @@ def get_key():
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
-def show_keyboard_visual(last_key='', last_note_info=None):
+def show_keyboard_visual(console, last_key='', last_note_info=None):
     """
-    Display a colorful, fun keyboard for kids!
+    Display a colorful, fun keyboard for kids using rich!
     """
-    # ANSI color codes
-    PURPLE = '\033[95m'
-    CYAN = '\033[96m'
-    YELLOW = '\033[93m'
-    GREEN = '\033[92m'
-    RED = '\033[91m'
-    BLUE = '\033[94m'
-    BOLD = '\033[1m'
-    RESET = '\033[0m'
+    console.clear()
 
-    # Clear screen and hide cursor
-    print("\033[2J\033[H\033[?25l", end='')
+    # Header with emoji
+    title = Text("🎵 MUSIC MODE 🎵", style="bold cyan")
+    subtitle = Text("Press keys to make music!", style="bold yellow")
+    instructions = Text("(ESC to exit)", style="dim green")
 
-    # Fun colorful header - centered for ~100 char width
-    print()
-    print()
-    print(f"                     {PURPLE}{BOLD}╔═══════════════════════════════════════╗{RESET}")
-    print(f"                     {PURPLE}{BOLD}║                                       ║{RESET}")
-    print(f"                     {PURPLE}{BOLD}║{RESET}              {CYAN}{BOLD}MUSIC MODE{RESET}              {PURPLE}{BOLD}║{RESET}")
-    print(f"                     {PURPLE}{BOLD}║                                       ║{RESET}")
-    print(f"                     {PURPLE}{BOLD}╚═══════════════════════════════════════╝{RESET}")
-    print()
-    print(f"                      {YELLOW}🎹 Press keys to make music! 🎹{RESET}")
-    print(f"                           {GREEN}ESC to exit{RESET}")
-    print()
-    print()
+    header_panel = Panel(
+        Align.center(title),
+        box=box.HEAVY,
+        style="magenta",
+        padding=(0, 2)
+    )
+    console.print(Align.center(header_panel))
+    console.print()
+    console.print(Align.center(subtitle))
+    console.print(Align.center(instructions))
+    console.print()
+    console.print()
 
-    # Keyboard layout with labels
+    # Keyboard layout
     all_keys = [
         ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
         ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
         ['z', 'x', 'c', 'v', 'b', 'n', 'm']
     ]
 
-    row_labels = ['HIGH', 'MID', 'LOW']
+    row_labels = [' HIGH ', '  MID ', '  LOW ']
+    row_colors = ['red', 'green', 'blue']
+    row_emojis = ['🔴', '🟢', '🔵']
 
-    # Colors for different rows
-    row_colors = [RED, GREEN, BLUE]
-
-    # Draw keyboard
+    # Draw each keyboard row with boxes
     for idx, row in enumerate(all_keys):
         label = row_labels[idx]
-        label_color = row_colors[idx]
+        color = row_colors[idx]
+        emoji = row_emojis[idx]
 
-        # Top border
-        print(f"                ", end='')
+        # Build the row as Text objects with boxes
+        row_text = Text()
+        row_text.append(f"{emoji} {label}", style=f"bold {color}")
+
         for key in row:
             if key in NOTE_MAP:
                 freq, note_name, display, instrument = NOTE_MAP[key]
+                # Box around each key
+                simple_display = f"{key.upper()}:{note_name}"
                 if key == last_key:
-                    print(f"  {BOLD}{YELLOW}┌──────┐{RESET}", end='')
+                    row_text.append(f" [{simple_display:^5}] ", style="bold black on yellow")
                 else:
-                    color = row_colors[idx]
-                    print(f"  {color}┌──────┐{RESET}", end='')
-        print()
+                    row_text.append(f" [{simple_display:^5}] ", style=f"bold {color}")
 
-        # Middle with key labels - row label goes here (vertically centered)
-        print(f"       {label_color}{BOLD}{label:>4}{RESET}     ", end='')
-        for key in row:
-            if key in NOTE_MAP:
-                freq, note_name, display, instrument = NOTE_MAP[key]
-                if key == last_key:
-                    print(f"  {BOLD}{YELLOW}│{display:^6}│{RESET}", end='')
-                else:
-                    color = row_colors[idx]
-                    print(f"  {color}│{display:^6}│{RESET}", end='')
-        print()
+        console.print(Align.center(row_text))
+        console.print()  # Extra spacing between rows
 
-        # Bottom border
-        print(f"                ", end='')
-        for key in row:
-            if key in NOTE_MAP:
-                if key == last_key:
-                    print(f"  {BOLD}{YELLOW}└──────┘{RESET}", end='')
-                else:
-                    color = row_colors[idx]
-                    print(f"  {color}└──────┘{RESET}", end='')
-        print()
-        print()
+    console.print()
 
-    print()
+    # Arrow keys section with emoji
+    arrow_title = Text("🎹 Arrow Keys - Different Instruments 🎹", style="bold yellow")
+    arrow_panel = Panel(
+        Align.center(arrow_title),
+        box=box.HEAVY,
+        style="magenta",
+        padding=(0, 1)
+    )
+    console.print(Align.center(arrow_panel))
+    console.print()
 
-    # Arrow keys section with different instruments
-    print(f"                    {PURPLE}{BOLD}╔════════════════════════════════╗{RESET}")
-    print(f"                    {PURPLE}{BOLD}║{RESET}     {YELLOW}Arrow Keys - Instruments{RESET}    {PURPLE}{BOLD}║{RESET}")
-    print(f"                    {PURPLE}{BOLD}╚════════════════════════════════╝{RESET}")
-    print()
+    # Arrow keys display - bigger boxes
+    up_style = "bold black on yellow" if last_key == 'arrow_up' else "bold white on blue"
+    down_style = "bold black on yellow" if last_key == 'arrow_down' else "bold white on blue"
+    left_style = "bold black on yellow" if last_key == 'arrow_left' else "bold white on blue"
+    right_style = "bold black on yellow" if last_key == 'arrow_right' else "bold white on blue"
 
-    # Display arrow keys in a cross pattern
-    up_color = YELLOW if last_key == 'arrow_up' else CYAN
-    down_color = YELLOW if last_key == 'arrow_down' else CYAN
-    left_color = YELLOW if last_key == 'arrow_left' else CYAN
-    right_color = YELLOW if last_key == 'arrow_right' else CYAN
+    # Up
+    up_text = Text(f"[ ↑ FLUTE 🎶 ]", style=up_style)
+    console.print(Align.center(up_text))
+    console.print()
 
-    # Up arrow
-    print(f"                              {up_color}┌──────────┐{RESET}")
-    print(f"                              {up_color}│ ↑→Flute  │{RESET}")
-    print(f"                              {up_color}└──────────┘{RESET}")
+    # Left and Right on same line
+    lr_text = Text()
+    lr_text.append(f"[ ← STRINGS 🎻 ]", style=left_style)
+    lr_text.append("      ")
+    lr_text.append(f"[ → BELL 🔔 ]", style=right_style)
+    console.print(Align.center(lr_text))
+    console.print()
 
-    # Left and Right arrows
-    print(f"                {left_color}┌────────────┐{RESET}        {right_color}┌──────────┐{RESET}")
-    print(f"                {left_color}│ ←→Strings  │{RESET}        {right_color}│ →→Bell   │{RESET}")
-    print(f"                {left_color}└────────────┘{RESET}        {right_color}└──────────┘{RESET}")
+    # Down
+    down_text = Text(f"[ ↓ BASS 🎸 ]", style=down_style)
+    console.print(Align.center(down_text))
 
-    # Down arrow
-    print(f"                              {down_color}┌──────────┐{RESET}")
-    print(f"                              {down_color}│ ↓→Bass   │{RESET}")
-    print(f"                              {down_color}└──────────┘{RESET}")
+    console.print()
+    console.print()
 
-    print()
-
-    # Now playing with fun emojis
+    # Now playing - bigger and more fun
     if last_note_info:
         display_key, note_name = last_note_info
-        print(f"                      {CYAN}{BOLD}♪ ♫ ♪  {display_key} = {note_name} note!  ♪ ♫ ♪{RESET}")
+        msg = Text(f"🎵 Playing: {note_name} note! 🎵", style="bold cyan")
     else:
-        print(f"                          {CYAN}(Try pressing keys!){RESET}")
-    print()
-    print()
+        msg = Text("✨ Try pressing keys! ✨", style="bold green")
 
-    # Flush output
-    sys.stdout.flush()
+    console.print(Align.center(msg))
 
 
 def activate():
@@ -360,8 +344,11 @@ def activate():
     Main entry point for Music Mode.
     This function is called when the mode is activated.
     """
+    # Create rich console
+    console = Console()
+
     # Pre-generate tones for faster playback
-    print("\nGenerating sounds...", flush=True)
+    console.print("\n[yellow]Generating sounds...[/yellow]")
     tone_cache = {}
 
     # Generate piano tones for regular keys
@@ -376,16 +363,12 @@ def activate():
     last_note_info = None
 
     try:
-        # Switch to alternate screen buffer (like vim)
-        # This prevents polluting the scrollback
-        sys.stdout.write("\033[?1049h")  # Enter alternate buffer
-        sys.stdout.write("\033[2J")      # Clear it
-        sys.stdout.write("\033[H")       # Move cursor to top
-        sys.stdout.write("\033[?25l")    # Hide cursor
+        # Hide cursor
+        sys.stdout.write("\033[?25l")
         sys.stdout.flush()
 
         # Show initial screen
-        show_keyboard_visual(last_key, last_note_info)
+        show_keyboard_visual(console, last_key, last_note_info)
 
         while True:
             # Get a keypress
@@ -405,7 +388,7 @@ def activate():
                     freq, note_name, display_key, instrument = ARROW_MAP[arrow_name]
                     last_note_info = (display_key, note_name)
                     play_sound(tone_cache[arrow_name])
-                    show_keyboard_visual(last_key, last_note_info)
+                    show_keyboard_visual(console, last_key, last_note_info)
             # Play sound if it's a regular mapped key
             elif key.lower() in tone_cache:
                 last_key = key.lower()
@@ -413,20 +396,19 @@ def activate():
                 last_note_info = (display_key, note_name)
                 play_sound(tone_cache[last_key])
                 # Redraw with highlighted key
-                show_keyboard_visual(last_key, last_note_info)
+                show_keyboard_visual(console, last_key, last_note_info)
             else:
                 last_key = ''
                 last_note_info = None
                 # Redraw without highlight
-                show_keyboard_visual(last_key, last_note_info)
+                show_keyboard_visual(console, last_key, last_note_info)
 
     except KeyboardInterrupt:
         pass
 
     finally:
-        # Show cursor and switch back to main screen buffer
-        sys.stdout.write("\033[?25h")    # Show cursor
-        sys.stdout.write("\033[?1049l")  # Exit alternate buffer
+        # Show cursor
+        sys.stdout.write("\033[?25h")
         sys.stdout.flush()
 
         # Clean up temporary files
@@ -436,7 +418,7 @@ def activate():
             except:
                 pass
 
-        print("✨ Exiting Music Mode...\n")
+        console.print("\n[green]✨ Exiting Music Mode...[/green]\n")
 
     return ""  # Return empty string so IPython doesn't print anything
 

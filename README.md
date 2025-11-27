@@ -241,6 +241,15 @@ See [MANUAL.md](MANUAL.md#development--testing) for details.
 
 **Architecture:** Ubuntu Server 22.04 + minimal Xorg (no desktop environment) + kitty terminal fullscreen. No GUI, no window manager, no desktop bloat.
 
+**Python Dependencies:**
+- `ipython` - Interactive Python shell
+- `colorama`, `termcolor` - Terminal colors
+- `rich` - Terminal UI library for layouts and panels
+- `simple-term-menu` - Menu system
+- `packaging`, `traitlets` - Core utilities
+
+All dependencies are automatically installed into a virtual environment (`.venv/`) by `make setup`.
+
 ---
 
 ## Philosophy

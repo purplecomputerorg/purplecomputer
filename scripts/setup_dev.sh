@@ -73,7 +73,7 @@ source .venv/bin/activate
 # Install Python dependencies
 echo_step "Installing Python dependencies into venv..."
 pip install --upgrade pip
-pip install ipython colorama termcolor packaging traitlets simple-term-menu
+pip install ipython colorama termcolor packaging traitlets simple-term-menu rich
 
 echo_info "✓ Python dependencies installed in virtual environment"
 

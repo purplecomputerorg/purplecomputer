@@ -6,10 +6,25 @@ Colorful, vibrant output with rainbow colors
 from colorama import Fore, Style
 import sys
 import os
+import shutil
+import re
 
 # Import emoji_lib from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from emoji_lib import rainbow_text, rainbow_pattern
+
+
+def center_text(text):
+    """
+    Center text based on terminal width.
+    Strips ANSI codes when calculating width.
+    """
+    term_width = shutil.get_terminal_size().columns
+    # Strip ANSI codes for width calculation
+    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
+    text_width = len(visible_text)
+    padding = max(0, (term_width - text_width) // 2)
+    return ' ' * padding
 
 
 class RainbowMode:
@@ -35,12 +50,13 @@ class RainbowMode:
             "╚═══════════════════════════════════════════╝",
         ]
 
-        result = []
+        result = ["\n"]  # Start with newline
         for i, line in enumerate(lines):
             color = self.colors[i % len(self.colors)]
-            result.append(f"{color}{Style.BRIGHT}{line}{Style.RESET_ALL}")
+            colored_line = f"{color}{Style.BRIGHT}{line}{Style.RESET_ALL}"
+            result.append(center_text(colored_line) + colored_line)
 
-        return '\n' + '\n'.join(result)
+        return '\n'.join(result)
 
     def activate(self):
         """Called when entering rainbow mode"""

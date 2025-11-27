@@ -7,6 +7,8 @@ from colorama import Fore, Style
 import random
 import sys
 import os
+import shutil
+import re
 
 # Import utilities from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -16,22 +18,37 @@ from emoji_lib import (
 )
 
 
+def center_text(text):
+    """
+    Center text based on terminal width.
+    Strips ANSI codes when calculating width.
+    """
+    term_width = shutil.get_terminal_size().columns
+    # Strip ANSI codes for width calculation
+    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
+    text_width = len(visible_text)
+    padding = max(0, (term_width - text_width) // 2)
+    return ' ' * padding
+
+
 class SurpriseMode:
     """Surprise mode - random delightful things!"""
 
     def __init__(self):
         self.name = "Surprise"
-        self.banner = f"""
-{Fore.MAGENTA}{Style.BRIGHT}
-╔═══════════════════════════════════════════╗
-║                                           ║
-║        ✨ SURPRISE MODE ACTIVATED ✨      ║
-║                                           ║
-║          Expect the unexpected!           ║
-║                                           ║
-╚═══════════════════════════════════════════╝
-{Style.RESET_ALL}
-"""
+        # Build banner dynamically with centering
+        lines = [
+            "",
+            f"{Fore.MAGENTA}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}║        ✨ SURPRISE MODE ACTIVATED ✨      ║{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}║          Expect the unexpected!           ║{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
+            f"{Fore.MAGENTA}{Style.BRIGHT}╚═══════════════════════════════════════════╝{Style.RESET_ALL}",
+            "",
+        ]
+        self.banner = '\n'.join([center_text(line) + line for line in lines])
 
         self.surprises = [
             self._emoji_explosion,

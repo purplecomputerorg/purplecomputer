@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-docker build-packs build-iso clean test docker-build docker-shell clean-iso
+.PHONY: help setup run run-docker build-packs build-iso clean test check docker-build docker-shell clean-iso
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -14,7 +14,9 @@ help:
 	@echo "  make run-docker     - Run Purple Computer in Docker (full simulation)"
 	@echo "  make docker-shell   - Open bash shell in Docker"
 	@echo ""
-	@echo "Building:"
+	@echo "Building & Testing:"
+	@echo "  make check          - Check Python syntax and imports"
+	@echo "  make test           - Run all tests (syntax + unit tests)"
 	@echo "  make build-packs    - Build example packs"
 	@echo "  make build-iso      - Build bootable ISO for VM/hardware install"
 	@echo "  make docker-build   - Rebuild Docker image"
@@ -86,9 +88,13 @@ clean-iso:
 clean-all: clean clean-docker clean-iso
 	@echo "✓ All test environments cleaned"
 
-test:
-	@echo "Running tests..."
-	@echo "(Tests coming soon!)"
+check:
+	@echo "Checking Python syntax and imports..."
+	./scripts/check.sh
+
+test: check
+	@echo "Running unit tests..."
+	@echo "(Unit tests coming soon!)"
 	# python3 -m pytest tests/
 
 .DEFAULT_GOAL := help

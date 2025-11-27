@@ -182,6 +182,8 @@ pip3 install --system packaging 2>/dev/null || true
 
 # Set ownership
 echo_info "Setting file ownership..."
+# Fix /home/purple directory itself first (prevents .Xauthority and log issues)
+chown purple:purple /home/purple
 chown -R purple:purple /home/purple/.purple
 chown -R purple:purple /home/purple/.config
 chown purple:purple /home/purple/.xinitrc
@@ -189,6 +191,7 @@ chown purple:purple /home/purple/.bash_profile
 chown -R purple:purple /home/purple/.ipython 2>/dev/null || true
 
 if [ -d "/home/kiduser" ]; then
+    chown kiduser:kiduser /home/kiduser
     chown -R kiduser:kiduser /home/kiduser/.purple
     chown -R kiduser:kiduser /home/kiduser/.config
     chown kiduser:kiduser /home/kiduser/.xinitrc 2>/dev/null || true

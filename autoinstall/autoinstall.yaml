@@ -122,9 +122,11 @@ autoinstall:
       - mkdir -p /home/kiduser/.purple/packs
       - mkdir -p /home/kiduser/.config/kitty
 
-      # Set ownership
+      # Set ownership - IMPORTANT: fix /home/purple itself first, then subdirectories
+      - chown purple:purple /home/purple
       - chown -R purple:purple /home/purple/.purple
       - chown -R purple:purple /home/purple/.config
+      - chown kiduser:kiduser /home/kiduser || true
       - chown -R kiduser:kiduser /home/kiduser/.purple || true
       - chown -R kiduser:kiduser /home/kiduser/.config || true
 
@@ -310,8 +312,12 @@ autoinstall:
       echo "✓ Xorg environment configured"
       echo ""
 
-      # Final ownership fix
+      # Final ownership fix (CRITICAL for .Xauthority and X11 logs)
       echo "Finalizing setup..."
+      # Fix home directories themselves first (prevents X11 permission errors)
+      chown purple:purple /home/purple
+      chown kiduser:kiduser /home/kiduser 2>/dev/null || true
+      # Then recursively fix all contents
       chown -R purple:purple /home/purple
       chown -R kiduser:kiduser /home/kiduser 2>/dev/null || true
 

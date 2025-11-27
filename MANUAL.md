@@ -869,6 +869,25 @@ journalctl -u getty@tty1 -b
 startx
 ```
 
+**X11 fails to start / .Xauthority errors**
+This is usually caused by incorrect ownership of `/home/purple`. The first-boot script should fix this automatically, but if you need to debug:
+
+```bash
+# Check ownership (should be purple:purple, not root:root)
+ls -la / | grep home
+ls -la /home/
+
+# The purple user has NO password and can't use sudo (correct for security)
+# To manually fix during testing, enable root access temporarily:
+```
+
+For testing VMs only - add this to `late-commands` in `autoinstall.yaml`:
+```yaml
+- echo 'root:test123' | chroot /target chpasswd
+```
+
+Then you can login as root to test fixes. Remove before production.
+
 ### REPL Issues
 
 **Kitty won't start**

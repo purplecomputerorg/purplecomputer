@@ -13,10 +13,21 @@ date
 
 # Ensure all Purple Computer files have correct permissions
 echo "Setting file permissions..."
+# Fix /home directories ownership (prevents .Xauthority and log issues)
+chown kiduser:kiduser /home/kiduser 2>/dev/null || true
 chown -R kiduser:kiduser /home/kiduser/.purple
 chown -R kiduser:kiduser /home/kiduser/.config
 chmod +x /home/kiduser/.xinitrc
 chmod +x /home/kiduser/.purple/repl.py 2>/dev/null || true
+
+# Also fix for purple user if it exists
+if [ -d /home/purple ]; then
+    chown purple:purple /home/purple
+    chown -R purple:purple /home/purple/.purple 2>/dev/null || true
+    chown -R purple:purple /home/purple/.config 2>/dev/null || true
+    chmod +x /home/purple/.xinitrc 2>/dev/null || true
+    chmod +x /home/purple/.purple/repl.py 2>/dev/null || true
+fi
 
 # Test text-to-speech
 echo "Testing text-to-speech..."

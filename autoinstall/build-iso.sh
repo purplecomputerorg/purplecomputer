@@ -52,14 +52,53 @@ fi
 
 # Check dependencies
 echo_info "Checking dependencies..."
-DEPS="xorriso isolinux curl wget"
-for dep in $DEPS; do
-    if ! command -v $dep &> /dev/null; then
-        echo_error "$dep is not installed. Please install it first."
-        echo "Run: sudo apt install xorriso isolinux curl wget"
+
+# Check for command-line tools
+COMMANDS="xorriso curl wget rsync"
+for cmd in $COMMANDS; do
+    if ! command -v $cmd &> /dev/null; then
+        echo_error "$cmd is not installed. Please install it first."
+        echo "  Debian/Ubuntu: sudo apt install $cmd"
+        echo "  Fedora: sudo dnf install $cmd"
+        echo "  Arch: sudo pacman -S $cmd"
+        echo "  NixOS: Add $cmd to your environment.systemPackages"
         exit 1
     fi
 done
+
+# Check for isolinux.bin (provided by isolinux or syslinux package)
+echo_info "Checking for isolinux.bin..."
+ISOLINUX_FOUND=false
+ISOLINUX_PATHS=(
+    "/usr/lib/ISOLINUX/isolinux.bin"
+    "/usr/lib/syslinux/isolinux.bin"
+    "/usr/share/syslinux/isolinux.bin"
+    "/usr/lib/syslinux/bios/isolinux.bin"
+    "/usr/lib/SYSLINUX/isolinux.bin"
+)
+
+# Also check NixOS store if it exists
+if [ -d "/nix/store" ]; then
+    ISOLINUX_PATHS+=($( find /nix/store -path "*/share/syslinux/isolinux.bin" 2>/dev/null || true ))
+fi
+
+for path in "${ISOLINUX_PATHS[@]}"; do
+    if [ -f "$path" ]; then
+        ISOLINUX_FOUND=true
+        ISOLINUX_BIN="$path"
+        echo_info "Found isolinux.bin at: $path"
+        break
+    fi
+done
+
+if [ "$ISOLINUX_FOUND" = false ]; then
+    echo_error "isolinux.bin not found in standard locations."
+    echo "  Debian/Ubuntu: sudo apt install isolinux"
+    echo "  Fedora: sudo dnf install syslinux"
+    echo "  Arch: sudo pacman -S syslinux"
+    echo "  NixOS: Add 'syslinux' to your environment.systemPackages"
+    exit 1
+fi
 
 # Create work directory
 echo_info "Creating work directory..."

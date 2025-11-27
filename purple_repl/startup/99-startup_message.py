@@ -32,10 +32,10 @@ def show_welcome():
     lines = []
     lines.append("")  # Empty line at top
 
-    # Header box
+    # Header box (emojis are 2 chars wide, so reduce padding by 2)
     lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}╔═══════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
     lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║              💜 PURPLE COMPUTER 💜                        ║{Style.RESET_ALL}")
+    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║              💜 PURPLE COMPUTER 💜                      ║{Style.RESET_ALL}")
     lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")
     lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║              A Magical Place for Kids                     ║{Style.RESET_ALL}")
     lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")

@@ -63,6 +63,8 @@ def create_config():
     # Appearance
     c.TerminalInteractiveShell.prompts_class = PurplePrompt
     c.TerminalInteractiveShell.true_color = True
+    c.TerminalInteractiveShell.banner1 = ""  # Hide Python/IPython version info
+    c.TerminalInteractiveShell.banner2 = ""  # Hide additional banner
 
     # Behavior
     c.TerminalInteractiveShell.confirm_exit = False

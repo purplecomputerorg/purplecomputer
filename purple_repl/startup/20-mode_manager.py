@@ -54,7 +54,7 @@ class _AutoActivateMode:
         if self.name == "speech":
             _speech_mode_active = True
 
-        return ""  # Return empty string so nothing displays
+        return ""  # Return empty string so IPython doesn't show None
 
     def __call__(self, *args):
         """Also allow being called as a function"""
@@ -73,7 +73,7 @@ def talk():
     _talk_mode_active = True
     print("\n💬 TALK MODE - Everything you type will be spoken!")
     print("Type 'normal' to exit\n")
-    return ""
+    return None
 
 def normal():
     """Switch back to normal mode"""
@@ -82,7 +82,7 @@ def normal():
     _talk_mode_active = False
     _speech_mode_active = False
     print("✨ Back to normal mode!")
-    return ""
+    return None
 
 # Helper function to sanitize text for kids (handle keyboard mashing)
 def sanitize_for_speech(text):
@@ -127,11 +127,11 @@ def say(text):
         # Only speak if there's actual content left
         if clean_text:
             speak(clean_text)
-            return ""  # Don't echo the text back
+            return None  # Don't echo the text back
         else:
-            return ""
+            return None
     except:
-        return ""
+        return None
 
 # Combined input transformer for say/talk/speech
 def transform_say_and_modes(lines):
@@ -235,7 +235,7 @@ def load_pack_modes():
                 def __call__(self):
                     """Allow calling as function"""
                     self.func()
-                    return ""
+                    return None
 
             pack_modes[mode_name] = _PackModeWrapper(mode_func, mode_name)
 

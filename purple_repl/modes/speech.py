@@ -32,12 +32,12 @@ class SpeechMode:
 
     def __init__(self):
         self.name = "Speech"
-        # Build banner dynamically with centering
+        # Build banner dynamically with centering (emojis are 2 chars wide, so reduce padding by 2)
         lines = [
             "",
             f"{Fore.CYAN}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
             f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║         🔊 SPEECH MODE ACTIVATED 🔊       ║{Style.RESET_ALL}",
+            f"{Fore.CYAN}{Style.BRIGHT}║         🔊 SPEECH MODE ACTIVATED 🔊     ║{Style.RESET_ALL}",
             f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
             f"{Fore.CYAN}{Style.BRIGHT}║    Everything you type will be spoken!    ║{Style.RESET_ALL}",
             f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",

@@ -58,7 +58,8 @@ class _AutoActivateMode:
 
     def __call__(self, *args):
         """Also allow being called as a function"""
-        return self.__repr__()
+        self.__repr__()
+        return None  # Return None so IPython doesn't show output
 
 # Create mode instances that auto-activate
 speech = _AutoActivateMode(SpeechMode, "speech")
@@ -195,6 +196,27 @@ try:
     ip = get_ipython()
     if ip:
         ip.input_transformers_post.append(transform_say_and_modes)
+
+        # Install custom displayhook to suppress empty string output
+        original_displayhook = ip.displayhook
+
+        class SuppressEmptyStringDisplayHook:
+            """Custom display hook that doesn't show empty strings"""
+
+            def __init__(self, original):
+                self.original = original
+
+            def __call__(self, obj):
+                # Don't display empty strings
+                if obj == "":
+                    return None
+                return self.original(obj)
+
+            def __getattr__(self, name):
+                """Proxy all other attributes to the original displayhook"""
+                return getattr(self.original, name)
+
+        ip.displayhook = SuppressEmptyStringDisplayHook(original_displayhook)
 except Exception:
     pass
 

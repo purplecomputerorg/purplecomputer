@@ -21,7 +21,7 @@ class SpeechMode:
         # Build banner using box_border utility
         content_lines = [
             "",
-            "🔊 SPEECH MODE ACTIVATEDDD 🔊",
+            "🔊 SPEECH MODE ACTIVATED 🔊",
             "",
             "Everything you type will be spoken!",
             "",

@@ -7,7 +7,7 @@ import sys
 import os
 
 # Add the purple directory to path so we can import our modules
-purple_dir = os.path.expanduser('~/.purple')
+purple_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if purple_dir not in sys.path:
     sys.path.insert(0, purple_dir)
 
@@ -117,7 +117,7 @@ def say(text):
     try:
         import sys
         import os
-        purple_dir = os.path.expanduser('~/.purple')
+        purple_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if purple_dir not in sys.path:
             sys.path.insert(0, purple_dir)
         from tts import speak
@@ -227,7 +227,7 @@ def load_pack_modes():
         # Import pack registry
         import sys
         import os
-        purple_dir = os.path.expanduser('~/.purple')
+        purple_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         repo_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
         # Add paths for imports

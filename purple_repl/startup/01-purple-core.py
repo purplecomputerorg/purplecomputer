@@ -9,7 +9,7 @@ def parent():
     import os
 
     # Add parent directory to path so we can import repl
-    purple_dir = os.path.expanduser('~/.purple')
+    purple_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if purple_dir not in sys.path:
         sys.path.insert(0, purple_dir)
 

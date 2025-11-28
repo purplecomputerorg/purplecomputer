@@ -127,16 +127,6 @@ autoinstall:
       - sh -c 'if id purple >/dev/null 2>&1; then chown purple:purple /home/purple; chown -R purple:purple /home/purple/.purple; chown -R purple:purple /home/purple/.config; fi'
       - sh -c 'if id kiduser >/dev/null 2>&1; then chown kiduser:kiduser /home/kiduser; chown -R kiduser:kiduser /home/kiduser/.purple; chown -R kiduser:kiduser /home/kiduser/.config; fi'
 
-      # Setup virtio-fs shared folder for VM development
-      # This allows mounting host directories in the VM for live code editing
-      - mkdir -p /mnt/purple
-      - |
-        cat >> /etc/fstab <<'FSTAB_EOF'
-        # Purple Computer shared folder (virtio-fs for VM testing)
-        purple /mnt/purple virtiofs defaults,nofail 0 0
-        FSTAB_EOF
-      - mount -a 2>/dev/null || true
-
       # Disable unnecessary services (NetworkManager stays enabled for auto-updates)
       - systemctl disable systemd-networkd-wait-online.service
       - systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target

@@ -6,25 +6,11 @@ Everything typed is read aloud with text-to-speech
 from colorama import Fore, Style
 import sys
 import os
-import shutil
-import re
 
-# Import TTS from parent directory
+# Import TTS and emoji_lib from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from tts import speak
-
-
-def center_text(text):
-    """
-    Center text based on terminal width.
-    Strips ANSI codes when calculating width.
-    """
-    term_width = shutil.get_terminal_size().columns
-    # Strip ANSI codes for width calculation
-    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
-    text_width = len(visible_text)
-    padding = max(0, (term_width - text_width) // 2)
-    return ' ' * padding
+from emoji_lib import box_border
 
 
 class SpeechMode:
@@ -32,19 +18,20 @@ class SpeechMode:
 
     def __init__(self):
         self.name = "Speech"
-        # Build banner dynamically with centering (emojis are 2 chars wide, so reduce padding by 2)
-        lines = [
+        # Build banner using box_border utility
+        content_lines = [
             "",
-            f"{Fore.CYAN}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║         🔊 SPEECH MODE ACTIVATED 🔊     ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║    Everything you type will be spoken!    ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.CYAN}{Style.BRIGHT}╚═══════════════════════════════════════════╝{Style.RESET_ALL}",
+            "🔊 SPEECH MODE ACTIVATEDDD 🔊",
+            "",
+            "Everything you type will be spoken!",
             "",
         ]
-        self.banner = '\n'.join([center_text(line) + line for line in lines])
+        self.banner = "\n" + box_border(
+            content_lines,
+            style='double',
+            color=Fore.CYAN + Style.BRIGHT,
+            center=True
+        ) + "\n"
 
     def activate(self):
         """Called when entering speech mode"""

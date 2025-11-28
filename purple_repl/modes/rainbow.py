@@ -6,25 +6,11 @@ Colorful, vibrant output with rainbow colors
 from colorama import Fore, Style
 import sys
 import os
-import shutil
-import re
 
 # Import emoji_lib from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from emoji_lib import rainbow_text, rainbow_pattern
-
-
-def center_text(text):
-    """
-    Center text based on terminal width.
-    Strips ANSI codes when calculating width.
-    """
-    term_width = shutil.get_terminal_size().columns
-    # Strip ANSI codes for width calculation
-    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
-    text_width = len(visible_text)
-    padding = max(0, (term_width - text_width) // 2)
-    return ' ' * padding
+from emoji_lib import rainbow_text, rainbow_pattern, box_border, get_visual_width
+import shutil
 
 
 class RainbowMode:
@@ -39,24 +25,59 @@ class RainbowMode:
         self.banner = self._make_rainbow_banner()
 
     def _make_rainbow_banner(self):
-        """Create a colorful rainbow banner"""
-        lines = [
-            "╔═══════════════════════════════════════════╗",
-            "║                                           ║",
-            "║        🌈 RAINBOW MODE ACTIVATED 🌈       ║",
-            "║                                           ║",
-            "║         Everything is colorful!           ║",
-            "║                                           ║",
-            "╚═══════════════════════════════════════════╝",
+        """Create a colorful rainbow banner with rainbow colored border"""
+        content_lines = [
+            "",
+            "🌈 RAINBOW MODE ACTIVATED 🌈",
+            "",
+            "Everything is colorful!",
+            "",
         ]
 
-        result = ["\n"]  # Start with newline
-        for i, line in enumerate(lines):
-            color = self.colors[i % len(self.colors)]
-            colored_line = f"{color}{Style.BRIGHT}{line}{Style.RESET_ALL}"
-            result.append(center_text(colored_line) + colored_line)
+        # Create the box without color first
+        from emoji_lib import box_border
+        import re
 
-        return '\n'.join(result)
+        # Box drawing characters
+        tl, tr, bl, br = '╔', '╗', '╚', '╝'
+        h, v = '═', '║'
+
+        # Calculate max visual width of content
+        max_width = 0
+        for line in content_lines:
+            width = get_visual_width(line)
+            max_width = max(max_width, width)
+
+        # Build the box with rainbow colors
+        result = ["\n"]
+
+        # Top border (rainbow colored)
+        top = tl + (h * (max_width + 2)) + tr
+        color = self.colors[0]
+        result.append(f"{color}{Style.BRIGHT}{top}{Style.RESET_ALL}")
+
+        # Content lines (rainbow colored borders)
+        for i, line in enumerate(content_lines):
+            visual_width = get_visual_width(line)
+            padding_needed = max_width - visual_width
+            padded_line = f"{v} {line}{' ' * padding_needed} {v}"
+            color = self.colors[(i + 1) % len(self.colors)]
+            result.append(f"{color}{Style.BRIGHT}{padded_line}{Style.RESET_ALL}")
+
+        # Bottom border (rainbow colored)
+        bottom = bl + (h * (max_width + 2)) + br
+        color = self.colors[(len(content_lines) + 1) % len(self.colors)]
+        result.append(f"{color}{Style.BRIGHT}{bottom}{Style.RESET_ALL}")
+
+        # Center everything
+        term_width = shutil.get_terminal_size().columns
+        centered = []
+        for line in result:
+            visual_width = get_visual_width(line)
+            padding = max(0, (term_width - visual_width) // 2)
+            centered.append(' ' * padding + line)
+
+        return '\n'.join(centered)
 
     def activate(self):
         """Called when entering rainbow mode"""

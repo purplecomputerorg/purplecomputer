@@ -84,6 +84,25 @@ def random_pattern(length=10):
     return ''.join(random_emoji() for _ in range(min(length, 50)))
 
 
+def get_visual_width(text):
+    """
+    Get the visual width of text, accounting for emoji and wide characters.
+    Uses wcwidth library for proper terminal width calculation.
+    """
+    import re
+
+    # Strip ANSI codes first
+    text = re.sub(r'\033\[[0-9;]*m', '', text)
+
+    try:
+        import wcwidth
+        return wcwidth.wcswidth(text)
+    except ImportError:
+        # Fallback if wcwidth not available - just return length
+        # This won't be perfect but will work
+        return len(text)
+
+
 def border(emoji, text=""):
     """Create a border around text with emoji"""
     if not text:
@@ -98,6 +117,77 @@ def border(emoji, text=""):
         padding = ' ' * (max_len - len(line))
         result.append(f"{emoji} {line}{padding} {emoji}")
     result.append(border_line)
+
+    return '\n'.join(result)
+
+
+def box_border(lines, style='double', color=None, center=True):
+    """
+    Create a box border around text lines with proper emoji width handling.
+
+    Args:
+        lines: List of text lines to put in the box
+        style: 'single', 'double', or 'thick'
+        color: Colorama color (e.g., Fore.CYAN + Style.BRIGHT)
+        center: Whether to center the box on screen
+
+    Returns:
+        String with the bordered box
+    """
+    import re
+    import shutil
+
+    # Box drawing characters
+    if style == 'double':
+        tl, tr, bl, br = '╔', '╗', '╚', '╝'
+        h, v = '═', '║'
+    elif style == 'thick':
+        tl, tr, bl, br = '┏', '┓', '┗', '┛'
+        h, v = '━', '┃'
+    else:  # single
+        tl, tr, bl, br = '┌', '┐', '└', '┘'
+        h, v = '─', '│'
+
+    # Calculate max visual width of content
+    max_width = 0
+    for line in lines:
+        width = get_visual_width(line)
+        max_width = max(max_width, width)
+
+    # Build the box
+    result = []
+
+    # Top border
+    top = tl + (h * (max_width + 2)) + tr
+    if color:
+        top = color + top + Style.RESET_ALL
+    result.append(top)
+
+    # Content lines
+    for line in lines:
+        # Strip ANSI for width calculation but keep in output
+        visual_width = get_visual_width(line)
+        padding_needed = max_width - visual_width
+        padded_line = f"{v} {line}{' ' * padding_needed} {v}"
+        if color:
+            padded_line = color + padded_line + Style.RESET_ALL
+        result.append(padded_line)
+
+    # Bottom border
+    bottom = bl + (h * (max_width + 2)) + br
+    if color:
+        bottom = color + bottom + Style.RESET_ALL
+    result.append(bottom)
+
+    # Center if requested
+    if center:
+        term_width = shutil.get_terminal_size().columns
+        centered = []
+        for line in result:
+            visual_width = get_visual_width(line)
+            padding = max(0, (term_width - visual_width) // 2)
+            centered.append(' ' * padding + line)
+        return '\n'.join(centered)
 
     return '\n'.join(result)
 
@@ -190,7 +280,7 @@ def show_math(a, b, op='+'):
 # Export all functions
 __all__ = [
     'repeat', 'line', 'grid', 'pattern', 'rainbow_text',
-    'random_emoji', 'random_pattern', 'border',
+    'random_emoji', 'random_pattern', 'border', 'box_border', 'get_visual_width',
     'heart_pattern', 'star_pattern', 'tree_pattern', 'rainbow_pattern',
     'count_to', 'show_math',
 ]

@@ -5,24 +5,36 @@ This file is automatically loaded by IPython on startup
 
 from colorama import Fore, Style, init
 import sys
+import os
 import shutil
-import re
 
 # Initialize colorama
 init(autoreset=True)
+
+# Import emoji_lib utilities
+purple_dir = os.path.expanduser('~/.purple')
+if purple_dir not in sys.path:
+    sys.path.insert(0, purple_dir)
+
+try:
+    from emoji_lib import box_border, get_visual_width
+except ImportError:
+    # Fallback if emoji_lib not available
+    def box_border(lines, style='double', color=None, center=True):
+        return '\n'.join(lines)
+    def get_visual_width(text):
+        import re
+        return len(re.sub(r'\033\[[0-9;]*m', '', text))
 
 
 def center_text(text):
     """
     Center text based on terminal width.
     Returns padding spaces needed to center the text.
-    Strips ANSI codes when calculating width.
     """
     term_width = shutil.get_terminal_size().columns
-    # Strip ANSI codes for width calculation
-    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
-    text_width = len(visible_text)
-    padding = max(0, (term_width - text_width) // 2)
+    visual_width = get_visual_width(text)
+    padding = max(0, (term_width - visual_width) // 2)
     return ' ' * padding
 
 def show_welcome():
@@ -32,14 +44,21 @@ def show_welcome():
     lines = []
     lines.append("")  # Empty line at top
 
-    # Header box (emojis are 2 chars wide, so reduce padding by 2)
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}╔═══════════════════════════════════════════════════════════╗{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║              💜 PURPLE COMPUTER 💜                      ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║              A Magical Place for Kids                     ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}║                                                           ║{Style.RESET_ALL}")
-    lines.append(f"{Fore.MAGENTA}{Style.BRIGHT}╚═══════════════════════════════════════════════════════════╝{Style.RESET_ALL}")
+    # Header box using box_border utility
+    header_lines = [
+        "",
+        "💜 PURPLE COMPUTER 💜",
+        "",
+        "A Magical Place for Kids",
+        "",
+    ]
+    header_box = box_border(
+        header_lines,
+        style='double',
+        color=Fore.MAGENTA + Style.BRIGHT,
+        center=True
+    )
+    lines.append(header_box)
     lines.append("")
 
     lines.append(f"{Fore.CYAN}Hello! Welcome to your Purple Computer!{Style.RESET_ALL}")

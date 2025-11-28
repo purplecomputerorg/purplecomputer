@@ -6,25 +6,10 @@ Visual counting and simple math with emoji
 from colorama import Fore, Style
 import sys
 import os
-import shutil
-import re
 
 # Import emoji_lib from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from emoji_lib import count_to, show_math
-
-
-def center_text(text):
-    """
-    Center text based on terminal width.
-    Strips ANSI codes when calculating width.
-    """
-    term_width = shutil.get_terminal_size().columns
-    # Strip ANSI codes for width calculation
-    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
-    text_width = len(visible_text)
-    padding = max(0, (term_width - text_width) // 2)
-    return ' ' * padding
+from emoji_lib import count_to, show_math, box_border
 
 
 class MathMode:
@@ -32,19 +17,20 @@ class MathMode:
 
     def __init__(self):
         self.name = "Math"
-        # Build banner dynamically with centering
-        lines = [
+        # Build banner using box_border utility
+        content_lines = [
             "",
-            f"{Fore.GREEN}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}║          🔢 MATH MODE ACTIVATED 🔢        ║{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}║     Count, add, and multiply visually!    ║{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.GREEN}{Style.BRIGHT}╚═══════════════════════════════════════════╝{Style.RESET_ALL}",
+            "🔢 MATH MODE ACTIVATED 🔢",
+            "",
+            "Count, add, and multiply visually!",
             "",
         ]
-        self.banner = '\n'.join([center_text(line) + line for line in lines])
+        self.banner = "\n" + box_border(
+            content_lines,
+            style='double',
+            color=Fore.GREEN + Style.BRIGHT,
+            center=True
+        ) + "\n"
 
     def activate(self):
         """Called when entering math mode"""

@@ -277,6 +277,28 @@ def _get_engine():
     return None
 
 
+def _is_only_emoji(text):
+    """Check if text contains only emoji and whitespace (not speakable)"""
+    if not text:
+        return True
+    # Remove whitespace
+    text = text.strip()
+    if not text:
+        return True
+    # Check if all characters are emoji (high unicode ranges)
+    for char in text:
+        if char.isspace():
+            continue
+        # Most emoji are above 0x1F000
+        if ord(char) < 0x1F000:
+            # Check for some common emoji in other ranges
+            if ord(char) not in [0x2764, 0x2B50, 0x2728, 0x2705, 0x274C,
+                                 0x2753, 0x2757, 0x2795, 0x2796, 0x2797,
+                                 0x27A1, 0x2600, 0x2601, 0x26F5, 0x2614]:
+                return False
+    return True
+
+
 def speak(text, wait=False):
     """
     Speak the given text aloud
@@ -286,6 +308,11 @@ def speak(text, wait=False):
         wait: If True, wait for speech to complete (default: False)
     """
     if not text or not isinstance(text, str):
+        return
+
+    # Don't try to speak pure emoji - TTS engines can't handle them
+    # and they just hang or error
+    if _is_only_emoji(text):
         return
 
     engine = _get_engine()

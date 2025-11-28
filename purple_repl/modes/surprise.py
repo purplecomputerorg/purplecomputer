@@ -7,28 +7,13 @@ from colorama import Fore, Style
 import random
 import sys
 import os
-import shutil
-import re
 
 # Import utilities from parent directory
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from emoji_lib import (
     random_emoji, random_pattern, heart_pattern,
-    star_pattern, tree_pattern, rainbow_pattern
+    star_pattern, tree_pattern, rainbow_pattern, box_border
 )
-
-
-def center_text(text):
-    """
-    Center text based on terminal width.
-    Strips ANSI codes when calculating width.
-    """
-    term_width = shutil.get_terminal_size().columns
-    # Strip ANSI codes for width calculation
-    visible_text = re.sub(r'\033\[[0-9;]*m', '', text)
-    text_width = len(visible_text)
-    padding = max(0, (term_width - text_width) // 2)
-    return ' ' * padding
 
 
 class SurpriseMode:
@@ -36,19 +21,20 @@ class SurpriseMode:
 
     def __init__(self):
         self.name = "Surprise"
-        # Build banner dynamically with centering
-        lines = [
+        # Build banner using box_border utility
+        content_lines = [
             "",
-            f"{Fore.MAGENTA}{Style.BRIGHT}╔═══════════════════════════════════════════╗{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}║        ✨ SURPRISE MODE ACTIVATED ✨      ║{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}║          Expect the unexpected!           ║{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}║                                           ║{Style.RESET_ALL}",
-            f"{Fore.MAGENTA}{Style.BRIGHT}╚═══════════════════════════════════════════╝{Style.RESET_ALL}",
+            "✨ SURPRISE MODE ACTIVATED ✨",
+            "",
+            "Expect the unexpected!",
             "",
         ]
-        self.banner = '\n'.join([center_text(line) + line for line in lines])
+        self.banner = "\n" + box_border(
+            content_lines,
+            style='double',
+            color=Fore.MAGENTA + Style.BRIGHT,
+            center=True
+        ) + "\n"
 
         self.surprises = [
             self._emoji_explosion,

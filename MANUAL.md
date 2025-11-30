@@ -2,6 +2,11 @@
 
 Complete reference for developing, testing, installing, and using Purple Computer.
 
+> **⚠️ SOURCE-AVAILABLE LICENSE**
+> This is **NOT open source**. Code is viewable for transparency/learning only.
+> **DO NOT FORK.** Modifications and redistribution require written permission.
+> See [LICENSE](LICENSE) and [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ---
 
 ## Table of Contents
@@ -17,6 +22,8 @@ Complete reference for developing, testing, installing, and using Purple Compute
 ---
 
 ## Development & Testing
+
+**Note:** This section is reference material for viewing and personal testing only. Development, modification, and contribution require written permission from Purple Computer. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Quick Setup
 

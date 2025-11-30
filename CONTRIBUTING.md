@@ -1,8 +1,51 @@
-# Contributing to Purple Computer
+# About Purple Computer
 
-Thanks for your interest in Purple Computer!
+> **⚠️ IMPORTANT: This is NOT Open Source**
+>
+> Purple Computer is **source-available** software with all rights reserved.
+> **DO NOT FORK THIS REPOSITORY.**
+> Viewing and personal use are permitted. Everything else requires written permission.
 
-## Getting Started
+## License
+
+This project is licensed under the **Purple Computer Source-Available License 1.0**. See [LICENSE](LICENSE) for full details.
+
+### What You Can Do
+
+You are permitted to:
+- Download and view the source code (`git clone` for viewing/testing)
+- Run the software for personal, private use
+- Learn from the code for educational purposes
+- Report bugs via GitHub issues
+- Suggest features via GitHub issues
+
+### What You CANNOT Do (Without Written Permission)
+
+**Strictly prohibited:**
+- **Fork this repository** (including GitHub forks)
+- Modify or create derivative works
+- Redistribute or publish the code or modified versions
+- Create plugins, add-ons, or extensions
+- Submit pull requests from forked repositories
+- Use the software commercially
+- Host or deploy the software as a service
+- Distribute binaries or packaged versions
+- Use Purple Computer trademarks or branding
+
+## Requesting Permission
+
+If you would like to contribute, create extensions, or use Purple Computer in ways not covered by the personal-use license, please contact Purple Computer in writing to request permission.
+
+### For Bug Reports and Feature Requests
+
+We welcome:
+- Bug reports via GitHub issues
+- Feature suggestions via GitHub issues
+- Documentation corrections (submit as issues for review)
+
+## Development Reference
+
+For those with permission to modify the code, here's the development workflow:
 
 ### Quick Setup
 
@@ -15,9 +58,7 @@ make run
 
 See [README.md](README.md#quick-start) for details.
 
-## Development Workflow
-
-### 1. Choose Your Testing Mode
+### Testing Modes
 
 - **Local** (fast iteration) - `make run`
 - **Docker** (Ubuntu simulation) - `make run-docker`
@@ -26,69 +67,17 @@ See [README.md](README.md#quick-start) for details.
 
 See [MANUAL.md - Development & Testing](MANUAL.md#development--testing) for full comparison.
 
-### 2. Make Your Changes
+### Code Structure
 
-- **Core REPL**: Edit files in `purple_repl/`
-- **Packs**: Create/modify packs in `packs/`
-- **Docs**: Update `README.md`, `MANUAL.md`, `CHANGELOG.md`
+- **Core REPL**: `purple_repl/`
+- **Packs**: `packs/`
+- **Docs**: `README.md`, `MANUAL.md`, `CHANGELOG.md`
 
-### 3. Test
+### Pack System
 
-```bash
-# Local testing
-make run
+Packs are Purple Computer's extension system. See [MANUAL.md - Pack System](MANUAL.md#pack-system) for complete documentation.
 
-# Full simulation
-make run-docker
-
-# VM testing (for UI/UX changes)
-# See MANUAL.md VM Testing section
-```
-
-### 4. Submit
-
-- Fork the repository
-- Create a feature branch (`git checkout -b feature/my-feature`)
-- Commit your changes
-- Push and open a pull request
-
-## What to Contribute
-
-### Priority Areas
-
-- **Packs**: Emoji, educational content, interactive modes
-- **Modes**: Music, drawing, games, creative tools
-- **Documentation**: Tutorials, examples, improvements
-- **Bug Fixes**: Issues, edge cases, errors
-- **Testing**: Test coverage, QA, UX feedback
-
-### Guidelines
-
-**Do:**
-- Keep it kid-friendly (ages 3-8)
-- Test on actual hardware when possible
-- Update documentation
-- Follow existing code style
-- Create packs for new features (see [MANUAL.md - Pack System](MANUAL.md#pack-system))
-
-**Don't:**
-- Add passive media consumption (videos, image galleries)
-- Include internet requirements for core features
-- Add complex dependencies
-- Break offline functionality
-
-## Creating Packs
-
-Packs are the preferred way to extend Purple Computer. See [MANUAL.md - Pack System](MANUAL.md#pack-system) for complete documentation.
-
-Quick example:
-```bash
-mkdir -p mypack/data
-# Create manifest.json and content files
-./scripts/build_pack.py mypack mypack.purplepack
-```
-
-## Code Style
+### Code Style
 
 - Python: Follow PEP 8, use descriptive names
 - Comments: Explain why, not what
@@ -103,4 +92,4 @@ mkdir -p mypack/data
 
 ---
 
-Made with 💜 for curious little minds
+**Note:** This is source-available software. Viewing and running for personal use is permitted. All other uses require written permission from Purple Computer.

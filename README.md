@@ -2,6 +2,11 @@
 
 A kid-friendly computing environment for ages 3-8. Boot directly into a fullscreen terminal with emoji, colors, and creative exploration.
 
+> **⚠️ SOURCE-AVAILABLE LICENSE**
+> This is **NOT open source**. You may view and run this code for personal use only.
+> **Forking, modifications, redistribution, and commercial use are prohibited** without written permission.
+> See [LICENSE](LICENSE) for details.
+
 ## What Is This?
 
 Purple Computer is a real computer for young kids. They type on a keyboard, run commands, and see what happens. It teaches:
@@ -286,7 +291,22 @@ rm ~/.purple/parent.json  # Reset it
 
 ## License
 
-MIT License - see [LICENSE](LICENSE)
+Purple Computer Source-Available License 1.0 - see [LICENSE](LICENSE)
+
+**This is NOT open source software.** The code is publicly visible for transparency and learning, but all rights are reserved.
+
+**You may:**
+- View the source code
+- Clone for personal testing/viewing
+- Run for personal, private use
+
+**You may NOT (without written permission):**
+- Fork this repository
+- Modify or create derivatives
+- Redistribute or republish
+- Use commercially
+- Create plugins or extensions
+- Distribute binaries
 
 ---
 

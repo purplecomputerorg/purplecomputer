@@ -58,24 +58,16 @@ make run
 
 See [README.md](README.md#quick-start) for details.
 
-### Testing Modes
+### Testing
 
 - **Local** (fast iteration) - `make run`
-- **Docker** (Ubuntu simulation) - `make run-docker`
-- **VM** (full UI testing) - See [MANUAL.md](MANUAL.md#vm-testing-reproducible-environment)
-- **Hardware** (production testing) - Build ISO
-
-See [MANUAL.md - Development & Testing](MANUAL.md#development--testing) for full comparison.
+- **Hardware** (production testing) - Build ISO and install on target laptop
 
 ### Code Structure
 
-- **Core REPL**: `purple_repl/`
+- **TUI App**: `purple_tui/`
 - **Packs**: `packs/`
-- **Docs**: `README.md`, `MANUAL.md`, `CHANGELOG.md`
-
-### Pack System
-
-Packs are Purple Computer's extension system. See [MANUAL.md - Pack System](MANUAL.md#pack-system) for complete documentation.
+- **Docs**: `README.md`, `CHANGELOG.md`
 
 ### Code Style
 
@@ -86,7 +78,6 @@ Packs are Purple Computer's extension system. See [MANUAL.md - Pack System](MANU
 
 ## Questions?
 
-- Check [MANUAL.md](MANUAL.md) for comprehensive docs
 - Search existing issues on GitHub
 - Open a new issue for discussion
 

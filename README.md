@@ -141,12 +141,58 @@ tar -czvf my-pack.purplepack manifest.json content/
 
 ---
 
+## Auto-Updates
+
+Purple Computer automatically checks for updates once per day on startup.
+
+- **Minor updates** (bug fixes, new emoji, etc.) are applied automatically
+- **Breaking updates** (major changes) show a prompt asking for confirmation
+
+Updates are pulled from the main branch via git. No action required from users.
+
+### Version Files
+
+| File | Purpose |
+|------|---------|
+| `VERSION` | Current version (e.g., `0.1.0`) |
+| `BREAKING_VERSION` | Increments on major/breaking changes |
+| `version.json` | Remote version info (fetched from GitHub) |
+
+### Testing Auto-Updates (Developers)
+
+To simulate an available update:
+
+```bash
+# 1. Edit version.json to have a higher version
+#    e.g., change "version": "0.1.0" to "version": "0.2.0"
+
+# 2. Clear the update check state
+rm ~/.purple_computer_update_state
+
+# 3. Run the app - it will detect the "update" and pull
+make run
+```
+
+To test a breaking update prompt:
+```bash
+# 1. Also increment "breaking_version" in version.json
+
+# 2. Clear state and run
+rm ~/.purple_computer_update_state
+make run
+
+# 3. You'll see the update confirmation dialog
+```
+
+---
+
 ## Architecture
 
 ```
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
 │   ├── purple_tui.py     # App entry point
+│   ├── updater.py        # Auto-update checker
 │   ├── constants.py      # Icons, colors, mode titles
 │   ├── modes/            # Mode modules (curated Python code)
 │   │   ├── ask_mode.py   # Math and emoji REPL

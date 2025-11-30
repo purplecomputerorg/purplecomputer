@@ -1,7 +1,7 @@
 #!/bin/bash
 # Purple Computer ISO Builder
 # This script creates a bootable Ubuntu Server ISO with Purple Computer pre-configured
-# Architecture: Ubuntu Server + minimal Xorg (no desktop) + kitty fullscreen
+# Architecture: Ubuntu Server + minimal Xorg (no desktop) + alacritty fullscreen
 #
 # Run from project root: ./autoinstall/build-iso.sh
 # Or from autoinstall/: ./build-iso.sh
@@ -203,13 +203,13 @@ chmod -R u+w "$EXTRACT_DIR"
 echo_info "Copying Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
 
-# Copy Purple REPL code
-cp -r "$PROJECT_ROOT/purple_repl"/* "$EXTRACT_DIR/purple_files/"
+# Copy Purple TUI code
+cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
 
 # Copy system configuration files
 cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
-cp "$PROJECT_ROOT/autoinstall/files/kitty/kitty.conf" "$EXTRACT_DIR/purple_files/"
+cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/"
 
 # Copy autoinstall configuration
 echo_info "Injecting autoinstall configuration..."

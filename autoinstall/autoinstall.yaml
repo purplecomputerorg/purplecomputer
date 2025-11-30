@@ -2,7 +2,7 @@
 # Purple Computer Autoinstall Configuration
 # This file drives the automated Ubuntu Server installation
 #
-# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + kitty fullscreen
+# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + alacritty fullscreen
 # No GUI, no window manager, no desktop bloat - just a fullscreen terminal
 
 autoinstall:
@@ -59,7 +59,7 @@ autoinstall:
     - matchbox-window-manager
 
     # Terminal emulator (runs fullscreen via xinitrc)
-    - kitty
+    - alacritty
 
     # Python environment
     - python3
@@ -125,7 +125,7 @@ autoinstall:
       # Create Purple Computer directory structure
       - mkdir -p /home/purple/.purple/modes
       - mkdir -p /home/purple/.purple/packs
-      - mkdir -p /home/purple/.config/kitty
+      - mkdir -p /home/purple/.config/alacritty
       - mkdir -p /usr/share/purple
 
       # Create legacy kiduser for backwards compatibility
@@ -133,7 +133,7 @@ autoinstall:
       - passwd -l kiduser
       - mkdir -p /home/kiduser/.purple/modes
       - mkdir -p /home/kiduser/.purple/packs
-      - mkdir -p /home/kiduser/.config/kitty
+      - mkdir -p /home/kiduser/.config/alacritty
 
       # Set ownership - IMPORTANT: fix /home/purple itself first, then subdirectories
       - sh -c 'if id purple >/dev/null 2>&1; then chown purple:purple /home/purple; chown -R purple:purple /home/purple/.purple; chown -R purple:purple /home/purple/.config; fi'
@@ -217,10 +217,10 @@ autoinstall:
       echo "✓ Download complete"
       echo ""
 
-      # Copy Purple REPL to user directories
+      # Copy Purple TUI to user directories
       echo "Installing Purple Computer files..."
       mkdir -p /home/purple/.purple
-      cp -r /tmp/purplecomputer/purple_repl/* /home/purple/.purple/
+      cp -r /tmp/purplecomputer/purple_tui/* /home/purple/.purple/
       if id purple >/dev/null 2>&1; then
         chown -R purple:purple /home/purple/.purple
       fi
@@ -229,7 +229,7 @@ autoinstall:
       # Backwards compatibility with kiduser
       if [ -d /home/kiduser ]; then
         mkdir -p /home/kiduser/.purple
-        cp -r /tmp/purplecomputer/purple_repl/* /home/kiduser/.purple/
+        cp -r /tmp/purplecomputer/purple_tui/* /home/kiduser/.purple/
         chown -R kiduser:kiduser /home/kiduser/.purple
         find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
       fi
@@ -254,9 +254,10 @@ autoinstall:
       xset s noblank
       xset b off
       xset r rate 300 30
-      xsetroot -solid "#800080"
+      xsetroot -solid "#2d1b4e"
       matchbox-window-manager &
-      exec kitty --start-as=fullscreen --single-instance /home/purple/.purple/repl.py
+      exec alacritty --config-file /home/purple/.config/alacritty/alacritty.toml \
+          -e /home/purple/.purple/purple_tui.py
       XINITRC
 
       if id purple >/dev/null 2>&1; then
@@ -270,27 +271,57 @@ autoinstall:
         chmod +x /home/kiduser/.xinitrc
       fi
 
-      # Create kitty config (embed inline)
-      mkdir -p /home/purple/.config/kitty
-      cat > /home/purple/.config/kitty/kitty.conf <<'KITTY'
-      # Purple Computer Kitty Configuration
-      font_family      monospace
-      font_size        14.0
-      cursor_blink_interval 0
-      enable_audio_bell no
-      window_padding_width 10
-      background_opacity 1.0
-      background #1a1a2e
-      foreground #eee8d5
-      KITTY
+      # Create alacritty config (embed inline)
+      mkdir -p /home/purple/.config/alacritty
+      cat > /home/purple/.config/alacritty/alacritty.toml <<'ALACRITTY'
+      # Purple Computer Alacritty Configuration
+      [window]
+      decorations = "None"
+      startup_mode = "Fullscreen"
+      opacity = 1.0
+
+      [font]
+      size = 22.0
+
+      [font.normal]
+      family = "JetBrainsMono Nerd Font"
+      style = "Regular"
+
+      [colors.primary]
+      background = "#2d1b4e"
+      foreground = "#f5f3ff"
+
+      [colors.cursor]
+      text = "#2d1b4e"
+      cursor = "#c4b5fd"
+
+      [colors.normal]
+      black = "#1e0a3c"
+      red = "#ff6b9d"
+      green = "#a0d995"
+      yellow = "#ffd97d"
+      blue = "#9bb3ff"
+      magenta = "#e0b0ff"
+      cyan = "#a8e6e1"
+      white = "#f5f3ff"
+
+      [cursor]
+      style = "Beam"
+
+      [bell]
+      duration = 0
+
+      [terminal]
+      osc52 = "Disabled"
+      ALACRITTY
 
       if id purple >/dev/null 2>&1; then
         chown -R purple:purple /home/purple/.config
       fi
 
       if [ -d /home/kiduser ]; then
-        mkdir -p /home/kiduser/.config/kitty
-        cp /home/purple/.config/kitty/kitty.conf /home/kiduser/.config/kitty/kitty.conf
+        mkdir -p /home/kiduser/.config/alacritty
+        cp /home/purple/.config/alacritty/alacritty.toml /home/kiduser/.config/alacritty/alacritty.toml
         chown -R kiduser:kiduser /home/kiduser/.config
       fi
 

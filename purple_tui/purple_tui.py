@@ -287,6 +287,32 @@ class PurpleApp(App):
     .view-ears #mode-indicator {
         display: none;
     }
+
+    /* Update dialog */
+    #update-dialog {
+        width: 60;
+        height: auto;
+        padding: 2 4;
+        background: $surface;
+        border: heavy $primary;
+    }
+
+    #update-dialog Label {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #update-buttons {
+        width: 100%;
+        height: 3;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #update-buttons Button {
+        margin: 0 2;
+    }
     """
 
     BINDINGS = [
@@ -309,6 +335,7 @@ class PurpleApp(App):
         self.escape_count = 0  # For 3-escape clear confirmation
         self.caps_mode = False  # Track if user is typing in caps
         self._recent_letters = []  # Track recent letter keypresses
+        self._pending_update = None  # Set by main() if breaking update available
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -355,6 +382,50 @@ class PurpleApp(App):
         """Called when app starts"""
         self._apply_theme()
         self._load_mode_content()
+
+        # Show breaking update prompt if available
+        if self._pending_update:
+            self._show_update_prompt()
+
+    def _show_update_prompt(self) -> None:
+        """Show a prompt for breaking updates"""
+        from textual.widgets import Button, Label
+        from textual.containers import Horizontal
+        from textual.screen import ModalScreen
+
+        update_info = self._pending_update
+
+        class UpdateScreen(ModalScreen):
+            """Modal screen for update prompt"""
+
+            BINDINGS = [("escape", "dismiss", "Cancel")]
+
+            def compose(self):
+                with Container(id="update-dialog"):
+                    yield Label(f"Purple Computer {update_info['version']} is available!")
+                    yield Label(update_info['message'])
+                    yield Label("")
+                    yield Label("This is a major update. Would you like to update now?")
+                    with Horizontal(id="update-buttons"):
+                        yield Button("Update", id="update-yes", variant="primary")
+                        yield Button("Later", id="update-no")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                if event.button.id == "update-yes":
+                    self.dismiss(True)
+                else:
+                    self.dismiss(False)
+
+        def handle_update_result(should_update: bool) -> None:
+            if should_update:
+                from .updater import apply_breaking_update
+                if apply_breaking_update():
+                    # Restart the app
+                    import sys
+                    import os
+                    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        self.push_screen(UpdateScreen(), handle_update_result)
 
     def _apply_theme(self) -> None:
         """Apply the current color theme"""
@@ -643,7 +714,27 @@ class PurpleApp(App):
 
 def main():
     """Entry point for Purple Computer"""
+    # Check for updates before starting
+    from .updater import auto_update_if_available
+    update_result = auto_update_if_available()
+
+    if update_result == "updated":
+        # Minor update applied - restart the app
+        import sys
+        import os
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    # If breaking update available, the app will show a prompt
+    # (handled in PurpleApp.on_mount)
+
     app = PurpleApp()
+    if update_result and update_result.startswith("breaking:"):
+        # Pass breaking update info to app
+        parts = update_result.split(":", 2)
+        app._pending_update = {
+            "version": parts[1],
+            "message": parts[2] if len(parts) > 2 else "A new version is available"
+        }
     app.run()
 
 

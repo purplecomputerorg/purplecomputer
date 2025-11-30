@@ -26,7 +26,14 @@ MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
 
 # Cleanup trap to unmount ISO if script exits early
-trap 'sudo umount "$MOUNT_DIR" 2>/dev/null || true' EXIT
+cleanup_mount() {
+    if [ "$(uname -s)" = "Darwin" ]; then
+        hdiutil detach "$MOUNT_DIR" 2>/dev/null || true
+    else
+        sudo umount "$MOUNT_DIR" 2>/dev/null || true
+    fi
+}
+trap cleanup_mount EXIT
 
 # Colors for output
 RED='\033[0;31m'
@@ -55,15 +62,27 @@ fi
 # Check dependencies
 echo_info "Checking dependencies..."
 
+# Detect OS
+OS="$(uname -s)"
+case "$OS" in
+    Linux)  IS_MACOS=false ;;
+    Darwin) IS_MACOS=true ;;
+    *)      echo_error "Unsupported OS: $OS"; exit 1 ;;
+esac
+
 # Check for command-line tools
-COMMANDS="xorriso curl wget rsync"
+COMMANDS="xorriso curl rsync"
 for cmd in $COMMANDS; do
     if ! command -v $cmd &> /dev/null; then
         echo_error "$cmd is not installed. Please install it first."
-        echo "  Debian/Ubuntu: sudo apt install $cmd"
-        echo "  Fedora: sudo dnf install $cmd"
-        echo "  Arch: sudo pacman -S $cmd"
-        echo "  NixOS: Add $cmd to your environment.systemPackages"
+        if $IS_MACOS; then
+            echo "  macOS: brew install $cmd"
+        else
+            echo "  Debian/Ubuntu: sudo apt install $cmd"
+            echo "  Fedora: sudo dnf install $cmd"
+            echo "  Arch: sudo pacman -S $cmd"
+            echo "  NixOS: Add $cmd to your environment.systemPackages"
+        fi
         exit 1
     fi
 done
@@ -83,7 +102,7 @@ verify_iso_checksum() {
     # Download SHA256SUMS if not present or if ISO was just downloaded
     if [ ! -f "SHA256SUMS" ] || [ "$1" = "force" ]; then
         echo_info "Downloading SHA256SUMS..."
-        wget -q -O "SHA256SUMS" "$UBUNTU_SHA256_URL" || {
+        curl -fsSL -o "SHA256SUMS" "$UBUNTU_SHA256_URL" || {
             echo_error "Failed to download SHA256SUMS"
             return 1
         }
@@ -99,7 +118,11 @@ verify_iso_checksum() {
 
     # Calculate actual checksum
     echo_info "Calculating SHA256 checksum (this may take a minute)..."
-    ACTUAL_SHA256=$(sha256sum "$UBUNTU_ISO_NAME" | awk '{print $1}')
+    if $IS_MACOS; then
+        ACTUAL_SHA256=$(shasum -a 256 "$UBUNTU_ISO_NAME" | awk '{print $1}')
+    else
+        ACTUAL_SHA256=$(sha256sum "$UBUNTU_ISO_NAME" | awk '{print $1}')
+    fi
 
     # Compare checksums
     if [ "$EXPECTED_SHA256" = "$ACTUAL_SHA256" ]; then
@@ -122,7 +145,7 @@ while [ $DOWNLOAD_ATTEMPT -lt $MAX_ATTEMPTS ]; do
         echo_info "Downloading Ubuntu $UBUNTU_VERSION ISO..."
         echo_warn "This is a large file (~2GB) and may take a while..."
 
-        if wget -O "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL"; then
+        if curl -fL --progress-bar -o "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL"; then
             echo_info "Download complete"
         else
             echo_error "Download failed"
@@ -157,15 +180,23 @@ done
 echo_info "Extracting Ubuntu ISO..."
 mkdir -p "$MOUNT_DIR" "$EXTRACT_DIR"
 
-# Mount ISO
-sudo mount -o loop "$UBUNTU_ISO_NAME" "$MOUNT_DIR"
+# Mount ISO (platform-specific)
+if $IS_MACOS; then
+    hdiutil attach -mountpoint "$MOUNT_DIR" "$UBUNTU_ISO_NAME" -nobrowse
+else
+    sudo mount -o loop "$UBUNTU_ISO_NAME" "$MOUNT_DIR"
+fi
 
 # Copy contents
 echo_info "Copying ISO contents..."
 rsync -a "$MOUNT_DIR/" "$EXTRACT_DIR/"
 
-# Unmount
-sudo umount "$MOUNT_DIR"
+# Unmount (platform-specific)
+if $IS_MACOS; then
+    hdiutil detach "$MOUNT_DIR"
+else
+    sudo umount "$MOUNT_DIR"
+fi
 
 # Make extracted files writable
 chmod -R u+w "$EXTRACT_DIR"
@@ -223,32 +254,51 @@ fi
 # Calculate MD5 sums
 echo_info "Calculating MD5 checksums..."
 cd "$EXTRACT_DIR"
-sudo rm -f md5sum.txt
-find -type f -print0 | sudo xargs -0 md5sum | grep -v isolinux/boot.cat | sudo tee md5sum.txt
+rm -f md5sum.txt
+if $IS_MACOS; then
+    find . -type f -print0 | xargs -0 md5 -r | grep -v isolinux/boot.cat > md5sum.txt
+else
+    find . -type f -print0 | xargs -0 md5sum | grep -v isolinux/boot.cat > md5sum.txt
+fi
 
 # Build the new ISO
 echo_info "Building Purple Computer ISO..."
 cd "$WORK_DIR"
-sudo xorriso -as mkisofs \
-    -r -V "Purple Computer" \
-    -o "$OUTPUT_ISO" \
-    -J -l \
-    -c boot.catalog \
-    -b boot/grub/i386-pc/eltorito.img \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -eltorito-alt-boot \
-    -e EFI/boot/grubx64.efi \
-    -no-emul-boot \
-    -isohybrid-gpt-basdat \
-    "$EXTRACT_DIR"
+if $IS_MACOS; then
+    xorriso -as mkisofs \
+        -r -V "Purple Computer" \
+        -o "$OUTPUT_ISO" \
+        -J -l \
+        -c boot.catalog \
+        -b boot/grub/i386-pc/eltorito.img \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        -eltorito-alt-boot \
+        -e EFI/boot/grubx64.efi \
+        -no-emul-boot \
+        -isohybrid-gpt-basdat \
+        "$EXTRACT_DIR"
+else
+    sudo xorriso -as mkisofs \
+        -r -V "Purple Computer" \
+        -o "$OUTPUT_ISO" \
+        -J -l \
+        -c boot.catalog \
+        -b boot/grub/i386-pc/eltorito.img \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        -eltorito-alt-boot \
+        -e EFI/boot/grubx64.efi \
+        -no-emul-boot \
+        -isohybrid-gpt-basdat \
+        "$EXTRACT_DIR"
 
-# Make ISO readable by user (get actual primary group instead of assuming it matches username)
-USER_GROUP=$(id -gn)
-sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
+    # Make ISO readable by user (get actual primary group instead of assuming it matches username)
+    USER_GROUP=$(id -gn)
+    sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
+fi
 
 # Cleanup
 echo_info "Cleaning up..."
-sudo rm -rf "$WORK_DIR/mount" "$WORK_DIR/extract"
+rm -rf "$WORK_DIR/mount" "$WORK_DIR/extract"
 
 # Success!
 echo_info "======================================"

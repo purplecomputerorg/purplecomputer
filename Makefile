@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-docker build-packs build-iso clean test check docker-build docker-shell clean-iso
+.PHONY: help setup run build-packs build-iso clean clean-iso clean-all
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -10,24 +10,23 @@ help:
 	@echo "  make setup          - Install dependencies and build packs"
 	@echo ""
 	@echo "Running:"
-	@echo "  make run            - Run Purple Computer locally (fast)"
-	@echo "  make run-docker     - Run Purple Computer in Docker (full simulation)"
-	@echo "  make docker-shell   - Open bash shell in Docker"
+	@echo "  make run            - Run Purple Computer locally"
 	@echo ""
-	@echo "Building & Testing:"
-	@echo "  make check          - Check Python syntax and imports"
-	@echo "  make test           - Run all tests (syntax + unit tests)"
-	@echo "  make build-packs    - Build example packs"
-	@echo "  make build-iso      - Build bootable ISO for VM/hardware install"
-	@echo "  make docker-build   - Rebuild Docker image"
+	@echo "Building:"
+	@echo "  make build-packs    - Build content packs"
+	@echo "  make build-iso      - Build bootable ISO for installation"
 	@echo ""
 	@echo "Cleaning:"
 	@echo "  make clean          - Remove test environment"
-	@echo "  make clean-docker   - Remove Docker containers and volumes"
 	@echo "  make clean-iso      - Remove ISO build artifacts"
-	@echo "  make clean-all      - Remove everything (test env + Docker + ISO)"
+	@echo "  make clean-all      - Remove everything"
 	@echo ""
-	@echo "For more info, see README.md and MANUAL.md"
+	@echo "Controls:"
+	@echo "  F1-F4      - Switch modes (Ask, Play, Listen, Write)"
+	@echo "  Ctrl+V     - Cycle views (Screen, Line, Ears)"
+	@echo "  F12        - Toggle dark/light theme"
+	@echo ""
+	@echo "For more info, see README.md"
 
 setup:
 	@echo "Setting up Purple Computer development environment..."
@@ -37,47 +36,25 @@ run:
 	@echo "Running Purple Computer locally..."
 	./scripts/run_local.sh
 
-run-docker:
-	@echo "Running Purple Computer in Docker..."
-	./scripts/run_docker.sh
-
-docker-build:
-	@echo "Building Docker image..."
-	./scripts/run_docker.sh --build
-
-docker-shell:
-	@echo "Opening Docker shell..."
-	./scripts/run_docker.sh --shell
-
 build-packs:
-	@echo "Building example packs..."
-	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack"
-	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/education-basics packs/education-basics.purplepack"
-	@bash -c "if [ -d .venv ]; then source .venv/bin/activate; fi; python scripts/build_pack.py packs/music_mode_basic packs/music_mode_basic.purplepack"
+	@echo "Building content packs..."
+	@cd packs/core-emoji && tar -czvf ../core-emoji.purplepack manifest.json content/
+	@cd packs/core-definitions && tar -czvf ../core-definitions.purplepack manifest.json content/
 	@echo "✓ Packs built"
 
 build-iso:
 	@echo "Building Purple Computer ISO..."
 	@echo "This will download Ubuntu Server ISO (~1.4GB) and create a bootable image"
-	@echo "Requirements: xorriso, isolinux, curl, wget"
 	@echo ""
 	./autoinstall/build-iso.sh
 	@echo ""
-	@echo "✓ ISO built successfully: purple-computer.iso"
-	@echo "  Boot in VM with virtio-fs shared folder for live development"
-	@echo "  See autoinstall/README.md for VM setup instructions"
+	@echo "✓ ISO built: purple-computer.iso"
 
 clean:
 	@echo "Cleaning local test environment..."
 	rm -rf .test_home/
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ Test environment removed"
-
-clean-docker:
-	@echo "Cleaning Docker environment..."
-	-docker rm -f purple-computer-test 2>/dev/null || true
-	-docker volume rm purplecomputer_purple-data 2>/dev/null || true
-	-docker volume rm purplecomputer_purple-config 2>/dev/null || true
-	@echo "✓ Docker cleaned (image preserved, use 'docker rmi purplecomputer:latest' to remove image)"
 
 clean-iso:
 	@echo "Cleaning ISO build artifacts..."
@@ -85,16 +62,7 @@ clean-iso:
 	rm -f purple-computer.iso
 	@echo "✓ ISO build artifacts removed"
 
-clean-all: clean clean-docker clean-iso
-	@echo "✓ All test environments cleaned"
-
-check:
-	@echo "Checking Python syntax and imports..."
-	./scripts/check.sh
-
-test: check
-	@echo "Running unit tests..."
-	@echo "(Unit tests coming soon!)"
-	# python3 -m pytest tests/
+clean-all: clean clean-iso
+	@echo "✓ All cleaned"
 
 .DEFAULT_GOAL := help

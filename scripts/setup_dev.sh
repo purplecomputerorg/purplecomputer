@@ -27,8 +27,8 @@ echo_step() {
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║   Purple Computer Development Setup         ║"
-echo "╔══════════════════════════════════════════════╗"
+echo "║   Purple Computer Development Setup          ║"
+echo "╚══════════════════════════════════════════════╝"
 echo ""
 
 cd "$PROJECT_ROOT"
@@ -73,62 +73,71 @@ source .venv/bin/activate
 # Install Python dependencies
 echo_step "Installing Python dependencies into venv..."
 pip install --upgrade pip
-pip install ipython colorama termcolor packaging traitlets simple-term-menu rich
+pip install textual rich wcwidth
 
 echo_info "✓ Python dependencies installed in virtual environment"
 
-# Build example packs
-echo_step "Building example packs..."
-if [ ! -f "packs/core-emoji.purplepack" ]; then
-    python3 scripts/build_pack.py packs/core-emoji packs/core-emoji.purplepack
+# Build content packs
+echo_step "Building content packs..."
+if [ -d "packs/core-emoji" ]; then
+    cd packs/core-emoji
+    tar -czvf ../core-emoji.purplepack manifest.json content/
+    cd "$PROJECT_ROOT"
     echo_info "✓ Built core-emoji.purplepack"
-else
-    echo_info "✓ core-emoji.purplepack exists"
 fi
 
-if [ ! -f "packs/education-basics.purplepack" ]; then
-    python3 scripts/build_pack.py packs/education-basics packs/education-basics.purplepack
-    echo_info "✓ Built education-basics.purplepack"
-else
-    echo_info "✓ education-basics.purplepack exists"
+if [ -d "packs/core-definitions" ]; then
+    cd packs/core-definitions
+    tar -czvf ../core-definitions.purplepack manifest.json content/
+    cd "$PROJECT_ROOT"
+    echo_info "✓ Built core-definitions.purplepack"
 fi
 
-# Check Docker (optional)
-echo_step "Checking Docker installation (optional)..."
-if command -v docker &> /dev/null; then
-    if docker info &> /dev/null 2>&1; then
-        echo_info "✓ Docker is installed and running"
-        DOCKER_AVAILABLE=true
+# Check Alacritty (optional but recommended)
+echo_step "Checking Alacritty installation (optional)..."
+ALACRITTY_AVAILABLE=false
+if command -v alacritty &> /dev/null; then
+    echo_info "✓ Alacritty is installed"
+    ALACRITTY_AVAILABLE=true
+elif [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Alacritty.app" ]; then
+    echo_info "✓ Alacritty.app is installed"
+    ALACRITTY_AVAILABLE=true
+else
+    echo_warn "Alacritty not found (optional but recommended)"
+    if [ "$OS" = "mac" ]; then
+        echo_warn "Install with: brew install --cask alacritty"
     else
-        echo_warn "Docker is installed but not running"
-        DOCKER_AVAILABLE=false
+        echo_warn "Install with: sudo apt install alacritty"
     fi
-else
-    echo_warn "Docker not found (optional for testing)"
-    DOCKER_AVAILABLE=false
 fi
 
 # Summary
 echo ""
 echo "╔══════════════════════════════════════════════╗"
 echo "║   Setup Complete!                            ║"
-echo "╔══════════════════════════════════════════════╗"
+echo "╚══════════════════════════════════════════════╝"
 echo ""
 echo_info "Virtual environment created at .venv/"
 echo_info "Activate it with: source .venv/bin/activate"
 echo ""
-echo_info "You can now run Purple Computer:"
-echo ""
-echo "  1. Local mode (Mac/Linux):"
-echo "     make run"
-echo "     (or ./scripts/run_local.sh)"
-echo ""
-
-if [ "$DOCKER_AVAILABLE" = true ]; then
-    echo "  2. Docker mode (full simulation):"
-    echo "     make run-docker"
-    echo "     (or ./scripts/run_docker.sh)"
+if [ "$ALACRITTY_AVAILABLE" = true ]; then
+    echo_info "Alacritty detected - 'make run' will use Purple theme"
+else
+    echo_warn "For the full Purple experience, install Alacritty:"
+    if [ "$OS" = "mac" ]; then
+        echo "  brew install --cask alacritty"
+    else
+        echo "  sudo apt install alacritty"
+    fi
     echo ""
 fi
-
-echo_info "The scripts will automatically activate the venv"
+echo_info "You can now run Purple Computer:"
+echo ""
+echo "  make run"
+echo "  (or ./scripts/run_local.sh)"
+echo ""
+echo_info "Controls:"
+echo "  F1-F4: Switch modes (Ask, Play, Listen, Write)"
+echo "  Ctrl+V: Cycle views (Screen, Line, Ears)"
+echo "  F12: Toggle dark/light theme"
+echo ""

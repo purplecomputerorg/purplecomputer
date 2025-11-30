@@ -19,14 +19,10 @@ if command -v unclutter &> /dev/null; then
     unclutter -idle 2 &
 fi
 
-# Set a nice purple background color
-xsetroot -solid "#800080"
+# Set the purple background color (brand identity - fills screen outside 8x4.5" viewport)
+xsetroot -solid "#2d1b4e"
 
-# Start matchbox window manager in background
-# This minimal WM enables Kitty's fullscreen mode to work properly
-matchbox-window-manager &
-
-# Launch Kitty in fullscreen with Purple REPL
-# The --start-as=fullscreen flag now works correctly with matchbox running
-exec kitty --start-as=fullscreen --single-instance \
-    /home/purple/.purple/repl.py
+# Launch Alacritty in fullscreen with Purple Computer Textual TUI
+# No window manager needed - Alacritty handles fullscreen directly
+exec alacritty --config-file /home/purple/.config/alacritty/alacritty.toml \
+    -e /home/purple/.purple/purple_tui.py

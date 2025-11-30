@@ -1,0 +1,122 @@
+# Purple Computer Alacritty Configuration
+# Calm, distraction-free terminal for kids
+
+[window]
+# Fullscreen with no decorations
+decorations = "None"
+startup_mode = "Fullscreen"
+dynamic_padding = false
+opacity = 1.0
+
+[window.padding]
+x = 0
+y = 0
+
+[scrolling]
+history = 100
+
+[font]
+# Use the fonts configured in the earlier commit
+# SF Mono > IBM Plex Mono > Inter > JetBrains Mono
+size = 22.0
+
+[font.normal]
+family = "SF Mono"
+style = "Regular"
+
+[font.bold]
+family = "SF Mono"
+style = "Bold"
+
+[font.italic]
+family = "SF Mono"
+style = "Italic"
+
+[font.bold_italic]
+family = "SF Mono"
+style = "Bold Italic"
+
+# Fallback fonts for emoji and symbols
+[[font.fallback]]
+family = "Noto Color Emoji"
+
+[[font.fallback]]
+family = "Noto Sans"
+
+[colors]
+# Dark purple theme - calming and sophisticated
+# Not too dark (avoids looking black), not too bright (avoids tacky plastic)
+
+[colors.primary]
+background = "#2d1b4e"  # Soft deep purple (not black, not garish)
+foreground = "#f5f3ff"  # Soft white text
+
+[colors.cursor]
+text = "#2d1b4e"
+cursor = "#c4b5fd"  # Light purple cursor
+
+[colors.selection]
+text = "#2d1b4e"
+background = "#c4b5fd"
+
+# Normal colors (used by Textual and content)
+[colors.normal]
+black = "#1e0a3c"
+red = "#ff6b9d"
+green = "#a0d995"
+yellow = "#ffd97d"
+blue = "#9bb3ff"
+magenta = "#e0b0ff"
+cyan = "#a8e6e1"
+white = "#f5f3ff"
+
+# Bright colors
+[colors.bright]
+black = "#4a3866"
+red = "#ffb3c6"
+green = "#c8f0c1"
+yellow = "#ffe9b3"
+blue = "#c7d7ff"
+magenta = "#f0d9ff"
+cyan = "#d1f5f0"
+white = "#ffffff"
+
+[cursor]
+style = "Beam"
+unfocused_hollow = false
+thickness = 0.15
+
+[bell]
+animation = "EaseOutExpo"
+duration = 0
+color = "#2d1b4e"
+
+[selection]
+save_to_clipboard = false
+
+[keyboard]
+# Disable most bindings - Textual app will handle everything
+bindings = []
+
+[mouse]
+hide_when_typing = true
+
+# Disable mouse bindings - no mouse interaction
+[[mouse.bindings]]
+mouse = "Right"
+action = "None"
+
+[[mouse.bindings]]
+mouse = "Middle"
+action = "None"
+
+[debug]
+# Performance settings for old laptops
+render_timer = false
+persistent_logging = false
+log_level = "Warn"
+print_events = false
+
+[terminal]
+# Disable OSC 52 (clipboard) for safety
+osc52 = "Disabled"

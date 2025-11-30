@@ -3,8 +3,8 @@
 # Run this manually if you're installing Purple Computer on an existing Ubuntu system
 # (instead of using the autoinstall ISO)
 #
-# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + kitty fullscreen
-# No GUI, no window manager, no desktop bloat - just a fullscreen terminal
+# Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + Alacritty fullscreen
+# No GUI, no window manager, no desktop bloat - just a fullscreen terminal with Textual TUI
 
 set -e
 
@@ -39,13 +39,10 @@ echo_info "Installing required packages..."
 apt install -y \
     xorg \
     xinit \
-    kitty \
+    alacritty \
     python3 \
     python3-pip \
     python3-venv \
-    ipython3 \
-    espeak-ng \
-    python3-pyttsx3 \
     alsa-utils \
     pulseaudio \
     fonts-noto \
@@ -56,11 +53,30 @@ apt install -y \
     wget \
     vim \
     build-essential \
-    python3-dev
+    python3-dev \
+    unclutter
+
+# Install Piper TTS for speech synthesis
+echo_info "Installing Piper TTS..."
+# Piper binary and voice model will be installed to /opt/piper
+mkdir -p /opt/piper
+cd /opt/piper
+# Download latest piper release for linux
+if [ ! -f piper ]; then
+    wget -q https://github.com/rhasspy/piper/releases/latest/download/piper_linux_x86_64.tar.gz
+    tar -xzf piper_linux_x86_64.tar.gz
+    rm piper_linux_x86_64.tar.gz
+fi
+# Download a kid-friendly voice (en_US-lessac-medium)
+if [ ! -f en_US-lessac-medium.onnx ]; then
+    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+fi
+cd -
 
 # Install Python packages
 echo_info "Installing Python packages..."
-pip3 install --system colorama termcolor simple-term-menu
+pip3 install --system textual rich wcwidth
 
 # Create purple user if doesn't exist
 # Note: Changed from 'kiduser' to 'purple' for cleaner branding
@@ -75,48 +91,25 @@ else
     echo_info "User purple already exists, skipping."
 fi
 
-# Also support legacy kiduser name
-if ! id "kiduser" &>/dev/null; then
-    echo_info "Creating kiduser account (legacy)..."
-    useradd -m -s /bin/bash kiduser
-    passwd -l kiduser
-fi
-
 # Add purple user to audio group
 usermod -a -G audio purple
 
-# Also add kiduser for backwards compatibility
-if id "kiduser" &>/dev/null; then
-    usermod -a -G audio kiduser
-fi
-
-# Create directory structure for both users
+# Create directory structure
 echo_info "Creating Purple Computer directories..."
 mkdir -p /home/purple/.purple/modes
 mkdir -p /home/purple/.purple/packs
-mkdir -p /home/purple/.config/kitty
+mkdir -p /home/purple/.config/alacritty
 mkdir -p /usr/share/purple
-
-# Also for kiduser (legacy)
-if [ -d "/home/kiduser" ]; then
-    mkdir -p /home/kiduser/.purple/modes
-    mkdir -p /home/kiduser/.purple/packs
-    mkdir -p /home/kiduser/.config/kitty
-fi
 
 # Get the directory where this script lives
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Copy Purple REPL files
-echo_info "Installing Purple REPL..."
-if [ -d "$SCRIPT_DIR/../../purple_repl" ]; then
-    cp -r "$SCRIPT_DIR/../../purple_repl/"* /home/purple/.purple/
-    # Also copy to kiduser if exists
-    if [ -d "/home/kiduser" ]; then
-        cp -r "$SCRIPT_DIR/../../purple_repl/"* /home/kiduser/.purple/
-    fi
+# Copy Purple TUI files
+echo_info "Installing Purple TUI..."
+if [ -d "$SCRIPT_DIR/../../purple_tui" ]; then
+    cp -r "$SCRIPT_DIR/../../purple_tui/"* /home/purple/.purple/
 else
-    echo_warn "Purple REPL files not found. You'll need to copy them manually."
+    echo_warn "Purple TUI files not found. You'll need to copy them manually."
 fi
 
 # Copy systemd service files
@@ -132,19 +125,12 @@ echo_info "Installing X11 startup configuration..."
 if [ -f "$SCRIPT_DIR/xinit/xinitrc" ]; then
     cp "$SCRIPT_DIR/xinit/xinitrc" /home/purple/.xinitrc
     chmod +x /home/purple/.xinitrc
-    if [ -d "/home/kiduser" ]; then
-        cp "$SCRIPT_DIR/xinit/xinitrc" /home/kiduser/.xinitrc
-        chmod +x /home/kiduser/.xinitrc
-    fi
 fi
 
-# Copy kitty config
-echo_info "Installing Kitty configuration..."
-if [ -f "$SCRIPT_DIR/kitty/kitty.conf" ]; then
-    cp "$SCRIPT_DIR/kitty/kitty.conf" /home/purple/.config/kitty/kitty.conf
-    if [ -d "/home/kiduser" ]; then
-        cp "$SCRIPT_DIR/kitty/kitty.conf" /home/kiduser/.config/kitty/kitty.conf
-    fi
+# Copy Alacritty config
+echo_info "Installing Alacritty configuration..."
+if [ -f "$SCRIPT_DIR/alacritty/alacritty.toml" ]; then
+    cp "$SCRIPT_DIR/alacritty/alacritty.toml" /home/purple/.config/alacritty/alacritty.toml
 fi
 
 # Create .bash_profile for auto-startx
@@ -156,30 +142,6 @@ if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
 fi
 EOF
 
-if [ -d "/home/kiduser" ]; then
-    cat > /home/kiduser/.bash_profile <<'EOF'
-# Purple Computer auto-start X11
-if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
-    exec startx
-fi
-EOF
-fi
-
-# Copy IPython profile (from purple_repl/startup - single source of truth)
-echo_info "Installing IPython configuration..."
-if [ -d "$SCRIPT_DIR/../../purple_repl/startup" ]; then
-    mkdir -p /home/purple/.ipython/profile_default/startup
-    cp "$SCRIPT_DIR/../../purple_repl/startup/"*.py /home/purple/.ipython/profile_default/startup/
-    if [ -d "/home/kiduser" ]; then
-        mkdir -p /home/kiduser/.ipython/profile_default/startup
-        cp "$SCRIPT_DIR/../../purple_repl/startup/"*.py /home/kiduser/.ipython/profile_default/startup/
-    fi
-fi
-
-# Install Python dependencies for new modules
-echo_info "Installing Python dependencies..."
-pip3 install --system packaging 2>/dev/null || true
-
 # Set ownership
 echo_info "Setting file ownership..."
 # Fix /home/purple directory itself first (prevents .Xauthority and log issues)
@@ -188,16 +150,6 @@ chown -R purple:purple /home/purple/.purple
 chown -R purple:purple /home/purple/.config
 chown purple:purple /home/purple/.xinitrc
 chown purple:purple /home/purple/.bash_profile
-chown -R purple:purple /home/purple/.ipython 2>/dev/null || true
-
-if [ -d "/home/kiduser" ]; then
-    chown kiduser:kiduser /home/kiduser
-    chown -R kiduser:kiduser /home/kiduser/.purple
-    chown -R kiduser:kiduser /home/kiduser/.config
-    chown kiduser:kiduser /home/kiduser/.xinitrc 2>/dev/null || true
-    chown kiduser:kiduser /home/kiduser/.bash_profile 2>/dev/null || true
-    chown -R kiduser:kiduser /home/kiduser/.ipython 2>/dev/null || true
-fi
 
 # Disable unnecessary services
 echo_info "Disabling unnecessary services..."
@@ -224,4 +176,4 @@ echo_info "User 'purple' has NO SYSTEM PASSWORD (auto-login only)"
 echo_info "Parent features are protected by a separate parent password"
 echo_info "You'll be prompted to create a parent password on first parent mode access"
 echo ""
-echo_info "Parent mode: Press Ctrl+C (or Ctrl+Alt+P if configured)"
+echo_info "Parent mode: Hold Ctrl and press V"

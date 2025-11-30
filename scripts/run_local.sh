@@ -1,14 +1,14 @@
 #!/bin/bash
 # Local Purple Computer Runner
-# Run Purple Computer REPL on Mac/Linux for testing
-# This simulates the kid experience without full installation
+# Run Purple Computer TUI on Mac/Linux for testing
 
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-PURPLE_DIR="$PROJECT_ROOT/purple_repl"
+PURPLE_TUI="$PROJECT_ROOT/purple_tui"
 TEST_HOME="$PROJECT_ROOT/.test_home"
+ALACRITTY_CONFIG="$PROJECT_ROOT/autoinstall/files/alacritty/alacritty-dev.toml"
 
 # Colors
 GREEN='\033[0;32m'
@@ -25,8 +25,8 @@ echo_warn() {
 
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║   Purple Computer - Local Test Mode         ║"
-echo "╔══════════════════════════════════════════════╗"
+echo "║   Purple Computer - Local Test Mode          ║"
+echo "╚══════════════════════════════════════════════╝"
 echo ""
 
 # Check Python
@@ -57,54 +57,29 @@ else
     fi
 fi
 
-# Create test home directory
+# Create test home directory for packs
 echo_info "Creating test environment at $TEST_HOME"
 mkdir -p "$TEST_HOME/.purple/packs"
-mkdir -p "$TEST_HOME/.purple/modes"
-mkdir -p "$TEST_HOME/.ipython/profile_default/startup"
 
-# Copy Purple REPL files to test home
-echo_info "Copying Purple REPL files..."
-cp -r "$PURPLE_DIR"/*.py "$TEST_HOME/.purple/" 2>/dev/null || true
-cp -r "$PURPLE_DIR/modes" "$TEST_HOME/.purple/" 2>/dev/null || true
-cp -r "$PURPLE_DIR/startup" "$TEST_HOME/.purple/" 2>/dev/null || true
-
-# Copy IPython startup files (from purple_repl/startup - single source of truth)
-echo_info "Setting up IPython environment..."
-if [ -d "$PURPLE_DIR/startup" ]; then
-    cp "$PURPLE_DIR/startup"/*.py "$TEST_HOME/.ipython/profile_default/startup/"
+# Copy packs to test environment
+echo_info "Copying content packs..."
+if [ -d "$PROJECT_ROOT/packs/core-emoji" ]; then
+    cp -r "$PROJECT_ROOT/packs/core-emoji" "$TEST_HOME/.purple/packs/"
 fi
-
-# Install example packs if available
-if [ -f "$PROJECT_ROOT/packs/core-emoji.purplepack" ]; then
-    echo_info "Installing core emoji pack..."
-    cd "$TEST_HOME/.purple"
-    python <<EOF
-from pack_manager import PackManager, get_registry
-from pathlib import Path
-
-packs_dir = Path('$TEST_HOME/.purple/packs')
-registry = get_registry()
-manager = PackManager(packs_dir, registry)
-
-success, msg = manager.install_pack_from_file(Path('$PROJECT_ROOT/packs/core-emoji.purplepack'))
-print(f"Core emoji pack: {msg}")
-
-if Path('$PROJECT_ROOT/packs/education-basics.purplepack').exists():
-    success, msg = manager.install_pack_from_file(Path('$PROJECT_ROOT/packs/education-basics.purplepack'))
-    print(f"Education pack: {msg}")
-EOF
+if [ -d "$PROJECT_ROOT/packs/core-definitions" ]; then
+    cp -r "$PROJECT_ROOT/packs/core-definitions" "$TEST_HOME/.purple/packs/"
+fi
+if [ -d "$PROJECT_ROOT/packs/core-sounds" ]; then
+    cp -r "$PROJECT_ROOT/packs/core-sounds" "$TEST_HOME/.purple/packs/"
 fi
 
 # Check dependencies
 echo_info "Checking Python dependencies..."
 MISSING_DEPS=()
 
-python3 -c "import IPython" 2>/dev/null || MISSING_DEPS+=("ipython")
-python3 -c "import colorama" 2>/dev/null || MISSING_DEPS+=("colorama")
-python3 -c "import termcolor" 2>/dev/null || MISSING_DEPS+=("termcolor")
-python3 -c "import packaging" 2>/dev/null || MISSING_DEPS+=("packaging")
-python3 -c "import simple_term_menu" 2>/dev/null || MISSING_DEPS+=("simple-term-menu")
+python3 -c "import textual" 2>/dev/null || MISSING_DEPS+=("textual")
+python3 -c "import rich" 2>/dev/null || MISSING_DEPS+=("rich")
+python3 -c "import wcwidth" 2>/dev/null || MISSING_DEPS+=("wcwidth")
 
 if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
     echo_warn "Missing dependencies: ${MISSING_DEPS[*]}"
@@ -121,19 +96,54 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
 fi
 
 echo ""
-echo_info "Starting Purple Computer REPL..."
-echo_info "Press Ctrl+C to access parent mode"
-echo_info "Type 'exit()' to quit"
+echo_info "Starting Purple Computer TUI..."
+echo_info "F1-F4: Switch modes | Ctrl+V: Cycle views | F12: Theme"
 echo ""
-sleep 1
 
 # Set environment variables
 export HOME="$TEST_HOME"
-export IPYTHONDIR="$TEST_HOME/.ipython"
+export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
-# Run the REPL (use 'python' since venv is activated)
-cd "$TEST_HOME/.purple"
-python repl.py
+# Check for Alacritty
+USE_ALACRITTY=false
+if command -v alacritty &> /dev/null; then
+    USE_ALACRITTY=true
+    echo_info "Alacritty found - launching with Purple theme"
+elif [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Alacritty.app" ]; then
+    USE_ALACRITTY=true
+    echo_info "Alacritty.app found - launching with Purple theme"
+else
+    echo_warn "Alacritty not found - running in current terminal"
+    echo_warn "Install Alacritty for the full Purple experience: brew install alacritty"
+fi
+
+cd "$PROJECT_ROOT"
+
+if [ "$USE_ALACRITTY" = true ]; then
+    # Create a launcher script for Alacritty to run
+    LAUNCHER=$(mktemp)
+    cat > "$LAUNCHER" << EOF
+#!/bin/bash
+source "$PROJECT_ROOT/.venv/bin/activate"
+export HOME="$TEST_HOME"
+export PYTHONPATH="$PROJECT_ROOT:\$PYTHONPATH"
+cd "$PROJECT_ROOT"
+python -m purple_tui.purple_tui
+EOF
+    chmod +x "$LAUNCHER"
+
+    # Launch Alacritty with our config
+    if [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Alacritty.app" ]; then
+        /Applications/Alacritty.app/Contents/MacOS/alacritty --config-file "$ALACRITTY_CONFIG" -e "$LAUNCHER"
+    else
+        alacritty --config-file "$ALACRITTY_CONFIG" -e "$LAUNCHER"
+    fi
+
+    rm -f "$LAUNCHER"
+else
+    sleep 1
+    python -m purple_tui.purple_tui
+fi
 
 echo ""
 echo_info "Purple Computer session ended."

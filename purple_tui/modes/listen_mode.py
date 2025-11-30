@@ -10,6 +10,26 @@ from textual.containers import Container, Center, Middle
 from textual.app import ComposeResult
 
 
+class ListenModeContent(Static):
+    """Coming soon message with caps support"""
+
+    # Nerd Font headphones icon
+    ICON = "󰋋"  # nf-md-headphones
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        title = caps("Listen")
+        coming = caps("Coming soon!")
+        desc = caps("Stories and songs for kids.")
+        hint = caps("Press F1-F4 to try other modes")
+        return (
+            f"[bold magenta]{self.ICON}  {title}[/]\n\n"
+            f"[dim]{coming}[/]\n\n"
+            f"{desc}\n\n"
+            f"[dim]{hint}[/]"
+        )
+
+
 class ListenMode(Container):
     """
     Listen Mode - Stories and songs library.
@@ -26,6 +46,7 @@ class ListenMode(Container):
         width: 100%;
         height: 100%;
         align: center middle;
+        background: $surface;
     }
 
     #coming-soon {
@@ -38,11 +59,4 @@ class ListenMode(Container):
     def compose(self) -> ComposeResult:
         with Center():
             with Middle():
-                yield Static(
-                    "[bold magenta]👂 Listen Mode[/]\n\n"
-                    "[dim]Coming soon![/]\n\n"
-                    "This will be a library of\n"
-                    "stories and songs for kids.\n\n"
-                    "[dim]Press F1-F4 to try other modes[/]",
-                    id="coming-soon"
-                )
+                yield ListenModeContent(id="coming-soon")

@@ -20,6 +20,8 @@ import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.mixer
 
+from ..constants import TOGGLE_DEBOUNCE, ICON_ERASER, ICON_PALETTE
+
 
 # 10x4 grid matching keyboard layout
 GRID_KEYS = [
@@ -230,23 +232,47 @@ class EraserModeIndicator(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.eraser_on = False
+        self._state_before_toggle = False  # Track state before rapid toggles
 
     def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         if self.eraser_on:
-            return "[bold #ff6b6b]🧽 Tab: eraser ON[/]"
+            return f"[bold #ff6b6b]{ICON_ERASER}  {caps('Tab: eraser ON')}[/]"
         else:
-            return "[dim]🎨 Tab: eraser off[/]"
+            return f"[dim]{ICON_PALETTE}  {caps('Tab: eraser off')}[/]"
+
+    def _speak_if_changed(self) -> None:
+        """Speak current state only if it differs from state before toggle sequence"""
+        from ..tts import speak, stop
+        stop()  # Cancel any previous
+        if self.eraser_on != self._state_before_toggle:
+            speak("eraser on" if self.eraser_on else "eraser off")
+        # Reset for next toggle sequence
+        self._state_before_toggle = self.eraser_on
 
     def toggle(self) -> bool:
+        # On first toggle in a sequence, remember the starting state
+        if self.eraser_on == self._state_before_toggle:
+            self._state_before_toggle = self.eraser_on
+
         self.eraser_on = not self.eraser_on
-        # Speak status
-        from ..tts import speak
-        if self.eraser_on:
-            speak("eraser on")
-        else:
-            speak("eraser off")
+
+        # Update UI immediately
         self.refresh()
+
+        # Debounce: only speak after delay if state actually changed
+        self.set_timer(TOGGLE_DEBOUNCE, self._speak_if_changed)
+
         return self.eraser_on
+
+
+class PlayExampleHint(Static):
+    """Shows example hint with caps support"""
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        text = caps("Try pressing letters and numbers!")
+        return f"[dim]{text}[/]"
 
 
 class PlayMode(Container, can_focus=True):
@@ -303,7 +329,7 @@ class PlayMode(Container, can_focus=True):
         yield EraserModeIndicator(id="eraser-indicator")
         self.grid = PlayGrid()
         yield self.grid
-        yield Static("[dim]Try pressing letters and numbers![/]", id="example-hint")
+        yield PlayExampleHint(id="example-hint")
 
     def on_mount(self) -> None:
         self.focus()
@@ -312,8 +338,27 @@ class PlayMode(Container, can_focus=True):
         if self.grid:
             self.grid.cleanup_sounds()
 
+    def _update_caps_mode(self, char: str) -> None:
+        """Track caps mode based on recent letter keypresses"""
+        if char and char.isalpha():
+            if not hasattr(self, '_recent_letters'):
+                self._recent_letters = []
+            self._recent_letters.append(char)
+            self._recent_letters = self._recent_letters[-4:]
+            if len(self._recent_letters) >= 4:
+                new_caps = all(c.isupper() for c in self._recent_letters)
+                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
+                    self.app.caps_mode = new_caps
+                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
+                        self.app._refresh_caps_sensitive_widgets()
+
     def on_key(self, event: events.Key) -> None:
         """Handle key press."""
+        char = event.character or event.key
+
+        # Track caps mode
+        self._update_caps_mode(char)
+
         # Tab toggles sticky eraser mode
         if event.key == "tab":
             indicator = self.query_one("#eraser-indicator", EraserModeIndicator)
@@ -321,7 +366,6 @@ class PlayMode(Container, can_focus=True):
             event.stop()
             return
 
-        char = event.character or event.key
         if not char:
             return
 

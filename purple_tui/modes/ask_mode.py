@@ -24,6 +24,10 @@ from textual.message import Message
 import re
 
 from ..content import get_content
+from ..constants import (
+    TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
+    ICON_VOLUME_ON, ICON_VOLUME_OFF,
+)
 
 
 class KeyboardOnlyScroll(ScrollableContainer):
@@ -80,9 +84,6 @@ class InlineInput(Input):
         ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
         '`': '~',
     }
-
-    # Double-tap threshold in seconds (generous for small kids)
-    DOUBLE_TAP_TIME = 0.5
 
     def __init__(self, **kwargs):
         super().__init__(placeholder="", **kwargs)
@@ -146,11 +147,28 @@ class InlineInput(Input):
         self.autocomplete_matches = [(w, e) for w, e in matches if w != clean_word][:5]
         self.autocomplete_index = 0
 
+    def _update_caps_mode(self, char: str) -> None:
+        """Track caps mode based on recent letter keypresses"""
+        if char and char.isalpha():
+            if not hasattr(self, '_recent_letters'):
+                self._recent_letters = []
+            self._recent_letters.append(char)
+            self._recent_letters = self._recent_letters[-4:]
+            if len(self._recent_letters) >= 4:
+                new_caps = all(c.isupper() for c in self._recent_letters)
+                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
+                    self.app.caps_mode = new_caps
+                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
+                        self.app._refresh_caps_sensitive_widgets()
+
     async def _on_key(self, event: events.Key) -> None:
         """Handle special keys before parent Input processes them"""
         import time
 
         char = event.character
+
+        # Track caps mode
+        self._update_caps_mode(char)
 
         # Space - accept autocomplete if there's a suggestion
         if event.key == "space" and self.autocomplete_matches:
@@ -191,7 +209,7 @@ class InlineInput(Input):
         # Double-tap for shifted characters
         if char and char in self.SHIFT_MAP:
             now = time.time()
-            if self.last_char == char and (now - self.last_char_time) < self.DOUBLE_TAP_TIME:
+            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
                 # Double-tap detected - replace last char with shifted version
                 event.stop()
                 event.prevent_default()
@@ -235,12 +253,22 @@ class InputPrompt(Static):
     """Shows 'Ask:' prompt with input area"""
 
     def render(self) -> str:
-        return "[bold #c4a0e8]Ask:[/]"
+        text = self.app.caps_text("Ask:") if hasattr(self.app, 'caps_text') else "Ask:"
+        return f"[bold #c4a0e8]{text}[/]"
 
 
 class AutocompleteHint(Static):
     """Shows autocomplete suggestion and help hints"""
     pass
+
+
+class ExampleHint(Static):
+    """Shows example hint with caps support"""
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        text = caps("Try: cat  •  2 + 2  •  cat times 3  •  apple?")
+        return f"[dim]{text}[/]"
 
 
 class SpeechIndicator(Static):
@@ -249,25 +277,40 @@ class SpeechIndicator(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.speech_on = False
+        self._state_before_toggle = False  # Track state before rapid toggles
 
     def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         if self.speech_on:
-            return "[bold green]🔊 Tab: talking ON[/]"
+            return f"[bold green]{ICON_VOLUME_ON}  {caps('Tab: talking ON')}[/]"
         else:
-            return "[dim]🔇 Tab: talking off[/]"
+            return f"[dim]{ICON_VOLUME_OFF}  {caps('Tab: talking off')}[/]"
+
+    def _speak_if_changed(self) -> None:
+        """Speak current state only if it differs from state before toggle sequence"""
+        from ..tts import speak, stop, init
+        stop()  # Cancel any previous
+        if self.speech_on != self._state_before_toggle:
+            if self.speech_on:
+                init()
+            speak("talking on" if self.speech_on else "talking off")
+        # Reset for next toggle sequence
+        self._state_before_toggle = self.speech_on
 
     def toggle(self) -> bool:
+        # On first toggle in a sequence, remember the starting state
+        # (if timer fires, it resets _state_before_toggle to current)
+        if self.speech_on == self._state_before_toggle:
+            self._state_before_toggle = self.speech_on
+
         self.speech_on = not self.speech_on
-        # Pre-initialize TTS and speak status
-        if self.speech_on:
-            from ..tts import init, speak
-            init()
-            # Speak after a short delay to let init complete
-            self.set_timer(0.3, lambda: speak("talking on"))
-        else:
-            from ..tts import speak
-            speak("talking off")
+
+        # Update UI immediately - call refresh before anything else
         self.refresh()
+
+        # Debounce: only speak after delay if state actually changed
+        self.set_timer(TOGGLE_DEBOUNCE, self._speak_if_changed)
+
         return self.speech_on
 
 
@@ -371,7 +414,7 @@ class AskMode(Vertical):
                 yield InputPrompt(id="input-prompt")
                 yield InlineInput(id="ask-input")
             yield AutocompleteHint(id="autocomplete-hint")
-            yield Static("[dim]Try: cat  •  2 + 2  •  cat times 3  •  apple?[/]", id="example-hint")
+            yield ExampleHint(id="example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""

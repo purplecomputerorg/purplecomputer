@@ -15,6 +15,8 @@ from textual.containers import Container
 from textual.app import ComposeResult
 from textual import events
 
+from ..constants import DOUBLE_TAP_TIME
+
 
 class KidTextArea(TextArea):
     """
@@ -35,9 +37,6 @@ class KidTextArea(TextArea):
         ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
         '`': '~',
     }
-
-    # Double-tap threshold in seconds (generous for small kids)
-    DOUBLE_TAP_TIME = 0.5
 
     DEFAULT_CSS = """
     KidTextArea {
@@ -60,6 +59,19 @@ class KidTextArea(TextArea):
         super().__init__(**kwargs)
         self.last_char = None
         self.last_char_time = 0
+        self._recent_letters = []
+
+    def _update_caps_mode(self, char: str) -> None:
+        """Track caps mode based on recent letter keypresses"""
+        if char and char.isalpha():
+            self._recent_letters.append(char)
+            self._recent_letters = self._recent_letters[-4:]
+            if len(self._recent_letters) >= 4:
+                new_caps = all(c.isupper() for c in self._recent_letters)
+                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
+                    self.app.caps_mode = new_caps
+                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
+                        self.app._refresh_caps_sensitive_widgets()
 
     def on_key(self, event: events.Key) -> None:
         """Filter keys for kid-safe editing"""
@@ -67,6 +79,9 @@ class KidTextArea(TextArea):
 
         key = event.key
         char = event.character
+
+        # Track caps mode
+        self._update_caps_mode(char)
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):
@@ -94,7 +109,7 @@ class KidTextArea(TextArea):
         # Check for double-tap to get shifted character
         if char and char in self.SHIFT_MAP:
             now = time.time()
-            if self.last_char == char and (now - self.last_char_time) < self.DOUBLE_TAP_TIME:
+            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
                 # Double-tap detected - replace last char with shifted version
                 event.stop()
                 event.prevent_default()
@@ -109,6 +124,15 @@ class KidTextArea(TextArea):
                 self.last_char_time = now
         else:
             self.last_char = None
+
+
+class WriteHeader(Static):
+    """Shows header with caps support"""
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        text = caps("Type anything you want!")
+        return f"[dim]{text}[/]"
 
 
 class WriteMode(Container):
@@ -144,7 +168,7 @@ class WriteMode(Container):
     """
 
     def compose(self) -> ComposeResult:
-        yield Static("[dim]Type anything you want![/]", id="write-header")
+        yield WriteHeader(id="write-header")
         yield KidTextArea(id="write-area")
 
     def on_mount(self) -> None:

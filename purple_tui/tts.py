@@ -120,10 +120,28 @@ def _init_sync() -> None:
     _ensure_mixer()
 
 
+_current_channel = None
+_speech_id = 0  # Incremented on each speak() call to cancel stale requests
+
+
+def stop() -> None:
+    """Stop any currently playing speech and cancel pending"""
+    global _current_channel, _speech_id
+    _speech_id += 1  # Invalidate any pending speech (atomic due to GIL)
+    try:
+        ch = _current_channel
+        if ch:
+            ch.stop()
+    except Exception:
+        pass
+    _current_channel = None
+
+
 def speak(text: str) -> bool:
     """
     Speak the given text using Piper TTS.
     Runs in a background thread to not block the UI.
+    Cancels any currently playing or generating speech first.
 
     Args:
         text: The text to speak
@@ -131,27 +149,45 @@ def speak(text: str) -> bool:
     Returns:
         True if speech was started, False otherwise
     """
+    global _speech_id
     if not text or not text.strip():
         return False
 
+    # Stop any previous speech and get new ID
+    stop()
+    my_id = _speech_id
+
     # Run TTS in background thread
-    thread = threading.Thread(target=_speak_sync, args=(text,), daemon=True)
+    thread = threading.Thread(target=_speak_sync, args=(text, my_id), daemon=True)
     thread.start()
     return True
 
 
-def _speak_sync(text: str) -> bool:
+def _speak_sync(text: str, speech_id: int) -> bool:
     """Synchronous speech - called from background thread"""
+    global _current_channel, _speech_id
+
+    # Check cancellation first
+    if speech_id != _speech_id:
+        return False
+
     voice = _get_piper_voice()
     if voice is None:
-        print(f"TTS: No voice available")
+        return False
+
+    # Check again after potentially slow voice load
+    if speech_id != _speech_id:
         return False
 
     if not _ensure_mixer():
-        print(f"TTS: Mixer not available")
         return False
 
+    wav_path = None
     try:
+        # Check if we've been cancelled before generating
+        if speech_id != _speech_id:
+            return False
+
         # Create a temporary WAV file
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
@@ -161,21 +197,40 @@ def _speak_sync(text: str) -> bool:
         with wave.open(wav_path, 'wb') as wav_file:
             voice.synthesize_wav(f"...{text}", wav_file)
 
+        # Check if we've been cancelled after generating
+        if speech_id != _speech_id:
+            Path(wav_path).unlink(missing_ok=True)
+            return False
+
         # Play the audio
         sound = pygame.mixer.Sound(wav_path)
         channel = sound.play()
+        _current_channel = channel
 
-        # Wait for playback to finish
+        # Wait for playback to finish (non-blocking check loop)
         if channel:
             while channel.get_busy():
+                # Check for cancellation during playback
+                if speech_id != _speech_id:
+                    try:
+                        channel.stop()
+                    except Exception:
+                        pass
+                    break
                 pygame.time.wait(50)
 
         # Clean up
-        Path(wav_path).unlink(missing_ok=True)
+        _current_channel = None
+        if wav_path:
+            Path(wav_path).unlink(missing_ok=True)
         return True
 
-    except Exception as e:
-        print(f"TTS error: {e}")
+    except Exception:
+        if wav_path:
+            try:
+                Path(wav_path).unlink(missing_ok=True)
+            except Exception:
+                pass
         return False
 
 

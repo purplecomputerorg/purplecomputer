@@ -17,6 +17,11 @@ from enum import Enum
 import subprocess
 import os
 
+from .constants import (
+    ICON_CHAT, ICON_PALETTE, ICON_HEADPHONES, ICON_DOCUMENT,
+    ICON_MOON, ICON_SUN,
+)
+
 
 class Mode(Enum):
     """The 4 core modes of Purple Computer"""
@@ -33,19 +38,13 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-
 # Mode display info
-# Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 MODE_INFO = {
-    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": "󰭹"},       # nf-md-chat_question (thought bubble)
-    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": "󰎈"},     # nf-md-music
-    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": "󰋋"},  # nf-md-headphones
-    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": "󰏫"},   # nf-md-file_document
+    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
+    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_PALETTE},
+    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": ICON_HEADPHONES},
+    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": ICON_DOCUMENT},
 }
-
-# Theme icons (Nerd Font)
-ICON_MOON = "󰖙"  # nf-md-weather_night
-ICON_SUN = "󰖨"   # nf-md-weather_sunny
 
 
 class KeyBadge(Static):
@@ -271,6 +270,8 @@ class PurpleApp(App):
         self.active_theme = "purple-dark"
         self.speech_enabled = False
         self.escape_count = 0  # For 3-escape clear confirmation
+        self.caps_mode = False  # Track if user is typing in caps
+        self._recent_letters = []  # Track recent letter keypresses
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -524,6 +525,19 @@ class PurpleApp(App):
 
     def on_key(self, event: events.Key) -> None:
         """Global key filter - ignore irrelevant keys app-wide"""
+        # Track caps mode based on recent letter keypresses
+        char = event.character
+        if char and char.isalpha():
+            self._recent_letters.append(char)
+            # Keep only last 4 letters
+            self._recent_letters = self._recent_letters[-4:]
+            # If we have 4+ letters and all are uppercase, enable caps mode
+            if len(self._recent_letters) >= 4:
+                new_caps = all(c.isupper() for c in self._recent_letters)
+                if new_caps != self.caps_mode:
+                    self.caps_mode = new_caps
+                    self._refresh_caps_sensitive_widgets()
+
         # Keys that should always be ignored (modifier-only, system keys, etc.)
         ignored_keys = {
             # Modifier keys (pressed alone)
@@ -554,6 +568,29 @@ class PurpleApp(App):
             event.stop()
             event.prevent_default()
             return
+
+    def _refresh_caps_sensitive_widgets(self) -> None:
+        """Refresh all widgets that change based on caps mode"""
+        # Refresh example hints and other caps-sensitive text
+        widget_ids = [
+            "#example-hint",       # Ask and Play mode hints
+            "#autocomplete-hint",  # Ask mode autocomplete
+            "#write-header",       # Write mode header
+            "#input-prompt",       # Ask mode "Ask:" prompt
+            "#speech-indicator",   # Ask mode speech toggle
+            "#eraser-indicator",   # Play mode eraser toggle
+            "#coming-soon",        # Listen mode placeholder
+        ]
+        for widget_id in widget_ids:
+            try:
+                widget = self.query_one(widget_id)
+                widget.refresh()
+            except NoMatches:
+                pass
+
+    def caps_text(self, text: str) -> str:
+        """Return text in caps if caps mode is on"""
+        return text.upper() if self.caps_mode else text
 
 
 def main():

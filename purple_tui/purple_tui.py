@@ -11,6 +11,7 @@ from textual.containers import Container, Vertical, Horizontal, Center, Middle
 from textual.widgets import Static, Footer
 from textual.binding import Binding
 from textual.css.query import NoMatches
+from textual.theme import Theme
 from textual import events
 from enum import Enum
 import subprocess
@@ -32,23 +33,6 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-# Color themes - calming purple tones
-THEMES = {
-    "dark": {
-        "background": "#2d1b4e",      # Soft deep purple
-        "foreground": "#f5f3ff",      # Soft white
-        "border": "#2d1b4e",          # Same as background for border area
-        "accent": "#c4b5fd",          # Light purple accent
-        "muted": "#6b5b7a",           # Muted purple for secondary text
-    },
-    "light": {
-        "background": "#f5f3ff",      # Soft white
-        "foreground": "#2d1b4e",      # Deep purple text
-        "border": "#e9e4f5",          # Slightly darker than background
-        "accent": "#7c3aed",          # Vibrant purple accent
-        "muted": "#a89cc4",           # Muted purple for secondary text
-    }
-}
 
 # Mode display info
 MODE_INFO = {
@@ -75,7 +59,7 @@ class ModeIndicator(Static):
             else:
                 parts.append(f"[dim]{info['key']} {info['emoji']}[/]")
         # Show sun/moon based on current theme
-        is_dark = self.app.dark if hasattr(self.app, 'dark') else True
+        is_dark = "dark" in self.app.active_theme if hasattr(self.app, 'active_theme') else True
         theme_icon = "🌙" if is_dark else "☀️"
         return "  ".join(parts) + f"  [dim]F12 {theme_icon}[/]"
 
@@ -135,7 +119,7 @@ class PurpleApp(App):
     #viewport {
         width: 100;
         height: 28;
-        border: heavy $accent;
+        border: heavy $primary;
         background: $surface;
         padding: 1;
     }
@@ -196,8 +180,40 @@ class PurpleApp(App):
         super().__init__()
         self.active_mode = Mode.ASK
         self.active_view = View.SCREEN
-        self.active_theme = "dark"
+        self.active_theme = "purple-dark"
         self.speech_enabled = False
+        # Register our purple themes
+        self.register_theme(
+            Theme(
+                name="purple-dark",
+                primary="#9b7bc4",
+                secondary="#7a5ca8",
+                warning="#c4a060",
+                error="#c46b7b",
+                success="#7bc48a",
+                accent="#c4a0e8",
+                background="#1e1033",
+                surface="#2a1845",
+                panel="#2a1845",
+                dark=True,
+            )
+        )
+        self.register_theme(
+            Theme(
+                name="purple-light",
+                primary="#7a4ca0",
+                secondary="#6a3c90",
+                warning="#a08040",
+                error="#a04050",
+                success="#40a050",
+                accent="#6a3c90",
+                background="#f0e8f8",
+                surface="#e8daf0",
+                panel="#e8daf0",
+                dark=False,
+            )
+        )
+        self.theme = "purple-dark"
 
     def compose(self) -> ComposeResult:
         """Create the UI layout"""
@@ -214,7 +230,7 @@ class PurpleApp(App):
 
     def _apply_theme(self) -> None:
         """Apply the current color theme"""
-        self.dark = self.active_theme == "dark"
+        self.theme = self.active_theme
         # Update mode indicator to show current theme
         try:
             indicator = self.query_one("#mode-indicator", ModeIndicator)
@@ -276,7 +292,7 @@ class PurpleApp(App):
 
     def action_toggle_theme(self) -> None:
         """Toggle between dark and light mode (F12)"""
-        self.active_theme = "light" if self.active_theme == "dark" else "dark"
+        self.active_theme = "purple-light" if self.active_theme == "purple-dark" else "purple-dark"
         self._apply_theme()
 
     def action_cycle_view(self) -> None:

@@ -1,20 +1,23 @@
 """
 Ask Mode - Math and Emoji REPL for Kids
 
-A simple evaluator for:
+IPython-style interface:
+- Ask: user types input
+- Answer: shows result
+
+Features:
 - Basic math: 2 + 2, 3 x 4, 10 - 5
 - Word synonyms: times, plus, minus
 - Emoji display: typing "cat" shows 🐱
 - Emoji math: 3 * cat produces 🐱🐱🐱
-- Word definitions: typing "what is cat" shows definition
-- Sticky shift, caps lock big letter mode
+- Definitions: ?cat or cat? shows definition
 - Speech output (Tab to toggle)
 - History (up/down arrows)
 - Emoji autocomplete (Space to accept)
 """
 
 from textual.widgets import Static, Input
-from textual.containers import Vertical, ScrollableContainer
+from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual.app import ComposeResult
 from textual import events
 from textual.message import Message
@@ -23,44 +26,76 @@ import re
 from ..content import get_content
 
 
-class OutputLine(Static):
-    """A single line of output in the REPL"""
+class KeyboardOnlyScroll(ScrollableContainer):
+    """ScrollableContainer that ignores mouse/trackpad scroll events"""
 
-    def __init__(self, text: str, is_input: bool = False, **kwargs):
+    def on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        event.stop()
+        event.prevent_default()
+
+    def on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        event.stop()
+        event.prevent_default()
+
+
+class HistoryLine(Static):
+    """A line in the REPL history (either Ask or Answer)"""
+
+    def __init__(self, text: str, line_type: str = "ask", **kwargs):
         super().__init__(**kwargs)
         self.text = text
-        self.is_input = is_input
+        self.line_type = line_type  # "ask" or "answer"
 
     def render(self) -> str:
-        if self.is_input:
-            return f"[bold magenta]💜[/] {self.text}"
+        if self.line_type == "ask":
+            return f"[bold #c4a0e8]Ask:[/] {self.text}"
         else:
-            return f"[bold cyan]✨[/] {self.text}"
+            return f"[#a888d0]  →[/] {self.text}"
 
 
-class AskInput(Input):
+class InlineInput(Input):
     """
-    Custom input widget with:
-    - Emoji autocomplete (Space to accept)
-    - Sticky shift
-    - History (up/down arrows)
-    - Big letter mode (caps lock)
+    Inline input widget that appears after Ask: prompt.
     """
 
-    class Submitted(Message):
+    class Submitted(Message, bubble=True):
         """Message sent when user presses Enter"""
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
 
+    BINDINGS = [
+        ("up", "scroll_up", "Scroll up"),
+        ("down", "scroll_down", "Scroll down"),
+        ("tab", "toggle_speech", "Toggle speech"),
+    ]
+
     def __init__(self, **kwargs):
-        super().__init__(placeholder="Type here...", **kwargs)
-        self.history: list[str] = []
-        self.history_index: int = -1
-        self.sticky_shift: bool = False
-        self.big_letter_mode: bool = False
+        super().__init__(placeholder="", **kwargs)
         self.autocomplete_word: str = ""
         self.autocomplete_emoji: str = ""
+
+    def action_scroll_up(self) -> None:
+        """Scroll history up"""
+        try:
+            scroll = self.app.query_one("#history-scroll")
+            scroll.scroll_up()
+        except Exception:
+            pass
+
+    def action_scroll_down(self) -> None:
+        """Scroll history down"""
+        try:
+            scroll = self.app.query_one("#history-scroll")
+            scroll.scroll_down()
+        except Exception:
+            pass
+
+    def action_toggle_speech(self) -> None:
+        """Toggle speech on/off"""
+        app = self.app
+        if hasattr(app, 'toggle_speech'):
+            app.toggle_speech()
 
     def _check_autocomplete(self) -> None:
         """Check if current input should show autocomplete"""
@@ -75,52 +110,24 @@ class AskInput(Input):
             return
 
         last_word = words[-1]
-        if len(last_word) < 2:
+        # Strip ? from beginning/end for autocomplete
+        clean_word = last_word.strip("?")
+        if len(clean_word) < 2:
             self.autocomplete_word = ""
             self.autocomplete_emoji = ""
             return
 
         # Search for matches
-        matches = content.search_emojis(last_word)
-        if matches and matches[0][0] != last_word:
+        matches = content.search_emojis(clean_word)
+        if matches and matches[0][0] != clean_word:
             self.autocomplete_word = matches[0][0]
             self.autocomplete_emoji = matches[0][1]
         else:
             self.autocomplete_word = ""
             self.autocomplete_emoji = ""
 
-    def on_key(self, event: events.Key) -> None:
-        """Handle special keys"""
-        # Tab toggles speech
-        if event.key == "tab":
-            event.stop()
-            event.prevent_default()
-            app = self.app
-            if hasattr(app, 'toggle_speech'):
-                app.toggle_speech()
-            return
-
-        # Up arrow - history back
-        if event.key == "up":
-            event.stop()
-            event.prevent_default()
-            if self.history and self.history_index < len(self.history) - 1:
-                self.history_index += 1
-                self.value = self.history[-(self.history_index + 1)]
-            return
-
-        # Down arrow - history forward
-        if event.key == "down":
-            event.stop()
-            event.prevent_default()
-            if self.history_index > 0:
-                self.history_index -= 1
-                self.value = self.history[-(self.history_index + 1)]
-            elif self.history_index == 0:
-                self.history_index = -1
-                self.value = ""
-            return
-
+    async def _on_key(self, event: events.Key) -> None:
+        """Handle special keys before parent Input processes them"""
         # Space - accept autocomplete if there's a suggestion
         if event.key == "space" and self.autocomplete_word:
             event.stop()
@@ -128,7 +135,14 @@ class AskInput(Input):
             # Replace last word with autocomplete
             words = self.value.split()
             if words:
-                words[-1] = self.autocomplete_word
+                # Preserve ? prefix/suffix if present
+                last = words[-1]
+                if last.startswith("?"):
+                    words[-1] = "?" + self.autocomplete_word
+                elif last.endswith("?"):
+                    words[-1] = self.autocomplete_word + "?"
+                else:
+                    words[-1] = self.autocomplete_word
                 self.value = " ".join(words) + " "
             self.autocomplete_word = ""
             self.autocomplete_emoji = ""
@@ -139,13 +153,14 @@ class AskInput(Input):
             event.stop()
             event.prevent_default()
             if self.value.strip():
-                self.history.append(self.value)
-                self.history_index = -1
                 self.post_message(self.Submitted(self.value))
                 self.value = ""
             self.autocomplete_word = ""
             self.autocomplete_emoji = ""
             return
+
+        # Let parent handle other keys
+        await super()._on_key(event)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete suggestions as user types"""
@@ -155,51 +170,97 @@ class AskInput(Input):
     def autocomplete_hint(self) -> str:
         """Get the autocomplete hint to display"""
         if self.autocomplete_word:
-            return f"[dim]{self.autocomplete_word} {self.autocomplete_emoji} (space to accept)[/]"
+            return f"  [dim]{self.autocomplete_word} {self.autocomplete_emoji} (space)[/]"
         return ""
 
 
+class InputPrompt(Static):
+    """Shows 'Ask:' prompt with input area"""
+
+    def render(self) -> str:
+        return "[bold #c4a0e8]Ask:[/]"
+
+
 class AutocompleteHint(Static):
-    """Shows autocomplete suggestion"""
+    """Shows autocomplete suggestion and help hints"""
     pass
+
+
+class HelpHint(Static):
+    """Shows discoverable help hints at bottom"""
+
+    def render(self) -> str:
+        return "[dim]Tab: speech  •  ?word: definition  •  ↑↓: scroll[/]"
 
 
 class AskMode(Vertical):
     """
-    Ask Mode - The main REPL interface for kids.
+    Ask Mode - IPython-style REPL interface for kids.
     """
 
     DEFAULT_CSS = """
     AskMode {
         width: 100%;
         height: 100%;
+        background: $background;
     }
 
-    #output-scroll {
+    #history-scroll {
         width: 100%;
         height: 1fr;
         border: none;
         scrollbar-gutter: stable;
+        padding: 1 1;
     }
 
-    #autocomplete-hint {
-        dock: bottom;
-        height: 1;
-        padding: 0 1;
-        color: $text-muted;
-    }
-
-    #ask-input {
-        dock: bottom;
+    HistoryLine {
         width: 100%;
-        height: 3;
-        border: heavy $accent;
+        height: auto;
+        padding: 0 0;
+        margin: 0 0 1 0;
     }
 
-    OutputLine {
+    #bottom-area {
+        dock: bottom;
         width: 100%;
         height: auto;
         padding: 0 1;
+    }
+
+    #input-row {
+        width: 100%;
+        height: 1;
+        layout: horizontal;
+    }
+
+    #input-prompt {
+        width: auto;
+        height: 1;
+        color: $primary;
+    }
+
+    #ask-input {
+        width: 1fr;
+        height: 1;
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin: 0 0 0 1;
+    }
+
+    #ask-input:focus {
+        border: none;
+    }
+
+    #autocomplete-hint {
+        height: 1;
+        color: $text-muted;
+    }
+
+    #help-hint {
+        height: 1;
+        text-align: center;
+        color: $text-muted;
     }
     """
 
@@ -208,9 +269,13 @@ class AskMode(Vertical):
         self.evaluator = SimpleEvaluator()
 
     def compose(self) -> ComposeResult:
-        yield ScrollableContainer(id="output-scroll")
-        yield AutocompleteHint(id="autocomplete-hint")
-        yield AskInput(id="ask-input")
+        yield KeyboardOnlyScroll(id="history-scroll")
+        with Vertical(id="bottom-area"):
+            with Horizontal(id="input-row"):
+                yield InputPrompt(id="input-prompt")
+                yield InlineInput(id="ask-input")
+            yield AutocompleteHint(id="autocomplete-hint")
+            yield HelpHint(id="help-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
@@ -219,29 +284,24 @@ class AskMode(Vertical):
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""
         try:
-            ask_input = self.query_one("#ask-input", AskInput)
+            ask_input = self.query_one("#ask-input", InlineInput)
             hint = self.query_one("#autocomplete-hint", AutocompleteHint)
             hint.update(ask_input.autocomplete_hint)
         except Exception:
             pass
 
-    async def on_ask_input_submitted(self, event: AskInput.Submitted) -> None:
+    async def on_inline_input_submitted(self, event: InlineInput.Submitted) -> None:
         """Handle input submission"""
         input_text = event.value
-        scroll = self.query_one("#output-scroll")
+        scroll = self.query_one("#history-scroll")
 
-        # Apply big letter mode if active
-        ask_input = self.query_one("#ask-input", AskInput)
-        display_input = input_text.upper() if ask_input.big_letter_mode else input_text
-
-        # Add input line to output
-        scroll.mount(OutputLine(display_input, is_input=True))
+        # Add the "Ask:" line to history
+        scroll.mount(HistoryLine(input_text, line_type="ask"))
 
         # Evaluate and show result
         result = self.evaluator.evaluate(input_text)
         if result:
-            display_result = result.upper() if ask_input.big_letter_mode else result
-            scroll.mount(OutputLine(display_result, is_input=False))
+            scroll.mount(HistoryLine(result, line_type="answer"))
 
         # Scroll to bottom
         scroll.scroll_end(animate=False)
@@ -260,8 +320,11 @@ class AskMode(Vertical):
             float(result.replace(",", ""))
             text_to_speak = f"{input_text} equals {result}"
         except (ValueError, AttributeError):
-            # Not math, just speak the input
-            text_to_speak = input_text
+            # Not math, just speak the result if different from input
+            if result and result != input_text:
+                text_to_speak = result
+            else:
+                text_to_speak = input_text
 
         speak(text_to_speak)
 
@@ -275,6 +338,7 @@ class SimpleEvaluator:
     - Word synonyms: "times", "plus", "minus", "divided by"
     - x between numbers treated as multiplication
     - Emoji variables and emoji math
+    - Definitions: ?word or word? shows definition
     - Word definitions: "what is X"
     """
 
@@ -287,7 +351,7 @@ class SimpleEvaluator:
         if not text:
             return ""
 
-        # Check for definition query: "what is X" or "whats X"
+        # Check for definition query: ?word or word?
         definition = self._check_definition(text)
         if definition:
             return definition
@@ -318,25 +382,49 @@ class SimpleEvaluator:
 
     def _check_definition(self, text: str) -> str | None:
         """Check if this is a definition query"""
-        patterns = [
-            r"^what\s+is\s+(?:a\s+)?(\w+)\??$",
-            r"^whats\s+(?:a\s+)?(\w+)\??$",
-            r"^define\s+(\w+)$",
-        ]
-
         text_lower = text.lower().strip()
-        for pattern in patterns:
-            match = re.match(pattern, text_lower)
-            if match:
-                word = match.group(1)
-                definition = self.content.get_definition(word)
-                if definition:
-                    emoji = self.content.get_emoji(word) or ""
-                    return f"{emoji} {definition}" if emoji else definition
-                else:
-                    return f"I don't know what {word} means yet!"
+
+        # Pattern: ?word (at start)
+        if text_lower.startswith("?"):
+            word = text_lower[1:].strip().rstrip("?")
+            if word:
+                return self._get_definition_response(word)
+
+        # Pattern: word? (at end)
+        if text_lower.endswith("?"):
+            # Could be "what is X?" or just "word?"
+            # First check for "what is X?" pattern
+            patterns = [
+                r"^what\s+is\s+(?:a\s+)?(\w+)\??$",
+                r"^whats\s+(?:a\s+)?(\w+)\??$",
+                r"^define\s+(\w+)\??$",
+            ]
+
+            for pattern in patterns:
+                match = re.match(pattern, text_lower)
+                if match:
+                    word = match.group(1)
+                    return self._get_definition_response(word)
+
+            # Simple "word?" pattern
+            word = text_lower.rstrip("?").strip()
+            if word and " " not in word:
+                return self._get_definition_response(word)
 
         return None
+
+    def _get_definition_response(self, word: str) -> str:
+        """Get definition response for a word"""
+        definition = self.content.get_definition(word)
+        if definition:
+            emoji = self.content.get_emoji(word) or ""
+            return f"{emoji} {definition}" if emoji else definition
+        else:
+            # Try to at least show the emoji
+            emoji = self.content.get_emoji(word)
+            if emoji:
+                return f"{emoji} (no definition yet)"
+            return f"I don't know what '{word}' means yet!"
 
     def _normalize(self, text: str) -> str:
         """Normalize text for evaluation"""

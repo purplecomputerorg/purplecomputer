@@ -19,7 +19,7 @@ import os
 
 from .constants import (
     ICON_CHAT, ICON_PALETTE, ICON_HEADPHONES, ICON_DOCUMENT,
-    ICON_MOON, ICON_SUN,
+    ICON_MOON, ICON_SUN, MODE_TITLES,
 )
 
 
@@ -45,6 +45,34 @@ MODE_INFO = {
     Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": ICON_HEADPHONES},
     Mode.WRITE: {"key": "F4", "label": "Write", "emoji": ICON_DOCUMENT},
 }
+
+
+class ModeTitle(Static):
+    """Shows current mode title above the viewport"""
+
+    DEFAULT_CSS = """
+    ModeTitle {
+        width: 100%;
+        height: 1;
+        text-align: center;
+        color: $primary;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.mode = "ask"
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+        self.refresh()
+
+    def render(self) -> str:
+        icon, label = MODE_TITLES.get(self.mode, ("", self.mode.title()))
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return f"{icon}  {caps(label)}"
 
 
 class KeyBadge(Static):
@@ -214,6 +242,15 @@ class PurpleApp(App):
         background: $background;
     }
 
+    #viewport-wrapper {
+        width: auto;
+        height: auto;
+    }
+
+    #mode-title {
+        width: 100;
+    }
+
     #viewport {
         width: 100;
         height: 28;
@@ -308,8 +345,10 @@ class PurpleApp(App):
     def compose(self) -> ComposeResult:
         """Create the UI layout"""
         with Container(id="outer-container"):
-            with ViewportContainer(id="viewport"):
-                yield Container(id="content-area")
+            with Vertical(id="viewport-wrapper"):
+                yield ModeTitle(id="mode-title")
+                with ViewportContainer(id="viewport"):
+                    yield Container(id="content-area")
             yield ModeIndicator(self.active_mode, id="mode-indicator")
 
     def on_mount(self) -> None:
@@ -412,6 +451,14 @@ class PurpleApp(App):
             self.active_mode = new_mode
             self._load_mode_content()
 
+            # Update title
+            try:
+                title = self.query_one("#mode-title", ModeTitle)
+                title.set_mode(mode_name)
+            except NoMatches:
+                pass
+
+            # Update mode indicator
             try:
                 indicator = self.query_one("#mode-indicator", ModeIndicator)
                 indicator.update_mode(new_mode)
@@ -573,6 +620,7 @@ class PurpleApp(App):
         """Refresh all widgets that change based on caps mode"""
         # Refresh example hints and other caps-sensitive text
         widget_ids = [
+            "#mode-title",         # Mode title in all modes
             "#example-hint",       # Ask and Play mode hints
             "#autocomplete-hint",  # Ask mode autocomplete
             "#write-header",       # Write mode header

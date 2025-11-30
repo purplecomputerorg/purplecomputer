@@ -13,17 +13,12 @@ from textual.app import ComposeResult
 class ListenModeContent(Static):
     """Coming soon message with caps support"""
 
-    # Nerd Font headphones icon
-    ICON = "󰋋"  # nf-md-headphones
-
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        title = caps("Listen")
         coming = caps("Coming soon!")
         desc = caps("Stories and songs for kids.")
         hint = caps("Press F1-F4 to try other modes")
         return (
-            f"[bold magenta]{self.ICON}  {title}[/]\n\n"
             f"[dim]{coming}[/]\n\n"
             f"{desc}\n\n"
             f"[dim]{hint}[/]"

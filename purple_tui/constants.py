@@ -18,3 +18,11 @@ ICON_HEADPHONES = "󰋋"       # nf-md-headphones
 ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
+
+# Mode titles with icons
+MODE_TITLES = {
+    "ask": (ICON_CHAT, "Ask"),
+    "play": (ICON_PALETTE, "Play"),
+    "listen": (ICON_HEADPHONES, "Listen"),
+    "write": (ICON_DOCUMENT, "Write"),
+}

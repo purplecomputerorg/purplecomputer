@@ -5,8 +5,22 @@
 #
 # Run from project root: ./autoinstall/build-iso.sh
 # Or from autoinstall/: ./build-iso.sh
+#
+# Options:
+#   --test    Build a test ISO that auto-installs without confirmation (for VM testing)
 
 set -e  # Exit on error
+
+# Parse arguments
+TEST_MODE=false
+for arg in "$@"; do
+    case $arg in
+        --test)
+            TEST_MODE=true
+            shift
+            ;;
+    esac
+done
 
 # Get the directory where this script lives and determine project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -222,31 +236,98 @@ touch "$EXTRACT_DIR/nocloud/meta-data"
 
 # Modify GRUB configuration for autoinstall
 echo_info "Modifying boot configuration..."
-cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'GRUB_EOF'
-set timeout=5
 
-menuentry "Install Purple Computer (Automatic)" {
+if $TEST_MODE; then
+    echo_warn "TEST MODE: Building ISO with auto-install (no confirmation)"
+    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'GRUB_EOF'
+set timeout=3
+set default=0
+
+menuentry "Purple Computer TEST INSTALL (auto-starts in 3s)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
+    initrd /casper/initrd
+}
+GRUB_EOF
+else
+    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'GRUB_EOF'
+set timeout=-1
+
+insmod all_video
+
+set menu_color_normal=white/black
+set menu_color_highlight=black/light-gray
+
+menuentry " " {
+    true
+}
+
+menuentry "    ╔════════════════════════════════════════════════════════╗" {
+    true
+}
+
+menuentry "    ║           PURPLE COMPUTER INSTALLER                    ║" {
+    true
+}
+
+menuentry "    ║                                                        ║" {
+    true
+}
+
+menuentry "    ║   WARNING: This will ERASE ALL DATA on the disk!       ║" {
+    true
+}
+
+menuentry "    ║   Make sure you have backed up any important files.    ║" {
+    true
+}
+
+menuentry "    ╚════════════════════════════════════════════════════════╝" {
+    true
+}
+
+menuentry " " {
+    true
+}
+
+menuentry ">>> Press ENTER to Install Purple Computer <<<" {
     set gfxpayload=keep
     linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
     initrd /casper/initrd
 }
 
-menuentry "Install Purple Computer (Manual)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz quiet splash ---
-    initrd /casper/initrd
+menuentry " " {
+    true
 }
 GRUB_EOF
+fi
 
 # Update isolinux for legacy boot
 if [ -f "$EXTRACT_DIR/isolinux/txt.cfg" ]; then
-    cat > "$EXTRACT_DIR/isolinux/txt.cfg" <<'ISOLINUX_EOF'
+    if $TEST_MODE; then
+        cat > "$EXTRACT_DIR/isolinux/txt.cfg" <<'ISOLINUX_EOF'
 default install
+timeout 30
+
 label install
-  menu label ^Install Purple Computer (Automatic)
+  menu label Purple Computer TEST INSTALL
   kernel /casper/vmlinuz
   append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/nocloud/ quiet splash ---
 ISOLINUX_EOF
+    else
+        cat > "$EXTRACT_DIR/isolinux/txt.cfg" <<'ISOLINUX_EOF'
+default install
+timeout 0
+prompt 1
+
+menu title PURPLE COMPUTER - WARNING: ERASES ALL DATA! Press ENTER to install.
+
+label install
+  menu label Press ENTER to Install Purple Computer
+  kernel /casper/vmlinuz
+  append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/nocloud/ quiet splash ---
+ISOLINUX_EOF
+    fi
 fi
 
 # Calculate MD5 sums
@@ -259,36 +340,34 @@ else
     find . -type f -print0 | xargs -0 md5sum | grep -v isolinux/boot.cat > md5sum.txt
 fi
 
-# Extract MBR boot code from original Ubuntu ISO for hybrid boot support
-echo_info "Extracting boot components from source ISO..."
-MBR_FILE="$WORK_DIR/mbr.img"
-EFI_FILE="$WORK_DIR/efi.img"
+# Build the new ISO with proper hybrid boot support
+# Use xorriso's --interval syntax to reference boot components directly from source ISO
+echo_info "Building Purple Computer ISO..."
+cd "$WORK_DIR"
 
-# Extract the first 432 bytes (MBR boot code, excluding partition table)
-dd if="$UBUNTU_ISO_NAME" bs=1 count=432 of="$MBR_FILE" 2>/dev/null
+# Extract boot parameters from source ISO using xorriso
+# This makes the script robust across different Ubuntu versions
+echo_info "Reading boot configuration from source ISO..."
+XORRISO_OPTS=$(xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area as_mkisofs 2>&1)
 
-# Extract EFI partition image from the source ISO (contains GRUB EFI bootloader)
-# The EFI partition in Ubuntu ISOs is typically around 5MB
-xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area plain 2>&1 | grep -E "^Partition" || true
-EFI_EXTRACT=$(xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area plain 2>&1 | grep -E "^Partition 2" | head -1)
-if [ -n "$EFI_EXTRACT" ]; then
-    EFI_START=$(echo "$EFI_EXTRACT" | awk '{print $5}')
-    EFI_SIZE=$(echo "$EFI_EXTRACT" | awk '{print $7}')
-    if [ -n "$EFI_START" ] && [ -n "$EFI_SIZE" ]; then
-        dd if="$UBUNTU_ISO_NAME" bs=512 skip="$EFI_START" count="$EFI_SIZE" of="$EFI_FILE" 2>/dev/null
-        echo_info "Extracted EFI partition: start=$EFI_START, size=$EFI_SIZE sectors"
-    else
-        echo_error "Could not parse EFI partition info"
-        exit 1
-    fi
-else
-    echo_error "Could not find EFI partition in source ISO"
+# Extract the EFI partition interval (e.g., "6441216d-6451375d")
+EFI_PARTITION_INTERVAL=$(echo "$XORRISO_OPTS" | grep -o -- '--interval:local_fs:[0-9]*d-[0-9]*d::' | head -1 | sed "s/--interval:local_fs://;s/:://")
+
+# Extract the EFI boot image interval for El Torito (e.g., "appended_partition_2_start_1610304s_size_10160d")
+EFI_BOOT_INTERVAL=$(echo "$XORRISO_OPTS" | grep -o -- "appended_partition_2_start_[0-9]*s_size_[0-9]*d" | head -1)
+
+# Extract boot load size for EFI (second boot-load-size in output, after the BIOS one)
+EFI_BOOT_LOAD_SIZE=$(echo "$XORRISO_OPTS" | grep "boot-load-size" | tail -1 | awk '{print $2}')
+
+if [ -z "$EFI_PARTITION_INTERVAL" ] || [ -z "$EFI_BOOT_INTERVAL" ]; then
+    echo_error "Could not extract boot parameters from source ISO"
+    echo_error "EFI_PARTITION_INTERVAL: $EFI_PARTITION_INTERVAL"
+    echo_error "EFI_BOOT_INTERVAL: $EFI_BOOT_INTERVAL"
     exit 1
 fi
 
-# Build the new ISO with proper hybrid boot support
-echo_info "Building Purple Computer ISO..."
-cd "$WORK_DIR"
+echo_info "EFI partition interval: $EFI_PARTITION_INTERVAL"
+echo_info "EFI boot interval: $EFI_BOOT_INTERVAL"
 
 # EFI system partition GUID (little-endian format for xorriso)
 EFI_PART_TYPE_LE="28732ac11ff8d211ba4b00a0c93ec93b"
@@ -301,25 +380,27 @@ if ! $IS_MACOS; then
     SUDO_CMD="sudo"
 fi
 
+# Reference MBR and EFI partition directly from source ISO using --interval syntax
 $SUDO_CMD xorriso -as mkisofs \
     -r -V "Purple Computer" \
     -o "$OUTPUT_ISO" \
     -J -l \
-    --grub2-mbr "$MBR_FILE" \
+    --grub2-mbr --interval:local_fs:0s-15s:zero_mbrpt,zero_gpt:"$UBUNTU_ISO_NAME" \
     --protective-msdos-label \
     -partition_cyl_align off \
     -partition_offset 16 \
     --mbr-force-bootable \
+    -append_partition 2 $EFI_PART_TYPE_LE --interval:local_fs:${EFI_PARTITION_INTERVAL}::"$UBUNTU_ISO_NAME" \
+    -appended_part_as_gpt \
+    -iso_mbr_part_type $ISO_PART_TYPE_LE \
     -c boot.catalog \
     -b boot/grub/i386-pc/eltorito.img \
     -no-emul-boot -boot-load-size 4 -boot-info-table \
     --grub2-boot-info \
     -eltorito-alt-boot \
-    -e --interval:appended_partition_2:::$EFI_FILE \
+    -e --interval:${EFI_BOOT_INTERVAL}:all:: \
     -no-emul-boot \
-    -append_partition 2 $EFI_PART_TYPE_LE "$EFI_FILE" \
-    -appended_part_as_gpt \
-    -iso_mbr_part_type $ISO_PART_TYPE_LE \
+    -boot-load-size "$EFI_BOOT_LOAD_SIZE" \
     "$EXTRACT_DIR"
 
 # Make ISO readable by user on Linux
@@ -327,9 +408,6 @@ if ! $IS_MACOS; then
     USER_GROUP=$(id -gn)
     sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
 fi
-
-# Clean up temporary boot files
-rm -f "$MBR_FILE" "$EFI_FILE"
 
 # Cleanup
 echo_info "Cleaning up..."

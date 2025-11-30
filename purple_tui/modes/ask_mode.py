@@ -45,6 +45,8 @@ class HistoryLine(Static):
         super().__init__(**kwargs)
         self.text = text
         self.line_type = line_type  # "ask" or "answer"
+        if line_type == "ask":
+            self.add_class("ask")
 
     def render(self) -> str:
         if self.line_type == "ask":
@@ -149,6 +151,8 @@ class InlineInput(Input):
                 else:
                     words[-1] = selected_word
                 self.value = " ".join(words) + " "
+                # Move cursor to end
+                self.cursor_position = len(self.value)
             self.autocomplete_matches = []
             self.autocomplete_index = 0
             return
@@ -199,7 +203,7 @@ class AutocompleteHint(Static):
 
 
 class SpeechIndicator(Static):
-    """Shows whether speech is on/off"""
+    """Shows whether speech is on/off - Tab to toggle"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -207,21 +211,18 @@ class SpeechIndicator(Static):
 
     def render(self) -> str:
         if self.speech_on:
-            return "[bold green]🔊 Speech ON[/]"
+            return "[bold green]🔊 Tab: speech ON[/]"
         else:
-            return "[dim]🔇 Speech off[/]"
+            return "[dim]🔇 Tab: speech off[/]"
 
     def toggle(self) -> bool:
         self.speech_on = not self.speech_on
+        # Pre-initialize TTS when turned on
+        if self.speech_on:
+            from ..tts import init
+            init()
         self.refresh()
         return self.speech_on
-
-
-class HelpHint(Static):
-    """Shows discoverable help hints at bottom"""
-
-    def render(self) -> str:
-        return "[dim]Tab: speech  •  ?word: definition  •  ↑↓: scroll[/]"
 
 
 class AskMode(Vertical):
@@ -233,7 +234,7 @@ class AskMode(Vertical):
     AskMode {
         width: 100%;
         height: 100%;
-        background: $background;
+        background: $surface;
     }
 
     #history-scroll {
@@ -242,13 +243,19 @@ class AskMode(Vertical):
         border: none;
         scrollbar-gutter: stable;
         padding: 1 1;
+        background: $surface;
     }
 
     HistoryLine {
         width: 100%;
         height: auto;
         padding: 0 0;
-        margin: 0 0 1 0;
+        margin: 0;
+        background: $surface;
+    }
+
+    HistoryLine.ask {
+        margin-top: 1;
     }
 
     #bottom-area {
@@ -256,6 +263,7 @@ class AskMode(Vertical):
         width: 100%;
         height: auto;
         padding: 0 1;
+        background: $surface;
     }
 
     #input-row {
@@ -274,7 +282,7 @@ class AskMode(Vertical):
         width: 1fr;
         height: 1;
         border: none;
-        background: transparent;
+        background: $surface;
         padding: 0;
         margin: 0 0 0 1;
     }
@@ -288,7 +296,7 @@ class AskMode(Vertical):
         color: $text-muted;
     }
 
-    #help-hint {
+    #example-hint {
         height: 1;
         text-align: center;
         color: $text-muted;
@@ -314,11 +322,22 @@ class AskMode(Vertical):
                 yield InputPrompt(id="input-prompt")
                 yield InlineInput(id="ask-input")
             yield AutocompleteHint(id="autocomplete-hint")
-            yield HelpHint(id="help-hint")
+            yield Static("[dim]Try: apple?  •  2 + 2  •  cat[/]", id="example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
         self.query_one("#ask-input").focus()
+
+    def on_click(self, event) -> None:
+        """Always keep focus on input"""
+        if self.display:
+            event.stop()
+            self.query_one("#ask-input").focus()
+
+    def on_descendant_blur(self, event) -> None:
+        """Re-focus input if it loses focus"""
+        if self.display:
+            self.query_one("#ask-input").focus()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""
@@ -357,10 +376,27 @@ class AskMode(Vertical):
         """Speak the input and result using Piper TTS"""
         from ..tts import speak
 
+        # Make math expressions speakable
+        def make_speakable(text: str) -> str:
+            import re
+            result = text
+            # Handle x between numbers (2x3, 2 x 3, etc.)
+            result = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', result, flags=re.IGNORECASE)
+            return (result
+                .replace("×", " times ")
+                .replace("*", " times ")
+                .replace("÷", " divided by ")
+                .replace("/", " divided by ")
+                .replace("+", " plus ")
+                .replace("−", " minus ")
+                .replace("-", " minus ")
+                .replace("=", " equals ")
+            )
+
         # Check if result looks like math output
         try:
             float(result.replace(",", ""))
-            text_to_speak = f"{input_text} equals {result}"
+            text_to_speak = f"{make_speakable(input_text)} equals {result}"
         except (ValueError, AttributeError):
             # Not math, just speak the result if different from input
             if result and result != input_text:
@@ -405,7 +441,7 @@ class SimpleEvaluator:
         try:
             result = self._eval_math(normalized)
             if result is not None:
-                return str(result)
+                return self._format_number(result)
         except Exception:
             pass
 
@@ -432,23 +468,21 @@ class SimpleEvaluator:
             if word:
                 return self._get_definition_response(word)
 
-        # Pattern: word? (at end)
+        # "what is X" / "whats X" / "define X" patterns (with or without ?)
+        patterns = [
+            r"^what\s+is\s+(?:a\s+)?(\w+)\??$",
+            r"^whats\s+(?:a\s+)?(\w+)\??$",
+            r"^define\s+(\w+)\??$",
+        ]
+
+        for pattern in patterns:
+            match = re.match(pattern, text_lower)
+            if match:
+                word = match.group(1)
+                return self._get_definition_response(word)
+
+        # Pattern: word? (at end) - simple single word with ?
         if text_lower.endswith("?"):
-            # Could be "what is X?" or just "word?"
-            # First check for "what is X?" pattern
-            patterns = [
-                r"^what\s+is\s+(?:a\s+)?(\w+)\??$",
-                r"^whats\s+(?:a\s+)?(\w+)\??$",
-                r"^define\s+(\w+)\??$",
-            ]
-
-            for pattern in patterns:
-                match = re.match(pattern, text_lower)
-                if match:
-                    word = match.group(1)
-                    return self._get_definition_response(word)
-
-            # Simple "word?" pattern
             word = text_lower.rstrip("?").strip()
             if word and " " not in word:
                 return self._get_definition_response(word)
@@ -470,12 +504,12 @@ class SimpleEvaluator:
 
     def _normalize(self, text: str) -> str:
         """Normalize text for evaluation"""
-        # Replace word operators with symbols
+        # Replace word operators with symbols (works with or without spaces: 2times3, 2 times 3)
         replacements = [
-            (r'\btimes\b', '*'),
-            (r'\bplus\b', '+'),
-            (r'\bminus\b', '-'),
-            (r'\bdivided\s+by\b', '/'),
+            (r'times', '*'),
+            (r'plus', '+'),
+            (r'minus', '-'),
+            (r'divided\s*by', '/'),
         ]
 
         result = text.lower()
@@ -501,6 +535,13 @@ class SimpleEvaluator:
             return result
         except Exception:
             return None
+
+    def _format_number(self, num: int | float) -> str:
+        """Format a number - up to 3 decimals, rounded"""
+        if isinstance(num, int) or num == int(num):
+            return str(int(num))
+        rounded = round(num, 3)
+        return str(rounded).rstrip('0').rstrip('.')
 
     def _eval_emoji_math(self, text: str) -> str | None:
         """Evaluate emoji multiplication like '3 * cat' -> '🐱🐱🐱'"""

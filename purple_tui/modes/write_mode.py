@@ -33,7 +33,15 @@ class KidTextArea(TextArea):
         width: 100%;
         height: 100%;
         border: none;
-        background: transparent;
+        background: $surface;
+    }
+
+    KidTextArea:focus {
+        border: none;
+    }
+
+    KidTextArea > .text-area--cursor-line {
+        background: $surface;
     }
     """
 
@@ -81,6 +89,7 @@ class WriteMode(Container):
         width: 100%;
         height: 100%;
         padding: 1;
+        background: $surface;
     }
 
     #write-header {
@@ -89,11 +98,13 @@ class WriteMode(Container):
         text-align: center;
         color: $text-muted;
         margin-bottom: 1;
+        background: $surface;
     }
 
     #write-area {
         width: 100%;
         height: 1fr;
+        background: $surface;
     }
     """
 

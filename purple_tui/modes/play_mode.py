@@ -199,7 +199,9 @@ class PlayGrid(Widget):
                 except Exception:
                     bg_color = "#4a3866"
 
-            text_color = "#1e1033" if bg_color in LIGHT_COLORS else "white"
+            # Determine text color based on background brightness
+            light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT, "#c4b5fd"}  # Include light mode default and flash
+            text_color = "#1e1033" if bg_color in light_backgrounds else "white"
 
             cell_bg_style = Style(bgcolor=bg_color)
             text_style = Style(bgcolor=bg_color, color=text_color, bold=True)
@@ -222,6 +224,25 @@ class PlayGrid(Widget):
         return Strip(segments)
 
 
+class ClearModeIndicator(Static):
+    """Shows whether clear mode is on/off - Tab to toggle"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.clear_on = False
+
+    def render(self) -> str:
+        if self.clear_on:
+            return "[bold #ff6b6b]🗑️ Tab: clear ON[/]"
+        else:
+            return "[dim]🎨 Tab: clear off[/]"
+
+    def toggle(self) -> bool:
+        self.clear_on = not self.clear_on
+        self.refresh()
+        return self.clear_on
+
+
 class PlayMode(Container, can_focus=True):
     """Play Mode - press keys to make sounds and colors."""
 
@@ -236,12 +257,11 @@ class PlayMode(Container, can_focus=True):
         height: 1fr;
     }
 
-    #hint {
-        dock: bottom;
-        width: 100%;
+    #clear-indicator {
+        dock: top;
         height: 1;
-        text-align: center;
-        color: #6b5b8a;
+        text-align: right;
+        padding: 0 1;
     }
     """
 
@@ -267,9 +287,9 @@ class PlayMode(Container, can_focus=True):
         event.stop()
 
     def compose(self) -> ComposeResult:
+        yield ClearModeIndicator(id="clear-indicator")
         self.grid = PlayGrid()
         yield self.grid
-        yield Static("[dim]Press keys to play! (Tab: clear mode)[/]", id="hint")
 
     def on_mount(self) -> None:
         self.focus()
@@ -282,12 +302,8 @@ class PlayMode(Container, can_focus=True):
         """Handle key press."""
         # Tab toggles sticky clear mode
         if event.key == "tab":
-            self.clear_mode = not self.clear_mode
-            hint = self.query_one("#hint", Static)
-            if self.clear_mode:
-                hint.update("[bold #ff6b6b]CLEAR MODE[/] - press keys to clear colors (Tab to exit)")
-            else:
-                hint.update("[dim]Press keys to play![/]")
+            indicator = self.query_one("#clear-indicator", ClearModeIndicator)
+            self.clear_mode = indicator.toggle()
             event.stop()
             return
 

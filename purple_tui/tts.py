@@ -91,8 +91,9 @@ def _ensure_mixer() -> bool:
         _mixer_initialized = True
         return True
     # Try to initialize with standard settings
+    # Use larger buffer (1024) to prevent audio clipping at start
     try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
         pygame.mixer.set_num_channels(16)
         _mixer_initialized = True
         return True
@@ -156,8 +157,9 @@ def _speak_sync(text: str) -> bool:
             wav_path = f.name
 
         # Generate audio with Piper (needs wave.Wave_write object)
+        # Add a tiny pause before speech to prevent clipping
         with wave.open(wav_path, 'wb') as wav_file:
-            voice.synthesize_wav(text, wav_file)
+            voice.synthesize_wav(f"...{text}", wav_file)
 
         # Play the audio
         sound = pygame.mixer.Sound(wav_path)

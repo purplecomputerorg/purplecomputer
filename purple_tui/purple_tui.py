@@ -35,45 +35,136 @@ class View(Enum):
 
 
 # Mode display info
+# Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 MODE_INFO = {
-    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": "💭"},
-    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": "🎵"},
-    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": "👂"},
-    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": "✏️"},
+    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": "󰭹"},       # nf-md-chat_question (thought bubble)
+    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": "󰎈"},     # nf-md-music
+    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": "󰋋"},  # nf-md-headphones
+    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": "󰏫"},   # nf-md-file_document
 }
 
+# Theme icons (Nerd Font)
+ICON_MOON = "󰖙"  # nf-md-weather_night
+ICON_SUN = "󰖨"   # nf-md-weather_sunny
 
-class ModeIndicator(Static):
-    """Shows F1-F4 mode indicators in the border area"""
+
+class KeyBadge(Static):
+    """A single key badge with rounded border"""
+
+    DEFAULT_CSS = """
+    KeyBadge {
+        width: auto;
+        height: 3;
+        padding: 0 1;
+        margin: 0 1;
+        border: round $primary;
+        background: $surface;
+        content-align: center middle;
+    }
+
+    KeyBadge.active {
+        border: round $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+
+    KeyBadge.dim {
+        border: round $surface-darken-2;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, text: str, **kwargs):
+        super().__init__(**kwargs)
+        self.text = text
+
+    def render(self) -> str:
+        return self.text
+
+
+class ModeIndicator(Horizontal):
+    """Shows F1-F4 mode indicators as styled key badges"""
+
+    DEFAULT_CSS = """
+    ModeIndicator {
+        width: 100%;
+        height: 3;
+        background: $background;
+        padding: 0 4;
+    }
+
+    #keys-left {
+        width: auto;
+        height: 3;
+        margin-left: 2;
+    }
+
+    #keys-spacer {
+        width: 1fr;
+        height: 3;
+    }
+
+    #keys-right {
+        width: auto;
+        height: 3;
+        margin-right: 2;
+    }
+    """
 
     def __init__(self, current_mode: Mode, **kwargs):
         super().__init__(**kwargs)
         self.current_mode = current_mode
 
-    def render(self) -> str:
-        parts = []
-        for mode in Mode:
-            info = MODE_INFO[mode]
-            if mode == self.current_mode:
-                parts.append(f"[bold reverse] {info['key']} {info['emoji']} [/]")
-            else:
-                parts.append(f"[dim]{info['key']} {info['emoji']}[/]")
+    def compose(self) -> ComposeResult:
+        # F1-F4 on the left (like on a real keyboard)
+        with Horizontal(id="keys-left"):
+            for mode in Mode:
+                info = MODE_INFO[mode]
+                badge = KeyBadge(f"{info['key']} {info['emoji']}", id=f"key-{mode.name.lower()}")
+                if mode == self.current_mode:
+                    badge.add_class("active")
+                else:
+                    badge.add_class("dim")
+                yield badge
 
-        # Show F5 clear button - highlighted if pending confirmation
-        clear_pending = getattr(self.app, 'clear_pending', False)
-        if clear_pending:
-            parts.append("[bold red reverse] F5 Clear? [/]")
-        else:
-            parts.append("[dim]F5 🗑️[/]")
+        # Spacer pushes F12 to the right
+        yield Static("", id="keys-spacer")
 
-        # Show sun/moon based on current theme
-        is_dark = "dark" in self.app.active_theme if hasattr(self.app, 'active_theme') else True
-        theme_icon = "🌙" if is_dark else "☀️"
-        return "  ".join(parts) + f"  [dim]F12 {theme_icon}[/]"
+        # F12 on the right (like on a real keyboard)
+        with Horizontal(id="keys-right"):
+            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
+            theme_icon = ICON_MOON if is_dark else ICON_SUN
+            theme_badge = KeyBadge(f"F12 {theme_icon}", id="key-theme")
+            theme_badge.add_class("dim")
+            yield theme_badge
 
     def update_mode(self, mode: Mode) -> None:
         self.current_mode = mode
-        self.refresh()
+        for m in Mode:
+            try:
+                badge = self.query_one(f"#key-{m.name.lower()}", KeyBadge)
+                badge.remove_class("active", "dim")
+                if m == mode:
+                    badge.add_class("active")
+                else:
+                    badge.add_class("dim")
+            except NoMatches:
+                pass
+
+    def update_theme_icon(self) -> None:
+        """Update the theme badge icon"""
+        try:
+            badge = self.query_one("#key-theme", KeyBadge)
+            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
+            badge.text = f"F12 {ICON_MOON if is_dark else ICON_SUN}"
+            badge.refresh()
+        except NoMatches:
+            pass
+
+    def show_escape_status(self, count: int) -> None:
+        """Show escape count status - for now just refresh"""
+        pass  # Could add a status badge if needed
 
 
 class SpeechIndicator(Static):
@@ -134,11 +225,8 @@ class PurpleApp(App):
 
     #mode-indicator {
         dock: bottom;
-        height: 1;
-        text-align: center;
+        height: 3;
         background: $background;
-        color: $text;
-        padding: 0 2;
     }
 
     #content-area {
@@ -170,7 +258,7 @@ class PurpleApp(App):
         Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
         Binding("f3", "switch_mode('listen')", "Listen", show=False, priority=True),
         Binding("f4", "switch_mode('write')", "Write", show=False, priority=True),
-        Binding("f5", "clear_mode", "Clear", show=False, priority=True),
+        Binding("escape", "escape_pressed", "Escape", show=False, priority=True),
         Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
         Binding("ctrl+d", "toggle_theme", "Theme", show=False, priority=True),  # Backup
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
@@ -182,7 +270,7 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
-        self.clear_pending = False  # For clear confirmation
+        self.escape_count = 0  # For 3-escape clear confirmation
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -333,6 +421,12 @@ class PurpleApp(App):
         """Toggle between dark and light mode (F12)"""
         self.active_theme = "purple-light" if self.active_theme == "purple-dark" else "purple-dark"
         self._apply_theme()
+        # Update theme icon in mode indicator
+        try:
+            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator.update_theme_icon()
+        except NoMatches:
+            pass
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
@@ -350,45 +444,82 @@ class PurpleApp(App):
             self.speech_enabled = not self.speech_enabled
             return self.speech_enabled
 
-    def action_clear_mode(self) -> None:
-        """Clear current mode (F5) - requires confirmation"""
-        if self.clear_pending:
-            # Second press - actually clear
-            self.clear_pending = False
-            # Remove the current mode widget and recreate
-            content_area = self.query_one("#content-area")
-            mode_id = f"mode-{self.active_mode.name.lower()}"
-            try:
-                existing = content_area.query_one(f"#{mode_id}")
-                existing.remove()
-            except NoMatches:
-                pass
-            self._load_mode_content()
-            # Update indicator
-            try:
-                indicator = self.query_one("#mode-indicator", ModeIndicator)
-                indicator.refresh()
-            except NoMatches:
-                pass
-        else:
-            # First press - ask for confirmation
-            self.clear_pending = True
-            try:
-                indicator = self.query_one("#mode-indicator", ModeIndicator)
-                indicator.refresh()
-            except NoMatches:
-                pass
-            # Auto-cancel after a few seconds
-            self.set_timer(3.0, self._cancel_clear)
+    def action_escape_pressed(self) -> None:
+        """Handle escape key - 3 presses to clear mode"""
+        self.escape_count += 1
 
-    def _cancel_clear(self) -> None:
-        """Cancel pending clear after timeout"""
-        if self.clear_pending:
-            self.clear_pending = False
+        if self.escape_count >= 3:
+            # Third press - reset mode state (not content)
+            self.escape_count = 0
+            self._reset_mode_state()
+
+        # Update indicator to show escape count
+        try:
+            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator.refresh()
+        except NoMatches:
+            pass
+
+        # Auto-reset after timeout
+        self.set_timer(2.0, self._reset_escape_count)
+
+    def _reset_escape_count(self) -> None:
+        """Reset escape count after timeout"""
+        if self.escape_count > 0:
+            self.escape_count = 0
             try:
                 indicator = self.query_one("#mode-indicator", ModeIndicator)
                 indicator.refresh()
             except NoMatches:
+                pass
+
+    def _reset_mode_state(self) -> None:
+        """Reset the current mode's state without clearing content"""
+        mode_id = f"mode-{self.active_mode.name.lower()}"
+        try:
+            content_area = self.query_one("#content-area")
+            mode_widget = content_area.query_one(f"#{mode_id}")
+        except NoMatches:
+            return
+
+        if self.active_mode == Mode.ASK:
+            # Clear input and autocomplete, but keep history
+            try:
+                ask_input = mode_widget.query_one("#ask-input")
+                ask_input.value = ""
+                ask_input.autocomplete_matches = []
+                ask_input.autocomplete_index = 0
+                ask_input.last_char = None
+                ask_input.last_char_time = 0
+                hint = mode_widget.query_one("#autocomplete-hint")
+                hint.update("")
+            except Exception:
+                pass
+
+        elif self.active_mode == Mode.PLAY:
+            # Reset eraser mode toggle and grid colors
+            try:
+                indicator = mode_widget.query_one("#eraser-indicator")
+                indicator.eraser_on = False
+                indicator.refresh()
+                mode_widget.eraser_mode = False
+                # Reset all grid colors
+                grid = mode_widget.grid
+                if grid:
+                    for key in grid.color_state:
+                        grid.color_state[key] = -1
+                    grid._flash_keys.clear()
+                    grid.refresh()
+            except Exception:
+                pass
+
+        elif self.active_mode == Mode.WRITE:
+            # Reset double-tap state
+            try:
+                write_area = mode_widget.query_one("#write-area")
+                write_area.last_char = None
+                write_area.last_char_time = 0
+            except Exception:
                 pass
 
     def on_key(self, event: events.Key) -> None:

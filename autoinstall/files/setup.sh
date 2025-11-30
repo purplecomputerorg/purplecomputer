@@ -57,6 +57,22 @@ apt install -y \
     python3-dev \
     unclutter
 
+# Install Nerd Font for icons
+echo_info "Installing JetBrainsMono Nerd Font..."
+FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
+if [ ! -d "$FONT_DIR" ]; then
+    mkdir -p "$FONT_DIR"
+    cd /tmp
+    wget -q https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/JetBrainsMono.zip
+    unzip -q JetBrainsMono.zip -d "$FONT_DIR"
+    rm JetBrainsMono.zip
+    fc-cache -f
+    cd -
+    echo_info "Nerd Font installed"
+else
+    echo_info "Nerd Font already installed, skipping"
+fi
+
 # Install Piper TTS for speech synthesis
 echo_info "Installing Piper TTS..."
 # Piper binary and voice model will be installed to /opt/piper

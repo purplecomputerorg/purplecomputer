@@ -68,7 +68,7 @@ class PlayGrid(Widget):
             return
         try:
             # More channels for polyphony, standard quality
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
             pygame.mixer.set_num_channels(16)
             self._mixer_initialized = True
             self._load_sounds()
@@ -224,23 +224,29 @@ class PlayGrid(Widget):
         return Strip(segments)
 
 
-class ClearModeIndicator(Static):
-    """Shows whether clear mode is on/off - Tab to toggle"""
+class EraserModeIndicator(Static):
+    """Shows whether eraser mode is on/off - Tab to toggle"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.clear_on = False
+        self.eraser_on = False
 
     def render(self) -> str:
-        if self.clear_on:
-            return "[bold #ff6b6b]🗑️ Tab: clear ON[/]"
+        if self.eraser_on:
+            return "[bold #ff6b6b]🧽 Tab: eraser ON[/]"
         else:
-            return "[dim]🎨 Tab: clear off[/]"
+            return "[dim]🎨 Tab: eraser off[/]"
 
     def toggle(self) -> bool:
-        self.clear_on = not self.clear_on
+        self.eraser_on = not self.eraser_on
+        # Speak status
+        from ..tts import speak
+        if self.eraser_on:
+            speak("eraser on")
+        else:
+            speak("eraser off")
         self.refresh()
-        return self.clear_on
+        return self.eraser_on
 
 
 class PlayMode(Container, can_focus=True):
@@ -257,18 +263,25 @@ class PlayMode(Container, can_focus=True):
         height: 1fr;
     }
 
-    #clear-indicator {
+    #eraser-indicator {
         dock: top;
         height: 1;
         text-align: right;
         padding: 0 1;
+    }
+
+    #example-hint {
+        dock: bottom;
+        height: 1;
+        text-align: center;
+        color: $text-muted;
     }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
-        self.clear_mode = False
+        self.eraser_mode = False
 
     # Block all mouse events
     def on_click(self, event) -> None:
@@ -287,9 +300,10 @@ class PlayMode(Container, can_focus=True):
         event.stop()
 
     def compose(self) -> ComposeResult:
-        yield ClearModeIndicator(id="clear-indicator")
+        yield EraserModeIndicator(id="eraser-indicator")
         self.grid = PlayGrid()
         yield self.grid
+        yield Static("[dim]Try pressing letters and numbers![/]", id="example-hint")
 
     def on_mount(self) -> None:
         self.focus()
@@ -300,10 +314,10 @@ class PlayMode(Container, can_focus=True):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key press."""
-        # Tab toggles sticky clear mode
+        # Tab toggles sticky eraser mode
         if event.key == "tab":
-            indicator = self.query_one("#clear-indicator", ClearModeIndicator)
-            self.clear_mode = indicator.toggle()
+            indicator = self.query_one("#eraser-indicator", EraserModeIndicator)
+            self.eraser_mode = indicator.toggle()
             event.stop()
             return
 
@@ -315,7 +329,7 @@ class PlayMode(Container, can_focus=True):
 
         if lookup in ALL_KEYS:
             event.stop()
-            if self.clear_mode:
+            if self.eraser_mode:
                 self.grid.clear_color(lookup)
                 # Clear flash after brief delay (capture key in lambda)
                 self.set_timer(0.3, lambda k=lookup: self.grid.clear_flash(k))

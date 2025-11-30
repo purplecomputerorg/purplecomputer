@@ -24,9 +24,20 @@ class KidTextArea(TextArea):
     - Letters, numbers, standard symbols
     - Backspace (delete)
     - Enter (new line)
-    - Caps Lock (toggle case)
-    - Sticky Shift (toggle, not hold)
+    - Double-tap for shifted symbols (e.g., 88 fast = *)
     """
+
+    # Map of unshifted -> shifted characters
+    SHIFT_MAP = {
+        '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+        '6': '^', '7': '&', '8': '*', '9': '(', '0': ')',
+        '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
+        ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
+        '`': '~',
+    }
+
+    # Double-tap threshold in seconds (generous for small kids)
+    DOUBLE_TAP_TIME = 0.5
 
     DEFAULT_CSS = """
     KidTextArea {
@@ -47,14 +58,19 @@ class KidTextArea(TextArea):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.sticky_shift = False
+        self.last_char = None
+        self.last_char_time = 0
 
     def on_key(self, event: events.Key) -> None:
         """Filter keys for kid-safe editing"""
+        import time
+
         key = event.key
+        char = event.character
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):
+            self.last_char = None
             return  # Let default handling work
 
         # Block: arrows, ctrl combos, function keys, etc.
@@ -74,6 +90,25 @@ class KidTextArea(TextArea):
             event.stop()
             event.prevent_default()
             return
+
+        # Check for double-tap to get shifted character
+        if char and char in self.SHIFT_MAP:
+            now = time.time()
+            if self.last_char == char and (now - self.last_char_time) < self.DOUBLE_TAP_TIME:
+                # Double-tap detected - replace last char with shifted version
+                event.stop()
+                event.prevent_default()
+                # Delete the previous character and insert shifted
+                self.action_delete_left()
+                self.insert(self.SHIFT_MAP[char])
+                self.last_char = None
+                return
+            else:
+                # First tap - remember it
+                self.last_char = char
+                self.last_char_time = now
+        else:
+            self.last_char = None
 
 
 class WriteMode(Container):

@@ -19,27 +19,20 @@ history = 100
 size = 22.0
 
 [font.normal]
-family = "JetBrains Mono"
+family = "JetBrainsMono Nerd Font"
 style = "Regular"
 
 [font.bold]
-family = "JetBrains Mono"
+family = "JetBrainsMono Nerd Font"
 style = "Bold"
 
 [font.italic]
-family = "JetBrains Mono"
+family = "JetBrainsMono Nerd Font"
 style = "Italic"
 
 [font.bold_italic]
-family = "JetBrains Mono"
+family = "JetBrainsMono Nerd Font"
 style = "Bold Italic"
-
-# Fallback fonts for emoji and symbols
-[[font.fallback]]
-family = "Noto Color Emoji"
-
-[[font.fallback]]
-family = "Noto Sans"
 
 [colors]
 # Dark purple theme - calming and sophisticated

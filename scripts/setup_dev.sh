@@ -112,42 +112,42 @@ if [ -d "packs/core-definitions" ]; then
     echo_info "✓ Built core-definitions.purplepack"
 fi
 
-# Install JetBrains Mono font (for Alacritty)
-echo_step "Checking JetBrains Mono font..."
-install_jetbrains_mono() {
-    local FONT_VERSION="2.304"
-    local FONT_URL="https://github.com/JetBrains/JetBrainsMono/releases/download/v${FONT_VERSION}/JetBrainsMono-${FONT_VERSION}.zip"
+# Install JetBrainsMono Nerd Font (for icons in Alacritty)
+echo_step "Checking JetBrainsMono Nerd Font..."
+install_nerd_font() {
+    local FONT_VERSION="3.3.0"
+    local FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${FONT_VERSION}/JetBrainsMono.zip"
     local TEMP_DIR=$(mktemp -d)
 
-    echo_info "Downloading JetBrains Mono..."
-    curl -sL "$FONT_URL" -o "$TEMP_DIR/jetbrains-mono.zip"
-    unzip -q "$TEMP_DIR/jetbrains-mono.zip" -d "$TEMP_DIR"
+    echo_info "Downloading JetBrainsMono Nerd Font..."
+    curl -sL "$FONT_URL" -o "$TEMP_DIR/jetbrains-mono-nerd.zip"
+    unzip -q "$TEMP_DIR/jetbrains-mono-nerd.zip" -d "$TEMP_DIR/fonts"
 
     if [ "$OS" = "mac" ]; then
         mkdir -p ~/Library/Fonts
-        cp "$TEMP_DIR/fonts/ttf/"*.ttf ~/Library/Fonts/
-        echo_info "✓ JetBrains Mono installed to ~/Library/Fonts/"
+        cp "$TEMP_DIR/fonts/"*.ttf ~/Library/Fonts/ 2>/dev/null || true
+        echo_info "✓ JetBrainsMono Nerd Font installed to ~/Library/Fonts/"
     else
         mkdir -p ~/.local/share/fonts
-        cp "$TEMP_DIR/fonts/ttf/"*.ttf ~/.local/share/fonts/
+        cp "$TEMP_DIR/fonts/"*.ttf ~/.local/share/fonts/ 2>/dev/null || true
         fc-cache -f ~/.local/share/fonts
-        echo_info "✓ JetBrains Mono installed to ~/.local/share/fonts/"
+        echo_info "✓ JetBrainsMono Nerd Font installed to ~/.local/share/fonts/"
     fi
 
     rm -rf "$TEMP_DIR"
 }
 
 if [ "$OS" = "mac" ]; then
-    if ls ~/Library/Fonts/JetBrainsMono-* &> /dev/null 2>&1; then
-        echo_info "✓ JetBrains Mono already installed"
+    if ls ~/Library/Fonts/JetBrainsMonoNerdFont-* &> /dev/null 2>&1; then
+        echo_info "✓ JetBrainsMono Nerd Font already installed"
     else
-        install_jetbrains_mono
+        install_nerd_font
     fi
 elif [ "$OS" = "linux" ]; then
-    if fc-list | grep -qi "JetBrains Mono" 2>/dev/null; then
-        echo_info "✓ JetBrains Mono already installed"
+    if fc-list | grep -qi "JetBrainsMono Nerd Font" 2>/dev/null; then
+        echo_info "✓ JetBrainsMono Nerd Font already installed"
     else
-        install_jetbrains_mono
+        install_nerd_font
     fi
 fi
 

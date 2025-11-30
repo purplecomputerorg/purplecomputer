@@ -72,10 +72,24 @@ class InlineInput(Input):
         ("tab", "toggle_speech", "Toggle speech"),
     ]
 
+    # Map of unshifted -> shifted characters (double-tap to get shifted)
+    SHIFT_MAP = {
+        '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+        '6': '^', '7': '&', '8': '*', '9': '(', '0': ')',
+        '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
+        ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
+        '`': '~',
+    }
+
+    # Double-tap threshold in seconds (generous for small kids)
+    DOUBLE_TAP_TIME = 0.5
+
     def __init__(self, **kwargs):
         super().__init__(placeholder="", **kwargs)
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji), ...]
         self.autocomplete_index: int = 0
+        self.last_char = None
+        self.last_char_time = 0
 
     def action_scroll_up(self) -> None:
         """Scroll history up"""
@@ -134,6 +148,10 @@ class InlineInput(Input):
 
     async def _on_key(self, event: events.Key) -> None:
         """Handle special keys before parent Input processes them"""
+        import time
+
+        char = event.character
+
         # Space - accept autocomplete if there's a suggestion
         if event.key == "space" and self.autocomplete_matches:
             event.stop()
@@ -155,6 +173,7 @@ class InlineInput(Input):
                 self.cursor_position = len(self.value)
             self.autocomplete_matches = []
             self.autocomplete_index = 0
+            self.last_char = None
             return
 
         # Enter - submit
@@ -166,7 +185,28 @@ class InlineInput(Input):
                 self.value = ""
             self.autocomplete_matches = []
             self.autocomplete_index = 0
+            self.last_char = None
             return
+
+        # Double-tap for shifted characters
+        if char and char in self.SHIFT_MAP:
+            now = time.time()
+            if self.last_char == char and (now - self.last_char_time) < self.DOUBLE_TAP_TIME:
+                # Double-tap detected - replace last char with shifted version
+                event.stop()
+                event.prevent_default()
+                # Remove last character and insert shifted
+                if self.value:
+                    self.value = self.value[:-1] + self.SHIFT_MAP[char]
+                    self.cursor_position = len(self.value)
+                self.last_char = None
+                return
+            else:
+                # First tap - remember it
+                self.last_char = char
+                self.last_char_time = now
+        else:
+            self.last_char = None
 
         # Let parent handle other keys
         await super()._on_key(event)
@@ -177,17 +217,18 @@ class InlineInput(Input):
 
     @property
     def autocomplete_hint(self) -> str:
-        """Get the autocomplete hint to display - shows multiple options"""
+        """Get the autocomplete hint to display - shows up to 5 options"""
         if not self.autocomplete_matches:
             return ""
 
-        # Build hint showing all matches
+        # Show up to 5 matches
+        shown = self.autocomplete_matches[:5]
         parts = []
-        for word, emoji in self.autocomplete_matches:
+        for word, emoji in shown:
             parts.append(f"{word} {emoji}")
 
-        hint = "  •  ".join(parts)
-        return f"  [dim]{hint} (space)[/]"
+        hint = "   ".join(parts)
+        return f"[dim]{hint}   ← space[/]"
 
 
 class InputPrompt(Static):
@@ -211,16 +252,21 @@ class SpeechIndicator(Static):
 
     def render(self) -> str:
         if self.speech_on:
-            return "[bold green]🔊 Tab: speech ON[/]"
+            return "[bold green]🔊 Tab: talking ON[/]"
         else:
-            return "[dim]🔇 Tab: speech off[/]"
+            return "[dim]🔇 Tab: talking off[/]"
 
     def toggle(self) -> bool:
         self.speech_on = not self.speech_on
-        # Pre-initialize TTS when turned on
+        # Pre-initialize TTS and speak status
         if self.speech_on:
-            from ..tts import init
+            from ..tts import init, speak
             init()
+            # Speak after a short delay to let init complete
+            self.set_timer(0.3, lambda: speak("talking on"))
+        else:
+            from ..tts import speak
+            speak("talking off")
         self.refresh()
         return self.speech_on
 
@@ -294,6 +340,9 @@ class AskMode(Vertical):
     #autocomplete-hint {
         height: 1;
         color: $text-muted;
+        margin-bottom: 1;
+        margin-top: 1;
+        margin-left: 5;
     }
 
     #example-hint {
@@ -322,7 +371,7 @@ class AskMode(Vertical):
                 yield InputPrompt(id="input-prompt")
                 yield InlineInput(id="ask-input")
             yield AutocompleteHint(id="autocomplete-hint")
-            yield Static("[dim]Try: apple?  •  2 + 2  •  cat[/]", id="example-hint")
+            yield Static("[dim]Try: cat  •  2 + 2  •  cat times 3  •  apple?[/]", id="example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
@@ -379,10 +428,11 @@ class AskMode(Vertical):
         # Make math expressions speakable
         def make_speakable(text: str) -> str:
             import re
-            result = text
+            # Lowercase to avoid spelling out caps letter by letter
+            text = text.lower()
             # Handle x between numbers (2x3, 2 x 3, etc.)
-            result = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', result, flags=re.IGNORECASE)
-            return (result
+            text = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', text)
+            return (text
                 .replace("×", " times ")
                 .replace("*", " times ")
                 .replace("÷", " divided by ")
@@ -393,16 +443,24 @@ class AskMode(Vertical):
                 .replace("=", " equals ")
             )
 
+        # Check if result is emoji (contains high unicode chars)
+        if result and any(ord(c) > 127 for c in result):
+            # It's emoji - describe it for speech
+            description = self.evaluator._describe_emoji_result(input_text, result)
+            text_to_speak = f"{make_speakable(input_text)} equals {description}"
         # Check if result looks like math output
-        try:
-            float(result.replace(",", ""))
-            text_to_speak = f"{make_speakable(input_text)} equals {result}"
-        except (ValueError, AttributeError):
-            # Not math, just speak the result if different from input
-            if result and result != input_text:
-                text_to_speak = result
-            else:
-                text_to_speak = input_text
+        elif result:
+            try:
+                float(result.replace(",", ""))
+                text_to_speak = f"{make_speakable(input_text)} equals {result}"
+            except (ValueError, AttributeError):
+                # Not math, just speak the result if different from input
+                if result.lower() != input_text.lower():
+                    text_to_speak = result.lower()
+                else:
+                    text_to_speak = input_text.lower()
+        else:
+            text_to_speak = input_text.lower()
 
         speak(text_to_speak)
 
@@ -423,6 +481,17 @@ class SimpleEvaluator:
     def __init__(self):
         self.content = get_content()
 
+    def _is_all_caps(self, text: str) -> bool:
+        """Check if text is all caps (only considering letters, need more than 3)"""
+        letters = [c for c in text if c.isalpha()]
+        return len(letters) > 3 and all(c.isupper() for c in letters)
+
+    def _maybe_uppercase(self, text: str, result: str) -> str:
+        """Make result uppercase if input was all caps"""
+        if self._is_all_caps(text):
+            return result.upper()
+        return result
+
     def evaluate(self, text: str) -> str:
         """Evaluate the input and return a result string"""
         text = text.strip()
@@ -432,7 +501,7 @@ class SimpleEvaluator:
         # Check for definition query: ?word or word?
         definition = self._check_definition(text)
         if definition:
-            return definition
+            return self._maybe_uppercase(text, definition)
 
         # Normalize input for math
         normalized = self._normalize(text)
@@ -544,29 +613,95 @@ class SimpleEvaluator:
         return str(rounded).rstrip('0').rstrip('.')
 
     def _eval_emoji_math(self, text: str) -> str | None:
-        """Evaluate emoji multiplication like '3 * cat' -> '🐱🐱🐱'"""
-        # Pattern: number * emoji_name or emoji_name * number
-        match = re.match(r'(\d+)\s*[\*x]\s*(\w+)', text.lower())
-        if match:
-            count, name = int(match.group(1)), match.group(2)
-            emoji = self.content.get_emoji(name)
-            if emoji and count <= 100:  # Limit to prevent abuse
-                return emoji * count
+        """Evaluate emoji expressions like '3 * cat', 'cat times 3', 'apple + banana', 'cat*3 + 2'"""
+        text_lower = text.lower()
 
-        match = re.match(r'(\w+)\s*[\*x]\s*(\d+)', text.lower())
-        if match:
-            name, count = match.group(1), int(match.group(2))
-            emoji = self.content.get_emoji(name)
-            if emoji and count <= 100:
-                return emoji * count
+        # Split by + or "plus" to handle additions
+        parts = re.split(r'\s*(?:\+|plus)\s*', text_lower)
+        results = []
+        has_emoji = False  # Track if we found at least one emoji
 
-        # Addition of emojis: cat + dog
-        match = re.match(r'(\w+)\s*\+\s*(\w+)', text.lower())
-        if match:
-            name1, name2 = match.group(1), match.group(2)
-            emoji1 = self.content.get_emoji(name1)
-            emoji2 = self.content.get_emoji(name2)
-            if emoji1 and emoji2:
-                return emoji1 + emoji2
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+
+            # Try: number * word, number x word, or number times word
+            match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', part)
+            if match:
+                count, name = int(match.group(1)), match.group(2)
+                emoji = self.content.get_emoji(name)
+                if emoji and count <= 100:
+                    results.append((emoji * count, name, count))
+                    has_emoji = True
+                    continue
+
+            # Try: word * number, word x number, or word times number
+            match = re.match(r'^(\w+)\s*(?:[\*x]|times)\s*(\d+)$', part)
+            if match:
+                name, count = match.group(1), int(match.group(2))
+                emoji = self.content.get_emoji(name)
+                if emoji and count <= 100:
+                    results.append((emoji * count, name, count))
+                    has_emoji = True
+                    continue
+
+            # Try: just a word (single emoji)
+            emoji = self.content.get_emoji(part)
+            if emoji:
+                results.append((emoji, part, 1))
+                has_emoji = True
+                continue
+
+            # Try: just a number (include as-is in mixed expressions)
+            if re.match(r'^\d+$', part):
+                results.append((part, None, int(part)))
+                continue
+
+            # Part didn't match anything - not emoji math
+            return None
+
+        # Only return if we found at least one emoji
+        if results and has_emoji:
+            return ''.join(r[0] for r in results)
 
         return None
+
+    def _describe_emoji_result(self, text: str, result: str) -> str:
+        """Describe an emoji math result for speech, e.g. '3 apples and 2 bananas'"""
+        text_lower = text.lower()
+        parts = re.split(r'\s*(?:\+|plus)\s*', text_lower)
+        descriptions = []
+
+        for part in parts:
+            part = part.strip()
+            if not part:
+                continue
+
+            # Try: number * word, number x word, or number times word
+            match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', part)
+            if match:
+                count, name = int(match.group(1)), match.group(2)
+                if self.content.get_emoji(name):
+                    descriptions.append(f"{count} {name}s" if count != 1 else f"1 {name}")
+                    continue
+
+            # Try: word * number, word x number, or word times number
+            match = re.match(r'^(\w+)\s*(?:[\*x]|times)\s*(\d+)$', part)
+            if match:
+                name, count = match.group(1), int(match.group(2))
+                if self.content.get_emoji(name):
+                    descriptions.append(f"{count} {name}s" if count != 1 else f"1 {name}")
+                    continue
+
+            # Just a word
+            if self.content.get_emoji(part):
+                descriptions.append(f"1 {part}")
+
+        if len(descriptions) == 1:
+            return descriptions[0]
+        elif len(descriptions) == 2:
+            return f"{descriptions[0]} and {descriptions[1]}"
+        elif len(descriptions) > 2:
+            return ", ".join(descriptions[:-1]) + f", and {descriptions[-1]}"
+        return result

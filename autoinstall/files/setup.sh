@@ -48,6 +48,7 @@ apt install -y \
     fonts-noto \
     fonts-noto-color-emoji \
     fonts-dejavu \
+    fonts-jetbrains-mono \
     git \
     curl \
     wget \

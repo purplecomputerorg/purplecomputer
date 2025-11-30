@@ -8,7 +8,11 @@ https://github.com/OHF-Voice/piper1-gpl
 import subprocess
 import tempfile
 from pathlib import Path
-import platform
+import os
+
+# Suppress pygame welcome message
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+import pygame.mixer
 
 
 # Piper configuration
@@ -119,32 +123,31 @@ def _speak_espeak(text: str) -> bool:
         return False
 
 
+_mixer_initialized = False
+
+
+def _ensure_mixer() -> bool:
+    """Initialize pygame mixer if needed"""
+    global _mixer_initialized
+    if _mixer_initialized:
+        return True
+    try:
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        _mixer_initialized = True
+        return True
+    except pygame.error:
+        return False
+
+
 def _play_audio(wav_path: str) -> None:
-    """Play a WAV file using system audio"""
-    system = platform.system()
+    """Play a WAV file using pygame mixer"""
+    if not _ensure_mixer():
+        return
 
     try:
-        if system == 'Darwin':
-            subprocess.Popen(
-                ['afplay', wav_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        elif system == 'Linux':
-            # Try aplay first (ALSA), then paplay (PulseAudio)
-            try:
-                subprocess.Popen(
-                    ['aplay', '-q', wav_path],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except FileNotFoundError:
-                subprocess.Popen(
-                    ['paplay', wav_path],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-    except (FileNotFoundError, OSError):
+        sound = pygame.mixer.Sound(wav_path)
+        sound.play()
+    except pygame.error:
         pass
 
 

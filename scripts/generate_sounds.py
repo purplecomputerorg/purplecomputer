@@ -24,10 +24,10 @@ NOTE_FREQUENCIES = {
     'Y': 880.00, 'U': 987.77, 'I': 1046.50, 'O': 1174.66, 'P': 1318.51,
     # Middle row - bright middle range
     'A': 261.63, 'S': 293.66, 'D': 329.63, 'F': 349.23, 'G': 392.00,
-    'H': 440.00, 'J': 493.88, 'K': 523.25, 'L': 587.33,
-    # Bottom row - warm low notes
+    'H': 440.00, 'J': 493.88, 'K': 523.25, 'L': 587.33, 'semicolon': 659.25,
+    # Bottom row - warm low notes (continues into next octave)
     'Z': 130.81, 'X': 146.83, 'C': 164.81, 'V': 174.61, 'B': 196.00,
-    'N': 220.00, 'M': 246.94,
+    'N': 220.00, 'M': 246.94, 'comma': 261.63, 'period': 293.66, 'slash': 329.63,
 }
 
 def write_wav(filename: str, samples: list[int], sample_rate: int = 44100):
@@ -93,68 +93,153 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
 
     return samples
 
-def generate_boing() -> list[int]:
-    """Silly boing sound - frequency drops quickly"""
+def generate_kick_drum() -> list[int]:
+    """Deep punchy kick drum"""
     sample_rate = 44100
-    duration = 0.5
+    duration = 0.35
     num_samples = int(sample_rate * duration)
     samples = []
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Frequency drops from high to low
-        freq = 800 * math.exp(-t * 6) + 100
+        # Pitch drops rapidly for that punchy kick sound
+        freq = 150 * math.exp(-t * 25) + 40
         sample = math.sin(2 * math.pi * freq * t)
-        # Add some wobble
-        sample += 0.3 * math.sin(2 * math.pi * freq * 1.5 * t)
-        # Envelope
-        envelope = math.exp(-t * 3)
-        samples.append(int(sample * envelope * 0.4 * 32767))
-
-    return samples
-
-def generate_drum() -> list[int]:
-    """Fun drum hit"""
-    sample_rate = 44100
-    duration = 0.3
-    num_samples = int(sample_rate * duration)
-    samples = []
-
-    random.seed(42)  # Consistent drum
-    for i in range(num_samples):
-        t = i / sample_rate
-        # Low thump
-        thump = math.sin(2 * math.pi * 80 * t) * math.exp(-t * 15)
-        # Snappy attack
-        snap = (random.random() * 2 - 1) * math.exp(-t * 30)
-        sample = thump * 0.7 + snap * 0.5
+        # Add some click at the start
+        click = math.exp(-t * 100) * 0.5
+        sample += click
         envelope = math.exp(-t * 8)
         samples.append(int(sample * envelope * 0.5 * 32767))
 
     return samples
 
-def generate_pop() -> list[int]:
-    """Bubbly pop sound"""
+def generate_snare() -> list[int]:
+    """Crispy snare drum"""
     sample_rate = 44100
-    duration = 0.2
+    duration = 0.25
+    num_samples = int(sample_rate * duration)
+    samples = []
+
+    random.seed(42)
+    for i in range(num_samples):
+        t = i / sample_rate
+        # Body tone
+        tone = math.sin(2 * math.pi * 200 * t) * math.exp(-t * 20)
+        # Snare rattle (filtered noise)
+        noise = (random.random() * 2 - 1) * math.exp(-t * 15)
+        sample = tone * 0.4 + noise * 0.6
+        envelope = math.exp(-t * 10)
+        samples.append(int(sample * envelope * 0.5 * 32767))
+
+    return samples
+
+def generate_hihat() -> list[int]:
+    """Bright hi-hat cymbal"""
+    sample_rate = 44100
+    duration = 0.15
+    num_samples = int(sample_rate * duration)
+    samples = []
+
+    random.seed(123)
+    for i in range(num_samples):
+        t = i / sample_rate
+        # High frequency noise for metallic sound
+        noise = random.random() * 2 - 1
+        # Add some high tones
+        tone = math.sin(2 * math.pi * 8000 * t) * 0.3
+        tone += math.sin(2 * math.pi * 10000 * t) * 0.2
+        sample = noise * 0.7 + tone
+        envelope = math.exp(-t * 30)
+        samples.append(int(sample * envelope * 0.35 * 32767))
+
+    return samples
+
+def generate_gong() -> list[int]:
+    """Deep gong hit"""
+    sample_rate = 44100
+    duration = 1.0
     num_samples = int(sample_rate * duration)
     samples = []
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Quick frequency sweep up then down
-        if t < 0.05:
-            freq = 200 + (t / 0.05) * 800
-        else:
-            freq = 1000 * math.exp(-(t - 0.05) * 20)
+        # Low fundamental with beating harmonics
+        freq = 120
         sample = math.sin(2 * math.pi * freq * t)
-        envelope = math.exp(-t * 15)
+        sample += 0.6 * math.sin(2 * math.pi * freq * 2.01 * t)  # Slight detune for shimmer
+        sample += 0.4 * math.sin(2 * math.pi * freq * 3.02 * t)
+        sample += 0.2 * math.sin(2 * math.pi * freq * 4.5 * t)
+        # Slow amplitude wobble
+        wobble = 1 + 0.1 * math.sin(2 * math.pi * 3 * t)
+        sample *= wobble
+        envelope = math.exp(-t * 2)
         samples.append(int(sample * envelope * 0.4 * 32767))
 
     return samples
 
-def generate_giggle() -> list[int]:
-    """Silly giggle-like sound"""
+def generate_cowbell() -> list[int]:
+    """Classic cowbell - more cowbell!"""
+    sample_rate = 44100
+    duration = 0.3
+    num_samples = int(sample_rate * duration)
+    samples = []
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        # Two slightly detuned tones for metallic character
+        freq1 = 800
+        freq2 = 540
+        sample = math.sin(2 * math.pi * freq1 * t)
+        sample += 0.7 * math.sin(2 * math.pi * freq2 * t)
+        # Add harmonics
+        sample += 0.3 * math.sin(2 * math.pi * freq1 * 2 * t)
+        envelope = math.exp(-t * 8)
+        samples.append(int(sample * envelope * 0.4 * 32767))
+
+    return samples
+
+def generate_clap() -> list[int]:
+    """Hand clap sound"""
+    sample_rate = 44100
+    duration = 0.2
+    num_samples = int(sample_rate * duration)
+    samples = []
+
+    random.seed(321)
+    for i in range(num_samples):
+        t = i / sample_rate
+        # Multiple short bursts for realistic clap
+        burst1 = math.exp(-((t - 0.005) ** 2) * 50000)
+        burst2 = math.exp(-((t - 0.015) ** 2) * 40000)
+        burst3 = math.exp(-((t - 0.025) ** 2) * 30000)
+        bursts = burst1 + burst2 * 0.8 + burst3 * 0.6
+        noise = (random.random() * 2 - 1) * bursts
+        envelope = math.exp(-t * 15)
+        samples.append(int(noise * envelope * 0.5 * 32767))
+
+    return samples
+
+def generate_woodblock() -> list[int]:
+    """Hollow wood block tick"""
+    sample_rate = 44100
+    duration = 0.15
+    num_samples = int(sample_rate * duration)
+    samples = []
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        # Hollow resonant tone
+        freq = 800
+        sample = math.sin(2 * math.pi * freq * t)
+        sample += 0.5 * math.sin(2 * math.pi * freq * 2.3 * t)
+        sample += 0.3 * math.sin(2 * math.pi * freq * 4.1 * t)
+        envelope = math.exp(-t * 25)
+        samples.append(int(sample * envelope * 0.45 * 32767))
+
+    return samples
+
+def generate_triangle() -> list[int]:
+    """Triangle ding"""
     sample_rate = 44100
     duration = 0.6
     num_samples = int(sample_rate * duration)
@@ -162,94 +247,43 @@ def generate_giggle() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Wobbling frequency
-        wobble = math.sin(t * 25) * 100
-        freq = 400 + wobble
+        # High pure tone with slight shimmer
+        freq = 1500
         sample = math.sin(2 * math.pi * freq * t)
-        # Add harmonics for richness
         sample += 0.3 * math.sin(2 * math.pi * freq * 2 * t)
-        envelope = math.exp(-t * 3) * (0.5 + 0.5 * math.sin(t * 20))
+        sample += 0.15 * math.sin(2 * math.pi * freq * 3 * t)
+        # Subtle vibrato
+        vibrato = 1 + 0.002 * math.sin(2 * math.pi * 6 * t)
+        sample *= vibrato
+        envelope = math.exp(-t * 4)
         samples.append(int(sample * envelope * 0.35 * 32767))
 
     return samples
 
-def generate_whoosh() -> list[int]:
-    """Swooshy whoosh sound"""
-    sample_rate = 44100
-    duration = 0.4
-    num_samples = int(sample_rate * duration)
-    samples = []
-
-    random.seed(123)
-    for i in range(num_samples):
-        t = i / sample_rate
-        # Filtered noise that sweeps
-        noise = random.random() * 2 - 1
-        # Frequency sweep for filter effect
-        sweep = math.sin(t * math.pi / duration)
-        sample = noise * sweep
-        envelope = math.sin(t * math.pi / duration)
-        samples.append(int(sample * envelope * 0.4 * 32767))
-
-    return samples
-
-def generate_ding() -> list[int]:
-    """Bright ding/bell sound"""
-    sample_rate = 44100
-    duration = 0.5
-    num_samples = int(sample_rate * duration)
-    samples = []
-
-    freq = 1200
-    for i in range(num_samples):
-        t = i / sample_rate
-        # Bell-like harmonics
-        sample = math.sin(2 * math.pi * freq * t)
-        sample += 0.5 * math.sin(2 * math.pi * freq * 2.4 * t)
-        sample += 0.25 * math.sin(2 * math.pi * freq * 5.95 * t)
-        envelope = math.exp(-t * 5)
-        samples.append(int(sample * envelope * 0.3 * 32767))
-
-    return samples
-
-def generate_bonk() -> list[int]:
-    """Cartoon bonk sound"""
+def generate_tambourine() -> list[int]:
+    """Jingly tambourine shake"""
     sample_rate = 44100
     duration = 0.25
     num_samples = int(sample_rate * duration)
     samples = []
 
+    random.seed(654)
     for i in range(num_samples):
         t = i / sample_rate
-        # Two quick tones
-        freq1 = 300 * math.exp(-t * 20)
-        freq2 = 150 * math.exp(-t * 15)
-        sample = math.sin(2 * math.pi * freq1 * t) + 0.7 * math.sin(2 * math.pi * freq2 * t)
+        # Jingles - high metallic noise
+        noise = (random.random() * 2 - 1)
+        # Add some high pitched tones for jingles
+        jingle = math.sin(2 * math.pi * 6000 * t) * 0.3
+        jingle += math.sin(2 * math.pi * 8500 * t) * 0.2
+        jingle += math.sin(2 * math.pi * 11000 * t) * 0.1
+        sample = noise * 0.5 + jingle
         envelope = math.exp(-t * 12)
         samples.append(int(sample * envelope * 0.4 * 32767))
 
     return samples
 
-def generate_spring() -> list[int]:
-    """Springy boing (different from boing)"""
-    sample_rate = 44100
-    duration = 0.7
-    num_samples = int(sample_rate * duration)
-    samples = []
-
-    for i in range(num_samples):
-        t = i / sample_rate
-        # Multiple bounces
-        freq = 300 + 200 * abs(math.sin(t * 15)) * math.exp(-t * 2)
-        sample = math.sin(2 * math.pi * freq * t)
-        sample += 0.4 * math.sin(2 * math.pi * freq * 2 * t)
-        envelope = math.exp(-t * 2)
-        samples.append(int(sample * envelope * 0.35 * 32767))
-
-    return samples
-
-def generate_quack() -> list[int]:
-    """Duck-like quack"""
+def generate_bongo() -> list[int]:
+    """Bongo drum hit"""
     sample_rate = 44100
     duration = 0.25
     num_samples = int(sample_rate * duration)
@@ -257,34 +291,12 @@ def generate_quack() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Nasal-sounding frequency modulation
-        freq = 350 + 100 * math.sin(t * 60)
+        # Higher pitched than kick, with quick pitch drop
+        freq = 400 * math.exp(-t * 30) + 180
         sample = math.sin(2 * math.pi * freq * t)
-        # Nasally harmonics
-        sample += 0.6 * math.sin(2 * math.pi * freq * 2 * t)
-        sample += 0.4 * math.sin(2 * math.pi * freq * 3 * t)
-        envelope = math.exp(-t * 8)
-        samples.append(int(sample * envelope * 0.35 * 32767))
-
-    return samples
-
-def generate_zap() -> list[int]:
-    """Electric zap sound"""
-    sample_rate = 44100
-    duration = 0.3
-    num_samples = int(sample_rate * duration)
-    samples = []
-
-    random.seed(456)
-    for i in range(num_samples):
-        t = i / sample_rate
-        # Descending tone with noise
-        freq = 2000 * math.exp(-t * 10) + 100
-        tone = math.sin(2 * math.pi * freq * t)
-        noise = (random.random() * 2 - 1) * 0.3 * math.exp(-t * 15)
-        sample = tone + noise
-        envelope = math.exp(-t * 8)
-        samples.append(int(sample * envelope * 0.35 * 32767))
+        sample += 0.4 * math.sin(2 * math.pi * freq * 1.5 * t)
+        envelope = math.exp(-t * 15)
+        samples.append(int(sample * envelope * 0.45 * 32767))
 
     return samples
 
@@ -304,18 +316,18 @@ def main():
     print()
     print("Silly sounds (0-9):")
 
-    # Number sounds - all different silly sounds
+    # Number sounds - percussion kit
     silly_sounds = [
-        ("0", generate_boing, "boing"),
-        ("1", generate_drum, "drum"),
-        ("2", generate_pop, "pop"),
-        ("3", generate_giggle, "giggle"),
-        ("4", generate_whoosh, "whoosh"),
-        ("5", generate_ding, "ding"),
-        ("6", generate_bonk, "bonk"),
-        ("7", generate_spring, "spring"),
-        ("8", generate_quack, "quack"),
-        ("9", generate_zap, "zap"),
+        ("0", generate_gong, "gong"),
+        ("1", generate_kick_drum, "kick"),
+        ("2", generate_snare, "snare"),
+        ("3", generate_hihat, "hi-hat"),
+        ("4", generate_clap, "clap"),
+        ("5", generate_cowbell, "cowbell"),
+        ("6", generate_woodblock, "woodblock"),
+        ("7", generate_triangle, "triangle"),
+        ("8", generate_tambourine, "tambourine"),
+        ("9", generate_bongo, "bongo"),
     ]
 
     for num, generator, name in silly_sounds:

@@ -1,0 +1,6 @@
+{
+  "name": "core-words",
+  "version": "1.0.0",
+  "description": "Core words with definitions and optional emoji",
+  "type": "words"
+}

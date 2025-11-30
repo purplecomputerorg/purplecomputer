@@ -24,19 +24,19 @@ history = 100
 size = 18.0
 
 [font.normal]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Regular"
 
 [font.bold]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Bold"
 
 [font.italic]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Italic"
 
 [font.bold_italic]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Bold Italic"
 
 [colors.primary]

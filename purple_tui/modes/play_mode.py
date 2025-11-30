@@ -13,8 +13,12 @@ from textual.strip import Strip
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
-import subprocess
 from pathlib import Path
+import os
+
+# Suppress pygame welcome message (must be set before import)
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+import pygame.mixer
 
 
 # 10x4 grid matching keyboard layout
@@ -25,64 +29,195 @@ GRID_KEYS = [
     ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'],
 ]
 
-# Rainbow colors to cycle through (no light purple)
-# Red, Orange, Yellow, Green, Blue, Indigo, Violet + None (back to default)
-COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#748ffc", "#da77f2", None]
+# All keys in a flat list for indexing
+ALL_KEYS = [key for row in GRID_KEYS for key in row]
 
-# Default background (None in COLORS means use this)
-DEFAULT_BG = "#2a1845"
+# Rainbow colors + None (back to default)
+COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#da77f2", None]
+
+# Default backgrounds (dark and light themes)
+DEFAULT_BG_DARK = "#2a1845"
+DEFAULT_BG_LIGHT = "#e8daf0"
 
 # Light colors need dark text
-LIGHT_COLORS = {"#ffd43b", "#69db7c", "#ffa94d"}
+LIGHT_COLORS = {"#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#da77f2"}
 
 
-class GridCell(Widget):
-    """A single grid cell - uses render_line to bypass compositor bug."""
+class PlayGrid(Widget):
+    """Single widget that renders the entire 10x4 grid manually."""
 
     DEFAULT_CSS = """
-    GridCell {
-        width: 1fr;
-        height: 1fr;
+    PlayGrid {
+        width: 100%;
+        height: 100%;
     }
     """
 
-    def __init__(self, key: str) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.key = key
-        self.color_idx = -1
-        self._bg_color = DEFAULT_BG
+        # Color state for each key: -1 = default, 0+ = index into COLORS
+        self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
+        self._sounds: dict[str, pygame.mixer.Sound] = {}
+        self._mixer_initialized = False
+        # Flash keys for visual feedback in clear mode
+        self._flash_keys: set[str] = set()
 
-    def next_color(self) -> None:
-        """Cycle to the next color."""
-        self.color_idx += 1
-        color = COLORS[self.color_idx % len(COLORS)]
-        self._bg_color = color if color else DEFAULT_BG
+    def _init_audio(self) -> None:
+        """Initialize pygame mixer and load sounds."""
+        if self._mixer_initialized:
+            return
+        try:
+            # More channels for polyphony, standard quality
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+            pygame.mixer.set_num_channels(16)
+            self._mixer_initialized = True
+            self._load_sounds()
+        except pygame.error:
+            pass
+
+    def _get_sounds_path(self) -> Path:
+        """Find the sounds directory."""
+        paths = [
+            Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
+            Path.home() / ".purple" / "packs" / "core-sounds" / "content",
+        ]
+        for p in paths:
+            if p.exists():
+                return p
+        return paths[0]
+
+    def _load_sounds(self) -> None:
+        """Load all sounds into memory."""
+        sounds_path = self._get_sounds_path()
+        names = {';': 'semicolon', ',': 'comma', '.': 'period', '/': 'slash'}
+        for key in ALL_KEYS:
+            name = names.get(key, key.lower())
+            path = sounds_path / f"{name}.wav"
+            if path.exists():
+                try:
+                    sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.4)  # Prevent clipping when multiple sounds play
+                    self._sounds[key] = sound
+                except pygame.error:
+                    pass
+
+    def play_sound(self, key: str) -> None:
+        """Play sound for a key."""
+        if not self._mixer_initialized:
+            self._init_audio()
+        if key in self._sounds:
+            self._sounds[key].play()
+
+    def cleanup_sounds(self) -> None:
+        """Stop all sounds and quit mixer."""
+        if self._mixer_initialized:
+            pygame.mixer.stop()
+            pygame.mixer.quit()
+            self._mixer_initialized = False
+        self._sounds.clear()
+
+    def next_color(self, key: str) -> None:
+        """Cycle color for a key."""
+        self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
         self.refresh()
 
+    def clear_color(self, key: str) -> None:
+        """Reset a key to default color."""
+        self.color_state[key] = -1
+        self._flash_keys.add(key)
+        self.refresh()
+
+    def clear_flash(self, key: str) -> None:
+        """Clear the flash indicator for a specific key."""
+        self._flash_keys.discard(key)
+        self.refresh()
+
+    def _get_default_bg(self) -> str:
+        """Get default background based on current theme."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return DEFAULT_BG_DARK if is_dark else DEFAULT_BG_LIGHT
+        except Exception:
+            return DEFAULT_BG_DARK
+
+    def get_color(self, key: str) -> str:
+        """Get current color for a key."""
+        idx = self.color_state[key]
+        if idx < 0 or COLORS[idx] is None:
+            return self._get_default_bg()
+        return COLORS[idx]
+
     def render_line(self, y: int) -> Strip:
-        """Render each line manually - bypasses compositor."""
+        """Render a single line of the grid."""
         width = self.size.width
         height = self.size.height
 
-        # Use dark text on light backgrounds
-        text_color = "#1e1033" if self._bg_color in LIGHT_COLORS else "white"
-        bg_style = Style(bgcolor=self._bg_color)
-        text_style = Style(bgcolor=self._bg_color, color=text_color, bold=True)
+        # Calculate cell dimensions - all cells equal size
+        cell_width = width // 10
+        cell_height = height // 4
 
-        # Center the key vertically and horizontally
-        mid_y = height // 2
-        if y == mid_y:
-            # Line with the key character centered
-            pad_left = (width - 1) // 2
-            pad_right = width - pad_left - 1
-            segments = [
-                Segment(" " * pad_left, bg_style),
-                Segment(self.key, text_style),
-                Segment(" " * pad_right, bg_style),
-            ]
-        else:
-            # Empty line with background
-            segments = [Segment(" " * width, bg_style)]
+        # Calculate grid dimensions and margins to center it
+        grid_width = cell_width * 10
+        grid_height = cell_height * 4
+        margin_left = (width - grid_width) // 2
+        margin_top = (height - grid_height) // 2
+
+        default_bg = self._get_default_bg()
+        bg_style = Style(bgcolor=default_bg)
+
+        # Above or below the grid?
+        if y < margin_top or y >= margin_top + grid_height:
+            return Strip([Segment(" " * width, bg_style)])
+
+        # Which row of the grid?
+        grid_y = y - margin_top
+        row_idx = grid_y // cell_height if cell_height > 0 else 0
+        if row_idx >= 4:
+            return Strip([Segment(" " * width, bg_style)])
+
+        # Which line within the cell?
+        line_in_cell = grid_y % cell_height if cell_height > 0 else 0
+        mid_line = cell_height // 2
+
+        segments = []
+
+        # Left margin
+        if margin_left > 0:
+            segments.append(Segment(" " * margin_left, bg_style))
+
+        # Grid cells - all equal width
+        for col_idx in range(10):
+            key = GRID_KEYS[row_idx][col_idx]
+            bg_color = self.get_color(key)
+
+            # Flash effect: contrasting color when key is flashed
+            is_flashed = key in self._flash_keys
+            if is_flashed:
+                try:
+                    is_dark = "dark" in self.app.theme
+                    bg_color = "#4a3866" if is_dark else "#c4b5fd"
+                except Exception:
+                    bg_color = "#4a3866"
+
+            text_color = "#1e1033" if bg_color in LIGHT_COLORS else "white"
+
+            cell_bg_style = Style(bgcolor=bg_color)
+            text_style = Style(bgcolor=bg_color, color=text_color, bold=True)
+
+            if line_in_cell == mid_line:
+                # Center the key character
+                pad_left = (cell_width - 1) // 2
+                pad_right = cell_width - pad_left - 1
+                segments.append(Segment(" " * pad_left, cell_bg_style))
+                segments.append(Segment(key, text_style))
+                segments.append(Segment(" " * pad_right, cell_bg_style))
+            else:
+                segments.append(Segment(" " * cell_width, cell_bg_style))
+
+        # Right margin
+        margin_right = width - margin_left - grid_width
+        if margin_right > 0:
+            segments.append(Segment(" " * margin_right, bg_style))
 
         return Strip(segments)
 
@@ -96,13 +231,9 @@ class PlayMode(Container, can_focus=True):
         height: 100%;
     }
 
-    #grid {
+    PlayGrid {
         width: 100%;
         height: 1fr;
-        layout: grid;
-        grid-size: 10 4;
-        grid-rows: 1fr 1fr 1fr 1fr;
-        grid-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
     }
 
     #hint {
@@ -116,8 +247,8 @@ class PlayMode(Container, can_focus=True):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.cells: dict[str, GridCell] = {}
-        self.sounds_path = self._get_sounds_path()
+        self.grid: PlayGrid | None = None
+        self.clear_mode = False
 
     # Block all mouse events
     def on_click(self, event) -> None:
@@ -135,56 +266,43 @@ class PlayMode(Container, can_focus=True):
     def on_mouse_scroll_up(self, event) -> None:
         event.stop()
 
-    def _get_sounds_path(self) -> Path:
-        """Find the sounds directory."""
-        paths = [
-            Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
-            Path.home() / ".purple" / "packs" / "core-sounds" / "content",
-        ]
-        for p in paths:
-            if p.exists():
-                return p
-        return paths[0]
-
     def compose(self) -> ComposeResult:
-        with Container(id="grid"):
-            for row in GRID_KEYS:
-                for key in row:
-                    cell = GridCell(key)
-                    # Store by uppercase for letters, as-is for others
-                    self.cells[key.upper() if key.isalpha() else key] = cell
-                    yield cell
-        yield Static("[dim]Press keys to play![/]", id="hint")
+        self.grid = PlayGrid()
+        yield self.grid
+        yield Static("[dim]Press keys to play! (Tab: clear mode)[/]", id="hint")
 
     def on_mount(self) -> None:
         self.focus()
 
+    def on_unmount(self) -> None:
+        if self.grid:
+            self.grid.cleanup_sounds()
+
     def on_key(self, event: events.Key) -> None:
         """Handle key press."""
+        # Tab toggles sticky clear mode
+        if event.key == "tab":
+            self.clear_mode = not self.clear_mode
+            hint = self.query_one("#hint", Static)
+            if self.clear_mode:
+                hint.update("[bold #ff6b6b]CLEAR MODE[/] - press keys to clear colors (Tab to exit)")
+            else:
+                hint.update("[dim]Press keys to play![/]")
+            event.stop()
+            return
+
         char = event.character or event.key
         if not char:
             return
 
         lookup = char.upper() if char.isalpha() else char
 
-        if lookup in self.cells:
+        if lookup in ALL_KEYS:
             event.stop()
-            self.cells[lookup].next_color()
-            self._play_sound(lookup)
-
-    def _play_sound(self, key: str) -> None:
-        """Play sound for a key."""
-        # Map special chars to filenames
-        names = {';': 'semicolon', ',': 'comma', '.': 'period', '/': 'slash'}
-        name = names.get(key, key.lower())
-        path = self.sounds_path / f"{name}.wav"
-
-        if path.exists():
-            try:
-                subprocess.Popen(
-                    ['afplay', str(path)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-            except OSError:
-                pass
+            if self.clear_mode:
+                self.grid.clear_color(lookup)
+                # Clear flash after brief delay (capture key in lambda)
+                self.set_timer(0.3, lambda k=lookup: self.grid.clear_flash(k))
+            else:
+                self.grid.next_color(lookup)
+            self.grid.play_sound(lookup)

@@ -72,8 +72,8 @@ class InlineInput(Input):
 
     def __init__(self, **kwargs):
         super().__init__(placeholder="", **kwargs)
-        self.autocomplete_word: str = ""
-        self.autocomplete_emoji: str = ""
+        self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji), ...]
+        self.autocomplete_index: int = 0
 
     def action_scroll_up(self) -> None:
         """Scroll history up"""
@@ -93,9 +93,16 @@ class InlineInput(Input):
 
     def action_toggle_speech(self) -> None:
         """Toggle speech on/off"""
-        app = self.app
-        if hasattr(app, 'toggle_speech'):
-            app.toggle_speech()
+        try:
+            # Find the AskMode parent and toggle its speech indicator
+            ask_mode = self.ancestors_with_self
+            for ancestor in ask_mode:
+                if isinstance(ancestor, AskMode):
+                    indicator = ancestor.query_one("#speech-indicator", SpeechIndicator)
+                    indicator.toggle()
+                    break
+        except Exception:
+            pass
 
     def _check_autocomplete(self) -> None:
         """Check if current input should show autocomplete"""
@@ -105,47 +112,45 @@ class InlineInput(Input):
         # Get last word being typed
         words = text.split()
         if not words:
-            self.autocomplete_word = ""
-            self.autocomplete_emoji = ""
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
             return
 
         last_word = words[-1]
         # Strip ? from beginning/end for autocomplete
         clean_word = last_word.strip("?")
         if len(clean_word) < 2:
-            self.autocomplete_word = ""
-            self.autocomplete_emoji = ""
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
             return
 
-        # Search for matches
+        # Search for matches - get up to 5
         matches = content.search_emojis(clean_word)
-        if matches and matches[0][0] != clean_word:
-            self.autocomplete_word = matches[0][0]
-            self.autocomplete_emoji = matches[0][1]
-        else:
-            self.autocomplete_word = ""
-            self.autocomplete_emoji = ""
+        # Filter out exact match and limit to 5
+        self.autocomplete_matches = [(w, e) for w, e in matches if w != clean_word][:5]
+        self.autocomplete_index = 0
 
     async def _on_key(self, event: events.Key) -> None:
         """Handle special keys before parent Input processes them"""
         # Space - accept autocomplete if there's a suggestion
-        if event.key == "space" and self.autocomplete_word:
+        if event.key == "space" and self.autocomplete_matches:
             event.stop()
             event.prevent_default()
-            # Replace last word with autocomplete
+            # Replace last word with selected autocomplete
+            selected_word = self.autocomplete_matches[self.autocomplete_index][0]
             words = self.value.split()
             if words:
                 # Preserve ? prefix/suffix if present
                 last = words[-1]
                 if last.startswith("?"):
-                    words[-1] = "?" + self.autocomplete_word
+                    words[-1] = "?" + selected_word
                 elif last.endswith("?"):
-                    words[-1] = self.autocomplete_word + "?"
+                    words[-1] = selected_word + "?"
                 else:
-                    words[-1] = self.autocomplete_word
+                    words[-1] = selected_word
                 self.value = " ".join(words) + " "
-            self.autocomplete_word = ""
-            self.autocomplete_emoji = ""
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
             return
 
         # Enter - submit
@@ -155,8 +160,8 @@ class InlineInput(Input):
             if self.value.strip():
                 self.post_message(self.Submitted(self.value))
                 self.value = ""
-            self.autocomplete_word = ""
-            self.autocomplete_emoji = ""
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
             return
 
         # Let parent handle other keys
@@ -168,10 +173,17 @@ class InlineInput(Input):
 
     @property
     def autocomplete_hint(self) -> str:
-        """Get the autocomplete hint to display"""
-        if self.autocomplete_word:
-            return f"  [dim]{self.autocomplete_word} {self.autocomplete_emoji} (space)[/]"
-        return ""
+        """Get the autocomplete hint to display - shows multiple options"""
+        if not self.autocomplete_matches:
+            return ""
+
+        # Build hint showing all matches
+        parts = []
+        for word, emoji in self.autocomplete_matches:
+            parts.append(f"{word} {emoji}")
+
+        hint = "  •  ".join(parts)
+        return f"  [dim]{hint} (space)[/]"
 
 
 class InputPrompt(Static):
@@ -184,6 +196,25 @@ class InputPrompt(Static):
 class AutocompleteHint(Static):
     """Shows autocomplete suggestion and help hints"""
     pass
+
+
+class SpeechIndicator(Static):
+    """Shows whether speech is on/off"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.speech_on = False
+
+    def render(self) -> str:
+        if self.speech_on:
+            return "[bold green]🔊 Speech ON[/]"
+        else:
+            return "[dim]🔇 Speech off[/]"
+
+    def toggle(self) -> bool:
+        self.speech_on = not self.speech_on
+        self.refresh()
+        return self.speech_on
 
 
 class HelpHint(Static):
@@ -262,6 +293,13 @@ class AskMode(Vertical):
         text-align: center;
         color: $text-muted;
     }
+
+    #speech-indicator {
+        dock: top;
+        height: 1;
+        text-align: right;
+        padding: 0 1;
+    }
     """
 
     def __init__(self, **kwargs):
@@ -269,6 +307,7 @@ class AskMode(Vertical):
         self.evaluator = SimpleEvaluator()
 
     def compose(self) -> ComposeResult:
+        yield SpeechIndicator(id="speech-indicator")
         yield KeyboardOnlyScroll(id="history-scroll")
         with Vertical(id="bottom-area"):
             with Horizontal(id="input-row"):
@@ -307,9 +346,12 @@ class AskMode(Vertical):
         scroll.scroll_end(animate=False)
 
         # Handle speech if enabled
-        app = self.app
-        if hasattr(app, 'speech_enabled') and app.speech_enabled:
-            self._speak(input_text, result)
+        try:
+            indicator = self.query_one("#speech-indicator", SpeechIndicator)
+            if indicator.speech_on:
+                self._speak(input_text, result)
+        except Exception:
+            pass
 
     def _speak(self, input_text: str, result: str) -> None:
         """Speak the input and result using Piper TTS"""

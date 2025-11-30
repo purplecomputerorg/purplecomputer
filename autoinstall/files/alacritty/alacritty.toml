@@ -16,24 +16,22 @@ y = 0
 history = 100
 
 [font]
-# Use the fonts configured in the earlier commit
-# SF Mono > IBM Plex Mono > Inter > JetBrains Mono
 size = 22.0
 
 [font.normal]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Regular"
 
 [font.bold]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Bold"
 
 [font.italic]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Italic"
 
 [font.bold_italic]
-family = "SF Mono"
+family = "JetBrains Mono"
 style = "Bold Italic"
 
 # Fallback fonts for emoji and symbols

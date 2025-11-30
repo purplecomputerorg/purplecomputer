@@ -141,15 +141,6 @@ class PurpleApp(App):
         padding: 0 2;
     }
 
-    #speech-indicator {
-        dock: top;
-        height: 1;
-        text-align: right;
-        background: $background;
-        color: $text;
-        padding: 0 2;
-    }
-
     #content-area {
         width: 100%;
         height: 100%;
@@ -228,7 +219,6 @@ class PurpleApp(App):
     def compose(self) -> ComposeResult:
         """Create the UI layout"""
         with Container(id="outer-container"):
-            yield SpeechIndicator(self.speech_enabled, id="speech-indicator")
             with ViewportContainer(id="viewport"):
                 yield Container(id="content-area")
             yield ModeIndicator(self.active_mode, id="mode-indicator")
@@ -277,6 +267,7 @@ class PurpleApp(App):
         try:
             existing = content_area.query_one(f"#{mode_id}")
             existing.display = True
+            self._focus_mode(existing)
             return
         except NoMatches:
             pass
@@ -286,6 +277,25 @@ class PurpleApp(App):
         if widget:
             widget.id = mode_id
             content_area.mount(widget)
+            # Focus will happen in on_mount of the widget
+
+    def _focus_mode(self, widget) -> None:
+        """Focus the appropriate element in a mode widget"""
+        # Each mode has a primary focusable element
+        if self.active_mode == Mode.ASK:
+            try:
+                widget.query_one("#ask-input").focus()
+            except Exception:
+                pass
+        elif self.active_mode == Mode.PLAY:
+            widget.focus()
+        elif self.active_mode == Mode.WRITE:
+            try:
+                widget.query_one("#write-input").focus()
+            except Exception:
+                widget.focus()
+        else:
+            widget.focus()
 
     def _update_view_class(self) -> None:
         """Update CSS class based on current view"""
@@ -380,6 +390,39 @@ class PurpleApp(App):
                 indicator.refresh()
             except NoMatches:
                 pass
+
+    def on_key(self, event: events.Key) -> None:
+        """Global key filter - ignore irrelevant keys app-wide"""
+        # Keys that should always be ignored (modifier-only, system keys, etc.)
+        ignored_keys = {
+            # Modifier keys (pressed alone)
+            "shift", "ctrl", "alt", "meta", "super",
+            "left_shift", "right_shift",
+            "left_ctrl", "right_ctrl", "control",
+            "left_alt", "right_alt", "option",
+            "left_meta", "right_meta", "left_super", "right_super",
+            "command", "cmd",
+            # Lock keys
+            "caps_lock", "num_lock", "scroll_lock",
+            # Other system keys
+            "print_screen", "pause", "insert",
+            "home", "end", "page_up", "page_down",
+            # Function keys we don't use
+            "f6", "f7", "f8", "f9", "f10", "f11",
+            "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
+        }
+
+        if event.key in ignored_keys:
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Also ignore any ctrl+/cmd+ combos we don't explicitly handle
+        # (our bindings handle ctrl+d, ctrl+v, ctrl+q)
+        if event.key.startswith("ctrl+") and event.key not in {"ctrl+d", "ctrl+v", "ctrl+q", "ctrl+c"}:
+            event.stop()
+            event.prevent_default()
+            return
 
 
 def main():

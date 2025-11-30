@@ -150,15 +150,46 @@ class ContentManager:
         pack_type = manifest.get("type", "")
         content_dir = pack_dir / "content"
 
-        if pack_type == "emoji":
+        if pack_type == "words":
+            self._load_words_pack(content_dir)
+        elif pack_type == "emoji":
             self._load_emoji_pack(content_dir)
         elif pack_type == "definitions":
             self._load_definitions_pack(content_dir)
         elif pack_type == "sounds":
             self._load_sounds_pack(content_dir, pack_dir)
 
+    def _load_words_pack(self, content_dir: Path) -> None:
+        """Load unified words pack with emoji (optional) and definition (required)"""
+        words_file = content_dir / "words.json"
+        if not words_file.exists():
+            return
+
+        try:
+            with open(words_file) as f:
+                data = json.load(f)
+                for word, entry in data.items():
+                    # Definition is required
+                    if "definition" in entry:
+                        self.definitions[word] = entry["definition"]
+                    # Emoji is optional
+                    if "emoji" in entry:
+                        self.emojis[word] = entry["emoji"]
+        except (json.JSONDecodeError, OSError):
+            pass
+
+        # Also load synonyms if present
+        synonyms_file = content_dir / "synonyms.json"
+        if synonyms_file.exists():
+            try:
+                with open(synonyms_file) as f:
+                    data = json.load(f)
+                    self.synonyms.update(data)
+            except (json.JSONDecodeError, OSError):
+                pass
+
     def _load_emoji_pack(self, content_dir: Path) -> None:
-        """Load emoji definitions from pack"""
+        """Load emoji definitions from pack (legacy format)"""
         emoji_file = content_dir / "emoji.json"
         if emoji_file.exists():
             try:

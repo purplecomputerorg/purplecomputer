@@ -25,11 +25,9 @@ WORK_DIR="$PROJECT_ROOT/autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
 
-# Cleanup trap to unmount ISO if script exits early
+# Cleanup trap to unmount ISO if script exits early (Linux only, macOS uses xorriso extraction)
 cleanup_mount() {
-    if [ "$(uname -s)" = "Darwin" ]; then
-        hdiutil detach "$MOUNT_DIR" 2>/dev/null || true
-    else
+    if [ "$(uname -s)" != "Darwin" ]; then
         sudo umount "$MOUNT_DIR" 2>/dev/null || true
     fi
 }
@@ -178,23 +176,23 @@ done
 
 # Extract ISO
 echo_info "Extracting Ubuntu ISO..."
-mkdir -p "$MOUNT_DIR" "$EXTRACT_DIR"
+mkdir -p "$EXTRACT_DIR"
 
-# Mount ISO (platform-specific)
+# Extract ISO contents (platform-specific)
 if $IS_MACOS; then
-    hdiutil attach -mountpoint "$MOUNT_DIR" "$UBUNTU_ISO_NAME" -nobrowse
+    # macOS can't mount Linux hybrid ISOs with hdiutil, use xorriso to extract
+    echo_info "Using xorriso to extract ISO contents (macOS)..."
+    xorriso -osirrox on -indev "$UBUNTU_ISO_NAME" -extract / "$EXTRACT_DIR"
 else
+    # Linux can mount the ISO directly
+    mkdir -p "$MOUNT_DIR"
     sudo mount -o loop "$UBUNTU_ISO_NAME" "$MOUNT_DIR"
-fi
 
-# Copy contents
-echo_info "Copying ISO contents..."
-rsync -a "$MOUNT_DIR/" "$EXTRACT_DIR/"
+    # Copy contents
+    echo_info "Copying ISO contents..."
+    rsync -a "$MOUNT_DIR/" "$EXTRACT_DIR/"
 
-# Unmount (platform-specific)
-if $IS_MACOS; then
-    hdiutil detach "$MOUNT_DIR"
-else
+    # Unmount
     sudo umount "$MOUNT_DIR"
 fi
 

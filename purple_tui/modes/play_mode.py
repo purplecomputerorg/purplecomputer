@@ -1,220 +1,190 @@
 """
 Play Mode - Music and Art Grid
 
-A rectangular grid mapped to QWERTY keyboard:
-- Letter keys (A-Z): Toggle grid cells on/off, play notes, cycle colors
-- Number keys (0-9): Play fun silly sounds (boing, drum, pop, giggle, etc.)
-- Simple kid-friendly rules: letters = music + art, numbers = silly sounds
+A rectangular grid mapped to QWERTY keyboard.
+Press keys to play sounds and cycle colors.
 """
 
 from textual.widgets import Static
 from textual.containers import Container
 from textual.app import ComposeResult
+from textual.widget import Widget
+from textual.strip import Strip
 from textual import events
-from textual.reactive import reactive
+from rich.segment import Segment
+from rich.style import Style
 import subprocess
-import os
 from pathlib import Path
 
 
-# QWERTY keyboard layout for the grid
-QWERTY_ROWS = [
+# 10x4 grid matching keyboard layout
+GRID_KEYS = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
     ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-    ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
+    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';'],
+    ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'],
 ]
 
-# Number keys for silly sounds
-NUMBER_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+# Rainbow colors to cycle through (no light purple)
+# Red, Orange, Yellow, Green, Blue, Indigo, Violet + None (back to default)
+COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#748ffc", "#da77f2", None]
 
-# Rainbow colors for cycling
-RAINBOW_COLORS = [
-    "#ff6b6b",  # Red
-    "#ffa94d",  # Orange
-    "#ffd43b",  # Yellow
-    "#69db7c",  # Green
-    "#4dabf7",  # Blue
-    "#9775fa",  # Purple
-    "#f783ac",  # Pink
-]
+# Default background (None in COLORS means use this)
+DEFAULT_BG = "#2a1845"
+
+# Light colors need dark text
+LIGHT_COLORS = {"#ffd43b", "#69db7c", "#ffa94d"}
 
 
-def get_sounds_path() -> Path:
-    """Get path to the sounds pack"""
-    # Try different locations
-    locations = [
-        # Development: project root
-        Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
-        # Installed: home directory
-        Path.home() / ".purple" / "packs" / "core-sounds" / "content",
-    ]
-    for loc in locations:
-        if loc.exists():
-            return loc
-    return locations[0]  # Default to first even if not found
+class GridCell(Widget):
+    """A single grid cell - uses render_line to bypass compositor bug."""
 
-
-class GridCell(Static):
-    """A single cell in the play grid"""
-
-    active = reactive(False)
-    color_index = reactive(0)
-
-    def __init__(self, letter: str, **kwargs):
-        super().__init__(**kwargs)
-        self.letter = letter
-
-    def render(self) -> str:
-        if self.active:
-            color = RAINBOW_COLORS[self.color_index % len(RAINBOW_COLORS)]
-            return f"[bold {color}]{self.letter}[/]"
-        else:
-            return f"[dim]{self.letter}[/]"
-
-    def toggle(self) -> bool:
-        """Toggle the cell state, cycle color if already on"""
-        if self.active:
-            # Already on, cycle to next color
-            self.color_index = (self.color_index + 1) % len(RAINBOW_COLORS)
-        else:
-            # Turn on
-            self.active = True
-        return self.active
-
-
-class PlayMode(Container):
+    DEFAULT_CSS = """
+    GridCell {
+        width: 1fr;
+        height: 1fr;
+    }
     """
-    Play Mode - Music and art grid.
 
-    Press letter keys to toggle cells and play notes.
-    Each letter has its own color state (cycles through rainbow).
-    Number keys play silly sounds (boing, drum, pop, etc.)
-    """
+    def __init__(self, key: str) -> None:
+        super().__init__()
+        self.key = key
+        self.color_idx = -1
+        self._bg_color = DEFAULT_BG
+
+    def next_color(self) -> None:
+        """Cycle to the next color."""
+        self.color_idx += 1
+        color = COLORS[self.color_idx % len(COLORS)]
+        self._bg_color = color if color else DEFAULT_BG
+        self.refresh()
+
+    def render_line(self, y: int) -> Strip:
+        """Render each line manually - bypasses compositor."""
+        width = self.size.width
+        height = self.size.height
+
+        # Use dark text on light backgrounds
+        text_color = "#1e1033" if self._bg_color in LIGHT_COLORS else "white"
+        bg_style = Style(bgcolor=self._bg_color)
+        text_style = Style(bgcolor=self._bg_color, color=text_color, bold=True)
+
+        # Center the key vertically and horizontally
+        mid_y = height // 2
+        if y == mid_y:
+            # Line with the key character centered
+            pad_left = (width - 1) // 2
+            pad_right = width - pad_left - 1
+            segments = [
+                Segment(" " * pad_left, bg_style),
+                Segment(self.key, text_style),
+                Segment(" " * pad_right, bg_style),
+            ]
+        else:
+            # Empty line with background
+            segments = [Segment(" " * width, bg_style)]
+
+        return Strip(segments)
+
+
+class PlayMode(Container, can_focus=True):
+    """Play Mode - press keys to make sounds and colors."""
 
     DEFAULT_CSS = """
     PlayMode {
         width: 100%;
         height: 100%;
-        align: center middle;
-        layout: vertical;
     }
 
-    #play-title {
+    #grid {
+        width: 100%;
+        height: 1fr;
+        layout: grid;
+        grid-size: 10 4;
+        grid-rows: 1fr 1fr 1fr 1fr;
+        grid-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+    }
+
+    #hint {
+        dock: bottom;
         width: 100%;
         height: 1;
         text-align: center;
-        margin-bottom: 1;
-    }
-
-    #grid-container {
-        width: auto;
-        height: auto;
-        align: center middle;
-    }
-
-    .grid-row {
-        width: auto;
-        height: 3;
-        align: center middle;
-        layout: horizontal;
-    }
-
-    GridCell {
-        width: 5;
-        height: 3;
-        border: round $accent;
-        text-align: center;
-        content-align: center middle;
-    }
-
-    #number-row {
-        margin-top: 1;
-    }
-
-    #instructions {
-        width: 100%;
-        height: 1;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
+        color: #6b5b8a;
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.cells: dict[str, GridCell] = {}
-        self.sounds_path = get_sounds_path()
+        self.sounds_path = self._get_sounds_path()
+
+    # Block all mouse events
+    def on_click(self, event) -> None:
+        event.stop()
+
+    def on_mouse_down(self, event) -> None:
+        event.stop()
+
+    def on_mouse_up(self, event) -> None:
+        event.stop()
+
+    def on_mouse_scroll_down(self, event) -> None:
+        event.stop()
+
+    def on_mouse_scroll_up(self, event) -> None:
+        event.stop()
+
+    def _get_sounds_path(self) -> Path:
+        """Find the sounds directory."""
+        paths = [
+            Path(__file__).parent.parent.parent / "packs" / "core-sounds" / "content",
+            Path.home() / ".purple" / "packs" / "core-sounds" / "content",
+        ]
+        for p in paths:
+            if p.exists():
+                return p
+        return paths[0]
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold]🎵 Play Mode 🎵[/]", id="play-title")
-
-        with Container(id="grid-container"):
-            # QWERTY letter rows
-            for row in QWERTY_ROWS:
-                with Container(classes="grid-row"):
-                    for letter in row:
-                        cell = GridCell(letter)
-                        self.cells[letter] = cell
-                        yield cell
-
-            # Number row for silly sounds
-            with Container(classes="grid-row", id="number-row"):
-                for num in NUMBER_KEYS:
-                    cell = GridCell(num)
-                    self.cells[num] = cell
+        with Container(id="grid"):
+            for row in GRID_KEYS:
+                for key in row:
+                    cell = GridCell(key)
+                    # Store by uppercase for letters, as-is for others
+                    self.cells[key.upper() if key.isalpha() else key] = cell
                     yield cell
-
-        yield Static(
-            "[dim]Letters = music + color! Numbers = silly sounds![/]",
-            id="instructions"
-        )
+        yield Static("[dim]Press keys to play![/]", id="hint")
 
     def on_mount(self) -> None:
-        """Focus when mode loads"""
         self.focus()
 
-    def _get_sound_file(self, key: str) -> str | None:
-        """Get the path to a pre-generated sound file"""
-        wav_path = self.sounds_path / f"{key.lower()}.wav"
-        if wav_path.exists():
-            return str(wav_path)
-        return None
-
-    def _play_sound(self, wav_path: str) -> None:
-        """Play a WAV file"""
-        import platform
-        system = platform.system()
-
-        try:
-            if system == 'Darwin':
-                subprocess.Popen(['afplay', wav_path],
-                               stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL)
-            elif system == 'Linux':
-                subprocess.Popen(['aplay', '-q', wav_path],
-                               stdout=subprocess.DEVNULL,
-                               stderr=subprocess.DEVNULL)
-        except (FileNotFoundError, OSError):
-            pass
-
     def on_key(self, event: events.Key) -> None:
-        """Handle key presses"""
-        # Get the character from the key event
-        key = event.character or event.key
-        if key:
-            key = key.upper()
+        """Handle key press."""
+        char = event.character or event.key
+        if not char:
+            return
 
-        # Check if it's a letter or number we care about
-        if key and key in self.cells:
+        lookup = char.upper() if char.isalpha() else char
+
+        if lookup in self.cells:
             event.stop()
-            event.prevent_default()
-            cell = self.cells[key]
+            self.cells[lookup].next_color()
+            self._play_sound(lookup)
 
-            # Letters toggle cells, numbers just play
-            if key.isalpha():
-                cell.toggle()
+    def _play_sound(self, key: str) -> None:
+        """Play sound for a key."""
+        # Map special chars to filenames
+        names = {';': 'semicolon', ',': 'comma', '.': 'period', '/': 'slash'}
+        name = names.get(key, key.lower())
+        path = self.sounds_path / f"{name}.wav"
 
-            # Play the pre-generated sound
-            wav_path = self._get_sound_file(key)
-            if wav_path:
-                self._play_sound(wav_path)
+        if path.exists():
+            try:
+                subprocess.Popen(
+                    ['afplay', str(path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except OSError:
+                pass

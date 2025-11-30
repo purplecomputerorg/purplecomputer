@@ -58,6 +58,14 @@ class ModeIndicator(Static):
                 parts.append(f"[bold reverse] {info['key']} {info['emoji']} [/]")
             else:
                 parts.append(f"[dim]{info['key']} {info['emoji']}[/]")
+
+        # Show F5 clear button - highlighted if pending confirmation
+        clear_pending = getattr(self.app, 'clear_pending', False)
+        if clear_pending:
+            parts.append("[bold red reverse] F5 Clear? [/]")
+        else:
+            parts.append("[dim]F5 🗑️[/]")
+
         # Show sun/moon based on current theme
         is_dark = "dark" in self.app.active_theme if hasattr(self.app, 'active_theme') else True
         theme_icon = "🌙" if is_dark else "☀️"
@@ -171,6 +179,7 @@ class PurpleApp(App):
         Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
         Binding("f3", "switch_mode('listen')", "Listen", show=False, priority=True),
         Binding("f4", "switch_mode('write')", "Write", show=False, priority=True),
+        Binding("f5", "clear_mode", "Clear", show=False, priority=True),
         Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
         Binding("ctrl+d", "toggle_theme", "Theme", show=False, priority=True),  # Backup
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
@@ -182,6 +191,7 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
+        self.clear_pending = False  # For clear confirmation
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -238,25 +248,44 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+    def _create_mode_widget(self, mode: Mode):
+        """Create a new mode widget"""
+        if mode == Mode.ASK:
+            from .modes.ask_mode import AskMode
+            return AskMode(classes="mode-content")
+        elif mode == Mode.PLAY:
+            from .modes.play_mode import PlayMode
+            return PlayMode(classes="mode-content")
+        elif mode == Mode.LISTEN:
+            from .modes.listen_mode import ListenMode
+            return ListenMode(classes="mode-content")
+        elif mode == Mode.WRITE:
+            from .modes.write_mode import WriteMode
+            return WriteMode(classes="mode-content")
+        return None
+
     def _load_mode_content(self) -> None:
         """Load the content widget for the current mode"""
         content_area = self.query_one("#content-area")
-        content_area.remove_children()
 
-        # Import and create the appropriate mode widget
-        # Modes are Python modules (curated code), not purplepacks
-        if self.active_mode == Mode.ASK:
-            from .modes.ask_mode import AskMode
-            content_area.mount(AskMode(classes="mode-content"))
-        elif self.active_mode == Mode.PLAY:
-            from .modes.play_mode import PlayMode
-            content_area.mount(PlayMode(classes="mode-content"))
-        elif self.active_mode == Mode.LISTEN:
-            from .modes.listen_mode import ListenMode
-            content_area.mount(ListenMode(classes="mode-content"))
-        elif self.active_mode == Mode.WRITE:
-            from .modes.write_mode import WriteMode
-            content_area.mount(WriteMode(classes="mode-content"))
+        # Hide all existing mode widgets
+        for child in content_area.children:
+            child.display = False
+
+        # Check if we already have this mode mounted
+        mode_id = f"mode-{self.active_mode.name.lower()}"
+        try:
+            existing = content_area.query_one(f"#{mode_id}")
+            existing.display = True
+            return
+        except NoMatches:
+            pass
+
+        # Create and mount new widget
+        widget = self._create_mode_widget(self.active_mode)
+        if widget:
+            widget.id = mode_id
+            content_area.mount(widget)
 
     def _update_view_class(self) -> None:
         """Update CSS class based on current view"""
@@ -310,6 +339,47 @@ class PurpleApp(App):
         except NoMatches:
             self.speech_enabled = not self.speech_enabled
             return self.speech_enabled
+
+    def action_clear_mode(self) -> None:
+        """Clear current mode (F5) - requires confirmation"""
+        if self.clear_pending:
+            # Second press - actually clear
+            self.clear_pending = False
+            # Remove the current mode widget and recreate
+            content_area = self.query_one("#content-area")
+            mode_id = f"mode-{self.active_mode.name.lower()}"
+            try:
+                existing = content_area.query_one(f"#{mode_id}")
+                existing.remove()
+            except NoMatches:
+                pass
+            self._load_mode_content()
+            # Update indicator
+            try:
+                indicator = self.query_one("#mode-indicator", ModeIndicator)
+                indicator.refresh()
+            except NoMatches:
+                pass
+        else:
+            # First press - ask for confirmation
+            self.clear_pending = True
+            try:
+                indicator = self.query_one("#mode-indicator", ModeIndicator)
+                indicator.refresh()
+            except NoMatches:
+                pass
+            # Auto-cancel after a few seconds
+            self.set_timer(3.0, self._cancel_clear)
+
+    def _cancel_clear(self) -> None:
+        """Cancel pending clear after timeout"""
+        if self.clear_pending:
+            self.clear_pending = False
+            try:
+                indicator = self.query_one("#mode-indicator", ModeIndicator)
+                indicator.refresh()
+            except NoMatches:
+                pass
 
 
 def main():

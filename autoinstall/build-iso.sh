@@ -259,40 +259,77 @@ else
     find . -type f -print0 | xargs -0 md5sum | grep -v isolinux/boot.cat > md5sum.txt
 fi
 
-# Build the new ISO
+# Extract MBR boot code from original Ubuntu ISO for hybrid boot support
+echo_info "Extracting boot components from source ISO..."
+MBR_FILE="$WORK_DIR/mbr.img"
+EFI_FILE="$WORK_DIR/efi.img"
+
+# Extract the first 432 bytes (MBR boot code, excluding partition table)
+dd if="$UBUNTU_ISO_NAME" bs=1 count=432 of="$MBR_FILE" 2>/dev/null
+
+# Extract EFI partition image from the source ISO (contains GRUB EFI bootloader)
+# The EFI partition in Ubuntu ISOs is typically around 5MB
+xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area plain 2>&1 | grep -E "^Partition" || true
+EFI_EXTRACT=$(xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area plain 2>&1 | grep -E "^Partition 2" | head -1)
+if [ -n "$EFI_EXTRACT" ]; then
+    EFI_START=$(echo "$EFI_EXTRACT" | awk '{print $5}')
+    EFI_SIZE=$(echo "$EFI_EXTRACT" | awk '{print $7}')
+    if [ -n "$EFI_START" ] && [ -n "$EFI_SIZE" ]; then
+        dd if="$UBUNTU_ISO_NAME" bs=512 skip="$EFI_START" count="$EFI_SIZE" of="$EFI_FILE" 2>/dev/null
+        echo_info "Extracted EFI partition: start=$EFI_START, size=$EFI_SIZE sectors"
+    else
+        echo_error "Could not parse EFI partition info"
+        exit 1
+    fi
+else
+    echo_error "Could not find EFI partition in source ISO"
+    exit 1
+fi
+
+# Build the new ISO with proper hybrid boot support
 echo_info "Building Purple Computer ISO..."
 cd "$WORK_DIR"
-if $IS_MACOS; then
-    xorriso -as mkisofs \
-        -r -V "Purple Computer" \
-        -o "$OUTPUT_ISO" \
-        -J -l \
-        -c boot.catalog \
-        -b boot/grub/i386-pc/eltorito.img \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        -eltorito-alt-boot \
-        -e EFI/boot/grubx64.efi \
-        -no-emul-boot \
-        -isohybrid-gpt-basdat \
-        "$EXTRACT_DIR"
-else
-    sudo xorriso -as mkisofs \
-        -r -V "Purple Computer" \
-        -o "$OUTPUT_ISO" \
-        -J -l \
-        -c boot.catalog \
-        -b boot/grub/i386-pc/eltorito.img \
-        -no-emul-boot -boot-load-size 4 -boot-info-table \
-        -eltorito-alt-boot \
-        -e EFI/boot/grubx64.efi \
-        -no-emul-boot \
-        -isohybrid-gpt-basdat \
-        "$EXTRACT_DIR"
 
-    # Make ISO readable by user (get actual primary group instead of assuming it matches username)
+# EFI system partition GUID (little-endian format for xorriso)
+EFI_PART_TYPE_LE="28732ac11ff8d211ba4b00a0c93ec93b"
+# GPT partition type for ISO 9660 (Microsoft Basic Data, little-endian)
+ISO_PART_TYPE_LE="a2a0d0ebe5b9334487c068b6b72699c7"
+
+# Use sudo on Linux only
+SUDO_CMD=""
+if ! $IS_MACOS; then
+    SUDO_CMD="sudo"
+fi
+
+$SUDO_CMD xorriso -as mkisofs \
+    -r -V "Purple Computer" \
+    -o "$OUTPUT_ISO" \
+    -J -l \
+    --grub2-mbr "$MBR_FILE" \
+    --protective-msdos-label \
+    -partition_cyl_align off \
+    -partition_offset 16 \
+    --mbr-force-bootable \
+    -c boot.catalog \
+    -b boot/grub/i386-pc/eltorito.img \
+    -no-emul-boot -boot-load-size 4 -boot-info-table \
+    --grub2-boot-info \
+    -eltorito-alt-boot \
+    -e --interval:appended_partition_2:::$EFI_FILE \
+    -no-emul-boot \
+    -append_partition 2 $EFI_PART_TYPE_LE "$EFI_FILE" \
+    -appended_part_as_gpt \
+    -iso_mbr_part_type $ISO_PART_TYPE_LE \
+    "$EXTRACT_DIR"
+
+# Make ISO readable by user on Linux
+if ! $IS_MACOS; then
     USER_GROUP=$(id -gn)
     sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
 fi
+
+# Clean up temporary boot files
+rm -f "$MBR_FILE" "$EFI_FILE"
 
 # Cleanup
 echo_info "Cleaning up..."

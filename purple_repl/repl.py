@@ -123,7 +123,7 @@ def show_parent_menu():
             "List installed packs",
             "Change parent password",
             "Open system shell (advanced)",
-            "Network settings (advanced)",
+            "WiFi setup",
             "Shut down",
             "Restart"
         ]
@@ -168,10 +168,14 @@ def show_parent_menu():
                 print("Type 'exit' to return to parent menu\n")
                 os.system('/bin/bash')
 
-            elif choice == 6:  # Network settings
-                print("\n🌐 Network Settings")
-                print("Use 'nmtui' to configure network (if NetworkManager is installed)")
-                input("\nPress Enter to continue...")
+            elif choice == 6:  # WiFi setup
+                try:
+                    import wifi_setup
+                    wifi_setup.main()
+                except Exception as e:
+                    print(f"\n❌ WiFi setup error: {e}")
+                    print("\nFallback: Use 'nmtui' to configure network manually")
+                    input("\nPress Enter to continue...")
 
             elif choice == 7:  # Shut down
                 confirm = input("\n⚠️  Really shut down? (yes/no): ")
@@ -207,7 +211,7 @@ def _show_parent_menu_fallback():
         print("4. List installed packs")
         print("5. Change parent password")
         print("6. Open system shell (advanced)")
-        print("7. Network settings (advanced)")
+        print("7. WiFi setup")
         print("8. Shut down")
         print("9. Restart")
         print("\nEnter choice (1-9): ", end='')
@@ -237,9 +241,13 @@ def _show_parent_menu_fallback():
                 os.system('/bin/bash')
 
             elif choice == '7':
-                print("\n🌐 Network Settings")
-                print("Use 'nmtui' to configure network (if NetworkManager is installed)")
-                input("\nPress Enter to continue...")
+                try:
+                    import wifi_setup
+                    wifi_setup.main()
+                except Exception as e:
+                    print(f"\n❌ WiFi setup error: {e}")
+                    print("\nFallback: Use 'nmtui' to configure network manually")
+                    input("\nPress Enter to continue...")
 
             elif choice == '8':
                 confirm = input("\n⚠️  Really shut down? (yes/no): ")

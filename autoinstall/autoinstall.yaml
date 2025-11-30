@@ -91,6 +91,18 @@ autoinstall:
     - build-essential
     - python3-dev
 
+    # Mac hardware support (2012-2017 Intel Macs)
+    # Broadcom WiFi firmware for common Mac WiFi chips
+    - bcmwl-kernel-source
+    - firmware-b43-installer
+    - b43-fwcutter
+
+    # WiFi tools for wpa_supplicant-based setup
+    - wpasupplicant
+    - wireless-tools
+    - iw
+    - rfkill
+
   # Disable automatic updates for stability
   updates: security
 
@@ -307,6 +319,16 @@ autoinstall:
       echo ""
 
       echo "✓ Xorg environment configured"
+      echo ""
+
+      # Mac hardware support - load hid-apple for keyboards/trackpads
+      echo "Configuring Mac hardware support..."
+      if lsmod | grep -q hid_apple || modinfo hid_apple >/dev/null 2>&1; then
+        echo "hid_apple" >> /etc/modules
+        # Enable function keys as standard F1-F12 by default
+        echo "options hid_apple fnmode=2" > /etc/modprobe.d/hid_apple.conf
+        echo "✓ Mac keyboard/trackpad support enabled"
+      fi
       echo ""
 
       # Final ownership fix (CRITICAL for .Xauthority and X11 logs)

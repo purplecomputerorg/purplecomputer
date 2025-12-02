@@ -28,6 +28,7 @@ from ..constants import (
     TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
     ICON_VOLUME_ON, ICON_VOLUME_OFF,
 )
+from ..keyboard import SHIFT_MAP
 
 
 class KeyboardOnlyScroll(ScrollableContainer):
@@ -75,14 +76,6 @@ class InlineInput(Input):
         ("down", "scroll_down", "Scroll down"),
         ("tab", "toggle_speech", "Toggle speech"),
     ]
-
-    # Map of unshifted -> shifted characters (double-tap to get shifted)
-    # NOTE: 0-9 excluded - numbers used for math and mode switching
-    SHIFT_MAP = {
-        '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
-        ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
-        '`': '~',
-    }
 
     def __init__(self, **kwargs):
         super().__init__(placeholder="", **kwargs)
@@ -146,40 +139,12 @@ class InlineInput(Input):
         self.autocomplete_matches = [(w, e) for w, e in matches if w != clean_word][:5]
         self.autocomplete_index = 0
 
-    def _update_caps_mode(self, char: str) -> None:
-        """Track caps mode based on recent letter keypresses"""
-        if char and char.isalpha():
-            if not hasattr(self, '_recent_letters'):
-                self._recent_letters = []
-            self._recent_letters.append(char)
-            self._recent_letters = self._recent_letters[-4:]
-            if len(self._recent_letters) >= 4:
-                new_caps = all(c.isupper() for c in self._recent_letters)
-                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
-                    self.app.caps_mode = new_caps
-                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
-                        self.app._refresh_caps_sensitive_widgets()
-
     async def _on_key(self, event: events.Key) -> None:
         """Handle special keys before parent Input processes them"""
         import time
 
         char = event.character
         key = event.key
-
-        # Track caps mode
-        self._update_caps_mode(char)
-
-        # Check for hold mode switching (0-4 keys)
-        if hasattr(self.app, 'check_hold_mode_switch'):
-            def delete_last_char():
-                # Remove the digit that was typed on first press
-                if self.value and self.value[-1:].isdigit():
-                    self.value = self.value[:-1]
-            if self.app.check_hold_mode_switch(key, delete_last_char):
-                event.stop()
-                event.prevent_default()
-                return
 
         # Space - accept autocomplete if there's a suggestion
         if event.key == "space" and self.autocomplete_matches:
@@ -218,7 +183,7 @@ class InlineInput(Input):
             return
 
         # Double-tap for shifted characters
-        if char and char in self.SHIFT_MAP:
+        if char and char in SHIFT_MAP:
             now = time.time()
             if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
                 # Double-tap detected - replace last char with shifted version
@@ -226,7 +191,7 @@ class InlineInput(Input):
                 event.prevent_default()
                 # Remove last character and insert shifted
                 if self.value:
-                    self.value = self.value[:-1] + self.SHIFT_MAP[char]
+                    self.value = self.value[:-1] + SHIFT_MAP[char]
                     self.cursor_position = len(self.value)
                 self.last_char = None
                 return

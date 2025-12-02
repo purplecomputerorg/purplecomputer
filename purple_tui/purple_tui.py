@@ -4,6 +4,14 @@ Purple Computer - Main Textual TUI Application
 
 The calm computer for kids ages 3-8.
 A creativity device, not an entertainment device.
+
+Keyboard controls:
+- F1-F4: Switch modes (Ask, Play, Listen, Write)
+- F12: Toggle dark/light theme
+- Escape (long hold): Parent mode
+- Caps Lock: Toggle big/small letters
+- Sticky shift: Shift key toggles, stays active for 1 second
+- Double-tap: Same symbol twice quickly = shifted version
 """
 
 from textual.app import App, ComposeResult
@@ -21,21 +29,20 @@ import time
 from .constants import (
     ICON_CHAT, ICON_PALETTE, ICON_HEADPHONES, ICON_DOCUMENT,
     ICON_MOON, ICON_SUN, MODE_TITLES,
+    DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
+)
+from .keyboard import (
+    KeyboardState, create_keyboard_state, detect_keyboard_mode,
+    KeyboardMode, SHIFT_MAP,
 )
 
 
 class Mode(Enum):
     """The 4 core modes of Purple Computer"""
-    ASK = 1      # Hold 1 - Math and emoji REPL
-    PLAY = 2     # Hold 2 - Music and art grid
-    LISTEN = 3   # Hold 3 - Stories and songs (future)
-    WRITE = 4    # Hold 4 - Simple text editor
-
-
-# Hold detection: time before key repeat triggers mode switch
-KEY_HOLD_THRESHOLD = 0.4
-# Max time between key events to consider it "key repeat" (vs manual taps)
-KEY_REPEAT_MAX_GAP = 0.08  # 80ms - key repeat is typically 30-50ms apart
+    ASK = 1      # F1 - Math and emoji REPL
+    PLAY = 2     # F2 - Music and art grid
+    LISTEN = 3   # F3 - Stories and songs (future)
+    WRITE = 4    # F4 - Simple text editor
 
 
 class View(Enum):
@@ -45,12 +52,12 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-# Mode display info - numbers for hold-space selection
+# Mode display info - F-keys for mode switching
 MODE_INFO = {
-    Mode.ASK: {"key": "1", "label": "Ask", "emoji": ICON_CHAT},
-    Mode.PLAY: {"key": "2", "label": "Play", "emoji": ICON_PALETTE},
-    Mode.LISTEN: {"key": "3", "label": "Listen", "emoji": ICON_HEADPHONES},
-    Mode.WRITE: {"key": "4", "label": "Write", "emoji": ICON_DOCUMENT},
+    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
+    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_PALETTE},
+    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": ICON_HEADPHONES},
+    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": ICON_DOCUMENT},
 }
 
 
@@ -118,7 +125,7 @@ class KeyBadge(Static):
 
 
 class ModeIndicator(Horizontal):
-    """Shows mode indicators with hold hint"""
+    """Shows mode indicators with F-keys"""
 
     DEFAULT_CSS = """
     ModeIndicator {
@@ -128,18 +135,9 @@ class ModeIndicator(Horizontal):
         padding: 0 4;
     }
 
-    #hold-hint {
-        width: auto;
-        height: 3;
-        padding: 0 2;
-        content-align: center middle;
-        color: $text-muted;
-    }
-
     #keys-left {
         width: auto;
         height: 3;
-        margin-left: 1;
     }
 
     #keys-spacer {
@@ -152,6 +150,18 @@ class ModeIndicator(Horizontal):
         height: 3;
         margin-right: 2;
     }
+
+    #caps-indicator {
+        width: auto;
+        height: 3;
+        padding: 0 1;
+        content-align: center middle;
+        color: $text-muted;
+    }
+
+    #caps-indicator.active {
+        color: $accent;
+    }
     """
 
     def __init__(self, current_mode: Mode, **kwargs):
@@ -159,10 +169,7 @@ class ModeIndicator(Horizontal):
         self.current_mode = current_mode
 
     def compose(self) -> ComposeResult:
-        # Hold hint on the left
-        yield Static("hold", id="hold-hint")
-
-        # Mode badges with numbers
+        # Mode badges with F-keys
         with Horizontal(id="keys-left"):
             for mode in Mode:
                 info = MODE_INFO[mode]
@@ -176,11 +183,14 @@ class ModeIndicator(Horizontal):
         # Spacer pushes theme to the right
         yield Static("", id="keys-spacer")
 
-        # Theme toggle on the right (double-tap 0)
+        # Caps indicator (starts as lowercase since caps starts off)
+        yield Static("abc", id="caps-indicator")
+
+        # Theme toggle on the right (F12)
         with Horizontal(id="keys-right"):
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
             theme_icon = ICON_MOON if is_dark else ICON_SUN
-            theme_badge = KeyBadge(f"0 {theme_icon}", id="key-theme")
+            theme_badge = KeyBadge(f"F12 {theme_icon}", id="key-theme")
             theme_badge.add_class("dim")
             yield theme_badge
 
@@ -207,9 +217,18 @@ class ModeIndicator(Horizontal):
         except NoMatches:
             pass
 
-    def show_escape_status(self, count: int) -> None:
-        """Show escape count status - for now just refresh"""
-        pass  # Could add a status badge if needed
+    def update_caps_indicator(self, caps_on: bool) -> None:
+        """Update caps lock indicator"""
+        try:
+            indicator = self.query_one("#caps-indicator", Static)
+            if caps_on:
+                indicator.update("ABC")
+                indicator.add_class("active")
+            else:
+                indicator.update("abc")
+                indicator.remove_class("active")
+        except NoMatches:
+            pass
 
 
 class SpeechIndicator(Static):
@@ -243,8 +262,10 @@ class PurpleApp(App):
     """
     Purple Computer - The calm computer for kids.
 
-    Double-tap 1-4: Switch between modes (Ask, Play, Listen, Write)
-    Double-tap 0: Toggle dark/light mode
+    F1-F4: Switch between modes (Ask, Play, Listen, Write)
+    F12: Toggle dark/light mode
+    Escape (long hold): Parent mode
+    Caps Lock: Toggle big/small letters
     Ctrl+V: Cycle views (Screen, Line, Ears)
     """
 
@@ -333,10 +354,13 @@ class PurpleApp(App):
     }
     """
 
-    # Mode switching uses hold-space + number (handled in on_key)
-    # This works on any keyboard without Fn key issues
+    # Mode switching uses F-keys for robustness
     BINDINGS = [
-        Binding("escape", "escape_pressed", "Escape", show=False, priority=True),
+        Binding("f1", "switch_mode('ask')", "Ask", show=False, priority=True),
+        Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
+        Binding("f3", "switch_mode('listen')", "Listen", show=False, priority=True),
+        Binding("f4", "switch_mode('write')", "Write", show=False, priority=True),
+        Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
@@ -346,14 +370,19 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
-        self.escape_count = 0  # For 3-escape clear confirmation
-        self.caps_mode = False  # Track if user is typing in caps
-        self._recent_letters = []  # Track recent letter keypresses
         self._pending_update = None  # Set by main() if breaking update available
-        # Hold detection state (key repeat = holding)
-        self._hold_key = None  # Key being held
-        self._hold_start_time = 0.0  # When the hold started
-        self._hold_triggered = False  # Whether we already triggered mode switch
+
+        # Unified keyboard state
+        self.keyboard = create_keyboard_state(
+            sticky_grace_period=STICKY_SHIFT_GRACE,
+            double_tap_threshold=DOUBLE_TAP_TIME,
+            escape_hold_threshold=ESCAPE_HOLD_THRESHOLD,
+        )
+        self.keyboard.mode = detect_keyboard_mode()
+
+        # Register callback for caps lock changes
+        self.keyboard.caps.on_change(self._on_caps_change)
+
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -581,210 +610,92 @@ class PurpleApp(App):
             self.speech_enabled = not self.speech_enabled
             return self.speech_enabled
 
-    def action_escape_pressed(self) -> None:
-        """Handle escape key - 3 presses to clear mode"""
-        self.escape_count += 1
-
-        if self.escape_count >= 3:
-            # Third press - reset mode state (not content)
-            self.escape_count = 0
-            self._reset_mode_state()
-
-        # Update indicator to show escape count
+    def _on_caps_change(self, caps_on: bool) -> None:
+        """Called when caps lock state changes"""
+        self._refresh_caps_sensitive_widgets()
         try:
             indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.refresh()
+            indicator.update_caps_indicator(caps_on)
         except NoMatches:
             pass
 
-        # Auto-reset after timeout
-        self.set_timer(2.0, self._reset_escape_count)
-
-    def _reset_escape_count(self) -> None:
-        """Reset escape count after timeout"""
-        if self.escape_count > 0:
-            self.escape_count = 0
-            try:
-                indicator = self.query_one("#mode-indicator", ModeIndicator)
-                indicator.refresh()
-            except NoMatches:
-                pass
-
-    def _reset_mode_state(self) -> None:
-        """Reset the current mode's state without clearing content"""
-        mode_id = f"mode-{self.active_mode.name.lower()}"
-        try:
-            content_area = self.query_one("#content-area")
-            mode_widget = content_area.query_one(f"#{mode_id}")
-        except NoMatches:
-            return
-
-        if self.active_mode == Mode.ASK:
-            # Clear input and autocomplete, but keep history
-            try:
-                ask_input = mode_widget.query_one("#ask-input")
-                ask_input.value = ""
-                ask_input.autocomplete_matches = []
-                ask_input.autocomplete_index = 0
-                ask_input.last_char = None
-                ask_input.last_char_time = 0
-                hint = mode_widget.query_one("#autocomplete-hint")
-                hint.update("")
-            except Exception:
-                pass
-
-        elif self.active_mode == Mode.PLAY:
-            # Reset eraser mode toggle and grid colors
-            try:
-                indicator = mode_widget.query_one("#eraser-indicator")
-                indicator.eraser_on = False
-                indicator.refresh()
-                mode_widget.eraser_mode = False
-                # Reset all grid colors
-                grid = mode_widget.grid
-                if grid:
-                    for key in grid.color_state:
-                        grid.color_state[key] = -1
-                    grid._flash_keys.clear()
-                    grid.refresh()
-            except Exception:
-                pass
-
-        elif self.active_mode == Mode.WRITE:
-            # Reset double-tap state
-            try:
-                write_area = mode_widget.query_one("#write-area")
-                write_area.last_char = None
-                write_area.last_char_time = 0
-            except Exception:
-                pass
-
-    def check_hold_mode_switch(self, key: str, undo_callback=None) -> bool:
-        """Check if key is being held for mode switching. Returns True if handled.
-
-        Call this from any widget's on_key before processing the key.
-        If it returns True, stop the event and return early.
-
-        Logic:
-        - First press of 0-4: record it, let it type normally
-        - Repeated press of same key (key repeat): if held long enough, trigger mode switch
-        - Different key: reset hold state
-
-        Args:
-            key: The key that was pressed
-            undo_callback: Optional callable to undo what the first keypress did
-                           (delete char in text modes, undo color in play mode)
-        """
-        if key not in {"0", "1", "2", "3", "4"}:
-            # Not a mode-switch key, reset state
-            self._hold_key = None
-            self._hold_start_time = 0
-            self._hold_triggered = False
-            return False
-
-        now = time.time()
-
-        if key == self._hold_key:
-            # Same key pressed again (key repeat while holding)
-            if self._hold_triggered:
-                # Already triggered, just consume the repeat
-                return True
-
-            if (now - self._hold_start_time) >= KEY_HOLD_THRESHOLD:
-                # Held long enough - trigger mode switch!
-                self._hold_triggered = True
-
-                # Undo what the first keypress did
-                if undo_callback:
-                    undo_callback()
-
-                if key == "0":
-                    self.action_toggle_theme()
-                elif key == "1":
-                    self.action_switch_mode("ask")
-                elif key == "2":
-                    self.action_switch_mode("play")
-                elif key == "3":
-                    self.action_switch_mode("listen")
-                elif key == "4":
-                    self.action_switch_mode("write")
-
-                return True  # Handled - caller should stop event
-
-            # Still holding but not long enough yet, consume the repeat
-            return True
-        else:
-            # Different key or first press - start tracking
-            self._hold_key = key
-            self._hold_start_time = now
-            self._hold_triggered = False
-            return False  # Let it type normally
+    def action_parent_mode(self) -> None:
+        """Enter parent mode (placeholder for future implementation)"""
+        # TODO: Implement parent mode - settings, content management, etc.
+        self.notify("Parent mode coming soon!", title="Parent Mode")
 
     def on_key(self, event: events.Key) -> None:
-        """Handle key filtering (mode switch handled by check_hold_mode_switch)"""
+        """Handle key events at app level"""
         key = event.key
 
-        # Check hold mode switch (for unfocused state or widgets that don't check)
-        if self.check_hold_mode_switch(key):
+        # Handle Escape for long-hold parent mode
+        if key == "escape":
+            if self.keyboard.handle_escape_repeat():
+                # Long hold threshold reached - enter parent mode
+                self.action_parent_mode()
+                event.stop()
+                event.prevent_default()
+                return
+            # First press - start tracking
+            self.keyboard.handle_escape_press()
             event.stop()
             event.prevent_default()
             return
 
-        # Track caps mode based on recent letter keypresses
-        char = event.character
-        if char and char.isalpha():
-            self._recent_letters.append(char)
-            # Keep only last 4 letters
-            self._recent_letters = self._recent_letters[-4:]
-            # If we have 4+ letters and all are uppercase, enable caps mode
-            if len(self._recent_letters) >= 4:
-                new_caps = all(c.isupper() for c in self._recent_letters)
-                if new_caps != self.caps_mode:
-                    self.caps_mode = new_caps
-                    self._refresh_caps_sensitive_widgets()
+        # Handle Caps Lock toggle
+        if key == "caps_lock":
+            self.keyboard.handle_caps_lock_press()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Handle Shift key for sticky shift
+        if key in ("shift", "left_shift", "right_shift"):
+            self.keyboard.handle_sticky_shift_press()
+            event.stop()
+            event.prevent_default()
+            return
 
         # Keys that should always be ignored (modifier-only, system keys, etc.)
         ignored_keys = {
-            # Modifier keys (pressed alone)
-            "shift", "ctrl", "alt", "meta", "super",
-            "left_shift", "right_shift",
+            # Modifier keys (pressed alone) - except shift which we handle above
+            "ctrl", "alt", "meta", "super",
             "left_ctrl", "right_ctrl", "control",
             "left_alt", "right_alt", "option",
             "left_meta", "right_meta", "left_super", "right_super",
             "command", "cmd",
-            # Lock keys
-            "caps_lock", "num_lock", "scroll_lock",
+            # Lock keys (except caps_lock which we handle above)
+            "num_lock", "scroll_lock",
             # Other system keys
             "print_screen", "pause", "insert",
             "home", "end", "page_up", "page_down",
-            # Function keys (all of them - we don't use F-keys anymore)
-            "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
+            # F-keys not used for modes (F5-F11, F13+)
+            "f5", "f6", "f7", "f8", "f9", "f10", "f11",
             "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
         }
 
-        if event.key in ignored_keys:
+        if key in ignored_keys:
             event.stop()
             event.prevent_default()
             return
 
         # Also ignore any ctrl+/cmd+ combos we don't explicitly handle
-        if event.key.startswith("ctrl+") and event.key not in {"ctrl+v", "ctrl+c"}:
+        if key.startswith("ctrl+") and key not in {"ctrl+v", "ctrl+c"}:
             event.stop()
             event.prevent_default()
             return
 
     def _refresh_caps_sensitive_widgets(self) -> None:
         """Refresh all widgets that change based on caps mode"""
-        # Refresh example hints and other caps-sensitive text
         widget_ids = [
-            "#mode-title",         # Mode title in all modes
-            "#example-hint",       # Ask and Play mode hints
-            "#autocomplete-hint",  # Ask mode autocomplete
-            "#write-header",       # Write mode header
-            "#input-prompt",       # Ask mode "Ask:" prompt
-            "#speech-indicator",   # Ask mode speech toggle
-            "#eraser-indicator",   # Play mode eraser toggle
-            "#coming-soon",        # Listen mode placeholder
+            "#mode-title",
+            "#example-hint",
+            "#autocomplete-hint",
+            "#write-header",
+            "#input-prompt",
+            "#speech-indicator",
+            "#eraser-indicator",
+            "#coming-soon",
         ]
         for widget_id in widget_ids:
             try:
@@ -792,6 +703,11 @@ class PurpleApp(App):
                 widget.refresh()
             except NoMatches:
                 pass
+
+    @property
+    def caps_mode(self) -> bool:
+        """Whether caps lock is on"""
+        return self.keyboard.caps.caps_lock_on
 
     def caps_text(self, text: str) -> str:
         """Return text in caps if caps mode is on"""

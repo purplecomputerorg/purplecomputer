@@ -16,6 +16,7 @@ from textual.app import ComposeResult
 from textual import events
 
 from ..constants import DOUBLE_TAP_TIME
+from ..keyboard import SHIFT_MAP
 
 
 class KidTextArea(TextArea):
@@ -26,16 +27,8 @@ class KidTextArea(TextArea):
     - Letters, numbers, standard symbols
     - Backspace (delete)
     - Enter (new line)
-    - Double-tap for shifted symbols (e.g., 88 fast = *)
+    - Double-tap for shifted symbols (e.g., -- fast = _)
     """
-
-    # Map of unshifted -> shifted characters
-    # NOTE: 0-9 excluded - numbers used for math and mode switching
-    SHIFT_MAP = {
-        '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
-        ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
-        '`': '~',
-    }
 
     DEFAULT_CSS = """
     KidTextArea {
@@ -58,19 +51,6 @@ class KidTextArea(TextArea):
         super().__init__(**kwargs)
         self.last_char = None
         self.last_char_time = 0
-        self._recent_letters = []
-
-    def _update_caps_mode(self, char: str) -> None:
-        """Track caps mode based on recent letter keypresses"""
-        if char and char.isalpha():
-            self._recent_letters.append(char)
-            self._recent_letters = self._recent_letters[-4:]
-            if len(self._recent_letters) >= 4:
-                new_caps = all(c.isupper() for c in self._recent_letters)
-                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
-                    self.app.caps_mode = new_caps
-                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
-                        self.app._refresh_caps_sensitive_widgets()
 
     def on_key(self, event: events.Key) -> None:
         """Filter keys for kid-safe editing"""
@@ -78,19 +58,6 @@ class KidTextArea(TextArea):
 
         key = event.key
         char = event.character
-
-        # Track caps mode
-        self._update_caps_mode(char)
-
-        # Check for hold mode switching (0-4 keys)
-        if hasattr(self.app, 'check_hold_mode_switch'):
-            def delete_last_char():
-                # Remove the digit that was typed on first press
-                self.action_delete_left()
-            if self.app.check_hold_mode_switch(key, delete_last_char):
-                event.stop()
-                event.prevent_default()
-                return
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):
@@ -116,7 +83,7 @@ class KidTextArea(TextArea):
             return
 
         # Check for double-tap to get shifted character
-        if char and char in self.SHIFT_MAP:
+        if char and char in SHIFT_MAP:
             now = time.time()
             if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
                 # Double-tap detected - replace last char with shifted version
@@ -124,7 +91,7 @@ class KidTextArea(TextArea):
                 event.prevent_default()
                 # Delete the previous character and insert shifted
                 self.action_delete_left()
-                self.insert(self.SHIFT_MAP[char])
+                self.insert(SHIFT_MAP[char])
                 self.last_char = None
                 return
             else:

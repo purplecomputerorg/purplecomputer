@@ -351,37 +351,10 @@ class PlayMode(Container, can_focus=True):
         if self.grid:
             self.grid.cleanup_sounds()
 
-    def _update_caps_mode(self, char: str) -> None:
-        """Track caps mode based on recent letter keypresses"""
-        if char and char.isalpha():
-            if not hasattr(self, '_recent_letters'):
-                self._recent_letters = []
-            self._recent_letters.append(char)
-            self._recent_letters = self._recent_letters[-4:]
-            if len(self._recent_letters) >= 4:
-                new_caps = all(c.isupper() for c in self._recent_letters)
-                if hasattr(self.app, 'caps_mode') and new_caps != self.app.caps_mode:
-                    self.app.caps_mode = new_caps
-                    if hasattr(self.app, '_refresh_caps_sensitive_widgets'):
-                        self.app._refresh_caps_sensitive_widgets()
-
     def on_key(self, event: events.Key) -> None:
         """Handle key press."""
         key = event.key
         char = event.character or key
-
-        # Track caps mode
-        self._update_caps_mode(char)
-
-        # Check for hold mode switching (0-4 keys)
-        if hasattr(self.app, 'check_hold_mode_switch'):
-            def undo_color():
-                # Undo the color rotation from the first press
-                self.grid.prev_color(key)
-            if self.app.check_hold_mode_switch(key, undo_color):
-                event.stop()
-                event.prevent_default()
-                return
 
         # Tab toggles sticky eraser mode
         if event.key == "tab":

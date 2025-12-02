@@ -5,8 +5,10 @@ Central location for constants used across the app.
 """
 
 # Timing
-TOGGLE_DEBOUNCE = 0.3       # Delay before speaking toggle state (debounce rapid toggles)
-DOUBLE_TAP_TIME = 0.5       # Threshold for double-tap to get shifted characters
+TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapid toggles)
+DOUBLE_TAP_TIME = 0.5        # Threshold for double-tap to get shifted characters
+STICKY_SHIFT_GRACE = 1.0     # How long sticky shift stays active (seconds)
+ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 ICON_VOLUME_ON = "󰕾"        # nf-md-volume_high

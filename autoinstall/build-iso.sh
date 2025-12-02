@@ -232,6 +232,8 @@ cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
 cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/"
+# Prometheus installer display
+cp "$PROJECT_ROOT/autoinstall/files/prometheus.py" "$EXTRACT_DIR/purple_files/"
 
 # Copy autoinstall config
 info "Adding autoinstall configuration..."

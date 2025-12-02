@@ -218,26 +218,24 @@ autoinstall:
       #!/bin/bash
       set -e
 
-      echo ""
-      echo "=========================================="
-      echo "  Purple Computer First Boot Setup"
-      echo "=========================================="
-      echo ""
-      echo "Setting up Purple Computer for the first time..."
-      echo "This will take about 30 seconds."
-      echo ""
+      # Prometheus installer display
+      PROMETHEUS="/opt/purple-install/prometheus.py"
+      show() {
+        if [ -x "$PROMETHEUS" ]; then
+          python3 "$PROMETHEUS" "$@" 2>/dev/null || true
+        fi
+      }
+
+      show start
 
       # Copy Purple TUI from pre-installed location (bundled in ISO)
-      echo "Installing Purple Computer files..."
+      show progress "Installing files" 1
       mkdir -p /home/purple/.purple
       if [ -d /opt/purple-install ]; then
         cp -r /opt/purple-install/* /home/purple/.purple/
-        echo "✓ Files installed from ISO"
       else
-        echo "ERROR: Purple Computer files not found at /opt/purple-install"
-        echo "The ISO may be corrupted. Please re-download and try again."
-        echo ""
-        echo "Press Enter to get a login prompt..."
+        show cleanup
+        echo "ERROR: Purple Computer files not found. ISO may be corrupted."
         read
         exit 1
       fi
@@ -253,19 +251,15 @@ autoinstall:
         chown -R kiduser:kiduser /home/kiduser/.purple
         find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
       fi
-      echo "✓ Installation complete"
-      echo ""
+
+      show progress "Configuring system" 1
 
       # Getty auto-login is already configured in late-commands
-      # Just ensure it's enabled
-      echo "Configuring auto-login..."
       systemctl daemon-reload
       systemctl enable getty@tty1.service
-      echo "✓ Auto-login configured"
-      echo ""
 
       # Create xinitrc (embed inline)
-      echo "Setting up X11 environment..."
+      show progress "Setting up display" 1
       cat > /home/purple/.xinitrc <<'XINITRC'
       #!/bin/bash
       # Purple Computer X11 Startup
@@ -346,7 +340,6 @@ autoinstall:
       fi
 
       # Setup auto-startx in .bash_profile
-      echo "Configuring auto-start..."
       cat >> /home/purple/.bash_profile <<'BASHEOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
@@ -366,24 +359,15 @@ autoinstall:
       BASHEOF
         chown kiduser:kiduser /home/kiduser/.bash_profile
       fi
-      echo "✓ Auto-start configured"
-      echo ""
-
-      echo "✓ Xorg environment configured"
-      echo ""
 
       # Mac hardware support - load hid-apple for keyboards/trackpads
-      echo "Configuring Mac hardware support..."
+      show progress "Finishing up" 1
       if lsmod | grep -q hid_apple || modinfo hid_apple >/dev/null 2>&1; then
         echo "hid_apple" >> /etc/modules
-        # Enable function keys as standard F1-F12 by default
         echo "options hid_apple fnmode=2" > /etc/modprobe.d/hid_apple.conf
-        echo "✓ Mac keyboard/trackpad support enabled"
       fi
-      echo ""
 
       # Final ownership fix (CRITICAL for .Xauthority and X11 logs)
-      echo "Finalizing setup..."
       # Fix home directories themselves first (prevents X11 permission errors)
       if id purple >/dev/null 2>&1; then
         chown purple:purple /home/purple
@@ -401,14 +385,9 @@ autoinstall:
       touch /etc/purple-computer-configured
       systemctl disable purple-first-boot.service
 
-      echo "✓ Setup complete"
-      echo ""
-      echo "=========================================="
-      echo "  Purple Computer is ready!"
-      echo "=========================================="
-      echo ""
-      echo "Starting Purple Computer..."
-      sleep 2
+      show ready
+      sleep 1
+      show cleanup
       FIRSTBOOT
 
     - chmod +x /target/usr/local/bin/purple-first-boot.sh

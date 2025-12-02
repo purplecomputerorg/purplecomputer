@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run build-packs build-iso clean clean-iso clean-all
+.PHONY: help setup run test build-packs build-iso clean clean-iso clean-all
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -11,6 +11,7 @@ help:
 	@echo ""
 	@echo "Running:"
 	@echo "  make run            - Run Purple Computer locally"
+	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build-packs    - Build content packs"
@@ -35,6 +36,9 @@ setup:
 run:
 	@echo "Running Purple Computer locally..."
 	./scripts/run_local.sh
+
+test:
+	@.venv/bin/python -m pytest tests/ -v
 
 build-packs:
 	@echo "Building content packs..."

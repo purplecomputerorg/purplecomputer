@@ -10,15 +10,28 @@ autoinstall:
 
   # Early commands run before installation begins
   early-commands:
-    - echo "Starting Purple Computer installation..."
+    - echo "Starting Purple Computer installation (offline mode)..."
+
+  # APT configuration for offline install
+  # Use local package pool from ISO, disable network sources during install
+  apt:
+    disable_components: []
+    geoip: false
+    preserve_sources_list: false
+    primary:
+      - arches: [amd64, i386]
+        uri: file:///cdrom/pool/
+    sources_list: |
+      # Local package repository from ISO (offline install)
+      deb [trusted=yes] file:///cdrom/pool ./
 
   # Locale and keyboard settings
   locale: en_US.UTF-8
   keyboard:
     layout: us
 
-  # Network configuration - enabled for auto-updates and pack downloads
-  # Parents can manage network access via router/firewall or parent mode settings
+  # Network configuration - optional, not required for offline install
+  # Network is configured but not mandatory - install works without it
   network:
     version: 2
     ethernets:
@@ -27,6 +40,7 @@ autoinstall:
           name: en*
         dhcp4: true
         dhcp6: false
+        optional: true
 
   # Storage configuration - use entire disk
   storage:
@@ -151,8 +165,20 @@ autoinstall:
       - echo "Purple Computer installation complete!"
 
   # Late commands - run after installation, before reboot
-  # NO file copying from /cdrom to avoid overlayfs conflicts with subiquity snap
   late-commands:
+    # Restore Ubuntu repos for future updates (after offline install)
+    - |
+      cat > /target/etc/apt/sources.list <<'SOURCES'
+      # Ubuntu 24.04 LTS (Noble Numbat)
+      deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+      SOURCES
+
+    # Copy Purple Computer files from ISO to target system
+    - mkdir -p /target/opt/purple-install
+    - cp -r /cdrom/purple_files/* /target/opt/purple-install/
+
     # Setup getty auto-login NOW (before first boot) so it works immediately
     - mkdir -p /target/etc/systemd/system/getty@tty1.service.d
     - |
@@ -170,9 +196,8 @@ autoinstall:
       cat > /target/etc/systemd/system/purple-first-boot.service <<'EOF'
       [Unit]
       Description=Purple Computer First Boot Setup
-      After=network-online.target systemd-user-sessions.service
+      After=systemd-user-sessions.service
       Before=getty@tty1.service
-      Wants=network-online.target
       ConditionPathExists=!/etc/purple-computer-configured
       DefaultDependencies=no
 
@@ -199,28 +224,23 @@ autoinstall:
       echo "=========================================="
       echo ""
       echo "Setting up Purple Computer for the first time..."
-      echo "This will take about 1-2 minutes."
+      echo "This will take about 30 seconds."
       echo ""
 
-      # Clone Purple Computer repository
-      echo "Downloading Purple Computer files..."
-      cd /tmp
-      if ! git clone https://github.com/purplecomputerorg/purplecomputer.git 2>&1; then
-        echo ""
-        echo "ERROR: Failed to download Purple Computer files."
-        echo "Please check your internet connection and try again."
+      # Copy Purple TUI from pre-installed location (bundled in ISO)
+      echo "Installing Purple Computer files..."
+      mkdir -p /home/purple/.purple
+      if [ -d /opt/purple-install ]; then
+        cp -r /opt/purple-install/* /home/purple/.purple/
+        echo "✓ Files installed from ISO"
+      else
+        echo "ERROR: Purple Computer files not found at /opt/purple-install"
+        echo "The ISO may be corrupted. Please re-download and try again."
         echo ""
         echo "Press Enter to get a login prompt..."
         read
         exit 1
       fi
-      echo "✓ Download complete"
-      echo ""
-
-      # Copy Purple TUI to user directories
-      echo "Installing Purple Computer files..."
-      mkdir -p /home/purple/.purple
-      cp -r /tmp/purplecomputer/purple_tui/* /home/purple/.purple/
       if id purple >/dev/null 2>&1; then
         chown -R purple:purple /home/purple/.purple
       fi
@@ -229,7 +249,7 @@ autoinstall:
       # Backwards compatibility with kiduser
       if [ -d /home/kiduser ]; then
         mkdir -p /home/kiduser/.purple
-        cp -r /tmp/purplecomputer/purple_tui/* /home/kiduser/.purple/
+        cp -r /opt/purple-install/* /home/kiduser/.purple/
         chown -R kiduser:kiduser /home/kiduser/.purple
         find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
       fi
@@ -375,8 +395,7 @@ autoinstall:
       fi
 
       # Clean up staging area
-      rm -rf /opt/purple_install
-      rm -rf /tmp/purplecomputer
+      rm -rf /opt/purple-install
 
       # Mark as configured and disable this service
       touch /etc/purple-computer-configured

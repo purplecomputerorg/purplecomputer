@@ -1,15 +1,17 @@
 #!/bin/bash
-# Purple Computer ISO Builder
-# This script creates a bootable Ubuntu Server ISO with Purple Computer pre-configured
+# Purple Computer ISO Builder (Linux only)
+# Creates a bootable Ubuntu Server ISO with Purple Computer pre-configured
 # Architecture: Ubuntu Server + minimal Xorg (no desktop) + alacritty fullscreen
 #
-# Run from project root: ./autoinstall/build-iso.sh
-# Or from autoinstall/: ./build-iso.sh
+# Requirements: Linux, Docker, xorriso, curl, rsync
 #
-# Options:
-#   --test    Build a test ISO that auto-installs without confirmation (for VM testing)
+# Usage:
+#   ./autoinstall/build-iso.sh         # Standard ISO (requires Enter to install)
+#   ./autoinstall/build-iso.sh --test  # Test ISO (auto-installs for VM testing)
+#
+# All builds are offline-capable with packages bundled (~4-5GB)
 
-set -e  # Exit on error
+set -e
 
 # Parse arguments
 TEST_MODE=false
@@ -25,8 +27,6 @@ done
 # Get the directory where this script lives and determine project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-# Change to project root to ensure all relative paths work correctly
 cd "$PROJECT_ROOT"
 
 # Configuration
@@ -38,350 +38,289 @@ OUTPUT_ISO="$PROJECT_ROOT/purple-computer.iso"
 WORK_DIR="$PROJECT_ROOT/autoinstall/build"
 MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
+POOL_DIR="$WORK_DIR/pool"
 
-# Cleanup trap to unmount ISO if script exits early (Linux only, macOS uses xorriso extraction)
-cleanup_mount() {
-    if [ "$(uname -s)" != "Darwin" ]; then
-        sudo umount "$MOUNT_DIR" 2>/dev/null || true
-    fi
+# Packages to bundle for offline install (must match autoinstall.yaml)
+OFFLINE_PACKAGES=(
+    xorg
+    xinit
+    xserver-xorg-video-all
+    matchbox-window-manager
+    alacritty
+    python3
+    python3-pip
+    python3-venv
+    ipython3
+    espeak-ng
+    alsa-utils
+    pulseaudio
+    fonts-noto
+    fonts-noto-color-emoji
+    fonts-dejavu
+    git
+    curl
+    wget
+    vim
+    less
+    build-essential
+    python3-dev
+    bcmwl-kernel-source
+    firmware-b43-installer
+    b43-fwcutter
+    wpasupplicant
+    wireless-tools
+    iw
+    rfkill
+)
+
+# Cleanup on exit
+cleanup() {
+    sudo umount "$MOUNT_DIR" 2>/dev/null || true
 }
-trap cleanup_mount EXIT
+trap cleanup EXIT
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-echo_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
+# Check Linux
+if [ "$(uname -s)" != "Linux" ]; then
+    error "This script only runs on Linux."
+    echo "  Use a Linux VM or WSL2 to build the ISO."
+    exit 1
+fi
 
-echo_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Check if running as root
+# Check not root
 if [ "$EUID" -eq 0 ]; then
-    echo_error "Please do not run as root. This script will use sudo when needed."
+    error "Don't run as root. Script will use sudo when needed."
     exit 1
 fi
 
 # Check dependencies
-echo_info "Checking dependencies..."
-
-# Detect OS
-OS="$(uname -s)"
-case "$OS" in
-    Linux)  IS_MACOS=false ;;
-    Darwin) IS_MACOS=true ;;
-    *)      echo_error "Unsupported OS: $OS"; exit 1 ;;
-esac
-
-# Check for command-line tools
-COMMANDS="xorriso curl rsync"
-for cmd in $COMMANDS; do
+info "Checking dependencies..."
+for cmd in xorriso curl rsync docker; do
     if ! command -v $cmd &> /dev/null; then
-        echo_error "$cmd is not installed. Please install it first."
-        if $IS_MACOS; then
-            echo "  macOS: brew install $cmd"
-        else
-            echo "  Debian/Ubuntu: sudo apt install $cmd"
-            echo "  Fedora: sudo dnf install $cmd"
-            echo "  Arch: sudo pacman -S $cmd"
-            echo "  NixOS: Add $cmd to your environment.systemPackages"
-        fi
+        error "$cmd is not installed."
+        echo "  Install with: sudo apt install $cmd"
+        [ "$cmd" = "docker" ] && echo "  Then: sudo usermod -aG docker $USER && newgrp docker"
         exit 1
     fi
 done
 
-# Note: Ubuntu 24.04 uses GRUB for both BIOS and UEFI boot (no isolinux needed)
-echo_info "Ubuntu 24.04 uses GRUB for both BIOS and UEFI boot"
+# Check Docker running
+if ! docker info &> /dev/null; then
+    error "Docker daemon not running. Start it with: sudo systemctl start docker"
+    exit 1
+fi
 
-# Create work directory
-echo_info "Creating work directory..."
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
+# Download packages using Docker
+download_packages() {
+    info "Downloading packages for offline install..."
+    warn "This may take 5-10 minutes on first run (cached for subsequent builds)"
 
-# Function to verify SHA256 checksum
-verify_iso_checksum() {
-    echo_info "Verifying ISO checksum..."
+    mkdir -p "$POOL_DIR"
 
-    # Download SHA256SUMS if not present or if ISO was just downloaded
+    # Create download script
+    cat > "$WORK_DIR/download-packages.sh" <<'SCRIPT'
+#!/bin/bash
+set -e
+apt-get update
+
+cd /pool
+apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
+    --no-conflicts --no-breaks --no-replaces --no-enhances \
+    "$@" | grep "^\w" | sort -u)
+
+dpkg-scanpackages . /dev/null > Packages
+gzip -k -f Packages
+echo "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"
+SCRIPT
+    chmod +x "$WORK_DIR/download-packages.sh"
+
+    docker run --rm \
+        -v "$POOL_DIR:/pool" \
+        -v "$WORK_DIR/download-packages.sh:/download.sh" \
+        ubuntu:24.04 \
+        /bin/bash -c "/download.sh ${OFFLINE_PACKAGES[*]}"
+
+    PKG_COUNT=$(ls -1 "$POOL_DIR"/*.deb 2>/dev/null | wc -l)
+    if [ "$PKG_COUNT" -eq 0 ]; then
+        error "No packages downloaded!"
+        exit 1
+    fi
+    info "Downloaded $PKG_COUNT packages"
+}
+
+# Verify ISO checksum
+verify_checksum() {
+    info "Verifying ISO checksum..."
+
     if [ ! -f "SHA256SUMS" ] || [ "$1" = "force" ]; then
-        echo_info "Downloading SHA256SUMS..."
-        curl -fsSL -o "SHA256SUMS" "$UBUNTU_SHA256_URL" || {
-            echo_error "Failed to download SHA256SUMS"
-            return 1
-        }
+        curl -fsSL -o "SHA256SUMS" "$UBUNTU_SHA256_URL" || { error "Failed to download SHA256SUMS"; return 1; }
     fi
 
-    # Extract the checksum for our ISO
-    EXPECTED_SHA256=$(grep "$UBUNTU_ISO_NAME" SHA256SUMS | awk '{print $1}')
+    EXPECTED=$(grep "$UBUNTU_ISO_NAME" SHA256SUMS | awk '{print $1}')
+    [ -z "$EXPECTED" ] && { error "Checksum not found for $UBUNTU_ISO_NAME"; return 1; }
 
-    if [ -z "$EXPECTED_SHA256" ]; then
-        echo_error "Could not find checksum for $UBUNTU_ISO_NAME in SHA256SUMS"
-        return 1
-    fi
+    info "Calculating checksum..."
+    ACTUAL=$(sha256sum "$UBUNTU_ISO_NAME" | awk '{print $1}')
 
-    # Calculate actual checksum
-    echo_info "Calculating SHA256 checksum (this may take a minute)..."
-    if $IS_MACOS; then
-        ACTUAL_SHA256=$(shasum -a 256 "$UBUNTU_ISO_NAME" | awk '{print $1}')
-    else
-        ACTUAL_SHA256=$(sha256sum "$UBUNTU_ISO_NAME" | awk '{print $1}')
-    fi
-
-    # Compare checksums
-    if [ "$EXPECTED_SHA256" = "$ACTUAL_SHA256" ]; then
-        echo_info "✓ Checksum verification passed"
+    if [ "$EXPECTED" = "$ACTUAL" ]; then
+        info "✓ Checksum OK"
         return 0
     else
-        echo_error "✗ Checksum verification failed!"
-        echo_error "Expected: $EXPECTED_SHA256"
-        echo_error "Got:      $ACTUAL_SHA256"
+        error "✗ Checksum mismatch!"
         return 1
     fi
 }
 
-# Download Ubuntu ISO if not present
-DOWNLOAD_ATTEMPT=0
-MAX_ATTEMPTS=2
+# Create work directory
+info "Creating work directory..."
+mkdir -p "$WORK_DIR"
+cd "$WORK_DIR"
 
-while [ $DOWNLOAD_ATTEMPT -lt $MAX_ATTEMPTS ]; do
+# Download Ubuntu ISO
+ATTEMPTS=0
+while [ $ATTEMPTS -lt 2 ]; do
     if [ ! -f "$UBUNTU_ISO_NAME" ]; then
-        echo_info "Downloading Ubuntu $UBUNTU_VERSION ISO..."
-        echo_warn "This is a large file (~2GB) and may take a while..."
-
-        if curl -fL --progress-bar -o "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL"; then
-            echo_info "Download complete"
-        else
-            echo_error "Download failed"
-            rm -f "$UBUNTU_ISO_NAME"
-            exit 1
-        fi
+        info "Downloading Ubuntu $UBUNTU_VERSION ISO (~2.5GB)..."
+        curl -fL --progress-bar -o "$UBUNTU_ISO_NAME" "$UBUNTU_ISO_URL" || { error "Download failed"; rm -f "$UBUNTU_ISO_NAME"; exit 1; }
     else
-        echo_info "Ubuntu ISO already downloaded"
+        info "Ubuntu ISO already downloaded"
     fi
 
-    # Verify checksum
-    if verify_iso_checksum "force"; then
-        # Checksum passed, break out of loop
+    if verify_checksum "force"; then
         break
     else
-        # Checksum failed
-        DOWNLOAD_ATTEMPT=$((DOWNLOAD_ATTEMPT + 1))
-
-        if [ $DOWNLOAD_ATTEMPT -lt $MAX_ATTEMPTS ]; then
-            echo_warn "Deleting corrupted ISO and retrying download (attempt $((DOWNLOAD_ATTEMPT + 1))/$MAX_ATTEMPTS)..."
-            rm -f "$UBUNTU_ISO_NAME" "SHA256SUMS"
-        else
-            echo_error "ISO verification failed after $MAX_ATTEMPTS attempts"
-            echo_error "Please check your network connection and try again"
-            rm -f "$UBUNTU_ISO_NAME" "SHA256SUMS"
-            exit 1
-        fi
+        ATTEMPTS=$((ATTEMPTS + 1))
+        [ $ATTEMPTS -lt 2 ] && { warn "Retrying download..."; rm -f "$UBUNTU_ISO_NAME" "SHA256SUMS"; }
     fi
 done
+[ $ATTEMPTS -ge 2 ] && { error "ISO verification failed"; exit 1; }
 
 # Extract ISO
-echo_info "Extracting Ubuntu ISO..."
-mkdir -p "$EXTRACT_DIR"
-
-# Extract ISO contents (platform-specific)
-if $IS_MACOS; then
-    # macOS can't mount Linux hybrid ISOs with hdiutil, use xorriso to extract
-    echo_info "Using xorriso to extract ISO contents (macOS)..."
-    xorriso -osirrox on -indev "$UBUNTU_ISO_NAME" -extract / "$EXTRACT_DIR"
-else
-    # Linux can mount the ISO directly
-    mkdir -p "$MOUNT_DIR"
-    sudo mount -o loop "$UBUNTU_ISO_NAME" "$MOUNT_DIR"
-
-    # Copy contents
-    echo_info "Copying ISO contents..."
-    rsync -a "$MOUNT_DIR/" "$EXTRACT_DIR/"
-
-    # Unmount
-    sudo umount "$MOUNT_DIR"
-fi
-
-# Make extracted files writable
+info "Extracting ISO..."
+rm -rf "$EXTRACT_DIR"
+mkdir -p "$EXTRACT_DIR" "$MOUNT_DIR"
+sudo mount -o loop "$UBUNTU_ISO_NAME" "$MOUNT_DIR"
+rsync -a "$MOUNT_DIR/" "$EXTRACT_DIR/"
+sudo umount "$MOUNT_DIR"
 chmod -R u+w "$EXTRACT_DIR"
 
+# Download packages (or use cache)
+if [ ! -f "$POOL_DIR/Packages.gz" ]; then
+    download_packages
+else
+    info "Using cached packages ($(ls -1 "$POOL_DIR"/*.deb 2>/dev/null | wc -l) packages)"
+fi
+
+# Copy package pool to ISO
+info "Adding package pool to ISO..."
+mkdir -p "$EXTRACT_DIR/pool"
+cp -r "$POOL_DIR"/* "$EXTRACT_DIR/pool/"
+
 # Copy Purple Computer files
-echo_info "Copying Purple Computer files..."
+info "Adding Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
-
-# Copy Purple TUI code
 cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
-
-# Copy system configuration files
 cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/"
 
-# Copy autoinstall configuration
-echo_info "Injecting autoinstall configuration..."
-cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/autoinstall.yaml"
-
-# Create user-data and meta-data for cloud-init
+# Copy autoinstall config
+info "Adding autoinstall configuration..."
 mkdir -p "$EXTRACT_DIR/nocloud"
 cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/nocloud/user-data"
 touch "$EXTRACT_DIR/nocloud/meta-data"
 
-# Modify GRUB configuration for autoinstall
-echo_info "Modifying boot configuration..."
+# Configure GRUB with larger font for high-DPI displays
+info "Configuring bootloader..."
+
+# Create larger GRUB font (if grub-mkfont available in Docker)
+info "Creating larger boot font..."
+docker run --rm -v "$EXTRACT_DIR/boot/grub:/grub" ubuntu:24.04 bash -c '
+    apt-get update -qq && apt-get install -qq -y grub-common fonts-dejavu-core >/dev/null 2>&1
+    grub-mkfont -s 32 -o /grub/fonts/dejavu_32.pf2 /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf 2>/dev/null || true
+' || warn "Could not create large font, using default"
 
 if $TEST_MODE; then
-    echo_warn "TEST MODE: Building ISO with auto-install (no confirmation)"
-    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'GRUB_EOF'
+    warn "TEST MODE: Auto-install enabled"
+    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'EOF'
 set timeout=3
 set default=0
+insmod all_video
+set gfxpayload=keep
 
 menuentry "Purple Computer TEST INSTALL (auto-starts in 3s)" {
-    set gfxpayload=keep
     linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
     initrd /casper/initrd
 }
-GRUB_EOF
+EOF
 else
-    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'GRUB_EOF'
-set timeout=-1
-
+    cat > "$EXTRACT_DIR/boot/grub/grub.cfg" <<'EOF'
+# Purple Computer Installer
 insmod all_video
+insmod gfxterm
 
+set gfxmode=1024x768,auto
+set gfxpayload=keep
+terminal_output gfxterm
+
+# Load larger font if available
+if [ -f /boot/grub/fonts/dejavu_32.pf2 ]; then
+    loadfont /boot/grub/fonts/dejavu_32.pf2
+fi
+
+# Colors
 set menu_color_normal=white/black
-set menu_color_highlight=black/light-gray
+set menu_color_highlight=black/white
 
-menuentry " " {
-    true
-}
+set timeout=-1
+set default=0
 
-menuentry "    ╔════════════════════════════════════════════════════════╗" {
-    true
-}
+# Show header
+echo ""
+echo "    PURPLE COMPUTER INSTALLER"
+echo "    ========================="
+echo ""
+echo "    WARNING: This will ERASE ALL DATA on the disk!"
+echo ""
 
-menuentry "    ║           PURPLE COMPUTER INSTALLER                    ║" {
-    true
-}
-
-menuentry "    ║                                                        ║" {
-    true
-}
-
-menuentry "    ║   WARNING: This will ERASE ALL DATA on the disk!       ║" {
-    true
-}
-
-menuentry "    ║   Make sure you have backed up any important files.    ║" {
-    true
-}
-
-menuentry "    ╚════════════════════════════════════════════════════════╝" {
-    true
-}
-
-menuentry " " {
-    true
-}
-
-menuentry ">>> Press ENTER to Install Purple Computer <<<" {
-    set gfxpayload=keep
+menuentry "Install Purple Computer" {
     linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
     initrd /casper/initrd
 }
 
-menuentry " " {
-    true
+menuentry "Cancel (power off)" {
+    halt
 }
-GRUB_EOF
+EOF
 fi
 
-# Update isolinux for legacy boot
-if [ -f "$EXTRACT_DIR/isolinux/txt.cfg" ]; then
-    if $TEST_MODE; then
-        cat > "$EXTRACT_DIR/isolinux/txt.cfg" <<'ISOLINUX_EOF'
-default install
-timeout 30
-
-label install
-  menu label Purple Computer TEST INSTALL
-  kernel /casper/vmlinuz
-  append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/nocloud/ quiet splash ---
-ISOLINUX_EOF
-    else
-        cat > "$EXTRACT_DIR/isolinux/txt.cfg" <<'ISOLINUX_EOF'
-default install
-timeout 0
-prompt 1
-
-menu title PURPLE COMPUTER - WARNING: ERASES ALL DATA! Press ENTER to install.
-
-label install
-  menu label Press ENTER to Install Purple Computer
-  kernel /casper/vmlinuz
-  append initrd=/casper/initrd autoinstall ds=nocloud;s=/cdrom/nocloud/ quiet splash ---
-ISOLINUX_EOF
-    fi
-fi
-
-# Calculate MD5 sums
-echo_info "Calculating MD5 checksums..."
+# Calculate checksums
+info "Calculating checksums..."
 cd "$EXTRACT_DIR"
-rm -f md5sum.txt
-if $IS_MACOS; then
-    find . -type f -print0 | xargs -0 md5 -r | grep -v isolinux/boot.cat > md5sum.txt
-else
-    find . -type f -print0 | xargs -0 md5sum | grep -v isolinux/boot.cat > md5sum.txt
-fi
+find . -type f -print0 | xargs -0 md5sum 2>/dev/null | grep -v isolinux/boot.cat > md5sum.txt || true
 
-# Build the new ISO with proper hybrid boot support
-# Use xorriso's --interval syntax to reference boot components directly from source ISO
-echo_info "Building Purple Computer ISO..."
+# Build ISO
+info "Building ISO..."
 cd "$WORK_DIR"
 
-# Extract boot parameters from source ISO using xorriso
-# This makes the script robust across different Ubuntu versions
-echo_info "Reading boot configuration from source ISO..."
+# Get boot parameters from source ISO
 XORRISO_OPTS=$(xorriso -indev "$UBUNTU_ISO_NAME" -report_system_area as_mkisofs 2>&1)
-
-# Extract the EFI partition interval (e.g., "6441216d-6451375d")
 EFI_PARTITION_INTERVAL=$(echo "$XORRISO_OPTS" | grep -o -- '--interval:local_fs:[0-9]*d-[0-9]*d::' | head -1 | sed "s/--interval:local_fs://;s/:://")
-
-# Extract the EFI boot image interval for El Torito (e.g., "appended_partition_2_start_1610304s_size_10160d")
 EFI_BOOT_INTERVAL=$(echo "$XORRISO_OPTS" | grep -o -- "appended_partition_2_start_[0-9]*s_size_[0-9]*d" | head -1)
-
-# Extract boot load size for EFI (second boot-load-size in output, after the BIOS one)
 EFI_BOOT_LOAD_SIZE=$(echo "$XORRISO_OPTS" | grep "boot-load-size" | tail -1 | awk '{print $2}')
 
-if [ -z "$EFI_PARTITION_INTERVAL" ] || [ -z "$EFI_BOOT_INTERVAL" ]; then
-    echo_error "Could not extract boot parameters from source ISO"
-    echo_error "EFI_PARTITION_INTERVAL: $EFI_PARTITION_INTERVAL"
-    echo_error "EFI_BOOT_INTERVAL: $EFI_BOOT_INTERVAL"
-    exit 1
-fi
+[ -z "$EFI_PARTITION_INTERVAL" ] || [ -z "$EFI_BOOT_INTERVAL" ] && { error "Could not extract boot parameters"; exit 1; }
 
-echo_info "EFI partition interval: $EFI_PARTITION_INTERVAL"
-echo_info "EFI boot interval: $EFI_BOOT_INTERVAL"
-
-# EFI system partition GUID (little-endian format for xorriso)
-EFI_PART_TYPE_LE="28732ac11ff8d211ba4b00a0c93ec93b"
-# GPT partition type for ISO 9660 (Microsoft Basic Data, little-endian)
-ISO_PART_TYPE_LE="a2a0d0ebe5b9334487c068b6b72699c7"
-
-# Use sudo on Linux only
-SUDO_CMD=""
-if ! $IS_MACOS; then
-    SUDO_CMD="sudo"
-fi
-
-# Reference MBR and EFI partition directly from source ISO using --interval syntax
-$SUDO_CMD xorriso -as mkisofs \
+sudo xorriso -as mkisofs \
     -r -V "Purple Computer" \
     -o "$OUTPUT_ISO" \
     -J -l \
@@ -390,9 +329,9 @@ $SUDO_CMD xorriso -as mkisofs \
     -partition_cyl_align off \
     -partition_offset 16 \
     --mbr-force-bootable \
-    -append_partition 2 $EFI_PART_TYPE_LE --interval:local_fs:${EFI_PARTITION_INTERVAL}::"$UBUNTU_ISO_NAME" \
+    -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b --interval:local_fs:${EFI_PARTITION_INTERVAL}::"$UBUNTU_ISO_NAME" \
     -appended_part_as_gpt \
-    -iso_mbr_part_type $ISO_PART_TYPE_LE \
+    -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
     -c boot.catalog \
     -b boot/grub/i386-pc/eltorito.img \
     -no-emul-boot -boot-load-size 4 -boot-info-table \
@@ -403,27 +342,22 @@ $SUDO_CMD xorriso -as mkisofs \
     -boot-load-size "$EFI_BOOT_LOAD_SIZE" \
     "$EXTRACT_DIR"
 
-# Make ISO readable by user on Linux
-if ! $IS_MACOS; then
-    USER_GROUP=$(id -gn)
-    sudo chown "$USER:$USER_GROUP" "$OUTPUT_ISO"
-fi
+sudo chown "$USER:$(id -gn)" "$OUTPUT_ISO"
 
 # Cleanup
-echo_info "Cleaning up..."
+info "Cleaning up..."
 rm -rf "$WORK_DIR/mount" "$WORK_DIR/extract"
 
-# Success!
-echo_info "======================================"
-echo_info "Purple Computer ISO built successfully!"
-echo_info "======================================"
-echo_info "ISO location: $OUTPUT_ISO"
-echo_info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
+# Done
 echo ""
-echo_info "Next steps:"
-echo_info "1. Write ISO to USB: sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress"
-echo_info "2. Boot from USB and installation will proceed automatically"
-echo_info "3. See docs/autoinstall.md for detailed instructions"
+info "======================================"
+info "Purple Computer ISO built successfully!"
+info "======================================"
+info "ISO: $OUTPUT_ISO"
+info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
 echo ""
-echo_warn "Note: Keep the build directory if you want to rebuild quickly."
-echo_warn "Delete it with: rm -rf $WORK_DIR"
+info "Write to USB:"
+info "  sudo dd if=$OUTPUT_ISO of=/dev/sdX bs=4M status=progress"
+echo ""
+warn "Package cache kept at: $POOL_DIR"
+warn "Delete to re-download: rm -rf $POOL_DIR"

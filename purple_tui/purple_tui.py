@@ -16,6 +16,7 @@ from textual import events
 from enum import Enum
 import subprocess
 import os
+import time
 
 from .constants import (
     ICON_CHAT, ICON_PALETTE, ICON_HEADPHONES, ICON_DOCUMENT,
@@ -25,10 +26,16 @@ from .constants import (
 
 class Mode(Enum):
     """The 4 core modes of Purple Computer"""
-    ASK = 1      # F1 - Math and emoji REPL
-    PLAY = 2     # F2 - Music and art grid
-    LISTEN = 3   # F3 - Stories and songs (future)
-    WRITE = 4    # F4 - Simple text editor
+    ASK = 1      # Hold 1 - Math and emoji REPL
+    PLAY = 2     # Hold 2 - Music and art grid
+    LISTEN = 3   # Hold 3 - Stories and songs (future)
+    WRITE = 4    # Hold 4 - Simple text editor
+
+
+# Hold detection: time before key repeat triggers mode switch
+KEY_HOLD_THRESHOLD = 0.4
+# Max time between key events to consider it "key repeat" (vs manual taps)
+KEY_REPEAT_MAX_GAP = 0.08  # 80ms - key repeat is typically 30-50ms apart
 
 
 class View(Enum):
@@ -38,12 +45,12 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-# Mode display info
+# Mode display info - numbers for hold-space selection
 MODE_INFO = {
-    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
-    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_PALETTE},
-    Mode.LISTEN: {"key": "F3", "label": "Listen", "emoji": ICON_HEADPHONES},
-    Mode.WRITE: {"key": "F4", "label": "Write", "emoji": ICON_DOCUMENT},
+    Mode.ASK: {"key": "1", "label": "Ask", "emoji": ICON_CHAT},
+    Mode.PLAY: {"key": "2", "label": "Play", "emoji": ICON_PALETTE},
+    Mode.LISTEN: {"key": "3", "label": "Listen", "emoji": ICON_HEADPHONES},
+    Mode.WRITE: {"key": "4", "label": "Write", "emoji": ICON_DOCUMENT},
 }
 
 
@@ -111,7 +118,7 @@ class KeyBadge(Static):
 
 
 class ModeIndicator(Horizontal):
-    """Shows F1-F4 mode indicators as styled key badges"""
+    """Shows mode indicators with hold hint"""
 
     DEFAULT_CSS = """
     ModeIndicator {
@@ -121,10 +128,18 @@ class ModeIndicator(Horizontal):
         padding: 0 4;
     }
 
+    #hold-hint {
+        width: auto;
+        height: 3;
+        padding: 0 2;
+        content-align: center middle;
+        color: $text-muted;
+    }
+
     #keys-left {
         width: auto;
         height: 3;
-        margin-left: 2;
+        margin-left: 1;
     }
 
     #keys-spacer {
@@ -144,7 +159,10 @@ class ModeIndicator(Horizontal):
         self.current_mode = current_mode
 
     def compose(self) -> ComposeResult:
-        # F1-F4 on the left (like on a real keyboard)
+        # Hold hint on the left
+        yield Static("hold", id="hold-hint")
+
+        # Mode badges with numbers
         with Horizontal(id="keys-left"):
             for mode in Mode:
                 info = MODE_INFO[mode]
@@ -155,14 +173,14 @@ class ModeIndicator(Horizontal):
                     badge.add_class("dim")
                 yield badge
 
-        # Spacer pushes F12 to the right
+        # Spacer pushes theme to the right
         yield Static("", id="keys-spacer")
 
-        # F12 on the right (like on a real keyboard)
+        # Theme toggle on the right (double-tap 0)
         with Horizontal(id="keys-right"):
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
             theme_icon = ICON_MOON if is_dark else ICON_SUN
-            theme_badge = KeyBadge(f"F12 {theme_icon}", id="key-theme")
+            theme_badge = KeyBadge(f"0 {theme_icon}", id="key-theme")
             theme_badge.add_class("dim")
             yield theme_badge
 
@@ -184,7 +202,7 @@ class ModeIndicator(Horizontal):
         try:
             badge = self.query_one("#key-theme", KeyBadge)
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            badge.text = f"F12 {ICON_MOON if is_dark else ICON_SUN}"
+            badge.text = f"0 {ICON_MOON if is_dark else ICON_SUN}"
             badge.refresh()
         except NoMatches:
             pass
@@ -225,9 +243,9 @@ class PurpleApp(App):
     """
     Purple Computer - The calm computer for kids.
 
-    F1-F4: Switch between modes (Ask, Play, Listen, Write)
+    Double-tap 1-4: Switch between modes (Ask, Play, Listen, Write)
+    Double-tap 0: Toggle dark/light mode
     Ctrl+V: Cycle views (Screen, Line, Ears)
-    F12: Toggle dark/light mode
     """
 
     CSS = """
@@ -315,14 +333,10 @@ class PurpleApp(App):
     }
     """
 
+    # Mode switching uses hold-space + number (handled in on_key)
+    # This works on any keyboard without Fn key issues
     BINDINGS = [
-        Binding("f1", "switch_mode('ask')", "Ask", show=False, priority=True),
-        Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
-        Binding("f3", "switch_mode('listen')", "Listen", show=False, priority=True),
-        Binding("f4", "switch_mode('write')", "Write", show=False, priority=True),
         Binding("escape", "escape_pressed", "Escape", show=False, priority=True),
-        Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
-        Binding("ctrl+d", "toggle_theme", "Theme", show=False, priority=True),  # Backup
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
@@ -336,6 +350,10 @@ class PurpleApp(App):
         self.caps_mode = False  # Track if user is typing in caps
         self._recent_letters = []  # Track recent letter keypresses
         self._pending_update = None  # Set by main() if breaking update available
+        # Hold detection state (key repeat = holding)
+        self._hold_key = None  # Key being held
+        self._hold_start_time = 0.0  # When the hold started
+        self._hold_triggered = False  # Whether we already triggered mode switch
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -641,8 +659,77 @@ class PurpleApp(App):
             except Exception:
                 pass
 
+    def check_hold_mode_switch(self, key: str, undo_callback=None) -> bool:
+        """Check if key is being held for mode switching. Returns True if handled.
+
+        Call this from any widget's on_key before processing the key.
+        If it returns True, stop the event and return early.
+
+        Logic:
+        - First press of 0-4: record it, let it type normally
+        - Repeated press of same key (key repeat): if held long enough, trigger mode switch
+        - Different key: reset hold state
+
+        Args:
+            key: The key that was pressed
+            undo_callback: Optional callable to undo what the first keypress did
+                           (delete char in text modes, undo color in play mode)
+        """
+        if key not in {"0", "1", "2", "3", "4"}:
+            # Not a mode-switch key, reset state
+            self._hold_key = None
+            self._hold_start_time = 0
+            self._hold_triggered = False
+            return False
+
+        now = time.time()
+
+        if key == self._hold_key:
+            # Same key pressed again (key repeat while holding)
+            if self._hold_triggered:
+                # Already triggered, just consume the repeat
+                return True
+
+            if (now - self._hold_start_time) >= KEY_HOLD_THRESHOLD:
+                # Held long enough - trigger mode switch!
+                self._hold_triggered = True
+
+                # Undo what the first keypress did
+                if undo_callback:
+                    undo_callback()
+
+                if key == "0":
+                    self.action_toggle_theme()
+                elif key == "1":
+                    self.action_switch_mode("ask")
+                elif key == "2":
+                    self.action_switch_mode("play")
+                elif key == "3":
+                    self.action_switch_mode("listen")
+                elif key == "4":
+                    self.action_switch_mode("write")
+
+                return True  # Handled - caller should stop event
+
+            # Still holding but not long enough yet, consume the repeat
+            return True
+        else:
+            # Different key or first press - start tracking
+            self._hold_key = key
+            self._hold_start_time = now
+            self._hold_triggered = False
+            return False  # Let it type normally
+
     def on_key(self, event: events.Key) -> None:
-        """Global key filter - ignore irrelevant keys app-wide"""
+        """Handle key filtering (mode switch handled by check_hold_mode_switch)"""
+        key = event.key
+
+        # Check hold mode switch (for unfocused state or widgets that don't check)
+        if self.check_hold_mode_switch(key):
+            event.stop()
+            event.prevent_default()
+            return
+
         # Track caps mode based on recent letter keypresses
         char = event.character
         if char and char.isalpha():
@@ -670,8 +757,8 @@ class PurpleApp(App):
             # Other system keys
             "print_screen", "pause", "insert",
             "home", "end", "page_up", "page_down",
-            # Function keys we don't use
-            "f6", "f7", "f8", "f9", "f10", "f11",
+            # Function keys (all of them - we don't use F-keys anymore)
+            "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "f10", "f11", "f12",
             "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
         }
 
@@ -681,8 +768,7 @@ class PurpleApp(App):
             return
 
         # Also ignore any ctrl+/cmd+ combos we don't explicitly handle
-        # (our bindings handle ctrl+d, ctrl+v, ctrl+q)
-        if event.key.startswith("ctrl+") and event.key not in {"ctrl+d", "ctrl+v", "ctrl+q", "ctrl+c"}:
+        if event.key.startswith("ctrl+") and event.key not in {"ctrl+v", "ctrl+c"}:
             event.stop()
             event.prevent_default()
             return

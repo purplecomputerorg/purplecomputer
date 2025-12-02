@@ -123,6 +123,19 @@ class PlayGrid(Widget):
         self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
         self.refresh()
 
+    def prev_color(self, key: str) -> None:
+        """Undo color cycle for a key (go back one step)."""
+        current = self.color_state[key]
+        if current == 0:
+            # Was at first color, go back to no color
+            self.color_state[key] = -1
+        elif current == -1:
+            # Was at no color, wrap to last color
+            self.color_state[key] = len(COLORS) - 1
+        else:
+            self.color_state[key] = current - 1
+        self.refresh()
+
     def clear_color(self, key: str) -> None:
         """Reset a key to default color."""
         self.color_state[key] = -1
@@ -354,10 +367,21 @@ class PlayMode(Container, can_focus=True):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key press."""
-        char = event.character or event.key
+        key = event.key
+        char = event.character or key
 
         # Track caps mode
         self._update_caps_mode(char)
+
+        # Check for hold mode switching (0-4 keys)
+        if hasattr(self.app, 'check_hold_mode_switch'):
+            def undo_color():
+                # Undo the color rotation from the first press
+                self.grid.prev_color(key)
+            if self.app.check_hold_mode_switch(key, undo_color):
+                event.stop()
+                event.prevent_default()
+                return
 
         # Tab toggles sticky eraser mode
         if event.key == "tab":

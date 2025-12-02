@@ -26,19 +26,19 @@ Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 ## The Four Modes
 
-Purple has four core modes, accessed with F1-F4:
+Purple has four core modes. Hold a number key to switch:
 
-| Key | Mode | What It Does |
-|-----|------|--------------|
-| F1 | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `what is elephant` |
-| F2 | **Play** | Music and art grid. Letters make notes and colors. Numbers make sounds. |
-| F3 | **Listen** | Stories and songs. (Coming soon) |
-| F4 | **Write** | Simple text editor. Just type. |
+| Hold | Mode | What It Does |
+|------|------|--------------|
+| **1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `what is elephant` |
+| **2** | **Play** | Music and art grid. Letters make notes and colors. Numbers make sounds. |
+| **3** | **Listen** | Stories and songs. (Coming soon) |
+| **4** | **Write** | Simple text editor. Just type. |
 
 **Controls:**
-- **F1-F4** — Switch modes
+- **Hold 1-4** — Switch modes (hold the number key for half a second)
+- **Hold 0** — Toggle dark/light mode
 - **Ctrl+V** — Cycle views (Screen → Line → Ears)
-- **F12** — Toggle dark/light mode
 - **Tab** (in Ask mode) — Toggle speech on/off
 
 ---

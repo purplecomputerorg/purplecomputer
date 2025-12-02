@@ -77,9 +77,8 @@ class InlineInput(Input):
     ]
 
     # Map of unshifted -> shifted characters (double-tap to get shifted)
+    # NOTE: 0-9 excluded - numbers used for math and mode switching
     SHIFT_MAP = {
-        '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
-        '6': '^', '7': '&', '8': '*', '9': '(', '0': ')',
         '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
         ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
         '`': '~',
@@ -166,9 +165,21 @@ class InlineInput(Input):
         import time
 
         char = event.character
+        key = event.key
 
         # Track caps mode
         self._update_caps_mode(char)
+
+        # Check for hold mode switching (0-4 keys)
+        if hasattr(self.app, 'check_hold_mode_switch'):
+            def delete_last_char():
+                # Remove the digit that was typed on first press
+                if self.value and self.value[-1:].isdigit():
+                    self.value = self.value[:-1]
+            if self.app.check_hold_mode_switch(key, delete_last_char):
+                event.stop()
+                event.prevent_default()
+                return
 
         # Space - accept autocomplete if there's a suggestion
         if event.key == "space" and self.autocomplete_matches:

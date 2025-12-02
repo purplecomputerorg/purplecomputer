@@ -30,9 +30,8 @@ class KidTextArea(TextArea):
     """
 
     # Map of unshifted -> shifted characters
+    # NOTE: 0-9 excluded - numbers used for math and mode switching
     SHIFT_MAP = {
-        '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
-        '6': '^', '7': '&', '8': '*', '9': '(', '0': ')',
         '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
         ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
         '`': '~',
@@ -82,6 +81,16 @@ class KidTextArea(TextArea):
 
         # Track caps mode
         self._update_caps_mode(char)
+
+        # Check for hold mode switching (0-4 keys)
+        if hasattr(self.app, 'check_hold_mode_switch'):
+            def delete_last_char():
+                # Remove the digit that was typed on first press
+                self.action_delete_left()
+            if self.app.check_hold_mode_switch(key, delete_last_char):
+                event.stop()
+                event.prevent_default()
+                return
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):

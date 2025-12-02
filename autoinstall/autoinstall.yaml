@@ -66,6 +66,10 @@ autoinstall:
   # Package selection
   # IMPORTANT: Ubuntu Server base, NO desktop environment packages
   packages:
+    # Boot splash
+    - plymouth
+    - plymouth-themes
+
     # X11 minimal (just the X server, no window manager, no desktop environment)
     - xorg
     - xinit
@@ -83,7 +87,6 @@ autoinstall:
 
     # Text-to-speech
     - espeak-ng
-    # pyttsx3 installed via pip in runcmd (not in apt repos for Ubuntu 24.04)
 
     # Audio
     - alsa-utils
@@ -106,12 +109,11 @@ autoinstall:
     - python3-dev
 
     # Mac hardware support (2012-2017 Intel Macs)
-    # Broadcom WiFi firmware for common Mac WiFi chips
     - bcmwl-kernel-source
     - firmware-b43-installer
     - b43-fwcutter
 
-    # WiFi tools for wpa_supplicant-based setup
+    # WiFi tools
     - wpasupplicant
     - wireless-tools
     - iw
@@ -218,24 +220,26 @@ autoinstall:
       #!/bin/bash
       set -e
 
-      # Prometheus installer display
-      PROMETHEUS="/opt/purple-install/prometheus.py"
-      show() {
-        if [ -x "$PROMETHEUS" ]; then
-          python3 "$PROMETHEUS" "$@" 2>/dev/null || true
-        fi
-      }
-
-      show start
+      echo ""
+      echo "=========================================="
+      echo "  Purple Computer First Boot Setup"
+      echo "=========================================="
+      echo ""
+      echo "Setting up Purple Computer for the first time..."
+      echo "This will take about 30 seconds."
+      echo ""
 
       # Copy Purple TUI from pre-installed location (bundled in ISO)
-      show progress "Installing files" 1
+      echo "Installing Purple Computer files..."
       mkdir -p /home/purple/.purple
       if [ -d /opt/purple-install ]; then
         cp -r /opt/purple-install/* /home/purple/.purple/
+        echo "✓ Files installed from ISO"
       else
-        show cleanup
-        echo "ERROR: Purple Computer files not found. ISO may be corrupted."
+        echo "ERROR: Purple Computer files not found at /opt/purple-install"
+        echo "The ISO may be corrupted. Please re-download and try again."
+        echo ""
+        echo "Press Enter to get a login prompt..."
         read
         exit 1
       fi
@@ -251,15 +255,19 @@ autoinstall:
         chown -R kiduser:kiduser /home/kiduser/.purple
         find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
       fi
-
-      show progress "Configuring system" 1
+      echo "✓ Installation complete"
+      echo ""
 
       # Getty auto-login is already configured in late-commands
+      # Just ensure it's enabled
+      echo "Configuring auto-login..."
       systemctl daemon-reload
       systemctl enable getty@tty1.service
+      echo "✓ Auto-login configured"
+      echo ""
 
       # Create xinitrc (embed inline)
-      show progress "Setting up display" 1
+      echo "Setting up X11 environment..."
       cat > /home/purple/.xinitrc <<'XINITRC'
       #!/bin/bash
       # Purple Computer X11 Startup
@@ -340,6 +348,7 @@ autoinstall:
       fi
 
       # Setup auto-startx in .bash_profile
+      echo "Configuring auto-start..."
       cat >> /home/purple/.bash_profile <<'BASHEOF'
       # Purple Computer auto-start X11
       if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
@@ -359,15 +368,35 @@ autoinstall:
       BASHEOF
         chown kiduser:kiduser /home/kiduser/.bash_profile
       fi
+      echo "✓ Auto-start configured"
+      echo ""
+
+      echo "✓ Xorg environment configured"
+      echo ""
+
+      # Install Plymouth theme
+      echo "Setting up boot splash..."
+      if [ -d /opt/purple-install/plymouth/purple ]; then
+        mkdir -p /usr/share/plymouth/themes/purple
+        cp -r /opt/purple-install/plymouth/purple/* /usr/share/plymouth/themes/purple/
+        plymouth-set-default-theme purple
+        update-initramfs -u
+        echo "✓ Boot splash configured"
+      fi
+      echo ""
 
       # Mac hardware support - load hid-apple for keyboards/trackpads
-      show progress "Finishing up" 1
+      echo "Configuring Mac hardware support..."
       if lsmod | grep -q hid_apple || modinfo hid_apple >/dev/null 2>&1; then
         echo "hid_apple" >> /etc/modules
+        # Enable function keys as standard F1-F12 by default
         echo "options hid_apple fnmode=2" > /etc/modprobe.d/hid_apple.conf
+        echo "✓ Mac keyboard/trackpad support enabled"
       fi
+      echo ""
 
       # Final ownership fix (CRITICAL for .Xauthority and X11 logs)
+      echo "Finalizing setup..."
       # Fix home directories themselves first (prevents X11 permission errors)
       if id purple >/dev/null 2>&1; then
         chown purple:purple /home/purple
@@ -385,16 +414,22 @@ autoinstall:
       touch /etc/purple-computer-configured
       systemctl disable purple-first-boot.service
 
-      show ready
-      sleep 1
-      show cleanup
+      echo "✓ Setup complete"
+      echo ""
+      echo "=========================================="
+      echo "  Purple Computer is ready!"
+      echo "=========================================="
+      echo ""
+      echo "Starting Purple Computer..."
+      sleep 2
       FIRSTBOOT
 
     - chmod +x /target/usr/local/bin/purple-first-boot.sh
     - chroot /target systemctl enable purple-first-boot.service
 
-    # Set GRUB timeout to 1 second for fast boot
+    # Configure GRUB for fast boot with splash
     - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
+    - curtin in-target --target=/target -- sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' /etc/default/grub
     - curtin in-target --target=/target -- update-grub
 
     - echo "Purple Computer late commands complete!"

@@ -1,0 +1,60 @@
+# Purple Computer Plymouth Theme
+# Minimal text-based theme with purple background
+
+# Purple background: #2d1b4e
+Window.SetBackgroundTopColor(0.176, 0.106, 0.306);
+Window.SetBackgroundBottomColor(0.176, 0.106, 0.306);
+
+# Title text
+title = Image.Text("Purple Computer", 0.96, 0.95, 1.0, "Sans Bold 48");
+title.sprite = Sprite(title);
+title.sprite.SetX(Window.GetWidth() / 2 - title.GetWidth() / 2);
+title.sprite.SetY(Window.GetHeight() / 2 - 60);
+
+# Status text (changes during boot)
+status_text = "Starting...";
+status.sprite = Sprite();
+
+fun update_status(text) {
+    global.status_text = text;
+    img = Image.Text(text, 0.78, 0.71, 0.96, "Sans 18");  # Lighter purple
+    status.sprite.SetImage(img);
+    status.sprite.SetX(Window.GetWidth() / 2 - img.GetWidth() / 2);
+    status.sprite.SetY(Window.GetHeight() / 2 + 20);
+}
+update_status("Starting...");
+
+# Simple dot animation
+dots = 0;
+fun refresh_callback() {
+    global.dots++;
+    n = global.dots % 40;
+    if (n < 10) d = ".";
+    else if (n < 20) d = "..";
+    else if (n < 30) d = "...";
+    else d = "";
+
+    img = Image.Text(d, 0.78, 0.71, 0.96, "Sans 18");
+    anim.sprite.SetImage(img);
+    anim.sprite.SetX(Window.GetWidth() / 2 - 15);
+    anim.sprite.SetY(Window.GetHeight() / 2 + 60);
+}
+
+anim.sprite = Sprite();
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# Handle messages from system
+fun message_callback(text) {
+    update_status(text);
+}
+Plymouth.SetMessageFunction(message_callback);
+
+# Handle password prompts (for encrypted disks)
+fun display_password_callback(prompt, bullets) {
+    pwd = Image.Text(prompt, 0.96, 0.95, 1.0, "Sans 16");
+    password.sprite.SetImage(pwd);
+    password.sprite.SetX(Window.GetWidth() / 2 - pwd.GetWidth() / 2);
+    password.sprite.SetY(Window.GetHeight() / 2 + 100);
+}
+password.sprite = Sprite();
+Plymouth.SetDisplayPasswordFunction(display_password_callback);

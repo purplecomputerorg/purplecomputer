@@ -42,28 +42,38 @@ POOL_DIR="$WORK_DIR/pool"
 
 # Packages to bundle for offline install (must match autoinstall.yaml)
 OFFLINE_PACKAGES=(
+    # Display
     xorg
     xinit
     xserver-xorg-video-all
     matchbox-window-manager
     alacritty
+    # Boot splash
+    plymouth
+    plymouth-themes
+    # Python
     python3
     python3-pip
     python3-venv
     ipython3
+    # Audio
     espeak-ng
     alsa-utils
     pulseaudio
+    # Fonts
     fonts-noto
     fonts-noto-color-emoji
     fonts-dejavu
+    # Tools
     git
     curl
     wget
     vim
     less
+    # Build tools
     build-essential
     python3-dev
+    # WiFi (Mac support)
     bcmwl-kernel-source
     firmware-b43-installer
     b43-fwcutter
@@ -232,8 +242,11 @@ cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
 cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
 cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/"
-# Prometheus installer display
-cp "$PROJECT_ROOT/autoinstall/files/prometheus.py" "$EXTRACT_DIR/purple_files/"
+
+# Copy Plymouth theme
+info "Adding Plymouth theme..."
+mkdir -p "$EXTRACT_DIR/purple_files/plymouth"
+cp -r "$PROJECT_ROOT/autoinstall/files/plymouth/purple" "$EXTRACT_DIR/purple_files/plymouth/"
 
 # Copy autoinstall config
 info "Adding autoinstall configuration..."

@@ -278,8 +278,17 @@ autoinstall:
       xset r rate 300 30
       xsetroot -solid "#2d1b4e"
       matchbox-window-manager &
+
+      # Dev mode: Use /mnt/purple if mounted (for VM development)
+      # Production: Use /home/purple/.purple (for standalone installations)
+      if [ -d /mnt/purple/purple_tui ] && [ -f /mnt/purple/purple_tui/purple_tui.py ]; then
+          PURPLE_PATH="/mnt/purple/purple_tui/purple_tui.py"
+      else
+          PURPLE_PATH="/home/purple/.purple/purple_tui.py"
+      fi
+
       exec alacritty --config-file /home/purple/.config/alacritty/alacritty.toml \
-          -e /home/purple/.purple/purple_tui.py
+          -e "$PURPLE_PATH"
       XINITRC
 
       if id purple >/dev/null 2>&1; then

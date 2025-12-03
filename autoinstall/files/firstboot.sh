@@ -18,7 +18,7 @@ chown kiduser:kiduser /home/kiduser 2>/dev/null || true
 chown -R kiduser:kiduser /home/kiduser/.purple
 chown -R kiduser:kiduser /home/kiduser/.config
 chmod +x /home/kiduser/.xinitrc
-chmod +x /home/kiduser/.purple/repl.py 2>/dev/null || true
+find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \; 2>/dev/null || true
 
 # Also fix for purple user if it exists
 if [ -d /home/purple ]; then
@@ -26,7 +26,7 @@ if [ -d /home/purple ]; then
     chown -R purple:purple /home/purple/.purple 2>/dev/null || true
     chown -R purple:purple /home/purple/.config 2>/dev/null || true
     chmod +x /home/purple/.xinitrc 2>/dev/null || true
-    chmod +x /home/purple/.purple/repl.py 2>/dev/null || true
+    find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \; 2>/dev/null || true
 fi
 
 # Test text-to-speech

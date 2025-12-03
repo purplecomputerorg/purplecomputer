@@ -47,7 +47,7 @@ Purple has four core modes. Hold a number key to switch:
 
 Purple reduces "screen time" feeling with three views:
 
-- **Screen view** — 8×4.5" viewport centered on screen, purple border filling the rest
+- **Screen view** — 10×6" viewport centered on screen, purple border filling the rest
 - **Line view** — Single line, calculator vibes
 - **Ears view** — Screen off, audio only (for Play and Listen modes)
 

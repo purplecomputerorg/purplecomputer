@@ -19,10 +19,20 @@ if command -v unclutter &> /dev/null; then
     unclutter -idle 2 &
 fi
 
-# Set the purple background color (brand identity - fills screen outside 8x4.5" viewport)
+# Set the purple background color (brand identity - fills screen outside 10×6" viewport)
 xsetroot -solid "#2d1b4e"
 
+# Launch matchbox window manager (minimal WM for proper fullscreen support)
+matchbox-window-manager &
+
+# Dev mode: Use /mnt/purple if mounted (for VM development)
+# Production: Use /home/purple/.purple (for standalone installations)
+if [ -d /mnt/purple/purple_tui ] && [ -f /mnt/purple/purple_tui/purple_tui.py ]; then
+    PURPLE_PATH="/mnt/purple/purple_tui/purple_tui.py"
+else
+    PURPLE_PATH="/home/purple/.purple/purple_tui.py"
+fi
+
 # Launch Alacritty in fullscreen with Purple Computer Textual TUI
-# No window manager needed - Alacritty handles fullscreen directly
 exec alacritty --config-file /home/purple/.config/alacritty/alacritty.toml \
-    -e /home/purple/.purple/purple_tui.py
+    -e "$PURPLE_PATH"

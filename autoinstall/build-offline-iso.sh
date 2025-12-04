@@ -176,10 +176,16 @@ apt-get update -qq
 apt-get install -y -qq dpkg-dev
 
 cd /pool
+# Fix permissions for apt sandboxing (suppresses warnings)
+chown -R _apt:root /pool 2>/dev/null || true
+
 PACKAGES=$(cat /packages.txt | tr "\n" " ")
 apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
     --no-conflicts --no-breaks --no-replaces --no-enhances \
     $PACKAGES | grep "^\w" | sort -u)
+
+# Restore root ownership for host access
+chown -R root:root /pool
 
 dpkg-scanpackages . /dev/null > Packages
 gzip -k -f Packages

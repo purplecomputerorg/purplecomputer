@@ -55,7 +55,6 @@ OFFLINE_PACKAGES=(
     python3
     python3-pip
     python3-venv
-    ipython3
     # Audio
     espeak-ng
     alsa-utils
@@ -63,20 +62,13 @@ OFFLINE_PACKAGES=(
     # Fonts
     fonts-noto
     fonts-noto-color-emoji
-    fonts-dejavu
     # Tools
     git
     curl
     wget
     vim
     less
-    # Build tools
-    build-essential
-    python3-dev
-    # WiFi (Mac support)
-    bcmwl-kernel-source
-    firmware-b43-installer
-    b43-fwcutter
+    # WiFi
     wpasupplicant
     wireless-tools
     iw
@@ -141,6 +133,7 @@ download_packages() {
 #!/bin/bash
 set -e
 apt-get update
+apt-get install -y dpkg-dev
 
 cd /pool
 apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \

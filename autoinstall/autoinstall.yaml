@@ -141,9 +141,6 @@ autoinstall:
     - echo "  Configuring Purple Computer..."
     - echo ""
 
-    # Install Python packages (including new dependencies)
-    - curtin in-target --target=/target -- pip3 install --break-system-packages colorama termcolor pillow packaging pyttsx3
-
     # Lock the purple user account (no password login)
     - chroot /target passwd -l purple
 

@@ -133,14 +133,8 @@ autoinstall:
   # Disable automatic updates for stability
   updates: security
 
-  # User data - additional cloud-init configuration
-  user-data:
-    # Disable automatic updates completely
-    package_update: false
-    package_upgrade: false
-
-    # Run commands after user creation
-    runcmd:
+  # Late commands - run after installation, before reboot
+  late-commands:
       - echo ""
       - echo -e "\033[1;35m  ✓\033[0m Installation complete"
       - echo ""
@@ -148,41 +142,32 @@ autoinstall:
       - echo ""
 
       # Install Python packages (including new dependencies)
-      - pip3 install --system colorama termcolor pillow packaging pyttsx3
+      - curtin in-target --target=/target -- pip3 install --break-system-packages colorama termcolor pillow packaging pyttsx3
 
       # Lock the purple user account (no password login)
-      - passwd -l purple
+      - chroot /target passwd -l purple
 
       # Create Purple Computer directory structure
-      - mkdir -p /home/purple/.purple/modes
-      - mkdir -p /home/purple/.purple/packs
-      - mkdir -p /home/purple/.config/alacritty
-      - mkdir -p /usr/share/purple
+      - mkdir -p /target/home/purple/.purple/modes
+      - mkdir -p /target/home/purple/.purple/packs
+      - mkdir -p /target/home/purple/.config/alacritty
+      - mkdir -p /target/usr/share/purple
 
-      # Create legacy kiduser for backwards compatibility
-      - useradd -m -s /bin/bash kiduser || true
-      - passwd -l kiduser
-      - mkdir -p /home/kiduser/.purple/modes
-      - mkdir -p /home/kiduser/.purple/packs
-      - mkdir -p /home/kiduser/.config/alacritty
+      # Set ownership
+      - chroot /target chown purple:purple /home/purple
+      - chroot /target chown -R purple:purple /home/purple/.purple
+      - chroot /target chown -R purple:purple /home/purple/.config
 
-      # Set ownership - IMPORTANT: fix /home/purple itself first, then subdirectories
-      - sh -c 'if id purple >/dev/null 2>&1; then chown purple:purple /home/purple; chown -R purple:purple /home/purple/.purple; chown -R purple:purple /home/purple/.config; fi'
-      - sh -c 'if id kiduser >/dev/null 2>&1; then chown kiduser:kiduser /home/kiduser; chown -R kiduser:kiduser /home/kiduser/.purple; chown -R kiduser:kiduser /home/kiduser/.config; fi'
-
-      # Disable unnecessary services (NetworkManager stays enabled for auto-updates)
-      - systemctl disable systemd-networkd-wait-online.service
-      - systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+      # Disable unnecessary services
+      - chroot /target systemctl disable systemd-networkd-wait-online.service
+      - chroot /target systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
       # Configure audio
-      - usermod -a -G audio purple
-      - usermod -a -G audio kiduser || true
+      - chroot /target usermod -a -G audio purple
 
       # Final message
       - echo "Purple Computer installation complete!"
 
-  # Late commands - run after installation, before reboot
-  late-commands:
     # Restore Ubuntu repos for future updates (after offline install)
     - |
       cat > /target/etc/apt/sources.list <<'SOURCES'

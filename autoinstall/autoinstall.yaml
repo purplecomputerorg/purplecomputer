@@ -8,9 +8,28 @@
 autoinstall:
   version: 1
 
+  # Reporting - silence verbose installer output
+  reporting:
+    builtin:
+      type: print
+
   # Early commands run before installation begins
   early-commands:
-    - echo "Starting Purple Computer installation (offline mode)..."
+    # Redirect kernel/installer messages away from main console
+    - echo 3 > /proc/sys/kernel/printk
+    # Show friendly welcome message
+    - echo -e "\n\n"
+    - echo -e "\033[1;35m"
+    - echo "  ╔════════════════════════════════════════╗"
+    - echo "  ║                                        ║"
+    - echo "  ║       Welcome to Purple Computer!     ║"
+    - echo "  ║                                        ║"
+    - echo "  ╚════════════════════════════════════════╝"
+    - echo -e "\033[0m"
+    - echo ""
+    - echo "  Setting up your computer..."
+    - echo "  This will take about 5 minutes."
+    - echo ""
 
   # APT configuration for offline install
   # Use local package pool from ISO, disable network sources during install
@@ -18,12 +37,10 @@ autoinstall:
     disable_components: []
     geoip: false
     preserve_sources_list: false
+    fallback: offline-install
     primary:
       - arches: [amd64, i386]
         uri: file:///cdrom/pool/
-    sources_list: |
-      # Local package repository from ISO (offline install)
-      deb [trusted=yes] file:///cdrom/pool ./
 
   # Locale and keyboard settings
   locale: en_US.UTF-8
@@ -47,6 +64,14 @@ autoinstall:
     layout:
       name: lvm
       sizing-policy: all
+
+  # Curtin configuration - reduce verbosity
+  curtin:
+    install:
+      log_file: /var/log/curtin-install.log
+      error_tarfile: /var/log/curtin-errors.tar
+      save_install_config: false
+      save_install_log: false
 
   # Identity - creates the purple user
   # NOTE: User will have NO PASSWORD (account is locked, auto-login only)
@@ -119,7 +144,11 @@ autoinstall:
 
     # Run commands after user creation
     runcmd:
-      - echo "Purple Computer post-install configuration..."
+      - echo ""
+      - echo -e "\033[1;35m  ✓\033[0m Installation complete"
+      - echo ""
+      - echo "  Configuring Purple Computer..."
+      - echo ""
 
       # Install Python packages (including new dependencies)
       - pip3 install --system colorama termcolor pillow packaging pyttsx3

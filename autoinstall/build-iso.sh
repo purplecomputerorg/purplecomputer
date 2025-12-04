@@ -270,7 +270,7 @@ insmod all_video
 set gfxpayload=keep
 
 menuentry "Purple Computer TEST INSTALL (auto-starts in 3s)" {
-    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
+    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash loglevel=0 systemd.show_status=false console=tty2 ---
     initrd /casper/initrd
 }
 EOF
@@ -289,9 +289,9 @@ if [ -f /boot/grub/fonts/dejavu_32.pf2 ]; then
     loadfont /boot/grub/fonts/dejavu_32.pf2
 fi
 
-# Colors
-set menu_color_normal=white/black
-set menu_color_highlight=black/white
+# Colors (purple theme)
+set menu_color_normal=light-magenta/black
+set menu_color_highlight=black/light-magenta
 
 set timeout=-1
 set default=0
@@ -305,7 +305,7 @@ echo "    WARNING: This will ERASE ALL DATA on the disk!"
 echo ""
 
 menuentry "Install Purple Computer" {
-    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash ---
+    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ quiet splash loglevel=0 systemd.show_status=false console=tty2 ---
     initrd /casper/initrd
 }
 

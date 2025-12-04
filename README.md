@@ -123,6 +123,9 @@ Purplepacks are **content only** (JSON + assets). They never contain executable 
 
 ### Creating Content Packs
 
+Purple supports two types of packs:
+
+**1. Content Packs** (JSON + assets only, no code)
 ```bash
 # Emoji pack structure
 my-emoji-pack/
@@ -147,6 +150,59 @@ Valid types: `emoji`, `definitions`, `sounds`, `words`
 **Build it:**
 ```bash
 tar -czvf my-pack.purplepack manifest.json content/
+```
+
+**2. Module Packs** (Python code + dependencies)
+
+For packs that need Python libraries or system dependencies, bundle everything needed:
+
+```bash
+# Module pack structure
+my-module-pack/
+├── manifest.json
+├── module.py           # Your Python code
+├── wheels/             # Pure Python dependencies (.whl files)
+│   ├── requests-2.31.0-py3-none-any.whl
+│   └── certifi-2023.7.22-py3-none-any.whl
+├── debs/               # System dependencies (Ubuntu .deb packages)
+│   └── libcairo2_1.16.0-7_amd64.deb
+└── requirements.txt    # List of dependencies
+```
+
+**manifest.json for modules:**
+```json
+{
+  "id": "my-module",
+  "name": "My Module",
+  "version": "1.0.0",
+  "type": "module",
+  "requires_pip": true,
+  "requires_system": ["libcairo2"]
+}
+```
+
+**How Purple Computer installs module packs automatically:**
+1. User downloads pack (via USB or feed)
+2. Purple Computer extracts to `~/.purple/packs/my-module/`
+3. If `debs/` exists: Runs `sudo dpkg -i debs/*.deb` (installs system dependencies)
+4. If `wheels/` exists: Runs `pip install --no-index --find-links=wheels/ -r requirements.txt` (installs Python deps offline)
+5. Loads the module
+
+**Why pip is included in the ISO:**
+- Purple Computer includes `python3-pip` to support automatic offline installation of module packs
+- Packs bundle `.whl` files so no internet is needed
+- Users never interact with pip directly - Purple Computer handles everything
+
+**Creating a module pack with dependencies:**
+```bash
+# Download wheels (do this on a machine with internet)
+pip download requests -d wheels/
+
+# Download .deb files
+apt download libcairo2
+
+# Bundle everything
+tar -czvf my-module.purplepack manifest.json module.py wheels/ debs/ requirements.txt
 ```
 
 ---

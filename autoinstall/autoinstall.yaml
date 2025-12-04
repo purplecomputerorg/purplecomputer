@@ -103,11 +103,7 @@ autoinstall:
 
     # Python environment
     - python3
-    - python3-pip
-    - python3-venv
-
-    # Text-to-speech
-    - espeak-ng
+    - python3-pip  # Required for automatic pack installation (modules may bundle .whl files)
 
     # Audio
     - alsa-utils
@@ -148,7 +144,6 @@ autoinstall:
     - mkdir -p /target/home/purple/.purple/modes
     - mkdir -p /target/home/purple/.purple/packs
     - mkdir -p /target/home/purple/.config/alacritty
-    - mkdir -p /target/usr/share/purple
 
     # Set ownership
     - chroot /target chown purple:purple /home/purple
@@ -246,14 +241,6 @@ autoinstall:
       find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
 
       echo "✓ Installation complete"
-      echo ""
-
-      # Getty auto-login is already configured in late-commands
-      # Just ensure it's enabled
-      echo "Configuring auto-login..."
-      systemctl daemon-reload
-      systemctl enable getty@tty1.service
-      echo "✓ Auto-login configured"
       echo ""
 
       # Create xinitrc (embed inline)
@@ -363,14 +350,6 @@ autoinstall:
         echo "✓ Mac keyboard/trackpad support enabled"
       fi
       echo ""
-
-      # Final ownership fix (CRITICAL for .Xauthority and X11 logs)
-      echo "Finalizing setup..."
-      # Fix home directories themselves first (prevents X11 permission errors)
-      if id purple >/dev/null 2>&1; then
-        chown purple:purple /home/purple
-        chown -R purple:purple /home/purple
-      fi
 
       # Clean up staging area
       rm -rf /opt/purple-install

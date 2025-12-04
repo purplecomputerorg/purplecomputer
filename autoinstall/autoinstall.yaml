@@ -93,10 +93,6 @@ autoinstall:
   # Package selection
   # IMPORTANT: Ubuntu Server base, NO desktop environment packages
   packages:
-    # Boot splash
-    - plymouth
-    - plymouth-themes
-
     # X11 minimal (just the X server, no window manager, no desktop environment)
     - xorg
     - xinit
@@ -403,18 +399,6 @@ autoinstall:
       echo "✓ Xorg environment configured"
       echo ""
 
-      # Install Plymouth theme
-      echo "Setting up boot splash..."
-      if [ -d /opt/purple-install/plymouth/purple ]; then
-        mkdir -p /usr/share/plymouth/themes/purplecomputer
-        cp -r /opt/purple-install/plymouth/purple/* /usr/share/plymouth/themes/purplecomputer/
-        echo "✓ Plymouth theme installed"
-      fi
-      echo ""
-
-      # Note: Silent boot configuration is done in late-commands during install
-      # to avoid slow update-initramfs blocking first boot
-
       # Mac hardware support - load hid-apple for keyboards/trackpads
       echo "Configuring Mac hardware support..."
       if lsmod | grep -q hid_apple || modinfo hid_apple >/dev/null 2>&1; then
@@ -457,14 +441,9 @@ autoinstall:
     - chmod +x /target/usr/local/bin/purple-first-boot.sh
     - chroot /target systemctl enable purple-first-boot.service
 
-    # Configure silent boot (done here during install to avoid blocking first boot)
-    - echo "Configuring silent boot..."
-    - |
-      if [ -f /cdrom/purple_files/configure-silent-boot.sh ]; then
-        cp /cdrom/purple_files/configure-silent-boot.sh /target/tmp/
-        chroot /target bash /tmp/configure-silent-boot.sh
-        rm /target/tmp/configure-silent-boot.sh
-      fi
+    # Set GRUB timeout to 0 for fast boot
+    - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    - curtin in-target --target=/target -- update-grub
 
     - echo "Purple Computer late commands complete!"
 

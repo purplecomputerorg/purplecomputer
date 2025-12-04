@@ -130,9 +130,6 @@ autoinstall:
     - iw
     - rfkill
 
-    # 9P filesystem support (for VM development)
-    - 9mount
-
   # Disable automatic updates for stability
   updates: security
 

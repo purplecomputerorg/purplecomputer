@@ -160,31 +160,30 @@ download_packages() {
 
     cd "$REPO_DIR/pool"
 
-    # Create download script for Docker
-    cat > "$WORK_DIR/download-packages.sh" <<'SCRIPT'
-#!/bin/bash
-set -e
-apt-get update
-apt-get install -y dpkg-dev
-
-cd /pool
-apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
-    --no-conflicts --no-breaks --no-replaces --no-enhances \
-    "$@" | grep "^\w" | sort -u)
-
-dpkg-scanpackages . /dev/null > Packages
-gzip -k -f Packages
-echo "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"
-SCRIPT
-    chmod +x "$WORK_DIR/download-packages.sh"
+    # Write packages to a file for Docker
+    echo "$packages" > "$WORK_DIR/packages.txt"
 
     # Download packages using Docker with Ubuntu 24.04
     info "Downloading packages in Ubuntu Docker container..."
     docker run --rm \
         -v "$REPO_DIR/pool:/pool" \
-        -v "$WORK_DIR/download-packages.sh:/download.sh" \
+        -v "$WORK_DIR/packages.txt:/packages.txt" \
         ubuntu:24.04 \
-        /bin/bash -c "/download.sh $packages" || error "Package download failed"
+        /bin/bash -c '
+set -e
+apt-get update -qq
+apt-get install -y -qq dpkg-dev
+
+cd /pool
+PACKAGES=$(cat /packages.txt | tr "\n" " ")
+apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
+    --no-conflicts --no-breaks --no-replaces --no-enhances \
+    $PACKAGES | grep "^\w" | sort -u)
+
+dpkg-scanpackages . /dev/null > Packages
+gzip -k -f Packages
+echo "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"
+' || error "Package download failed"
 
     local pkg_count=$(ls -1 *.deb 2>/dev/null | wc -l)
     info "✓ Downloaded $pkg_count packages"

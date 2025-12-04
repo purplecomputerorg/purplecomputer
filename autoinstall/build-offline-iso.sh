@@ -253,29 +253,18 @@ EOF
 configure_autoinstall() {
     info "Configuring autoinstall for offline installation..."
 
-    # Create modified autoinstall.yaml with offline repo configuration
-    cat > "$EXTRACT_DIR/autoinstall.yaml" <<'AUTOINSTALL'
-#cloud-config
-# Purple Computer Autoinstall - Offline Mode
-autoinstall:
-  version: 1
-
-  # APT configuration - use embedded offline repository
-  apt:
-    disable_components: []
-    geoip: false
-    preserve_sources_list: false
-    primary:
-      - arches: [amd64]
-        uri: file:///cdrom
-    fallback: offline-install
-    sources_list: |
-      deb [trusted=yes check-valid-until=no] file:///cdrom noble main
-AUTOINSTALL
-
-    # Append the rest of autoinstall.yaml (without the apt section)
-    yq eval 'del(.autoinstall.apt)' "$PROJECT_ROOT/autoinstall/autoinstall.yaml" | \
-        tail -n +2 >> "$EXTRACT_DIR/autoinstall.yaml"
+    # Use yq to properly merge offline apt config into the original autoinstall.yaml
+    # This replaces the apt section while preserving everything else
+    yq eval '
+        .autoinstall.apt = {
+            "disable_components": [],
+            "geoip": false,
+            "preserve_sources_list": false,
+            "primary": [{"arches": ["amd64"], "uri": "file:///cdrom"}],
+            "fallback": "offline-install",
+            "sources_list": "deb [trusted=yes check-valid-until=no] file:///cdrom noble main\n"
+        }
+    ' "$PROJECT_ROOT/autoinstall/autoinstall.yaml" > "$EXTRACT_DIR/autoinstall.yaml"
 
     # Also copy to nocloud for autoinstall discovery
     mkdir -p "$EXTRACT_DIR/nocloud"

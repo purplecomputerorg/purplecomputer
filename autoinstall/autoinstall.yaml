@@ -1,9 +1,28 @@
 #cloud-config
+# ============================================================================
 # Purple Computer Autoinstall Configuration
-# This file drives the automated Ubuntu Server installation
+# ============================================================================
+#
+# PURPOSE: This file tells Ubuntu's installer WHAT to do during installation
+#
+# When the ISO boots, Ubuntu's subiquity installer reads this file and:
+# - Partitions the disk
+# - Installs packages (from bundled pool or internet)
+# - Creates users and configures the system
+# - Runs setup scripts
+#
+# This file is the SINGLE SOURCE OF TRUTH for:
+# - Package list (build-iso.sh extracts packages from here using yq)
+# - User configuration
+# - System setup
+#
+# IMPORTANT: The package list below is automatically extracted by build-iso.sh
+# to download packages for offline installation. Keep packages in sync by only
+# editing the packages list in this file, never in build-iso.sh.
 #
 # Architecture: Ubuntu Server + minimal Xorg (no desktop environment) + alacritty fullscreen
 # No GUI, no window manager, no desktop bloat - just a fullscreen terminal
+# ============================================================================
 
 autoinstall:
   version: 1

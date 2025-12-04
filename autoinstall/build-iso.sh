@@ -1,15 +1,34 @@
 #!/bin/bash
+# ============================================================================
 # Purple Computer ISO Builder (Linux only)
-# Creates a bootable Ubuntu Server ISO with Purple Computer pre-configured
+# ============================================================================
+#
+# PURPOSE: This script creates the bootable ISO file BEFORE installation
+#
+# What this script does:
+# 1. Downloads base Ubuntu Server ISO
+# 2. Extracts package list from autoinstall.yaml (using yq)
+# 3. Downloads all packages for offline installation
+# 4. Bundles packages + Purple Computer files + autoinstall.yaml into ISO
+# 5. Creates bootable ISO file
+#
+# When you boot from the resulting ISO, Ubuntu's installer reads autoinstall.yaml
+# and uses the bundled packages to install without needing internet.
+#
+# IMPORTANT: This script does NOT define the package list!
+# Package list is extracted from autoinstall.yaml to keep them in sync.
+# Edit packages in autoinstall.yaml, not here.
+#
 # Architecture: Ubuntu Server + minimal Xorg (no desktop) + alacritty fullscreen
 #
-# Requirements: Linux, Docker, xorriso, curl, rsync
+# Requirements: Linux, Docker, xorriso, curl, rsync, yq
 #
 # Usage:
 #   ./autoinstall/build-iso.sh         # Standard ISO (requires Enter to install)
 #   ./autoinstall/build-iso.sh --test  # Test ISO (auto-installs for VM testing)
 #
 # All builds are offline-capable with packages bundled (~4-5GB)
+# ============================================================================
 
 set -e
 
@@ -40,40 +59,15 @@ MOUNT_DIR="$WORK_DIR/mount"
 EXTRACT_DIR="$WORK_DIR/extract"
 POOL_DIR="$WORK_DIR/pool"
 
-# Packages to bundle for offline install (must match autoinstall.yaml)
-OFFLINE_PACKAGES=(
-    # Display
-    xorg
-    xinit
-    xserver-xorg-video-all
-    matchbox-window-manager
-    alacritty
-    # Boot splash
-    plymouth
-    plymouth-themes
-    # Python
-    python3
-    python3-pip
-    python3-venv
-    # Audio
-    espeak-ng
-    alsa-utils
-    pulseaudio
-    # Fonts
-    fonts-noto
-    fonts-noto-color-emoji
-    # Tools
-    git
-    curl
-    wget
-    vim
-    less
-    # WiFi
-    wpasupplicant
-    wireless-tools
-    iw
-    rfkill
-)
+# Extract package list from autoinstall.yaml (single source of truth)
+# This ensures build-iso.sh and autoinstall.yaml stay in sync
+extract_packages() {
+    yq eval '.autoinstall.packages[]' "$PROJECT_ROOT/autoinstall/autoinstall.yaml" 2>/dev/null || {
+        error "Failed to extract packages from autoinstall.yaml"
+        error "Make sure yq is installed: sudo snap install yq"
+        exit 1
+    }
+}
 
 # Cleanup on exit
 cleanup() {
@@ -106,11 +100,17 @@ fi
 
 # Check dependencies
 info "Checking dependencies..."
-for cmd in xorriso curl rsync docker; do
+for cmd in xorriso curl rsync docker yq; do
     if ! command -v $cmd &> /dev/null; then
         error "$cmd is not installed."
-        echo "  Install with: sudo apt install $cmd"
-        [ "$cmd" = "docker" ] && echo "  Then: sudo usermod -aG docker $USER && newgrp docker"
+        if [ "$cmd" = "docker" ]; then
+            echo "  Install with: sudo apt install docker"
+            echo "  Then: sudo usermod -aG docker $USER && newgrp docker"
+        elif [ "$cmd" = "yq" ]; then
+            echo "  Install with: sudo snap install yq"
+        else
+            echo "  Install with: sudo apt install $cmd"
+        fi
         exit 1
     fi
 done
@@ -124,6 +124,18 @@ fi
 # Download packages using Docker
 download_packages() {
     info "Downloading packages for offline install..."
+    info "Extracting package list from autoinstall.yaml..."
+
+    # Extract packages from autoinstall.yaml
+    local packages
+    packages=$(extract_packages | tr '\n' ' ')
+
+    if [ -z "$packages" ]; then
+        error "No packages found in autoinstall.yaml"
+        exit 1
+    fi
+
+    info "Found $(echo $packages | wc -w) packages to download"
     warn "This may take 5-10 minutes on first run (cached for subsequent builds)"
 
     mkdir -p "$POOL_DIR"
@@ -150,7 +162,7 @@ SCRIPT
         -v "$POOL_DIR:/pool" \
         -v "$WORK_DIR/download-packages.sh:/download.sh" \
         ubuntu:24.04 \
-        /bin/bash -c "/download.sh ${OFFLINE_PACKAGES[*]}"
+        /bin/bash -c "/download.sh $packages"
 
     PKG_COUNT=$(ls -1 "$POOL_DIR"/*.deb 2>/dev/null | wc -l)
     if [ "$PKG_COUNT" -eq 0 ]; then
@@ -232,18 +244,11 @@ cp -r "$POOL_DIR"/* "$EXTRACT_DIR/pool/"
 info "Adding Purple Computer files..."
 mkdir -p "$EXTRACT_DIR/purple_files"
 cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
-cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/"
-cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/"
-cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/"
 
-# Copy Plymouth theme
-info "Adding Plymouth theme..."
-mkdir -p "$EXTRACT_DIR/purple_files/plymouth"
-cp -r "$PROJECT_ROOT/autoinstall/files/plymouth/purple" "$EXTRACT_DIR/purple_files/plymouth/"
-
-# Copy silent boot configuration script
-info "Adding silent boot configuration script..."
-cp "$PROJECT_ROOT/autoinstall/files/configure-silent-boot.sh" "$EXTRACT_DIR/purple_files/"
+# Copy configuration files if they exist
+[ -d "$PROJECT_ROOT/autoinstall/files/systemd" ] && cp -r "$PROJECT_ROOT/autoinstall/files/systemd" "$EXTRACT_DIR/purple_files/" || true
+[ -f "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" ] && cp "$PROJECT_ROOT/autoinstall/files/xinit/xinitrc" "$EXTRACT_DIR/purple_files/" || true
+[ -f "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" ] && cp "$PROJECT_ROOT/autoinstall/files/alacritty/alacritty.toml" "$EXTRACT_DIR/purple_files/" || true
 
 # Copy autoinstall config
 info "Adding autoinstall configuration..."

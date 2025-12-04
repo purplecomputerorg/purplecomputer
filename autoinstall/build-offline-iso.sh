@@ -152,6 +152,7 @@ download_packages() {
         "grub-efi-amd64"
         "grub-efi-amd64-signed"
         "shim-signed"
+        "snapd"
     )
 
     packages="$packages ${critical_packages[*]}"

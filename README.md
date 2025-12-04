@@ -84,12 +84,22 @@ what is elephant   # Definition lookup
 **Target hardware:** 2012-2018 Mac laptops (consistent bootloaders, no T2/Apple Silicon complexity)
 
 **Option 1: USB Install (Recommended)**
-1. Download the Purple Computer ISO (or build with `make build-iso`)
+1. Download the Purple Computer ISO (or build with `sudo bash ./autoinstall/build-offline-iso.sh`)
 2. Write to USB with [balenaEtcher](https://www.balena.io/etcher/)
 3. Boot from USB — installation is automatic
 4. Remove USB when done
 
-**Option 2: Manual Install** (Existing Ubuntu 22.04):
+**How the offline installer works:**
+
+Purple Computer uses a **fully offline installation** with an embedded apt repository. This means:
+- **Zero network required** — The ISO contains all packages (~4-5GB total)
+- **Proper Debian repository structure** — `/pool/` and `/dists/` with Packages.gz metadata
+- **APT treats it as a native source** — `file:///cdrom` is configured as the primary apt source
+- **OEM-grade reliability** — Same approach Dell/Lenovo use for preload installers
+
+This is **NOT** relying on Ubuntu's fragile "auto-discover packages on cdrom" feature (which is broken in 24.04). Instead, we provide a real apt repository that APT understands natively.
+
+**Option 2: Manual Install** (Existing Ubuntu 24.04):
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer

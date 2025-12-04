@@ -412,16 +412,8 @@ autoinstall:
       fi
       echo ""
 
-      # Configure silent boot
-      echo "Configuring silent boot..."
-      if [ -f /opt/purple-install/configure-silent-boot.sh ]; then
-        chmod +x /opt/purple-install/configure-silent-boot.sh
-        /opt/purple-install/configure-silent-boot.sh
-        echo "✓ Silent boot configured"
-      else
-        echo "⚠ Silent boot script not found, skipping"
-      fi
-      echo ""
+      # Note: Silent boot configuration is done in late-commands during install
+      # to avoid slow update-initramfs blocking first boot
 
       # Mac hardware support - load hid-apple for keyboards/trackpads
       echo "Configuring Mac hardware support..."
@@ -464,6 +456,15 @@ autoinstall:
 
     - chmod +x /target/usr/local/bin/purple-first-boot.sh
     - chroot /target systemctl enable purple-first-boot.service
+
+    # Configure silent boot (done here during install to avoid blocking first boot)
+    - echo "Configuring silent boot..."
+    - |
+      if [ -f /cdrom/purple_files/configure-silent-boot.sh ]; then
+        cp /cdrom/purple_files/configure-silent-boot.sh /target/tmp/
+        chroot /target bash /tmp/configure-silent-boot.sh
+        rm /target/tmp/configure-silent-boot.sh
+      fi
 
     - echo "Purple Computer late commands complete!"
 

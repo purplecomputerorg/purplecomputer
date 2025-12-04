@@ -99,31 +99,21 @@ Purple Computer uses a **fully offline installation** with an embedded apt repos
 
 This is **NOT** relying on Ubuntu's fragile "auto-discover packages on cdrom" feature (which is broken in 24.04). Instead, we provide a real apt repository that APT understands natively.
 
-**Option 2: Manual Install** (Existing Ubuntu 24.04):
-```bash
-git clone https://github.com/purplecomputerorg/purplecomputer.git
-cd purplecomputer
-sudo ./autoinstall/files/setup.sh
-sudo reboot
-```
-
 ---
 
-## Content Packs
+## Purplepacks
 
-Purple uses **purplepacks** for content — emoji, definitions, sounds, words.
+Purple uses **Purplepacks** to distribute content and modules.
 
-Purplepacks are **content only** (JSON + assets). They never contain executable code. Parents can safely install them offline.
-
-**Built-in packs:**
+**Built-in Purplepacks:**
 - `core-emoji` — ~100 kid-friendly emojis with synonyms
 - `core-definitions` — Simple word definitions
 - `core-sounds` — Number and punctuation sounds for Play mode
 - `core-words` — Word lookups and synonyms
 
-### Creating Content Packs
+### Creating Purplepacks
 
-Purple supports two types of packs:
+Purple supports two types of Purplepacks:
 
 **1. Content Packs** (JSON + assets only, no code)
 ```bash
@@ -181,16 +171,16 @@ my-module-pack/
 }
 ```
 
-**How Purple Computer installs module packs automatically:**
-1. User downloads pack (via USB or feed)
+**How Purple Computer installs Module Purplepacks automatically:**
+1. User downloads Purplepack (via USB or feed)
 2. Purple Computer extracts to `~/.purple/packs/my-module/`
 3. If `debs/` exists: Runs `sudo dpkg -i debs/*.deb` (installs system dependencies)
 4. If `wheels/` exists: Runs `pip install --no-index --find-links=wheels/ -r requirements.txt` (installs Python deps offline)
 5. Loads the module
 
 **Why pip is included in the ISO:**
-- Purple Computer includes `python3-pip` to support automatic offline installation of module packs
-- Packs bundle `.whl` files so no internet is needed
+- Purple Computer includes `python3-pip` to support automatic offline installation of Module Purplepacks
+- Purplepacks bundle `.whl` files so no internet is needed
 - Users never interact with pip directly - Purple Computer handles everything
 
 **Creating a module pack with dependencies:**
@@ -265,21 +255,22 @@ purplecomputer/
 │   │   ├── play_mode.py  # Music and art grid
 │   │   ├── write_mode.py # Simple text editor
 │   │   └── listen_mode.py# Stories (stub)
-│   ├── content.py        # Content API for purplepacks
-│   ├── pack_manager.py   # Content-only pack installer
+│   ├── content.py        # Content API for packs
+│   ├── pack_manager.py   # Pack installer (content + modules)
 │   └── tts.py            # Piper TTS integration
 │
-├── packs/                # Content packs (no executable code)
+├── packs/                # Built-in content packs
 │   ├── core-emoji/       # Emojis + synonyms
 │   ├── core-definitions/ # Word definitions
 │   ├── core-sounds/      # Audio files for Play mode
 │   └── core-words/       # Word lookups
 │
-├── autoinstall/          # Ubuntu installation configs
+├── autoinstall/          # Ubuntu 24.04 offline installer
+│   ├── autoinstall.yaml  # Ubuntu autoinstall configuration
+│   ├── build-offline-iso.sh  # ISO builder script
 │   └── files/
-│       ├── alacritty/    # Terminal config (dev + prod)
-│       ├── xinit/        # X11 startup
-│       └── setup.sh      # Installation script
+│       ├── alacritty/    # Terminal config
+│       └── xinit/        # X11 startup config
 │
 ├── scripts/              # Build and dev utilities
 │   ├── setup_dev.sh      # Development environment setup
@@ -291,7 +282,7 @@ purplecomputer/
 
 **Key design decisions:**
 - **Modes are Python modules** — Curated, reviewed code shipped with Purple. Future modes distributed via Purple Store only.
-- **Purplepacks are content only** — JSON + assets, no Python. Safe for parents to install.
+- **Two types of Purplepacks** — Content Packs (JSON + assets, safe for anyone) and Module Packs (Python code + dependencies, curated/reviewed).
 - **Alacritty terminal** — Fast, simple, reliable Unicode/emoji rendering.
 - **Textual TUI** — Modern Python TUI framework for the interface.
 - **Piper TTS** — Offline text-to-speech using neural voices.
@@ -309,7 +300,7 @@ purplecomputer/
 
 **Recommended:** 2012-2018 MacBook Air/Pro
 
-**Stack:** Ubuntu Server 22.04 + minimal Xorg + Alacritty + Textual TUI
+**Stack:** Ubuntu Server 24.04 + minimal Xorg + Alacritty + Textual TUI
 
 **Python Dependencies:** `textual`, `rich`, `wcwidth`, `pygame`, `piper-tts`
 
@@ -341,4 +332,4 @@ Purple Computer Source-Available License 1.0 — see [LICENSE](LICENSE)
 
 ---
 
-Made with 💜 for curious little minds
+💜

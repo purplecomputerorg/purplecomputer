@@ -386,11 +386,20 @@ autoinstall:
       # Install Plymouth theme
       echo "Setting up boot splash..."
       if [ -d /opt/purple-install/plymouth/purple ]; then
-        mkdir -p /usr/share/plymouth/themes/purple
-        cp -r /opt/purple-install/plymouth/purple/* /usr/share/plymouth/themes/purple/
-        plymouth-set-default-theme purple
-        update-initramfs -u
-        echo "✓ Boot splash configured"
+        mkdir -p /usr/share/plymouth/themes/purplecomputer
+        cp -r /opt/purple-install/plymouth/purple/* /usr/share/plymouth/themes/purplecomputer/
+        echo "✓ Plymouth theme installed"
+      fi
+      echo ""
+
+      # Configure silent boot
+      echo "Configuring silent boot..."
+      if [ -f /opt/purple-install/configure-silent-boot.sh ]; then
+        chmod +x /opt/purple-install/configure-silent-boot.sh
+        /opt/purple-install/configure-silent-boot.sh
+        echo "✓ Silent boot configured"
+      else
+        echo "⚠ Silent boot script not found, skipping"
       fi
       echo ""
 
@@ -435,11 +444,6 @@ autoinstall:
 
     - chmod +x /target/usr/local/bin/purple-first-boot.sh
     - chroot /target systemctl enable purple-first-boot.service
-
-    # Configure GRUB for fast boot with splash
-    - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=1/' /etc/default/grub
-    - curtin in-target --target=/target -- sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"/' /etc/default/grub
-    - curtin in-target --target=/target -- update-grub
 
     - echo "Purple Computer late commands complete!"
 

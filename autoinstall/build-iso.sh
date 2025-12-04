@@ -248,6 +248,10 @@ info "Adding Plymouth theme..."
 mkdir -p "$EXTRACT_DIR/purple_files/plymouth"
 cp -r "$PROJECT_ROOT/autoinstall/files/plymouth/purple" "$EXTRACT_DIR/purple_files/plymouth/"
 
+# Copy silent boot configuration script
+info "Adding silent boot configuration script..."
+cp "$PROJECT_ROOT/autoinstall/files/configure-silent-boot.sh" "$EXTRACT_DIR/purple_files/"
+
 # Copy autoinstall config
 info "Adding autoinstall configuration..."
 mkdir -p "$EXTRACT_DIR/nocloud"

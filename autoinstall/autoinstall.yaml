@@ -37,10 +37,12 @@ autoinstall:
     disable_components: []
     geoip: false
     preserve_sources_list: false
-    fallback: offline-install
     primary:
       - arches: [amd64, i386]
         uri: file:///cdrom/pool/
+    sources_list: |
+      # Local package repository from ISO (offline install)
+      deb [trusted=yes] file:///cdrom/pool ./
 
   # Locale and keyboard settings
   locale: en_US.UTF-8

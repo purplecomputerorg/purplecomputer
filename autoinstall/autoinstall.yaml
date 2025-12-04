@@ -135,38 +135,38 @@ autoinstall:
 
   # Late commands - run after installation, before reboot
   late-commands:
-      - echo ""
-      - echo -e "\033[1;35m  ✓\033[0m Installation complete"
-      - echo ""
-      - echo "  Configuring Purple Computer..."
-      - echo ""
+    - echo ""
+    - echo -e "\033[1;35m  ✓\033[0m Installation complete"
+    - echo ""
+    - echo "  Configuring Purple Computer..."
+    - echo ""
 
-      # Install Python packages (including new dependencies)
-      - curtin in-target --target=/target -- pip3 install --break-system-packages colorama termcolor pillow packaging pyttsx3
+    # Install Python packages (including new dependencies)
+    - curtin in-target --target=/target -- pip3 install --break-system-packages colorama termcolor pillow packaging pyttsx3
 
-      # Lock the purple user account (no password login)
-      - chroot /target passwd -l purple
+    # Lock the purple user account (no password login)
+    - chroot /target passwd -l purple
 
-      # Create Purple Computer directory structure
-      - mkdir -p /target/home/purple/.purple/modes
-      - mkdir -p /target/home/purple/.purple/packs
-      - mkdir -p /target/home/purple/.config/alacritty
-      - mkdir -p /target/usr/share/purple
+    # Create Purple Computer directory structure
+    - mkdir -p /target/home/purple/.purple/modes
+    - mkdir -p /target/home/purple/.purple/packs
+    - mkdir -p /target/home/purple/.config/alacritty
+    - mkdir -p /target/usr/share/purple
 
-      # Set ownership
-      - chroot /target chown purple:purple /home/purple
-      - chroot /target chown -R purple:purple /home/purple/.purple
-      - chroot /target chown -R purple:purple /home/purple/.config
+    # Set ownership
+    - chroot /target chown purple:purple /home/purple
+    - chroot /target chown -R purple:purple /home/purple/.purple
+    - chroot /target chown -R purple:purple /home/purple/.config
 
-      # Disable unnecessary services
-      - chroot /target systemctl disable systemd-networkd-wait-online.service
-      - chroot /target systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+    # Disable unnecessary services
+    - chroot /target systemctl disable systemd-networkd-wait-online.service
+    - chroot /target systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 
-      # Configure audio
-      - chroot /target usermod -a -G audio purple
+    # Configure audio
+    - chroot /target usermod -a -G audio purple
 
-      # Final message
-      - echo "Purple Computer installation complete!"
+    # Final message
+    - echo "Purple Computer installation complete!"
 
     # Restore Ubuntu repos for future updates (after offline install)
     - |
@@ -248,13 +248,6 @@ autoinstall:
       fi
       find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \;
 
-      # Backwards compatibility with kiduser
-      if [ -d /home/kiduser ]; then
-        mkdir -p /home/kiduser/.purple
-        cp -r /opt/purple-install/* /home/kiduser/.purple/
-        chown -R kiduser:kiduser /home/kiduser/.purple
-        find /home/kiduser/.purple -name "*.py" -type f -exec chmod +x {} \;
-      fi
       echo "✓ Installation complete"
       echo ""
 
@@ -296,11 +289,6 @@ autoinstall:
         chmod +x /home/purple/.xinitrc
       fi
 
-      if [ -d /home/kiduser ]; then
-        cp /home/purple/.xinitrc /home/kiduser/.xinitrc
-        chown kiduser:kiduser /home/kiduser/.xinitrc
-        chmod +x /home/kiduser/.xinitrc
-      fi
 
       # Create alacritty config (embed inline)
       mkdir -p /home/purple/.config/alacritty
@@ -350,11 +338,6 @@ autoinstall:
         chown -R purple:purple /home/purple/.config
       fi
 
-      if [ -d /home/kiduser ]; then
-        mkdir -p /home/kiduser/.config/alacritty
-        cp /home/purple/.config/alacritty/alacritty.toml /home/kiduser/.config/alacritty/alacritty.toml
-        chown -R kiduser:kiduser /home/kiduser/.config
-      fi
 
       # Setup auto-startx in .bash_profile
       echo "Configuring auto-start..."
@@ -368,15 +351,6 @@ autoinstall:
         chown purple:purple /home/purple/.bash_profile
       fi
 
-      if [ -d /home/kiduser ]; then
-        cat >> /home/kiduser/.bash_profile <<'BASHEOF'
-      # Purple Computer auto-start X11
-      if [ -z "$DISPLAY" ] && [ "$XDG_VTNR" = "1" ]; then
-        exec startx
-      fi
-      BASHEOF
-        chown kiduser:kiduser /home/kiduser/.bash_profile
-      fi
       echo "✓ Auto-start configured"
       echo ""
 
@@ -399,10 +373,6 @@ autoinstall:
       if id purple >/dev/null 2>&1; then
         chown purple:purple /home/purple
         chown -R purple:purple /home/purple
-      fi
-      if id kiduser >/dev/null 2>&1; then
-        chown kiduser:kiduser /home/kiduser
-        chown -R kiduser:kiduser /home/kiduser
       fi
 
       # Clean up staging area

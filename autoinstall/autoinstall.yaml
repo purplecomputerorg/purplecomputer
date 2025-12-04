@@ -89,6 +89,15 @@ autoinstall:
   ssh:
     install-server: false
 
+  # APT configuration - disable mirror checking for offline install
+  apt:
+    disable_components: []
+    geoip: false
+    preserve_sources_list: false
+    primary:
+      - arches: [default]
+        uri: file:///cdrom
+
   # Package selection
   # IMPORTANT: Ubuntu Server base, NO desktop environment packages
   packages:
@@ -159,15 +168,6 @@ autoinstall:
 
     # Final message
     - echo "Purple Computer installation complete!"
-
-    # Restore Ubuntu repos for future updates (after offline install)
-    - |
-      cat > /target/etc/apt/sources.list <<'SOURCES'
-      # Ubuntu 24.04 LTS (Noble Numbat)
-      deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
-      deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
-      deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
-      SOURCES
 
     # Copy Purple Computer files from ISO to target system
     - mkdir -p /target/opt/purple-install
@@ -291,10 +291,21 @@ autoinstall:
       fi
       chown -R purple:purple /home/purple/.purple 2>/dev/null || true
       find /home/purple/.purple -name "*.py" -type f -exec chmod +x {} \; 2>/dev/null || true
+
+      # Restore Ubuntu repos for future updates (after offline install)
+      cat > /etc/apt/sources.list <<'APT'
+      # Ubuntu 24.04 LTS (Noble Numbat)
+      deb http://archive.ubuntu.com/ubuntu noble main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu noble-updates main restricted universe multiverse
+      deb http://archive.ubuntu.com/ubuntu noble-security main restricted universe multiverse
+      APT
+
+      # Mac hardware support
       if lsmod | grep -q hid_apple || modinfo hid_apple >/dev/null 2>&1; then
         echo "hid_apple" >> /etc/modules
         echo "options hid_apple fnmode=2" > /etc/modprobe.d/hid_apple.conf
       fi
+
       rm -rf /opt/purple-install
       touch /etc/purple-computer-configured
       systemctl disable purple-first-boot.service

@@ -103,7 +103,7 @@ This is **NOT** relying on Ubuntu's fragile "auto-discover packages on cdrom" fe
 
 ## Purplepacks
 
-Purple uses **Purplepacks** to distribute content and modules.
+Purple uses **Purplepacks** to distribute content only. Modules are part of Purple core.
 
 **Built-in Purplepacks:**
 - `core-emoji` — ~100 kid-friendly emojis with synonyms
@@ -111,11 +111,10 @@ Purple uses **Purplepacks** to distribute content and modules.
 - `core-sounds` — Number and punctuation sounds for Play mode
 - `core-words` — Word lookups and synonyms
 
-### Creating Purplepacks
+### Creating Content Packs
 
-Purple supports two types of Purplepacks:
+Content packs are JSON + assets only (no code):
 
-**1. Content Packs** (JSON + assets only, no code)
 ```bash
 # Emoji pack structure
 my-emoji-pack/
@@ -142,58 +141,22 @@ Valid types: `emoji`, `definitions`, `sounds`, `words`
 tar -czvf my-pack.purplepack manifest.json content/
 ```
 
-**2. Module Packs** (Python code + dependencies)
+### Modules & Dependencies
 
-For packs that need Python libraries or system dependencies, bundle everything needed:
+**Modules are curated Python code shipped with Purple core**, not distributed as packs. This keeps Purple simple:
 
-```bash
-# Module pack structure
-my-module-pack/
-├── manifest.json
-├── module.py           # Your Python code
-├── wheels/             # Pure Python dependencies (.whl files)
-│   ├── requests-2.31.0-py3-none-any.whl
-│   └── certifi-2023.7.22-py3-none-any.whl
-├── debs/               # System dependencies (Ubuntu .deb packages)
-│   └── libcairo2_1.16.0-7_amd64.deb
-└── requirements.txt    # List of dependencies
-```
+- All modules live in `purple_tui/modes/` and are reviewed/maintained by the Purple team
+- All dependencies (pip packages, deb packages) are declared globally in Purple's installation manifest
+- When Purple updates, it includes any new dependencies needed by new or updated modules
+- Users never manage dependencies — Purple handles everything atomically
 
-**manifest.json for modules:**
-```json
-{
-  "id": "my-module",
-  "name": "My Module",
-  "version": "1.0.0",
-  "type": "module",
-  "requires_pip": true,
-  "requires_system": ["libcairo2"]
-}
-```
+**Why this approach:**
+- **Simplicity** — One version of Purple = one exact environment
+- **Reliability** — No dependency conflicts between modules
+- **Atomic updates** — Purple version X.Y.Z always means the same thing
+- **Just works** — No "module needs package X but you have Y" situations
 
-**How Purple Computer installs Module Purplepacks automatically:**
-1. User downloads Purplepack (via USB or feed)
-2. Purple Computer extracts to `~/.purple/packs/my-module/`
-3. If `debs/` exists: Runs `sudo dpkg -i debs/*.deb` (installs system dependencies)
-4. If `wheels/` exists: Runs `pip install --no-index --find-links=wheels/ -r requirements.txt` (installs Python deps offline)
-5. Loads the module
-
-**Why pip is included in the ISO:**
-- Purple Computer includes `python3-pip` to support automatic offline installation of Module Purplepacks
-- Purplepacks bundle `.whl` files so no internet is needed
-- Users never interact with pip directly - Purple Computer handles everything
-
-**Creating a module pack with dependencies:**
-```bash
-# Download wheels (do this on a machine with internet)
-pip download requests -d wheels/
-
-# Download .deb files
-apt download libcairo2
-
-# Bundle everything
-tar -czvf my-module.purplepack manifest.json module.py wheels/ debs/ requirements.txt
-```
+If a module needs new dependencies, those are added to Purple's global requirements and installed when users update Purple core.
 
 ---
 
@@ -281,8 +244,9 @@ purplecomputer/
 ```
 
 **Key design decisions:**
-- **Modes are Python modules** — Curated, reviewed code shipped with Purple. Future modes distributed via Purple Store only.
-- **Two types of Purplepacks** — Content Packs (JSON + assets, safe for anyone) and Module Packs (Python code + dependencies, curated/reviewed).
+- **Modes are curated Python modules** — All modes shipped with Purple core, maintained in `purple_tui/modes/`. No third-party code execution.
+- **Purplepacks for content only** — JSON + assets (emoji, sounds, definitions). No code in packs.
+- **Global dependency management** — All pip/deb dependencies declared globally. Purple updates = atomic environment updates.
 - **Alacritty terminal** — Fast, simple, reliable Unicode/emoji rendering.
 - **Textual TUI** — Modern Python TUI framework for the interface.
 - **Piper TTS** — Offline text-to-speech using neural voices.

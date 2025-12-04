@@ -372,8 +372,8 @@ autoinstall:
     - chroot /target systemctl enable purple-first-boot.service
 
     # Set GRUB timeout to 0 for fast boot
-    - curtin in-target --target=/target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
-    - curtin in-target --target=/target -- update-grub
+    - curtin in-target -- sed -i 's/GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub
+    - curtin in-target -- update-grub
 
     - echo "Purple Computer late commands complete!"
 

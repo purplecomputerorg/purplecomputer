@@ -69,7 +69,7 @@ check_dependencies() {
     info "Checking dependencies..."
     local missing=()
 
-    for cmd in xorriso rsync wget dpkg-scanpackages gzip yq; do
+    for cmd in xorriso rsync wget gzip yq docker; do
         if ! command -v "$cmd" &> /dev/null; then
             missing+=("$cmd")
         fi
@@ -77,8 +77,20 @@ check_dependencies() {
 
     if [ ${#missing[@]} -gt 0 ]; then
         error "Missing dependencies: ${missing[*]}"
-        echo "  Install with: apt install xorriso rsync wget dpkg-dev gzip"
-        echo "  For yq: snap install yq"
+        echo ""
+        echo "  Install on Ubuntu/Debian:"
+        echo "    sudo apt install xorriso rsync wget gzip docker.io"
+        echo "    sudo snap install yq"
+        echo ""
+        echo "  Install on other distros: use your package manager to install above tools"
+        exit 1
+    fi
+
+    # Check Docker is running
+    if ! docker info &> /dev/null 2>&1; then
+        error "Docker daemon not running."
+        echo "  Start with: sudo systemctl start docker"
+        echo "  Enable on boot: sudo systemctl enable docker"
         exit 1
     fi
 }
@@ -148,12 +160,31 @@ download_packages() {
 
     cd "$REPO_DIR/pool"
 
-    # Download packages with all dependencies
-    apt-get update
-    apt-get download \
-        $(apt-cache depends --recurse --no-recommends --no-suggests \
-        --no-conflicts --no-breaks --no-replaces --no-enhances \
-        $packages | grep "^\w" | sort -u) || error "Package download failed"
+    # Create download script for Docker
+    cat > "$WORK_DIR/download-packages.sh" <<'SCRIPT'
+#!/bin/bash
+set -e
+apt-get update
+apt-get install -y dpkg-dev
+
+cd /pool
+apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
+    --no-conflicts --no-breaks --no-replaces --no-enhances \
+    "$@" | grep "^\w" | sort -u)
+
+dpkg-scanpackages . /dev/null > Packages
+gzip -k -f Packages
+echo "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"
+SCRIPT
+    chmod +x "$WORK_DIR/download-packages.sh"
+
+    # Download packages using Docker with Ubuntu 24.04
+    info "Downloading packages in Ubuntu Docker container..."
+    docker run --rm \
+        -v "$REPO_DIR/pool:/pool" \
+        -v "$WORK_DIR/download-packages.sh:/download.sh" \
+        ubuntu:24.04 \
+        /bin/bash -c "/download.sh $packages" || error "Package download failed"
 
     local pkg_count=$(ls -1 *.deb 2>/dev/null | wc -l)
     info "✓ Downloaded $pkg_count packages"

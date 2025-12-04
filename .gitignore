@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build-offline/
 .venv/
 venv/
 env/

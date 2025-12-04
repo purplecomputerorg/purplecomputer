@@ -50,35 +50,15 @@ autoinstall:
     - echo "  This will take about 5 minutes."
     - echo ""
 
-  # APT configuration for offline install
-  # Use local package pool from ISO, disable network sources during install
-  apt:
-    disable_components: []
-    geoip: false
-    preserve_sources_list: false
-    primary:
-      - arches: [amd64, i386]
-        uri: file:///cdrom/pool/
-    sources_list: |
-      # Local package repository from ISO (offline install)
-      deb [trusted=yes] file:///cdrom/pool ./
-
   # Locale and keyboard settings
   locale: en_US.UTF-8
   keyboard:
     layout: us
 
-  # Network configuration - optional, not required for offline install
-  # Network is configured but not mandatory - install works without it
+  # Network configuration - DISABLED for offline install
+  # All packages are bundled in the ISO
   network:
     version: 2
-    ethernets:
-      any:
-        match:
-          name: en*
-        dhcp4: true
-        dhcp6: false
-        optional: true
 
   # Storage configuration - use entire disk
   storage:

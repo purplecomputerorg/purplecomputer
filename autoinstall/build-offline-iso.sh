@@ -198,8 +198,10 @@ generate_repo_metadata() {
 
     cd "$REPO_DIR"
 
-    # Create standard Debian repository structure
+    # Create standard Debian repository structure for three components
     mkdir -p "dists/$UBUNTU_VERSION/main/binary-amd64"
+    mkdir -p "dists/$UBUNTU_VERSION/restricted/binary-amd64"
+    mkdir -p "dists/$UBUNTU_VERSION/universe/binary-amd64"
     mkdir -p pool
 
     # Move downloaded packages to pool
@@ -208,9 +210,11 @@ generate_repo_metadata() {
         rmdir debs 2>/dev/null || true
     fi
 
-    # Generate Packages file (scans pool automatically)
-    apt-ftparchive packages pool > "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
-    gzip -k "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
+    # Generate Packages files for all three components (all point to same pool)
+    for component in main restricted universe; do
+        apt-ftparchive packages pool > "dists/$UBUNTU_VERSION/$component/binary-amd64/Packages"
+        gzip -k "dists/$UBUNTU_VERSION/$component/binary-amd64/Packages"
+    done
 
     # Generate Release file with all checksums
     apt-ftparchive release "dists/$UBUNTU_VERSION" > "dists/$UBUNTU_VERSION/Release"
@@ -246,29 +250,19 @@ inject_repository() {
     info "✓ Repository injected into ISO"
 }
 
-# Configure autoinstall for offline mode
+# Copy autoinstall configuration
 configure_autoinstall() {
-    info "Configuring autoinstall for offline installation..."
+    info "Copying autoinstall configuration..."
 
-    # Use yq to properly merge offline apt config into the original autoinstall.yaml
-    # This replaces the apt section while preserving everything else
-    yq eval '
-        .autoinstall.apt = {
-            "disable_components": [],
-            "geoip": false,
-            "preserve_sources_list": false,
-            "primary": [{"arches": ["amd64"], "uri": "file:///cdrom"}],
-            "fallback": "offline-install",
-            "sources_list": "deb [trusted=yes check-valid-until=no] file:///cdrom noble main\n"
-        }
-    ' "$PROJECT_ROOT/autoinstall/autoinstall.yaml" > "$EXTRACT_DIR/autoinstall.yaml"
+    # Copy autoinstall.yaml as-is (no modifications)
+    cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/autoinstall.yaml"
 
     # Also copy to nocloud for autoinstall discovery
     mkdir -p "$EXTRACT_DIR/nocloud"
-    cp "$EXTRACT_DIR/autoinstall.yaml" "$EXTRACT_DIR/nocloud/user-data"
+    cp "$PROJECT_ROOT/autoinstall/autoinstall.yaml" "$EXTRACT_DIR/nocloud/user-data"
     touch "$EXTRACT_DIR/nocloud/meta-data"
 
-    info "✓ Autoinstall configured for offline mode"
+    info "✓ Autoinstall configuration copied"
 }
 
 # Copy Purple Computer files

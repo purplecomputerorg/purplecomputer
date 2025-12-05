@@ -87,13 +87,16 @@ autoinstall:
 
   # APT configuration - disable mirror selection for offline install
   apt:
-    fallback: offline-install
+    disable_components: []
     geoip: false
+    fallback: offline-install
+    preserve_sources_list: false
     mirror-selection:
       primary: none
       security: none
     sources:
-      - source: "deb [trusted=yes] cdrom:/ noble main restricted"
+      cdrom:
+        source: "deb [trusted=yes] file:///cdrom noble main restricted universe"
 
   # Package selection
   packages:

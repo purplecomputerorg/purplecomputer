@@ -34,21 +34,8 @@ autoinstall:
 
   # Early commands run before installation begins
   early-commands:
-    # Redirect kernel/installer messages away from main console
     - echo 3 > /proc/sys/kernel/printk
-    # Show friendly welcome message
-    - echo -e "\n\n"
-    - echo -e "\033[1;35m"
-    - echo "  ╔════════════════════════════════════════╗"
-    - echo "  ║                                        ║"
-    - echo "  ║       Welcome to Purple Computer!     ║"
-    - echo "  ║                                        ║"
-    - echo "  ╚════════════════════════════════════════╝"
-    - echo -e "\033[0m"
-    - echo ""
-    - echo "  Setting up your computer..."
-    - echo "  This will take about 5 minutes."
-    - echo ""
+    - echo "Welcome to Purple Computer - Installation starting..."
 
   # Locale and keyboard settings
   locale: en_US.UTF-8

@@ -27,11 +27,10 @@
 autoinstall:
   version: 1
 
-  # Reporting - ENABLE verbose output for debugging
+  # Reporting - simple print output
   reporting:
     builtin:
       type: print
-      level: DEBUG
 
   # Early commands run before installation begins
   early-commands:

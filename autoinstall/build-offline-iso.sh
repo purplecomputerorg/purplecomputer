@@ -134,12 +134,12 @@ download_packages() {
 
     mkdir -p "$REPO_DIR/pool"
 
-    # Extract packages from packages.txt (single source of truth)
+    # Extract packages from autoinstall.yaml using yq
     local packages
-    packages=$(grep -v "^#" "$PROJECT_ROOT/autoinstall/packages.txt" | grep -v "^$" | tr "\n" " ")
+    packages=$(yq eval '.autoinstall.packages[]' "$PROJECT_ROOT/autoinstall/autoinstall.yaml" 2>/dev/null || echo "")
 
     if [ -z "$packages" ]; then
-        error "No packages found in autoinstall/packages.txt"
+        error "No packages found in autoinstall.yaml"
     fi
 
     info "Found $(echo "$packages" | wc -w) packages to download"
@@ -287,9 +287,6 @@ copy_purple_files() {
 
     mkdir -p "$EXTRACT_DIR/purple_files"
     cp -r "$PROJECT_ROOT/purple_tui"/* "$EXTRACT_DIR/purple_files/"
-
-    # Copy package list to ISO root (for late-commands to read)
-    cp "$PROJECT_ROOT/autoinstall/packages.txt" "$EXTRACT_DIR/packages.txt"
 
     # Copy config files if they exist
     [ -d "$PROJECT_ROOT/autoinstall/files/systemd" ] && \

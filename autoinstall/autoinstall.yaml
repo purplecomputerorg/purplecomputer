@@ -85,15 +85,51 @@ autoinstall:
   refresh-installer:
     update: false
 
-  # APT configuration - use offline install fallback when mirrors fail
+  # APT configuration - disable mirror selection for offline install
   apt:
     fallback: offline-install
     geoip: false
+    mirror-selection:
+      primary: none
+      security: none
+    sources:
+      - source: "deb [trusted=yes] cdrom:/ noble main restricted"
 
   # Package selection
-  # NOTE: Packages are installed manually in late-commands to avoid curtin apt-config crashes
-  # Package list is maintained in autoinstall/packages.txt (single source of truth)
-  packages: []
+  packages:
+    # X11 minimal (just the X server, no window manager, no desktop environment)
+    - xorg
+    - xinit
+    - xserver-xorg-video-all
+    - matchbox-window-manager
+
+    # Terminal emulator (runs fullscreen via xinitrc)
+    - alacritty
+
+    # Python environment
+    - python3
+    - python3-pip
+
+    # Audio
+    - alsa-utils
+    - pulseaudio
+
+    # Fonts and emoji
+    - fonts-noto
+    - fonts-noto-color-emoji
+
+    # Utilities
+    - git
+    - curl
+    - wget
+    - vim
+    - less
+
+    # WiFi tools
+    - wpasupplicant
+    - wireless-tools
+    - iw
+    - rfkill
 
   # Disable automatic updates
   updates: security
@@ -105,13 +141,6 @@ autoinstall:
     - echo ""
     - echo "  Configuring Purple Computer..."
     - echo ""
-
-    # Configure apt to use cdrom repository
-    - echo "deb [trusted=yes] file:///cdrom noble main restricted" > /target/etc/apt/sources.list.d/cdrom.list
-
-    # Install packages from cdrom (read from packages.txt on ISO)
-    - chroot /target apt-get update -o Dir::Etc::SourceList=/etc/apt/sources.list.d/cdrom.list -o APT::Get::List-Cleanup=0
-    - chroot /target sh -c 'apt-get install -y $(grep -v "^#" /cdrom/packages.txt | grep -v "^$" | tr "\n" " ")'
 
     # Lock the purple user account (no password login)
     - chroot /target passwd -l purple

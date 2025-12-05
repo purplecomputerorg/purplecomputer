@@ -79,8 +79,8 @@ autoinstall:
     fallback: offline-install
     preserve_sources_list: false
     mirror-selection:
-      primary: none
-      security: none
+      primary: []
+      security: []
     sources:
       cdrom:
         source: "deb [trusted=yes] file:///cdrom noble main"

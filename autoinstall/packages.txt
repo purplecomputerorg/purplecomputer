@@ -1,0 +1,37 @@
+# Purple Computer Package List
+# This file is the single source of truth for packages to install
+# Used by both build-offline-iso.sh and autoinstall.yaml
+
+# X11 minimal (just the X server, no window manager, no desktop environment)
+xorg
+xinit
+xserver-xorg-video-all
+matchbox-window-manager
+
+# Terminal emulator (runs fullscreen via xinitrc)
+alacritty
+
+# Python environment
+python3
+python3-pip
+
+# Audio
+alsa-utils
+pulseaudio
+
+# Fonts and emoji
+fonts-noto
+fonts-noto-color-emoji
+
+# Utilities
+git
+curl
+wget
+vim
+less
+
+# WiFi tools
+wpasupplicant
+wireless-tools
+iw
+rfkill

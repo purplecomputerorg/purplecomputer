@@ -27,10 +27,11 @@
 autoinstall:
   version: 1
 
-  # Reporting - silence verbose installer output
+  # Reporting - ENABLE verbose output for debugging
   reporting:
     builtin:
       type: print
+      level: DEBUG
 
   # Early commands run before installation begins
   early-commands:
@@ -85,54 +86,12 @@ autoinstall:
   refresh-installer:
     update: false
 
-  # APT configuration - offline install with fallback
-  apt:
-    geoip: false
-    fallback: offline-install
-
-  # Use offline install source (disable network driver lookups)
-  source:
-    id: ubuntu-server-minimal
-    search_drivers: false
-
   # Package selection
-  # IMPORTANT: Ubuntu Server base, NO desktop environment packages
-  packages:
-    # X11 minimal (just the X server, no window manager, no desktop environment)
-    - xorg
-    - xinit
-    - xserver-xorg-video-all
-    - matchbox-window-manager
+  # NOTE: Packages are installed manually in late-commands to avoid curtin apt-config crashes
+  # Package list is maintained in autoinstall/packages.txt (single source of truth)
+  packages: []
 
-    # Terminal emulator (runs fullscreen via xinitrc)
-    - alacritty
-
-    # Python environment
-    - python3
-    - python3-pip  # Required for automatic pack installation (modules may bundle .whl files)
-
-    # Audio
-    - alsa-utils
-    - pulseaudio
-
-    # Fonts and emoji
-    - fonts-noto
-    - fonts-noto-color-emoji
-
-    # Utilities
-    - git
-    - curl
-    - wget
-    - vim
-    - less
-
-    # WiFi tools
-    - wpasupplicant
-    - wireless-tools
-    - iw
-    - rfkill
-
-  # Disable automatic updates for stability
+  # Disable automatic updates
   updates: security
 
   # Late commands - run after installation, before reboot
@@ -142,6 +101,13 @@ autoinstall:
     - echo ""
     - echo "  Configuring Purple Computer..."
     - echo ""
+
+    # Configure apt to use cdrom repository
+    - echo "deb [trusted=yes] file:///cdrom noble main restricted" > /target/etc/apt/sources.list.d/cdrom.list
+
+    # Install packages from cdrom (read from packages.txt on ISO)
+    - chroot /target apt-get update -o Dir::Etc::SourceList=/etc/apt/sources.list.d/cdrom.list -o APT::Get::List-Cleanup=0
+    - chroot /target sh -c 'apt-get install -y $(grep -v "^#" /cdrom/packages.txt | grep -v "^$" | tr "\n" " ")'
 
     # Lock the purple user account (no password login)
     - chroot /target passwd -l purple

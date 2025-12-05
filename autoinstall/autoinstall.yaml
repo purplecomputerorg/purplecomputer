@@ -85,6 +85,11 @@ autoinstall:
   refresh-installer:
     update: false
 
+  # APT configuration - use offline install fallback when mirrors fail
+  apt:
+    fallback: offline-install
+    geoip: false
+
   # Package selection
   # NOTE: Packages are installed manually in late-commands to avoid curtin apt-config crashes
   # Package list is maintained in autoinstall/packages.txt (single source of truth)

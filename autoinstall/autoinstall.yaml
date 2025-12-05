@@ -96,7 +96,7 @@ autoinstall:
       security: none
     sources:
       cdrom:
-        source: "deb [trusted=yes] file:///cdrom noble main restricted universe"
+        source: "deb [trusted=yes] file:///cdrom noble main"
 
   # Package selection
   packages:

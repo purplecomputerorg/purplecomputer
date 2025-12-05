@@ -198,10 +198,8 @@ generate_repo_metadata() {
 
     cd "$REPO_DIR"
 
-    # Create standard Debian repository structure for three components
+    # Create standard Debian repository structure
     mkdir -p "dists/$UBUNTU_VERSION/main/binary-amd64"
-    mkdir -p "dists/$UBUNTU_VERSION/restricted/binary-amd64"
-    mkdir -p "dists/$UBUNTU_VERSION/universe/binary-amd64"
     mkdir -p pool
 
     # Move downloaded packages to pool
@@ -210,11 +208,9 @@ generate_repo_metadata() {
         rmdir debs 2>/dev/null || true
     fi
 
-    # Generate Packages files for all three components (all point to same pool)
-    for component in main restricted universe; do
-        apt-ftparchive packages pool > "dists/$UBUNTU_VERSION/$component/binary-amd64/Packages"
-        gzip -k "dists/$UBUNTU_VERSION/$component/binary-amd64/Packages"
-    done
+    # Generate Packages file (scans pool automatically)
+    apt-ftparchive packages pool > "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
+    gzip -k "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
 
     # Generate Release file with all checksums
     apt-ftparchive release "dists/$UBUNTU_VERSION" > "dists/$UBUNTU_VERSION/Release"

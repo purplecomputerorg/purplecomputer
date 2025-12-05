@@ -66,14 +66,6 @@ autoinstall:
       name: lvm
       sizing-policy: all
 
-  # Curtin configuration - reduce verbosity
-  curtin:
-    install:
-      log_file: /var/log/curtin-install.log
-      error_tarfile: /var/log/curtin-errors.tar
-      save_install_config: false
-      save_install_log: false
-
   # Identity - creates the purple user
   # NOTE: User will have NO PASSWORD (account is locked, auto-login only)
   # Parent mode is protected by a separate parent password set on first use
@@ -89,14 +81,19 @@ autoinstall:
   ssh:
     install-server: false
 
-  # APT configuration - disable mirror checking for offline install
+  # Disable installer refresh
+  refresh-installer:
+    update: false
+
+  # APT configuration - offline install with fallback
   apt:
-    disable_components: []
     geoip: false
-    preserve_sources_list: false
-    primary:
-      - arches: [default]
-        uri: file:///cdrom
+    fallback: offline-install
+
+  # Use offline install source (disable network driver lookups)
+  source:
+    id: ubuntu-server-minimal
+    search_drivers: false
 
   # Package selection
   # IMPORTANT: Ubuntu Server base, NO desktop environment packages

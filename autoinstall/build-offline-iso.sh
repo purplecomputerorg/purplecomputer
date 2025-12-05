@@ -53,7 +53,6 @@ fi
 
 # Get the actual user (not root)
 ACTUAL_USER="${SUDO_USER:-$USER}"
-ACTUAL_UID=$(id -u "$ACTUAL_USER")
 ACTUAL_GID=$(id -g "$ACTUAL_USER")
 
 # Cleanup function
@@ -69,7 +68,7 @@ check_dependencies() {
     info "Checking dependencies..."
     local missing=()
 
-    for cmd in xorriso rsync wget gzip yq docker; do
+    for cmd in xorriso rsync wget gzip yq docker apt-ftparchive; do
         if ! command -v "$cmd" &> /dev/null; then
             missing+=("$cmd")
         fi
@@ -79,7 +78,7 @@ check_dependencies() {
         error "Missing dependencies: ${missing[*]}"
         echo ""
         echo "  Install on Ubuntu/Debian:"
-        echo "    sudo apt install xorriso rsync wget gzip docker.io"
+        echo "    sudo apt install xorriso rsync wget gzip docker.io apt-utils"
         echo "    sudo snap install yq"
         echo ""
         echo "  Install on other distros: use your package manager to install above tools"
@@ -132,7 +131,7 @@ download_packages() {
     info "Downloading packages for offline repository..."
     info "Extracting package list from autoinstall.yaml..."
 
-    mkdir -p "$REPO_DIR/pool"
+    mkdir -p "$REPO_DIR/debs"
 
     # Extract packages from autoinstall.yaml using yq
     local packages
@@ -159,15 +158,13 @@ download_packages() {
 
     warn "This will download ~2-3GB of packages. This may take 20-40 minutes..."
 
-    cd "$REPO_DIR/pool"
-
     # Write packages to a file for Docker
     echo "$packages" > "$WORK_DIR/packages.txt"
 
     # Download packages using Docker with Ubuntu 24.04
     info "Downloading packages in Ubuntu Docker container..."
     docker run --rm \
-        -v "$REPO_DIR/pool:/pool" \
+        -v "$REPO_DIR/debs:/debs" \
         -v "$WORK_DIR/packages.txt:/packages.txt" \
         ubuntu:24.04 \
         /bin/bash -c '
@@ -175,9 +172,9 @@ set -e
 apt-get update -qq
 apt-get install -y -qq dpkg-dev
 
-cd /pool
+cd /debs
 # Fix permissions for apt sandboxing (suppresses warnings)
-chown -R _apt:root /pool 2>/dev/null || true
+chown -R _apt:root /debs 2>/dev/null || true
 
 PACKAGES=$(cat /packages.txt | tr "\n" " ")
 apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
@@ -185,73 +182,66 @@ apt-get download $(apt-cache depends --recurse --no-recommends --no-suggests \
     $PACKAGES | grep "^\w" | sort -u)
 
 # Restore root ownership for host access
-chown -R root:root /pool
+chown -R root:root /debs
 
-dpkg-scanpackages . /dev/null > Packages
-gzip -k -f Packages
 echo "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"
 ' || error "Package download failed"
 
-    local pkg_count=$(ls -1 *.deb 2>/dev/null | wc -l)
+    local pkg_count
+    pkg_count=$(find "$REPO_DIR/debs" -name "*.deb" 2>/dev/null | wc -l)
     info "✓ Downloaded $pkg_count packages"
 }
 
-# Generate repository metadata
+# Generate repository metadata using apt-ftparchive
 generate_repo_metadata() {
-    info "Generating repository metadata..."
+    info "Generating repository metadata with apt-ftparchive..."
 
-    cd "$REPO_DIR/pool"
+    cd "$REPO_DIR"
 
-    # Generate Packages file
-    dpkg-scanpackages . /dev/null > Packages || error "Failed to generate Packages file"
+    # Create standard Debian repository structure
+    mkdir -p "dists/$UBUNTU_VERSION/main/binary-amd64"
+    mkdir -p pool
 
-    # Compress it
-    gzip -k -f Packages
+    # Move downloaded packages to pool
+    if [ -d debs ] && [ "$(ls -A debs/*.deb 2>/dev/null)" ]; then
+        mv debs/*.deb pool/ 2>/dev/null || true
+        rmdir debs 2>/dev/null || true
+    fi
 
-    # Generate Release file
-    cat > Release <<EOF
-Archive: $UBUNTU_VERSION
-Component: main
-Origin: Purple Computer
-Label: Purple Computer Offline Repository
-Architecture: amd64
-Description: Purple Computer Offline Installation Repository
-EOF
+    # Generate Packages file (scans pool automatically)
+    apt-ftparchive packages pool > "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
+    gzip -k "dists/$UBUNTU_VERSION/main/binary-amd64/Packages"
 
-    info "✓ Repository metadata generated"
+    # Generate Release file with all checksums
+    apt-ftparchive release "dists/$UBUNTU_VERSION" > "dists/$UBUNTU_VERSION/Release"
+
+    info "✓ Repository metadata generated with apt-ftparchive"
 }
 
 # Inject repository into ISO
 inject_repository() {
     info "Injecting repository into ISO..."
 
-    # Create proper Debian repository structure
-    mkdir -p "$EXTRACT_DIR/pool"
-    mkdir -p "$EXTRACT_DIR/dists/$UBUNTU_VERSION/main/binary-amd64"
+    # Copy the apt-ftparchive-generated repository structure
+    info "Copying repository dists/ and pool/ to ISO..."
 
-    # Copy packages
-    info "Copying packages to ISO..."
-    cp -r "$REPO_DIR/pool"/* "$EXTRACT_DIR/pool/" || error "Failed to copy packages"
+    # Copy pool directory (contains actual .deb files organized by component)
+    if [ -d "$REPO_DIR/pool" ]; then
+        cp -r "$REPO_DIR/pool" "$EXTRACT_DIR/" || error "Failed to copy pool directory"
+    else
+        error "Repository pool directory not found at $REPO_DIR/pool"
+    fi
 
-    # Copy metadata
-    cp "$REPO_DIR/pool/Packages.gz" "$EXTRACT_DIR/dists/$UBUNTU_VERSION/main/binary-amd64/"
-    cp "$REPO_DIR/pool/Packages" "$EXTRACT_DIR/dists/$UBUNTU_VERSION/main/binary-amd64/"
+    # Copy dists directory (contains Release, InRelease, Packages, etc.)
+    if [ -d "$REPO_DIR/dists" ]; then
+        cp -r "$REPO_DIR/dists" "$EXTRACT_DIR/" || error "Failed to copy dists directory"
+    else
+        error "Repository dists directory not found at $REPO_DIR/dists"
+    fi
 
-    # Create Release file for distribution
-    cat > "$EXTRACT_DIR/dists/$UBUNTU_VERSION/Release" <<EOF
-Origin: Purple Computer
-Label: Purple Computer Offline
-Suite: $UBUNTU_VERSION
-Codename: $UBUNTU_VERSION
-Architectures: amd64
-Components: main
-Description: Purple Computer Offline Repository
-MD5Sum:
-EOF
-
-    # Add MD5 checksums to Release
-    cd "$EXTRACT_DIR/dists/$UBUNTU_VERSION"
-    find . -type f -name "Packages*" -exec md5sum {} \; | sed 's/\.\///' >> Release
+    # Verify critical files exist
+    [ -f "$EXTRACT_DIR/dists/$UBUNTU_VERSION/Release" ] || error "Missing Release file"
+    [ -f "$EXTRACT_DIR/dists/$UBUNTU_VERSION/main/binary-amd64/Packages.gz" ] || error "Missing Packages.gz"
 
     info "✓ Repository injected into ISO"
 }
@@ -367,7 +357,7 @@ rebuild_iso() {
         -partition_cyl_align off \
         -partition_offset 16 \
         --mbr-force-bootable \
-        -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b --interval:local_fs:${efi_partition}::"$BASE_ISO_NAME" \
+        -append_partition 2 28732ac11ff8d211ba4b00a0c93ec93b --interval:local_fs:"${efi_partition}"::"$BASE_ISO_NAME" \
         -appended_part_as_gpt \
         -iso_mbr_part_type a2a0d0ebe5b9334487c068b6b72699c7 \
         -c boot.catalog \
@@ -375,7 +365,7 @@ rebuild_iso() {
         -no-emul-boot -boot-load-size 4 -boot-info-table \
         --grub2-boot-info \
         -eltorito-alt-boot \
-        -e --interval:${efi_boot_interval}:all:: \
+        -e --interval:"${efi_boot_interval}":all:: \
         -no-emul-boot \
         -boot-load-size "$efi_boot_load_size" \
         "$EXTRACT_DIR" || error "Failed to build ISO"
@@ -397,10 +387,23 @@ verify_iso() {
 
     # Check critical paths
     [ -f "$verify_mount/autoinstall.yaml" ] || error "Missing autoinstall.yaml"
-    [ -f "$verify_mount/dists/$UBUNTU_VERSION/main/binary-amd64/Packages.gz" ] || error "Missing Packages.gz"
+    [ -f "$verify_mount/dists/$UBUNTU_VERSION/Release" ] || error "Missing Release file"
     [ -d "$verify_mount/pool" ] || error "Missing pool directory"
 
-    local pkg_count=$(ls -1 "$verify_mount/pool"/*.deb 2>/dev/null | wc -l)
+    # Check for main component directory
+    [ -d "$verify_mount/dists/$UBUNTU_VERSION/main/binary-amd64" ] || error "Missing main component"
+    [ -f "$verify_mount/dists/$UBUNTU_VERSION/main/binary-amd64/Packages.gz" ] || error "Missing Packages.gz"
+
+    # Verify Release file contains checksums
+    if grep -q "MD5Sum:" "$verify_mount/dists/$UBUNTU_VERSION/Release" 2>/dev/null || \
+       grep -q "SHA256:" "$verify_mount/dists/$UBUNTU_VERSION/Release" 2>/dev/null; then
+        info "Release file contains checksums"
+    else
+        warn "Release file missing checksums"
+    fi
+
+    local pkg_count
+    pkg_count=$(find "$verify_mount/pool" -name "*.deb" 2>/dev/null | wc -l)
     info "Verified: $pkg_count packages in ISO"
 
     umount "$verify_mount"

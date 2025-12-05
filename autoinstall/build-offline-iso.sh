@@ -290,7 +290,7 @@ insmod all_video
 set gfxpayload=keep
 
 menuentry "Purple Computer - Automated Install (Offline)" {
-    linux /casper/vmlinuz autoinstall ---
+    linux /casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud ---
     initrd /casper/initrd
 }
 

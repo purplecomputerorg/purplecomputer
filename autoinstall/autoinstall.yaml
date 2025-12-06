@@ -44,6 +44,19 @@ autoinstall:
     - echo "deb [trusted=yes] file:///cdrom noble main restricted universe multiverse" > /etc/apt/sources.list
     - echo "Forced offline apt configuration - cdrom only"
 
+    # CRITICAL: Subiquity generates curtin apt config BEFORE early-commands
+    # We must overwrite it to force curtin to use ONLY our cdrom repo
+    - mkdir -p /run/casper/curtin-install
+    - |
+      cat > /run/casper/curtin-install/subiquity-curtin-apt.conf <<'CURTINEOF'
+      apt:
+        primary: []
+        sources:
+          cdrom:
+            source: deb [trusted=yes] file:///cdrom noble main restricted universe multiverse
+      CURTINEOF
+    - echo "Overwrote curtin apt config - cdrom only"
+
   # Locale and keyboard settings
   locale: en_US.UTF-8
   keyboard:

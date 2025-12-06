@@ -227,8 +227,9 @@ This ensures the installed system can receive updates post-installation while ke
 
 **The magic formula:**
 1. Configure `/etc/apt/sources.list` in `early-commands` with cdrom repo
-2. Use minimal apt block with `preserve_sources_list: true` and `fallback: offline-install`
-3. **DO NOT** define `sources:` in the apt block
-4. Verify during installation that only cdrom sources are present
+2. **CRITICAL**: Overwrite `/run/casper/curtin-install/subiquity-curtin-apt.conf` in `early-commands` with `primary: []` to block online mirrors
+3. Use minimal apt block with `preserve_sources_list: true` and `fallback: offline-install`
+4. **DO NOT** define `sources:` in the apt block
+5. Verify during installation that only cdrom sources are present
 
-This approach forces Subiquity to detect a pre-configured, valid apt setup and prevents it from generating any online sources.
+This two-pronged approach (overriding both `/etc/apt/sources.list` AND the curtin config) forces both Subiquity and curtin to use ONLY the offline repository, preventing any contact with archive.ubuntu.com during installation.

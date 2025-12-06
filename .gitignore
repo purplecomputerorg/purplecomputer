@@ -14,6 +14,7 @@ build-offline/
 venv/
 env/
 ENV/
+autoinstall/subiquity/
 
 # Test environments
 .test_home/

@@ -74,10 +74,9 @@ autoinstall:
 
   # APT configuration - disable mirror selection for offline install
   apt:
-    disable_components: []
     geoip: false
     fallback: offline-install
-    preserve_sources_list: false
+    preserve_sources_list: true 
     sources:
       cdrom:
         source: "deb [trusted=yes] file:///cdrom noble main"

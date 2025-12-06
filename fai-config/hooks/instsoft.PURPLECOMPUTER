@@ -1,0 +1,47 @@
+#!/bin/bash
+# FAI hook: instsoft stage for Purple Computer
+# Runs after package installation, before scripts
+# Configure APT to use only local repository
+
+set -e
+
+echo "Configuring APT for offline local repository..."
+
+# Create sources.list for local repository only
+cat > $target/etc/apt/sources.list <<'EOF'
+# Purple Computer Local Repository
+# This system uses an embedded offline repository
+
+deb [trusted=yes] file:///media/purple-repo bookworm main contrib non-free non-free-firmware
+# For Ubuntu, use:
+# deb [trusted=yes] file:///media/purple-repo jammy main restricted universe multiverse
+
+# Online repositories disabled for offline operation
+# Uncomment these lines if you have internet access:
+# deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware
+# deb http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware
+# deb http://deb.debian.org/debian bookworm-updates main contrib non-free non-free-firmware
+EOF
+
+# Create APT preferences to prefer local repository
+cat > $target/etc/apt/preferences.d/local-repo <<'EOF'
+Package: *
+Pin: origin ""
+Pin-Priority: 1000
+EOF
+
+# Disable apt recommends to keep system minimal
+cat > $target/etc/apt/apt.conf.d/99-no-recommends <<'EOF'
+APT::Install-Recommends "false";
+APT::Install-Suggests "false";
+EOF
+
+# Configure dpkg to be non-interactive
+cat > $target/etc/apt/apt.conf.d/99-noninteractive <<'EOF'
+Dpkg::Options {
+   "--force-confdef";
+   "--force-confold";
+}
+EOF
+
+echo "APT configuration complete."

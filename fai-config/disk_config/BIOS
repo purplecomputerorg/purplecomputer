@@ -1,0 +1,19 @@
+# BIOS/Legacy boot disk configuration
+# Single boot partition, no separate EFI partition needed
+
+disk_config disk1 disklabel:msdos bootable:1 fstabkey:uuid
+
+# Boot partition with GRUB
+primary /boot     512M    ext4    rw,relatime,errors=remount-ro bootable:1
+
+# Extended partition for LVM
+logical -         0-      -       -
+
+# LVM configuration (same as LAPTOP/UEFI)
+disk_config lvm vg:vg_system
+
+vg_system-root    /       20G     ext4    rw,relatime,errors=remount-ro
+vg_system-swap    swap    4G      swap    sw
+vg_system-home    /home   10G     ext4    rw,relatime,nodev,nosuid
+vg_system-var     /var    10G     ext4    rw,relatime,nodev
+vg_system-tmp     /tmp    2G      ext4    rw,relatime,nodev,nosuid,noexec

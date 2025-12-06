@@ -1,0 +1,200 @@
+#!/bin/bash
+# Configure minimal X11 environment
+# Runs in FAI chroot environment
+
+set -e
+
+error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
+
+USERNAME="purple"
+
+echo "Configuring minimal X11 environment..."
+
+# Enable LightDM display manager
+$ROOTCMD systemctl enable lightdm
+
+# Configure LightDM for auto-login
+mkdir -p $target/etc/lightdm/lightdm.conf.d
+cat > $target/etc/lightdm/lightdm.conf.d/50-purple-autologin.conf <<EOF
+[Seat:*]
+autologin-user=$USERNAME
+autologin-user-timeout=0
+user-session=openbox
+EOF
+
+# Create Openbox configuration directory
+mkdir -p $target/home/$USERNAME/.config/openbox
+
+# Create basic Openbox autostart
+cat > $target/home/$USERNAME/.config/openbox/autostart <<'EOF'
+#!/bin/bash
+# Purple Computer Openbox autostart
+
+# Set wallpaper (solid color)
+feh --bg-fill /usr/share/backgrounds/purple-background.png &
+
+# Start compositor for smooth rendering
+picom -b &
+
+# Start notification daemon
+dunst &
+
+# Set keyboard repeat rate
+xset r rate 250 30 &
+
+# Disable screen blanking for fresh install
+xset s off &
+xset -dpms &
+
+# Start PulseAudio
+pulseaudio --start &
+
+# Launch terminal on startup
+alacritty &
+EOF
+
+chmod +x $target/home/$USERNAME/.config/openbox/autostart
+
+# Create Openbox menu configuration
+cat > $target/home/$USERNAME/.config/openbox/menu.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="Purple Computer">
+    <item label="Terminal">
+      <action name="Execute">
+        <command>alacritty</command>
+      </action>
+    </item>
+    <item label="Files">
+      <action name="Execute">
+        <command>pcmanfm</command>
+      </action>
+    </item>
+    <item label="Browser">
+      <action name="Execute">
+        <command>firefox-esr</command>
+      </action>
+    </item>
+    <separator />
+    <item label="Logout">
+      <action name="Exit">
+        <prompt>yes</prompt>
+      </action>
+    </item>
+    <item label="Reboot">
+      <action name="Execute">
+        <command>systemctl reboot</command>
+      </action>
+    </item>
+    <item label="Shutdown">
+      <action name="Execute">
+        <command>systemctl poweroff</command>
+      </action>
+    </item>
+  </menu>
+</openbox_menu>
+EOF
+
+# Create basic Openbox rc.xml (keyboard shortcuts)
+cat > $target/home/$USERNAME/.config/openbox/rc.xml <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <keyboard>
+    <!-- Launch terminal -->
+    <keybind key="A-Return">
+      <action name="Execute">
+        <command>alacritty</command>
+      </action>
+    </keybind>
+    <!-- Launch rofi -->
+    <keybind key="A-space">
+      <action name="Execute">
+        <command>rofi -show run</command>
+      </action>
+    </keybind>
+    <!-- Close window -->
+    <keybind key="A-q">
+      <action name="Close"/>
+    </keybind>
+  </keyboard>
+</openbox_config>
+EOF
+
+# Create .xinitrc for manual X startup if needed
+cat > $target/home/$USERNAME/.xinitrc <<'EOF'
+#!/bin/sh
+# Purple Computer .xinitrc
+
+# Load .Xresources
+[ -f ~/.Xresources ] && xrdb -merge ~/.Xresources
+
+# Start Openbox
+exec openbox-session
+EOF
+
+chmod +x $target/home/$USERNAME/.xinitrc
+
+# Create basic .Xresources for terminal colors
+cat > $target/home/$USERNAME/.Xresources <<'EOF'
+! Purple Computer X Resources
+
+! Terminal colors (Gruvbox-inspired)
+*.foreground:   #ebdbb2
+*.background:   #282828
+*.cursorColor:  #ebdbb2
+
+! Black
+*.color0:       #282828
+*.color8:       #928374
+
+! Red
+*.color1:       #cc241d
+*.color9:       #fb4934
+
+! Green
+*.color2:       #98971a
+*.color10:      #b8bb26
+
+! Yellow
+*.color3:       #d79921
+*.color11:      #fabd2f
+
+! Blue
+*.color4:       #458588
+*.color12:      #83a598
+
+! Magenta
+*.color5:       #b16286
+*.color13:      #d3869b
+
+! Cyan
+*.color6:       #689d6a
+*.color14:      #8ec07c
+
+! White
+*.color7:       #a89984
+*.color15:      #ebdbb2
+
+! Font settings
+Xft.dpi: 96
+Xft.antialias: true
+Xft.hinting: true
+Xft.rgba: rgb
+Xft.hintstyle: hintslight
+Xft.lcdfilter: lcddefault
+EOF
+
+# Create default background image (simple solid color)
+mkdir -p $target/usr/share/backgrounds
+convert -size 1920x1080 xc:'#2a1845' $target/usr/share/backgrounds/purple-background.png 2>/dev/null || \
+    echo "Note: ImageMagick not available, background will be created later"
+
+# Fix all ownership
+$ROOTCMD chown -R $USERNAME:$USERNAME /home/$USERNAME/.config
+$ROOTCMD chown $USERNAME:$USERNAME /home/$USERNAME/.xinitrc
+$ROOTCMD chown $USERNAME:$USERNAME /home/$USERNAME/.Xresources
+
+echo "X11 configuration complete."
+echo "Auto-login enabled for user: $USERNAME"
+
+exit $error

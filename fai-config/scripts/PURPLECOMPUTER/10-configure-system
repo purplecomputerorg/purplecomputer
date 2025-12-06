@@ -1,0 +1,69 @@
+#!/bin/bash
+# Configure base Purple Computer system settings
+# Runs in FAI chroot environment
+
+set -e
+
+error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
+
+echo "Configuring Purple Computer system..."
+
+# Set hostname
+echo "purplecomputer" > $target/etc/hostname
+
+# Configure hosts file
+cat > $target/etc/hosts <<'EOF'
+127.0.0.1       localhost
+127.0.1.1       purplecomputer
+
+# IPv6
+::1             localhost ip6-localhost ip6-loopback
+ff02::1         ip6-allnodes
+ff02::2         ip6-allrouters
+EOF
+
+# Set timezone (default to UTC, can be changed post-install)
+$ROOTCMD ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+
+# Configure locale
+echo "en_US.UTF-8 UTF-8" >> $target/etc/locale.gen
+$ROOTCMD locale-gen
+echo 'LANG="en_US.UTF-8"' > $target/etc/default/locale
+
+# Keyboard layout
+cat > $target/etc/default/keyboard <<'EOF'
+XKBMODEL="pc105"
+XKBLAYOUT="us"
+XKBVARIANT=""
+XKBOPTIONS=""
+BACKSPACE="guess"
+EOF
+
+# Enable persistent journald logging
+mkdir -p $target/var/log/journal
+$ROOTCMD systemctl enable systemd-journald
+
+# Disable unnecessary services for minimal system
+$ROOTCMD systemctl disable apt-daily.timer || true
+$ROOTCMD systemctl disable apt-daily-upgrade.timer || true
+
+# Enable useful laptop services
+$ROOTCMD systemctl enable acpid || true
+$ROOTCMD systemctl enable tlp || true
+
+# Configure sudo for wheel group (no password for sudo group)
+cat > $target/etc/sudoers.d/purple-sudo <<'EOF'
+# Purple Computer sudo configuration
+# Allow members of sudo group to execute any command
+%sudo   ALL=(ALL:ALL) ALL
+
+# Useful aliases
+Defaults        env_reset
+Defaults        mail_badpass
+Defaults        secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+EOF
+chmod 0440 $target/etc/sudoers.d/purple-sudo
+
+echo "System configuration complete."
+
+exit $error

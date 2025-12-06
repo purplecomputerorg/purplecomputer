@@ -1,0 +1,50 @@
+#!/bin/bash
+# FAI class definition script - Base classes
+# Determines which classes apply to this installation
+
+# Always apply these base classes
+echo "FAIBASE"
+echo "DEBIAN"
+echo "AMD64"
+
+# Distribution release
+echo "BOOKWORM"  # Debian 12 (change to JAMMY for Ubuntu 22.04, NOBLE for 24.04)
+
+# Installation type
+echo "PURPLECOMPUTER"
+echo "LAPTOP"
+echo "MINIMAL_X"
+
+# Hardware classes (can be auto-detected)
+if [ -d /sys/firmware/efi ]; then
+    echo "UEFI"
+else
+    echo "BIOS"
+fi
+
+# Disk size class (for appropriate swap sizing)
+disk_size=$(lsblk -b -d -n -o SIZE /dev/sda 2>/dev/null | head -1)
+if [ -n "$disk_size" ]; then
+    # Convert to GB
+    size_gb=$((disk_size / 1024 / 1024 / 1024))
+    if [ $size_gb -lt 128 ]; then
+        echo "DISK_SMALL"
+    elif [ $size_gb -lt 256 ]; then
+        echo "DISK_MEDIUM"
+    else
+        echo "DISK_LARGE"
+    fi
+fi
+
+# Memory-based class (for swap sizing)
+mem_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+mem_gb=$((mem_kb / 1024 / 1024))
+if [ $mem_gb -lt 4 ]; then
+    echo "MEM_LOW"
+elif [ $mem_gb -lt 8 ]; then
+    echo "MEM_MEDIUM"
+else
+    echo "MEM_HIGH"
+fi
+
+exit 0

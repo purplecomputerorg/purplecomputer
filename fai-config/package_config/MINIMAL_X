@@ -1,0 +1,82 @@
+# Minimal X11 environment + terminal
+# Lightweight graphical environment for terminal-centric workflow
+
+PACKAGES install
+# X.org core (minimal)
+xserver-xorg-core
+xserver-xorg-input-all
+xserver-xorg-video-all
+x11-xserver-utils
+x11-utils
+xinit
+
+# Display manager (lightweight)
+lightdm
+lightdm-gtk-greeter
+
+# Window manager (ultra minimal)
+openbox
+obconf
+obmenu
+
+# Terminal emulator (modern, GPU-accelerated)
+alacritty
+
+# Alternative terminals
+xterm
+rxvt-unicode
+
+# Fonts (essential)
+fonts-dejavu-core
+fonts-liberation
+fonts-noto-core
+fonts-noto-mono
+xfonts-base
+
+# Audio (ALSA + PulseAudio)
+alsa-utils
+pulseaudio
+pulseaudio-utils
+pavucontrol
+
+# Basic GUI utilities
+feh
+pcmanfm
+lxappearance
+nitrogen
+dunst
+rofi
+dmenu
+
+# Clipboard manager
+xclip
+xsel
+
+# Session management
+dbus-x11
+
+# Screen/display utilities
+arandr
+xbacklight
+redshift
+
+# PDF viewer (lightweight)
+zathura
+
+# Image viewer
+feh
+sxiv
+
+# File manager
+pcmanfm
+ranger
+
+# Browser (lightweight)
+firefox-esr
+
+# System monitor (GUI)
+htop
+btop
+
+# Compositor (optional, for visual effects)
+picom

@@ -1,0 +1,267 @@
+#!/bin/bash
+# Apply custom Purple Computer configurations
+# This script copies custom dotfiles and configurations
+# Runs in FAI chroot environment
+
+set -e
+
+error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
+
+USERNAME="purple"
+
+echo "Applying custom Purple Computer configuration..."
+
+# Create config directories
+mkdir -p $target/home/$USERNAME/.config/alacritty
+mkdir -p $target/home/$USERNAME/.vim
+
+# Alacritty terminal configuration
+cat > $target/home/$USERNAME/.config/alacritty/alacritty.yml <<'EOF'
+# Purple Computer Alacritty Configuration
+
+window:
+  padding:
+    x: 8
+    y: 8
+  decorations: full
+  opacity: 0.95
+
+scrolling:
+  history: 10000
+
+font:
+  normal:
+    family: DejaVu Sans Mono
+  size: 11.0
+
+colors:
+  primary:
+    background: '#282828'
+    foreground: '#ebdbb2'
+
+  normal:
+    black:   '#282828'
+    red:     '#cc241d'
+    green:   '#98971a'
+    yellow:  '#d79921'
+    blue:    '#458588'
+    magenta: '#b16286'
+    cyan:    '#689d6a'
+    white:   '#a89984'
+
+  bright:
+    black:   '#928374'
+    red:     '#fb4934'
+    green:   '#b8bb26'
+    yellow:  '#fabd2f'
+    blue:    '#83a598'
+    magenta: '#d3869b'
+    cyan:    '#8ec07c'
+    white:   '#ebdbb2'
+
+cursor:
+  style: Block
+  unfocused_hollow: true
+
+selection:
+  save_to_clipboard: true
+
+shell:
+  program: /bin/bash
+
+key_bindings:
+  - { key: V,        mods: Control|Shift, action: Paste            }
+  - { key: C,        mods: Control|Shift, action: Copy             }
+  - { key: Plus,     mods: Control,       action: IncreaseFontSize }
+  - { key: Minus,    mods: Control,       action: DecreaseFontSize }
+  - { key: Key0,     mods: Control,       action: ResetFontSize    }
+EOF
+
+# Vim configuration
+cat > $target/home/$USERNAME/.vimrc <<'EOF'
+" Purple Computer Vim Configuration
+
+" General settings
+set nocompatible
+set number
+set relativenumber
+set ruler
+set showcmd
+set incsearch
+set hlsearch
+set ignorecase
+set smartcase
+set autoindent
+set smartindent
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set encoding=utf-8
+set backspace=indent,eol,start
+
+" Visual settings
+syntax on
+set background=dark
+colorscheme desert
+
+" Enable mouse support
+set mouse=a
+
+" Better command-line completion
+set wildmenu
+set wildmode=longest:full,full
+
+" Keep cursor centered
+set scrolloff=8
+
+" Show matching brackets
+set showmatch
+
+" Persistent undo
+set undofile
+set undodir=~/.vim/undo
+
+" Swap and backup
+set directory=~/.vim/swap
+set backupdir=~/.vim/backup
+
+" Status line
+set laststatus=2
+set statusline=%F%m%r%h%w\ [%l/%L,%c]\ [%p%%]
+
+" Key mappings
+let mapleader = " "
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <leader>n :noh<CR>
+EOF
+
+# Create vim directories
+mkdir -p $target/home/$USERNAME/.vim/{undo,swap,backup}
+
+# Git configuration
+cat > $target/home/$USERNAME/.gitconfig <<'EOF'
+[user]
+    name = Purple Computer User
+    email = user@purplecomputer.local
+
+[core]
+    editor = vim
+    autocrlf = input
+
+[color]
+    ui = auto
+
+[alias]
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    lg = log --graph --oneline --decorate --all
+    last = log -1 HEAD
+    unstage = reset HEAD --
+
+[init]
+    defaultBranch = main
+EOF
+
+# Tmux configuration
+cat > $target/home/$USERNAME/.tmux.conf <<'EOF'
+# Purple Computer Tmux Configuration
+
+# Change prefix to Ctrl-a
+unbind C-b
+set-option -g prefix C-a
+bind-key C-a send-prefix
+
+# Split panes using | and -
+bind | split-window -h
+bind - split-window -v
+unbind '"'
+unbind %
+
+# Reload config
+bind r source-file ~/.tmux.conf \; display "Config reloaded!"
+
+# Enable mouse mode
+set -g mouse on
+
+# Start windows and panes at 1, not 0
+set -g base-index 1
+setw -g pane-base-index 1
+
+# Status bar
+set -g status-bg colour235
+set -g status-fg colour250
+set -g status-interval 1
+set -g status-left-length 30
+set -g status-left '#[fg=green](#S) '
+set -g status-right '#[fg=yellow]%Y-%m-%d %H:%M '
+
+# Highlight active window
+setw -g window-status-current-style fg=black,bg=green
+
+# Vi mode
+setw -g mode-keys vi
+
+# Increase scrollback buffer
+set-option -g history-limit 10000
+EOF
+
+# Create first-boot welcome script
+cat > $target/home/$USERNAME/.purple-welcome <<'EOF'
+#!/bin/bash
+# Purple Computer first-boot welcome message
+
+clear
+cat << 'WELCOME'
+╔═══════════════════════════════════════════════════════════╗
+║                                                           ║
+║              Welcome to Purple Computer!                 ║
+║                                                           ║
+║  A minimal, terminal-centric computing environment       ║
+║                                                           ║
+╚═══════════════════════════════════════════════════════════╝
+
+Quick tips:
+  - Press Alt+Enter to open a new terminal
+  - Press Alt+Space for application launcher
+  - Press Alt+Q to close windows
+
+  - Default username: purple
+  - Default password: purple (CHANGE THIS!)
+
+  - Change password: passwd
+  - Configure network: nmtui
+  - Edit configs: vim ~/.config/
+
+  - System info: htop or btop
+  - File manager: ranger or pcmanfm
+
+Documentation: https://purplecomputer.local/docs
+
+WELCOME
+
+read -p "Press Enter to continue..."
+
+# Remove this welcome script after first run
+rm -f ~/.purple-welcome
+EOF
+
+chmod +x $target/home/$USERNAME/.purple-welcome
+
+# Add welcome to .bashrc (runs once)
+cat >> $target/home/$USERNAME/.bashrc <<'EOF'
+
+# First-boot welcome
+if [ -f ~/.purple-welcome ]; then
+    ~/.purple-welcome
+fi
+EOF
+
+# Fix all ownership
+$ROOTCMD chown -R $USERNAME:$USERNAME /home/$USERNAME
+
+echo "Custom configuration applied successfully."
+
+exit $error

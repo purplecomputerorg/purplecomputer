@@ -1,0 +1,157 @@
+#!/bin/bash
+# Finalize Purple Computer installation
+# Last script to run before reboot
+# Runs in FAI chroot environment
+
+set -e
+
+error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
+
+echo "Finalizing Purple Computer installation..."
+
+# Update initramfs
+$ROOTCMD update-initramfs -u -k all
+
+# Update GRUB
+if [ -d $target/sys/firmware/efi ]; then
+    # UEFI system
+    $ROOTCMD grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PurpleComputer
+else
+    # BIOS system
+    $ROOTCMD grub-install /dev/sda
+fi
+
+$ROOTCMD update-grub
+
+# Clean up package cache to save space
+$ROOTCMD apt-get clean
+
+# Remove residual config files
+$ROOTCMD apt-get autoremove --purge -y
+
+# Create installation info file
+cat > $target/etc/purple-install-info <<EOF
+Purple Computer Installation
+============================
+Install date: $(date)
+Installed by: FAI (Fully Automatic Installation)
+Version: 1.0
+Architecture: amd64
+
+Classes applied:
+$(cat $LOGDIR/FAI_CLASSES)
+
+Disk layout: LVM
+Distribution: Debian Bookworm
+Environment: Minimal X11 + Terminal
+
+Default user: purple
+Default password: purple (CHANGE THIS!)
+
+For support: https://purplecomputer.local
+EOF
+
+# Set up motd (message of the day)
+cat > $target/etc/motd <<'EOF'
+
+  ____                   _        ____                            _
+ |  _ \ _   _ _ __ _ __ | | ___  / ___|___  _ __ ___  _ __  _   _| |_ ___ _ __
+ | |_) | | | | '__| '_ \| |/ _ \| |   / _ \| '__/ _ \| '_ \| | | | __/ _ \ '__|
+ |  __/| |_| | |  | |_) | |  __/| |__| (_) | | | (_) | |_) | |_| | ||  __/ |
+ |_|    \__,_|_|  | .__/|_|\___| \____\___/|_|  \___/| .__/ \__,_|\__\___|_|
+                  |_|                                 |_|
+
+  Minimal • Terminal-centric • Offline-capable
+
+EOF
+
+# Create post-install helper script
+cat > $target/usr/local/bin/purple-setup <<'EOF'
+#!/bin/bash
+# Purple Computer post-install setup helper
+
+echo "Purple Computer Setup Helper"
+echo "============================"
+echo ""
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run with sudo: sudo purple-setup"
+    exit 1
+fi
+
+# Menu options
+echo "Available setup tasks:"
+echo "  1. Change user password"
+echo "  2. Configure network (WiFi)"
+echo "  3. Set timezone"
+echo "  4. Configure keyboard layout"
+echo "  5. Update system packages"
+echo "  6. Show installation info"
+echo "  0. Exit"
+echo ""
+
+read -p "Select option: " choice
+
+case $choice in
+    1)
+        read -p "Enter username (default: purple): " user
+        user=${user:-purple}
+        passwd $user
+        ;;
+    2)
+        nmtui
+        ;;
+    3)
+        dpkg-reconfigure tzdata
+        ;;
+    4)
+        dpkg-reconfigure keyboard-configuration
+        systemctl restart keyboard-setup
+        ;;
+    5)
+        apt-get update
+        apt-get upgrade -y
+        ;;
+    6)
+        cat /etc/purple-install-info
+        ;;
+    0)
+        echo "Exiting."
+        exit 0
+        ;;
+    *)
+        echo "Invalid option."
+        exit 1
+        ;;
+esac
+EOF
+
+chmod +x $target/usr/local/bin/purple-setup
+
+# Ensure proper permissions on sensitive files
+$ROOTCMD chmod 644 /etc/passwd
+$ROOTCMD chmod 644 /etc/group
+$ROOTCMD chmod 600 /etc/shadow
+$ROOTCMD chmod 600 /etc/gshadow
+
+# Set proper permissions on home directory
+$ROOTCMD chmod 755 /home/purple
+$ROOTCMD chmod 700 /home/purple/.ssh 2>/dev/null || true
+
+# Enable automatic security updates (optional, comment out if fully offline)
+# cat > $target/etc/apt/apt.conf.d/50unattended-upgrades <<'EOF'
+# Unattended-Upgrade::Allowed-Origins {
+#     "${distro_id}:${distro_codename}-security";
+# };
+# Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+# Unattended-Upgrade::Remove-Unused-Dependencies "true";
+# EOF
+
+echo "Installation finalized successfully!"
+echo ""
+echo "IMPORTANT: Default password is 'purple' - CHANGE IT IMMEDIATELY!"
+echo "After reboot, run: sudo purple-setup"
+echo ""
+
+exit $error

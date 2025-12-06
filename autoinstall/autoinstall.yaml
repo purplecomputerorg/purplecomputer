@@ -86,7 +86,6 @@ autoinstall:
     # X11 minimal (just the X server, no window manager, no desktop environment)
     - xorg
     - xinit
-    - xserver-xorg-video-all
     - matchbox-window-manager
 
     # Terminal emulator (runs fullscreen via xinitrc)

@@ -37,6 +37,13 @@ autoinstall:
     - echo 3 > /proc/sys/kernel/printk
     - echo "Welcome to Purple Computer - Installation starting..."
 
+    # CRITICAL: Override apt sources BEFORE Subiquity initializes apt
+    # This prevents Subiquity from generating online mirror entries
+    - rm -f /etc/apt/sources.list
+    - rm -rf /etc/apt/sources.list.d/*
+    - echo "deb [trusted=yes] file:///cdrom noble main restricted universe multiverse" > /etc/apt/sources.list
+    - echo "Forced offline apt configuration - cdrom only"
+
   # Locale and keyboard settings
   locale: en_US.UTF-8
   keyboard:
@@ -73,13 +80,12 @@ autoinstall:
     update: false
 
   # APT configuration - disable mirror selection for offline install
+  # DO NOT define "sources:" - it triggers Subiquity to generate online mirrors
+  # early-commands already configured /etc/apt/sources.list with cdrom repo
   apt:
     geoip: false
     fallback: offline-install
-    preserve_sources_list: true 
-    sources:
-      cdrom:
-        source: "deb [trusted=yes] file:///cdrom noble main"
+    preserve_sources_list: true
 
   # Package selection
   packages:

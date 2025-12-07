@@ -41,15 +41,18 @@ download_packages() {
 
     apt-get update
 
-    # First, download essential base system packages (required for debootstrap)
-    log_info "Downloading base system packages..."
-    apt-get install --reinstall --download-only -y \
-        -o Dir::Cache::Archives="${CACHE_DIR}/downloads" \
-        ubuntu-minimal apt udev systemd
+    # Download EVERYTHING needed for a bootable system (base + nfsroot + target packages)
+    log_info "Downloading all packages with dependencies..."
 
-    # Then download packages from our list
-    log_info "Downloading Purple Computer packages..."
-    xargs -a "${CACHE_DIR}/packages.list" apt-get install --reinstall --download-only -y \
+    # Combine base + nfsroot + FAI package list
+    {
+        echo "$BASE_PACKAGES" | tr ' ' '\n'
+        echo "$NFSROOT_PACKAGES" | tr ',' '\n'
+        cat "${CACHE_DIR}/packages.list"
+    } | sort -u > "${CACHE_DIR}/full-packages.list"
+
+    # Download all packages with full dependency resolution
+    xargs -a "${CACHE_DIR}/full-packages.list" apt-get install --reinstall --download-only -y \
         -o Dir::Cache::Archives="${CACHE_DIR}/downloads"
 
     log_info "Downloaded $(ls -1 *.deb 2>/dev/null | wc -l) packages"

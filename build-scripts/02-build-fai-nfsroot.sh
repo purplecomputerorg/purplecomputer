@@ -151,7 +151,7 @@ build_nfsroot() {
         --architecture=amd64 \
         --components=main \
         --aptopt='Apt::Get::AllowUnauthenticated "true";' \
-        --include=linux-image-generic,linux-firmware,casper,systemd,lvm2,parted,e2fsprogs,ntfs-3g,grub-pc-bin,grub-efi-amd64-bin \
+        --include="${NFSROOT_PACKAGES}" \
         "${DIST_NAME}" \
         "$NFSROOT" \
         "deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} main"

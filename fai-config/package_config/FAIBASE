@@ -1,16 +1,10 @@
 PACKAGES install
 linux-image-generic
+linux-firmware
 lvm2
 sudo
-bash-completion
 vim-tiny
 less
-wget
-curl
-ca-certificates
-pciutils
-usbutils
 iproute2
 iputils-ping
-net-tools
-apt-utils
+ca-certificates

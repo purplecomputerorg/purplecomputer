@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+# Distribution configured in build-scripts/config.sh: Ubuntu 24.04.3 LTS (noble)
 cat > $target/etc/apt/sources.list <<'EOF'
 deb [trusted=yes] file:///media/purple-repo noble main restricted universe multiverse
 EOF

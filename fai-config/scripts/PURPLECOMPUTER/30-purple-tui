@@ -13,9 +13,12 @@ if [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
 fi
 EOF
 
-# .xinitrc - just run Alacritty fullscreen
+# .xinitrc - run Matchbox WM with Alacritty fullscreen
 cat > $target/home/$USERNAME/.xinitrc <<'EOF'
 #!/bin/sh
+# Start minimal window manager in background
+matchbox-window-manager -use_titlebar no &
+# Run Alacritty fullscreen as main process
 exec alacritty --option window.decorations=none
 EOF
 

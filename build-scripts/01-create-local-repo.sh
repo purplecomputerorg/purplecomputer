@@ -1,16 +1,12 @@
 #!/bin/bash
-# Create local APT repository for Purple Computer
-# This script downloads all required packages and creates repository metadata
-
 set -e
 
-# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+
 REPO_BASE="/opt/purple-installer/local-repo"
 MIRROR_DIR="${REPO_BASE}/mirror"
 CACHE_DIR="${REPO_BASE}/cache"
-DIST="noble"
-ARCH="amd64"
-SECTIONS="main restricted universe multiverse"
 
 # Colors for output
 RED='\033[0;31m'
@@ -51,11 +47,11 @@ check_dependencies() {
 create_directories() {
     log_info "Creating repository directory structure..."
 
-    mkdir -p "${MIRROR_DIR}/dists/${DIST}"
+    mkdir -p "${MIRROR_DIR}/dists/${DIST_NAME}"
     mkdir -p "${CACHE_DIR}"
 
     for section in $SECTIONS; do
-        mkdir -p "${MIRROR_DIR}/dists/${DIST}/${section}/binary-${ARCH}"
+        mkdir -p "${MIRROR_DIR}/dists/${DIST_NAME}/${section}/binary-${ARCH}"
         mkdir -p "${MIRROR_DIR}/pool/${section}"
     done
 
@@ -166,7 +162,7 @@ create_metadata() {
     cd "$MIRROR_DIR"
 
     for section in $SECTIONS; do
-        local packages_file="dists/${DIST}/${section}/binary-${ARCH}/Packages"
+        local packages_file="dists/${DIST_NAME}/${section}/binary-${ARCH}/Packages"
 
         log_info "Generating Packages file for ${section}..."
 
@@ -186,21 +182,21 @@ create_metadata() {
 create_release() {
     log_info "Creating Release file..."
 
-    local release_file="${MIRROR_DIR}/dists/${DIST}/Release"
+    local release_file="${MIRROR_DIR}/dists/${DIST_NAME}/Release"
 
     cat > "$release_file" <<EOF
 Origin: Purple Computer
 Label: Purple Computer Local Repository
-Suite: ${DIST}
-Codename: ${DIST}
+Suite: ${DIST_NAME}
+Codename: ${DIST_NAME}
 Date: $(date -R)
 Architectures: ${ARCH}
 Components: ${SECTIONS}
-Description: Purple Computer Offline Repository
+Description: ${DIST_FULL} Offline Repository
 EOF
 
     # Generate checksums
-    cd "${MIRROR_DIR}/dists/${DIST}"
+    cd "${MIRROR_DIR}/dists/${DIST_NAME}"
 
     # MD5Sum
     {
@@ -234,7 +230,7 @@ EOF
 # Main execution
 main() {
     log_info "Starting local repository creation for Purple Computer..."
-    log_info "Distribution: ${DIST}"
+    log_info "Distribution: ${DIST_FULL}"
     log_info "Architecture: ${ARCH}"
 
     check_dependencies

@@ -1,10 +1,9 @@
 #!/bin/bash
-# Build FAI nfsroot (installation environment)
-# This creates the live environment used during installation
-
 set -e
 
-# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+
 FAI_CONFIG_DIR="/home/tavi/purplecomputer/fai-config"
 FAI_BASE="/srv/fai"
 NFSROOT="${FAI_BASE}/nfsroot"
@@ -62,6 +61,7 @@ setup_fai_config() {
     mkdir -p "${FAI_BASE}"
     mkdir -p "${FAI_BASE}/config"
     mkdir -p "${FAI_BASE}/nfsroot"
+    mkdir -p "/srv/tftp/fai"
 
     # Copy our configuration
     log_info "Copying FAI configuration from ${FAI_CONFIG_DIR}..."
@@ -90,10 +90,10 @@ LOGUSER="fai"
 FAI_LOGPROTO="file:///"
 
 # Server settings
-FAI_DEBOOTSTRAP="bookworm file:${MIRROR_DIR}"
+FAI_DEBOOTSTRAP="${DIST_NAME} file:${MIRROR_DIR}"
 
 # Classes to always apply
-FAI_CLASSES="FAIBASE DEBIAN AMD64 PURPLECOMPUTER LAPTOP MINIMAL_X"
+FAI_CLASSES="FAIBASE UBUNTU AMD64 PURPLECOMPUTER LAPTOP MINIMAL_X"
 
 # Default action
 FAI_ACTION="install"
@@ -102,43 +102,14 @@ FAI_ACTION="install"
 FAI_FLAGS="verbose"
 EOF
 
-    # Configure make-fai-nfsroot
-    cat > /etc/fai/make-fai-nfsroot.conf <<EOF
-# Purple Computer nfsroot configuration
+    # Use our custom nfsroot.conf
+    cp "${FAI_CONFIG_DIR}/nfsroot.conf" /etc/fai/nfsroot.conf
 
-# Use local mirror
-FAI_DEBOOTSTRAP="noble file://${MIRROR_DIR}"
+    # Override FAI defaults - don't install extra packages
+    cat >> /etc/fai/nfsroot.conf <<EOF
 
-# Architecture
-FAI_DEBOOTSTRAP_OPTS="--arch amd64"
-
-# Kernel package
-KERNELPACKAGE="linux-image-amd64"
-
-# Additional packages for nfsroot
-NFSROOT_PACKAGES="
-    systemd-sysv
-    live-boot
-    live-boot-initramfs-tools
-    lvm2
-    parted
-    gdisk
-    dosfstools
-    e2fsprogs
-    btrfs-progs
-    ntfs-3g
-    grub-pc
-    grub-efi-amd64
-    firmware-linux-free
-    ssh
-    vim
-    "
-
-# NFS root location
-NFSROOT="${NFSROOT}"
-
-# Make nfsroot read-write during installation
-FAI_NFSROOT_MODE="666"
+# Override FAI defaults
+FAI_NFSROOT_PACKAGES=""
 EOF
 
     log_info "FAI configured."
@@ -149,8 +120,7 @@ setup_local_repository() {
 
     # Create sources.list for FAI build environment
     cat > /etc/apt/sources.list.d/purple-local.list <<EOF
-# Purple Computer local repository
-deb [trusted=yes] file://${MIRROR_DIR} bookworm main contrib non-free non-free-firmware
+deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} ${SECTIONS}
 EOF
 
     # Update apt cache
@@ -185,7 +155,7 @@ customize_nfsroot() {
     # Copy local repository list into nfsroot
     mkdir -p "${NFSROOT}/etc/apt/sources.list.d"
     cat > "${NFSROOT}/etc/apt/sources.list.d/purple-local.list" <<EOF
-deb [trusted=yes] file:///media/purple-repo bookworm main contrib non-free non-free-firmware
+deb [trusted=yes] file:///media/purple-repo ${DIST_NAME} ${SECTIONS}
 EOF
 
     # Disable online repositories in nfsroot

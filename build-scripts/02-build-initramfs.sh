@@ -36,7 +36,7 @@ main() {
     log_info "Creating init script..."
     cat > "$INITRAMFS_DIR/init" <<'EOF'
 #!/bin/busybox sh
-# Minimal init: mount installer root and execute install.sh
+# Minimal init: mount ISO, loop-mount installer.ext4, run install.sh
 
 # Mount pseudo-filesystems
 /bin/busybox mount -t proc proc /proc
@@ -46,10 +46,19 @@ main() {
 # Wait for devices to settle
 /bin/busybox sleep 2
 
-# Find and mount installer root by label
-/bin/busybox echo "Mounting installer..."
-/bin/busybox mount -o ro LABEL=PURPLE_INSTALLER /mnt || {
-    /bin/busybox echo "ERROR: Cannot find PURPLE_INSTALLER"
+# Mount the ISO (CD-ROM)
+/bin/busybox echo "Mounting ISO..."
+/bin/busybox mkdir -p /cdrom
+/bin/busybox mount -t iso9660 -o ro LABEL=PURPLE_INSTALLER /cdrom || {
+    /bin/busybox echo "ERROR: Cannot find ISO with label PURPLE_INSTALLER"
+    /bin/busybox sh
+}
+
+# Loop-mount the installer rootfs from within the ISO
+/bin/busybox echo "Mounting installer rootfs..."
+/bin/busybox mkdir -p /mnt
+/bin/busybox mount -o ro,loop /cdrom/boot/installer.ext4 /mnt || {
+    /bin/busybox echo "ERROR: Cannot mount installer.ext4"
     /bin/busybox sh
 }
 

@@ -35,10 +35,31 @@ main() {
     rm -rf "$ISO_DIR"
     mkdir -p "$ISO_DIR"/{boot,isolinux,EFI/boot}
 
-    # Find kernel from build system
-    log_info "Copying kernel..."
-    KERNEL=$(ls -1 "${BUILD_DIR}/installer-rootfs/boot/vmlinuz-"* | sort -V | tail -1)
+    # Extract kernel from golden image
+    log_info "Extracting kernel from golden image..."
+    GOLDEN_IMG="${BUILD_DIR}/purple-os.img"
+    if [ ! -f "$GOLDEN_IMG" ]; then
+        echo "ERROR: Golden image not found at $GOLDEN_IMG"
+        echo "Run step 1 (build-golden-image.sh) first"
+        exit 1
+    fi
+
+    # Mount golden image to extract kernel
+    LOOP_DEV=$(losetup -f --show "$GOLDEN_IMG")
+    kpartx -av "$LOOP_DEV"
+    LOOP_NAME=$(basename "$LOOP_DEV")
+
+    TEMP_MOUNT="${BUILD_DIR}/mnt-kernel-extract"
+    mkdir -p "$TEMP_MOUNT"
+    mount "/dev/mapper/${LOOP_NAME}p2" "$TEMP_MOUNT"
+
+    KERNEL=$(ls -1 "$TEMP_MOUNT/boot/vmlinuz-"* | sort -V | tail -1)
     cp "$KERNEL" "$ISO_DIR/boot/vmlinuz"
+
+    umount "$TEMP_MOUNT"
+    kpartx -dv "$LOOP_DEV"
+    losetup -d "$LOOP_DEV"
+    rm -rf "$TEMP_MOUNT"
 
     # Copy initramfs
     log_info "Copying initramfs..."

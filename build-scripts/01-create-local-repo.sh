@@ -25,7 +25,7 @@ download_base_system() {
     mkdir -p "${MIRROR_DIR}/pool"
     rm -rf "$TEMP_ROOT"
 
-    # First mmdebstrap: downloads everything, customize-hook extracts .debs
+    # First mmdebstrap: keep apt cache, extract all .debs after build completes
     mmdebstrap \
         --mode=unshare \
         --variant=minbase \
@@ -34,10 +34,15 @@ download_base_system() {
         --include="${NFSROOT_PACKAGES}" \
         --aptopt='APT::Install-Recommends "false"' \
         --aptopt='APT::Install-Suggests "false"' \
-        --customize-hook='find "$1/var/cache/apt/archives" -name "*.deb" -exec cp {} '"${MIRROR_DIR}/pool/"' \;' \
+        --aptopt='APT::Keep-Downloaded-Packages "true"' \
+        --skip=cleanup/apt/cache \
         "${DIST_NAME}" \
         "$TEMP_ROOT" \
         "${UBUNTU_MIRROR}"
+
+    # Extract all .debs from apt cache after mmdebstrap completes
+    log_info "Extracting .debs from apt cache..."
+    find "$TEMP_ROOT/var/cache/apt/archives" -name "*.deb" -exec cp -v {} "${MIRROR_DIR}/pool/" \;
 
     rm -rf "$TEMP_ROOT"
     log_info "Downloaded .debs: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"

@@ -121,7 +121,7 @@ setup_local_repository() {
     # Create sources.list for FAI build environment
     # NOTE: file:/// (three slashes) for absolute path + trailing slash required
     cat > /etc/apt/sources.list.d/purple-local.list <<EOF
-deb [trusted=yes] file:///${MIRROR_DIR}/ ${DIST_NAME} main
+deb [trusted=yes] file://${MIRROR_DIR}/ ${DIST_NAME} main
 EOF
 
     # Update apt cache
@@ -147,7 +147,7 @@ build_nfsroot() {
     # STAGE 3: Second mmdebstrap - offline only, uses local repo
     log_info "Building nfsroot (offline mode)..."
 
-    # NOTE: file:/// (three slashes) for absolute path + trailing slash required
+    # NOTE: file:/// (three slashes total: file:// + /absolute/path) + trailing slash required
     mmdebstrap \
         --mode=unshare \
         --variant=minbase \
@@ -155,11 +155,11 @@ build_nfsroot() {
         --components=main \
         --aptopt='Apt::Get::AllowUnauthenticated "true";' \
         --include="${NFSROOT_PACKAGES}" \
-        --setup-hook='echo "deb [trusted=yes] file:///'${MIRROR_DIR}'/ '${DIST_NAME}' main" > "$1/etc/apt/sources.list"' \
+        --setup-hook='echo "deb [trusted=yes] file://'${MIRROR_DIR}'/ '${DIST_NAME}' main" > "$1/etc/apt/sources.list"' \
         --setup-hook='rm -f "$1/etc/apt/sources.list.d"/*.list || true' \
         "${DIST_NAME}" \
         "$NFSROOT" \
-        "file:///${MIRROR_DIR}/ ${DIST_NAME} main"
+        "file://${MIRROR_DIR}/ ${DIST_NAME} main"
 
     log_info "Nfsroot built (offline): ${NFSROOT}"
 }

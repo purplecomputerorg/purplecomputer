@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     fai-server \
     fai-setup-storage \
     mmdebstrap \
+    apt-utils \
     squashfs-tools \
     live-boot \
     syslinux \

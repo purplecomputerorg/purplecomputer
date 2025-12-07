@@ -182,6 +182,29 @@ EOF
         sed -i 's/^deb /#deb /g' "${NFSROOT}/etc/apt/sources.list"
     fi
 
+    # Disable DHCP client in live-boot to prevent network retries
+    log_info "Disabling network configuration in initramfs..."
+
+    # Disable ipconfig/DHCP by commenting out calls
+    # Use word-boundary and guard against double-commenting
+    chroot "${NFSROOT}" /bin/bash -c "
+        # Patch initramfs scripts to skip ipconfig calls
+        for script in /usr/share/initramfs-tools/scripts/init-top/udev \
+                      /usr/share/initramfs-tools/scripts/local-top/udev; do
+            if [ -f \"\$script\" ]; then
+                # Only comment if not already commented (avoid ##ipconfig)
+                sed -i '/^[[:space:]]*#.*ipconfig/!s/^[[:space:]]*\(ipconfig\b\)/#\1/' \"\$script\" || true
+            fi
+        done
+
+        # Disable network-boot attempts in live-boot
+        mkdir -p /etc/live
+        echo 'NO_NETWORK=1' > /etc/live/boot.conf
+
+        # Update initramfs with changes
+        update-initramfs -u || true
+    "
+
     # Add Purple Computer branding
     cat > "${NFSROOT}/etc/issue" <<'EOF'
 Purple Computer Installation Environment

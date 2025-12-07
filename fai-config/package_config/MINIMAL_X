@@ -17,7 +17,6 @@ lightdm-gtk-greeter
 # Window manager (ultra minimal)
 openbox
 obconf
-obmenu
 
 # Terminal emulator (modern, GPU-accelerated)
 alacritty

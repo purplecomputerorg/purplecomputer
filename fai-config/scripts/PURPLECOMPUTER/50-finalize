@@ -9,18 +9,21 @@ error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
 
 echo "Finalizing Purple Computer installation..."
 
-# Update initramfs
-$ROOTCMD update-initramfs -u -k all
-
-# Update GRUB
+# Install appropriate GRUB package and bootloader
 if [ -d $target/sys/firmware/efi ]; then
     # UEFI system
+    echo "Installing GRUB for UEFI..."
+    $ROOTCMD apt-get install -y grub-efi-amd64
     $ROOTCMD grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PurpleComputer
 else
     # BIOS system
+    echo "Installing GRUB for BIOS..."
+    $ROOTCMD apt-get install -y grub-pc
     $ROOTCMD grub-install /dev/sda
 fi
 
+# Update initramfs and GRUB config
+$ROOTCMD update-initramfs -u -k all
 $ROOTCMD update-grub
 
 # Clean up package cache to save space

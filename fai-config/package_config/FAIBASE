@@ -4,8 +4,7 @@
 PACKAGES install
 # Core system
 linux-image-amd64
-grub-pc
-grub-efi-amd64
+# Note: grub-pc and grub-efi-amd64 conflict - installed per-class in scripts
 
 # LVM support
 lvm2

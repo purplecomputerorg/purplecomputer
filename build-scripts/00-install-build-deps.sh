@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Install all dependencies required to build Purple Computer installer
 # Run this first on a Debian/Ubuntu build machine
 

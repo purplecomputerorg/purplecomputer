@@ -12,8 +12,7 @@ udev
 e2fsprogs
 btrfs-progs
 ntfs-3g
-exfat-fuse
-exfat-utils
+exfatprogs
 
 # Compression tools
 gzip
@@ -39,8 +38,7 @@ acpid
 pm-utils
 cpufrequtils
 
-# Laptop-specific
-laptop-mode-tools
+# Laptop-specific (tlp conflicts with laptop-mode-tools, using tlp only)
 tlp
 tlp-rdw
 

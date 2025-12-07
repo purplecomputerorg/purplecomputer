@@ -120,7 +120,7 @@ setup_local_repository() {
 
     # Create sources.list for FAI build environment
     cat > /etc/apt/sources.list.d/purple-local.list <<EOF
-deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} ${SECTIONS}
+deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} main
 EOF
 
     # Update apt cache
@@ -135,16 +135,26 @@ build_nfsroot() {
     # Clean old nfsroot if exists
     if [ -d "$NFSROOT" ]; then
         log_warn "Removing old nfsroot..."
+        # Unmount any bind mounts first
+        umount "$NFSROOT/dev" 2>/dev/null || true
+        umount "$NFSROOT/proc" 2>/dev/null || true
+        umount "$NFSROOT/sys" 2>/dev/null || true
         rm -rf "$NFSROOT"
     fi
 
     # Build nfsroot
+    # Export FAAI_DEBOOTSTRAP_OPTS to include --no-check-certificate for Docker
+    export DEBIAN_FRONTEND=noninteractive
     fai-make-nfsroot -v
 
     if [ $? -eq 0 ]; then
         log_info "FAI nfsroot built successfully at: ${NFSROOT}"
     else
         log_error "Failed to build FAI nfsroot"
+        # Clean up any mounts on failure
+        umount "$NFSROOT/dev" 2>/dev/null || true
+        umount "$NFSROOT/proc" 2>/dev/null || true
+        umount "$NFSROOT/sys" 2>/dev/null || true
         exit 1
     fi
 }
@@ -155,7 +165,7 @@ customize_nfsroot() {
     # Copy local repository list into nfsroot
     mkdir -p "${NFSROOT}/etc/apt/sources.list.d"
     cat > "${NFSROOT}/etc/apt/sources.list.d/purple-local.list" <<EOF
-deb [trusted=yes] file:///media/purple-repo ${DIST_NAME} ${SECTIONS}
+deb [trusted=yes] file:///media/purple-repo ${DIST_NAME} main
 EOF
 
     # Disable online repositories in nfsroot

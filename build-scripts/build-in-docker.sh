@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Build PurpleOS installer in Docker (for NixOS compatibility)
+# Usage: ./build-in-docker.sh [step]
+#   step: optional step number to start from (1-4, default: 1)
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_NAME="purple-installer-builder"
+START_STEP="${1:-1}"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -21,12 +24,12 @@ main() {
     docker build -t "$IMAGE_NAME" .
 
     # Run build in container
-    log_info "Running build in container..."
+    log_info "Running build in container (starting from step $START_STEP)..."
     docker run --rm --privileged \
         -v "$SCRIPT_DIR:/build" \
         -v "/opt/purple-installer:/opt/purple-installer" \
         "$IMAGE_NAME" \
-        /build/build-all.sh
+        /build/build-all.sh "$START_STEP"
 
     log_info "Build complete!"
     log_info "Output in: /opt/purple-installer/output/"

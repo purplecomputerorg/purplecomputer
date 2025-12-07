@@ -21,28 +21,39 @@ main() {
 
     cd "$SCRIPT_DIR"
 
-    log_step "Building PurpleOS installer (4 steps)..."
+    # Allow starting from a specific step (default: 1)
+    START_STEP="${1:-1}"
+
+    log_step "Building PurpleOS installer (starting from step $START_STEP)..."
     echo
 
-    log_step "1/4: Building golden image..."
-    ./01-build-golden-image.sh
-    echo
+    if [ "$START_STEP" -le 1 ]; then
+        log_step "1/4: Building golden image..."
+        ./01-build-golden-image.sh
+        echo
+    fi
 
-    log_step "2/4: Building initramfs..."
-    ./02-build-initramfs.sh
-    echo
+    if [ "$START_STEP" -le 2 ]; then
+        log_step "2/4: Building initramfs..."
+        ./02-build-initramfs.sh
+        echo
+    fi
 
-    log_step "3/4: Building installer rootfs..."
-    ./03-build-installer-rootfs.sh
-    echo
+    if [ "$START_STEP" -le 3 ]; then
+        log_step "3/4: Building installer rootfs..."
+        ./03-build-installer-rootfs.sh
+        echo
+    fi
 
-    log_step "4/4: Building bootable ISO..."
-    ./04-build-iso.sh
-    echo
+    if [ "$START_STEP" -le 4 ]; then
+        log_step "4/4: Building bootable ISO..."
+        ./04-build-iso.sh
+        echo
+    fi
 
     log_done "Build complete!"
     log_done "ISO ready at: /opt/purple-installer/output/"
-    ls -lh /opt/purple-installer/output/*.iso
+    ls -lh /opt/purple-installer/output/*.iso 2>/dev/null || true
 }
 
 main "$@"

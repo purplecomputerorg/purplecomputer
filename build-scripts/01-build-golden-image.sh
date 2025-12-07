@@ -77,10 +77,19 @@ main() {
     chroot "$MOUNT_DIR" usermod -aG sudo purple
     echo "purple:purple" | chroot "$MOUNT_DIR" chpasswd
 
-    # Install bootloader
+    # Bind mount necessary filesystems for grub-install
     log_info "Installing GRUB bootloader..."
+    mount --bind /dev "$MOUNT_DIR/dev"
+    mount --bind /proc "$MOUNT_DIR/proc"
+    mount --bind /sys "$MOUNT_DIR/sys"
+
     chroot "$MOUNT_DIR" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PURPLE --no-nvram
     chroot "$MOUNT_DIR" update-grub
+
+    # Unmount bind mounts
+    umount "$MOUNT_DIR/dev"
+    umount "$MOUNT_DIR/proc"
+    umount "$MOUNT_DIR/sys"
 
     # Cleanup
     log_info "Cleaning up..."

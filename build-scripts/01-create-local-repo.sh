@@ -199,30 +199,24 @@ EOF
     cd "${MIRROR_DIR}/dists/${DIST_NAME}"
 
     # MD5Sum
-    {
-        find . -type f -name 'Packages*' -exec md5sum {} \;
-    } > Release.tmp
-
     echo "MD5Sum:" >> "$release_file"
-    awk '{printf " %s %16d %s\n", $1, $2, $2}' Release.tmp | \
-        while read hash size file; do
-            actual_size=$(stat -c%s "$file")
-            echo " $hash $actual_size $file"
-        done >> "$release_file"
+    find . -type f -name 'Packages*' | while read file; do
+        # Strip leading ./
+        file_path="${file#./}"
+        file_size=$(stat -c%s "$file")
+        file_hash=$(md5sum "$file" | awk '{print $1}')
+        echo " $file_hash $file_size $file_path"
+    done >> "$release_file"
 
     # SHA256
-    {
-        find . -type f -name 'Packages*' -exec sha256sum {} \;
-    } > Release.tmp
-
     echo "SHA256:" >> "$release_file"
-    awk '{printf " %s %16d %s\n", $1, $2, $2}' Release.tmp | \
-        while read hash size file; do
-            actual_size=$(stat -c%s "$file")
-            echo " $hash $actual_size $file"
-        done >> "$release_file"
-
-    rm Release.tmp
+    find . -type f -name 'Packages*' | while read file; do
+        # Strip leading ./
+        file_path="${file#./}"
+        file_size=$(stat -c%s "$file")
+        file_hash=$(sha256sum "$file" | awk '{print $1}')
+        echo " $file_hash $file_size $file_path"
+    done >> "$release_file"
 
     log_info "Release file created."
 }

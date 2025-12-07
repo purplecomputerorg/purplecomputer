@@ -119,8 +119,9 @@ setup_local_repository() {
     log_info "Setting up local repository access..."
 
     # Create sources.list for FAI build environment
+    # NOTE: file:/// (three slashes) for absolute path + trailing slash required
     cat > /etc/apt/sources.list.d/purple-local.list <<EOF
-deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} main
+deb [trusted=yes] file:///${MIRROR_DIR}/ ${DIST_NAME} main
 EOF
 
     # Update apt cache
@@ -130,7 +131,7 @@ EOF
 }
 
 build_nfsroot() {
-    log_info "Building FAI nfsroot (this will take several minutes)..."
+    log_info "Stage 3: Building nfsroot from offline repository..."
 
     # Clean old nfsroot if exists
     if [ -d "$NFSROOT" ]; then
@@ -143,20 +144,24 @@ build_nfsroot() {
 
     export DEBIAN_FRONTEND=noninteractive
 
-    # Use mmdebstrap (Docker-native, no two-stage needed)
-    log_info "Creating nfsroot with mmdebstrap..."
+    # STAGE 3: Second mmdebstrap - offline only, uses local repo
+    log_info "Building nfsroot (offline mode)..."
 
+    # NOTE: file:/// (three slashes) for absolute path + trailing slash required
     mmdebstrap \
+        --mode=unshare \
         --variant=minbase \
         --architecture=amd64 \
         --components=main \
         --aptopt='Apt::Get::AllowUnauthenticated "true";' \
         --include="${NFSROOT_PACKAGES}" \
+        --setup-hook='echo "deb [trusted=yes] file:///'${MIRROR_DIR}'/ '${DIST_NAME}' main" > "$1/etc/apt/sources.list"' \
+        --setup-hook='rm -f "$1/etc/apt/sources.list.d"/*.list || true' \
         "${DIST_NAME}" \
         "$NFSROOT" \
-        "deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} main"
+        "file:///${MIRROR_DIR}/ ${DIST_NAME} main"
 
-    log_info "FAI nfsroot built at: ${NFSROOT}"
+    log_info "Nfsroot built (offline): ${NFSROOT}"
 }
 
 customize_nfsroot() {

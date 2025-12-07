@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     fai-setup-storage \
     mmdebstrap \
     apt-utils \
+    dpkg-dev \
     squashfs-tools \
     live-boot \
     syslinux \

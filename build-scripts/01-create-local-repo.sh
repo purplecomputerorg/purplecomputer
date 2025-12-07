@@ -17,16 +17,15 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Use mmdebstrap to download complete base system (Docker-safe)
+# STAGE 1: Download complete dependency closure with mmdebstrap
 download_base_system() {
-    log_info "Downloading complete base system with mmdebstrap..."
-    log_info "This gets ALL dependencies (~500MB)"
+    log_info "Stage 1: Downloading complete dependency closure..."
 
     local TEMP_ROOT="${CACHE_DIR}/temp-root"
-    mkdir -p "${CACHE_DIR}/base-downloads"
+    mkdir -p "${MIRROR_DIR}/pool"
     rm -rf "$TEMP_ROOT"
 
-    # Build to temp directory - customize-hook copies .debs AFTER apt downloads
+    # First mmdebstrap: downloads everything, customize-hook extracts .debs
     mmdebstrap \
         --mode=unshare \
         --variant=minbase \
@@ -35,20 +34,18 @@ download_base_system() {
         --include="${NFSROOT_PACKAGES}" \
         --aptopt='APT::Install-Recommends "false"' \
         --aptopt='APT::Install-Suggests "false"' \
-        --customize-hook='cp -v "$1"/var/cache/apt/archives/*.deb '"${CACHE_DIR}/base-downloads/"' || true' \
+        --customize-hook='find "$1/var/cache/apt/archives" -name "*.deb" -exec cp {} '"${MIRROR_DIR}/pool/"' \;' \
         "${DIST_NAME}" \
         "$TEMP_ROOT" \
         "${UBUNTU_MIRROR}"
 
-    # Clean up temp root
     rm -rf "$TEMP_ROOT"
-
-    log_info "Base packages: $(ls -1 ${CACHE_DIR}/base-downloads/*.deb 2>/dev/null | wc -l)"
+    log_info "Downloaded .debs: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"
 }
 
-# Add Purple-specific packages
+# Add Purple-specific packages to pool
 add_purple_packages() {
-    log_info "Downloading Purple-specific packages..."
+    log_info "Adding Purple-specific packages..."
 
     # Collect from FAI configs
     local pkg_list="${CACHE_DIR}/packages.list"
@@ -61,47 +58,39 @@ add_purple_packages() {
     sort -u "$pkg_list" -o "$pkg_list"
     log_info "Purple packages to add: $(wc -l < $pkg_list)"
 
-    # Download Purple packages using apt-get download
-    mkdir -p "${CACHE_DIR}/purple-downloads"
-    cd "${CACHE_DIR}/purple-downloads"
-
+    # Download directly to pool
+    cd "${MIRROR_DIR}/pool"
     apt-get update
     xargs -a "$pkg_list" apt-get download 2>/dev/null || true
 
-    log_info "Purple packages: $(ls -1 *.deb 2>/dev/null | wc -l)"
+    log_info "Total packages in pool: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"
 }
 
-# Create offline repo from downloaded .debs
+# STAGE 2: Build proper offline repository
 create_repository() {
-    log_info "Creating repository structure..."
+    log_info "Stage 2: Building offline repository metadata..."
 
-    mkdir -p "${MIRROR_DIR}/pool"
     mkdir -p "${MIRROR_DIR}/dists/${DIST_NAME}/main/binary-${ARCH}"
-
-    # Copy all debs to pool
-    cp "${CACHE_DIR}/base-downloads"/*.deb "${MIRROR_DIR}/pool/" 2>/dev/null || true
-    cp "${CACHE_DIR}/purple-downloads"/*.deb "${MIRROR_DIR}/pool/" 2>/dev/null || true
-
     cd "$MIRROR_DIR"
 
-    # Generate Packages file
-    apt-ftparchive packages pool > "dists/${DIST_NAME}/main/binary-${ARCH}/Packages"
+    # Generate Packages file with dpkg-scanpackages
+    dpkg-scanpackages pool > "dists/${DIST_NAME}/main/binary-${ARCH}/Packages"
     gzip -9c "dists/${DIST_NAME}/main/binary-${ARCH}/Packages" > "dists/${DIST_NAME}/main/binary-${ARCH}/Packages.gz"
 
-    # Generate Release file
-    cat > /tmp/apt-ftparchive.conf <<EOF
+    # Generate Release file with hashes using apt-ftparchive
+    cat > /tmp/apt-release.conf <<EOF
 APT::FTPArchive::Release::Origin "Purple Computer";
-APT::FTPArchive::Release::Label "PurpleOS Offline Repository";
+APT::FTPArchive::Release::Label "PurpleOS Offline";
 APT::FTPArchive::Release::Suite "${DIST_NAME}";
 APT::FTPArchive::Release::Codename "${DIST_NAME}";
 APT::FTPArchive::Release::Architectures "${ARCH}";
 APT::FTPArchive::Release::Components "main";
-APT::FTPArchive::Release::Description "${DIST_FULL} Offline Repository";
+APT::FTPArchive::Release::Description "${DIST_FULL} Offline";
 EOF
 
-    apt-ftparchive -c /tmp/apt-ftparchive.conf release "dists/${DIST_NAME}" > "dists/${DIST_NAME}/Release"
+    apt-ftparchive -c /tmp/apt-release.conf release "dists/${DIST_NAME}" > "dists/${DIST_NAME}/Release"
 
-    log_info "Repository created: ${MIRROR_DIR}"
+    log_info "Repository created at: ${MIRROR_DIR}"
 }
 
 # Main
@@ -121,11 +110,10 @@ main() {
     create_repository
 
     log_info ""
-    log_info "✓ Repository ready at: ${MIRROR_DIR}"
+    log_info "✓ Offline repository ready"
+    log_info "  Location: ${MIRROR_DIR}"
     log_info "  Packages: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"
     log_info "  Size: $(du -sh ${MIRROR_DIR} | cut -f1)"
-    log_info ""
-    log_info "Next: Run 02-build-fai-nfsroot.sh"
 }
 
 main

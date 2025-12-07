@@ -17,32 +17,32 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# STAGE 1: Download complete dependency closure with mmdebstrap
+# STAGE 1: Download complete dependency closure with debootstrap
 download_base_system() {
     log_info "Stage 1: Downloading complete dependency closure..."
 
     local TEMP_ROOT="${CACHE_DIR}/temp-root"
+    local DEB_CACHE="${CACHE_DIR}/debs"
     mkdir -p "${MIRROR_DIR}/pool"
+    mkdir -p "$DEB_CACHE"
     rm -rf "$TEMP_ROOT"
 
-    # First mmdebstrap: keep apt cache, extract all .debs after build completes
-    mmdebstrap \
-        --mode=unshare \
+    # Use debootstrap with --make-tarball to download all .debs
+    # debootstrap downloads ALL packages including Essential ones
+    log_info "Downloading base system with debootstrap..."
+    debootstrap \
+        --arch=amd64 \
         --variant=minbase \
-        --architecture=amd64 \
         --components=main,restricted,universe,multiverse \
         --include="${NFSROOT_PACKAGES}" \
-        --aptopt='APT::Install-Recommends "false"' \
-        --aptopt='APT::Install-Suggests "false"' \
-        --aptopt='APT::Keep-Downloaded-Packages "true"' \
-        --skip=cleanup/apt/cache \
+        --download-only \
         "${DIST_NAME}" \
         "$TEMP_ROOT" \
         "${UBUNTU_MIRROR}"
 
-    # Extract all .debs from apt cache after mmdebstrap completes
-    log_info "Extracting .debs from apt cache..."
-    find "$TEMP_ROOT/var/cache/apt/archives" -name "*.deb" -exec cp -v {} "${MIRROR_DIR}/pool/" \;
+    # Copy all downloaded .debs to pool
+    log_info "Copying .debs to pool..."
+    find "$TEMP_ROOT/var/cache/apt/archives" -name "*.deb" -exec cp {} "${MIRROR_DIR}/pool/" \;
 
     rm -rf "$TEMP_ROOT"
     log_info "Downloaded .debs: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"
@@ -61,12 +61,26 @@ add_purple_packages() {
     done
 
     sort -u "$pkg_list" -o "$pkg_list"
+    local PURPLE_PKGS=$(tr '\n' ',' < "$pkg_list" | sed 's/,$//')
     log_info "Purple packages to add: $(wc -l < $pkg_list)"
 
-    # Download directly to pool
-    cd "${MIRROR_DIR}/pool"
-    apt-get update
-    xargs -a "$pkg_list" apt-get download 2>/dev/null || true
+    # Use debootstrap again to download Purple packages with same versions
+    local TEMP_ROOT2="${CACHE_DIR}/temp-root2"
+    rm -rf "$TEMP_ROOT2"
+
+    debootstrap \
+        --arch=amd64 \
+        --variant=minbase \
+        --components=main,restricted,universe,multiverse \
+        --include="${PURPLE_PKGS}" \
+        --download-only \
+        "${DIST_NAME}" \
+        "$TEMP_ROOT2" \
+        "${UBUNTU_MIRROR}"
+
+    # Copy Purple package .debs to pool
+    find "$TEMP_ROOT2/var/cache/apt/archives" -name "*.deb" -exec cp {} "${MIRROR_DIR}/pool/" \;
+    rm -rf "$TEMP_ROOT2"
 
     log_info "Total packages in pool: $(ls -1 ${MIRROR_DIR}/pool/*.deb 2>/dev/null | wc -l)"
 }

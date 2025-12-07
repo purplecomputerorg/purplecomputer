@@ -4,6 +4,7 @@ FROM ubuntu:noble
 RUN apt-get update && apt-get install -y \
     fai-server \
     fai-setup-storage \
+    debootstrap \
     mmdebstrap \
     apt-utils \
     dpkg-dev \

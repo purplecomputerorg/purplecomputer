@@ -147,7 +147,8 @@ build_nfsroot() {
     # STAGE 3: Second mmdebstrap - offline only, uses local repo
     log_info "Building nfsroot (offline mode)..."
 
-    # NOTE: file:/// (three slashes total: file:// + /absolute/path) + trailing slash required
+    # NOTE: file:/// protocol requires bind-mount to access from inside chroot
+    # Use --hook-dir to auto-mount the file:// repo
     mmdebstrap \
         --mode=unshare \
         --variant=minbase \
@@ -155,8 +156,11 @@ build_nfsroot() {
         --components=main \
         --aptopt='Apt::Get::AllowUnauthenticated "true";' \
         --include="${NFSROOT_PACKAGES}" \
+        --hook-dir=/usr/share/mmdebstrap/hooks/file-mirror-automount \
         --setup-hook='echo "deb [trusted=yes] file://'${MIRROR_DIR}'/ '${DIST_NAME}' main" > "$1/etc/apt/sources.list"' \
         --setup-hook='rm -f "$1/etc/apt/sources.list.d"/*.list || true' \
+        --setup-hook='echo "[DEBUG] sources.list content:"; cat "$1/etc/apt/sources.list"' \
+        --customize-hook='if grep -q "archive.ubuntu.com\|security.ubuntu.com" "$1/etc/apt/sources.list" 2>/dev/null; then echo "ERROR: Online repos detected!"; exit 1; fi' \
         "${DIST_NAME}" \
         "$NFSROOT" \
         "file://${MIRROR_DIR}/ ${DIST_NAME} main"

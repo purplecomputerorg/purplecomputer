@@ -40,6 +40,15 @@ download_packages() {
     cd "${CACHE_DIR}/downloads"
 
     apt-get update
+
+    # First, download essential base system packages (required for debootstrap)
+    log_info "Downloading base system packages..."
+    apt-get install --reinstall --download-only -y \
+        -o Dir::Cache::Archives="${CACHE_DIR}/downloads" \
+        ubuntu-minimal apt udev systemd
+
+    # Then download packages from our list
+    log_info "Downloading Purple Computer packages..."
     xargs -a "${CACHE_DIR}/packages.list" apt-get install --reinstall --download-only -y \
         -o Dir::Cache::Archives="${CACHE_DIR}/downloads"
 
@@ -62,8 +71,18 @@ create_repository() {
     apt-ftparchive packages pool > "dists/${DIST_NAME}/main/binary-${ARCH}/Packages"
     gzip -9c "dists/${DIST_NAME}/main/binary-${ARCH}/Packages" > "dists/${DIST_NAME}/main/binary-${ARCH}/Packages.gz"
 
-    # Generate Release file
-    apt-ftparchive release "dists/${DIST_NAME}" > "dists/${DIST_NAME}/Release"
+    # Generate Release file with proper metadata
+    cat > /tmp/apt-ftparchive.conf <<EOF
+APT::FTPArchive::Release::Origin "Purple Computer";
+APT::FTPArchive::Release::Label "Purple Computer Offline Repository";
+APT::FTPArchive::Release::Suite "${DIST_NAME}";
+APT::FTPArchive::Release::Codename "${DIST_NAME}";
+APT::FTPArchive::Release::Architectures "${ARCH}";
+APT::FTPArchive::Release::Components "main";
+APT::FTPArchive::Release::Description "${DIST_FULL} Offline Repository";
+EOF
+
+    apt-ftparchive -c /tmp/apt-ftparchive.conf release "dists/${DIST_NAME}" > "dists/${DIST_NAME}/Release"
 
     log_info "Repository created: ${MIRROR_DIR}"
 }

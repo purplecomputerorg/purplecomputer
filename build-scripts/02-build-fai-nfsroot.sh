@@ -41,7 +41,7 @@ install_fai() {
     apt-get install -y \
         fai-server \
         fai-setup-storage \
-        debootstrap \
+        mmdebstrap \
         squashfs-tools \
         live-boot \
         syslinux \
@@ -135,28 +135,28 @@ build_nfsroot() {
     # Clean old nfsroot if exists
     if [ -d "$NFSROOT" ]; then
         log_warn "Removing old nfsroot..."
-        # Unmount any bind mounts first
         umount "$NFSROOT/dev" 2>/dev/null || true
         umount "$NFSROOT/proc" 2>/dev/null || true
         umount "$NFSROOT/sys" 2>/dev/null || true
         rm -rf "$NFSROOT"
     fi
 
-    # Build nfsroot
-    # Export FAAI_DEBOOTSTRAP_OPTS to include --no-check-certificate for Docker
     export DEBIAN_FRONTEND=noninteractive
-    fai-make-nfsroot -v
 
-    if [ $? -eq 0 ]; then
-        log_info "FAI nfsroot built successfully at: ${NFSROOT}"
-    else
-        log_error "Failed to build FAI nfsroot"
-        # Clean up any mounts on failure
-        umount "$NFSROOT/dev" 2>/dev/null || true
-        umount "$NFSROOT/proc" 2>/dev/null || true
-        umount "$NFSROOT/sys" 2>/dev/null || true
-        exit 1
-    fi
+    # Use mmdebstrap (Docker-native, no two-stage needed)
+    log_info "Creating nfsroot with mmdebstrap..."
+
+    mmdebstrap \
+        --variant=minbase \
+        --architecture=amd64 \
+        --components=main \
+        --aptopt='Apt::Get::AllowUnauthenticated "true";' \
+        --include=linux-image-generic,linux-firmware,casper,systemd,lvm2,parted,e2fsprogs,ntfs-3g,grub-pc-bin,grub-efi-amd64-bin \
+        "${DIST_NAME}" \
+        "$NFSROOT" \
+        "deb [trusted=yes] file://${MIRROR_DIR} ${DIST_NAME} main"
+
+    log_info "FAI nfsroot built at: ${NFSROOT}"
 }
 
 customize_nfsroot() {

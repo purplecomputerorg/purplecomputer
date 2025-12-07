@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Purple Computer Build Configuration
 # Single source of truth for distribution settings
 

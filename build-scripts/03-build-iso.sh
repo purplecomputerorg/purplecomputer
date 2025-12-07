@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Build bootable ISO with embedded FAI and local repository
 # Creates a complete offline installer for Purple Computer
 
@@ -121,6 +121,12 @@ create_isolinux_config() {
     cp /usr/lib/syslinux/modules/bios/*.c32 "$ISO_DIR/isolinux/"
 
     # Create isolinux.cfg
+    # Boot parameters:
+    #   boot=live           - Use live-boot to mount squashfs
+    #   toram              - Load entire squashfs to RAM (correct syntax, no =filesystem.squashfs)
+    #   ip=frommedia       - Skip DHCP/network wait, use media-provided config (prevents ethernet hang)
+    #   FAI_ACTION=install - Trigger FAI automated installation
+    #   FAI_FLAGS=...      - verbose,createvt,reboot flags for FAI
     cat > "$ISO_DIR/isolinux/isolinux.cfg" <<'EOF'
 DEFAULT purple_install
 TIMEOUT 50
@@ -129,17 +135,17 @@ PROMPT 0
 LABEL purple_install
     MENU LABEL ^Purple Computer - Automated Installation
     KERNEL /live/vmlinuz
-    APPEND initrd=/live/initrd.img boot=live fetch=file:///live/filesystem.squashfs FAI_ACTION=install FAI_FLAGS=verbose,createvt root=/dev/ram0 quiet
+    APPEND initrd=/live/initrd.img boot=live toram ip=frommedia FAI_ACTION=install FAI_FLAGS=verbose,createvt,reboot root=/dev/ram0 quiet
 
 LABEL purple_install_verbose
     MENU LABEL Purple Computer - Installation (Verbose)
     KERNEL /live/vmlinuz
-    APPEND initrd=/live/initrd.img boot=live fetch=file:///live/filesystem.squashfs FAI_ACTION=install FAI_FLAGS=verbose,createvt,debug root=/dev/ram0
+    APPEND initrd=/live/initrd.img boot=live toram ip=frommedia FAI_ACTION=install FAI_FLAGS=verbose,createvt,debug,reboot root=/dev/ram0
 
 LABEL purple_rescue
     MENU LABEL Purple Computer - Rescue Shell
     KERNEL /live/vmlinuz
-    APPEND initrd=/live/initrd.img boot=live fetch=file:///live/filesystem.squashfs root=/dev/ram0
+    APPEND initrd=/live/initrd.img boot=live toram ip=frommedia root=/dev/ram0
 
 MENU TITLE Purple Computer Installer
 MENU BACKGROUND
@@ -156,22 +162,23 @@ create_grub_config() {
     log_info "Creating GRUB EFI boot configuration..."
 
     # Create grub.cfg for EFI boot
+    # Boot parameters same as isolinux - see create_isolinux_config() for details
     cat > "$ISO_DIR/EFI/boot/grub.cfg" <<'EOF'
 set default=0
 set timeout=5
 
 menuentry "Purple Computer - Automated Installation" {
-    linux /live/vmlinuz boot=live fetch=file:///live/filesystem.squashfs FAI_ACTION=install FAI_FLAGS=verbose,createvt root=/dev/ram0 quiet
+    linux /live/vmlinuz boot=live toram ip=frommedia FAI_ACTION=install FAI_FLAGS=verbose,createvt,reboot root=/dev/ram0 quiet
     initrd /live/initrd.img
 }
 
 menuentry "Purple Computer - Installation (Verbose)" {
-    linux /live/vmlinuz boot=live fetch=file:///live/filesystem.squashfs FAI_ACTION=install FAI_FLAGS=verbose,createvt,debug root=/dev/ram0
+    linux /live/vmlinuz boot=live toram ip=frommedia FAI_ACTION=install FAI_FLAGS=verbose,createvt,debug,reboot root=/dev/ram0
     initrd /live/initrd.img
 }
 
 menuentry "Purple Computer - Rescue Shell" {
-    linux /live/vmlinuz boot=live fetch=file:///live/filesystem.squashfs root=/dev/ram0
+    linux /live/vmlinuz boot=live toram ip=frommedia root=/dev/ram0
     initrd /live/initrd.img
 }
 EOF

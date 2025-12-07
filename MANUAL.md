@@ -19,8 +19,8 @@ Purple Computer uses **FAI (Fully Automatic Installation)** to create a robust, 
 - Downloads all packages and creates a proper APT repository (~2-5GB)
 - Builds a FAI installation environment (nfsroot)
 - Creates a bootable ISO with embedded repository (~3-7GB)
-- Installs a minimal Debian/Ubuntu system with LVM and X11
-- Configures Purple Computer application with auto-login
+- Installs Ubuntu 24.04 LTS minimal with LVM, X11, and Alacritty
+- Auto-starts Purple TUI on boot (no desktop environment)
 
 **Why FAI?**
 - Industry-standard (used by data centers, OEMs)
@@ -36,80 +36,41 @@ Purple Computer uses **FAI (Fully Automatic Installation)** to create a robust, 
 ### Prerequisites
 
 **Build machine:**
-- Debian 12 (Bookworm) or Ubuntu 22.04/24.04
+- Any system with Docker installed
 - 20GB free disk space
-- Root access
+- Docker daemon running
 - Internet connection (for package download)
 
 **Time estimate:**
-- Dependency install: 5 minutes
+- Docker image build: 5-10 minutes (first time only)
 - Repository creation: 30-60 minutes (downloads ~2-5GB)
 - Nfsroot build: 10-15 minutes
 - ISO creation: 5-10 minutes
+- **Total: ~1-2 hours first build**
 
-### Step 1: Install Dependencies
+### Single Command Build
 
 ```bash
 cd build-scripts
-sudo ./00-install-build-deps.sh
+./build-in-docker.sh
 ```
 
-**What it installs:**
-- FAI tools: `fai-server`, `fai-setup-storage`, `fai-client`
-- Bootloaders: `grub-pc-bin`, `grub-efi-amd64-bin`
-- ISO tools: `xorriso`, `squashfs-tools`, `isolinux`, `syslinux`
-- Repository tools: `dpkg-dev`, `apt-utils`
-- Utilities: `debootstrap`, `rsync`, `mtools`
+This script:
+1. Builds Ubuntu Noble Docker image with FAI tools
+2. Runs all build steps inside container
+3. Outputs ISO to `/opt/purple-installer/output/`
 
-**What it creates:**
-- `/srv/fai/` - FAI base directory
-- `/opt/purple-installer/` - Build workspace
+The Docker approach works on any system (Linux, macOS, NixOS, etc.) and isolates the build environment.
 
-### Step 2: Create Local Repository
+### Build Steps (inside container)
 
-```bash
-sudo ./01-create-local-repo.sh
-```
+**1. Create Local Repository** (`01-create-local-repo.sh`)
+- Reads package lists from `fai-config/package_config/*`
+- Downloads Ubuntu Noble packages and dependencies
+- Creates APT repository with proper dists/pool structure
+- Result: `/opt/purple-installer/local-repo/mirror/`
 
-**What it does:**
-1. Reads package lists from `fai-config/package_config/*`
-2. Resolves dependencies using APT
-3. Downloads all `.deb` files to cache
-4. Organizes packages into pool structure (`pool/main/`, `pool/contrib/`, etc.)
-5. Generates repository metadata:
-   - `Packages` (plain text package index)
-   - `Packages.gz`, `Packages.bz2`, `Packages.xz` (compressed)
-   - `Release` file with MD5Sum and SHA256 checksums
-
-**Result:**
-```
-/opt/purple-installer/local-repo/mirror/
-├── dists/bookworm/
-│   ├── Release
-│   ├── main/binary-amd64/Packages.gz
-│   ├── contrib/binary-amd64/Packages.gz
-│   └── non-free/binary-amd64/Packages.gz
-└── pool/
-    ├── main/a/alacritty/alacritty_*.deb
-    ├── main/v/vim/vim_*.deb
-    └── ...
-```
-
-This is a **real APT repository** - not just copied files. APT can use it natively with:
-```
-deb [trusted=yes] file:///path/to/mirror bookworm main contrib non-free
-```
-
-**Customization:**
-- Edit `DIST` variable for Ubuntu (change `bookworm` to `jammy` or `noble`)
-- Edit `SECTIONS` for Ubuntu (`main restricted universe multiverse`)
-- See [guides/offline_apt_guide.md](guides/offline_apt_guide.md) for details
-
-### Step 3: Build FAI Nfsroot
-
-```bash
-sudo ./02-build-fai-nfsroot.sh
-```
+**2. Build FAI Nfsroot** (`02-build-fai-nfsroot.sh`)
 
 **What it does:**
 1. Configures FAI to use local repository

@@ -28,10 +28,6 @@ python3-pip
 python3-venv
 man-db
 linux-firmware
-firmware-b43-installer
-firmware-atheros
-firmware-realtek
-firmware-iwlwifi
 bcmwl-kernel-source
 xserver-xorg-video-intel
 xserver-xorg-video-nouveau

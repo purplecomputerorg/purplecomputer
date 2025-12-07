@@ -48,10 +48,7 @@ what is elephant   # Definition lookup
 **Build installer:**
 ```bash
 cd build-scripts
-sudo ./00-install-build-deps.sh       # One-time: install FAI tools
-sudo ./01-create-local-repo.sh        # Download packages (~2-5GB)
-sudo ./02-build-fai-nfsroot.sh        # Build installer environment
-sudo ./03-build-iso.sh                # Create bootable ISO
+./build-in-docker.sh  # Builds everything in Docker container
 
 # Result: /opt/purple-installer/output/purple-computer-installer-YYYYMMDD.iso
 ```
@@ -116,7 +113,7 @@ purplecomputer/
 ```
 
 **Stack:**
-- **Target System:** Ubuntu/Debian minimal + X11 + Alacritty + Textual TUI
+- **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI
 - **Installer:** FAI (Fully Automatic Installation) with embedded offline repository
 - **Application:** Python + Textual + Piper TTS + Pygame
 
@@ -133,9 +130,9 @@ purplecomputer/
 **Tested on:** 2010-2015 era laptops (ThinkPad, Dell Latitude, MacBook Air/Pro)
 
 **Build Machine:**
-- Debian 12 or Ubuntu 22.04/24.04
+- Any system with Docker (NixOS, Ubuntu, macOS, etc.)
 - 20GB free disk space
-- Root access
+- Docker daemon running
 - Internet connection (for package download only)
 
 ---

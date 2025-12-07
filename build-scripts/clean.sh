@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
-# Clean all Purple Computer build artifacts and Docker images
+# Clean all build artifacts
 
 set -e
 
-echo "Cleaning Purple Computer build artifacts..."
+echo "Cleaning PurpleOS build artifacts..."
 
-# Remove build directories
-sudo rm -rf /opt/purple-installer/local-repo
+# Unmount any lingering mounts
+sudo umount /opt/purple-installer/build/mnt-golden 2>/dev/null || true
+sudo umount /opt/purple-installer/build/mnt-installer 2>/dev/null || true
+
+# Remove build directory
+sudo rm -rf /opt/purple-installer/build
+
+# Remove output ISOs
 sudo rm -rf /opt/purple-installer/output
-sudo rm -rf /srv/fai
 
 # Remove Docker image
-if docker images | grep -q "purple-builder"; then
-    echo "Removing purple-builder Docker image..."
-    docker rmi purple-builder
+if docker images | grep -q "purple-installer-builder"; then
+    echo "Removing purple-installer-builder Docker image..."
+    docker rmi purple-installer-builder
 fi
 
 echo "✓ Cleanup complete"
-echo ""
-echo "Ready to rebuild with: ./build-in-docker.sh"

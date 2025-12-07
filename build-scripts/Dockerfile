@@ -1,29 +1,23 @@
-FROM ubuntu:noble
+# Minimal build environment for PurpleOS installer
+FROM ubuntu:24.04
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    fai-server \
-    fai-setup-storage \
+# Install only required build tools
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
     debootstrap \
-    mmdebstrap \
-    apt-utils \
-    dpkg-dev \
-    squashfs-tools \
-    live-boot \
-    syslinux \
-    isolinux \
     xorriso \
-    grub-pc-bin \
+    isolinux \
+    syslinux-utils \
     grub-efi-amd64-bin \
-    mtools \
+    busybox-static \
+    zstd \
+    gdisk \
+    parted \
+    dosfstools \
+    e2fsprogs \
+    cpio \
+    gzip \
+    kpartx \
     && rm -rf /var/lib/apt/lists/*
 
-# Create build directories
-RUN mkdir -p /srv/fai/{config,nfsroot} \
-    /opt/purple-installer/{local-repo,iso-build,output}
-
-# Set working directory
 WORKDIR /build
-
-# Entry point will be the build scripts
-CMD ["/bin/bash"]

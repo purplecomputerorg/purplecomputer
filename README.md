@@ -24,6 +24,50 @@ Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 ---
 
+## Quick Start
+
+### For Development (Mac/Linux)
+
+```bash
+git clone https://github.com/purplecomputerorg/purplecomputer.git
+cd purplecomputer
+make setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
+make run      # Launches in Alacritty with Purple theme (or current terminal)
+```
+
+Inside Purple Computer, try:
+```
+2 + 2              # Math
+cat * 5            # Five cats
+dog + cat          # Emoji addition
+what is elephant   # Definition lookup
+```
+
+### For Installation (Old Laptop)
+
+**Build installer:**
+```bash
+cd build-scripts
+sudo ./00-install-build-deps.sh       # One-time: install FAI tools
+sudo ./01-create-local-repo.sh        # Download packages (~2-5GB)
+sudo ./02-build-fai-nfsroot.sh        # Build installer environment
+sudo ./03-build-iso.sh                # Create bootable ISO
+
+# Result: /opt/purple-installer/output/purple-computer-installer-YYYYMMDD.iso
+```
+
+**Install to hardware:**
+1. Write ISO to USB with [balenaEtcher](https://www.balena.io/etcher/) or `dd`
+2. Boot laptop from USB
+3. Installation runs automatically (10-20 minutes)
+4. System reboots into Purple Computer
+
+**Default credentials:** `purple` / `purple` (change immediately!)
+
+See [MANUAL.md](MANUAL.md) for complete build/customization details.
+
+---
+
 ## The Four Modes
 
 Purple has four core modes. Hold a number key to switch:
@@ -36,172 +80,10 @@ Purple has four core modes. Hold a number key to switch:
 | **4** | **Write** | Simple text editor. Just type. |
 
 **Controls:**
-- **Hold 1-4** — Switch modes (hold the number key for half a second)
+- **Hold 1-4** — Switch modes
 - **Hold 0** — Toggle dark/light mode
 - **Ctrl+V** — Cycle views (Screen → Line → Ears)
 - **Tab** (in Ask mode) — Toggle speech on/off
-
----
-
-## Three Views
-
-Purple reduces "screen time" feeling with three views:
-
-- **Screen view** — 10×6" viewport centered on screen, purple border filling the rest
-- **Line view** — Single line, calculator vibes
-- **Ears view** — Screen off, audio only (for Play and Listen modes)
-
----
-
-## Quick Start
-
-### For Developers (Mac/Linux)
-
-```bash
-git clone https://github.com/purplecomputerorg/purplecomputer.git
-cd purplecomputer
-make setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
-make run      # Launches in Alacritty with Purple theme (or current terminal)
-```
-
-**What `make setup` does:**
-- Creates Python virtual environment (`.venv/`)
-- Installs dependencies: `textual`, `rich`, `wcwidth`, `pygame`, `piper-tts`
-- Downloads Piper TTS voice model for speech
-- Installs JetBrainsMono Nerd Font
-- Builds content packs
-
-Inside Purple Computer, try:
-```
-2 + 2              # Math
-cat * 5            # Five cats
-dog + cat          # Emoji addition
-what is elephant   # Definition lookup
-```
-
-### For Parents (Installing on Old Laptop)
-
-**Target hardware:** 2012-2018 Mac laptops (consistent bootloaders, no T2/Apple Silicon complexity)
-
-**Option 1: USB Install (Recommended)**
-1. Download the Purple Computer ISO (or build with `sudo bash ./autoinstall/build-offline-iso.sh`)
-2. Write to USB with [balenaEtcher](https://www.balena.io/etcher/)
-3. Boot from USB — installation is automatic
-4. Remove USB when done
-
-**How the offline installer works:**
-
-Purple Computer uses a **fully offline installation** with an embedded apt repository. This means:
-- **Zero network required** — The ISO contains all packages (~4-5GB total)
-- **Proper Debian repository structure** — `/pool/` and `/dists/` with Packages.gz metadata
-- **APT treats it as a native source** — `file:///cdrom` is configured as the primary apt source
-- **OEM-grade reliability** — Same approach Dell/Lenovo use for preload installers
-
-This is **NOT** relying on Ubuntu's fragile "auto-discover packages on cdrom" feature (which is broken in 24.04). Instead, we provide a real apt repository that APT understands natively.
-
----
-
-## Purplepacks
-
-Purple uses **Purplepacks** to distribute content only. Modules are part of Purple core.
-
-**Built-in Purplepacks:**
-- `core-emoji` — ~100 kid-friendly emojis with synonyms
-- `core-definitions` — Simple word definitions
-- `core-sounds` — Number and punctuation sounds for Play mode
-- `core-words` — Word lookups and synonyms
-
-### Creating Content Packs
-
-Content packs are JSON + assets only (no code):
-
-```bash
-# Emoji pack structure
-my-emoji-pack/
-├── manifest.json
-└── content/
-    ├── emoji.json      # {"word": "emoji"}
-    └── synonyms.json   # {"synonym": "canonical_word"}
-```
-
-**manifest.json:**
-```json
-{
-  "id": "my-pack",
-  "name": "My Pack",
-  "version": "1.0.0",
-  "type": "emoji"
-}
-```
-
-Valid types: `emoji`, `definitions`, `sounds`, `words`
-
-**Build it:**
-```bash
-tar -czvf my-pack.purplepack manifest.json content/
-```
-
-### Modules & Dependencies
-
-**Modules are curated Python code shipped with Purple core**, not distributed as packs. This keeps Purple simple:
-
-- All modules live in `purple_tui/modes/` and are reviewed/maintained by the Purple team
-- All dependencies (pip packages, deb packages) are declared globally in Purple's installation manifest
-- When Purple updates, it includes any new dependencies needed by new or updated modules
-- Users never manage dependencies — Purple handles everything atomically
-
-**Why this approach:**
-- **Simplicity** — One version of Purple = one exact environment
-- **Reliability** — No dependency conflicts between modules
-- **Atomic updates** — Purple version X.Y.Z always means the same thing
-- **Just works** — No "module needs package X but you have Y" situations
-
-If a module needs new dependencies, those are added to Purple's global requirements and installed when users update Purple core.
-
----
-
-## Auto-Updates
-
-Purple Computer automatically checks for updates once per day on startup.
-
-- **Minor updates** (bug fixes, new emoji, etc.) are applied automatically
-- **Breaking updates** (major changes) show a prompt asking for confirmation
-
-Updates are pulled from the main branch via git. No action required from users.
-
-### Version Files
-
-| File | Purpose |
-|------|---------|
-| `VERSION` | Current version (e.g., `0.1.0`) |
-| `BREAKING_VERSION` | Increments on major/breaking changes |
-| `version.json` | Remote version info (fetched from GitHub) |
-
-### Testing Auto-Updates (Developers)
-
-To simulate an available update:
-
-```bash
-# 1. Edit version.json to have a higher version
-#    e.g., change "version": "0.1.0" to "version": "0.2.0"
-
-# 2. Clear the update check state
-rm ~/.purple_computer_update_state
-
-# 3. Run the app - it will detect the "update" and pull
-make run
-```
-
-To test a breaking update prompt:
-```bash
-# 1. Also increment "breaking_version" in version.json
-
-# 2. Clear state and run
-rm ~/.purple_computer_update_state
-make run
-
-# 3. You'll see the update confirmation dialog
-```
 
 ---
 
@@ -210,63 +92,59 @@ make run
 ```
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
-│   ├── purple_tui.py     # App entry point
-│   ├── updater.py        # Auto-update checker
-│   ├── constants.py      # Icons, colors, mode titles
-│   ├── modes/            # Mode modules (curated Python code)
-│   │   ├── ask_mode.py   # Math and emoji REPL
-│   │   ├── play_mode.py  # Music and art grid
-│   │   ├── write_mode.py # Simple text editor
-│   │   └── listen_mode.py# Stories (stub)
+│   ├── modes/            # Ask, Play, Write, Listen modes
 │   ├── content.py        # Content API for packs
-│   ├── pack_manager.py   # Pack installer (content + modules)
 │   └── tts.py            # Piper TTS integration
 │
-├── packs/                # Built-in content packs
-│   ├── core-emoji/       # Emojis + synonyms
-│   ├── core-definitions/ # Word definitions
-│   ├── core-sounds/      # Audio files for Play mode
-│   └── core-words/       # Word lookups
+├── packs/                # Built-in content (emoji, definitions, sounds)
 │
-├── autoinstall/          # Ubuntu 24.04 offline installer
-│   ├── autoinstall.yaml  # Ubuntu autoinstall configuration
-│   ├── build-offline-iso.sh  # ISO builder script
-│   └── files/
-│       ├── alacritty/    # Terminal config
-│       └── xinit/        # X11 startup config
+├── fai-config/           # FAI installer configuration
+│   ├── class/            # Hardware detection & class assignment
+│   ├── disk_config/      # LVM partition layouts
+│   ├── package_config/   # Package lists
+│   ├── scripts/          # Post-install configuration
+│   └── hooks/            # APT offline repository setup
 │
-├── scripts/              # Build and dev utilities
-│   ├── setup_dev.sh      # Development environment setup
-│   ├── run_local.sh      # Local runner (Mac/Linux)
-│   └── generate_sounds.py# Sound generation script
+├── build-scripts/        # ISO build automation
+│   ├── 00-install-build-deps.sh
+│   ├── 01-create-local-repo.sh
+│   ├── 02-build-fai-nfsroot.sh
+│   └── 03-build-iso.sh
 │
-└── tests/                # Test suite
+└── guides/               # Technical references
+    └── offline_apt_guide.md
 ```
 
-**Key design decisions:**
-- **Modes are curated Python modules** — All modes shipped with Purple core, maintained in `purple_tui/modes/`. No third-party code execution.
-- **Purplepacks for content only** — JSON + assets (emoji, sounds, definitions). No code in packs.
-- **Global dependency management** — All pip/deb dependencies declared globally. Purple updates = atomic environment updates.
-- **Alacritty terminal** — Fast, simple, reliable Unicode/emoji rendering.
-- **Textual TUI** — Modern Python TUI framework for the interface.
-- **Piper TTS** — Offline text-to-speech using neural voices.
-- **Pygame** — Audio playback for sounds in Play mode.
-- **10×6" viewport** — Consistent size across laptops, calming, strong purple branding.
+**Stack:**
+- **Target System:** Ubuntu/Debian minimal + X11 + Alacritty + Textual TUI
+- **Installer:** FAI (Fully Automatic Installation) with embedded offline repository
+- **Application:** Python + Textual + Piper TTS + Pygame
 
 ---
 
 ## System Requirements
 
-- x86_64 processor (Intel or AMD)
-- 2GB RAM minimum
-- 8GB storage minimum
-- USB port for installation
+**Target Hardware:**
+- x86_64 processor (Intel/AMD)
+- 2GB RAM minimum (4GB+ recommended)
+- 20GB storage minimum (60GB+ recommended)
+- BIOS or UEFI firmware
 
-**Recommended:** 2012-2018 MacBook Air/Pro
+**Tested on:** 2010-2015 era laptops (ThinkPad, Dell Latitude, MacBook Air/Pro)
 
-**Stack:** Ubuntu Server 24.04 + minimal Xorg + Alacritty + Textual TUI
+**Build Machine:**
+- Debian 12 or Ubuntu 22.04/24.04
+- 20GB free disk space
+- Root access
+- Internet connection (for package download only)
 
-**Python Dependencies:** `textual`, `rich`, `wcwidth`, `pygame`, `piper-tts`
+---
+
+## Documentation
+
+- **[MANUAL.md](MANUAL.md)** - Complete build process, customization, troubleshooting
+- **[guides/offline_apt_guide.md](guides/offline_apt_guide.md)** - How the offline repository works
+- **[CLAUDE.md](CLAUDE.md)** - Development notes for Claude Code (Textual framework workarounds)
 
 ---
 

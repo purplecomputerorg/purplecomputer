@@ -1,15 +1,6 @@
-# Base packages required for all FAI installations
-# These are absolutely essential for system boot and operation
-
 PACKAGES install
-# Core system
-linux-image-amd64
-# Note: grub-pc and grub-efi-amd64 conflict - installed per-class in scripts
-
-# LVM support
+linux-image-generic
 lvm2
-
-# Essential system utilities
 sudo
 bash-completion
 vim-tiny
@@ -17,17 +8,9 @@ less
 wget
 curl
 ca-certificates
-
-# Hardware support
-firmware-linux-free
 pciutils
 usbutils
-
-# Network basics (minimal)
 iproute2
 iputils-ping
 net-tools
-
-# System maintenance
 apt-utils
-debconf-utils

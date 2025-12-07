@@ -107,7 +107,7 @@ EOF
 # Purple Computer nfsroot configuration
 
 # Use local mirror
-FAI_DEBOOTSTRAP="bookworm file://${MIRROR_DIR}"
+FAI_DEBOOTSTRAP="noble file://${MIRROR_DIR}"
 
 # Architecture
 FAI_DEBOOTSTRAP_OPTS="--arch amd64"

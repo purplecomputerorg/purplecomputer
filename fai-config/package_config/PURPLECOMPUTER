@@ -1,63 +1,38 @@
-# Purple Computer core packages
-# Minimal base system with essential utilities
-
 PACKAGES install
-# System utilities
 systemd
-systemd-sysv
 dbus
-udev
-
-# File system utilities
 e2fsprogs
-btrfs-progs
 ntfs-3g
 exfatprogs
-
-# Compression tools
 gzip
 bzip2
 xz-utils
 zip
 unzip
-
-# Text editors
 vim
 nano
-
-# System tools
 htop
 tmux
-screen
 tree
 rsync
-
-# Hardware utilities
 acpi
-acpid
-pm-utils
-cpufrequtils
-
-# Laptop-specific (tlp conflicts with laptop-mode-tools, using tlp only)
 tlp
-tlp-rdw
-
-# Wireless support (for laptops)
 wireless-tools
 wpasupplicant
 iw
-
-# Bluetooth support
 bluez
-bluez-tools
-
-# Development tools (minimal)
 build-essential
 git
 python3
 python3-pip
-
-# Documentation
+python3-venv
 man-db
-manpages
-info
+linux-firmware
+firmware-b43-installer
+firmware-atheros
+firmware-realtek
+firmware-iwlwifi
+bcmwl-kernel-source
+xserver-xorg-video-intel
+xserver-xorg-video-nouveau
+mesa-utils

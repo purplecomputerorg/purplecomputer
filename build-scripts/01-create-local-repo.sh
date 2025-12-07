@@ -8,12 +8,9 @@ set -e
 REPO_BASE="/opt/purple-installer/local-repo"
 MIRROR_DIR="${REPO_BASE}/mirror"
 CACHE_DIR="${REPO_BASE}/cache"
-DIST="bookworm"  # Change to jammy for Ubuntu 22.04, noble for 24.04
+DIST="noble"
 ARCH="amd64"
-SECTIONS="main contrib non-free non-free-firmware"
-
-# For Ubuntu, use these sections:
-# SECTIONS="main restricted universe multiverse"
+SECTIONS="main restricted universe multiverse"
 
 # Colors for output
 RED='\033[0;31m'

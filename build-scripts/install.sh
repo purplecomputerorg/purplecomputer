@@ -4,6 +4,8 @@
 
 set -e
 
+echo "[DEBUG] install.sh started, set -e active"
+
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
@@ -13,10 +15,14 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 # Find target disk (anything except the boot disk)
 find_target() {
+    echo "[DEBUG] find_target() entered"
     log "Detecting boot disk..."
+    echo "[DEBUG] About to check PURPLE_INSTALLER_DEV"
     log "PURPLE_INSTALLER_DEV env var: ${PURPLE_INSTALLER_DEV:-NOT SET}"
+    echo "[DEBUG] Declaring local boot_disk"
 
     local boot_disk
+    echo "[DEBUG] local boot_disk declared"
 
     # The init script passed us the installer partition device
     if [ -n "$PURPLE_INSTALLER_DEV" ]; then
@@ -84,8 +90,14 @@ main() {
     [ ! -d /proc/mounts ] && mount -t proc proc /proc 2>/dev/null || true
     [ ! -d /sys/dev ] && mount -t sysfs sys /sys 2>/dev/null || true
 
+    log "About to call find_target..."
+    set +e  # Temporarily disable exit-on-error
     TARGET=$(find_target)
-    if [ -z "$TARGET" ]; then
+    FIND_EXIT=$?
+    set -e  # Re-enable exit-on-error
+    log "find_target returned: $TARGET (exit code: $FIND_EXIT)"
+
+    if [ $FIND_EXIT -ne 0 ] || [ -z "$TARGET" ]; then
         error "No target disk found"
     fi
 

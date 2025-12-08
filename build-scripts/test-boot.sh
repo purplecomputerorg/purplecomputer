@@ -112,13 +112,20 @@ setup_test_env() {
 boot_test() {
     info "Starting QEMU boot test (timeout: ${TIMEOUT}s)..."
 
+    # Create temporary target disk for installation testing
+    TARGET_DISK=$(mktemp -u).qcow2
+    qemu-img create -f qcow2 "$TARGET_DISK" 20G > /dev/null 2>&1
+    info "Created temporary target disk: $TARGET_DISK"
+
     # Build QEMU command
     # Use -hda to simulate USB stick (hybrid ISO shows as /dev/sda)
+    # Use -hdb as target installation disk (shows as /dev/sdb)
     # Use -snapshot to avoid write lock issues
     QEMU_CMD=(
         qemu-system-x86_64
         -m "$MEMORY"
         -hda "$ISO_PATH"
+        -hdb "$TARGET_DISK"
         -snapshot
         -serial file:"$SERIAL_LOG"
         -boot c
@@ -442,6 +449,11 @@ check_kernel_drivers() {
 }
 
 cleanup() {
+    # Clean up temporary target disk
+    if [ -n "$TARGET_DISK" ] && [ -f "$TARGET_DISK" ]; then
+        rm -f "$TARGET_DISK"
+    fi
+
     if [ $? -eq 0 ] && [ "$KEEP_LOGS" -eq 0 ]; then
         info "Cleaning up successful test logs..."
         rm -f "$LOG_FILE" "$SERIAL_LOG"

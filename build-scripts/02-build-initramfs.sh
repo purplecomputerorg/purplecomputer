@@ -120,6 +120,14 @@ if [ -z "$INSTALLER_DEV" ]; then
     for dev in /dev/sd* /dev/nvme* /dev/vd*; do
         [ -b "$dev" ] || continue
 
+        # Skip whole disks, only check partitions
+        # Partitions: sd*[0-9], vd*[0-9], nvme*n*p[0-9]
+        case "$(basename "$dev")" in
+            sd*[0-9]|vd*[0-9]) ;;  # SATA/virtio partition
+            nvme*n*p[0-9]*) ;;     # NVMe partition (nvme0n1p1, etc)
+            *) continue ;;          # Whole disk - skip
+        esac
+
         # Try mounting and checking for installer.ext4
         if /bin/busybox mount -o ro "$dev" /mnt 2>/dev/null; then
             if [ -f /mnt/boot/installer.ext4 ]; then

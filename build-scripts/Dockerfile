@@ -18,6 +18,7 @@ RUN apt-get update && \
     cpio \
     gzip \
     kpartx \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build

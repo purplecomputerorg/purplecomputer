@@ -1,9 +1,15 @@
-# Minimal build environment for PurpleOS installer
+# Build environment for PurpleOS installer (module-free architecture)
 FROM ubuntu:24.04
 
-# Install only required build tools
+# Install build tools
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    build-essential \
+    bc \
+    bison \
+    flex \
+    libelf-dev \
+    libssl-dev \
     debootstrap \
     xorriso \
     isolinux \

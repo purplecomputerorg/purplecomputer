@@ -109,6 +109,7 @@ main() {
     # Build kernel
     log_step "5/6: Compiling kernel (this may take 10-30 minutes)..."
     log_info "Building with ${NPROC} parallel jobs..."
+
     make -j"${NPROC}" bzImage
 
     # Copy kernel to output location

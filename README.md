@@ -45,12 +45,23 @@ what is elephant   # Definition lookup
 
 ### For Installation (Old Laptop)
 
-**Build installer:**
+**Build and test installer:**
 ```bash
 cd build-scripts
-./build-in-docker.sh  # Builds everything in Docker container
 
-# Result: /opt/purple-installer/output/purple-computer-installer-YYYYMMDD.iso
+# Build everything (30-90 min first time, 10-20 min after)
+./build-in-docker.sh
+
+# Validate build (checks configs, verifies artifacts)
+./validate-build.sh
+
+# Test boot in QEMU (automated, detects kernel panics)
+./test-boot.sh
+
+# Auto-fix any detected issues
+./auto-fix.sh
+
+# Result: /opt/purple-installer/output/purple-installer-YYYYMMDD.iso
 ```
 
 **Install to hardware:**
@@ -60,6 +71,11 @@ cd build-scripts
 4. System reboots into Purple Computer
 
 **Default credentials:** `purple` / `purple` (change immediately!)
+
+**Troubleshooting:**
+- Kernel panics? Run `./test-boot.sh` to diagnose automatically
+- Build failures? Run `./validate-build.sh` to check configs
+- Issues detected? Run `./auto-fix.sh` to apply fixes automatically
 
 See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
@@ -95,14 +111,17 @@ purplecomputer/
 │
 ├── packs/                # Built-in content (emoji, definitions, sounds)
 │
-├── build-scripts/        # Module-free ISO build pipeline (5 steps)
+├── build-scripts/        # Module-free ISO build pipeline
 │   ├── 00-build-custom-kernel.sh    # Custom kernel with built-in drivers
 │   ├── 01-build-golden-image.sh     # Ubuntu base system image
 │   ├── 02-build-initramfs.sh        # Minimal initramfs (no modules)
 │   ├── 03-build-installer-rootfs.sh # Installer environment
 │   ├── 04-build-iso.sh              # USB-bootable hybrid ISO
-│   ├── build-all.sh                 # Orchestrate all steps
+│   ├── build-all.sh                 # Orchestrate all build steps
 │   ├── build-in-docker.sh           # Docker wrapper (NixOS-friendly)
+│   ├── validate-build.sh            # Pre-build validation (configs, deps)
+│   ├── test-boot.sh                 # Automated QEMU boot testing
+│   ├── auto-fix.sh                  # Automatic issue resolution
 │   ├── kernel-config-fragment.config # Kernel driver configuration
 │   └── install.sh                   # Installation script (runs on target)
 │

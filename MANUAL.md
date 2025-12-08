@@ -432,6 +432,157 @@ grep "=y" /opt/purple-installer/build/kernel-config-purple | grep -E "USB|SATA|N
 # CONFIG_NVME_CORE=y
 ```
 
+**Kernel Panic**
+
+A kernel panic indicates a critical error during boot. The kernel will display a panic message and halt.
+
+**Common causes:**
+- Missing or misconfigured essential drivers (root filesystem, storage)
+- Hardware incompatibility
+- Corrupted kernel image
+- Missing initramfs or init script errors
+- Memory issues (bad RAM)
+
+**Debugging steps:**
+
+1. **Capture the panic message:**
+   - Take a photo of the screen showing the panic
+   - Look for the last function call before panic (often in brackets like `[function_name+0x123]`)
+   - Note any "not syncing" or "Attempted to kill init" messages
+
+2. **Add kernel debug parameters:**
+
+   Edit `build-scripts/04-build-iso.sh` to add debug options to the kernel command line:
+
+   ```bash
+   # For ISOLINUX (BIOS boot), around line 84:
+   APPEND initrd=/boot/initrd.img debug ignore_loglevel earlyprintk=vga,keep
+
+   # For GRUB (UEFI boot), around line 106:
+   linux /boot/vmlinuz debug ignore_loglevel earlyprintk=vga,keep
+   ```
+
+   These options provide verbose output during boot, showing where the panic occurs.
+
+3. **Test with minimal kernel parameters:**
+
+   Remove all optional parameters to isolate the issue:
+
+   ```bash
+   # Minimal boot line (ISOLINUX)
+   APPEND initrd=/boot/initrd.img
+
+   # Minimal boot line (GRUB)
+   linux /boot/vmlinuz
+   initrd /boot/initrd.img
+   ```
+
+4. **Check for missing drivers:**
+
+   If panic mentions "VFS: Unable to mount root fs" or "not syncing: No working init found":
+
+   ```bash
+   # Verify initramfs is present and correct
+   file /opt/purple-installer/build/initrd.img
+   # Should show: gzip compressed data
+
+   # Extract and check init script exists
+   mkdir -p /tmp/initrd-check
+   cd /tmp/initrd-check
+   zcat /opt/purple-installer/build/initrd.img | cpio -i
+   ls -la init  # Should exist and be executable
+
+   # Verify BusyBox is present
+   ls -la bin/busybox
+   ```
+
+5. **Enable serial console for detailed logs:**
+
+   If you have access to serial port or can use QEMU/VirtualBox for testing:
+
+   ```bash
+   # Add to kernel command line
+   console=ttyS0,115200 console=tty0
+
+   # In QEMU, capture output:
+   qemu-system-x86_64 -serial file:boot.log -cdrom purple-installer.iso
+   ```
+
+6. **Test kernel configuration:**
+
+   Verify critical drivers are enabled:
+
+   ```bash
+   grep "CONFIG_BLK_DEV=y" /opt/purple-installer/build/kernel-config-purple
+   grep "CONFIG_EXT4_FS=y" /opt/purple-installer/build/kernel-config-purple
+   grep "CONFIG_PROC_FS=y" /opt/purple-installer/build/kernel-config-purple
+   grep "CONFIG_SYSFS=y" /opt/purple-installer/build/kernel-config-purple
+   grep "CONFIG_DEVTMPFS=y" /opt/purple-installer/build/kernel-config-purple
+   ```
+
+   All should return `=y`. If not, the kernel config fragment wasn't applied correctly.
+
+7. **Common panic messages and solutions:**
+
+   | Panic Message | Likely Cause | Solution |
+   |---------------|--------------|----------|
+   | "VFS: Unable to mount root fs" | Missing filesystem driver or initramfs not found | Verify CONFIG_EXT4_FS=y and initrd.img exists |
+   | "Attempted to kill init" | /init script failed or doesn't exist | Check initramfs contains /init and is executable |
+   | "No working init found" | Init path wrong or BusyBox missing | Verify BusyBox at /bin/busybox in initramfs |
+   | "end Kernel panic - not syncing" | Generic kernel failure | Enable debug params above, check for earlier error messages |
+   | "Kernel panic - not syncing: Fatal exception" | Hardware incompatibility or driver bug | Try `nomodeset`, disable specific drivers, test on different hardware |
+
+8. **Rebuild with conservative options:**
+
+   If panic persists, try disabling advanced features:
+
+   ```bash
+   # Edit build-scripts/kernel-config-fragment.config
+   # Comment out these lines:
+   # CONFIG_NVME_MULTIPATH=y
+   # CONFIG_DM_CRYPT=y
+   # CONFIG_ACPI=y  # Only as last resort
+
+   # Rebuild kernel
+   ./build-in-docker.sh 0
+   ./build-in-docker.sh 4
+   ```
+
+9. **Test on known-good hardware:**
+
+   If available, test the same USB stick on a different laptop to isolate whether the issue is:
+   - Hardware-specific (original laptop incompatibility)
+   - Build issue (affects all hardware)
+
+10. **Last resort—use Ubuntu's kernel for testing:**
+
+    To quickly test if the issue is kernel-specific:
+
+    ```bash
+    # Extract Ubuntu's kernel from golden image for comparison
+    # (Not recommended for production—only for debugging)
+
+    # Mount golden image
+    LOOP=$(losetup -f --show /opt/purple-installer/build/purple-os.img)
+    mkdir -p /tmp/golden
+    mount ${LOOP}p2 /tmp/golden
+
+    # Copy Ubuntu kernel
+    cp /tmp/golden/boot/vmlinuz-* /tmp/test-vmlinuz
+
+    # Test this kernel with same initramfs
+    # If this boots, the issue is in the custom kernel config
+    ```
+
+**When to ask for help:**
+
+If you've tried the above and still get kernel panics:
+
+1. Capture the full panic output (photo or serial log)
+2. Note the hardware (laptop model, CPU, disk type)
+3. Share the kernel config: `/opt/purple-installer/build/kernel-config-purple`
+4. Share the panic message and any earlier errors visible on screen
+
 ### Installation Issues
 
 **"No target disk found"**

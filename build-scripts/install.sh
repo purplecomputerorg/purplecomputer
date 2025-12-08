@@ -10,19 +10,19 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}[PURPLE]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+log() { echo -e "${GREEN}[PURPLE]${NC} $1" >&2; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
 # Find target disk (anything except the boot disk)
 find_target() {
-    echo "[DEBUG] find_target() entered"
+    echo "[DEBUG] find_target() entered" >&2
     log "Detecting boot disk..."
-    echo "[DEBUG] About to check PURPLE_INSTALLER_DEV"
+    echo "[DEBUG] About to check PURPLE_INSTALLER_DEV" >&2
     log "PURPLE_INSTALLER_DEV env var: ${PURPLE_INSTALLER_DEV:-NOT SET}"
-    echo "[DEBUG] Declaring local boot_disk"
+    echo "[DEBUG] Declaring local boot_disk" >&2
 
     local boot_disk
-    echo "[DEBUG] local boot_disk declared"
+    echo "[DEBUG] local boot_disk declared" >&2
 
     # The init script passed us the installer partition device
     if [ -n "$PURPLE_INSTALLER_DEV" ]; then
@@ -86,10 +86,6 @@ main() {
     log "PurpleOS Factory Installer"
     log "=========================="
 
-    # Ensure pseudo-filesystems are mounted (needed for findmnt, lsblk, etc.)
-    [ ! -d /proc/mounts ] && mount -t proc proc /proc 2>/dev/null || true
-    [ ! -d /sys/dev ] && mount -t sysfs sys /sys 2>/dev/null || true
-
     log "About to call find_target..."
     set +e  # Temporarily disable exit-on-error
     TARGET=$(find_target)
@@ -102,6 +98,12 @@ main() {
     fi
 
     log "Target disk: /dev/$TARGET"
+
+    # Debug: Check if device actually exists and is accessible
+    log "Checking device /dev/$TARGET..."
+    ls -la /dev/$TARGET || log "ERROR: Device node doesn't exist!"
+    [ -b /dev/$TARGET ] && log "Device is a block device" || log "ERROR: Not a block device!"
+
     log "WARNING: This will WIPE /dev/$TARGET"
     sleep 3
 
@@ -120,23 +122,25 @@ main() {
 
     # Mount partitions
     log "Installing bootloader..."
-    mkdir -p /target
-    mount /dev/${TARGET}2 /target
-    mkdir -p /target/boot/efi
-    mount /dev/${TARGET}1 /target/boot/efi
+    # Root filesystem is read-only, so create /target in tmpfs
+    mount -t tmpfs tmpfs /tmp
+    mkdir -p /tmp/target/boot/efi
+    mount /dev/${TARGET}2 /tmp/target
+    mkdir -p /tmp/target/boot/efi
+    mount /dev/${TARGET}1 /tmp/target/boot/efi
 
     # Install GRUB
     grub-install \
         --target=x86_64-efi \
-        --efi-directory=/target/boot/efi \
-        --boot-directory=/target/boot \
+        --efi-directory=/tmp/target/boot/efi \
+        --boot-directory=/tmp/target/boot \
         --bootloader-id=PURPLE \
         /dev/$TARGET
 
     # Cleanup
     sync
-    umount /target/boot/efi
-    umount /target
+    umount /tmp/target/boot/efi
+    umount /tmp/target
 
     log "✓ Installation complete!"
     log "Rebooting in 3 seconds..."

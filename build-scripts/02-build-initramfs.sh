@@ -200,10 +200,16 @@ echo ""
 # Export installer device so install.sh knows which disk to avoid
 export PURPLE_INSTALLER_DEV="$INSTALLER_DEV"
 
+# Move pseudo-filesystems into new root so device nodes remain accessible
+echo "Moving pseudo-filesystems to new root..."
+/bin/busybox mkdir -p /newroot/dev /newroot/proc /newroot/sys
+/bin/busybox mount --move /dev /newroot/dev
+/bin/busybox mount --move /proc /newroot/proc
+/bin/busybox mount --move /sys /newroot/sys
+
 # switch_root will:
-# 1. Move /mnt to /newroot/mnt (keeps USB mounted for logging)
-# 2. Change root to /newroot
-# 3. Execute /install.sh with PURPLE_INSTALLER_DEV set
+# 1. Change root to /newroot
+# 2. Execute /install.sh with all mounts and PURPLE_INSTALLER_DEV preserved
 exec /bin/busybox switch_root /newroot /install.sh
 EOF
 

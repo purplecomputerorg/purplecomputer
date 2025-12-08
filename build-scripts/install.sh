@@ -107,45 +107,25 @@ main() {
     log "WARNING: This will WIPE /dev/$TARGET"
     sleep 3
 
-    # Wipe partition table
-    log "Wiping disk..."
-    sgdisk -Z /dev/$TARGET
+    # Write PurpleOS golden image to entire disk
+    # The image contains: GPT partition table + EFI partition + root partition + bootloader
+    log "Writing PurpleOS image to disk (this takes ~10 min)..."
+    zstd -dc /purple-os.img.zst | dd of=/dev/$TARGET bs=4M status=progress
 
-    # Create partitions
-    log "Creating partitions..."
-    sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI" /dev/$TARGET
-    sgdisk -n 2:0:0 -t 2:8300 -c 2:"PURPLE_ROOT" /dev/$TARGET
-
-    # Write PurpleOS image to root partition
-    log "Writing PurpleOS image (this takes ~10 min)..."
-    zstd -dc /purple-os.img.zst | dd of=/dev/${TARGET}2 bs=4M status=progress
-
-    # Mount partitions
-    log "Installing bootloader..."
-    # Root filesystem is read-only, so create /target in tmpfs
-    mount -t tmpfs tmpfs /tmp
-    mkdir -p /tmp/target/boot/efi
-    mount /dev/${TARGET}2 /tmp/target
-    mkdir -p /tmp/target/boot/efi
-    mount /dev/${TARGET}1 /tmp/target/boot/efi
-
-    # Install GRUB
-    grub-install \
-        --target=x86_64-efi \
-        --efi-directory=/tmp/target/boot/efi \
-        --boot-directory=/tmp/target/boot \
-        --bootloader-id=PURPLE \
-        /dev/$TARGET
-
-    # Cleanup
+    # Force kernel to re-read partition table from the new image
+    log "Reloading partition table..."
     sync
-    umount /tmp/target/boot/efi
-    umount /tmp/target
+    blockdev --rereadpt /dev/$TARGET || true
+    sleep 2  # Give kernel time to recognize new partitions
+
+    log "Verifying partitions..."
+    ls -la /dev/${TARGET}* || log "Warning: partition devices not visible yet"
 
     log "✓ Installation complete!"
     log "Rebooting in 3 seconds..."
     sleep 3
-    reboot -f
+    # Use busybox reboot or kernel reboot syscall
+    /bin/busybox reboot -f || echo b > /proc/sysrq-trigger
 }
 
 main "$@"

@@ -86,6 +86,19 @@ main() {
     chroot "$MOUNT_DIR" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PURPLE --no-nvram
     chroot "$MOUNT_DIR" update-grub
 
+    # Create fallback bootloader for maximum hardware compatibility
+    # This ensures the disk boots on any UEFI system without NVRAM entries
+    log_info "Creating UEFI fallback bootloader..."
+    mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
+    cp "$MOUNT_DIR/boot/efi/EFI/PURPLE/grubx64.efi" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
+
+    # Create minimal grub.cfg that points to the real config
+    cat > "$MOUNT_DIR/boot/efi/EFI/BOOT/grub.cfg" <<'EOF'
+search --no-floppy --label PURPLE_ROOT --set=root
+set prefix=($root)/boot/grub
+configfile ($root)/boot/grub/grub.cfg
+EOF
+
     # Unmount bind mounts
     umount "$MOUNT_DIR/dev"
     umount "$MOUNT_DIR/proc"

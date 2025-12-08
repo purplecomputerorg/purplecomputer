@@ -101,7 +101,7 @@ main() {
 
     # Compress golden image
     log_info "Compressing golden image..."
-    zstd -19 -T0 "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
+    zstd -19 -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
 
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"

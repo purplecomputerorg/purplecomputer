@@ -41,14 +41,21 @@ main() {
         exit 1
     fi
 
-    # Check for required tools
-    for tool in wget tar make gcc bc bison flex libelf-dev; do
-        if ! command -v "$tool" >/dev/null 2>&1 && ! dpkg -l | grep -q "^ii.*$tool"; then
+    # Check for required tools (commands only, not libraries)
+    for tool in wget tar make gcc bc bison flex; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
             echo "ERROR: Required tool not found: $tool"
-            echo "Install with: apt-get install build-essential bc bison flex libelf-dev libssl-dev"
+            echo "Install with: apt-get install build-essential bc bison flex libelf-dev libssl-dev wget"
             exit 1
         fi
     done
+
+    # Check for required header files
+    if [ ! -f /usr/include/libelf.h ]; then
+        echo "ERROR: libelf-dev not installed"
+        echo "Install with: apt-get install libelf-dev"
+        exit 1
+    fi
 
     mkdir -p "$BUILD_DIR"
     mkdir -p "$KERNEL_BUILD_DIR"

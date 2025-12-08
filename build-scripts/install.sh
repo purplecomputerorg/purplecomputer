@@ -21,6 +21,11 @@ main() {
     log "PurpleOS Factory Installer"
     log "=========================="
 
+    # Ensure /sys is mounted (needed for lsblk)
+    if [ ! -d /sys/dev ]; then
+        mount -t sysfs sys /sys 2>/dev/null || true
+    fi
+
     TARGET=$(find_target)
     if [ -z "$TARGET" ]; then
         error "No target disk found"

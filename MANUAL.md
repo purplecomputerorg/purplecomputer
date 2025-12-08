@@ -1,33 +1,101 @@
 # Purple Computer Manual
 
-Complete reference for building, customizing, and maintaining Purple Computer installer.
+Complete reference for building, installing, and maintaining Purple Computer.
 
 **Table of Contents:**
 - [Overview](#overview)
+- [Installer Architecture](#installer-architecture)
 - [Build Process](#build-process)
-- [FAI Configuration](#fai-configuration)
+- [Installation](#installation)
 - [Customization](#customization)
 - [Troubleshooting](#troubleshooting)
-- [Reference](#reference)
 
 ---
 
 ## Overview
 
-Purple Computer uses **FAI (Fully Automatic Installation)** to create a robust, offline installer. The system:
+Purple Computer turns old laptops into calm, creative tools for kids. The installer boots from USB, writes a pre-built Ubuntu Noble Numbat disk image to the internal drive, and reboots into a minimal TUI environment.
 
-- Downloads all packages and creates a proper APT repository (~2-5GB)
-- Builds a FAI installation environment (nfsroot)
-- Creates a bootable ISO with embedded repository (~3-7GB)
-- Installs Ubuntu 24.04 LTS minimal with LVM, X11, and Alacritty
-- Auto-starts Purple TUI on boot (no desktop environment)
+**Key Facts:**
+- **Installed OS:** Ubuntu 24.04 LTS (Noble Numbat) with custom TUI application
+- **Installer Method:** Direct disk imaging (no apt, no package installation during setup)
+- **Boot Medium:** USB stick (hybrid ISO, BIOS and UEFI compatible)
+- **Installation Time:** 10-20 minutes (mostly disk write time)
 
-**Why FAI?**
-- Industry-standard (used by data centers, OEMs)
-- Powerful class-based configuration
-- Supports LVM, RAID, complex disk layouts
-- Extensive hooks for customization
-- Well-documented and actively maintained
+---
+
+## Installer Architecture
+
+### Design Philosophy
+
+The PurpleOS installer is built for **simplicity and reliability**. It eliminates common failure modes (module ABI mismatches, apt dependency hell, network requirements) by using a pre-built system image and minimal custom kernel.
+
+### How It Works
+
+1. **Boot:** USB stick loads custom Linux kernel with built-in drivers
+2. **Detect:** Initramfs finds internal disk (SATA, NVMe, or legacy IDE)
+3. **Write:** Decompress and write Ubuntu Noble image to disk (~4GB)
+4. **Bootloader:** Install GRUB for BIOS or UEFI systems
+5. **Reboot:** System boots into installed Ubuntu + Purple TUI
+
+**No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk.
+
+### Custom Kernel (Installer Only)
+
+The installer uses a **custom Linux kernel (6.8.12)** with all essential storage and filesystem drivers compiled in:
+
+- USB controllers (xhci, ehci, usb-storage, uas)
+- SATA controllers (ahci, ata_piix for older ThinkPads)
+- NVMe (modern SSDs)
+- Filesystems (ext4, vfat)
+
+**This kernel is only used during installation.** The installed OS runs Ubuntu's standard kernel.
+
+#### Why a Custom Kernel?
+
+The previous approach attempted to load Ubuntu kernel modules at runtime. This repeatedly failed due to:
+
+- ABI mismatches between kernel and modules
+- Compressed `.ko.zst` modules that wouldn't load
+- Missing dependencies or incorrect load order
+- CD-ROM mounting logic not used on real hardware
+- Initramfs scripts designed for Ubuntu's live ISO environment (casper/live)
+
+By compiling all drivers into the kernel (`CONFIG_*=y`), the installer boots deterministically on diverse laptop hardware without runtime module loading.
+
+#### Are We Still Installing Ubuntu?
+
+**Yes.** Nothing about the installed OS changes.
+
+The installer boots a small, purpose-built environment, writes a **pre-built Ubuntu Noble Numbat image** to the internal disk, installs GRUB, and reboots. The final running system is 100% Ubuntu (plus our custom TUI application).
+
+The installer kernel is just a tool—it is not the kernel the end user runs.
+
+### Why Not Subiquity or FAI?
+
+Subiquity and FAI (Fully Automatic Installation) are powerful but designed for different use cases:
+
+- They expect a **full apt repository** with metadata and dependency resolution
+- They require package-based installation, not raw image deployment
+- They assume network availability or mirror configuration
+- They are tightly coupled to Ubuntu's stock initramfs and module layout
+- They introduce significant complexity and fragile points of failure
+
+For an **offline, deterministic, one-click installation** intended for non-technical users and aging hardware, these systems are overkill.
+
+Our approach eliminates apt entirely from the installation flow.
+
+### Comparison to Cloud Images
+
+Cloud providers (AWS, GCP, Azure) supply:
+
+- Standardized virtual hardware
+- A known kernel and module set
+- Guaranteed driver availability
+
+**Cloud providers give you the kernel.** We must supply our own installer kernel that supports unpredictable real hardware without relying on Ubuntu's module system.
+
+Once Ubuntu is installed, the system boots the stock Ubuntu kernel—exactly like cloud images.
 
 ---
 
@@ -36,426 +104,248 @@ Purple Computer uses **FAI (Fully Automatic Installation)** to create a robust, 
 ### Prerequisites
 
 **Build machine:**
-- Any system with Docker installed
+- Docker installed and running
 - 20GB free disk space
-- Docker daemon running
-- Internet connection (for package download)
+- Internet connection (for downloads)
+- Any OS (Linux, macOS, NixOS)
 
 **Time estimate:**
-- Docker image build: 5-10 minutes (first time only)
-- Repository creation: 30-60 minutes (downloads ~2-5GB)
-- Nfsroot build: 10-15 minutes
+- Kernel build: 10-30 minutes (first time only, cached after)
+- Golden image: 10-15 minutes
+- Initramfs: 1-2 minutes
+- Installer rootfs: 5-10 minutes
 - ISO creation: 5-10 minutes
-- **Total: ~1-2 hours first build**
+- **Total: 30-60 minutes (first build), 10-20 minutes (subsequent)**
 
-### Single Command Build
+### Quick Start
 
 ```bash
 cd build-scripts
 ./build-in-docker.sh
 ```
 
-This script:
-1. Builds Ubuntu Noble Docker image with FAI tools
-2. Runs all build steps inside container
-3. Outputs ISO to `/opt/purple-installer/output/`
+This builds everything in Docker and outputs the ISO to `/opt/purple-installer/output/`.
 
-The Docker approach works on any system (Linux, macOS, NixOS, etc.) and isolates the build environment.
-
-### Build Steps (inside container)
-
-**1. Create Local Repository** (`01-create-local-repo.sh`)
-- Reads package lists from `fai-config/package_config/*`
-- Downloads Ubuntu Noble packages and dependencies
-- Creates APT repository with proper dists/pool structure
-- Result: `/opt/purple-installer/local-repo/mirror/`
-
-**2. Build FAI Nfsroot** (`02-build-fai-nfsroot.sh`)
-
-**What it does:**
-1. Configures FAI to use local repository
-2. Creates `/etc/fai/fai.conf` with offline settings
-3. Runs `fai-make-nfsroot` to create installation environment
-4. Customizes nfsroot for offline operation
-
-**Nfsroot contents:**
-- Minimal Debian/Ubuntu base system
-- Linux kernel and initramfs
-- FAI installation tools
-- LVM and partitioning utilities (parted, gdisk, lvm2)
-- Grub bootloaders (both BIOS and UEFI)
-- Network tools for hardware detection
-
-**Result:** `/srv/fai/nfsroot/` (~1-2GB)
-
-The nfsroot is a complete Linux system that runs from RAM during installation. It contains everything needed to partition disks, install packages, and configure the target system.
-
-### Step 4: Build Bootable ISO
-
+**Resume from a specific step:**
 ```bash
-sudo ./03-build-iso.sh
+./build-in-docker.sh 2  # Skip kernel and golden image, start from initramfs
 ```
 
-**What it does:**
-1. Creates squashfs from nfsroot (`filesystem.squashfs`)
-2. Copies kernel and initrd from nfsroot
-3. Embeds entire local repository (~2-5GB)
-4. Configures ISOLINUX for BIOS boot
-5. Configures GRUB for UEFI boot
-6. Creates hybrid ISO (bootable from CD and USB)
-7. Generates MD5 and SHA256 checksums
+### Build Pipeline (5 Steps)
 
-**Result:** `/opt/purple-installer/output/purple-computer-installer-YYYYMMDD.iso`
+#### Step 0: Build Custom Kernel
+
+**Script:** `00-build-custom-kernel.sh`
+
+Downloads Linux 6.8.12 source from kernel.org, applies PurpleOS driver configuration, and compiles kernel with built-in drivers.
+
+**Output:** `vmlinuz-purple` (8-12 MB)
+
+**What's built in:**
+- USB: xhci-hcd, ehci-hcd, usb-storage, uas
+- SATA: ahci, ata_piix (for older Intel chipsets)
+- NVMe: nvme-core, nvme
+- Filesystems: ext4, vfat
+- Block: loop device, partition tables (GPT/MBR)
+- EFI: UEFI boot support
+
+See `build-scripts/kernel-config-fragment.config` for full annotated configuration.
+
+#### Step 1: Build Golden Image
+
+**Script:** `01-build-golden-image.sh`
+
+Creates a complete Ubuntu Noble Numbat system as a 4GB disk image using `debootstrap`.
+
+**Output:** `purple-os.img.zst` (~1.5 GB compressed)
+
+**Contents:**
+- Ubuntu 24.04 minimal base
+- Standard Ubuntu kernel (linux-image-generic)
+- GRUB bootloader
+- System utilities (sudo, vim, less)
+
+This is the system that gets written to the target laptop's internal disk.
+
+#### Step 2: Build Initramfs
+
+**Script:** `02-build-initramfs.sh`
+
+Creates a minimal initramfs with BusyBox and boot logic.
+
+**Output:** `initrd.img` (1-2 MB)
+
+**Contents:**
+- Statically-compiled BusyBox
+- `/init` script (device detection, mounts installer rootfs)
+- No kernel modules (all drivers built into kernel)
+
+**Boot flow:**
+1. Mount proc, sys, dev
+2. Wait 3 seconds for USB/SATA/NVMe enumeration
+3. Find partition labeled `PURPLE_INSTALLER`
+4. Mount USB partition
+5. Loop-mount `installer.ext4`
+6. Switch root and execute `install.sh`
+
+#### Step 3: Build Installer Rootfs
+
+**Script:** `03-build-installer-rootfs.sh`
+
+Creates the installer environment that runs `install.sh`.
+
+**Output:** `installer.ext4` (2-3 GB)
+
+**Contents:**
+- Minimal Ubuntu environment (debootstrap)
+- Installation tools (zstd, gdisk, grub, dosfstools)
+- Compressed golden image (`purple-os.img.zst`)
+- Installation script (`install.sh`)
+
+#### Step 4: Build ISO
+
+**Script:** `04-build-iso.sh`
+
+Combines kernel, initramfs, and installer rootfs into a hybrid bootable ISO.
+
+**Output:** `purple-installer-YYYYMMDD.iso` (3-5 GB)
 
 **ISO structure:**
 ```
-ISO:
-├── isolinux/          # BIOS boot
+purple-installer.iso
+├── boot/
+│   ├── vmlinuz             # Custom kernel
+│   ├── initrd.img          # Minimal initramfs
+│   └── installer.ext4      # Installer environment
+├── isolinux/               # BIOS boot
 │   ├── isolinux.bin
 │   └── isolinux.cfg
-├── EFI/boot/          # UEFI boot
-│   ├── bootx64.efi
-│   └── grub.cfg
-├── live/
-│   ├── vmlinuz
-│   ├── initrd.img
-│   └── filesystem.squashfs
-└── purple-repo/       # Complete APT repository
+└── EFI/boot/               # UEFI boot
+    ├── bootx64.efi
+    └── grub.cfg
 ```
 
-The ISO is **hybrid** - you can:
-- Burn to CD/DVD
-- Write to USB with `dd`: `sudo dd if=installer.iso of=/dev/sdX bs=4M`
-- Boot in BIOS or UEFI mode
+The ISO is **hybrid**—bootable from USB stick or optical media, BIOS or UEFI.
 
 ---
 
-## FAI Configuration
+## Installation
 
-FAI uses a **class-based** system. Each class can define:
-- Disk layout (`disk_config/`)
-- Package list (`package_config/`)
-- Configuration scripts (`scripts/`)
-- Hooks at various installation stages (`hooks/`)
+### Writing to USB
 
-### Directory Structure
-
-```
-fai-config/
-├── class/10-base-classes      # Assigns classes based on hardware
-├── disk_config/
-│   ├── LAPTOP                 # LVM layout for laptops
-│   ├── UEFI                   # UEFI-specific partitions
-│   └── BIOS                   # BIOS/legacy partitions
-├── package_config/
-│   ├── FAIBASE                # Essential system packages
-│   ├── PURPLECOMPUTER         # Purple Computer packages
-│   └── MINIMAL_X              # X11 and GUI packages
-├── scripts/
-│   ├── PURPLECOMPUTER/
-│   │   ├── 10-configure-system
-│   │   ├── 20-create-user
-│   │   ├── 40-custom-config
-│   │   └── 50-finalize
-│   └── MINIMAL_X/
-│       └── 30-configure-x11
-├── hooks/
-│   └── instsoft.PURPLECOMPUTER
-└── nfsroot.conf               # Nfsroot build config
-```
-
-### Class Assignment
-
-**File:** `fai-config/class/10-base-classes`
-
-This script runs early in installation and outputs class names (one per line):
-
+**Linux/macOS:**
 ```bash
-echo "FAIBASE"        # Always applied
-echo "DEBIAN"         # or UBUNTU
-echo "AMD64"          # Architecture
-echo "BOOKWORM"       # Distribution release
-echo "PURPLECOMPUTER" # Purple Computer config
-echo "LAPTOP"         # Laptop-specific settings
-echo "MINIMAL_X"      # Install X11
-
-# Auto-detect firmware type
-if [ -d /sys/firmware/efi ]; then
-    echo "UEFI"
-else
-    echo "BIOS"
-fi
+sudo dd if=/opt/purple-installer/output/purple-installer-*.iso \
+    of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Classes are stored in `$LOGDIR/FAI_CLASSES` and used throughout installation.
+Replace `/dev/sdX` with your USB device (check with `lsblk`).
 
-### Disk Configuration
+**Windows:**
+Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
 
-**LVM Layout (LAPTOP class):**
+### Booting
 
-```
-/dev/sda1: /boot     512MB ext4
-/dev/sda2: LVM PV    Rest of disk
+1. Insert USB stick into target laptop
+2. Enter BIOS/UEFI boot menu (usually F12, F2, Del, or Esc during startup)
+3. Select USB device
+4. System boots into installer automatically
 
-Volume Group: vg_system
-  - root:  20GB  /
-  - swap:   4GB  swap
-  - home:  10GB  /home
-  - var:   10GB  /var
-  - tmp:    2GB  /tmp
-  - (unallocated space for expansion)
-```
+### Installation Process
 
-**UEFI systems** add an ESP partition:
-```
-/dev/sda1: /boot/efi 512MB vfat (ESP)
-/dev/sda2: /boot     512MB ext4
-/dev/sda3: LVM PV    Rest
-```
+**Automatic installation (10-20 minutes):**
 
-**Format:**
-```
-disk_config disk1 disklabel:gpt bootable:1 fstabkey:uuid
+1. Kernel boots (custom kernel with built-in drivers)
+2. Initramfs finds internal disk (first non-USB disk)
+3. Wipes partition table and creates GPT partitions:
+   - `/dev/sdX1`: EFI system partition (512 MB, vfat)
+   - `/dev/sdX2`: Root partition (rest of disk, ext4)
+4. Decompresses and writes golden image to root partition
+5. Installs GRUB bootloader (UEFI or BIOS)
+6. Reboots
 
-primary /boot     512M    ext4    rw,relatime,errors=remount-ro
-primary -         0-      -       -
+**No user interaction required.** The entire process is automated.
 
-disk_config lvm vg:vg_system
+### First Boot
 
-vg_system-root    /       20G     ext4    rw,relatime,errors=remount-ro
-vg_system-swap    swap    4G      swap    sw
-vg_system-home    /home   10G     ext4    rw,relatime,nodev,nosuid
-```
+**Default credentials:**
+- Username: `purple`
+- Password: `purple`
 
-See `fai-config/disk_config/LAPTOP` for complete layout.
-
-### Package Lists
-
-**FAIBASE** - Essential system:
-- `linux-image-amd64`, `grub-pc`, `grub-efi-amd64`
-- `lvm2`, `sudo`, `vim-tiny`, `wget`, `curl`
-- `firmware-linux-free`, `pciutils`, `usbutils`
-
-**PURPLECOMPUTER** - Core packages:
-- System: `systemd`, `dbus`, `udev`
-- Filesystems: `e2fsprogs`, `btrfs-progs`, `ntfs-3g`
-- Editors: `vim`, `nano`
-- Tools: `htop`, `tmux`, `tree`, `rsync`
-- Laptop: `laptop-mode-tools`, `tlp`, `acpi`
-- Wireless: `wpasupplicant`, `wireless-tools`, `iw`
-- Bluetooth: `bluez`, `bluez-tools`
-- Development: `build-essential`, `git`, `python3`
-
-**MINIMAL_X** - Graphical environment:
-- X11: `xserver-xorg-core`, `xserver-xorg-input-all`
-- Display manager: `lightdm`, `lightdm-gtk-greeter`
-- Window manager: `openbox`, `obconf`
-- Terminals: `alacritty`, `xterm`, `rxvt-unicode`
-- Fonts: `fonts-dejavu-core`, `fonts-liberation`, `fonts-noto-*`
-- Audio: `alsa-utils`, `pulseaudio`, `pavucontrol`
-- Apps: `firefox-esr`, `feh`, `pcmanfm`, `zathura`
-
-### Installation Scripts
-
-Scripts run in numerical order within each class directory.
-
-**PURPLECOMPUTER/10-configure-system** - System settings
-- Hostname: `purplecomputer`
-- Locale: `en_US.UTF-8`
-- Timezone: `UTC`
-- Keyboard: `us`
-- Enable services: `systemd-journald`, `acpid`, `tlp`
-- Configure sudo (no password for sudo group)
-
-**PURPLECOMPUTER/20-create-user** - User account
-- Create user `purple` with groups: `sudo`, `audio`, `video`, `plugdev`, `netdev`, `bluetooth`
-- Default password: `purple`
-- Create home directories: `Documents`, `Downloads`, `Pictures`, etc.
-- Configure `.bashrc` with colors and aliases
-- Configure `.profile` for PATH
-
-**MINIMAL_X/30-configure-x11** - X11 environment
-- Enable `lightdm` display manager
-- Configure auto-login for user `purple`
-- Create Openbox config (menu, keybindings, autostart)
-- Configure `.xinitrc`, `.Xresources`
-- Set up terminal colors (Gruvbox-inspired)
-
-**PURPLECOMPUTER/40-custom-config** - Dotfiles
-- Alacritty config (colors, fonts, keybindings)
-- Vim config (line numbers, syntax, keybindings)
-- Git config (user, aliases)
-- Tmux config (prefix Ctrl+A, keybindings)
-- First-boot welcome message
-
-**PURPLECOMPUTER/50-finalize** - Final tasks
-- Update initramfs
-- Install GRUB (UEFI or BIOS)
-- Clean package cache
-- Create `/etc/purple-install-info`
-- Create `/etc/motd` (message of the day)
-- Create `purple-setup` helper script
-- Set file permissions
-
-### Hooks
-
-**instsoft.PURPLECOMPUTER** - APT configuration
-
-Runs during `instsoft` stage (after package installation begins).
-
-Creates `/etc/apt/sources.list` pointing to offline repository:
-```
-deb [trusted=yes] file:///media/purple-repo bookworm main contrib non-free
-```
-
-Configures APT:
-- Disable recommended/suggested packages
-- Non-interactive dpkg mode
-- Prefer local repository (Pin-Priority: 1000)
-
-### FAI Variables
-
-Available in scripts:
-
-- `$target` - Mount point of target system (e.g., `/target`)
-- `$ROOTCMD` - Prefix for commands in chroot (e.g., `chroot $target`)
-- `$classes` - Space-separated list of classes
-- `$LOGDIR` - FAI log directory
-
-**Examples:**
+**IMPORTANT:** Change password immediately:
 ```bash
-# Create file in target
-echo "purplecomputer" > $target/etc/hostname
-
-# Run command in chroot
-$ROOTCMD systemctl enable lightdm
-
-# Check for class
-if ifclass MINIMAL_X; then
-    echo "Installing X11..."
-fi
+passwd
 ```
 
 ---
 
 ## Customization
 
-### Add/Remove Packages
+### Modify Golden Image
 
-**Edit package lists:**
+The golden image is built in step 1. To customize the installed OS:
+
+**Edit:** `build-scripts/01-build-golden-image.sh`
+
+**Examples:**
+
+Add packages during debootstrap:
 ```bash
-vim fai-config/package_config/PURPLECOMPUTER
-# Add/remove package names (one per line)
+debootstrap \
+    --include=linux-image-generic,grub-efi-amd64,systemd,sudo,vim-tiny,neofetch \
+    noble "$MOUNT_DIR" http://archive.ubuntu.com/ubuntu
 ```
 
-**Rebuild repository:**
+Create additional users:
 ```bash
-sudo ./01-create-local-repo.sh
-sudo ./02-build-fai-nfsroot.sh  # If FAI tools need new packages
-sudo ./03-build-iso.sh
+chroot "$MOUNT_DIR" useradd -m -s /bin/bash myuser
+echo "myuser:password" | chroot "$MOUNT_DIR" chpasswd
 ```
 
-### Change Disk Layout
-
-**Edit disk config:**
+Install custom software:
 ```bash
-vim fai-config/disk_config/LAPTOP
+cp -r /path/to/purple_tui "$MOUNT_DIR/opt/"
+chroot "$MOUNT_DIR" systemctl enable purple-tui
 ```
 
-**Example - increase root to 40GB:**
-```
-vg_system-root    /       40G     ext4    rw,relatime,errors=remount-ro
-```
-
-Changes apply on next installation. No rebuild needed.
-
-### Change Distribution
-
-**For Ubuntu:**
-
-1. Edit `build-scripts/01-create-local-repo.sh`:
-   ```bash
-   DIST="jammy"  # or noble for 24.04
-   SECTIONS="main restricted universe multiverse"
-   ```
-
-2. Edit `build-scripts/02-build-fai-nfsroot.sh`:
-   ```bash
-   FAI_DEBOOTSTRAP="jammy file://${MIRROR_DIR}"
-   ```
-
-3. Edit `fai-config/class/10-base-classes`:
-   ```bash
-   echo "UBUNTU"
-   echo "JAMMY"  # instead of BOOKWORM
-   ```
-
-4. Rebuild everything:
-   ```bash
-   sudo ./01-create-local-repo.sh
-   sudo ./02-build-fai-nfsroot.sh
-   sudo ./03-build-iso.sh
-   ```
-
-### Modify User Configuration
-
-**Edit user creation script:**
+**Rebuild:**
 ```bash
-vim fai-config/scripts/PURPLECOMPUTER/20-create-user
+./build-in-docker.sh 1  # Rebuild from step 1 (skip kernel build)
 ```
 
-**Example - change username:**
+### Modify Kernel Drivers
+
+If the installer doesn't boot on specific hardware, you may need to add drivers.
+
+**Edit:** `build-scripts/kernel-config-fragment.config`
+
+**Example—add Intel wireless driver:**
+```makefile
+# Intel WiFi (iwlwifi)
+CONFIG_IWLWIFI=y
+CONFIG_IWLMVM=y
+```
+
+**Rebuild:**
 ```bash
-USERNAME="myuser"
-FULLNAME="My User"
+./build-in-docker.sh 0  # Rebuild kernel
+./build-in-docker.sh 4  # Rebuild ISO
 ```
 
-**Example - change default password:**
+### Change Partition Layout
+
+The installer creates a simple two-partition layout (EFI + root). To customize:
+
+**Edit:** `build-scripts/install.sh`
+
+**Example—add swap partition:**
 ```bash
-echo "$USERNAME:mypassword" | $ROOTCMD chpasswd
+# After line 40 (partition creation)
+sgdisk -n 3:0:+4G -t 3:8200 -c 3:"SWAP" /dev/$TARGET
+
+# After line 44 (root write)
+mkswap /dev/${TARGET}3
 ```
-
-### Add Post-Install Script
-
-**Create new script:**
-```bash
-vim fai-config/scripts/PURPLECOMPUTER/60-install-purple-tui
-chmod +x fai-config/scripts/PURPLECOMPUTER/60-install-purple-tui
-```
-
-**Example script:**
-```bash
-#!/bin/bash
-set -e
-error=0 ; trap 'error=$(($?>$error?$?:$error))' ERR
-
-echo "Installing Purple TUI..."
-
-# Copy Purple TUI to target
-cp -r /path/to/purple_tui $target/opt/purple_tui
-
-# Create systemd service
-cat > $target/etc/systemd/system/purple.service <<'EOF'
-[Unit]
-Description=Purple Computer
-After=graphical.target
-
-[Service]
-Type=simple
-User=purple
-ExecStart=/opt/purple_tui/run.sh
-
-[Install]
-WantedBy=graphical.target
-EOF
-
-# Enable service
-$ROOTCMD systemctl enable purple
-
-exit $error
-```
-
-Scripts run in numerical order (10, 20, 30, ...).
 
 ---
 
@@ -463,143 +353,177 @@ Scripts run in numerical order (10, 20, 30, ...).
 
 ### Build Issues
 
-**Repository download fails:**
-```bash
-# Check internet connection
-ping deb.debian.org
+**"ERROR: busybox not found"**
 
-# Check APT cache
-sudo apt-get update
-
-# Check disk space
-df -h /opt/purple-installer
-
-# Partial downloads in cache
-ls -lh /opt/purple-installer/local-repo/cache/downloads/
+Install busybox-static in Docker container:
+```dockerfile
+# Add to build-scripts/Dockerfile
+RUN apt-get install -y busybox-static
 ```
 
-**Nfsroot build fails:**
-```bash
-# Check logs
-sudo cat /var/log/fai/fai-make-nfsroot.log
+**"Kernel build fails: missing bc"**
 
-# Verify local repository
-ls /opt/purple-installer/local-repo/mirror/dists/bookworm/
-
-# Try verbose mode
-sudo fai-make-nfsroot -v
+Install kernel build dependencies:
+```dockerfile
+# Add to build-scripts/Dockerfile
+RUN apt-get install -y build-essential bc bison flex libelf-dev libssl-dev
 ```
 
-**ISO creation fails:**
+**"No space left on device"**
+
+Free up space or use larger disk:
 ```bash
-# Check disk space (need ~10GB free)
-df -h /opt/purple-installer
+df -h /opt/purple-installer  # Check usage
+du -sh /opt/purple-installer/build/*  # Find large files
+```
 
-# Verify squashfs was created
-ls -lh /opt/purple-installer/iso-build/live/filesystem.squashfs
+### Boot Issues
 
-# Check xorriso is installed
-which xorriso
+**"ERROR: Cannot find PurpleOS installer partition"**
+
+The initramfs can't detect the USB stick. Causes:
+
+- USB stick wasn't written correctly
+- Partition label is missing
+- USB controller not supported by kernel
+
+**Solutions:**
+```bash
+# Verify partition label
+sudo blkid  # Should show LABEL="PURPLE_INSTALLER"
+
+# Re-write USB stick
+sudo dd if=purple-installer.iso of=/dev/sdX bs=4M status=progress
+
+# Try different USB port (USB 2.0 ports often more reliable)
+```
+
+**Kernel doesn't boot (black screen)**
+
+Possible causes:
+
+- Missing graphics driver in kernel
+- Incompatible BIOS/UEFI settings
+
+**Solutions:**
+```bash
+# Add nomodeset to kernel command line
+# Edit build-scripts/04-build-iso.sh, line 84:
+APPEND initrd=/boot/initrd.img quiet nomodeset
+
+# Check BIOS settings
+- Disable Secure Boot
+- Enable Legacy Boot (for BIOS)
+- Enable CSM (Compatibility Support Module)
+```
+
+**No /dev/sdX devices detected**
+
+USB/SATA drivers aren't loaded. This shouldn't happen with the custom kernel, but if it does:
+
+```bash
+# Verify kernel config
+grep "=y" /opt/purple-installer/build/kernel-config-purple | grep -E "USB|SATA|NVME"
+
+# Should see:
+# CONFIG_USB=y
+# CONFIG_USB_XHCI_HCD=y
+# CONFIG_SATA_AHCI=y
+# CONFIG_NVME_CORE=y
 ```
 
 ### Installation Issues
 
-**Boot menu doesn't appear:**
-- Verify ISO checksum matches `.md5` file
-- Try different USB port
-- Check BIOS/UEFI boot settings
-- Try writing with different tool (Rufus, balenaEtcher, dd)
+**"No target disk found"**
 
-**Installation hangs:**
-- Select "Installation (Verbose)" from boot menu
-- Press `Alt+F2` to switch to shell
-- Press `Alt+F3` to view FAI logs
-- Check `/tmp/fai/` for log files
+The installer couldn't find an internal disk (all disks appear as USB).
 
-**Cannot find packages:**
-- Repository not mounted correctly
-- Check if `/media/purple-repo` exists during install
-- Verify repository on ISO: mount ISO and check `purple-repo/` directory
+**Solution:**
+Manually specify target in `install.sh`:
+```bash
+# Edit build-scripts/install.sh, line 24:
+TARGET="sda"  # Or nvme0n1, vda, etc.
+```
 
-**Partition fails:**
-- Disk may have existing partitions
-- Boot to rescue mode and manually partition
-- Check disk is not in use (unmount all partitions)
+**Installation hangs during disk write**
 
-**Bootloader installation fails:**
-- UEFI/BIOS mismatch
-- Check firmware mode in BIOS settings
-- Verify ESP partition exists (UEFI) or boot flag set (BIOS)
+- Bad disk sectors
+- Failing hard drive
+- USB stick interference
+
+**Check:**
+```bash
+# Boot Ubuntu live USB separately
+# Run disk check
+sudo badblocks -v /dev/sda
+
+# Check SMART status
+sudo smartctl -a /dev/sda
+```
+
+**GRUB installation fails**
+
+UEFI/BIOS mismatch or partition issues.
+
+**Check:**
+- Booted in UEFI mode but trying to install BIOS GRUB (or vice versa)
+- ESP partition not formatted as vfat
+- Boot flag not set on correct partition
 
 ### Post-Install Issues
 
-**No display after boot:**
+**System boots to grub rescue prompt**
+
+GRUB installation failed or disk UUID changed.
+
+**Solution:**
 ```bash
-# Switch to console
-Press Ctrl+Alt+F2
+# Boot from Ubuntu live USB
+# Mount target system
+sudo mount /dev/sdX2 /mnt
+sudo mount /dev/sdX1 /mnt/boot/efi
 
-# Check X11 logs
-journalctl -u lightdm
-cat /var/log/Xorg.0.log
+# Reinstall GRUB
+sudo grub-install --target=x86_64-efi --efi-directory=/mnt/boot/efi \
+    --boot-directory=/mnt/boot /dev/sdX
 
-# Try manual X start
-startx
+# Update GRUB config
+sudo chroot /mnt update-grub
 ```
 
-**Network not working:**
-```bash
-# Check interface
-ip link
+**No network connectivity**
 
-# WiFi needs firmware
+Laptop may need proprietary firmware for WiFi.
+
+**Check:**
+```bash
+# Identify WiFi card
 lspci | grep -i network
-# May need firmware-iwlwifi or similar
 
-# Manual network config
-sudo nmtui
+# Common fixes
+sudo apt update
+sudo apt install firmware-iwlwifi      # Intel
+sudo apt install firmware-realtek      # Realtek
+sudo apt install firmware-atheros      # Atheros
+
+# Reboot
+sudo reboot
 ```
 
-**Wrong resolution:**
+**Screen resolution wrong**
+
+X11 may not detect native resolution.
+
+**Fix:**
 ```bash
 # List available modes
 xrandr
 
 # Set resolution
 xrandr --output HDMI-1 --mode 1920x1080
-```
 
-### Debugging FAI
-
-**Enable verbose output:**
-Boot menu → "Installation (Verbose)"
-
-**Shell access during install:**
-Press `Alt+F2` during installation
-
-**Check class assignment:**
-```bash
-cat /tmp/fai/FAI_CLASSES
-```
-
-**View FAI variables:**
-```bash
-# During installation (Alt+F2)
-echo $target
-echo $classes
-ls $LOGDIR
-```
-
-**Test disk config:**
-```bash
-# On build machine
-fai-disk-config -t LAPTOP
-```
-
-**Manual FAI run:**
-```bash
-# Boot to rescue shell
-# Partition manually, mount to /target
-fai -v -N install
+# Make permanent (add to ~/.xprofile)
+echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 ```
 
 ---
@@ -608,146 +532,117 @@ fai -v -N install
 
 ### File Locations
 
-**Build machine:**
-- `/srv/fai/config/` - FAI configuration (copied from `fai-config/`)
-- `/srv/fai/nfsroot/` - Installation environment (~1-2GB)
-- `/opt/purple-installer/local-repo/mirror/` - APT repository (~2-5GB)
-- `/opt/purple-installer/output/` - Final ISO files
+**Build system:**
+```
+/opt/purple-installer/
+├── build/
+│   ├── vmlinuz-purple           # Custom kernel
+│   ├── kernel-config-purple     # Kernel .config
+│   ├── initrd.img               # Initramfs
+│   ├── purple-os.img            # Golden image (uncompressed)
+│   ├── purple-os.img.zst        # Golden image (compressed)
+│   └── installer.ext4           # Installer environment
+└── output/
+    └── purple-installer-YYYYMMDD.iso  # Final ISO
+```
+
+**Source files:**
+```
+build-scripts/
+├── 00-build-custom-kernel.sh       # Kernel build
+├── 01-build-golden-image.sh        # Ubuntu base system
+├── 02-build-initramfs.sh           # Minimal initramfs
+├── 03-build-installer-rootfs.sh    # Installer environment
+├── 04-build-iso.sh                 # Hybrid ISO
+├── build-all.sh                    # Orchestrator
+├── build-in-docker.sh              # Docker wrapper
+├── kernel-config-fragment.config   # Kernel driver config
+├── install.sh                      # Installation script
+└── config.sh                       # Build configuration
+```
 
 **Installed system:**
-- `/var/log/fai/` - Installation logs
-- `/etc/purple-install-info` - Installation metadata
-- `/etc/apt/sources.list` - APT configuration (points to `/media/purple-repo`)
-- `/home/purple/` - User home directory
+```
+/boot/
+├── vmlinuz-*           # Ubuntu kernel (not custom kernel)
+├── initrd.img-*        # Ubuntu initramfs
+└── grub/               # GRUB config
 
-### Important Scripts
-
-**Build:**
-- `build-scripts/00-install-build-deps.sh` - Install FAI and tools
-- `build-scripts/01-create-local-repo.sh` - Create APT repository
-- `build-scripts/02-build-fai-nfsroot.sh` - Build installation environment
-- `build-scripts/03-build-iso.sh` - Create bootable ISO
-
-**FAI:**
-- `fai-config/class/10-base-classes` - Class assignment
-- `fai-config/scripts/PURPLECOMPUTER/*` - Configuration scripts
-- `fai-config/hooks/instsoft.PURPLECOMPUTER` - APT setup
-
-**Installed system:**
-- `/usr/local/bin/purple-setup` - Post-install helper
-
-### Package Counts
-
-Approximate package counts by class:
-
-- FAIBASE: ~20 packages
-- PURPLECOMPUTER: ~60 packages
-- MINIMAL_X: ~80 packages
-- **Total: ~160 packages** (plus dependencies = ~500-800 packages)
-
-### Size Estimates
-
-- Local repository: 2-5GB
-- FAI nfsroot: 1-2GB
-- ISO file: 3-7GB
-- Installed system: 3-5GB (without repository)
-
-### Boot Process
-
-1. BIOS/UEFI loads bootloader (ISOLINUX or GRUB)
-2. Bootloader loads kernel and initramfs from `live/`
-3. Initramfs mounts squashfs (`filesystem.squashfs`)
-4. Live environment boots (FAI nfsroot)
-5. FAI starts automatically (`FAI_ACTION=install`)
-6. Class assignment (`class/10-base-classes`)
-7. Disk partitioning (`disk_config/`)
-8. Package installation (`package_config/`)
-9. Configuration (`scripts/`, `hooks/`)
-10. Bootloader install (`50-finalize`)
-11. Reboot to installed system
-
-### Default Credentials
-
-**Username:** `purple`
-**Password:** `purple`
-
-**IMPORTANT:** Change password immediately after installation:
-```bash
-passwd
+/home/purple/           # User home directory
+/etc/hostname           # purplecomputer
 ```
 
-Or use helper:
-```bash
-sudo purple-setup
-# Select option 1
+### Hardware Compatibility
+
+**Tested configurations:**
+- ThinkPad T/X/L series (2010-2020)
+- Dell Latitude (2012+)
+- HP EliteBook (2013+)
+- MacBook Air/Pro (2013+, Intel models)
+
+**Supported storage:**
+- SATA (AHCI controller)
+- SATA (legacy IDE/PATA via ata_piix)
+- NVMe (modern SSDs)
+- USB (for installer boot)
+
+**Known incompatible:**
+- Very old laptops (<2010) may need IDE drivers
+- Some MacBooks (2016+ with T2 chip)
+- Exotic RAID controllers
+
+### Size Reference
+
+| Component | Size |
+|-----------|------|
+| Custom kernel | 8-12 MB |
+| Initramfs | 1-2 MB |
+| Golden image (compressed) | 1.5 GB |
+| Installer rootfs | 2-3 GB |
+| Final ISO | 3-5 GB |
+| Installed system | 3-5 GB |
+
+### Boot Flow Diagram
+
+```
+USB Boot (BIOS/UEFI)
+  ↓
+Bootloader (ISOLINUX/GRUB)
+  ↓
+Load Custom Kernel (vmlinuz-purple)
+  ├─ All drivers built-in (no module loading)
+  ├─ USB controllers (xhci, ehci)
+  ├─ SATA controllers (ahci, ata_piix)
+  ├─ NVMe (nvme-core, nvme)
+  └─ Filesystems (ext4, vfat)
+  ↓
+Unpack Initramfs (initrd.img)
+  ↓
+Execute /init Script
+  ├─ Mount proc, sys, dev
+  ├─ Wait for device enumeration
+  ├─ Find partition labeled PURPLE_INSTALLER
+  ├─ Mount USB partition
+  ├─ Loop-mount installer.ext4
+  └─ switch_root /newroot /install.sh
+  ↓
+Installation (install.sh)
+  ├─ Detect target disk (first non-USB)
+  ├─ Wipe partition table (sgdisk -Z)
+  ├─ Create GPT partitions (EFI + root)
+  ├─ Decompress purple-os.img.zst → /dev/sdX2
+  ├─ Install GRUB (--target=x86_64-efi or i386-pc)
+  └─ Reboot
+  ↓
+First Boot (Installed System)
+  └─ Ubuntu 24.04 + Purple TUI
 ```
 
-### Useful Commands
+### Documentation
 
-**LVM management:**
-```bash
-# View volumes
-sudo lvs
-sudo vgs
-sudo pvs
-
-# Extend volume
-sudo lvextend -L +10G /dev/vg_system/home
-sudo resize2fs /dev/vg_system/home
-
-# Create snapshot
-sudo lvcreate -L 5G -s -n root_snapshot /dev/vg_system/root
-```
-
-**Repository management:**
-```bash
-# Verify repository
-apt-cache policy
-
-# List available packages
-apt-cache search .
-
-# Add online repositories
-sudo vim /etc/apt/sources.list
-# Uncomment online repo lines
-sudo apt update
-```
-
-**System info:**
-```bash
-# Installation info
-cat /etc/purple-install-info
-
-# Applied classes
-# (during install only)
-cat /tmp/fai/FAI_CLASSES
-
-# Disk layout
-lsblk
-df -h
-
-# Boot logs
-journalctl -b
-```
-
-### FAI Documentation
-
-- FAI Project: https://fai-project.org/
-- FAI Guide: https://fai-project.org/fai-guide/
-- Disk config: https://fai-project.org/doc/man/fai-disk-config.html
-- Setup storage: https://fai-project.org/doc/man/setup-storage.html
-
-### Support
-
-For issues with Purple Computer installer:
-1. Check logs in `/var/log/fai/`
-2. Review this manual
-3. Check FAI documentation
-4. Boot in verbose mode for detailed output
-
-For issues with Purple Computer application:
-- See main repository documentation
-- Check `purple_tui/` source code
+- **README.md** - Quick start and overview
+- **MANUAL.md** - This file (complete reference)
+- **guides/module-free-architecture.md** - Technical deep-dive on installer design
 
 ---
 

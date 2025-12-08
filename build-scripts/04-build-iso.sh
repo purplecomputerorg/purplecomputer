@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
-# Build bootable ISO
-# Combines kernel, initramfs, and installer rootfs into hybrid ISO
+# Build bootable USB/hybrid ISO (module-free architecture)
+# Combines custom kernel, minimal initramfs, and installer rootfs into hybrid ISO
+#
+# CHANGES FROM OLD VERSION:
+# - Uses custom-built kernel with drivers built-in (not extracted from golden image)
+# - Creates proper hybrid ISO bootable from USB stick (not CD-ROM)
+# - Simpler boot configuration (no CD-ROM assumptions)
+# - Partition labeled PURPLE_INSTALLER for reliable detection
 
 set -e
 
@@ -11,66 +17,60 @@ OUTPUT_DIR="/opt/purple-installer/output"
 ISO_NAME="purple-installer-$(date +%Y%m%d).iso"
 
 GREEN='\033[0;32m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
 main() {
-    log_info "Building bootable ISO..."
+    log_info "Building bootable USB/hybrid ISO (module-free architecture)..."
 
     if [ "$EUID" -ne 0 ]; then
-        echo "This script must be run as root"
+        echo "ERROR: This script must be run as root"
         exit 1
     fi
 
     # Check prerequisites
-    for file in "${BUILD_DIR}/initrd.img" "${BUILD_DIR}/installer.ext4"; do
+    log_step "Checking prerequisites..."
+    MISSING=""
+    for file in "${BUILD_DIR}/vmlinuz-purple" "${BUILD_DIR}/initrd.img" "${BUILD_DIR}/installer.ext4"; do
         if [ ! -f "$file" ]; then
             echo "ERROR: Missing $file"
-            echo "Run previous build scripts first"
-            exit 1
+            MISSING="yes"
         fi
     done
+
+    if [ -n "$MISSING" ]; then
+        echo ""
+        echo "Run previous build scripts first:"
+        echo "  ./00-build-custom-kernel.sh    # Build custom kernel"
+        echo "  ./02-build-initramfs.sh        # Build minimal initramfs"
+        echo "  ./03-build-installer-rootfs.sh # Build installer environment"
+        exit 1
+    fi
 
     mkdir -p "$OUTPUT_DIR"
     rm -rf "$ISO_DIR"
     mkdir -p "$ISO_DIR"/{boot,isolinux,EFI/boot}
 
-    # Extract kernel from golden image
-    log_info "Extracting kernel from golden image..."
-    GOLDEN_IMG="${BUILD_DIR}/purple-os.img"
-    if [ ! -f "$GOLDEN_IMG" ]; then
-        echo "ERROR: Golden image not found at $GOLDEN_IMG"
-        echo "Run step 1 (build-golden-image.sh) first"
-        exit 1
-    fi
-
-    # Mount golden image to extract kernel
-    LOOP_DEV=$(losetup -f --show "$GOLDEN_IMG")
-    kpartx -av "$LOOP_DEV"
-    LOOP_NAME=$(basename "$LOOP_DEV")
-
-    TEMP_MOUNT="${BUILD_DIR}/mnt-kernel-extract"
-    mkdir -p "$TEMP_MOUNT"
-    mount "/dev/mapper/${LOOP_NAME}p2" "$TEMP_MOUNT"
-
-    KERNEL=$(ls -1 "$TEMP_MOUNT/boot/vmlinuz-"* | sort -V | tail -1)
-    cp "$KERNEL" "$ISO_DIR/boot/vmlinuz"
-
-    umount "$TEMP_MOUNT"
-    kpartx -dv "$LOOP_DEV"
-    losetup -d "$LOOP_DEV"
-    rm -rf "$TEMP_MOUNT"
+    # Copy custom kernel
+    log_step "1/5: Copying custom kernel..."
+    cp "${BUILD_DIR}/vmlinuz-purple" "$ISO_DIR/boot/vmlinuz"
+    log_info "  Kernel size: $(du -h ${BUILD_DIR}/vmlinuz-purple | cut -f1)"
 
     # Copy initramfs
-    log_info "Copying initramfs..."
+    log_step "2/5: Copying initramfs..."
     cp "${BUILD_DIR}/initrd.img" "$ISO_DIR/boot/initrd.img"
+    log_info "  Initramfs size: $(du -h ${BUILD_DIR}/initrd.img | cut -f1)"
 
     # Copy installer rootfs
-    log_info "Embedding installer rootfs..."
+    log_step "3/5: Embedding installer rootfs..."
     cp "${BUILD_DIR}/installer.ext4" "$ISO_DIR/boot/installer.ext4"
+    log_info "  Installer rootfs size: $(du -h ${BUILD_DIR}/installer.ext4 | cut -f1)"
 
     # Create ISOLINUX config (BIOS boot)
-    log_info "Creating ISOLINUX boot config..."
+    log_step "4/5: Creating boot configuration..."
+    log_info "  Configuring ISOLINUX (BIOS boot)..."
     cp /usr/lib/ISOLINUX/isolinux.bin "$ISO_DIR/isolinux/"
     cp /usr/lib/syslinux/modules/bios/*.c32 "$ISO_DIR/isolinux/"
 
@@ -81,17 +81,17 @@ PROMPT 0
 
 LABEL install
     KERNEL /boot/vmlinuz
-    APPEND initrd=/boot/initrd.img root=LABEL=PURPLE_INSTALLER ro quiet
+    APPEND initrd=/boot/initrd.img quiet console=tty0 console=ttyS0,115200n8
 EOF
 
     # Create GRUB config (UEFI boot)
-    log_info "Creating GRUB EFI boot config..."
+    log_info "  Configuring GRUB (UEFI boot)..."
     cat > "$ISO_DIR/EFI/boot/grub.cfg" <<'EOF'
 set default=0
 set timeout=1
 
 menuentry "PurpleOS Installer" {
-    linux /boot/vmlinuz root=LABEL=PURPLE_INSTALLER ro quiet
+    linux /boot/vmlinuz quiet console=tty0 console=ttyS0,115200n8
     initrd /boot/initrd.img
 }
 EOF
@@ -101,16 +101,21 @@ EOF
         cp /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi "$ISO_DIR/EFI/boot/bootx64.efi"
     elif [ -f /usr/lib/grub/x86_64-efi/grubx64.efi ]; then
         cp /usr/lib/grub/x86_64-efi/grubx64.efi "$ISO_DIR/EFI/boot/bootx64.efi"
+    else
+        echo "WARNING: GRUB EFI binary not found - UEFI boot may not work"
     fi
 
-    # Build hybrid ISO
-    log_info "Creating hybrid ISO..."
+    # Build hybrid ISO (bootable from USB and optical media)
+    log_step "5/5: Creating hybrid ISO..."
+    log_info "  Building with xorriso..."
+
     xorriso -as mkisofs \
         -iso-level 3 \
         -full-iso9660-filenames \
         -volid "PURPLE_INSTALLER" \
         -appid "PurpleOS Factory Installer" \
         -publisher "Purple Computer Project" \
+        -preparer "PurpleOS Build System" \
         -eltorito-boot isolinux/isolinux.bin \
         -eltorito-catalog isolinux/boot.cat \
         -no-emul-boot \
@@ -130,8 +135,22 @@ EOF
     md5sum "$ISO_NAME" > "${ISO_NAME}.md5"
     sha256sum "$ISO_NAME" > "${ISO_NAME}.sha256"
 
-    log_info "✓ ISO ready: ${OUTPUT_DIR}/${ISO_NAME}"
+    # Display results
+    echo
+    log_info "✓ ISO build complete!"
+    log_info "  Output: ${OUTPUT_DIR}/${ISO_NAME}"
     log_info "  Size: $(du -h ${OUTPUT_DIR}/${ISO_NAME} | cut -f1)"
+    echo
+    log_info "Write to USB stick with:"
+    log_info "  sudo dd if=${OUTPUT_DIR}/${ISO_NAME} of=/dev/sdX bs=4M status=progress"
+    log_info "  (Replace /dev/sdX with your USB device)"
+    echo
+    log_info "Module-free architecture benefits:"
+    log_info "  ✓ No runtime kernel modules"
+    log_info "  ✓ No CD-ROM dependency"
+    log_info "  ✓ Direct USB boot support"
+    log_info "  ✓ All drivers built into kernel"
+    log_info "  ✓ Improved hardware compatibility"
 }
 
 main "$@"

@@ -95,27 +95,37 @@ purplecomputer/
 │
 ├── packs/                # Built-in content (emoji, definitions, sounds)
 │
-├── fai-config/           # FAI installer configuration
-│   ├── class/            # Hardware detection & class assignment
-│   ├── disk_config/      # LVM partition layouts
-│   ├── package_config/   # Package lists
-│   ├── scripts/          # Post-install configuration
-│   └── hooks/            # APT offline repository setup
-│
-├── build-scripts/        # ISO build automation
-│   ├── 00-install-build-deps.sh
-│   ├── 01-create-local-repo.sh
-│   ├── 02-build-fai-nfsroot.sh
-│   └── 03-build-iso.sh
+├── build-scripts/        # Module-free ISO build pipeline (5 steps)
+│   ├── 00-build-custom-kernel.sh    # Custom kernel with built-in drivers
+│   ├── 01-build-golden-image.sh     # Ubuntu base system image
+│   ├── 02-build-initramfs.sh        # Minimal initramfs (no modules)
+│   ├── 03-build-installer-rootfs.sh # Installer environment
+│   ├── 04-build-iso.sh              # USB-bootable hybrid ISO
+│   ├── build-all.sh                 # Orchestrate all steps
+│   ├── build-in-docker.sh           # Docker wrapper (NixOS-friendly)
+│   ├── kernel-config-fragment.config # Kernel driver configuration
+│   └── install.sh                   # Installation script (runs on target)
 │
 └── guides/               # Technical references
-    └── offline_apt_guide.md
+    └── module-free-architecture.md
 ```
 
 **Stack:**
 - **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI
-- **Installer:** FAI (Fully Automatic Installation) with embedded offline repository
+- **Installer:** Module-free custom kernel + minimal initramfs + direct disk imaging
 - **Application:** Python + Textual + Piper TTS + Pygame
+
+**How Installation Works:**
+
+The installer does **not** contain an offline apt repository or Ubuntu ISO. Instead, it writes a fully pre-built Ubuntu Noble disk image directly to the internal drive. This eliminates package installation complexity and ensures deterministic, reliable installations.
+
+After installation, the system boots into standard Ubuntu 24.04 LTS and uses Ubuntu's normal apt servers for updates.
+
+**Module-Free Architecture:**
+- Custom Linux kernel (6.8.12) with all essential drivers built-in (USB, SATA, NVMe, ext4, vfat)
+- No runtime kernel module loading (eliminates insmod, .ko files, ABI mismatches)
+- Direct USB boot (no CD-ROM/ISO9660 dependency)
+- Improved hardware compatibility across diverse laptops (2010+)
 
 ---
 
@@ -139,9 +149,9 @@ purplecomputer/
 
 ## Documentation
 
-- **[MANUAL.md](MANUAL.md)** - Complete build process, customization, troubleshooting
-- **[guides/offline_apt_guide.md](guides/offline_apt_guide.md)** - How the offline repository works
-- **[CLAUDE.md](CLAUDE.md)** - Development notes for Claude Code (Textual framework workarounds)
+See [MANUAL.md](MANUAL.md) for complete build instructions, customization, and troubleshooting.
+
+Technical guides are in [guides/](guides/).
 
 ---
 

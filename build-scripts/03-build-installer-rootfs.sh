@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Build installer rootfs
+# Build installer rootfs (module-free architecture)
 # This is the environment that runs install.sh
+#
+# CHANGES: No module-loading tools needed, USB-aware boot
 
 set -e
 
@@ -46,9 +48,9 @@ main() {
     cp "$SCRIPT_DIR/install.sh" "$ROOTFS_DIR/"
     chmod +x "$ROOTFS_DIR/install.sh"
 
-    # Copy golden image
+    # Copy golden image (rename to standard location)
     log_info "Embedding PurpleOS golden image..."
-    cp "$GOLDEN_COMPRESSED" "$ROOTFS_DIR/"
+    cp "$GOLDEN_COMPRESSED" "$ROOTFS_DIR/purple-os.img.zst"
 
     # Create filesystem image
     log_info "Creating ext4 filesystem..."

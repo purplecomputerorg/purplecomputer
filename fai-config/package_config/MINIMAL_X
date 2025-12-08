@@ -1,8 +1,0 @@
-PACKAGES install
-xserver-xorg-core
-xserver-xorg-input-libinput
-xinit
-matchbox-window-manager
-alacritty
-fonts-noto-mono
-alsa-utils

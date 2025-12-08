@@ -189,10 +189,13 @@ echo "  PurpleOS Installer Starting"
 echo "========================================"
 echo ""
 
+# Export installer device so install.sh knows which disk to avoid
+export PURPLE_INSTALLER_DEV="$INSTALLER_DEV"
+
 # switch_root will:
 # 1. Move /mnt to /newroot/mnt (keeps USB mounted for logging)
 # 2. Change root to /newroot
-# 3. Execute /install.sh
+# 3. Execute /install.sh with PURPLE_INSTALLER_DEV set
 exec /bin/busybox switch_root /newroot /install.sh
 EOF
 

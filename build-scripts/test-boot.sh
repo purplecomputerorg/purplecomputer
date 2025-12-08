@@ -57,6 +57,14 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+check_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        error "This script must be run with sudo"
+        error "Run: sudo ./test-boot.sh"
+        exit 1
+    fi
+}
+
 check_qemu() {
     if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
         error "QEMU not found. Install with:"
@@ -79,15 +87,6 @@ find_iso() {
 
     if [ ! -f "$ISO_PATH" ]; then
         error "ISO not found: $ISO_PATH"
-        exit 1
-    fi
-
-    # Check if we can read the ISO
-    if [ ! -r "$ISO_PATH" ]; then
-        error "Cannot read ISO: $ISO_PATH (permission denied)"
-        error "ISO was built with sudo. Either:"
-        error "  1. Run this script with sudo: sudo ./test-boot.sh"
-        error "  2. Fix permissions: sudo chmod a+r $ISO_PATH"
         exit 1
     fi
 
@@ -115,11 +114,12 @@ boot_test() {
 
     # Build QEMU command
     # Use -hda to simulate USB stick (hybrid ISO shows as /dev/sda)
-    # This matches real USB boot behavior better than -cdrom
+    # Use -snapshot to avoid write lock issues
     QEMU_CMD=(
         qemu-system-x86_64
         -m "$MEMORY"
         -hda "$ISO_PATH"
+        -snapshot
         -serial file:"$SERIAL_LOG"
         -boot c
         -no-reboot
@@ -457,6 +457,7 @@ main() {
     echo "=========================================="
     echo
 
+    check_sudo
     check_qemu
     find_iso
     setup_test_env

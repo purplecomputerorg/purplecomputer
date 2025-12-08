@@ -55,11 +55,8 @@ cd build-scripts
 # Validate build (checks configs, verifies artifacts)
 ./validate-build.sh
 
-# Test boot in QEMU (automated, detects kernel panics)
-./test-boot.sh
-
-# Auto-fix any detected issues
-./auto-fix.sh
+# Test boot in QEMU (detects kernel panics, shows what failed)
+sudo ./test-boot.sh
 
 # Result: /opt/purple-installer/output/purple-installer-YYYYMMDD.iso
 ```
@@ -71,11 +68,6 @@ cd build-scripts
 4. System reboots into Purple Computer
 
 **Default credentials:** `purple` / `purple` (change immediately!)
-
-**Troubleshooting:**
-- Kernel panics? Run `./test-boot.sh` to diagnose automatically
-- Build failures? Run `./validate-build.sh` to check configs
-- Issues detected? Run `./auto-fix.sh` to apply fixes automatically
 
 See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
@@ -120,8 +112,7 @@ purplecomputer/
 │   ├── build-all.sh                 # Orchestrate all build steps
 │   ├── build-in-docker.sh           # Docker wrapper (NixOS-friendly)
 │   ├── validate-build.sh            # Pre-build validation (configs, deps)
-│   ├── test-boot.sh                 # Automated QEMU boot testing
-│   ├── auto-fix.sh                  # Automatic issue resolution
+│   ├── test-boot.sh                 # QEMU boot testing (detects panics)
 │   ├── kernel-config-fragment.config # Kernel driver configuration
 │   └── install.sh                   # Installation script (runs on target)
 │

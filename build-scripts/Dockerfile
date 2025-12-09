@@ -15,6 +15,7 @@ RUN apt-get update && \
     isolinux \
     syslinux-utils \
     grub-efi-amd64-bin \
+    mtools \
     busybox-static \
     zstd \
     gdisk \

@@ -96,14 +96,27 @@ menuentry "PurpleOS Installer" {
 }
 EOF
 
-    # Copy GRUB EFI binary
-    if [ -f /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi ]; then
-        cp /usr/lib/grub/x86_64-efi/monolithic/grubx64.efi "$ISO_DIR/EFI/boot/bootx64.efi"
-    elif [ -f /usr/lib/grub/x86_64-efi/grubx64.efi ]; then
-        cp /usr/lib/grub/x86_64-efi/grubx64.efi "$ISO_DIR/EFI/boot/bootx64.efi"
-    else
-        echo "WARNING: GRUB EFI binary not found - UEFI boot may not work"
-    fi
+    # Generate GRUB EFI binary using grub-mkstandalone
+    # Modern Ubuntu doesn't ship prebuilt grubx64.efi, must generate it
+    log_info "  Generating UEFI bootloader with grub-mkstandalone..."
+    grub-mkstandalone \
+        --format=x86_64-efi \
+        --output="$ISO_DIR/EFI/boot/bootx64.efi" \
+        --locales="" \
+        --fonts="" \
+        "boot/grub/grub.cfg=$ISO_DIR/EFI/boot/grub.cfg"
+
+    # Create EFI System Partition (ESP) image for UEFI boot
+    # UEFI firmware needs a FAT-formatted image, not bare .efi files
+    log_info "  Creating EFI System Partition image..."
+    EFI_IMG="$ISO_DIR/boot/efi.img"
+    dd if=/dev/zero of="$EFI_IMG" bs=1M count=4 status=none
+    mkfs.vfat -F 12 "$EFI_IMG" >/dev/null 2>&1
+
+    # Copy BOOTX64.EFI into the ESP image using mtools
+    mmd -i "$EFI_IMG" ::/EFI
+    mmd -i "$EFI_IMG" ::/EFI/BOOT
+    mcopy -i "$EFI_IMG" "$ISO_DIR/EFI/boot/bootx64.efi" ::/EFI/BOOT/BOOTX64.EFI
 
     # Build hybrid ISO (bootable from USB and optical media)
     log_step "5/5: Creating hybrid ISO..."
@@ -123,7 +136,8 @@ EOF
         -boot-info-table \
         -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
         -eltorito-alt-boot \
-        -e EFI/boot/bootx64.efi \
+        -eltorito-platform efi \
+        -e boot/efi.img \
         -no-emul-boot \
         -isohybrid-gpt-basdat \
         -output "${OUTPUT_DIR}/${ISO_NAME}" \

@@ -61,7 +61,7 @@ main() {
     debootstrap \
         --arch=amd64 \
         --variant=minbase \
-        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less \
+        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
         noble \
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu
@@ -77,6 +77,62 @@ main() {
     chroot "$MOUNT_DIR" usermod -aG sudo purple
     echo "purple:purple" | chroot "$MOUNT_DIR" chpasswd
 
+    # Install Purple Computer application
+    log_info "Installing Purple Computer application..."
+
+    # Setup apt sources for universe repository (needed for pip)
+    cat > "$MOUNT_DIR/etc/apt/sources.list" <<'SOURCES'
+deb http://archive.ubuntu.com/ubuntu noble main universe
+deb http://archive.ubuntu.com/ubuntu noble-updates main universe
+deb http://archive.ubuntu.com/ubuntu noble-security main universe
+SOURCES
+
+    # Install pip, SDL libraries for pygame, and audio support (requires universe repository)
+    chroot "$MOUNT_DIR" apt-get update
+    chroot "$MOUNT_DIR" apt-get install -y python3-pip libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 alsa-utils pulseaudio
+
+    # Copy application files (project root is mounted at /purple-src)
+    mkdir -p "$MOUNT_DIR/opt/purple"
+    cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
+    cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/keyboard_normalizer.py "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
+
+    # Install Python dependencies
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame
+
+    # Clean apt cache to save space
+    chroot "$MOUNT_DIR" apt-get clean
+
+    # Create launcher script
+    cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
+#!/bin/bash
+export TERM=${TERM:-linux}
+# Use ALSA for audio (SPICE provides ich9 sound device)
+export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa}
+cd /opt/purple
+exec python3 -m purple_tui.purple_tui "$@"
+LAUNCHER
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple"
+
+    # Configure auto-login for purple user on tty1
+    mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d"
+    cat > "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
+AUTOLOGIN
+
+    # Configure auto-start for purple user (via .bashrc)
+    cat >> "$MOUNT_DIR/home/purple/.bashrc" <<'AUTOSTART'
+
+# Auto-start Purple Computer on login (only on tty, not SSH)
+if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" != "not a tty" ]; then
+    exec /usr/local/bin/purple
+fi
+AUTOSTART
+    chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"
+
     # We skip grub-install and update-grub entirely - they create complex configs that
     # don't work well with our standalone GRUB. Instead we use grub-mkstandalone for
     # the bootloader and create our own minimal grub.cfg.
@@ -87,7 +143,7 @@ main() {
     mkdir -p "$MOUNT_DIR/boot/grub"
     cat > "$MOUNT_DIR/boot/grub/grub.cfg" <<'EOF'
 # PurpleOS minimal GRUB configuration
-set timeout=3
+set timeout=0
 set default=0
 
 menuentry "PurpleOS" {

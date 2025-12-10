@@ -31,8 +31,11 @@ main() {
     # Run build in container with new pipeline
     log_info "Running build in container (starting from step $START_STEP)..."
     log_info "Using module-free architecture..."
+    # Mount the entire project directory (parent of build-scripts) as /purple-src
+    PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
     docker run --rm --privileged \
         -v "$SCRIPT_DIR:/build" \
+        -v "$PROJECT_DIR:/purple-src" \
         -v "/opt/purple-installer:/opt/purple-installer" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"

@@ -71,6 +71,11 @@ main() {
 
     log_info "✓ Installer rootfs ready: $ROOTFS_IMG"
     log_info "  Size: $(du -h $ROOTFS_IMG | cut -f1)"
+
+    # Clean up rootfs directory to save space (1.5GB)
+    log_info "Cleaning up installer rootfs directory to save space..."
+    rm -rf "$ROOTFS_DIR"
+    log_info "  Freed: ~1.5GB"
 }
 
 main "$@"

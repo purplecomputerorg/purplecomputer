@@ -162,6 +162,13 @@ EOF
     log_info "  Kernel: $OUTPUT_KERNEL ($(du -h $OUTPUT_KERNEL | cut -f1))"
     log_info "  Config: $OUTPUT_CONFIG"
     log_info "  Build info: ${BUILD_DIR}/kernel-build-info.txt"
+
+    # Clean up kernel build directory to save space (2.4GB)
+    log_info "Cleaning up kernel build directory to save space..."
+    cd "$BUILD_DIR"
+    rm -rf "$KERNEL_BUILD_DIR"
+    log_info "  Freed: ~2.4GB"
+
     echo
     log_info "Next steps:"
     log_info "  1. Run ./02-build-initramfs.sh to create minimal initramfs"

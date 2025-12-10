@@ -119,6 +119,9 @@ EOF
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"
     log_info "  Compressed: $(du -h $GOLDEN_COMPRESSED | cut -f1)"
+
+    # Delete uncompressed image to save space
+    rm -f "$GOLDEN_IMAGE"
 }
 
 main "$@"

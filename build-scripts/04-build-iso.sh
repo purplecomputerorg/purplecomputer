@@ -90,6 +90,15 @@ EOF
 set default=0
 set timeout=1
 
+# Search for the ISO volume and set it as root
+search --no-floppy --set=root --label PURPLE_INSTALLER
+
+# Debug: verify root is set correctly
+if [ -z "$root" ]; then
+    echo "ERROR: Could not find PURPLE_INSTALLER volume"
+    sleep 5
+fi
+
 menuentry "PurpleOS Installer" {
     linux /boot/vmlinuz quiet console=tty0 console=ttyS0,115200n8
     initrd /boot/initrd.img
@@ -98,25 +107,53 @@ EOF
 
     # Generate GRUB EFI binary using grub-mkstandalone
     # Modern Ubuntu doesn't ship prebuilt grubx64.efi, must generate it
+    # Include all modules needed for UEFI ISO boot
     log_info "  Generating UEFI bootloader with grub-mkstandalone..."
     grub-mkstandalone \
         --format=x86_64-efi \
         --output="$ISO_DIR/EFI/boot/bootx64.efi" \
+        --modules="part_gpt part_msdos iso9660 fat normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font loopback memdisk minicmd echo test cmp" \
         --locales="" \
-        --fonts="" \
         "boot/grub/grub.cfg=$ISO_DIR/EFI/boot/grub.cfg"
 
     # Create EFI System Partition (ESP) image for UEFI boot
     # UEFI firmware needs a FAT-formatted image, not bare .efi files
     log_info "  Creating EFI System Partition image..."
-    EFI_IMG="$ISO_DIR/boot/efi.img"
-    dd if=/dev/zero of="$EFI_IMG" bs=1M count=4 status=none
-    mkfs.vfat -F 12 "$EFI_IMG" >/dev/null 2>&1
 
-    # Copy BOOTX64.EFI into the ESP image using mtools
+    # Debug: Check disk space before creating ESP image
+    log_info "  [DEBUG] Disk space before ESP creation:"
+    df -h / | tail -1
+    df -h /opt/purple-installer | tail -1
+    log_info "  [DEBUG] Build directory size: $(du -sh /opt/purple-installer/build 2>/dev/null | cut -f1)"
+    log_info "  [DEBUG] ISO directory size: $(du -sh $ISO_DIR 2>/dev/null | cut -f1)"
+    log_info "  [DEBUG] ISO/boot exists: $(ls -ld $ISO_DIR/boot 2>/dev/null || echo 'NO')"
+
+    EFI_IMG="$ISO_DIR/boot/efi.img"
+    log_info "  [DEBUG] Creating $EFI_IMG (4MB)..."
+    if ! dd if=/dev/zero of="$EFI_IMG" bs=1M count=4 status=progress 2>&1; then
+        echo "ERROR: dd failed!"
+        echo "Exit code: $?"
+        echo "Disk space after failure:"
+        df -h / | tail -1
+        df -h /opt/purple-installer | tail -1
+        echo "Directory contents:"
+        ls -lh "$ISO_DIR/boot/" 2>/dev/null || echo "boot/ doesn't exist"
+        exit 1
+    fi
+    log_info "  [DEBUG] dd completed successfully"
+
+    log_info "  [DEBUG] Running mkfs.vfat..."
+    if ! mkfs.vfat -F 12 "$EFI_IMG" 2>&1; then
+        echo "ERROR: mkfs.vfat failed!"
+        exit 1
+    fi
+    log_info "  [DEBUG] mkfs.vfat completed successfully"
+
+    # Copy BOOTX64.EFI and grub.cfg into the ESP image using mtools
     mmd -i "$EFI_IMG" ::/EFI
     mmd -i "$EFI_IMG" ::/EFI/BOOT
     mcopy -i "$EFI_IMG" "$ISO_DIR/EFI/boot/bootx64.efi" ::/EFI/BOOT/BOOTX64.EFI
+    mcopy -i "$EFI_IMG" "$ISO_DIR/EFI/boot/grub.cfg" ::/EFI/BOOT/grub.cfg
 
     # Build hybrid ISO (bootable from USB and optical media)
     log_step "5/5: Creating hybrid ISO..."

@@ -86,18 +86,53 @@ main() {
     chroot "$MOUNT_DIR" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PURPLE --no-nvram
     chroot "$MOUNT_DIR" update-grub
 
-    # Create fallback bootloader for maximum hardware compatibility
-    # This ensures the disk boots on any UEFI system without NVRAM entries
-    log_info "Creating UEFI fallback bootloader..."
+    # Create fallback bootloader using grub-mkstandalone for maximum hardware compatibility
+    # Ubuntu's grubx64.efi may not have all modules (e.g., serial) built in
+    # grub-mkstandalone ensures we have all modules needed for debugging and boot
+    log_info "Creating UEFI fallback bootloader with grub-mkstandalone..."
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
-    cp "$MOUNT_DIR/boot/efi/EFI/PURPLE/grubx64.efi" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
 
-    # Create minimal grub.cfg that points to the real config
-    cat > "$MOUNT_DIR/boot/efi/EFI/BOOT/grub.cfg" <<'EOF'
+    # Create the grub.cfg that will be embedded in the standalone EFI binary
+    cat > /tmp/grub-standalone.cfg <<'EOF'
+# GRUB standalone fallback bootloader for PurpleOS
+# Using grub-mkstandalone avoids prefix/UUID mismatch issues with copied grubx64.efi
+
+# Enable console output first (before serial, so we see something even if serial fails)
+terminal_output console
+set debug=all
+set pager=0
+
+# Setup serial console for debugging
+serial --unit=0 --speed=115200
+terminal_input console serial
+terminal_output console serial
+
+echo "GRUB: PurpleOS standalone bootloader starting..."
+
 search --no-floppy --label PURPLE_ROOT --set=root
-set prefix=($root)/boot/grub
-configfile ($root)/boot/grub/grub.cfg
+
+if [ -z "$root" ]; then
+    echo "ERROR: Could not find PURPLE_ROOT partition"
+    echo "Listing available devices:"
+    ls
+    sleep 30
+else
+    echo "SUCCESS: Found root=$root"
+    set prefix=($root)/boot/grub
+    echo "Loading config from $prefix/grub.cfg"
+    configfile ($root)/boot/grub/grub.cfg
+fi
 EOF
+
+    # Generate standalone GRUB EFI with all required modules
+    grub-mkstandalone \
+        --format=x86_64-efi \
+        --output="$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI" \
+        --modules="part_gpt part_msdos fat ext2 normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test serial" \
+        --locales="" \
+        "boot/grub/grub.cfg=/tmp/grub-standalone.cfg"
+
+    rm -f /tmp/grub-standalone.cfg
 
     # Unmount bind mounts
     umount "$MOUNT_DIR/dev"

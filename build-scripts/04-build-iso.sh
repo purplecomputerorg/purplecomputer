@@ -87,21 +87,64 @@ EOF
     # Create GRUB config (UEFI boot)
     log_info "  Configuring GRUB (UEFI boot)..."
     cat > "$ISO_DIR/EFI/boot/grub.cfg" <<'EOF'
+# GRUB debugging configuration - enable all output
+set debug=all
+set pager=0
+
+# Configure serial console explicitly
+serial --unit=0 --speed=115200
+terminal_input console serial
+terminal_output console serial
+
+echo "GRUB: Starting PurpleOS installer bootloader"
+echo "GRUB: Initializing terminal..."
+
 set default=0
-set timeout=1
+set timeout=5
+
+echo "GRUB: Searching for PURPLE_INSTALLER volume..."
 
 # Search for the ISO volume and set it as root
 search --no-floppy --set=root --label PURPLE_INSTALLER
 
+echo "GRUB: Search completed, root=$root"
+
 # Debug: verify root is set correctly
 if [ -z "$root" ]; then
     echo "ERROR: Could not find PURPLE_INSTALLER volume"
-    sleep 5
+    echo "Available devices:"
+    ls -l
+    echo "Sleeping 30 seconds for debugging..."
+    sleep 30
+else
+    echo "SUCCESS: Found root device: $root"
 fi
 
+echo "GRUB: Checking for kernel and initrd..."
+if [ -f /boot/vmlinuz ]; then
+    echo "SUCCESS: Found kernel at /boot/vmlinuz"
+else
+    echo "ERROR: Kernel not found at /boot/vmlinuz"
+fi
+
+if [ -f /boot/initrd.img ]; then
+    echo "SUCCESS: Found initrd at /boot/initrd.img"
+else
+    echo "ERROR: Initrd not found at /boot/initrd.img"
+fi
+
+echo "GRUB: Displaying boot menu..."
+
 menuentry "PurpleOS Installer" {
-    linux /boot/vmlinuz quiet console=tty0 console=ttyS0,115200n8
+    echo "GRUB: Loading kernel..."
+    linux /boot/vmlinuz console=tty0 console=ttyS0,115200n8
+    echo "GRUB: Loading initrd..."
     initrd /boot/initrd.img
+    echo "GRUB: Booting..."
+}
+
+menuentry "GRUB Command Line (Debug)" {
+    echo "Entering GRUB command line for debugging"
 }
 EOF
 
@@ -112,7 +155,7 @@ EOF
     grub-mkstandalone \
         --format=x86_64-efi \
         --output="$ISO_DIR/EFI/boot/bootx64.efi" \
-        --modules="part_gpt part_msdos iso9660 fat normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font loopback memdisk minicmd echo test cmp" \
+        --modules="part_gpt part_msdos iso9660 fat normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font loopback memdisk minicmd echo test cmp serial" \
         --locales="" \
         "boot/grub/grub.cfg=$ISO_DIR/EFI/boot/grub.cfg"
 
@@ -129,8 +172,10 @@ EOF
     log_info "  [DEBUG] ISO/boot exists: $(ls -ld $ISO_DIR/boot 2>/dev/null || echo 'NO')"
 
     EFI_IMG="$ISO_DIR/boot/efi.img"
-    log_info "  [DEBUG] Creating $EFI_IMG (4MB)..."
-    if ! dd if=/dev/zero of="$EFI_IMG" bs=1M count=4 status=progress 2>&1; then
+    # Need 10MB for ESP image because grub-mkstandalone with all modules creates ~3MB bootloader
+    # 4MB was too small - mtools "Disk full" error when copying bootx64.efi into FAT image
+    log_info "  [DEBUG] Creating $EFI_IMG (10MB)..."
+    if ! dd if=/dev/zero of="$EFI_IMG" bs=1M count=10 status=progress 2>&1; then
         echo "ERROR: dd failed!"
         echo "Exit code: $?"
         echo "Disk space after failure:"

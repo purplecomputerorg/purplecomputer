@@ -61,7 +61,7 @@ main() {
     debootstrap \
         --arch=amd64 \
         --variant=minbase \
-        --include=linux-image-generic,grub-efi-amd64,systemd,sudo,vim-tiny,less \
+        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less \
         noble \
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu
@@ -77,14 +77,40 @@ main() {
     chroot "$MOUNT_DIR" usermod -aG sudo purple
     echo "purple:purple" | chroot "$MOUNT_DIR" chpasswd
 
-    # Bind mount necessary filesystems for grub-install
-    log_info "Installing GRUB bootloader..."
-    mount --bind /dev "$MOUNT_DIR/dev"
-    mount --bind /proc "$MOUNT_DIR/proc"
-    mount --bind /sys "$MOUNT_DIR/sys"
+    # We skip grub-install and update-grub entirely - they create complex configs that
+    # don't work well with our standalone GRUB. Instead we use grub-mkstandalone for
+    # the bootloader and create our own minimal grub.cfg.
 
-    chroot "$MOUNT_DIR" grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=PURPLE --no-nvram
-    chroot "$MOUNT_DIR" update-grub
+    # Create minimal grub.cfg for the installed system
+    # This is what gets loaded when our standalone BOOTX64.EFI calls configfile
+    log_info "Creating minimal GRUB configuration..."
+    mkdir -p "$MOUNT_DIR/boot/grub"
+    cat > "$MOUNT_DIR/boot/grub/grub.cfg" <<'EOF'
+# PurpleOS minimal GRUB configuration
+set timeout=3
+set default=0
+
+menuentry "PurpleOS" {
+    search --no-floppy --label PURPLE_ROOT --set=root
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet console=tty0 console=ttyS0,115200n8
+    initrd /boot/initrd.img
+}
+
+menuentry "PurpleOS (recovery mode)" {
+    search --no-floppy --label PURPLE_ROOT --set=root
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
+    initrd /boot/initrd.img
+}
+EOF
+
+    # Create symlinks to actual kernel/initrd (Ubuntu installs versioned files)
+    # This makes our grub.cfg work regardless of kernel version
+    KERNEL_VERSION=$(ls "$MOUNT_DIR/boot/" | grep "vmlinuz-" | head -1 | sed 's/vmlinuz-//')
+    if [ -n "$KERNEL_VERSION" ]; then
+        ln -sf "vmlinuz-$KERNEL_VERSION" "$MOUNT_DIR/boot/vmlinuz"
+        ln -sf "initrd.img-$KERNEL_VERSION" "$MOUNT_DIR/boot/initrd.img"
+        log_info "  Kernel version: $KERNEL_VERSION"
+    fi
 
     # Create fallback bootloader using grub-mkstandalone for maximum hardware compatibility
     # Ubuntu's grubx64.efi may not have all modules (e.g., serial) built in
@@ -128,16 +154,11 @@ EOF
     grub-mkstandalone \
         --format=x86_64-efi \
         --output="$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI" \
-        --modules="part_gpt part_msdos fat ext2 normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test serial" \
+        --modules="part_gpt part_msdos fat ext2 normal linux configfile search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test serial" \
         --locales="" \
         "boot/grub/grub.cfg=/tmp/grub-standalone.cfg"
 
     rm -f /tmp/grub-standalone.cfg
-
-    # Unmount bind mounts
-    umount "$MOUNT_DIR/dev"
-    umount "$MOUNT_DIR/proc"
-    umount "$MOUNT_DIR/sys"
 
     # Cleanup
     log_info "Cleaning up..."

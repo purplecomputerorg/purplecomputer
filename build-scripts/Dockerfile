@@ -26,6 +26,8 @@ RUN apt-get update && \
     gzip \
     kpartx \
     wget \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build

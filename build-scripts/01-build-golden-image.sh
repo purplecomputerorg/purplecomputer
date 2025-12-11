@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="/opt/purple-installer/build"
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
-IMAGE_SIZE_MB=4096
+IMAGE_SIZE_MB=8192
 
 # Colors
 GREEN='\033[0;32m'
@@ -44,9 +44,9 @@ main() {
     # kpartx creates devices like /dev/mapper/loop0p1
     LOOP_NAME=$(basename "$LOOP_DEV")
 
-    # Format partitions
+    # Format partitions with labels (used in fstab)
     log_info "Formatting partitions..."
-    mkfs.vfat -F32 "/dev/mapper/${LOOP_NAME}p1"
+    mkfs.vfat -F32 -n PURPLE_EFI "/dev/mapper/${LOOP_NAME}p1"
     mkfs.ext4 -L PURPLE_ROOT "/dev/mapper/${LOOP_NAME}p2"
 
     # Mount root partition
@@ -71,6 +71,15 @@ main() {
 
     # Set hostname
     echo "purplecomputer" > "$MOUNT_DIR/etc/hostname"
+    echo "127.0.0.1 localhost purplecomputer" > "$MOUNT_DIR/etc/hosts"
+
+    # Create fstab - critical for mounting root as read-write
+    cat > "$MOUNT_DIR/etc/fstab" <<'FSTAB'
+# PurpleOS filesystem table
+LABEL=PURPLE_ROOT  /         ext4  defaults,errors=remount-ro  0 1
+LABEL=PURPLE_EFI   /boot/efi vfat  umask=0077                  0 1
+tmpfs              /tmp      tmpfs defaults,nosuid,nodev       0 0
+FSTAB
 
     # Create purple user
     chroot "$MOUNT_DIR" useradd -m -s /bin/bash purple
@@ -87,9 +96,31 @@ deb http://archive.ubuntu.com/ubuntu noble-updates main universe
 deb http://archive.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
-    # Install pip, SDL libraries for pygame, and audio support (requires universe repository)
+    # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
     chroot "$MOUNT_DIR" apt-get update
-    chroot "$MOUNT_DIR" apt-get install -y python3-pip libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 alsa-utils pulseaudio
+    chroot "$MOUNT_DIR" apt-get install -y \
+        python3-pip \
+        libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
+        alsa-utils pulseaudio \
+        xorg xinit x11-xserver-utils \
+        xserver-xorg-core \
+        xserver-xorg-input-all \
+        xserver-xorg-video-all \
+        matchbox-window-manager \
+        alacritty \
+        libxkbcommon-x11-0 \
+        unclutter \
+        fontconfig
+
+    # Install JetBrainsMono Nerd Font (needed for emoji/icon glyphs in Purple TUI)
+    # Download from host (curl available in Docker container, not in chroot)
+    log_info "Installing JetBrainsMono Nerd Font..."
+    FONT_DIR="$MOUNT_DIR/usr/share/fonts/truetype/jetbrains-mono-nerd"
+    mkdir -p "$FONT_DIR"
+    curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/JetBrainsMono.zip -o /tmp/JetBrainsMono.zip
+    unzip -o /tmp/JetBrainsMono.zip -d "$FONT_DIR"
+    rm /tmp/JetBrainsMono.zip
+    chroot "$MOUNT_DIR" fc-cache -fv
 
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
@@ -123,15 +154,34 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
 AUTOLOGIN
 
-    # Configure auto-start for purple user (via .bashrc)
+    # Copy xinitrc from project config (shared with dev environment)
+    cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/home/purple/.xinitrc"
+    chmod +x "$MOUNT_DIR/home/purple/.xinitrc"
+    chown 1000:1000 "$MOUNT_DIR/home/purple/.xinitrc"
+
+    # Copy Alacritty config from project config (shared with dev environment)
+    mkdir -p "$MOUNT_DIR/etc/purple"
+    cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
+
+    # Configure auto-start X11 on login (via .bashrc)
     cat >> "$MOUNT_DIR/home/purple/.bashrc" <<'AUTOSTART'
 
-# Auto-start Purple Computer on login (only on tty, not SSH)
-if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" != "not a tty" ]; then
-    exec /usr/local/bin/purple
+# Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
+if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    # Clean stale X lock files from previous crashes
+    rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
+    exec startx
 fi
 AUTOSTART
     chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"
+
+    # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
+    mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
+    cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
+AUTOLOGIN
 
     # We skip grub-install and update-grub entirely - they create complex configs that
     # don't work well with our standalone GRUB. Instead we use grub-mkstandalone for

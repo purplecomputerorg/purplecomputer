@@ -1,0 +1,41 @@
+#!/bin/bash
+# Purple Computer X11 Startup Script
+# This launches when the purple user logs in and starts X11
+
+# Wait a moment for X to fully initialize
+sleep 1
+
+# Disable screen blanking and power management
+xset s off
+xset -dpms
+xset s noblank
+
+# Disable bell
+xset b off
+
+# Set keyboard repeat rate (faster for kid typing)
+xset r rate 300 30
+
+# Hide mouse cursor after 2 seconds of inactivity
+# (kids often don't use mouse in terminal)
+if command -v unclutter &> /dev/null; then
+    unclutter -idle 2 &
+fi
+
+# Set the purple background color (brand identity - fills screen outside 10×6" viewport)
+xsetroot -solid "#2d1b4e"
+
+# Launch matchbox window manager (minimal WM for proper fullscreen support)
+matchbox-window-manager -use_titlebar no &
+
+# Wait for WM to start
+sleep 0.5
+
+# Launch Alacritty in fullscreen with Purple Computer TUI
+# Loop to restart on crash (for debugging, logs each failure)
+while true; do
+    RUST_BACKTRACE=1 alacritty --config-file /etc/purple/alacritty.toml \
+        -e /usr/local/bin/purple 2>&1 | tee -a /tmp/alacritty.log
+    echo "=== Alacritty exited at $(date) ===" >> /tmp/alacritty.log
+    sleep 2
+done

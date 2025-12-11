@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 PURPLE_TUI="$PROJECT_ROOT/purple_tui"
 TEST_HOME="$PROJECT_ROOT/.test_home"
-ALACRITTY_CONFIG="$PROJECT_ROOT/autoinstall/files/alacritty/alacritty-dev.toml"
+ALACRITTY_CONFIG="$PROJECT_ROOT/config/alacritty/alacritty-dev.toml"
 
 # Colors
 GREEN='\033[0;32m'

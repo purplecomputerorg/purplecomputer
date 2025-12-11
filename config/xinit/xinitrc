@@ -22,6 +22,11 @@ if command -v unclutter &> /dev/null; then
     unclutter -idle 2 &
 fi
 
+# Start SPICE guest agent for VM display resize (harmless on real hardware)
+if command -v spice-vdagent &> /dev/null; then
+    spice-vdagent &
+fi
+
 # Set the purple background color (brand identity - fills screen outside 10×6" viewport)
 xsetroot -solid "#2d1b4e"
 

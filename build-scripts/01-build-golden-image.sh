@@ -233,32 +233,15 @@ EOF
 
     # Create the grub.cfg that will be embedded in the standalone EFI binary
     cat > /tmp/grub-standalone.cfg <<'EOF'
-# GRUB standalone fallback bootloader for PurpleOS
-# Using grub-mkstandalone avoids prefix/UUID mismatch issues with copied grubx64.efi
-
-# Enable console output first (before serial, so we see something even if serial fails)
+# GRUB standalone bootloader for PurpleOS
 terminal_output console
-set debug=all
+terminal_input console
 set pager=0
-
-# Setup serial console for debugging
-serial --unit=0 --speed=115200
-terminal_input console serial
-terminal_output console serial
-
-echo "GRUB: PurpleOS standalone bootloader starting..."
 
 search --no-floppy --label PURPLE_ROOT --set=root
 
-if [ -z "$root" ]; then
-    echo "ERROR: Could not find PURPLE_ROOT partition"
-    echo "Listing available devices:"
-    ls
-    sleep 30
-else
-    echo "SUCCESS: Found root=$root"
+if [ -n "$root" ]; then
     set prefix=($root)/boot/grub
-    echo "Loading config from $prefix/grub.cfg"
     configfile ($root)/boot/grub/grub.cfg
 fi
 EOF
@@ -267,7 +250,7 @@ EOF
     grub-mkstandalone \
         --format=x86_64-efi \
         --output="$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI" \
-        --modules="part_gpt part_msdos fat ext2 normal linux configfile search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test serial" \
+        --modules="part_gpt part_msdos fat ext2 normal linux configfile search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test" \
         --locales="" \
         "boot/grub/grub.cfg=/tmp/grub-standalone.cfg"
 

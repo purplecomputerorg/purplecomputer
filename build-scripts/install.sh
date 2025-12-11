@@ -99,31 +99,82 @@ main() {
 
     log "Target disk: /dev/$TARGET"
 
-    # Debug: Check if device actually exists and is accessible
-    log "Checking device /dev/$TARGET..."
-    ls -la /dev/$TARGET || log "ERROR: Device node doesn't exist!"
-    [ -b /dev/$TARGET ] && log "Device is a block device" || log "ERROR: Not a block device!"
+    # Verify device exists
+    if [ ! -b /dev/$TARGET ]; then
+        error "Target device /dev/$TARGET not found"
+    fi
 
-    log "WARNING: This will WIPE /dev/$TARGET"
-    sleep 3
+    echo ""
+    echo "    ----------------------------------------"
+    echo "    Step 1 of 3: Writing system image"
+    echo "    ----------------------------------------"
+    echo ""
 
     # Write PurpleOS golden image to entire disk
     # The image contains: GPT partition table + EFI partition + root partition + bootloader
-    log "Writing PurpleOS image to disk (this takes ~10 min)..."
-    zstd -dc /purple-os.img.zst | dd of=/dev/$TARGET bs=4M status=progress
+    zstd -dc /purple-os.img.zst | dd of=/dev/$TARGET bs=4M status=progress 2>&1
+
+    echo ""
+    echo "    ----------------------------------------"
+    echo "    Step 2 of 3: Configuring system"
+    echo "    ----------------------------------------"
+    echo ""
 
     # Force kernel to re-read partition table from the new image
-    log "Reloading partition table..."
+    log "Syncing disk..."
     sync
     blockdev --rereadpt /dev/$TARGET || true
     sleep 2  # Give kernel time to recognize new partitions
 
-    log "Verifying partitions..."
-    ls -la /dev/${TARGET}* || log "Warning: partition devices not visible yet"
+    # Register PurpleOS in UEFI boot order (required for Surface and some other laptops)
+    log "Registering PurpleOS in UEFI boot menu..."
 
-    log "✓ Installation complete!"
-    log "Rebooting in 3 seconds..."
-    sleep 3
+    # Determine EFI partition device name
+    # For nvme: /dev/nvme0n1p1, for sata: /dev/sda1
+    case "$TARGET" in
+        nvme*) EFI_PART="/dev/${TARGET}p1" ;;
+        *)     EFI_PART="/dev/${TARGET}1" ;;
+    esac
+
+    if [ -b "$EFI_PART" ]; then
+        # Mount EFI partition temporarily
+        mkdir -p /mnt/efi
+        mount "$EFI_PART" /mnt/efi 2>/dev/null || true
+
+        if command -v efibootmgr >/dev/null 2>&1; then
+            # Remove any existing PurpleOS entries first
+            for bootnum in $(efibootmgr | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | sed 's/Boot//'); do
+                efibootmgr -b "$bootnum" -B 2>/dev/null || true
+            done
+
+            # Create new boot entry pointing to our bootloader
+            efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\BOOT\BOOTX64.EFI' 2>/dev/null && \
+                log "✓ Added PurpleOS to UEFI boot menu" || \
+                log "Warning: Could not add UEFI boot entry (may need manual setup)"
+        else
+            log "Warning: efibootmgr not available, UEFI boot entry not created"
+        fi
+
+        umount /mnt/efi 2>/dev/null || true
+    fi
+
+    echo ""
+    echo "    ----------------------------------------"
+    echo "    Step 3 of 3: Complete!"
+    echo "    ----------------------------------------"
+    echo ""
+    echo "    ========================================"
+    echo "    |                                      |"
+    echo "    |   Installation successful!           |"
+    echo "    |                                      |"
+    echo "    |   Rebooting in 5 seconds...          |"
+    echo "    |                                      |"
+    echo "    |   Remove the USB drive when the      |"
+    echo "    |   screen goes dark.                  |"
+    echo "    |                                      |"
+    echo "    ========================================"
+    echo ""
+    sleep 5
     # Use busybox reboot or kernel reboot syscall
     /bin/busybox reboot -f || echo b > /proc/sysrq-trigger
 }

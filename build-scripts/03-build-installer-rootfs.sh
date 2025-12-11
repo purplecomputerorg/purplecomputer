@@ -38,7 +38,7 @@ main() {
     debootstrap \
         --arch=amd64 \
         --variant=minbase \
-        --include=zstd,gdisk,grub-efi-amd64-bin,dosfstools,e2fsprogs \
+        --include=zstd,gdisk,grub-efi-amd64-bin,dosfstools,e2fsprogs,efibootmgr \
         noble \
         "$ROOTFS_DIR" \
         http://archive.ubuntu.com/ubuntu
@@ -47,6 +47,9 @@ main() {
     log_info "Installing install.sh..."
     cp "$SCRIPT_DIR/install.sh" "$ROOTFS_DIR/"
     chmod +x "$ROOTFS_DIR/install.sh"
+
+    # Create mount point for EFI partition (needed by install.sh for efibootmgr)
+    mkdir -p "$ROOTFS_DIR/mnt/efi"
 
     # Copy golden image (rename to standard location)
     log_info "Embedding PurpleOS golden image..."

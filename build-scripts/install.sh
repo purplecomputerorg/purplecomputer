@@ -121,9 +121,41 @@ main() {
     log "Verifying partitions..."
     ls -la /dev/${TARGET}* || log "Warning: partition devices not visible yet"
 
-    log "✓ Installation complete!"
-    log "Rebooting in 3 seconds..."
-    sleep 3
+    # Register PurpleOS in UEFI boot order (required for Surface and some other laptops)
+    log "Registering PurpleOS in UEFI boot menu..."
+
+    # Determine EFI partition device name
+    # For nvme: /dev/nvme0n1p1, for sata: /dev/sda1
+    case "$TARGET" in
+        nvme*) EFI_PART="/dev/${TARGET}p1" ;;
+        *)     EFI_PART="/dev/${TARGET}1" ;;
+    esac
+
+    if [ -b "$EFI_PART" ]; then
+        # Mount EFI partition temporarily (/mnt/efi created at build time)
+        if mount "$EFI_PART" /mnt/efi 2>/dev/null; then
+            if command -v efibootmgr >/dev/null 2>&1; then
+                # Remove any existing PurpleOS entries first
+                for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | sed 's/Boot//'); do
+                    efibootmgr -b "$bootnum" -B 2>/dev/null || true
+                done
+
+                # Create new boot entry pointing to our bootloader
+                efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\BOOT\BOOTX64.EFI' 2>/dev/null && \
+                    log "Added PurpleOS to UEFI boot menu" || \
+                    log "Warning: Could not add UEFI boot entry (may need manual setup)"
+            else
+                log "Warning: efibootmgr not available"
+            fi
+            umount /mnt/efi 2>/dev/null || true
+        else
+            log "Warning: Could not mount EFI partition"
+        fi
+    fi
+
+    log "Installation complete!"
+    log "Rebooting in 5 seconds... Remove USB drive now."
+    sleep 5
     # Use busybox reboot or kernel reboot syscall
     /bin/busybox reboot -f || echo b > /proc/sysrq-trigger
 }

@@ -31,11 +31,10 @@ matchbox-window-manager -use_titlebar no &
 # Wait for WM to start
 sleep 0.5
 
+# Calculate optimal font size for this screen (10x6 inch content area)
+FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "18.0")
+
 # Launch Alacritty in fullscreen with Purple Computer TUI
-# Loop to restart on crash (for debugging, logs each failure)
-while true; do
-    RUST_BACKTRACE=1 alacritty --config-file /etc/purple/alacritty.toml \
-        -e /usr/local/bin/purple 2>&1 | tee -a /tmp/alacritty.log
-    echo "=== Alacritty exited at $(date) ===" >> /tmp/alacritty.log
-    sleep 2
-done
+exec alacritty --config-file /etc/purple/alacritty.toml \
+    -o "font.size=${FONT_SIZE}" \
+    -e /usr/local/bin/purple

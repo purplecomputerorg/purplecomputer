@@ -110,7 +110,8 @@ SOURCES
         alacritty \
         libxkbcommon-x11-0 \
         unclutter \
-        fontconfig
+        fontconfig \
+        spice-vdagent
 
     # Install JetBrainsMono Nerd Font (needed for emoji/icon glyphs in Purple TUI)
     # Download from host (curl available in Docker container, not in chroot)
@@ -128,9 +129,10 @@ SOURCES
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/keyboard_normalizer.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
 
-    # Install Python dependencies
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame
+    # Install Python dependencies (python-xlib for font size calculation fallback)
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib
 
     # Clean apt cache to save space
     chroot "$MOUNT_DIR" apt-get clean
@@ -139,10 +141,15 @@ SOURCES
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
 export TERM=${TERM:-linux}
-# Use ALSA for audio (SPICE provides ich9 sound device)
 export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa}
 cd /opt/purple
-exec python3 -m purple_tui.purple_tui "$@"
+
+# Detect VM and suppress ALSA underrun warnings (only affects VMs, not real hardware)
+if systemd-detect-virt -q 2>/dev/null; then
+    exec python3 -m purple_tui.purple_tui "$@" 2>&1 | grep -v "snd_pcm_recover"
+else
+    exec python3 -m purple_tui.purple_tui "$@"
+fi
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 

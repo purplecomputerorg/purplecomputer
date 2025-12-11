@@ -28,14 +28,31 @@ for loop in $(sudo losetup -a | grep purple-installer | cut -d: -f1); do
     sudo losetup -d "$loop" 2>/dev/null || true
 done
 
-# Remove build directory completely (force, ignore errors)
+# Remove build directory completely
 echo "Removing build directory..."
-sudo rm -rf /opt/purple-installer/build 2>/dev/null || true
+if [ -d /opt/purple-installer/build ]; then
+    sudo rm -rf /opt/purple-installer/build
+    if [ -d /opt/purple-installer/build ]; then
+        echo "ERROR: Failed to remove /opt/purple-installer/build"
+        ls -la /opt/purple-installer/build/
+        exit 1
+    fi
+fi
 sudo mkdir -p /opt/purple-installer/build  # Recreate empty directory
+echo "  ✓ Build directory cleaned"
 
 # Remove output ISOs
 echo "Removing output ISOs..."
 sudo rm -rf /opt/purple-installer/output
+echo "  ✓ Output directory cleaned"
+
+# Verify clean state
+echo "Verifying clean state..."
+if ls /opt/purple-installer/build/* 2>/dev/null; then
+    echo "ERROR: Build directory is not empty after clean!"
+    exit 1
+fi
+echo "  ✓ Verified empty"
 
 # Remove Docker image to force fresh build
 if docker images | grep -q "purple-installer-builder"; then

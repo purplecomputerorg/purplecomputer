@@ -87,64 +87,26 @@ EOF
     # Create GRUB config (UEFI boot)
     log_info "  Configuring GRUB (UEFI boot)..."
     cat > "$ISO_DIR/EFI/boot/grub.cfg" <<'EOF'
-# GRUB debugging configuration - enable all output
-set debug=all
+# PurpleOS Installer GRUB Configuration
 set pager=0
-
-# Configure serial console explicitly
-serial --unit=0 --speed=115200
-terminal_input console serial
-terminal_output console serial
-
-echo "GRUB: Starting PurpleOS installer bootloader"
-echo "GRUB: Initializing terminal..."
-
 set default=0
 set timeout=5
 
-echo "GRUB: Searching for PURPLE_INSTALLER volume..."
+# Use console only (no serial - breaks some laptops like Surface)
+terminal_output console
+terminal_input console
 
-# Search for the ISO volume and set it as root
+# Search for the ISO volume
 search --no-floppy --set=root --label PURPLE_INSTALLER
 
-echo "GRUB: Search completed, root=$root"
-
-# Debug: verify root is set correctly
-if [ -z "$root" ]; then
-    echo "ERROR: Could not find PURPLE_INSTALLER volume"
-    echo "Available devices:"
-    ls -l
-    echo "Sleeping 30 seconds for debugging..."
-    sleep 30
-else
-    echo "SUCCESS: Found root device: $root"
-fi
-
-echo "GRUB: Checking for kernel and initrd..."
-if [ -f /boot/vmlinuz ]; then
-    echo "SUCCESS: Found kernel at /boot/vmlinuz"
-else
-    echo "ERROR: Kernel not found at /boot/vmlinuz"
-fi
-
-if [ -f /boot/initrd.img ]; then
-    echo "SUCCESS: Found initrd at /boot/initrd.img"
-else
-    echo "ERROR: Initrd not found at /boot/initrd.img"
-fi
-
-echo "GRUB: Displaying boot menu..."
-
 menuentry "PurpleOS Installer" {
-    echo "GRUB: Loading kernel..."
-    linux /boot/vmlinuz console=tty0 console=ttyS0,115200n8
-    echo "GRUB: Loading initrd..."
+    linux /boot/vmlinuz quiet
     initrd /boot/initrd.img
-    echo "GRUB: Booting..."
 }
 
-menuentry "GRUB Command Line (Debug)" {
-    echo "Entering GRUB command line for debugging"
+menuentry "PurpleOS Installer (Debug Mode)" {
+    linux /boot/vmlinuz console=tty0
+    initrd /boot/initrd.img
 }
 EOF
 
@@ -155,7 +117,7 @@ EOF
     grub-mkstandalone \
         --format=x86_64-efi \
         --output="$ISO_DIR/EFI/boot/bootx64.efi" \
-        --modules="part_gpt part_msdos iso9660 fat normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font loopback memdisk minicmd echo test cmp serial" \
+        --modules="part_gpt part_msdos iso9660 fat normal linux search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font loopback memdisk minicmd echo test cmp" \
         --locales="" \
         "boot/grub/grub.cfg=$ISO_DIR/EFI/boot/grub.cfg"
 

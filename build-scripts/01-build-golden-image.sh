@@ -112,6 +112,7 @@ SOURCES
         libgl1-mesa-dri \
         matchbox-window-manager \
         alacritty \
+        ncurses-term \
         libxkbcommon-x11-0 \
         unclutter \
         fontconfig \

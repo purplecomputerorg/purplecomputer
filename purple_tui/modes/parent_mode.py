@@ -100,6 +100,8 @@ class ParentMenu(ModalScreen):
         """Actually run the shell - called after modal dismissed"""
         # Suspend the Textual app to give control to the terminal
         with self.app.suspend():
+            # Reset terminal to sane state (ensures echo is on, etc.)
+            os.system('stty sane')
             # Clear screen and show message
             os.system('clear')
             print("=" * 60)
@@ -111,6 +113,7 @@ class ParentMenu(ModalScreen):
             print()
             print("-" * 60)
             print()
+            sys.stdout.flush()
 
             # Get the user's default shell or fall back to bash
             shell = os.environ.get('SHELL', '/bin/bash')
@@ -121,3 +124,4 @@ class ParentMenu(ModalScreen):
             # When shell exits, the Textual app resumes automatically
             print()
             print("Returning to Purple Computer...")
+            sys.stdout.flush()

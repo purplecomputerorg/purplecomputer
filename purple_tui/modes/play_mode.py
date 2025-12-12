@@ -69,8 +69,10 @@ class PlayGrid(Widget):
         if self._mixer_initialized:
             return
         try:
-            # More channels for polyphony, standard quality
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+            # More channels for polyphony, larger buffer for Linux ALSA stability
+            import sys
+            buf = 2048 if sys.platform == 'linux' else 1024
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=buf)
             pygame.mixer.set_num_channels(16)
             self._mixer_initialized = True
             self._load_sounds()

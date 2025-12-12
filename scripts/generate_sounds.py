@@ -94,22 +94,34 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
     return samples
 
 def generate_kick_drum() -> list[int]:
-    """Deep punchy kick drum"""
+    """Punchy kick drum - tuned for laptop speakers"""
     sample_rate = 44100
     duration = 0.35
     num_samples = int(sample_rate * duration)
     samples = []
 
+    # Short fade-in to prevent click (2ms)
+    fade_in_samples = int(sample_rate * 0.002)
+
     for i in range(num_samples):
         t = i / sample_rate
-        # Pitch drops rapidly for that punchy kick sound
-        freq = 150 * math.exp(-t * 25) + 40
+        # Higher min freq (60 Hz vs 40 Hz) for better laptop speaker reproduction
+        freq = 180 * math.exp(-t * 20) + 60
         sample = math.sin(2 * math.pi * freq * t)
-        # Add some click at the start
-        click = math.exp(-t * 100) * 0.5
+        # Second harmonic helps laptop speakers reproduce the low end
+        sample += 0.3 * math.sin(2 * math.pi * freq * 2 * t)
+        # Softer click at the start
+        click = math.exp(-t * 80) * 0.25
         sample += click
-        envelope = math.exp(-t * 8)
-        samples.append(int(sample * envelope * 0.5 * 32767))
+        envelope = math.exp(-t * 7)
+
+        # Apply fade-in
+        if i < fade_in_samples:
+            fade = i / fade_in_samples
+        else:
+            fade = 1.0
+
+        samples.append(int(sample * envelope * fade * 0.5 * 32767))
 
     return samples
 

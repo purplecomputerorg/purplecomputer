@@ -16,6 +16,48 @@ from rich.style import Style
 from pathlib import Path
 import os
 
+# Suppress ALSA error/log messages before pygame imports ALSA.
+# These corrupt Textual's stderr-based UI. Install null handlers for both paths.
+def _suppress_alsa_output():
+    try:
+        import ctypes
+        import ctypes.util
+
+        # Find libasound
+        path = ctypes.util.find_library('asound')
+        if not path:
+            for p in ('libasound.so.2', 'libasound.so'):
+                try:
+                    path = p
+                    ctypes.CDLL(p)
+                    break
+                except OSError:
+                    path = None
+        if not path:
+            return
+
+        asound = ctypes.CDLL(path)
+
+        # Handler types: error has int err, log has uint level
+        HANDLER = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int,
+                                   ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p)
+        LOG_HANDLER = ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int,
+                                       ctypes.c_char_p, ctypes.c_uint, ctypes.c_char_p)
+
+        noop = lambda *_: None
+        err_h, log_h = HANDLER(noop), LOG_HANDLER(noop)
+        _suppress_alsa_output._refs = (err_h, log_h)  # prevent GC
+
+        asound.snd_lib_error_set_handler(err_h)
+        try:
+            asound.snd_lib_log_set_handler(log_h)
+        except AttributeError:
+            pass
+    except Exception:
+        pass
+
+_suppress_alsa_output()
+
 # Suppress pygame welcome message (must be set before import)
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.mixer
@@ -69,10 +111,8 @@ class PlayGrid(Widget):
         if self._mixer_initialized:
             return
         try:
-            # More channels for polyphony, larger buffer for Linux ALSA stability
-            import sys
-            buf = 2048 if sys.platform == 'linux' else 1024
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=buf)
+            # Larger buffer (2048) prevents ALSA underrun errors on slower hardware
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
             pygame.mixer.set_num_channels(16)
             self._mixer_initialized = True
             self._load_sounds()

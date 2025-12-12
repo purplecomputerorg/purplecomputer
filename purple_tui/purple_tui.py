@@ -836,8 +836,43 @@ class PurpleApp(App):
         return text.upper() if self.caps_mode else text
 
 
+def _install_stderr_filter():
+    """
+    Filter native library noise (ALSA) from stderr while preserving Textual output.
+    Safety net for messages that bypass ALSA handlers. Must run BEFORE Textual starts.
+    """
+    import sys
+    import threading
+
+    # Byte patterns to filter (ALSA noise)
+    FILTER = (b'ALSA lib ', b'snd_', b'underrun', b'recover')
+
+    try:
+        stderr_fd = sys.stderr.fileno()
+        saved_fd = os.dup(stderr_fd)
+        read_fd, write_fd = os.pipe()
+        os.dup2(write_fd, stderr_fd)
+        os.close(write_fd)
+
+        def filter_loop():
+            rf = os.fdopen(read_fd, 'rb', 0)
+            wf = os.fdopen(saved_fd, 'wb', 0)
+            for line in rf:
+                if not any(p in line for p in FILTER):
+                    wf.write(line)
+
+        t = threading.Thread(target=filter_loop, daemon=True)
+        t.start()
+        _install_stderr_filter._refs = (t, saved_fd)
+    except Exception:
+        pass
+
+
 def main():
     """Entry point for Purple Computer"""
+    # Install stderr filter BEFORE Textual starts (safety net for ALSA noise)
+    _install_stderr_filter()
+
     # Check for updates before starting
     from .updater import auto_update_if_available
     update_result = auto_update_if_available()

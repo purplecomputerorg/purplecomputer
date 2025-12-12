@@ -143,14 +143,11 @@ SOURCES
     chroot "$MOUNT_DIR" apt-get clean
 
     # Create launcher script
+    # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
-export TERM=${TERM:-linux}
-export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa}
 cd /opt/purple
-# Redirect stderr to log file to prevent ALSA warnings from corrupting TUI
-# Use /tmp which is writable by all users
-exec python3 -m purple_tui.purple_tui "$@" 2>/tmp/purple-stderr.log
+exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 

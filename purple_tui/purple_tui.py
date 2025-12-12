@@ -30,6 +30,8 @@ from .constants import (
     ICON_CHAT, ICON_PALETTE, ICON_HEADPHONES, ICON_DOCUMENT,
     ICON_MOON, ICON_SUN, MODE_TITLES,
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
+    ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
+    ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -71,7 +73,6 @@ class ModeTitle(Static):
         text-align: center;
         color: $primary;
         text-style: bold;
-        margin-bottom: 1;
     }
     """
 
@@ -258,6 +259,113 @@ class ViewportContainer(Container):
     pass
 
 
+class BatteryIndicator(Static):
+    """
+    Shows battery status in the top-right corner.
+    Gracefully hides if no battery is available or on error.
+    """
+
+    DEFAULT_CSS = """
+    BatteryIndicator {
+        width: auto;
+        height: 1;
+        color: $primary;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._battery_available = False
+        self._battery_path = None
+        self._update_timer = None
+
+    def on_mount(self) -> None:
+        """Find battery and start periodic updates"""
+        self._find_battery()
+        if self._battery_available:
+            # Update every 30 seconds
+            self._update_timer = self.set_interval(30, self._update_battery)
+
+    def _find_battery(self) -> None:
+        """Try to find a battery in /sys/class/power_supply/"""
+        try:
+            power_supply_path = "/sys/class/power_supply"
+            if not os.path.exists(power_supply_path):
+                return
+
+            for entry in os.listdir(power_supply_path):
+                entry_path = os.path.join(power_supply_path, entry)
+                type_file = os.path.join(entry_path, "type")
+                try:
+                    with open(type_file) as f:
+                        if f.read().strip() == "Battery":
+                            # Found a battery - verify we can read capacity
+                            capacity_file = os.path.join(entry_path, "capacity")
+                            if os.path.exists(capacity_file):
+                                self._battery_path = entry_path
+                                self._battery_available = True
+                                return
+                except (IOError, OSError, PermissionError):
+                    continue
+        except (IOError, OSError, PermissionError):
+            pass
+
+    def _read_battery_status(self) -> tuple[int, bool] | None:
+        """Read battery percentage and charging status. Returns None on error."""
+        if not self._battery_available or not self._battery_path:
+            return None
+
+        try:
+            # Read capacity (percentage)
+            capacity_file = os.path.join(self._battery_path, "capacity")
+            with open(capacity_file) as f:
+                capacity = int(f.read().strip())
+
+            # Read charging status
+            status_file = os.path.join(self._battery_path, "status")
+            charging = False
+            if os.path.exists(status_file):
+                with open(status_file) as f:
+                    status = f.read().strip().lower()
+                    charging = status in ("charging", "full")
+
+            return (capacity, charging)
+        except (IOError, OSError, PermissionError, ValueError):
+            return None
+
+    def _get_battery_icon(self, capacity: int, charging: bool) -> str:
+        """Get the appropriate battery icon based on level and charging status"""
+        if charging:
+            return ICON_BATTERY_CHARGING
+        elif capacity >= 95:
+            return ICON_BATTERY_FULL
+        elif capacity >= 60:
+            return ICON_BATTERY_HIGH
+        elif capacity >= 30:
+            return ICON_BATTERY_MED
+        elif capacity >= 10:
+            return ICON_BATTERY_LOW
+        else:
+            return ICON_BATTERY_EMPTY
+
+    def _update_battery(self) -> None:
+        """Periodic update callback"""
+        self.refresh()
+
+    def render(self) -> str:
+        """Render the battery indicator"""
+        status = self._read_battery_status()
+        if status is None:
+            # Dev mode: show test battery if PURPLE_TEST_BATTERY is set
+            if os.environ.get("PURPLE_TEST_BATTERY"):
+                return ICON_BATTERY_FULL
+            return ""
+
+        capacity, charging = status
+        icon = self._get_battery_icon(capacity, charging)
+        return icon
+
+
 class PurpleApp(App):
     """
     Purple Computer - The calm computer for kids.
@@ -286,8 +394,18 @@ class PurpleApp(App):
         height: auto;
     }
 
-    #mode-title {
+    #title-row {
         width: 100;
+        height: 1;
+        margin-bottom: 1;
+    }
+
+    #mode-title {
+        width: 1fr;
+    }
+
+    #battery-indicator {
+        width: auto;
     }
 
     #viewport {
@@ -420,7 +538,9 @@ class PurpleApp(App):
         """Create the UI layout"""
         with Container(id="outer-container"):
             with Vertical(id="viewport-wrapper"):
-                yield ModeTitle(id="mode-title")
+                with Horizontal(id="title-row"):
+                    yield ModeTitle(id="mode-title")
+                    yield BatteryIndicator(id="battery-indicator")
                 with ViewportContainer(id="viewport"):
                     yield Container(id="content-area")
             yield ModeIndicator(self.active_mode, id="mode-indicator")

@@ -35,7 +35,7 @@ setup:
 
 run:
 	@echo "Running Purple Computer locally..."
-	./scripts/run_local.sh
+	PURPLE_TEST_BATTERY=1 ./scripts/run_local.sh
 
 test:
 	@.venv/bin/python -m pytest tests/ -v

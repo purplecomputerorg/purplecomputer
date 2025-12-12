@@ -21,6 +21,14 @@ ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
 
+# Battery icons (nf-md-battery variants)
+ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)
+ICON_BATTERY_HIGH = "󰂀"     # nf-md-battery_70 (70-99%)
+ICON_BATTERY_MED = "󰁾"      # nf-md-battery_50 (30-69%)
+ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
+ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
+ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
+
 # Mode titles with icons
 MODE_TITLES = {
     "ask": (ICON_CHAT, "Ask"),

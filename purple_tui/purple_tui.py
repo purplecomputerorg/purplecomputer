@@ -36,6 +36,7 @@ from .constants import (
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
     KeyboardMode, SHIFT_MAP,
+    launch_keyboard_normalizer, stop_keyboard_normalizer,
 )
 from .power_manager import get_power_manager
 
@@ -506,6 +507,9 @@ class PurpleApp(App):
         # Register callback for caps lock changes
         self.keyboard.caps.on_change(self._on_caps_change)
 
+        # Keyboard normalizer subprocess (Linux only)
+        self._keyboard_normalizer_process = None
+
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -555,6 +559,10 @@ class PurpleApp(App):
         self._apply_theme()
         self._load_mode_content()
 
+        # Launch keyboard normalizer on Linux (provides tap-shift, long-press, etc.)
+        # This fails gracefully if not on Linux or missing permissions
+        self._keyboard_normalizer_process = launch_keyboard_normalizer()
+
         # Start idle detection timer
         # In demo mode, check every second for responsiveness
         # In normal mode, check every 5 seconds to save resources
@@ -576,6 +584,12 @@ class PurpleApp(App):
         # Show breaking update prompt if available
         if self._pending_update:
             self._show_update_prompt()
+
+    def on_unmount(self) -> None:
+        """Called when app is shutting down"""
+        # Clean up keyboard normalizer subprocess
+        stop_keyboard_normalizer(self._keyboard_normalizer_process)
+        self._keyboard_normalizer_process = None
 
     def _show_update_prompt(self) -> None:
         """Show a prompt for breaking updates"""
@@ -832,7 +846,14 @@ class PurpleApp(App):
 
         key = event.key
 
-        # Handle Escape for long-hold parent mode
+        # Handle F24 from hardware keyboard normalizer (long-press escape signal)
+        if key == "f24":
+            self.action_parent_mode()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Handle Escape for long-hold parent mode (fallback for Mac/terminal)
         if key == "escape":
             if self.keyboard.handle_escape_repeat():
                 # Long hold threshold reached - enter parent mode
@@ -873,9 +894,11 @@ class PurpleApp(App):
             # Other system keys
             "print_screen", "pause", "insert",
             "home", "end", "page_up", "page_down",
-            # F-keys not used for modes (F5-F11, F13+)
+            # F-keys not used for modes (F5-F11, F13-F23)
+            # Note: F24 is handled above for parent mode
             "f5", "f6", "f7", "f8", "f9", "f10", "f11",
             "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
+            "f21", "f22", "f23",
         }
 
         if key in ignored_keys:

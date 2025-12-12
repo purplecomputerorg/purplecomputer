@@ -323,3 +323,137 @@ def detect_keyboard_mode() -> KeyboardMode:
         pass
 
     return KeyboardMode.TERMINAL_FALLBACK
+
+
+# ============================================================================
+# Keyboard Normalizer Subprocess Management
+# ============================================================================
+
+import subprocess
+import sys
+import os
+import logging
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Virtual device name created by KeyboardNormalizer
+NORMALIZER_DEVICE_NAME = "Purple Keyboard Normalizer"
+
+
+def is_normalizer_running() -> bool:
+    """
+    Check if KeyboardNormalizer is already running.
+
+    Looks for the virtual keyboard device it creates.
+    """
+    try:
+        import evdev
+        for path in evdev.list_devices():
+            try:
+                device = evdev.InputDevice(path)
+                if NORMALIZER_DEVICE_NAME in device.name:
+                    return True
+            except (PermissionError, OSError):
+                continue
+    except ImportError:
+        pass
+    return False
+
+
+def find_normalizer_script() -> Optional[Path]:
+    """Find the keyboard_normalizer.py script."""
+    # Look relative to this file's location
+    this_dir = Path(__file__).parent
+    candidates = [
+        this_dir.parent / "keyboard_normalizer.py",  # Project root
+        Path("/opt/purple/keyboard_normalizer.py"),  # Installed location
+        Path.home() / "purple" / "keyboard_normalizer.py",  # User location
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return None
+
+
+def launch_keyboard_normalizer() -> Optional[subprocess.Popen]:
+    """
+    Launch KeyboardNormalizer as a background subprocess.
+
+    Returns the Popen object if successful, None if failed or not needed.
+    This function is designed to fail gracefully - it won't crash the app
+    if the normalizer can't be started.
+    """
+    # Only relevant on Linux with evdev
+    if detect_keyboard_mode() != KeyboardMode.LINUX_EVDEV:
+        logger.debug("Not on Linux/evdev, skipping keyboard normalizer")
+        return None
+
+    # Check if already running
+    if is_normalizer_running():
+        logger.debug("Keyboard normalizer already running")
+        return None
+
+    # Find the script
+    script_path = find_normalizer_script()
+    if not script_path:
+        logger.warning("Could not find keyboard_normalizer.py")
+        return None
+
+    # Launch as subprocess
+    try:
+        # Use the same Python interpreter
+        python = sys.executable
+
+        # Start the normalizer (it will grab the keyboard and run forever)
+        process = subprocess.Popen(
+            [python, str(script_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            # Don't inherit stdin - we don't want it to compete for keyboard
+            stdin=subprocess.DEVNULL,
+            # Start in new process group so it doesn't get signals meant for TUI
+            start_new_session=True,
+        )
+
+        # Give it a moment to start and check if it failed immediately
+        import time
+        time.sleep(0.2)
+
+        if process.poll() is not None:
+            # Process already exited - check stderr for error
+            stderr = process.stderr.read().decode() if process.stderr else ""
+            if "Permission denied" in stderr:
+                logger.warning(
+                    "Keyboard normalizer failed: permission denied. "
+                    "Run with root or add user to 'input' group."
+                )
+            else:
+                logger.warning(f"Keyboard normalizer failed to start: {stderr[:200]}")
+            return None
+
+        logger.info("Keyboard normalizer started successfully")
+        return process
+
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.warning(f"Failed to start keyboard normalizer: {e}")
+        return None
+
+
+def stop_keyboard_normalizer(process: Optional[subprocess.Popen]) -> None:
+    """Stop the keyboard normalizer subprocess if running."""
+    if process is None:
+        return
+
+    try:
+        process.terminate()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+        logger.debug("Keyboard normalizer stopped")
+    except (OSError, ProcessLookupError):
+        pass  # Already stopped

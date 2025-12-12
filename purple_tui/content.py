@@ -3,7 +3,6 @@ Content API for Purple Computer
 
 Provides a stable interface for modes to access content from purplepacks:
 - Emojis (with synonyms)
-- Definitions (word meanings)
 - Stories (text + audio)
 - Sounds (audio files)
 
@@ -27,8 +26,6 @@ class ContentManager:
     def __init__(self, packs_dir: Optional[Path] = None):
         self.packs_dir = packs_dir or Path.home() / ".purple" / "packs"
         self.emojis: dict[str, str] = {}           # word -> emoji
-        self.synonyms: dict[str, str] = {}         # synonym -> canonical word
-        self.definitions: dict[str, str] = {}      # word -> definition
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         self._loaded = False
 
@@ -95,44 +92,20 @@ class ContentManager:
             "yes": "✅", "no": "❌", "thumbsup": "👍", "clap": "👏",
             "wave": "👋", "hug": "🤗", "fire": "🔥", "sparkle": "✨",
             "magic": "🪄", "crown": "👑", "gem": "💎",
-        }
 
-        # Synonyms map to canonical emoji names
-        self.synonyms = {
-            # Animal synonyms
-            "kitty": "cat", "kitten": "cat", "meow": "cat",
-            "puppy": "dog", "doggy": "dog", "woof": "dog",
-            "bunny": "rabbit", "horsie": "horse",
-            "dino": "dinosaur", "rex": "trex", "t-rex": "trex",
-            "birdie": "bird", "fishy": "fish",
-
-            # Nature synonyms
-            "sunny": "sun", "moony": "moon", "starry": "star",
-            "rainy": "rain", "snowy": "snow", "cloudy": "cloud",
-
-            # Food synonyms
-            "yummy": "icecream", "treat": "candy",
-
-            # Expression synonyms
-            "smile": "happy", "cry": "sad", "giggle": "laugh",
-            "haha": "laugh", "lol": "laugh",
-
-            # Misc synonyms
-            "good": "yes", "bad": "no", "great": "thumbsup",
-            "yay": "clap", "hi": "wave", "hello": "wave", "bye": "wave",
-        }
-
-        # Default definitions
-        self.definitions = {
-            "cat": "A small furry animal that says meow",
-            "dog": "A friendly animal that says woof and loves to play",
-            "elephant": "A very big gray animal with a long trunk",
-            "sun": "The big bright ball in the sky that gives us light",
-            "moon": "The round light we see in the night sky",
-            "rainbow": "Colorful stripes in the sky after rain",
-            "apple": "A round red or green fruit that grows on trees",
-            "happy": "Feeling good and joyful inside",
-            "love": "A warm feeling when you care about someone",
+            # Synonyms (same emoji, different words)
+            "kitty": "🐱", "kitten": "🐱", "meow": "🐱",
+            "puppy": "🐶", "doggy": "🐶", "woof": "🐶",
+            "bunny": "🐰", "horsie": "🐴",
+            "dino": "🦕", "rex": "🦖", "t-rex": "🦖",
+            "birdie": "🐦", "fishy": "🐟",
+            "sunny": "☀️", "moony": "🌙", "starry": "⭐",
+            "rainy": "🌧️", "snowy": "❄️", "cloudy": "☁️",
+            "yummy": "🍦", "treat": "🍬",
+            "smile": "😊", "cry": "😢", "giggle": "😂",
+            "haha": "😂", "lol": "😂",
+            "good": "✅", "bad": "❌", "great": "👍",
+            "yay": "👏", "hi": "👋", "hello": "👋", "bye": "👋",
         }
 
     def _load_pack(self, pack_dir: Path) -> None:
@@ -150,72 +123,19 @@ class ContentManager:
         pack_type = manifest.get("type", "")
         content_dir = pack_dir / "content"
 
-        if pack_type == "words":
-            self._load_words_pack(content_dir)
-        elif pack_type == "emoji":
+        if pack_type == "emoji":
             self._load_emoji_pack(content_dir)
-        elif pack_type == "definitions":
-            self._load_definitions_pack(content_dir)
         elif pack_type == "sounds":
             self._load_sounds_pack(content_dir, pack_dir)
 
-    def _load_words_pack(self, content_dir: Path) -> None:
-        """Load unified words pack with emoji (optional) and definition (required)"""
-        words_file = content_dir / "words.json"
-        if not words_file.exists():
-            return
-
-        try:
-            with open(words_file) as f:
-                data = json.load(f)
-                for word, entry in data.items():
-                    # Definition is required
-                    if "definition" in entry:
-                        self.definitions[word] = entry["definition"]
-                    # Emoji is optional
-                    if "emoji" in entry:
-                        self.emojis[word] = entry["emoji"]
-        except (json.JSONDecodeError, OSError):
-            pass
-
-        # Also load synonyms if present
-        synonyms_file = content_dir / "synonyms.json"
-        if synonyms_file.exists():
-            try:
-                with open(synonyms_file) as f:
-                    data = json.load(f)
-                    self.synonyms.update(data)
-            except (json.JSONDecodeError, OSError):
-                pass
-
     def _load_emoji_pack(self, content_dir: Path) -> None:
-        """Load emoji definitions from pack (legacy format)"""
+        """Load emoji pack - simple word -> emoji mapping"""
         emoji_file = content_dir / "emoji.json"
         if emoji_file.exists():
             try:
                 with open(emoji_file) as f:
                     data = json.load(f)
                     self.emojis.update(data)
-            except (json.JSONDecodeError, OSError):
-                pass
-
-        synonyms_file = content_dir / "synonyms.json"
-        if synonyms_file.exists():
-            try:
-                with open(synonyms_file) as f:
-                    data = json.load(f)
-                    self.synonyms.update(data)
-            except (json.JSONDecodeError, OSError):
-                pass
-
-    def _load_definitions_pack(self, content_dir: Path) -> None:
-        """Load word definitions from pack"""
-        defs_file = content_dir / "definitions.json"
-        if defs_file.exists():
-            try:
-                with open(defs_file) as f:
-                    data = json.load(f)
-                    self.definitions.update(data)
             except (json.JSONDecodeError, OSError):
                 pass
 
@@ -236,24 +156,9 @@ class ContentManager:
     # Public API for modes
 
     def get_emoji(self, word: str) -> Optional[str]:
-        """Get emoji for a word (checks synonyms too)"""
+        """Get emoji for a word"""
         word = word.lower().strip()
-
-        # Direct match
-        if word in self.emojis:
-            return self.emojis[word]
-
-        # Check synonyms
-        canonical = self.synonyms.get(word)
-        if canonical and canonical in self.emojis:
-            return self.emojis[canonical]
-
-        return None
-
-    def get_definition(self, word: str) -> Optional[str]:
-        """Get definition for a word"""
-        word = word.lower().strip()
-        return self.definitions.get(word)
+        return self.emojis.get(word)
 
     def get_sound(self, sound_id: str) -> Optional[Path]:
         """Get path to a sound file"""
@@ -268,17 +173,11 @@ class ContentManager:
         prefix = prefix.lower()
         results = []
 
-        # Search direct matches
         for word, emoji in self.emojis.items():
             if word.startswith(prefix):
                 results.append((word, emoji))
 
-        # Search synonyms
-        for synonym, canonical in self.synonyms.items():
-            if synonym.startswith(prefix) and canonical in self.emojis:
-                results.append((synonym, self.emojis[canonical]))
-
-        return sorted(set(results), key=lambda x: x[0])
+        return sorted(results, key=lambda x: x[0])
 
 
 # Global content manager instance

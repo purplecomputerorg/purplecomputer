@@ -10,7 +10,6 @@ Features:
 - Word synonyms: times, plus, minus
 - Emoji display: typing "cat" shows 🐱
 - Emoji math: 3 * cat produces 🐱🐱🐱
-- Definitions: ?cat or cat? shows definition
 - Speech output (Tab to toggle)
 - History (up/down arrows)
 - Emoji autocomplete (Space to accept)
@@ -126,17 +125,15 @@ class InlineInput(Input):
             return
 
         last_word = words[-1]
-        # Strip ? from beginning/end for autocomplete
-        clean_word = last_word.strip("?")
-        if len(clean_word) < 2:
+        if len(last_word) < 2:
             self.autocomplete_matches = []
             self.autocomplete_index = 0
             return
 
         # Search for matches - get up to 5
-        matches = content.search_emojis(clean_word)
+        matches = content.search_emojis(last_word)
         # Filter out exact match and limit to 5
-        self.autocomplete_matches = [(w, e) for w, e in matches if w != clean_word][:5]
+        self.autocomplete_matches = [(w, e) for w, e in matches if w != last_word][:5]
         self.autocomplete_index = 0
 
     async def _on_key(self, event: events.Key) -> None:
@@ -154,14 +151,7 @@ class InlineInput(Input):
             selected_word = self.autocomplete_matches[self.autocomplete_index][0]
             words = self.value.split()
             if words:
-                # Preserve ? prefix/suffix if present
-                last = words[-1]
-                if last.startswith("?"):
-                    words[-1] = "?" + selected_word
-                elif last.endswith("?"):
-                    words[-1] = selected_word + "?"
-                else:
-                    words[-1] = selected_word
+                words[-1] = selected_word
                 self.value = " ".join(words) + " "
                 # Move cursor to end
                 self.cursor_position = len(self.value)
@@ -243,7 +233,7 @@ class ExampleHint(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        text = caps("Try: cat  •  2 + 2  •  cat times 3  •  apple?")
+        text = caps("Try: cat  •  2 + 2  •  cat times 3  •  cat + dog")
         return f"[dim]{text}[/]"
 
 
@@ -493,34 +483,16 @@ class SimpleEvaluator:
     - Word synonyms: "times", "plus", "minus", "divided by"
     - x between numbers treated as multiplication
     - Emoji variables and emoji math
-    - Definitions: ?word or word? shows definition
-    - Word definitions: "what is X"
     """
 
     def __init__(self):
         self.content = get_content()
-
-    def _is_all_caps(self, text: str) -> bool:
-        """Check if text is all caps (only considering letters, need more than 3)"""
-        letters = [c for c in text if c.isalpha()]
-        return len(letters) > 3 and all(c.isupper() for c in letters)
-
-    def _maybe_uppercase(self, text: str, result: str) -> str:
-        """Make result uppercase if input was all caps"""
-        if self._is_all_caps(text):
-            return result.upper()
-        return result
 
     def evaluate(self, text: str) -> str:
         """Evaluate the input and return a result string"""
         text = text.strip()
         if not text:
             return ""
-
-        # Check for definition query: ?word or word?
-        definition = self._check_definition(text)
-        if definition:
-            return self._maybe_uppercase(text, definition)
 
         # Normalize input for math
         normalized = self._normalize(text)
@@ -545,50 +517,6 @@ class SimpleEvaluator:
 
         # Just return the input as-is (string echo)
         return text
-
-    def _check_definition(self, text: str) -> str | None:
-        """Check if this is a definition query"""
-        text_lower = text.lower().strip()
-
-        # Pattern: ?word (at start)
-        if text_lower.startswith("?"):
-            word = text_lower[1:].strip().rstrip("?")
-            if word:
-                return self._get_definition_response(word)
-
-        # "what is X" / "whats X" / "define X" patterns (with or without ?)
-        patterns = [
-            r"^what\s+is\s+(?:a\s+)?(\w+)\??$",
-            r"^whats\s+(?:a\s+)?(\w+)\??$",
-            r"^define\s+(\w+)\??$",
-        ]
-
-        for pattern in patterns:
-            match = re.match(pattern, text_lower)
-            if match:
-                word = match.group(1)
-                return self._get_definition_response(word)
-
-        # Pattern: word? (at end) - simple single word with ?
-        if text_lower.endswith("?"):
-            word = text_lower.rstrip("?").strip()
-            if word and " " not in word:
-                return self._get_definition_response(word)
-
-        return None
-
-    def _get_definition_response(self, word: str) -> str:
-        """Get definition response for a word"""
-        definition = self.content.get_definition(word)
-        if definition:
-            emoji = self.content.get_emoji(word) or ""
-            return f"{emoji} {definition}" if emoji else definition
-        else:
-            # Try to at least show the emoji
-            emoji = self.content.get_emoji(word)
-            if emoji:
-                return f"{emoji} (no definition yet)"
-            return f"I don't know what '{word}' means yet!"
 
     def _normalize(self, text: str) -> str:
         """Normalize text for evaluation"""

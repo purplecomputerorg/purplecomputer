@@ -3,7 +3,6 @@ Purple Computer Pack Manager (Content-Only)
 
 Handles installation of content purplepacks. These are CONTENT ONLY:
 - emoji packs (JSON)
-- definitions packs (JSON)
 - sounds packs (audio files)
 - stories packs (text + audio)
 
@@ -19,7 +18,7 @@ from typing import Optional
 
 
 # Valid content-only pack types (no executable code)
-VALID_PACK_TYPES = ['emoji', 'definitions', 'sounds', 'stories']
+VALID_PACK_TYPES = ['emoji', 'sounds', 'stories']
 
 
 class PackInstaller:
@@ -82,9 +81,7 @@ class PackInstaller:
         Pack format: tar.gz containing:
           - manifest.json (required)
           - content/ directory with:
-            - emoji.json (for emoji packs)
-            - synonyms.json (optional emoji synonyms)
-            - definitions.json (for definition packs)
+            - emoji.json (for emoji packs - word -> emoji mapping)
             - sounds.json + assets/*.wav (for sound packs)
             - stories.json + assets/*.mp3 (for story packs)
         """

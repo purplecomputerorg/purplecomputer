@@ -40,7 +40,7 @@ Inside Purple Computer, try:
 2 + 2              # Math
 cat * 5            # Five cats
 dog + cat          # Emoji addition
-what is elephant   # Definition lookup
+cat times 3        # Word operators
 ```
 
 ### For Installation (Old Laptop)
@@ -75,20 +75,53 @@ See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
 ## The Four Modes
 
-Purple has four core modes. Hold a number key to switch:
+Purple has four core modes:
 
-| Hold | Mode | What It Does |
-|------|------|--------------|
-| **1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `what is elephant` |
-| **2** | **Play** | Music and art grid. Letters make notes and colors. Numbers make sounds. |
-| **3** | **Listen** | Stories and songs. (Coming soon) |
-| **4** | **Write** | Simple text editor. Just type. |
+| Key | Mode | What It Does |
+|-----|------|--------------|
+| **F1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `cat + dog` |
+| **F2** | **Play** | Music and art grid. Letters make notes and colors. Numbers make sounds. |
+| **F3** | **Listen** | Stories and songs. (Coming soon) |
+| **F4** | **Write** | Simple text editor. Just type. |
 
 **Controls:**
-- **Hold 1-4** — Switch modes
-- **Hold 0** — Toggle dark/light mode
+- **F1-F4** — Switch modes
+- **F12** — Toggle dark/light mode
 - **Ctrl+V** — Cycle views (Screen → Line → Ears)
 - **Tab** (in Ask mode) — Toggle speech on/off
+- **Hold Escape (1s)** — Parent mode (admin menu)
+
+---
+
+## Keyboard Features
+
+Purple includes a hardware keyboard normalizer that makes typing easier for kids:
+
+### Tap-vs-Hold Shift
+- **Tap Shift quickly** — Activates "sticky shift" for the next character only
+- **Hold Shift + type** — Normal shift behavior (uppercase while held)
+
+This means kids can type capital letters without holding two keys at once!
+
+### Long-Press for Symbols
+- **Hold any letter** (>400ms) — Types the uppercase version
+- **Hold any number** (>400ms) — Types the shifted symbol (e.g., hold `1` → `!`)
+- **Hold punctuation** (>400ms) — Types the shifted symbol (e.g., hold `-` → `_`)
+
+This makes it easy to type symbols one-handed.
+
+### Parent Mode
+- **Hold Escape for 1 second** — Opens parent/admin menu
+
+### How It Works (Linux)
+
+On Linux with evdev, Purple runs a background keyboard normalizer that:
+- Grabs the hardware keyboard exclusively
+- Detects tap vs hold timing at the hardware level
+- Emits normalized key events to a virtual keyboard
+- Remaps extra keys (media keys, etc.) to F1-F12
+
+On Mac/other systems, a terminal-level fallback provides basic functionality.
 
 ---
 
@@ -107,7 +140,7 @@ purplecomputer/
 │   ├── content.py        # Content API for packs
 │   └── tts.py            # Piper TTS integration
 │
-├── packs/                # Built-in content (emoji, definitions, sounds)
+├── packs/                # Built-in content (emoji, sounds)
 │
 ├── build-scripts/        # Module-free ISO build pipeline
 │   ├── 00-build-custom-kernel.sh    # Custom kernel with built-in drivers

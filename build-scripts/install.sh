@@ -13,6 +13,12 @@ NC='\033[0m'
 log() { echo -e "${GREEN}[PURPLE]${NC} $1" >&2; }
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 
+# Spawn emergency shell on tty2 (user can access with Alt+F2)
+if [ -c /dev/tty2 ]; then
+    log "Emergency shell available on tty2 (Alt+F2)"
+    setsid bash </dev/tty2 >/dev/tty2 2>&1 &
+fi
+
 # Find target disk (anything except the boot disk)
 find_target() {
     echo "[DEBUG] find_target() entered" >&2

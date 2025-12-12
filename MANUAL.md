@@ -97,6 +97,111 @@ Cloud providers (AWS, GCP, Azure) supply:
 
 Once Ubuntu is installed, the system boots the stock Ubuntu kernel—exactly like cloud images.
 
+### Graphics Stack (Installed System)
+
+The installed Purple Computer uses X11 with a deliberately minimal graphics configuration designed for maximum hardware compatibility.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Purple TUI                           │
+│                   (Alacritty terminal)                  │
+├─────────────────────────────────────────────────────────┤
+│              Matchbox Window Manager                    │
+├─────────────────────────────────────────────────────────┤
+│                    X.Org Server                         │
+│              (modesetting driver only)                  │
+├─────────────────────────────────────────────────────────┤
+│        Mesa + Glamor (OpenGL acceleration)              │
+├─────────────────────────────────────────────────────────┤
+│              Linux DRM/KMS (kernel)                     │
+│         (i915, amdgpu, nouveau, etc.)                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### Why Modesetting Only?
+
+We deliberately **do not install** `xserver-xorg-video-all` (which includes legacy drivers like vesa, fbdev, intel DDX). Instead, we rely solely on the **modesetting driver** built into `xserver-xorg-core`.
+
+**Reasons:**
+
+1. **Avoids I/O port errors:** Legacy drivers (vesa, fbdev) attempt to access VGA I/O ports (`0000-03ff`), which fails under rootless X with `xf86EnableIO: Operation not permitted`
+
+2. **Works everywhere KMS works:** The modesetting driver supports all hardware with a working kernel DRM/KMS driver—which includes Intel (2008+), AMD (2012+), NVIDIA via nouveau, and VM graphics (QXL, virtio-gpu)
+
+3. **Simpler, more maintainable:** Legacy DDX drivers are effectively unmaintained; modesetting is what modern Xorg development targets
+
+4. **No privilege escalation needed:** Modesetting uses only DRM/KMS ioctls, never raw I/O—works cleanly with logind/rootless X
+
+#### Hardware Compatibility
+
+| GPU | Kernel Driver | Support |
+|-----|---------------|---------|
+| Intel HD/UHD (2008+) | i915 | ✅ Full |
+| AMD Radeon (2012+) | amdgpu | ✅ Full |
+| AMD Radeon (older) | radeon | ✅ Full |
+| NVIDIA (via nouveau) | nouveau | ✅ Basic |
+| NVIDIA proprietary | nvidia | ⚠️ Requires separate config |
+| QEMU/KVM VMs | virtio-gpu, qxl | ✅ Full |
+| VirtualBox | vboxvideo | ✅ Full |
+
+**Note:** NVIDIA proprietary drivers install their own X driver and config, which takes precedence. The modesetting approach doesn't interfere with this.
+
+#### Glamor Acceleration
+
+Glamor provides 2D acceleration via OpenGL, used automatically by the modesetting driver. It requires:
+
+- `libgl1-mesa-dri` (Mesa DRI drivers)
+- A GPU with OpenGL 2.1 or OpenGL ES 2.0 support
+
+All target hardware (2012+ laptops) meets these requirements.
+
+#### X11 Fail-Fast Protection
+
+To prevent infinite restart loops when X fails to start, the startup script tracks consecutive failures:
+
+- After **3 consecutive failures**, X stops trying to start
+- User sees an error message with debugging instructions
+- Counter resets on clean exit (e.g., entering parent mode)
+- Recovery: `rm /tmp/.x-fail-count` and re-login
+
+#### Troubleshooting Graphics
+
+**X won't start (black screen, returns to console)**
+
+```bash
+# Check X log for errors
+cat /var/log/Xorg.0.log | grep -E "(EE|WW)"
+
+# Verify modesetting is being used
+grep "modeset" /var/log/Xorg.0.log
+
+# Check if KMS is working
+dmesg | grep -i drm
+```
+
+**Screen resolution wrong**
+
+```bash
+# List available modes
+xrandr
+
+# Set resolution manually
+xrandr --output HDMI-1 --mode 1920x1080
+```
+
+**No hardware acceleration (slow/laggy)**
+
+```bash
+# Check if glamor initialized
+grep -i glamor /var/log/Xorg.0.log
+
+# Verify Mesa is working
+glxinfo | grep "OpenGL renderer"
+# Should show your GPU, not "llvmpipe" (software)
+```
+
 ---
 
 ## Build Process
@@ -663,7 +768,7 @@ sudo reboot
 
 **Screen resolution wrong**
 
-X11 may not detect native resolution.
+X11 may not detect native resolution. See also [Graphics Stack](#graphics-stack-installed-system) for architecture details.
 
 **Fix:**
 ```bash

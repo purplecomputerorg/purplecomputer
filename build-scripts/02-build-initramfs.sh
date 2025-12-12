@@ -86,6 +86,10 @@ echo "Mounting pseudo-filesystems..."
 /bin/busybox mount -t sysfs sys /sys
 /bin/busybox mount -t devtmpfs dev /dev
 
+# Spawn emergency shell on tty2 (user can access with Alt+F2)
+echo "Starting emergency shell on tty2 (Alt+F2 to access)..."
+/bin/busybox setsid /bin/busybox sh </dev/tty2 >/dev/tty2 2>&1 &
+
 # Wait for devices to settle (USB enumeration, disk detection)
 echo "Waiting for hardware initialization..."
 /bin/busybox sleep 3

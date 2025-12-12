@@ -97,6 +97,10 @@ deb http://archive.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
+    # NOTE: We deliberately omit xserver-xorg-video-all to use the modesetting driver
+    # built into xserver-xorg-core. This avoids xf86EnableIO errors from legacy drivers
+    # (vesa, fbdev) trying to access VGA I/O ports under rootless X.
+    # Mesa is required for glamor acceleration with modesetting.
     chroot "$MOUNT_DIR" apt-get update
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
@@ -105,7 +109,7 @@ SOURCES
         xorg xinit x11-xserver-utils \
         xserver-xorg-core \
         xserver-xorg-input-all \
-        xserver-xorg-video-all \
+        libgl1-mesa-dri \
         matchbox-window-manager \
         alacritty \
         libxkbcommon-x11-0 \
@@ -161,6 +165,10 @@ AUTOLOGIN
     chmod +x "$MOUNT_DIR/home/purple/.xinitrc"
     chown 1000:1000 "$MOUNT_DIR/home/purple/.xinitrc"
 
+    # Copy X.Org config (forces modesetting driver, avoids I/O port issues)
+    mkdir -p "$MOUNT_DIR/usr/share/X11/xorg.conf.d"
+    cp /purple-src/config/xorg/10-modesetting.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
+
     # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
@@ -170,9 +178,50 @@ AUTOLOGIN
 
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    # Fail-fast: don't loop forever if X keeps crashing
+    X_FAIL_COUNT_FILE="/tmp/.x-fail-count"
+    X_FAIL_MAX=3
+
+    # Read current fail count
+    if [ -f "$X_FAIL_COUNT_FILE" ]; then
+        X_FAIL_COUNT=$(cat "$X_FAIL_COUNT_FILE")
+    else
+        X_FAIL_COUNT=0
+    fi
+
+    # Check if we've failed too many times
+    if [ "$X_FAIL_COUNT" -ge "$X_FAIL_MAX" ]; then
+        echo ""
+        echo "=========================================="
+        echo "  X11 failed to start $X_FAIL_MAX times"
+        echo "=========================================="
+        echo ""
+        echo "Check /var/log/Xorg.0.log for errors."
+        echo "Common fixes:"
+        echo "  - Switch to tty2 (Ctrl+Alt+F2) for shell access"
+        echo "  - Run 'rm $X_FAIL_COUNT_FILE' to retry X11"
+        echo ""
+        # Don't start X, just give them a shell
+        exec bash
+    fi
+
     # Clean stale X lock files from previous crashes
     rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
-    exec startx
+
+    # Increment fail count before starting (will be reset on clean exit)
+    echo $((X_FAIL_COUNT + 1)) > "$X_FAIL_COUNT_FILE"
+
+    # Start X - if it exits cleanly, reset the counter
+    startx
+    X_EXIT=$?
+
+    if [ $X_EXIT -eq 0 ]; then
+        # Clean exit - reset fail counter
+        rm -f "$X_FAIL_COUNT_FILE"
+    fi
+
+    # Re-exec bash to show the error message on next login
+    exec bash --login
 fi
 AUTOSTART
     chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"

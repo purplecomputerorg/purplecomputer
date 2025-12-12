@@ -143,13 +143,8 @@ SOURCES
 export TERM=${TERM:-linux}
 export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa}
 cd /opt/purple
-
-# Detect VM and suppress ALSA underrun warnings (only affects VMs, not real hardware)
-if systemd-detect-virt -q 2>/dev/null; then
-    exec python3 -m purple_tui.purple_tui "$@" 2>&1 | grep -v "snd_pcm_recover"
-else
-    exec python3 -m purple_tui.purple_tui "$@"
-fi
+# Redirect stderr to log file to prevent ALSA warnings from corrupting TUI
+exec python3 -m purple_tui.purple_tui "$@" 2>/var/log/purple-stderr.log
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 

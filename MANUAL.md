@@ -5,6 +5,8 @@ Complete reference for building, installing, and maintaining Purple Computer.
 **Table of Contents:**
 - [Overview](#overview)
 - [Installer Architecture](#installer-architecture)
+  - [Screen Size & Font Calculation](#screen-size--font-calculation)
+  - [Graphics Stack](#graphics-stack-installed-system)
 - [Build Process](#build-process)
 - [Installation](#installation)
 - [Customization](#customization)
@@ -96,6 +98,60 @@ Cloud providers (AWS, GCP, Azure) supply:
 **Cloud providers give you the kernel.** We must supply our own installer kernel that supports unpredictable real hardware without relying on Ubuntu's module system.
 
 Once Ubuntu is installed, the system boots the stock Ubuntu kernel—exactly like cloud images.
+
+### Screen Size & Font Calculation
+
+Purple Computer displays a fixed 100×28 character viewport that targets approximately **10×6 inches** of physical screen space. This provides a consistent experience for kids across different laptop sizes.
+
+#### How It Works
+
+The font size is calculated at X11 startup by `calc_font_size.py`:
+
+1. **Check cache** (`/var/cache/purple/font_probe.cache`) — instant if valid
+2. **Probe Alacritty** — launch once at 18pt to measure actual cell dimensions
+3. **Get screen info** — resolution (pixels) and physical size (mm) from xrandr
+4. **Calculate target**:
+   - If physical size known: target 10" wide viewport (254mm)
+   - If physical size unknown: fill 85% of screen width
+   - Always cap at 85% to ensure purple border is visible
+5. **Apply safety margin** (5%) and clamp to 10-48pt range
+
+#### Behavior by Screen Size
+
+| Screen | Resolution | Physical Width | Viewport Behavior |
+|--------|------------|----------------|-------------------|
+| 10" laptop | 1280×800 | ~220mm | Fills ~85% (max cap) |
+| 13" laptop | 1920×1080 | ~290mm | Fills ~87% → capped to 85% |
+| 15" laptop | 1920×1080 | ~340mm | Fills ~75% (targets 10") |
+| Surface 13.8" | 2304×1536 | ~267mm | Fills ~85% (max cap) |
+
+#### Fallback Behavior
+
+Every step has a fallback to ensure Purple always starts:
+
+- **Cache corrupt/missing**: Re-probe Alacritty (adds ~1-2s to first boot)
+- **Probe fails**: Use 16pt (guaranteed to fit 1280×800)
+- **xrandr fails**: Use fallback resolution 1366×768
+
+#### Cache
+
+Probe results are cached per-resolution at `/var/cache/purple/font_probe.cache`. Format:
+```
+2304x1536:18:11:22
+# resolution:probe_pt:cell_w:cell_h
+```
+
+The cache is automatically invalidated if screen resolution changes.
+
+#### Manual Override
+
+To force a specific font size, edit `/home/purple/.xinitrc`:
+```bash
+# Replace the FONT_SIZE= line with:
+FONT_SIZE=22.0
+```
+
+---
 
 ### Graphics Stack (Installed System)
 

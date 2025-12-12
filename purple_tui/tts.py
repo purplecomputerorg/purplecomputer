@@ -18,7 +18,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.mixer
 
 # Voice model configuration
-VOICE_MODEL = "en_US-ryan-high"
+VOICE_MODEL = "en_GB-cori-high"
 
 def _get_voice_search_paths() -> list[Path]:
     """Get list of paths to search for voice model."""
@@ -194,9 +194,9 @@ def _speak_sync(text: str, speech_id: int) -> bool:
             wav_path = f.name
 
         # Generate audio with Piper (needs wave.Wave_write object)
-        # Add a tiny pause before speech to prevent clipping
+        # Pad with pauses before and after to prevent clipping on short words
         with wave.open(wav_path, 'wb') as wav_file:
-            voice.synthesize_wav(f"...{text}", wav_file)
+            voice.synthesize_wav(f"... {text} ...", wav_file)
 
         # Check if we've been cancelled after generating
         if speech_id != _speech_id:

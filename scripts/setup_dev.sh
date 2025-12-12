@@ -80,15 +80,15 @@ echo_info "✓ Python dependencies installed in virtual environment"
 # Download Piper voice model
 echo_step "Setting up Piper TTS voice..."
 PIPER_VOICES_DIR="$HOME/.local/share/piper-voices"
-VOICE_MODEL="en_US-ryan-high"
+VOICE_MODEL="en_GB-cori-high"
 if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
     echo_info "✓ Piper voice model already downloaded"
 else
     mkdir -p "$PIPER_VOICES_DIR"
     echo_info "Downloading Piper voice model ($VOICE_MODEL)..."
     # Download from Hugging Face
-    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/$VOICE_MODEL.onnx" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx"
-    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/$VOICE_MODEL.onnx.json" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx.json"
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/cori/high/$VOICE_MODEL.onnx" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx"
+    curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/cori/high/$VOICE_MODEL.onnx.json" -o "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx.json"
     if [ -f "$PIPER_VOICES_DIR/$VOICE_MODEL.onnx" ]; then
         echo_info "✓ Piper voice model downloaded"
     else

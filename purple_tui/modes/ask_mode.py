@@ -261,14 +261,20 @@ class SpeechIndicator(Static):
 
     def _speak_if_changed(self) -> None:
         """Speak current state only if it differs from state before toggle sequence"""
-        from ..tts import speak, stop, init
-        stop()  # Cancel any previous
-        if self.speech_on != self._state_before_toggle:
-            if self.speech_on:
-                init()
-            speak("talking on" if self.speech_on else "talking off")
-        # Reset for next toggle sequence
-        self._state_before_toggle = self.speech_on
+        import threading
+
+        def do_speak():
+            from ..tts import speak, stop, init
+            stop()  # Cancel any previous
+            if self.speech_on != self._state_before_toggle:
+                if self.speech_on:
+                    init()
+                speak("talking on" if self.speech_on else "talking off")
+            # Reset for next toggle sequence
+            self._state_before_toggle = self.speech_on
+
+        # Run in background thread to avoid blocking UI
+        threading.Thread(target=do_speak, daemon=True).start()
 
     def toggle(self) -> bool:
         # On first toggle in a sequence, remember the starting state
@@ -441,12 +447,26 @@ class AskMode(Vertical):
         """Speak the input and result using Piper TTS"""
         from ..tts import speak
 
+        # Check if input has math operators (not just number+word like "2banana")
+        def has_math_operator(text: str) -> bool:
+            # Has +, -, *, /, x (between numbers), times, plus, minus, divided
+            import re
+            text_lower = text.lower()
+            if any(op in text for op in ['+', '-', '*', '/', '×', '÷']):
+                return True
+            if re.search(r'\d\s*x\s*\d', text_lower):  # x between numbers
+                return True
+            if any(word in text_lower for word in [' times ', ' plus ', ' minus ', ' divided']):
+                return True
+            # "times" or "x" with emoji word (like "cat times 3" or "3 x cat")
+            if re.search(r'(times|(?<!\w)x(?!\w))', text_lower):
+                return True
+            return False
+
         # Make math expressions speakable
         def make_speakable(text: str) -> str:
             import re
-            # Lowercase to avoid spelling out caps letter by letter
             text = text.lower()
-            # Handle x between numbers (2x3, 2 x 3, etc.)
             text = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', text)
             return (text
                 .replace("×", " times ")
@@ -460,33 +480,33 @@ class AskMode(Vertical):
             )
 
         input_lower = input_text.lower().strip()
+        has_operator = has_math_operator(input_text)
 
         # Check if result is emoji (contains high unicode chars)
         if result and any(ord(c) > 127 for c in result):
-            # It's emoji - describe it for speech
-            description = self.evaluator._describe_emoji_result(input_text, result)
-            # For simple single-word input, just say the word (not "cat equals 1 cat")
-            if description == input_lower or description == f"1 {input_lower}":
-                text_to_speak = input_lower
-            else:
+            if has_operator:
+                # Math with emoji: "2 * cat" -> "2 times cat equals 2 cats"
+                description = self.evaluator._describe_emoji_result(input_text, result)
                 text_to_speak = f"{make_speakable(input_text)} equals {description}"
+            else:
+                # No math operator: just read the input naturally
+                # "2banana" -> "2 banana", "cat" -> "cat", "ari is cool" -> "ari is cool"
+                text_to_speak = make_speakable(input_lower)
         # Check if result looks like math output (number, possibly with dots)
         elif result:
-            # Extract just the number part (before any newline/dots)
             result_num = result.split('\n')[0]
             try:
                 float(result_num.replace(",", ""))
                 # For simple number echo (input "5" -> output "5"), just say the number
                 if input_lower == result_num:
                     text_to_speak = result_num
-                else:
+                elif has_operator:
                     text_to_speak = f"{make_speakable(input_text)} equals {result_num}"
-            except (ValueError, AttributeError):
-                # Not math, just speak the result if different from input
-                if result.lower() != input_lower:
-                    text_to_speak = result.lower()
                 else:
                     text_to_speak = input_lower
+            except (ValueError, AttributeError):
+                # Not math, just speak the input
+                text_to_speak = input_lower
         else:
             text_to_speak = input_lower
 

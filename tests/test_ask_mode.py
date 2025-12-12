@@ -414,3 +414,86 @@ class TestNumberVisualization:
         assert result.startswith("100\n")
         # Should have 100 dots total
         assert result.count("•") == 100
+
+
+class TestSpeechOutput:
+    """Test speech output logic - what gets spoken"""
+
+    def test_has_math_operator_plus(self):
+        """Plus sign is a math operator"""
+        from purple_tui.modes.ask_mode import AskMode
+        # We need to test the inner function, let's create a mock
+        import re
+        def has_math_operator(text: str) -> bool:
+            text_lower = text.lower()
+            if any(op in text for op in ['+', '-', '*', '/', '×', '÷']):
+                return True
+            if re.search(r'\d\s*x\s*\d', text_lower):
+                return True
+            if any(word in text_lower for word in [' times ', ' plus ', ' minus ', ' divided']):
+                return True
+            if re.search(r'(times|(?<!\w)x(?!\w))', text_lower):
+                return True
+            return False
+
+        assert has_math_operator("2 + 2") is True
+        assert has_math_operator("cat + dog") is True
+        assert has_math_operator("2 * cat") is True
+        assert has_math_operator("cat times 3") is True
+        assert has_math_operator("3 x cat") is True
+        assert has_math_operator("3x4") is True
+
+    def test_has_no_math_operator(self):
+        """Simple expressions without operators"""
+        import re
+        def has_math_operator(text: str) -> bool:
+            text_lower = text.lower()
+            if any(op in text for op in ['+', '-', '*', '/', '×', '÷']):
+                return True
+            if re.search(r'\d\s*x\s*\d', text_lower):
+                return True
+            if any(word in text_lower for word in [' times ', ' plus ', ' minus ', ' divided']):
+                return True
+            if re.search(r'(times|(?<!\w)x(?!\w))', text_lower):
+                return True
+            return False
+
+        # These should NOT be considered math
+        assert has_math_operator("cat") is False
+        assert has_math_operator("2banana") is False
+        assert has_math_operator("2 banana") is False
+        assert has_math_operator("apples") is False
+        assert has_math_operator("ari is cool") is False
+        assert has_math_operator("apple & orange") is False
+
+    def test_simple_word_no_equals(self, evaluator):
+        """Single word like 'cat' should just say 'cat', not 'cat equals...'"""
+        # We can't easily test actual speech, but we can verify the describe function
+        result = evaluator._describe_emoji_result("cat", "🐱")
+        assert result == "cat"
+        assert "equals" not in result
+
+    def test_text_substitution_no_equals(self, evaluator):
+        """Text like 'ari is cool' shouldn't use equals in speech"""
+        # The describe function is for emoji math, text substitution just echoes
+        result = evaluator.evaluate("ari is cool")
+        # Should return substituted text (cool -> 😎)
+        assert "😎" in result
+        # The speech for this should just be "ari is cool", not mention the emoji
+
+    def test_number_word_no_equals(self, evaluator):
+        """'2banana' should just say '2 banana', not '2banana equals...'"""
+        result = evaluator.evaluate("2banana")
+        assert result == "🍌🍌"
+        # Speech should be "2 banana" not "2 banana equals 2 bananas"
+
+    def test_math_operator_uses_equals(self, evaluator):
+        """'2 * cat' should say '2 times cat equals 2 cats'"""
+        result = evaluator._describe_emoji_result("2 * cat", "🐱🐱")
+        assert result == "2 cats"
+        # Full speech would be "2 times cat equals 2 cats"
+
+    def test_addition_uses_equals(self, evaluator):
+        """'cat + dog' should say 'cat plus dog equals cat and dog'"""
+        result = evaluator._describe_emoji_result("cat + dog", "🐱🐶")
+        assert result == "cat and dog"

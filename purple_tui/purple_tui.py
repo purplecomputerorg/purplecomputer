@@ -620,9 +620,11 @@ class PurpleApp(App):
             pass
 
     def action_parent_mode(self) -> None:
-        """Enter parent mode (placeholder for future implementation)"""
-        # TODO: Implement parent mode - settings, content management, etc.
-        self.notify("Parent mode coming soon!", title="Parent Mode")
+        """Enter parent mode - shows admin menu for parents"""
+        from .modes.parent_mode import ParentMenu
+        # Reset escape hold state so it can be triggered again after returning
+        self.keyboard.escape_hold.reset()
+        self.push_screen(ParentMenu())
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events at app level"""

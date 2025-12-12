@@ -199,47 +199,82 @@ main() {
 
     log "Installation complete!"
 
-    # Get the USB disk name from PURPLE_INSTALLER_DEV (e.g., /dev/sda2 -> sda)
-    USB_DISK=""
-    if [ -n "$PURPLE_INSTALLER_DEV" ]; then
-        USB_DISK=$(echo "$PURPLE_INSTALLER_DEV" | sed 's|/dev/||' | sed 's/p*[0-9]*$//')
+    # Detect if we're running in a VM - if so, skip USB removal wait
+    IS_VM=false
+    if [ -f /sys/class/dmi/id/product_name ]; then
+        PRODUCT=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo "")
+        case "$PRODUCT" in
+            *"Virtual"*|*"QEMU"*|*"KVM"*|*"VMware"*|*"VirtualBox"*|*"Bochs"*)
+                IS_VM=true
+                log "Detected VM environment ($PRODUCT) - skipping USB removal wait"
+                ;;
+        esac
+    fi
+    # Also check for hypervisor flag in cpuinfo
+    if grep -q "^flags.*hypervisor" /proc/cpuinfo 2>/dev/null; then
+        IS_VM=true
+        log "Detected hypervisor flag - skipping USB removal wait"
     fi
 
-    # Clear screen and show friendly completion message
-    clear
-    echo ""
-    echo ""
-    echo -e "${GREEN}=================================================${NC}"
-    echo -e "${GREEN}                                                 ${NC}"
-    echo -e "${GREEN}             All done!                           ${NC}"
-    echo -e "${GREEN}                                                 ${NC}"
-    echo -e "${GREEN}=================================================${NC}"
-    echo ""
-    echo ""
-    echo -e "    Please remove the USB stick now."
-    echo ""
-    echo -e "    Your computer will restart automatically"
-    echo -e "    once the USB stick is removed."
-    echo ""
-    echo ""
-
-    # Wait for USB to be physically removed
-    # This is the most robust approach - no timeouts, no user error
-    if [ -n "$USB_DISK" ] && [ -d "/sys/block/$USB_DISK" ]; then
-        while [ -d "/sys/block/$USB_DISK" ]; do
-            sleep 1
-        done
-        # USB removed - brief pause then reboot
-        echo ""
-        echo -e "    USB removed. Restarting now..."
-        echo ""
-        sleep 2
+    if [ "$IS_VM" = "true" ]; then
+        # VM: just show completion and reboot after brief delay
+        log "================================================="
+        log "             Installation complete!              "
+        log "================================================="
+        log "Rebooting in 5 seconds..."
+        sleep 5
     else
-        # Fallback if we can't detect USB
+        # Physical hardware: wait for USB removal
+
+        # Get the USB disk name from PURPLE_INSTALLER_DEV (e.g., /dev/sda2 -> sda)
+        USB_DISK=""
+        if [ -n "$PURPLE_INSTALLER_DEV" ]; then
+            USB_DISK=$(echo "$PURPLE_INSTALLER_DEV" | sed 's|/dev/||' | sed 's/p*[0-9]*$//')
+        fi
+
+        # Check if the boot device is actually removable
+        IS_REMOVABLE=false
+        if [ -n "$USB_DISK" ] && [ -f "/sys/block/$USB_DISK/removable" ]; then
+            if [ "$(cat /sys/block/$USB_DISK/removable)" = "1" ]; then
+                IS_REMOVABLE=true
+            fi
+        fi
+
+        # Clear screen and show friendly completion message
+        clear
         echo ""
-        echo -e "    Press ENTER when you've removed the USB stick..."
         echo ""
-        read -p "" 2>/dev/null || sleep 60
+        echo -e "${GREEN}=================================================${NC}"
+        echo -e "${GREEN}                                                 ${NC}"
+        echo -e "${GREEN}             All done!                           ${NC}"
+        echo -e "${GREEN}                                                 ${NC}"
+        echo -e "${GREEN}=================================================${NC}"
+        echo ""
+        echo ""
+        echo -e "    Please remove the USB stick now."
+        echo ""
+        echo -e "    Your computer will restart automatically"
+        echo -e "    once the USB stick is removed."
+        echo ""
+        echo ""
+
+        # Wait for USB to be physically removed (only if removable device detected)
+        if [ "$IS_REMOVABLE" = "true" ] && [ -d "/sys/block/$USB_DISK" ]; then
+            while [ -d "/sys/block/$USB_DISK" ]; do
+                sleep 1
+            done
+            # USB removed - brief pause then reboot
+            echo ""
+            echo -e "    USB removed. Restarting now..."
+            echo ""
+            sleep 2
+        else
+            # Fallback: countdown with option to press enter
+            echo ""
+            echo -e "    Rebooting in 30 seconds (or press ENTER)..."
+            echo ""
+            read -t 30 2>/dev/null || true
+        fi
     fi
 
     # Use busybox reboot or kernel reboot syscall

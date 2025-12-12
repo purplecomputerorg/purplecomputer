@@ -130,6 +130,13 @@ class InlineInput(Input):
             self.autocomplete_index = 0
             return
 
+        # If the last word exactly matches an emoji, don't show autocomplete
+        # This prevents "sun" + space from autocompleting to "sunflower"
+        if content.get_emoji(last_word):
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
+            return
+
         # Search for matches - get up to 5
         matches = content.search_emojis(last_word)
         # Filter out exact match and limit to 5
@@ -452,24 +459,36 @@ class AskMode(Vertical):
                 .replace("=", " equals ")
             )
 
+        input_lower = input_text.lower().strip()
+
         # Check if result is emoji (contains high unicode chars)
         if result and any(ord(c) > 127 for c in result):
             # It's emoji - describe it for speech
             description = self.evaluator._describe_emoji_result(input_text, result)
-            text_to_speak = f"{make_speakable(input_text)} equals {description}"
-        # Check if result looks like math output
+            # For simple single-word input, just say the word (not "cat equals 1 cat")
+            if description == input_lower or description == f"1 {input_lower}":
+                text_to_speak = input_lower
+            else:
+                text_to_speak = f"{make_speakable(input_text)} equals {description}"
+        # Check if result looks like math output (number, possibly with dots)
         elif result:
+            # Extract just the number part (before any newline/dots)
+            result_num = result.split('\n')[0]
             try:
-                float(result.replace(",", ""))
-                text_to_speak = f"{make_speakable(input_text)} equals {result}"
+                float(result_num.replace(",", ""))
+                # For simple number echo (input "5" -> output "5"), just say the number
+                if input_lower == result_num:
+                    text_to_speak = result_num
+                else:
+                    text_to_speak = f"{make_speakable(input_text)} equals {result_num}"
             except (ValueError, AttributeError):
                 # Not math, just speak the result if different from input
-                if result.lower() != input_text.lower():
+                if result.lower() != input_lower:
                     text_to_speak = result.lower()
                 else:
-                    text_to_speak = input_text.lower()
+                    text_to_speak = input_lower
         else:
-            text_to_speak = input_text.lower()
+            text_to_speak = input_lower
 
         speak(text_to_speak)
 
@@ -494,6 +513,15 @@ class SimpleEvaluator:
         if not text:
             return ""
 
+        # Handle parentheses first by evaluating innermost groups
+        text = self._eval_parentheses(text)
+
+        # Try emoji math first (e.g., "3 * cat", "2 apples", "3banana")
+        # This handles plurals and number+word combinations
+        emoji_result = self._eval_emoji_math(text)
+        if emoji_result:
+            return emoji_result
+
         # Normalize input for math
         normalized = self._normalize(text)
 
@@ -501,21 +529,63 @@ class SimpleEvaluator:
         try:
             result = self._eval_math(normalized)
             if result is not None:
-                return self._format_number(result)
+                return self._format_number_with_dots(result)
         except Exception:
             pass
 
-        # Try emoji lookup
+        # Try emoji lookup for single word
         emoji = self.content.get_emoji(text.lower())
         if emoji:
             return emoji
 
-        # Try emoji math (e.g., "3 * cat")
+        # Try emoji substitution in non-math text (e.g., "apple & orange")
+        emoji_sub = self._substitute_emojis(text)
+        if emoji_sub and emoji_sub != text:
+            return emoji_sub
+
+        # Just return the input as-is (string echo)
+        return text
+
+    def _eval_parentheses(self, text: str) -> str:
+        """Recursively evaluate innermost parentheses first"""
+        max_iterations = 10  # Prevent infinite loops
+        for _ in range(max_iterations):
+            # Find innermost parentheses (no nested parens inside)
+            match = re.search(r'\(([^()]+)\)', text)
+            if not match:
+                break
+
+            inner = match.group(1)
+            inner_result = self._eval_inner(inner)
+            # Replace the parenthesized expression with its result
+            text = text[:match.start()] + inner_result + text[match.end():]
+
+        return text
+
+    def _eval_inner(self, text: str) -> str:
+        """Evaluate an expression without parentheses"""
+        text = text.strip()
+
+        # Try pure math first
+        normalized = self._normalize(text)
+        try:
+            result = self._eval_math(normalized)
+            if result is not None:
+                return self._format_number(result)
+        except Exception:
+            pass
+
+        # Try emoji math
         emoji_result = self._eval_emoji_math(text)
         if emoji_result:
             return emoji_result
 
-        # Just return the input as-is (string echo)
+        # Try single emoji lookup
+        emoji = self.content.get_emoji(text.lower())
+        if emoji:
+            return emoji
+
+        # Return as-is
         return text
 
     def _normalize(self, text: str) -> str:
@@ -559,25 +629,71 @@ class SimpleEvaluator:
         rounded = round(num, 3)
         return str(rounded).rstrip('0').rstrip('.')
 
+    def _format_number_with_dots(self, num: int | float) -> str:
+        """Format a number with dot visualization for small integers"""
+        formatted = self._format_number(num)
+
+        # Only show dots for positive whole numbers less than 1000
+        if isinstance(num, int) or (isinstance(num, float) and num.is_integer()):
+            n = int(num)
+            if 1 <= n < 1000:
+                # Create dot visualization
+                dots = "•" * n
+                # Wrap dots to 90 chars per line (viewport is 100 with padding)
+                lines = []
+                for i in range(0, len(dots), 90):
+                    lines.append(dots[i:i+90])
+                dot_display = "\n".join(lines)
+                return f"{formatted}\n{dot_display}"
+
+        return formatted
+
+    def _is_emoji_string(self, text: str) -> bool:
+        """Check if text consists only of emoji characters (high unicode)"""
+        return bool(text) and all(ord(c) > 127 or c.isspace() for c in text)
+
     def _eval_emoji_math(self, text: str) -> str | None:
-        """Evaluate emoji expressions like '3 * cat', 'cat times 3', 'apple + banana', 'cat*3 + 2'"""
+        """Evaluate emoji expressions like '3 * cat', 'cat times 3', 'apple + banana', 'cat*3 + 2'
+        Also handles: 'apples' (plural -> 2), '2 apples', '3banana'
+        Also handles already-evaluated emoji strings from parentheses."""
         text_lower = text.lower()
+        text_original = text  # Keep original for emoji string detection
 
         # Split by + or "plus" to handle additions
-        parts = re.split(r'\s*(?:\+|plus)\s*', text_lower)
+        parts_lower = re.split(r'\s*(?:\+|plus)\s*', text_lower)
+        parts_original = re.split(r'\s*(?:\+|plus)\s*', text_original)
         results = []
         has_emoji = False  # Track if we found at least one emoji
 
-        for part in parts:
+        for part, part_orig in zip(parts_lower, parts_original):
             part = part.strip()
+            part_orig = part_orig.strip()
             if not part:
                 continue
+
+            # Try: emoji_string * number (for already-evaluated emojis like "🐱🐶 * 2")
+            match = re.match(r'^(.+?)\s*(?:[\*x]|times)\s*(\d+)$', part_orig)
+            if match:
+                emoji_str, count = match.group(1).strip(), int(match.group(2))
+                if self._is_emoji_string(emoji_str) and count <= 100:
+                    results.append((emoji_str * count, None, count))
+                    has_emoji = True
+                    continue
+
+            # Try: number * emoji_string (for "2 * 🐱🐶")
+            match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(.+)$', part_orig)
+            if match:
+                count, emoji_str = int(match.group(1)), match.group(2).strip()
+                if self._is_emoji_string(emoji_str) and count <= 100:
+                    results.append((emoji_str * count, None, count))
+                    has_emoji = True
+                    continue
 
             # Try: number * word, number x word, or number times word
             match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', part)
             if match:
                 count, name = int(match.group(1)), match.group(2)
-                emoji = self.content.get_emoji(name)
+                emoji = self._get_emoji_singular(name)
                 if emoji and count <= 100:
                     results.append((emoji * count, name, count))
                     has_emoji = True
@@ -587,9 +703,28 @@ class SimpleEvaluator:
             match = re.match(r'^(\w+)\s*(?:[\*x]|times)\s*(\d+)$', part)
             if match:
                 name, count = match.group(1), int(match.group(2))
-                emoji = self.content.get_emoji(name)
+                emoji = self._get_emoji_singular(name)
                 if emoji and count <= 100:
                     results.append((emoji * count, name, count))
+                    has_emoji = True
+                    continue
+
+            # Try: "2 apples" or "2apples" or "3 banana" or "3banana" (number followed by word)
+            match = re.match(r'^(\d+)\s*(\w+)$', part)
+            if match:
+                count, name = int(match.group(1)), match.group(2)
+                emoji = self._get_emoji_singular(name)
+                if emoji and count <= 100:
+                    results.append((emoji * count, name, count))
+                    has_emoji = True
+                    continue
+
+            # Try: bare plural word like "apples" -> 2 emojis
+            if part.endswith('s') and len(part) > 2:
+                singular = part[:-1]
+                emoji = self.content.get_emoji(singular)
+                if emoji:
+                    results.append((emoji * 2, singular, 2))
                     has_emoji = True
                     continue
 
@@ -597,6 +732,12 @@ class SimpleEvaluator:
             emoji = self.content.get_emoji(part)
             if emoji:
                 results.append((emoji, part, 1))
+                has_emoji = True
+                continue
+
+            # Try: already-evaluated emoji string (from parentheses)
+            if self._is_emoji_string(part_orig):
+                results.append((part_orig, None, 1))
                 has_emoji = True
                 continue
 
@@ -613,6 +754,46 @@ class SimpleEvaluator:
             return ''.join(r[0] for r in results)
 
         return None
+
+    def _get_emoji_singular(self, word: str) -> str | None:
+        """Get emoji for a word, handling plurals by stripping 's' suffix"""
+        emoji = self.content.get_emoji(word)
+        if emoji:
+            return emoji
+        # Try singular form if word ends in 's'
+        if word.endswith('s') and len(word) > 2:
+            return self.content.get_emoji(word[:-1])
+        return None
+
+    def _substitute_emojis(self, text: str) -> str:
+        """Substitute emoji words with emojis in non-math text (e.g., 'apple & orange')"""
+        # Find all word boundaries and try to replace emoji words
+        result = []
+        i = 0
+        text_lower = text.lower()
+
+        while i < len(text):
+            # Try to find a word starting at position i
+            if text_lower[i].isalpha():
+                # Find word end
+                j = i
+                while j < len(text) and text_lower[j].isalpha():
+                    j += 1
+                word = text_lower[i:j]
+
+                # Try to get emoji for this word
+                emoji = self.content.get_emoji(word)
+                if emoji:
+                    result.append(emoji)
+                else:
+                    # Keep original text (preserve case)
+                    result.append(text[i:j])
+                i = j
+            else:
+                result.append(text[i])
+                i += 1
+
+        return ''.join(result)
 
     def _describe_emoji_result(self, text: str, result: str) -> str:
         """Describe an emoji math result for speech, e.g. '3 apples and 2 bananas'"""
@@ -641,9 +822,9 @@ class SimpleEvaluator:
                     descriptions.append(f"{count} {name}s" if count != 1 else f"1 {name}")
                     continue
 
-            # Just a word
+            # Just a word - don't say "1 cat", just say "cat"
             if self.content.get_emoji(part):
-                descriptions.append(f"1 {part}")
+                descriptions.append(part)
 
         if len(descriptions) == 1:
             return descriptions[0]

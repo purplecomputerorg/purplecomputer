@@ -159,6 +159,33 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
 AUTOLOGIN
 
+    # Configure systemd-logind for power management
+    # This is a fallback - the Purple TUI handles lid close with a warning,
+    # but if the TUI isn't running, logind will shut down on lid close
+    mkdir -p "$MOUNT_DIR/etc/systemd/logind.conf.d"
+    cat > "$MOUNT_DIR/etc/systemd/logind.conf.d/purple-power.conf" <<'LOGIND'
+# Purple Computer power management
+# Lid close triggers shutdown (fallback if Purple TUI isn't handling it)
+[Login]
+HandleLidSwitch=poweroff
+HandleLidSwitchExternalPower=poweroff
+HandleLidSwitchDocked=ignore
+# Don't suspend/sleep - we use shutdown for reliability across old laptops
+HandleSuspendKey=poweroff
+HandleHibernateKey=poweroff
+# Allow purple user to shut down without password
+PolicyKitBypassUsers=purple
+LOGIND
+
+    # Allow purple user to shut down without sudo password
+    cat > "$MOUNT_DIR/etc/sudoers.d/purple-power" <<'SUDOERS'
+# Allow purple user to shut down without password
+purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl poweroff
+purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl halt
+purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot
+SUDOERS
+    chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-power"
+
     # Copy xinitrc from project config (shared with dev environment)
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/home/purple/.xinitrc"
     chmod +x "$MOUNT_DIR/home/purple/.xinitrc"

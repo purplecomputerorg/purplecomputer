@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run test build-packs build-iso clean clean-iso clean-all
+.PHONY: help setup run run-sleep-demo test build-packs build-iso clean clean-iso clean-all
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -11,6 +11,7 @@ help:
 	@echo ""
 	@echo "Running:"
 	@echo "  make run            - Run Purple Computer locally"
+	@echo "  make run-sleep-demo - Test sleep/power states (accelerated timing)"
 	@echo "  make test           - Run tests"
 	@echo ""
 	@echo "Building:"
@@ -36,6 +37,22 @@ setup:
 run:
 	@echo "Running Purple Computer locally..."
 	PURPLE_TEST_BATTERY=1 ./scripts/run_local.sh
+
+run-sleep-demo:
+	@echo "Running sleep/power demo mode..."
+	@echo ""
+	@echo "Accelerated timing for testing:"
+	@echo "  0s   - Start (normal UI)"
+	@echo "  2s   - Sleep screen appears"
+	@echo "  6s   - Screen dims"
+	@echo "  10s  - Screen off"
+	@echo "  15s  - Shutdown warning"
+	@echo "  20s  - Shutdown (simulated)"
+	@echo ""
+	@echo "Press any key at any point to reset the idle timer."
+	@echo "Press Ctrl+C to exit."
+	@echo ""
+	PURPLE_TEST_BATTERY=1 PURPLE_SLEEP_DEMO=1 ./scripts/run_local.sh
 
 test:
 	@.venv/bin/python -m pytest tests/ -v

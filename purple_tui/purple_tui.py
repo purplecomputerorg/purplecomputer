@@ -37,6 +37,7 @@ from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
     KeyboardMode, SHIFT_MAP,
 )
+from .power_manager import get_power_manager
 
 
 class Mode(Enum):
@@ -490,6 +491,10 @@ class PurpleApp(App):
         self.speech_enabled = False
         self._pending_update = None  # Set by main() if breaking update available
 
+        # Power management
+        self._idle_timer = None
+        self._sleep_screen_active = False
+
         # Unified keyboard state
         self.keyboard = create_keyboard_state(
             sticky_grace_period=STICKY_SHIFT_GRACE,
@@ -550,6 +555,24 @@ class PurpleApp(App):
         self._apply_theme()
         self._load_mode_content()
 
+        # Start idle detection timer
+        # In demo mode, check every second for responsiveness
+        # In normal mode, check every 5 seconds to save resources
+        import os
+        from .power_manager import IDLE_SLEEP_UI, IDLE_SHUTDOWN
+
+        if os.environ.get("PURPLE_SLEEP_DEMO"):
+            check_interval = 1.0
+            self.notify(
+                f"Demo: sleep@{IDLE_SLEEP_UI}s, off@{IDLE_SHUTDOWN}s",
+                title="Sleep Demo",
+                timeout=5,
+            )
+        else:
+            check_interval = 5.0
+
+        self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
+
         # Show breaking update prompt if available
         if self._pending_update:
             self._show_update_prompt()
@@ -602,6 +625,62 @@ class PurpleApp(App):
             indicator = self.query_one("#mode-indicator", ModeIndicator)
             indicator.refresh()
         except NoMatches:
+            pass
+
+    def _check_idle_state(self) -> None:
+        """Check if we should enter sleep mode due to inactivity."""
+        # Don't check if sleep screen is already showing
+        if self._sleep_screen_active:
+            return
+
+        try:
+            # Import threshold at runtime so demo mode env var is respected
+            from .power_manager import IDLE_SLEEP_UI
+
+            pm = get_power_manager()
+            idle_seconds = pm.get_idle_seconds()
+
+            if idle_seconds >= IDLE_SLEEP_UI:
+                self._show_sleep_screen()
+        except Exception as e:
+            # In demo mode, show errors for debugging
+            import os
+            if os.environ.get("PURPLE_SLEEP_DEMO"):
+                self.notify(f"Idle check error: {e}", title="Error", timeout=5)
+
+    def _show_sleep_screen(self) -> None:
+        """Show the sleep screen overlay."""
+        if self._sleep_screen_active:
+            return
+
+        try:
+            from .modes.sleep_screen import SleepScreen
+
+            self._sleep_screen_active = True
+
+            def on_sleep_screen_dismiss() -> None:
+                self._sleep_screen_active = False
+                # Re-enable DPMS disable (screen stays on during normal use)
+                try:
+                    pm = get_power_manager()
+                    pm.disable_dpms()
+                except Exception:
+                    pass
+
+            self.push_screen(SleepScreen(), on_sleep_screen_dismiss)
+        except Exception as e:
+            # If sleep screen fails, show error in demo mode
+            self._sleep_screen_active = False
+            import os
+            if os.environ.get("PURPLE_SLEEP_DEMO"):
+                self.notify(f"Sleep screen error: {e}", title="Error", timeout=5)
+
+    def _record_user_activity(self) -> None:
+        """Record that user is active - resets idle timer."""
+        try:
+            pm = get_power_manager()
+            pm.record_activity()
+        except Exception:
             pass
 
     def _create_mode_widget(self, mode: Mode):
@@ -748,6 +827,9 @@ class PurpleApp(App):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events at app level"""
+        # Record activity for idle detection (any key counts)
+        self._record_user_activity()
+
         key = event.key
 
         # Handle Escape for long-hold parent mode

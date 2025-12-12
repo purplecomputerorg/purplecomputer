@@ -127,6 +127,9 @@ if [ "$USE_ALACRITTY" = true ]; then
 source "$PROJECT_ROOT/.venv/bin/activate"
 export HOME="$TEST_HOME"
 export PYTHONPATH="$PROJECT_ROOT:\$PYTHONPATH"
+# Pass through test/demo environment variables
+export PURPLE_TEST_BATTERY="${PURPLE_TEST_BATTERY:-}"
+export PURPLE_SLEEP_DEMO="${PURPLE_SLEEP_DEMO:-}"
 cd "$PROJECT_ROOT"
 python -m purple_tui.purple_tui
 EOF

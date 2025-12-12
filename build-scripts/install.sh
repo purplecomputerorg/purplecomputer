@@ -121,41 +121,127 @@ main() {
     log "Verifying partitions..."
     ls -la /dev/${TARGET}* || log "Warning: partition devices not visible yet"
 
-    # Register PurpleOS in UEFI boot order (required for Surface and some other laptops)
-    log "Registering PurpleOS in UEFI boot menu..."
+    # ==========================================================================
+    # ROBUST UEFI BOOT SETUP - Multi-layer approach for maximum compatibility
+    # ==========================================================================
+    # Many firmwares (especially Surface, HP, some Dell) have buggy UEFI that:
+    # - Ignores BootOrder changes from efibootmgr
+    # - Resets boot order on every boot
+    # - Only boots from specific paths
+    #
+    # Our strategy uses THREE layers of fallback:
+    # 1. Standard EFI/BOOT/BOOTX64.EFI (fallback path all UEFI checks)
+    # 2. EFI/Microsoft/Boot/bootmgfw.efi (some firmwares ONLY boot this)
+    # 3. efibootmgr entry with explicit boot order (for compliant firmwares)
+    # ==========================================================================
+
+    log "Setting up UEFI boot (multi-layer approach for compatibility)..."
 
     # Determine EFI partition device name
-    # For nvme: /dev/nvme0n1p1, for sata: /dev/sda1
     case "$TARGET" in
         nvme*) EFI_PART="/dev/${TARGET}p1" ;;
         *)     EFI_PART="/dev/${TARGET}1" ;;
     esac
 
     if [ -b "$EFI_PART" ]; then
-        # Mount EFI partition temporarily (/mnt/efi created at build time)
         if mount "$EFI_PART" /mnt/efi 2>/dev/null; then
+
+            # Layer 1: Standard fallback path (EFI/BOOT/BOOTX64.EFI)
+            # This is already done during partition setup, but verify it exists
+            if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
+                log "Layer 1: EFI/BOOT/BOOTX64.EFI present (standard fallback)"
+            else
+                log "Warning: EFI/BOOT/BOOTX64.EFI missing!"
+            fi
+
+            # Layer 2: Microsoft bootloader path hijack
+            # Some buggy firmwares (HP, some Surface) ONLY boot EFI/Microsoft/Boot/bootmgfw.efi
+            # By placing our bootloader there, we ensure it boots even on these systems
+            mkdir -p /mnt/efi/EFI/Microsoft/Boot
+            if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
+                cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
+                log "Layer 2: Installed to EFI/Microsoft/Boot/bootmgfw.efi (for buggy firmwares)"
+            fi
+
+            # Layer 3: Create proper UEFI boot entry and set boot order
+            # This works on compliant firmwares and provides a clean boot menu entry
             if command -v efibootmgr >/dev/null 2>&1; then
                 # Remove any existing PurpleOS entries first
                 for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | sed 's/Boot//'); do
                     efibootmgr -b "$bootnum" -B 2>/dev/null || true
                 done
 
-                # Create new boot entry pointing to our bootloader
-                efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\BOOT\BOOTX64.EFI' 2>/dev/null && \
-                    log "Added PurpleOS to UEFI boot menu" || \
-                    log "Warning: Could not add UEFI boot entry (may need manual setup)"
-            else
-                log "Warning: efibootmgr not available"
+                # Create new boot entry
+                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\BOOT\BOOTX64.EFI' 2>/dev/null; then
+                    log "Layer 3: Created UEFI boot entry 'PurpleOS'"
+
+                    # Set as first in boot order
+                    PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | head -1 | sed 's/Boot//')
+                    if [ -n "$PURPLE_BOOTNUM" ]; then
+                        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep "BootOrder:" | sed 's/BootOrder: //')
+                        NEW_ORDER=$(echo "$CURRENT_ORDER" | sed "s/$PURPLE_BOOTNUM,//g" | sed "s/,$PURPLE_BOOTNUM//g" | sed "s/^$PURPLE_BOOTNUM$//")
+                        [ -n "$NEW_ORDER" ] && NEW_ORDER="$PURPLE_BOOTNUM,$NEW_ORDER" || NEW_ORDER="$PURPLE_BOOTNUM"
+                        efibootmgr -o "$NEW_ORDER" 2>/dev/null && \
+                            log "Layer 3: Set boot order to $NEW_ORDER" || \
+                            log "Layer 3: Could not set boot order (firmware may ignore)"
+                    fi
+                else
+                    log "Layer 3: Could not create UEFI entry (layers 1-2 should still work)"
+                fi
             fi
+
             umount /mnt/efi 2>/dev/null || true
+            log "UEFI boot setup complete (using 3-layer fallback strategy)"
         else
-            log "Warning: Could not mount EFI partition"
+            log "Warning: Could not mount EFI partition for boot setup"
         fi
     fi
 
     log "Installation complete!"
-    log "Rebooting in 5 seconds... Remove USB drive now."
-    sleep 5
+
+    # Get the USB disk name from PURPLE_INSTALLER_DEV (e.g., /dev/sda2 -> sda)
+    USB_DISK=""
+    if [ -n "$PURPLE_INSTALLER_DEV" ]; then
+        USB_DISK=$(echo "$PURPLE_INSTALLER_DEV" | sed 's|/dev/||' | sed 's/p*[0-9]*$//')
+    fi
+
+    # Clear screen and show friendly completion message
+    clear
+    echo ""
+    echo ""
+    echo -e "${GREEN}=================================================${NC}"
+    echo -e "${GREEN}                                                 ${NC}"
+    echo -e "${GREEN}             All done!                           ${NC}"
+    echo -e "${GREEN}                                                 ${NC}"
+    echo -e "${GREEN}=================================================${NC}"
+    echo ""
+    echo ""
+    echo -e "    Please remove the USB stick now."
+    echo ""
+    echo -e "    Your computer will restart automatically"
+    echo -e "    once the USB stick is removed."
+    echo ""
+    echo ""
+
+    # Wait for USB to be physically removed
+    # This is the most robust approach - no timeouts, no user error
+    if [ -n "$USB_DISK" ] && [ -d "/sys/block/$USB_DISK" ]; then
+        while [ -d "/sys/block/$USB_DISK" ]; do
+            sleep 1
+        done
+        # USB removed - brief pause then reboot
+        echo ""
+        echo -e "    USB removed. Restarting now..."
+        echo ""
+        sleep 2
+    else
+        # Fallback if we can't detect USB
+        echo ""
+        echo -e "    Press ENTER when you've removed the USB stick..."
+        echo ""
+        read -p "" 2>/dev/null || sleep 60
+    fi
+
     # Use busybox reboot or kernel reboot syscall
     /bin/busybox reboot -f || echo b > /proc/sysrq-trigger
 }

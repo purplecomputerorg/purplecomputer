@@ -18,13 +18,14 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.mixer
 
 # Voice model configuration
-VOICE_MODEL = "en_US-lessac-medium"
+VOICE_MODEL = "en_US-ryan-high"
 
 def _get_voice_search_paths() -> list[Path]:
     """Get list of paths to search for voice model."""
     paths = [
         Path.home() / ".local" / "share" / "piper-voices",
         Path.home() / ".cache" / "piper",
+        Path("/opt/purple/piper-voices"),  # USB/installed system
         Path("/opt/piper"),
     ]
     # On macOS/Linux, also check the actual user home (in case HOME is overridden)

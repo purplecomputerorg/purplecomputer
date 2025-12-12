@@ -137,7 +137,15 @@ SOURCES
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
 
     # Install Python dependencies (python-xlib for font size calculation fallback)
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts
+
+    # Download Piper TTS voice model (Ryan high quality)
+    log_info "Downloading Piper TTS voice model..."
+    VOICE_MODEL="en_US-ryan-high"
+    VOICE_DIR="$MOUNT_DIR/opt/purple/piper-voices"
+    mkdir -p "$VOICE_DIR"
+    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
+    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
 
     # Clean apt cache to save space
     chroot "$MOUNT_DIR" apt-get clean

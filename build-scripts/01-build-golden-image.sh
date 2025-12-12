@@ -148,7 +148,8 @@ export TERM=${TERM:-linux}
 export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-alsa}
 cd /opt/purple
 # Redirect stderr to log file to prevent ALSA warnings from corrupting TUI
-exec python3 -m purple_tui.purple_tui "$@" 2>/var/log/purple-stderr.log
+# Use /tmp which is writable by all users
+exec python3 -m purple_tui.purple_tui "$@" 2>/tmp/purple-stderr.log
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 

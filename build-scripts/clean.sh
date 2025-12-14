@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Clean all build artifacts (module-free architecture)
+# Clean all build artifacts (Ubuntu ISO Remaster architecture)
 
 echo "Cleaning PurpleOS build artifacts..."
 
 # Unmount any lingering mounts (build directory)
 sudo umount /opt/purple-installer/build/mnt-golden 2>/dev/null || true
-sudo umount /opt/purple-installer/build/mnt-installer 2>/dev/null || true
-sudo umount /opt/purple-installer/build/mnt-kernel-extract 2>/dev/null || true
+sudo umount /opt/purple-installer/build/remaster/iso-mount 2>/dev/null || true
+sudo umount /opt/purple-installer/build/remaster/squashfs-root/dev 2>/dev/null || true
+sudo umount /opt/purple-installer/build/remaster/squashfs-root/proc 2>/dev/null || true
+sudo umount /opt/purple-installer/build/remaster/squashfs-root/sys 2>/dev/null || true
 
 # Unmount any test/debug mounts from /tmp
 sudo umount /tmp/iso_check 2>/dev/null || true
-sudo umount /tmp/installer_check 2>/dev/null || true
-sudo umount /tmp/efi_check 2>/dev/null || true
-sudo umount /tmp/golden_check 2>/dev/null || true
+sudo umount /tmp/iso_mount 2>/dev/null || true
 
 # Force unmount anything under /opt/purple-installer recursively (multiple passes)
 for i in {1..3}; do

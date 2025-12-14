@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Automated boot testing with QEMU
-# Boots the ISO, captures all output, analyzes for panics/errors, suggests fixes
+# Boots the remastered Ubuntu ISO, captures output, analyzes for errors
+#
+# Architecture: Ubuntu ISO Remaster
+# - Uses Ubuntu's unmodified boot stack (shim, GRUB, kernel, casper)
+# - Our modifications are only in the squashfs (service masking + payload)
 
 set -e
 
@@ -159,7 +163,8 @@ boot_test() {
         fi
 
         # Check for success markers in serial log
-        if grep -q "PurpleOS Installer Starting" "$SERIAL_LOG" 2>/dev/null; then
+        if grep -q "Purple Computer Installer" "$SERIAL_LOG" 2>/dev/null || \
+           grep -q "\[PURPLE\]" "$SERIAL_LOG" 2>/dev/null; then
             ok "Installer started successfully!"
             sleep 2  # Let it run a bit more
             kill $QEMU_PID 2>/dev/null || true
@@ -175,9 +180,9 @@ boot_test() {
             return 1
         fi
 
-        # Check for init errors
-        if grep -qi "Cannot find PurpleOS installer partition" "$SERIAL_LOG" 2>/dev/null; then
-            warn "Installer partition detection failed"
+        # Check for installer errors
+        if grep -qi "No target disk found" "$SERIAL_LOG" 2>/dev/null; then
+            warn "Target disk detection failed"
             kill $QEMU_PID 2>/dev/null || true
             wait $QEMU_PID 2>/dev/null || true
             return 2
@@ -274,60 +279,62 @@ analyze_kernel_panic() {
         echo "ROOT CAUSE: Cannot mount root filesystem"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Initramfs not found or corrupted"
-        echo "  2. Missing CONFIG_EXT4_FS=y in kernel"
-        echo "  3. Initramfs path wrong in boot config"
+        echo "  1. Casper/initramfs issue in Ubuntu ISO"
+        echo "  2. ISO corrupted during remaster"
         echo
-        echo "AUTOMATIC FIXES TO APPLY:"
-        echo "  - Verify initramfs exists: ls -lh $BUILD_DIR/initrd.img"
-        echo "  - Check kernel config: grep CONFIG_EXT4_FS=y $BUILD_DIR/kernel-config-purple"
-        echo "  - Rebuild initramfs: ./02-build-initramfs.sh"
+        echo "SUGGESTED FIXES:"
+        echo "  - Clean rebuild: ./clean.sh && ./build-in-docker.sh"
+        echo "  - Re-download Ubuntu ISO: rm $BUILD_DIR/ubuntu-*.iso"
+        echo "  - This is Ubuntu's boot stack - check upstream issues"
 
     elif grep -qi "Attempted to kill init" "$SERIAL_LOG"; then
-        echo "ROOT CAUSE: Init process failed or not found"
+        echo "ROOT CAUSE: Init process failed"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. /init script missing or not executable in initramfs"
-        echo "  2. BusyBox missing or dynamically linked"
-        echo "  3. Init script has syntax errors"
+        echo "  1. Squashfs corrupted during remaster"
+        echo "  2. Service masking broke systemd"
         echo
-        echo "AUTOMATIC FIXES TO APPLY:"
-        extract_and_check_initramfs
+        echo "SUGGESTED FIXES:"
+        echo "  - Clean rebuild: ./clean.sh && ./build-in-docker.sh"
+        echo "  - Check squashfs integrity in remaster script"
 
     elif grep -qi "No working init found" "$SERIAL_LOG"; then
-        echo "ROOT CAUSE: Kernel cannot find init executable"
+        echo "ROOT CAUSE: Kernel cannot find init"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Init path wrong (kernel expects /init, /sbin/init, or init= parameter)"
-        echo "  2. Initramfs empty or corrupted"
+        echo "  1. Squashfs not mounted by casper"
+        echo "  2. ISO structure corrupted"
         echo
-        echo "AUTOMATIC FIXES TO APPLY:"
-        extract_and_check_initramfs
+        echo "SUGGESTED FIXES:"
+        echo "  - Clean rebuild: ./clean.sh && ./build-in-docker.sh"
 
     elif grep -qi "not syncing" "$SERIAL_LOG"; then
         echo "ROOT CAUSE: Critical kernel subsystem failure"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Missing critical driver (storage, filesystem)"
-        echo "  2. Hardware incompatibility"
+        echo "  1. Hardware incompatibility (try real hardware)"
+        echo "  2. QEMU configuration issue"
         echo
-        echo "AUTOMATIC FIXES TO APPLY:"
-        echo "  - Check for missing drivers in kernel config"
-        check_kernel_drivers
+        echo "SUGGESTED FIXES:"
+        echo "  - Try with --interactive flag to see boot screen"
+        echo "  - Test on real hardware instead of QEMU"
+        echo "  - This uses Ubuntu's stock kernel - should work on most hardware"
     else
         echo "ROOT CAUSE: Unknown kernel panic"
         echo
         echo "Check the panic message above for clues."
+        echo "Note: This ISO uses Ubuntu's unmodified boot stack."
+        echo "Kernel issues are unlikely to be caused by our remaster."
     fi
 }
 
 analyze_partition_detection() {
-    echo "Installer partition not detected by init script."
+    echo "Installer partition not detected."
     echo
     echo "LIKELY ISSUES:"
     echo "  1. ISO not properly configured as hybrid bootable"
-    echo "  2. Partition label PURPLE_INSTALLER missing"
-    echo "  3. USB/SATA drivers not loaded (but should be built-in)"
+    echo "  2. Volume label PURPLE_INSTALLER missing"
+    echo "  3. xorriso rebuild failed"
     echo
     echo "CHECKING ISO CONFIGURATION:"
 
@@ -336,9 +343,9 @@ analyze_partition_detection() {
     fi
 
     echo
-    echo "AUTOMATIC FIXES TO APPLY:"
-    echo "  - Rebuild ISO with correct volume label: ./04-build-iso.sh"
-    echo "  - Verify xorriso hybrid ISO creation succeeded"
+    echo "SUGGESTED FIXES:"
+    echo "  - Clean rebuild: ./clean.sh && ./build-in-docker.sh"
+    echo "  - Check xorriso output in build logs"
 }
 
 analyze_timeout() {
@@ -346,106 +353,70 @@ analyze_timeout() {
     echo
     echo "CHECKING SERIAL LOG FOR CLUES:"
 
-    if grep -q "Mounting pseudo-filesystems" "$SERIAL_LOG"; then
-        echo "  ✓ Init script started"
+    if grep -q "systemd" "$SERIAL_LOG"; then
+        echo "  ✓ Systemd started"
     else
-        echo "  ✗ Init script never started - kernel didn't load initramfs"
+        echo "  ✗ Systemd never started - casper may have failed"
     fi
 
-    if grep -q "Waiting for hardware initialization" "$SERIAL_LOG"; then
-        echo "  ✓ Hardware enumeration started"
+    if grep -q "purple-installer" "$SERIAL_LOG"; then
+        echo "  ✓ Purple installer service mentioned"
     else
-        echo "  ✗ Stuck before hardware enumeration"
+        echo "  ✗ Purple installer service not seen"
     fi
 
-    if grep -q "Detected block devices:" "$SERIAL_LOG"; then
-        echo "  ✓ Block device detection ran"
-        echo "  Devices found:"
-        grep -A 5 "Detected block devices:" "$SERIAL_LOG" | sed 's/^/    /'
+    if grep -q "Reached target" "$SERIAL_LOG"; then
+        echo "  ✓ Systemd reached targets"
     else
-        echo "  ✗ No block devices detected"
+        echo "  ✗ Systemd targets not reached"
     fi
 
+    echo
+    echo "LIKELY ISSUES:"
+    echo "  1. Systemd taking too long (increase --timeout)"
+    echo "  2. Service dependency issue"
+    echo "  3. purple-installer.service not enabled"
+    echo
+    echo "SUGGESTED FIXES:"
+    echo "  - Try: sudo ./test-boot.sh --timeout 120"
+    echo "  - Try: sudo ./test-boot.sh --interactive"
+    echo "  - Check service is enabled in squashfs"
     echo
     echo "LAST 20 LINES OF OUTPUT:"
     tail -20 "$SERIAL_LOG"
 }
 
-extract_and_check_initramfs() {
-    echo "  Extracting initramfs for analysis..."
+check_squashfs() {
+    echo "  Checking squashfs in ISO..."
 
-    local TEMP_DIR=$(mktemp -d)
-    trap "rm -rf $TEMP_DIR" RETURN
-
-    cd "$TEMP_DIR"
-    if zcat "$BUILD_DIR/initrd.img" | cpio -i 2>/dev/null; then
-        echo "  ✓ Initramfs extracted successfully"
-
-        if [ -f init ]; then
-            echo "  ✓ /init exists"
-            if [ -x init ]; then
-                echo "  ✓ /init is executable"
-            else
-                error "  ✗ /init is NOT executable - FIX: chmod +x on init before packing"
-            fi
-
-            # Check shebang
-            SHEBANG=$(head -1 init)
-            echo "  Shebang: $SHEBANG"
-            if [ "$SHEBANG" = "#!/bin/busybox sh" ]; then
-                echo "  ✓ Correct shebang"
-            else
-                error "  ✗ Wrong shebang - should be #!/bin/busybox sh"
-            fi
+    # Mount ISO and check structure
+    local TEMP_MNT=$(mktemp -d)
+    if mount -o loop,ro "$ISO_PATH" "$TEMP_MNT" 2>/dev/null; then
+        if [ -f "$TEMP_MNT/casper/filesystem.squashfs" ]; then
+            local SIZE=$(du -h "$TEMP_MNT/casper/filesystem.squashfs" | cut -f1)
+            echo "  ✓ filesystem.squashfs exists ($SIZE)"
         else
-            error "  ✗ /init NOT FOUND in initramfs"
+            error "  ✗ filesystem.squashfs NOT FOUND"
         fi
 
-        if [ -f bin/busybox ]; then
-            echo "  ✓ BusyBox exists at /bin/busybox"
-            if ldd bin/busybox 2>&1 | grep -q "not a dynamic executable"; then
-                echo "  ✓ BusyBox is statically linked"
-            else
-                error "  ✗ BusyBox is dynamically linked - FIX: use busybox-static package"
-            fi
+        if [ -f "$TEMP_MNT/casper/vmlinuz" ]; then
+            echo "  ✓ vmlinuz exists"
         else
-            error "  ✗ BusyBox NOT FOUND at /bin/busybox"
+            error "  ✗ vmlinuz NOT FOUND"
         fi
 
-        echo "  Directory structure:"
-        ls -la | sed 's/^/    /'
+        if [ -f "$TEMP_MNT/casper/initrd" ]; then
+            echo "  ✓ initrd exists"
+        else
+            error "  ✗ initrd NOT FOUND"
+        fi
+
+        umount "$TEMP_MNT"
+        rmdir "$TEMP_MNT"
     else
-        error "  ✗ Failed to extract initramfs - may be corrupted"
+        warn "  Could not mount ISO for inspection"
+        rmdir "$TEMP_MNT" 2>/dev/null || true
     fi
-}
-
-check_kernel_drivers() {
-    echo "  Checking kernel configuration for critical drivers..."
-
-    local CONFIG="$BUILD_DIR/kernel-config-purple"
-
-    if [ ! -f "$CONFIG" ]; then
-        warn "  Kernel config not found at $CONFIG"
-        return
-    fi
-
-    local CRITICAL=(
-        "CONFIG_BLK_DEV"
-        "CONFIG_SCSI"
-        "CONFIG_BLK_DEV_SD"
-        "CONFIG_EXT4_FS"
-        "CONFIG_PROC_FS"
-        "CONFIG_SYSFS"
-        "CONFIG_DEVTMPFS"
-    )
-
-    for cfg in "${CRITICAL[@]}"; do
-        if grep -q "^${cfg}=y" "$CONFIG"; then
-            echo "  ✓ ${cfg}=y"
-        else
-            error "  ✗ ${cfg} NOT ENABLED - FIX: add to kernel-config-fragment.config"
-        fi
-    done
 }
 
 cleanup() {

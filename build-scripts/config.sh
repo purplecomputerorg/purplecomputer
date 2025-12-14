@@ -2,26 +2,18 @@
 # Purple Computer Build Configuration
 # Single source of truth for distribution settings
 #
-# MODULE-FREE ARCHITECTURE NOTES:
-# - Custom kernel with built-in drivers (no runtime modules)
-# - No live-boot/casper needed (direct USB boot)
-# - Simplified installer environment
+# ARCHITECTURE: Ubuntu ISO Remaster
+# - We take an official Ubuntu Server ISO as a black box
+# - We do NOT build initramfs, casper, or the boot stack
+# - We just add our payload and disable Subiquity
 
 DIST_NAME="noble"
-DIST_FULL="Ubuntu 24.04.3 LTS"
-SECTIONS="main restricted universe multiverse"
+DIST_FULL="Ubuntu 24.04.1 LTS"
 ARCH="amd64"
-UBUNTU_MIRROR="http://archive.ubuntu.com/ubuntu"
 
-# Custom kernel configuration
-KERNEL_VERSION="6.8.12"              # Upstream kernel version
-KERNEL_MAJOR="6.x"                   # Kernel.org download path
+# Ubuntu Server ISO to use as base (downloaded during build)
+UBUNTU_ISO_URL="https://releases.ubuntu.com/24.04.1/ubuntu-24.04.1-live-server-amd64.iso"
+UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
 
-# Essential packages for installer environment (simplified, no live-boot)
-# Module-free architecture eliminates need for:
-# - linux-modules-* (drivers built into kernel)
-# - live-boot, casper (no live system)
-INSTALLER_PACKAGES="systemd,lvm2,parted,e2fsprogs,ntfs-3g,grub-pc-bin,grub-efi-amd64-bin,zstd,gdisk,dosfstools"
-
-# Essential base packages (always needed)
-BASE_PACKAGES="ubuntu-minimal base-files libc6 dpkg apt systemd udev"
+# Essential base packages for golden image (the installed system)
+GOLDEN_PACKAGES="linux-image-generic grub-efi-amd64 systemd sudo"

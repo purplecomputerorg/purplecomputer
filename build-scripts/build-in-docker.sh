@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Build PurpleOS installer in Docker (module-free architecture)
+# Build PurpleOS installer in Docker (Ubuntu ISO Remaster architecture)
 # Usage: ./build-in-docker.sh [step]
-#   step: optional step number to start from (0-4, default: 0)
-#     0 = build custom kernel
-#     1 = build golden image
-#     2 = build initramfs
-#     3 = build installer rootfs
-#     4 = build ISO
+#   step: optional step number to start from (0-1, default: 0)
+#     0 = build golden image (pre-built Ubuntu system)
+#     1 = remaster Ubuntu ISO with our payload
 
 set -e
 
@@ -28,9 +25,13 @@ main() {
     log_step "Building Docker image..."
     docker build -t "$IMAGE_NAME" .
 
-    # Run build in container with new pipeline
+    # Run build in container
     log_info "Running build in container (starting from step $START_STEP)..."
-    log_info "Using module-free architecture..."
+    log_info "Architecture: Ubuntu ISO Remaster"
+    log_info "  - We download official Ubuntu Server ISO"
+    log_info "  - We add our payload and disable Subiquity"
+    log_info "  - Ubuntu's boot stack remains untouched"
+
     # Mount the entire project directory (parent of build-scripts) as /purple-src
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
     docker run --rm --privileged \

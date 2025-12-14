@@ -49,21 +49,18 @@ cat times 3        # Word operators
 ```bash
 cd build-scripts
 
-# Build everything (30-90 min first time, 10-20 min after)
+# Build everything (20-35 min first time, 15-25 min subsequent)
 ./build-in-docker.sh
 
 # Validate build (checks configs, verifies artifacts)
 ./validate-build.sh
-
-# Test boot in QEMU (detects kernel panics, shows what failed)
-sudo ./test-boot.sh
 
 # Result: /opt/purple-installer/output/purple-installer-YYYYMMDD.iso
 ```
 
 **Install to hardware:**
 1. Write ISO to USB with [balenaEtcher](https://www.balena.io/etcher/) or `dd`
-2. Boot laptop from USB
+2. Boot laptop from USB (Secure Boot can remain enabled)
 3. Installation runs automatically (10-20 minutes)
 4. System reboots into Purple Computer
 
@@ -142,39 +139,40 @@ purplecomputer/
 │
 ├── packs/                # Built-in content (emoji, sounds)
 │
-├── build-scripts/        # Module-free ISO build pipeline
-│   ├── 00-build-custom-kernel.sh    # Custom kernel with built-in drivers
-│   ├── 01-build-golden-image.sh     # Ubuntu base system image
-│   ├── 02-build-initramfs.sh        # Minimal initramfs (no modules)
-│   ├── 03-build-installer-rootfs.sh # Installer environment
-│   ├── 04-build-iso.sh              # USB-bootable hybrid ISO
-│   ├── build-all.sh                 # Orchestrate all build steps
-│   ├── build-in-docker.sh           # Docker wrapper (NixOS-friendly)
-│   ├── validate-build.sh            # Pre-build validation (configs, deps)
-│   ├── test-boot.sh                 # QEMU boot testing (detects panics)
-│   ├── kernel-config-fragment.config # Kernel driver configuration
-│   └── install.sh                   # Installation script (runs on target)
+├── build-scripts/        # Ubuntu ISO remaster build pipeline
+│   ├── 00-build-golden-image.sh    # Pre-built Ubuntu system image
+│   ├── 01-remaster-iso.sh          # Remaster Ubuntu Server ISO
+│   ├── build-all.sh                # Orchestrate build steps
+│   ├── build-in-docker.sh          # Docker wrapper (NixOS-friendly)
+│   ├── validate-build.sh           # Pre-build validation
+│   └── install.sh                  # Installation script (runs on target)
 │
 └── guides/               # Technical references
-    └── module-free-architecture.md
+    └── ubuntu-live-installer.md
 ```
 
 **Stack:**
 - **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI
-- **Installer:** Module-free custom kernel + minimal initramfs + direct disk imaging
+- **Installer:** Remastered Ubuntu Server ISO with casper, Secure Boot support
 - **Application:** Python + Textual + Piper TTS + Pygame
 
 **How Installation Works:**
 
-The installer does **not** contain an offline apt repository or Ubuntu ISO. Instead, it writes a fully pre-built Ubuntu Noble disk image directly to the internal drive. This eliminates package installation complexity and ensures deterministic, reliable installations.
+There are **two separate systems** involved:
 
-After installation, the system boots into standard Ubuntu 24.04 LTS and uses Ubuntu's normal apt servers for updates.
+1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO. We disable Subiquity and add our own installer service. Ubuntu's boot stack (shim, GRUB, kernel, casper) is untouched.
 
-**Module-Free Architecture:**
-- Custom Linux kernel (6.8.12) with all essential drivers built-in (USB, SATA, NVMe, ext4, vfat)
-- No runtime kernel module loading (eliminates insmod, .ko files, ABI mismatches)
-- Direct USB boot (no CD-ROM/ISO9660 dependency)
-- Improved hardware compatibility across diverse laptops (2010+)
+2. **Installed System** (permanent) - A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
+
+The USB's only job is to copy the pre-built image to disk. After reboot, the USB is never used again.
+
+**Why this design:**
+- Ubuntu's signed boot chain → Secure Boot works
+- Ubuntu's stock kernel → all hardware drivers included
+- No package installation during setup → fast, reliable, offline
+- Standard Ubuntu on the installed system → normal apt updates work
+
+See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation of why this design exists and what alternatives we tried.
 
 ---
 
@@ -185,8 +183,9 @@ After installation, the system boots into standard Ubuntu 24.04 LTS and uses Ubu
 - 2GB RAM minimum (4GB+ recommended)
 - 20GB storage minimum (60GB+ recommended)
 - BIOS or UEFI firmware
+- Secure Boot supported
 
-**Tested on:** 2010-2015 era laptops (ThinkPad, Dell Latitude, MacBook Air/Pro)
+**Tested on:** 2010-2020 era laptops (ThinkPad, Dell Latitude, HP EliteBook, Surface, MacBook Air/Pro)
 
 **Build Machine:**
 - Any system with Docker (NixOS, Ubuntu, macOS, etc.)
@@ -198,9 +197,9 @@ After installation, the system boots into standard Ubuntu 24.04 LTS and uses Ubu
 
 ## Documentation
 
-See [MANUAL.md](MANUAL.md) for complete build instructions, customization, and troubleshooting.
-
-Technical guides are in [guides/](guides/).
+- **[MANUAL.md](MANUAL.md)** - Complete build instructions, customization, and troubleshooting
+- **[guides/architecture-overview.md](guides/architecture-overview.md)** - High-level explanation of the two-system design
+- **[guides/ubuntu-live-installer.md](guides/ubuntu-live-installer.md)** - Technical deep-dive on ISO remastering
 
 ---
 

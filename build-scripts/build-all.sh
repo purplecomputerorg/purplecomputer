@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# Build complete PurpleOS installer ISO (module-free architecture)
-# Orchestrates all build steps in sequence
+# Build complete PurpleOS installer ISO
 #
-# ARCHITECTURE CHANGES:
-# - Step 0: Build custom kernel with built-in drivers
-# - Step 1: Build golden image (unchanged)
-# - Step 2: Build minimal initramfs (no modules, no CD-ROM)
-# - Step 3: Build installer rootfs (unchanged)
-# - Step 4: Build USB-bootable hybrid ISO
+# ARCHITECTURE: Ubuntu ISO Remaster
+# - Step 0: Build golden image (pre-built Ubuntu system to install)
+# - Step 1: Remaster Ubuntu Server ISO (add payload, disable Subiquity)
 #
-# Total time estimate: 30-90 minutes (kernel build dominates)
+# We do NOT build initramfs, casper, or the boot stack.
+# We take Ubuntu's live ISO as a black box and just add our payload.
 
 set -e
 
@@ -27,8 +24,8 @@ log_info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 print_banner() {
     echo
     echo "=========================================="
-    echo "  PurpleOS Installer Build Pipeline"
-    echo "  Module-Free Architecture"
+    echo "  PurpleOS Installer Build"
+    echo "  Architecture: Ubuntu ISO Remaster"
     echo "=========================================="
     echo
 }
@@ -45,38 +42,18 @@ main() {
     START_STEP="${1:-0}"
 
     print_banner
-    log_info "Build pipeline: 5 steps (starting from step $START_STEP)"
-    log_info "Estimated time: 30-90 minutes"
+    log_info "Build pipeline: 2 steps (starting from step $START_STEP)"
     echo
 
     if [ "$START_STEP" -le 0 ]; then
-        log_step "0/5: Building custom kernel with built-in drivers..."
-        log_info "This step takes 10-30 minutes depending on CPU"
-        ./00-build-custom-kernel.sh
+        log_step "0/1: Building golden image (the installed system)..."
+        ./00-build-golden-image.sh
         echo
     fi
 
     if [ "$START_STEP" -le 1 ]; then
-        log_step "1/5: Building golden image..."
-        ./01-build-golden-image.sh
-        echo
-    fi
-
-    if [ "$START_STEP" -le 2 ]; then
-        log_step "2/5: Building minimal initramfs (no modules)..."
-        ./02-build-initramfs.sh
-        echo
-    fi
-
-    if [ "$START_STEP" -le 3 ]; then
-        log_step "3/5: Building installer rootfs..."
-        ./03-build-installer-rootfs.sh
-        echo
-    fi
-
-    if [ "$START_STEP" -le 4 ]; then
-        log_step "4/5: Building USB-bootable hybrid ISO..."
-        ./04-build-iso.sh
+        log_step "1/1: Remastering Ubuntu ISO with our payload..."
+        ./01-remaster-iso.sh
         echo
     fi
 
@@ -89,11 +66,10 @@ main() {
     log_info "Write to USB stick with:"
     log_info "  sudo dd if=/opt/purple-installer/output/purple-installer-*.iso of=/dev/sdX bs=4M status=progress"
     echo
-    log_info "Module-free architecture benefits:"
-    log_info "  ✓ All drivers built into kernel (USB, SATA, NVMe, ext4, vfat)"
-    log_info "  ✓ No runtime module loading (no insmod, no .ko files)"
-    log_info "  ✓ No CD-ROM dependency (direct USB boot)"
-    log_info "  ✓ Improved reliability and hardware compatibility"
+    log_info "This ISO uses Ubuntu's official boot stack:"
+    log_info "  - Signed shim + GRUB (Secure Boot works)"
+    log_info "  - Ubuntu's kernel + initramfs + casper (untouched)"
+    log_info "  - Our payload just added on top"
 }
 
 main "$@"

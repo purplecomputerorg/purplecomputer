@@ -141,11 +141,11 @@ purplecomputer/
 │
 ├── build-scripts/        # Ubuntu ISO remaster build pipeline
 │   ├── 00-build-golden-image.sh    # Pre-built Ubuntu system image
-│   ├── 01-remaster-iso.sh          # Remaster Ubuntu Server ISO
+│   ├── 01-remaster-iso.sh          # Remaster Ubuntu Server ISO (initramfs injection)
 │   ├── build-all.sh                # Orchestrate build steps
 │   ├── build-in-docker.sh          # Docker wrapper (NixOS-friendly)
 │   ├── validate-build.sh           # Pre-build validation
-│   └── install.sh                  # Installation script (runs on target)
+│   └── install.sh                  # Installation script (runs in initramfs)
 │
 └── guides/               # Technical references
     └── ubuntu-live-installer.md
@@ -153,14 +153,14 @@ purplecomputer/
 
 **Stack:**
 - **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI
-- **Installer:** Remastered Ubuntu Server ISO with casper, Secure Boot support
+- **Installer:** Remastered Ubuntu Server ISO with initramfs hook, Secure Boot support
 - **Application:** Python + Textual + Piper TTS + Pygame
 
 **How Installation Works:**
 
 There are **two separate systems** involved:
 
-1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO. We disable Subiquity and add our own installer service. Ubuntu's boot stack (shim, GRUB, kernel, casper) is untouched.
+1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO. We inject a hook script into the initramfs that runs BEFORE casper. The hook checks for our payload and runs the installer. Ubuntu's boot stack (shim, GRUB, kernel) is untouched. The squashfs is never mounted.
 
 2. **Installed System** (permanent) - A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
 
@@ -171,6 +171,7 @@ The USB's only job is to copy the pre-built image to disk. After reboot, the USB
 - Ubuntu's stock kernel → all hardware drivers included
 - No package installation during setup → fast, reliable, offline
 - Standard Ubuntu on the installed system → normal apt updates work
+- Initramfs injection avoids squashfs complexity entirely
 
 See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation of why this design exists and what alternatives we tried.
 

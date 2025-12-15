@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Clean all build artifacts (Ubuntu ISO Remaster architecture)
+# Clean all build artifacts
 
-echo "Cleaning PurpleOS build artifacts..."
+echo "Cleaning Purple Computer build artifacts..."
 
-# Unmount any lingering mounts (build directory)
+# Unmount any lingering mounts
 sudo umount /opt/purple-installer/build/mnt-golden 2>/dev/null || true
+sudo umount /opt/purple-installer/build/mnt-golden/boot/efi 2>/dev/null || true
 sudo umount /opt/purple-installer/build/remaster/iso-mount 2>/dev/null || true
-sudo umount /opt/purple-installer/build/remaster/squashfs-root/dev 2>/dev/null || true
-sudo umount /opt/purple-installer/build/remaster/squashfs-root/proc 2>/dev/null || true
-sudo umount /opt/purple-installer/build/remaster/squashfs-root/sys 2>/dev/null || true
 
 # Unmount any test/debug mounts from /tmp
 sudo umount /tmp/iso_check 2>/dev/null || true
 sudo umount /tmp/iso_mount 2>/dev/null || true
 
-# Force unmount anything under /opt/purple-installer recursively (multiple passes)
+# Force unmount anything under /opt/purple-installer recursively
 for i in {1..3}; do
     while read -r mount; do
         echo "Unmounting $mount..."
@@ -22,13 +20,20 @@ for i in {1..3}; do
     done < <(mount | grep /opt/purple-installer | awk '{print $3}' | sort -r)
 done
 
-# Detach any loop devices
-for loop in $(sudo losetup -a | grep purple-installer | cut -d: -f1); do
-    echo "Detaching $loop..."
+# Clean up loop devices
+echo "Cleaning up loop devices..."
+for loop in $(sudo losetup -a | grep -E 'purple-installer|purple-os\.img|\(deleted\)' | cut -d: -f1); do
+    echo "  Detaching $loop..."
     sudo losetup -d "$loop" 2>/dev/null || true
 done
 
-# Remove build directory completely
+# Clean up kpartx mappings
+for mapping in $(ls /dev/mapper/loop* 2>/dev/null); do
+    echo "  Removing kpartx mapping $mapping..."
+    sudo dmsetup remove "$mapping" 2>/dev/null || true
+done
+
+# Remove build directory
 echo "Removing build directory..."
 if [ -d /opt/purple-installer/build ]; then
     sudo rm -rf /opt/purple-installer/build
@@ -38,7 +43,7 @@ if [ -d /opt/purple-installer/build ]; then
         exit 1
     fi
 fi
-sudo mkdir -p /opt/purple-installer/build  # Recreate empty directory
+sudo mkdir -p /opt/purple-installer/build
 echo "  ✓ Build directory cleaned"
 
 # Remove output ISOs
@@ -60,7 +65,7 @@ if docker images | grep -q "purple-installer-builder"; then
     docker rmi purple-installer-builder 2>/dev/null || true
 fi
 
-# Prune Docker build cache to free space
+# Prune Docker build cache
 echo "Pruning Docker build cache..."
 docker builder prune -af 2>/dev/null || true
 

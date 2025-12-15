@@ -1,19 +1,18 @@
-# Build environment for PurpleOS installer (Ubuntu ISO Remaster architecture)
+# Build environment for Purple Computer installer
+# Architecture: Initramfs injection into Ubuntu Server ISO
 FROM ubuntu:24.04
 
-# Install build tools for:
-# - Golden image creation (debootstrap)
-# - ISO remastering (squashfs-tools, xorriso)
-# - No initramfs/casper building - we use Ubuntu's as-is
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     # Golden image building
     debootstrap \
     # ISO remastering
-    squashfs-tools \
     xorriso \
     isolinux \
     syslinux-utils \
+    # Initramfs manipulation
+    initramfs-tools-core \
+    cpio \
     # Bootloader tools (for golden image GRUB setup)
     grub-efi-amd64-bin \
     grub-pc-bin \
@@ -26,7 +25,7 @@ RUN apt-get update && \
     e2fsprogs \
     # Loop device support
     kpartx \
-    # Download tools (for fetching Ubuntu ISO)
+    # Download tools
     wget \
     curl \
     unzip \

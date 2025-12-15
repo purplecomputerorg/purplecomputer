@@ -2,9 +2,10 @@
 # Automated boot testing with QEMU
 # Boots the remastered Ubuntu ISO, captures output, analyzes for errors
 #
-# Architecture: Ubuntu ISO Remaster
-# - Uses Ubuntu's unmodified boot stack (shim, GRUB, kernel, casper)
-# - Our modifications are only in the squashfs (service masking + payload)
+# Architecture: Initramfs Injection
+# - Uses Ubuntu's unmodified boot stack (shim, GRUB, kernel)
+# - Our hook runs in initramfs before casper
+# - Squashfs is never mounted when installer runs
 
 set -e
 
@@ -279,7 +280,7 @@ analyze_kernel_panic() {
         echo "ROOT CAUSE: Cannot mount root filesystem"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Casper/initramfs issue in Ubuntu ISO"
+        echo "  1. Initramfs corrupted during repack"
         echo "  2. ISO corrupted during remaster"
         echo
         echo "SUGGESTED FIXES:"
@@ -291,18 +292,18 @@ analyze_kernel_panic() {
         echo "ROOT CAUSE: Init process failed"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Squashfs corrupted during remaster"
-        echo "  2. Service masking broke systemd"
+        echo "  1. Initramfs hook script has errors"
+        echo "  2. Initramfs corrupted during repack"
         echo
         echo "SUGGESTED FIXES:"
         echo "  - Clean rebuild: ./clean.sh && ./build-in-docker.sh"
-        echo "  - Check squashfs integrity in remaster script"
+        echo "  - Check install.sh script for syntax errors"
 
     elif grep -qi "No working init found" "$SERIAL_LOG"; then
         echo "ROOT CAUSE: Kernel cannot find init"
         echo
         echo "LIKELY ISSUES:"
-        echo "  1. Squashfs not mounted by casper"
+        echo "  1. Initramfs repacking failed"
         echo "  2. ISO structure corrupted"
         echo
         echo "SUGGESTED FIXES:"
@@ -353,52 +354,45 @@ analyze_timeout() {
     echo
     echo "CHECKING SERIAL LOG FOR CLUES:"
 
-    if grep -q "systemd" "$SERIAL_LOG"; then
-        echo "  ✓ Systemd started"
+    if grep -q "init-top" "$SERIAL_LOG"; then
+        echo "  ✓ Initramfs init-top scripts ran"
     else
-        echo "  ✗ Systemd never started - casper may have failed"
+        echo "  ✗ init-top scripts never ran - initramfs may have failed"
     fi
 
-    if grep -q "purple-installer" "$SERIAL_LOG"; then
-        echo "  ✓ Purple installer service mentioned"
+    if grep -q "purple" "$SERIAL_LOG" || grep -q "PURPLE" "$SERIAL_LOG"; then
+        echo "  ✓ Purple installer hook mentioned"
     else
-        echo "  ✗ Purple installer service not seen"
+        echo "  ✗ Purple installer hook not seen"
     fi
 
-    if grep -q "Reached target" "$SERIAL_LOG"; then
-        echo "  ✓ Systemd reached targets"
+    if grep -q "install.sh" "$SERIAL_LOG"; then
+        echo "  ✓ install.sh was found/executed"
     else
-        echo "  ✗ Systemd targets not reached"
+        echo "  ✗ install.sh not found - check payload on ISO"
     fi
 
     echo
     echo "LIKELY ISSUES:"
-    echo "  1. Systemd taking too long (increase --timeout)"
-    echo "  2. Service dependency issue"
-    echo "  3. purple-installer.service not enabled"
+    echo "  1. Hook script not in initramfs"
+    echo "  2. Payload not found on boot device"
+    echo "  3. install.sh has errors"
     echo
     echo "SUGGESTED FIXES:"
     echo "  - Try: sudo ./test-boot.sh --timeout 120"
     echo "  - Try: sudo ./test-boot.sh --interactive"
-    echo "  - Check service is enabled in squashfs"
+    echo "  - Check initramfs contains hook: unmkinitramfs /casper/initrd /tmp/check"
     echo
     echo "LAST 20 LINES OF OUTPUT:"
     tail -20 "$SERIAL_LOG"
 }
 
-check_squashfs() {
-    echo "  Checking squashfs in ISO..."
+check_iso_structure() {
+    echo "  Checking ISO structure..."
 
     # Mount ISO and check structure
     local TEMP_MNT=$(mktemp -d)
     if mount -o loop,ro "$ISO_PATH" "$TEMP_MNT" 2>/dev/null; then
-        if [ -f "$TEMP_MNT/casper/filesystem.squashfs" ]; then
-            local SIZE=$(du -h "$TEMP_MNT/casper/filesystem.squashfs" | cut -f1)
-            echo "  ✓ filesystem.squashfs exists ($SIZE)"
-        else
-            error "  ✗ filesystem.squashfs NOT FOUND"
-        fi
-
         if [ -f "$TEMP_MNT/casper/vmlinuz" ]; then
             echo "  ✓ vmlinuz exists"
         else
@@ -406,9 +400,26 @@ check_squashfs() {
         fi
 
         if [ -f "$TEMP_MNT/casper/initrd" ]; then
-            echo "  ✓ initrd exists"
+            echo "  ✓ initrd exists (modified with Purple hook)"
         else
             error "  ✗ initrd NOT FOUND"
+        fi
+
+        if [ -d "$TEMP_MNT/purple" ]; then
+            echo "  ✓ /purple/ payload directory exists"
+            if [ -f "$TEMP_MNT/purple/install.sh" ]; then
+                echo "  ✓ install.sh exists"
+            else
+                error "  ✗ install.sh NOT FOUND"
+            fi
+            if [ -f "$TEMP_MNT/purple/purple-os.img.zst" ]; then
+                local SIZE=$(du -h "$TEMP_MNT/purple/purple-os.img.zst" | cut -f1)
+                echo "  ✓ purple-os.img.zst exists ($SIZE)"
+            else
+                error "  ✗ purple-os.img.zst NOT FOUND"
+            fi
+        else
+            error "  ✗ /purple/ payload directory NOT FOUND"
         fi
 
         umount "$TEMP_MNT"

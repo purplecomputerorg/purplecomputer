@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build complete PurpleOS installer ISO
+# Build complete Purple Computer installer ISO
 #
-# ARCHITECTURE: Ubuntu ISO Remaster
-# - Step 0: Build golden image (pre-built Ubuntu system to install)
-# - Step 1: Remaster Ubuntu Server ISO (add payload, disable Subiquity)
+# Architecture: Initramfs Injection
+# - Step 0: Build golden image (the installed system)
+# - Step 1: Remaster Ubuntu Server ISO (inject hook into initramfs)
 #
-# We do NOT build initramfs, casper, or the boot stack.
-# We take Ubuntu's live ISO as a black box and just add our payload.
+# We modify only the initramfs to add an early hook script.
+# The squashfs and boot stack remain untouched.
 
 set -e
 
@@ -14,18 +14,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 log_done() { echo -e "${GREEN}[DONE]${NC} $1"; }
-log_info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 
 print_banner() {
     echo
     echo "=========================================="
-    echo "  PurpleOS Installer Build"
-    echo "  Architecture: Ubuntu ISO Remaster"
+    echo "  Purple Computer Installer Build"
+    echo "  Architecture: Initramfs Injection"
     echo "=========================================="
     echo
 }
@@ -38,7 +37,6 @@ main() {
 
     cd "$SCRIPT_DIR"
 
-    # Allow starting from a specific step (default: 0)
     START_STEP="${1:-0}"
 
     print_banner
@@ -52,7 +50,7 @@ main() {
     fi
 
     if [ "$START_STEP" -le 1 ]; then
-        log_step "1/1: Remastering Ubuntu ISO with our payload..."
+        log_step "1/1: Remastering Ubuntu Server ISO..."
         ./01-remaster-iso.sh
         echo
     fi
@@ -65,11 +63,6 @@ main() {
     echo
     log_info "Write to USB stick with:"
     log_info "  sudo dd if=/opt/purple-installer/output/purple-installer-*.iso of=/dev/sdX bs=4M status=progress"
-    echo
-    log_info "This ISO uses Ubuntu's official boot stack:"
-    log_info "  - Signed shim + GRUB (Secure Boot works)"
-    log_info "  - Ubuntu's kernel + initramfs + casper (untouched)"
-    log_info "  - Our payload just added on top"
 }
 
 main "$@"

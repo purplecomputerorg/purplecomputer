@@ -28,6 +28,7 @@ main() {
     # Create empty disk image
     log_info "Creating ${IMAGE_SIZE_MB}MB disk image..."
     dd if=/dev/zero of="$GOLDEN_IMAGE" bs=1M count="$IMAGE_SIZE_MB" status=progress
+    sync
 
     # Create partition table
     log_info "Partitioning disk image..."

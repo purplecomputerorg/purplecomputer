@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Pre-build validation and post-build debugging script
-# Architecture: Ubuntu ISO Remaster
+# Pre-build validation script
 
 set -e
 
@@ -24,8 +23,8 @@ WARNINGS=0
 banner() {
     echo
     echo "=========================================="
-    echo "  PurpleOS Build Validation"
-    echo "  Architecture: Ubuntu ISO Remaster"
+    echo "  Purple Computer Build Validation"
+    echo "  Architecture: Initramfs Injection"
     echo "=========================================="
     echo
 }
@@ -65,7 +64,6 @@ check_install_script() {
         return
     fi
 
-    # Check for critical components
     if ! grep -q "zstd -dc" "$SCRIPT" && ! grep -q "zstdcat" "$SCRIPT"; then
         error "Install script missing zstd decompression"
         ((ERRORS++))
@@ -95,13 +93,13 @@ check_dockerfile() {
         return
     fi
 
-    # Required packages for ISO remaster
     local REQUIRED_DEPS=(
-        "squashfs-tools"
         "xorriso"
         "isolinux"
+        "initramfs-tools-core"
         "wget"
         "rsync"
+        "cpio"
     )
 
     for dep in "${REQUIRED_DEPS[@]}"; do
@@ -126,7 +124,6 @@ check_golden_image() {
         return
     fi
 
-    # Check size (should be 1-2 GB compressed)
     local SIZE=$(stat -c%s "$GOLDEN" 2>/dev/null || stat -f%z "$GOLDEN" 2>/dev/null || echo "0")
     local SIZE_MB=$((SIZE / 1048576))
 
@@ -187,41 +184,12 @@ check_final_iso() {
         ok "ISO size: ${SIZE_MB}MB - $(basename "$ISO")"
     fi
 
-    # Check checksums exist
     if [ -f "${ISO}.sha256" ]; then
         ok "SHA256 checksum present"
     else
         warn "SHA256 checksum missing"
         ((WARNINGS++))
     fi
-}
-
-post_boot_debug() {
-    info "Post-boot debugging information..."
-    echo
-    echo "If the installer doesn't boot or hangs, try these steps:"
-    echo
-    echo "1. Check serial log (if using purple-vm):"
-    echo "   sudo cat /var/log/libvirt/qemu/purplecomputer-serial.log"
-    echo
-    echo "2. Use Debug Mode from boot menu"
-    echo
-    echo "3. Access emergency shell:"
-    echo "   Press Alt+F2 during installation for root shell"
-    echo
-    echo "4. Test in QEMU:"
-    echo "   qemu-system-x86_64 -m 4096 -enable-kvm \\"
-    echo "     -drive file=/opt/purple-installer/output/purple-installer-*.iso,format=raw \\"
-    echo "     -drive file=test.qcow2,format=qcow2"
-    echo
-    echo "5. Check Secure Boot:"
-    echo "   This ISO uses Ubuntu's signed boot chain - Secure Boot should work"
-    echo
-    echo "6. Common issues:"
-    echo "   - Subiquity still starts: Check masked services in remaster script"
-    echo "   - Boot hangs: Ubuntu's boot stack issue, not ours"
-    echo "   - 'No target disk found': Check install.sh disk detection"
-    echo
 }
 
 summary() {
@@ -231,13 +199,13 @@ summary() {
     echo "=========================================="
 
     if [ "$ERRORS" -eq 0 ] && [ "$WARNINGS" -eq 0 ]; then
-        ok "All checks passed! Build should succeed."
+        ok "All checks passed!"
         echo
         info "Run the build with:"
         info "  cd build-scripts"
         info "  ./build-in-docker.sh"
     elif [ "$ERRORS" -eq 0 ]; then
-        warn "$WARNINGS warning(s) found - build may succeed but review warnings"
+        warn "$WARNINGS warning(s) found - build may succeed"
         echo
         info "You can proceed with the build"
     else
@@ -255,7 +223,6 @@ main() {
     check_install_script
     check_dockerfile
 
-    # Check build artifacts if they exist
     if [ -d "$BUILD_DIR" ]; then
         check_golden_image
         check_ubuntu_iso
@@ -263,13 +230,6 @@ main() {
     fi
 
     summary
-
-    echo
-    info "For boot debugging help, run: $0 --debug"
-
-    if [ "$1" = "--debug" ] || [ "$1" = "-d" ]; then
-        post_boot_debug
-    fi
 }
 
 main "$@"

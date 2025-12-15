@@ -42,18 +42,18 @@ The PurpleOS installer is built for **simplicity, reliability, and broad hardwar
 ### How It Works
 
 1. **Boot:** USB stick loads Ubuntu's signed boot chain (shim → GRUB → kernel)
-2. **Live Environment:** Casper mounts squashfs live filesystem with systemd
-3. **Auto-Start:** `purple-installer.service` runs automatically
-4. **Detect:** Installer finds internal disk (SATA, NVMe)
-5. **Write:** Decompress and write pre-built Ubuntu image to disk
+2. **Initramfs:** Kernel loads initramfs with our injected hook script
+3. **Hook Runs:** Our script in `/scripts/init-top/` runs before casper
+4. **Detect:** Hook finds payload on boot device and runs installer
+5. **Write:** Decompress and write pre-built Ubuntu image to internal disk
 6. **Bootloader:** Setup UEFI boot entries with multi-layer fallback
 7. **Reboot:** System boots into installed Ubuntu + Purple TUI
 
-**No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk.
+**No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk. The squashfs is never mounted—we intercept boot before casper runs.
 
-### Ubuntu Live Architecture
+### Initramfs Injection Architecture
 
-The installer uses Ubuntu's standard live boot infrastructure:
+The installer intercepts boot BEFORE Ubuntu's live system starts:
 
 ```
 USB Boot Flow
@@ -68,17 +68,23 @@ shimx64.efi (Microsoft-signed)
 grubx64.efi (Canonical-signed)
     │
     ▼
-vmlinuz + initrd (Ubuntu stock kernel, MODULES=most)
+vmlinuz + initrd (Ubuntu kernel + modified initramfs)
     │
     ▼
-Casper Live Boot (mounts squashfs → systemd)
+initramfs runs init-top scripts
+    │
+    ├── [Purple hook] Check for /purple/install.sh on boot device
+    │       │
+    │       ├── If found: Run installer, reboot
+    │       │
+    │       └── If not found: Continue to casper (normal Ubuntu boot)
     │
     ▼
-purple-installer.service
-    │
-    ▼
-Disk imaging + GRUB setup + Reboot
+(Only reaches here if payload missing)
+Casper mounts squashfs → Normal Ubuntu live boot
 ```
+
+**Key insight:** Our installer runs in initramfs, before casper ever mounts the squashfs. The squashfs and Ubuntu's live system are never touched.
 
 ### Why Ubuntu's Boot Stack?
 
@@ -234,7 +240,7 @@ This builds everything in Docker and outputs the ISO to `/opt/purple-installer/o
 
 ### Build Pipeline (2 Steps)
 
-The build uses an **ISO remaster** approach: we download the official Ubuntu Server ISO and modify it to add our payload and disable Subiquity.
+The build uses an **initramfs injection** approach: we download the official Ubuntu Server ISO and inject a hook script into the initramfs. The squashfs is left completely untouched.
 
 #### Step 0: Build Golden Image
 
@@ -257,28 +263,31 @@ This is the system that gets written to the target laptop's internal disk.
 
 **Script:** `01-remaster-iso.sh`
 
-Downloads official Ubuntu Server 24.04 ISO and remaster it with our payload.
+Downloads official Ubuntu Server 24.04 ISO and injects our hook into the initramfs.
 
 **Process:**
 1. Download Ubuntu Server ISO (cached for subsequent builds)
 2. Mount and extract ISO contents
-3. Unsquash the filesystem.squashfs
-4. Mask Subiquity/cloud-init services (so installer doesn't start)
-5. Add payload: golden image, install script, systemd service
-6. Resquash the filesystem
+3. Extract initramfs (using `unmkinitramfs`)
+4. Add hook script to `/scripts/init-top/`
+5. Repack initramfs (maintaining concatenated cpio structure)
+6. Add payload files to ISO root (`/purple/`)
 7. Rebuild ISO with xorriso
 
 **Output:** `purple-installer-YYYYMMDD.iso` (~4-5 GB)
 
-**Key insight:** We treat Ubuntu's boot stack (shim, GRUB, kernel, initramfs, casper) as a **black box**. We never rebuild it—we just add our payload and disable the default installer.
+**Key insight:** We only modify the initramfs. The squashfs, kernel, and boot stack remain completely untouched.
 
 **ISO structure (after remaster):**
 ```
 purple-installer.iso
 ├── casper/
 │   ├── vmlinuz             # Ubuntu kernel (untouched)
-│   ├── initrd              # Ubuntu initramfs (untouched)
-│   └── filesystem.squashfs # Modified: + golden image + installer
+│   ├── initrd              # MODIFIED: has our hook script
+│   └── *.squashfs          # Untouched (never mounted)
+├── purple/                 # NEW: our payload
+│   ├── install.sh          # Installer script
+│   └── purple-os.img.zst   # Golden image
 ├── boot/grub/
 │   └── grub.cfg            # Ubuntu's GRUB config (untouched)
 ├── [BOOT]/                 # UEFI boot partition (untouched)
@@ -317,12 +326,13 @@ Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
 
 **Automatic installation (10-20 minutes):**
 
-1. USB boots (Ubuntu kernel + casper live boot)
-2. Systemd starts `purple-installer.service`
-3. Installer detects internal disk (first non-USB, non-removable disk)
-4. Wipes disk and writes golden image via `zstdcat | dd`
-5. Sets up UEFI boot with 3-layer fallback strategy
-6. Prompts to remove USB, then reboots
+1. USB boots (Ubuntu kernel loads initramfs)
+2. Hook script in initramfs runs before casper
+3. Hook finds payload on boot device and runs `install.sh`
+4. Installer detects internal disk (first non-USB, non-removable disk)
+5. Wipes disk and writes golden image via `zstdcat | dd`
+6. Sets up UEFI boot with 3-layer fallback strategy
+7. Reboots automatically
 
 **No user interaction required.** The entire process is automated.
 
@@ -497,7 +507,7 @@ echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 │   ├── ubuntu-24.04.1-live-server-amd64.iso  # Cached Ubuntu ISO
 │   └── remaster/                      # Remaster working directory
 │       ├── iso-contents/              # Extracted ISO
-│       └── squashfs-root/             # Unsquashed filesystem
+│       └── initrd-work/               # Extracted initramfs
 └── output/
     └── purple-installer-YYYYMMDD.iso  # Final ISO
 ```
@@ -506,12 +516,12 @@ echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 ```
 build-scripts/
 ├── 00-build-golden-image.sh     # Ubuntu base system (debootstrap)
-├── 01-remaster-iso.sh           # Remaster Ubuntu Server ISO
+├── 01-remaster-iso.sh           # Remaster Ubuntu Server ISO (initramfs injection)
 ├── build-all.sh                 # Orchestrator (2 steps)
 ├── build-in-docker.sh           # Docker wrapper
 ├── clean.sh                     # Clean all build artifacts
 ├── validate-build.sh            # Pre-build validation
-└── install.sh                   # Installation script (runs on target)
+└── install.sh                   # Installation script (runs in initramfs)
 ```
 
 **Installed system:**
@@ -562,17 +572,17 @@ Bootloader (ISOLINUX/GRUB+Shim)
 Load Ubuntu Kernel + Initramfs
   ├─ MODULES=most initramfs
   ├─ Comprehensive driver support
-  └─ Casper live boot scripts
+  └─ Modified initramfs with Purple hook
   ↓
-Mount Squashfs Live Filesystem
+Initramfs init-top scripts run
+  ├─ udev starts (devices available)
+  └─ Purple hook: /scripts/init-top/01_purple_installer
+      ├─ Check each block device for /purple/install.sh
+      ├─ If found: Run installer, reboot
+      └─ If not found: Exit, continue to casper
   ↓
-Systemd Starts
-  ↓
-purple-installer.service
-  ├─ Detect target disk (first non-USB)
-  ├─ Decompress purple-os.img.zst → /dev/sdX
-  ├─ Setup UEFI boot (3-layer fallback)
-  └─ Reboot
+(Only if payload not found)
+Casper mounts squashfs → Normal Ubuntu boot
   ↓
 First Boot (Installed System)
   └─ Ubuntu 24.04 + Purple TUI

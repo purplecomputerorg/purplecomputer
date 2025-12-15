@@ -160,18 +160,22 @@ purplecomputer/
 
 There are **two separate systems** involved:
 
-1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO. We inject a hook script into the initramfs that runs BEFORE casper. The hook checks for our payload and runs the installer. Ubuntu's boot stack (shim, GRUB, kernel) is untouched. The squashfs is never mounted.
+1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO with a two-gate safety model:
+   - **Gate 1 (initramfs):** Checks for `purple.install=1` in kernel cmdline, writes runtime artifacts to `/run/`
+   - **Gate 2 (userspace):** Shows confirmation screen, requires user to press ENTER
+   - Ubuntu's boot stack (shim, GRUB, kernel) and squashfs are untouched
 
 2. **Installed System** (permanent) - A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
 
-The USB's only job is to copy the pre-built image to disk. After reboot, the USB is never used again.
+The USB's only job is to copy the pre-built image to disk (after user confirmation). After reboot, the USB is never used again.
 
 **Why this design:**
 - Ubuntu's signed boot chain → Secure Boot works
 - Ubuntu's stock kernel → all hardware drivers included
 - No package installation during setup → fast, reliable, offline
 - Standard Ubuntu on the installed system → normal apt updates work
-- Initramfs injection avoids squashfs complexity entirely
+- Initramfs hook writes to `/run/` → squashfs never modified
+- Two-gate safety → explicit user consent before disk writes
 
 See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation of why this design exists and what alternatives we tried.
 

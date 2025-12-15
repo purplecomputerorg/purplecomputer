@@ -39,24 +39,40 @@ These are built differently and serve different purposes. See [guides/architectu
 
 The PurpleOS installer is built for **simplicity, reliability, and broad hardware compatibility**. It uses Ubuntu's stock kernel and signed boot chain to work across diverse laptop hardware including Surface, Dell, HP, and ThinkPad devices.
 
-### How It Works
+### How It Works (Two-Gate Safety Model)
+
+Installation requires passing **two independent safety gates**:
+
+| Gate | When | What | Purpose |
+|------|------|------|---------|
+| **Gate 1** | Initramfs (early boot) | Check `purple.install=1` in cmdline | Design-time arming |
+| **Gate 2** | Userspace (systemd) | Show confirmation, require ENTER | Runtime user consent |
+
+**Boot Flow:**
 
 1. **Boot:** USB stick loads Ubuntu's signed boot chain (shim → GRUB → kernel)
 2. **Initramfs:** Kernel loads initramfs with our injected hook script
-3. **Hook Runs:** Our script in `/scripts/init-top/` runs before casper
-4. **Detect:** Hook finds payload on boot device and runs installer
-5. **Write:** Decompress and write pre-built Ubuntu image to internal disk
-6. **Bootloader:** Setup UEFI boot entries with multi-layer fallback
-7. **Reboot:** System boots into installed Ubuntu + Purple TUI
+3. **Gate 1 (Hook Runs):** Our script in `/scripts/init-top/` checks for `purple.install=1`
+   - If NOT armed → exit, normal Ubuntu boot
+   - If ARMED → find payload, write runtime artifacts to `/run/`, continue to casper
+4. **Casper:** Ubuntu's casper mounts squashfs, systemd starts
+5. **Gate 2 (Confirmation):** Runtime systemd service shows confirmation screen
+   - User presses ENTER → run installer
+   - User presses ESC or timeout → reboot (no install)
+6. **Write:** Decompress and write pre-built Ubuntu image to internal disk
+7. **Bootloader:** Setup UEFI boot entries with multi-layer fallback
+8. **Reboot:** System boots into installed Ubuntu + Purple TUI
 
-**No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk. The squashfs is never mounted—we intercept boot before casper runs.
+**Key insight:** The squashfs is never modified. Gate 2's systemd service is written to `/run/` by the initramfs hook—systemd automatically loads units from `/run/systemd/system/`.
+
+**No package manager runs during installation.** The installer writes a complete, pre-built Ubuntu system image directly to disk.
 
 ### Initramfs Injection Architecture
 
 The installer intercepts boot BEFORE Ubuntu's live system starts:
 
 ```
-USB Boot Flow
+USB Boot Flow (Two-Gate Model)
 ═══════════════════════════════════════════════════════════
 
 UEFI Firmware
@@ -68,23 +84,65 @@ shimx64.efi (Microsoft-signed)
 grubx64.efi (Canonical-signed)
     │
     ▼
+GRUB menu:
+  • "Install Purple Computer" (default) → purple.install=1
+  • "Debug Mode (no install)" → no arming flag
+    │
+    ▼
 vmlinuz + initrd (Ubuntu kernel + modified initramfs)
     │
     ▼
+═══════════════════════════════════════════════════════════
+                    GATE 1: DESIGN-TIME ARMING
+═══════════════════════════════════════════════════════════
 initramfs runs init-top scripts
     │
-    ├── [Purple hook] Check for /purple/install.sh on boot device
+    ├── [Purple hook] Check cmdline for purple.install=1
     │       │
-    │       ├── If found: Run installer, reboot
+    │       ├── NOT ARMED → Gate 1 CLOSED → normal Ubuntu boot
     │       │
-    │       └── If not found: Continue to casper (normal Ubuntu boot)
+    │       └── ARMED → scan for payload
+    │               │
+    │               ├── Found → write /run/purple/armed marker
+    │               │           write /run/systemd/system/purple-confirm.service
+    │               │           Gate 1 PASSED → continue to casper
+    │               │
+    │               └── Not found → Gate 1 CLOSED → normal Ubuntu boot
     │
     ▼
-(Only reaches here if payload missing)
-Casper mounts squashfs → Normal Ubuntu live boot
+casper mounts squashfs → systemd starts
+    │
+    ▼
+═══════════════════════════════════════════════════════════
+                    GATE 2: RUNTIME USER CONFIRMATION
+═══════════════════════════════════════════════════════════
+purple-confirm.service runs (only if /run/purple/armed exists)
+    │
+    ├── Shows large warning: "This will set up Purple Computer"
+    │
+    ├── Waits for user input:
+    │       │
+    │       ├── ENTER → Gate 2 PASSED → run installer
+    │       │
+    │       ├── ESC → Gate 2 CLOSED → reboot (no install)
+    │       │
+    │       └── Timeout → Gate 2 CLOSED → reboot (no install)
+    │
+    ▼
+(Only reaches here if both gates passed)
+install.sh writes golden image to disk
+    │
+    ▼
+Reboot into installed Purple Computer
 ```
 
-**Key insight:** Our installer runs in initramfs, before casper ever mounts the squashfs. The squashfs and Ubuntu's live system are never touched.
+**Key insight:** Our hook runs in initramfs but does NOT run the installer. It writes runtime artifacts to `/run/` and lets casper continue. The confirmation screen (Gate 2) runs in userspace via systemd.
+
+**Safety:** Installation requires BOTH gates to pass:
+1. `purple.install=1` in kernel cmdline (Gate 1 - design-time arming)
+2. User presses ENTER on confirmation screen (Gate 2 - runtime consent)
+
+Selecting "Debug Mode" from the GRUB menu fails Gate 1, booting into normal Ubuntu Server live environment.
 
 ### Why Ubuntu's Boot Stack?
 
@@ -324,17 +382,20 @@ Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
 
 ### Installation Process
 
-**Automatic installation (10-20 minutes):**
+**Two-gate installation (10-20 minutes):**
 
 1. USB boots (Ubuntu kernel loads initramfs)
-2. Hook script in initramfs runs before casper
-3. Hook finds payload on boot device and runs `install.sh`
-4. Installer detects internal disk (first non-USB, non-removable disk)
-5. Wipes disk and writes golden image via `zstdcat | dd`
-6. Sets up UEFI boot with 3-layer fallback strategy
-7. Reboots automatically
+2. **Gate 1:** Hook script checks for `purple.install=1` in kernel cmdline
+3. Hook finds payload on boot device, writes runtime artifacts to `/run/`
+4. Casper mounts squashfs, systemd starts
+5. **Gate 2:** Confirmation screen appears - "This will set up Purple Computer"
+6. **User presses ENTER** to confirm (ESC or timeout cancels)
+7. Installer detects internal disk (first non-USB, non-removable disk)
+8. Wipes disk and writes golden image via `zstdcat | dd`
+9. Sets up UEFI boot with 3-layer fallback strategy
+10. User removes USB and presses ENTER to reboot
 
-**No user interaction required.** The entire process is automated.
+**User confirmation required.** Gate 2 ensures explicit consent before any disk writes.
 
 ### First Boot
 
@@ -568,21 +629,41 @@ build-scripts/
 USB Boot (BIOS/UEFI)
   ↓
 Bootloader (ISOLINUX/GRUB+Shim)
+  ├─ "Install Purple Computer" → purple.install=1 (default)
+  └─ "Debug Mode (no install)" → no arming flag
   ↓
 Load Ubuntu Kernel + Initramfs
   ├─ MODULES=most initramfs
   ├─ Comprehensive driver support
   └─ Modified initramfs with Purple hook
   ↓
+═══════════════════════════════════════════════
+            GATE 1: DESIGN-TIME ARMING
+═══════════════════════════════════════════════
 Initramfs init-top scripts run
   ├─ udev starts (devices available)
   └─ Purple hook: /scripts/init-top/01_purple_installer
-      ├─ Check each block device for /purple/install.sh
-      ├─ If found: Run installer, reboot
-      └─ If not found: Exit, continue to casper
+      ├─ Check cmdline for purple.install=1
+      ├─ If NOT ARMED: exit, Gate 1 closed
+      ├─ If ARMED: scan for /purple/payload
+      │     ├─ If found: write /run/purple/armed
+      │     │            write /run/systemd/system/purple-confirm.service
+      │     │            Gate 1 passed → continue to casper
+      │     └─ If not found: exit, Gate 1 closed
   ↓
-(Only if payload not found)
-Casper mounts squashfs → Normal Ubuntu boot
+Casper mounts squashfs → systemd starts
+  ↓
+═══════════════════════════════════════════════
+         GATE 2: RUNTIME USER CONFIRMATION
+═══════════════════════════════════════════════
+purple-confirm.service runs (if /run/purple/armed exists)
+  ├─ Shows confirmation screen
+  ├─ ENTER → Gate 2 passed → run install.sh
+  ├─ ESC → Gate 2 closed → reboot
+  └─ Timeout → Gate 2 closed → reboot
+  ↓
+(Only if both gates passed)
+install.sh writes golden image to disk
   ↓
 First Boot (Installed System)
   └─ Ubuntu 24.04 + Purple TUI

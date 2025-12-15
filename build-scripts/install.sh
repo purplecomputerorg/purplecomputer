@@ -1,13 +1,18 @@
 #!/bin/bash
 # PurpleOS Factory Installer
-# Runs from Ubuntu live environment (casper-based)
+# Runs from Gate 2 confirmation script (purple-confirm.sh)
+#
+# TWO-GATE SAFETY MODEL:
+#   Gate 1 (initramfs): Checks purple.install=1, sets /run/purple/armed marker
+#   Gate 2 (systemd): Shows confirmation screen, requires ENTER to proceed
+#   This script: Only runs AFTER user confirms in Gate 2
 #
 # This script:
 # 1. Detects the internal disk (excluding USB/removable devices)
 # 2. Wipes the partition table
 # 3. Writes the pre-built golden image (purple-os.img.zst)
 # 4. Sets up UEFI boot with multi-layer fallback strategy
-# 5. Reboots into the installed system
+# 5. Returns to caller (which handles reboot)
 
 set -e
 
@@ -17,9 +22,23 @@ YELLOW='\033[1;33m'
 PURPLE='\033[0;35m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}[PURPLE]${NC} $1" >&2; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
-error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
+# Loud logging to console for debugging
+log() {
+    echo -e "${GREEN}[PURPLE]${NC} $1" >&2
+    echo "[PURPLE] $1" >/dev/console 2>/dev/null || true
+}
+warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1" >&2
+    echo "[PURPLE WARN] $1" >/dev/console 2>/dev/null || true
+}
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+    echo "[PURPLE ERROR] $1" >/dev/console 2>/dev/null || true
+    exit 1
+}
+
+# Golden image path - set by hook via PURPLE_PAYLOAD_DIR
+GOLDEN_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os.img.zst"
 
 # Spawn emergency shell on tty2 (user can access with Alt+F2)
 if [ -c /dev/tty2 ]; then
@@ -149,18 +168,23 @@ main() {
     log ""
     sleep 3
 
+    # Verify golden image exists
+    if [ ! -f "$GOLDEN_IMAGE" ]; then
+        error "Golden image not found: $GOLDEN_IMAGE"
+    fi
+
     # Write golden image directly to disk
     log "Writing Purple Computer to disk..."
-    log "  Source: /purple-os.img.zst"
+    log "  Source: $GOLDEN_IMAGE"
     log "  Target: /dev/$TARGET"
     log "  This will take approximately 10-15 minutes..."
     log ""
 
     # Use pv for progress if available, otherwise dd with status=progress
     if command -v pv >/dev/null 2>&1; then
-        zstd -dc /purple-os.img.zst | pv -s $(zstd -l /purple-os.img.zst 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G") | dd of=/dev/$TARGET bs=4M conv=fsync
+        zstd -dc "$GOLDEN_IMAGE" | pv -s $(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G") | dd of=/dev/$TARGET bs=4M conv=fsync
     else
-        zstd -dc /purple-os.img.zst | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
+        zstd -dc "$GOLDEN_IMAGE" | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
     fi
 
     # Force kernel to re-read partition table from the new image
@@ -247,60 +271,13 @@ main() {
     fi
 
     log ""
+    log "============================================"
     log "Installation complete!"
+    log "============================================"
 
-    # Detect if we're running in a VM
-    IS_VM=false
-    if [ -f /sys/class/dmi/id/product_name ]; then
-        PRODUCT=$(cat /sys/class/dmi/id/product_name 2>/dev/null || echo "")
-        case "$PRODUCT" in
-            *"Virtual"*|*"QEMU"*|*"KVM"*|*"VMware"*|*"VirtualBox"*|*"Bochs"*)
-                IS_VM=true
-                log "Detected VM environment ($PRODUCT)"
-                ;;
-        esac
-    fi
-    # Also check hypervisor flag
-    if grep -q "^flags.*hypervisor" /proc/cpuinfo 2>/dev/null; then
-        IS_VM=true
-    fi
-
-    if [ "$IS_VM" = "true" ]; then
-        # VM: brief delay then reboot
-        echo ""
-        echo -e "${GREEN}=================================================${NC}"
-        echo -e "${GREEN}             Installation complete!              ${NC}"
-        echo -e "${GREEN}=================================================${NC}"
-        echo ""
-        log "Rebooting in 5 seconds..."
-        sleep 5
-    else
-        # Physical hardware: show friendly message and wait for USB removal or Enter
-        clear
-        echo ""
-        echo ""
-        echo -e "${GREEN}=================================================${NC}"
-        echo -e "${GREEN}                                                 ${NC}"
-        echo -e "${GREEN}             All done!                           ${NC}"
-        echo -e "${GREEN}                                                 ${NC}"
-        echo -e "${GREEN}=================================================${NC}"
-        echo ""
-        echo ""
-        echo "    Please remove the USB stick now."
-        echo ""
-        echo "    Press ENTER to restart your computer,"
-        echo "    or it will restart automatically in 60 seconds."
-        echo ""
-        echo ""
-
-        # Wait for Enter or timeout
-        read -t 60 2>/dev/null || true
-    fi
-
-    # Reboot
-    log "Rebooting..."
-    sync
-    reboot -f || echo b > /proc/sysrq-trigger
+    # Return success - the initramfs hook handles reboot/user interaction
+    # This keeps install.sh focused on disk operations only
+    exit 0
 }
 
 main "$@"

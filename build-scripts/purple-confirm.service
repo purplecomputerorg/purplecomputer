@@ -1,0 +1,58 @@
+# Purple Computer Installer - Gate 2 Service
+# This service handles runtime user confirmation before installation
+#
+# TWO-GATE SAFETY MODEL:
+#   Gate 1 (initramfs hook): Sets /run/purple/armed if purple.install=1 in cmdline
+#   Gate 2 (this service): Shows confirmation screen, requires ENTER to proceed
+#
+# This service:
+# - Only runs if /run/purple/armed exists (Gate 1 passed)
+# - Runs early, before graphical login
+# - Has no network or graphics dependencies
+# - Shows TTY-based confirmation screen
+# - Requires explicit user input to proceed
+
+[Unit]
+Description=Purple Computer Installer (Gate 2: User Confirmation)
+
+# Run very early, before any user-facing services
+DefaultDependencies=no
+
+# Requires basic system to be up
+After=sysinit.target
+After=systemd-udevd.service
+
+# Must run before any graphical or login services
+Before=display-manager.service
+Before=getty@tty1.service
+Before=multi-user.target
+
+# Only run if Gate 1 passed (marker file exists)
+ConditionPathExists=/run/purple/armed
+
+[Service]
+Type=oneshot
+
+# Run on tty1 for user interaction
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+# The confirmation script
+ExecStart=/purple/purple-confirm.sh
+
+# Give it time to complete (installation can take 15+ minutes)
+TimeoutStartSec=3600
+
+# If it fails, don't bring down the system
+FailureAction=none
+
+# Environment
+Environment=TERM=linux
+
+[Install]
+WantedBy=sysinit.target

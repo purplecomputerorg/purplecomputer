@@ -194,10 +194,25 @@ def _speak_sync(text: str, speech_id: int) -> bool:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
-        # Generate audio with Piper (needs wave.Wave_write object)
+        # Generate audio with Piper
         # Pad with pauses before and after to prevent clipping on short words
+        from piper.config import SynthesisConfig
+        config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
+
+        # Collect audio chunks from generator
+        audio_chunks = list(voice.synthesize(f"... {text} ...", config))
+        if not audio_chunks:
+            Path(wav_path).unlink(missing_ok=True)
+            return False
+
+        # Write WAV file from chunks
+        first_chunk = audio_chunks[0]
         with wave.open(wav_path, 'wb') as wav_file:
-            voice.synthesize(f"... {text} ...", wav_file, speaker_id=VOICE_SPEAKER)
+            wav_file.setnchannels(first_chunk.sample_channels)
+            wav_file.setsampwidth(first_chunk.sample_width)
+            wav_file.setframerate(first_chunk.sample_rate)
+            for chunk in audio_chunks:
+                wav_file.writeframes(chunk.audio_int16_bytes)
 
         # Check if we've been cancelled after generating
         if speech_id != _speech_id:

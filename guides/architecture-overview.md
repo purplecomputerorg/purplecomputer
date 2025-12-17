@@ -45,7 +45,7 @@ Installation requires passing **two independent safety gates**:
 
 | Gate | When | What | Purpose |
 |------|------|------|---------|
-| **Gate 1** | Initramfs (early boot) | Check `purple.install=1` in cmdline | Design-time arming |
+| **Gate 1** | Initramfs (casper-bottom) | Check `purple.install=1` in cmdline | Design-time arming |
 | **Gate 2** | Userspace (systemd) | Show confirmation, require ENTER | Runtime user consent |
 
 **Arming ≠ Asking user.** Gate 1 is set by the ISO builder. Gate 2 requires explicit human action.
@@ -71,24 +71,32 @@ GRUB menu:
 vmlinuz + initrd (Ubuntu kernel + modified initramfs)
     │
     ▼
+casper mounts squashfs, sets up /run
+    │
+    ▼
 ═══════════════════════════════════════════════════════════
                     GATE 1: DESIGN-TIME ARMING
 ═══════════════════════════════════════════════════════════
-initramfs runs init-top scripts
+casper runs casper-bottom scripts (after /run is ready)
     │
-    ├── [Purple hook] Check cmdline for purple.install=1
+    ├── [Purple hook: 80_purple_installer]
     │       │
-    │       ├── NOT ARMED → Gate 1 CLOSED → normal Ubuntu boot
-    │       │
-    │       └── ARMED → scan for payload
-    │               │
-    │               ├── Found → write /run/purple/armed marker
-    │               │           Gate 1 PASSED → continue to casper
-    │               │
-    │               └── Not found → Gate 1 CLOSED → normal Ubuntu boot
+    │       ├── Check cmdline for purple.install=1
+    │       │       │
+    │       │       ├── NOT ARMED → Gate 1 CLOSED → normal Ubuntu boot
+    │       │       │
+    │       │       └── ARMED → check payload at /cdrom/purple/
+    │       │               │
+    │       │               ├── Found → write runtime artifacts to /run/:
+    │       │               │           - /run/purple/armed (marker)
+    │       │               │           - /run/purple/confirm.sh (script)
+    │       │               │           - /run/systemd/system/purple-confirm.service
+    │       │               │           Gate 1 PASSED → continue boot
+    │       │               │
+    │       │               └── Not found → Gate 1 CLOSED → normal Ubuntu boot
     │
     ▼
-casper mounts squashfs → systemd starts
+systemd starts (picks up runtime units from /run/systemd/system/)
     │
     ▼
 ═══════════════════════════════════════════════════════════
@@ -145,17 +153,30 @@ The following must remain **identical to the official Ubuntu ISO**:
 | Surface | What we do |
 |---------|------------|
 | **GRUB config** | Add `purple.install=1` to cmdline, add debug entry |
-| **Initramfs** | Add one hook script to `/scripts/init-top/` |
+| **Initramfs** | Add one hook script to `/scripts/casper-bottom/` |
 | **ISO filesystem** | Add `/purple/` directory with payload |
 
-The initramfs hook:
+The casper-bottom hook (`80_purple_installer`):
 1. Checks if `purple.install=1` is in kernel cmdline (Gate 1)
 2. If not armed: exits immediately, normal Ubuntu boot
-3. If armed: scans for payload on boot device
-4. If payload found: writes runtime artifacts to `/run/`, continues boot
-5. If no payload: exits, lets casper continue normally
+3. If armed: checks for payload at `/root/cdrom/purple/` (see path notes below)
+4. If payload found: writes runtime artifacts to `/root/run/`, continues boot
+5. If no payload: exits, lets boot continue normally
 
-**Gate 2 is implemented via runtime systemd units in `/run/`** - NOT by modifying squashfs.
+**Why casper-bottom (not init-top)?**
+- `init-top` runs BEFORE casper mounts the live root
+- Files written to `/run` in `init-top` are LOST during `switch_root`
+- `casper-bottom` runs AFTER the real `/run` tmpfs is mounted
+- This is the same mechanism Ubuntu's own scripts use (e.g., `55disable_snap_refresh`)
+
+**Critical path notes for casper-bottom scripts:**
+- In casper-bottom, the real root filesystem is mounted at `/root`
+- The live media (ISO/USB) is mounted at `/root/cdrom`, NOT `/cdrom`
+- Runtime files must be written to `/root/run/`, NOT `/run/`
+- After `switch_root`, `/root` becomes `/`, so `/root/run/` becomes `/run/`
+- The ORDER file (`/scripts/casper-bottom/ORDER`) controls which scripts run - scripts not listed are silently ignored
+
+**Gate 2 is implemented via runtime systemd units in `/root/run/`** - NOT by modifying squashfs.
 
 ---
 
@@ -205,17 +226,18 @@ The installer follows strict safety requirements to prevent accidental data loss
 - Arming (Gate 1) is a design decision made when building the ISO
 - Confirmation (Gate 2) is a runtime decision made by the user
 
-### Gate 1: Initramfs Hook
+### Gate 1: Casper-Bottom Hook
 
-The hook script in `/scripts/init-top/01_purple_installer`:
+The hook script `/scripts/casper-bottom/80_purple_installer`:
 
 1. Checks for `purple.install=1` in kernel cmdline
-2. Scans for payload on boot device (with timeouts)
-3. Writes runtime artifacts to `/run/`:
-   - `/run/purple/armed` - marker with payload info
-   - `/run/purple/confirm.sh` - confirmation script (copied from payload)
-   - `/run/systemd/system/purple-confirm.service` - runtime systemd unit
-4. Exits cleanly—casper boots, systemd loads runtime unit
+2. Checks for payload at `/root/cdrom/purple/` (where casper mounts live media, relative to initramfs root)
+3. Writes runtime artifacts to `/root/run/` (which becomes `/run/` after switch_root):
+   - `/root/run/purple/armed` - marker with payload info
+   - `/root/run/purple/confirm.sh` - confirmation script (copied from payload)
+   - `/root/run/systemd/system/purple-confirm.service` - runtime systemd unit
+   - Service masks for interfering services (subiquity, snapd, getty)
+4. Exits cleanly—after switch_root, systemd loads runtime unit and masks from `/run/`
 
 **What the hook is NOT allowed to do:**
 - ❌ Run the installer
@@ -348,6 +370,63 @@ We are **NOT** trying to:
 
 ---
 
+## Initramfs/Casper Debugging Notes
+
+Hard-won lessons from debugging the casper-bottom hook:
+
+### Path Confusion in Initramfs
+
+The initramfs environment has a confusing filesystem layout:
+
+| Path in initramfs | What it is | Path after switch_root |
+|-------------------|------------|------------------------|
+| `/` | Initramfs root (temporary) | Gone |
+| `/root` | Real root filesystem mount | `/` |
+| `/root/run` | Real /run tmpfs | `/run` |
+| `/root/cdrom` | Live media mount | `/cdrom` |
+| `/cdrom` | Empty mount point | N/A |
+| `/run` | Initramfs /run (discarded) | N/A |
+
+**Key insight:** In casper-bottom, always use `/root/` prefix for anything that needs to persist.
+
+### ORDER File
+
+Casper-bottom scripts are NOT auto-discovered. The file `/scripts/casper-bottom/ORDER` explicitly lists which scripts run and in what order. If your script isn't in ORDER, it will be silently ignored.
+
+To add a script:
+```bash
+sed -i '/99casperboot/i /scripts/casper-bottom/80_purple_installer "$@"\n[ -e /conf/param.conf ] && . /conf/param.conf' ORDER
+```
+
+### Casper Functions
+
+Casper-bottom scripts must source casper functions:
+```bash
+. /scripts/casper-functions
+log_begin_msg "$DESCRIPTION"
+# ... your code ...
+log_end_msg
+```
+
+### Debugging Tips
+
+1. **Add verbose logging** - Use `echo "[PREFIX] message" >/dev/console` to see output during boot
+2. **Check serial console** - VM serial logs capture boot messages: `/var/log/libvirt/qemu/*-serial.log`
+3. **List mounts** - Run `mount | grep -E "(cdrom|vda|loop)"` to see what's mounted where
+4. **Debug mode** - Boot without `purple.install=1` to get a normal Ubuntu live shell
+
+### Common Failures
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Hook doesn't run | Not in ORDER file | Add to ORDER file |
+| "Payload not found" | Wrong path (used `/cdrom` instead of `/root/cdrom`) | Use `/root/cdrom` |
+| Service fails to start | Wrote to `/run` instead of `/root/run` | Use `/root/run` |
+| Service file not found | Same as above | Use `/root/run/systemd/system/` |
+| Black screen after boot | Getty masked but our service failed | Check service logs, fix service |
+
+---
+
 ## Glossary
 
 | Term | Meaning |
@@ -355,7 +434,7 @@ We are **NOT** trying to:
 | **Golden image** | Pre-built Ubuntu system, created with debootstrap, compressed as purple-os.img.zst |
 | **Initramfs** | Early boot filesystem loaded by kernel, contains scripts that run before real root |
 | **Casper** | Ubuntu's scripts for live boot, mounts squashfs—we let it run normally, Gate 2 runs in userspace |
-| **Hook script** | Our script in `/scripts/init-top/` that checks for arming and writes runtime artifacts to `/run/` |
+| **Hook script** | Our script in `/scripts/casper-bottom/` that checks for arming and writes runtime artifacts to `/run/` |
 
 ---
 
@@ -369,11 +448,12 @@ We are **NOT** trying to:
 │   We don't modify Ubuntu's live system (squashfs).              │
 │   We only modify GRUB config and initramfs.                     │
 │                                                                 │
-│   Gate 1 (initramfs hook):                                      │
+│   Gate 1 (casper-bottom hook):                                  │
+│     - Runs in casper-bottom, AFTER real root is mounted         │
 │     - Checks for purple.install=1 in cmdline                    │
-│     - If armed: writes runtime artifacts to /run/               │
+│     - Finds payload at /root/cdrom/purple/                      │
+│     - Writes runtime artifacts to /root/run/ (becomes /run/)    │
 │     - Does NOT run installer directly                           │
-│     - Lets casper continue to boot                              │
 │                                                                 │
 │   Gate 2 (systemd service in /run):                             │
 │     - Shows confirmation screen                                 │

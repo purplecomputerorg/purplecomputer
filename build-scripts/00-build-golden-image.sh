@@ -91,10 +91,11 @@ FSTAB
     log_info "Installing Purple Computer application..."
 
     # Setup apt sources for universe repository (needed for pip)
+    # Using us.archive for better mirror sync reliability
     cat > "$MOUNT_DIR/etc/apt/sources.list" <<'SOURCES'
-deb http://archive.ubuntu.com/ubuntu noble main universe
-deb http://archive.ubuntu.com/ubuntu noble-updates main universe
-deb http://archive.ubuntu.com/ubuntu noble-security main universe
+deb http://us.archive.ubuntu.com/ubuntu noble main universe
+deb http://us.archive.ubuntu.com/ubuntu noble-updates main universe
+deb http://security.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)

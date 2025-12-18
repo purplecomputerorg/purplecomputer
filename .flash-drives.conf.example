@@ -1,0 +1,9 @@
+# USB Drive Whitelist for flash-to-usb.sh
+# Add one drive serial number per line.
+# Run './build-scripts/flash-to-usb.sh --list' to see connected drives.
+#
+# Only drives with serials listed here will be offered as targets.
+# This prevents accidentally writing to the wrong drive.
+#
+# Example:
+# ABC123456789

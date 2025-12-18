@@ -58,11 +58,22 @@ cd build-scripts
 # Result: /opt/purple-installer/output/purple-installer-YYYYMMDD.iso
 ```
 
+**Flash to USB:**
+```bash
+# List USB drives and find your drive's serial number
+./build-scripts/flash-to-usb.sh --list
+
+# Add your drive's serial to the whitelist (one-time setup)
+echo 'YOUR_DRIVE_SERIAL' >> .flash-drives.conf
+
+# Flash the latest ISO (with verification)
+./build-scripts/flash-to-usb.sh
+```
+
 **Install to hardware:**
-1. Write ISO to USB with [balenaEtcher](https://www.balena.io/etcher/) or `dd`
-2. Boot laptop from USB (Secure Boot can remain enabled)
-3. Installation runs automatically (10-20 minutes)
-4. System reboots into Purple Computer
+1. Boot laptop from USB (Secure Boot can remain enabled)
+2. Installation runs automatically (10-20 minutes)
+3. System reboots into Purple Computer
 
 **Default credentials:** `purple` / `purple` (change immediately!)
 
@@ -145,6 +156,7 @@ purplecomputer/
 │   ├── build-all.sh                # Orchestrate build steps
 │   ├── build-in-docker.sh          # Docker wrapper (NixOS-friendly)
 │   ├── validate-build.sh           # Pre-build validation
+│   ├── flash-to-usb.sh             # Write ISO to USB with verification
 │   └── install.sh                  # Installation script (runs in initramfs)
 │
 └── guides/               # Technical references

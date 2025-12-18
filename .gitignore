@@ -70,3 +70,6 @@ htmlcov/
 # Build artifacts
 purple-computer.iso
 purple-computer-*.iso
+
+# USB flash drive whitelist (contains user-specific drive serials)
+.flash-drives.conf

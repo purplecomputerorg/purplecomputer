@@ -360,7 +360,26 @@ The ISO is **hybrid**—bootable from USB stick or optical media, BIOS or UEFI, 
 
 ### Writing to USB
 
-**Linux/macOS:**
+**Recommended: Use the flash script (Linux)**
+
+The `flash-to-usb.sh` script provides safe USB writing with verification:
+
+```bash
+# One-time setup: whitelist your USB drive
+./build-scripts/flash-to-usb.sh --list    # Find your drive's serial number
+echo 'YOUR_SERIAL' >> .flash-drives.conf  # Add to whitelist
+
+# Flash the latest ISO
+./build-scripts/flash-to-usb.sh
+```
+
+**Features:**
+- Only writes to whitelisted drives (prevents accidental data loss)
+- Rejects drives over 256GB (safety limit for flash drives)
+- Verifies write by reading back and comparing SHA256 checksums
+- Auto-detects most recent ISO in `/opt/purple-installer/output/`
+
+**Manual method (Linux/macOS):**
 ```bash
 sudo dd if=/opt/purple-installer/output/purple-installer-*.iso \
     of=/dev/sdX bs=4M status=progress conv=fsync
@@ -479,7 +498,7 @@ du -sh /opt/purple-installer/build/*  # Find large files
 
 **"Boot device not found" / No USB boot option**
 
-- Ensure USB was written correctly (use `dd` or balenaEtcher)
+- Ensure USB was written correctly (use `flash-to-usb.sh` which verifies the write)
 - Try different USB port (USB 2.0 ports often more reliable)
 - Check BIOS boot order includes USB
 
@@ -582,7 +601,11 @@ build-scripts/
 ├── build-in-docker.sh           # Docker wrapper
 ├── clean.sh                     # Clean all build artifacts
 ├── validate-build.sh            # Pre-build validation
+├── flash-to-usb.sh              # Safe USB writing with verification
 └── install.sh                   # Installation script (runs in initramfs)
+
+.flash-drives.conf               # USB drive whitelist (gitignored, user-specific)
+.flash-drives.conf.example       # Template for whitelist
 ```
 
 **Installed system:**

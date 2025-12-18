@@ -168,42 +168,48 @@ if [ -z "$PAYLOAD_PATH" ]; then
 fi
 
 # =============================================================================
-# WRITE RUNTIME ARTIFACTS TO /root/run (the real root's /run)
-# In casper-bottom, the real root is mounted at /root
+# WRITE RUNTIME ARTIFACTS
+# IMPORTANT: Use /root/etc/systemd/system/ NOT /root/run/systemd/system/
+# The /run tmpfs gets mounted OVER /root/run during switch_root, hiding files.
+# /etc/systemd/system/ survives and has highest priority in systemd's load path.
 # =============================================================================
-purple_log "Writing runtime artifacts to /root/run..."
+purple_log "Writing runtime artifacts..."
 
-mkdir -p /root/run/purple
-mkdir -p /root/run/systemd/system
+# Scripts go to /run/purple (NOT /root/run/purple!)
+# The /run tmpfs is moved into the new root during switch_root.
+# Writing to /root/run would put files UNDER the tmpfs mount, where they get shadowed.
+mkdir -p /run/purple
 
-# 1. Write arming marker
-cat > /root/run/purple/armed << MARKER_EOF
-PAYLOAD_PATH=$PAYLOAD_PATH
+# 1. Write arming marker (use post-switch_root path: /root/cdrom -> /cdrom)
+PAYLOAD_PATH_FINAL=$(echo "$PAYLOAD_PATH" | sed 's|^/root||')
+cat > /run/purple/armed << MARKER_EOF
+PAYLOAD_PATH=$PAYLOAD_PATH_FINAL
 MARKER_EOF
 
 # 2. Copy confirmation script
 if [ -f "$PAYLOAD_PATH/purple-confirm.sh" ]; then
-    cp "$PAYLOAD_PATH/purple-confirm.sh" /root/run/purple/confirm.sh
-    chmod 755 /root/run/purple/confirm.sh
-    purple_log "Copied confirmation script"
+    cp "$PAYLOAD_PATH/purple-confirm.sh" /run/purple/confirm.sh
+    chmod 755 /run/purple/confirm.sh
+    purple_log "Copied confirmation script to /run/purple/"
 else
     purple_log "WARNING: No purple-confirm.sh found"
-    cat > /root/run/purple/confirm.sh << 'FALLBACK'
+    cat > /run/purple/confirm.sh << 'FALLBACK'
 #!/bin/sh
 echo "[PURPLE] ERROR: Confirmation script missing"
 sleep 30
 reboot -f
 FALLBACK
-    chmod 755 /root/run/purple/confirm.sh
+    chmod 755 /run/purple/confirm.sh
 fi
 
-# 3. Write systemd service
-cat > /root/run/systemd/system/purple-confirm.service << 'SERVICE_EOF'
+# 3. Write systemd service to /etc (survives switch_root, highest priority)
+mkdir -p /root/etc/systemd/system
+cat > /root/etc/systemd/system/purple-confirm.service << 'SERVICE_EOF'
 [Unit]
 Description=Purple Computer Installer (Gate 2)
 DefaultDependencies=no
-After=sysinit.target
-Before=getty.target
+After=basic.target
+Before=multi-user.target getty.target
 ConditionKernelCommandLine=purple.install=1
 Conflicts=subiquity.service snapd.service getty@tty1.service
 
@@ -216,20 +222,21 @@ StandardError=tty
 TTYReset=yes
 TTYVHangup=yes
 TTYVTDisallocate=yes
-ExecStart=/run/purple/confirm.sh
+ExecStart=/bin/bash /run/purple/confirm.sh
 TimeoutStartSec=600
 SERVICE_EOF
 
 # 4. Enable the service
-mkdir -p /root/run/systemd/system/sysinit.target.wants
-ln -sf ../purple-confirm.service /root/run/systemd/system/sysinit.target.wants/purple-confirm.service
+mkdir -p /root/etc/systemd/system/multi-user.target.wants
+ln -sf ../purple-confirm.service /root/etc/systemd/system/multi-user.target.wants/purple-confirm.service
+purple_log "Created service in /root/etc/systemd/system/"
 
-# 5. Mask interfering services
-ln -sf /dev/null /root/run/systemd/system/subiquity.service
-ln -sf /dev/null /root/run/systemd/system/snapd.service
-ln -sf /dev/null /root/run/systemd/system/snapd.socket
-ln -sf /dev/null /root/run/systemd/system/ssh.service
-ln -sf /dev/null /root/run/systemd/system/getty@tty1.service
+# 5. Mask interfering services (these go to /etc too)
+ln -sf /dev/null /root/etc/systemd/system/subiquity.service
+ln -sf /dev/null /root/etc/systemd/system/snapd.service
+ln -sf /dev/null /root/etc/systemd/system/snapd.socket
+ln -sf /dev/null /root/etc/systemd/system/ssh.service
+ln -sf /dev/null /root/etc/systemd/system/getty@tty1.service
 purple_log "Masked interfering services"
 
 purple_log "============================================"

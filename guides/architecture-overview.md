@@ -172,11 +172,13 @@ The casper-bottom hook (`80_purple_installer`):
 **Critical path notes for casper-bottom scripts:**
 - In casper-bottom, the real root filesystem is mounted at `/root`
 - The live media (ISO/USB) is mounted at `/root/cdrom`, NOT `/cdrom`
-- Runtime files must be written to `/root/run/`, NOT `/run/`
-- After `switch_root`, `/root` becomes `/`, so `/root/run/` becomes `/run/`
+- **Systemd units must go to `/root/etc/systemd/system/`** (NOT `/root/run/systemd/system/`)
+  - `/run` tmpfs gets mounted OVER `/root/run` during switch_root, hiding any files written there
+  - `/etc/systemd/system/` has highest priority in systemd's unit load path and survives switch_root
+- Scripts can go to `/root/run/purple/` (the `/run` tmpfs is moved, not remounted fresh)
 - The ORDER file (`/scripts/casper-bottom/ORDER`) controls which scripts run - scripts not listed are silently ignored
 
-**Gate 2 is implemented via runtime systemd units in `/root/run/`** - NOT by modifying squashfs.
+**Gate 2 is implemented via systemd units written to `/root/etc/systemd/system/`** - NOT by modifying squashfs.
 
 ---
 
@@ -231,13 +233,12 @@ The installer follows strict safety requirements to prevent accidental data loss
 The hook script `/scripts/casper-bottom/80_purple_installer`:
 
 1. Checks for `purple.install=1` in kernel cmdline
-2. Checks for payload at `/root/cdrom/purple/` (where casper mounts live media, relative to initramfs root)
-3. Writes runtime artifacts to `/root/run/` (which becomes `/run/` after switch_root):
-   - `/root/run/purple/armed` - marker with payload info
-   - `/root/run/purple/confirm.sh` - confirmation script (copied from payload)
-   - `/root/run/systemd/system/purple-confirm.service` - runtime systemd unit
-   - Service masks for interfering services (subiquity, snapd, getty)
-4. Exits cleanly—after switch_root, systemd loads runtime unit and masks from `/run/`
+2. Checks for payload at `/root/cdrom/purple/` (where casper mounts live media)
+3. Writes artifacts:
+   - `/run/purple/confirm.sh` - confirmation script (to `/run`, NOT `/root/run`!)
+   - `/root/etc/systemd/system/purple-confirm.service` - systemd unit
+   - Service masks in `/root/etc/systemd/system/`
+4. Exits cleanly—after switch_root, systemd loads unit and runs `/run/purple/confirm.sh`
 
 **What the hook is NOT allowed to do:**
 - ❌ Run the installer
@@ -378,16 +379,29 @@ Hard-won lessons from debugging the casper-bottom hook:
 
 The initramfs environment has a confusing filesystem layout:
 
-| Path in initramfs | What it is | Path after switch_root |
-|-------------------|------------|------------------------|
-| `/` | Initramfs root (temporary) | Gone |
-| `/root` | Real root filesystem mount | `/` |
-| `/root/run` | Real /run tmpfs | `/run` |
-| `/root/cdrom` | Live media mount | `/cdrom` |
-| `/cdrom` | Empty mount point | N/A |
-| `/run` | Initramfs /run (discarded) | N/A |
+| What | Write to | Why |
+|------|----------|-----|
+| Systemd units | `/root/etc/systemd/system/` | Persists on root filesystem, becomes `/etc/systemd/system/` |
+| Runtime scripts | `/run/purple/` | The `/run` tmpfs is **moved** into new root |
+| Marker files | `/run/purple/armed` | Same reason - use `/run`, not `/root/run` |
+| **NOT** | `/root/run/...` | Gets shadowed when `/run` tmpfs is moved on top |
 
-**Key insight:** In casper-bottom, always use `/root/` prefix for anything that needs to persist.
+**The `/run` shadowing trap:**
+
+There are TWO different locations that look similar:
+- **`/run/`** - A tmpfs that gets **moved** into the new root. Files survive.
+- **`/root/run/`** - A directory on the root filesystem. When `/run` tmpfs is moved on top, files here get **hidden**.
+
+Think of it like putting a file in a folder, then someone places a box on top - the file is still there but inaccessible.
+
+**Path translation for marker files:**
+
+Paths found during initramfs (e.g., `/root/cdrom/purple`) must be translated for post-switch_root use:
+```bash
+# In initramfs: /root/cdrom/purple
+# After switch_root: /cdrom/purple
+PAYLOAD_PATH_FINAL=$(echo "$PAYLOAD_PATH" | sed 's|^/root||')
+```
 
 ### ORDER File
 
@@ -420,10 +434,12 @@ log_end_msg
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Hook doesn't run | Not in ORDER file | Add to ORDER file |
-| "Payload not found" | Wrong path (used `/cdrom` instead of `/root/cdrom`) | Use `/root/cdrom` |
-| Service fails to start | Wrote to `/run` instead of `/root/run` | Use `/root/run` |
-| Service file not found | Same as above | Use `/root/run/systemd/system/` |
-| Black screen after boot | Getty masked but our service failed | Check service logs, fix service |
+| "Payload not found" (in hook) | Used `/cdrom` instead of `/root/cdrom` | Use `/root/cdrom` in initramfs |
+| "Payload not found" (at runtime) | Marker has `/root/cdrom/...` path | Strip `/root` prefix before writing marker |
+| Service never starts | Wrote unit to `/root/run/systemd/system/` | Use `/root/etc/systemd/system/` |
+| ExecStart script not found | Wrote script to `/root/run/...` | Write to `/run/...` (no /root prefix) |
+| Service fails with 203/EXEC | Shebang or permissions issue | Use `ExecStart=/bin/bash /path/to/script` |
+| Black screen after boot | Getty masked but service failed | Check `systemctl status purple-confirm.service` |
 
 ---
 
@@ -449,19 +465,17 @@ log_end_msg
 │   We only modify GRUB config and initramfs.                     │
 │                                                                 │
 │   Gate 1 (casper-bottom hook):                                  │
-│     - Runs in casper-bottom, AFTER real root is mounted         │
-│     - Checks for purple.install=1 in cmdline                    │
 │     - Finds payload at /root/cdrom/purple/                      │
-│     - Writes runtime artifacts to /root/run/ (becomes /run/)    │
-│     - Does NOT run installer directly                           │
+│     - Writes scripts to /run/purple/ (NOT /root/run!)           │
+│     - Writes systemd unit to /root/etc/systemd/system/          │
+│     - Translates paths: /root/cdrom -> /cdrom for marker        │
 │                                                                 │
-│   Gate 2 (systemd service in /run):                             │
+│   Gate 2 (systemd service):                                     │
 │     - Shows confirmation screen                                 │
 │     - User presses ENTER = install proceeds                     │
 │     - User presses ESC or timeout = safe reboot                 │
 │                                                                 │
-│   The squashfs is never modified. Layered squashfs?             │
-│   Doesn't matter. We never touch it.                            │
+│   The squashfs is never modified.                               │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```

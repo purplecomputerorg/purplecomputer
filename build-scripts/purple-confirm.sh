@@ -148,15 +148,10 @@ log "Using TTY: $TTY_DEV"
 # Switch to the TTY
 exec <$TTY_DEV >$TTY_DEV 2>&1
 
-# Test if we can actually read input
-log "Testing keyboard input..."
-echo "Press any key to confirm keyboard is working (10 second timeout)..."
-
-if ! read -t 10 -n 1 test_key 2>/dev/null; then
-    input_error_and_reboot "Keyboard test timeout - no input received"
-fi
-
-log "Keyboard input confirmed"
+# Note: We used to have a keyboard test here, but it was too aggressive.
+# Users should just see the confirmation screen and press ENTER when ready.
+# If keyboard doesn't work, they'll hit the 5-minute timeout on the main prompt.
+log "Input device ready"
 
 # =============================================================================
 # DISPLAY CONFIRMATION SCREEN (calm, parent-friendly)

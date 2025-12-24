@@ -772,6 +772,8 @@ class PurpleApp(App):
         elif self.active_mode == Mode.WRITE:
             try:
                 widget.query_one("#write-area").focus()
+                # Restore border color when re-entering write mode
+                widget.restore_border_color()
             except Exception:
                 widget.focus()
         else:

@@ -273,6 +273,7 @@ class WriteMode(Container):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._color_mixer = ColorMixer()
+        self._current_border_color: str | None = None
 
     def compose(self) -> ComposeResult:
         yield WriteHeader(id="write-header")
@@ -282,9 +283,14 @@ class WriteMode(Container):
         """Focus the text area when mode loads."""
         self.query_one("#write-area").focus()
 
+    def restore_border_color(self) -> None:
+        """Restore the border color when re-entering write mode."""
+        if self._current_border_color:
+            self.post_message(BorderColorChanged(self._current_border_color))
+
     def on_color_key_pressed(self, event: ColorKeyPressed) -> None:
         """Handle color key presses by updating the viewport border color."""
         new_color = self._color_mixer.add_key(event.row)
         if new_color:
-            # Send message to app to change viewport border
+            self._current_border_color = new_color
             self.post_message(BorderColorChanged(new_color))

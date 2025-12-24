@@ -238,13 +238,3 @@ class SleepScreen(Screen):
         event.stop()
         event.prevent_default()
         self._wake_up()
-
-    def on_mouse_move(self, event: events.MouseMove) -> None:
-        """Mouse movement wakes up"""
-        event.stop()
-        self._wake_up()
-
-    def on_click(self, event: events.Click) -> None:
-        """Click wakes up"""
-        event.stop()
-        self._wake_up()

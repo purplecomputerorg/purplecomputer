@@ -16,10 +16,14 @@ Features:
 """
 
 from textual.widgets import Static, Input
+from textual.widget import Widget
 from textual.containers import Vertical, Horizontal, ScrollableContainer
 from textual.app import ComposeResult
 from textual import events
 from textual.message import Message
+from textual.strip import Strip
+from rich.segment import Segment
+from rich.style import Style
 import re
 
 from ..content import get_content
@@ -28,6 +32,7 @@ from ..constants import (
     ICON_VOLUME_ON, ICON_VOLUME_OFF,
 )
 from ..keyboard import SHIFT_MAP
+from ..color_mixing import mix_colors_paint, get_color_name_approximation
 
 
 class KeyboardOnlyScroll(ScrollableContainer):
@@ -59,6 +64,103 @@ class HistoryLine(Static):
             return f"[#a888d0]  →[/] {self.text}"
 
 
+class ColorResultLine(Widget):
+    """
+    A color result display showing component colors and the mixed result.
+
+    Shows: [color1] [color2] → [result swatch]
+    With a compact 3x6 result swatch.
+
+    Uses render_line() with Strip/Segment for proper background coloring
+    (see CLAUDE.md for the workaround details).
+    """
+
+    DEFAULT_CSS = """
+    ColorResultLine {
+        width: 100%;
+        height: 4;
+        margin: 0 0;
+        padding: 0;
+    }
+    """
+
+    SWATCH_WIDTH = 6  # Width of the result swatch in characters
+    SWATCH_HEIGHT = 3  # Height of the result swatch
+    COMPONENT_WIDTH = 2  # Width of each component color box
+
+    def __init__(self, hex_color: str, color_name: str, component_colors: list[str] = None, **kwargs):
+        super().__init__(**kwargs)
+        self._hex_color = hex_color
+        self._color_name = color_name
+        self._component_colors = component_colors or []
+
+    def render_line(self, y: int) -> Strip:
+        """Render each line of the color result"""
+        width = self.size.width
+        if width <= 0:
+            width = 40
+
+        prefix = "  →  "
+        prefix_style = Style(color="#a888d0")
+
+        # Line 0: Show component colors and arrow to result
+        if y == 0:
+            segments = [Segment(prefix, prefix_style)]
+
+            # Show component color boxes
+            if len(self._component_colors) > 1:
+                for i, comp_hex in enumerate(self._component_colors):
+                    # Add small colored box for each component
+                    comp_style = Style(bgcolor=comp_hex)
+                    segments.append(Segment("  ", comp_style))  # 2-char wide box
+                    if i < len(self._component_colors) - 1:
+                        segments.append(Segment(" ", Style()))  # space between
+
+                # Arrow to result
+                segments.append(Segment(" → ", Style(color="#a888d0")))
+
+            # Start of result swatch (top row)
+            result_style = Style(bgcolor=self._hex_color)
+            segments.append(Segment(" " * self.SWATCH_WIDTH, result_style))
+
+            # Color name after swatch
+            text_color = self._get_contrast_color(self._hex_color)
+            name_style = Style(color=text_color, bgcolor=self._hex_color, bold=True)
+            segments.append(Segment(f" {self._color_name.upper()} ", name_style))
+
+            return Strip(segments)
+
+        # Lines 1-2: Continue the result swatch
+        elif y < self.SWATCH_HEIGHT:
+            segments = [Segment(prefix, Style())]  # Invisible prefix for alignment
+
+            # Add spacing for component boxes if present
+            if len(self._component_colors) > 1:
+                # Each component is 2 chars + 1 space between
+                comp_width = len(self._component_colors) * 2 + (len(self._component_colors) - 1)
+                segments.append(Segment(" " * comp_width, Style()))
+                segments.append(Segment("   ", Style()))  # " → " spacing
+
+            # Result swatch continuation
+            result_style = Style(bgcolor=self._hex_color)
+            segments.append(Segment(" " * self.SWATCH_WIDTH, result_style))
+
+            return Strip(segments)
+
+        # Line 3: Empty line for spacing
+        else:
+            return Strip([Segment(" " * width, Style())])
+
+    def _get_contrast_color(self, hex_color: str) -> str:
+        """Get a contrasting text color (black or white) for readability"""
+        hex_color = hex_color.lstrip('#')
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#000000" if luminance > 0.5 else "#FFFFFF"
+
+
 class InlineInput(Input):
     """
     Inline input widget that appears after Ask: prompt.
@@ -78,7 +180,8 @@ class InlineInput(Input):
 
     def __init__(self, **kwargs):
         super().__init__(placeholder="", **kwargs)
-        self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji), ...]
+        self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
+        self.autocomplete_type: str = "emoji"  # "emoji" or "color"
         self.autocomplete_index: int = 0
         self.last_char = None
         self.last_char_time = 0
@@ -113,20 +216,51 @@ class InlineInput(Input):
             pass
 
     def _check_autocomplete(self) -> None:
-        """Check if current input should show autocomplete"""
+        """Check if current input should show autocomplete for colors or emojis"""
         content = get_content()
         text = self.value.lower().strip()
 
-        # Get last word being typed
-        words = text.split()
+        # Get last word being typed (handle + operator for color mixing)
+        # Split by spaces and + to get the last "word" being typed
+        parts = re.split(r'[\s+]+', text)
+        words = [p for p in parts if p]
         if not words:
             self.autocomplete_matches = []
+            self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
             return
 
         last_word = words[-1]
         if len(last_word) < 2:
             self.autocomplete_matches = []
+            self.autocomplete_type = "emoji"
+            self.autocomplete_index = 0
+            return
+
+        # Check if this looks like a color expression (has + or other color words)
+        is_color_context = '+' in text or any(content.get_color(w) for w in words[:-1])
+
+        # Search colors first (they take priority in color context)
+        color_matches = content.search_colors(last_word)
+        color_matches = [(w, h) for w, h in color_matches if w != last_word][:5]
+
+        # If we have color matches, use those
+        if color_matches:
+            # If exact color match, don't show autocomplete
+            if content.get_color(last_word):
+                self.autocomplete_matches = []
+                self.autocomplete_type = "color"
+                self.autocomplete_index = 0
+                return
+            self.autocomplete_matches = color_matches
+            self.autocomplete_type = "color"
+            self.autocomplete_index = 0
+            return
+
+        # If in color context but no color matches, don't suggest emojis
+        if is_color_context:
+            self.autocomplete_matches = []
+            self.autocomplete_type = "color"
             self.autocomplete_index = 0
             return
 
@@ -134,13 +268,15 @@ class InlineInput(Input):
         # This prevents "sun" + space from autocompleting to "sunflower"
         if content.get_emoji(last_word):
             self.autocomplete_matches = []
+            self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
             return
 
-        # Search for matches - get up to 5
+        # Search for emoji matches - get up to 5
         matches = content.search_emojis(last_word)
         # Filter out exact match and limit to 5
         self.autocomplete_matches = [(w, e) for w, e in matches if w != last_word][:5]
+        self.autocomplete_type = "emoji"
         self.autocomplete_index = 0
 
     async def _on_key(self, event: events.Key) -> None:
@@ -215,8 +351,16 @@ class InlineInput(Input):
         # Show up to 5 matches
         shown = self.autocomplete_matches[:5]
         parts = []
-        for word, emoji in shown:
-            parts.append(f"{word} {emoji}")
+
+        if self.autocomplete_type == "color":
+            # Show colored blocks for colors
+            for name, hex_code in shown:
+                # Use a colored square block with the color as background
+                parts.append(f"{name} [{hex_code}]██[/]")
+        else:
+            # Show emojis as before
+            for word, emoji in shown:
+                parts.append(f"{word} {emoji}")
 
         hint = "   ".join(parts)
         return f"[dim]{hint}   ← space[/]"
@@ -240,7 +384,7 @@ class ExampleHint(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        text = caps("Try: cat  •  2 + 2  •  cat times 3  •  cat + dog")
+        text = caps("Try: cat  •  2 + 2  •  red + blue  •  cat times 3")
         return f"[dim]{text}[/]"
 
 
@@ -399,17 +543,6 @@ class AskMode(Vertical):
         """Focus the input when mode loads"""
         self.query_one("#ask-input").focus()
 
-    def on_click(self, event) -> None:
-        """Always keep focus on input"""
-        if self.display:
-            event.stop()
-            self.query_one("#ask-input").focus()
-
-    def on_descendant_blur(self, event) -> None:
-        """Re-focus input if it loses focus"""
-        if self.display:
-            self.query_one("#ask-input").focus()
-
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""
         try:
@@ -430,7 +563,13 @@ class AskMode(Vertical):
         # Evaluate and show result
         result = self.evaluator.evaluate(input_text)
         if result:
-            scroll.mount(HistoryLine(result, line_type="answer"))
+            # Check if this is a color result (special format)
+            color_data = self.evaluator._parse_color_result(result)
+            if color_data:
+                hex_color, color_name, components = color_data
+                scroll.mount(ColorResultLine(hex_color, color_name, components))
+            else:
+                scroll.mount(HistoryLine(result, line_type="answer"))
 
         # Scroll to bottom
         scroll.scroll_end(animate=False)
@@ -481,6 +620,17 @@ class AskMode(Vertical):
 
         input_lower = input_text.lower().strip()
         has_operator = has_math_operator(input_text)
+
+        # Check if result is a color mixing result
+        if result and result.startswith("COLOR_RESULT:"):
+            color_data = self.evaluator._parse_color_result(result)
+            if color_data:
+                _, color_name, _ = color_data
+                # Make the input more speakable
+                speakable_input = make_speakable(input_lower)
+                text_to_speak = f"{speakable_input} equals {color_name}"
+                speak(text_to_speak)
+                return
 
         # Check if result is emoji (contains high unicode chars)
         if result and any(ord(c) > 127 for c in result):
@@ -535,6 +685,11 @@ class SimpleEvaluator:
 
         # Handle parentheses first by evaluating innermost groups
         text = self._eval_parentheses(text)
+
+        # Try color mixing first (e.g., "red + blue", "red + red + blue")
+        color_result = self._eval_color_mixing(text)
+        if color_result:
+            return color_result
 
         # Try emoji math first (e.g., "3 * cat", "2 apples", "3banana")
         # This handles plurals and number+word combinations
@@ -853,3 +1008,71 @@ class SimpleEvaluator:
         elif len(descriptions) > 2:
             return ", ".join(descriptions[:-1]) + f", and {descriptions[-1]}"
         return result
+
+    def _eval_color_mixing(self, text: str) -> str | None:
+        """
+        Evaluate color mixing expressions like "red + blue" or "red + red + blue".
+
+        Returns a special formatted string with COLOR_RESULT: prefix that triggers
+        the color swatch display, or None if not a color expression.
+
+        Format: COLOR_RESULT:result_hex:color_name:comp1_hex,comp2_hex,...
+        """
+        text_lower = text.lower().strip()
+
+        # Check if this looks like a color expression (colors separated by +)
+        # Split by + and "plus"
+        parts = re.split(r'\s*(?:\+|plus)\s*', text_lower)
+        parts = [p.strip() for p in parts if p.strip()]
+
+        if not parts:
+            return None
+
+        # Collect colors and their counts (for weighted mixing)
+        colors_to_mix = []
+        for part in parts:
+            color_hex = self.content.get_color(part)
+            if color_hex:
+                colors_to_mix.append(color_hex)
+            else:
+                # Not a valid color - not a pure color expression
+                return None
+
+        if not colors_to_mix:
+            return None
+
+        # Single color - just show that color
+        if len(colors_to_mix) == 1:
+            mixed_hex = colors_to_mix[0]
+        else:
+            # Mix the colors using paint-like mixing
+            mixed_hex = mix_colors_paint(colors_to_mix)
+
+        # Get unique component colors for display (deduplicated, preserving order)
+        seen = set()
+        unique_components = []
+        for c in colors_to_mix:
+            if c not in seen:
+                seen.add(c)
+                unique_components.append(c)
+
+        # Return a special marker that includes hex color, name, and components
+        color_name = get_color_name_approximation(mixed_hex)
+        components_str = ",".join(unique_components)
+        return f"COLOR_RESULT:{mixed_hex}:{color_name}:{components_str}"
+
+    def _is_color_result(self, result: str) -> bool:
+        """Check if a result is a color result"""
+        return result.startswith("COLOR_RESULT:")
+
+    def _parse_color_result(self, result: str) -> tuple[str, str, list[str]] | None:
+        """Parse a color result, returns (hex_color, color_name, component_colors) or None"""
+        if not self._is_color_result(result):
+            return None
+        parts = result.split(":", 3)
+        if len(parts) >= 3:
+            hex_color = parts[1]
+            color_name = parts[2]
+            components = parts[3].split(",") if len(parts) > 3 and parts[3] else []
+            return (hex_color, color_name, components)
+        return None

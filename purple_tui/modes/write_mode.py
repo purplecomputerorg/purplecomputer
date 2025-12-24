@@ -7,16 +7,95 @@ A blank screen with large font for typing:
 - Caps lock works as expected
 - Backspace works
 - Enter creates new line
-- Arrow keys and other modifiers do nothing
+- Up/Down arrows scroll the text
+- Color mixing: keyboard rows (top=red, middle=blue, bottom=yellow) mix colors
 """
+
+from collections import deque
 
 from textual.widgets import Static, TextArea
 from textual.containers import Container
 from textual.app import ComposeResult
+from textual.message import Message
 from textual import events
 
 from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import SHIFT_MAP
+from ..color_mixing import mix_colors_paint
+
+
+# Keyboard row definitions for color mixing
+# Top row: red, Middle row: blue, Bottom row: yellow
+TOP_ROW = set("qwertyuiop[]\\")
+MIDDLE_ROW = set("asdfghjkl;'")
+BOTTOM_ROW = set("zxcvbnm,./")
+
+# Colors for each row (true vibrant primaries)
+ROW_COLORS = {
+    "top": "#FF0000",      # red
+    "middle": "#0066FF",   # blue (true blue, not purple-blue)
+    "bottom": "#FFDD00",   # yellow
+}
+
+# Starting/neutral color (muted purple to match the app theme)
+NEUTRAL_COLOR = "#2a1845"
+
+# How many recent keystrokes to remember for color mixing
+# 10-12 feels responsive but smooth - you can reach pure colors
+# but transitions still feel gradual
+COLOR_MEMORY_SIZE = 12
+
+
+class ColorKeyPressed(Message):
+    """Message sent when a color-row key is pressed (internal to WriteMode)"""
+    def __init__(self, row: str) -> None:
+        self.row = row  # "top", "middle", or "bottom"
+        super().__init__()
+
+
+class BorderColorChanged(Message, bubble=True):
+    """Message sent to app to change viewport border color"""
+    def __init__(self, color: str) -> None:
+        self.color = color
+        super().__init__()
+
+
+class ColorMixer:
+    """
+    Tracks recent keystrokes and mixes colors.
+
+    Uses a sliding window of recent keystrokes to determine color.
+    Type enough keys from one row and you'll reach that pure color.
+    """
+
+    def __init__(self):
+        self._color_memory: deque[str] = deque(maxlen=COLOR_MEMORY_SIZE)
+
+    def add_key(self, row: str) -> str | None:
+        """Add a new color key and return the new mixed color, or None if invalid."""
+        if row not in ROW_COLORS:
+            return None
+
+        # Add to sliding window (automatically removes oldest if full)
+        self._color_memory.append(row)
+
+        # Mix all colors in the window using paint-like mixing
+        if self._color_memory:
+            colors = [ROW_COLORS[r] for r in self._color_memory]
+            return mix_colors_paint(colors)
+        return NEUTRAL_COLOR
+
+
+def get_row_for_char(char: str) -> str | None:
+    """Return which keyboard row a character belongs to, or None if not a row key."""
+    char_lower = char.lower()
+    if char_lower in TOP_ROW:
+        return "top"
+    elif char_lower in MIDDLE_ROW:
+        return "middle"
+    elif char_lower in BOTTOM_ROW:
+        return "bottom"
+    return None
 
 
 class KidTextArea(TextArea):
@@ -27,6 +106,7 @@ class KidTextArea(TextArea):
     - Letters, numbers, standard symbols
     - Backspace (delete)
     - Enter (new line)
+    - Up/Down arrows (scroll by 5 lines)
     - Double-tap for shifted symbols (e.g., -- fast = _)
     """
 
@@ -41,11 +121,10 @@ class KidTextArea(TextArea):
     KidTextArea:focus {
         border: none;
     }
-
-    KidTextArea > .text-area--cursor-line {
-        background: $surface;
-    }
     """
+
+    # Lines to scroll per up/down arrow press
+    SCROLL_LINES = 5
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -64,9 +143,24 @@ class KidTextArea(TextArea):
             self.last_char = None
             return  # Let default handling work
 
-        # Block: arrows, ctrl combos, function keys, etc.
+        # Up/Down arrows scroll the text
+        if key == "up":
+            event.stop()
+            event.prevent_default()
+            for _ in range(self.SCROLL_LINES):
+                self.action_scroll_up()
+            return
+
+        if key == "down":
+            event.stop()
+            event.prevent_default()
+            for _ in range(self.SCROLL_LINES):
+                self.action_scroll_down()
+            return
+
+        # Block: left/right arrows, ctrl combos, function keys, etc.
         blocked_keys = [
-            "up", "down", "left", "right",
+            "left", "right",
             "home", "end", "pageup", "pagedown",
             "insert", "delete", "escape", "tab",
         ]
@@ -101,6 +195,13 @@ class KidTextArea(TextArea):
         else:
             self.last_char = None
 
+        # Notify parent about color key presses (for paint mixing)
+        if char:
+            row = get_row_for_char(char)
+            if row:
+                # Post a message to the parent WriteMode
+                self.post_message(ColorKeyPressed(row))
+
 
 class WriteHeader(Static):
     """Shows header with caps support"""
@@ -111,19 +212,41 @@ class WriteHeader(Static):
         return f"[dim]{text}[/]"
 
 
+class WriteAreaContainer(Container):
+    """Container that holds the text area."""
+
+    DEFAULT_CSS = """
+    WriteAreaContainer {
+        width: 100%;
+        height: 1fr;
+    }
+
+    WriteAreaContainer > KidTextArea {
+        width: 100%;
+        height: 100%;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield KidTextArea(id="write-area")
+
+
 class WriteMode(Container):
     """
     Write Mode - Simple text editor for small kids.
 
     A blank screen where kids can type freely.
-    No distractions, no complex features.
+    Border color changes as you type based on keyboard row:
+    - Top row (qwerty...): red
+    - Middle row (asdf...): blue
+    - Bottom row (zxcv...): yellow
     """
 
     DEFAULT_CSS = """
     WriteMode {
         width: 100%;
         height: 100%;
-        padding: 1;
+        padding: 0;
         background: $surface;
     }
 
@@ -136,17 +259,32 @@ class WriteMode(Container):
         background: $surface;
     }
 
-    #write-area {
+    #write-container {
         width: 100%;
         height: 1fr;
-        background: $surface;
+    }
+
+    #write-area {
+        width: 100%;
+        height: 100%;
     }
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._color_mixer = ColorMixer()
+
     def compose(self) -> ComposeResult:
         yield WriteHeader(id="write-header")
-        yield KidTextArea(id="write-area")
+        yield WriteAreaContainer(id="write-container")
 
     def on_mount(self) -> None:
-        """Focus the text area when mode loads"""
+        """Focus the text area when mode loads."""
         self.query_one("#write-area").focus()
+
+    def on_color_key_pressed(self, event: ColorKeyPressed) -> None:
+        """Handle color key presses by updating the viewport border color."""
+        new_color = self._color_mixer.add_key(event.row)
+        if new_color:
+            # Send message to app to change viewport border
+            self.post_message(BorderColorChanged(new_color))

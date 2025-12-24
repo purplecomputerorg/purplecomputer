@@ -26,6 +26,7 @@ class ContentManager:
     def __init__(self, packs_dir: Optional[Path] = None):
         self.packs_dir = packs_dir or Path.home() / ".purple" / "packs"
         self.emojis: dict[str, str] = {}           # word -> emoji
+        self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         self._loaded = False
 
@@ -108,6 +109,53 @@ class ContentManager:
             "yay": "👏", "hi": "👋", "hello": "👋", "bye": "👋",
         }
 
+        # Default colors for paint mixing (RYB primary/secondary + common colors)
+        self.colors = {
+            # Primary colors (paint)
+            "red": "#E52B50",      # A true paint red (like cadmium red)
+            "yellow": "#FFEB00",   # Primary yellow
+            "blue": "#0047AB",     # Cobalt blue (paint blue)
+
+            # Secondary colors (what you get from mixing primaries)
+            "orange": "#FF6600",   # Red + Yellow
+            "green": "#228B22",    # Yellow + Blue
+            "purple": "#7B2D8E",   # Red + Blue
+            "violet": "#7B2D8E",   # Same as purple
+
+            # Tertiary and common colors
+            "pink": "#FF69B4",
+            "brown": "#8B4513",
+            "black": "#1A1A1A",
+            "white": "#F5F5F5",
+            "gray": "#808080",
+            "grey": "#808080",
+
+            # Fun colors kids know
+            "cyan": "#00FFFF",
+            "magenta": "#FF00FF",
+            "gold": "#FFD700",
+            "silver": "#C0C0C0",
+            "teal": "#008080",
+            "turquoise": "#40E0D0",
+            "coral": "#FF7F50",
+            "salmon": "#FA8072",
+            "peach": "#FFCBA4",
+            "lavender": "#E6E6FA",
+            "mint": "#98FF98",
+            "lime": "#32CD32",
+            "maroon": "#800000",
+            "navy": "#000080",
+            "olive": "#808000",
+            "indigo": "#4B0082",
+            "tan": "#D2B48C",
+            "beige": "#F5F5DC",
+            "cream": "#FFFDD0",
+            "sky": "#87CEEB",
+            "rose": "#FF007F",
+            "crimson": "#DC143C",
+            "scarlet": "#FF2400",
+        }
+
     def _load_pack(self, pack_dir: Path) -> None:
         """Load content from a single pack directory"""
         manifest_path = pack_dir / "manifest.json"
@@ -178,6 +226,26 @@ class ContentManager:
                 results.append((word, emoji))
 
         return sorted(results, key=lambda x: x[0])
+
+    def get_color(self, word: str) -> Optional[str]:
+        """Get hex color code for a color name"""
+        word = word.lower().strip()
+        return self.colors.get(word)
+
+    def search_colors(self, prefix: str) -> list[tuple[str, str]]:
+        """Search for colors starting with prefix, returns [(name, hex), ...]"""
+        prefix = prefix.lower()
+        results = []
+
+        for name, hex_code in self.colors.items():
+            if name.startswith(prefix):
+                results.append((name, hex_code))
+
+        return sorted(results, key=lambda x: x[0])
+
+    def list_colors(self) -> list[str]:
+        """Get list of all available color names"""
+        return sorted(self.colors.keys())
 
 
 # Global content manager instance

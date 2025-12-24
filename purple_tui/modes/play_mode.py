@@ -62,6 +62,14 @@ _suppress_alsa_output()
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 import pygame.mixer
 
+# Initialize mixer at module load time (before UI shows) to avoid click later
+try:
+    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+    pygame.mixer.set_num_channels(16)
+    _MIXER_READY = True
+except pygame.error:
+    _MIXER_READY = False
+
 from ..constants import TOGGLE_DEBOUNCE, ICON_ERASER, ICON_PALETTE
 
 
@@ -102,22 +110,16 @@ class PlayGrid(Widget):
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._sounds: dict[str, pygame.mixer.Sound] = {}
-        self._mixer_initialized = False
+        self._sounds_loaded = False
         # Flash keys for visual feedback in clear mode
         self._flash_keys: set[str] = set()
 
-    def _init_audio(self) -> None:
-        """Initialize pygame mixer and load sounds."""
-        if self._mixer_initialized:
+    def _ensure_sounds_loaded(self) -> None:
+        """Load sounds if not already loaded."""
+        if self._sounds_loaded or not _MIXER_READY:
             return
-        try:
-            # Larger buffer (2048) prevents ALSA underrun errors on slower hardware
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-            pygame.mixer.set_num_channels(16)
-            self._mixer_initialized = True
-            self._load_sounds()
-        except pygame.error:
-            pass
+        self._load_sounds()
+        self._sounds_loaded = True
 
     def _get_sounds_path(self) -> Path:
         """Find the sounds directory."""
@@ -147,18 +149,16 @@ class PlayGrid(Widget):
 
     def play_sound(self, key: str) -> None:
         """Play sound for a key."""
-        if not self._mixer_initialized:
-            self._init_audio()
+        self._ensure_sounds_loaded()
         if key in self._sounds:
             self._sounds[key].play()
 
     def cleanup_sounds(self) -> None:
-        """Stop all sounds and quit mixer."""
-        if self._mixer_initialized:
+        """Stop all currently playing sounds and clear loaded sounds."""
+        if _MIXER_READY:
             pygame.mixer.stop()
-            pygame.mixer.quit()
-            self._mixer_initialized = False
         self._sounds.clear()
+        self._sounds_loaded = False
 
     def next_color(self, key: str) -> None:
         """Cycle color for a key."""
@@ -363,22 +363,6 @@ class PlayMode(Container, can_focus=True):
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
         self.eraser_mode = False
-
-    # Block all mouse events
-    def on_click(self, event) -> None:
-        event.stop()
-
-    def on_mouse_down(self, event) -> None:
-        event.stop()
-
-    def on_mouse_up(self, event) -> None:
-        event.stop()
-
-    def on_mouse_scroll_down(self, event) -> None:
-        event.stop()
-
-    def on_mouse_scroll_up(self, event) -> None:
-        event.stop()
 
     def compose(self) -> ComposeResult:
         yield EraserModeIndicator(id="eraser-indicator")

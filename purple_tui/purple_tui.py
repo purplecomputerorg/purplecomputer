@@ -39,6 +39,7 @@ from .keyboard import (
     launch_keyboard_normalizer, stop_keyboard_normalizer,
 )
 from .power_manager import get_power_manager
+from .modes.write_mode import BorderColorChanged
 
 
 class Mode(Enum):
@@ -591,6 +592,26 @@ class PurpleApp(App):
         stop_keyboard_normalizer(self._keyboard_normalizer_process)
         self._keyboard_normalizer_process = None
 
+    def on_border_color_changed(self, event: BorderColorChanged) -> None:
+        """Handle border color change from write mode."""
+        try:
+            from textual.color import Color
+            viewport = self.query_one("#viewport")
+            viewport.styles.border = ("heavy", Color.parse(event.color))
+        except Exception:
+            pass
+
+    def _reset_viewport_border(self) -> None:
+        """Reset viewport border to default purple."""
+        try:
+            from textual.color import Color
+            viewport = self.query_one("#viewport")
+            # Get primary color based on current theme
+            primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
+            viewport.styles.border = ("heavy", Color.parse(primary_color))
+        except Exception:
+            pass
+
     def _show_update_prompt(self) -> None:
         """Show a prompt for breaking updates"""
         from textual.widgets import Button, Label
@@ -750,7 +771,7 @@ class PurpleApp(App):
             widget.focus()
         elif self.active_mode == Mode.WRITE:
             try:
-                widget.query_one("#write-input").focus()
+                widget.query_one("#write-area").focus()
             except Exception:
                 widget.focus()
         else:
@@ -779,6 +800,10 @@ class PurpleApp(App):
         new_mode = mode_map.get(mode_name, Mode.ASK)
 
         if new_mode != self.active_mode:
+            # Reset viewport border when leaving write mode
+            if self.active_mode == Mode.WRITE:
+                self._reset_viewport_border()
+
             self.active_mode = new_mode
             self._load_mode_content()
 
@@ -968,7 +993,7 @@ def main():
             "version": parts[1],
             "message": parts[2] if len(parts) > 2 else "A new version is available"
         }
-    app.run()
+    app.run(mouse=False)  # Purple Computer is keyboard-only
 
 
 if __name__ == "__main__":

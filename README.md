@@ -135,7 +135,7 @@ On Mac/other systems, a terminal-level fallback provides basic functionality.
 
 ## Screen Size
 
-Purple Computer displays a 100×28 character viewport that targets roughly **10×6 inches** of content area. On smaller laptops (10-11"), the viewport fills most of the screen. On larger laptops (15"+), the viewport stays approximately the same physical size with more purple border around it. This gives kids a consistent experience across different hardware.
+Purple Computer displays a **100×28 character viewport** (plus header and footer, requiring a **104×37 character terminal**) that targets roughly **10×6 inches** of content area. On smaller laptops (10-11"), the viewport fills most of the screen. On larger laptops (15"+), the viewport stays approximately the same physical size with more purple border around it. This gives kids a consistent experience across different hardware.
 
 ---
 

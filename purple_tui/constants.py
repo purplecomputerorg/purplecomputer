@@ -4,6 +4,35 @@ Purple Computer - Shared Constants
 Central location for constants used across the app.
 """
 
+# =============================================================================
+# TERMINAL LAYOUT CONSTANTS
+# =============================================================================
+# These define the minimum terminal grid required to display the full UI.
+# Used by calc_font_size.py to calculate appropriate font size.
+#
+# Layout breakdown (from purple_tui.py CSS):
+#   - Title row: width 100, height 1 + margin-bottom 1 = 2 rows
+#   - Viewport: width 100 + border(2) + padding(2) = 104 cols
+#               height 28 + border(2) + padding(2) = 32 rows
+#   - Mode indicator: height 3 (docked bottom)
+#
+# Total: 104 cols × 37 rows
+
+VIEWPORT_CONTENT_COLS = 100   # Inner content area width
+VIEWPORT_CONTENT_ROWS = 28    # Inner content area height
+
+# Full terminal requirements (content + borders + padding + chrome)
+REQUIRED_TERMINAL_COLS = 104  # viewport width + border(2) + padding(2)
+REQUIRED_TERMINAL_ROWS = 37   # title(2) + viewport(32) + footer(3)
+
+# Target physical size for viewport (mm) - hint only, not enforced
+TARGET_VIEWPORT_WIDTH_MM = 254   # 10 inches
+TARGET_VIEWPORT_HEIGHT_MM = 152  # 6 inches
+
+# =============================================================================
+# TIMING
+# =============================================================================
+
 # Timing
 TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapid toggles)
 DOUBLE_TAP_TIME = 0.5        # Threshold for double-tap to get shifted characters

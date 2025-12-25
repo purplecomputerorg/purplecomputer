@@ -90,7 +90,7 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
     return samples
 
 
-def generate_marimba(frequency: float, duration: float = 1.0) -> list[int]:
+def generate_marimba(frequency: float, duration: float = 0.65) -> list[int]:
     """
     Full, resonant marimba with tube resonator simulation.
     Bar vibration + resonator tube = rich, room-filling sound.
@@ -100,21 +100,21 @@ def generate_marimba(frequency: float, duration: float = 1.0) -> list[int]:
 
     # Marimba bar partials (wooden bar physics)
     bar_partials = [
-        (1.0, 1.0, 1.5),      # fundamental - slower decay
-        (3.9, 0.15, 4.0),     # first overtone
-        (9.2, 0.05, 8.0),     # second overtone
+        (1.0, 1.0, 2.5),      # fundamental - moderate decay
+        (3.9, 0.15, 6.0),     # first overtone
+        (9.2, 0.05, 12.0),    # second overtone
     ]
 
     # Resonator tube modes - this is what makes it FULL
     # Multiple resonances for richer sound
     tube_modes = [
-        (1.0, 0.9, 0.9),      # main tube resonance - strong, slow decay
-        (2.0, 0.35, 1.5),     # second harmonic
-        (3.0, 0.15, 2.5),     # third harmonic - adds presence
+        (1.0, 0.9, 1.5),      # main tube resonance - strong, natural decay
+        (2.0, 0.35, 2.5),     # second harmonic
+        (3.0, 0.15, 3.5),     # third harmonic - adds presence
     ]
 
     samples = []
-    fade_out_duration = 0.15  # longer fade
+    fade_out_duration = 0.18  # smooth fade
     fade_out_start = duration - fade_out_duration
 
     for i in range(num_samples):
@@ -141,7 +141,7 @@ def generate_marimba(frequency: float, duration: float = 1.0) -> list[int]:
             sample += amp * tube_env * math.sin(2 * math.pi * frequency * ratio * t)
 
         # Sub-bass warmth
-        sub_bass = 0.3 * math.exp(-t * 0.8) * math.sin(2 * math.pi * frequency * 0.5 * t)
+        sub_bass = 0.3 * math.exp(-t * 2.0) * math.sin(2 * math.pi * frequency * 0.5 * t)
         sample += sub_bass
 
         sample *= attack

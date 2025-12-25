@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Purple Computer - Main Textual TUI Application
+Purple Computer: Main Textual TUI Application
 
 The calm computer for kids ages 3-8.
 A creativity device, not an entertainment device.
@@ -45,19 +45,19 @@ from .modes.write_mode import BorderColorChanged
 
 class Mode(Enum):
     """The 3 core modes of Purple Computer"""
-    ASK = 1      # F1 - Math and emoji REPL
-    PLAY = 2     # F2 - Music and art grid
-    WRITE = 3    # F3 - Simple text editor
+    ASK = 1      # F1: Math and emoji REPL
+    PLAY = 2     # F2: Music and art grid
+    WRITE = 3    # F3: Simple text editor
 
 
 class View(Enum):
-    """The 3 core views - reduce screen time feeling"""
+    """The 3 core views. Reduce screen time feeling."""
     SCREEN = 1   # 10x6" viewport
     LINE = 2     # 10" wide, 1 line height
     EARS = 3     # Screen off (blank)
 
 
-# Mode display info - F-keys for mode switching
+# Mode display info: F-keys for mode switching
 MODE_INFO = {
     Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
     Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_MUSIC},
@@ -193,7 +193,7 @@ class ModeIndicator(Horizontal):
                     badge.add_class("dim")
                 yield badge
 
-        # Write mode badges (F5 save, F6 load) - hidden until write mode
+        # Write mode badges (F5 save, F6 load). Hidden until write mode
         with Horizontal(id="keys-write"):
             save_badge = KeyBadge(f"F5 {ICON_SAVE}", id="key-save")
             save_badge.add_class("dim")
@@ -351,7 +351,7 @@ class BatteryIndicator(Static):
                 try:
                     with open(type_file) as f:
                         if f.read().strip() == "Battery":
-                            # Found a battery - verify we can read capacity
+                            # Found a battery. Verify we can read capacity
                             capacity_file = os.path.join(entry_path, "capacity")
                             if os.path.exists(capacity_file):
                                 self._battery_path = entry_path
@@ -420,7 +420,7 @@ class BatteryIndicator(Static):
 
 class PurpleApp(App):
     """
-    Purple Computer - The calm computer for kids.
+    Purple Computer: The calm computer for kids.
 
     F1-F3: Switch between modes (Ask, Play, Write)
     F12: Toggle dark/light mode
@@ -760,7 +760,7 @@ class PurpleApp(App):
                 self.notify(f"Sleep screen error: {e}", title="Error", timeout=5)
 
     def _record_user_activity(self) -> None:
-        """Record that user is active - resets idle timer."""
+        """Record that user is active. Resets idle timer."""
         try:
             pm = get_power_manager()
             pm.record_activity()
@@ -768,7 +768,7 @@ class PurpleApp(App):
             pass
 
     async def on_event(self, event: events.Event) -> None:
-        """Record activity for any key press - before widgets can stop it.
+        """Record activity for any key press. Runs before widgets can stop it.
 
         This is called BEFORE event dispatch, so child widgets calling
         event.stop() won't prevent activity from being recorded.
@@ -926,7 +926,7 @@ class PurpleApp(App):
             pass
 
     def action_parent_mode(self) -> None:
-        """Enter parent mode - shows admin menu for parents"""
+        """Enter parent mode. Shows admin menu for parents."""
         from .modes.parent_mode import ParentMenu
         # Reset escape hold state so it can be triggered again after returning
         self.keyboard.escape_hold.reset()
@@ -949,12 +949,12 @@ class PurpleApp(App):
         # Handle Escape for long-hold parent mode (fallback for Mac/terminal)
         if key == "escape":
             if self.keyboard.handle_escape_repeat():
-                # Long hold threshold reached - enter parent mode
+                # Long hold threshold reached. Enter parent mode
                 self.action_parent_mode()
                 event.stop()
                 event.prevent_default()
                 return
-            # First press - start tracking
+            # First press. Start tracking
             self.keyboard.handle_escape_press()
             event.stop()
             event.prevent_default()
@@ -983,7 +983,7 @@ class PurpleApp(App):
 
         # Keys that should always be ignored (modifier-only, system keys, etc.)
         ignored_keys = {
-            # Modifier keys (pressed alone) - except shift which we handle above
+            # Modifier keys (pressed alone). Except shift which we handle above
             "ctrl", "alt", "meta", "super",
             "left_ctrl", "right_ctrl", "control",
             "left_alt", "right_alt", "option",
@@ -995,9 +995,9 @@ class PurpleApp(App):
             "print_screen", "pause", "insert",
             "home", "end", "page_up", "page_down",
             # F-keys not used:
-            # F5/F6 = Write mode slots (save/load) - handled by WriteMode
-            # F10 = Write mode clear all - handled by WriteMode
-            # F11 = Volume toggle - handled above
+            # F5/F6 = Write mode slots (save/load). Handled by WriteMode
+            # F10 = Write mode clear all. Handled by WriteMode
+            # F11 = Volume toggle. Handled above
             # F13-F23 = Unused, F24 = parent mode (handled above)
             "f7", "f8", "f9",
             "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
@@ -1055,7 +1055,7 @@ def main():
     update_result = auto_update_if_available()
 
     if update_result == "updated":
-        # Minor update applied - restart the app
+        # Minor update applied. Restart the app
         import sys
         import os
         os.execv(sys.executable, [sys.executable] + sys.argv)

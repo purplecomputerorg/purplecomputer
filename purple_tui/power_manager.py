@@ -1,8 +1,8 @@
 """
-Purple Computer - Power Management
+Purple Computer: Power Management
 
 Handles idle detection, lid monitoring, screen dimming, and shutdown.
-Designed to be robust and fail gracefully - no errors, just fallbacks.
+Designed to be robust and fail gracefully. No errors, just fallbacks.
 
 Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
 """
@@ -14,7 +14,7 @@ from typing import Callable, Optional
 
 
 def _get_timing(normal: int, demo: int) -> int:
-    """Get timing value - uses demo value if PURPLE_SLEEP_DEMO is set."""
+    """Get timing value. Uses demo value if PURPLE_SLEEP_DEMO is set."""
     if os.environ.get("PURPLE_SLEEP_DEMO"):
         return demo
     return normal
@@ -22,13 +22,13 @@ def _get_timing(normal: int, demo: int) -> int:
 
 # Timing constants (seconds)
 # Normal values / Demo values (for quick testing)
-IDLE_SLEEP_UI = _get_timing(3 * 60, 2)        # 3 min / 2 sec - show sleeping face
-IDLE_SCREEN_DIM = _get_timing(10 * 60, 6)     # 10 min / 6 sec - dim screen
-IDLE_SCREEN_OFF = _get_timing(15 * 60, 10)    # 15 min / 10 sec - screen off
-IDLE_SHUTDOWN_WARN = _get_timing(25 * 60, 15) # 25 min / 15 sec - shutdown warning
-IDLE_SHUTDOWN = _get_timing(30 * 60, 20)      # 30 min / 20 sec - shutdown
+IDLE_SLEEP_UI = _get_timing(3 * 60, 2)        # 3 min / 2 sec: show sleeping face
+IDLE_SCREEN_DIM = _get_timing(10 * 60, 6)     # 10 min / 6 sec: dim screen
+IDLE_SCREEN_OFF = _get_timing(15 * 60, 10)    # 15 min / 10 sec: screen off
+IDLE_SHUTDOWN_WARN = _get_timing(25 * 60, 15) # 25 min / 15 sec: shutdown warning
+IDLE_SHUTDOWN = _get_timing(30 * 60, 20)      # 30 min / 20 sec: shutdown
 
-LID_SHUTDOWN_DELAY = _get_timing(5, 3)        # 5 sec / 3 sec - lid close warning
+LID_SHUTDOWN_DELAY = _get_timing(5, 3)        # 5 sec / 3 sec: lid close warning
 
 
 class PowerManager:

@@ -1,5 +1,5 @@
 """
-Play Mode - Music and Art Grid
+Play Mode: Music and Art Grid
 
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
@@ -212,7 +212,7 @@ class PlayGrid(Widget):
         width = self.size.width
         height = self.size.height
 
-        # Calculate cell dimensions - all cells equal size
+        # Calculate cell dimensions. All cells equal size
         cell_width = width // 10
         cell_height = height // 4
 
@@ -245,7 +245,7 @@ class PlayGrid(Widget):
         if margin_left > 0:
             segments.append(Segment(" " * margin_left, bg_style))
 
-        # Grid cells - all equal width
+        # Grid cells. All equal width
         for col_idx in range(10):
             key = GRID_KEYS[row_idx][col_idx]
             bg_color = self.get_color(key)
@@ -285,7 +285,7 @@ class PlayGrid(Widget):
 
 
 class EraserModeIndicator(Static):
-    """Shows whether eraser mode is on/off - Tab to toggle"""
+    """Shows whether eraser mode is on/off. Tab to toggle."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -334,7 +334,7 @@ class PlayExampleHint(Static):
 
 
 class PlayMode(Container, can_focus=True):
-    """Play Mode - press keys to make sounds and colors."""
+    """Play Mode: press keys to make sounds and colors."""
 
     DEFAULT_CSS = """
     PlayMode {

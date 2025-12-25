@@ -394,7 +394,7 @@ def calibrate() -> bool:
     print("Let's set up your keyboard!")
     print()
     print("Press each key when asked. Don't worry about")
-    print("holding any extra keys - just press the key shown.")
+    print("holding any extra keys. Just press the key shown.")
     print()
 
     # Find keyboard

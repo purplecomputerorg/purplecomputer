@@ -1,5 +1,5 @@
 """
-Ask Mode - Math and Emoji REPL for Kids
+Ask Mode: Math and Emoji REPL for Kids
 
 IPython-style interface:
 - Ask: user types input
@@ -120,7 +120,7 @@ class ColorResultLine(Widget):
                 # Arrow to result
                 segments.append(Segment(" → ", Style(color="#a888d0")))
 
-            # Start of result swatch (top row) - no name label
+            # Start of result swatch (top row). No name label
             result_style = Style(bgcolor=self._hex_color)
             segments.append(Segment(" " * self.SWATCH_WIDTH, result_style))
 
@@ -201,7 +201,7 @@ class InlineInput(Input):
         key = event.key
         char = event.character
 
-        # Up/Down arrows - scroll the history
+        # Up/Down arrows: scroll the history
         if key == "up":
             event.stop()
             event.prevent_default()
@@ -213,7 +213,7 @@ class InlineInput(Input):
             self.action_scroll_down()
             return
 
-        # Space - accept autocomplete if there's a suggestion
+        # Space: accept autocomplete if there's a suggestion
         if key == "space" and self.autocomplete_matches:
             event.stop()
             event.prevent_default()
@@ -228,7 +228,7 @@ class InlineInput(Input):
             self.last_char = None
             return
 
-        # Enter - submit
+        # Enter: submit
         if key == "enter":
             event.stop()
             event.prevent_default()
@@ -335,7 +335,7 @@ class InlineInput(Input):
             self.autocomplete_index = 0
             return
 
-        # Store matches as (word, display_value) - the display logic will handle rendering
+        # Store matches as (word, display_value). The display logic will handle rendering
         # Use "mixed" type if we have both colors and emojis
         has_colors = any(is_color for _, _, is_color in combined)
         has_emojis = any(not is_color for _, _, is_color in combined)
@@ -350,7 +350,7 @@ class InlineInput(Input):
 
     @property
     def autocomplete_hint(self) -> str:
-        """Get the autocomplete hint to display - shows up to 5 options.
+        """Get the autocomplete hint to display. Shows up to 5 options.
 
         Handles colors (shown as colored blocks) and emojis in any combination.
         """
@@ -364,10 +364,10 @@ class InlineInput(Input):
         for word, display_value in shown:
             # Detect if this is a color (hex code starts with #) or emoji
             if display_value.startswith("#"):
-                # Color - show colored block (color at full opacity, word dimmed)
+                # Color: show colored block (color at full opacity, word dimmed)
                 parts.append(f"[dim]{word}[/] [{display_value}]██[/]")
             else:
-                # Emoji - show as-is (emoji visible, word dimmed)
+                # Emoji: show as-is (emoji visible, word dimmed)
                 parts.append(f"[dim]{word}[/] {display_value}")
 
         hint = "   ".join(parts)
@@ -397,7 +397,7 @@ class ExampleHint(Static):
 
 
 class SpeechIndicator(Static):
-    """Shows whether speech is on/off - Tab to toggle"""
+    """Shows whether speech is on/off. Tab to toggle."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -436,7 +436,7 @@ class SpeechIndicator(Static):
 
         self.speech_on = not self.speech_on
 
-        # Update UI immediately - call refresh before anything else
+        # Update UI immediately. Call refresh before anything else
         self.refresh()
 
         # Debounce: only speak after delay if state actually changed
@@ -447,7 +447,7 @@ class SpeechIndicator(Static):
 
 class AskMode(Vertical):
     """
-    Ask Mode - IPython-style REPL interface for kids.
+    Ask Mode: IPython-style REPL interface for kids.
     """
 
     DEFAULT_CSS = """
@@ -579,7 +579,7 @@ class AskMode(Vertical):
                 # Single color: display inline like emoji (2-char colored box)
                 # Mixed colors (2+ components): display as 3x6 swatch
                 if len(components) <= 1:
-                    # Single color - show as inline colored box using Rich markup
+                    # Single color: show as inline colored box using Rich markup
                     color_box = f"[on {hex_color}]  [/]"
                     scroll.mount(HistoryLine(color_box, line_type="answer"))
                 else:
@@ -814,7 +814,7 @@ class SimpleEvaluator:
             return None
 
     def _format_number(self, num: int | float) -> str:
-        """Format a number - up to 3 decimals, rounded"""
+        """Format a number. Up to 3 decimals, rounded."""
         if isinstance(num, int) or num == int(num):
             return str(int(num))
         rounded = round(num, 3)
@@ -937,7 +937,7 @@ class SimpleEvaluator:
                 results.append((part, None, int(part)))
                 continue
 
-            # Part didn't match anything - not emoji math
+            # Part didn't match anything. Not emoji math
             return None
 
         # Only return if we found at least one emoji
@@ -964,7 +964,7 @@ class SimpleEvaluator:
         return None
 
     def _get_emoji_or_color(self, word: str) -> str | None:
-        """Get emoji or color box for a word - colors act like emoji"""
+        """Get emoji or color box for a word. Colors act like emoji."""
         # Try emoji first
         result = self._get_emoji_singular(word)
         if result:
@@ -1029,7 +1029,7 @@ class SimpleEvaluator:
                     descriptions.append(f"{count} {name}s" if count != 1 else f"1 {name}")
                     continue
 
-            # Just a word - don't say "1 cat", just say "cat"
+            # Just a word. Don't say "1 cat", just say "cat"
             if self.content.get_emoji(part):
                 descriptions.append(part)
 
@@ -1102,13 +1102,13 @@ class SimpleEvaluator:
             if term_colors:
                 colors_to_mix.extend(term_colors)
             else:
-                # Not a valid color term - not a pure color expression
+                # Not a valid color term. Not a pure color expression
                 return None
 
         if not colors_to_mix:
             return None
 
-        # Single color - just show that color
+        # Single color: just show that color
         if len(colors_to_mix) == 1:
             mixed_hex = colors_to_mix[0]
         else:
@@ -1116,7 +1116,7 @@ class SimpleEvaluator:
             mixed_hex = mix_colors_paint(colors_to_mix)
 
         # Return a special marker that includes hex color, name, and all components
-        # (no deduplication - "red * 3 + orange" shows 3 red boxes + 1 orange)
+        # (no deduplication: "red * 3 + orange" shows 3 red boxes + 1 orange)
         color_name = get_color_name_approximation(mixed_hex)
         components_str = ",".join(colors_to_mix)
         return f"COLOR_RESULT:{mixed_hex}:{color_name}:{components_str}"

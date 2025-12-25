@@ -171,12 +171,12 @@ purplecomputer/
 
 There are **two separate systems** involved:
 
-1. **USB Installer** (temporary) - A remastered Ubuntu Server ISO with a two-gate safety model:
+1. **USB Installer** (temporary): A remastered Ubuntu Server ISO with a two-gate safety model.
    - **Gate 1 (initramfs):** Checks for `purple.install=1` in kernel cmdline, writes runtime artifacts to `/run/`
    - **Gate 2 (userspace):** Shows confirmation screen, requires user to press ENTER
    - Ubuntu's boot stack (shim, GRUB, kernel) and squashfs are untouched
 
-2. **Installed System** (permanent) - A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
+2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
 
 The USB's only job is to copy the pre-built image to disk (after user confirmation). After reboot, the USB is never used again.
 
@@ -213,9 +213,9 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 ## Documentation
 
-- **[MANUAL.md](MANUAL.md)** - Complete build instructions, customization, and troubleshooting
-- **[guides/architecture-overview.md](guides/architecture-overview.md)** - High-level explanation of the two-system design
-- **[guides/ubuntu-live-installer.md](guides/ubuntu-live-installer.md)** - Technical deep-dive on ISO remastering
+- **[MANUAL.md](MANUAL.md):** Complete build instructions, customization, and troubleshooting
+- **[guides/architecture-overview.md](guides/architecture-overview.md):** High-level explanation of the two-system design
+- **[guides/ubuntu-live-installer.md](guides/ubuntu-live-installer.md):** Technical deep-dive on ISO remastering
 
 ---
 

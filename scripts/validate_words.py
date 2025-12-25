@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validate words.json - ensures every entry has a definition.
+Validate words.json: ensures every entry has a definition.
 
 Usage: python scripts/validate_words.py
 """

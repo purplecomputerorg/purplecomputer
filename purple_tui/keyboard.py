@@ -1,5 +1,5 @@
 """
-Purple Computer - Unified Keyboard Handling
+Purple Computer: Unified Keyboard Handling
 
 Centralizes all keyboard input strategies:
 - Shift strategies: sticky shift (grace period), double-tap, regular shift
@@ -26,7 +26,7 @@ SHIFT_MAP = {
     '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
     ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
     '`': '~',
-    # Numbers are NOT included - they're used in math expressions
+    # Numbers are NOT included. They're used in math expressions
 }
 
 # Reverse map for checking if a character is a shifted version
@@ -100,11 +100,11 @@ class ShiftState:
                 self.last_char = None
                 return SHIFT_MAP[char]
             else:
-                # First tap - remember it
+                # First tap. Remember it
                 self.last_char = char
                 self.last_char_time = now
         else:
-            # Different character - reset
+            # Different character. Reset
             self.last_char = None
 
         return None
@@ -383,7 +383,7 @@ def launch_keyboard_normalizer() -> Optional[subprocess.Popen]:
     Launch KeyboardNormalizer as a background subprocess.
 
     Returns the Popen object if successful, None if failed or not needed.
-    This function is designed to fail gracefully - it won't crash the app
+    This function is designed to fail gracefully. It won't crash the app
     if the normalizer can't be started.
     """
     # Only relevant on Linux with evdev

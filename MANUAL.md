@@ -27,8 +27,8 @@ Purple Computer turns old laptops into calm, creative tools for kids. The instal
 - **Secure Boot:** Supported out of the box
 
 **Important:** There are **two separate systems** involved:
-1. **USB Installer** - A temporary Ubuntu live environment that copies the system to disk, then is never used again
-2. **Installed System** - A normal Ubuntu 24.04 system that kids use every day
+1. **USB Installer:** A temporary Ubuntu live environment that copies the system to disk, then is never used again
+2. **Installed System:** A normal Ubuntu 24.04 system that kids use every day
 
 These are built differently and serve different purposes. See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation.
 
@@ -140,8 +140,8 @@ Reboot into installed Purple Computer
 **Key insight:** Our hook runs in initramfs but does NOT run the installer. It writes runtime artifacts to `/run/` and lets casper continue. The confirmation screen (Gate 2) runs in userspace via systemd.
 
 **Safety:** Installation requires BOTH gates to pass:
-1. `purple.install=1` in kernel cmdline (Gate 1 - design-time arming)
-2. User presses ENTER on confirmation screen (Gate 2 - runtime consent)
+1. `purple.install=1` in kernel cmdline (Gate 1, design-time arming)
+2. User presses ENTER on confirmation screen (Gate 2, runtime consent)
 
 Selecting "Debug Mode" from the GRUB menu fails Gate 1, booting into normal Ubuntu Server live environment.
 
@@ -297,7 +297,7 @@ This ensures kids can't accidentally click around or get confused by trackpad ge
 
 #### F-Key Setup
 
-Purple Computer uses the top-row keys (F1-F12) for switching between modes. On first boot, keyboard setup runs automatically - just press each F-key when prompted.
+Purple Computer uses the top-row keys (F1-F12) for switching between modes. On first boot, keyboard setup runs automatically. Just press each F-key when prompted.
 
 **How it works:**
 
@@ -457,7 +457,7 @@ Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
 2. **Gate 1:** Hook script checks for `purple.install=1` in kernel cmdline
 3. Hook finds payload on boot device, writes runtime artifacts to `/run/`
 4. Casper mounts squashfs, systemd starts
-5. **Gate 2:** Confirmation screen appears - "This will set up Purple Computer"
+5. **Gate 2:** Confirmation screen appears: "This will set up Purple Computer"
 6. **User presses ENTER** to confirm (ESC or timeout cancels)
 7. Installer detects internal disk (first non-USB, non-removable disk)
 8. Wipes disk and writes golden image via `zstdcat | dd`
@@ -552,9 +552,9 @@ The system tracks keyboard activity and progresses through idle states:
 Activity is tracked via `on_event()` in the Textual app, which catches all keyboard events before they can be consumed by child widgets. This ensures activity is always recorded regardless of which mode is active.
 
 **Key files:**
-- `purple_tui/power_manager.py` - Idle tracking, screen control, shutdown
-- `purple_tui/modes/sleep_screen.py` - Sleep UI and wake handling
-- `purple_tui/purple_tui.py` - Activity recording in `on_event()`
+- `purple_tui/power_manager.py`: Idle tracking, screen control, shutdown
+- `purple_tui/modes/sleep_screen.py`: Sleep UI and wake handling
+- `purple_tui/purple_tui.py`: Activity recording in `on_event()`
 
 ### Testing Sleep Mode
 
@@ -802,10 +802,10 @@ First Boot (Installed System)
 
 ### Documentation
 
-- **README.md** - Quick start and overview
-- **MANUAL.md** - This file (complete reference)
-- **guides/architecture-overview.md** - High-level explanation of the two-system design and design rationale
-- **guides/ubuntu-live-installer.md** - Technical deep-dive on ISO remaster architecture
+- **README.md:** Quick start and overview
+- **MANUAL.md:** This file (complete reference)
+- **guides/architecture-overview.md:** High-level explanation of the two-system design and design rationale
+- **guides/ubuntu-live-installer.md:** Technical deep-dive on ISO remaster architecture
 
 ---
 

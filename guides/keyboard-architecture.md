@@ -14,7 +14,7 @@ Purple Computer uses F1-F12 for mode switching. But on most modern laptops:
 - etc.
 
 The **Fn key** toggles between media functions and F-keys, but:
-1. Fn is handled at firmware level - Linux never sees it
+1. Fn is handled at firmware level (Linux never sees it)
 2. Default behavior varies by manufacturer
 3. Parents don't know what "Fn Lock" means
 
@@ -75,7 +75,7 @@ Keycodes are **policy**, not fact. The firmware chooses:
 
 Once that choice is made, the keycode contains no physical position info.
 
-Scancodes are closer to hardware, but they're still **not physical positions**. They identify "which control on this specific keyboard" - not "leftmost F-row key."
+Scancodes are closer to hardware, but they're still **not physical positions**. They identify "which control on this specific keyboard," not "leftmost F-row key."
 
 ### The Hard Limit
 
@@ -217,7 +217,7 @@ By mapping scancodes, we capture "this physical key" regardless of what the firm
 On first boot (or when `/etc/purple/keyboard-map.json` is missing):
 
 ```
-First time setup - configuring keyboard...
+First time setup. Configuring keyboard...
 
 Purple Computer Keyboard Setup
 ==========================================
@@ -225,7 +225,7 @@ Purple Computer Keyboard Setup
 Let's set up your keyboard!
 
 Press each key when asked. Don't worry about
-holding any extra keys - just press the key shown.
+holding any extra keys. Just press the key shown.
 
 Press F1... OK!
 Press F2... OK!
@@ -292,7 +292,7 @@ Only calibration gives ground truth.
 
 **Calibration sees wrong keys:**
 - Make sure you're pressing the top-row F-keys (above number row)
-- The key labels might say brightness/volume icons - that's fine
+- The key labels might say brightness/volume icons. That's fine
 
 **Normalizer not running:**
 - Check if user is in `input` group: `groups`

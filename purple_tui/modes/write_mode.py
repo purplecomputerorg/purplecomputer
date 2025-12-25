@@ -1,5 +1,5 @@
 """
-Write Mode - Simple Text Editor for Kids
+Write Mode: Simple Text Editor for Kids
 
 A blank screen with large font for typing:
 - Letters, numbers, symbols only
@@ -58,7 +58,7 @@ ROW_COLORS = {
 NEUTRAL_COLOR = "#2a1845"
 
 # How many recent keystrokes to remember for color mixing
-# 10-12 feels responsive but smooth - you can reach pure colors
+# 10-12 feels responsive but smooth. You can reach pure colors
 # but transitions still feel gradual
 COLOR_MEMORY_SIZE = 12
 
@@ -212,7 +212,7 @@ class KidTextArea(TextArea):
         if char and char in SHIFT_MAP:
             now = time.time()
             if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
-                # Double-tap detected - replace last char with shifted version
+                # Double-tap detected. Replace last char with shifted version
                 event.stop()
                 event.prevent_default()
                 # Delete the previous character and insert shifted
@@ -221,7 +221,7 @@ class KidTextArea(TextArea):
                 self.last_char = None
                 return
             else:
-                # First tap - remember it
+                # First tap. Remember it
                 self.last_char = char
                 self.last_char_time = now
         else:
@@ -408,7 +408,7 @@ def save_slots(slots: dict[int, str]) -> None:
 
 class WriteMode(Container):
     """
-    Write Mode - Simple text editor for small kids.
+    Write Mode: Simple text editor for small kids.
 
     A blank screen where kids can type freely.
     Border color changes as you type based on keyboard row:

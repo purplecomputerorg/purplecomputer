@@ -60,8 +60,8 @@ See [README.md](README.md#quick-start) for details.
 
 ### Testing
 
-- **Local** (fast iteration) - `make run`
-- **Hardware** (production testing) - Build ISO and install on target laptop
+- **Local** (fast iteration): `make run`
+- **Hardware** (production testing): Build ISO and install on target laptop
 
 ### Code Structure
 

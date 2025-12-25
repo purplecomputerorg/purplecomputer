@@ -1,5 +1,7 @@
 # Purple Computer
 
+> **Raw URL for LLM context:** https://raw.githubusercontent.com/purplecomputerorg/purplecomputer/refs/heads/main/CONTEXT.md
+
 **A joyful, kid-safe creativity computer built from your old laptop.**
 
 Purple Computer is a calm, distraction-free computing environment for kids ages 3-8. It transforms old laptops into magical creativity machines where every keystroke brings wonder and mistakes are impossible.
@@ -44,14 +46,22 @@ A simple text editor with large, friendly text. Sticky shift makes capitals easy
 - **One-handed typing friendly**—sticky shift and long-press for symbols
 - **Parent mode** (hold Escape)—password-protected admin access
 
-## How It Works
+## Getting a Purple Computer
 
-1. Find an old laptop lying around
-2. Download the Purple Computer USB installer
-3. Boot from USB and follow simple installation
-4. Hand it to your little one and watch the magic happen
+Purple Computer is designed to be dead simple for non-technical parents. Two paths:
 
-The installer transforms the laptop into a dedicated Purple Computer. It boots directly into the fullscreen purple interface with a simple heart prompt, ready to explore.
+### Option 1: DIY Installation
+If you have an old laptop lying around:
+1. Download the Purple Computer USB installer
+2. Boot from USB and follow the simple installation
+3. Hand it to your little one
+
+The installer handles everything—no terminal commands, no configuration, no technical knowledge required. It transforms any compatible laptop into a dedicated Purple Computer that boots directly into the purple interface.
+
+### Option 2: Buy a Ready-to-Go Purple Laptop
+Don't have a spare laptop or don't want to deal with installation? Pre-configured Purple Laptops are available for purchase—refurbished machines with Purple Computer already installed. Power on and it just works.
+
+These are quality used laptops (ThinkPads, etc.) that have been tested, cleaned, and set up with Purple Computer. They arrive ready for a kid to start exploring immediately.
 
 ## Technology
 

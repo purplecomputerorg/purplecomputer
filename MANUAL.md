@@ -10,6 +10,7 @@ Complete reference for building, installing, and maintaining Purple Computer.
 - [Build Process](#build-process)
 - [Installation](#installation)
 - [Customization](#customization)
+- [Power Management](#power-management)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -264,6 +265,34 @@ We deliberately **do not install** `xserver-xorg-video-all` (which includes lega
 
 **Note:** NVIDIA proprietary drivers install their own X driver and config, which takes precedence. The modesetting approach doesn't interfere with this.
 
+#### Input Devices
+
+Purple Computer is **keyboard-only**. Mouse and trackpad input is disabled at multiple layers:
+
+| Layer | How | Config |
+|-------|-----|--------|
+| **X.Org** | `MatchIsPointer "on"` → `Ignore "true"` | `40-disable-pointer.conf` |
+| **Textual** | `app.run(mouse=False)` | `purple_tui.py` |
+| **Visual** | `unclutter -idle 2` hides cursor | `.xinitrc` |
+
+The X.Org config (`/usr/share/X11/xorg.conf.d/40-disable-pointer.conf`) completely ignores all pointer and touchpad devices:
+
+```
+Section "InputClass"
+    Identifier "Disable all pointer devices"
+    MatchIsPointer "on"
+    Option "Ignore" "true"
+EndSection
+
+Section "InputClass"
+    Identifier "Disable touchpads"
+    MatchIsTouchpad "on"
+    Option "Ignore" "true"
+EndSection
+```
+
+This ensures kids can't accidentally click around or get confused by trackpad gestures.
+
 ---
 
 ## Build Process
@@ -475,6 +504,50 @@ The golden image creates a simple two-partition layout (EFI + root). To customiz
 parted -s "$GOLDEN_IMAGE" mkpart primary linux-swap 513MiB 4GiB
 parted -s "$GOLDEN_IMAGE" mkpart primary ext4 4GiB 100%
 ```
+
+---
+
+## Power Management
+
+Purple Computer includes automatic power management to save energy and protect the screen on unattended laptops.
+
+### Idle Detection
+
+The system tracks keyboard activity and progresses through idle states:
+
+| Idle Time | State | What Happens |
+|-----------|-------|--------------|
+| 0-3 min | Active | Normal operation |
+| 3 min | Sleep UI | Show sleeping face, "press any key to wake" |
+| 10 min | Dim | (reserved for future use) |
+| 15 min | Screen Off | DPMS turns off display |
+| 25 min | Shutdown Warning | "Turning off in X minutes" |
+| 30 min | Shutdown | System powers off |
+
+**Lid close** triggers a 5-second countdown to shutdown (shown on screen).
+
+### Implementation
+
+Activity is tracked via `on_event()` in the Textual app, which catches all keyboard events before they can be consumed by child widgets. This ensures activity is always recorded regardless of which mode is active.
+
+**Key files:**
+- `purple_tui/power_manager.py` - Idle tracking, screen control, shutdown
+- `purple_tui/modes/sleep_screen.py` - Sleep UI and wake handling
+- `purple_tui/purple_tui.py` - Activity recording in `on_event()`
+
+### Testing Sleep Mode
+
+Use demo mode for accelerated timings:
+
+```bash
+PURPLE_SLEEP_DEMO=1 python -m purple_tui.purple_tui
+```
+
+Demo timings:
+- Sleep UI: 2 seconds
+- Screen off: 10 seconds
+- Shutdown warning: 15 seconds
+- Shutdown: 20 seconds (prints message instead of actual shutdown)
 
 ---
 

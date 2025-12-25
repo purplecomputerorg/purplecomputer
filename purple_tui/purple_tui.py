@@ -718,6 +718,17 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def on_event(self, event: events.Event) -> None:
+        """Record activity for any key press - before widgets can stop it.
+
+        This is called BEFORE event dispatch, so child widgets calling
+        event.stop() won't prevent activity from being recorded.
+        """
+        if isinstance(event, events.Key):
+            self._record_user_activity()
+        # Always call super to continue normal event dispatch
+        super().on_event(event)
+
     def _create_mode_widget(self, mode: Mode):
         """Create a new mode widget"""
         if mode == Mode.ASK:
@@ -868,8 +879,8 @@ class PurpleApp(App):
 
     def on_key(self, event: events.Key) -> None:
         """Handle key events at app level"""
-        # Record activity for idle detection (any key counts)
-        self._record_user_activity()
+        # Note: Activity recording moved to on_event() so it can't be bypassed
+        # by child widgets calling event.stop()
 
         key = event.key
 

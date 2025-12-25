@@ -201,9 +201,12 @@ SUDOERS
     chmod +x "$MOUNT_DIR/home/purple/.xinitrc"
     chown 1000:1000 "$MOUNT_DIR/home/purple/.xinitrc"
 
-    # Copy X.Org config (forces modesetting driver, avoids I/O port issues)
+    # Copy X.Org configs
     mkdir -p "$MOUNT_DIR/usr/share/X11/xorg.conf.d"
+    # Forces modesetting driver, avoids I/O port issues
     cp /purple-src/config/xorg/10-modesetting.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
+    # Disable mouse/trackpad - kids use keyboard only
+    cp /purple-src/config/xorg/40-disable-pointer.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
 
     # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"

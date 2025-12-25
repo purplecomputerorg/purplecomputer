@@ -88,7 +88,7 @@ Purple has three core modes:
 | Key | Mode | What It Does |
 |-----|------|--------------|
 | **F1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `cat + dog` |
-| **F2** | **Play** | Music and art grid. Letters make notes and colors. Numbers make sounds. |
+| **F2** | **Play** | Music and art grid. Press any key to play a sound and paint a color. |
 | **F3** | **Write** | Simple text editor. Just type. |
 
 **Controls:**

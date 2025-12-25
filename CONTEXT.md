@@ -30,7 +30,7 @@ Purple Computer organizes around three simple modes, accessed by function keys:
 A math and emoji playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. Type `cat + dog` and see 🐱🐶. Type `3 * rainbow` and see 🌈🌈🌈. Mix colors: `red + blue` shows purple. Every word becomes an opportunity for delight.
 
 ### F2: Play
-A music and art grid mapped to the keyboard. Press any letter to play a note and paint a color. The full QWERTY keyboard becomes an instrument—ten keys across, four rows down. No wrong notes, just exploration.
+A music and art grid mapped to the keyboard. Press any key to play a sound and paint a color. The number row plus three letter rows create a 10×4 grid. No wrong notes, just exploration.
 
 ### F3: Write
 A simple text editor with large, friendly text. Sticky shift makes capitals easy. Typing from different keyboard rows mixes colors like paint—top row adds red, middle adds blue, bottom adds yellow.

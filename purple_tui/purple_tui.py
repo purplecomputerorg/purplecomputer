@@ -27,7 +27,7 @@ import os
 import time
 
 from .constants import (
-    ICON_CHAT, ICON_PALETTE, ICON_DOCUMENT,
+    ICON_CHAT, ICON_MUSIC, ICON_DOCUMENT,
     ICON_MOON, ICON_SUN, MODE_TITLES,
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -59,7 +59,7 @@ class View(Enum):
 # Mode display info - F-keys for mode switching
 MODE_INFO = {
     Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
-    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_PALETTE},
+    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_MUSIC},
     Mode.WRITE: {"key": "F3", "label": "Write", "emoji": ICON_DOCUMENT},
 }
 

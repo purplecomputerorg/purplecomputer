@@ -142,7 +142,7 @@ class PlayGrid(Widget):
             if path.exists():
                 try:
                     sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.4)  # Prevent clipping when multiple sounds play
+                    sound.set_volume(0.3)  # Lower volume prevents clipping with many simultaneous sounds
                     self._sounds[key] = sound
                 except pygame.error:
                     pass

@@ -17,17 +17,17 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
-# Musical frequencies (C major scale, spread across octaves for fun range)
+# Musical frequencies (C major scale, balanced range)
 NOTE_FREQUENCIES = {
-    # Top row - sparkly high notes
-    'Q': 523.25, 'W': 587.33, 'E': 659.25, 'R': 698.46, 'T': 783.99,
-    'Y': 880.00, 'U': 987.77, 'I': 1046.50, 'O': 1174.66, 'P': 1318.51,
-    # Middle row - bright middle range
-    'A': 261.63, 'S': 293.66, 'D': 329.63, 'F': 349.23, 'G': 392.00,
-    'H': 440.00, 'J': 493.88, 'K': 523.25, 'L': 587.33, 'semicolon': 659.25,
-    # Bottom row - warm low notes (continues into next octave)
-    'Z': 130.81, 'X': 146.83, 'C': 164.81, 'V': 174.61, 'B': 196.00,
-    'N': 220.00, 'M': 246.94, 'comma': 261.63, 'period': 293.66, 'slash': 329.63,
+    # Top row - bright but not shrill
+    'Q': 392.00, 'W': 440.00, 'E': 493.88, 'R': 523.25, 'T': 587.33,
+    'Y': 659.25, 'U': 739.99, 'I': 783.99, 'O': 880.00, 'P': 987.77,
+    # Middle row - warm middle
+    'A': 196.00, 'S': 220.00, 'D': 246.94, 'F': 261.63, 'G': 293.66,
+    'H': 329.63, 'J': 369.99, 'K': 392.00, 'L': 440.00, 'semicolon': 493.88,
+    # Bottom row - rich low end
+    'Z': 98.00, 'X': 110.00, 'C': 123.47, 'V': 130.81, 'B': 146.83,
+    'N': 164.81, 'M': 185.00, 'comma': 196.00, 'period': 220.00, 'slash': 246.94,
 }
 
 def write_wav(filename: str, samples: list[int], sample_rate: int = 44100):
@@ -45,8 +45,8 @@ def write_wav(filename: str, samples: list[int], sample_rate: int = 44100):
 
 def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
     """
-    Generate a bright, vibrant piano-like tone.
-    Rich harmonics + sparkle + nice envelope = fun for kids!
+    Original bright, vibrant piano-like tone.
+    Rich harmonics + sparkle + nice envelope.
     """
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
@@ -74,17 +74,13 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
         release_start = duration - 0.15
 
         if t < attack_time:
-            # Quick attack with slight overshoot
             envelope = (t / attack_time) * 1.1
         elif t < attack_time + decay_time:
-            # Decay to sustain
             decay_progress = (t - attack_time) / decay_time
             envelope = 1.1 - (0.4 * decay_progress)
         elif t < release_start:
-            # Sustain
             envelope = sustain_level
         else:
-            # Release
             release_progress = (t - release_start) / (duration - release_start)
             envelope = sustain_level * (1 - release_progress)
 
@@ -92,6 +88,120 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
         samples.append(int(sample * 32767))
 
     return samples
+
+
+def generate_marimba(frequency: float, duration: float = 1.0) -> list[int]:
+    """
+    Full, resonant marimba with tube resonator simulation.
+    Bar vibration + resonator tube = rich, room-filling sound.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+
+    # Marimba bar partials (wooden bar physics)
+    bar_partials = [
+        (1.0, 1.0, 1.5),      # fundamental - slower decay
+        (3.9, 0.15, 4.0),     # first overtone
+        (9.2, 0.05, 8.0),     # second overtone
+    ]
+
+    # Resonator tube modes - this is what makes it FULL
+    # Multiple resonances for richer sound
+    tube_modes = [
+        (1.0, 0.9, 0.9),      # main tube resonance - strong, slow decay
+        (2.0, 0.35, 1.5),     # second harmonic
+        (3.0, 0.15, 2.5),     # third harmonic - adds presence
+    ]
+
+    samples = []
+    fade_out_duration = 0.15  # longer fade
+    fade_out_start = duration - fade_out_duration
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        sample = 0
+
+        # Soft mallet attack with bloom
+        if t < 0.012:
+            attack = t / 0.012
+        elif t < 0.06:
+            # Bloom as resonator builds up
+            attack = 1.0 + 0.2 * math.sin(math.pi * (t - 0.012) / 0.048)
+        else:
+            attack = 1.0
+
+        # Bar vibration
+        for ratio, amp, decay_rate in bar_partials:
+            partial_decay = math.exp(-t * decay_rate)
+            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
+
+        # Resonator tube - builds up then sustains
+        for ratio, amp, decay_rate in tube_modes:
+            tube_env = (1 - math.exp(-t * 25)) * math.exp(-t * decay_rate)
+            sample += amp * tube_env * math.sin(2 * math.pi * frequency * ratio * t)
+
+        # Sub-bass warmth
+        sub_bass = 0.3 * math.exp(-t * 0.8) * math.sin(2 * math.pi * frequency * 0.5 * t)
+        sample += sub_bass
+
+        sample *= attack
+
+        # Smooth fade out (cosine curve for natural sound)
+        if t > fade_out_start:
+            fade_progress = (t - fade_out_start) / fade_out_duration
+            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+
+        samples.append(sample)
+
+    return finalize_samples(samples, peak_level=0.5)  # lower peak to prevent mix clipping
+
+
+def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
+    """
+    Bright, playful tone - like a toy piano or xylophone.
+    Punchy attack, clear tone, fun for kids.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+
+    samples = []
+    fade_out_start = duration - 0.04
+
+    for i in range(num_samples):
+        t = i / sample_rate
+
+        # Punchy attack with slight "bonk"
+        if t < 0.005:
+            attack = (t / 0.005) * 1.3  # overshoot
+        elif t < 0.03:
+            attack = 1.3 - 0.3 * ((t - 0.005) / 0.025)  # settle
+        else:
+            attack = 1.0
+
+        # Clear, bright harmonics (xylophone-like)
+        sample = math.sin(2 * math.pi * frequency * t)            # fundamental
+        sample += 0.5 * math.sin(2 * math.pi * frequency * 2 * t)  # 2nd - body
+        sample += 0.4 * math.sin(2 * math.pi * frequency * 4 * t)  # 4th - brightness
+        sample += 0.15 * math.sin(2 * math.pi * frequency * 6 * t) # 6th - sparkle
+
+        # Decay - snappy but not too short
+        envelope = math.exp(-t * 4)
+
+        sample = sample * attack * envelope
+
+        # Fade out
+        if t > fade_out_start:
+            sample *= 1 - (t - fade_out_start) / 0.04
+
+        samples.append(sample)
+
+    return finalize_samples(samples)
+
+
+def finalize_samples(samples: list[float], peak_level: float = 0.75) -> list[int]:
+    """Normalize and convert to int16."""
+    peak = max(abs(s) for s in samples) or 1
+    return [int(s / peak * peak_level * 32767) for s in samples]
 
 def generate_kick_drum() -> list[int]:
     """Punchy kick drum - tuned for laptop speakers"""
@@ -319,10 +429,10 @@ def main():
 
     SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Generate piano tones for letters
-    print("Piano tones (A-Z):")
+    # Generate marimba tones for letters
+    print("Marimba tones (A-Z):")
     for letter, freq in NOTE_FREQUENCIES.items():
-        samples = generate_piano_tone(freq)
+        samples = generate_marimba(freq)
         write_wav(f"{letter.lower()}.wav", samples)
 
     print()

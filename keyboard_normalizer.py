@@ -5,7 +5,7 @@ Maps physical F-row keys to logical F1-F4/F12 using scancodes (MSC_SCAN),
 which identify physical keys regardless of Fn Lock state or firmware decisions.
 
 Mapping priority:
-1. Calibrated scancode mapping (from /etc/purple/keyboard-map.json)
+1. Calibrated scancode mapping (from ~/.config/purple/keyboard-map.json)
 2. Native F-keys (if firmware sends KEY_F1-F12 directly)
 3. Passthrough (unknown keys unchanged)
 
@@ -82,8 +82,8 @@ TARGET_FKEYS = {
 # Keys that indicate a real keyboard (not a mouse/gamepad)
 KEYBOARD_INDICATOR_KEYS = set(range(KeyCodes.KEY_A, KeyCodes.KEY_Z + 1))
 
-# Mapping file location
-MAPPING_FILE = Path("/etc/purple/keyboard-map.json")
+# Mapping file location (user-writable, no sudo needed)
+MAPPING_FILE = Path.home() / ".config" / "purple" / "keyboard-map.json"
 
 # Keys that can be double-tapped for shifted version (letters, numbers, punctuation)
 DOUBLE_TAP_KEYS = set(range(2, 14)) | set(range(16, 26)) | set(range(30, 39)) | set(range(44, 53)) | {40, 41, 43}
@@ -491,7 +491,7 @@ def calibrate() -> bool:
         return True
     else:
         print("Could not save settings.")
-        print("Try running with: sudo python3 keyboard_normalizer.py --calibrate")
+        print("Check that ~/.config/purple/ is writable.")
         return False
 
 

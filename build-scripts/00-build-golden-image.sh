@@ -159,11 +159,12 @@ SOURCES
 cd /opt/purple
 
 # Auto-calibrate keyboard on first boot (if no mapping exists)
-if [ ! -f /etc/purple/keyboard-map.json ]; then
+# Uses ~/.config/purple/ which is user-writable, no sudo needed
+if [ ! -f "$HOME/.config/purple/keyboard-map.json" ]; then
     echo
     echo "First time setup - configuring keyboard..."
     echo
-    sudo python3 keyboard_normalizer.py --calibrate
+    python3 keyboard_normalizer.py --calibrate
     echo
     sleep 1
 fi

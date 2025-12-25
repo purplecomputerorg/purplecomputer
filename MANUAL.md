@@ -669,16 +669,16 @@ echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 
 **F-keys (F1-F12) not working**
 
-Keyboard setup should have run on first boot. To re-run it:
+Keyboard setup should have run on first boot. To re-run it, use the Parent Menu (hold Escape 1 second) and select "Recalibrate Keyboard".
 
+Or from a terminal:
 ```bash
-# From parent shell (hold Escape 1 second)
-sudo python3 /opt/purple/keyboard_normalizer.py --calibrate
+python3 /opt/purple/keyboard_normalizer.py --calibrate
 ```
 
 Or delete the config and reboot:
 ```bash
-sudo rm /etc/purple/keyboard-map.json
+rm ~/.config/purple/keyboard-map.json
 ```
 
 ---

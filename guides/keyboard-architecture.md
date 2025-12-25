@@ -192,7 +192,7 @@ By mapping scancodes, we capture "this physical key" regardless of what the firm
 - Captures MSC_SCAN events before KEY events
 - Looks up scancode in calibrated mapping
 - Remaps to correct F-key (F1-F12)
-- Stored in `/etc/purple/keyboard-map.json`
+- Stored in `~/.config/purple/keyboard-map.json`
 
 ### Sticky Shift
 - Tap shift quickly (<300ms) = toggle sticky shift
@@ -214,7 +214,7 @@ By mapping scancodes, we capture "this physical key" regardless of what the firm
 
 ## Calibration Flow
 
-On first boot (or when `/etc/purple/keyboard-map.json` is missing):
+On first boot (or when `~/.config/purple/keyboard-map.json` is missing):
 
 ```
 First time setup. Configuring keyboard...
@@ -235,7 +235,7 @@ Press F12... OK!
 Keyboard setup complete!
 ```
 
-Settings saved to `/etc/purple/keyboard-map.json`.
+Settings saved to `~/.config/purple/keyboard-map.json`.
 
 ---
 
@@ -279,7 +279,7 @@ Only calibration gives ground truth.
 | File | Purpose |
 |------|---------|
 | `keyboard_normalizer.py` | Main normalizer (grabs keyboard, remaps, emits) |
-| `/etc/purple/keyboard-map.json` | Calibrated scancode→keycode mapping |
+| `~/.config/purple/keyboard-map.json` | Calibrated scancode→keycode mapping |
 | `purple_tui/keyboard.py` | App-side keyboard state (sticky shift, etc.) |
 
 ---
@@ -287,8 +287,8 @@ Only calibration gives ground truth.
 ## Troubleshooting
 
 **F-keys not working after setup:**
-- Re-run calibration: `sudo python3 /opt/purple/keyboard_normalizer.py --calibrate`
-- Or delete config and reboot: `sudo rm /etc/purple/keyboard-map.json`
+- Re-run calibration: `python3 /opt/purple/keyboard_normalizer.py --calibrate`
+- Or delete config and reboot: `rm ~/.config/purple/keyboard-map.json`
 
 **Calibration sees wrong keys:**
 - Make sure you're pressing the top-row F-keys (above number row)

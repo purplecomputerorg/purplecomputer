@@ -13,6 +13,7 @@ from textual.binding import Binding
 import subprocess
 import os
 import sys
+from pathlib import Path
 
 
 class ParentMenuItem(Button):
@@ -81,12 +82,15 @@ class ParentMenu(ModalScreen):
             with Center(id="parent-items"):
                 with Vertical():
                     yield ParentMenuItem("Open Terminal", id="menu-shell")
+                    yield ParentMenuItem("Recalibrate Keyboard", id="menu-keyboard")
             yield Static("Press Escape to return", id="parent-hint")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle menu item selection"""
         if event.button.id == "menu-shell":
             self._open_shell()
+        elif event.button.id == "menu-keyboard":
+            self._recalibrate_keyboard()
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""
@@ -125,3 +129,45 @@ class ParentMenu(ModalScreen):
             print()
             print("Returning to Purple Computer...")
             sys.stdout.flush()
+
+    def _recalibrate_keyboard(self) -> None:
+        """Run keyboard calibration"""
+        self.dismiss()
+        self.app.call_later(self._run_keyboard_calibration)
+
+    def _run_keyboard_calibration(self) -> None:
+        """Actually run calibration - called after modal dismissed"""
+        # Find the keyboard_normalizer.py script
+        this_dir = Path(__file__).parent
+        candidates = [
+            this_dir.parent.parent / "keyboard_normalizer.py",  # Project root
+            Path("/opt/purple/keyboard_normalizer.py"),  # Installed location
+        ]
+
+        script_path = None
+        for path in candidates:
+            if path.exists():
+                script_path = path
+                break
+
+        if not script_path:
+            self.app.notify("Could not find keyboard calibration script", severity="error")
+            return
+
+        with self.app.suspend():
+            os.system('stty sane')
+            os.system('clear')
+
+            # Run the calibration
+            result = subprocess.run([sys.executable, str(script_path), "--calibrate"])
+
+            if result.returncode == 0:
+                print()
+                print("Keyboard calibration complete!")
+                print("Press Enter to return to Purple Computer...")
+            else:
+                print()
+                print("Keyboard calibration failed or was cancelled.")
+                print("Press Enter to return to Purple Computer...")
+
+            input()  # Wait for user to press Enter

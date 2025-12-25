@@ -81,18 +81,19 @@ See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
 ---
 
-## The Three Modes
+## The Four Modes
 
-Purple has three core modes:
+Purple has four core modes:
 
 | Key | Mode | What It Does |
 |-----|------|--------------|
 | **F1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `cat + dog` |
 | **F2** | **Play** | Music and art grid. Press any key to play a sound and paint a color. |
 | **F3** | **Write** | Simple text editor. Just type. |
+| **F4** | **Sketch** | Freeform keyboard scribbling. Any key places a glyph, arrow keys change direction. Pure freeplay. |
 
 **Controls:**
-- **F1-F3** — Switch modes
+- **F1-F4** — Switch modes
 - **F12** — Toggle dark/light mode
 - **Ctrl+V** — Cycle views (Screen → Line → Ears)
 - **Tab** (in Ask mode) — Toggle speech on/off
@@ -143,7 +144,7 @@ Purple Computer displays a **100×28 character viewport** (plus header and foote
 ```
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
-│   ├── modes/            # Ask, Play, Write modes
+│   ├── modes/            # Ask, Play, Write, Sketch modes
 │   ├── content.py        # Content API for packs
 │   └── tts.py            # Piper TTS integration
 │

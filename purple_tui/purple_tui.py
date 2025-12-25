@@ -6,7 +6,7 @@ The calm computer for kids ages 3-8.
 A creativity device, not an entertainment device.
 
 Keyboard controls:
-- F1-F3: Switch modes (Ask, Play, Write)
+- F1-F4: Switch modes (Ask, Play, Write, Sketch)
 - F12: Toggle dark/light theme
 - Escape (long hold): Parent mode
 - Caps Lock: Toggle big/small letters
@@ -27,7 +27,7 @@ import os
 import time
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_DOCUMENT,
+    ICON_CHAT, ICON_MUSIC, ICON_DOCUMENT, ICON_SKETCH,
     ICON_MOON, ICON_SUN, MODE_TITLES,
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -44,10 +44,11 @@ from .modes.write_mode import BorderColorChanged
 
 
 class Mode(Enum):
-    """The 3 core modes of Purple Computer"""
+    """The 4 core modes of Purple Computer"""
     ASK = 1      # F1 - Math and emoji REPL
     PLAY = 2     # F2 - Music and art grid
     WRITE = 3    # F3 - Simple text editor
+    SKETCH = 4   # F4 - Freeform keyboard scribbling
 
 
 class View(Enum):
@@ -62,6 +63,7 @@ MODE_INFO = {
     Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
     Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_MUSIC},
     Mode.WRITE: {"key": "F3", "label": "Write", "emoji": ICON_DOCUMENT},
+    Mode.SKETCH: {"key": "F4", "label": "Sketch", "emoji": ICON_SKETCH},
 }
 
 
@@ -422,7 +424,7 @@ class PurpleApp(App):
     """
     Purple Computer - The calm computer for kids.
 
-    F1-F3: Switch between modes (Ask, Play, Write)
+    F1-F4: Switch between modes (Ask, Play, Write, Sketch)
     F12: Toggle dark/light mode
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
@@ -529,6 +531,7 @@ class PurpleApp(App):
         Binding("f1", "switch_mode('ask')", "Ask", show=False, priority=True),
         Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
         Binding("f3", "switch_mode('write')", "Write", show=False, priority=True),
+        Binding("f4", "switch_mode('sketch')", "Sketch", show=False, priority=True),
         Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
@@ -789,6 +792,9 @@ class PurpleApp(App):
         elif mode == Mode.WRITE:
             from .modes.write_mode import WriteMode
             return WriteMode(classes="mode-content")
+        elif mode == Mode.SKETCH:
+            from .modes.sketch_mode import SketchMode
+            return SketchMode(classes="mode-content")
         return None
 
     def _load_mode_content(self) -> None:
@@ -833,6 +839,12 @@ class PurpleApp(App):
                 widget.restore_border_color()
             except Exception:
                 widget.focus()
+        elif self.active_mode == Mode.SKETCH:
+            # Focus the canvas directly
+            try:
+                widget.canvas.focus()
+            except Exception:
+                widget.focus()
         else:
             widget.focus()
 
@@ -849,11 +861,12 @@ class PurpleApp(App):
             container.add_class("view-ears")
 
     def action_switch_mode(self, mode_name: str) -> None:
-        """Switch to a different mode (F1-F3)"""
+        """Switch to a different mode (F1-F4)"""
         mode_map = {
             "ask": Mode.ASK,
             "play": Mode.PLAY,
             "write": Mode.WRITE,
+            "sketch": Mode.SKETCH,
         }
         new_mode = mode_map.get(mode_name, Mode.ASK)
 

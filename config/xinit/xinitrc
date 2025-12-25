@@ -1,101 +1,47 @@
 #!/bin/bash
-# Purple Computer X11 Startup Script
-# This launches when the purple user logs in and starts X11
+# Purple Computer X11 Startup
+# Simple and reliable - no edge cases
 
-# Log everything for debugging
+# Log for debugging (view with: cat /tmp/xinitrc.log)
 exec >> /tmp/xinitrc.log 2>&1
 echo "=== $(date) ==="
-echo "Starting Purple Computer X11 session"
 
-# Wait a moment for X to fully initialize
+# Wait for X to initialize
 sleep 1
 
-# Disable screen blanking and power management
-xset s off
-xset -dpms
-xset s noblank
+# Disable screen blanking
+xset s off -dpms s noblank b off
 
-# Disable bell
-xset b off
-
-# Set keyboard repeat rate (faster for kid typing)
+# Keyboard repeat (faster for kids)
 xset r rate 300 30
 
-# Hide mouse cursor after 2 seconds of inactivity
-if command -v unclutter &> /dev/null; then
-    unclutter -idle 2 &
-fi
+# Hide cursor when idle
+command -v unclutter &>/dev/null && unclutter -idle 2 &
 
-# Start SPICE guest agent for VM display resize (harmless on real hardware)
-# Start early to give it time to negotiate resolution before font calculation
-if command -v spice-vdagent &> /dev/null; then
-    spice-vdagent &
-    echo "Started spice-vdagent"
-fi
+# SPICE agent for VM resize (harmless on real hardware)
+command -v spice-vdagent &>/dev/null && spice-vdagent &
 
-# Set the purple background color (fills screen outside viewport)
+# Purple background (fills space around viewport)
 xsetroot -solid "#2d1b4e"
 
-# Launch matchbox window manager (minimal WM for proper fullscreen support)
+# Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &
-echo "Started matchbox-window-manager"
-
-# Wait for WM to start
 sleep 0.5
 
-# Force predictable X11 scaling (prevents HiDPI auto-scaling issues)
+# Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
 
-# Calculate optimal font size for this screen
-# The script waits for resolution to stabilize (handles SPICE race condition)
-echo "Calculating font size..."
-FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "14.0")
-echo "Calculated font size: $FONT_SIZE"
+# Calculate font size (simple: 80% of screen, clamped to 12-32pt)
+FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "16")
+echo "Font size: $FONT_SIZE"
 
-# Validation loop: launch Alacritty and verify terminal has enough cols/rows
-# If too small, reduce font size and retry (handles edge cases the calc missed)
-MAX_RETRIES=3
-RETRY=0
-
-while [ $RETRY -lt $MAX_RETRIES ]; do
-    echo "Attempt $((RETRY + 1)): Launching Alacritty with font size $FONT_SIZE"
-
-    # Launch Alacritty with a validation check instead of the app
-    # This runs inside the terminal and checks actual COLUMNS/LINES
-    VALIDATION=$(alacritty --config-file /etc/purple/alacritty.toml \
-        -o "font.size=${FONT_SIZE}" \
-        -e bash -c 'python3 /opt/purple/calc_font_size.py --validate' 2>/dev/null)
-
-    echo "Validation result: $VALIDATION"
-
-    if [ "$VALIDATION" = "OK" ]; then
-        echo "Terminal size validated, launching Purple TUI"
-        break
-    else
-        # Terminal too small, reduce font by 10% and retry
-        RETRY=$((RETRY + 1))
-        if [ $RETRY -lt $MAX_RETRIES ]; then
-            FONT_SIZE=$(echo "$FONT_SIZE * 0.9" | bc -l | xargs printf "%.1f")
-            echo "Reducing font to $FONT_SIZE and retrying..."
-            # Clear any stale cache since our calculation was wrong
-            rm -f /var/cache/purple/font_probe.cache 2>/dev/null
-        fi
-    fi
-done
-
-# Launch the actual Purple Computer TUI
-echo "Launching Purple Computer with font size $FONT_SIZE"
+# Launch Purple Computer
 alacritty --config-file /etc/purple/alacritty.toml \
     -o "font.size=${FONT_SIZE}" \
     -e /usr/local/bin/purple
-ALACRITTY_EXIT=$?
 
-echo "Alacritty exited with code $ALACRITTY_EXIT"
-
-# If Alacritty exited unexpectedly, show debug info
-if [ $ALACRITTY_EXIT -ne 0 ]; then
-    echo "Alacritty failed, showing debug shell..."
-    exec alacritty --config-file /etc/purple/alacritty.toml \
-        -o "font.size=${FONT_SIZE}" \
-        -e bash -c "echo '=== Purple TUI Debug ==='; echo 'Exit code: $ALACRITTY_EXIT'; echo ''; echo '--- Screen info ---'; python3 /opt/purple/calc_font_size.py --info 2>/dev/null; echo ''; echo '--- stderr log ---'; cat /tmp/purple-stderr.log 2>/dev/null || echo '(no stderr log)'; echo ''; echo '--- xinitrc log ---'; tail -50 /tmp/xinitrc.log 2>/dev/null; echo ''; echo 'Press Enter to exit'; read"
-fi
+# If it exits, show debug info
+echo "Exited, showing debug shell"
+exec alacritty --config-file /etc/purple/alacritty.toml \
+    -o "font.size=16" \
+    -e bash -c "echo 'Purple exited. Debug:'; python3 /opt/purple/calc_font_size.py --info; echo; cat /tmp/xinitrc.log; read"

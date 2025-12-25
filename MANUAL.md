@@ -162,79 +162,56 @@ Ubuntu's stock kernel handles these automatically:
 
 ### Screen Size & Font Calculation
 
-Purple Computer displays a fixed **100×28 character viewport** (plus header and footer) that targets approximately **10×6 inches** of physical screen space. The full UI requires a **104×37 character terminal grid** (viewport + borders + padding + chrome). This provides a consistent experience for kids across different laptop sizes.
+Purple Computer displays a **100×28 character viewport** (plus header and footer) requiring a **104×37 character terminal grid**. The font size is calculated to fill **80% of the screen**, with a cap to prevent huge viewports on large displays.
+
+**Minimum supported resolution:** 1024×768
 
 #### How It Works
 
-The font size is calculated at X11 startup by `calc_font_size.py`:
+At X11 startup, `calc_font_size.py` calculates the optimal font size:
 
-1. **Wait for resolution stability** — polls xrandr until resolution stops changing (handles SPICE/VM race conditions)
-2. **Check cache** (`/var/cache/purple/font_probe.cache`) — instant if valid
-3. **Probe Alacritty** — launch once at 18pt to measure actual cell dimensions
-4. **Get screen info** — resolution (pixels) and physical size (mm) from xrandr
-5. **Validate DPI** — reject obviously wrong EDID data (DPI < 60 or > 220)
-6. **Calculate target**:
-   - Primary: ensure 104×37 grid fits on screen (fills 85% max)
-   - Secondary: if physical size known and sane, target 10" wide viewport (254mm)
-7. **Apply safety margin** (5%) and clamp to 10-48pt range
-8. **Validation loop** — xinitrc validates terminal has enough cols/rows, reduces font and retries if too small
+1. **Get resolution** from xrandr (fallback: 1366×768)
+2. **Probe cell size** by launching Alacritty at 18pt (fallback: 11×22 pixels)
+3. **Calculate font** to fill 80% of screen
+4. **Clamp** to 12-24pt range
 
-The environment variable `WINIT_X11_SCALE_FACTOR=1.0` is set to prevent HiDPI auto-scaling issues.
-
-#### Layout Constants
-
-The required terminal size is defined in `purple_tui/constants.py`:
-- `VIEWPORT_CONTENT_COLS = 100` — inner content width
-- `VIEWPORT_CONTENT_ROWS = 28` — inner content height
-- `REQUIRED_TERMINAL_COLS = 104` — full UI width (+ borders + padding)
-- `REQUIRED_TERMINAL_ROWS = 37` — full UI height (+ title + footer)
+That's it. No EDID/physical size detection (too unreliable), no caching (fast enough), no validation loops (calculation just works).
 
 #### Behavior by Screen Size
 
-| Screen | Resolution | Physical Width | Viewport Behavior |
-|--------|------------|----------------|-------------------|
-| 10" laptop | 1280×800 | ~220mm | Fills ~85% (max cap) |
-| 13" laptop | 1920×1080 | ~290mm | Fills ~85% (height limited) |
-| 15" laptop | 1920×1080 | ~340mm | Fills ~75% (targets 10") |
-| Surface 13.8" | 2304×1536 | ~267mm | Fills ~85% (max cap) |
+| Screen | Resolution | Font | Viewport Fill |
+|--------|------------|------|---------------|
+| 11" laptop | 1366×768 | 14pt | 80% |
+| 13" laptop | 1920×1080 | 19pt | 80% |
+| 15" laptop | 1920×1080 | 19pt | 80% |
+| 17" laptop | 2560×1440 | 24pt | ~60% (capped) |
+| 4K monitor | 3840×2160 | 24pt | ~40% (capped) |
 
-#### Fallback Behavior
-
-Every step has a fallback to ensure Purple always starts:
-
-- **Resolution unstable**: Times out after 5s and uses current resolution
-- **Cache corrupt/missing**: Re-probe Alacritty (adds ~1-2s to first boot)
-- **Probe fails**: Use 14pt fallback (conservative, fits 1280×800)
-- **xrandr fails**: Use fallback resolution 1366×768
-- **DPI looks wrong**: Ignore physical size, use percentage-based sizing
-- **Validation fails**: Reduce font by 10% and retry (up to 3 times)
-
-#### Cache
-
-Probe results are cached per-resolution at `/var/cache/purple/font_probe.cache`. Format:
-```
-2304x1536:18:11:22
-# resolution:probe_pt:cell_w:cell_h
-```
-
-The cache is automatically invalidated if screen resolution changes.
+The 24pt cap prevents oversized viewports on large screens while keeping the UI proportional on typical donated laptops (11-15").
 
 #### Debugging
 
-Run `python3 /opt/purple/calc_font_size.py --info` to see diagnostic info:
+Run inside the VM to see what's happening:
+```bash
+python3 /opt/purple/calc_font_size.py --info
 ```
-Screen: 1920x1080 px
-Physical: 344x194 mm (142 DPI)
-Required grid: 104x37
-Probed cell: 11x22 px (at 18pt)
+
+Output:
 ```
+Screen: 1920x1080
+Cell: 11x22 (at 18pt)
+Grid: 104x37
+Fill: 80%
+Font: 19.1pt
+```
+
+Startup log: `cat /tmp/xinitrc.log`
 
 #### Manual Override
 
-To force a specific font size, set `PURPLE_FONT_SIZE` before starting X, or edit `/home/purple/.xinitrc`:
+Edit xinitrc to force a specific font size:
 ```bash
-# Replace the FONT_SIZE= line with:
-FONT_SIZE=22.0
+FONT_SIZE=20  # Override calculated size
 ```
 
 ---

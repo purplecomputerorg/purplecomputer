@@ -45,7 +45,6 @@ ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off
 ICON_ERASER = "󰇾"           # nf-md-eraser
 ICON_PALETTE = "󰏘"          # nf-md-palette
 ICON_CHAT = "󰭹"             # nf-md-chat_question
-ICON_HEADPHONES = "󰋋"       # nf-md-headphones
 ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
@@ -62,6 +61,5 @@ ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 MODE_TITLES = {
     "ask": (ICON_CHAT, "Ask"),
     "play": (ICON_PALETTE, "Play"),
-    "listen": (ICON_HEADPHONES, "Listen"),
     "write": (ICON_DOCUMENT, "Write"),
 }

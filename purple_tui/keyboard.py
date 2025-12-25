@@ -5,7 +5,7 @@ Centralizes all keyboard input strategies:
 - Shift strategies: sticky shift (grace period), double-tap, regular shift
 - Caps lock detection (direct from hardware or terminal fallback)
 - Long-hold detection for parent mode (Escape)
-- F-key mode switching (F1-F4, F12)
+- F-key mode switching (F1-F3, F12)
 
 On Linux with evdev: uses KeyboardNormalizer for hardware-level detection
 On Mac/fallback: uses terminal-level detection with reduced robustness

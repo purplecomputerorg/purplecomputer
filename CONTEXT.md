@@ -22,9 +22,9 @@ Purple Computer runs on 2010-2020 era laptops—ThinkPads, Dell Latitudes, HP El
 
 Minimal requirements: 2GB RAM, 20GB storage, x86_64 processor. Old hardware runs it beautifully.
 
-## The Four Modes
+## The Three Modes
 
-Purple Computer organizes around four simple modes, accessed by function keys:
+Purple Computer organizes around three simple modes, accessed by function keys:
 
 ### F1: Ask
 A math and emoji playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. Type `cat + dog` and see 🐱🐶. Type `3 * rainbow` and see 🌈🌈🌈. Mix colors: `red + blue` shows purple. Every word becomes an opportunity for delight.
@@ -32,10 +32,7 @@ A math and emoji playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. 
 ### F2: Play
 A music and art grid mapped to the keyboard. Press any letter to play a note and paint a color. The full QWERTY keyboard becomes an instrument—ten keys across, four rows down. No wrong notes, just exploration.
 
-### F3: Listen
-A library of stories and songs (coming soon). Kid-friendly audio content, no streaming required.
-
-### F4: Write
+### F3: Write
 A simple text editor with large, friendly text. Sticky shift makes capitals easy. Typing from different keyboard rows mixes colors like paint—top row adds red, middle adds blue, bottom adds yellow.
 
 ## Key Design Principles

@@ -24,7 +24,7 @@ help:
 	@echo "  make clean-all      - Remove everything"
 	@echo ""
 	@echo "Controls:"
-	@echo "  F1-F4      - Switch modes (Ask, Play, Listen, Write)"
+	@echo "  F1-F3      - Switch modes (Ask, Play, Write)"
 	@echo "  Ctrl+V     - Cycle views (Screen, Line, Ears)"
 	@echo "  F12        - Toggle dark/light theme"
 	@echo ""

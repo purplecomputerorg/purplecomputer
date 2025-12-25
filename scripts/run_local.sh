@@ -97,7 +97,7 @@ fi
 
 echo ""
 echo_info "Starting Purple Computer TUI..."
-echo_info "F1-F4: Switch modes | Ctrl+V: Cycle views | F12: Theme"
+echo_info "F1-F3: Switch modes | Ctrl+V: Cycle views | F12: Theme"
 echo ""
 
 # Set environment variables

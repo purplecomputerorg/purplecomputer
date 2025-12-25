@@ -9,12 +9,17 @@ A blank screen with large font for typing:
 - Enter creates new line
 - Up/Down arrows scroll the text
 - Color mixing: keyboard rows (top=red, middle=blue, bottom=yellow) mix colors
+- Storage bins: F5 to save, F6 to load (5 slots)
+- F10: Clear all text (with confirmation)
 """
 
 from collections import deque
+from enum import Enum
+from pathlib import Path
+import json
 
 from textual.widgets import Static, TextArea
-from textual.containers import Container
+from textual.containers import Container, Vertical
 from textual.app import ComposeResult
 from textual.message import Message
 from textual import events
@@ -23,6 +28,17 @@ from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import SHIFT_MAP
 from ..color_mixing import mix_colors_paint
 from ..scrolling import scroll_widget
+
+
+# Number of storage slots
+NUM_SLOTS = 5
+
+# Slot mode states
+class SlotMode(Enum):
+    IDLE = "idle"
+    SAVING = "saving"
+    LOADING = "loading"
+    CONFIRM_CLEAR = "confirm_clear"
 
 
 # Keyboard row definitions for color mixing
@@ -51,6 +67,13 @@ class ColorKeyPressed(Message):
     """Message sent when a color-row key is pressed (internal to WriteMode)"""
     def __init__(self, row: str) -> None:
         self.row = row  # "top", "middle", or "bottom"
+        super().__init__()
+
+
+class SlotKeyPressed(Message):
+    """Message sent when a slot-related key is pressed during slot mode"""
+    def __init__(self, key: str) -> None:
+        self.key = key  # "1"-"5", "escape", or "f10"
         super().__init__()
 
 
@@ -128,6 +151,7 @@ class KidTextArea(TextArea):
         super().__init__(**kwargs)
         self.last_char = None
         self.last_char_time = 0
+        self.slot_mode_active = False  # Set by WriteMode when in save/load/clear mode
 
     def on_key(self, event: events.Key) -> None:
         """Filter keys for kid-safe editing"""
@@ -135,6 +159,14 @@ class KidTextArea(TextArea):
 
         key = event.key
         char = event.character
+
+        # When in slot mode, capture 1-5, escape, f10 and send to WriteMode
+        if self.slot_mode_active:
+            if key in ("1", "2", "3", "4", "5", "escape", "f10"):
+                event.stop()
+                event.prevent_default()
+                self.post_message(SlotKeyPressed(key))
+                return
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):
@@ -165,6 +197,10 @@ class KidTextArea(TextArea):
             event.stop()
             event.prevent_default()
             return
+
+        # Let F5/F6/F10/F11 bubble up to WriteMode/App for slot/volume handling
+        if key in ("f5", "f6", "f10", "f11"):
+            return  # Don't stop, let it bubble
 
         # Block non-printable keys (except allowed ones above)
         if not event.is_printable and key not in ("backspace", "enter"):
@@ -200,12 +236,124 @@ class KidTextArea(TextArea):
 
 
 class WriteHeader(Static):
-    """Shows header with caps support"""
+    """Shows header with caps support, also shows slot mode prompts"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._slot_mode = SlotMode.IDLE
+        self._slot_previews: list[str] = [""] * NUM_SLOTS
+
+    def set_slot_mode(self, mode: SlotMode, previews: list[str] | None = None) -> None:
+        self._slot_mode = mode
+        if previews:
+            self._slot_previews = previews
+        self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        text = caps("Type anything you want!")
-        return f"[dim]{text}[/]"
+
+        if self._slot_mode == SlotMode.SAVING:
+            return f"[bold yellow]{caps('Save to which slot?')}[/] [dim](1-5 or Esc)[/]"
+        elif self._slot_mode == SlotMode.LOADING:
+            return f"[bold cyan]{caps('Load from which slot?')}[/] [dim](1-5 or Esc)[/]"
+        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
+            return f"[bold red]{caps('Erase everything?')}[/] [dim](F10 yes, Esc no)[/]"
+        else:
+            text = caps("Type anything you want!")
+            return f"[dim]{text}[/]"
+
+
+class SlotIndicator(Static):
+    """A single storage slot indicator"""
+
+    DEFAULT_CSS = """
+    SlotIndicator {
+        width: 3;
+        height: 3;
+        content-align: center middle;
+        border: round $primary-darken-2;
+        margin-bottom: 1;
+    }
+
+    SlotIndicator.filled {
+        border: round $accent;
+    }
+
+    SlotIndicator.highlighted {
+        border: round $warning;
+        background: $warning 20%;
+    }
+    """
+
+    def __init__(self, slot_num: int, **kwargs):
+        super().__init__(**kwargs)
+        self.slot_num = slot_num
+        self._filled = False
+        self._highlighted = False
+
+    def set_filled(self, filled: bool) -> None:
+        self._filled = filled
+        self.remove_class("filled")
+        if filled:
+            self.add_class("filled")
+        self.refresh()
+
+    def set_highlighted(self, highlighted: bool) -> None:
+        self._highlighted = highlighted
+        self.remove_class("highlighted")
+        if highlighted:
+            self.add_class("highlighted")
+        self.refresh()
+
+    def render(self) -> str:
+        num = str(self.slot_num)
+        if self._filled:
+            # Show filled indicator
+            return f"[bold]{num}[/]\n[bold $accent]●[/]"
+        else:
+            return f"{num}\n[dim]○[/]"
+
+
+class SlotStrip(Vertical):
+    """Vertical strip of storage slot indicators"""
+
+    DEFAULT_CSS = """
+    SlotStrip {
+        width: 5;
+        height: 100%;
+        dock: right;
+        padding: 1 1;
+        background: $surface;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._slots: list[SlotIndicator] = []
+
+    def compose(self) -> ComposeResult:
+        for i in range(1, NUM_SLOTS + 1):
+            indicator = SlotIndicator(i, id=f"slot-{i}")
+            self._slots.append(indicator)
+            yield indicator
+
+    def update_slot(self, slot_num: int, filled: bool) -> None:
+        """Update whether a slot is filled"""
+        if 1 <= slot_num <= NUM_SLOTS:
+            try:
+                indicator = self.query_one(f"#slot-{slot_num}", SlotIndicator)
+                indicator.set_filled(filled)
+            except Exception:
+                pass
+
+    def highlight_all(self, highlight: bool) -> None:
+        """Highlight all slots (for save/load mode)"""
+        for i in range(1, NUM_SLOTS + 1):
+            try:
+                indicator = self.query_one(f"#slot-{i}", SlotIndicator)
+                indicator.set_highlighted(highlight)
+            except Exception:
+                pass
 
 
 class WriteAreaContainer(Container):
@@ -227,6 +375,37 @@ class WriteAreaContainer(Container):
         yield KidTextArea(id="write-area")
 
 
+def get_slots_file() -> Path:
+    """Get path to slots storage file"""
+    purple_dir = Path.home() / ".purple"
+    purple_dir.mkdir(exist_ok=True)
+    return purple_dir / "write_slots.json"
+
+
+def load_slots() -> dict[int, str]:
+    """Load slots from disk"""
+    slots_file = get_slots_file()
+    if slots_file.exists():
+        try:
+            with open(slots_file) as f:
+                data = json.load(f)
+                # Convert string keys back to int
+                return {int(k): v for k, v in data.items()}
+        except Exception:
+            pass
+    return {}
+
+
+def save_slots(slots: dict[int, str]) -> None:
+    """Save slots to disk"""
+    slots_file = get_slots_file()
+    try:
+        with open(slots_file, "w") as f:
+            json.dump(slots, f)
+    except Exception:
+        pass
+
+
 class WriteMode(Container):
     """
     Write Mode - Simple text editor for small kids.
@@ -236,6 +415,11 @@ class WriteMode(Container):
     - Top row (qwerty...): red
     - Middle row (asdf...): blue
     - Bottom row (zxcv...): yellow
+
+    Storage bins (F5/F6):
+    - F5: Enter save mode, then press 1-5 to save
+    - F6: Enter load mode, then press 1-5 to load
+    - F10: Clear all text (with confirmation)
     """
 
     DEFAULT_CSS = """
@@ -255,13 +439,24 @@ class WriteMode(Container):
         background: $surface;
     }
 
-    #write-container {
+    #write-main {
         width: 100%;
         height: 1fr;
+        layout: horizontal;
+    }
+
+    #write-container {
+        width: 1fr;
+        height: 100%;
     }
 
     #write-area {
         width: 100%;
+        height: 100%;
+    }
+
+    #slot-strip {
+        width: 5;
         height: 100%;
     }
     """
@@ -270,14 +465,160 @@ class WriteMode(Container):
         super().__init__(**kwargs)
         self._color_mixer = ColorMixer()
         self._current_border_color: str | None = None
+        self._slot_mode = SlotMode.IDLE
+        self._slots: dict[int, str] = load_slots()
 
     def compose(self) -> ComposeResult:
         yield WriteHeader(id="write-header")
-        yield WriteAreaContainer(id="write-container")
+        with Container(id="write-main"):
+            yield WriteAreaContainer(id="write-container")
+            yield SlotStrip(id="slot-strip")
 
     def on_mount(self) -> None:
         """Focus the text area when mode loads."""
         self.query_one("#write-area").focus()
+        # Update slot indicators based on loaded data
+        self._update_slot_indicators()
+
+    def _update_slot_indicators(self) -> None:
+        """Update all slot indicators based on current slot data"""
+        try:
+            strip = self.query_one("#slot-strip", SlotStrip)
+            for i in range(1, NUM_SLOTS + 1):
+                strip.update_slot(i, bool(self._slots.get(i)))
+        except Exception:
+            pass
+
+    def _set_slot_mode(self, mode: SlotMode) -> None:
+        """Set the current slot mode and update UI"""
+        self._slot_mode = mode
+        try:
+            # Tell KidTextArea to pass through slot keys when in slot mode
+            text_area = self.query_one("#write-area", KidTextArea)
+            text_area.slot_mode_active = mode != SlotMode.IDLE
+        except Exception:
+            pass
+        try:
+            header = self.query_one("#write-header", WriteHeader)
+            header.set_slot_mode(mode)
+            strip = self.query_one("#slot-strip", SlotStrip)
+            strip.highlight_all(mode in (SlotMode.SAVING, SlotMode.LOADING))
+        except Exception:
+            pass
+
+    def _save_to_slot(self, slot_num: int) -> None:
+        """Save current text to a slot"""
+        try:
+            text_area = self.query_one("#write-area", KidTextArea)
+            text = text_area.text
+            if text:  # Only save if there's content
+                self._slots[slot_num] = text
+                save_slots(self._slots)
+                self._update_slot_indicators()
+        except Exception:
+            pass
+        self._set_slot_mode(SlotMode.IDLE)
+        # Re-focus text area
+        try:
+            self.query_one("#write-area").focus()
+        except Exception:
+            pass
+
+    def _load_from_slot(self, slot_num: int) -> None:
+        """Load text from a slot"""
+        try:
+            text = self._slots.get(slot_num, "")
+            if text:
+                text_area = self.query_one("#write-area", KidTextArea)
+                text_area.clear()
+                text_area.insert(text)
+        except Exception:
+            pass
+        self._set_slot_mode(SlotMode.IDLE)
+        # Re-focus text area
+        try:
+            self.query_one("#write-area").focus()
+        except Exception:
+            pass
+
+    def _clear_all_text(self) -> None:
+        """Clear all text in the editor"""
+        try:
+            text_area = self.query_one("#write-area", KidTextArea)
+            text_area.clear()
+        except Exception:
+            pass
+        self._set_slot_mode(SlotMode.IDLE)
+        # Re-focus text area
+        try:
+            self.query_one("#write-area").focus()
+        except Exception:
+            pass
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle F5/F6/F10 and slot number keys"""
+        key = event.key
+
+        # Handle slot mode keys
+        if self._slot_mode == SlotMode.SAVING:
+            if key in ("1", "2", "3", "4", "5"):
+                event.stop()
+                event.prevent_default()
+                self._save_to_slot(int(key))
+                return
+            elif key == "escape":
+                event.stop()
+                event.prevent_default()
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()
+                return
+
+        elif self._slot_mode == SlotMode.LOADING:
+            if key in ("1", "2", "3", "4", "5"):
+                event.stop()
+                event.prevent_default()
+                self._load_from_slot(int(key))
+                return
+            elif key == "escape":
+                event.stop()
+                event.prevent_default()
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()
+                return
+
+        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
+            if key == "f10":
+                event.stop()
+                event.prevent_default()
+                self._clear_all_text()
+                return
+            elif key == "escape":
+                event.stop()
+                event.prevent_default()
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()
+                return
+
+        # F5 = Save mode
+        if key == "f5":
+            event.stop()
+            event.prevent_default()
+            self._set_slot_mode(SlotMode.SAVING)
+            return
+
+        # F6 = Load mode
+        if key == "f6":
+            event.stop()
+            event.prevent_default()
+            self._set_slot_mode(SlotMode.LOADING)
+            return
+
+        # F10 = Clear all (first press shows confirmation)
+        if key == "f10":
+            event.stop()
+            event.prevent_default()
+            self._set_slot_mode(SlotMode.CONFIRM_CLEAR)
+            return
 
     def restore_border_color(self) -> None:
         """Restore the border color when re-entering write mode."""
@@ -290,3 +631,28 @@ class WriteMode(Container):
         if new_color:
             self._current_border_color = new_color
             self.post_message(BorderColorChanged(new_color))
+
+    def on_slot_key_pressed(self, event: SlotKeyPressed) -> None:
+        """Handle slot key presses from KidTextArea."""
+        key = event.key
+
+        if self._slot_mode == SlotMode.SAVING:
+            if key in ("1", "2", "3", "4", "5"):
+                self._save_to_slot(int(key))
+            elif key == "escape":
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()
+
+        elif self._slot_mode == SlotMode.LOADING:
+            if key in ("1", "2", "3", "4", "5"):
+                self._load_from_slot(int(key))
+            elif key == "escape":
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()
+
+        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
+            if key == "f10":
+                self._clear_all_text()
+            elif key == "escape":
+                self._set_slot_mode(SlotMode.IDLE)
+                self.query_one("#write-area").focus()

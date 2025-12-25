@@ -32,6 +32,7 @@ from .constants import (
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
+    ICON_VOLUME_ON, ICON_VOLUME_OFF, ICON_SAVE, ICON_LOAD, ICON_ERASER,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -164,6 +165,16 @@ class ModeIndicator(Horizontal):
     #caps-indicator.active {
         color: $accent;
     }
+
+    #keys-write {
+        width: auto;
+        height: 3;
+        display: none;
+    }
+
+    #keys-write.visible {
+        display: block;
+    }
     """
 
     def __init__(self, current_mode: Mode, **kwargs):
@@ -182,8 +193,22 @@ class ModeIndicator(Horizontal):
                     badge.add_class("dim")
                 yield badge
 
-        # Spacer pushes theme to the right
+        # Write mode badges (F5 save, F6 load) - hidden until write mode
+        with Horizontal(id="keys-write"):
+            save_badge = KeyBadge(f"F5 {ICON_SAVE}", id="key-save")
+            save_badge.add_class("dim")
+            yield save_badge
+            load_badge = KeyBadge(f"F6 {ICON_LOAD}", id="key-load")
+            load_badge.add_class("dim")
+            yield load_badge
+
+        # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
+
+        # Volume toggle (F11)
+        volume_badge = KeyBadge(f"F11 {ICON_VOLUME_ON}", id="key-volume")
+        volume_badge.add_class("dim")
+        yield volume_badge
 
         # Caps indicator (starts as lowercase since caps starts off)
         yield Static("abc", id="caps-indicator")
@@ -209,6 +234,16 @@ class ModeIndicator(Horizontal):
             except NoMatches:
                 pass
 
+        # Show/hide write mode badges (F5/F6)
+        try:
+            keys_write = self.query_one("#keys-write")
+            if mode == Mode.WRITE:
+                keys_write.add_class("visible")
+            else:
+                keys_write.remove_class("visible")
+        except NoMatches:
+            pass
+
     def update_theme_icon(self) -> None:
         """Update the theme badge icon"""
         try:
@@ -229,6 +264,22 @@ class ModeIndicator(Horizontal):
             else:
                 indicator.update("abc")
                 indicator.remove_class("active")
+        except NoMatches:
+            pass
+
+    def update_volume_indicator(self, volume_on: bool) -> None:
+        """Update volume indicator badge"""
+        try:
+            badge = self.query_one("#key-volume", KeyBadge)
+            if volume_on:
+                badge.text = f"F11 {ICON_VOLUME_ON}"
+                badge.remove_class("active")
+                badge.add_class("dim")
+            else:
+                badge.text = f"F11 {ICON_VOLUME_OFF}"
+                badge.remove_class("dim")
+                badge.add_class("active")  # Highlight when muted to draw attention
+            badge.refresh()
         except NoMatches:
             pass
 
@@ -488,6 +539,7 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
+        self.volume_on = True  # F11 toggles volume on/off
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -838,6 +890,16 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+    def action_toggle_volume(self) -> None:
+        """Toggle volume on/off (F11)"""
+        self.volume_on = not self.volume_on
+        # Update volume indicator in mode indicator
+        try:
+            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator.update_volume_indicator(self.volume_on)
+        except NoMatches:
+            pass
+
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
         views = [View.SCREEN, View.LINE, View.EARS]
@@ -912,6 +974,13 @@ class PurpleApp(App):
             event.prevent_default()
             return
 
+        # F11 = Volume toggle (global)
+        if key == "f11":
+            self.action_toggle_volume()
+            event.stop()
+            event.prevent_default()
+            return
+
         # Keys that should always be ignored (modifier-only, system keys, etc.)
         ignored_keys = {
             # Modifier keys (pressed alone) - except shift which we handle above
@@ -925,9 +994,12 @@ class PurpleApp(App):
             # Other system keys
             "print_screen", "pause", "insert",
             "home", "end", "page_up", "page_down",
-            # F-keys not used for modes (F5-F11, F13-F23)
-            # Note: F24 is handled above for parent mode
-            "f5", "f6", "f7", "f8", "f9", "f10", "f11",
+            # F-keys not used:
+            # F5/F6 = Write mode slots (save/load) - handled by WriteMode
+            # F10 = Write mode clear all - handled by WriteMode
+            # F11 = Volume toggle - handled above
+            # F13-F23 = Unused, F24 = parent mode (handled above)
+            "f7", "f8", "f9",
             "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
             "f21", "f22", "f23",
         }

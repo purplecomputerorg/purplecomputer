@@ -70,7 +70,7 @@ try:
 except pygame.error:
     _MIXER_READY = False
 
-from ..constants import TOGGLE_DEBOUNCE, ICON_ERASER, ICON_PALETTE
+from ..constants import TOGGLE_DEBOUNCE, ICON_ERASER
 
 
 # 10x4 grid matching keyboard layout
@@ -84,15 +84,15 @@ GRID_KEYS = [
 # All keys in a flat list for indexing
 ALL_KEYS = [key for row in GRID_KEYS for key in row]
 
-# Rainbow colors + None (back to default)
-COLORS = ["#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#da77f2", None]
+# Simple color cycle: purple → blue → red → default
+COLORS = ["#da77f2", "#4dabf7", "#ff6b6b", None]
 
 # Default backgrounds (dark and light themes)
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
 # Light colors need dark text
-LIGHT_COLORS = {"#ff6b6b", "#ffa94d", "#ffd43b", "#69db7c", "#4dabf7", "#da77f2"}
+LIGHT_COLORS = {"#da77f2", "#4dabf7", "#ff6b6b"}
 
 
 class PlayGrid(Widget):
@@ -148,7 +148,10 @@ class PlayGrid(Widget):
                     pass
 
     def play_sound(self, key: str) -> None:
-        """Play sound for a key."""
+        """Play sound for a key (respects app volume setting)."""
+        # Check if volume is muted at app level
+        if hasattr(self.app, 'volume_on') and not self.app.volume_on:
+            return
         self._ensure_sounds_loaded()
         if key in self._sounds:
             self._sounds[key].play()
@@ -294,7 +297,7 @@ class EraserModeIndicator(Static):
         if self.eraser_on:
             return f"[bold #ff6b6b]{ICON_ERASER}  {caps('Tab: eraser ON')}[/]"
         else:
-            return f"[dim]{ICON_PALETTE}  {caps('Tab: eraser off')}[/]"
+            return f"[dim]{ICON_ERASER}  {caps('Tab: eraser off')}[/]"
 
     def _speak_if_changed(self) -> None:
         """Speak current state only if it differs from state before toggle sequence"""

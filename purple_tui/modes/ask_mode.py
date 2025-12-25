@@ -33,6 +33,7 @@ from ..constants import (
 )
 from ..keyboard import SHIFT_MAP
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
+from ..scrolling import scroll_widget
 
 
 class KeyboardOnlyScroll(ScrollableContainer):
@@ -95,7 +96,7 @@ class ColorResultLine(Widget):
         self._component_colors = component_colors or []
 
     def render_line(self, y: int) -> Strip:
-        """Render each line of the color result"""
+        """Render each line of the color result (mixed colors only, 3x6 swatch without name)"""
         width = self.size.width
         if width <= 0:
             width = 40
@@ -107,7 +108,7 @@ class ColorResultLine(Widget):
         if y == 0:
             segments = [Segment(prefix, prefix_style)]
 
-            # Show component color boxes
+            # Show component color boxes (only if multiple components)
             if len(self._component_colors) > 1:
                 for i, comp_hex in enumerate(self._component_colors):
                     # Add small colored box for each component
@@ -119,14 +120,9 @@ class ColorResultLine(Widget):
                 # Arrow to result
                 segments.append(Segment(" → ", Style(color="#a888d0")))
 
-            # Start of result swatch (top row)
+            # Start of result swatch (top row) - no name label
             result_style = Style(bgcolor=self._hex_color)
             segments.append(Segment(" " * self.SWATCH_WIDTH, result_style))
-
-            # Color name after swatch
-            text_color = self._get_contrast_color(self._hex_color)
-            name_style = Style(color=text_color, bgcolor=self._hex_color, bold=True)
-            segments.append(Segment(f" {self._color_name.upper()} ", name_style))
 
             return Strip(segments)
 
@@ -173,8 +169,6 @@ class InlineInput(Input):
             super().__init__()
 
     BINDINGS = [
-        ("up", "scroll_up", "Scroll up"),
-        ("down", "scroll_down", "Scroll down"),
         ("tab", "toggle_speech", "Toggle speech"),
     ]
 
@@ -187,20 +181,84 @@ class InlineInput(Input):
         self.last_char_time = 0
 
     def action_scroll_up(self) -> None:
-        """Scroll history up"""
+        """Scroll the history up"""
         try:
-            scroll = self.app.query_one("#history-scroll")
-            scroll.scroll_up()
+            scroll_widget(self.app.query_one("#history-scroll"), -1)
         except Exception:
             pass
 
     def action_scroll_down(self) -> None:
-        """Scroll history down"""
+        """Scroll the history down"""
         try:
-            scroll = self.app.query_one("#history-scroll")
-            scroll.scroll_down()
+            scroll_widget(self.app.query_one("#history-scroll"), 1)
         except Exception:
             pass
+
+    async def _on_key(self, event: events.Key) -> None:
+        """Handle all special keys before Input processes them"""
+        import time
+
+        key = event.key
+        char = event.character
+
+        # Up/Down arrows - scroll the history
+        if key == "up":
+            event.stop()
+            event.prevent_default()
+            self.action_scroll_up()
+            return
+        if key == "down":
+            event.stop()
+            event.prevent_default()
+            self.action_scroll_down()
+            return
+
+        # Space - accept autocomplete if there's a suggestion
+        if key == "space" and self.autocomplete_matches:
+            event.stop()
+            event.prevent_default()
+            selected_word = self.autocomplete_matches[self.autocomplete_index][0]
+            words = self.value.split()
+            if words:
+                words[-1] = selected_word
+                self.value = " ".join(words) + " "
+                self.cursor_position = len(self.value)
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
+            self.last_char = None
+            return
+
+        # Enter - submit
+        if key == "enter":
+            event.stop()
+            event.prevent_default()
+            if self.value.strip():
+                self.post_message(self.Submitted(self.value))
+                self.value = ""
+            self.autocomplete_matches = []
+            self.autocomplete_index = 0
+            self.last_char = None
+            return
+
+        # Double-tap for shifted characters
+        if char and char in SHIFT_MAP:
+            now = time.time()
+            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
+                event.stop()
+                event.prevent_default()
+                if self.value:
+                    self.value = self.value[:-1] + SHIFT_MAP[char]
+                    self.cursor_position = len(self.value)
+                self.last_char = None
+                return
+            else:
+                self.last_char = char
+                self.last_char_time = now
+        else:
+            self.last_char = None
+
+        # Let parent Input handle all other keys
+        await super()._on_key(event)
 
     def action_toggle_speech(self) -> None:
         """Toggle speech on/off"""
@@ -216,13 +274,16 @@ class InlineInput(Input):
             pass
 
     def _check_autocomplete(self) -> None:
-        """Check if current input should show autocomplete for colors or emojis"""
+        """Check if current input should show autocomplete for colors and/or emojis.
+
+        Colors and emojis can both appear in expressions like "cat + red" or "red + blue",
+        so we search both and combine results, prioritizing exact matches.
+        """
         content = get_content()
         text = self.value.lower().strip()
 
-        # Get last word being typed (handle + operator for color mixing)
-        # Split by spaces and + to get the last "word" being typed
-        parts = re.split(r'[\s+]+', text)
+        # Get last word being typed (split by spaces, +, and other operators)
+        parts = re.split(r'[\s+*x]+', text)
         words = [p for p in parts if p]
         if not words:
             self.autocomplete_matches = []
@@ -237,106 +298,51 @@ class InlineInput(Input):
             self.autocomplete_index = 0
             return
 
-        # Check if this looks like a color expression (has + or other color words)
-        is_color_context = '+' in text or any(content.get_color(w) for w in words[:-1])
-
-        # Search colors first (they take priority in color context)
-        color_matches = content.search_colors(last_word)
-        color_matches = [(w, h) for w, h in color_matches if w != last_word][:5]
-
-        # If we have color matches, use those
-        if color_matches:
-            # If exact color match, don't show autocomplete
-            if content.get_color(last_word):
-                self.autocomplete_matches = []
-                self.autocomplete_type = "color"
-                self.autocomplete_index = 0
-                return
-            self.autocomplete_matches = color_matches
-            self.autocomplete_type = "color"
-            self.autocomplete_index = 0
-            return
-
-        # If in color context but no color matches, don't suggest emojis
-        if is_color_context:
-            self.autocomplete_matches = []
-            self.autocomplete_type = "color"
-            self.autocomplete_index = 0
-            return
-
-        # If the last word exactly matches an emoji, don't show autocomplete
-        # This prevents "sun" + space from autocompleting to "sunflower"
-        if content.get_emoji(last_word):
+        # If exact match exists (color or emoji), don't show autocomplete
+        if content.get_color(last_word) or content.get_emoji(last_word):
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
             return
 
-        # Search for emoji matches - get up to 5
-        matches = content.search_emojis(last_word)
-        # Filter out exact match and limit to 5
-        self.autocomplete_matches = [(w, e) for w, e in matches if w != last_word][:5]
-        self.autocomplete_type = "emoji"
+        # Search both colors and emojis
+        color_matches = content.search_colors(last_word)
+        emoji_matches = content.search_emojis(last_word)
+
+        # Combine results: colors first (marked as color type), then emojis
+        # We'll track the type in the tuple: (word, display_value, is_color)
+        combined = []
+        seen_words = set()
+
+        # Add color matches (show hex as display value)
+        for word, hex_code in color_matches:
+            if word != last_word and word not in seen_words:
+                combined.append((word, hex_code, True))
+                seen_words.add(word)
+
+        # Add emoji matches
+        for word, emoji in emoji_matches:
+            if word != last_word and word not in seen_words:
+                combined.append((word, emoji, False))
+                seen_words.add(word)
+
+        # Limit to 5 total suggestions
+        combined = combined[:5]
+
+        if not combined:
+            self.autocomplete_matches = []
+            self.autocomplete_type = "emoji"
+            self.autocomplete_index = 0
+            return
+
+        # Store matches as (word, display_value) - the display logic will handle rendering
+        # Use "mixed" type if we have both colors and emojis
+        has_colors = any(is_color for _, _, is_color in combined)
+        has_emojis = any(not is_color for _, _, is_color in combined)
+
+        self.autocomplete_matches = [(word, display) for word, display, _ in combined]
+        self.autocomplete_type = "mixed" if (has_colors and has_emojis) else ("color" if has_colors else "emoji")
         self.autocomplete_index = 0
-
-    async def _on_key(self, event: events.Key) -> None:
-        """Handle special keys before parent Input processes them"""
-        import time
-
-        char = event.character
-        key = event.key
-
-        # Space - accept autocomplete if there's a suggestion
-        if event.key == "space" and self.autocomplete_matches:
-            event.stop()
-            event.prevent_default()
-            # Replace last word with selected autocomplete
-            selected_word = self.autocomplete_matches[self.autocomplete_index][0]
-            words = self.value.split()
-            if words:
-                words[-1] = selected_word
-                self.value = " ".join(words) + " "
-                # Move cursor to end
-                self.cursor_position = len(self.value)
-            self.autocomplete_matches = []
-            self.autocomplete_index = 0
-            self.last_char = None
-            return
-
-        # Enter - submit
-        if event.key == "enter":
-            event.stop()
-            event.prevent_default()
-            if self.value.strip():
-                self.post_message(self.Submitted(self.value))
-                self.value = ""
-            self.autocomplete_matches = []
-            self.autocomplete_index = 0
-            self.last_char = None
-            return
-
-        # Double-tap for shifted characters
-        if char and char in SHIFT_MAP:
-            now = time.time()
-            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
-                # Double-tap detected - replace last char with shifted version
-                event.stop()
-                event.prevent_default()
-                # Remove last character and insert shifted
-                if self.value:
-                    self.value = self.value[:-1] + SHIFT_MAP[char]
-                    self.cursor_position = len(self.value)
-                self.last_char = None
-                return
-            else:
-                # First tap - remember it
-                self.last_char = char
-                self.last_char_time = now
-        else:
-            self.last_char = None
-
-        # Let parent handle other keys
-        await super()._on_key(event)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete suggestions as user types"""
@@ -344,7 +350,10 @@ class InlineInput(Input):
 
     @property
     def autocomplete_hint(self) -> str:
-        """Get the autocomplete hint to display - shows up to 5 options"""
+        """Get the autocomplete hint to display - shows up to 5 options.
+
+        Handles colors (shown as colored blocks) and emojis in any combination.
+        """
         if not self.autocomplete_matches:
             return ""
 
@@ -352,15 +361,14 @@ class InlineInput(Input):
         shown = self.autocomplete_matches[:5]
         parts = []
 
-        if self.autocomplete_type == "color":
-            # Show colored blocks for colors
-            for name, hex_code in shown:
-                # Use a colored square block with the color as background
-                parts.append(f"{name} [{hex_code}]██[/]")
-        else:
-            # Show emojis as before
-            for word, emoji in shown:
-                parts.append(f"{word} {emoji}")
+        for word, display_value in shown:
+            # Detect if this is a color (hex code starts with #) or emoji
+            if display_value.startswith("#"):
+                # Color - show colored block
+                parts.append(f"{word} [{display_value}]██[/]")
+            else:
+                # Emoji - show as-is
+                parts.append(f"{word} {display_value}")
 
         hint = "   ".join(parts)
         return f"[dim]{hint}   ← space[/]"
@@ -543,6 +551,7 @@ class AskMode(Vertical):
         """Focus the input when mode loads"""
         self.query_one("#ask-input").focus()
 
+
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""
         try:
@@ -567,7 +576,14 @@ class AskMode(Vertical):
             color_data = self.evaluator._parse_color_result(result)
             if color_data:
                 hex_color, color_name, components = color_data
-                scroll.mount(ColorResultLine(hex_color, color_name, components))
+                # Single color: display inline like emoji (2-char colored box)
+                # Mixed colors (2+ components): display as 3x6 swatch
+                if len(components) <= 1:
+                    # Single color - show as inline colored box using Rich markup
+                    color_box = f"[on {hex_color}]  [/]"
+                    scroll.mount(HistoryLine(color_box, line_type="answer"))
+                else:
+                    scroll.mount(ColorResultLine(hex_color, color_name, components))
             else:
                 scroll.mount(HistoryLine(result, line_type="answer"))
 
@@ -708,10 +724,10 @@ class SimpleEvaluator:
         except Exception:
             pass
 
-        # Try emoji lookup for single word
-        emoji = self.content.get_emoji(text.lower())
-        if emoji:
-            return emoji
+        # Try emoji or color lookup for single word
+        emoji_or_color = self._get_emoji_or_color(text.lower())
+        if emoji_or_color:
+            return emoji_or_color
 
         # Try emoji substitution in non-math text (e.g., "apple & orange")
         emoji_sub = self._substitute_emojis(text)
@@ -750,15 +766,15 @@ class SimpleEvaluator:
         except Exception:
             pass
 
-        # Try emoji math
+        # Try emoji math (also handles colors)
         emoji_result = self._eval_emoji_math(text)
         if emoji_result:
             return emoji_result
 
-        # Try single emoji lookup
-        emoji = self.content.get_emoji(text.lower())
-        if emoji:
-            return emoji
+        # Try single emoji or color lookup
+        emoji_or_color = self._get_emoji_or_color(text.lower())
+        if emoji_or_color:
+            return emoji_or_color
 
         # Return as-is
         return text
@@ -868,9 +884,9 @@ class SimpleEvaluator:
             match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', part)
             if match:
                 count, name = int(match.group(1)), match.group(2)
-                emoji = self._get_emoji_singular(name)
-                if emoji and count <= 100:
-                    results.append((emoji * count, name, count))
+                emoji_or_color = self._get_emoji_or_color(name)
+                if emoji_or_color and count <= 100:
+                    results.append((emoji_or_color * count, name, count))
                     has_emoji = True
                     continue
 
@@ -878,9 +894,9 @@ class SimpleEvaluator:
             match = re.match(r'^(\w+)\s*(?:[\*x]|times)\s*(\d+)$', part)
             if match:
                 name, count = match.group(1), int(match.group(2))
-                emoji = self._get_emoji_singular(name)
-                if emoji and count <= 100:
-                    results.append((emoji * count, name, count))
+                emoji_or_color = self._get_emoji_or_color(name)
+                if emoji_or_color and count <= 100:
+                    results.append((emoji_or_color * count, name, count))
                     has_emoji = True
                     continue
 
@@ -888,13 +904,13 @@ class SimpleEvaluator:
             match = re.match(r'^(\d+)\s*(\w+)$', part)
             if match:
                 count, name = int(match.group(1)), match.group(2)
-                emoji = self._get_emoji_singular(name)
-                if emoji and count <= 100:
-                    results.append((emoji * count, name, count))
+                emoji_or_color = self._get_emoji_or_color(name)
+                if emoji_or_color and count <= 100:
+                    results.append((emoji_or_color * count, name, count))
                     has_emoji = True
                     continue
 
-            # Try: bare plural word like "apples" -> 2 emojis
+            # Try: bare plural word like "apples" -> 2 emojis (colors don't pluralize)
             if part.endswith('s') and len(part) > 2:
                 singular = part[:-1]
                 emoji = self.content.get_emoji(singular)
@@ -903,10 +919,10 @@ class SimpleEvaluator:
                     has_emoji = True
                     continue
 
-            # Try: just a word (single emoji)
-            emoji = self.content.get_emoji(part)
-            if emoji:
-                results.append((emoji, part, 1))
+            # Try: just a word (single emoji or color)
+            emoji_or_color = self._get_emoji_or_color(part)
+            if emoji_or_color:
+                results.append((emoji_or_color, part, 1))
                 has_emoji = True
                 continue
 
@@ -939,6 +955,22 @@ class SimpleEvaluator:
         if word.endswith('s') and len(word) > 2:
             return self.content.get_emoji(word[:-1])
         return None
+
+    def _get_color_box(self, word: str) -> str | None:
+        """Get an inline colored box for a color name (2-char wide like emoji)"""
+        hex_color = self.content.get_color(word.lower())
+        if hex_color:
+            return f"[on {hex_color}]  [/]"
+        return None
+
+    def _get_emoji_or_color(self, word: str) -> str | None:
+        """Get emoji or color box for a word - colors act like emoji"""
+        # Try emoji first
+        result = self._get_emoji_singular(word)
+        if result:
+            return result
+        # Try color
+        return self._get_color_box(word)
 
     def _substitute_emojis(self, text: str) -> str:
         """Substitute emoji words with emojis in non-math text (e.g., 'apple & orange')"""
@@ -1009,9 +1041,45 @@ class SimpleEvaluator:
             return ", ".join(descriptions[:-1]) + f", and {descriptions[-1]}"
         return result
 
+    def _parse_color_term(self, term: str) -> list[str] | None:
+        """
+        Parse a color term that may include multiplication.
+
+        Handles: "red", "red * 3", "3 * red", "red x 6", "6x red", "red times 3"
+        Returns list of hex colors (repeated for multiplied terms), or None if invalid.
+        """
+        term = term.strip()
+        if not term:
+            return None
+
+        # Try: color * number, color x number, color times number
+        match = re.match(r'^(\w+)\s*(?:[\*x]|times)\s*(\d+)$', term)
+        if match:
+            color_name, count = match.group(1), int(match.group(2))
+            color_hex = self.content.get_color(color_name)
+            if color_hex and 1 <= count <= 20:  # Reasonable limit
+                return [color_hex] * count
+            return None
+
+        # Try: number * color, number x color
+        match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', term)
+        if match:
+            count, color_name = int(match.group(1)), match.group(2)
+            color_hex = self.content.get_color(color_name)
+            if color_hex and 1 <= count <= 20:
+                return [color_hex] * count
+            return None
+
+        # Try: just a color name
+        color_hex = self.content.get_color(term)
+        if color_hex:
+            return [color_hex]
+
+        return None
+
     def _eval_color_mixing(self, text: str) -> str | None:
         """
-        Evaluate color mixing expressions like "red + blue" or "red + red + blue".
+        Evaluate color mixing expressions like "red + blue", "red * 3 + blue", "redx6 + yellow".
 
         Returns a special formatted string with COLOR_RESULT: prefix that triggers
         the color swatch display, or None if not a color expression.
@@ -1020,22 +1088,21 @@ class SimpleEvaluator:
         """
         text_lower = text.lower().strip()
 
-        # Check if this looks like a color expression (colors separated by +)
-        # Split by + and "plus"
+        # Split by + and "plus" to get additive terms
         parts = re.split(r'\s*(?:\+|plus)\s*', text_lower)
         parts = [p.strip() for p in parts if p.strip()]
 
         if not parts:
             return None
 
-        # Collect colors and their counts (for weighted mixing)
+        # Collect colors from each term (handling multiplication)
         colors_to_mix = []
         for part in parts:
-            color_hex = self.content.get_color(part)
-            if color_hex:
-                colors_to_mix.append(color_hex)
+            term_colors = self._parse_color_term(part)
+            if term_colors:
+                colors_to_mix.extend(term_colors)
             else:
-                # Not a valid color - not a pure color expression
+                # Not a valid color term - not a pure color expression
                 return None
 
         if not colors_to_mix:
@@ -1048,17 +1115,10 @@ class SimpleEvaluator:
             # Mix the colors using paint-like mixing
             mixed_hex = mix_colors_paint(colors_to_mix)
 
-        # Get unique component colors for display (deduplicated, preserving order)
-        seen = set()
-        unique_components = []
-        for c in colors_to_mix:
-            if c not in seen:
-                seen.add(c)
-                unique_components.append(c)
-
-        # Return a special marker that includes hex color, name, and components
+        # Return a special marker that includes hex color, name, and all components
+        # (no deduplication - "red * 3 + orange" shows 3 red boxes + 1 orange)
         color_name = get_color_name_approximation(mixed_hex)
-        components_str = ",".join(unique_components)
+        components_str = ",".join(colors_to_mix)
         return f"COLOR_RESULT:{mixed_hex}:{color_name}:{components_str}"
 
     def _is_color_result(self, result: str) -> bool:

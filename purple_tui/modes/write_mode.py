@@ -22,6 +22,7 @@ from textual import events
 from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import SHIFT_MAP
 from ..color_mixing import mix_colors_paint
+from ..scrolling import scroll_widget
 
 
 # Keyboard row definitions for color mixing
@@ -123,9 +124,6 @@ class KidTextArea(TextArea):
     }
     """
 
-    # Lines to scroll per up/down arrow press
-    SCROLL_LINES = 5
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.last_char = None
@@ -147,15 +145,13 @@ class KidTextArea(TextArea):
         if key == "up":
             event.stop()
             event.prevent_default()
-            for _ in range(self.SCROLL_LINES):
-                self.action_scroll_up()
+            scroll_widget(self, -1)
             return
 
         if key == "down":
             event.stop()
             event.prevent_default()
-            for _ in range(self.SCROLL_LINES):
-                self.action_scroll_down()
+            scroll_widget(self, 1)
             return
 
         # Block: left/right arrows, ctrl combos, function keys, etc.

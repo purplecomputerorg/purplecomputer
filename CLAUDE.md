@@ -1,5 +1,16 @@
 # Claude Code Notes for Purple Computer
 
+## Writing Style
+
+**No em-dashes or spaced dashes.** Instead of ` - ` or ` — `, use colons, commas, or periods.
+
+Bad: `Press F1 - opens Ask mode`
+Good: `Press F1: opens Ask mode` or `Press F1 to open Ask mode`
+
+This applies to docs, comments, and UI strings.
+
+---
+
 ## Textual Framework Workarounds
 
 ### Background Color Updates (Textual 0.67.0)

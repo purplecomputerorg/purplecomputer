@@ -295,6 +295,25 @@ EndSection
 
 This ensures kids can't accidentally click around or get confused by trackpad gestures.
 
+#### F-Key Setup
+
+Purple Computer uses the top-row keys (F1-F12) for switching between modes. On first boot, keyboard setup runs automatically - just press each F-key when prompted.
+
+**How it works:**
+
+The keyboard normalizer identifies physical keys by their internal codes (scancodes), which stay the same regardless of what the laptop decides each key should do. This means:
+- Physical F1 key → always works as F1 in Purple Computer
+- No need to hold extra keys or remember special combinations
+- Works on any laptop
+
+**Re-running setup:**
+
+If you need to reconfigure (e.g., different keyboard), run from parent shell:
+
+```bash
+sudo python3 /opt/purple/keyboard_normalizer.py --calibrate
+```
+
 ---
 
 ## Build Process
@@ -646,6 +665,20 @@ xrandr --output HDMI-1 --mode 1920x1080
 
 # Make permanent (add to ~/.xprofile)
 echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
+```
+
+**F-keys (F1-F12) not working**
+
+Keyboard setup should have run on first boot. To re-run it:
+
+```bash
+# From parent shell (hold Escape 1 second)
+sudo python3 /opt/purple/keyboard_normalizer.py --calibrate
+```
+
+Or delete the config and reboot:
+```bash
+sudo rm /etc/purple/keyboard-map.json
 ```
 
 ---

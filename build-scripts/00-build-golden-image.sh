@@ -82,9 +82,9 @@ LABEL=PURPLE_EFI   /boot/efi vfat  umask=0077                  0 1
 tmpfs              /tmp      tmpfs defaults,nosuid,nodev       0 0
 FSTAB
 
-    # Create purple user
+    # Create purple user (input group for keyboard access via evdev)
     chroot "$MOUNT_DIR" useradd -m -s /bin/bash purple
-    chroot "$MOUNT_DIR" usermod -aG sudo purple
+    chroot "$MOUNT_DIR" usermod -aG sudo,input purple
     echo "purple:purple" | chroot "$MOUNT_DIR" chpasswd
 
     # Install Purple Computer application
@@ -138,8 +138,8 @@ SOURCES
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
 
-    # Install Python dependencies (python-xlib for font size calculation fallback)
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts
+    # Install Python dependencies (python-xlib for font size calculation fallback, evdev for keyboard normalizer)
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."
@@ -157,6 +157,17 @@ SOURCES
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
 cd /opt/purple
+
+# Auto-calibrate keyboard on first boot (if no mapping exists)
+if [ ! -f /etc/purple/keyboard-map.json ]; then
+    echo
+    echo "First time setup - configuring keyboard..."
+    echo
+    sudo python3 keyboard_normalizer.py --calibrate
+    echo
+    sleep 1
+fi
+
 exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"

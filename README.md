@@ -104,31 +104,29 @@ Purple has three core modes:
 
 Purple includes a hardware keyboard normalizer that makes typing easier for kids:
 
-### Tap-vs-Hold Shift
-- **Tap Shift quickly** — Activates "sticky shift" for the next character only
+### Easy Capitals (No Shift Key Needed)
+- **Double-tap any key** — Types the shifted version (`a` `a` → `A`, `1` `1` → `!`)
+- **Tap Shift quickly** — Activates "sticky shift" for the next character
 - **Hold Shift + type** — Normal shift behavior (uppercase while held)
 
-This means kids can type capital letters without holding two keys at once!
-
-### Long-Press for Symbols
-- **Hold any letter** (>400ms) — Types the uppercase version
-- **Hold any number** (>400ms) — Types the shifted symbol (e.g., hold `1` → `!`)
-- **Hold punctuation** (>400ms) — Types the shifted symbol (e.g., hold `-` → `_`)
-
-This makes it easy to type symbols one-handed.
+Kids can type capital letters without holding two keys at once!
 
 ### Parent Mode
-- **Hold Escape for 1 second** — Opens parent/admin menu
+- **Hold Escape for 1 second** — Opens parent shell
+
+### F-Key Setup
+
+On first boot, Purple automatically runs keyboard setup. You'll be asked to press F1 through F12. This captures each key's scancode, making F-keys work regardless of the laptop's default behavior (some laptops send brightness/volume instead of F1-F12).
 
 ### How It Works (Linux)
 
 On Linux with evdev, Purple runs a background keyboard normalizer that:
 - Grabs the hardware keyboard exclusively
-- Detects tap vs hold timing at the hardware level
-- Emits normalized key events to a virtual keyboard
-- Remaps extra keys (media keys, etc.) to F1-F12
+- Remaps physical F-keys via scancodes (survives Fn Lock changes)
+- Detects sticky shift and Escape long-press
+- Emits normalized events to a virtual keyboard
 
-On Mac/other systems, a terminal-level fallback provides basic functionality.
+On Mac/other systems, a terminal-level fallback provides basic sticky shift.
 
 ---
 

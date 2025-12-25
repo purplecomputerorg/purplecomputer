@@ -364,14 +364,14 @@ class InlineInput(Input):
         for word, display_value in shown:
             # Detect if this is a color (hex code starts with #) or emoji
             if display_value.startswith("#"):
-                # Color - show colored block
-                parts.append(f"{word} [{display_value}]██[/]")
+                # Color - show colored block (color at full opacity, word dimmed)
+                parts.append(f"[dim]{word}[/] [{display_value}]██[/]")
             else:
-                # Emoji - show as-is
-                parts.append(f"{word} {display_value}")
+                # Emoji - show as-is (emoji visible, word dimmed)
+                parts.append(f"[dim]{word}[/] {display_value}")
 
         hint = "   ".join(parts)
-        return f"[dim]{hint}   ← space[/]"
+        return f"{hint}   [dim]← space[/]"
 
 
 class InputPrompt(Static):

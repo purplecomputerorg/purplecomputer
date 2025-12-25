@@ -295,6 +295,16 @@ EndSection
 
 This ensures kids can't accidentally click around or get confused by trackpad gestures.
 
+#### Parent Menu
+
+Hold Escape for ~1 second to open the Parent Menu. Navigation uses explicit key handling (no focus system):
+
+| Key | Action |
+|-----|--------|
+| **↑/↓** | Move selection |
+| **Enter** | Activate selected item |
+| **Escape** | Close menu |
+
 #### F-Key Setup
 
 Purple Computer uses the top-row keys (F1-F12) for switching between modes. On first boot, keyboard setup runs automatically. Just press each F-key when prompted.
@@ -669,7 +679,7 @@ echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 
 **F-keys (F1-F12) not working**
 
-Keyboard setup should have run on first boot. To re-run it, use the Parent Menu (hold Escape 1 second) and select "Recalibrate Keyboard".
+Keyboard setup should have run on first boot. To re-run it, use the Parent Menu (hold Escape 1 second), then use Up/Down arrows to select "Recalibrate Keyboard" and press Enter.
 
 Or from a terminal:
 ```bash

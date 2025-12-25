@@ -3,29 +3,56 @@ Parent Mode - Admin menu for parents/guardians
 
 Accessed by holding Escape for ~1 second.
 Provides access to system settings, bash shell, etc.
+
+Navigation is handled explicitly via on_key (no focus system).
+Up/Down arrows move selection, Enter activates, Escape exits.
 """
 
-from textual.widgets import Static, Button
-from textual.containers import Container, Vertical, Center, Middle
+from textual.widgets import Static
+from textual.containers import Container, Vertical, Center
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
-from textual.binding import Binding
+from textual import events
 import subprocess
 import os
 import sys
+import time
 from pathlib import Path
 
+# Ignore escape events for this long after menu opens (user is still holding key)
+ESCAPE_COOLDOWN = 1.5
 
-class ParentMenuItem(Button):
-    """A menu item button with consistent styling"""
+
+# Menu items: (id, label)
+MENU_ITEMS = [
+    ("menu-shell", "Open Terminal"),
+    ("menu-keyboard", "Recalibrate Keyboard"),
+    ("menu-exit", "Exit"),
+]
+
+
+class ParentMenuItem(Static):
+    """A menu item that shows selected state via styling"""
 
     DEFAULT_CSS = """
     ParentMenuItem {
-        width: 40;
-        height: 3;
-        margin: 1 0;
+        width: 100%;
+        height: 1;
+        text-align: left;
+        padding: 0 2;
+        margin: 0;
+    }
+
+    ParentMenuItem.selected {
+        background: $primary;
+        color: $text;
+        text-style: bold;
     }
     """
+
+    def __init__(self, label: str, item_id: str, **kwargs):
+        super().__init__(label, id=item_id, **kwargs)
+        self.label = label
 
 
 class ParentMenu(ModalScreen):
@@ -35,11 +62,10 @@ class ParentMenu(ModalScreen):
     Provides access to:
     - Bash shell (exit to return to Purple)
     - Future: Settings, content packs, updates, etc.
-    """
 
-    BINDINGS = [
-        Binding("escape", "dismiss", "Back to Purple"),
-    ]
+    Navigation: Up/Down to move, Enter to select, Escape to exit.
+    No focus system used (keyboard-only design).
+    """
 
     DEFAULT_CSS = """
     ParentMenu {
@@ -48,49 +74,90 @@ class ParentMenu(ModalScreen):
     }
 
     #parent-dialog {
-        width: 60;
+        width: 36;
         height: auto;
-        padding: 2 4;
+        padding: 1 2;
         background: $surface;
-        border: heavy $primary;
+        border: round $primary;
     }
 
     #parent-title {
         width: 100%;
+        height: 1;
         text-align: center;
         text-style: bold;
         color: $primary;
-        margin-bottom: 2;
+        margin-bottom: 1;
     }
 
     #parent-items {
         width: 100%;
-        align: center middle;
+        height: auto;
     }
 
     #parent-hint {
         width: 100%;
+        height: 1;
         text-align: center;
         color: $text-muted;
-        margin-top: 2;
+        margin-top: 1;
     }
     """
 
-    def compose(self) -> ComposeResult:
-        with Container(id="parent-dialog"):
-            yield Static("Parent Menu", id="parent-title")
-            with Center(id="parent-items"):
-                with Vertical():
-                    yield ParentMenuItem("Open Terminal", id="menu-shell")
-                    yield ParentMenuItem("Recalibrate Keyboard", id="menu-keyboard")
-            yield Static("Press Escape to return", id="parent-hint")
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._selected_index = 0
+        self._open_time = time.monotonic()  # Track when menu opened
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle menu item selection"""
-        if event.button.id == "menu-shell":
+    def compose(self) -> ComposeResult:
+        with Vertical(id="parent-dialog"):
+            yield Static("Parent Menu", id="parent-title")
+            with Vertical(id="parent-items"):
+                for item_id, label in MENU_ITEMS:
+                    yield ParentMenuItem(label, item_id)
+            yield Static("↑↓ Enter Esc", id="parent-hint")
+
+    def on_mount(self) -> None:
+        """Highlight the first menu item"""
+        self._update_selection()
+
+    def _update_selection(self) -> None:
+        """Update visual selection state"""
+        for i, (item_id, _) in enumerate(MENU_ITEMS):
+            item = self.query_one(f"#{item_id}", ParentMenuItem)
+            if i == self._selected_index:
+                item.add_class("selected")
+            else:
+                item.remove_class("selected")
+
+    def on_key(self, event: events.Key) -> None:
+        """Handle navigation keys"""
+        if event.key == "up":
+            event.stop()
+            self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
+            self._update_selection()
+        elif event.key == "down":
+            event.stop()
+            self._selected_index = (self._selected_index + 1) % len(MENU_ITEMS)
+            self._update_selection()
+        elif event.key == "enter":
+            event.stop()
+            self._activate_selected()
+        elif event.key == "escape":
+            event.stop()
+            # Ignore escape during cooldown (user still holding from long-press)
+            if time.monotonic() - self._open_time > ESCAPE_COOLDOWN:
+                self.dismiss()
+
+    def _activate_selected(self) -> None:
+        """Activate the currently selected menu item"""
+        item_id = MENU_ITEMS[self._selected_index][0]
+        if item_id == "menu-shell":
             self._open_shell()
-        elif event.button.id == "menu-keyboard":
+        elif item_id == "menu-keyboard":
             self._recalibrate_keyboard()
+        elif item_id == "menu-exit":
+            self.dismiss()
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

@@ -189,15 +189,20 @@ class KidTextArea(TextArea):
             return
 
         # Block: left/right arrows, ctrl combos, function keys, etc.
+        # Note: escape is NOT blocked so it can bubble up for parent menu long-hold
         blocked_keys = [
             "left", "right",
             "home", "end", "pageup", "pagedown",
-            "insert", "delete", "escape", "tab",
+            "insert", "delete", "tab",
         ]
 
         if key in blocked_keys:
             event.stop()
             event.prevent_default()
+            return
+
+        # Let escape bubble up (for parent menu long-hold detection)
+        if key == "escape":
             return
 
         # Let F5/F6/F10/F11 bubble up to WriteMode/App for slot/volume handling

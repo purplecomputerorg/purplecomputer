@@ -47,3 +47,41 @@ class ColorCell(Widget):
 ```
 
 This approach gives full control over every line and updates immediately on `refresh()`.
+
+### Focus-Free Keyboard Navigation
+
+**Problem**: Textual's focus system (Tab/Shift-Tab, Button focus) is unreliable without a mouse. Focus can get "stuck" or not move as expected.
+
+**Solution**: Handle all navigation explicitly via `on_key()`. Track selection state manually and update visual styling with CSS classes.
+
+```python
+class MyMenu(ModalScreen):
+    def __init__(self):
+        super().__init__()
+        self._selected_index = 0
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "up":
+            event.stop()
+            self._selected_index = (self._selected_index - 1) % len(ITEMS)
+            self._update_selection()
+        elif event.key == "down":
+            event.stop()
+            self._selected_index = (self._selected_index + 1) % len(ITEMS)
+            self._update_selection()
+        elif event.key == "enter":
+            event.stop()
+            self._activate_selected()
+
+    def _update_selection(self) -> None:
+        for i, item in enumerate(self.query(MenuItem)):
+            if i == self._selected_index:
+                item.add_class("selected")
+            else:
+                item.remove_class("selected")
+```
+
+This pattern is used in:
+- `PlayMode`: handles grid keys directly
+- `AskMode`: focuses an Input widget explicitly
+- `ParentMenu`: tracks menu selection with up/down/enter

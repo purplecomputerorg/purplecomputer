@@ -25,7 +25,7 @@ from textual.message import Message
 from textual import events
 
 from ..constants import DOUBLE_TAP_TIME
-from ..keyboard import SHIFT_MAP
+from ..keyboard import SHIFT_MAP, DoubleTapDetector
 from ..color_mixing import mix_colors_paint
 from ..scrolling import scroll_widget
 
@@ -149,8 +149,10 @@ class KidTextArea(TextArea):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.last_char = None
-        self.last_char_time = 0
+        self._double_tap = DoubleTapDetector(
+            threshold=DOUBLE_TAP_TIME,
+            allowed_keys=set(SHIFT_MAP.keys()),
+        )
         self.slot_mode_active = False  # Set by WriteMode when in save/load/clear mode
 
     def on_key(self, event: events.Key) -> None:
@@ -170,7 +172,7 @@ class KidTextArea(TextArea):
 
         # Allow: backspace, enter
         if key in ("backspace", "enter"):
-            self.last_char = None
+            self._double_tap.reset()
             return  # Let default handling work
 
         # Up/Down arrows scroll the text
@@ -209,23 +211,14 @@ class KidTextArea(TextArea):
             return
 
         # Check for double-tap to get shifted character
-        if char and char in SHIFT_MAP:
-            now = time.time()
-            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
-                # Double-tap detected. Replace last char with shifted version
-                event.stop()
-                event.prevent_default()
-                # Delete the previous character and insert shifted
-                self.action_delete_left()
-                self.insert(SHIFT_MAP[char])
-                self.last_char = None
-                return
-            else:
-                # First tap. Remember it
-                self.last_char = char
-                self.last_char_time = now
-        else:
-            self.last_char = None
+        if char and self._double_tap.check(char):
+            # Double-tap detected. Replace last char with shifted version
+            event.stop()
+            event.prevent_default()
+            # Delete the previous character and insert shifted
+            self.action_delete_left()
+            self.insert(SHIFT_MAP[char])
+            return
 
         # Notify parent about color key presses (for paint mixing)
         if char:

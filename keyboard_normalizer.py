@@ -21,6 +21,13 @@ import time
 from pathlib import Path
 from typing import Optional
 
+# Import DoubleTapDetector for shared double-tap logic
+try:
+    from purple_tui.keyboard import DoubleTapDetector
+except ImportError:
+    # Fallback for standalone operation (e.g., running directly)
+    DoubleTapDetector = None
+
 # =============================================================================
 # Constants (matching Linux input-event-codes.h)
 # =============================================================================
@@ -139,9 +146,14 @@ class KeyEventProcessor:
         self._shift_key_held: Optional[int] = None
         self._key_during_shift = False
 
-        # Double-tap tracking (for shifted characters)
-        self._last_key: Optional[int] = None
-        self._last_key_time: float = 0.0
+        # Double-tap detection (uses shared DoubleTapDetector if available)
+        if DoubleTapDetector is not None:
+            self._double_tap = DoubleTapDetector(
+                threshold=self.DOUBLE_TAP_THRESHOLD,
+                allowed_keys=DOUBLE_TAP_KEYS,
+            )
+        else:
+            self._double_tap = None
         self._double_tap_shift_held: bool = False  # True if we injected shift for double-tap
 
         # Escape long-press
@@ -187,12 +199,8 @@ class KeyEventProcessor:
         # Double-tap detection: tap same key twice quickly = shifted version
         if code in DOUBLE_TAP_KEYS:
             if value == 1:  # Key press
-                is_double_tap = (
-                    self._last_key == code and
-                    (timestamp - self._last_key_time) < self.DOUBLE_TAP_THRESHOLD
-                )
+                is_double_tap = self._check_double_tap(code, timestamp)
                 if is_double_tap:
-                    self._last_key = None  # Reset to prevent triple-tap
                     self._double_tap_shift_held = True
                     # Backspace to delete first char, then emit shifted version
                     return [
@@ -201,9 +209,6 @@ class KeyEventProcessor:
                         (KeyCodes.EV_KEY, KeyCodes.KEY_LEFTSHIFT, 1),
                         (KeyCodes.EV_KEY, code, 1),
                     ]
-                # Track for potential double-tap
-                self._last_key = code
-                self._last_key_time = timestamp
 
             elif value == 0 and self._double_tap_shift_held:
                 # Key release after double-tap: release shift too
@@ -214,6 +219,28 @@ class KeyEventProcessor:
                 ]
 
         return [(KeyCodes.EV_KEY, code, value)]
+
+    def _check_double_tap(self, code: int, timestamp: float) -> bool:
+        """
+        Check if this keycode completes a double-tap.
+
+        Uses shared DoubleTapDetector if available, otherwise inline fallback.
+        """
+        if self._double_tap is not None:
+            return self._double_tap.check(code, timestamp)
+
+        # Fallback: inline implementation for standalone operation
+        if not hasattr(self, '_last_key'):
+            self._last_key = None
+            self._last_key_time = 0.0
+
+        if self._last_key == code and (timestamp - self._last_key_time) < self.DOUBLE_TAP_THRESHOLD:
+            self._last_key = None  # Reset to prevent triple-tap
+            return True
+
+        self._last_key = code
+        self._last_key_time = timestamp
+        return False
 
     def _handle_shift(self, code: int, value: int, ts: float) -> list[tuple[int, int, int]]:
         """Tap shift = sticky shift, hold shift = normal."""

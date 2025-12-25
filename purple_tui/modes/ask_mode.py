@@ -31,7 +31,7 @@ from ..constants import (
     TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
     ICON_VOLUME_ON, ICON_VOLUME_OFF,
 )
-from ..keyboard import SHIFT_MAP
+from ..keyboard import SHIFT_MAP, DoubleTapDetector
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget
 
@@ -177,8 +177,10 @@ class InlineInput(Input):
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
         self.autocomplete_type: str = "emoji"  # "emoji" or "color"
         self.autocomplete_index: int = 0
-        self.last_char = None
-        self.last_char_time = 0
+        self._double_tap = DoubleTapDetector(
+            threshold=DOUBLE_TAP_TIME,
+            allowed_keys=set(SHIFT_MAP.keys()),
+        )
 
     def action_scroll_up(self) -> None:
         """Scroll the history up"""
@@ -225,7 +227,7 @@ class InlineInput(Input):
                 self.cursor_position = len(self.value)
             self.autocomplete_matches = []
             self.autocomplete_index = 0
-            self.last_char = None
+            self._double_tap.reset()
             return
 
         # Enter: submit
@@ -237,25 +239,17 @@ class InlineInput(Input):
                 self.value = ""
             self.autocomplete_matches = []
             self.autocomplete_index = 0
-            self.last_char = None
+            self._double_tap.reset()
             return
 
         # Double-tap for shifted characters
-        if char and char in SHIFT_MAP:
-            now = time.time()
-            if self.last_char == char and (now - self.last_char_time) < DOUBLE_TAP_TIME:
-                event.stop()
-                event.prevent_default()
-                if self.value:
-                    self.value = self.value[:-1] + SHIFT_MAP[char]
-                    self.cursor_position = len(self.value)
-                self.last_char = None
-                return
-            else:
-                self.last_char = char
-                self.last_char_time = now
-        else:
-            self.last_char = None
+        if char and self._double_tap.check(char):
+            event.stop()
+            event.prevent_default()
+            if self.value:
+                self.value = self.value[:-1] + SHIFT_MAP[char]
+                self.cursor_position = len(self.value)
+            return
 
         # Let parent Input handle all other keys
         await super()._on_key(event)

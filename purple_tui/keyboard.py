@@ -18,7 +18,7 @@ from enum import Enum
 
 
 # ============================================================================
-# Shift Strategies
+# Double-Tap Detection
 # ============================================================================
 
 # Characters that can be shifted via double-tap
@@ -33,7 +33,82 @@ SHIFT_MAP = {
 UNSHIFT_MAP = {v: k for k, v in SHIFT_MAP.items()}
 
 
-@dataclass
+class DoubleTapDetector:
+    """
+    Detects double-tap of the same key/character within a time threshold.
+
+    Pure logic class with no I/O. Timestamp is injected for deterministic testing.
+
+    Usage:
+        detector = DoubleTapDetector(threshold=0.4, allowed_keys={'a', 'b', '-'})
+        result = detector.check('a', timestamp=0.0)  # None (first tap)
+        result = detector.check('a', timestamp=0.2)  # 'a' (double-tap detected!)
+        result = detector.check('a', timestamp=0.8)  # None (too slow, new first tap)
+
+    For evdev (keycodes):
+        detector = DoubleTapDetector(threshold=0.4, allowed_keys={30, 31, 32})
+        result = detector.check(30, timestamp=0.0)  # None
+        result = detector.check(30, timestamp=0.2)  # 30 (double-tap!)
+
+    Args:
+        threshold: Maximum seconds between taps for double-tap detection
+        allowed_keys: Set of keys that can trigger double-tap (None = all keys)
+    """
+
+    DEFAULT_THRESHOLD = 0.4  # seconds
+
+    def __init__(
+        self,
+        threshold: float = DEFAULT_THRESHOLD,
+        allowed_keys: set = None,
+    ):
+        self.threshold = threshold
+        self.allowed_keys = allowed_keys
+        self._last_key = None
+        self._last_time: float = 0.0
+
+    def check(self, key, timestamp: float = None) -> bool:
+        """
+        Check if this key press completes a double-tap.
+
+        Args:
+            key: The key/character pressed (any hashable type)
+            timestamp: Current time in seconds (uses time.time() if None)
+
+        Returns:
+            True if double-tap detected, False otherwise.
+            Caller is responsible for applying the shift transformation.
+        """
+        if timestamp is None:
+            timestamp = time.time()
+
+        # Filter to allowed keys if specified
+        if self.allowed_keys is not None and key not in self.allowed_keys:
+            self._last_key = None
+            return False
+
+        # Check for double-tap
+        if self._last_key == key and (timestamp - self._last_time) < self.threshold:
+            # Double-tap detected!
+            self._last_key = None  # Reset to prevent triple-tap
+            return True
+
+        # First tap or new key: remember it
+        self._last_key = key
+        self._last_time = timestamp
+        return False
+
+    def reset(self) -> None:
+        """Reset detector state."""
+        self._last_key = None
+        self._last_time = 0.0
+
+
+# ============================================================================
+# Shift Strategies
+# ============================================================================
+
+
 class ShiftState:
     """
     Unified shift state tracking.
@@ -43,18 +118,35 @@ class ShiftState:
     2. Double-tap: Same key twice quickly = shifted version
     3. Regular shift: Physical shift key held (from hardware layer)
     """
-    # Sticky shift state
-    sticky_active: bool = False
-    sticky_activated_at: float = 0.0
-    sticky_grace_period: float = 1.0  # seconds
 
-    # Double-tap state
-    last_char: Optional[str] = None
-    last_char_time: float = 0.0
-    double_tap_threshold: float = 0.5  # seconds
+    def __init__(
+        self,
+        sticky_grace_period: float = 1.0,
+        double_tap_threshold: float = 0.5,
+    ):
+        # Sticky shift state
+        self.sticky_active: bool = False
+        self.sticky_activated_at: float = 0.0
+        self.sticky_grace_period: float = sticky_grace_period
 
-    # Physical shift (from hardware layer)
-    physical_shift_held: bool = False
+        # Double-tap detector (uses SHIFT_MAP keys as allowed set)
+        self._double_tap = DoubleTapDetector(
+            threshold=double_tap_threshold,
+            allowed_keys=set(SHIFT_MAP.keys()),
+        )
+
+        # Physical shift (from hardware layer)
+        self.physical_shift_held: bool = False
+
+    @property
+    def double_tap_threshold(self) -> float:
+        """Get double-tap threshold."""
+        return self._double_tap.threshold
+
+    @double_tap_threshold.setter
+    def double_tap_threshold(self, value: float) -> None:
+        """Set double-tap threshold."""
+        self._double_tap.threshold = value
 
     def should_shift(self) -> bool:
         """Check if next character should be shifted."""
@@ -84,37 +176,21 @@ class ShiftState:
         """Consume sticky shift after using it for one character."""
         self.sticky_active = False
 
-    def check_double_tap(self, char: str) -> Optional[str]:
+    def check_double_tap(self, char: str, timestamp: float = None) -> Optional[str]:
         """
         Check if this character completes a double-tap.
 
         Returns the shifted character if double-tap detected, None otherwise.
-        Also updates tracking state for next check.
         """
-        now = time.time()
-
-        if char in SHIFT_MAP:
-            if (self.last_char == char and
-                (now - self.last_char_time) < self.double_tap_threshold):
-                # Double-tap detected!
-                self.last_char = None
-                return SHIFT_MAP[char]
-            else:
-                # First tap. Remember it
-                self.last_char = char
-                self.last_char_time = now
-        else:
-            # Different character. Reset
-            self.last_char = None
-
+        if self._double_tap.check(char, timestamp):
+            return SHIFT_MAP.get(char)
         return None
 
     def reset(self) -> None:
         """Reset all shift state."""
         self.sticky_active = False
         self.sticky_activated_at = 0.0
-        self.last_char = None
-        self.last_char_time = 0.0
+        self._double_tap.reset()
         self.physical_shift_held = False
 
 

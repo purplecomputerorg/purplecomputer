@@ -718,7 +718,7 @@ class PurpleApp(App):
         except Exception:
             pass
 
-    def on_event(self, event: events.Event) -> None:
+    async def on_event(self, event: events.Event) -> None:
         """Record activity for any key press - before widgets can stop it.
 
         This is called BEFORE event dispatch, so child widgets calling
@@ -727,7 +727,7 @@ class PurpleApp(App):
         if isinstance(event, events.Key):
             self._record_user_activity()
         # Always call super to continue normal event dispatch
-        super().on_event(event)
+        await super().on_event(event)
 
     def _create_mode_widget(self, mode: Mode):
         """Create a new mode widget"""

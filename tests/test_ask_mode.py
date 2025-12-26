@@ -1108,6 +1108,39 @@ class TestColorMixingComponents:
         assert self._eval_color_mixing("3 yellow + red", colors) == 4
 
 
+class TestSpeakPrefixes:
+    """Test speak prefix constants (say/talk trigger one-shot TTS)."""
+
+    def test_speak_prefixes_defined(self, evaluator):
+        """SPEAK_PREFIXES should contain say and talk."""
+        assert "say" in SimpleEvaluator.SPEAK_PREFIXES
+        assert "talk" in SimpleEvaluator.SPEAK_PREFIXES
+
+    def test_speak_prefix_detection(self, evaluator):
+        """Speak prefixes should be detectable at start of input."""
+        for prefix in SimpleEvaluator.SPEAK_PREFIXES:
+            test_input = f"{prefix} hello"
+            words = test_input.split(None, 1)
+            assert words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES
+            assert words[1] == "hello"
+
+    def test_speak_prefix_case_insensitive(self, evaluator):
+        """Speak prefix detection should be case-insensitive."""
+        for prefix in ["Say", "SAY", "Talk", "TALK"]:
+            test_input = f"{prefix} hello"
+            words = test_input.split(None, 1)
+            assert words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES
+
+    def test_say_not_spoken_in_tts(self, evaluator):
+        """Words in SPEAK_PREFIXES should never appear in speakable output."""
+        # If user types "say hello", the spoken text should be about "hello", not "say"
+        result = evaluator.evaluate("hello")
+        speak = evaluator._make_speakable("hello", result)
+        # "say" and "talk" should not appear in normal speakable output
+        for prefix in SimpleEvaluator.SPEAK_PREFIXES:
+            assert prefix not in speak.lower()
+
+
 class TestThemeConstants:
     """Test theme color constants match the app's registered themes."""
 

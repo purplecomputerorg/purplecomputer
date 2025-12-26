@@ -356,6 +356,17 @@ Ask mode is a calculator that understands math, emojis, and colors. It's designe
 - **Typo tolerance:** Long math expressions (3+ operators, 60%+ valid symbols) tolerate accidental keystrokes like `=` (replaced with `+`)
 - **Unknown text passes through:** `my name is tavi apple` → `my name is tavi 🍎`
 
+### Speech Prefix
+
+Type `say` or `talk` before any input to speak the result aloud (one-shot TTS):
+
+| Input | Behavior |
+|-------|----------|
+| `say 2 + 2` | Shows "2 + 2 → 4" and speaks "2 plus 2 equals 4" |
+| `talk cat` | Shows "cat → 🐱" and speaks "cat" |
+
+The prefix is stripped from display. TTS is triggered for that line only, regardless of whether speech mode is on.
+
 ### Autocomplete
 
 - Triggers at 2+ characters

@@ -627,11 +627,19 @@ class AskMode(Vertical):
         input_text = event.value
         scroll = self.query_one("#history-scroll")
 
-        # Add the "Ask:" line to history
-        scroll.mount(HistoryLine(input_text, line_type="ask"))
+        # Check for speak prefix (e.g., "say", "talk"): triggers TTS for this line only
+        force_speak = False
+        eval_text = input_text
+        words = input_text.split(None, 1)
+        if words and words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES:
+            force_speak = True
+            eval_text = words[1] if len(words) > 1 else ""
+
+        # Add the "Ask:" line to history (without speak prefix)
+        scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
         # Evaluate and show result
-        result = self.evaluator.evaluate(input_text)
+        result = self.evaluator.evaluate(eval_text)
         if result:
             # Check if this is a color result (special format)
             # Mixed results look like "text COLOR_RESULT:hex:name:comps emoji_stuff"
@@ -680,11 +688,11 @@ class AskMode(Vertical):
         # Scroll to bottom
         scroll.scroll_end(animate=False)
 
-        # Handle speech if enabled
+        # Handle speech (if TTS enabled or force_speak from say/talk prefix)
         try:
             indicator = self.query_one("#speech-indicator", SpeechIndicator)
-            if indicator.speech_on:
-                self._speak(input_text, result)
+            if force_speak or indicator.speech_on:
+                self._speak(eval_text, result)
         except Exception:
             pass
 
@@ -715,6 +723,9 @@ class SimpleEvaluator:
     - Colors: collect and mix (even if non-colors in between)
     - Parens: evaluate inner first, result becomes a term
     """
+
+    # Speech prefixes: trigger TTS for one line, stripped from input
+    SPEAK_PREFIXES = {'say', 'talk'}
 
     # Math operators: symbols and their word equivalents
     MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}

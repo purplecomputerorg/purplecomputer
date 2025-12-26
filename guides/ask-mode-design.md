@@ -269,6 +269,20 @@ what is (2 * 3) cats  → says "what is 2 times 3 cats equals 6 cats"
 - `/` → "divided by"
 - Parentheses are removed
 
+### Speech Prefix (One-Shot TTS)
+
+Type `say` or `talk` before any input to speak the result without enabling speech mode:
+
+```
+say 2 + 2             → shows "2 + 2 → 4", speaks "2 plus 2 equals 4"
+talk cat              → shows "cat → 🐱", speaks "cat"
+say red + blue        → shows color result, speaks "red plus blue equals purple"
+```
+
+The prefix word is stripped from both display and evaluation. Speech is triggered for that line only, then returns to whatever mode was active (on or off).
+
+This is useful when speech mode is off but you want to hear one specific result, or to show a child how something is pronounced.
+
 ---
 
 ## Number Attachment Rules

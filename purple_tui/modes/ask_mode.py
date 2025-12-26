@@ -836,9 +836,13 @@ class SimpleEvaluator:
             elif item_type == 'emoji':
                 e, c, w = value
                 emoji_str = e * c
-                # Merge with previous if also emoji
+                # Merge with previous if same emoji type, space if different
                 if result_parts and self._is_emoji_str(result_parts[-1]):
-                    result_parts[-1] += emoji_str
+                    last_emoji = [ch for ch in result_parts[-1] if ord(ch) > 127][-1] if result_parts[-1] else None
+                    if last_emoji == e:
+                        result_parts[-1] += emoji_str  # Same type, no space
+                    else:
+                        result_parts[-1] += ' ' + emoji_str  # Different type, add space
                 else:
                     result_parts.append(emoji_str)
             elif item_type == 'text':

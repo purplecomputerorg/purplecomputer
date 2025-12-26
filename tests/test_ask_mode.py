@@ -134,13 +134,13 @@ if HAS_PYTEST:
             assert evaluator.evaluate("cat*3") == "3 cats\n🐱🐱🐱"
 
         def test_emoji_addition(self, evaluator):
-            assert evaluator.evaluate("cat + dog") == "🐱🐶"
+            assert evaluator.evaluate("cat + dog") == "🐱 🐶"
 
         def test_emoji_complex(self, evaluator):
-            assert evaluator.evaluate("apple*3 + banana*2") == "🍎🍎🍎🍌🍌"
+            assert evaluator.evaluate("apple*3 + banana*2") == "🍎🍎🍎 🍌🍌"
 
         def test_emoji_complex_with_spaces(self, evaluator):
-            assert evaluator.evaluate("apple * 3 + banana * 2") == "🍎🍎🍎🍌🍌"
+            assert evaluator.evaluate("apple * 3 + banana * 2") == "🍎🍎🍎 🍌🍌"
 
         def test_emoji_times_word(self, evaluator):
             assert evaluator.evaluate("cat times 3") == "3 cats\n🐱🐱🐱"
@@ -149,7 +149,7 @@ if HAS_PYTEST:
             assert evaluator.evaluate("3 times cat") == "3 cats\n🐱🐱🐱"
 
         def test_emoji_plus_word(self, evaluator):
-            assert evaluator.evaluate("cat plus dog") == "🐱🐶"
+            assert evaluator.evaluate("cat plus dog") == "🐱 🐶"
 
         def test_number_attaches_to_next_emoji(self, evaluator):
             # 2 attaches to 3 cats = 5 cats (with label)
@@ -164,16 +164,16 @@ if HAS_PYTEST:
             assert evaluator.evaluate("3 + 4 + 2 bananas") == "9 bananas\n🍌🍌🍌🍌🍌🍌🍌🍌🍌"
 
         def test_number_attaches_per_emoji_group(self, evaluator):
-            # 5 + 2 cats + 3 dogs = 7 cats + 3 dogs
-            assert evaluator.evaluate("5 + 2 cats + 3 dogs") == "🐱🐱🐱🐱🐱🐱🐱🐶🐶🐶"
+            # 5 + 2 cats + 3 dogs = 7 cats + 3 dogs (space between different types)
+            assert evaluator.evaluate("5 + 2 cats + 3 dogs") == "🐱🐱🐱🐱🐱🐱🐱 🐶🐶🐶"
 
         def test_trailing_number_attaches_to_last(self, evaluator):
             # cat*3 + 2 = 5 cats (2 attaches to the 3 cats, with label)
             assert evaluator.evaluate("cat*3 + 2") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_number_between_emojis(self, evaluator):
-            # 2 cats + 5 + 3 dogs = 2 cats + 8 dogs (5 attaches to dogs)
-            assert evaluator.evaluate("2 cats + 5 + 3 dogs") == "🐱🐱🐶🐶🐶🐶🐶🐶🐶🐶"
+            # 2 cats + 5 + 3 dogs = 2 cats + 8 dogs (5 attaches to dogs, space between types)
+            assert evaluator.evaluate("2 cats + 5 + 3 dogs") == "🐱🐱 🐶🐶🐶🐶🐶🐶🐶🐶"
 
         def test_n_times_m_word(self, evaluator):
             # 5 x 2 cats = 10 cats (with label)
@@ -261,10 +261,10 @@ if HAS_PYTEST:
             assert evaluator.evaluate("(2 + 3) * cat") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_emoji_in_parens_multiply(self, evaluator):
-            assert evaluator.evaluate("(cat + dog) * 2") == "🐱🐶🐱🐶"
+            assert evaluator.evaluate("(cat + dog) * 2") == "🐱 🐶🐱 🐶"
 
         def test_multiply_emoji_in_parens(self, evaluator):
-            assert evaluator.evaluate("2 * (cat + dog)") == "🐱🐶🐱🐶"
+            assert evaluator.evaluate("2 * (cat + dog)") == "🐱 🐶🐱 🐶"
 
         def test_number_plus_emoji_parens(self, evaluator):
             # 5 attaches to (5 cats) = 10 cats (with label)
@@ -275,7 +275,7 @@ if HAS_PYTEST:
             assert evaluator.evaluate("(cat * 3) + 2") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_complex_emoji_parens(self, evaluator):
-            assert evaluator.evaluate("(2 * cat) + (3 * dog)") == "🐱🐱🐶🐶🐶"
+            assert evaluator.evaluate("(2 * cat) + (3 * dog)") == "🐱🐱 🐶🐶🐶"
 
         def test_parens_with_word_operators(self, evaluator):
             assert evaluator.evaluate("(2 plus 3) times cat") == "5 cats\n🐱🐱🐱🐱🐱"
@@ -310,10 +310,10 @@ if HAS_PYTEST:
             assert evaluator.evaluate("3apple") == "🍎🍎🍎"
 
         def test_plural_in_addition(self, evaluator):
-            assert evaluator.evaluate("apples + bananas") == "🍎🍎🍌🍌"
+            assert evaluator.evaluate("apples + bananas") == "🍎🍎 🍌🍌"
 
         def test_mixed_plural_number(self, evaluator):
-            assert evaluator.evaluate("3 apples + 2 bananas") == "🍎🍎🍎🍌🍌"
+            assert evaluator.evaluate("3 apples + 2 bananas") == "🍎🍎🍎 🍌🍌"
 
 
     class TestEmojiSubstitution:
@@ -705,14 +705,14 @@ class TestComputedLabels:
         assert result == "🐱"
 
     def test_no_label_mixed_emojis(self, evaluator):
-        # cat + dog = just emojis (mixed types, no single label)
+        # cat + dog = just emojis (mixed types, no single label, space between)
         result = evaluator.evaluate("cat + dog")
-        assert result == "🐱🐶"
+        assert result == "🐱 🐶"
 
     def test_no_label_multi_emoji_with_counts(self, evaluator):
-        # 2 cats + 3 dogs = just emojis (mixed types)
+        # 2 cats + 3 dogs = just emojis (mixed types, space between)
         result = evaluator.evaluate("2 cats + 3 dogs")
-        assert result == "🐱🐱🐶🐶🐶"
+        assert result == "🐱🐱 🐶🐶🐶"
 
     def test_n_times_m_word_in_plus_expr(self, evaluator):
         # 2 + 3 * 4 cats = 14 cats (3*4=12, +2=14)

@@ -640,17 +640,15 @@ class AskMode(Vertical):
 
         # Check if input has math operators (not just number+word like "2banana")
         def has_math_operator(text: str) -> bool:
-            # Has +, -, *, /, x (between numbers), times, plus, minus, divided
-            import re
             text_lower = text.lower()
-            if any(op in text for op in ['+', '-', '*', '/', '×', '÷']):
+            # Check for symbol operators
+            if any(op in text for op in SimpleEvaluator.MATH_SYMBOLS):
                 return True
-            if re.search(r'\d\s*x\s*\d', text_lower):  # x between numbers
+            # Check for word operators
+            if any(word in text_lower for word in SimpleEvaluator.WORD_TO_SYMBOL):
                 return True
-            if any(word in text_lower for word in [' times ', ' plus ', ' minus ', ' divided']):
-                return True
-            # "times" or "x" with emoji word (like "cat times 3" or "3 x cat")
-            if re.search(r'(times|(?<!\w)x(?!\w))', text_lower):
+            # Check for "divided by"
+            if 'divided' in text_lower:
                 return True
             return False
 
@@ -727,6 +725,14 @@ class SimpleEvaluator:
     - Parens: evaluate inner first, result becomes a term
     """
 
+    # Math operators: symbols and their word equivalents
+    MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}
+    WORD_TO_SYMBOL = {'times': '*', 'plus': '+', 'minus': '-', 'x': '*'}
+    # Regex for detecting plus expressions (symbol or word)
+    PLUS_PATTERN = r'\+|(?<!\w)plus(?!\w)'
+    # Regex for valid math expression characters
+    MATH_CHARS_PATTERN = r'^[\d\s\+\-\*\/\(\)\.]+$'
+
     def __init__(self):
         self.content = get_content()
 
@@ -736,17 +742,24 @@ class SimpleEvaluator:
         if not text:
             return ""
 
+        # Track if original had parens (implies computation)
+        had_parens = '(' in text
+
         # Handle parentheses first
         text = self._eval_parens(text)
 
+        # Try text with embedded expression (e.g., "what is 2 + 3", "I have 5 apples")
+        if result := self._eval_text_with_expr(text, had_parens):
+            return result
+
         # Check if it's a + expression
-        if re.search(r'\+|(?<!\w)plus(?!\w)', text.lower()):
+        if re.search(self.PLUS_PATTERN, text.lower()):
             if result := self._eval_plus_expr(text):
-                return result
+                return self._maybe_add_label(result, had_parens)
 
         # Try multiplication: "3 * cat", "cat times 5", etc.
         if mult := self._eval_mult(text):
-            return mult
+            return self._maybe_add_label(mult, had_parens)
 
         # Try pure math
         normalized = self._normalize_math(text)
@@ -759,7 +772,86 @@ class SimpleEvaluator:
 
         # Try emoji substitution in text (e.g., "I love cat")
         subbed = self._substitute_emojis(text)
-        return subbed if subbed != text else text
+        result = subbed if subbed != text else text
+
+        return self._maybe_add_label(result, had_parens)
+
+    def _maybe_add_label(self, result: str, had_parens: bool) -> str:
+        """Add emoji label if result is unlabeled emojis from a paren expression."""
+        if had_parens and self._is_emoji_str(result) and '\n' not in result:
+            chars = [c for c in result if ord(c) > 127]
+            if len(chars) > 1 and all(c == chars[0] for c in chars):
+                return f"{len(chars)} {chars[0]}\n{result}"
+        return result
+
+    def _eval_text_with_expr(self, text: str, had_parens: bool = False) -> str | None:
+        """Handle text containing expressions like 'what is 2+3' or 'I have 5 apples'.
+
+        Returns multi-line result with text prefix preserved on each line.
+        Only triggers when there's actual English text before the expression.
+        """
+        words = text.split()
+        if len(words) < 2:
+            return None
+
+        # Find where expression starts (first number, operator, color, or emoji word)
+        expr_start = None
+        for i, word in enumerate(words):
+            clean = re.sub(r'[^\w]', '', word.lower())
+            if (re.match(r'^\d+$', clean) or
+                clean in self.WORD_TO_SYMBOL or
+                self._get_color(clean) or
+                self._get_emoji(clean)):
+                expr_start = i
+                break
+
+        if expr_start is None or expr_start == 0:
+            return None  # No text prefix found
+
+        # Verify the prefix is actual English text (not emoji, numbers, or operators)
+        prefix_words = words[:expr_start]
+        if not all(self._is_plain_text(w) for w in prefix_words):
+            return None
+
+        prefix = ' '.join(prefix_words)
+        expr_text = ' '.join(words[expr_start:])
+
+        # Evaluate the expression part
+        result = self._eval_expr_part(expr_text)
+        if result is None:
+            return None
+
+        # Add label if parens implied computation
+        result = self._maybe_add_label(result, had_parens)
+
+        # Prepend prefix to each line of the result
+        lines = result.split('\n')
+        return '\n'.join(f"{prefix} {line}" for line in lines)
+
+    def _eval_expr_part(self, text: str) -> str | None:
+        """Evaluate an expression (without text prefix). Returns multi-line if appropriate."""
+        # Handle parentheses
+        text = self._eval_parens(text)
+
+        # Try + expression
+        if re.search(self.PLUS_PATTERN, text.lower()):
+            if result := self._eval_plus_expr(text):
+                return result
+
+        # Try multiplication
+        if mult := self._eval_mult(text):
+            return mult
+
+        # Try pure math (returns with dots visualization)
+        normalized = self._normalize_math(text)
+        if (math_result := self._eval_math(normalized)) is not None:
+            return self._format_number_with_dots(math_result)
+
+        # Try single word lookup
+        if single := self._lookup(text.lower().strip()):
+            return single
+
+        return None
 
     def _eval_parens(self, text: str) -> str:
         """Evaluate innermost parentheses first, recursively."""
@@ -767,14 +859,19 @@ class SimpleEvaluator:
             if not (match := re.search(r'\(([^()]+)\)', text)):
                 break
             result = self.evaluate(match.group(1))
-            # Strip dot visualization for use in outer expressions
+            # Strip label/dot visualization for use in outer expressions
             result = result.split('\n')[0]
+            # If result is "N emoji", extract just the emojis for outer expression
+            if m := re.match(r'^(\d+)\s+(.+)$', result):
+                count, emoji_str = int(m.group(1)), m.group(2).strip()
+                if self._is_emoji_str(emoji_str):
+                    result = emoji_str * count
             text = text[:match.start()] + result + text[match.end():]
         return text
 
     def _eval_plus_expr(self, text: str) -> str | None:
         """Evaluate + expression. Preserves order. Numbers attach to next emoji. Colors mix (at first color's position)."""
-        parts = re.split(r'\s*(?:\+|(?<!\w)plus(?!\w))\s*', text.lower())
+        parts = re.split(r'\s*(?:' + self.PLUS_PATTERN + r')\s*', text.lower())
         colors = []  # Collect for mixing
         items = []   # (type, value) in original order: value is (emoji, count, word) for emoji
         pending = 0
@@ -828,8 +925,8 @@ class SimpleEvaluator:
 
         # Collect emoji info for label formatting
         emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
-        # If single emoji type with count > 1, show label
-        show_label = (len(emoji_items) == 1 and emoji_items[0][2] and emoji_items[0][1] > 1
+        # Show label if single emoji type with count > 1 (+ expr implies computation)
+        show_label = (len(emoji_items) == 1 and emoji_items[0][1] > 1
                       and not colors and not any(t == 'text' for t, _ in items))
 
         # Build result in order, merging adjacent emojis
@@ -863,8 +960,7 @@ class SimpleEvaluator:
             # Add label line for single emoji type with count
             if show_label and result:
                 e, c, w = emoji_items[0]
-                word = w + 's' if c != 1 and not w.endswith('s') else w
-                result = f"{c} {word}\n{result}"
+                result = f"{c} {e}\n{result}"
             return result
         return None
 
@@ -874,10 +970,9 @@ class SimpleEvaluator:
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
-    def _format_emoji_label(self, emoji: str, count: int, word: str) -> str:
-        """Format emoji with label: 'N words\\nemojis'."""
-        label = word + 's' if count != 1 and not word.endswith('s') else word
-        return f"{count} {label}\n{emoji * count}"
+    def _format_emoji_label(self, emoji: str, count: int) -> str:
+        """Format emoji with label: 'N 🐱' then full visualization."""
+        return f"{count} {emoji}\n{emoji * count}"
 
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""
@@ -902,8 +997,8 @@ class SimpleEvaluator:
             e, c, w = emoji_data
             if c <= 100:
                 # Show label if there's explicit operator (*, x, times)
-                if has_operator and w and c > 1:
-                    return self._format_emoji_label(e, c, w)
+                if has_operator and c > 1:
+                    return self._format_emoji_label(e, c)
                 return e * c
 
         # "N * word" for colors (no label for colors)
@@ -1016,16 +1111,25 @@ class SimpleEvaluator:
         """Check if text is emoji characters only."""
         return bool(text) and all(ord(c) > 127 or c.isspace() for c in text)
 
+    def _is_plain_text(self, word: str) -> bool:
+        """Check if word is plain English text (not emoji, number, operator, or expression)."""
+        return bool(word) and word.isalpha() and all(ord(c) < 128 for c in word)
+
     def _normalize_math(self, text: str) -> str:
         """Normalize text for math evaluation."""
         result = text.lower()
-        for pat, repl in [(r'times', '*'), (r'plus', '+'), (r'minus', '-'), (r'divided\s*by', '/')]:
-            result = re.sub(pat, repl, result)
+        # Convert word operators to symbols (no word boundaries to allow "3times4")
+        for word, symbol in self.WORD_TO_SYMBOL.items():
+            if word != 'x':  # 'x' is handled specially below
+                result = result.replace(word, symbol)
+        # Handle "divided by" separately (two words)
+        result = re.sub(r'divided\s*by', '/', result)
+        # Handle x between digits (avoid replacing 'x' in words like "fox")
         return re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
 
     def _eval_math(self, text: str) -> float | int | None:
         """Safely evaluate math expression."""
-        if not re.match(r'^[\d\s\+\-\*\/\(\)\.]+$', text):
+        if not re.match(self.MATH_CHARS_PATTERN, text):
             return None
         try:
             result = eval(text, {"__builtins__": {}}, {})

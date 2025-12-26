@@ -28,7 +28,8 @@ Words become emojis. Supports multiplication and addition:
 ```
 cat             → 🐱
 3 cats          → 🐱🐱🐱
-cat * 5         → 🐱🐱🐱🐱🐱 (with label: "5 cats")
+cat * 5         → 5 🐱
+                  🐱🐱🐱🐱🐱
 cats            → 🐱🐱 (bare plural = 2)
 cat + dog       → 🐱 🐶 (space between different types)
 cat + cat       → 🐱🐱 (no space, same type)
@@ -81,16 +82,32 @@ Math operators follow standard precedence, even with emojis:
 When computation happens, show the count to help kids understand:
 
 ```
-3 * 4 + 2 dogs        → "14 dogs"
+3 * 4 + 2 dogs        → 14 🐶
                         🐶🐶🐶🐶🐶🐶🐶🐶🐶🐶🐶🐶🐶🐶
 
-12 * 3 cats           → "36 cats"
+12 * 3 cats           → 36 🐱
                         🐱🐱🐱🐱... (36 cats)
+
+(cat * 3) + 2         → 5 🐱
+                        🐱🐱🐱🐱🐱
+
+(2 * 3) cats          → 6 🐱
+                        🐱🐱🐱🐱🐱🐱
+```
+
+Parentheses imply computation, so they always show labels:
+```
+(2 + 2) cats          → 4 🐱
+                        🐱🐱🐱🐱
+
+what is (3 * 2) dogs  → what is 6 🐶
+                        what is 🐶🐶🐶🐶🐶🐶
 ```
 
 But simple expressions don't need labels:
 ```
 3 cats                → 🐱🐱🐱 (no label, obvious)
+6 cats                → 🐱🐱🐱🐱🐱🐱 (no label, no computation)
 cat                   → 🐱
 ```
 
@@ -118,6 +135,25 @@ Text that isn't recognized still appears, with valid terms processed:
 my name is tavi apple → my name is tavi 🍎
 gibberish + blue      → gibberish [blue swatch]
 ```
+
+### Text with Expressions
+When English text precedes an expression, the text is preserved:
+
+```
+what is 2 + 3         → what is 5
+                        what is •••••
+
+I have 5 apples       → I have 🍎🍎🍎🍎🍎
+
+I have 2 + 3 apples   → I have 5 🍎
+                        I have 🍎🍎🍎🍎🍎
+
+what is red + blue    → what is [color result]
+
+show me 3 cats        → show me 🐱🐱🐱
+```
+
+The prefix must be plain English text (no emojis, numbers, or operators). This allows natural questions like "what is 2 + 2" to work intuitively.
 
 ---
 
@@ -193,7 +229,9 @@ Kids will eventually learn real math. Better to teach them correctly from the st
 
 ### Why Labels on Computed Expressions?
 
-When the result isn't obvious from the input, show the count. `3 * 4 + 2 dogs` needs the "14 dogs" label because a child can't easily compute that. But `3 cats` doesn't need a label because it's visually obvious.
+When the result isn't obvious from the input, show the count. `3 * 4 + 2 dogs` needs the "14 🐶" label because a child can't easily compute that. But `3 cats` doesn't need a label because it's visually obvious.
+
+Parentheses always trigger labels because they imply computation happened, even if the final expression looks simple. `(2 * 3) cats` becomes `6 cats` after paren evaluation, but we show `6 🐱` as a label because the child typed a computation.
 
 ### Why Spaces Between Emoji Types?
 
@@ -205,12 +243,20 @@ When the result isn't obvious from the input, show the count. `3 * 4 + 2 dogs` n
 
 The evaluator tries methods in order:
 1. Parentheses (recursive evaluation)
-2. Plus expressions (with color mixing, emoji handling)
-3. Multiplication expressions
-4. Pure math
-5. Text substitution (emoji replacement in sentences)
+2. Text with expression (e.g., "what is 2 + 3")
+3. Plus expressions (with color mixing, emoji handling)
+4. Multiplication expressions
+5. Pure math
+6. Text substitution (emoji replacement in sentences)
 
 Each method can "pass through" to the next if it doesn't fully handle the input. This layered approach allows complex expressions to be evaluated piece by piece.
+
+### Operator Constants
+Math operators are defined centrally in `SimpleEvaluator`:
+- `MATH_SYMBOLS`: `{'+', '-', '*', '/', '×', '÷', '−'}`
+- `WORD_TO_SYMBOL`: `{'times': '*', 'plus': '+', 'minus': '-', 'x': '*'}`
+- `PLUS_PATTERN`: regex for detecting + or "plus"
+- `MATH_CHARS_PATTERN`: regex for valid math expression characters
 
 ---
 

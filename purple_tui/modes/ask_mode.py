@@ -313,25 +313,17 @@ class InlineInput(Input):
             return
 
         # Search both colors and emojis
-        color_matches = content.search_colors(last_word)
-        emoji_matches = content.search_emojis(last_word)
+        color_matches = {w: h for w, h in content.search_colors(last_word) if w != last_word}
+        emoji_matches = {w: e for w, e in content.search_emojis(last_word) if w != last_word}
 
-        # Combine results: colors first (marked as color type), then emojis
-        # We'll track the type in the tuple: (word, display_value, is_color)
+        # Combine results, grouping overlapping words together
+        # Format: (word, color_hex or None, emoji or None)
+        all_words = sorted(set(color_matches.keys()) | set(emoji_matches.keys()))
         combined = []
-        seen_words = set()
-
-        # Add color matches (show hex as display value)
-        for word, hex_code in color_matches:
-            if word != last_word and word not in seen_words:
-                combined.append((word, hex_code, True))
-                seen_words.add(word)
-
-        # Add emoji matches
-        for word, emoji in emoji_matches:
-            if word != last_word and word not in seen_words:
-                combined.append((word, emoji, False))
-                seen_words.add(word)
+        for word in all_words:
+            color_hex = color_matches.get(word)
+            emoji = emoji_matches.get(word)
+            combined.append((word, color_hex, emoji))
 
         # Limit to 5 total suggestions
         combined = combined[:5]
@@ -342,12 +334,11 @@ class InlineInput(Input):
             self.autocomplete_index = 0
             return
 
-        # Store matches as (word, display_value). The display logic will handle rendering
-        # Use "mixed" type if we have both colors and emojis
-        has_colors = any(is_color for _, _, is_color in combined)
-        has_emojis = any(not is_color for _, _, is_color in combined)
+        # Store matches as (word, color_hex, emoji) tuples
+        has_colors = any(c for _, c, _ in combined)
+        has_emojis = any(e for _, _, e in combined)
 
-        self.autocomplete_matches = [(word, display) for word, display, _ in combined]
+        self.autocomplete_matches = combined
         self.autocomplete_type = "mixed" if (has_colors and has_emojis) else ("color" if has_colors else "emoji")
         self.autocomplete_index = 0
 
@@ -359,7 +350,8 @@ class InlineInput(Input):
     def autocomplete_hint(self) -> str:
         """Get the autocomplete hint to display. Shows up to 5 options.
 
-        Handles colors (shown as colored blocks) and emojis in any combination.
+        Handles colors (shown as colored blocks) and emojis.
+        Overlapping words (both color and emoji) show as: word [color] emoji
         """
         if not self.autocomplete_matches:
             return ""
@@ -368,14 +360,14 @@ class InlineInput(Input):
         shown = self.autocomplete_matches[:5]
         parts = []
 
-        for word, display_value in shown:
-            # Detect if this is a color (hex code starts with #) or emoji
-            if display_value.startswith("#"):
-                # Color: show colored block (color at full opacity, word dimmed)
-                parts.append(f"[dim]{word}[/] [{display_value}]██[/]")
-            else:
-                # Emoji: show as-is (emoji visible, word dimmed)
-                parts.append(f"[dim]{word}[/] {display_value}")
+        for word, color_hex, emoji in shown:
+            # Build display: word emoji? [color]?
+            display = f"[dim]{word}[/]"
+            if emoji:
+                display += f" {emoji}"
+            if color_hex:
+                display += f" [{color_hex}]██[/]"
+            parts.append(display)
 
         hint = "   ".join(parts)
         return f"{hint}   [dim]← space[/]"

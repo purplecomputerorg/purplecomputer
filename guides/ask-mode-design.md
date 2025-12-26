@@ -286,6 +286,32 @@ Colors still mix together regardless of where they appear in the expression.
 
 ---
 
+## Overlapping Words (Color + Emoji)
+
+Some words are both colors and emojis (e.g., "orange", "peach", "rose"). The behavior is context-sensitive:
+
+### Standalone: Emoji Priority
+```
+orange                → 🍊 (fruit emoji)
+peach                 → 🍑 (fruit emoji)
+3 orange              → 🍊🍊🍊 (emoji multiplication)
+```
+
+### In + Expressions: Color Priority
+```
+orange + blue         → color mix (greenish-brown)
+2 + 3 orange          → 5 oranges for color mixing
+```
+
+### Autocomplete Shows Both
+When typing "ora", autocomplete shows overlapping words grouped together:
+```
+orange 🍊 ██
+```
+The emoji appears first, then the color swatch. This helps kids see both options exist for words like "orange", "peach", and "rose".
+
+---
+
 ## Implementation Notes
 
 The evaluator tries methods in order:

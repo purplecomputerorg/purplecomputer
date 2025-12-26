@@ -48,9 +48,9 @@ class ContentManager:
 
     def _load_defaults(self) -> None:
         """Load default emojis and definitions"""
-        # Default emojis - ~100 kid-friendly options
+        # Default emojis - kid-friendly options
         self.emojis = {
-            # Animals
+            # Animals - common
             "cat": "🐱", "dog": "🐶", "elephant": "🐘", "lion": "🦁",
             "tiger": "🐯", "bear": "🐻", "panda": "🐼", "koala": "🐨",
             "pig": "🐷", "cow": "🐮", "horse": "🐴", "unicorn": "🦄",
@@ -61,29 +61,74 @@ class ContentManager:
             "dolphin": "🐬", "fish": "🐟", "octopus": "🐙", "butterfly": "🦋",
             "bee": "🐝", "ladybug": "🐞", "snail": "🐌", "crab": "🦀",
 
+            # Animals - more
+            "zebra": "🦓", "giraffe": "🦒", "hippo": "🦛", "gorilla": "🦍",
+            "wolf": "🐺", "deer": "🦌", "sheep": "🐑", "goat": "🐐",
+            "camel": "🐪", "kangaroo": "🦘", "sloth": "🦥", "hedgehog": "🦔",
+            "raccoon": "🦝", "squirrel": "🐿️", "bat": "🦇", "seal": "🦭",
+            "shark": "🦈", "jellyfish": "🪼", "starfish": "⭐", "shrimp": "🦐",
+            "lobster": "🦞", "squid": "🦑", "ant": "🐜", "spider": "🕷️",
+            "scorpion": "🦂", "mosquito": "🦟", "cricket": "🦗", "worm": "🪱",
+            "parrot": "🦜", "flamingo": "🦩", "peacock": "🦚", "swan": "🦢",
+            "rooster": "🐓", "turkey": "🦃", "eagle": "🦅", "dove": "🕊️",
+            "crocodile": "🐊", "lizard": "🦎", "dragon": "🐉",
+
+            # Fantasy/magical
+            "fairy": "🧚", "mermaid": "🧜", "wizard": "🧙", "genie": "🧞",
+            "ghost": "👻", "alien": "👽", "robot": "🤖", "monster": "👾",
+            "vampire": "🧛", "zombie": "🧟", "ogre": "👹", "troll": "🧌",
+
             # Nature
             "sun": "☀️", "moon": "🌙", "star": "⭐", "rainbow": "🌈",
             "cloud": "☁️", "rain": "🌧️", "snow": "❄️", "flower": "🌸",
             "tree": "🌲", "plant": "🌱", "leaf": "🍃", "mushroom": "🍄",
+            "rose": "🌹", "sunflower": "🌻", "tulip": "🌷", "blossom": "🌼",
+            "mountain": "⛰️", "volcano": "🌋", "beach": "🏖️", "island": "🏝️",
+            "ocean": "🌊", "desert": "🏜️", "forest": "🌳", "cactus": "🌵",
 
-            # Food
+            # Food - fruits
             "apple": "🍎", "banana": "🍌", "orange": "🍊", "grape": "🍇",
-            "strawberry": "🍓", "watermelon": "🍉", "pizza": "🍕",
+            "strawberry": "🍓", "watermelon": "🍉", "peach": "🍑",
+            "cherry": "🍒", "lemon": "🍋", "pineapple": "🍍", "coconut": "🥥",
+            "mango": "🥭", "kiwi": "🥝", "blueberry": "🫐", "pear": "🍐",
+
+            # Food - other
+            "pizza": "🍕", "burger": "🍔", "hotdog": "🌭", "taco": "🌮",
+            "fries": "🍟", "popcorn": "🍿", "pretzel": "🥨", "egg": "🥚",
+            "bread": "🍞", "cheese": "🧀", "bacon": "🥓", "pancake": "🥞",
             "icecream": "🍦", "cake": "🎂", "cookie": "🍪", "candy": "🍬",
-            "chocolate": "🍫", "bread": "🍞", "cheese": "🧀",
+            "chocolate": "🍫", "donut": "🍩", "cupcake": "🧁", "pie": "🥧",
+            "tomato": "🍅", "carrot": "🥕", "corn": "🌽", "broccoli": "🥦",
+            "avocado": "🥑", "potato": "🥔", "onion": "🧅", "garlic": "🧄",
+            "milk": "🥛", "juice": "🧃", "coffee": "☕", "tea": "🍵",
 
             # Objects
-            "heart": "❤️", "star": "⭐", "ball": "⚽", "balloon": "🎈",
+            "heart": "❤️", "ball": "⚽", "balloon": "🎈",
             "gift": "🎁", "book": "📚", "pencil": "✏️", "crayon": "🖍️",
             "art": "🎨", "music": "🎵", "drum": "🥁", "guitar": "🎸",
             "piano": "🎹", "rocket": "🚀", "car": "🚗", "bus": "🚌",
             "train": "🚂", "airplane": "✈️", "boat": "⛵", "bike": "🚲",
             "house": "🏠", "castle": "🏰", "tent": "⛺",
+            "phone": "📱", "camera": "📷", "computer": "💻", "clock": "🕐",
+            "lamp": "💡", "key": "🔑", "umbrella": "☂️", "glasses": "👓",
+            "hat": "🎩", "shoe": "👟", "shirt": "👕", "dress": "👗",
+            "backpack": "🎒", "scissors": "✂️", "hammer": "🔨", "wrench": "🔧",
+
+            # Vehicles
+            "helicopter": "🚁", "tractor": "🚜", "ambulance": "🚑",
+            "firetruck": "🚒", "police": "🚓", "taxi": "🚕", "truck": "🚚",
+            "scooter": "🛴", "motorcycle": "🏍️", "ship": "🚢", "canoe": "🛶",
+
+            # Sports
+            "soccer": "⚽", "basketball": "🏀", "football": "🏈",
+            "baseball": "⚾", "tennis": "🎾", "bowling": "🎳", "golf": "⛳",
+            "skating": "⛸️", "skiing": "⛷️", "surfing": "🏄", "fishing": "🎣",
 
             # Faces/expressions
             "happy": "😊", "sad": "😢", "laugh": "😂", "love": "😍",
             "cool": "😎", "silly": "🤪", "sleepy": "😴", "surprised": "😮",
-            "think": "🤔", "wow": "🤩",
+            "think": "🤔", "wow": "🤩", "angry": "😠", "scared": "😨",
+            "sick": "🤒", "dizzy": "😵", "nerd": "🤓", "party": "🥳",
 
             # Activities
             "run": "🏃", "swim": "🏊", "dance": "💃", "sing": "🎤",
@@ -92,13 +137,19 @@ class ContentManager:
             # Misc
             "yes": "✅", "no": "❌", "thumbsup": "👍", "clap": "👏",
             "wave": "👋", "hug": "🤗", "fire": "🔥", "sparkle": "✨",
-            "magic": "🪄", "crown": "👑", "gem": "💎",
+            "magic": "🪄", "crown": "👑", "gem": "💎", "medal": "🏅",
+            "trophy": "🏆", "flag": "🚩", "bomb": "💣", "lightning": "⚡",
+            "poop": "💩", "skull": "💀", "eye": "👁️", "brain": "🧠",
+
+            # Holidays
+            "pumpkin": "🎃", "snowman": "☃️", "santa": "🎅", "tree": "🎄",
+            "present": "🎁", "firework": "🎆", "egg": "🥚", "bunny": "🐰",
 
             # Synonyms (same emoji, different words)
             "kitty": "🐱", "kitten": "🐱", "meow": "🐱",
             "puppy": "🐶", "doggy": "🐶", "woof": "🐶",
-            "bunny": "🐰", "horsie": "🐴",
-            "dino": "🦕", "rex": "🦖", "t-rex": "🦖",
+            "horsie": "🐴", "lamb": "🐑",
+            "dino": "🦕", "tyrannosaurus": "🦖",
             "birdie": "🐦", "fishy": "🐟",
             "sunny": "☀️", "moony": "🌙", "starry": "⭐",
             "rainy": "🌧️", "snowy": "❄️", "cloudy": "☁️",

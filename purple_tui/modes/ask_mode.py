@@ -64,7 +64,9 @@ class HistoryLine(Static):
         if self.line_type == "ask":
             return f"[bold #c4a0e8]Ask:[/] {self.text}"
         else:
-            return f"[#a888d0]  →[/] {self.text}"
+            # Add arrow to each line for multi-line results
+            lines = self.text.split('\n')
+            return '\n'.join(f"[#a888d0]  →[/] {line}" for line in lines)
 
 
 class ColorResultLine(Widget):
@@ -573,30 +575,37 @@ class AskMode(Vertical):
         result = self.evaluator.evaluate(input_text)
         if result:
             # Check if this is a color result (special format)
-            # Mixed results look like "COLOR_RESULT:hex:name:comps emoji_stuff"
-            color_part, other_part = None, None
-            if result.startswith("COLOR_RESULT:"):
-                # Split off any non-color content after the COLOR_RESULT
-                parts = result.split(" ", 1)
-                color_part = parts[0]
-                other_part = parts[1] if len(parts) > 1 else None
+            # Mixed results look like "text COLOR_RESULT:hex:name:comps emoji_stuff"
+            color_part, before_part, after_part = None, None, None
+            if "COLOR_RESULT:" in result:
+                # Find and extract the COLOR_RESULT token
+                parts = result.split()
+                for i, p in enumerate(parts):
+                    if p.startswith("COLOR_RESULT:"):
+                        color_part = p
+                        before_part = " ".join(parts[:i]) if i > 0 else None
+                        after_part = " ".join(parts[i+1:]) if i < len(parts) - 1 else None
+                        break
 
             if color_part:
                 color_data = self.evaluator._parse_color_result(color_part)
                 if color_data:
                     hex_color, color_name, components = color_data
+                    other_part = " ".join(filter(None, [before_part, after_part]))
                     # Single color: inline box; multiple: swatch
                     if len(components) <= 1:
                         color_box = f"[on {hex_color}]  [/]"
-                        display = f"{color_box} {other_part}" if other_part else color_box
+                        parts = [before_part, color_box, after_part]
+                        display = " ".join(filter(None, parts))
                         scroll.mount(HistoryLine(display, line_type="answer"))
                     else:
                         # For multi-color with emoji, show swatch then emoji on same line after
                         if other_part:
-                            # Show inline: component boxes + result + emoji
+                            # Show inline: before + component boxes + result + after
                             comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
                             result_box = f"[on {hex_color}]  [/]"
-                            display = f"{comp_boxes} → {result_box} {other_part}"
+                            parts = [before_part, comp_boxes, "→", result_box, after_part]
+                            display = " ".join(filter(None, parts))
                             scroll.mount(HistoryLine(display, line_type="answer"))
                         else:
                             scroll.mount(ColorResultLine(hex_color, color_name, components))
@@ -753,69 +762,96 @@ class SimpleEvaluator:
         return text
 
     def _eval_plus_expr(self, text: str) -> str | None:
-        """Evaluate + expression. Numbers attach to next emoji. Colors mix. Emojis concat."""
+        """Evaluate + expression. Preserves order. Numbers attach to next emoji. Colors mix (at first color's position)."""
         parts = re.split(r'\s*(?:\+|(?<!\w)plus(?!\w))\s*', text.lower())
-        colors, emojis, pending = [], [], 0
+        colors = []  # Collect for mixing
+        items = []   # (type, value) in original order: value is (emoji, count, word) for emoji
+        pending = 0
 
         for part in parts:
             part = part.strip()
             if not part:
                 continue
 
-            # Color term (collect for mixing)
+            # Color term (collect for mixing, placeholder at first position)
             if hexes := self._parse_color(part):
                 colors.extend(hexes)
+                if not any(t == 'color' for t, _ in items):
+                    items.append(('color', None))
                 continue
 
-            # Emoji term (number attaches here)
+            # Emoji term (pending attaches here)
             if emoji_data := self._parse_emoji(part):
-                emoji, count = emoji_data
-                emojis.append((emoji, count + pending))
+                emoji, count, word = emoji_data
+                items.append(('emoji', (emoji, count + pending, word)))
                 pending = 0
                 continue
 
-            # Bare number (accumulates for next emoji)
-            if re.match(r'^\d+$', part):
-                pending += int(part)
+            # Bare number or math expression (e.g., "3 * 4")
+            normalized = self._normalize_math(part)
+            if (math_result := self._eval_math(normalized)) is not None:
+                pending += int(math_result) if float(math_result).is_integer() else math_result
                 continue
 
-            # Already-resolved emoji string (from parens)
+            # Emoji string (from parens)
             if self._is_emoji_str(part):
-                # Count emoji chars; if all same, add pending to count; otherwise repeat whole string
                 chars = [c for c in part if ord(c) > 127]
                 if chars and all(c == chars[0] for c in chars):
-                    # All same emoji (e.g., 🐱🐱🐱), add pending to count
-                    emojis.append((chars[0], len(chars) + pending))
+                    items.append(('emoji', (chars[0], len(chars) + pending, None)))
                 else:
-                    # Mixed emojis (e.g., 🐱🐶), treat as single unit
-                    emojis.append((part, 1 + pending))
+                    items.append(('emoji', (part, 1 + pending, None)))
                 pending = 0
                 continue
 
-            # Unknown: not a valid + expression
-            return None
+            # Unknown: try emoji substitution, pass through
+            items.append(('text', self._substitute_emojis(part)))
 
-        # Leftover pending attaches to last emoji
-        if pending and emojis:
-            e, c = emojis[-1]
-            emojis[-1] = (e, c + pending)
-            pending = 0
+        # Attach remaining pending to last emoji
+        if pending:
+            for i in range(len(items) - 1, -1, -1):
+                if items[i][0] == 'emoji':
+                    e, c, w = items[i][1]
+                    items[i] = ('emoji', (e, c + pending, w))
+                    pending = 0
+                    break
 
-        # Build result parts
+        # Collect emoji info for label formatting
+        emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
+        # If single emoji type with count > 1, show label
+        show_label = (len(emoji_items) == 1 and emoji_items[0][2] and emoji_items[0][1] > 1
+                      and not colors and not any(t == 'text' for t, _ in items))
+
+        # Build result in order, merging adjacent emojis
         result_parts = []
-
-        if colors:
-            mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
-            name = get_color_name_approximation(mixed)
-            result_parts.append(f"COLOR_RESULT:{mixed}:{name}:{','.join(colors)}")
-
-        if emojis:
-            result_parts.append(''.join(e * c for e, c in emojis))
+        for item_type, value in items:
+            if item_type == 'color' and colors:
+                mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+                name = get_color_name_approximation(mixed)
+                result_parts.append(f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(colors)}")
+            elif item_type == 'emoji':
+                e, c, w = value
+                emoji_str = e * c
+                # Merge with previous if also emoji
+                if result_parts and self._is_emoji_str(result_parts[-1]):
+                    result_parts[-1] += emoji_str
+                else:
+                    result_parts.append(emoji_str)
+            elif item_type == 'text':
+                result_parts.append(value)
 
         if pending:
             result_parts.append(self._format_number_with_dots(pending))
 
-        return ' '.join(result_parts) if result_parts else None
+        # Only return if we have colors or emojis (not just text/numbers which pure math can handle)
+        if colors or any(t == 'emoji' for t, _ in items):
+            result = ' '.join(result_parts) if result_parts else None
+            # Add label line for single emoji type with count
+            if show_label and result:
+                e, c, w = emoji_items[0]
+                word = w + 's' if c != 1 and not w.endswith('s') else w
+                result = f"{c} {word}\n{result}"
+            return result
+        return None
 
     def _normalize_mult(self, text: str) -> str:
         """Normalize multiplication operators (x, times) to *."""
@@ -823,10 +859,16 @@ class SimpleEvaluator:
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
+    def _format_emoji_label(self, emoji: str, count: int, word: str) -> str:
+        """Format emoji with label: 'N words\\nemojis'."""
+        label = word + 's' if count != 1 and not word.endswith('s') else word
+        return f"{count} {label}\n{emoji * count}"
+
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""
         t = self._normalize_mult(text.strip())
         t_lower = t.lower()
+        has_operator = '*' in t  # After normalization, all mult operators become *
 
         # "emoji_string * N" (for paren results like "🐱🐶 * 2")
         if m := re.match(r'^(.+?)\s*\*\s*(\d+)$', text.strip()):
@@ -840,35 +882,32 @@ class SimpleEvaluator:
             if self._is_emoji_str(s) and count <= 100:
                 return s * count
 
-        # "N * M word" (e.g., "5 * 2 cats" after normalization)
-        if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+(\w+)$', t_lower):
-            n1, n2, word = int(m.group(1)), int(m.group(2)), m.group(3)
-            count = n1 * n2
-            if (item := self._lookup(word)) and count <= 100:
-                return item * count
+        # Try _parse_emoji for word-based patterns
+        if emoji_data := self._parse_emoji(t_lower):
+            e, c, w = emoji_data
+            if c <= 100:
+                # Show label if there's explicit operator (*, x, times)
+                if has_operator and w and c > 1:
+                    return self._format_emoji_label(e, c, w)
+                return e * c
 
-        # "N * word"
+        # "N * word" for colors (no label for colors)
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
-            if (item := self._lookup(word)) and count <= 100:
-                return item * count
+            if (h := self._get_color(word)) and count <= 100:
+                return f"[on {h}]  [/]" * count
 
-        # "word * N"
+        # "word * N" for colors
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', t_lower):
             word, count = m.group(1), int(m.group(2))
-            if (item := self._lookup(word)) and count <= 100:
-                return item * count
+            if (h := self._get_color(word)) and count <= 100:
+                return f"[on {h}]  [/]" * count
 
-        # "N word" (e.g., "3 cats") or "Nword" (e.g., "3cats")
+        # "N word" for colors (e.g., "3 red")
         if m := re.match(r'^(\d+)\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
-            if (item := self._lookup(word)) and count <= 100:
-                return item * count
-
-        # Bare plural (e.g., "cats" -> 2 cats)
-        if t_lower.endswith('s') and len(t_lower) > 2:
-            if emoji := self.content.get_emoji(t_lower[:-1]):
-                return emoji * 2
+            if (h := self._get_color(word)) and count <= 100:
+                return f"[on {h}]  [/]" * count
 
         return None
 
@@ -895,31 +934,42 @@ class SimpleEvaluator:
 
         return None
 
-    def _parse_emoji(self, term: str) -> tuple[str, int] | None:
-        """Parse emoji term -> (emoji_char, count)."""
+    def _parse_emoji(self, term: str) -> tuple[str, int, str] | None:
+        """Parse emoji term -> (emoji_char, count, word)."""
         term = self._normalize_mult(term.strip()).lower()
+
+        # "N * M word" (e.g., "3 * 4 cats")
+        if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+(\w+)$', term):
+            n1, n2, word = int(m.group(1)), int(m.group(2)), m.group(3)
+            count = n1 * n2
+            if (e := self._get_emoji(word)) and count <= 100:
+                return (e, count, word)
 
         # "N * word" or "word * N"
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', term):
-            if (e := self._get_emoji(m.group(2))) and int(m.group(1)) <= 100:
-                return (e, int(m.group(1)))
+            word = m.group(2)
+            if (e := self._get_emoji(word)) and int(m.group(1)) <= 100:
+                return (e, int(m.group(1)), word)
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
-            if (e := self._get_emoji(m.group(1))) and int(m.group(2)) <= 100:
-                return (e, int(m.group(2)))
+            word = m.group(1)
+            if (e := self._get_emoji(word)) and int(m.group(2)) <= 100:
+                return (e, int(m.group(2)), word)
 
         # "N word" or "Nword"
         if m := re.match(r'^(\d+)\s*(\w+)$', term):
-            if (e := self._get_emoji(m.group(2))) and int(m.group(1)) <= 100:
-                return (e, int(m.group(1)))
+            word = m.group(2)
+            if (e := self._get_emoji(word)) and int(m.group(1)) <= 100:
+                return (e, int(m.group(1)), word)
 
         # Bare plural
         if term.endswith('s') and len(term) > 2:
-            if e := self.content.get_emoji(term[:-1]):
-                return (e, 2)
+            word = term[:-1]
+            if e := self.content.get_emoji(word):
+                return (e, 2, word)
 
         # Single word
         if e := self._get_emoji(term):
-            return (e, 1)
+            return (e, 1, term.rstrip('s') if term.endswith('s') else term)
 
         return None
 
@@ -1031,5 +1081,6 @@ class SimpleEvaluator:
             return None
         parts = result.split(":", 3)
         if len(parts) >= 3:
-            return (parts[1], parts[2], parts[3].split(",") if len(parts) > 3 and parts[3] else [])
+            name = parts[2].replace('_', ' ')  # Convert back from underscore
+            return (parts[1], name, parts[3].split(",") if len(parts) > 3 and parts[3] else [])
         return None

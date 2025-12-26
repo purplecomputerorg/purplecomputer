@@ -122,16 +122,16 @@ if HAS_PYTEST:
         """Test emoji multiplication and addition"""
 
         def test_emoji_times_number(self, evaluator):
-            assert evaluator.evaluate("cat * 3") == "🐱🐱🐱"
+            assert evaluator.evaluate("cat * 3") == "3 cats\n🐱🐱🐱"
 
         def test_number_times_emoji(self, evaluator):
-            assert evaluator.evaluate("3 * cat") == "🐱🐱🐱"
+            assert evaluator.evaluate("3 * cat") == "3 cats\n🐱🐱🐱"
 
         def test_emoji_x_number(self, evaluator):
-            assert evaluator.evaluate("cat x 2") == "🐱🐱"
+            assert evaluator.evaluate("cat x 2") == "2 cats\n🐱🐱"
 
         def test_emoji_no_spaces(self, evaluator):
-            assert evaluator.evaluate("cat*3") == "🐱🐱🐱"
+            assert evaluator.evaluate("cat*3") == "3 cats\n🐱🐱🐱"
 
         def test_emoji_addition(self, evaluator):
             assert evaluator.evaluate("cat + dog") == "🐱🐶"
@@ -143,53 +143,53 @@ if HAS_PYTEST:
             assert evaluator.evaluate("apple * 3 + banana * 2") == "🍎🍎🍎🍌🍌"
 
         def test_emoji_times_word(self, evaluator):
-            assert evaluator.evaluate("cat times 3") == "🐱🐱🐱"
+            assert evaluator.evaluate("cat times 3") == "3 cats\n🐱🐱🐱"
 
         def test_number_times_word_emoji(self, evaluator):
-            assert evaluator.evaluate("3 times cat") == "🐱🐱🐱"
+            assert evaluator.evaluate("3 times cat") == "3 cats\n🐱🐱🐱"
 
         def test_emoji_plus_word(self, evaluator):
             assert evaluator.evaluate("cat plus dog") == "🐱🐶"
 
         def test_number_attaches_to_next_emoji(self, evaluator):
-            # 2 attaches to 3 cats = 5 cats
-            assert evaluator.evaluate("2 + 3 cats") == "🐱🐱🐱🐱🐱"
+            # 2 attaches to 3 cats = 5 cats (with label)
+            assert evaluator.evaluate("2 + 3 cats") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_number_attaches_to_emoji_after(self, evaluator):
-            # 3 + cat = 4 cats (3 attaches to the 1 cat)
-            assert evaluator.evaluate("3 + cat") == "🐱🐱🐱🐱"
+            # 3 + cat = 4 cats (3 attaches to the 1 cat, with label)
+            assert evaluator.evaluate("3 + cat") == "4 cats\n🐱🐱🐱🐱"
 
         def test_multiple_numbers_attach_to_next_emoji(self, evaluator):
-            # 3 + 4 + 2 bananas = 9 bananas
-            assert evaluator.evaluate("3 + 4 + 2 bananas") == "🍌🍌🍌🍌🍌🍌🍌🍌🍌"
+            # 3 + 4 + 2 bananas = 9 bananas (with label)
+            assert evaluator.evaluate("3 + 4 + 2 bananas") == "9 bananas\n🍌🍌🍌🍌🍌🍌🍌🍌🍌"
 
         def test_number_attaches_per_emoji_group(self, evaluator):
             # 5 + 2 cats + 3 dogs = 7 cats + 3 dogs
             assert evaluator.evaluate("5 + 2 cats + 3 dogs") == "🐱🐱🐱🐱🐱🐱🐱🐶🐶🐶"
 
         def test_trailing_number_attaches_to_last(self, evaluator):
-            # cat*3 + 2 = 5 cats (2 attaches to the 3 cats)
-            assert evaluator.evaluate("cat*3 + 2") == "🐱🐱🐱🐱🐱"
+            # cat*3 + 2 = 5 cats (2 attaches to the 3 cats, with label)
+            assert evaluator.evaluate("cat*3 + 2") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_number_between_emojis(self, evaluator):
             # 2 cats + 5 + 3 dogs = 2 cats + 8 dogs (5 attaches to dogs)
             assert evaluator.evaluate("2 cats + 5 + 3 dogs") == "🐱🐱🐶🐶🐶🐶🐶🐶🐶🐶"
 
         def test_n_times_m_word(self, evaluator):
-            # 5 x 2 cats = 10 cats
-            assert evaluator.evaluate("5 x 2 cats") == "🐱" * 10
+            # 5 x 2 cats = 10 cats (with label)
+            assert evaluator.evaluate("5 x 2 cats") == "10 cats\n" + "🐱" * 10
 
         def test_n_times_m_word_singular(self, evaluator):
-            # 5 x 2 cat = 10 cats
-            assert evaluator.evaluate("5 x 2 cat") == "🐱" * 10
+            # 5 x 2 cat = 10 cats (with label)
+            assert evaluator.evaluate("5 x 2 cat") == "10 cats\n" + "🐱" * 10
 
         def test_n_star_m_word(self, evaluator):
-            # 3 * 4 dogs = 12 dogs
-            assert evaluator.evaluate("3 * 4 dogs") == "🐶" * 12
+            # 3 * 4 dogs = 12 dogs (with label)
+            assert evaluator.evaluate("3 * 4 dogs") == "12 dogs\n" + "🐶" * 12
 
         def test_n_times_word_m(self, evaluator):
-            # 2 times 5 cats = 10 cats (times used as word operator)
-            assert evaluator.evaluate("2 times 5 cats") == "🐱" * 10
+            # 2 times 5 cats = 10 cats (with label)
+            assert evaluator.evaluate("2 times 5 cats") == "10 cats\n" + "🐱" * 10
 
 
     class TestEmojiDescription:
@@ -258,7 +258,7 @@ if HAS_PYTEST:
             assert result.startswith("10")
 
         def test_parens_with_emoji_multiply(self, evaluator):
-            assert evaluator.evaluate("(2 + 3) * cat") == "🐱🐱🐱🐱🐱"
+            assert evaluator.evaluate("(2 + 3) * cat") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_emoji_in_parens_multiply(self, evaluator):
             assert evaluator.evaluate("(cat + dog) * 2") == "🐱🐶🐱🐶"
@@ -267,18 +267,18 @@ if HAS_PYTEST:
             assert evaluator.evaluate("2 * (cat + dog)") == "🐱🐶🐱🐶"
 
         def test_number_plus_emoji_parens(self, evaluator):
-            # 5 attaches to (5 cats) = 10 cats
-            assert evaluator.evaluate("5 + (5 * cat)") == "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱"
+            # 5 attaches to (5 cats) = 10 cats (with label)
+            assert evaluator.evaluate("5 + (5 * cat)") == "10 cats\n🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱"
 
         def test_emoji_parens_plus_number(self, evaluator):
-            # 2 attaches to (3 cats) = 5 cats
-            assert evaluator.evaluate("(cat * 3) + 2") == "🐱🐱🐱🐱🐱"
+            # 2 attaches to (3 cats) = 5 cats (with label)
+            assert evaluator.evaluate("(cat * 3) + 2") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_complex_emoji_parens(self, evaluator):
             assert evaluator.evaluate("(2 * cat) + (3 * dog)") == "🐱🐱🐶🐶🐶"
 
         def test_parens_with_word_operators(self, evaluator):
-            assert evaluator.evaluate("(2 plus 3) times cat") == "🐱🐱🐱🐱🐱"
+            assert evaluator.evaluate("(2 plus 3) times cat") == "5 cats\n🐱🐱🐱🐱🐱"
 
         def test_deeply_nested_math(self, evaluator):
             result = evaluator.evaluate("((1 + 2) + (3 + 4))")
@@ -610,6 +610,110 @@ class TestMixedExpressions:
     def test_pure_numbers_still_math(self, evaluator):
         result = evaluator.evaluate("3 + 4 + 5")
         assert result.startswith("12")
+
+    def test_unknown_plus_color_order_preserved(self, evaluator):
+        # Unknown text + color: text first, then color
+        result = evaluator.evaluate("gibberish + blue")
+        assert result.startswith("gibberish")
+        assert "COLOR_RESULT:" in result
+
+    def test_color_plus_unknown_order_preserved(self, evaluator):
+        # Color + unknown text: color first, then text
+        result = evaluator.evaluate("blue + gibberish")
+        assert result.startswith("COLOR_RESULT:")
+        assert "gibberish" in result
+
+    def test_emoji_color_emoji_order(self, evaluator):
+        # cat + red + dog: emojis separated by color, colors mix
+        result = evaluator.evaluate("cat + red + dog + blue")
+        parts = result.split()
+        # First part should be cat emoji
+        assert parts[0] == "🐱"
+        # Should have color result
+        assert "COLOR_RESULT:" in result
+        # Last part should be dog emoji
+        assert parts[-1] == "🐶"
+
+
+class TestOperatorPrecedence:
+    """Test that operator precedence is preserved with emojis."""
+
+    def test_mult_before_add_pure_math(self, evaluator):
+        # 3 * 4 + 2 = 14 (not 18)
+        result = evaluator.evaluate("3 * 4 + 2")
+        assert result.startswith("14")
+
+    def test_mult_before_add_with_emoji(self, evaluator):
+        # 3 * 4 + 2 dogs = 14 dogs
+        result = evaluator.evaluate("3 * 4 + 2 dogs")
+        assert result.count("🐶") == 14
+
+    def test_add_then_mult_with_emoji(self, evaluator):
+        # 2 + 3 * 4 cats = 2 + 12 cats = 14 cats
+        result = evaluator.evaluate("2 + 3 * 4 cats")
+        assert result.count("🐱") == 14
+
+    def test_complex_precedence_with_emoji(self, evaluator):
+        # 1 + 2 * 3 + 4 dogs = 1 + 6 + 4 = 11 dogs
+        result = evaluator.evaluate("1 + 2 * 3 + 4 dogs")
+        assert result.count("🐶") == 11
+
+    def test_parens_override_precedence_with_emoji(self, evaluator):
+        # (2 + 3) * 4 cats = 20 cats
+        result = evaluator.evaluate("(2 + 3) * 4 cats")
+        assert result.count("🐱") == 20
+
+
+class TestComputedLabels:
+    """Test that computed expressions show labels, simple ones don't."""
+
+    def test_label_on_computed_plus_expr(self, evaluator):
+        # 3 + 2 cats = 5 cats with label
+        result = evaluator.evaluate("3 + 2 cats")
+        assert result == "5 cats\n🐱🐱🐱🐱🐱"
+
+    def test_label_on_complex_math_expr(self, evaluator):
+        # 3 * 4 + 2 dogs = 14 dogs with label
+        result = evaluator.evaluate("3 * 4 + 2 dogs")
+        assert result.startswith("14 dogs\n")
+        assert result.count("🐶") == 14
+
+    def test_no_label_simple_mult(self, evaluator):
+        # 3 cats = just emojis (no computation to explain)
+        result = evaluator.evaluate("3 cats")
+        assert result == "🐱🐱🐱"
+
+    def test_no_label_bare_plural(self, evaluator):
+        # cats = just emojis
+        result = evaluator.evaluate("cats")
+        assert result == "🐱🐱"
+
+    def test_no_label_single_emoji(self, evaluator):
+        # cat = just emoji
+        result = evaluator.evaluate("cat")
+        assert result == "🐱"
+
+    def test_no_label_mixed_emojis(self, evaluator):
+        # cat + dog = just emojis (mixed types, no single label)
+        result = evaluator.evaluate("cat + dog")
+        assert result == "🐱🐶"
+
+    def test_no_label_multi_emoji_with_counts(self, evaluator):
+        # 2 cats + 3 dogs = just emojis (mixed types)
+        result = evaluator.evaluate("2 cats + 3 dogs")
+        assert result == "🐱🐱🐶🐶🐶"
+
+    def test_n_times_m_word_in_plus_expr(self, evaluator):
+        # 2 + 3 * 4 cats = 14 cats (3*4=12, +2=14)
+        result = evaluator.evaluate("2 + 3 * 4 cats")
+        assert result.startswith("14 cats\n")
+        assert result.count("🐱") == 14
+
+    def test_label_on_large_multiplication(self, evaluator):
+        # 12 * 3 cats = 36 cats (with label)
+        result = evaluator.evaluate("12 * 3 cats")
+        assert result.startswith("36 cats\n")
+        assert result.count("🐱") == 36
 
 
 class TestColorMixingComponents:

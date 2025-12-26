@@ -1045,6 +1045,25 @@ class TestColorMixingComponents:
         assert self._eval_color_mixing("3 yellow + red", colors) == 4
 
 
+class TestThemeConstants:
+    """Test theme color constants match the app's registered themes."""
+
+    def test_surface_constants_match_app_theme(self):
+        """Surface color constants should match the app's theme values."""
+        from purple_tui.modes.ask_mode import ColorResultLine
+
+        # These should match the values in purple_tui.py register_theme calls
+        assert ColorResultLine.SURFACE_DARK == "#2a1845"
+        assert ColorResultLine.SURFACE_LIGHT == "#e8daf0"
+
+    def test_arrow_constants_exist(self):
+        """Arrow color constants should be defined for both themes."""
+        from purple_tui.modes.ask_mode import HistoryLine
+
+        assert HistoryLine.ARROW_DARK == "#a888d0"
+        assert HistoryLine.ARROW_LIGHT == "#7a5a9e"
+
+
 # =============================================================================
 # Standalone runner
 # =============================================================================

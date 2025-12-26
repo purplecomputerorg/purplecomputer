@@ -53,6 +53,10 @@ class KeyboardOnlyScroll(ScrollableContainer):
 class HistoryLine(Static):
     """A line in the REPL history (either Ask or Answer)"""
 
+    # Arrow colors for dark and light themes
+    ARROW_DARK = "#a888d0"
+    ARROW_LIGHT = "#7a5a9e"
+
     def __init__(self, text: str, line_type: str = "ask", **kwargs):
         super().__init__(**kwargs)
         self.text = text
@@ -60,13 +64,22 @@ class HistoryLine(Static):
         if line_type == "ask":
             self.add_class("ask")
 
+    def _get_arrow_color(self) -> str:
+        """Get arrow color based on current theme."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return self.ARROW_DARK if is_dark else self.ARROW_LIGHT
+        except Exception:
+            return self.ARROW_DARK
+
     def render(self) -> str:
         if self.line_type == "ask":
             return f"[bold #c4a0e8]Ask:[/] {self.text}"
         else:
             # Add arrow to each line for multi-line results
+            arrow_color = self._get_arrow_color()
             lines = self.text.split('\n')
-            return '\n'.join(f"[#a888d0]  →[/] {line}" for line in lines)
+            return '\n'.join(f"[{arrow_color}]  →[/] {line}" for line in lines)
 
 
 class ColorResultLine(Widget):
@@ -93,11 +106,30 @@ class ColorResultLine(Widget):
     SWATCH_HEIGHT = 3  # Height of the result swatch
     COMPONENT_WIDTH = 2  # Width of each component color box
 
+    # Surface colors for dark and light themes
+    SURFACE_DARK = "#2a1845"
+    SURFACE_LIGHT = "#e8daf0"
+
     def __init__(self, hex_color: str, color_name: str, component_colors: list[str] = None, **kwargs):
         super().__init__(**kwargs)
         self._hex_color = hex_color
         self._color_name = color_name
         self._component_colors = component_colors or []
+
+    def _get_surface_color(self) -> str:
+        """Get surface color based on current theme."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return self.SURFACE_DARK if is_dark else self.SURFACE_LIGHT
+        except Exception:
+            return self.SURFACE_DARK
+
+    def _is_dark_theme(self) -> bool:
+        """Check if current theme is dark."""
+        try:
+            return "dark" in self.app.theme
+        except Exception:
+            return True
 
     def render_line(self, y: int) -> Strip:
         """Render each line of the color result (mixed colors only, 3x6 swatch without name)"""
@@ -105,8 +137,14 @@ class ColorResultLine(Widget):
         if width <= 0:
             width = 40
 
+        # Get theme-aware colors
+        surface = self._get_surface_color()
+        surface_style = Style(bgcolor=surface)
+        # Arrow color: light purple on dark, darker purple on light for visibility
+        arrow_color = "#a888d0" if self._is_dark_theme() else "#7a5a9e"
+
         prefix = "  →  "
-        prefix_style = Style(color="#a888d0")
+        prefix_style = Style(color=arrow_color, bgcolor=surface)
 
         # Line 0: Show component colors and arrow to result
         if y == 0:
@@ -119,10 +157,10 @@ class ColorResultLine(Widget):
                     comp_style = Style(bgcolor=comp_hex)
                     segments.append(Segment("  ", comp_style))  # 2-char wide box
                     if i < len(self._component_colors) - 1:
-                        segments.append(Segment(" ", Style()))  # space between
+                        segments.append(Segment(" ", surface_style))  # space between
 
                 # Arrow to result
-                segments.append(Segment(" → ", Style(color="#a888d0")))
+                segments.append(Segment(" → ", Style(color=arrow_color, bgcolor=surface)))
 
             # Start of result swatch (top row). No name label
             result_style = Style(bgcolor=self._hex_color)
@@ -132,14 +170,14 @@ class ColorResultLine(Widget):
 
         # Lines 1-2: Continue the result swatch
         elif y < self.SWATCH_HEIGHT:
-            segments = [Segment(prefix, Style())]  # Invisible prefix for alignment
+            segments = [Segment("     ", surface_style)]  # Spacing for alignment (no arrow)
 
             # Add spacing for component boxes if present
             if len(self._component_colors) > 1:
                 # Each component is 2 chars + 1 space between
                 comp_width = len(self._component_colors) * 2 + (len(self._component_colors) - 1)
-                segments.append(Segment(" " * comp_width, Style()))
-                segments.append(Segment("   ", Style()))  # " → " spacing
+                segments.append(Segment(" " * comp_width, surface_style))
+                segments.append(Segment("   ", surface_style))  # " → " spacing
 
             # Result swatch continuation
             result_style = Style(bgcolor=self._hex_color)
@@ -149,7 +187,7 @@ class ColorResultLine(Widget):
 
         # Line 3: Empty line for spacing
         else:
-            return Strip([Segment(" " * width, Style())])
+            return Strip([Segment(" " * width, surface_style)])
 
     def _get_contrast_color(self, hex_color: str) -> str:
         """Get a contrasting text color (black or white) for readability"""

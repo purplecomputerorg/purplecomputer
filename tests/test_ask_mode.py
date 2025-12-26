@@ -151,14 +151,45 @@ if HAS_PYTEST:
         def test_emoji_plus_word(self, evaluator):
             assert evaluator.evaluate("cat plus dog") == "🐱🐶"
 
-        def test_emoji_plus_number(self, evaluator):
-            assert evaluator.evaluate("cat*3 + 2") == "🐱🐱🐱2"
+        def test_number_attaches_to_next_emoji(self, evaluator):
+            # 2 attaches to 3 cats = 5 cats
+            assert evaluator.evaluate("2 + 3 cats") == "🐱🐱🐱🐱🐱"
 
-        def test_emoji_mixed_with_number(self, evaluator):
-            assert evaluator.evaluate("apple times 2 plus 5") == "🍎🍎5"
+        def test_number_attaches_to_emoji_after(self, evaluator):
+            # 3 + cat = 4 cats (3 attaches to the 1 cat)
+            assert evaluator.evaluate("3 + cat") == "🐱🐱🐱🐱"
 
-        def test_number_plus_emoji(self, evaluator):
-            assert evaluator.evaluate("3 + cat") == "3🐱"
+        def test_multiple_numbers_attach_to_next_emoji(self, evaluator):
+            # 3 + 4 + 2 bananas = 9 bananas
+            assert evaluator.evaluate("3 + 4 + 2 bananas") == "🍌🍌🍌🍌🍌🍌🍌🍌🍌"
+
+        def test_number_attaches_per_emoji_group(self, evaluator):
+            # 5 + 2 cats + 3 dogs = 7 cats + 3 dogs
+            assert evaluator.evaluate("5 + 2 cats + 3 dogs") == "🐱🐱🐱🐱🐱🐱🐱🐶🐶🐶"
+
+        def test_trailing_number_attaches_to_last(self, evaluator):
+            # cat*3 + 2 = 5 cats (2 attaches to the 3 cats)
+            assert evaluator.evaluate("cat*3 + 2") == "🐱🐱🐱🐱🐱"
+
+        def test_number_between_emojis(self, evaluator):
+            # 2 cats + 5 + 3 dogs = 2 cats + 8 dogs (5 attaches to dogs)
+            assert evaluator.evaluate("2 cats + 5 + 3 dogs") == "🐱🐱🐶🐶🐶🐶🐶🐶🐶🐶"
+
+        def test_n_times_m_word(self, evaluator):
+            # 5 x 2 cats = 10 cats
+            assert evaluator.evaluate("5 x 2 cats") == "🐱" * 10
+
+        def test_n_times_m_word_singular(self, evaluator):
+            # 5 x 2 cat = 10 cats
+            assert evaluator.evaluate("5 x 2 cat") == "🐱" * 10
+
+        def test_n_star_m_word(self, evaluator):
+            # 3 * 4 dogs = 12 dogs
+            assert evaluator.evaluate("3 * 4 dogs") == "🐶" * 12
+
+        def test_n_times_word_m(self, evaluator):
+            # 2 times 5 cats = 10 cats (times used as word operator)
+            assert evaluator.evaluate("2 times 5 cats") == "🐱" * 10
 
 
     class TestEmojiDescription:
@@ -236,10 +267,12 @@ if HAS_PYTEST:
             assert evaluator.evaluate("2 * (cat + dog)") == "🐱🐶🐱🐶"
 
         def test_number_plus_emoji_parens(self, evaluator):
-            assert evaluator.evaluate("5 + (5 * cat)") == "5🐱🐱🐱🐱🐱"
+            # 5 attaches to (5 cats) = 10 cats
+            assert evaluator.evaluate("5 + (5 * cat)") == "🐱🐱🐱🐱🐱🐱🐱🐱🐱🐱"
 
         def test_emoji_parens_plus_number(self, evaluator):
-            assert evaluator.evaluate("(cat * 3) + 2") == "🐱🐱🐱2"
+            # 2 attaches to (3 cats) = 5 cats
+            assert evaluator.evaluate("(cat * 3) + 2") == "🐱🐱🐱🐱🐱"
 
         def test_complex_emoji_parens(self, evaluator):
             assert evaluator.evaluate("(2 * cat) + (3 * dog)") == "🐱🐱🐶🐶🐶"
@@ -502,8 +535,73 @@ class TestHintRendering:
         assert "[#228B22]" in result and "🍇" in result
 
 
+class TestColorMixing:
+    """Test color mixing behavior."""
+
+    def test_two_colors_mix(self, evaluator):
+        result = evaluator.evaluate("red + blue")
+        assert result.startswith("COLOR_RESULT:")
+
+    def test_color_with_multiplier(self, evaluator):
+        result = evaluator.evaluate("red * 3 + yellow")
+        assert result.startswith("COLOR_RESULT:")
+        # Should have 4 components (3 red + 1 yellow)
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 4
+
+    def test_color_plus_emoji_mixed(self, evaluator):
+        # red + cat + blue = mixed purple + cat emoji
+        result = evaluator.evaluate("red + cat + blue")
+        assert "COLOR_RESULT:" in result
+        assert "🐱" in result
+
+    def test_color_with_number_multiplier(self, evaluator):
+        result = evaluator.evaluate("3 yellow + red")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 4  # 3 yellow + 1 red
+
+    def test_color_plural_with_number(self, evaluator):
+        # "3 yellows + red" should work like "3 yellow + red"
+        result = evaluator.evaluate("3 yellows + red")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 4
+
+    def test_color_times_variant(self, evaluator):
+        result = evaluator.evaluate("yellow times 3 + red")
+        assert result.startswith("COLOR_RESULT:")
+
+    def test_color_x_variant(self, evaluator):
+        result = evaluator.evaluate("yellow x 3 + red")
+        assert result.startswith("COLOR_RESULT:")
+
+
+class TestMixedExpressions:
+    """Test expressions mixing colors, emojis, and numbers."""
+
+    def test_color_and_emoji(self, evaluator):
+        # Should mix colors and show emoji
+        result = evaluator.evaluate("red + fox + blue")
+        assert "COLOR_RESULT:" in result
+        assert "🦊" in result
+
+    def test_number_color_emoji(self, evaluator):
+        # 2 + red + 3 cats + blue = mixed colors + 5 cats
+        result = evaluator.evaluate("2 + red + 3 cats + blue")
+        assert "COLOR_RESULT:" in result
+        assert "🐱🐱🐱🐱🐱" in result
+
+    def test_pure_numbers_still_math(self, evaluator):
+        result = evaluator.evaluate("3 + 4 + 5")
+        assert result.startswith("12")
+
+
 class TestColorMixingComponents:
-    """Test color mixing with multiplication."""
+    """Test color mixing component parsing (unit tests)."""
 
     def _parse_color_term(self, term, colors):
         term = term.strip()
@@ -519,6 +617,15 @@ class TestColorMixingComponents:
             return None
 
         match = re.match(r'^(\d+)\s*(?:[\*x]|times)\s*(\w+)$', term)
+        if match:
+            count, color_name = int(match.group(1)), match.group(2)
+            color_hex = colors.get(color_name)
+            if color_hex and 1 <= count <= 20:
+                return [color_hex] * count
+            return None
+
+        # "N word" (e.g., "3 yellow")
+        match = re.match(r'^(\d+)\s+(\w+)$', term)
         if match:
             count, color_name = int(match.group(1)), match.group(2)
             color_hex = colors.get(color_name)
@@ -564,9 +671,9 @@ class TestColorMixingComponents:
         colors = {"red": "#E52B50", "yellow": "#FFEB00", "blue": "#0047AB"}
         assert self._eval_color_mixing("3x red + 2x yellow + blue", colors) == 6
 
-    def test_invalid_color_returns_none(self):
-        colors = {"red": "#E52B50"}
-        assert self._eval_color_mixing("red * cat", colors) is None
+    def test_number_space_color(self):
+        colors = {"yellow": "#FFEB00", "red": "#E52B50"}
+        assert self._eval_color_mixing("3 yellow + red", colors) == 4
 
 
 # =============================================================================

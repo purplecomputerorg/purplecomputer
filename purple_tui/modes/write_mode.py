@@ -25,7 +25,7 @@ from textual.message import Message
 from textual import events
 
 from ..constants import DOUBLE_TAP_TIME
-from ..keyboard import SHIFT_MAP, DoubleTapDetector
+from ..keyboard import SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor
 from ..color_mixing import mix_colors_paint
 from ..scrolling import scroll_widget
 
@@ -153,14 +153,20 @@ class KidTextArea(TextArea):
             threshold=DOUBLE_TAP_TIME,
             allowed_keys=set(SHIFT_MAP.keys()),
         )
+        self._repeat_suppressor = KeyRepeatSuppressor()
         self.slot_mode_active = False  # Set by WriteMode when in save/load/clear mode
 
     def on_key(self, event: events.Key) -> None:
         """Filter keys for kid-safe editing"""
-        import time
-
         key = event.key
         char = event.character
+
+        # Suppress key repeats (held keys)
+        key_id = char if char else key
+        if self._repeat_suppressor.should_suppress(key_id):
+            event.stop()
+            event.prevent_default()
+            return
 
         # When in slot mode, capture 1-5, escape, f10 and send to WriteMode
         if self.slot_mode_active:

@@ -105,6 +105,78 @@ class DoubleTapDetector:
 
 
 # ============================================================================
+# Key Repeat Suppression
+# ============================================================================
+
+
+class KeyRepeatSuppressor:
+    """
+    Suppresses key repeat when a key is held down.
+
+    Pure logic class with no I/O. Timestamp is injected for deterministic testing.
+
+    Usage:
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        suppressor.should_suppress('a', timestamp=0.0)   # False (first press)
+        suppressor.should_suppress('a', timestamp=0.05)  # True (repeat, suppress)
+        suppressor.should_suppress('a', timestamp=0.15)  # True (still repeating)
+        suppressor.should_suppress('b', timestamp=0.20)  # False (different key)
+
+    Works with any key identifier (characters, key names like 'backspace', etc.)
+    """
+
+    DEFAULT_THRESHOLD = 0.1  # 100ms between same key = repeat
+
+    def __init__(self, threshold: float = DEFAULT_THRESHOLD):
+        self.threshold = threshold
+        self._last_key: str | None = None
+        self._last_time: float = 0.0
+        self._suppressing: bool = False
+
+    def should_suppress(
+        self,
+        key: str,
+        timestamp: float | None = None,
+    ) -> bool:
+        """
+        Check if this key event should be suppressed (is a repeat).
+
+        Args:
+            key: Key identifier (character or key name like 'backspace')
+            timestamp: Event time (uses time.time() if not provided)
+
+        Returns:
+            True if key should be suppressed (is a repeat), False otherwise
+        """
+        if timestamp is None:
+            timestamp = time.time()
+
+        # Different key: not a repeat
+        if key != self._last_key:
+            self._last_key = key
+            self._last_time = timestamp
+            self._suppressing = False
+            return False
+
+        # Same key within threshold: suppress
+        if (timestamp - self._last_time) < self.threshold:
+            self._last_time = timestamp  # Update time for continuous hold
+            self._suppressing = True
+            return True
+
+        # Same key but enough time passed: allow (user lifted and pressed again)
+        self._last_time = timestamp
+        self._suppressing = False
+        return False
+
+    def reset(self) -> None:
+        """Reset suppressor state."""
+        self._last_key = None
+        self._last_time = 0.0
+        self._suppressing = False
+
+
+# ============================================================================
 # Shift Strategies
 # ============================================================================
 

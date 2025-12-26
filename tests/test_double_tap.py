@@ -11,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.keyboard import DoubleTapDetector, SHIFT_MAP
+from purple_tui.keyboard import DoubleTapDetector, KeyRepeatSuppressor, SHIFT_MAP
 
 
 class TestDoubleTapDetector:
@@ -192,3 +192,62 @@ class TestDoubleTapEdgeCases:
 
         assert detector.check('a', timestamp=1000.0) is False
         assert detector.check('a', timestamp=1000.2) is True
+
+
+class TestKeyRepeatSuppressor:
+    """Tests for the KeyRepeatSuppressor class."""
+
+    def test_first_press_not_suppressed(self):
+        """First press of any key should not be suppressed."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+
+    def test_rapid_same_key_suppressed(self):
+        """Same key within threshold should be suppressed."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        assert suppressor.should_suppress('a', timestamp=0.05) is True
+        assert suppressor.should_suppress('a', timestamp=0.08) is True
+
+    def test_same_key_after_threshold_not_suppressed(self):
+        """Same key after threshold should not be suppressed (user lifted and pressed again)."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        assert suppressor.should_suppress('a', timestamp=0.15) is False
+
+    def test_different_key_not_suppressed(self):
+        """Different key should not be suppressed."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        assert suppressor.should_suppress('b', timestamp=0.05) is False
+
+    def test_backspace_suppressed(self):
+        """Special keys like backspace should also be suppressed."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('backspace', timestamp=0.0) is False
+        assert suppressor.should_suppress('backspace', timestamp=0.05) is True
+
+    def test_continuous_hold_stays_suppressed(self):
+        """Continuous key hold should stay suppressed."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        # Simulate continuous hold with events every 30ms
+        assert suppressor.should_suppress('a', timestamp=0.03) is True
+        assert suppressor.should_suppress('a', timestamp=0.06) is True
+        assert suppressor.should_suppress('a', timestamp=0.09) is True
+        assert suppressor.should_suppress('a', timestamp=0.12) is True
+
+    def test_reset_clears_state(self):
+        """Reset should clear the suppressor state."""
+        suppressor = KeyRepeatSuppressor(threshold=0.1)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        assert suppressor.should_suppress('a', timestamp=0.05) is True
+        suppressor.reset()
+        assert suppressor.should_suppress('a', timestamp=0.06) is False
+
+    def test_custom_threshold(self):
+        """Custom threshold should be respected."""
+        suppressor = KeyRepeatSuppressor(threshold=0.2)
+        assert suppressor.should_suppress('a', timestamp=0.0) is False
+        assert suppressor.should_suppress('a', timestamp=0.15) is True  # Within 0.2
+        assert suppressor.should_suppress('a', timestamp=0.5) is False  # Well beyond 0.2

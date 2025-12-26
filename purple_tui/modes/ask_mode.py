@@ -34,7 +34,7 @@ from ..constants import (
     TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
     ICON_VOLUME_ON, ICON_VOLUME_OFF,
 )
-from ..keyboard import SHIFT_MAP, DoubleTapDetector
+from ..keyboard import SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget
 
@@ -235,6 +235,7 @@ class InlineInput(Input):
             threshold=DOUBLE_TAP_TIME,
             allowed_keys=set(SHIFT_MAP.keys()),
         )
+        self._repeat_suppressor = KeyRepeatSuppressor()
 
     def action_scroll_up(self) -> None:
         """Scroll the history up"""
@@ -252,10 +253,15 @@ class InlineInput(Input):
 
     async def _on_key(self, event: events.Key) -> None:
         """Handle all special keys before Input processes them"""
-        import time
-
         key = event.key
         char = event.character
+
+        # Suppress key repeats (held keys)
+        key_id = char if char else key  # Use char for typing, key name for special keys
+        if self._repeat_suppressor.should_suppress(key_id):
+            event.stop()
+            event.prevent_default()
+            return
 
         # Up/Down arrows: scroll the history
         if key == "up":

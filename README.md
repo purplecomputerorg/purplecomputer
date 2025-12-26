@@ -232,6 +232,14 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 ---
 
+## Third-Party Credits
+
+Purple Computer includes code from the following open-source projects:
+
+- **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Paint-like color mixing using Kubelka-Munk theory, ported to Python for realistic pigment blending (yellow + blue = green)
+
+---
+
 ## License
 
 Purple Computer Source-Available License 1.0 — see [LICENSE](LICENSE)

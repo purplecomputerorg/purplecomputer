@@ -932,7 +932,7 @@ class SimpleEvaluator:
             # Unknown: try emoji substitution, pass through
             items.append(('text', self._substitute_emojis(part)))
 
-        # Attach remaining pending to last emoji
+        # Attach remaining pending to last emoji or color
         if pending:
             for i in range(len(items) - 1, -1, -1):
                 if items[i][0] == 'emoji':
@@ -940,6 +940,10 @@ class SimpleEvaluator:
                     items[i] = ('emoji', (e, c + pending, w))
                     pending = 0
                     break
+            # If still pending and have colors, attach to colors
+            if pending and colors:
+                colors.extend([colors[-1]] * int(pending))
+                pending = 0
 
         # Collect emoji info for label formatting
         emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
@@ -1048,6 +1052,12 @@ class SimpleEvaluator:
             if (h := self._get_color(word)) and count <= 100:
                 return f"[on {h}]  [/]" * count
 
+        # Bare plural for colors (e.g., "yellows" -> 2 yellow boxes)
+        if t_lower.endswith('s') and len(t_lower) > 2:
+            word = t_lower[:-1]
+            if h := self.content.get_color(word):
+                return f"[on {h}]  [/]" * 2
+
         return None
 
     def _parse_color(self, term: str) -> list[str] | None:
@@ -1067,7 +1077,13 @@ class SimpleEvaluator:
             if (h := self._get_color(m.group(2))) and 1 <= int(m.group(1)) <= 20:
                 return [h] * int(m.group(1))
 
-        # Just a color name (handles plurals via _get_color)
+        # Bare plural (e.g., "yellows" -> 2 yellow)
+        if term.endswith('s') and len(term) > 2:
+            word = term[:-1]
+            if h := self.content.get_color(word):
+                return [h] * 2
+
+        # Just a color name
         if h := self._get_color(term):
             return [h]
 

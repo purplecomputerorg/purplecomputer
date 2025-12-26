@@ -656,6 +656,40 @@ class TestColorMixing:
         components = parts[3].split(",")
         assert len(components) == 4
 
+    def test_bare_plural_yellows(self, evaluator):
+        # "yellows" alone should be 2 yellows (like "apples" is 2 apples)
+        result = evaluator.evaluate("yellows")
+        # Returns 2 inline color boxes
+        assert result.count("[on #") == 2
+
+    def test_bare_plural_greens(self, evaluator):
+        # "greens" alone should be 2 greens
+        result = evaluator.evaluate("greens")
+        # Returns 2 inline color boxes
+        assert result.count("[on #") == 2
+
+    def test_bare_plural_mixed(self, evaluator):
+        # "yellows + blue" should be 2 yellows + 1 blue = 3 components
+        result = evaluator.evaluate("yellows + blue")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 3
+
+    def test_color_plus_trailing_number(self, evaluator):
+        # "yellow + 3" should work like "3 + yellow" (4 yellows total)
+        result = evaluator.evaluate("yellow + 3")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 4
+
+    def test_color_plus_trailing_number_symmetry(self, evaluator):
+        # Both orders should produce same result
+        result1 = evaluator.evaluate("yellow + 3")
+        result2 = evaluator.evaluate("3 + yellow")
+        assert result1 == result2
+
     def test_color_times_variant(self, evaluator):
         result = evaluator.evaluate("yellow times 3 + red")
         assert result.startswith("COLOR_RESULT:")

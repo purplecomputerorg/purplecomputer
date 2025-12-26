@@ -1,136 +1,194 @@
 """
-Paint-like Color Mixing using RYB Color Model
+Paint-like Color Mixing using Spectral Reflectance
 
-This module implements subtractive color mixing similar to how paint mixes,
-using the RYB (Red-Yellow-Blue) color model that kids learn in art class.
+Based on spectral.js by Ronald van Wijnen (MIT License)
+https://github.com/rvanwijnen/spectral.js
 
-Key behaviors:
+Uses Kubelka-Munk theory for realistic pigment mixing where:
+- yellow + blue = green
 - red + blue = purple
 - red + yellow = orange
-- blue + yellow = green
-- red + red + blue = reddish purple (weighted mixing)
-- mixing complementary colors = brownish/muddy
 """
 
 from typing import Tuple
+import math
+
+SIZE = 38  # Number of spectral samples
+
+# Base spectral reflectance curves for primary pigments
+# From spectral.js, based on Scott Burns' LHTSS method
+BASE_SPECTRA = {
+    "W": [
+        1.0011607271876, 1.0011606515973, 1.0011603192275, 1.0011586727079, 1.0011525984455, 1.00113252529, 1.0010850066333, 1.0009968788945, 1.0008652515227,
+        1.0006962900094, 1.0005049611489, 1.0003080818799, 1.0001196660201, 0.99995276596841, 0.9998218368993, 0.99973860955759, 0.99970955163961, 0.99973193021063,
+        0.9997994363462, 0.99990033031667, 1.0000204065261, 1.0001447879366, 1.0002599790341, 1.0003557969709, 1.0004275378027, 1.0004762334489, 1.0005072096751,
+        1.0005251915637, 1.000535096069, 1.0005402209748, 1.0005427281678, 1.0005438956909, 1.0005444821215, 1.0005447695999, 1.0005448988776, 1.0005449625469,
+        1.0005449892706, 1.000544996993
+    ],
+    "C": [
+        0.97058500132296, 0.97059249814343, 0.97062534872989, 0.97078680611902, 0.97136867322825, 0.97316323062125, 0.97674022315877, 0.98158760549138, 0.98628026565295,
+        0.98994914768913, 0.99249270153842, 0.99414568040526, 0.99518397503321, 0.99575675011082, 0.99591281828671, 0.99560615783453, 0.99459760096185, 0.99221571549237,
+        0.98623645278325, 0.96794333726454, 0.89128500424494, 0.53620247786205, 0.15410811900188, 0.057457509322893, 0.031534987310701, 0.022263392008634, 0.018202284149244,
+        0.016299055973264, 0.015365623933461, 0.014911156873398, 0.014695433989824, 0.014596414671772, 0.014547015669966, 0.01452287718995, 0.014512034111897,
+        0.014506694093983, 0.014504450731448, 0.014503800946464
+    ],
+    "M": [
+        0.99067355731999, 0.99067152496198, 0.99066258235342, 0.9906181076448, 0.99045148087871, 0.9898710814002, 0.98828660875964, 0.9842906927975, 0.97393490562531,
+        0.94181783846015, 0.81739032619516, 0.43247280506573, 0.13845397825887, 0.053734721694003, 0.029217499667323, 0.021313651750859, 0.020134953018114, 0.024132309628066,
+        0.037223614522363, 0.07605065527066, 0.2053754719424, 0.54126890346044, 0.81584168508649, 0.91281770412398, 0.94633983016696, 0.95992769633199, 0.96626059523031,
+        0.96932597005842, 0.9708545367214, 0.97160506652813, 0.97196276975739, 0.97212727227451, 0.97220941774581, 0.97224957767842, 0.97226762199874, 0.97227650946215,
+        0.97228024330687, 0.97228132482656
+    ],
+    "Y": [
+        0.021052337178931, 0.021056462751741, 0.021074617869504, 0.021164905844875, 0.02150279572725, 0.022673879904156, 0.025823564969363, 0.033487938563985,
+        0.051906966374031, 0.10074901483347, 0.23912989970685, 0.53480431227275, 0.79780757864303, 0.91144989406738, 0.95379796300451, 0.97124161546543, 0.97930312380759,
+        0.98338011950758, 0.98546124656776, 0.98643504697661, 0.98673825067014, 0.98661788244503, 0.98627777675864, 0.98586059244406, 0.98547492767621, 0.98517693476556,
+        0.98497157401418, 0.98484630341571, 0.9847753518112, 0.98473806662527, 0.98471964831177, 0.98471102339194, 0.98470668330068, 0.98470455439309, 0.98470359630937,
+        0.98470312407755, 0.98470292561509, 0.9847028681228
+    ],
+    "R": [
+        0.031560573777721, 0.031552071833015, 0.031514821551366, 0.03133180449827, 0.030672985772553, 0.028648047698961, 0.024645040704571, 0.019296075366365,
+        0.014206661222056, 0.010294260887861, 0.0076191460521811, 0.005898041083542, 0.0048233247781713, 0.0042298748350633, 0.0040599171299341, 0.0043533695594676,
+        0.0053434425970201, 0.0076917201010463, 0.013596979573654, 0.031697544266112, 0.10786119635525, 0.4638126031687, 0.84705540527201, 0.94318540939392, 0.96886215069656,
+        0.9780306674736, 0.98204364385431, 0.98392362371871, 0.98484548415438, 0.9852942758146, 0.98550729521983, 0.98560507153984, 0.98565384993358, 0.98567768503388,
+        0.98568839180612, 0.98569366469003, 0.98569587984821, 0.98569652146376
+    ],
+    "G": [
+        0.0095560747554212, 0.0095581580120851, 0.0095673245444588, 0.0096129126297349, 0.0097837090401843, 0.010378622705871, 0.012002645237857, 0.016097772147392,
+        0.026706190223168, 0.059555544018588, 0.18603982653283, 0.57057982011616, 0.86146776840029, 0.94587908976766, 0.97046548647431, 0.97841363028445, 0.97958903141122,
+        0.97553353690863, 0.96228875539781, 0.92312157451312, 0.79343401894311, 0.45927013590243, 0.1855741036663, 0.088177495995537, 0.05436302287667, 0.040628844706072,
+        0.034221520431697, 0.031118579095697, 0.029570889833613, 0.028810873934893, 0.02844862713246, 0.028282030172473, 0.028198837649024, 0.028158165534204,
+        0.028139891021639, 0.028130890166581, 0.028127108680582, 0.02812601336121
+    ],
+    "B": [
+        0.97940475250201, 0.97940070684313, 0.97938290347026, 0.97929436494559, 0.97896301460857, 0.97781446669404, 0.97472432113384, 0.96719848234397, 0.94907965753058,
+        0.90085012894098, 0.76315044546224, 0.46592217164932, 0.20126328045101, 0.087752441341962, 0.045717679329168, 0.028470605052184, 0.020527176756985, 0.016530279231021,
+        0.014513510721286, 0.013600350863769, 0.013360425876957, 0.013548894314568, 0.013959435636699, 0.014443425575357, 0.014885444062141, 0.015225429699975,
+        0.015459284818021, 0.015601802648596, 0.015682487128194, 0.015724876436062, 0.015745810878412, 0.015755612335023, 0.015760544396491, 0.015762963751528,
+        0.015764052562911, 0.015764589232951, 0.015764814777265, 0.015764880114962
+    ],
+}
+
+# CIE Color Matching Functions weighted by D65 (from spectral.js)
+CIE_CMF_X = [
+    0.0000646919989576, 0.0002194098998132, 0.0011205743509343, 0.0037666134117111, 0.011880553603799, 0.0232864424191771, 0.0345594181969747, 0.0372237901162006,
+    0.0324183761091486, 0.021233205609381, 0.0104909907685421, 0.0032958375797931, 0.0005070351633801, 0.0009486742057141, 0.0062737180998318, 0.0168646241897775,
+    0.028689649025981, 0.0426748124691731, 0.0562547481311377, 0.0694703972677158, 0.0830531516998291, 0.0861260963002257, 0.0904661376847769, 0.0850038650591277,
+    0.0709066691074488, 0.0506288916373645, 0.035473961885264, 0.0214682102597065, 0.0125164567619117, 0.0068045816390165, 0.0034645657946526, 0.0014976097506959,
+    0.000769700480928, 0.0004073680581315, 0.0001690104031614, 0.0000952245150365, 0.0000490309872958, 0.0000199961492222
+]
+CIE_CMF_Y = [
+    0.000001844289444, 0.0000062053235865, 0.0000310096046799, 0.0001047483849269, 0.0003536405299538, 0.0009514714056444, 0.0022822631748318, 0.004207329043473,
+    0.0066887983719014, 0.0098883960193565, 0.0152494514496311, 0.0214183109449723, 0.0334229301575068, 0.0513100134918512, 0.070402083939949, 0.0878387072603517,
+    0.0942490536184085, 0.0979566702718931, 0.0941521856862608, 0.0867810237486753, 0.0788565338632013, 0.0635267026203555, 0.05374141675682, 0.042646064357412,
+    0.0316173492792708, 0.020885205921391, 0.0138601101360152, 0.0081026402038399, 0.004630102258803, 0.0024913800051319, 0.0012593033677378, 0.000541646522168,
+    0.0002779528920067, 0.0001471080673854, 0.0000610327472927, 0.0000343873229523, 0.0000177059860053, 0.000007220974913
+]
+CIE_CMF_Z = [
+    0.000305017147638, 0.0010368066663574, 0.0053131363323992, 0.0179543925899536, 0.0570775815345485, 0.113651618936287, 0.17335872618355, 0.196206575558657,
+    0.186082370706296, 0.139950475383207, 0.0891745294268649, 0.0478962113517075, 0.0281456253957952, 0.0161376622950514, 0.0077591019215214, 0.0042961483736618,
+    0.0020055092122156, 0.0008614711098802, 0.0003690387177652, 0.0001914287288574, 0.0001495555858975, 0.0000923109285104, 0.0000681349182337, 0.0000288263655696,
+    0.0000157671820553, 0.0000039406041027, 0.000001584012587, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+]
+
+# XYZ to sRGB matrix
+XYZ_TO_RGB = [
+    [3.2409699419045226, -1.537383177570094, -0.4986107602930034],
+    [-0.9692660305051868, 1.8760108454466942, 0.041556017530349834],
+    [0.05563007969699366, -0.20397695888897652, 1.0569715142428786]
+]
+
+
+def _srgb_to_linear(c: int) -> float:
+    """Convert sRGB (0-255) to linear RGB (0-1)."""
+    c = c / 255
+    if c <= 0.04045:
+        return c / 12.92
+    return ((c + 0.055) / 1.055) ** 2.4
+
+
+def _linear_to_srgb(c: float) -> int:
+    """Convert linear RGB (0-1) to sRGB (0-255)."""
+    c = max(0, min(1, c))
+    if c <= 0.0031308:
+        c = 12.92 * c
+    else:
+        c = 1.055 * (c ** (1/2.4)) - 0.055
+    return max(0, min(255, int(c * 255 + 0.5)))
+
+
+def _linear_rgb_to_spectrum(lrgb: Tuple[float, float, float]) -> list[float]:
+    """Convert linear RGB to spectral reflectance curve."""
+    r, g, b = lrgb
+
+    # Extract white component
+    w = min(r, g, b)
+    r, g, b = r - w, g - w, b - w
+
+    # Decompose into CMY and RGB components
+    c = min(g, b)
+    m = min(r, b)
+    y = min(r, g)
+    r = max(0, min(r - b, r - g))
+    g = max(0, min(g - b, g - r))
+    b = max(0, min(b - g, b - r))
+
+    # Build spectrum from weighted base spectra
+    spectrum = []
+    for i in range(SIZE):
+        val = (w * BASE_SPECTRA["W"][i] +
+               c * BASE_SPECTRA["C"][i] +
+               m * BASE_SPECTRA["M"][i] +
+               y * BASE_SPECTRA["Y"][i] +
+               r * BASE_SPECTRA["R"][i] +
+               g * BASE_SPECTRA["G"][i] +
+               b * BASE_SPECTRA["B"][i])
+        spectrum.append(max(1e-10, val))
+    return spectrum
+
+
+def _spectrum_to_xyz(spectrum: list[float]) -> Tuple[float, float, float]:
+    """Convert spectral reflectance to CIE XYZ."""
+    x = sum(s * cmf for s, cmf in zip(spectrum, CIE_CMF_X))
+    y = sum(s * cmf for s, cmf in zip(spectrum, CIE_CMF_Y))
+    z = sum(s * cmf for s, cmf in zip(spectrum, CIE_CMF_Z))
+    return x, y, z
+
+
+def _xyz_to_linear_rgb(xyz: Tuple[float, float, float]) -> Tuple[float, float, float]:
+    """Convert XYZ to linear RGB."""
+    x, y, z = xyz
+    r = XYZ_TO_RGB[0][0] * x + XYZ_TO_RGB[0][1] * y + XYZ_TO_RGB[0][2] * z
+    g = XYZ_TO_RGB[1][0] * x + XYZ_TO_RGB[1][1] * y + XYZ_TO_RGB[1][2] * z
+    b = XYZ_TO_RGB[2][0] * x + XYZ_TO_RGB[2][1] * y + XYZ_TO_RGB[2][2] * z
+    return r, g, b
+
+
+def _ks(r: float) -> float:
+    """Kubelka-Munk K/S coefficient from reflectance."""
+    r = max(1e-10, r)
+    return (1 - r) ** 2 / (2 * r)
+
+
+def _km(ks: float) -> float:
+    """Kubelka-Munk reflectance from K/S coefficient."""
+    return 1 + ks - math.sqrt(ks * ks + 2 * ks)
 
 
 def hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
-    """Convert hex color string to RGB tuple"""
+    """Convert hex color string to RGB tuple."""
     hex_color = hex_color.lstrip('#')
     return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
 def rgb_to_hex(r: int, g: int, b: int) -> str:
-    """Convert RGB tuple to hex color string"""
+    """Convert RGB tuple to hex color string."""
     return f"#{r:02X}{g:02X}{b:02X}"
-
-
-# RYB to RGB conversion using trilinear interpolation
-# Based on the Gosset and Chen paper approach
-# These are the RGB values at the corners of the RYB cube
-
-RYB_CUBE = {
-    # (r, y, b) -> (R, G, B)
-    (0, 0, 0): (255, 255, 255),  # white
-    (1, 0, 0): (255, 0, 0),       # red
-    (0, 1, 0): (255, 255, 0),     # yellow
-    (0, 0, 1): (0, 0, 255),       # blue
-    (1, 1, 0): (255, 128, 0),     # orange (red + yellow)
-    (1, 0, 1): (128, 0, 128),     # purple (red + blue)
-    (0, 1, 1): (0, 128, 0),       # green (yellow + blue)
-    (1, 1, 1): (64, 32, 16),      # dark brown (all mixed)
-}
-
-
-def _cubic_interpolate(t: float, a: float, b: float) -> float:
-    """Cubic interpolation for smoother color transitions"""
-    return a + t * (b - a)
-
-
-def ryb_to_rgb(r: float, y: float, b: float) -> Tuple[int, int, int]:
-    """
-    Convert RYB (0-1 range) to RGB (0-255 range) using trilinear interpolation.
-
-    This maps the RYB color cube to RGB colors that look like paint mixing.
-    """
-    # Clamp inputs
-    r = max(0, min(1, r))
-    y = max(0, min(1, y))
-    b = max(0, min(1, b))
-
-    # Trilinear interpolation through the RYB cube
-    # Interpolate along R axis first
-    x00 = tuple(_cubic_interpolate(r, RYB_CUBE[(0,0,0)][i], RYB_CUBE[(1,0,0)][i]) for i in range(3))
-    x01 = tuple(_cubic_interpolate(r, RYB_CUBE[(0,0,1)][i], RYB_CUBE[(1,0,1)][i]) for i in range(3))
-    x10 = tuple(_cubic_interpolate(r, RYB_CUBE[(0,1,0)][i], RYB_CUBE[(1,1,0)][i]) for i in range(3))
-    x11 = tuple(_cubic_interpolate(r, RYB_CUBE[(0,1,1)][i], RYB_CUBE[(1,1,1)][i]) for i in range(3))
-
-    # Interpolate along Y axis
-    y0 = tuple(_cubic_interpolate(y, x00[i], x10[i]) for i in range(3))
-    y1 = tuple(_cubic_interpolate(y, x01[i], x11[i]) for i in range(3))
-
-    # Interpolate along B axis
-    final = tuple(int(_cubic_interpolate(b, y0[i], y1[i])) for i in range(3))
-
-    return (
-        max(0, min(255, final[0])),
-        max(0, min(255, final[1])),
-        max(0, min(255, final[2]))
-    )
-
-
-def rgb_to_ryb(r: int, g: int, b: int) -> Tuple[float, float, float]:
-    """
-    Approximate conversion from RGB to RYB.
-
-    This is an approximation since RGB->RYB is not perfectly invertible.
-    We use the approach of removing whiteness and blackness first.
-    """
-    # Normalize to 0-1
-    r, g, b = r / 255.0, g / 255.0, b / 255.0
-
-    # Remove whiteness
-    w = min(r, g, b)
-    r -= w
-    g -= w
-    b -= w
-
-    max_g = max(r, g, b)
-
-    # Calculate yellow from red and green
-    y = min(r, g)
-    r -= y
-    g -= y
-
-    # If blue and green remain, convert to blue
-    if b > 0 and g > 0:
-        b += g
-        g = 0
-
-    # Redistribute
-    if max_g > 0:
-        n = max(r, y, b) / max_g
-        if n > 0:
-            r /= n
-            y /= n
-            b /= n
-
-    # Add back whiteness
-    r += w
-    y += w
-    b += w
-
-    return (
-        max(0, min(1, r)),
-        max(0, min(1, y)),
-        max(0, min(1, b))
-    )
 
 
 def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
     """
-    Mix multiple colors like paint using the RYB color model.
+    Mix multiple colors like paint using Kubelka-Munk spectral mixing.
 
     Args:
         colors: List of hex color strings (e.g., ["#FF0000", "#0000FF"])
@@ -138,77 +196,67 @@ def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
 
     Returns:
         Hex color string of the mixed result
-
-    Example:
-        mix_colors_paint(["#FF0000", "#0000FF"]) -> purple
-        mix_colors_paint(["#FF0000", "#FF0000", "#0000FF"]) -> reddish purple
     """
     if not colors:
-        return "#808080"  # gray default
+        return "#808080"
 
     if len(colors) == 1:
         return colors[0]
 
-    # If all colors are the same, return that color (avoid RYB conversion artifacts)
     if all(c.upper() == colors[0].upper() for c in colors):
         return colors[0]
 
-    # Default to equal weights
     if weights is None:
         weights = [1.0] * len(colors)
 
-    # Normalize weights
-    total_weight = sum(weights)
-    if total_weight == 0:
-        weights = [1.0 / len(colors)] * len(colors)
-    else:
-        weights = [w / total_weight for w in weights]
-
-    # Convert all colors to RYB
-    ryb_colors = []
+    # Convert colors to spectra and compute luminances
+    spectra = []
+    luminances = []
     for hex_color in colors:
         rgb = hex_to_rgb(hex_color)
-        ryb = rgb_to_ryb(*rgb)
-        ryb_colors.append(ryb)
+        lrgb = (_srgb_to_linear(rgb[0]), _srgb_to_linear(rgb[1]), _srgb_to_linear(rgb[2]))
+        spectrum = _linear_rgb_to_spectrum(lrgb)
+        spectra.append(spectrum)
+        xyz = _spectrum_to_xyz(spectrum)
+        luminances.append(max(1e-10, xyz[1]))
 
-    # Weighted average in RYB space
-    mixed_r = sum(ryb[0] * w for ryb, w in zip(ryb_colors, weights))
-    mixed_y = sum(ryb[1] * w for ryb, w in zip(ryb_colors, weights))
-    mixed_b = sum(ryb[2] * w for ryb, w in zip(ryb_colors, weights))
+    # Mix using Kubelka-Munk
+    result_spectrum = []
+    for i in range(SIZE):
+        ks_mix = 0
+        total_concentration = 0
+        for spectrum, weight, luminance in zip(spectra, weights, luminances):
+            concentration = weight * weight * luminance
+            total_concentration += concentration
+            ks_mix += _ks(spectrum[i]) * concentration
+        result_spectrum.append(_km(ks_mix / total_concentration))
 
     # Convert back to RGB
-    result_rgb = ryb_to_rgb(mixed_r, mixed_y, mixed_b)
+    xyz = _spectrum_to_xyz(result_spectrum)
+    lrgb = _xyz_to_linear_rgb(xyz)
+    rgb = (_linear_to_srgb(lrgb[0]), _linear_to_srgb(lrgb[1]), _linear_to_srgb(lrgb[2]))
 
-    return rgb_to_hex(*result_rgb)
+    return rgb_to_hex(*rgb)
 
 
 def get_color_name_approximation(hex_color: str) -> str:
     """
-    Get an approximate name for a mixed color.
-
-    This is used for speech output to describe the result.
+    Get an approximate name for a color.
+    Returns simple color names without modifiers.
     """
     r, g, b = hex_to_rgb(hex_color)
 
-    # Convert to HSL-like values for easier categorization
     max_c = max(r, g, b)
     min_c = min(r, g, b)
-    l = (max_c + min_c) / 2 / 255  # lightness 0-1
+    l = (max_c + min_c) / 2 / 255
 
     if max_c == min_c:
-        # Grayscale
         if l < 0.2:
             return "black"
-        elif l < 0.4:
-            return "dark gray"
-        elif l < 0.6:
-            return "gray"
-        elif l < 0.8:
-            return "light gray"
-        else:
+        elif l > 0.8:
             return "white"
+        return "gray"
 
-    # Calculate hue
     d = max_c - min_c
     if max_c == r:
         h = ((g - b) / d) % 6
@@ -216,44 +264,30 @@ def get_color_name_approximation(hex_color: str) -> str:
         h = (b - r) / d + 2
     else:
         h = (r - g) / d + 4
-    h *= 60  # Convert to degrees
+    h *= 60
 
-    # Saturation
     s = d / (255 - abs(2 * (max_c + min_c) / 2 - 255)) if max_c != min_c else 0
 
-    # Name based on hue
-    if s < 0.15:
-        # Low saturation = grayish
+    if s < 0.1:
         if l < 0.3:
-            return "dark gray"
+            return "black"
         elif l > 0.7:
-            return "light gray"
+            return "white"
         return "gray"
 
-    # Map hue to color name
     if h < 15 or h >= 345:
-        base = "red"
+        return "red"
     elif h < 45:
-        base = "orange"
+        return "orange"
     elif h < 70:
-        base = "yellow"
+        return "yellow"
     elif h < 150:
-        base = "green"
-    elif h < 200:
-        base = "cyan"
-    elif h < 260:
-        base = "blue"
+        return "green"
+    elif h < 190:
+        return "cyan"
+    elif h < 250:
+        return "blue"
     elif h < 320:
-        base = "purple"
+        return "purple"
     else:
-        base = "pink"
-
-    # Add modifiers
-    if l < 0.25:
-        return f"dark {base}"
-    elif l > 0.75:
-        return f"light {base}"
-    elif s < 0.4:
-        return f"muted {base}"
-
-    return base
+        return "pink"

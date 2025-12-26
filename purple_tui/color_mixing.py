@@ -149,6 +149,10 @@ def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
     if len(colors) == 1:
         return colors[0]
 
+    # If all colors are the same, return that color (avoid RYB conversion artifacts)
+    if all(c.upper() == colors[0].upper() for c in colors):
+        return colors[0]
+
     # Default to equal weights
     if weights is None:
         weights = [1.0] * len(colors)

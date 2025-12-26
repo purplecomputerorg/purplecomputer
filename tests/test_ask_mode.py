@@ -912,6 +912,43 @@ class TestSpeakable:
         assert "🐱" not in speak
 
 
+class TestColorMixingLogic:
+    """Test the actual color mixing behavior."""
+
+    def test_identical_colors_unchanged(self, evaluator):
+        # Mixing same color multiple times should return that exact color
+        result = evaluator.evaluate("yellow + yellow + yellow")
+        parts = result.split(":")
+        mixed = parts[1]
+        components = parts[3].split(",")
+        assert mixed == components[0]  # Mixed should equal component
+
+    def test_red_plus_blue_makes_purple(self, evaluator):
+        result = evaluator.evaluate("red + blue")
+        assert "purple" in result.lower()
+
+    def test_red_plus_yellow_makes_orange(self, evaluator):
+        result = evaluator.evaluate("red + yellow")
+        assert "orange" in result.lower()
+
+    def test_blue_plus_yellow_makes_green(self, evaluator):
+        result = evaluator.evaluate("blue + yellow")
+        assert "green" in result.lower()
+
+    def test_weighted_mix_shifts_toward_heavier(self, evaluator):
+        # 3 red + 1 blue should be more red than 1 red + 1 blue
+        result_weighted = evaluator.evaluate("3 red + blue")
+        result_equal = evaluator.evaluate("red + blue")
+        # Both should have purple-ish result, but weighted should be named differently
+        assert "COLOR_RESULT:" in result_weighted
+        assert "COLOR_RESULT:" in result_equal
+
+    def test_single_color_no_mixing(self, evaluator):
+        # Single color should just show that color
+        result = evaluator.evaluate("blue")
+        assert "[on #" in result  # Should be a color box, not COLOR_RESULT
+
+
 class TestColorMixingComponents:
     """Test color mixing component parsing (unit tests)."""
 

@@ -226,6 +226,13 @@ class InlineInput(Input):
         ("tab", "toggle_speech", "Toggle speech"),
     ]
 
+    # Display math operators as clearer Unicode versions (not emoji, so they inherit text color)
+    # Only substitute * and / since + and - are already clear
+    MATH_DISPLAY = {
+        '*': '×',   # Multiplication sign U+00D7
+        '/': '÷',   # Division sign U+00F7
+    }
+
     def __init__(self, **kwargs):
         super().__init__(placeholder="", highlighter=ValidWordHighlighter(), **kwargs)
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
@@ -309,6 +316,16 @@ class InlineInput(Input):
             if self.value:
                 self.value = self.value[:-1] + SHIFT_MAP[char]
                 self.cursor_position = len(self.value)
+            return
+
+        # Math operator substitution (* → ×, / → ÷)
+        if char and char in self.MATH_DISPLAY:
+            event.stop()
+            event.prevent_default()
+            display_char = self.MATH_DISPLAY[char]
+            self.value = self.value[:self.cursor_position] + display_char + self.value[self.cursor_position:]
+            self.cursor_position += len(display_char)
+            self._check_autocomplete()
             return
 
         # Let parent Input handle all other keys
@@ -702,6 +719,8 @@ class SimpleEvaluator:
     # Math operators: symbols and their word equivalents
     MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}
     WORD_TO_SYMBOL = {'times': '*', 'plus': '+', 'minus': '-', 'x': '*'}
+    # Display operators to normalize before evaluation
+    DISPLAY_TO_SYMBOL = {'×': '*', '÷': '/'}
     # Regex for detecting plus expressions (symbol or word)
     PLUS_PATTERN = r'\+|(?<!\w)plus(?!\w)'
     # Regex for valid math expression characters
@@ -963,8 +982,9 @@ class SimpleEvaluator:
         return None
 
     def _normalize_mult(self, text: str) -> str:
-        """Normalize multiplication operators (x, times) to *."""
-        result = re.sub(r'\btimes\b', '*', text, flags=re.IGNORECASE)
+        """Normalize multiplication operators (x, times, ×) to *."""
+        result = text.replace('×', '*')
+        result = re.sub(r'\btimes\b', '*', result, flags=re.IGNORECASE)
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
@@ -1116,6 +1136,9 @@ class SimpleEvaluator:
     def _normalize_math(self, text: str) -> str:
         """Normalize text for math evaluation."""
         result = text.lower()
+        # Convert display operators (fullwidth, ×, ÷) to ASCII symbols first
+        for display, symbol in self.DISPLAY_TO_SYMBOL.items():
+            result = result.replace(display, symbol)
         # Convert word operators to symbols (no word boundaries to allow "3times4")
         for word, symbol in self.WORD_TO_SYMBOL.items():
             if word != 'x':  # 'x' is handled specially below

@@ -148,6 +148,26 @@ if HAS_PYTEST:
             assert result.startswith("12\n") and result.count("•") == 12
 
 
+    class TestUnicodeOperators:
+        """Test Unicode display operators (× and ÷)"""
+
+        def test_multiplication_sign(self, evaluator):
+            result = evaluator.evaluate("3 × 4")
+            assert result.startswith("12\n") and result.count("•") == 12
+
+        def test_division_sign(self, evaluator):
+            result = evaluator.evaluate("8 ÷ 2")
+            assert result.startswith("4\n") and result.count("•") == 4
+
+        def test_multiplication_with_emoji(self, evaluator):
+            result = evaluator.evaluate("3 × cat")
+            assert "🐱🐱🐱" in result
+
+        def test_division_decimal(self, evaluator):
+            result = evaluator.evaluate("7 ÷ 2")
+            assert result == "3.5"
+
+
     class TestEmojiLookup:
         """Test emoji lookup"""
 

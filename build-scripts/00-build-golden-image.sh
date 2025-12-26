@@ -118,9 +118,11 @@ SOURCES
         libxkbcommon-x11-0 \
         unclutter \
         fontconfig \
+        fonts-noto-color-emoji \
         spice-vdagent
 
-    # Install JetBrainsMono Nerd Font (needed for emoji/icon glyphs in Purple TUI)
+    # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
+    # Noto Color Emoji (installed via apt above) provides Unicode emoji (🐱 🎉)
     # Download from host (curl available in Docker container, not in chroot)
     log_info "Installing JetBrainsMono Nerd Font..."
     FONT_DIR="$MOUNT_DIR/usr/share/fonts/truetype/jetbrains-mono-nerd"

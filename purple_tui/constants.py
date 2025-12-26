@@ -33,6 +33,7 @@ STICKY_SHIFT_GRACE = 1.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
+# These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
 ICON_VOLUME_ON = "󰕾"        # nf-md-volume_high
 ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off
 ICON_ERASER = "󰇾"           # nf-md-eraser

@@ -112,7 +112,7 @@ if [ -d "packs/core-definitions" ]; then
     echo_info "✓ Built core-definitions.purplepack"
 fi
 
-# Install JetBrainsMono Nerd Font (for icons in Alacritty)
+# Install JetBrainsMono Nerd Font (for UI icons in Alacritty)
 echo_step "Checking JetBrainsMono Nerd Font..."
 install_nerd_font() {
     local FONT_VERSION="3.3.0"
@@ -148,6 +148,26 @@ elif [ "$OS" = "linux" ]; then
         echo_info "✓ JetBrainsMono Nerd Font already installed"
     else
         install_nerd_font
+    fi
+fi
+
+# Install Noto Color Emoji (for Unicode emoji like 🐱 🎉)
+echo_step "Checking Noto Color Emoji font..."
+if [ "$OS" = "mac" ]; then
+    # macOS has built-in emoji support via Apple Color Emoji
+    echo_info "✓ macOS has built-in emoji support"
+elif [ "$OS" = "linux" ]; then
+    if fc-list | grep -qi "Noto Color Emoji" 2>/dev/null; then
+        echo_info "✓ Noto Color Emoji already installed"
+    else
+        echo_info "Installing Noto Color Emoji..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get install -y fonts-noto-color-emoji
+            echo_info "✓ Noto Color Emoji installed"
+        else
+            echo_warn "Could not install Noto Color Emoji (apt not available)"
+            echo_warn "Install manually: https://fonts.google.com/noto/specimen/Noto+Color+Emoji"
+        fi
     fi
 fi
 

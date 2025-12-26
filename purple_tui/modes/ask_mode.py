@@ -604,13 +604,19 @@ class AskMode(Vertical):
                         display = " ".join(filter(None, parts))
                         scroll.mount(HistoryLine(display, line_type="answer"))
                     else:
-                        # For multi-color with emoji, show swatch then emoji on same line after
+                        # For multi-color with emoji, show two lines:
+                        # Line 1: inputs in order (emoji + component boxes)
+                        # Line 2: result (emoji + mixed color)
                         if other_part:
-                            # Show inline: before + component boxes + result + after
                             comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
                             result_box = f"[on {hex_color}]  [/]"
-                            parts = [before_part, comp_boxes, "→", result_box, after_part]
-                            display = " ".join(filter(None, parts))
+                            # Line 1: inputs in order
+                            input_parts = [before_part, comp_boxes, after_part]
+                            input_line = " ".join(filter(None, input_parts))
+                            # Line 2: result
+                            result_parts = [before_part, result_box, after_part]
+                            result_line = " ".join(filter(None, result_parts))
+                            display = f"{input_line}\n{result_line}"
                             scroll.mount(HistoryLine(display, line_type="answer"))
                         else:
                             scroll.mount(ColorResultLine(hex_color, color_name, components))

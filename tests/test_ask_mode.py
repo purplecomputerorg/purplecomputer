@@ -595,6 +595,18 @@ class TestMixedExpressions:
         assert "COLOR_RESULT:" in result
         assert "🐱🐱🐱🐱🐱" in result
 
+    def test_emoji_plus_single_color(self, evaluator):
+        # apple + blue = blue color + apple emoji
+        result = evaluator.evaluate("apple + blue")
+        assert "COLOR_RESULT:" in result
+        assert "🍎" in result
+
+    def test_single_color_plus_emoji(self, evaluator):
+        # blue + leaf = blue color + leaf emoji
+        result = evaluator.evaluate("blue + leaf")
+        assert "COLOR_RESULT:" in result
+        assert "🍃" in result
+
     def test_pure_numbers_still_math(self, evaluator):
         result = evaluator.evaluate("3 + 4 + 5")
         assert result.startswith("12")

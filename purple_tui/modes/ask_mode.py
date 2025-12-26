@@ -573,17 +573,33 @@ class AskMode(Vertical):
         result = self.evaluator.evaluate(input_text)
         if result:
             # Check if this is a color result (special format)
-            color_data = self.evaluator._parse_color_result(result)
-            if color_data:
-                hex_color, color_name, components = color_data
-                # Single color: display inline like emoji (2-char colored box)
-                # Mixed colors (2+ components): display as 3x6 swatch
-                if len(components) <= 1:
-                    # Single color: show as inline colored box using Rich markup
-                    color_box = f"[on {hex_color}]  [/]"
-                    scroll.mount(HistoryLine(color_box, line_type="answer"))
-                else:
-                    scroll.mount(ColorResultLine(hex_color, color_name, components))
+            # Mixed results look like "COLOR_RESULT:hex:name:comps emoji_stuff"
+            color_part, other_part = None, None
+            if result.startswith("COLOR_RESULT:"):
+                # Split off any non-color content after the COLOR_RESULT
+                parts = result.split(" ", 1)
+                color_part = parts[0]
+                other_part = parts[1] if len(parts) > 1 else None
+
+            if color_part:
+                color_data = self.evaluator._parse_color_result(color_part)
+                if color_data:
+                    hex_color, color_name, components = color_data
+                    # Single color: inline box; multiple: swatch
+                    if len(components) <= 1:
+                        color_box = f"[on {hex_color}]  [/]"
+                        display = f"{color_box} {other_part}" if other_part else color_box
+                        scroll.mount(HistoryLine(display, line_type="answer"))
+                    else:
+                        # For multi-color with emoji, show swatch then emoji on same line after
+                        if other_part:
+                            # Show inline: component boxes + result + emoji
+                            comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
+                            result_box = f"[on {hex_color}]  [/]"
+                            display = f"{comp_boxes} → {result_box} {other_part}"
+                            scroll.mount(HistoryLine(display, line_type="answer"))
+                        else:
+                            scroll.mount(ColorResultLine(hex_color, color_name, components))
             else:
                 scroll.mount(HistoryLine(result, line_type="answer"))
 

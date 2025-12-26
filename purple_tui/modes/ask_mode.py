@@ -860,8 +860,13 @@ class SimpleEvaluator:
 
         # Collect emoji info for label formatting
         emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
-        # Show label if single emoji type with count > 1 (+ expr implies computation)
-        show_label = (len(emoji_items) == 1 and emoji_items[0][1] > 1
+        # Show label if any computation happened (counts > 1 or multiple types with total > types)
+        # e.g., "3 cats" (single type, count > 1) or "2 * 3 banana + lions" (multiple, total > 2)
+        total_count = sum(c for _, c, _ in emoji_items)
+        has_computation = (
+            total_count > len(emoji_items)  # More emojis than unique types means multiplication happened
+        )
+        show_label = (has_computation
                       and not colors and not any(t == 'text' for t, _ in items))
 
         # Build result in order, merging adjacent emojis
@@ -892,10 +897,15 @@ class SimpleEvaluator:
         # Only return if we have colors or emojis (not just text/numbers which pure math can handle)
         if colors or any(t == 'emoji' for t, _ in items):
             result = ' '.join(result_parts) if result_parts else None
-            # Add label line for single emoji type with count
+            # Add label line for emoji computation
             if show_label and result:
-                e, c, w = emoji_items[0]
-                result = f"{c} {e}\n{result}"
+                # Combine same emoji types: "1 dog + 3 dogs" → "4 🐶"
+                combined = {}
+                for e, c, w in emoji_items:
+                    combined[e] = combined.get(e, 0) + c
+                label_parts = [f"{c} {e}" for e, c in combined.items()]
+                label = ' '.join(label_parts)
+                result = f"{label}\n{result}"
             return result
         return None
 
@@ -1204,19 +1214,31 @@ class SimpleEvaluator:
                         out.append(p)
                 return ' '.join(out)
 
-            # Handle "N emoji" label format (e.g., "5 🍎") or "prefix N emoji"
-            # Match patterns like "5 🍎" or "what is 5 🍎"
-            if m := re.search(r'(\d+)\s+(\S+)\s*$', first_line):
-                count, rest = m.group(1), m.group(2).strip()
-                prefix_part = first_line[:m.start()].strip()
-                # If rest is emoji, find the word for it
-                if self._is_emoji_str(rest):
-                    emoji_char = rest[0] if rest else ''
+            # Handle multi-emoji label format (e.g., "6 🍌 2 🦁")
+            # Parse patterns like "N emoji N emoji ..."
+            emoji_descs = []
+            remaining = first_line.strip()
+            while remaining:
+                m = re.match(r'^(\d+)\s+(\S+)\s*', remaining)
+                if not m:
+                    break
+                count, emoji_part = int(m.group(1)), m.group(2).strip()
+                if self._is_emoji_str(emoji_part):
+                    emoji_char = emoji_part[0] if emoji_part else ''
                     word = self._emoji_to_word(emoji_char)
                     if word:
-                        result_part = f"{count} {word}s" if int(count) != 1 else f"1 {word}"
-                        return f"{prefix_part} {result_part}".strip() if prefix_part else result_part
-                return first_line
+                        emoji_descs.append(f"{count} {word}s" if count != 1 else f"1 {word}")
+                        remaining = remaining[m.end():].strip()
+                        continue
+                break
+
+            if emoji_descs:
+                if len(emoji_descs) == 1:
+                    return emoji_descs[0]
+                elif len(emoji_descs) == 2:
+                    return f"{emoji_descs[0]} and {emoji_descs[1]}"
+                else:
+                    return ", ".join(emoji_descs[:-1]) + f", and {emoji_descs[-1]}"
 
             # Handle pure emoji result (find word equivalents)
             if self._is_emoji_str(first_line.replace(' ', '')):
@@ -1266,10 +1288,4 @@ class SimpleEvaluator:
 
     def _emoji_to_word(self, emoji: str) -> str | None:
         """Reverse lookup: emoji character to word."""
-        # Search through emoji content for matching emoji
-        for word in ['cat', 'dog', 'apple', 'banana', 'fox', 'bird', 'fish', 'star',
-                     'heart', 'sun', 'moon', 'tree', 'flower', 'leaf', 'rainbow']:
-            if self.content.get_emoji(word) == emoji:
-                return word
-        # Fallback: search all emojis (slower)
-        return self.content.emoji_to_word(emoji) if hasattr(self.content, 'emoji_to_word') else None
+        return self.content.emoji_to_word(emoji)

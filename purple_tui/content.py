@@ -259,6 +259,13 @@ class ContentManager:
         word = word.lower().strip()
         return self.emojis.get(word)
 
+    def emoji_to_word(self, emoji: str) -> Optional[str]:
+        """Reverse lookup: get word for an emoji character"""
+        for word, e in self.emojis.items():
+            if e == emoji:
+                return word
+        return None
+
     def get_sound(self, sound_id: str) -> Optional[Path]:
         """Get path to a sound file"""
         return self.sounds.get(sound_id)

@@ -411,6 +411,11 @@ class MockContent:
 
 def check_autocomplete(text, content):
     """Simplified version of _check_autocomplete logic."""
+    # Common 2-letter words that shouldn't trigger autocomplete
+    COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if',
+                    'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or', 'so',
+                    'to', 'up', 'us', 'we', 'hi', 'oh', 'ok'}
+
     text = text.lower().strip()
     parts = re.split(r'[\s+*x]+', text)
     words = [p for p in parts if p]
@@ -418,7 +423,7 @@ def check_autocomplete(text, content):
         return [], "emoji"
 
     last_word = words[-1]
-    if len(last_word) < 2:
+    if len(last_word) < 2 or last_word in COMMON_2CHAR:
         return [], "emoji"
 
     if content.get_color(last_word) or content.get_emoji(last_word):
@@ -475,11 +480,17 @@ class TestAutocomplete:
         words = [w for w, _ in matches]
         assert set(words) == {"gray", "green", "grey", "grape", "grapes"}
 
-    def test_go_suggests_gold(self):
+    def test_gol_suggests_gold(self):
         content = MockContent()
-        matches, match_type = check_autocomplete("go", content)
+        matches, match_type = check_autocomplete("gol", content)
         assert [w for w, _ in matches] == ["gold"]
         assert match_type == "color"
+
+    def test_go_no_suggestions_common_word(self):
+        # "go" is a common 2-letter word, shouldn't trigger autocomplete
+        content = MockContent()
+        matches, _ = check_autocomplete("go", content)
+        assert matches == []
 
     def test_ca_suggests_cat(self):
         content = MockContent()
@@ -804,7 +815,7 @@ def run_standalone_tests():
 
     tests = [
         ("red + ap suggests apple", lambda: check_autocomplete("red + ap", content)[0] == [("apple", "🍎")]),
-        ("go suggests gold", lambda: [w for w, _ in check_autocomplete("go", content)[0]] == ["gold"]),
+        ("gol suggests gold", lambda: [w for w, _ in check_autocomplete("gol", content)[0]] == ["gold"]),
         ("exact match red no suggestions", lambda: check_autocomplete("red", content)[0] == []),
         ("short prefix no suggestions", lambda: check_autocomplete("r", content)[0] == []),
     ]

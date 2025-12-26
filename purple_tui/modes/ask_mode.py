@@ -291,10 +291,15 @@ class InlineInput(Input):
         content = get_content()
         text = self.value.lower().strip()
 
+        # Common 2-letter words that shouldn't trigger autocomplete
+        COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if',
+                        'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or', 'so',
+                        'to', 'up', 'us', 'we', 'hi', 'oh', 'ok'}
+
         # Find the last word being typed (sequence of letters at the end)
         match = re.search(r'([a-z]+)$', text)
         last_word = match.group(1) if match else ""
-        if len(last_word) < 2:
+        if len(last_word) < 2 or last_word in COMMON_2CHAR:
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0

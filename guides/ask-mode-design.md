@@ -239,6 +239,53 @@ Parentheses always trigger labels because they imply computation happened, even 
 
 ---
 
+## Speaking Mode
+
+Press Tab to toggle speech. When enabled, results are spoken aloud using Piper TTS.
+
+### Principles
+
+1. **Say minimal text.** Don't pronounce emoji symbols or color boxes.
+2. **For computation:** Say "input equals result"
+3. **For simple lookups:** Just say the word
+
+### Examples
+
+```
+cat                   → says "cat"
+3 cats                → says "3 cats"
+cat * 3               → says "cat times 3 equals 3 cats"
+2 + 3 apples          → says "2 plus 3 apples equals 5 apples"
+red + blue            → says "red plus blue equals purple"
+what is 2 + 3         → says "what is 2 plus 3 equals 5"
+what is (2 * 3) cats  → says "what is 2 times 3 cats equals 6 cats"
+```
+
+### Operators in Speech
+
+- `*` → "times"
+- `+` → "plus"
+- `-` → "minus"
+- `/` → "divided by"
+- Parentheses are removed
+
+---
+
+## Number Attachment Rules
+
+Numbers attach to the **next term** (color or emoji). They accumulate until they hit something.
+
+```
+2 + 3 yellow          → 5 yellows (2+3=5 attaches to yellow)
+2 + red               → 3 reds (2+1=3)
+3 + 4 + 2 bananas     → 9 bananas (3+4+2=9 attaches to bananas)
+2 + red + 3 cats      → 3 reds + 3 cats (2→red, 3→cats)
+```
+
+Colors still mix together regardless of where they appear in the expression.
+
+---
+
 ## Implementation Notes
 
 The evaluator tries methods in order:

@@ -21,6 +21,19 @@ import pygame.mixer
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
+# Pre-generated voice clips directory
+VOICE_CLIPS_DIR = Path(__file__).parent.parent / "packs" / "core-sounds" / "content" / "voice"
+
+
+def _get_voice_clip(text: str) -> Path | None:
+    """Check if a pre-generated voice clip exists for this text."""
+    # Convert text to filename (spaces to underscores)
+    filename = text.strip().lower().replace(" ", "_") + ".wav"
+    clip_path = VOICE_CLIPS_DIR / filename
+    if clip_path.exists():
+        return clip_path
+    return None
+
 def _get_voice_search_paths() -> list[Path]:
     """Get list of paths to search for voice model."""
     paths = [
@@ -173,15 +186,21 @@ def _speak_sync(text: str, speech_id: int) -> bool:
     if speech_id != _speech_id:
         return False
 
+    if not _ensure_mixer():
+        return False
+
+    # Check for pre-generated voice clip first
+    clip_path = _get_voice_clip(text)
+    if clip_path:
+        return _play_clip(clip_path, speech_id)
+
+    # Fall back to Piper TTS for dynamic content
     voice = _get_piper_voice()
     if voice is None:
         return False
 
     # Check again after potentially slow voice load
     if speech_id != _speech_id:
-        return False
-
-    if not _ensure_mixer():
         return False
 
     wav_path = None
@@ -248,6 +267,35 @@ def _speak_sync(text: str, speech_id: int) -> bool:
                 Path(wav_path).unlink(missing_ok=True)
             except Exception:
                 pass
+        return False
+
+
+def _play_clip(clip_path: Path, speech_id: int) -> bool:
+    """Play a pre-generated voice clip."""
+    global _current_channel, _speech_id
+
+    try:
+        if speech_id != _speech_id:
+            return False
+
+        sound = pygame.mixer.Sound(str(clip_path))
+        channel = sound.play()
+        _current_channel = channel
+
+        if channel:
+            while channel.get_busy():
+                if speech_id != _speech_id:
+                    try:
+                        channel.stop()
+                    except Exception:
+                        pass
+                    break
+                pygame.time.wait(50)
+
+        _current_channel = None
+        return True
+
+    except Exception:
         return False
 
 

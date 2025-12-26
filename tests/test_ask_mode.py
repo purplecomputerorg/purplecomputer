@@ -607,10 +607,11 @@ class TestMixedExpressions:
         assert "🦊" in result
 
     def test_number_color_emoji(self, evaluator):
-        # 2 + red + 3 cats + blue = mixed colors + 5 cats
+        # 2 + red + 3 cats + blue = 3 reds + 1 blue (mixed) + 3 cats
+        # Numbers attach to the NEXT term (2→red, 3→cats)
         result = evaluator.evaluate("2 + red + 3 cats + blue")
         assert "COLOR_RESULT:" in result
-        assert "🐱🐱🐱🐱🐱" in result
+        assert "🐱🐱🐱" in result  # 3 cats (not 5)
 
     def test_emoji_plus_single_color(self, evaluator):
         # apple + blue = blue color + apple emoji
@@ -827,6 +828,88 @@ class TestXOperator:
         # "fox" should stay as fox emoji, not "fo*"
         result = evaluator.evaluate("fox")
         assert "🦊" in result
+
+
+class TestColorNumberAttachment:
+    """Test that pending numbers attach correctly to colors vs emojis."""
+
+    def test_color_only_numbers_attach(self, evaluator):
+        # "2 + 3 yellow" = 5 yellows (color-only, numbers attach to color)
+        result = evaluator.evaluate("2 + 3 yellow")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 5  # 2 + 3 = 5
+
+    def test_color_only_numbers_attach_to_first(self, evaluator):
+        # "2 + red" = 3 reds (2 pending + 1 red)
+        result = evaluator.evaluate("2 + red")
+        assert result.startswith("COLOR_RESULT:")
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 3
+
+    def test_mixed_numbers_attach_to_next(self, evaluator):
+        # "2 + red + 3 cats" = 3 reds + 3 cats (2→red, 3→cats)
+        result = evaluator.evaluate("2 + red + 3 cats")
+        assert "COLOR_RESULT:" in result
+        parts = result.split(":")
+        components = parts[3].split(",")
+        assert len(components) == 3  # 2 + 1 = 3 reds
+        assert "🐱🐱🐱" in result  # 3 cats
+
+
+class TestSpeakable:
+    """Test the _make_speakable method for TTS."""
+
+    def test_pure_math(self, evaluator):
+        result = evaluator.evaluate("2 + 3")
+        speak = evaluator._make_speakable("2 + 3", result)
+        assert speak == "2 plus 3 equals 5"
+
+    def test_multiplication(self, evaluator):
+        result = evaluator.evaluate("3 * 4")
+        speak = evaluator._make_speakable("3 * 4", result)
+        assert speak == "3 times 4 equals 12"
+
+    def test_simple_echo(self, evaluator):
+        result = evaluator.evaluate("5")
+        speak = evaluator._make_speakable("5", result)
+        assert speak == "5"
+
+    def test_emoji_lookup(self, evaluator):
+        result = evaluator.evaluate("cat")
+        speak = evaluator._make_speakable("cat", result)
+        assert speak == "cat"
+
+    def test_emoji_multiply(self, evaluator):
+        result = evaluator.evaluate("cat * 3")
+        speak = evaluator._make_speakable("cat * 3", result)
+        assert speak == "cat times 3 equals 3 cats"
+
+    def test_emoji_plus_expr(self, evaluator):
+        result = evaluator.evaluate("2 + 3 apples")
+        speak = evaluator._make_speakable("2 + 3 apples", result)
+        assert speak == "2 plus 3 apples equals 5 apples"
+
+    def test_color_mixing(self, evaluator):
+        result = evaluator.evaluate("red + blue")
+        speak = evaluator._make_speakable("red + blue", result)
+        assert "red plus blue equals" in speak
+        assert "purple" in speak.lower()
+
+    def test_text_prefix_not_duplicated(self, evaluator):
+        result = evaluator.evaluate("what is 2 + 3")
+        speak = evaluator._make_speakable("what is 2 + 3", result)
+        # Should be "what is 2 plus 3 equals 5", not "what is ... equals what is 5"
+        assert speak == "what is 2 plus 3 equals 5"
+
+    def test_text_prefix_with_emoji(self, evaluator):
+        result = evaluator.evaluate("what is (2 * 3) cats")
+        speak = evaluator._make_speakable("what is (2 * 3) cats", result)
+        # Should convert emoji to word
+        assert "6 cats" in speak
+        assert "🐱" not in speak
 
 
 class TestColorMixingComponents:

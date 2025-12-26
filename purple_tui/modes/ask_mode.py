@@ -635,82 +635,19 @@ class AskMode(Vertical):
             pass
 
     def _speak(self, input_text: str, result: str) -> None:
-        """Speak the input and result using Piper TTS"""
+        """Speak the input and result using Piper TTS.
+
+        Principles:
+        - Say minimal text, don't pronounce emoji symbols or color boxes
+        - For computation: "input equals result"
+        - For simple lookups: just the word
+        - Convert operators to words (* → times, + → plus)
+        """
         from ..tts import speak
 
-        # Check if input has math operators (not just number+word like "2banana")
-        def has_math_operator(text: str) -> bool:
-            text_lower = text.lower()
-            # Check for symbol operators
-            if any(op in text for op in SimpleEvaluator.MATH_SYMBOLS):
-                return True
-            # Check for word operators
-            if any(word in text_lower for word in SimpleEvaluator.WORD_TO_SYMBOL):
-                return True
-            # Check for "divided by"
-            if 'divided' in text_lower:
-                return True
-            return False
-
-        # Make math expressions speakable
-        def make_speakable(text: str) -> str:
-            import re
-            text = text.lower()
-            text = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', text)
-            return (text
-                .replace("×", " times ")
-                .replace("*", " times ")
-                .replace("÷", " divided by ")
-                .replace("/", " divided by ")
-                .replace("+", " plus ")
-                .replace("−", " minus ")
-                .replace("-", " minus ")
-                .replace("=", " equals ")
-            )
-
-        input_lower = input_text.lower().strip()
-        has_operator = has_math_operator(input_text)
-
-        # Check if result is a color mixing result
-        if result and result.startswith("COLOR_RESULT:"):
-            color_data = self.evaluator._parse_color_result(result)
-            if color_data:
-                _, color_name, _ = color_data
-                # Make the input more speakable
-                speakable_input = make_speakable(input_lower)
-                text_to_speak = f"{speakable_input} equals {color_name}"
-                speak(text_to_speak)
-                return
-
-        # Check if result is emoji (contains high unicode chars)
-        if result and any(ord(c) > 127 for c in result):
-            if has_operator:
-                # Math with emoji: "2 * cat" -> "2 times cat equals 2 cats"
-                description = self.evaluator._describe_emoji_result(input_text, result)
-                text_to_speak = f"{make_speakable(input_text)} equals {description}"
-            else:
-                # No math operator: just read the input naturally
-                # "2banana" -> "2 banana", "cat" -> "cat", "ari is cool" -> "ari is cool"
-                text_to_speak = make_speakable(input_lower)
-        # Check if result looks like math output (number, possibly with dots)
-        elif result:
-            result_num = result.split('\n')[0]
-            try:
-                float(result_num.replace(",", ""))
-                # For simple number echo (input "5" -> output "5"), just say the number
-                if input_lower == result_num:
-                    text_to_speak = result_num
-                elif has_operator:
-                    text_to_speak = f"{make_speakable(input_text)} equals {result_num}"
-                else:
-                    text_to_speak = input_lower
-            except (ValueError, AttributeError):
-                # Not math, just speak the input
-                text_to_speak = input_lower
-        else:
-            text_to_speak = input_lower
-
-        speak(text_to_speak)
+        speakable = self.evaluator._make_speakable(input_text, result)
+        if speakable:
+            speak(speakable)
 
 
 class SimpleEvaluator:
@@ -870,8 +807,9 @@ class SimpleEvaluator:
         return text
 
     def _eval_plus_expr(self, text: str) -> str | None:
-        """Evaluate + expression. Preserves order. Numbers attach to next emoji. Colors mix (at first color's position)."""
+        """Evaluate + expression. Preserves order. Numbers attach to next term (color or emoji). Colors mix."""
         parts = re.split(r'\s*(?:' + self.PLUS_PATTERN + r')\s*', text.lower())
+
         colors = []  # Collect for mixing
         items = []   # (type, value) in original order: value is (emoji, count, word) for emoji
         pending = 0
@@ -882,7 +820,12 @@ class SimpleEvaluator:
                 continue
 
             # Color term (collect for mixing, placeholder at first position)
+            # Pending numbers add extra copies of this color
             if hexes := self._parse_color(part):
+                if pending > 0:
+                    # Add pending copies of first color in this term
+                    hexes = [hexes[0]] * pending + hexes
+                    pending = 0
                 colors.extend(hexes)
                 if not any(t == 'color' for t, _ in items):
                     items.append(('color', None))
@@ -1203,3 +1146,138 @@ class SimpleEvaluator:
             name = parts[2].replace('_', ' ')  # Convert back from underscore
             return (parts[1], name, parts[3].split(",") if len(parts) > 3 and parts[3] else [])
         return None
+
+    def _make_speakable(self, input_text: str, result: str) -> str:
+        """Convert input/result pair to minimal speakable text.
+
+        Principles:
+        - Don't pronounce emoji symbols or color boxes
+        - For computation: "input equals result"
+        - For simple lookups (no operators): just the word
+        - Handle text prefixes naturally
+        """
+        input_text = input_text.strip()
+        if not input_text:
+            return ""
+
+        # Check if input has operators (implies computation)
+        def has_operator(text: str) -> bool:
+            t = text.lower()
+            if any(op in text for op in self.MATH_SYMBOLS):
+                return True
+            if any(f' {w} ' in f' {t} ' or t.startswith(f'{w} ') or t.endswith(f' {w}')
+                   for w in self.WORD_TO_SYMBOL):
+                return True
+            if 'divided' in t:
+                return True
+            return False
+
+        # Convert operators to spoken words
+        def speakable_ops(text: str) -> str:
+            t = text.lower()
+            t = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', t)
+            t = re.sub(r'\bx\b', ' times ', t)
+            return (t
+                .replace("×", " times ")
+                .replace("*", " times ")
+                .replace("÷", " divided by ")
+                .replace("/", " divided by ")
+                .replace("+", " plus ")
+                .replace("−", " minus ")
+                .replace("-", " minus ")
+                .replace("(", "").replace(")", "")
+            )
+
+        # Extract speakable result (first line, convert emoji counts to words)
+        def speakable_result(res: str, input_prefix: str = "") -> str:
+            if not res:
+                return ""
+            first_line = res.split('\n')[0]
+
+            # Strip input prefix from result if present (avoid "what is ... equals what is ...")
+            if input_prefix and first_line.lower().startswith(input_prefix.lower()):
+                first_line = first_line[len(input_prefix):].strip()
+
+            # Handle COLOR_RESULT
+            if "COLOR_RESULT:" in first_line:
+                # Extract color name and any surrounding text
+                parts = first_line.split()
+                out = []
+                for p in parts:
+                    if p.startswith("COLOR_RESULT:"):
+                        color_data = self._parse_color_result(p)
+                        if color_data:
+                            out.append(color_data[1])  # color name
+                    elif not self._is_emoji_str(p):  # Skip emoji parts
+                        out.append(p)
+                return ' '.join(out)
+
+            # Handle "N emoji" label format (e.g., "5 🍎") or "prefix N emoji"
+            # Match patterns like "5 🍎" or "what is 5 🍎"
+            if m := re.search(r'(\d+)\s+(\S+)\s*$', first_line):
+                count, rest = m.group(1), m.group(2).strip()
+                prefix_part = first_line[:m.start()].strip()
+                # If rest is emoji, find the word for it
+                if self._is_emoji_str(rest):
+                    emoji_char = rest[0] if rest else ''
+                    word = self._emoji_to_word(emoji_char)
+                    if word:
+                        result_part = f"{count} {word}s" if int(count) != 1 else f"1 {word}"
+                        return f"{prefix_part} {result_part}".strip() if prefix_part else result_part
+                return first_line
+
+            # Handle pure emoji result (find word equivalents)
+            if self._is_emoji_str(first_line.replace(' ', '')):
+                return ""  # Will use input description instead
+
+            # Handle number result
+            try:
+                float(first_line.replace(",", ""))
+                return first_line
+            except ValueError:
+                pass
+
+            return first_line
+
+        # Extract text prefix (e.g., "what is" from "what is 2 + 3")
+        def extract_prefix(text: str) -> str:
+            words = text.split()
+            for i, word in enumerate(words):
+                clean = re.sub(r'[^\w]', '', word.lower())
+                # Found start of expression (number, operator word, color, or emoji)
+                if (re.match(r'^\d+$', clean) or
+                    clean in self.WORD_TO_SYMBOL or
+                    self._get_color(clean) or
+                    self._get_emoji(clean)):
+                    return ' '.join(words[:i]) if i > 0 else ""
+            return ""
+
+        # Simple echo (input "5" → output "5", input "cat" → output emoji)
+        computed = has_operator(input_text)
+        input_prefix = extract_prefix(input_text)
+        result_speak = speakable_result(result, input_prefix)
+        input_speak = speakable_ops(input_text)
+
+        # Clean up extra spaces
+        input_speak = ' '.join(input_speak.split())
+
+        if not computed:
+            # No computation: just say the input naturally
+            return input_speak
+
+        # Computation happened: "input equals result"
+        if result_speak:
+            return f"{input_speak} equals {result_speak}"
+        else:
+            # Result is pure emoji with no label, describe based on input
+            return input_speak
+
+    def _emoji_to_word(self, emoji: str) -> str | None:
+        """Reverse lookup: emoji character to word."""
+        # Search through emoji content for matching emoji
+        for word in ['cat', 'dog', 'apple', 'banana', 'fox', 'bird', 'fish', 'star',
+                     'heart', 'sun', 'moon', 'tree', 'flower', 'leaf', 'rainbow']:
+            if self.content.get_emoji(word) == emoji:
+                return word
+        # Fallback: search all emojis (slower)
+        return self.content.emoji_to_word(emoji) if hasattr(self.content, 'emoji_to_word') else None

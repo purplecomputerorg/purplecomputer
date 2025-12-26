@@ -7,6 +7,7 @@ Complete reference for building, installing, and maintaining Purple Computer.
 - [Installer Architecture](#installer-architecture)
   - [Screen Size & Font Calculation](#screen-size--font-calculation)
   - [Graphics Stack](#graphics-stack-installed-system)
+- [Ask Mode (F1)](#ask-mode-f1)
 - [Build Process](#build-process)
 - [Installation](#installation)
 - [Customization](#customization)
@@ -323,6 +324,44 @@ If you need to reconfigure (e.g., different keyboard), run from parent shell:
 ```bash
 sudo python3 /opt/purple/keyboard_normalizer.py --calibrate
 ```
+
+---
+
+## Ask Mode (F1)
+
+Ask mode is a calculator that understands math, emojis, and colors. It's designed to be **maximally permissive**: always try to do something meaningful.
+
+### Quick Reference
+
+| Input | Output |
+|-------|--------|
+| `2 + 2` | 4 with dot visualization |
+| `3 * 4 + 2` | 14 (operator precedence preserved) |
+| `cat` | 🐱 |
+| `3 cats` | 🐱🐱🐱 |
+| `cat * 5` | 5 cats + 🐱🐱🐱🐱🐱 (with label) |
+| `cat + dog` | 🐱 🐶 (space between different types) |
+| `cats` | 🐱🐱 (bare plural = 2) |
+| `red + blue` | Purple swatch (color mixing) |
+| `3 + 4 + 2 bananas` | 9 bananas (numbers attach to emoji) |
+| `apple + red + green` | Two lines: inputs then mixed result |
+
+### Key Behaviors
+
+- **Operator precedence preserved:** `3 * 4 + 2 = 14`, not 18
+- **Numbers attach to emojis:** `3 + 4 + 2 bananas = 9 bananas`
+- **Labels for computed expressions:** Shows "14 dogs" above the emojis when math was involved
+- **Spaces between different emoji types:** `cat + dog` → `🐱 🐶`
+- **Colors mix like paint:** Even with non-colors between them
+- **Unknown text passes through:** `my name is tavi apple` → `my name is tavi 🍎`
+
+### Autocomplete
+
+- Triggers at 2+ characters
+- Common 2-letter words excluded (by, my, go, to, etc.) to prevent unwanted completions
+- Space accepts the suggestion
+
+For the full design philosophy, see [guides/ask-mode-design.md](guides/ask-mode-design.md).
 
 ---
 
@@ -816,6 +855,7 @@ First Boot (Installed System)
 - **MANUAL.md:** This file (complete reference)
 - **guides/architecture-overview.md:** High-level explanation of the two-system design and design rationale
 - **guides/ubuntu-live-installer.md:** Technical deep-dive on ISO remaster architecture
+- **guides/ask-mode-design.md:** Ask mode evaluation philosophy and behavior reference
 
 ---
 

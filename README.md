@@ -37,10 +37,13 @@ make run      # Launches in Alacritty with Purple theme (or current terminal)
 
 Inside Purple Computer, try:
 ```
-2 + 2              # Math
-cat * 5            # Five cats
-dog + cat          # Emoji addition
-cat times 3        # Word operators
+2 + 2                  # Math with dot visualization
+3 * 4 + 2              # Operator precedence (= 14)
+cat * 5                # Five cats
+dog + cat              # Emoji addition (🐶 🐱)
+3 + 4 + 2 bananas      # Numbers attach to emoji (= 9 bananas)
+red + blue             # Color mixing (= purple)
+apple + red + green    # Mixed: emoji + colors
 ```
 
 ### For Installation (Old Laptop)
@@ -87,7 +90,7 @@ Purple has three core modes:
 
 | Key | Mode | What It Does |
 |-----|------|--------------|
-| **F1** | **Ask** | Math and emoji. Type `2 + 2` or `cat * 3` or `cat + dog` |
+| **F1** | **Ask** | Math, emoji, and colors. Maximally permissive: always tries to do something meaningful. See [guides/ask-mode-design.md](guides/ask-mode-design.md) |
 | **F2** | **Play** | Music and art grid. Press any key to play a sound and paint a color. |
 | **F3** | **Write** | Simple text editor. Just type. |
 
@@ -214,8 +217,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 ## Documentation
 
 - **[MANUAL.md](MANUAL.md):** Complete build instructions, customization, and troubleshooting
-- **[guides/architecture-overview.md](guides/architecture-overview.md):** High-level explanation of the two-system design
-- **[guides/ubuntu-live-installer.md](guides/ubuntu-live-installer.md):** Technical deep-dive on ISO remastering
+- **[guides/](guides/):** Technical deep-dives (architecture, installer, ask mode design, etc.)
 
 ---
 

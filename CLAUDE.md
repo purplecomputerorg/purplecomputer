@@ -11,6 +11,23 @@ This applies to docs, comments, and UI strings.
 
 ---
 
+## Python Environment
+
+Always use `.venv` or Docker to access Python dependencies. The system Python won't have the required libraries.
+
+```bash
+# Local development
+source .venv/bin/activate
+pytest tests/ -v
+
+# Or via Docker (on some machines)
+docker compose run app pytest tests/ -v
+```
+
+Or use the Makefile shortcuts: `make test`, `make run`, `make setup`.
+
+---
+
 ## Textual Framework Workarounds
 
 ### Background Color Updates (Textual 0.67.0)

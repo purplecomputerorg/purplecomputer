@@ -24,6 +24,8 @@ from textual.message import Message
 from textual.strip import Strip
 from rich.segment import Segment
 from rich.style import Style
+from rich.highlighter import Highlighter
+from rich.text import Text
 import re
 
 from ..content import get_content
@@ -157,6 +159,17 @@ class ColorResultLine(Widget):
         return "#000000" if luminance > 0.5 else "#FFFFFF"
 
 
+class ValidWordHighlighter(Highlighter):
+    """Underlines valid emoji and color words as user types."""
+
+    def highlight(self, text: Text) -> None:
+        content = get_content()
+        plain = str(text).lower()
+        for match in re.finditer(r'[a-z]+', plain):
+            if content.is_valid_word(match.group()):
+                text.stylize("underline", match.start(), match.end())
+
+
 class InlineInput(Input):
     """
     Inline input widget that appears after Ask: prompt.
@@ -173,7 +186,7 @@ class InlineInput(Input):
     ]
 
     def __init__(self, **kwargs):
-        super().__init__(placeholder="", **kwargs)
+        super().__init__(placeholder="", highlighter=ValidWordHighlighter(), **kwargs)
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
         self.autocomplete_type: str = "emoji"  # "emoji" or "color"
         self.autocomplete_index: int = 0
@@ -276,24 +289,17 @@ class InlineInput(Input):
         content = get_content()
         text = self.value.lower().strip()
 
-        # Get last word being typed (split by spaces, +, and other operators)
-        parts = re.split(r'[\s+*x]+', text)
-        words = [p for p in parts if p]
-        if not words:
-            self.autocomplete_matches = []
-            self.autocomplete_type = "emoji"
-            self.autocomplete_index = 0
-            return
-
-        last_word = words[-1]
+        # Find the last word being typed (sequence of letters at the end)
+        match = re.search(r'([a-z]+)$', text)
+        last_word = match.group(1) if match else ""
         if len(last_word) < 2:
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
             return
 
-        # If exact match exists (color or emoji), don't show autocomplete
-        if content.get_color(last_word) or content.get_emoji(last_word):
+        # If exact match exists (color, emoji, or plural), don't show autocomplete
+        if content.is_valid_word(last_word):
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0

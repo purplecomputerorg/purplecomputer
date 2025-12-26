@@ -247,6 +247,40 @@ class ContentManager:
         """Get list of all available color names"""
         return sorted(self.colors.keys())
 
+    def get_word(self, word: str) -> tuple[str, str] | None:
+        """Get emoji or color for a word, including plural forms.
+
+        Returns (value, type) where type is 'emoji' or 'color', or None if not found.
+        For plurals like 'cats' or 'reds', returns the singular form.
+        """
+        word = word.lower().strip()
+
+        # Check emoji first
+        emoji = self.emojis.get(word)
+        if emoji:
+            return (emoji, "emoji")
+
+        # Check color
+        color = self.colors.get(word)
+        if color:
+            return (color, "color")
+
+        # Check singular form for plurals
+        if word.endswith('s') and len(word) > 2:
+            singular = word[:-1]
+            emoji = self.emojis.get(singular)
+            if emoji:
+                return (emoji, "emoji")
+            color = self.colors.get(singular)
+            if color:
+                return (color, "color")
+
+        return None
+
+    def is_valid_word(self, word: str) -> bool:
+        """Check if word is a valid emoji or color, including plural forms."""
+        return self.get_word(word) is not None
+
 
 # Global content manager instance
 _content: Optional[ContentManager] = None

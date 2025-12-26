@@ -10,6 +10,7 @@ Features:
 - Word synonyms: times, plus, minus
 - Emoji display: typing "cat" shows 🐱
 - Emoji math: 3 * cat produces 🐱🐱🐱
+- Typo tolerance: long math expressions forgive accidental keystrokes
 - Speech output (Tab to toggle)
 - History (up/down arrows)
 - Emoji autocomplete (Space to accept)
@@ -699,6 +700,11 @@ class SimpleEvaluator:
     PLUS_PATTERN = r'\+|(?<!\w)plus(?!\w)'
     # Regex for valid math expression characters
     MATH_CHARS_PATTERN = r'^[\d\s\+\-\*\/\(\)\.]+$'
+    # Valid math punctuation (operators, parens, decimal) for "mostly math" detection
+    MATH_PUNCTUATION = set('+-*/(). ')
+    # Thresholds for "mostly math" detection (filters typos like accidental '=')
+    MIN_MATH_OPERATORS = 3
+    MATH_RATIO_THRESHOLD = 0.6  # 60% of punctuation must be math symbols
 
     def __init__(self):
         self.content = get_content()
@@ -708,6 +714,9 @@ class SimpleEvaluator:
         text = text.strip()
         if not text:
             return ""
+
+        # Clean typos in mostly-math expressions (e.g., accidental '=' key)
+        text = self._clean_mostly_math(text)
 
         # Track if original had parens (implies computation)
         had_parens = '(' in text
@@ -1109,6 +1118,37 @@ class SimpleEvaluator:
         result = re.sub(r'divided\s*by', '/', result)
         # Handle x between digits (avoid replacing 'x' in words like "fox")
         return re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
+
+    def _clean_mostly_math(self, text: str) -> str:
+        """Clean text that looks mostly like math (filters typos like accidental '=').
+
+        If the text has at least MIN_MATH_OPERATORS math operators and at least
+        MATH_RATIO_THRESHOLD of ASCII punctuation symbols are valid math punctuation,
+        filter out the invalid ones. Digits, letters, emojis, spaces are always kept.
+
+        Example: "2+3+4-5+5+3-2=3+4+6" -> "2+3+4-5+5+3-23+4+6" (= removed)
+        """
+        # Count math operators
+        math_ops = set('+-*/')
+        math_op_count = sum(1 for c in text if c in math_ops)
+
+        # Get all ASCII punctuation (excludes digits, letters, spaces, emojis)
+        ascii_punct = [c for c in text if ord(c) < 128 and not c.isalnum() and not c.isspace()]
+        # Count how many are valid math punctuation
+        math_punct_count = sum(1 for c in ascii_punct if c in self.MATH_PUNCTUATION)
+
+        # Check if it looks mostly like math
+        if (math_op_count >= self.MIN_MATH_OPERATORS and
+            len(ascii_punct) > 0 and
+            math_punct_count / len(ascii_punct) >= self.MATH_RATIO_THRESHOLD):
+            # Replace invalid ASCII punctuation with '+' (likely typo, e.g. '=' next to '+')
+            def keep_or_plus(c):
+                if c.isalnum() or c.isspace() or ord(c) > 127 or c in self.MATH_PUNCTUATION:
+                    return c
+                return '+'
+            return ''.join(keep_or_plus(c) for c in text)
+
+        return text
 
     def _eval_math(self, text: str) -> float | int | None:
         """Safely evaluate math expression."""

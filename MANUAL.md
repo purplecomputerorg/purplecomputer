@@ -353,6 +353,7 @@ Ask mode is a calculator that understands math, emojis, and colors. It's designe
 - **Labels for computed expressions:** Shows "14 dogs" above the emojis when math was involved
 - **Spaces between different emoji types:** `cat + dog` → `🐱 🐶`
 - **Colors mix like paint:** Even with non-colors between them
+- **Typo tolerance:** Long math expressions (3+ operators, 60%+ valid symbols) tolerate accidental keystrokes like `=` (replaced with `+`)
 - **Unknown text passes through:** `my name is tavi apple` → `my name is tavi 🍎`
 
 ### Autocomplete

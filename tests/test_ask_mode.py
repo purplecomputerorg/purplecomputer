@@ -65,6 +65,49 @@ if HAS_PYTEST:
             assert result.startswith("20\n") and result.count("•") == 20
 
 
+    class TestMostlyMathCleaning:
+        """Test that mostly-math expressions tolerate typos like accidental '='."""
+
+        def test_accidental_equals_cleaned(self, evaluator):
+            """Accidental = in long math expression should be replaced with +."""
+            result = evaluator.evaluate("2+3+4-5+5+3-2=3+4+6")
+            # = replaced with +: 2+3+4-5+5+3-2+3+4+6 = 23
+            assert result.startswith("23\n")
+
+        def test_accidental_equals_middle(self, evaluator):
+            """Equals in middle of expression."""
+            result = evaluator.evaluate("1+2+3=4+5+6")
+            # = replaced with +: 1+2+3+4+5+6 = 21
+            assert result.startswith("21\n")
+
+        def test_too_few_operators_not_cleaned(self, evaluator):
+            """With only 2 operators, don't clean (might be intentional)."""
+            # Only 2 math operators, doesn't meet MIN_MATH_OPERATORS threshold
+            result = evaluator.evaluate("2+3=5")
+            # Should NOT be cleaned, returns as-is (not valid math)
+            assert result == "2+3=5"
+
+        def test_too_many_non_math_symbols_not_cleaned(self, evaluator):
+            """If too many non-math symbols, don't clean."""
+            # 3 math ops (+,+,+) but 3 non-math (=,=,=), ratio is 50% < 60%
+            result = evaluator.evaluate("1+2=3+4=5+6=7")
+            assert result == "1+2=3+4=5+6=7"
+
+        def test_clean_preserves_spaces(self, evaluator):
+            """Cleaning should preserve spaces and replace invalid punct with +."""
+            # 4 math ops (+,+,+,+), 1 non-math (=), ratio = 4/5 = 80% >= 60%
+            result = evaluator.evaluate("2 + 3 + 4 = 5 + 6")
+            # = replaced with +: 2 + 3 + 4 + 5 + 6 = 20
+            assert result.startswith("20\n")
+
+        def test_borderline_ratio_passes(self, evaluator):
+            """At 60% threshold, 3 math / 5 total (60%) should pass."""
+            # 3 math ops (+,+,+), 2 non-math (=,=), ratio = 3/5 = 60%
+            result = evaluator.evaluate("1+2+3+4=5=6")
+            # Both = replaced with +: 1+2+3+4+5+6 = 21
+            assert result.startswith("21\n")
+
+
     class TestWordOperators:
         """Test word-based operators"""
 

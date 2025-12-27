@@ -778,6 +778,17 @@ class PurpleApp(App):
         # Always call super to continue normal event dispatch
         await super().on_event(event)
 
+    def on_screen_resume(self, event: events.ScreenResume) -> None:
+        """Restore focus when returning from overlay screens (sleep, parent menu)."""
+        # Find the current mode widget and restore focus
+        mode_id = f"mode-{self.active_mode.name.lower()}"
+        try:
+            content_area = self.query_one("#content-area")
+            mode_widget = content_area.query_one(f"#{mode_id}")
+            self._focus_mode(mode_widget)
+        except NoMatches:
+            pass
+
     def _create_mode_widget(self, mode: Mode):
         """Create a new mode widget"""
         if mode == Mode.ASK:

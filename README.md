@@ -16,7 +16,7 @@ Purple isn't a screen your kid stares at. Purple is a calm place your kid *does*
 Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 - **Distraction-free by design.** No videos. No ads. No app store. No infinite feeds.
-- **A creativity device, not an entertainment device.** Kids write, draw, explore, type, imagine — slowly and calmly.
+- **A creativity device, not an entertainment device.** Kids write, draw, explore, type, imagine. Slowly and calmly.
 - **Safe by default.** No accounts. No tracking. No social media. No algorithm.
 - **Eco-friendly & kid-ready.** Every Purple Laptop saves a device from the landfill.
 
@@ -95,11 +95,11 @@ Purple has three core modes:
 | **F3** | **Write** | Simple text editor. Just type. |
 
 **Controls:**
-- **F1-F3** — Switch modes
-- **F12** — Toggle dark/light mode
-- **Ctrl+V** — Cycle views (Screen → Line → Ears)
-- **Tab** (in Ask mode) — Toggle speech on/off
-- **Hold Escape (1s)** — Parent mode (admin menu)
+- **F1-F3:** Switch modes
+- **F12:** Toggle dark/light mode
+- **Ctrl+V:** Cycle views (Screen → Line → Ears)
+- **Tab** (in Ask mode): Toggle speech on/off
+- **Hold Escape (1s):** Parent mode (admin menu)
 
 ---
 
@@ -223,12 +223,12 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 ## Philosophy
 
-**A computer kids can't break, and parents don't have to fight with.**
+**A calm computer parents don't have to fight with.**
 
-- Simple, text-based interface — easy for kids, calming for parents
+- Simple, text-based interface: easy for kids, calming for parents
 - Your kid's first computer that isn't trying to control their attention
-- A tool, not a toy — built from sturdy laptops made to survive real kid use
-- Offline & private — no internet required, no tracking, no data collection
+- A tool, not a toy. Runs on any old laptop you have lying around
+- Offline and private: no internet required, no tracking, no data collection
 
 ---
 

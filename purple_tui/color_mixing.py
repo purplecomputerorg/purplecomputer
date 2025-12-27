@@ -186,16 +186,9 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
     return f"#{r:02X}{g:02X}{b:02X}"
 
 
-def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
+def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     """
-    Mix multiple colors like paint using Kubelka-Munk spectral mixing.
-
-    Args:
-        colors: List of hex color strings (e.g., ["#FF0000", "#0000FF"])
-        weights: Optional list of weights for each color (defaults to equal)
-
-    Returns:
-        Hex color string of the mixed result
+    Internal: Mix multiple colors at once using Kubelka-Munk spectral mixing.
     """
     if not colors:
         return "#808080"
@@ -237,6 +230,39 @@ def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
     rgb = (_linear_to_srgb(lrgb[0]), _linear_to_srgb(lrgb[1]), _linear_to_srgb(lrgb[2]))
 
     return rgb_to_hex(*rgb)
+
+
+def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
+    """
+    Mix multiple colors like paint using Kubelka-Munk spectral mixing.
+    Mixes pairwise, tracking accumulated weight so counts affect result.
+
+    Args:
+        colors: List of hex color strings (e.g., ["#FF0000", "#0000FF"])
+        weights: Ignored (kept for API compatibility)
+
+    Returns:
+        Hex color string of the mixed result
+    """
+    if not colors:
+        return "#808080"
+
+    if len(colors) == 1:
+        return colors[0]
+
+    # Mix pairwise, tracking accumulated weight
+    result = colors[0]
+    result_weight = 1.0
+    for i in range(1, len(colors)):
+        if colors[i].upper() == result.upper():
+            # Same color: just increase weight
+            result_weight += 1.0
+        else:
+            # Different color: mix with weights
+            result = _mix_colors_internal([result, colors[i]], [result_weight, 1.0])
+            result_weight = 1.0  # Reset: mixed result is now a single "unit"
+
+    return result
 
 
 def get_color_name_approximation(hex_color: str) -> str:

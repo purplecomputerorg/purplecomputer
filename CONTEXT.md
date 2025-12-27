@@ -20,7 +20,7 @@ For screen-skeptical parents: a computer kids can't break, and parents don't hav
 
 Purple Computer runs on 2010-2020 era laptops—ThinkPads, Dell Latitudes, HP EliteBooks, Surfaces, MacBook Airs. These machines have years of life left but often sit in drawers or head to e-waste. Purple gives them new purpose as dedicated creativity tools for kids, extending their lifespan by 5-10 more years.
 
-Minimal requirements: 2GB RAM, 20GB storage, x86_64 processor. Old hardware runs it beautifully.
+Minimal requirements: 2GB RAM, 16GB storage, 1024×768 display, x86_64 processor. Old hardware runs it beautifully.
 
 ## The Three Modes
 
@@ -33,15 +33,15 @@ A math and emoji playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. 
 A music and art grid mapped to the keyboard. Press any key to play a sound and paint a color. The number row plus three letter rows create a 10×4 grid. No wrong notes, just exploration.
 
 ### F3: Write
-A simple text editor with large, friendly text. Sticky shift makes capitals easy. Typing from different keyboard rows mixes colors like paint—top row adds red, middle adds blue, bottom adds yellow.
+A simple text editor with large, friendly text. Double-tap or sticky shift makes capitals easy. Typing from different keyboard rows mixes colors like paint: top row adds red, middle adds blue, bottom adds yellow.
 
 ## Key Design Principles
 
 - **No files to delete, no settings to break, no internet to worry about**
 - **No login required**—boots straight into the purple interface
 - **Offline by default**—works without network access
-- **One-handed typing friendly**—sticky shift and long-press for symbols
-- **Parent mode** (hold Escape)—password-protected admin access
+- **One-handed typing friendly**—sticky shift and double-tap for capitals
+- **Parent mode** (hold Escape 1s)—opens admin menu for shell access
 
 ## Getting a Purple Computer
 
@@ -62,15 +62,15 @@ These are quality used laptops (ThinkPads, etc.) that have been tested, cleaned,
 
 ## Technology
 
-Purple Computer is a custom Linux-based operating system built on Ubuntu. The interface is a fullscreen terminal application with:
+Purple Computer is a custom Linux-based operating system built on Ubuntu 24.04 LTS. The interface is a fullscreen terminal application (Python + Textual) running in Alacritty with:
 
-- Large, kid-appropriate text sizing
-- Text-to-speech for typed content
-- Custom keyboard handling for young typists
-- Thoughtful power management (auto-sleep, safe shutdown)
-- Trackpad/mouse disabled—keyboard only
+- Large, kid-appropriate text sizing (auto-calculated to fill 80% of screen)
+- Text-to-speech for typed content (Piper TTS, works offline)
+- Custom keyboard handling for young typists (sticky shift, double-tap capitals, F-key calibration)
+- Lid close triggers safe shutdown
+- Trackpad/mouse disabled (keyboard only)
 
-The entire experience fits in a 100×28 character viewport, targeting roughly 10×6 inches of physical screen space regardless of the laptop's actual size.
+The entire experience fits in a 100×28 character viewport, filling most of the screen on typical 11-15" donated laptops.
 
 ## Content Packs
 

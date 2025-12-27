@@ -198,11 +198,12 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 ## System Requirements
 
 **Target Hardware:**
-- x86_64 processor (Intel/AMD)
-- 2GB RAM minimum (4GB+ recommended)
-- 20GB storage minimum (60GB+ recommended)
-- BIOS or UEFI firmware
-- Secure Boot supported
+- x86_64 processor (Intel/AMD, 64-bit)
+- 2GB RAM minimum (4GB recommended for smooth TTS)
+- 16GB storage minimum (the installer requires this)
+- 1024×768 display minimum
+- Audio output (speakers or headphones)
+- BIOS or UEFI firmware (Secure Boot supported)
 
 **Tested on:** 2010-2020 era laptops (ThinkPad, Dell Latitude, HP EliteBook, Surface, MacBook Air/Pro)
 

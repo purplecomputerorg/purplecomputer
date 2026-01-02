@@ -1,18 +1,17 @@
 """
-Write Mode: Art Canvas
+Write Mode: Text Canvas with Playful Painting
 
-A directional typing canvas for creative expression:
-- Arrow keys change typing direction (up/down/left/right)
-- Cursor shows direction as an arrow
-- Tab toggles between text mode and dot mode
-- In dot mode, all keys paint colored dots (⬤)
-- Dot colors follow keyboard row gradients (purple, red, yellow, blue)
-- Painting dots over dots mixes colors
-- Edges wrap around (Pac-Man style)
+A text-focused canvas with paint-by-key features:
+- Normal typing writes readable text (left-to-right, wrapping at edges)
+- Each key tints the background based on keyboard row
+- Arrow keys move the cursor (no drawing)
+- Hold Space + arrows to paint colored trails
+- Backspace erases glyph and fades background
+- Hold Backspace to clear the entire canvas
 """
 
-from enum import Enum
 import colorsys
+import time
 
 from textual.widgets import Static
 from textual.containers import Container
@@ -24,112 +23,143 @@ from textual import events
 from rich.segment import Segment
 from rich.style import Style
 
-from ..color_mixing import mix_colors_paint
+from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
+
+# Detect if evdev is available (Linux with proper keyboard handling)
+try:
+    import evdev
+    EVDEV_AVAILABLE = True
+except ImportError:
+    EVDEV_AVAILABLE = False
 
 
 # =============================================================================
-# ENUMS AND CONSTANTS
+# CONSTANTS
 # =============================================================================
 
-class Direction(Enum):
-    """Typing direction on the canvas."""
-    RIGHT = "right"
-    LEFT = "left"
-    UP = "up"
-    DOWN = "down"
-
-
-class CanvasMode(Enum):
-    """Canvas input mode."""
-    TEXT = "text"
-    DOT = "dot"
-
-
-# Direction arrows for cursor display
-DIRECTION_ARROWS = {
-    Direction.RIGHT: "▶",
-    Direction.LEFT: "◀",
-    Direction.UP: "▲",
-    Direction.DOWN: "▼",
+# Grayscale values (selected by number keys: 1=white, 0=black)
+GRAYSCALE = {
+    "1": "#FFFFFF",  # White
+    "2": "#E0E0E0",
+    "3": "#C0C0C0",
+    "4": "#A0A0A0",
+    "5": "#808080",  # Middle gray
+    "6": "#606060",
+    "7": "#404040",
+    "8": "#202020",
+    "9": "#101010",
+    "0": "#000000",  # Black
 }
 
-# The dot character (solid block, reliably 1 char wide)
-DOT_CHAR = "█"
+# Brush character for painting
+BRUSH_CHAR = "█"
 
-# Keyboard rows (left to right order for gradient)
-NUMBER_ROW = list("1234567890")
-QWERTY_ROW = list("qwertyuiop[]\\")
-ASDF_ROW = list("asdfghjkl;'")
-ZXCV_ROW = list("zxcvbnm,./")
+# Box-drawing characters for cursor border
+BOX_CHARS = {
+    (-1, -1): "┌",  # top-left
+    (0, -1): "─",   # top-center
+    (1, -1): "┐",   # top-right
+    (-1, 0): "│",   # middle-left
+    (1, 0): "│",    # middle-right
+    (-1, 1): "└",   # bottom-left
+    (0, 1): "─",    # bottom-center
+    (1, 1): "┘",    # bottom-right
+}
 
-# Default background color
+# Keyboard rows for colors (letter rows only)
+QWERTY_ROW = list("qwertyuiop")    # Red family
+ASDF_ROW = list("asdfghjkl")       # Yellow family
+ZXCV_ROW = list("zxcvbnm")         # Blue family
+
+# Default background color (dark purple)
 DEFAULT_BG = "#2a1845"
+
+# Readable text foreground color
+TEXT_FG = "#FFFFFF"
+
+# Cursor colors
+CURSOR_BG_NORMAL = "#6633AA"
+CURSOR_BG_PAINT = "#FF6600"
+
+# Background tint strength (0.0 = no tint, 1.0 = full color)
+# Keep low so text stays readable
+BG_TINT_STRENGTH = 0.15
+
+# Paint color strength when holding space
+PAINT_STRENGTH = 0.7
+
+# Fade factor for backspace (how much background fades toward default)
+FADE_FACTOR = 0.5
+
+# Hold duration for backspace clear (in seconds)
+BACKSPACE_HOLD_CLEAR_TIME = 1.0
 
 
 # =============================================================================
-# COLOR GRADIENT GENERATION
+# COLOR UTILITIES
 # =============================================================================
 
 def hsl_to_hex(h: float, s: float, l: float) -> str:
-    """
-    Convert HSL to hex color string.
-
-    Args:
-        h: Hue (0-360)
-        s: Saturation (0-1)
-        l: Lightness (0-1)
-
-    Returns:
-        Hex color string like "#FF0000"
-    """
-    # colorsys uses h in 0-1 range
+    """Convert HSL to hex color string."""
     r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
     return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
 
 
+def lerp_color(c1: str, c2: str, t: float) -> str:
+    """Linear interpolation between two colors."""
+    r1, g1, b1 = hex_to_rgb(c1)
+    r2, g2, b2 = hex_to_rgb(c2)
+    r = int(r1 + (r2 - r1) * t)
+    g = int(g1 + (g2 - g1) * t)
+    b = int(b1 + (b2 - b1) * t)
+    return rgb_to_hex(r, g, b)
+
+
 def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
-    """
-    Generate a light-to-dark gradient for a row of keys.
-
-    Args:
-        hue: Base hue (0-360)
-        keys: List of keys in order
-
-    Returns:
-        Dict mapping each key to its hex color
-    """
+    """Generate a light-to-dark gradient for a row of keys."""
     result = {}
     count = len(keys)
     for i, key in enumerate(keys):
-        # Lightness goes from 0.70 (light) to 0.30 (dark)
-        lightness = 0.70 - (i / max(count - 1, 1)) * 0.40
-        result[key] = hsl_to_hex(hue, 0.80, lightness)
+        lightness = 0.65 - (i / max(count - 1, 1)) * 0.35
+        result[key] = hsl_to_hex(hue, 0.75, lightness)
     return result
 
 
-# Build the complete key-to-color mapping
-DOT_COLORS: dict[str, str] = {}
-DOT_COLORS.update(generate_row_gradient(300, NUMBER_ROW))   # Purple/pink
-DOT_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red
-DOT_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow
-DOT_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue
+# Build key-to-color mapping (primary colors by row)
+KEY_COLORS: dict[str, str] = {}
+KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top letter row)
+KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
+KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
 
 
-def get_dot_color(char: str) -> str:
-    """Get the dot color for a character, or white if not in a row."""
-    return DOT_COLORS.get(char.lower(), "#FFFFFF")
+def get_key_color(char: str) -> str:
+    """Get the color for a key, or white if not mapped."""
+    return KEY_COLORS.get(char.lower(), "#AAAAAA")
+
+
+def get_row_tint_color(char: str) -> str:
+    """Get a tint color based on which keyboard row a character is on."""
+    lower = char.lower()
+    if lower in QWERTY_ROW:
+        return hsl_to_hex(0, 0.5, 0.35)      # Red family
+    elif lower in ASDF_ROW:
+        return hsl_to_hex(50, 0.5, 0.40)     # Yellow family
+    elif lower in ZXCV_ROW:
+        return hsl_to_hex(220, 0.5, 0.35)    # Blue family
+    else:
+        return DEFAULT_BG  # No tint for unmapped keys
 
 
 # =============================================================================
 # MESSAGES
 # =============================================================================
 
-class CanvasModeChanged(Message):
-    """Message sent when canvas mode or direction changes."""
+class PaintModeChanged(Message):
+    """Message sent when paint mode changes."""
 
-    def __init__(self, mode: "CanvasMode", direction: "Direction") -> None:
-        self.mode = mode
-        self.direction = direction
+    def __init__(self, is_painting: bool, last_color: str) -> None:
+        self.is_painting = is_painting
+        self.last_color = last_color
         super().__init__()
 
 
@@ -139,9 +169,10 @@ class CanvasModeChanged(Message):
 
 class ArtCanvas(Widget, can_focus=True):
     """
-    Custom canvas widget with directional typing and dot painting.
+    Custom canvas widget with text typing and Space-held painting.
 
     Uses render_line() for full control over rendering.
+    Cell structure: (char, fg_color, bg_color)
     """
 
     DEFAULT_CSS = """
@@ -153,13 +184,76 @@ class ArtCanvas(Widget, can_focus=True):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # Grid: dict[(x, y)] = (char, color)
-        self._grid: dict[tuple[int, int], tuple[str, str]] = {}
+        # Grid: dict[(x, y)] = (char, fg_color, bg_color)
+        self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         self._cursor_x = 0
         self._cursor_y = 0
-        self._direction = Direction.RIGHT
-        self._mode = CanvasMode.TEXT
-        self._default_text_color = "#FFFFFF"
+
+        # Paint mode toggle (not hold-based)
+        self._paint_mode = False
+        self._last_key_color = "#FFFFFF"  # Color from last key in paint mode
+        self._last_key_char = ""  # Last key pressed
+
+        # Double-tap detection for Space (evdev mode) to toggle paint mode
+        self._last_space_time: float = 0.0
+        self._double_tap_threshold = 0.4  # seconds
+
+        # Space-hold for drawing lines in paint mode
+        self._space_down = False
+        self._space_down_timer = None
+
+        # Cursor blink state
+        self._cursor_visible = True
+        self._blink_timer = None
+
+        # Backspace hold state
+        self._backspace_start_time: float | None = None
+        self._clear_animation_active = False
+
+    def _toggle_paint_mode(self) -> None:
+        """Toggle between paint mode and text mode."""
+        self._paint_mode = not self._paint_mode
+        self._space_down = False  # Reset brush state on mode change
+
+        # Start or stop cursor blinking
+        if self._paint_mode:
+            self._start_blink()
+        else:
+            self._stop_blink()
+
+        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
+        self.refresh()
+
+    def _toggle_blink(self) -> None:
+        """Toggle cursor visibility for blink effect."""
+        self._cursor_visible = not self._cursor_visible
+        self.refresh()
+
+    def _start_blink(self) -> None:
+        """Start cursor blinking."""
+        self._cursor_visible = True
+        if self._blink_timer is not None:
+            self._blink_timer.stop()
+        self._blink_timer = self.set_interval(0.4, self._toggle_blink)
+
+    def _stop_blink(self) -> None:
+        """Stop cursor blinking."""
+        if self._blink_timer is not None:
+            self._blink_timer.stop()
+            self._blink_timer = None
+        self._cursor_visible = True
+
+    def _release_space_down(self) -> None:
+        """Release brush-down state after timer expires."""
+        self._space_down = False
+        self.refresh()
+
+    def _extend_space_down(self) -> None:
+        """Extend the space-down timer (for drawing lines)."""
+        if self._space_down_timer is not None:
+            self._space_down_timer.stop()
+        # Long timer: space "sticks" for drawing, released after inactivity
+        self._space_down_timer = self.set_timer(1.5, self._release_space_down)
 
     @property
     def canvas_width(self) -> int:
@@ -172,14 +266,16 @@ class ArtCanvas(Widget, can_focus=True):
         return max(1, self.size.height)
 
     @property
-    def direction(self) -> Direction:
-        """Current typing direction."""
-        return self._direction
+    def is_painting(self) -> bool:
+        """Whether paint mode is active."""
+        return self._paint_mode
 
-    @property
-    def mode(self) -> CanvasMode:
-        """Current canvas mode."""
-        return self._mode
+    def _is_in_brush_ring(self, x: int, y: int) -> bool:
+        """Check if position is in the 3x3 ring around cursor (not center)."""
+        dx = x - self._cursor_x
+        dy = y - self._cursor_y
+        # In the 3x3 area but not the center
+        return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the canvas."""
@@ -189,154 +285,293 @@ class ArtCanvas(Widget, can_focus=True):
             return Strip([])
 
         segments = []
-        bg_style = Style(bgcolor=DEFAULT_BG)
 
         for x in range(width):
             pos = (x, y)
             cell = self._grid.get(pos)
 
-            # Is this the cursor position?
-            is_cursor = (x == self._cursor_x and y == self._cursor_y)
+            is_cursor_center = (x == self._cursor_x and y == self._cursor_y)
+            is_brush_ring = self._paint_mode and self._is_in_brush_ring(x, y)
 
-            if is_cursor:
-                # Draw cursor as direction arrow
-                arrow = DIRECTION_ARROWS[self._direction]
-                # Cursor style: bright on dark
-                cursor_style = Style(color="#FFFFFF", bgcolor="#6633AA", bold=True)
-                segments.append(Segment(arrow, cursor_style))
+            if is_cursor_center:
+                if self._paint_mode:
+                    # Paint mode: center always shows underlying (the "hole")
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                    else:
+                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+                else:
+                    # Text mode cursor
+                    cursor_style = Style(color="#FFFFFF", bgcolor=CURSOR_BG_NORMAL, bold=True)
+                    segments.append(Segment("▌", cursor_style))
+            elif is_brush_ring:
+                # 3x3 ring around cursor: blinks on/off with box-drawing chars
+                if self._cursor_visible:
+                    dx = x - self._cursor_x
+                    dy = y - self._cursor_y
+                    box_char = BOX_CHARS.get((dx, dy), "·")
+
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        # Check if cell has real text (not empty/space/block)
+                        if char not in (" ", BRUSH_CHAR, ""):
+                            # Text cell: keep the character, tint it with cursor color
+                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            segments.append(Segment(char, ring_style))
+                        else:
+                            # Painted/empty cell: show box char with underlying bg
+                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            segments.append(Segment(box_char, ring_style))
+                    else:
+                        # Empty cell: show box char on default bg
+                        ring_style = Style(color=self._last_key_color, bgcolor=DEFAULT_BG)
+                        segments.append(Segment(box_char, ring_style))
+                else:
+                    # Blink off: show underlying cell
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                    else:
+                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
             elif cell:
-                char, color = cell
-                # Draw the character with its color
-                char_style = Style(color=color, bgcolor=DEFAULT_BG)
+                char, fg_color, bg_color = cell
+                char_style = Style(color=fg_color, bgcolor=bg_color)
                 segments.append(Segment(char, char_style))
             else:
                 # Empty cell
-                segments.append(Segment(" ", bg_style))
+                segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
 
         return Strip(segments)
 
-    def _move_cursor(self) -> None:
-        """Move cursor in current direction with Pac-Man wrap."""
-        if self._direction == Direction.RIGHT:
-            self._cursor_x = (self._cursor_x + 1) % self.canvas_width
-        elif self._direction == Direction.LEFT:
-            self._cursor_x = (self._cursor_x - 1) % self.canvas_width
-        elif self._direction == Direction.DOWN:
-            self._cursor_y = (self._cursor_y + 1) % self.canvas_height
-        elif self._direction == Direction.UP:
-            self._cursor_y = (self._cursor_y - 1) % self.canvas_height
+    def _move_cursor_right(self) -> bool:
+        """Move cursor right, return False if at edge."""
+        if self._cursor_x < self.canvas_width - 1:
+            self._cursor_x += 1
+            return True
+        return False
 
-    def _move_cursor_back(self) -> None:
-        """Move cursor opposite to current direction (for backspace)."""
-        if self._direction == Direction.RIGHT:
-            self._cursor_x = (self._cursor_x - 1) % self.canvas_width
-        elif self._direction == Direction.LEFT:
-            self._cursor_x = (self._cursor_x + 1) % self.canvas_width
-        elif self._direction == Direction.DOWN:
-            self._cursor_y = (self._cursor_y - 1) % self.canvas_height
-        elif self._direction == Direction.UP:
-            self._cursor_y = (self._cursor_y + 1) % self.canvas_height
+    def _move_cursor_left(self) -> bool:
+        """Move cursor left, return False if at edge."""
+        if self._cursor_x > 0:
+            self._cursor_x -= 1
+            return True
+        return False
+
+    def _move_cursor_up(self) -> bool:
+        """Move cursor up, return False if at edge."""
+        if self._cursor_y > 0:
+            self._cursor_y -= 1
+            return True
+        return False
+
+    def _move_cursor_down(self) -> bool:
+        """Move cursor down, return False if at edge."""
+        if self._cursor_y < self.canvas_height - 1:
+            self._cursor_y += 1
+            return True
+        return False
 
     def _carriage_return(self) -> None:
-        """Move to start of next line (relative to typing direction)."""
-        if self._direction == Direction.RIGHT:
-            self._cursor_x = 0
-            self._cursor_y = (self._cursor_y + 1) % self.canvas_height
-        elif self._direction == Direction.LEFT:
-            self._cursor_x = self.canvas_width - 1
-            self._cursor_y = (self._cursor_y + 1) % self.canvas_height
-        elif self._direction == Direction.DOWN:
-            self._cursor_y = 0
-            self._cursor_x = (self._cursor_x + 1) % self.canvas_width
-        elif self._direction == Direction.UP:
-            self._cursor_y = self.canvas_height - 1
-            self._cursor_x = (self._cursor_x + 1) % self.canvas_width
+        """Move to start of next line."""
+        self._cursor_x = 0
+        if self._cursor_y < self.canvas_height - 1:
+            self._cursor_y += 1
 
-    def type_char(self, char: str, color: str) -> None:
-        """Type a character or dot at cursor, then move cursor."""
+    def _get_cell_bg(self, pos: tuple[int, int]) -> str:
+        """Get background color of a cell, or default if empty."""
+        cell = self._grid.get(pos)
+        if cell:
+            return cell[2]
+        return DEFAULT_BG
+
+    def _set_cell(self, pos: tuple[int, int], char: str, fg: str, bg: str) -> None:
+        """Set a cell's content."""
+        self._grid[pos] = (char, fg, bg)
+
+    def _paint_at_cursor(self) -> None:
+        """Paint at current cursor position using current color."""
+        pos = (self._cursor_x, self._cursor_y)
+        existing_bg = self._get_cell_bg(pos)
+
+        # Blend paint color with existing background using spectral mixing
+        if existing_bg != DEFAULT_BG:
+            # Mix existing color with new paint color
+            new_bg = mix_colors_paint([existing_bg, self._last_key_color])
+        else:
+            # Blend paint color with default background
+            new_bg = lerp_color(DEFAULT_BG, self._last_key_color, PAINT_STRENGTH)
+
+        # Paint uses solid block character
+        self._set_cell(pos, BRUSH_CHAR, new_bg, new_bg)
+
+    def type_char(self, char: str) -> None:
+        """Type a character at cursor with row-based background tint."""
         pos = (self._cursor_x, self._cursor_y)
 
-        if self._mode == CanvasMode.DOT:
-            existing = self._grid.get(pos)
-            if existing and existing[0] == DOT_CHAR:
-                # Mix colors when painting over existing dot
-                new_color = mix_colors_paint([existing[1], color])
-                self._grid[pos] = (DOT_CHAR, new_color)
-            else:
-                self._grid[pos] = (DOT_CHAR, color)
-        else:
-            # Text mode: just place character
-            self._grid[pos] = (char, color)
+        # Update last key color (for painting)
+        self._last_key_char = char
+        self._last_key_color = get_key_color(char)
 
-        self._move_cursor()
+        # Get tint color based on keyboard row
+        tint = get_row_tint_color(char)
+
+        # Get existing background or start from default
+        existing_bg = self._get_cell_bg(pos)
+
+        # Blend tint with existing background (subtle tint)
+        if existing_bg == DEFAULT_BG:
+            new_bg = lerp_color(DEFAULT_BG, tint, BG_TINT_STRENGTH)
+        else:
+            # Blend new tint into existing
+            new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
+
+        # Text always uses readable foreground
+        self._set_cell(pos, char, TEXT_FG, new_bg)
+
+        # Move cursor right (with wrapping to next line)
+        if not self._move_cursor_right():
+            # At right edge, wrap to next line
+            self._carriage_return()
+
         self.refresh()
+
+    def _backspace(self) -> None:
+        """Delete character at cursor and fade background."""
+        # Move cursor back first
+        if self._cursor_x > 0:
+            self._cursor_x -= 1
+        elif self._cursor_y > 0:
+            # Wrap to end of previous line
+            self._cursor_y -= 1
+            self._cursor_x = self.canvas_width - 1
+
+        pos = (self._cursor_x, self._cursor_y)
+        cell = self._grid.get(pos)
+
+        if cell:
+            _, _, bg = cell
+            # Fade background toward default
+            faded_bg = lerp_color(bg, DEFAULT_BG, FADE_FACTOR)
+            # Clear the glyph but keep faded background
+            if faded_bg != DEFAULT_BG:
+                self._set_cell(pos, " ", TEXT_FG, faded_bg)
+            else:
+                # Fully faded, remove cell entirely
+                del self._grid[pos]
+        # If cell was empty, nothing to do
+
+        self.refresh()
+
+    def _clear_canvas(self) -> None:
+        """Clear the entire canvas with animation."""
+        self._clear_animation_active = True
+
+        # Simple clear (animation could be added via set_interval)
+        self._grid.clear()
+        self._cursor_x = 0
+        self._cursor_y = 0
+
+        self._clear_animation_active = False
+        self.refresh()
+
+    def _on_edge_hit(self) -> None:
+        """Provide feedback when cursor hits an edge."""
+        # Could add visual flash or sound here
+        # For now, the cursor just stops
+        pass
 
     def on_key(self, event: events.Key) -> None:
         """Handle keyboard input."""
         key = event.key
         char = event.character
 
-        # Arrow keys change direction
-        if key == "up":
-            self._direction = Direction.UP
-            self.post_message(CanvasModeChanged(self._mode, self._direction))
-            self.refresh()
-            event.stop()
-            event.prevent_default()
-            return
-
-        if key == "down":
-            self._direction = Direction.DOWN
-            self.post_message(CanvasModeChanged(self._mode, self._direction))
-            self.refresh()
-            event.stop()
-            event.prevent_default()
-            return
-
-        if key == "left":
-            self._direction = Direction.LEFT
-            self.post_message(CanvasModeChanged(self._mode, self._direction))
-            self.refresh()
-            event.stop()
-            event.prevent_default()
-            return
-
-        if key == "right":
-            self._direction = Direction.RIGHT
-            self.post_message(CanvasModeChanged(self._mode, self._direction))
-            self.refresh()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Tab toggles mode
-        if key == "tab":
-            if self._mode == CanvasMode.TEXT:
-                self._mode = CanvasMode.DOT
+        # Space handling
+        if key == "space":
+            if self._paint_mode:
+                # In paint mode: space stamps the selected color
+                self._paint_at_cursor()
+                # Track space for line drawing (key repeat extends this)
+                self._space_down = True
+                self._extend_space_down()
+                self.refresh()
             else:
-                self._mode = CanvasMode.TEXT
-            # Post message to update header
-            self.post_message(CanvasModeChanged(self._mode, self._direction))
+                # In text mode: check for double-tap to toggle, else type space
+                current_time = time.time()
+                if EVDEV_AVAILABLE and (current_time - self._last_space_time) < self._double_tap_threshold:
+                    # Double-tap detected: toggle paint mode
+                    self._toggle_paint_mode()
+                    self._last_space_time = 0.0
+                else:
+                    # Type a space
+                    pos = (self._cursor_x, self._cursor_y)
+                    existing_bg = self._get_cell_bg(pos)
+                    self._set_cell(pos, " ", TEXT_FG, existing_bg)
+                    if not self._move_cursor_right():
+                        self._carriage_return()
+                    self._last_space_time = current_time
+                    self.refresh()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Tab toggles paint mode (works on both evdev and non-evdev)
+        if key == "tab":
+            self._toggle_paint_mode()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Arrow keys
+        if key in ("up", "down", "left", "right"):
+            moved = False
+
+            if key == "up":
+                moved = self._move_cursor_up()
+            elif key == "down":
+                moved = self._move_cursor_down()
+            elif key == "left":
+                moved = self._move_cursor_left()
+            elif key == "right":
+                moved = self._move_cursor_right()
+
+            if not moved:
+                self._on_edge_hit()
+
+            # In paint mode with brush down (space held): draw line
+            if self._paint_mode and self._space_down:
+                self._paint_at_cursor()
+                self._extend_space_down()  # Keep brush down while moving
+
             self.refresh()
             event.stop()
             event.prevent_default()
             return
 
-        # Enter: carriage return
+        # Enter: carriage return (only in text mode)
         if key == "enter":
-            self._carriage_return()
+            if not self._paint_mode:
+                self._carriage_return()
             self.refresh()
             event.stop()
             event.prevent_default()
             return
 
-        # Backspace: move back, clear cell
+        # Backspace
         if key == "backspace":
-            self._move_cursor_back()
-            pos = (self._cursor_x, self._cursor_y)
-            if pos in self._grid:
-                del self._grid[pos]
-            self.refresh()
+            current_time = time.time()
+
+            if self._backspace_start_time is None:
+                self._backspace_start_time = current_time
+
+            # Check for hold-to-clear
+            hold_duration = current_time - self._backspace_start_time
+            if hold_duration >= BACKSPACE_HOLD_CLEAR_TIME:
+                self._clear_canvas()
+                self._backspace_start_time = None
+            else:
+                self._backspace()
+
             event.stop()
             event.prevent_default()
             return
@@ -351,15 +586,36 @@ class ArtCanvas(Widget, can_focus=True):
             event.prevent_default()
             return
 
+        # Reset backspace timer on other keys
+        self._backspace_start_time = None
+
         # Printable character
         if char:
-            if self._mode == CanvasMode.DOT:
-                color = get_dot_color(char)
-                self.type_char(DOT_CHAR, color)
+            if self._paint_mode:
+                # In paint mode:
+                # - Number keys select grayscale (1=white, 0=black)
+                # - Letter keys select hue colors
+                if char in GRAYSCALE:
+                    self._last_key_char = char
+                    self._last_key_color = GRAYSCALE[char]
+                    self.post_message(PaintModeChanged(True, self._last_key_color))
+                    self.refresh()
+                elif char.isalpha():
+                    color = get_key_color(char)
+                    if color != "#AAAAAA":  # Only if it's a mapped color
+                        self._last_key_char = char
+                        self._last_key_color = color
+                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                        self.refresh()
             else:
-                self.type_char(char, self._default_text_color)
+                # In text mode: type the character
+                self.type_char(char)
             event.stop()
             event.prevent_default()
+
+    def on_blur(self, event: events.Blur) -> None:
+        """Reset state when losing focus."""
+        pass  # Paint mode persists across focus changes
 
 
 # =============================================================================
@@ -367,7 +623,7 @@ class ArtCanvas(Widget, can_focus=True):
 # =============================================================================
 
 class CanvasHeader(Static):
-    """Shows current mode and direction."""
+    """Shows current mode and hints."""
 
     DEFAULT_CSS = """
     CanvasHeader {
@@ -381,28 +637,27 @@ class CanvasHeader(Static):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._mode = CanvasMode.TEXT
-        self._direction = Direction.RIGHT
+        self._is_painting = False
+        self._last_color = "#FFFFFF"
 
-    def update_state(self, mode: CanvasMode, direction: Direction) -> None:
-        """Update displayed mode and direction."""
-        self._mode = mode
-        self._direction = direction
+    def update_state(self, is_painting: bool, last_color: str) -> None:
+        """Update displayed state."""
+        self._is_painting = is_painting
+        self._last_color = last_color
         self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        mode_text = "Dot" if self._mode == CanvasMode.DOT else "Text"
-        arrow = DIRECTION_ARROWS[self._direction]
 
-        # Color the mode indicator based on mode
-        if self._mode == CanvasMode.DOT:
-            mode_styled = f"[bold #da77f2]{caps(mode_text)}[/]"
+        if self._is_painting:
+            # Show paint mode with color indicator
+            mode_styled = f"[bold {self._last_color}]{caps('Paint')}[/]"
+            hint = caps("1-0 gray, letters hue, Space stamp")
         else:
-            mode_styled = f"[bold]{caps(mode_text)}[/]"
+            mode_styled = f"[bold]{caps('Write')}[/]"
+            hint = caps("Tab = paint")
 
-        hint = caps("Tab: switch mode, Arrows: direction")
-        return f"{mode_styled} {arrow}  [dim]({hint})[/]"
+        return f"{mode_styled}  [dim]({hint})[/]"
 
 
 # =============================================================================
@@ -411,10 +666,10 @@ class CanvasHeader(Static):
 
 class WriteMode(Container):
     """
-    Art Canvas mode.
+    Write Mode: Text canvas with playful painting.
 
-    Ephemeral canvas for creative expression with directional typing,
-    dot painting, and color mixing.
+    Normal typing writes readable text with subtle background tinting.
+    Holding Space while pressing arrows paints colorful trails.
     """
 
     DEFAULT_CSS = """
@@ -445,11 +700,11 @@ class WriteMode(Container):
         """Focus the canvas when mode loads."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas.focus()
-        # Initialize header with canvas state
+        # Initialize header
         header = self.query_one("#canvas-header", CanvasHeader)
-        header.update_state(canvas.mode, canvas.direction)
+        header.update_state(False, "#FFFFFF")
 
-    def on_canvas_mode_changed(self, event: CanvasModeChanged) -> None:
-        """Update header when canvas mode/direction changes."""
+    def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
+        """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
-        header.update_state(event.mode, event.direction)
+        header.update_state(event.is_painting, event.last_color)

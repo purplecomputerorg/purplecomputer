@@ -40,7 +40,6 @@ from .keyboard import (
     launch_keyboard_normalizer, stop_keyboard_normalizer,
 )
 from .power_manager import get_power_manager
-from .modes.write_mode import BorderColorChanged
 
 
 class Mode(Enum):
@@ -641,15 +640,6 @@ class PurpleApp(App):
         stop_keyboard_normalizer(self._keyboard_normalizer_process)
         self._keyboard_normalizer_process = None
 
-    def on_border_color_changed(self, event: BorderColorChanged) -> None:
-        """Handle border color change from write mode."""
-        try:
-            from textual.color import Color
-            viewport = self.query_one("#viewport")
-            viewport.styles.border = ("heavy", Color.parse(event.color))
-        except Exception:
-            pass
-
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
         try:
@@ -839,9 +829,7 @@ class PurpleApp(App):
             widget.focus()
         elif self.active_mode == Mode.WRITE:
             try:
-                widget.query_one("#write-area").focus()
-                # Restore border color when re-entering write mode
-                widget.restore_border_color()
+                widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
         else:

@@ -244,16 +244,21 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_visible = True
 
     def _release_space_down(self) -> None:
-        """Release brush-down state after timer expires."""
+        """Release brush-down state."""
         self._space_down = False
-        self.refresh()
-
-    def _extend_space_down(self) -> None:
-        """Extend the space-down timer (for drawing lines)."""
         if self._space_down_timer is not None:
             self._space_down_timer.stop()
-        # Long timer: space "sticks" for drawing, released after inactivity
-        self._space_down_timer = self.set_timer(1.5, self._release_space_down)
+            self._space_down_timer = None
+        self.refresh()
+
+    def _start_space_down(self) -> None:
+        """Start brush-down state (sticky until color change or mode switch)."""
+        self._space_down = True
+        # Cancel any existing timer
+        if self._space_down_timer is not None:
+            self._space_down_timer.stop()
+        # Very long timeout - pen stays down for extended drawing
+        self._space_down_timer = self.set_timer(5.0, self._release_space_down)
 
     @property
     def canvas_width(self) -> int:
@@ -489,11 +494,9 @@ class ArtCanvas(Widget, can_focus=True):
         # Space handling
         if key == "space":
             if self._paint_mode:
-                # In paint mode: space stamps the selected color
+                # In paint mode: space stamps and enables "pen down" for line drawing
                 self._paint_at_cursor()
-                # Track space for line drawing (key repeat extends this)
-                self._space_down = True
-                self._extend_space_down()
+                self._start_space_down()
                 self.refresh()
             else:
                 # In text mode: check for double-tap to toggle, else type space
@@ -538,10 +541,10 @@ class ArtCanvas(Widget, can_focus=True):
             if not moved:
                 self._on_edge_hit()
 
-            # In paint mode with brush down (space held): draw line
+            # In paint mode with pen down: draw line
             if self._paint_mode and self._space_down:
                 self._paint_at_cursor()
-                self._extend_space_down()  # Keep brush down while moving
+                self._start_space_down()  # Reset timer, keep pen down
 
             self.refresh()
             event.stop()
@@ -593,19 +596,28 @@ class ArtCanvas(Widget, can_focus=True):
         if char:
             if self._paint_mode:
                 # In paint mode:
-                # - Number keys select grayscale (1=white, 0=black)
-                # - Letter keys select hue colors
+                # - Lowercase letters: select color, stamp, advance right
+                # - Uppercase (shift) letters: just select color (no stamp, no advance)
+                # - Number keys: select grayscale, stamp, advance right
                 if char in GRAYSCALE:
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
+                    self._paint_at_cursor()
+                    self._move_cursor_right()  # Advance after stamp
                     self.post_message(PaintModeChanged(True, self._last_key_color))
                     self.refresh()
                 elif char.isalpha():
-                    color = get_key_color(char)
+                    lower = char.lower()
+                    color = get_key_color(lower)
                     if color != "#AAAAAA":  # Only if it's a mapped color
-                        self._last_key_char = char
+                        self._last_key_char = lower
                         self._last_key_color = color
                         self.post_message(PaintModeChanged(True, self._last_key_color))
+                        if char.islower():
+                            # Lowercase: stamp and advance
+                            self._paint_at_cursor()
+                            self._move_cursor_right()
+                        # Uppercase (shift): just select brush, no stamp
                         self.refresh()
             else:
                 # In text mode: type the character
@@ -652,7 +664,7 @@ class CanvasHeader(Static):
         if self._is_painting:
             # Show paint mode with color indicator
             mode_styled = f"[bold {self._last_color}]{caps('Paint')}[/]"
-            hint = caps("1-0 gray, letters hue, Space stamp")
+            hint = caps("type=stamp, SHIFT=select, Space+arrows=line")
         else:
             mode_styled = f"[bold]{caps('Write')}[/]"
             hint = caps("Tab = paint")

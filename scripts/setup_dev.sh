@@ -70,10 +70,54 @@ fi
 # Activate venv
 source .venv/bin/activate
 
+# Install system dependencies for evdev (Linux only)
+if [ "$OS" = "linux" ]; then
+    echo_step "Checking system build dependencies for evdev..."
+    if ! command -v gcc &> /dev/null || [ ! -f /usr/include/python3*/Python.h ] 2>/dev/null; then
+        echo_info "Installing gcc and python3-dev (required to build evdev)..."
+        if command -v apt-get &> /dev/null; then
+            sudo apt-get install -y gcc python3-dev
+        else
+            echo_warn "Please install gcc and python3-dev manually"
+        fi
+    else
+        echo_info "✓ Build dependencies already installed"
+    fi
+
+    echo_step "Setting up input device permissions..."
+    # Add user to input group
+    if ! groups | grep -q '\binput\b'; then
+        echo_info "Adding $USER to input group..."
+        sudo usermod -a -G input "$USER"
+        echo_warn "You'll need to log out and back in for group changes to take effect"
+    else
+        echo_info "✓ Already in input group"
+    fi
+
+    # Set up uinput permissions (needed for keyboard normalizer)
+    if [ ! -w /dev/uinput ] 2>/dev/null; then
+        echo_info "Setting up /dev/uinput permissions..."
+        # Create persistent udev rule
+        UDEV_RULE='KERNEL=="uinput", GROUP="input", MODE="0660"'
+        UDEV_FILE="/etc/udev/rules.d/99-purple-uinput.rules"
+        if [ ! -f "$UDEV_FILE" ]; then
+            echo "$UDEV_RULE" | sudo tee "$UDEV_FILE" > /dev/null
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger
+        fi
+        # Also fix it immediately for this session
+        sudo chmod 660 /dev/uinput
+        sudo chown root:input /dev/uinput
+        echo_info "✓ uinput permissions configured"
+    else
+        echo_info "✓ uinput already accessible"
+    fi
+fi
+
 # Install Python dependencies
 echo_step "Installing Python dependencies into venv..."
 pip install --upgrade pip
-pip install textual rich wcwidth pygame piper-tts
+pip install -r requirements.txt
 
 echo_info "✓ Python dependencies installed in virtual environment"
 

@@ -67,6 +67,7 @@ class KeyCodes:
     KEY_F10 = 68
     KEY_F11 = 87
     KEY_F12 = 88
+    KEY_F20 = 191  # Used for space release signal (F20 has better terminal support than F23)
     KEY_F24 = 194
 
     # Letters (for keyboard detection)
@@ -191,6 +192,16 @@ class KeyEventProcessor:
 
         if code == KeyCodes.KEY_CAPSLOCK and value == 1:
             self.caps_lock = not self.caps_lock
+
+        # Space release: emit F20 signal for paint mode brush-up
+        if code == KeyCodes.KEY_SPACE and value == 0:
+            with open("/tmp/purple-debug.log", "a") as f:
+                f.write(f"[NORMALIZER] Space released, emitting F20\n")
+            return [
+                (KeyCodes.EV_KEY, KeyCodes.KEY_SPACE, 0),
+                (KeyCodes.EV_KEY, KeyCodes.KEY_F20, 1),
+                (KeyCodes.EV_KEY, KeyCodes.KEY_F20, 0),
+            ]
 
         # Track key press during shift hold
         if self._shift_key_held and value == 1:
@@ -336,7 +347,8 @@ class KeyboardNormalizer:
         for path in sorted(evdev.list_devices()):
             try:
                 dev = InputDevice(path)
-                if 'virtual' in dev.name.lower() or 'normalizer' in dev.name.lower():
+                # Skip our own virtual device, but allow VM virtual keyboards
+                if 'normalizer' in dev.name.lower():
                     continue
                 caps = dev.capabilities().get(ecodes.EV_KEY, [])
                 if set(caps) & KEYBOARD_INDICATOR_KEYS:
@@ -349,8 +361,8 @@ class KeyboardNormalizer:
     def _create_virtual_keyboard(self) -> None:
         """Create virtual keyboard with F-key support."""
         caps = list(self.hw_device.capabilities().get(ecodes.EV_KEY, []))
-        # Ensure we can emit F1-F12 and F24
-        for fkey in list(TARGET_FKEYS.values()) + [KeyCodes.KEY_F24]:
+        # Ensure we can emit F1-F12, F20 (space release), and F24 (parent mode)
+        for fkey in list(TARGET_FKEYS.values()) + [KeyCodes.KEY_F20, KeyCodes.KEY_F24]:
             if fkey not in caps:
                 caps.append(fkey)
         self.virtual_device = UInput({ecodes.EV_KEY: caps}, name="Purple Keyboard Normalizer")

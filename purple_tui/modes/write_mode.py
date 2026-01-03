@@ -1,429 +1,768 @@
 """
-Write Mode: Simple Text Editor for Kids
+Write Mode: Text Canvas with Playful Painting
 
-A blank screen with large font for typing:
-- Letters, numbers, symbols only
-- Sticky shift (toggle, don't hold)
-- Caps lock works as expected
-- Backspace works
-- Enter creates new line
-- Up/Down arrows scroll the text
-- Color mixing: keyboard rows (top=red, middle=blue, bottom=yellow) mix colors
-- Storage bins: F5 to save, F6 to load (5 slots)
-- F10: Clear all text (with confirmation)
+A text-focused canvas with paint-by-key features:
+- Normal typing writes readable text (left-to-right, wrapping at edges)
+- Each key tints the background based on keyboard row
+- Arrow keys move the cursor (no drawing)
+- Hold Space + arrows to paint colored trails
+- Backspace erases glyph and fades background
+- Hold Backspace to clear the entire canvas
 """
 
-from collections import deque
-from enum import Enum
-from pathlib import Path
-import json
+import colorsys
+import time
 
-from textual.widgets import Static, TextArea
-from textual.containers import Container, Vertical
+from textual.widgets import Static
+from textual.containers import Container
 from textual.app import ComposeResult
+from textual.widget import Widget
+from textual.strip import Strip
 from textual.message import Message
 from textual import events
+from rich.segment import Segment
+from rich.style import Style
 
-from ..constants import DOUBLE_TAP_TIME
-from ..keyboard import SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor
-from ..color_mixing import mix_colors_paint
-from ..scrolling import scroll_widget
+from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
 
+# Note: This mode requires evdev (Linux) for proper key release detection.
+# The keyboard_normalizer.py emits F20 on space release for brush-up.
+# Since terminals don't pass F20 through, we read it directly from evdev.
 
-# Number of storage slots
-NUM_SLOTS = 5
-
-# Slot mode states
-class SlotMode(Enum):
-    IDLE = "idle"
-    SAVING = "saving"
-    LOADING = "loading"
-    CONFIRM_CLEAR = "confirm_clear"
+import threading
+import evdev
+from evdev import ecodes
 
 
-# Keyboard row definitions for color mixing
-# Top row: red, Middle row: blue, Bottom row: yellow
-TOP_ROW = set("qwertyuiop[]\\")
-MIDDLE_ROW = set("asdfghjkl;'")
-BOTTOM_ROW = set("zxcvbnm,./")
+KEY_F20 = 191  # Linux keycode for F20
 
-# Colors for each row (true vibrant primaries)
-ROW_COLORS = {
-    "top": "#FF0000",      # red
-    "middle": "#0066FF",   # blue (true blue, not purple-blue)
-    "bottom": "#FFDD00",   # yellow
+class F20Monitor:
+    """
+    Monitors the keyboard normalizer's virtual device for F20 (space release).
+    Runs in a background thread and calls the callback when F20 is detected.
+    """
+    def __init__(self, callback):
+        self._callback = callback
+        self._running = False
+        self._thread = None
+        self._device = None
+
+    def start(self):
+        """Start monitoring in background thread."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop monitoring."""
+        self._running = False
+        if self._device:
+            try:
+                self._device.close()
+            except:
+                pass
+
+    def _find_normalizer_device(self):
+        """Find the Purple Keyboard Normalizer virtual device."""
+        for path in evdev.list_devices():
+            try:
+                dev = evdev.InputDevice(path)
+                if 'normalizer' in dev.name.lower():
+                    return dev
+            except:
+                pass
+        return None
+
+    def _monitor_loop(self):
+        """Background thread that monitors for F20."""
+        import select
+
+        while self._running:
+            # Find device if we don't have one
+            if not self._device:
+                self._device = self._find_normalizer_device()
+                if not self._device:
+                    import time
+                    time.sleep(0.5)  # Wait and retry
+                    continue
+
+            try:
+                # Use select with timeout so we can check _running
+                readable, _, _ = select.select([self._device.fd], [], [], 0.1)
+                if readable:
+                    for event in self._device.read():
+                        if event.type == ecodes.EV_KEY and event.code == KEY_F20 and event.value == 1:
+                            with open("/tmp/purple-debug.log", "a") as f:
+                                f.write(f"[F20_MONITOR] F20 detected from evdev!\n")
+                            self._callback()
+            except (OSError, IOError):
+                # Device disconnected, will retry
+                self._device = None
+
+
+# =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Grayscale values (selected by number keys: 1=white, 0=black)
+GRAYSCALE = {
+    "1": "#FFFFFF",  # White
+    "2": "#E0E0E0",
+    "3": "#C0C0C0",
+    "4": "#A0A0A0",
+    "5": "#808080",  # Middle gray
+    "6": "#606060",
+    "7": "#404040",
+    "8": "#202020",
+    "9": "#101010",
+    "0": "#000000",  # Black
 }
 
-# Starting/neutral color (muted purple to match the app theme)
-NEUTRAL_COLOR = "#2a1845"
+# Brush character for painting
+BRUSH_CHAR = "█"
 
-# How many recent keystrokes to remember for color mixing
-# 10-12 feels responsive but smooth. You can reach pure colors
-# but transitions still feel gradual
-COLOR_MEMORY_SIZE = 12
+# Box-drawing characters for cursor border
+BOX_CHARS = {
+    (-1, -1): "┌",  # top-left
+    (0, -1): "─",   # top-center
+    (1, -1): "┐",   # top-right
+    (-1, 0): "│",   # middle-left
+    (1, 0): "│",    # middle-right
+    (-1, 1): "└",   # bottom-left
+    (0, 1): "─",    # bottom-center
+    (1, 1): "┘",    # bottom-right
+}
+
+# Keyboard rows for colors (letter rows only)
+QWERTY_ROW = list("qwertyuiop")    # Red family
+ASDF_ROW = list("asdfghjkl")       # Yellow family
+ZXCV_ROW = list("zxcvbnm")         # Blue family
+
+# Default background color (dark purple)
+DEFAULT_BG = "#2a1845"
+
+# Readable text foreground color
+TEXT_FG = "#FFFFFF"
+
+# Cursor colors
+CURSOR_BG_NORMAL = "#6633AA"
+CURSOR_BG_PAINT = "#FF6600"
+
+# Background tint strength (0.0 = no tint, 1.0 = full color)
+# Keep low so text stays readable
+BG_TINT_STRENGTH = 0.15
+
+# Paint color strength when holding space
+PAINT_STRENGTH = 0.7
+
+# Fade factor for backspace (how much background fades toward default)
+FADE_FACTOR = 0.5
+
+# Hold duration for backspace clear (in seconds)
+BACKSPACE_HOLD_CLEAR_TIME = 1.0
 
 
-class ColorKeyPressed(Message):
-    """Message sent when a color-row key is pressed (internal to WriteMode)"""
-    def __init__(self, row: str) -> None:
-        self.row = row  # "top", "middle", or "bottom"
+# =============================================================================
+# COLOR UTILITIES
+# =============================================================================
+
+def hsl_to_hex(h: float, s: float, l: float) -> str:
+    """Convert HSL to hex color string."""
+    r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
+    return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+
+
+def lerp_color(c1: str, c2: str, t: float) -> str:
+    """Linear interpolation between two colors."""
+    r1, g1, b1 = hex_to_rgb(c1)
+    r2, g2, b2 = hex_to_rgb(c2)
+    r = int(r1 + (r2 - r1) * t)
+    g = int(g1 + (g2 - g1) * t)
+    b = int(b1 + (b2 - b1) * t)
+    return rgb_to_hex(r, g, b)
+
+
+def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
+    """Generate a light-to-dark gradient for a row of keys."""
+    result = {}
+    count = len(keys)
+    for i, key in enumerate(keys):
+        lightness = 0.65 - (i / max(count - 1, 1)) * 0.35
+        result[key] = hsl_to_hex(hue, 0.75, lightness)
+    return result
+
+
+# Build key-to-color mapping (primary colors by row)
+KEY_COLORS: dict[str, str] = {}
+KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top letter row)
+KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
+KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
+
+
+def get_key_color(char: str) -> str:
+    """Get the color for a key, or white if not mapped."""
+    return KEY_COLORS.get(char.lower(), "#AAAAAA")
+
+
+def get_row_tint_color(char: str) -> str:
+    """Get a tint color based on which keyboard row a character is on."""
+    lower = char.lower()
+    if lower in QWERTY_ROW:
+        return hsl_to_hex(0, 0.5, 0.35)      # Red family
+    elif lower in ASDF_ROW:
+        return hsl_to_hex(50, 0.5, 0.40)     # Yellow family
+    elif lower in ZXCV_ROW:
+        return hsl_to_hex(220, 0.5, 0.35)    # Blue family
+    else:
+        return DEFAULT_BG  # No tint for unmapped keys
+
+
+# =============================================================================
+# MESSAGES
+# =============================================================================
+
+class PaintModeChanged(Message):
+    """Message sent when paint mode changes."""
+
+    def __init__(self, is_painting: bool, last_color: str) -> None:
+        self.is_painting = is_painting
+        self.last_color = last_color
         super().__init__()
 
 
-class SlotKeyPressed(Message):
-    """Message sent when a slot-related key is pressed during slot mode"""
-    def __init__(self, key: str) -> None:
-        self.key = key  # "1"-"5", "escape", or "f10"
-        super().__init__()
+# =============================================================================
+# CANVAS WIDGET
+# =============================================================================
 
-
-class BorderColorChanged(Message, bubble=True):
-    """Message sent to app to change viewport border color"""
-    def __init__(self, color: str) -> None:
-        self.color = color
-        super().__init__()
-
-
-class ColorMixer:
+class ArtCanvas(Widget, can_focus=True):
     """
-    Tracks recent keystrokes and mixes colors.
+    Custom canvas widget with text typing and Space-held painting.
 
-    Uses a sliding window of recent keystrokes to determine color.
-    Type enough keys from one row and you'll reach that pure color.
-    """
-
-    def __init__(self):
-        self._color_memory: deque[str] = deque(maxlen=COLOR_MEMORY_SIZE)
-
-    def add_key(self, row: str) -> str | None:
-        """Add a new color key and return the new mixed color, or None if invalid."""
-        if row not in ROW_COLORS:
-            return None
-
-        # Add to sliding window (automatically removes oldest if full)
-        self._color_memory.append(row)
-
-        # Mix all colors in the window using paint-like mixing
-        if self._color_memory:
-            colors = [ROW_COLORS[r] for r in self._color_memory]
-            return mix_colors_paint(colors)
-        return NEUTRAL_COLOR
-
-
-def get_row_for_char(char: str) -> str | None:
-    """Return which keyboard row a character belongs to, or None if not a row key."""
-    char_lower = char.lower()
-    if char_lower in TOP_ROW:
-        return "top"
-    elif char_lower in MIDDLE_ROW:
-        return "middle"
-    elif char_lower in BOTTOM_ROW:
-        return "bottom"
-    return None
-
-
-class KidTextArea(TextArea):
-    """
-    Simple text area with kid-safe key handling.
-
-    Only allows:
-    - Letters, numbers, standard symbols
-    - Backspace (delete)
-    - Enter (new line)
-    - Up/Down arrows (scroll by 5 lines)
-    - Double-tap for shifted symbols (e.g., -- fast = _)
+    Uses render_line() for full control over rendering.
+    Cell structure: (char, fg_color, bg_color)
     """
 
     DEFAULT_CSS = """
-    KidTextArea {
+    ArtCanvas {
         width: 100%;
         height: 100%;
-        border: none;
-        background: $surface;
-    }
-
-    KidTextArea:focus {
-        border: none;
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._double_tap = DoubleTapDetector(
-            threshold=DOUBLE_TAP_TIME,
-            allowed_keys=set(SHIFT_MAP.keys()),
-        )
-        self._repeat_suppressor = KeyRepeatSuppressor()
-        self.slot_mode_active = False  # Set by WriteMode when in save/load/clear mode
+        # Grid: dict[(x, y)] = (char, fg_color, bg_color)
+        self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
+        self._cursor_x = 0
+        self._cursor_y = 0
+
+        # Paint mode toggle (not hold-based)
+        self._paint_mode = False
+        self._last_key_color = "#FFFFFF"  # Color from last key in paint mode
+        self._last_key_char = ""  # Last key pressed
+
+        # Double-tap detection for Space (evdev mode) to toggle paint mode
+        self._last_space_time: float = 0.0
+        self._double_tap_threshold = 0.4  # seconds
+
+        # Space-hold for drawing lines in paint mode (released by F20 from evdev)
+        self._space_down = False
+
+        # Cursor blink state
+        self._cursor_visible = True
+        self._blink_timer = None
+
+        # Backspace hold state
+        self._backspace_start_time: float | None = None
+        self._clear_animation_active = False
+
+    def _toggle_paint_mode(self) -> None:
+        """Toggle between paint mode and text mode."""
+        self._paint_mode = not self._paint_mode
+        self._space_down = False  # Reset brush state on mode change
+
+        # Start or stop cursor blinking
+        if self._paint_mode:
+            self._start_blink()
+        else:
+            self._stop_blink()
+
+        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
+        self.refresh()
+
+    def _toggle_blink(self) -> None:
+        """Toggle cursor visibility for blink effect."""
+        self._cursor_visible = not self._cursor_visible
+        self.refresh()
+
+    def _start_blink(self) -> None:
+        """Start cursor blinking."""
+        self._cursor_visible = True
+        if self._blink_timer is not None:
+            self._blink_timer.stop()
+        self._blink_timer = self.set_interval(0.4, self._toggle_blink)
+
+    def _stop_blink(self) -> None:
+        """Stop cursor blinking."""
+        if self._blink_timer is not None:
+            self._blink_timer.stop()
+            self._blink_timer = None
+        self._cursor_visible = True
+
+    def _release_space_down(self) -> None:
+        """Release brush-down state (called when F20 received from evdev)."""
+        with open("/tmp/purple-debug.log", "a") as f:
+            f.write(f"[WRITE_MODE] _release_space_down called, setting space_down=False\n")
+        self._space_down = False
+        self.refresh()
+
+    def _start_space_down(self) -> None:
+        """Start brush-down state. Released by F20 signal from evdev on key up."""
+        with open("/tmp/purple-debug.log", "a") as f:
+            f.write(f"[WRITE_MODE] _start_space_down called, setting space_down=True\n")
+        self._space_down = True
+
+    @property
+    def canvas_width(self) -> int:
+        """Width of the canvas in characters."""
+        return max(1, self.size.width)
+
+    @property
+    def canvas_height(self) -> int:
+        """Height of the canvas in characters."""
+        return max(1, self.size.height)
+
+    @property
+    def is_painting(self) -> bool:
+        """Whether paint mode is active."""
+        return self._paint_mode
+
+    def _is_in_brush_ring(self, x: int, y: int) -> bool:
+        """Check if position is in the 3x3 ring around cursor (not center)."""
+        dx = x - self._cursor_x
+        dy = y - self._cursor_y
+        # In the 3x3 area but not the center
+        return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
+
+    def render_line(self, y: int) -> Strip:
+        """Render a single line of the canvas."""
+        width = self.size.width
+
+        if width <= 0:
+            return Strip([])
+
+        segments = []
+
+        for x in range(width):
+            pos = (x, y)
+            cell = self._grid.get(pos)
+
+            is_cursor_center = (x == self._cursor_x and y == self._cursor_y)
+            is_brush_ring = self._paint_mode and self._is_in_brush_ring(x, y)
+
+            if is_cursor_center:
+                if self._paint_mode:
+                    # Paint mode: center always shows underlying (the "hole")
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                    else:
+                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+                else:
+                    # Text mode cursor
+                    cursor_style = Style(color="#FFFFFF", bgcolor=CURSOR_BG_NORMAL, bold=True)
+                    segments.append(Segment("▌", cursor_style))
+            elif is_brush_ring:
+                # 3x3 ring around cursor: blinks on/off with box-drawing chars
+                if self._cursor_visible:
+                    dx = x - self._cursor_x
+                    dy = y - self._cursor_y
+                    box_char = BOX_CHARS.get((dx, dy), "·")
+
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        # Check if cell has real text (not empty/space/block)
+                        if char not in (" ", BRUSH_CHAR, ""):
+                            # Text cell: keep the character, tint it with cursor color
+                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            segments.append(Segment(char, ring_style))
+                        else:
+                            # Painted/empty cell: show box char with underlying bg
+                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            segments.append(Segment(box_char, ring_style))
+                    else:
+                        # Empty cell: show box char on default bg
+                        ring_style = Style(color=self._last_key_color, bgcolor=DEFAULT_BG)
+                        segments.append(Segment(box_char, ring_style))
+                else:
+                    # Blink off: show underlying cell
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                    else:
+                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+            elif cell:
+                char, fg_color, bg_color = cell
+                char_style = Style(color=fg_color, bgcolor=bg_color)
+                segments.append(Segment(char, char_style))
+            else:
+                # Empty cell
+                segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+
+        return Strip(segments)
+
+    def _move_cursor_right(self) -> bool:
+        """Move cursor right, return False if at edge."""
+        if self._cursor_x < self.canvas_width - 1:
+            self._cursor_x += 1
+            return True
+        return False
+
+    def _move_cursor_left(self) -> bool:
+        """Move cursor left, return False if at edge."""
+        if self._cursor_x > 0:
+            self._cursor_x -= 1
+            return True
+        return False
+
+    def _move_cursor_up(self) -> bool:
+        """Move cursor up, return False if at edge."""
+        if self._cursor_y > 0:
+            self._cursor_y -= 1
+            return True
+        return False
+
+    def _move_cursor_down(self) -> bool:
+        """Move cursor down, return False if at edge."""
+        if self._cursor_y < self.canvas_height - 1:
+            self._cursor_y += 1
+            return True
+        return False
+
+    def _carriage_return(self) -> None:
+        """Move to start of next line."""
+        self._cursor_x = 0
+        if self._cursor_y < self.canvas_height - 1:
+            self._cursor_y += 1
+
+    def _get_cell_bg(self, pos: tuple[int, int]) -> str:
+        """Get background color of a cell, or default if empty."""
+        cell = self._grid.get(pos)
+        if cell:
+            return cell[2]
+        return DEFAULT_BG
+
+    def _set_cell(self, pos: tuple[int, int], char: str, fg: str, bg: str) -> None:
+        """Set a cell's content."""
+        self._grid[pos] = (char, fg, bg)
+
+    def _paint_at_cursor(self) -> None:
+        """Paint at current cursor position using current color."""
+        pos = (self._cursor_x, self._cursor_y)
+        existing_bg = self._get_cell_bg(pos)
+
+        # Blend paint color with existing background using spectral mixing
+        if existing_bg != DEFAULT_BG:
+            # Mix existing color with new paint color
+            new_bg = mix_colors_paint([existing_bg, self._last_key_color])
+        else:
+            # Blend paint color with default background
+            new_bg = lerp_color(DEFAULT_BG, self._last_key_color, PAINT_STRENGTH)
+
+        # Paint uses solid block character
+        self._set_cell(pos, BRUSH_CHAR, new_bg, new_bg)
+
+    def type_char(self, char: str) -> None:
+        """Type a character at cursor with row-based background tint."""
+        pos = (self._cursor_x, self._cursor_y)
+
+        # Update last key color (for painting)
+        self._last_key_char = char
+        self._last_key_color = get_key_color(char)
+
+        # Get tint color based on keyboard row
+        tint = get_row_tint_color(char)
+
+        # Get existing background or start from default
+        existing_bg = self._get_cell_bg(pos)
+
+        # Blend tint with existing background (subtle tint)
+        if existing_bg == DEFAULT_BG:
+            new_bg = lerp_color(DEFAULT_BG, tint, BG_TINT_STRENGTH)
+        else:
+            # Blend new tint into existing
+            new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
+
+        # Text always uses readable foreground
+        self._set_cell(pos, char, TEXT_FG, new_bg)
+
+        # Move cursor right (with wrapping to next line)
+        if not self._move_cursor_right():
+            # At right edge, wrap to next line
+            self._carriage_return()
+
+        self.refresh()
+
+    def _backspace(self) -> None:
+        """Delete character at cursor and fade background."""
+        # Move cursor back first
+        if self._cursor_x > 0:
+            self._cursor_x -= 1
+        elif self._cursor_y > 0:
+            # Wrap to end of previous line
+            self._cursor_y -= 1
+            self._cursor_x = self.canvas_width - 1
+
+        pos = (self._cursor_x, self._cursor_y)
+        cell = self._grid.get(pos)
+
+        if cell:
+            _, _, bg = cell
+            # Fade background toward default
+            faded_bg = lerp_color(bg, DEFAULT_BG, FADE_FACTOR)
+            # Clear the glyph but keep faded background
+            if faded_bg != DEFAULT_BG:
+                self._set_cell(pos, " ", TEXT_FG, faded_bg)
+            else:
+                # Fully faded, remove cell entirely
+                del self._grid[pos]
+        # If cell was empty, nothing to do
+
+        self.refresh()
+
+    def _clear_canvas(self) -> None:
+        """Clear the entire canvas with animation."""
+        self._clear_animation_active = True
+
+        # Simple clear (animation could be added via set_interval)
+        self._grid.clear()
+        self._cursor_x = 0
+        self._cursor_y = 0
+
+        self._clear_animation_active = False
+        self.refresh()
+
+    def _on_edge_hit(self) -> None:
+        """Provide feedback when cursor hits an edge."""
+        # Could add visual flash or sound here
+        # For now, the cursor just stops
+        pass
 
     def on_key(self, event: events.Key) -> None:
-        """Filter keys for kid-safe editing"""
+        """Handle keyboard input."""
         key = event.key
         char = event.character
 
-        # Suppress key repeats (held keys)
-        key_id = char if char else key
-        if self._repeat_suppressor.should_suppress(key_id):
+        # Debug logging for key events
+        if key in ("space", "f20") or key.startswith("f1") or key.startswith("f2"):
+            with open("/tmp/purple-debug.log", "a") as f:
+                f.write(f"[WRITE_MODE] key={key!r} char={char!r} paint_mode={self._paint_mode} space_down={self._space_down}\n")
+
+        # F20: space release signal from keyboard normalizer (evdev)
+        # (F20 has better terminal support than F23)
+        if key == "f20":
+            with open("/tmp/purple-debug.log", "a") as f:
+                f.write(f"[WRITE_MODE] F20 received! Releasing space_down\n")
+            if self._paint_mode:
+                self._release_space_down()
             event.stop()
             event.prevent_default()
             return
 
-        # When in slot mode, capture 1-5, escape, f10 and send to WriteMode
-        if self.slot_mode_active:
-            if key in ("1", "2", "3", "4", "5", "escape", "f10"):
-                event.stop()
-                event.prevent_default()
-                self.post_message(SlotKeyPressed(key))
-                return
-
-        # Allow: backspace, enter
-        if key in ("backspace", "enter"):
-            self._double_tap.reset()
-            return  # Let default handling work
-
-        # Up/Down arrows scroll the text
-        if key == "up":
-            event.stop()
-            event.prevent_default()
-            scroll_widget(self, -1)
-            return
-
-        if key == "down":
-            event.stop()
-            event.prevent_default()
-            scroll_widget(self, 1)
-            return
-
-        # Block: left/right arrows, ctrl combos, function keys, etc.
-        # Note: escape is NOT blocked so it can bubble up for parent menu long-hold
-        blocked_keys = [
-            "left", "right",
-            "home", "end", "pageup", "pagedown",
-            "insert", "delete", "tab",
-        ]
-
-        if key in blocked_keys:
+        # Space handling
+        if key == "space":
+            if self._paint_mode:
+                # In paint mode: space stamps and enables "pen down" for line drawing
+                self._paint_at_cursor()
+                self._start_space_down()
+                self.refresh()
+            else:
+                # In text mode: check for double-tap to toggle, else type space
+                current_time = time.time()
+                if (current_time - self._last_space_time) < self._double_tap_threshold:
+                    # Double-tap detected: toggle paint mode
+                    self._toggle_paint_mode()
+                    self._last_space_time = 0.0
+                else:
+                    # Type a space
+                    pos = (self._cursor_x, self._cursor_y)
+                    existing_bg = self._get_cell_bg(pos)
+                    self._set_cell(pos, " ", TEXT_FG, existing_bg)
+                    if not self._move_cursor_right():
+                        self._carriage_return()
+                    self._last_space_time = current_time
+                    self.refresh()
             event.stop()
             event.prevent_default()
             return
 
-        # Let escape bubble up (for parent menu long-hold detection)
+        # Tab toggles paint mode
+        if key == "tab":
+            self._toggle_paint_mode()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Arrow keys
+        if key in ("up", "down", "left", "right"):
+            moved = False
+
+            if key == "up":
+                moved = self._move_cursor_up()
+            elif key == "down":
+                moved = self._move_cursor_down()
+            elif key == "left":
+                moved = self._move_cursor_left()
+            elif key == "right":
+                moved = self._move_cursor_right()
+
+            if not moved:
+                self._on_edge_hit()
+
+            # In paint mode with pen down: draw line
+            if self._paint_mode and self._space_down:
+                with open("/tmp/purple-debug.log", "a") as f:
+                    f.write(f"[WRITE_MODE] Arrow with space_down, painting at cursor\n")
+                self._paint_at_cursor()
+
+            self.refresh()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Enter: carriage return (only in text mode)
+        if key == "enter":
+            if not self._paint_mode:
+                self._carriage_return()
+            self.refresh()
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Backspace
+        if key == "backspace":
+            current_time = time.time()
+
+            if self._backspace_start_time is None:
+                self._backspace_start_time = current_time
+
+            # Check for hold-to-clear
+            hold_duration = current_time - self._backspace_start_time
+            if hold_duration >= BACKSPACE_HOLD_CLEAR_TIME:
+                self._clear_canvas()
+                self._backspace_start_time = None
+            else:
+                self._backspace()
+
+            event.stop()
+            event.prevent_default()
+            return
+
+        # Let escape bubble up for parent menu
         if key == "escape":
             return
 
-        # Let F5/F6/F10/F11 bubble up to WriteMode/App for slot/volume handling
-        if key in ("f5", "f6", "f10", "f11"):
-            return  # Don't stop, let it bubble
-
-        # Block non-printable keys (except allowed ones above)
-        if not event.is_printable and key not in ("backspace", "enter"):
+        # Block other non-printable keys
+        if not event.is_printable:
             event.stop()
             event.prevent_default()
             return
 
-        # Check for double-tap to get shifted character
-        if char and self._double_tap.check(char):
-            # Double-tap detected. Replace last char with shifted version
-            event.stop()
-            event.prevent_default()
-            # Delete the previous character and insert shifted
-            self.action_delete_left()
-            self.insert(SHIFT_MAP[char])
-            return
+        # Reset backspace timer on other keys
+        self._backspace_start_time = None
 
-        # Notify parent about color key presses (for paint mixing)
+        # Printable character
         if char:
-            row = get_row_for_char(char)
-            if row:
-                # Post a message to the parent WriteMode
-                self.post_message(ColorKeyPressed(row))
+            if self._paint_mode:
+                # In paint mode:
+                # - Lowercase letters: select color, stamp, advance right
+                # - Uppercase (shift) letters: just select color (no stamp, no advance)
+                # - Number keys: select grayscale, stamp, advance right
+                if char in GRAYSCALE:
+                    self._last_key_char = char
+                    self._last_key_color = GRAYSCALE[char]
+                    self._paint_at_cursor()
+                    self._move_cursor_right()  # Advance after stamp
+                    self.post_message(PaintModeChanged(True, self._last_key_color))
+                    self.refresh()
+                elif char.isalpha():
+                    lower = char.lower()
+                    color = get_key_color(lower)
+                    if color != "#AAAAAA":  # Only if it's a mapped color
+                        self._last_key_char = lower
+                        self._last_key_color = color
+                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                        if char.islower():
+                            # Lowercase: stamp and advance
+                            self._paint_at_cursor()
+                            self._move_cursor_right()
+                        # Uppercase (shift): just select brush, no stamp
+                        self.refresh()
+            else:
+                # In text mode: type the character
+                self.type_char(char)
+            event.stop()
+            event.prevent_default()
+
+    def on_blur(self, event: events.Blur) -> None:
+        """Reset state when losing focus."""
+        pass  # Paint mode persists across focus changes
 
 
-class WriteHeader(Static):
-    """Shows header with caps support, also shows slot mode prompts"""
+# =============================================================================
+# HEADER WIDGET
+# =============================================================================
 
-    def __init__(self, **kwargs):
+class CanvasHeader(Static):
+    """Shows current mode and hints."""
+
+    DEFAULT_CSS = """
+    CanvasHeader {
+        height: 1;
+        dock: top;
+        text-align: center;
+        color: $text-muted;
+        background: $surface;
+    }
+    """
+
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._slot_mode = SlotMode.IDLE
-        self._slot_previews: list[str] = [""] * NUM_SLOTS
+        self._is_painting = False
+        self._last_color = "#FFFFFF"
 
-    def set_slot_mode(self, mode: SlotMode, previews: list[str] | None = None) -> None:
-        self._slot_mode = mode
-        if previews:
-            self._slot_previews = previews
+    def update_state(self, is_painting: bool, last_color: str) -> None:
+        """Update displayed state."""
+        self._is_painting = is_painting
+        self._last_color = last_color
         self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
-        if self._slot_mode == SlotMode.SAVING:
-            return f"[bold yellow]{caps('Save to which slot?')}[/] [dim](1-5 or Esc)[/]"
-        elif self._slot_mode == SlotMode.LOADING:
-            return f"[bold cyan]{caps('Load from which slot?')}[/] [dim](1-5 or Esc)[/]"
-        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
-            return f"[bold red]{caps('Erase everything?')}[/] [dim](F10 yes, Esc no)[/]"
+        if self._is_painting:
+            # Show paint mode with color indicator
+            mode_styled = f"[bold {self._last_color}]{caps('Paint')}[/]"
+            hint = caps("type=stamp, SHIFT=select, Space+arrows=line")
         else:
-            text = caps("Type anything you want!")
-            return f"[dim]{text}[/]"
+            mode_styled = f"[bold]{caps('Write')}[/]"
+            hint = caps("Tab = paint")
+
+        return f"{mode_styled}  [dim]({hint})[/]"
 
 
-class SlotIndicator(Static):
-    """A single storage slot indicator"""
-
-    DEFAULT_CSS = """
-    SlotIndicator {
-        width: 3;
-        height: 3;
-        content-align: center middle;
-        border: round $primary-darken-2;
-        margin-bottom: 1;
-    }
-
-    SlotIndicator.filled {
-        border: round $accent;
-    }
-
-    SlotIndicator.highlighted {
-        border: round $warning;
-        background: $warning 20%;
-    }
-    """
-
-    def __init__(self, slot_num: int, **kwargs):
-        super().__init__(**kwargs)
-        self.slot_num = slot_num
-        self._filled = False
-        self._highlighted = False
-
-    def set_filled(self, filled: bool) -> None:
-        self._filled = filled
-        self.remove_class("filled")
-        if filled:
-            self.add_class("filled")
-        self.refresh()
-
-    def set_highlighted(self, highlighted: bool) -> None:
-        self._highlighted = highlighted
-        self.remove_class("highlighted")
-        if highlighted:
-            self.add_class("highlighted")
-        self.refresh()
-
-    def render(self) -> str:
-        num = str(self.slot_num)
-        if self._filled:
-            # Show filled indicator
-            return f"[bold]{num}[/]\n[bold $accent]●[/]"
-        else:
-            return f"{num}\n[dim]○[/]"
-
-
-class SlotStrip(Vertical):
-    """Vertical strip of storage slot indicators"""
-
-    DEFAULT_CSS = """
-    SlotStrip {
-        width: 5;
-        height: 100%;
-        dock: right;
-        padding: 1 1;
-        background: $surface;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._slots: list[SlotIndicator] = []
-
-    def compose(self) -> ComposeResult:
-        for i in range(1, NUM_SLOTS + 1):
-            indicator = SlotIndicator(i, id=f"slot-{i}")
-            self._slots.append(indicator)
-            yield indicator
-
-    def update_slot(self, slot_num: int, filled: bool) -> None:
-        """Update whether a slot is filled"""
-        if 1 <= slot_num <= NUM_SLOTS:
-            try:
-                indicator = self.query_one(f"#slot-{slot_num}", SlotIndicator)
-                indicator.set_filled(filled)
-            except Exception:
-                pass
-
-    def highlight_all(self, highlight: bool) -> None:
-        """Highlight all slots (for save/load mode)"""
-        for i in range(1, NUM_SLOTS + 1):
-            try:
-                indicator = self.query_one(f"#slot-{i}", SlotIndicator)
-                indicator.set_highlighted(highlight)
-            except Exception:
-                pass
-
-
-class WriteAreaContainer(Container):
-    """Container that holds the text area."""
-
-    DEFAULT_CSS = """
-    WriteAreaContainer {
-        width: 100%;
-        height: 1fr;
-    }
-
-    WriteAreaContainer > KidTextArea {
-        width: 100%;
-        height: 100%;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        yield KidTextArea(id="write-area")
-
-
-def get_slots_file() -> Path:
-    """Get path to slots storage file"""
-    purple_dir = Path.home() / ".purple"
-    purple_dir.mkdir(exist_ok=True)
-    return purple_dir / "write_slots.json"
-
-
-def load_slots() -> dict[int, str]:
-    """Load slots from disk"""
-    slots_file = get_slots_file()
-    if slots_file.exists():
-        try:
-            with open(slots_file) as f:
-                data = json.load(f)
-                # Convert string keys back to int
-                return {int(k): v for k, v in data.items()}
-        except Exception:
-            pass
-    return {}
-
-
-def save_slots(slots: dict[int, str]) -> None:
-    """Save slots to disk"""
-    slots_file = get_slots_file()
-    try:
-        with open(slots_file, "w") as f:
-            json.dump(slots, f)
-    except Exception:
-        pass
-
+# =============================================================================
+# WRITE MODE CONTAINER
+# =============================================================================
 
 class WriteMode(Container):
     """
-    Write Mode: Simple text editor for small kids.
+    Write Mode: Text canvas with playful painting.
 
-    A blank screen where kids can type freely.
-    Border color changes as you type based on keyboard row:
-    - Top row (qwerty...): red
-    - Middle row (asdf...): blue
-    - Bottom row (zxcv...): yellow
-
-    Storage bins (F5/F6):
-    - F5: Enter save mode, then press 1-5 to save
-    - F6: Enter load mode, then press 1-5 to load
-    - F10: Clear all text (with confirmation)
+    Normal typing writes readable text with subtle background tinting.
+    Holding Space while pressing arrows paints colorful trails.
     """
 
     DEFAULT_CSS = """
@@ -434,229 +773,31 @@ class WriteMode(Container):
         background: $surface;
     }
 
-    #write-header {
+    #canvas-header {
         height: 1;
         dock: top;
-        text-align: center;
-        color: $text-muted;
         margin-bottom: 1;
-        background: $surface;
     }
 
-    #write-main {
+    #art-canvas {
         width: 100%;
         height: 1fr;
-        layout: horizontal;
-    }
-
-    #write-container {
-        width: 1fr;
-        height: 100%;
-    }
-
-    #write-area {
-        width: 100%;
-        height: 100%;
-    }
-
-    #slot-strip {
-        width: 5;
-        height: 100%;
     }
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._color_mixer = ColorMixer()
-        self._current_border_color: str | None = None
-        self._slot_mode = SlotMode.IDLE
-        self._slots: dict[int, str] = load_slots()
-
     def compose(self) -> ComposeResult:
-        yield WriteHeader(id="write-header")
-        with Container(id="write-main"):
-            yield WriteAreaContainer(id="write-container")
-            yield SlotStrip(id="slot-strip")
+        yield CanvasHeader(id="canvas-header")
+        yield ArtCanvas(id="art-canvas")
 
     def on_mount(self) -> None:
-        """Focus the text area when mode loads."""
-        self.query_one("#write-area").focus()
-        # Update slot indicators based on loaded data
-        self._update_slot_indicators()
+        """Focus the canvas when mode loads."""
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        canvas.focus()
+        # Initialize header
+        header = self.query_one("#canvas-header", CanvasHeader)
+        header.update_state(False, "#FFFFFF")
 
-    def _update_slot_indicators(self) -> None:
-        """Update all slot indicators based on current slot data"""
-        try:
-            strip = self.query_one("#slot-strip", SlotStrip)
-            for i in range(1, NUM_SLOTS + 1):
-                strip.update_slot(i, bool(self._slots.get(i)))
-        except Exception:
-            pass
-
-    def _set_slot_mode(self, mode: SlotMode) -> None:
-        """Set the current slot mode and update UI"""
-        self._slot_mode = mode
-        try:
-            # Tell KidTextArea to pass through slot keys when in slot mode
-            text_area = self.query_one("#write-area", KidTextArea)
-            text_area.slot_mode_active = mode != SlotMode.IDLE
-        except Exception:
-            pass
-        try:
-            header = self.query_one("#write-header", WriteHeader)
-            header.set_slot_mode(mode)
-            strip = self.query_one("#slot-strip", SlotStrip)
-            strip.highlight_all(mode in (SlotMode.SAVING, SlotMode.LOADING))
-        except Exception:
-            pass
-
-    def _save_to_slot(self, slot_num: int) -> None:
-        """Save current text to a slot"""
-        try:
-            text_area = self.query_one("#write-area", KidTextArea)
-            text = text_area.text
-            if text:  # Only save if there's content
-                self._slots[slot_num] = text
-                save_slots(self._slots)
-                self._update_slot_indicators()
-        except Exception:
-            pass
-        self._set_slot_mode(SlotMode.IDLE)
-        # Re-focus text area
-        try:
-            self.query_one("#write-area").focus()
-        except Exception:
-            pass
-
-    def _load_from_slot(self, slot_num: int) -> None:
-        """Load text from a slot"""
-        try:
-            text = self._slots.get(slot_num, "")
-            if text:
-                text_area = self.query_one("#write-area", KidTextArea)
-                text_area.clear()
-                text_area.insert(text)
-        except Exception:
-            pass
-        self._set_slot_mode(SlotMode.IDLE)
-        # Re-focus text area
-        try:
-            self.query_one("#write-area").focus()
-        except Exception:
-            pass
-
-    def _clear_all_text(self) -> None:
-        """Clear all text in the editor"""
-        try:
-            text_area = self.query_one("#write-area", KidTextArea)
-            text_area.clear()
-        except Exception:
-            pass
-        self._set_slot_mode(SlotMode.IDLE)
-        # Re-focus text area
-        try:
-            self.query_one("#write-area").focus()
-        except Exception:
-            pass
-
-    def on_key(self, event: events.Key) -> None:
-        """Handle F5/F6/F10 and slot number keys"""
-        key = event.key
-
-        # Handle slot mode keys
-        if self._slot_mode == SlotMode.SAVING:
-            if key in ("1", "2", "3", "4", "5"):
-                event.stop()
-                event.prevent_default()
-                self._save_to_slot(int(key))
-                return
-            elif key == "escape":
-                event.stop()
-                event.prevent_default()
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
-                return
-
-        elif self._slot_mode == SlotMode.LOADING:
-            if key in ("1", "2", "3", "4", "5"):
-                event.stop()
-                event.prevent_default()
-                self._load_from_slot(int(key))
-                return
-            elif key == "escape":
-                event.stop()
-                event.prevent_default()
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
-                return
-
-        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
-            if key == "f10":
-                event.stop()
-                event.prevent_default()
-                self._clear_all_text()
-                return
-            elif key == "escape":
-                event.stop()
-                event.prevent_default()
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
-                return
-
-        # F5 = Save mode
-        if key == "f5":
-            event.stop()
-            event.prevent_default()
-            self._set_slot_mode(SlotMode.SAVING)
-            return
-
-        # F6 = Load mode
-        if key == "f6":
-            event.stop()
-            event.prevent_default()
-            self._set_slot_mode(SlotMode.LOADING)
-            return
-
-        # F10 = Clear all (first press shows confirmation)
-        if key == "f10":
-            event.stop()
-            event.prevent_default()
-            self._set_slot_mode(SlotMode.CONFIRM_CLEAR)
-            return
-
-    def restore_border_color(self) -> None:
-        """Restore the border color when re-entering write mode."""
-        if self._current_border_color:
-            self.post_message(BorderColorChanged(self._current_border_color))
-
-    def on_color_key_pressed(self, event: ColorKeyPressed) -> None:
-        """Handle color key presses by updating the viewport border color."""
-        new_color = self._color_mixer.add_key(event.row)
-        if new_color:
-            self._current_border_color = new_color
-            self.post_message(BorderColorChanged(new_color))
-
-    def on_slot_key_pressed(self, event: SlotKeyPressed) -> None:
-        """Handle slot key presses from KidTextArea."""
-        key = event.key
-
-        if self._slot_mode == SlotMode.SAVING:
-            if key in ("1", "2", "3", "4", "5"):
-                self._save_to_slot(int(key))
-            elif key == "escape":
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
-
-        elif self._slot_mode == SlotMode.LOADING:
-            if key in ("1", "2", "3", "4", "5"):
-                self._load_from_slot(int(key))
-            elif key == "escape":
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
-
-        elif self._slot_mode == SlotMode.CONFIRM_CLEAR:
-            if key == "f10":
-                self._clear_all_text()
-            elif key == "escape":
-                self._set_slot_mode(SlotMode.IDLE)
-                self.query_one("#write-area").focus()
+    def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
+        """Update header when paint mode changes."""
+        header = self.query_one("#canvas-header", CanvasHeader)
+        header.update_state(event.is_painting, event.last_color)

@@ -1,14 +1,15 @@
 """
 Purple Computer: Unified Keyboard Handling
 
-Centralizes all keyboard input strategies:
-- Shift strategies: sticky shift (grace period), double-tap, regular shift
-- Caps lock detection (direct from hardware or terminal fallback)
-- Long-hold detection for parent mode (Escape)
-- F-key mode switching (F1-F3, F12)
+Requires Linux with evdev for hardware-level keyboard access.
+Uses keyboard_normalizer.py for key press/release detection.
 
-On Linux with evdev: uses KeyboardNormalizer for hardware-level detection
-On Mac/fallback: uses terminal-level detection with reduced robustness
+Features:
+- Shift strategies: sticky shift (grace period), double-tap, regular shift
+- Caps lock detection (direct from hardware)
+- Long-hold detection for parent mode (Escape → F24)
+- Key release signals (Space → F20 for paint mode)
+- F-key mode switching (F1-F3, F12)
 """
 
 import time
@@ -275,8 +276,7 @@ class CapsState:
     """
     Caps lock state tracking.
 
-    On Linux: Detected directly from hardware via evdev
-    On Mac/fallback: Not reliably detectable, starts off
+    Detected directly from hardware via evdev.
     """
     caps_lock_on: bool = False
 
@@ -354,9 +354,8 @@ class HoldState:
 # ============================================================================
 
 class KeyboardMode(Enum):
-    """Keyboard operation mode."""
-    LINUX_EVDEV = "linux_evdev"  # Full hardware access
-    TERMINAL_FALLBACK = "terminal_fallback"  # Mac/non-evdev
+    """Keyboard operation mode. Currently only evdev is supported."""
+    LINUX_EVDEV = "linux_evdev"  # Full hardware access via evdev
 
 
 @dataclass
@@ -368,12 +367,13 @@ class KeyboardState:
     - Shift strategies
     - Caps lock
     - Long-hold detection
-    - Mode (evdev vs fallback)
+
+    Requires evdev (Linux) for proper keyboard handling.
     """
     shift: ShiftState = field(default_factory=ShiftState)
     caps: CapsState = field(default_factory=CapsState)
     escape_hold: HoldState = field(default_factory=lambda: HoldState(threshold=1.0))
-    mode: KeyboardMode = KeyboardMode.TERMINAL_FALLBACK
+    mode: KeyboardMode = KeyboardMode.LINUX_EVDEV
 
     def process_char(self, char: str, apply_shift: bool = True) -> str:
         """
@@ -456,21 +456,37 @@ def create_keyboard_state(
 
 def detect_keyboard_mode() -> KeyboardMode:
     """
-    Detect which keyboard mode is available.
+    Verify evdev is available. Raises RuntimeError if not.
 
-    Returns LINUX_EVDEV if evdev is available and we have permissions,
-    otherwise TERMINAL_FALLBACK.
+    Purple Computer requires evdev (Linux) for proper keyboard handling.
+    The keyboard_normalizer.py must be running to provide key release signals.
     """
     try:
         import evdev
-        # Try to list devices - will fail without permissions
         devices = evdev.list_devices()
         if devices:
             return KeyboardMode.LINUX_EVDEV
-    except (ImportError, PermissionError, OSError):
-        pass
+    except ImportError:
+        raise RuntimeError(
+            "evdev not available. Purple Computer requires Linux with python-evdev.\n"
+            "  # Install build dependencies first:\n"
+            "  sudo apt install gcc python3-dev\n"
+            "  # Then install evdev:\n"
+            "  pip install evdev"
+        )
+    except (PermissionError, OSError):
+        raise RuntimeError(
+            "Cannot access input devices. Add user to 'input' group: "
+            "sudo usermod -a -G input $USER"
+        )
 
-    return KeyboardMode.TERMINAL_FALLBACK
+    raise RuntimeError(
+        "No input devices found. Run 'make setup' or manually:\n"
+        "  sudo usermod -a -G input $USER\n"
+        "  sudo chmod 660 /dev/uinput\n"
+        "  sudo chown root:input /dev/uinput\n"
+        "  # Then log out and back in (or reboot)"
+    )
 
 
 # ============================================================================
@@ -526,18 +542,15 @@ def find_normalizer_script() -> Optional[Path]:
     return None
 
 
-def launch_keyboard_normalizer() -> Optional[subprocess.Popen]:
+def launch_keyboard_normalizer() -> subprocess.Popen:
     """
     Launch KeyboardNormalizer as a background subprocess.
 
-    Returns the Popen object if successful, None if failed or not needed.
-    This function is designed to fail gracefully. It won't crash the app
-    if the normalizer can't be started.
+    Returns the Popen object. Raises RuntimeError if it fails to start.
+    Purple Computer requires the keyboard normalizer for proper input handling.
     """
-    # Only relevant on Linux with evdev
-    if detect_keyboard_mode() != KeyboardMode.LINUX_EVDEV:
-        logger.debug("Not on Linux/evdev, skipping keyboard normalizer")
-        return None
+    # Verify evdev is available (raises if not)
+    detect_keyboard_mode()
 
     # Check if already running
     if is_normalizer_running():
@@ -547,47 +560,46 @@ def launch_keyboard_normalizer() -> Optional[subprocess.Popen]:
     # Find the script
     script_path = find_normalizer_script()
     if not script_path:
-        logger.warning("Could not find keyboard_normalizer.py")
-        return None
-
-    # Launch as subprocess
-    try:
-        # Use the same Python interpreter
-        python = sys.executable
-
-        # Start the normalizer (it will grab the keyboard and run forever)
-        process = subprocess.Popen(
-            [python, str(script_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            # Don't inherit stdin - we don't want it to compete for keyboard
-            stdin=subprocess.DEVNULL,
-            # Start in new process group so it doesn't get signals meant for TUI
-            start_new_session=True,
+        raise RuntimeError(
+            "Could not find keyboard_normalizer.py. "
+            "Ensure Purple Computer is properly installed."
         )
 
-        # Give it a moment to start and check if it failed immediately
-        import time
-        time.sleep(0.2)
+    # Launch as subprocess
+    python = sys.executable
 
-        if process.poll() is not None:
-            # Process already exited - check stderr for error
-            stderr = process.stderr.read().decode() if process.stderr else ""
-            if "Permission denied" in stderr:
-                logger.warning(
-                    "Keyboard normalizer failed: permission denied. "
-                    "Run with root or add user to 'input' group."
-                )
-            else:
-                logger.warning(f"Keyboard normalizer failed to start: {stderr[:200]}")
-            return None
+    # Start the normalizer (it will grab the keyboard and run forever)
+    process = subprocess.Popen(
+        [python, str(script_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,  # Merge stderr into stdout
+        # Don't inherit stdin - we don't want it to compete for keyboard
+        stdin=subprocess.DEVNULL,
+        # Start in new process group so it doesn't get signals meant for TUI
+        start_new_session=True,
+    )
 
-        logger.info("Keyboard normalizer started successfully")
-        return process
+    # Give it a moment to start and check if it failed immediately
+    import time
+    time.sleep(0.3)
 
-    except (OSError, subprocess.SubprocessError) as e:
-        logger.warning(f"Failed to start keyboard normalizer: {e}")
-        return None
+    if process.poll() is not None:
+        # Process already exited - check output for error
+        output = process.stdout.read().decode() if process.stdout else ""
+        if "Permission denied" in output:
+            raise RuntimeError(
+                "Keyboard normalizer failed: permission denied. "
+                "Add user to 'input' group: sudo usermod -a -G input $USER"
+            )
+        if "uinput" in output.lower():
+            raise RuntimeError(
+                "Keyboard normalizer failed: cannot write to /dev/uinput.\n"
+                "  sudo chmod 660 /dev/uinput && sudo chown root:input /dev/uinput"
+            )
+        raise RuntimeError(f"Keyboard normalizer failed to start: {output[:300]}")
+
+    logger.info("Keyboard normalizer started successfully")
+    return process
 
 
 def stop_keyboard_normalizer(process: Optional[subprocess.Popen]) -> None:

@@ -1062,7 +1062,14 @@ def main():
     # If breaking update available, the app will show a prompt
     # (handled in PurpleApp.on_mount)
 
-    app = PurpleApp()
+    try:
+        app = PurpleApp()
+    except RuntimeError as e:
+        # Friendly error for missing evdev or permissions
+        import sys
+        print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
+        sys.exit(1)
+
     if update_result and update_result.startswith("breaking:"):
         # Pass breaking update info to app
         parts = update_result.split(":", 2)

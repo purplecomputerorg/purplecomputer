@@ -25,12 +25,81 @@ from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
 
-# Detect if evdev is available (Linux with proper keyboard handling)
-try:
-    import evdev
-    EVDEV_AVAILABLE = True
-except ImportError:
-    EVDEV_AVAILABLE = False
+# Note: This mode requires evdev (Linux) for proper key release detection.
+# The keyboard_normalizer.py emits F20 on space release for brush-up.
+# Since terminals don't pass F20 through, we read it directly from evdev.
+
+import threading
+import evdev
+from evdev import ecodes
+
+
+KEY_F20 = 191  # Linux keycode for F20
+
+class F20Monitor:
+    """
+    Monitors the keyboard normalizer's virtual device for F20 (space release).
+    Runs in a background thread and calls the callback when F20 is detected.
+    """
+    def __init__(self, callback):
+        self._callback = callback
+        self._running = False
+        self._thread = None
+        self._device = None
+
+    def start(self):
+        """Start monitoring in background thread."""
+        if self._running:
+            return
+        self._running = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        """Stop monitoring."""
+        self._running = False
+        if self._device:
+            try:
+                self._device.close()
+            except:
+                pass
+
+    def _find_normalizer_device(self):
+        """Find the Purple Keyboard Normalizer virtual device."""
+        for path in evdev.list_devices():
+            try:
+                dev = evdev.InputDevice(path)
+                if 'normalizer' in dev.name.lower():
+                    return dev
+            except:
+                pass
+        return None
+
+    def _monitor_loop(self):
+        """Background thread that monitors for F20."""
+        import select
+
+        while self._running:
+            # Find device if we don't have one
+            if not self._device:
+                self._device = self._find_normalizer_device()
+                if not self._device:
+                    import time
+                    time.sleep(0.5)  # Wait and retry
+                    continue
+
+            try:
+                # Use select with timeout so we can check _running
+                readable, _, _ = select.select([self._device.fd], [], [], 0.1)
+                if readable:
+                    for event in self._device.read():
+                        if event.type == ecodes.EV_KEY and event.code == KEY_F20 and event.value == 1:
+                            with open("/tmp/purple-debug.log", "a") as f:
+                                f.write(f"[F20_MONITOR] F20 detected from evdev!\n")
+                            self._callback()
+            except (OSError, IOError):
+                # Device disconnected, will retry
+                self._device = None
 
 
 # =============================================================================
@@ -198,9 +267,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._last_space_time: float = 0.0
         self._double_tap_threshold = 0.4  # seconds
 
-        # Space-hold for drawing lines in paint mode
+        # Space-hold for drawing lines in paint mode (released by F20 from evdev)
         self._space_down = False
-        self._space_down_timer = None
 
         # Cursor blink state
         self._cursor_visible = True
@@ -244,21 +312,17 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_visible = True
 
     def _release_space_down(self) -> None:
-        """Release brush-down state."""
+        """Release brush-down state (called when F20 received from evdev)."""
+        with open("/tmp/purple-debug.log", "a") as f:
+            f.write(f"[WRITE_MODE] _release_space_down called, setting space_down=False\n")
         self._space_down = False
-        if self._space_down_timer is not None:
-            self._space_down_timer.stop()
-            self._space_down_timer = None
         self.refresh()
 
     def _start_space_down(self) -> None:
-        """Start brush-down state (sticky until color change or mode switch)."""
+        """Start brush-down state. Released by F20 signal from evdev on key up."""
+        with open("/tmp/purple-debug.log", "a") as f:
+            f.write(f"[WRITE_MODE] _start_space_down called, setting space_down=True\n")
         self._space_down = True
-        # Cancel any existing timer
-        if self._space_down_timer is not None:
-            self._space_down_timer.stop()
-        # Very long timeout - pen stays down for extended drawing
-        self._space_down_timer = self.set_timer(5.0, self._release_space_down)
 
     @property
     def canvas_width(self) -> int:
@@ -491,6 +555,22 @@ class ArtCanvas(Widget, can_focus=True):
         key = event.key
         char = event.character
 
+        # Debug logging for key events
+        if key in ("space", "f20") or key.startswith("f1") or key.startswith("f2"):
+            with open("/tmp/purple-debug.log", "a") as f:
+                f.write(f"[WRITE_MODE] key={key!r} char={char!r} paint_mode={self._paint_mode} space_down={self._space_down}\n")
+
+        # F20: space release signal from keyboard normalizer (evdev)
+        # (F20 has better terminal support than F23)
+        if key == "f20":
+            with open("/tmp/purple-debug.log", "a") as f:
+                f.write(f"[WRITE_MODE] F20 received! Releasing space_down\n")
+            if self._paint_mode:
+                self._release_space_down()
+            event.stop()
+            event.prevent_default()
+            return
+
         # Space handling
         if key == "space":
             if self._paint_mode:
@@ -501,7 +581,7 @@ class ArtCanvas(Widget, can_focus=True):
             else:
                 # In text mode: check for double-tap to toggle, else type space
                 current_time = time.time()
-                if EVDEV_AVAILABLE and (current_time - self._last_space_time) < self._double_tap_threshold:
+                if (current_time - self._last_space_time) < self._double_tap_threshold:
                     # Double-tap detected: toggle paint mode
                     self._toggle_paint_mode()
                     self._last_space_time = 0.0
@@ -518,7 +598,7 @@ class ArtCanvas(Widget, can_focus=True):
             event.prevent_default()
             return
 
-        # Tab toggles paint mode (works on both evdev and non-evdev)
+        # Tab toggles paint mode
         if key == "tab":
             self._toggle_paint_mode()
             event.stop()
@@ -543,8 +623,9 @@ class ArtCanvas(Widget, can_focus=True):
 
             # In paint mode with pen down: draw line
             if self._paint_mode and self._space_down:
+                with open("/tmp/purple-debug.log", "a") as f:
+                    f.write(f"[WRITE_MODE] Arrow with space_down, painting at cursor\n")
                 self._paint_at_cursor()
-                self._start_space_down()  # Reset timer, keep pen down
 
             self.refresh()
             event.stop()

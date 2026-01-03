@@ -133,24 +133,94 @@ The VM's console IS the target. keyboard_normalizer.py's output goes there. You 
 **One-time setup (~30 minutes):**
 
 1. Install UTM (free, works on Apple Silicon)
-2. Download Ubuntu Server or Debian minimal ISO
-3. Create VM: 2GB RAM, 20GB disk
-4. Install OS
+
+2. Download Ubuntu Server ARM64 ISO (not x86)
+
+3. Create VM in UTM:
+   - Enable "Apple Virtualization" (checked)
+   - Do NOT enable Rosetta
+   - Do NOT emulate x86
+   - Guest architecture: ARM64 (aarch64)
+   - RAM: 2-4 GB (2 GB is sufficient)
+   - Disk: 16 GB
+   - Display output enabled
+   - No OpenGL acceleration needed
+
+4. Install Ubuntu Server:
+   - Minimized install is fine
+   - Use entire disk (default partitioning)
+   - Enable OpenSSH (for setup/editing only)
+
 5. Configure:
    ```bash
    sudo usermod -aG input $USER
-   sudo apt install python3-pip python3-venv git
+   sudo apt install python3-pip python3-venv git evtest
    ```
-6. Set up shared folder or rsync for code sync
-7. Snapshot the VM in this clean state
+
+6. Verify evdev works:
+   ```bash
+   # Check architecture
+   uname -m  # should show: aarch64
+
+   # Check evdev devices exist
+   ls /dev/input/by-id/
+
+   # Should see something like:
+   # usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd
+
+   # Test keyboard events (Ctrl+C to exit)
+   sudo evtest /dev/input/by-id/usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd
+   ```
+
+7. Set up shared folder or rsync for code sync
+
+8. Snapshot the VM in this clean state
+
+**What evtest output looks like:**
+
+```
+Event: time 1234.567890, type 1 (EV_KEY), code 30 (KEY_A), value 1   ← key down
+Event: time 1234.567890, type 0 (EV_SYN), code 0 (SYN_REPORT), value 0
+Event: time 1234.667890, type 1 (EV_KEY), code 30 (KEY_A), value 2   ← repeat
+Event: time 1234.767890, type 1 (EV_KEY), code 30 (KEY_A), value 2   ← repeat
+Event: time 1234.867890, type 1 (EV_KEY), code 30 (KEY_A), value 0   ← key up
+```
+
+- `value=1`: key down (start timing)
+- `value=0`: key up (end timing)
+- `value=2`: auto-repeat (ignore for duration logic)
 
 **Daily workflow:**
 
 1. Start VM
 2. Sync code (shared folder or rsync)
-3. Run Purple TUI in the VM console window
+3. Run Purple TUI in the **VM console window** (not SSH)
 4. Test keyboard: long-press Escape, sticky shift, double-tap, F-keys
 5. Make changes on Mac, re-sync, restart TUI
+
+**Important:** Use SSH for editing code and git operations. Use the VM console window for running and testing Purple Computer.
+
+---
+
+## VM Keyboard Quirks
+
+**Stable device paths:**
+
+Always use `/dev/input/by-id/` paths, not `/dev/input/eventX`. The event numbers can change between boots.
+
+```python
+# Good
+device = InputDevice('/dev/input/by-id/usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd')
+
+# Bad (may change)
+device = InputDevice('/dev/input/event3')
+```
+
+**Modifier key mapping:**
+
+In the UTM VM, Mac's Command key maps to `KEY_LEFTSHIFT`. This differs from real hardware where Command might map to `KEY_LEFTMETA`.
+
+Do NOT assume semantic meaning from modifier key names. The keyboard_normalizer.py code treats modifiers abstractly, which is correct.
 
 ---
 
@@ -221,3 +291,9 @@ See `tests/test_keyboard_normalizer.py` for examples.
 3. **Its output goes to the Linux console**, so SSH doesn't help
 4. **Use a Linux VM** and work in the console window
 5. **Mac is fine for UI work**, just not keyboard UX testing
+
+---
+
+## Related Guides
+
+- **[Linux VM Dev Setup](linux-vm-dev-setup.md)**: Complete guide to setting up Ubuntu Server + Xorg + Alacritty in a VM for development, including troubleshooting common issues.

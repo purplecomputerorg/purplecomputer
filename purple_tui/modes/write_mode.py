@@ -703,3 +703,8 @@ class WriteMode(Container):
         """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Delegate keyboard actions to the canvas."""
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        await canvas.handle_keyboard_action(action)

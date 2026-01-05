@@ -320,6 +320,35 @@ class EvdevReader:
 
         logger.info("EvdevReader: stopped")
 
+    def release_grab(self) -> None:
+        """
+        Temporarily release the keyboard grab.
+
+        Call this before suspending the app to allow terminal input
+        (e.g., for input() to receive keystrokes).
+        Call reacquire_grab() after resuming.
+        """
+        if self._device and self._grab:
+            try:
+                self._device.ungrab()
+                logger.info("EvdevReader: released grab for terminal")
+            except (IOError, OSError) as e:
+                logger.warning(f"EvdevReader: could not release grab: {e}")
+
+    def reacquire_grab(self) -> None:
+        """
+        Re-acquire the keyboard grab after suspend.
+
+        Call this after the terminal session ends and before
+        the TUI resumes normal operation.
+        """
+        if self._device and self._grab:
+            try:
+                self._device.grab()
+                logger.info("EvdevReader: reacquired grab")
+            except (IOError, OSError) as e:
+                logger.warning(f"EvdevReader: could not reacquire grab: {e}")
+
     async def _read_loop(self) -> None:
         """Main event reading loop."""
         try:

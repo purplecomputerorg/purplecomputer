@@ -191,8 +191,8 @@ class ParentMenu(ModalScreen):
 
     def _run_shell(self) -> None:
         """Actually run the shell - called after modal dismissed"""
-        # Suspend the Textual app to give control to the terminal
-        with self.app.suspend():
+        # Suspend the Textual app and release evdev grab for terminal input
+        with self.app.suspend_with_terminal_input():
             # Reset terminal to sane state (ensures echo is on, etc.)
             os.system('stty sane')
             # Clear screen and show message
@@ -243,7 +243,7 @@ class ParentMenu(ModalScreen):
             self.app.notify("Could not find keyboard calibration script", severity="error")
             return
 
-        with self.app.suspend():
+        with self.app.suspend_with_terminal_input():
             os.system('stty sane')
             os.system('clear')
 

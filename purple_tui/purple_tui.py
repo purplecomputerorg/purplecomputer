@@ -653,6 +653,38 @@ class PurpleApp(App):
             await self._evdev_reader.stop()
             self._evdev_reader = None
 
+    def suspend_with_terminal_input(self):
+        """
+        Context manager to suspend the TUI and allow terminal input.
+
+        Use this instead of self.suspend() when you need to call input()
+        or run interactive programs that read from stdin.
+
+        Example:
+            with self.app.suspend_with_terminal_input():
+                input("Press Enter...")
+
+        This releases the evdev keyboard grab so the terminal can receive
+        input, then reacquires it when the context exits.
+        """
+        from contextlib import contextmanager
+
+        @contextmanager
+        def _suspend_ctx():
+            # Release evdev grab so terminal can receive keyboard input
+            if self._evdev_reader:
+                self._evdev_reader.release_grab()
+
+            try:
+                with self.suspend():
+                    yield
+            finally:
+                # Reacquire grab when resuming
+                if self._evdev_reader:
+                    self._evdev_reader.reacquire_grab()
+
+        return _suspend_ctx()
+
     async def _handle_raw_key_event(self, event: RawKeyEvent) -> None:
         """
         Handle raw keyboard events from evdev.

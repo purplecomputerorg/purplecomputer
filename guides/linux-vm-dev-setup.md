@@ -105,6 +105,30 @@ If using a VM:
 - The same input group and uinput permissions are required
 - Performance is generally fine for development
 
+### Keyboard Not Detected in VM
+
+If you see "Could not find your keyboard" or "permission denied":
+
+1. **Check you're in the input group** (most common issue):
+   ```bash
+   groups  # Should include 'input'
+   ```
+   If not, add yourself and **reboot** (logout is not enough in VMs):
+   ```bash
+   sudo usermod -aG input $USER
+   sudo reboot
+   ```
+
+2. **Verify keyboard devices exist**:
+   ```bash
+   ls -la /dev/input/
+   ```
+   You should see `event0`, `event1`, etc. If empty, the VM isn't passing through a keyboard device.
+
+3. **For UTM on macOS**: The virtual keyboard should appear automatically. If not, check VM settings under "Devices" to ensure a USB keyboard or virtio input device is configured.
+
+4. **For USB passthrough**: If you're passing a physical USB keyboard to the VM, ensure it's attached to the VM (not the host) in the VM software settings.
+
 ---
 
 ## How the Keyboard Normalizer Works

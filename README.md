@@ -26,13 +26,15 @@ Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 ## Quick Start
 
-### For Development (Mac/Linux)
+### For Development (Linux only)
+
+Purple Computer requires Linux with evdev for keyboard input. macOS is not supported. Use a Linux VM if developing on Mac (see `guides/keyboard-dev-testing.md`).
 
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 make setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
-make run      # Launches in Alacritty with Purple theme (or current terminal)
+make run      # Launches in Alacritty with Purple theme
 ```
 
 Inside Purple Computer, try:
@@ -121,15 +123,22 @@ Kids can type capital letters without holding two keys at once!
 
 On first boot, Purple automatically runs keyboard setup. You'll be asked to press F1 through F12. This captures each key's scancode, making F-keys work regardless of the laptop's default behavior (some laptops send brightness/volume instead of F1-F12).
 
-### How It Works (Linux)
+### How It Works
 
-On Linux with evdev, Purple runs a background keyboard normalizer that:
-- Grabs the hardware keyboard exclusively
+**Purple Computer requires Linux with evdev.** macOS is not supported.
+
+Keyboard input is read directly from evdev, bypassing the terminal. The terminal (Alacritty) is display-only. This gives us:
+- True key down/up events for reliable timing
+- Space-hold detection for paint mode
+- All keycodes (terminals drop some F-keys)
+
+The keyboard handling:
+- Grabs the hardware keyboard exclusively (kiosk mode)
 - Remaps physical F-keys via scancodes (survives Fn Lock changes)
-- Detects sticky shift and Escape long-press
-- Emits normalized events to a virtual keyboard
+- Detects sticky shift, double-tap, and Escape long-press
+- Processes events through a state machine that emits high-level actions
 
-On Mac/other systems, a terminal-level fallback provides basic sticky shift.
+See `guides/keyboard-architecture-v2.md` for technical details.
 
 ---
 

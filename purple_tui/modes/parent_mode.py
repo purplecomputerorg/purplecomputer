@@ -19,6 +19,8 @@ import sys
 import time
 from pathlib import Path
 
+from ..keyboard import NavigationAction, ControlAction
+
 # Ignore escape events for this long after menu opens (user is still holding key)
 ESCAPE_COOLDOWN = 1.5
 
@@ -131,7 +133,7 @@ class ParentMenu(ModalScreen):
                 item.remove_class("selected")
 
     def on_key(self, event: events.Key) -> None:
-        """Handle navigation keys"""
+        """Handle navigation keys (terminal fallback, not used with evdev)"""
         if event.key == "up":
             event.stop()
             self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
@@ -148,6 +150,26 @@ class ParentMenu(ModalScreen):
             # Ignore escape during cooldown (user still holding from long-press)
             if time.monotonic() - self._open_time > ESCAPE_COOLDOWN:
                 self.dismiss()
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Handle keyboard actions from evdev."""
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
+                self._update_selection()
+            elif action.direction == 'down':
+                self._selected_index = (self._selected_index + 1) % len(MENU_ITEMS)
+                self._update_selection()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                self._activate_selected()
+            elif action.action == 'escape':
+                # Ignore escape during cooldown (user still holding from long-press)
+                if time.monotonic() - self._open_time > ESCAPE_COOLDOWN:
+                    self.dismiss()
+            return
 
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""

@@ -234,7 +234,11 @@ class SleepScreen(Screen):
         self.app.pop_screen()
 
     def on_key(self, event: events.Key) -> None:
-        """Any key press wakes up the computer"""
+        """Any key press wakes up the computer (terminal fallback)"""
         event.stop()
         event.prevent_default()
+        self._wake_up()
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Any key action wakes up the computer (evdev)"""
         self._wake_up()

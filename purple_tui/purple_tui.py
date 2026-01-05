@@ -693,6 +693,14 @@ class PurpleApp(App):
                 pass
             return
 
+        # Check if a modal screen is active (e.g., ParentMenu)
+        # screen_stack[0] is the base screen, anything above is a modal
+        if len(self.screen_stack) > 1:
+            active_screen = self.screen
+            if hasattr(active_screen, 'handle_keyboard_action'):
+                await active_screen.handle_keyboard_action(action)
+            return
+
         # Dispatch to the current mode widget
         mode_id = f"mode-{self.active_mode.name.lower()}"
         try:
@@ -744,6 +752,14 @@ class PurpleApp(App):
                     self.dismiss(True)
                 else:
                     self.dismiss(False)
+
+            async def handle_keyboard_action(self, action) -> None:
+                """Handle keyboard actions from evdev."""
+                if isinstance(action, ControlAction) and action.is_down:
+                    if action.action == 'enter':
+                        self.dismiss(True)  # Update
+                    elif action.action == 'escape':
+                        self.dismiss(False)  # Later
 
         def handle_update_result(should_update: bool) -> None:
             if should_update:

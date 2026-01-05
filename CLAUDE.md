@@ -98,40 +98,75 @@ class ColorCell(Widget):
 
 This approach gives full control over every line and updates immediately on `refresh()`.
 
-### Focus-Free Keyboard Navigation
+### Keyboard Input Architecture (evdev)
 
-**Problem**: Textual's focus system (Tab/Shift-Tab, Button focus) is unreliable without a mouse. Focus can get "stuck" or not move as expected.
+**Purple Computer requires Linux with evdev.** macOS is not supported.
 
-**Solution**: Handle all navigation explicitly via `on_key()`. Track selection state manually and update visual styling with CSS classes.
+Keyboard input is read directly from evdev (`/dev/input/event*`), bypassing the terminal entirely. The terminal (Alacritty) is display-only. This gives us:
+- True key down/up events (terminals only provide key pressed)
+- Precise timestamps for timing features (sticky shift, long-press)
+- All keycodes (terminals drop F13-F24)
 
-```python
-class MyMenu(ModalScreen):
-    def __init__(self):
-        super().__init__()
-        self._selected_index = 0
-
-    def on_key(self, event: events.Key) -> None:
-        if event.key == "up":
-            event.stop()
-            self._selected_index = (self._selected_index - 1) % len(ITEMS)
-            self._update_selection()
-        elif event.key == "down":
-            event.stop()
-            self._selected_index = (self._selected_index + 1) % len(ITEMS)
-            self._update_selection()
-        elif event.key == "enter":
-            event.stop()
-            self._activate_selected()
-
-    def _update_selection(self) -> None:
-        for i, item in enumerate(self.query(MenuItem)):
-            if i == self._selected_index:
-                item.add_class("selected")
-            else:
-                item.remove_class("selected")
+**Architecture:**
+```
+Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
+                                                                        ↓
+                                                              Mode widgets / Modal screens
 ```
 
+**Key files:**
+- `purple_tui/input.py`: `EvdevReader`, `RawKeyEvent`, `KeyCode`
+- `purple_tui/keyboard.py`: `KeyboardStateMachine`, action types (`CharacterAction`, `NavigationAction`, `ControlAction`, etc.)
+- `keyboard_normalizer.py`: F-key calibration tool only (not used at runtime)
+
+**See:** `guides/keyboard-architecture-v2.md` for full details.
+
+### Adding Keyboard Handling to Widgets
+
+Every mode widget and modal screen that needs keyboard input must implement `handle_keyboard_action()`:
+
+```python
+from ..keyboard import NavigationAction, ControlAction, CharacterAction
+
+class MyMode(Container):
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self._move_up()
+            elif action.direction == 'down':
+                self._move_down()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                self._activate()
+            elif action.action == 'escape':
+                self._cancel()
+            return
+
+        if isinstance(action, CharacterAction):
+            self._type_char(action.char)
+            return
+```
+
+**Important:** If your widget is inside a container (like `ArtCanvas` inside `WriteMode`), the container must delegate:
+
+```python
+class WriteMode(Container):
+    async def handle_keyboard_action(self, action) -> None:
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        await canvas.handle_keyboard_action(action)
+```
+
+Modal screens are automatically dispatched to when active (checked via `screen_stack`).
+
+### Focus-Free Navigation
+
+Textual's focus system (Tab/Shift-Tab) doesn't work with evdev since we suppress terminal events. Handle all navigation explicitly via `handle_keyboard_action()` using `NavigationAction` for arrows and `ControlAction` for Enter/Escape.
+
 This pattern is used in:
-- `PlayMode`: handles grid keys directly
-- `AskMode`: focuses an Input widget explicitly
+- `PlayMode`: handles character keys for sound/color
+- `AskMode`: handles characters, navigation, autocomplete
+- `WriteMode`: delegates to `ArtCanvas` for painting
 - `ParentMenu`: tracks menu selection with up/down/enter
+- `SleepScreen`: any key wakes the screen

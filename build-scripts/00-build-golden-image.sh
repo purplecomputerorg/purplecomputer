@@ -119,7 +119,8 @@ SOURCES
         unclutter \
         fontconfig \
         fonts-noto-color-emoji \
-        spice-vdagent
+        spice-vdagent \
+        xkbset
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji (🐱 🎉)
@@ -189,8 +190,12 @@ AUTOLOGIN
     mkdir -p "$MOUNT_DIR/etc/systemd/logind.conf.d"
     cat > "$MOUNT_DIR/etc/systemd/logind.conf.d/purple-power.conf" <<'LOGIND'
 # Purple Computer power management
-# Lid close triggers shutdown (fallback if Purple TUI isn't handling it)
+# Kid-friendly: any power action = shutdown (no suspend/hibernate complexity)
 [Login]
+# Power button: single press = shutdown (no 10-second hold needed)
+HandlePowerKey=poweroff
+HandlePowerKeyLongPress=poweroff
+# Lid close triggers shutdown (fallback if Purple TUI isn't handling it)
 HandleLidSwitch=poweroff
 HandleLidSwitchExternalPower=poweroff
 HandleLidSwitchDocked=ignore
@@ -209,6 +214,21 @@ purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl halt
 purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot
 SUDOERS
     chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-power"
+
+    # Disable SysRq magic keys (Alt+PrintScreen combos can force reboot, kill processes, etc.)
+    # Kids mashing keys could accidentally trigger these. Value 0 = completely disabled.
+    # Parents/admins can still use the power button for shutdown.
+    mkdir -p "$MOUNT_DIR/etc/sysctl.d"
+    cat > "$MOUNT_DIR/etc/sysctl.d/99-purple-sysrq.conf" <<'SYSCTL'
+# Purple Computer: disable SysRq magic keys for kid-proofing
+# Alt+SysRq+B = instant reboot, Alt+SysRq+O = instant poweroff, etc.
+# These are dangerous when kids mash random key combinations.
+kernel.sysrq = 0
+SYSCTL
+
+    # Disable Ctrl+Alt+Del reboot (systemd target)
+    # By default this triggers a system reboot, which kids could hit accidentally
+    chroot "$MOUNT_DIR" systemctl mask ctrl-alt-del.target
 
     # Copy xinitrc from project config (shared with dev environment)
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/home/purple/.xinitrc"

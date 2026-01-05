@@ -12,6 +12,14 @@ sleep 1
 # Disable screen blanking
 xset s off -dpms s noblank b off
 
+# Kid-proofing: disable XKB accessibility features
+# Sticky keys can be triggered by holding Shift for 5 seconds
+# Slow keys can be triggered by holding Shift for 8 seconds
+# These would confuse kids and make typing unpredictable
+if command -v xkbset &>/dev/null; then
+    xkbset -a  # Disable all AccessX features
+fi
+
 # Keyboard repeat (faster for kids)
 xset r rate 300 30
 

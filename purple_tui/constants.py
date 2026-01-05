@@ -5,6 +5,12 @@ Central location for constants used across the app.
 """
 
 # =============================================================================
+# SUPPORT
+# =============================================================================
+
+SUPPORT_EMAIL = "support@purplecomputer.org"
+
+# =============================================================================
 # TERMINAL LAYOUT CONSTANTS
 # =============================================================================
 # These define the terminal grid required for the full UI.

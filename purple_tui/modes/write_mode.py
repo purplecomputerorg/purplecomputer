@@ -8,6 +8,9 @@ A text-focused canvas with paint-by-key features:
 - Hold Space + arrows to paint colored trails
 - Backspace erases glyph and fades background
 - Hold Backspace to clear the entire canvas
+
+Keyboard input is received via handle_keyboard_action() from the main app,
+which reads directly from evdev. This gives us true key release detection.
 """
 
 import colorsys
@@ -24,82 +27,9 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
-
-# Note: This mode requires evdev (Linux) for proper key release detection.
-# The keyboard_normalizer.py emits F20 on space release for brush-up.
-# Since terminals don't pass F20 through, we read it directly from evdev.
-
-import threading
-import evdev
-from evdev import ecodes
-
-
-KEY_F20 = 191  # Linux keycode for F20
-
-class F20Monitor:
-    """
-    Monitors the keyboard normalizer's virtual device for F20 (space release).
-    Runs in a background thread and calls the callback when F20 is detected.
-    """
-    def __init__(self, callback):
-        self._callback = callback
-        self._running = False
-        self._thread = None
-        self._device = None
-
-    def start(self):
-        """Start monitoring in background thread."""
-        if self._running:
-            return
-        self._running = True
-        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
-        self._thread.start()
-
-    def stop(self):
-        """Stop monitoring."""
-        self._running = False
-        if self._device:
-            try:
-                self._device.close()
-            except:
-                pass
-
-    def _find_normalizer_device(self):
-        """Find the Purple Keyboard Normalizer virtual device."""
-        for path in evdev.list_devices():
-            try:
-                dev = evdev.InputDevice(path)
-                if 'normalizer' in dev.name.lower():
-                    return dev
-            except:
-                pass
-        return None
-
-    def _monitor_loop(self):
-        """Background thread that monitors for F20."""
-        import select
-
-        while self._running:
-            # Find device if we don't have one
-            if not self._device:
-                self._device = self._find_normalizer_device()
-                if not self._device:
-                    import time
-                    time.sleep(0.5)  # Wait and retry
-                    continue
-
-            try:
-                # Use select with timeout so we can check _running
-                readable, _, _ = select.select([self._device.fd], [], [], 0.1)
-                if readable:
-                    for event in self._device.read():
-                        if event.type == ecodes.EV_KEY and event.code == KEY_F20 and event.value == 1:
-                            with open("/tmp/purple-debug.log", "a") as f:
-                                f.write(f"[F20_MONITOR] F20 detected from evdev!\n")
-                            self._callback()
-            except (OSError, IOError):
-                # Device disconnected, will retry
-                self._device = None
+from ..keyboard import (
+    CharacterAction, NavigationAction, ControlAction, ShiftAction,
+)
 
 
 # =============================================================================
@@ -258,16 +188,17 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_x = 0
         self._cursor_y = 0
 
-        # Paint mode toggle (not hold-based)
+        # Paint mode toggle
         self._paint_mode = False
         self._last_key_color = "#FFFFFF"  # Color from last key in paint mode
         self._last_key_char = ""  # Last key pressed
 
-        # Double-tap detection for Space (evdev mode) to toggle paint mode
+        # Double-tap detection for Space to toggle paint mode
         self._last_space_time: float = 0.0
         self._double_tap_threshold = 0.4  # seconds
 
-        # Space-hold for drawing lines in paint mode (released by F20 from evdev)
+        # Space-hold for drawing lines in paint mode
+        # With evdev, we get true key release events
         self._space_down = False
 
         # Cursor blink state
@@ -312,16 +243,12 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_visible = True
 
     def _release_space_down(self) -> None:
-        """Release brush-down state (called when F20 received from evdev)."""
-        with open("/tmp/purple-debug.log", "a") as f:
-            f.write(f"[WRITE_MODE] _release_space_down called, setting space_down=False\n")
+        """Release brush-down state (called on space key release)."""
         self._space_down = False
         self.refresh()
 
     def _start_space_down(self) -> None:
-        """Start brush-down state. Released by F20 signal from evdev on key up."""
-        with open("/tmp/purple-debug.log", "a") as f:
-            f.write(f"[WRITE_MODE] _start_space_down called, setting space_down=True\n")
+        """Start brush-down state for line drawing."""
         self._space_down = True
 
     @property
@@ -550,131 +477,107 @@ class ArtCanvas(Widget, can_focus=True):
         # For now, the cursor just stops
         pass
 
-    def on_key(self, event: events.Key) -> None:
-        """Handle keyboard input."""
-        key = event.key
-        char = event.character
+    async def handle_keyboard_action(self, action) -> None:
+        """
+        Handle keyboard actions from the main app's KeyboardStateMachine.
 
-        # Debug logging for key events
-        if key in ("space", "f20") or key.startswith("f1") or key.startswith("f2"):
-            with open("/tmp/purple-debug.log", "a") as f:
-                f.write(f"[WRITE_MODE] key={key!r} char={char!r} paint_mode={self._paint_mode} space_down={self._space_down}\n")
-
-        # F20: space release signal from keyboard normalizer (evdev)
-        # (F20 has better terminal support than F23)
-        if key == "f20":
-            with open("/tmp/purple-debug.log", "a") as f:
-                f.write(f"[WRITE_MODE] F20 received! Releasing space_down\n")
-            if self._paint_mode:
-                self._release_space_down()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Space handling
-        if key == "space":
-            if self._paint_mode:
-                # In paint mode: space stamps and enables "pen down" for line drawing
-                self._paint_at_cursor()
-                self._start_space_down()
-                self.refresh()
-            else:
-                # In text mode: check for double-tap to toggle, else type space
-                current_time = time.time()
-                if (current_time - self._last_space_time) < self._double_tap_threshold:
-                    # Double-tap detected: toggle paint mode
-                    self._toggle_paint_mode()
-                    self._last_space_time = 0.0
+        This receives high-level actions (CharacterAction, NavigationAction, etc.)
+        instead of raw key events. Key up/down detection works reliably via evdev.
+        """
+        # Handle control actions (space, tab, backspace, enter, escape)
+        if isinstance(action, ControlAction):
+            if action.action == 'space':
+                if action.is_down:
+                    # Space press
+                    if self._paint_mode:
+                        # In paint mode: stamp and enable "pen down" for line drawing
+                        self._paint_at_cursor()
+                        self._start_space_down()
+                        self.refresh()
+                    else:
+                        # In text mode: check for double-tap to toggle, else type space
+                        current_time = time.time()
+                        if (current_time - self._last_space_time) < self._double_tap_threshold:
+                            # Double-tap detected: toggle paint mode
+                            self._toggle_paint_mode()
+                            self._last_space_time = 0.0
+                        else:
+                            # Type a space
+                            pos = (self._cursor_x, self._cursor_y)
+                            existing_bg = self._get_cell_bg(pos)
+                            self._set_cell(pos, " ", TEXT_FG, existing_bg)
+                            if not self._move_cursor_right():
+                                self._carriage_return()
+                            self._last_space_time = current_time
+                            self.refresh()
                 else:
-                    # Type a space
-                    pos = (self._cursor_x, self._cursor_y)
-                    existing_bg = self._get_cell_bg(pos)
-                    self._set_cell(pos, " ", TEXT_FG, existing_bg)
-                    if not self._move_cursor_right():
-                        self._carriage_return()
-                    self._last_space_time = current_time
-                    self.refresh()
-            event.stop()
-            event.prevent_default()
+                    # Space release: stop line drawing
+                    if self._paint_mode:
+                        self._release_space_down()
+                return
+
+            if action.action == 'tab' and action.is_down:
+                self._toggle_paint_mode()
+                return
+
+            if action.action == 'enter' and action.is_down:
+                if not self._paint_mode:
+                    self._carriage_return()
+                self.refresh()
+                return
+
+            if action.action == 'backspace':
+                if action.is_down:
+                    current_time = time.time()
+
+                    if self._backspace_start_time is None:
+                        self._backspace_start_time = current_time
+
+                    # Check for hold-to-clear
+                    hold_duration = current_time - self._backspace_start_time
+                    if hold_duration >= BACKSPACE_HOLD_CLEAR_TIME:
+                        self._clear_canvas()
+                        self._backspace_start_time = None
+                    else:
+                        self._backspace()
+                else:
+                    # Backspace release: reset timer
+                    self._backspace_start_time = None
+                return
+
+            # Escape is handled by the main app (parent mode)
             return
 
-        # Tab toggles paint mode
-        if key == "tab":
-            self._toggle_paint_mode()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Arrow keys
-        if key in ("up", "down", "left", "right"):
+        # Handle navigation actions (arrow keys)
+        if isinstance(action, NavigationAction):
             moved = False
 
-            if key == "up":
+            if action.direction == 'up':
                 moved = self._move_cursor_up()
-            elif key == "down":
+            elif action.direction == 'down':
                 moved = self._move_cursor_down()
-            elif key == "left":
+            elif action.direction == 'left':
                 moved = self._move_cursor_left()
-            elif key == "right":
+            elif action.direction == 'right':
                 moved = self._move_cursor_right()
 
             if not moved:
                 self._on_edge_hit()
 
             # In paint mode with pen down: draw line
-            if self._paint_mode and self._space_down:
-                with open("/tmp/purple-debug.log", "a") as f:
-                    f.write(f"[WRITE_MODE] Arrow with space_down, painting at cursor\n")
+            # action.space_held comes from KeyboardStateMachine
+            if self._paint_mode and (self._space_down or action.space_held):
                 self._paint_at_cursor()
 
             self.refresh()
-            event.stop()
-            event.prevent_default()
             return
 
-        # Enter: carriage return (only in text mode)
-        if key == "enter":
-            if not self._paint_mode:
-                self._carriage_return()
-            self.refresh()
-            event.stop()
-            event.prevent_default()
-            return
+        # Handle character actions (printable characters)
+        if isinstance(action, CharacterAction):
+            # Reset backspace timer on character input
+            self._backspace_start_time = None
 
-        # Backspace
-        if key == "backspace":
-            current_time = time.time()
-
-            if self._backspace_start_time is None:
-                self._backspace_start_time = current_time
-
-            # Check for hold-to-clear
-            hold_duration = current_time - self._backspace_start_time
-            if hold_duration >= BACKSPACE_HOLD_CLEAR_TIME:
-                self._clear_canvas()
-                self._backspace_start_time = None
-            else:
-                self._backspace()
-
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Let escape bubble up for parent menu
-        if key == "escape":
-            return
-
-        # Block other non-printable keys
-        if not event.is_printable:
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Reset backspace timer on other keys
-        self._backspace_start_time = None
-
-        # Printable character
-        if char:
+            char = action.char
             if self._paint_mode:
                 # In paint mode:
                 # - Lowercase letters: select color, stamp, advance right
@@ -703,8 +606,7 @@ class ArtCanvas(Widget, can_focus=True):
             else:
                 # In text mode: type the character
                 self.type_char(char)
-            event.stop()
-            event.prevent_default()
+            return
 
     def on_blur(self, event: events.Blur) -> None:
         """Reset state when losing focus."""

@@ -5,6 +5,11 @@ Purple Computer: Main Textual TUI Application
 The calm computer for kids ages 3-8.
 A creativity device, not an entertainment device.
 
+IMPORTANT: Requires Linux with evdev for keyboard input.
+The terminal (Alacritty) is display-only; keyboard input is read
+directly from evdev, bypassing the terminal. See:
+  guides/keyboard-architecture-v2.md
+
 Keyboard controls:
 - F1-F3: Switch modes (Ask, Play, Write)
 - F12: Toggle dark/light theme
@@ -37,8 +42,10 @@ from .constants import (
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
     KeyboardMode, SHIFT_MAP,
-    launch_keyboard_normalizer, stop_keyboard_normalizer,
+    KeyboardStateMachine, CharacterAction, NavigationAction,
+    ModeAction, ControlAction, ShiftAction, CapsLockAction, LongHoldAction,
 )
+from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 
 
@@ -545,7 +552,7 @@ class PurpleApp(App):
         self._idle_timer = None
         self._sleep_screen_active = False
 
-        # Unified keyboard state
+        # Unified keyboard state (for legacy API compatibility)
         self.keyboard = create_keyboard_state(
             sticky_grace_period=STICKY_SHIFT_GRACE,
             double_tap_threshold=DOUBLE_TAP_TIME,
@@ -556,8 +563,9 @@ class PurpleApp(App):
         # Register callback for caps lock changes
         self.keyboard.caps.on_change(self._on_caps_change)
 
-        # Keyboard normalizer subprocess (Linux only)
-        self._keyboard_normalizer_process = None
+        # Direct evdev keyboard input (replaces terminal on_key)
+        self._keyboard_state_machine = KeyboardStateMachine()
+        self._evdev_reader: EvdevReader | None = None
 
         # Register our purple themes
         self.register_theme(
@@ -603,14 +611,18 @@ class PurpleApp(App):
                     yield Container(id="content-area")
             yield ModeIndicator(self.active_mode, id="mode-indicator")
 
-    def on_mount(self) -> None:
+    async def on_mount(self) -> None:
         """Called when app starts"""
         self._apply_theme()
         self._load_mode_content()
 
-        # Launch keyboard normalizer on Linux (provides tap-shift, long-press, etc.)
-        # This fails gracefully if not on Linux or missing permissions
-        self._keyboard_normalizer_process = launch_keyboard_normalizer()
+        # Start direct evdev keyboard reader
+        # This reads keyboard events directly, bypassing the terminal
+        self._evdev_reader = EvdevReader(
+            callback=self._handle_raw_key_event,
+            grab=True,  # Grab keyboard exclusively in kiosk mode
+        )
+        await self._evdev_reader.start()
 
         # Start idle detection timer
         # In demo mode, check every second for responsiveness
@@ -634,11 +646,64 @@ class PurpleApp(App):
         if self._pending_update:
             self._show_update_prompt()
 
-    def on_unmount(self) -> None:
+    async def on_unmount(self) -> None:
         """Called when app is shutting down"""
-        # Clean up keyboard normalizer subprocess
-        stop_keyboard_normalizer(self._keyboard_normalizer_process)
-        self._keyboard_normalizer_process = None
+        # Clean up evdev reader
+        if self._evdev_reader:
+            await self._evdev_reader.stop()
+            self._evdev_reader = None
+
+    async def _handle_raw_key_event(self, event: RawKeyEvent) -> None:
+        """
+        Handle raw keyboard events from evdev.
+
+        This is called by EvdevReader for each key press/release.
+        Events are processed through KeyboardStateMachine to produce actions.
+        """
+        # Record user activity for idle detection
+        self._record_user_activity()
+
+        # Process through state machine
+        actions = self._keyboard_state_machine.process(event)
+
+        for action in actions:
+            await self._dispatch_keyboard_action(action)
+
+    async def _dispatch_keyboard_action(self, action) -> None:
+        """Dispatch a keyboard action to the appropriate handler."""
+        if isinstance(action, ModeAction):
+            if action.mode == 'ask':
+                self.action_switch_mode('ask')
+            elif action.mode == 'play':
+                self.action_switch_mode('play')
+            elif action.mode == 'write':
+                self.action_switch_mode('write')
+            elif action.mode == 'parent':
+                self.action_parent_mode()
+            return
+
+        if isinstance(action, CapsLockAction):
+            # Toggle caps lock in the old keyboard state for compatibility
+            self.keyboard.handle_caps_lock_press()
+            return
+
+        if isinstance(action, LongHoldAction):
+            if action.key == 'escape':
+                # Long-hold escape handled via ModeAction('parent')
+                pass
+            return
+
+        # Dispatch to the current mode widget
+        mode_id = f"mode-{self.active_mode.name.lower()}"
+        try:
+            content_area = self.query_one("#content-area")
+            mode_widget = content_area.query_one(f"#{mode_id}")
+
+            # Call the mode's action handler if it exists
+            if hasattr(mode_widget, 'handle_keyboard_action'):
+                await mode_widget.handle_keyboard_action(action)
+        except NoMatches:
+            pass
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
@@ -932,87 +997,19 @@ class PurpleApp(App):
         self.push_screen(ParentMenu())
 
     def on_key(self, event: events.Key) -> None:
-        """Handle key events at app level"""
-        # Note: Activity recording moved to on_event() so it can't be bypassed
-        # by child widgets calling event.stop()
+        """
+        Handle terminal key events.
 
-        key = event.key
+        NOTE: With evdev architecture, all keyboard input is handled via
+        _handle_raw_key_event(). This handler exists only to suppress
+        terminal input (which we're bypassing by reading evdev directly).
 
-        # Handle F24 from hardware keyboard normalizer (long-press escape signal)
-        if key == "f24":
-            self.action_parent_mode()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Handle Escape for long-hold parent mode (fallback for Mac/terminal)
-        if key == "escape":
-            if self.keyboard.handle_escape_repeat():
-                # Long hold threshold reached. Enter parent mode
-                self.action_parent_mode()
-                event.stop()
-                event.prevent_default()
-                return
-            # First press. Start tracking
-            self.keyboard.handle_escape_press()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Handle Caps Lock toggle
-        if key == "caps_lock":
-            self.keyboard.handle_caps_lock_press()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Handle Shift key for sticky shift
-        if key in ("shift", "left_shift", "right_shift"):
-            self.keyboard.handle_sticky_shift_press()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # F11 = Volume toggle (global)
-        if key == "f11":
-            self.action_toggle_volume()
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Keys that should always be ignored (modifier-only, system keys, etc.)
-        ignored_keys = {
-            # Modifier keys (pressed alone). Except shift which we handle above
-            "ctrl", "alt", "meta", "super",
-            "left_ctrl", "right_ctrl", "control",
-            "left_alt", "right_alt", "option",
-            "left_meta", "right_meta", "left_super", "right_super",
-            "command", "cmd",
-            # Lock keys (except caps_lock which we handle above)
-            "num_lock", "scroll_lock",
-            # Other system keys
-            "print_screen", "pause", "insert",
-            "home", "end", "page_up", "page_down",
-            # F-keys not used:
-            # F5/F6 = Write mode slots (save/load). Handled by WriteMode
-            # F10 = Write mode clear all. Handled by WriteMode
-            # F11 = Volume toggle. Handled above
-            # F13-F23 = Unused, F24 = parent mode (handled above)
-            "f7", "f8", "f9",
-            "f13", "f14", "f15", "f16", "f17", "f18", "f19", "f20",
-            "f21", "f22", "f23",
-        }
-
-        if key in ignored_keys:
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Also ignore any ctrl+/cmd+ combos we don't explicitly handle
-        if key.startswith("ctrl+") and key not in {"ctrl+v", "ctrl+c"}:
-            event.stop()
-            event.prevent_default()
-            return
+        The terminal (Alacritty) is display-only; keyboard input flows:
+        evdev → EvdevReader → KeyboardStateMachine → App
+        """
+        # Suppress all terminal keyboard events since we handle via evdev
+        event.stop()
+        event.prevent_default()
 
     def _refresh_caps_sensitive_widgets(self) -> None:
         """Refresh all widgets that change based on caps mode"""
@@ -1045,6 +1042,16 @@ class PurpleApp(App):
 
 def main():
     """Entry point for Purple Computer"""
+    import sys
+
+    # Verify evdev is available before anything else
+    # Purple Computer requires Linux with evdev for keyboard input
+    try:
+        check_evdev_available()
+    except RuntimeError as e:
+        print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
+        sys.exit(1)
+
     # Note: We intentionally do NOT filter stderr here.
     # Textual renders to stderr, so any pipe redirection causes UI lag.
     # ALSA noise should be silenced at the source (see tts.py for handlers).
@@ -1055,7 +1062,6 @@ def main():
 
     if update_result == "updated":
         # Minor update applied. Restart the app
-        import sys
         import os
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
@@ -1065,8 +1071,7 @@ def main():
     try:
         app = PurpleApp()
     except RuntimeError as e:
-        # Friendly error for missing evdev or permissions
-        import sys
+        # Friendly error for configuration issues
         print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
         sys.exit(1)
 

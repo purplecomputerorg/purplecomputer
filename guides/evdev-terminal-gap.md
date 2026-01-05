@@ -1,5 +1,11 @@
 # The evdev-Terminal Gap: F-Key Signal Problem
 
+**STATUS: RESOLVED** - This document is historical. The architecture has been
+changed to bypass the terminal for keyboard input entirely. See
+`guides/keyboard-architecture-v2.md` for the current design.
+
+---
+
 This document describes an architectural issue discovered while implementing space-hold-to-paint in write mode.
 
 ---

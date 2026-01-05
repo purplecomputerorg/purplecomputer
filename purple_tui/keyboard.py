@@ -1,21 +1,25 @@
 """
 Purple Computer: Unified Keyboard Handling
 
-Requires Linux with evdev for hardware-level keyboard access.
-Uses keyboard_normalizer.py for key press/release detection.
+Requires Linux with evdev for direct keyboard access.
+Reads raw key events via EvdevReader, processes through KeyboardStateMachine.
 
 Features:
-- Shift strategies: sticky shift (grace period), double-tap, regular shift
-- Caps lock detection (direct from hardware)
-- Long-hold detection for parent mode (Escape → F24)
-- Key release signals (Space → F20 for paint mode)
+- Shift strategies: sticky shift (grace period), double-tap, physical shift
+- Caps lock toggle (direct from hardware)
+- Long-hold detection for parent mode (Escape held > 1s)
+- Space-hold for paint mode line drawing (release detection via evdev)
 - F-key mode switching (F1-F3, F12)
+
+See guides/keyboard-architecture-v2.md for architecture details.
 """
 
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
+
+from .constants import SUPPORT_EMAIL
 
 
 # ============================================================================
@@ -458,162 +462,368 @@ def detect_keyboard_mode() -> KeyboardMode:
     """
     Verify evdev is available. Raises RuntimeError if not.
 
-    Purple Computer requires evdev (Linux) for proper keyboard handling.
-    The keyboard_normalizer.py must be running to provide key release signals.
+    Purple Computer requires evdev (Linux) for direct keyboard access.
     """
     try:
         import evdev
         devices = evdev.list_devices()
         if devices:
             return KeyboardMode.LINUX_EVDEV
-    except ImportError:
+    except ImportError as e:
         raise RuntimeError(
-            "evdev not available. Purple Computer requires Linux with python-evdev.\n"
-            "  # Install build dependencies first:\n"
-            "  sudo apt install gcc python3-dev\n"
-            "  # Then install evdev:\n"
-            "  pip install evdev"
+            "Purple Computer needs to be set up before it can run.\n\n"
+            f"Please contact {SUPPORT_EMAIL} for help.\n\n"
+            "(Technical: evdev library not installed)"
         )
-    except (PermissionError, OSError):
+    except PermissionError as e:
         raise RuntimeError(
-            "Cannot access input devices. Add user to 'input' group: "
-            "sudo usermod -a -G input $USER"
+            "Purple Computer doesn't have permission to use the keyboard.\n\n"
+            "Please restart your Purple Computer. If this keeps happening,\n"
+            f"contact {SUPPORT_EMAIL}\n\n"
+            "(Technical: user not in 'input' group)"
+        )
+    except OSError as e:
+        raise RuntimeError(
+            "Purple Computer had trouble accessing the keyboard.\n\n"
+            "Please restart your Purple Computer. If this keeps happening,\n"
+            f"contact {SUPPORT_EMAIL}\n\n"
+            f"(Technical: {e})"
         )
 
     raise RuntimeError(
-        "No input devices found. Run 'make setup' or manually:\n"
-        "  sudo usermod -a -G input $USER\n"
-        "  sudo chmod 660 /dev/uinput\n"
-        "  sudo chown root:input /dev/uinput\n"
-        "  # Then log out and back in (or reboot)"
+        "Could not find your keyboard.\n"
+        "Please make sure a keyboard is connected.\n\n"
+        f"If this keeps happening, contact {SUPPORT_EMAIL}"
     )
 
 
 # ============================================================================
-# Keyboard Normalizer Subprocess Management
+# Keyboard State Machine
 # ============================================================================
 
-import subprocess
-import sys
-import os
 import logging
-from pathlib import Path
+from typing import Union, List
+from .input import RawKeyEvent, KeyCode
 
 logger = logging.getLogger(__name__)
 
-# Virtual device name created by KeyboardNormalizer
-NORMALIZER_DEVICE_NAME = "Purple Keyboard Normalizer"
+
+class KeyAction:
+    """Base class for keyboard actions emitted by the state machine."""
+    pass
 
 
-def is_normalizer_running() -> bool:
+@dataclass
+class CharacterAction(KeyAction):
+    """A printable character was typed."""
+    char: str
+    shifted: bool = False  # Was shift applied?
+
+
+@dataclass
+class NavigationAction(KeyAction):
+    """Arrow key movement."""
+    direction: str  # 'up', 'down', 'left', 'right'
+    space_held: bool = False  # True when painting (space down)
+
+
+@dataclass
+class ModeAction(KeyAction):
+    """Mode switch requested."""
+    mode: str  # 'ask' (F1), 'play' (F2), 'write' (F3), 'parent' (F12 or long Escape)
+
+
+@dataclass
+class ControlAction(KeyAction):
+    """Control key action."""
+    action: str  # 'backspace', 'enter', 'tab', 'escape', 'space'
+    is_down: bool = True  # Key press (True) or release (False)
+
+
+@dataclass
+class ShiftAction(KeyAction):
+    """Shift key state change."""
+    is_down: bool
+
+
+@dataclass
+class CapsLockAction(KeyAction):
+    """Caps lock toggled."""
+    pass
+
+
+@dataclass
+class LongHoldAction(KeyAction):
+    """Long hold threshold reached."""
+    key: str  # e.g., 'escape'
+
+
+class KeyboardStateMachine:
     """
-    Check if KeyboardNormalizer is already running.
+    Consumes RawKeyEvent from EvdevReader, produces high-level KeyAction.
 
-    Looks for the virtual keyboard device it creates.
+    Handles:
+    - Key state tracking (pressed/released)
+    - Modifier state (shift, caps lock)
+    - Long-hold detection (Escape for parent mode)
+    - Space-hold detection (for paint mode drawing)
+    - Double-tap detection
+    - Character translation (keycode to character)
+
+    Usage:
+        state_machine = KeyboardStateMachine()
+
+        async def handle_raw(event: RawKeyEvent):
+            for action in state_machine.process(event):
+                await handle_action(action)
+
+        reader = EvdevReader(handle_raw)
+        await reader.start()
     """
-    try:
-        import evdev
-        for path in evdev.list_devices():
-            try:
-                device = evdev.InputDevice(path)
-                if NORMALIZER_DEVICE_NAME in device.name:
-                    return True
-            except (PermissionError, OSError):
-                continue
-    except ImportError:
-        pass
-    return False
 
+    # Timing thresholds
+    ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
+    DOUBLE_TAP_THRESHOLD = 0.4   # seconds between taps
+    STICKY_SHIFT_GRACE = 1.0     # seconds sticky shift stays active
 
-def find_normalizer_script() -> Optional[Path]:
-    """Find the keyboard_normalizer.py script."""
-    # Look relative to this file's location
-    this_dir = Path(__file__).parent
-    candidates = [
-        this_dir.parent / "keyboard_normalizer.py",  # Project root
-        Path("/opt/purple/keyboard_normalizer.py"),  # Installed location
-        Path.home() / "purple" / "keyboard_normalizer.py",  # User location
-    ]
+    def __init__(self):
+        # Key press state: keycode -> timestamp
+        self._pressed: dict[int, float] = {}
 
-    for path in candidates:
-        if path.exists():
-            return path
+        # Modifier state
+        self._shift_held = False
+        self._caps_lock_on = False
+        self._space_held = False
 
-    return None
+        # Sticky shift
+        self._sticky_shift_active = False
+        self._sticky_shift_time = 0.0
 
-
-def launch_keyboard_normalizer() -> subprocess.Popen:
-    """
-    Launch KeyboardNormalizer as a background subprocess.
-
-    Returns the Popen object. Raises RuntimeError if it fails to start.
-    Purple Computer requires the keyboard normalizer for proper input handling.
-    """
-    # Verify evdev is available (raises if not)
-    detect_keyboard_mode()
-
-    # Check if already running
-    if is_normalizer_running():
-        logger.debug("Keyboard normalizer already running")
-        return None
-
-    # Find the script
-    script_path = find_normalizer_script()
-    if not script_path:
-        raise RuntimeError(
-            "Could not find keyboard_normalizer.py. "
-            "Ensure Purple Computer is properly installed."
+        # Double-tap detection
+        self._double_tap = DoubleTapDetector(
+            threshold=self.DOUBLE_TAP_THRESHOLD,
+            allowed_keys=set(SHIFT_MAP.keys()),
         )
 
-    # Launch as subprocess
-    python = sys.executable
+        # Long-hold tracking for Escape
+        self._escape_hold_triggered = False
 
-    # Start the normalizer (it will grab the keyboard and run forever)
-    process = subprocess.Popen(
-        [python, str(script_path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,  # Merge stderr into stdout
-        # Don't inherit stdin - we don't want it to compete for keyboard
-        stdin=subprocess.DEVNULL,
-        # Start in new process group so it doesn't get signals meant for TUI
-        start_new_session=True,
-    )
+    def process(self, event: RawKeyEvent) -> List[KeyAction]:
+        """
+        Process a raw key event and return a list of actions.
 
-    # Give it a moment to start and check if it failed immediately
-    import time
-    time.sleep(0.3)
+        Most events produce 0-1 actions, but some (like character with
+        double-tap) may produce multiple.
+        """
+        actions = []
 
-    if process.poll() is not None:
-        # Process already exited - check output for error
-        output = process.stdout.read().decode() if process.stdout else ""
-        if "Permission denied" in output:
-            raise RuntimeError(
-                "Keyboard normalizer failed: permission denied. "
-                "Add user to 'input' group: sudo usermod -a -G input $USER"
-            )
-        if "uinput" in output.lower():
-            raise RuntimeError(
-                "Keyboard normalizer failed: cannot write to /dev/uinput.\n"
-                "  sudo chmod 660 /dev/uinput && sudo chown root:input /dev/uinput"
-            )
-        raise RuntimeError(f"Keyboard normalizer failed to start: {output[:300]}")
+        if event.is_down:
+            actions.extend(self._handle_key_down(event))
+        else:
+            actions.extend(self._handle_key_up(event))
 
-    logger.info("Keyboard normalizer started successfully")
-    return process
+        return actions
 
+    def _handle_key_down(self, event: RawKeyEvent) -> List[KeyAction]:
+        """Handle key press."""
+        actions = []
+        keycode = event.keycode
+        timestamp = event.timestamp
 
-def stop_keyboard_normalizer(process: Optional[subprocess.Popen]) -> None:
-    """Stop the keyboard normalizer subprocess if running."""
-    if process is None:
-        return
+        # Track pressed state
+        already_pressed = keycode in self._pressed
+        self._pressed[keycode] = timestamp
 
-    try:
-        process.terminate()
-        try:
-            process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait()
-        logger.debug("Keyboard normalizer stopped")
-    except (OSError, ProcessLookupError):
-        pass  # Already stopped
+        # Handle modifiers
+        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
+            self._shift_held = True
+            actions.append(ShiftAction(is_down=True))
+            return actions
+
+        if keycode == KeyCode.KEY_CAPSLOCK:
+            self._caps_lock_on = not self._caps_lock_on
+            actions.append(CapsLockAction())
+            return actions
+
+        # Handle Escape (start tracking for long-hold)
+        if keycode == KeyCode.KEY_ESC:
+            self._escape_hold_triggered = False
+            actions.append(ControlAction(action='escape', is_down=True))
+            return actions
+
+        # Handle Space
+        if keycode == KeyCode.KEY_SPACE:
+            self._space_held = True
+            actions.append(ControlAction(action='space', is_down=True))
+            return actions
+
+        # Handle arrow keys
+        if keycode == KeyCode.KEY_UP:
+            actions.append(NavigationAction(direction='up', space_held=self._space_held))
+            return actions
+        if keycode == KeyCode.KEY_DOWN:
+            actions.append(NavigationAction(direction='down', space_held=self._space_held))
+            return actions
+        if keycode == KeyCode.KEY_LEFT:
+            actions.append(NavigationAction(direction='left', space_held=self._space_held))
+            return actions
+        if keycode == KeyCode.KEY_RIGHT:
+            actions.append(NavigationAction(direction='right', space_held=self._space_held))
+            return actions
+
+        # Handle other control keys
+        if keycode == KeyCode.KEY_BACKSPACE:
+            actions.append(ControlAction(action='backspace', is_down=True))
+            return actions
+        if keycode == KeyCode.KEY_ENTER:
+            actions.append(ControlAction(action='enter', is_down=True))
+            return actions
+        if keycode == KeyCode.KEY_TAB:
+            actions.append(ControlAction(action='tab', is_down=True))
+            return actions
+
+        # Handle F-keys for mode switching
+        if keycode == KeyCode.KEY_F1:
+            actions.append(ModeAction(mode='ask'))
+            return actions
+        if keycode == KeyCode.KEY_F2:
+            actions.append(ModeAction(mode='play'))
+            return actions
+        if keycode == KeyCode.KEY_F3:
+            actions.append(ModeAction(mode='write'))
+            return actions
+        if keycode == KeyCode.KEY_F12:
+            actions.append(ModeAction(mode='parent'))
+            return actions
+
+        # Handle printable characters
+        char = event.char
+        if char:
+            # Check for double-tap
+            shifted_char = self._double_tap.check(char, timestamp)
+            if shifted_char:
+                # Delete the first character (will be replaced)
+                actions.append(ControlAction(action='backspace', is_down=True))
+                actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True))
+                return actions
+
+            # Apply shift/caps
+            final_char = self._apply_shift(char)
+            actions.append(CharacterAction(char=final_char, shifted=(final_char != char)))
+
+            # Consume sticky shift
+            if self._sticky_shift_active:
+                self._sticky_shift_active = False
+
+        return actions
+
+    def _handle_key_up(self, event: RawKeyEvent) -> List[KeyAction]:
+        """Handle key release."""
+        actions = []
+        keycode = event.keycode
+
+        # Remove from pressed state
+        press_time = self._pressed.pop(keycode, None)
+
+        # Handle modifier releases
+        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
+            # Check for sticky shift (quick tap)
+            if press_time:
+                hold_duration = event.timestamp - press_time
+                if hold_duration < 0.3:  # Quick tap
+                    self._sticky_shift_active = True
+                    self._sticky_shift_time = event.timestamp
+            self._shift_held = False
+            actions.append(ShiftAction(is_down=False))
+            return actions
+
+        # Handle Escape release (check for long-hold)
+        if keycode == KeyCode.KEY_ESC:
+            if press_time:
+                hold_duration = event.timestamp - press_time
+                if hold_duration >= self.ESCAPE_HOLD_THRESHOLD and not self._escape_hold_triggered:
+                    self._escape_hold_triggered = True
+                    actions.append(LongHoldAction(key='escape'))
+                    actions.append(ModeAction(mode='parent'))
+            actions.append(ControlAction(action='escape', is_down=False))
+            return actions
+
+        # Handle Space release
+        if keycode == KeyCode.KEY_SPACE:
+            self._space_held = False
+            actions.append(ControlAction(action='space', is_down=False))
+            return actions
+
+        # Handle other control key releases
+        if keycode == KeyCode.KEY_BACKSPACE:
+            actions.append(ControlAction(action='backspace', is_down=False))
+            return actions
+
+        return actions
+
+    def _apply_shift(self, char: str) -> str:
+        """Apply shift/caps transformations to a character."""
+        should_shift = self._shift_held
+
+        # Check sticky shift with grace period
+        if self._sticky_shift_active:
+            elapsed = time.time() - self._sticky_shift_time
+            if elapsed <= self.STICKY_SHIFT_GRACE:
+                should_shift = True
+            else:
+                self._sticky_shift_active = False
+
+        if should_shift and char in SHIFT_MAP:
+            return SHIFT_MAP[char]
+
+        # Apply caps lock to letters
+        if char.isalpha() and self._caps_lock_on:
+            return char.upper()
+
+        return char
+
+    def check_escape_hold(self) -> bool:
+        """
+        Check if Escape is currently held past threshold.
+        Call this periodically (e.g., every 100ms) while Escape is pressed.
+        Returns True once when threshold is first reached.
+        """
+        if KeyCode.KEY_ESC not in self._pressed:
+            return False
+
+        if self._escape_hold_triggered:
+            return False  # Already triggered
+
+        press_time = self._pressed[KeyCode.KEY_ESC]
+        elapsed = time.time() - press_time
+
+        if elapsed >= self.ESCAPE_HOLD_THRESHOLD:
+            self._escape_hold_triggered = True
+            return True
+
+        return False
+
+    @property
+    def space_held(self) -> bool:
+        """Check if space is currently held."""
+        return self._space_held
+
+    @property
+    def shift_held(self) -> bool:
+        """Check if shift is currently held."""
+        return self._shift_held
+
+    @property
+    def caps_lock_on(self) -> bool:
+        """Check if caps lock is on."""
+        return self._caps_lock_on
+
+    def reset(self) -> None:
+        """Reset all state."""
+        self._pressed.clear()
+        self._shift_held = False
+        self._caps_lock_on = False
+        self._space_held = False
+        self._sticky_shift_active = False
+        self._double_tap.reset()
+        self._escape_hold_triggered = False

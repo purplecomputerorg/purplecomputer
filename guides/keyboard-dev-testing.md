@@ -6,98 +6,97 @@ How to test Purple Computer's keyboard features without flashing the golden imag
 
 ## The Architecture
 
-Purple Computer has special keyboard handling for young typists:
-
-| Feature | What it does |
-|---------|--------------|
-| Sticky shift | Tap shift, then type = capital letter (no holding two keys) |
-| Double-tap | Type `a` twice quickly = `A` |
-| Long-press Escape | Hold 1 second = parent mode |
-| F-key remapping | F1/F2/F3 work on all laptops regardless of Fn Lock |
-
-All of this is handled by `keyboard_normalizer.py`, which runs as a subprocess:
+Purple Computer reads keyboard input directly from Linux evdev, bypassing the terminal. The terminal (Alacritty) is display-only.
 
 ```
 Physical Keyboard
        │
-       ▼
+       ▼ evdev (/dev/input/event*)
+       │
 ┌──────────────────────────────────────┐
-│       keyboard_normalizer.py         │
+│         Purple TUI Process           │
 │                                      │
-│  • Grabs the keyboard exclusively    │
-│  • Detects tap vs hold (shift)       │
-│  • Detects double-tap                │
-│  • Detects long-press (escape)       │
-│  • Remaps F-keys via scancodes       │
-│  • Emits processed keys              │
+│  EvdevReader (async)                 │
+│       │ RawKeyEvent                  │
+│       ▼                              │
+│  KeyboardStateMachine                │
+│       │ KeyAction                    │
+│       ▼                              │
+│  Mode Widgets (Ask, Play, Write)     │
+│       │                              │
+│       ▼                              │
+│  Textual UI ──────► Alacritty        │
+│                     (display only)   │
 └──────────────────────────────────────┘
-       │
-       ▼
-Virtual Keyboard ("Purple Keyboard Normalizer")
-       │
-       ▼
-Terminal (Alacritty)
-       │
-       ▼
-Purple TUI (Textual)
 ```
 
-**The TUI receives already-processed events.** By the time a keypress reaches the TUI, sticky shift is applied, double-tap is converted, and long-press Escape becomes F24.
+This architecture gives us:
+- True key down/up events (not just key pressed)
+- Precise timestamps for timing features
+- All keycodes (no terminal filtering of F13-F24)
+- Reliable space-hold detection for paint mode
+
+See `guides/keyboard-architecture-v2.md` for the full design rationale.
+
+---
+
+## Keyboard Features
+
+| Feature | What it does | How it works |
+|---------|--------------|--------------|
+| Sticky shift | Tap shift, then type = capital letter | KeyboardStateMachine detects quick tap |
+| Double-tap | Type `a` twice quickly = `A` | DoubleTapDetector tracks timing |
+| Long-press Escape | Hold 1 second = parent mode | KeyboardStateMachine tracks press duration |
+| Space-hold paint | Hold space + arrows = draw lines | True key release via evdev |
+| F-key remapping | F1-F3 work on all laptops | Scancode calibration via keyboard_normalizer.py |
 
 ---
 
 ## Why You Can't Test on Mac
 
-keyboard_normalizer.py requires Linux evdev. It literally cannot run on macOS.
+Purple Computer requires Linux with evdev. It literally cannot run on macOS.
 
-The TUI has fallback code for Mac, but it's approximate:
+The app will fail at startup with a clear error:
 
-| Feature | On Linux | On Mac |
-|---------|----------|--------|
-| Key press/release | Separate events | Only "key pressed" |
-| Long-press timing | Accurate | Unreliable (no key-up) |
-| Sticky shift | Works perfectly | Timing is guesswork |
-| Double-tap | Works perfectly | Key repeat interferes |
+```
+Purple Computer cannot start:
+evdev not available. Purple Computer requires Linux with python-evdev.
+```
 
-**Mac is fine for UI layout. Not for keyboard UX.**
+**macOS is not supported at all.** Not even for UI development. You need a Linux environment.
 
 ---
 
-## Why SSH Doesn't Work Either
+## Why SSH Doesn't Work
 
-This is the confusing part.
-
-You might think: "I have a NixOS server running Linux. I'll SSH in and test there."
+You might think: "I have a Linux server. I'll SSH in and test there."
 
 **It doesn't work.** Here's why:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   NixOS Server                       │
+│                   Linux Server                       │
 │                                                      │
-│  keyboard_normalizer.py                              │
-│         │                                            │
-│         ▼                                            │
-│  Virtual Keyboard ──────► TTY1 (console)             │
-│                              │                       │
-│                              ▼                       │
-│                     [nothing, no monitor]            │
+│  EvdevReader tries to grab /dev/input/event*         │
+│       │                                              │
+│       ▼                                              │
+│  Physical keyboard (attached to server)              │
+│       │                                              │
+│  BUT your keystrokes come from SSH, not evdev!       │
 │                                                      │
 │  ─────────────────────────────────────────────────── │
 │                                                      │
 │  SSH connection ◄──────── your Mac                   │
-│         │                                            │
-│         ▼                                            │
-│  PTY (pseudo-terminal) ──► Purple TUI                │
-│                                                      │
+│       │                                              │
+│       ▼                                              │
+│  PTY (pseudo-terminal) ──► Textual on_key            │
+│                            (which is suppressed)     │
 └─────────────────────────────────────────────────────┘
 ```
 
-keyboard_normalizer.py grabs the physical keyboard and emits to a virtual keyboard. That virtual keyboard's output goes to the **Linux console (TTY1)**, not to your SSH session.
+The EvdevReader grabs the physical keyboard attached to the server. Your SSH keystrokes come through a PTY, which evdev doesn't see. And we suppress terminal keyboard events since we expect evdev input.
 
-Your SSH session has its own input path: keystrokes from your Mac travel over the network into a PTY. keyboard_normalizer.py never sees them.
-
-**SSH gives you Mac keyboard behavior with extra latency.**
+**SSH simply won't work for testing.**
 
 ---
 
@@ -109,14 +108,12 @@ Run a Linux VM on your Mac. Use the VM's console window (not SSH into the VM).
 ┌─────────────────────────────────────────────────────┐
 │                   Linux VM                           │
 │                                                      │
-│  keyboard_normalizer.py                              │
-│         │                                            │
-│         ▼                                            │
-│  Virtual Keyboard ──────► TTY1 (console)             │
-│                              │                       │
-│                              ▼                       │
-│                     Purple TUI ◄─── you see this     │
-│                                     in the VM window │
+│  EvdevReader                                         │
+│       │                                              │
+│       ▼                                              │
+│  Virtual Keyboard ──► /dev/input/by-id/*-kbd         │
+│                                                      │
+│  Purple TUI ◄─── you see this in the VM window       │
 └─────────────────────────────────────────────────────┘
        ▲
        │
@@ -124,7 +121,7 @@ Run a Linux VM on your Mac. Use the VM's console window (not SSH into the VM).
   (VM captures it as if it were a physical keyboard)
 ```
 
-The VM's console IS the target. keyboard_normalizer.py's output goes there. You see it in the VM window.
+The VM presents your Mac keyboard as a virtual evdev device. Purple reads from that device. You see the output in the VM window.
 
 ---
 
@@ -144,17 +141,16 @@ The VM's console IS the target. keyboard_normalizer.py's output goes there. You 
    - RAM: 2-4 GB (2 GB is sufficient)
    - Disk: 16 GB
    - Display output enabled
-   - No OpenGL acceleration needed
 
 4. Install Ubuntu Server:
    - Minimized install is fine
-   - Use entire disk (default partitioning)
    - Enable OpenSSH (for setup/editing only)
 
 5. Configure:
    ```bash
    sudo usermod -aG input $USER
    sudo apt install python3-pip python3-venv git evtest
+   # Log out and back in for group change to take effect
    ```
 
 6. Verify evdev works:
@@ -164,12 +160,11 @@ The VM's console IS the target. keyboard_normalizer.py's output goes there. You 
 
    # Check evdev devices exist
    ls /dev/input/by-id/
-
    # Should see something like:
    # usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd
 
    # Test keyboard events (Ctrl+C to exit)
-   sudo evtest /dev/input/by-id/usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd
+   evtest /dev/input/by-id/usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd
    ```
 
 7. Set up shared folder or rsync for code sync
@@ -186,90 +181,31 @@ Event: time 1234.767890, type 1 (EV_KEY), code 30 (KEY_A), value 2   ← repeat
 Event: time 1234.867890, type 1 (EV_KEY), code 30 (KEY_A), value 0   ← key up
 ```
 
-- `value=1`: key down (start timing)
-- `value=0`: key up (end timing)
-- `value=2`: auto-repeat (ignore for duration logic)
+- `value=1`: key down
+- `value=0`: key up
+- `value=2`: auto-repeat (ignored)
 
 **Daily workflow:**
 
 1. Start VM
 2. Sync code (shared folder or rsync)
 3. Run Purple TUI in the **VM console window** (not SSH)
-4. Test keyboard: long-press Escape, sticky shift, double-tap, F-keys
+4. Test keyboard: long-press Escape, sticky shift, double-tap, space-hold
 5. Make changes on Mac, re-sync, restart TUI
 
 **Important:** Use SSH for editing code and git operations. Use the VM console window for running and testing Purple Computer.
 
 ---
 
-## VM Keyboard Quirks
+## F-Key Calibration
 
-**Stable device paths:**
+Different laptops send different scancodes for F-keys. To calibrate:
 
-Always use `/dev/input/by-id/` paths, not `/dev/input/eventX`. The event numbers can change between boots.
-
-```python
-# Good
-device = InputDevice('/dev/input/by-id/usb-Apple_Inc._Virtual_USB_Keyboard-event-kbd')
-
-# Bad (may change)
-device = InputDevice('/dev/input/event3')
+```bash
+python keyboard_normalizer.py --calibrate
 ```
 
-**Modifier key mapping:**
-
-In the UTM VM, Mac's Command key maps to `KEY_LEFTSHIFT`. This differs from real hardware where Command might map to `KEY_LEFTMETA`.
-
-Do NOT assume semantic meaning from modifier key names. The keyboard_normalizer.py code treats modifiers abstractly, which is correct.
-
----
-
-## When to Use What
-
-| Task | Where to do it |
-|------|----------------|
-| UI layout, colors, screen flow | Mac directly |
-| Basic typing, mode switching | Mac directly |
-| Long-press Escape timing | Linux VM |
-| Sticky shift behavior | Linux VM |
-| Double-tap behavior | Linux VM |
-| F-key remapping | Linux VM |
-| Final hardware validation | Golden image on real laptop |
-
----
-
-## Common Mistakes
-
-### "I'll just SSH into a Linux box"
-
-Doesn't work. SSH input bypasses keyboard_normalizer.py. You get Mac keyboard behavior.
-
-### "I'll attach a USB keyboard to my server"
-
-Only works if you also have a monitor. keyboard_normalizer.py output goes to TTY1 (the console), which you can't see without a display.
-
-### "Why can't the TUI read evdev directly?"
-
-It could, but then you'd have two things trying to grab the keyboard. The current architecture (normalizer as subprocess) keeps concerns separated: hardware handling in one place, UI in another.
-
-### "Can I test keyboard_normalizer.py logic without hardware?"
-
-Yes. `KeyEventProcessor` in keyboard_normalizer.py is pure logic. Feed it synthetic events with timestamps:
-
-```python
-proc = KeyEventProcessor()
-
-# Simulate escape press
-proc.process_event(EV_KEY, KEY_ESC, 1, timestamp=0.0)
-
-# Simulate release after 1.2 seconds
-result = proc.process_event(EV_KEY, KEY_ESC, 0, timestamp=1.2)
-
-# Should have emitted F24 (parent mode)
-assert (EV_KEY, KEY_F24, 1) in result
-```
-
-See `tests/test_keyboard_normalizer.py` for examples.
+This prompts you to press F1-F12 and saves the scancode mapping to `~/.config/purple/keyboard-map.json`. The Purple TUI loads this file on startup.
 
 ---
 
@@ -277,23 +213,54 @@ See `tests/test_keyboard_normalizer.py` for examples.
 
 | File | What it does |
 |------|--------------|
-| `keyboard_normalizer.py` | Grabs hardware keyboard, processes events, emits to virtual keyboard |
-| `purple_tui/keyboard.py` | Pure-logic classes (DoubleTapDetector, ShiftState, etc.) used by normalizer |
-| `tests/test_keyboard_normalizer.py` | Unit tests for keyboard logic |
+| `purple_tui/input.py` | EvdevReader, RawKeyEvent: direct keyboard reading |
+| `purple_tui/keyboard.py` | KeyboardStateMachine, action types, timing logic |
+| `keyboard_normalizer.py` | F-key calibration tool only (not used at runtime) |
 | `~/.config/purple/keyboard-map.json` | Calibrated F-key scancode mapping |
+
+---
+
+## Testing Keyboard Logic Without Hardware
+
+The `KeyboardStateMachine` in keyboard.py is pure logic. You can test it with synthetic events:
+
+```python
+from purple_tui.input import RawKeyEvent, KeyCode
+from purple_tui.keyboard import KeyboardStateMachine, ModeAction
+
+sm = KeyboardStateMachine()
+
+# Simulate escape press
+actions = sm.process(RawKeyEvent(
+    keycode=KeyCode.KEY_ESC,
+    is_down=True,
+    timestamp=0.0
+))
+
+# Simulate release after 1.2 seconds
+actions = sm.process(RawKeyEvent(
+    keycode=KeyCode.KEY_ESC,
+    is_down=False,
+    timestamp=1.2
+))
+
+# Should have triggered parent mode
+assert any(isinstance(a, ModeAction) and a.mode == 'parent' for a in actions)
+```
 
 ---
 
 ## Summary
 
-1. **keyboard_normalizer.py does all the hard keyboard work** (timing, long-press, sticky shift)
-2. **It requires Linux evdev**, so Mac can't run it
-3. **Its output goes to the Linux console**, so SSH doesn't help
+1. **Purple reads keyboard directly from evdev**, bypassing the terminal
+2. **Requires Linux with evdev**, so Mac can't run it at all
+3. **SSH doesn't work** because evdev reads physical keyboard, not PTY
 4. **Use a Linux VM** and work in the console window
-5. **Mac is fine for UI work**, just not keyboard UX testing
+5. **F-key calibration** is a separate tool (keyboard_normalizer.py --calibrate)
 
 ---
 
 ## Related Guides
 
-- **[Linux VM Dev Setup](linux-vm-dev-setup.md)**: Complete guide to setting up Ubuntu Server + Xorg + Alacritty in a VM for development, including troubleshooting common issues.
+- **[Keyboard Architecture v2](keyboard-architecture-v2.md)**: Full design rationale for direct evdev input
+- **[Linux VM Dev Setup](linux-vm-dev-setup.md)**: Complete guide to setting up Ubuntu + Xorg + Alacritty in a VM

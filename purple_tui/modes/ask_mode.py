@@ -34,7 +34,10 @@ from ..constants import (
     TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
     ICON_VOLUME_ON, ICON_VOLUME_OFF,
 )
-from ..keyboard import SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor
+from ..keyboard import (
+    SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor,
+    CharacterAction, NavigationAction, ControlAction, ShiftAction,
+)
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget
 
@@ -612,6 +615,90 @@ class AskMode(Vertical):
         """Focus the input when mode loads"""
         self.query_one("#ask-input").focus()
 
+    async def handle_keyboard_action(self, action) -> None:
+        """
+        Handle keyboard actions from the main app's KeyboardStateMachine.
+
+        This mode uses Textual's Input widget which needs special treatment.
+        We handle some actions directly and forward others to the input.
+        """
+        ask_input = self.query_one("#ask-input", InlineInput)
+
+        # Handle navigation (up/down for scrolling history)
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                ask_input.action_scroll_up()
+            elif action.direction == 'down':
+                ask_input.action_scroll_down()
+            return
+
+        # Handle control actions
+        if isinstance(action, ControlAction):
+            if action.action == 'space' and action.is_down:
+                # Space: accept autocomplete if there's a suggestion
+                if ask_input.autocomplete_matches:
+                    selected_word = ask_input.autocomplete_matches[ask_input.autocomplete_index][0]
+                    words = ask_input.value.split()
+                    if words:
+                        words[-1] = selected_word
+                        ask_input.value = " ".join(words) + " "
+                        ask_input.cursor_position = len(ask_input.value)
+                    ask_input.autocomplete_matches = []
+                    ask_input.autocomplete_index = 0
+                    ask_input._double_tap.reset()
+                else:
+                    # Type a space
+                    ask_input.value = ask_input.value[:ask_input.cursor_position] + " " + ask_input.value[ask_input.cursor_position:]
+                    ask_input.cursor_position += 1
+                    ask_input._check_autocomplete()
+                return
+
+            if action.action == 'enter' and action.is_down:
+                if ask_input.value.strip():
+                    ask_input.post_message(InlineInput.Submitted(ask_input.value))
+                    ask_input.value = ""
+                ask_input.autocomplete_matches = []
+                ask_input.autocomplete_index = 0
+                ask_input._double_tap.reset()
+                return
+
+            if action.action == 'backspace' and action.is_down:
+                if ask_input.cursor_position > 0:
+                    ask_input.value = ask_input.value[:ask_input.cursor_position - 1] + ask_input.value[ask_input.cursor_position:]
+                    ask_input.cursor_position -= 1
+                    ask_input._check_autocomplete()
+                return
+
+            if action.action == 'tab' and action.is_down:
+                ask_input.action_toggle_speech()
+                return
+
+            return
+
+        # Handle character input
+        if isinstance(action, CharacterAction):
+            char = action.char
+
+            # Double-tap for shifted characters
+            if ask_input._double_tap.check(char):
+                if ask_input.value:
+                    ask_input.value = ask_input.value[:-1] + SHIFT_MAP[char]
+                    ask_input.cursor_position = len(ask_input.value)
+                return
+
+            # Math operator substitution (* → ×, / → ÷)
+            if char in ask_input.MATH_DISPLAY:
+                display_char = ask_input.MATH_DISPLAY[char]
+                ask_input.value = ask_input.value[:ask_input.cursor_position] + display_char + ask_input.value[ask_input.cursor_position:]
+                ask_input.cursor_position += len(display_char)
+                ask_input._check_autocomplete()
+                return
+
+            # Normal character
+            ask_input.value = ask_input.value[:ask_input.cursor_position] + char + ask_input.value[ask_input.cursor_position:]
+            ask_input.cursor_position += 1
+            ask_input._check_autocomplete()
+            return
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""

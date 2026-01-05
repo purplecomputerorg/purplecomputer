@@ -3,6 +3,9 @@ Play Mode: Music and Art Grid
 
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
+
+Keyboard input is received via handle_keyboard_action() from the main app,
+which reads directly from evdev.
 """
 
 from textual.widgets import Static
@@ -15,6 +18,8 @@ from rich.segment import Segment
 from rich.style import Style
 from pathlib import Path
 import os
+
+from ..keyboard import CharacterAction, NavigationAction, ControlAction
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -380,29 +385,34 @@ class PlayMode(Container, can_focus=True):
         if self.grid:
             self.grid.cleanup_sounds()
 
-    def on_key(self, event: events.Key) -> None:
-        """Handle key press."""
-        key = event.key
-        char = event.character or key
+    async def handle_keyboard_action(self, action) -> None:
+        """
+        Handle keyboard actions from the main app's KeyboardStateMachine.
 
+        Play mode is simple: character keys cycle colors and play sounds,
+        Tab toggles eraser mode.
+        """
         # Tab toggles sticky eraser mode
-        if event.key == "tab":
-            indicator = self.query_one("#eraser-indicator", EraserModeIndicator)
-            self.eraser_mode = indicator.toggle()
-            event.stop()
+        if isinstance(action, ControlAction):
+            if action.action == 'tab' and action.is_down:
+                indicator = self.query_one("#eraser-indicator", EraserModeIndicator)
+                self.eraser_mode = indicator.toggle()
             return
 
-        if not char:
+        # Character keys cycle colors and play sounds
+        if isinstance(action, CharacterAction):
+            char = action.char
+            if not char:
+                return
+
+            lookup = char.upper() if char.isalpha() else char
+
+            if lookup in ALL_KEYS:
+                if self.eraser_mode:
+                    self.grid.clear_color(lookup)
+                    # Clear flash after brief delay (capture key in lambda)
+                    self.set_timer(0.3, lambda k=lookup: self.grid.clear_flash(k))
+                else:
+                    self.grid.next_color(lookup)
+                self.grid.play_sound(lookup)
             return
-
-        lookup = char.upper() if char.isalpha() else char
-
-        if lookup in ALL_KEYS:
-            event.stop()
-            if self.eraser_mode:
-                self.grid.clear_color(lookup)
-                # Clear flash after brief delay (capture key in lambda)
-                self.set_timer(0.3, lambda k=lookup: self.grid.clear_flash(k))
-            else:
-                self.grid.next_color(lookup)
-            self.grid.play_sound(lookup)

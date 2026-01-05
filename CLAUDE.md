@@ -1,5 +1,38 @@
 # Claude Code Notes for Purple Computer
 
+## Target Audience
+
+Purple Computer is for **kids ages 3-8** and their **non-technical parents**.
+
+When writing user-facing messages (error messages, setup prompts, UI text):
+- Use simple, friendly language
+- Avoid technical jargon (no "evdev", "scancode", "EAGAIN", "permission denied")
+- Give clear next steps, not explanations of what went wrong
+- Point to help resources (GitHub issues) when something fails
+- Reassure rather than alarm
+
+**Bad:**
+```
+ERROR: No keyboard found. Need root or 'input' group.
+No scancodes captured. Your keyboard may not report MSC_SCAN events.
+```
+
+**Good:**
+```
+Could not find your keyboard.
+Please make sure a keyboard is connected and try again.
+
+If this keeps happening, contact us at {SUPPORT_EMAIL}
+
+(Technical: user not in 'input' group)
+```
+
+Use the `SUPPORT_EMAIL` constant from `purple_tui/constants.py` for consistency.
+
+**Technical hints:** When you're confident about the root cause, add a `(Technical: ...)` line at the end. This helps support diagnose issues while keeping the main message friendly. Only include technical hints for known, specific errors (like permission denied → input group). For unknown errors, just log them and point to support.
+
+---
+
 ## Writing Style
 
 **No em-dashes or spaced dashes.** Instead of ` - ` or ` — `, use colons, commas, or periods.

@@ -17,7 +17,26 @@ import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 # Suppress ONNX Runtime warnings (e.g., "Unknown CPU vendor" in VMs)
 os.environ['ORT_LOGGING_LEVEL'] = '3'
+# Also suppress TensorFlow/transformers warnings if they leak through
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import pygame.mixer
+from contextlib import contextmanager
+
+
+@contextmanager
+def _suppress_stderr():
+    """Temporarily redirect stderr to suppress ONNX runtime warnings."""
+    import sys
+    old_stderr = sys.stderr
+    try:
+        sys.stderr = open(os.devnull, 'w')
+        yield
+    finally:
+        try:
+            sys.stderr.close()
+        except Exception:
+            pass
+        sys.stderr = old_stderr
 
 # Voice model configuration
 VOICE_MODEL = "en_US-libritts-high"
@@ -69,7 +88,9 @@ def _get_piper_voice():
         return _piper_voice
 
     try:
-        from piper import PiperVoice
+        # Suppress stderr during piper import (loads ONNX runtime)
+        with _suppress_stderr():
+            from piper import PiperVoice
 
         # Check for voice model in various locations
         model_path = None
@@ -83,7 +104,9 @@ def _get_piper_voice():
             _piper_available = False
             return None
 
-        _piper_voice = PiperVoice.load(str(model_path))
+        # Suppress stderr during model loading (ONNX session creation)
+        with _suppress_stderr():
+            _piper_voice = PiperVoice.load(str(model_path))
         _piper_available = True
         return _piper_voice
 
@@ -139,6 +162,15 @@ def _init_sync() -> None:
 
 _current_channel = None
 _speech_id = 0  # Incremented on each speak() call to cancel stale requests
+_muted = False  # Global mute state (controlled by app volume toggle)
+
+
+def set_muted(muted: bool) -> None:
+    """Set the global mute state. When muted, speak() does nothing."""
+    global _muted
+    _muted = muted
+    if muted:
+        stop()  # Stop any currently playing speech
 
 
 def stop() -> None:
@@ -167,6 +199,8 @@ def speak(text: str) -> bool:
         True if speech was started, False otherwise
     """
     global _speech_id
+    if _muted:
+        return False
     if not text or not text.strip():
         return False
 
@@ -220,8 +254,9 @@ def _speak_sync(text: str, speech_id: int) -> bool:
         from piper.config import SynthesisConfig
         config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
 
-        # Collect audio chunks from generator
-        audio_chunks = list(voice.synthesize(f"... {text} ...", config))
+        # Collect audio chunks from generator (suppress ONNX warnings during inference)
+        with _suppress_stderr():
+            audio_chunks = list(voice.synthesize(f"... {text} ...", config))
         if not audio_chunks:
             Path(wav_path).unlink(missing_ok=True)
             return False

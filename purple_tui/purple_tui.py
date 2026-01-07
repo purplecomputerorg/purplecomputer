@@ -19,6 +19,11 @@ Keyboard controls:
 - Double-tap: Same symbol twice quickly = shifted version
 """
 
+# Suppress ONNX runtime warnings early (before any imports that might load it)
+import os
+os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
+os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal, Center, Middle
 from textual.widgets import Static, Footer
@@ -28,7 +33,6 @@ from textual.theme import Theme
 from textual import events
 from enum import Enum
 import subprocess
-import os
 import time
 
 from .constants import (
@@ -217,17 +221,10 @@ class ModeIndicator(Horizontal):
             pass
 
     def update_volume_indicator(self, volume_on: bool) -> None:
-        """Update volume indicator badge"""
+        """Update volume indicator badge (icon only, stays dim)"""
         try:
             badge = self.query_one("#key-volume", KeyBadge)
-            if volume_on:
-                badge.text = f"F11 {ICON_VOLUME_ON}"
-                badge.remove_class("active")
-                badge.add_class("dim")
-            else:
-                badge.text = f"F11 {ICON_VOLUME_OFF}"
-                badge.remove_class("dim")
-                badge.add_class("active")  # Highlight when muted to draw attention
+            badge.text = f"F11 {ICON_VOLUME_ON if volume_on else ICON_VOLUME_OFF}"
             badge.refresh()
         except NoMatches:
             pass
@@ -1008,6 +1005,9 @@ class PurpleApp(App):
     def action_toggle_volume(self) -> None:
         """Toggle volume on/off (F11)"""
         self.volume_on = not self.volume_on
+        # Update TTS mute state
+        from . import tts
+        tts.set_muted(not self.volume_on)
         # Update volume indicator in mode indicator
         try:
             indicator = self.query_one("#mode-indicator", ModeIndicator)

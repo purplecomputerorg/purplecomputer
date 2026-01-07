@@ -368,6 +368,18 @@ class ArtCanvas(Widget, can_focus=True):
             return True
         return False
 
+    def _move_in_direction(self, direction: str) -> bool:
+        """Move cursor in the given direction. Returns True if moved."""
+        if direction == 'up':
+            return self._move_cursor_up()
+        elif direction == 'down':
+            return self._move_cursor_down()
+        elif direction == 'left':
+            return self._move_cursor_left()
+        elif direction == 'right':
+            return self._move_cursor_right()
+        return False
+
     def _carriage_return(self) -> None:
         """Move to start of next line."""
         self._cursor_x = 0
@@ -493,6 +505,9 @@ class ArtCanvas(Widget, can_focus=True):
                         # In paint mode: stamp and enable "pen down" for line drawing
                         self._paint_at_cursor()
                         self._start_space_down()
+                        # If an arrow key is held, advance in that direction after stamping
+                        if action.arrow_held:
+                            self._move_in_direction(action.arrow_held)
                         self.refresh()
                     else:
                         # In text mode: check for double-tap to toggle, else type space
@@ -521,8 +536,8 @@ class ArtCanvas(Widget, can_focus=True):
                 return
 
             if action.action == 'enter' and action.is_down:
-                if not self._paint_mode:
-                    self._carriage_return()
+                # Move down one line, keeping column position (for vertical drawing)
+                self._move_cursor_down()
                 self.refresh()
                 return
 

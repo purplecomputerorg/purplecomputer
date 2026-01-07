@@ -11,7 +11,7 @@ Features:
 - Space-hold for paint mode line drawing (release detection via evdev)
 - F-key mode switching (F1-F3, F12)
 
-See guides/keyboard-architecture-v2.md for architecture details.
+See guides/keyboard-architecture.md for architecture details.
 """
 
 import time
@@ -538,6 +538,7 @@ class ControlAction(KeyAction):
     """Control key action."""
     action: str  # 'backspace', 'enter', 'tab', 'escape', 'space'
     is_down: bool = True  # Key press (True) or release (False)
+    arrow_held: str | None = None  # Arrow direction held when this action fired
 
 
 @dataclass
@@ -654,7 +655,11 @@ class KeyboardStateMachine:
         # Handle Space
         if keycode == KeyCode.KEY_SPACE:
             self._space_held = True
-            actions.append(ControlAction(action='space', is_down=True))
+            actions.append(ControlAction(
+                action='space',
+                is_down=True,
+                arrow_held=self.held_arrow_direction,
+            ))
             return actions
 
         # Handle arrow keys
@@ -827,6 +832,20 @@ class KeyboardStateMachine:
     def caps_lock_on(self) -> bool:
         """Check if caps lock is on."""
         return self._caps_lock_on
+
+    @property
+    def held_arrow_direction(self) -> str | None:
+        """Get the currently held arrow direction, if any."""
+        arrow_keys = [
+            (KeyCode.KEY_UP, 'up'),
+            (KeyCode.KEY_DOWN, 'down'),
+            (KeyCode.KEY_LEFT, 'left'),
+            (KeyCode.KEY_RIGHT, 'right'),
+        ]
+        for keycode, direction in arrow_keys:
+            if keycode in self._pressed:
+                return direction
+        return None
 
     def reset(self) -> None:
         """Reset all state."""

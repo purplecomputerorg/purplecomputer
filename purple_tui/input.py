@@ -8,7 +8,7 @@ The terminal (Alacritty) is display-only. Keyboard input flows:
   evdev → EvdevReader → RawKeyEvent → App
 
 IMPORTANT: Purple Computer requires Linux with evdev. macOS is not supported.
-See guides/keyboard-architecture-v2.md for details.
+See guides/keyboard-architecture.md for details.
 """
 
 import asyncio

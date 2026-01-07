@@ -13,7 +13,7 @@ by the main Purple Computer app (purple_tui) when it starts.
 
 NOTE: The runtime keyboard processing has moved to purple_tui/input.py
 which reads evdev directly, bypassing the terminal. This file is kept
-only for calibration mode. See guides/keyboard-architecture-v2.md.
+only for calibration mode. See guides/keyboard-architecture.md.
 """
 
 import json

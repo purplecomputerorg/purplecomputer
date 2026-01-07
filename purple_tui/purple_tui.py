@@ -8,7 +8,7 @@ A creativity device, not an entertainment device.
 IMPORTANT: Requires Linux with evdev for keyboard input.
 The terminal (Alacritty) is display-only; keyboard input is read
 directly from evdev, bypassing the terminal. See:
-  guides/keyboard-architecture-v2.md
+  guides/keyboard-architecture.md
 
 Keyboard controls:
 - F1-F3: Switch modes (Ask, Play, Write)

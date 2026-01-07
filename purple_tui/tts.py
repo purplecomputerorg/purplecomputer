@@ -15,6 +15,8 @@ import os
 
 # Suppress pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+# Suppress ONNX Runtime warnings (e.g., "Unknown CPU vendor" in VMs)
+os.environ['ORT_LOGGING_LEVEL'] = '3'
 import pygame.mixer
 
 # Voice model configuration

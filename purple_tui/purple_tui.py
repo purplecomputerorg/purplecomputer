@@ -1099,10 +1099,12 @@ class PurpleApp(App):
             "#example-hint",
             "#autocomplete-hint",
             "#write-header",
+            "#canvas-header",
             "#input-prompt",
             "#speech-indicator",
             "#eraser-indicator",
             "#coming-soon",
+            "#art-canvas",
         ]
         for widget_id in widget_ids:
             try:
@@ -1110,6 +1112,22 @@ class PurpleApp(App):
                 widget.refresh()
             except NoMatches:
                 pass
+
+        # Refresh all HistoryLine widgets in ask mode
+        try:
+            from .modes.ask_mode import HistoryLine
+            for widget in self.query(HistoryLine):
+                widget.refresh()
+        except Exception:
+            pass
+
+        # Refresh PlayGrid in play mode
+        try:
+            from .modes.play_mode import PlayGrid
+            for widget in self.query(PlayGrid):
+                widget.refresh()
+        except Exception:
+            pass
 
     @property
     def caps_mode(self) -> bool:

@@ -273,6 +273,12 @@ class ArtCanvas(Widget, can_focus=True):
         # In the 3x3 area but not the center
         return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
 
+    def _caps_char(self, char: str) -> str:
+        """Transform character based on caps mode."""
+        if hasattr(self.app, 'caps_mode') and self.app.caps_mode and char.isalpha():
+            return char.upper()
+        return char
+
     def render_line(self, y: int) -> Strip:
         """Render a single line of the canvas."""
         width = self.size.width
@@ -294,7 +300,7 @@ class ArtCanvas(Widget, can_focus=True):
                     # Paint mode: center always shows underlying (the "hole")
                     if cell:
                         char, fg_color, bg_color = cell
-                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                        segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
                 else:
@@ -314,7 +320,7 @@ class ArtCanvas(Widget, can_focus=True):
                         if char not in (" ", BRUSH_CHAR, ""):
                             # Text cell: keep the character, tint it with cursor color
                             ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
-                            segments.append(Segment(char, ring_style))
+                            segments.append(Segment(self._caps_char(char), ring_style))
                         else:
                             # Painted/empty cell: show box char with underlying bg
                             ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
@@ -327,13 +333,13 @@ class ArtCanvas(Widget, can_focus=True):
                     # Blink off: show underlying cell
                     if cell:
                         char, fg_color, bg_color = cell
-                        segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
+                        segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
             elif cell:
                 char, fg_color, bg_color = cell
                 char_style = Style(color=fg_color, bgcolor=bg_color)
-                segments.append(Segment(char, char_style))
+                segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell
                 segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))

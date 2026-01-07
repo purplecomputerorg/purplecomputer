@@ -170,11 +170,13 @@ class RawKeyEvent:
         is_down: True for key press, False for key release
         timestamp: Monotonic timestamp in seconds
         scancode: Hardware scancode (for F-key remapping), 0 if unavailable
+        is_repeat: True if this is a key repeat event (key held down)
     """
     keycode: int
     is_down: bool
     timestamp: float
     scancode: int = 0
+    is_repeat: bool = False
 
     @property
     def char(self) -> Optional[str]:
@@ -376,8 +378,8 @@ class EvdevReader:
                     self._pending_scancode = event.value
                     continue
 
-                # Process key events (ignore repeats: value=2)
-                if event.type == EV_KEY and event.value in (0, 1):
+                # Process key events: 0=up, 1=down, 2=repeat
+                if event.type == EV_KEY and event.value in (0, 1, 2):
                     keycode = event.code
                     scancode = self._pending_scancode
                     self._pending_scancode = 0
@@ -388,9 +390,10 @@ class EvdevReader:
 
                     raw_event = RawKeyEvent(
                         keycode=keycode,
-                        is_down=(event.value == 1),
+                        is_down=(event.value in (1, 2)),  # down or repeat
                         timestamp=event.timestamp(),
                         scancode=scancode,
+                        is_repeat=(event.value == 2),
                     )
 
                     await self._callback(raw_event)

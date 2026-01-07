@@ -518,6 +518,7 @@ class CharacterAction(KeyAction):
     """A printable character was typed."""
     char: str
     shifted: bool = False  # Was shift applied?
+    is_repeat: bool = False  # Is this a key repeat?
 
 
 @dataclass
@@ -525,6 +526,7 @@ class NavigationAction(KeyAction):
     """Arrow key movement."""
     direction: str  # 'up', 'down', 'left', 'right'
     space_held: bool = False  # True when painting (space down)
+    is_repeat: bool = False  # Is this a key repeat?
 
 
 @dataclass
@@ -539,6 +541,7 @@ class ControlAction(KeyAction):
     action: str  # 'backspace', 'enter', 'tab', 'escape', 'space'
     is_down: bool = True  # Key press (True) or release (False)
     arrow_held: str | None = None  # Arrow direction held when this action fired
+    is_repeat: bool = False  # Is this a key repeat?
 
 
 @dataclass
@@ -626,98 +629,105 @@ class KeyboardStateMachine:
         return actions
 
     def _handle_key_down(self, event: RawKeyEvent) -> List[KeyAction]:
-        """Handle key press."""
+        """Handle key press or repeat."""
         actions = []
         keycode = event.keycode
         timestamp = event.timestamp
+        is_repeat = event.is_repeat
 
-        # Track pressed state
-        already_pressed = keycode in self._pressed
-        self._pressed[keycode] = timestamp
+        # Track pressed state (only on fresh press, not repeat)
+        if not is_repeat:
+            self._pressed[keycode] = timestamp
 
-        # Handle modifiers
-        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
-            self._shift_held = True
-            actions.append(ShiftAction(is_down=True))
-            return actions
+        # Handle modifiers (only on fresh press)
+        if not is_repeat:
+            if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
+                self._shift_held = True
+                actions.append(ShiftAction(is_down=True))
+                return actions
 
-        if keycode == KeyCode.KEY_CAPSLOCK:
-            self._caps_lock_on = not self._caps_lock_on
-            actions.append(CapsLockAction())
-            return actions
+            if keycode == KeyCode.KEY_CAPSLOCK:
+                self._caps_lock_on = not self._caps_lock_on
+                actions.append(CapsLockAction())
+                return actions
 
-        # Handle Escape (start tracking for long-hold)
+        # Handle Escape (only on fresh press for long-hold tracking)
         if keycode == KeyCode.KEY_ESC:
-            self._escape_hold_triggered = False
-            actions.append(ControlAction(action='escape', is_down=True))
+            if not is_repeat:
+                self._escape_hold_triggered = False
+            actions.append(ControlAction(action='escape', is_down=True, is_repeat=is_repeat))
             return actions
 
         # Handle Space
         if keycode == KeyCode.KEY_SPACE:
-            self._space_held = True
+            if not is_repeat:
+                self._space_held = True
             actions.append(ControlAction(
                 action='space',
                 is_down=True,
                 arrow_held=self.held_arrow_direction,
+                is_repeat=is_repeat,
             ))
             return actions
 
-        # Handle arrow keys
+        # Handle arrow keys (repeats allowed)
         if keycode == KeyCode.KEY_UP:
-            actions.append(NavigationAction(direction='up', space_held=self._space_held))
+            actions.append(NavigationAction(direction='up', space_held=self._space_held, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_DOWN:
-            actions.append(NavigationAction(direction='down', space_held=self._space_held))
+            actions.append(NavigationAction(direction='down', space_held=self._space_held, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_LEFT:
-            actions.append(NavigationAction(direction='left', space_held=self._space_held))
+            actions.append(NavigationAction(direction='left', space_held=self._space_held, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_RIGHT:
-            actions.append(NavigationAction(direction='right', space_held=self._space_held))
+            actions.append(NavigationAction(direction='right', space_held=self._space_held, is_repeat=is_repeat))
             return actions
 
-        # Handle other control keys
+        # Handle other control keys (repeats allowed)
         if keycode == KeyCode.KEY_BACKSPACE:
-            actions.append(ControlAction(action='backspace', is_down=True))
+            actions.append(ControlAction(action='backspace', is_down=True, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_ENTER:
-            actions.append(ControlAction(action='enter', is_down=True))
+            actions.append(ControlAction(action='enter', is_down=True, is_repeat=is_repeat))
             return actions
         if keycode == KeyCode.KEY_TAB:
-            actions.append(ControlAction(action='tab', is_down=True))
+            actions.append(ControlAction(action='tab', is_down=True, is_repeat=is_repeat))
             return actions
 
-        # Handle F-keys for mode switching
-        if keycode == KeyCode.KEY_F1:
-            actions.append(ModeAction(mode='ask'))
-            return actions
-        if keycode == KeyCode.KEY_F2:
-            actions.append(ModeAction(mode='play'))
-            return actions
-        if keycode == KeyCode.KEY_F3:
-            actions.append(ModeAction(mode='write'))
-            return actions
-        if keycode == KeyCode.KEY_F12:
-            actions.append(ModeAction(mode='parent'))
-            return actions
+        # Handle F-keys for mode switching (no repeats)
+        if not is_repeat:
+            if keycode == KeyCode.KEY_F1:
+                actions.append(ModeAction(mode='ask'))
+                return actions
+            if keycode == KeyCode.KEY_F2:
+                actions.append(ModeAction(mode='play'))
+                return actions
+            if keycode == KeyCode.KEY_F3:
+                actions.append(ModeAction(mode='write'))
+                return actions
+            if keycode == KeyCode.KEY_F12:
+                actions.append(ModeAction(mode='parent'))
+                return actions
 
         # Handle printable characters
         char = event.char
         if char:
-            # Check for double-tap
-            shifted_char = self._double_tap.check(char, timestamp)
-            if shifted_char:
-                # Delete the first character (will be replaced)
-                actions.append(ControlAction(action='backspace', is_down=True))
-                actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True))
-                return actions
+            # Check for double-tap (only on fresh press)
+            if not is_repeat:
+                shifted_char = self._double_tap.check(char, timestamp)
+                if shifted_char:
+                    # Delete the first character (will be replaced)
+                    actions.append(ControlAction(action='backspace', is_down=True))
+                    actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True))
+                    return actions
 
             # Apply shift/caps
             final_char = self._apply_shift(char)
-            actions.append(CharacterAction(char=final_char, shifted=(final_char != char)))
+            actions.append(CharacterAction(char=final_char, shifted=(final_char != char), is_repeat=is_repeat))
 
-            # Consume sticky shift
-            if self._sticky_shift_active:
+            # Consume sticky shift (only on fresh press)
+            if not is_repeat and self._sticky_shift_active:
                 self._sticky_shift_active = False
 
         return actions

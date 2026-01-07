@@ -77,13 +77,14 @@ class HistoryLine(Static):
             return self.ARROW_DARK
 
     def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         if self.line_type == "ask":
-            return f"[bold #c4a0e8]Ask:[/] {self.text}"
+            return f"[bold #c4a0e8]{caps('Ask:')}[/] {caps(self.text)}"
         else:
             # Add arrow to each line for multi-line results
             arrow_color = self._get_arrow_color()
             lines = self.text.split('\n')
-            return '\n'.join(f"[{arrow_color}]  →[/] {line}" for line in lines)
+            return '\n'.join(f"[{arrow_color}]  →[/] {caps(line)}" for line in lines)
 
 
 class ColorResultLine(Widget):
@@ -421,13 +422,15 @@ class InlineInput(Input):
         if not self.autocomplete_matches:
             return ""
 
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+
         # Show up to 5 matches
         shown = self.autocomplete_matches[:5]
         parts = []
 
         for word, color_hex, emoji in shown:
             # Build display: word emoji? [color]?
-            display = f"[dim]{word}[/]"
+            display = f"[dim]{caps(word)}[/]"
             if emoji:
                 display += f" {emoji}"
             if color_hex:
@@ -435,7 +438,7 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return f"{hint}   [dim]← space[/]"
+        return f"{hint}   [dim]{caps('← space')}[/]"
 
 
 class InputPrompt(Static):
@@ -663,6 +666,9 @@ class AskMode(Vertical):
                 return
 
             if action.action == 'backspace' and action.is_down:
+                # Skip key repeats for backspace (debounce held keys)
+                if action.is_repeat:
+                    return
                 if ask_input.cursor_position > 0:
                     ask_input.value = ask_input.value[:ask_input.cursor_position - 1] + ask_input.value[ask_input.cursor_position:]
                     ask_input.cursor_position -= 1
@@ -677,6 +683,10 @@ class AskMode(Vertical):
 
         # Handle character input
         if isinstance(action, CharacterAction):
+            # Skip key repeats for characters (debounce held keys)
+            if action.is_repeat:
+                return
+
             char = action.char
 
             # Double-tap for shifted characters

@@ -119,6 +119,14 @@ class PlayGrid(Widget):
         # Flash keys for visual feedback in clear mode
         self._flash_keys: set[str] = set()
 
+    def _caps_key(self, key: str) -> str:
+        """Transform key label based on caps mode."""
+        if key.isalpha():
+            if hasattr(self.app, 'caps_mode') and self.app.caps_mode:
+                return key.upper()
+            return key.lower()
+        return key
+
     def _ensure_sounds_loaded(self) -> None:
         """Load sounds if not already loaded."""
         if self._sounds_loaded or not _MIXER_READY:
@@ -276,7 +284,7 @@ class PlayGrid(Widget):
                 pad_left = (cell_width - 1) // 2
                 pad_right = cell_width - pad_left - 1
                 segments.append(Segment(" " * pad_left, cell_bg_style))
-                segments.append(Segment(key, text_style))
+                segments.append(Segment(self._caps_key(key), text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
             else:
                 segments.append(Segment(" " * cell_width, cell_bg_style))

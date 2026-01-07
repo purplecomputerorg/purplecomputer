@@ -346,8 +346,11 @@ class ParentMenu(ModalScreen):
             print()
 
             input()
+
+            # Fully restore terminal before exit
             _flush_terminal_input()
             os.system('stty sane')
-
-            # Exit immediately (don't return to app)
-            sys.exit(0)
+            os.system('clear')
+            print("Run 'make run' to start Purple Computer.")
+            print()
+            os._exit(0)  # Hard exit, bypasses Python cleanup

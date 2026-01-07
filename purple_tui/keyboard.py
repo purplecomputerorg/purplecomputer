@@ -817,11 +817,14 @@ class KeyboardStateMachine:
                        Custom thresholds don't set the triggered flag, allowing
                        multiple thresholds to be checked independently.
         """
+        import sys
         # Use dedicated escape press time (set with time.time() for consistency)
         if self._escape_press_time is None:
+            print(f"[DEBUG] check_escape_hold: _escape_press_time is None", file=sys.stderr)
             return False
 
         elapsed = time.time() - self._escape_press_time
+        print(f"[DEBUG] check_escape_hold: elapsed={elapsed:.3f}s, threshold={self.ESCAPE_HOLD_THRESHOLD}s, triggered={self._escape_hold_triggered}", file=sys.stderr)
 
         # Custom threshold: just check elapsed time (no triggered flag)
         if threshold is not None:
@@ -829,12 +832,15 @@ class KeyboardStateMachine:
 
         # Default threshold: use triggered flag to fire only once
         if self._escape_hold_triggered:
+            print(f"[DEBUG] check_escape_hold: already triggered, returning False", file=sys.stderr)
             return False  # Already triggered
 
         if elapsed >= self.ESCAPE_HOLD_THRESHOLD:
             self._escape_hold_triggered = True
+            print(f"[DEBUG] check_escape_hold: threshold reached! returning True", file=sys.stderr)
             return True
 
+        print(f"[DEBUG] check_escape_hold: not yet, returning False", file=sys.stderr)
         return False
 
     @property

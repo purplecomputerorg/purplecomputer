@@ -1126,6 +1126,9 @@ class PurpleApp(App):
 def main():
     """Entry point for Purple Computer"""
     import sys
+    import os
+    import signal
+    import atexit
 
     # Verify evdev is available before anything else
     # Purple Computer requires Linux with evdev for keyboard input
@@ -1134,6 +1137,14 @@ def main():
     except RuntimeError as e:
         print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
         sys.exit(1)
+
+    # Restore terminal state on exit (kernel auto-releases evdev grab)
+    def restore_terminal():
+        os.system('stty sane 2>/dev/null')
+
+    atexit.register(restore_terminal)
+    signal.signal(signal.SIGTERM, lambda s, f: (restore_terminal(), sys.exit(0)))
+    signal.signal(signal.SIGINT, lambda s, f: (restore_terminal(), sys.exit(0)))
 
     # Note: We intentionally do NOT filter stderr here.
     # Textual renders to stderr, so any pipe redirection causes UI lag.

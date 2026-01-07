@@ -37,7 +37,7 @@ from .constants import (
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
-    ICON_VOLUME_ON, ICON_VOLUME_OFF, ICON_SAVE, ICON_LOAD, ICON_ERASER,
+    ICON_VOLUME_ON, ICON_VOLUME_OFF, ICON_ERASER,
     ICON_CAPS_LOCK,
 )
 from .keyboard import (
@@ -160,16 +160,6 @@ class ModeIndicator(Horizontal):
         height: 3;
         margin-right: 2;
     }
-
-    #keys-write {
-        width: auto;
-        height: 3;
-        display: none;
-    }
-
-    #keys-write.visible {
-        display: block;
-    }
     """
 
     def __init__(self, current_mode: Mode, **kwargs):
@@ -188,25 +178,15 @@ class ModeIndicator(Horizontal):
                     badge.add_class("dim")
                 yield badge
 
-        # Write mode badges (F5 save, F6 load). Hidden until write mode
-        with Horizontal(id="keys-write"):
-            save_badge = KeyBadge(f"F5 {ICON_SAVE}", id="key-save")
-            save_badge.add_class("dim")
-            yield save_badge
-            load_badge = KeyBadge(f"F6 {ICON_LOAD}", id="key-load")
-            load_badge.add_class("dim")
-            yield load_badge
-
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
 
-        # Volume toggle (F11)
-        volume_badge = KeyBadge(f"F11 {ICON_VOLUME_ON}", id="key-volume")
-        volume_badge.add_class("dim")
-        yield volume_badge
-
-        # Theme toggle on the right (F12)
+        # Volume (F11) and Theme (F12) on the right
         with Horizontal(id="keys-right"):
+            volume_badge = KeyBadge(f"F11 {ICON_VOLUME_ON}", id="key-volume")
+            volume_badge.add_class("dim")
+            yield volume_badge
+
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
             theme_icon = ICON_MOON if is_dark else ICON_SUN
             theme_badge = KeyBadge(f"F12 {theme_icon}", id="key-theme")
@@ -226,22 +206,12 @@ class ModeIndicator(Horizontal):
             except NoMatches:
                 pass
 
-        # Show/hide write mode badges (F5/F6)
-        try:
-            keys_write = self.query_one("#keys-write")
-            if mode == Mode.WRITE:
-                keys_write.add_class("visible")
-            else:
-                keys_write.remove_class("visible")
-        except NoMatches:
-            pass
-
     def update_theme_icon(self) -> None:
         """Update the theme badge icon"""
         try:
             badge = self.query_one("#key-theme", KeyBadge)
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            badge.text = f"0 {ICON_MOON if is_dark else ICON_SUN}"
+            badge.text = f"F12 {ICON_MOON if is_dark else ICON_SUN}"
             badge.refresh()
         except NoMatches:
             pass
@@ -443,7 +413,7 @@ class PurpleApp(App):
     #caps-indicator {
         width: auto;
         height: 1;
-        margin-right: 1;
+        margin-right: 2;
         color: $text-muted;
     }
 
@@ -759,10 +729,15 @@ class PurpleApp(App):
             pass
 
     def _start_escape_hold_timer(self) -> None:
-        """Start a timer to check for escape long-hold."""
+        """Start a one-shot timer for escape long-hold detection.
+
+        Uses call_later for exact 1s timing instead of polling every 100ms.
+        This avoids the race condition where a polling tick might miss the
+        threshold if the user releases between ticks.
+        """
         self._cancel_escape_hold_timer()  # Cancel any existing timer
-        # Check every 100ms if escape has been held long enough
-        self._escape_hold_timer = self.set_interval(0.1, self._check_escape_hold)
+        # Schedule callback for exactly 1s from now
+        self._escape_hold_timer = self.call_later(ESCAPE_HOLD_THRESHOLD, self._check_escape_hold)
 
     def _cancel_escape_hold_timer(self) -> None:
         """Cancel the escape hold timer."""

@@ -51,6 +51,7 @@ ICON_CHAT = "󰭹"             # nf-md-chat_question
 ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
+ICON_CAPS_LOCK = "󰬈"        # nf-md-caps_lock
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

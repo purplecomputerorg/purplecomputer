@@ -38,6 +38,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_ON, ICON_VOLUME_OFF, ICON_SAVE, ICON_LOAD, ICON_ERASER,
+    ICON_CAPS_LOCK,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -162,9 +163,8 @@ class ModeIndicator(Horizontal):
 
     #caps-indicator {
         width: auto;
-        height: 3;
-        padding: 0 1;
-        content-align: center middle;
+        height: 1;
+        margin-right: 1;
         color: $text-muted;
     }
 
@@ -216,9 +216,6 @@ class ModeIndicator(Horizontal):
         volume_badge.add_class("dim")
         yield volume_badge
 
-        # Caps indicator (starts as lowercase since caps starts off)
-        yield Static("abc", id="caps-indicator")
-
         # Theme toggle on the right (F12)
         with Horizontal(id="keys-right"):
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
@@ -257,19 +254,6 @@ class ModeIndicator(Horizontal):
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
             badge.text = f"0 {ICON_MOON if is_dark else ICON_SUN}"
             badge.refresh()
-        except NoMatches:
-            pass
-
-    def update_caps_indicator(self, caps_on: bool) -> None:
-        """Update caps lock indicator"""
-        try:
-            indicator = self.query_one("#caps-indicator", Static)
-            if caps_on:
-                indicator.update("ABC")
-                indicator.add_class("active")
-            else:
-                indicator.update("abc")
-                indicator.remove_class("active")
         except NoMatches:
             pass
 
@@ -607,6 +591,7 @@ class PurpleApp(App):
             with Vertical(id="viewport-wrapper"):
                 with Horizontal(id="title-row"):
                     yield ModeTitle(id="mode-title")
+                    yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
                 with ViewportContainer(id="viewport"):
                     yield Container(id="content-area")
@@ -737,6 +722,15 @@ class PurpleApp(App):
                 # Cancel timer on release
                 self._cancel_escape_hold_timer()
             # Don't return - let escape events propagate to modes for other uses
+
+        # Handle global toggles (F11 volume, F12 theme)
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'volume_toggle':
+                self.action_toggle_volume()
+                return
+            if action.action == 'theme_toggle':
+                self.action_toggle_theme()
+                return
 
         # Check if a modal screen is active (e.g., ParentMenu)
         # screen_stack[0] is the base screen, anything above is a modal
@@ -1063,8 +1057,13 @@ class PurpleApp(App):
         """Called when caps lock state changes"""
         self._refresh_caps_sensitive_widgets()
         try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.update_caps_indicator(caps_on)
+            indicator = self.query_one("#caps-indicator", Static)
+            if caps_on:
+                indicator.update(f"{ICON_CAPS_LOCK} ABC")
+                indicator.add_class("active")
+            else:
+                indicator.update(f"{ICON_CAPS_LOCK} abc")
+                indicator.remove_class("active")
         except NoMatches:
             pass
 

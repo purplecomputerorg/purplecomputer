@@ -9,7 +9,7 @@ Features:
 - Caps lock toggle (direct from hardware)
 - Long-hold detection for parent mode (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key mode switching (F1-F3, F12)
+- F-key mode switching (F1-F3) and toggles (F11 volume, F12 theme)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -532,7 +532,7 @@ class NavigationAction(KeyAction):
 @dataclass
 class ModeAction(KeyAction):
     """Mode switch requested."""
-    mode: str  # 'ask' (F1), 'play' (F2), 'write' (F3), 'parent' (F12 or long Escape)
+    mode: str  # 'ask' (F1), 'play' (F2), 'write' (F3), 'parent' (long Escape)
 
 
 @dataclass
@@ -611,6 +611,7 @@ class KeyboardStateMachine:
 
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
+        self._escape_press_time: float | None = None  # time.time() when escape pressed
 
     def process(self, event: RawKeyEvent) -> List[KeyAction]:
         """
@@ -655,6 +656,7 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_ESC:
             if not is_repeat:
                 self._escape_hold_triggered = False
+                self._escape_press_time = time.time()  # Use wall clock for consistent timing
             actions.append(ControlAction(action='escape', is_down=True, is_repeat=is_repeat))
             return actions
 
@@ -695,7 +697,7 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='tab', is_down=True, is_repeat=is_repeat))
             return actions
 
-        # Handle F-keys for mode switching (no repeats)
+        # Handle F-keys for mode switching and volume (no repeats)
         if not is_repeat:
             if keycode == KeyCode.KEY_F1:
                 actions.append(ModeAction(mode='ask'))
@@ -706,8 +708,11 @@ class KeyboardStateMachine:
             if keycode == KeyCode.KEY_F3:
                 actions.append(ModeAction(mode='write'))
                 return actions
+            if keycode == KeyCode.KEY_F11:
+                actions.append(ControlAction(action='volume_toggle', is_down=True))
+                return actions
             if keycode == KeyCode.KEY_F12:
-                actions.append(ModeAction(mode='parent'))
+                actions.append(ControlAction(action='theme_toggle', is_down=True))
                 return actions
 
         # Handle printable characters
@@ -753,13 +758,17 @@ class KeyboardStateMachine:
             return actions
 
         # Handle Escape release (check for long-hold)
+        # Uses dedicated _escape_press_time (wall clock) instead of _pressed dict (evdev timestamp)
+        # to avoid race conditions with the timer-based check in check_escape_hold().
+        # Both mechanisms now use time.time() consistently.
         if keycode == KeyCode.KEY_ESC:
-            if press_time:
-                hold_duration = event.timestamp - press_time
+            if self._escape_press_time is not None:
+                hold_duration = time.time() - self._escape_press_time
                 if hold_duration >= self.ESCAPE_HOLD_THRESHOLD and not self._escape_hold_triggered:
                     self._escape_hold_triggered = True
                     actions.append(LongHoldAction(key='escape'))
                     actions.append(ModeAction(mode='parent'))
+                self._escape_press_time = None  # Clear on release
             actions.append(ControlAction(action='escape', is_down=False))
             return actions
 
@@ -808,11 +817,11 @@ class KeyboardStateMachine:
                        Custom thresholds don't set the triggered flag, allowing
                        multiple thresholds to be checked independently.
         """
-        if KeyCode.KEY_ESC not in self._pressed:
+        # Use dedicated escape press time (set with time.time() for consistency)
+        if self._escape_press_time is None:
             return False
 
-        press_time = self._pressed[KeyCode.KEY_ESC]
-        elapsed = time.time() - press_time
+        elapsed = time.time() - self._escape_press_time
 
         # Custom threshold: just check elapsed time (no triggered flag)
         if threshold is not None:
@@ -866,3 +875,4 @@ class KeyboardStateMachine:
         self._sticky_shift_active = False
         self._double_tap.reset()
         self._escape_hold_triggered = False
+        self._escape_press_time = None

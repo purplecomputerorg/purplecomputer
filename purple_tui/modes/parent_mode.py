@@ -349,5 +349,5 @@ class ParentMenu(ModalScreen):
             _flush_terminal_input()
             os.system('stty sane')
 
-        # Exit so user can restart with proper launch context
-        self.app.exit()
+            # Exit immediately (don't return to app)
+            sys.exit(0)

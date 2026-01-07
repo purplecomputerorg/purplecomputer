@@ -684,7 +684,6 @@ class PurpleApp(App):
                 if self._evdev_reader:
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
-                # (keys pressed before suspend should not be "held" after resume)
                 self._keyboard_state_machine.reset()
 
         return _suspend_ctx()

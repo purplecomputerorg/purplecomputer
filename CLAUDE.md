@@ -98,23 +98,6 @@ class ColorCell(Widget):
 
 This approach gives full control over every line and updates immediately on `refresh()`.
 
-### Exiting from Suspend Context
-
-**Problem**: When using `app.suspend()` to run terminal commands, calling `sys.exit()` inside the suspend context causes Textual's cleanup to run, which can leave the terminal in a broken state (blank screen, no echo).
-
-**Solution**: Use `os._exit(0)` instead of `sys.exit(0)` when exiting from inside a suspend context. This exits immediately while the terminal is still in the clean state from `suspend()`, before Textual tries to restore its own state.
-
-```python
-with self.app.suspend():
-    # Terminal is in normal mode here
-    subprocess.run(['some', 'command'])
-
-    if should_exit:
-        os.system('stty sane')
-        os.system('clear')
-        os._exit(0)  # NOT sys.exit(0)
-```
-
 ### Keyboard Input Architecture (evdev)
 
 **Purple Computer requires Linux with evdev.** macOS is not supported.

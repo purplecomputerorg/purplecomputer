@@ -668,52 +668,23 @@ class PurpleApp(App):
         This releases the evdev keyboard grab so the terminal can receive
         input, then reacquires it when the context exits.
         """
-        import logging
         from contextlib import contextmanager
-
-        logger = logging.getLogger(__name__)
 
         @contextmanager
         def _suspend_ctx():
-            import sys
-            import time
-            from pathlib import Path
-            def debug(msg):
-                ts = time.strftime("%H:%M:%S")
-                line = f"[{ts}] {msg}"
-                print(f"[DEBUG] {msg}", file=sys.stderr, flush=True)
-                for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
-                    try:
-                        with open(path, "a") as f:
-                            f.write(line + "\n")
-                    except Exception:
-                        pass
-            debug("suspend_with_terminal_input: entering context")
-
             # Release evdev grab so terminal can receive keyboard input
             if self._evdev_reader:
-                debug("suspend_with_terminal_input: releasing evdev grab")
                 self._evdev_reader.release_grab()
 
             try:
-                debug("suspend_with_terminal_input: calling self.suspend()")
                 with self.suspend():
-                    debug("suspend_with_terminal_input: inside suspend context, yielding")
                     yield
-                    debug("suspend_with_terminal_input: yield returned, exiting suspend context")
-            except Exception as e:
-                debug(f"suspend_with_terminal_input: exception in suspend: {e}")
-                raise
             finally:
-                debug("suspend_with_terminal_input: in finally block")
                 # Reacquire grab when resuming
                 if self._evdev_reader:
-                    debug("suspend_with_terminal_input: reacquiring evdev grab")
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
-                debug("suspend_with_terminal_input: resetting keyboard state")
                 self._keyboard_state_machine.reset()
-                debug("suspend_with_terminal_input: context cleanup complete")
 
         return _suspend_ctx()
 
@@ -800,20 +771,8 @@ class PurpleApp(App):
             self._escape_hold_timer = None
 
     def _check_escape_hold(self) -> None:
-        """Check if escape has been held long enough for parent mode or force exit."""
-        # Check for 5-second hold = force exit (dev mode only)
-        if self._keyboard_state_machine.check_escape_hold(threshold=5.0):
-            from .modes.parent_mode import _is_dev_environment
-            if _is_dev_environment():
-                self._cancel_escape_hold_timer()
-                # Force exit immediately
-                import os
-                os.system('stty sane 2>/dev/null')
-                os._exit(0)
-
-        # Check for 1-second hold = parent mode
+        """Check if escape has been held long enough for parent mode."""
         if self._keyboard_state_machine.check_escape_hold():
-            # Threshold reached - trigger parent mode
             self._cancel_escape_hold_timer()
             self.action_parent_mode()
 

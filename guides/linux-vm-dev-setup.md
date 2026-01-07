@@ -129,6 +129,32 @@ If you see "Could not find your keyboard" or "permission denied":
 
 4. **For USB passthrough**: If you're passing a physical USB keyboard to the VM, ensure it's attached to the VM (not the host) in the VM software settings.
 
+### SSH Access for Debugging
+
+SSH into the VM is useful for debugging when the app is frozen or the terminal is in a bad state.
+
+**For UTM on macOS**:
+1. In VM settings, change Network Mode from "Shared Network" to "Bridged (Advanced)"
+2. Set Interface to your Mac's network (e.g., "Wi-Fi (en0)")
+3. Install SSH server in the VM: `sudo apt install openssh-server`
+4. Find the VM's IP: `hostname -I` (from inside VM) or `arp -a | grep <mac-address>` (from Mac)
+5. Connect: `ssh username@vm-ip`
+
+**Useful debugging commands over SSH**:
+```bash
+# Kill a frozen Purple Computer
+pkill -f purple_tui
+
+# Check debug logs (if enabled)
+cat /tmp/purple-debug.log
+
+# Check if keyboard devices exist
+ls -la /dev/input/
+
+# Check group membership
+groups
+```
+
 ---
 
 ## How the Keyboard Normalizer Works

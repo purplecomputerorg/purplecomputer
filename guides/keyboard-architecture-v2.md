@@ -230,3 +230,29 @@ When the TUI grabs the keyboard device (`EVIOCGRAB`):
 | Complexity | Higher (more moving parts) | Lower (fewer hops) |
 
 The new architecture is simpler AND more capable. The terminal becomes a dumb display, which is exactly what we need for a kiosk-style kids' computer.
+
+---
+
+## Suspending for Terminal Access
+
+Parent mode can open a shell for admin tasks. This requires temporarily releasing the evdev grab so the terminal receives keyboard input.
+
+Use `app.suspend_with_terminal_input()`:
+
+```python
+with self.app.suspend_with_terminal_input():
+    os.system('stty sane')
+    subprocess.run(['/bin/bash', '-i'])
+    os.system('stty sane')
+
+self.app.refresh(repaint=True)
+```
+
+This context manager:
+1. Releases the evdev grab
+2. Calls Textual's `suspend()` to restore the terminal
+3. Reacquires the grab and resets keyboard state on exit
+
+**Important**: When flushing pending evdev events before reacquiring the grab, use `select()` with a 0 timeout to check for data before calling `read_one()`. Otherwise `read_one()` blocks forever.
+
+**Exiting from suspend**: If you need to exit the app from inside a suspend context, use `os._exit(0)` instead of `sys.exit(0)`. The latter tries to unwind through Textual's cleanup, which can leave the terminal in a broken state.

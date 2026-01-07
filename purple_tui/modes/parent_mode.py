@@ -210,48 +210,16 @@ class ParentMenu(ModalScreen):
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""
-        # Early debug logging to both home and /tmp
-        import time
-        def log_debug(msg):
-            ts = time.strftime('%H:%M:%S')
-            line = f"[{ts}] {msg}\n"
-            for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
-                try:
-                    with open(path, "a") as f:
-                        f.write(line)
-                except Exception:
-                    pass
-
-        log_debug("_open_shell: called, about to dismiss modal")
-
         # Dismiss the modal first
         self.dismiss()
-
-        log_debug("_open_shell: modal dismissed, scheduling _run_shell")
 
         # Schedule the shell to open after the modal is closed
         self.app.call_later(self._run_shell)
 
     def _run_shell(self) -> None:
         """Actually run the shell - called after modal dismissed"""
-        # Debug logging to both stderr and files (multiple locations for reliability)
-        import time
-        def debug(msg):
-            ts = time.strftime("%H:%M:%S")
-            line = f"[{ts}] {msg}"
-            print(f"[DEBUG shell] {msg}", file=sys.stderr, flush=True)
-            for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
-                try:
-                    with open(path, "a") as f:
-                        f.write(line + "\n")
-                except Exception:
-                    pass
-        debug("_run_shell: starting")
-
         # Suspend the Textual app and release evdev grab for terminal input
-        debug("_run_shell: entering suspend context")
         with self.app.suspend_with_terminal_input():
-            debug("_run_shell: inside suspend context")
             # Reset terminal to sane state (ensures echo is on, etc.)
             os.system('stty sane')
             # Clear screen and show message
@@ -270,10 +238,8 @@ class ParentMenu(ModalScreen):
             # Get the user's default shell or fall back to bash
             shell = os.environ.get('SHELL', '/bin/bash')
 
-            debug(f"_run_shell: launching shell: {shell}")
             # Run the shell interactively
             subprocess.run([shell, '-i'])
-            debug("_run_shell: shell exited")
 
             # When shell exits, clean up before resuming
             print()
@@ -281,17 +247,11 @@ class ParentMenu(ModalScreen):
             sys.stdout.flush()
 
             # Flush any buffered input to prevent stray characters
-            debug("_run_shell: flushing terminal input")
             _flush_terminal_input()
-            debug("_run_shell: running stty sane")
             os.system('stty sane')
-            debug("_run_shell: about to exit suspend context")
 
-        debug("_run_shell: exited suspend context")
-        debug("_run_shell: calling app.refresh(repaint=True)")
         # Force redraw after returning from suspend
         self.app.refresh(repaint=True)
-        debug("_run_shell: refresh called, function complete")
 
     def _recalibrate_keyboard(self) -> None:
         """Run keyboard calibration"""

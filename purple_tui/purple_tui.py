@@ -690,14 +690,11 @@ class PurpleApp(App):
             return
 
         # Handle escape key for long-hold detection
+        # Only start timer on fresh press, not on repeat events (which would restart the timer)
         if isinstance(action, ControlAction) and action.action == 'escape':
             if action.is_down and not action.is_repeat:
-                # Start timer to check for long-hold (only on fresh press, not repeat)
-                import sys; print(f"[DEBUG] ESC DOWN - starting timer", file=sys.stderr)
                 self._start_escape_hold_timer()
             elif not action.is_down:
-                # Cancel timer on release
-                import sys; print(f"[DEBUG] ESC UP - cancelling timer", file=sys.stderr)
                 self._cancel_escape_hold_timer()
             # Don't return - let escape events propagate to modes for other uses
 
@@ -737,7 +734,6 @@ class PurpleApp(App):
         that can be cancelled if escape is released before 1s.
         """
         self._cancel_escape_hold_timer()  # Cancel any existing timer
-        import sys; print(f"[DEBUG] Timer scheduled for {ESCAPE_HOLD_THRESHOLD}s", file=sys.stderr)
         self._escape_hold_timer = self.set_timer(ESCAPE_HOLD_THRESHOLD, self._check_escape_hold)
 
     def _cancel_escape_hold_timer(self) -> None:
@@ -747,14 +743,9 @@ class PurpleApp(App):
             self._escape_hold_timer = None
 
     def _check_escape_hold(self) -> None:
-        """Check if escape has been held long enough for parent mode."""
-        import sys
-        print(f"[DEBUG] Timer fired! Checking escape hold...", file=sys.stderr)
-        result = self._keyboard_state_machine.check_escape_hold()
-        print(f"[DEBUG] check_escape_hold() returned: {result}", file=sys.stderr)
-        if result:
+        """Called by timer after 1s. Trigger parent mode if escape still held."""
+        if self._keyboard_state_machine.check_escape_hold():
             self._cancel_escape_hold_timer()
-            print(f"[DEBUG] Triggering parent mode!", file=sys.stderr)
             self.action_parent_mode()
 
     def _reset_viewport_border(self) -> None:

@@ -119,7 +119,7 @@ Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_
 - `purple_tui/keyboard.py`: `KeyboardStateMachine`, action types (`CharacterAction`, `NavigationAction`, `ControlAction`, etc.)
 - `keyboard_normalizer.py`: F-key calibration tool only (not used at runtime)
 
-**See:** `guides/keyboard-architecture-v2.md` for full details.
+**See:** `guides/keyboard-architecture.md` for full details.
 
 ### Adding Keyboard Handling to Widgets
 

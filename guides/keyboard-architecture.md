@@ -1,299 +1,171 @@
-# Keyboard Architecture Guide
+# Keyboard Architecture: Direct evdev Input
 
-How Purple Computer handles keyboard input across all laptops.
-
----
-
-## The Problem
-
-Purple Computer uses F1-F12 for mode switching. But on most modern laptops:
-
-- **F1** sends brightness down (not KEY_F1)
-- **F2** sends brightness up (not KEY_F2)
-- **F3** sends mute (not KEY_F3)
-- etc.
-
-The **Fn key** toggles between media functions and F-keys, but:
-1. Fn is handled at firmware level (Linux never sees it)
-2. Default behavior varies by manufacturer
-3. Parents don't know what "Fn Lock" means
-
-We need F1 to always be F1, regardless of laptop brand or Fn Lock state.
+How Purple Computer handles keyboard input by reading directly from Linux evdev.
 
 ---
 
-## Why This Is Hard
+## Why Direct evdev?
 
-### The Fn Key Is Invisible
+Terminals are lossy filters. They convert keycodes to escape sequences and drop keys they don't recognize (F13-F24). They also don't provide key release events.
 
-```
-Physical key press → Laptop Firmware (EC) → USB/PS2 scan code → Linux
-                            ↑
-                     Fn key handled HERE
-                     (invisible to Linux)
-```
+By reading evdev directly, Purple gets:
+- True key down/up events
+- Precise timestamps for timing features
+- All keycodes (no filtering)
 
-The Embedded Controller (EC) decides what keycode to send based on Fn state. By the time Linux sees the event, the decision is already made. We cannot intercept or detect Fn.
-
-### What Linux Sees
-
-When you press the physical F1 key:
-
-**With Fn Lock OFF (typical default):**
-```
-EV_MSC / MSC_SCAN / 0xe0  ← scancode (physical key identifier)
-EV_KEY / KEY_BRIGHTNESSDOWN / 1  ← keycode (firmware's decision)
-```
-
-**With Fn Lock ON:**
-```
-EV_MSC / MSC_SCAN / 0x3b  ← different scancode!
-EV_KEY / KEY_F1 / 1  ← keycode is now F1
-```
-
-Notice: both the scancode AND keycode change depending on Fn Lock. The firmware completely remaps the key.
+The terminal (Alacritty) becomes display-only.
 
 ---
 
-## MSC_SCAN: Necessary But Not Sufficient
-
-### What Is MSC_SCAN?
-
-`MSC_SCAN` is the raw scancode that identifies which physical control fired. It arrives *before* the keycode:
+## Architecture
 
 ```
-1. EV_MSC / MSC_SCAN / <scancode>   ← "which switch moved"
-2. EV_KEY / KEY_* / 1               ← "what it means" (firmware decision)
-3. EV_SYN / SYN_REPORT / 0          ← sync
+Hardware Keyboard
+       ↓
+evdev (/dev/input/event*)
+       ↓
+TUI Process:
+  ├── EvdevReader (async task)
+  │     - Reads raw events from evdev
+  │     - Sees key down (value=1) and key up (value=0)
+  │     - Captures scancodes for F-key remapping
+  │     - Emits RawKeyEvent
+  │           ↓
+  │   KeyboardStateMachine
+  │     - Tracks pressed keys with timestamps
+  │     - Detects long-press (Escape > 1s)
+  │     - Handles sticky shift (tap < 300ms)
+  │     - Handles double-tap (same key < 400ms)
+  │     - Emits high-level actions
+  │           ↓
+  │   Textual App
+  │     - Receives actions, updates UI
+  │           ↓
+  └── Alacritty (display only)
+        - Renders Textual's output
+        - Keyboard input ignored
 ```
 
-### Why Scancode Matters
-
-Keycodes are **policy**, not fact. The firmware chooses:
-- "This key is F1" → sends KEY_F1
-- "This key is brightness" → sends KEY_BRIGHTNESSDOWN
-
-Once that choice is made, the keycode contains no physical position info.
-
-Scancodes are closer to hardware, but they're still **not physical positions**. They identify "which control on this specific keyboard," not "leftmost F-row key."
-
-### The Hard Limit
-
-If firmware does:
-```
-Physical F1 → firmware decides "brightness" → scancode 0xe0, KEY_BRIGHTNESSDOWN
-```
-
-Then Linux has **no information** that can recover "this was physically F1."
-
-- No sysfs file
-- No HID descriptor
-- No evdev API
-- No kernel parameter
-
-The information simply doesn't exist. The firmware threw it away.
+evdev provides separate key down (`value=1`) and key up (`value=0`) events, precise timestamps, all keycodes, and scancodes for F-key remapping.
 
 ---
 
-## The Solution: Calibration
+## Design Details
 
-Since we can't detect physical position programmatically, we ask the user once:
+### RawKeyEvent
 
-```
-Press F1... [captures scancode 0xe0]
-Press F2... [captures scancode 0xe1]
-...
-```
+The universal event type that the evdev reader emits:
 
-Now we have a mapping:
-```json
-{
-  "scancodes": {
-    "224": 59,   // scancode 0xe0 → KEY_F1
-    "225": 60,   // scancode 0xe1 → KEY_F2
-    ...
-  }
-}
+```python
+@dataclass
+class RawKeyEvent:
+    keycode: int        # Linux keycode (KEY_SPACE, KEY_A, etc.)
+    is_down: bool       # True = press, False = release
+    timestamp: float    # Monotonic time in seconds
+    scancode: int = 0   # Hardware scancode (for F-key remapping)
 ```
 
-This mapping is stable because:
-- Same physical key = same scancode (on this keyboard)
-- Fn Lock state doesn't matter after calibration
-- Works regardless of what keycode firmware sends
+### EvdevReader
 
-### Why Scancode-Based, Not Keycode-Based?
+Async task that reads from the keyboard device:
 
-If we mapped keycodes:
+```python
+class EvdevReader:
+    async def run(self):
+        async for event in device.async_read_loop():
+            if event.type == EV_KEY and event.value in (0, 1):
+                raw_event = RawKeyEvent(
+                    keycode=event.code,
+                    is_down=(event.value == 1),
+                    timestamp=event.timestamp(),
+                    scancode=self._pending_scancode,
+                )
+                await self._emit(raw_event)
 ```
-KEY_BRIGHTNESSDOWN → KEY_F1
+
+### KeyboardStateMachine
+
+Consumes RawKeyEvent, produces high-level actions:
+
+```python
+class KeyboardStateMachine:
+    def process(self, event: RawKeyEvent) -> list[KeyboardAction]:
+        # Track key state
+        if event.is_down:
+            self._pressed[event.keycode] = event.timestamp
+        else:
+            press_time = self._pressed.pop(event.keycode, None)
+            if press_time:
+                hold_duration = event.timestamp - press_time
+                # Check for long-press, etc.
 ```
 
-This would break on laptops where F1 is mute instead of brightness. Every laptop is different.
+### F-Key Calibration
 
-By mapping scancodes, we capture "this physical key" regardless of what the firmware calls it.
+`keyboard_normalizer.py --calibrate` prompts the user to press F1-F12 and saves scancode mappings to `~/.config/purple/keyboard-map.json`. The TUI loads this file on startup to remap F-keys correctly regardless of Fn Lock state.
 
 ---
 
-## Architecture Overview
+## UX Considerations
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Physical Keyboard                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              Laptop Firmware (Embedded Controller)           │
-│                                                              │
-│  • Fn key handled here (invisible to OS)                     │
-│  • Decides: F1 → brightness or F1 → KEY_F1                   │
-│  • We cannot change this                                     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Linux Kernel (evdev)                     │
-│                                                              │
-│  Receives:                                                   │
-│  • EV_MSC / MSC_SCAN / <scancode>                           │
-│  • EV_KEY / KEY_* / <value>                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│              keyboard_normalizer.py (our code)               │
-│                                                              │
-│  1. Grabs hardware keyboard exclusively                      │
-│  2. Captures MSC_SCAN before each KEY event                  │
-│  3. Looks up scancode in calibrated mapping                  │
-│  4. Remaps to correct F-key if found                         │
-│  5. Handles sticky shift, Escape long-press                  │
-│  6. Emits to virtual keyboard                                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│            Virtual Keyboard (uinput)                         │
-│            "Purple Keyboard Normalizer"                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Terminal / Textual                        │
-│                    Purple Computer TUI                       │
-└─────────────────────────────────────────────────────────────┘
-```
+### Terminal as Display Only
+
+With keyboard input bypassing the terminal:
+
+| Concern | Impact |
+|---------|--------|
+| Character echo | None. Textual controls all display in raw mode. |
+| Window resize | Still works. Alacritty notifies Textual via SIGWINCH. |
+| Copy/paste | Alacritty shortcuts won't work. Not needed for kids 3-8. |
+| Mouse input | Purple disables trackpad anyway. |
+| Focus | In kiosk mode, only Purple runs. No focus issues. |
+
+### Device Grabbing
+
+When the TUI grabs the keyboard device (`EVIOCGRAB`):
+- Other applications can't receive keyboard input
+- This is intentional for kiosk mode
+- In dev mode, grabbing can be disabled for convenience
 
 ---
 
-## What We Handle
-
-### Scancode-Based F-Key Remapping
-- Captures MSC_SCAN events before KEY events
-- Looks up scancode in calibrated mapping
-- Remaps to correct F-key (F1-F12)
-- Stored in `~/.config/purple/keyboard-map.json`
-
-### Sticky Shift
-- Tap shift quickly (<300ms) = toggle sticky shift
-- Next character gets shifted
-- Kids can type capitals without holding two keys
-
-### Double-Tap Shift
-- Tap same key twice quickly = shifted version
-- `a` `a` → `A`
-- `1` `1` → `!`
-- No latency on normal typing
-
-### Escape Long-Press
-- Hold Escape >1 second = emit F24
-- App catches F24 → opens parent shell
-- Quick tap = normal Escape
-
----
-
-## Calibration Flow
-
-On first boot (or when `~/.config/purple/keyboard-map.json` is missing):
-
-```
-First time setup. Configuring keyboard...
-
-Purple Computer Keyboard Setup
-==========================================
-
-Let's set up your keyboard!
-
-Press each key when asked. Don't worry about
-holding any extra keys. Just press the key shown.
-
-Press F1... OK!
-Press F2... OK!
-...
-Press F12... OK!
-
-Keyboard setup complete!
-```
-
-Settings saved to `~/.config/purple/keyboard-map.json`.
-
----
-
-## Design Principles
-
-### DRY
-One event loop, one mapping function, one config file.
-
-### KISS
-- No probing or auto-detection (impossible anyway)
-- No vendor-specific logic
-- Calibrate once, done forever
-
-### Fail Soft
-- No calibration? Keys pass through unchanged
-- Unknown scancode? Key passes through unchanged
-- Never block input, always do something reasonable
-
-### Offline-First
-- No network required
-- No database of laptop models
-- Everything local to the device
-
----
-
-## Mental Model
-
-| Concept | What It Answers |
-|---------|-----------------|
-| **Keycode** | "What action did firmware choose?" |
-| **Scancode** | "Which switch moved?" |
-| **Calibration** | "What did the human mean?" |
-
-You can capture the first two automatically.
-Only calibration gives ground truth.
-
----
-
-## Files
+## File Structure
 
 | File | Purpose |
 |------|---------|
-| `keyboard_normalizer.py` | Main normalizer (grabs keyboard, remaps, emits) |
-| `~/.config/purple/keyboard-map.json` | Calibrated scancode→keycode mapping |
-| `purple_tui/keyboard.py` | App-side keyboard state (sticky shift, etc.) |
+| `purple_tui/input.py` | RawKeyEvent, EvdevReader, TextualInputAdapter |
+| `purple_tui/keyboard.py` | KeyboardStateMachine (refactored from current) |
+| `keyboard_normalizer.py` | Calibration mode only |
+| `~/.config/purple/keyboard-map.json` | F-key scancode mapping |
 
 ---
 
-## Troubleshooting
+## Summary
 
-**F-keys not working after setup:**
-- Re-run calibration: `python3 /opt/purple/keyboard_normalizer.py --calibrate`
-- Or delete config and reboot: `rm ~/.config/purple/keyboard-map.json`
+Purple reads keyboard directly from evdev, bypassing the terminal. This gives us key up/down events, precise timing, and all keycodes. The terminal is display-only, which is exactly what we need for a kiosk-style kids' computer.
 
-**Calibration sees wrong keys:**
-- Make sure you're pressing the top-row F-keys (above number row)
-- The key labels might say brightness/volume icons. That's fine
+---
 
-**Normalizer not running:**
-- Check if user is in `input` group: `groups`
-- Check if evdev is installed: `python3 -c "import evdev"`
+## Suspending for Terminal Access
+
+Parent mode can open a shell for admin tasks. This requires temporarily releasing the evdev grab so the terminal receives keyboard input.
+
+Use `app.suspend_with_terminal_input()`:
+
+```python
+with self.app.suspend_with_terminal_input():
+    os.system('stty sane')
+    subprocess.run(['/bin/bash', '-i'])
+    os.system('stty sane')
+
+self.app.refresh(repaint=True)
+```
+
+This context manager:
+1. Releases the evdev grab
+2. Calls Textual's `suspend()` to restore the terminal
+3. Reacquires the grab and resets keyboard state on exit
+
+**Important**: When flushing pending evdev events before reacquiring the grab, use `select()` with a 0 timeout to check for data before calling `read_one()`. Otherwise `read_one()` blocks forever.
+
+**Exiting from suspend**: If you need to exit the app from inside a suspend context, use `os._exit(0)` instead of `sys.exit(0)`. The latter tries to unwind through Textual's cleanup, which can leave the terminal in a broken state.

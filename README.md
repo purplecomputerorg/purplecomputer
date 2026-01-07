@@ -28,7 +28,7 @@ Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 ### For Development (Linux only)
 
-Purple Computer requires Linux with evdev for keyboard input. macOS is not supported. Use a Linux VM if developing on Mac (see `guides/keyboard-dev-testing.md`).
+Purple Computer requires Linux with evdev for keyboard input. macOS is not supported. Use a Linux VM if developing on Mac (see `guides/linux-vm-dev-setup.md`).
 
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
@@ -138,7 +138,7 @@ The keyboard handling:
 - Detects sticky shift, double-tap, and Escape long-press
 - Processes events through a state machine that emits high-level actions
 
-See `guides/keyboard-architecture-v2.md` for technical details.
+See `guides/keyboard-architecture.md` for technical details.
 
 ---
 

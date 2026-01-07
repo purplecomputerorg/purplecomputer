@@ -210,23 +210,42 @@ class ParentMenu(ModalScreen):
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""
+        # Early debug logging to both home and /tmp
+        import time
+        def log_debug(msg):
+            ts = time.strftime('%H:%M:%S')
+            line = f"[{ts}] {msg}\n"
+            for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
+                try:
+                    with open(path, "a") as f:
+                        f.write(line)
+                except Exception:
+                    pass
+
+        log_debug("_open_shell: called, about to dismiss modal")
+
         # Dismiss the modal first
         self.dismiss()
+
+        log_debug("_open_shell: modal dismissed, scheduling _run_shell")
 
         # Schedule the shell to open after the modal is closed
         self.app.call_later(self._run_shell)
 
     def _run_shell(self) -> None:
         """Actually run the shell - called after modal dismissed"""
-        # Debug logging to both stderr and file (file survives terminal issues)
+        # Debug logging to both stderr and files (multiple locations for reliability)
         import time
-        log_file = Path.home() / ".purple-debug.log"
         def debug(msg):
             ts = time.strftime("%H:%M:%S")
             line = f"[{ts}] {msg}"
             print(f"[DEBUG shell] {msg}", file=sys.stderr, flush=True)
-            with open(log_file, "a") as f:
-                f.write(line + "\n")
+            for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
+                try:
+                    with open(path, "a") as f:
+                        f.write(line + "\n")
+                except Exception:
+                    pass
         debug("_run_shell: starting")
 
         # Suspend the Textual app and release evdev grab for terminal input

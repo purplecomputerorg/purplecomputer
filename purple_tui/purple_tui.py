@@ -678,13 +678,16 @@ class PurpleApp(App):
             import sys
             import time
             from pathlib import Path
-            log_file = Path.home() / ".purple-debug.log"
             def debug(msg):
                 ts = time.strftime("%H:%M:%S")
                 line = f"[{ts}] {msg}"
                 print(f"[DEBUG] {msg}", file=sys.stderr, flush=True)
-                with open(log_file, "a") as f:
-                    f.write(line + "\n")
+                for path in [Path.home() / ".purple-debug.log", Path("/tmp/purple-debug.log")]:
+                    try:
+                        with open(path, "a") as f:
+                            f.write(line + "\n")
+                    except Exception:
+                        pass
             debug("suspend_with_terminal_input: entering context")
 
             # Release evdev grab so terminal can receive keyboard input
@@ -797,7 +800,18 @@ class PurpleApp(App):
             self._escape_hold_timer = None
 
     def _check_escape_hold(self) -> None:
-        """Check if escape has been held long enough for parent mode."""
+        """Check if escape has been held long enough for parent mode or force exit."""
+        # Check for 5-second hold = force exit (dev mode only)
+        if self._keyboard_state_machine.check_escape_hold(threshold=5.0):
+            from .modes.parent_mode import _is_dev_environment
+            if _is_dev_environment():
+                self._cancel_escape_hold_timer()
+                # Force exit immediately
+                import os
+                os.system('stty sane 2>/dev/null')
+                os._exit(0)
+
+        # Check for 1-second hold = parent mode
         if self._keyboard_state_machine.check_escape_hold():
             # Threshold reached - trigger parent mode
             self._cancel_escape_hold_timer()

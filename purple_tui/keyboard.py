@@ -782,20 +782,30 @@ class KeyboardStateMachine:
 
         return char
 
-    def check_escape_hold(self) -> bool:
+    def check_escape_hold(self, threshold: float | None = None) -> bool:
         """
         Check if Escape is currently held past threshold.
         Call this periodically (e.g., every 100ms) while Escape is pressed.
         Returns True once when threshold is first reached.
+
+        Args:
+            threshold: Custom threshold in seconds. If None, uses default (1.0s).
+                       Custom thresholds don't set the triggered flag, allowing
+                       multiple thresholds to be checked independently.
         """
         if KeyCode.KEY_ESC not in self._pressed:
             return False
 
-        if self._escape_hold_triggered:
-            return False  # Already triggered
-
         press_time = self._pressed[KeyCode.KEY_ESC]
         elapsed = time.time() - press_time
+
+        # Custom threshold: just check elapsed time (no triggered flag)
+        if threshold is not None:
+            return elapsed >= threshold
+
+        # Default threshold: use triggered flag to fire only once
+        if self._escape_hold_triggered:
+            return False  # Already triggered
 
         if elapsed >= self.ESCAPE_HOLD_THRESHOLD:
             self._escape_hold_triggered = True

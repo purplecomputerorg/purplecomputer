@@ -729,15 +729,13 @@ class PurpleApp(App):
             pass
 
     def _start_escape_hold_timer(self) -> None:
-        """Start a timer to poll for escape long-hold.
+        """Schedule a one-shot timer to trigger parent mode after 1s.
 
-        Polls every 50ms to check if escape has been held for 1s.
-        The tight polling interval minimizes the window where the user could
-        release escape between a poll and the threshold being reached.
+        Uses set_timer (not call_later) because it returns a Timer object
+        that can be cancelled if escape is released before 1s.
         """
         self._cancel_escape_hold_timer()  # Cancel any existing timer
-        # Poll every 50ms for responsive detection
-        self._escape_hold_timer = self.set_interval(0.05, self._check_escape_hold)
+        self._escape_hold_timer = self.set_timer(ESCAPE_HOLD_THRESHOLD, self._check_escape_hold)
 
     def _cancel_escape_hold_timer(self) -> None:
         """Cancel the escape hold timer."""

@@ -250,6 +250,9 @@ class ParentMenu(ModalScreen):
             _flush_terminal_input()
             os.system('stty sane')
 
+        # Force redraw after returning from suspend
+        self.app.refresh(repaint=True)
+
     def _recalibrate_keyboard(self) -> None:
         """Run keyboard calibration"""
         self.dismiss()
@@ -295,6 +298,9 @@ class ParentMenu(ModalScreen):
             # Flush any buffered input to prevent stray characters
             _flush_terminal_input()
             os.system('stty sane')
+
+        # Force redraw after returning from suspend
+        self.app.refresh(repaint=True)
 
     def _update_and_restart(self) -> None:
         """Git pull and restart the app (dev mode only)."""
@@ -347,10 +353,15 @@ class ParentMenu(ModalScreen):
 
             input()
 
-            # Fully restore terminal before exit
+            # Restore terminal and exit.
+            # We use os._exit(0) instead of sys.exit(0) because we're inside
+            # Textual's suspend context. sys.exit() would try to unwind through
+            # Textual's cleanup code, which can leave the terminal in a broken
+            # state (blank screen, no echo). os._exit() exits immediately while
+            # the terminal is still in the clean state from suspend().
             _flush_terminal_input()
             os.system('stty sane')
             os.system('clear')
             print("Run 'make run' to start Purple Computer.")
             print()
-            os._exit(0)  # Hard exit, bypasses Python cleanup
+            os._exit(0)

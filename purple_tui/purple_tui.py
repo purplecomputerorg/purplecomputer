@@ -566,6 +566,7 @@ class PurpleApp(App):
         # Direct evdev keyboard input (replaces terminal on_key)
         self._keyboard_state_machine = KeyboardStateMachine()
         self._evdev_reader: EvdevReader | None = None
+        self._escape_hold_timer = None  # Timer for detecting escape long-hold
 
         # Register our purple themes
         self.register_theme(
@@ -682,6 +683,9 @@ class PurpleApp(App):
                 # Reacquire grab when resuming
                 if self._evdev_reader:
                     self._evdev_reader.reacquire_grab()
+                # Reset keyboard state to avoid stuck keys
+                # (keys pressed before suspend should not be "held" after resume)
+                self._keyboard_state_machine.reset()
 
         return _suspend_ctx()
 
@@ -725,6 +729,16 @@ class PurpleApp(App):
                 pass
             return
 
+        # Handle escape key for long-hold detection
+        if isinstance(action, ControlAction) and action.action == 'escape':
+            if action.is_down:
+                # Start timer to check for long-hold
+                self._start_escape_hold_timer()
+            else:
+                # Cancel timer on release
+                self._cancel_escape_hold_timer()
+            # Don't return - let escape events propagate to modes for other uses
+
         # Check if a modal screen is active (e.g., ParentMenu)
         # screen_stack[0] is the base screen, anything above is a modal
         if len(self.screen_stack) > 1:
@@ -744,6 +758,25 @@ class PurpleApp(App):
                 await mode_widget.handle_keyboard_action(action)
         except NoMatches:
             pass
+
+    def _start_escape_hold_timer(self) -> None:
+        """Start a timer to check for escape long-hold."""
+        self._cancel_escape_hold_timer()  # Cancel any existing timer
+        # Check every 100ms if escape has been held long enough
+        self._escape_hold_timer = self.set_interval(0.1, self._check_escape_hold)
+
+    def _cancel_escape_hold_timer(self) -> None:
+        """Cancel the escape hold timer."""
+        if self._escape_hold_timer:
+            self._escape_hold_timer.stop()
+            self._escape_hold_timer = None
+
+    def _check_escape_hold(self) -> None:
+        """Check if escape has been held long enough for parent mode."""
+        if self._keyboard_state_machine.check_escape_hold():
+            # Threshold reached - trigger parent mode
+            self._cancel_escape_hold_timer()
+            self.action_parent_mode()
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
@@ -1040,8 +1073,10 @@ class PurpleApp(App):
     def action_parent_mode(self) -> None:
         """Enter parent mode. Shows admin menu for parents."""
         from .modes.parent_mode import ParentMenu
-        # Reset escape hold state so it can be triggered again after returning
+        # Cancel escape hold timer and reset state
+        self._cancel_escape_hold_timer()
         self.keyboard.escape_hold.reset()
+        self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.push_screen(ParentMenu())
 
     def on_key(self, event: events.Key) -> None:

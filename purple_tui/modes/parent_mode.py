@@ -17,12 +17,21 @@ import subprocess
 import os
 import sys
 import time
+import termios
 from pathlib import Path
 
 from ..keyboard import NavigationAction, ControlAction
 
 # Ignore escape events for this long after menu opens (user is still holding key)
 ESCAPE_COOLDOWN = 1.5
+
+
+def _flush_terminal_input() -> None:
+    """Flush any buffered terminal input to prevent stray characters."""
+    try:
+        termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+    except (termios.error, OSError):
+        pass  # Not a TTY or other error, ignore
 
 
 # Menu items: (id, label)
@@ -214,10 +223,14 @@ class ParentMenu(ModalScreen):
             # Run the shell interactively
             subprocess.run([shell, '-i'])
 
-            # When shell exits, the Textual app resumes automatically
+            # When shell exits, clean up before resuming
             print()
             print("Returning to Purple Computer...")
             sys.stdout.flush()
+
+            # Flush any buffered input to prevent stray characters
+            _flush_terminal_input()
+            os.system('stty sane')
 
     def _recalibrate_keyboard(self) -> None:
         """Run keyboard calibration"""
@@ -260,3 +273,7 @@ class ParentMenu(ModalScreen):
                 print("Press Enter to return to Purple Computer...")
 
             input()  # Wait for user to press Enter
+
+            # Flush any buffered input to prevent stray characters
+            _flush_terminal_input()
+            os.system('stty sane')

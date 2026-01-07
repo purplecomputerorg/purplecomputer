@@ -53,7 +53,7 @@ def _get_menu_items() -> list:
         ("menu-keyboard", "Recalibrate Keyboard"),
     ]
     if _is_dev_environment():
-        items.append(("menu-update", "Update & Restart"))
+        items.append(("menu-update", "Git Pull & Exit"))
     items.append(("menu-exit", "Exit"))
     return items
 
@@ -341,11 +341,13 @@ class ParentMenu(ModalScreen):
                 )
 
             print()
-            print("Update complete! Restarting...")
+            print("Update complete!")
+            print("Press Enter to exit. Then run 'make run' to restart.")
             print()
 
+            input()
             _flush_terminal_input()
             os.system('stty sane')
 
-        # Restart the app by replacing current process
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # Exit so user can restart with proper launch context
+        self.app.exit()

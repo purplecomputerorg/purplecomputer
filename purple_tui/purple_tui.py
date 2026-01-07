@@ -161,17 +161,6 @@ class ModeIndicator(Horizontal):
         margin-right: 2;
     }
 
-    #caps-indicator {
-        width: auto;
-        height: 1;
-        margin-right: 1;
-        color: $text-muted;
-    }
-
-    #caps-indicator.active {
-        color: $accent;
-    }
-
     #keys-write {
         width: auto;
         height: 3;
@@ -442,8 +431,24 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
+    #title-spacer-left {
+        width: 12;  /* Balance right side: caps (~8) + battery (~3) + margin */
+    }
+
     #mode-title {
         width: 1fr;
+        text-align: center;
+    }
+
+    #caps-indicator {
+        width: auto;
+        height: 1;
+        margin-right: 1;
+        color: $text-muted;
+    }
+
+    #caps-indicator.active {
+        color: $accent;
     }
 
     #battery-indicator {
@@ -590,6 +595,7 @@ class PurpleApp(App):
         with Container(id="outer-container"):
             with Vertical(id="viewport-wrapper"):
                 with Horizontal(id="title-row"):
+                    yield Static("", id="title-spacer-left")  # Balance for right elements
                     yield ModeTitle(id="mode-title")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")

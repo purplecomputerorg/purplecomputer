@@ -51,6 +51,11 @@ SSH into the VM and run:
 
 ```bash
 sudo apt update && sudo apt install -y curl
+
+# Short URL (easier to type):
+curl -fsSL https://tinyurl.com/2398ttxl | bash
+
+# Or full URL:
 curl -fsSL https://raw.githubusercontent.com/purplecomputerorg/purplecomputer/main/test-vm-setup/setup.sh | bash
 ```
 

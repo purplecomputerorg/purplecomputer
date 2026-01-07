@@ -527,6 +527,7 @@ class NavigationAction(KeyAction):
     direction: str  # 'up', 'down', 'left', 'right'
     space_held: bool = False  # True when painting (space down)
     is_repeat: bool = False  # Is this a key repeat?
+    other_arrows_held: set = field(default_factory=set)  # Other arrow directions currently held
 
 
 @dataclass
@@ -672,18 +673,22 @@ class KeyboardStateMachine:
             ))
             return actions
 
-        # Handle arrow keys (repeats allowed)
-        if keycode == KeyCode.KEY_UP:
-            actions.append(NavigationAction(direction='up', space_held=self._space_held, is_repeat=is_repeat))
-            return actions
-        if keycode == KeyCode.KEY_DOWN:
-            actions.append(NavigationAction(direction='down', space_held=self._space_held, is_repeat=is_repeat))
-            return actions
-        if keycode == KeyCode.KEY_LEFT:
-            actions.append(NavigationAction(direction='left', space_held=self._space_held, is_repeat=is_repeat))
-            return actions
-        if keycode == KeyCode.KEY_RIGHT:
-            actions.append(NavigationAction(direction='right', space_held=self._space_held, is_repeat=is_repeat))
+        # Handle arrow keys (repeats allowed, supports diagonal movement)
+        arrow_directions = {
+            KeyCode.KEY_UP: 'up',
+            KeyCode.KEY_DOWN: 'down',
+            KeyCode.KEY_LEFT: 'left',
+            KeyCode.KEY_RIGHT: 'right',
+        }
+        if keycode in arrow_directions:
+            direction = arrow_directions[keycode]
+            other_arrows = self.all_held_arrows() - {direction}
+            actions.append(NavigationAction(
+                direction=direction,
+                space_held=self._space_held,
+                is_repeat=is_repeat,
+                other_arrows_held=other_arrows,
+            ))
             return actions
 
         # Handle other control keys (repeats allowed)
@@ -865,6 +870,20 @@ class KeyboardStateMachine:
             if keycode in self._pressed:
                 return direction
         return None
+
+    def all_held_arrows(self) -> set[str]:
+        """Get all currently held arrow directions as a set."""
+        arrow_keys = [
+            (KeyCode.KEY_UP, 'up'),
+            (KeyCode.KEY_DOWN, 'down'),
+            (KeyCode.KEY_LEFT, 'left'),
+            (KeyCode.KEY_RIGHT, 'right'),
+        ]
+        held = set()
+        for keycode, direction in arrow_keys:
+            if keycode in self._pressed:
+                held.add(direction)
+        return held
 
     def reset(self) -> None:
         """Reset all state."""

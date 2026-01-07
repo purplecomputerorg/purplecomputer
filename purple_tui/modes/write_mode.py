@@ -571,18 +571,18 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Handle navigation actions (arrow keys)
         if isinstance(action, NavigationAction):
-            moved = False
+            # Collect all directions to move (primary + any other held arrows)
+            directions_to_move = [action.direction]
+            if action.other_arrows_held:
+                directions_to_move.extend(action.other_arrows_held)
 
-            if action.direction == 'up':
-                moved = self._move_cursor_up()
-            elif action.direction == 'down':
-                moved = self._move_cursor_down()
-            elif action.direction == 'left':
-                moved = self._move_cursor_left()
-            elif action.direction == 'right':
-                moved = self._move_cursor_right()
+            any_moved = False
+            for direction in directions_to_move:
+                moved = self._move_in_direction(direction)
+                if moved:
+                    any_moved = True
 
-            if not moved:
+            if not any_moved:
                 self._on_edge_hit()
 
             # In paint mode with pen down: draw line

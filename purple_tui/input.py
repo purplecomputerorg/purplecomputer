@@ -430,11 +430,7 @@ class EvdevReader:
         for dev_path in sorted(evdev.list_devices()):
             try:
                 dev = InputDevice(dev_path)
-                # Skip virtual devices we might have created
-                name_lower = dev.name.lower()
-                if "virtual" in name_lower:
-                    continue
-                # Check for letter keys
+                # Check for letter keys (indicates a real keyboard)
                 caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
                 if set(caps) & keyboard_keys:
                     return dev

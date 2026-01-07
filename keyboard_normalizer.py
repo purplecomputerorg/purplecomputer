@@ -123,20 +123,37 @@ def calibrate() -> bool:
     print("Press each key when asked.")
     print("Just press and release the key shown.")
     print()
+    print("If a key doesn't work (captured by your system), press Space to skip it.")
+    print()
 
-    # Find keyboard
+    # Find keyboard - prefer /dev/input/by-id (stable, works in VMs)
     hw_device = None
-    for path in sorted(evdev.list_devices()):
-        try:
-            dev = InputDevice(path)
-            if 'virtual' in dev.name.lower():
+    by_id = Path("/dev/input/by-id")
+    if by_id.exists():
+        for path in sorted(by_id.iterdir()):
+            name = path.name.lower()
+            if "kbd" in name or "keyboard" in name:
+                try:
+                    dev = InputDevice(str(path.resolve()))
+                    caps = dev.capabilities().get(ecodes.EV_KEY, [])
+                    if set(caps) & KEYBOARD_INDICATOR_KEYS:
+                        hw_device = dev
+                        break
+                except (PermissionError, OSError):
+                    continue
+
+    # Fall back to scanning all devices
+    if not hw_device:
+        for path in sorted(evdev.list_devices()):
+            try:
+                dev = InputDevice(path)
+                # Check for letter keys (indicates a real keyboard)
+                caps = dev.capabilities().get(ecodes.EV_KEY, [])
+                if set(caps) & KEYBOARD_INDICATOR_KEYS:
+                    hw_device = dev
+                    break
+            except (PermissionError, OSError):
                 continue
-            caps = dev.capabilities().get(ecodes.EV_KEY, [])
-            if set(caps) & KEYBOARD_INDICATOR_KEYS:
-                hw_device = dev
-                break
-        except (PermissionError, OSError):
-            continue
 
     if not hw_device:
         print("Could not find your keyboard.")
@@ -156,19 +173,24 @@ def calibrate() -> bool:
     try:
         hw_device.grab()
 
+        KEY_SPACE = 57  # Linux keycode for space
+
         for fnum, fname in keys_to_calibrate:
             print(f"Press {fname}... ", end="", flush=True)
 
             scancode = None
+            keycode = None
             key_released = False
+            skipped = False
 
             while not key_released:
                 # Use select to wait for events (avoids EAGAIN errors)
-                readable, _, _ = select.select([hw_device.fd], [], [], 5.0)
+                readable, _, _ = select.select([hw_device.fd], [], [], 10.0)
 
                 if not readable:
                     # Timeout waiting for key
-                    print("(timeout)")
+                    print("(skipped, no response)")
+                    skipped = True
                     break
 
                 # Read available events
@@ -176,21 +198,27 @@ def calibrate() -> bool:
                     for event in hw_device.read():
                         if event.type == ecodes.EV_MSC and event.code == ecodes.MSC_SCAN:
                             scancode = event.value
-                        elif event.type == ecodes.EV_KEY and event.value == 0:
-                            # Key released, done with this key
-                            key_released = True
-                            break
+                        elif event.type == ecodes.EV_KEY:
+                            if event.value == 1:  # Key down
+                                keycode = event.code
+                            elif event.value == 0:  # Key released
+                                key_released = True
+                                break
                 except BlockingIOError:
                     # Device returned EAGAIN, just continue waiting
                     continue
 
-            if scancode:
+            if skipped:
+                continue
+            elif keycode == KEY_SPACE:
+                print("(skipped)")
+                continue
+            elif scancode:
                 mapping[scancode] = TARGET_FKEYS[fnum]
                 print("OK!")
             elif key_released:
                 # Key was pressed but no scancode (some keyboards don't report MSC_SCAN)
                 print("OK")  # Don't confuse parents, just continue
-            # else: timeout already printed
 
         hw_device.ungrab()
 

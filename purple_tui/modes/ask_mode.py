@@ -237,6 +237,9 @@ class InlineInput(Input):
         '/': '÷',   # Division sign U+00F7
     }
 
+    # Math operators that get auto-spaced for readability (e.g., "5+3" becomes "5 + 3")
+    MATH_OPERATORS = {'+', '-', '*', '/'}
+
     def __init__(self, **kwargs):
         super().__init__(placeholder="", highlighter=ValidWordHighlighter(), **kwargs)
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
@@ -263,77 +266,12 @@ class InlineInput(Input):
             pass
 
     async def _on_key(self, event: events.Key) -> None:
-        """Handle all special keys before Input processes them"""
-        key = event.key
-        char = event.character
-
-        # Suppress key repeats (held keys)
-        key_id = char if char else key  # Use char for typing, key name for special keys
-        if self._repeat_suppressor.should_suppress(key_id):
-            event.stop()
-            event.prevent_default()
-            return
-
-        # Up/Down arrows: scroll the history
-        if key == "up":
-            event.stop()
-            event.prevent_default()
-            self.action_scroll_up()
-            return
-        if key == "down":
-            event.stop()
-            event.prevent_default()
-            self.action_scroll_down()
-            return
-
-        # Space: accept autocomplete if there's a suggestion
-        if key == "space" and self.autocomplete_matches:
-            event.stop()
-            event.prevent_default()
-            selected_word = self.autocomplete_matches[self.autocomplete_index][0]
-            words = self.value.split()
-            if words:
-                words[-1] = selected_word
-                self.value = " ".join(words) + " "
-                self.cursor_position = len(self.value)
-            self.autocomplete_matches = []
-            self.autocomplete_index = 0
-            self._double_tap.reset()
-            return
-
-        # Enter: submit
-        if key == "enter":
-            event.stop()
-            event.prevent_default()
-            if self.value.strip():
-                self.post_message(self.Submitted(self.value))
-                self.value = ""
-            self.autocomplete_matches = []
-            self.autocomplete_index = 0
-            self._double_tap.reset()
-            return
-
-        # Double-tap for shifted characters
-        if char and self._double_tap.check(char):
-            event.stop()
-            event.prevent_default()
-            if self.value:
-                self.value = self.value[:-1] + SHIFT_MAP[char]
-                self.cursor_position = len(self.value)
-            return
-
-        # Math operator substitution (* → ×, / → ÷)
-        if char and char in self.MATH_DISPLAY:
-            event.stop()
-            event.prevent_default()
-            display_char = self.MATH_DISPLAY[char]
-            self.value = self.value[:self.cursor_position] + display_char + self.value[self.cursor_position:]
-            self.cursor_position += len(display_char)
-            self._check_autocomplete()
-            return
-
-        # Let parent Input handle all other keys
-        await super()._on_key(event)
+        """Suppress terminal key events. All input comes via evdev/handle_keyboard_action()."""
+        # Purple Computer uses evdev for keyboard input, bypassing the terminal.
+        # This handler suppresses any terminal key events to avoid duplicate processing.
+        # See handle_keyboard_action() in AskMode for the actual input handling.
+        event.stop()
+        event.prevent_default()
 
     def action_toggle_speech(self) -> None:
         """Toggle speech on/off"""
@@ -627,12 +565,13 @@ class AskMode(Vertical):
         """
         ask_input = self.query_one("#ask-input", InlineInput)
 
-        # Handle navigation (up/down for scrolling history)
+        # Handle navigation (up/down for scrolling history, left/right ignored)
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
                 ask_input.action_scroll_up()
             elif action.direction == 'down':
                 ask_input.action_scroll_down()
+            # Left/right arrows are ignored (no cursor movement for kids)
             return
 
         # Handle control actions
@@ -650,9 +589,9 @@ class AskMode(Vertical):
                     ask_input.autocomplete_index = 0
                     ask_input._double_tap.reset()
                 else:
-                    # Type a space
-                    ask_input.value = ask_input.value[:ask_input.cursor_position] + " " + ask_input.value[ask_input.cursor_position:]
-                    ask_input.cursor_position += 1
+                    # Type a space (always at end)
+                    ask_input.value += " "
+                    ask_input.cursor_position = len(ask_input.value)
                     ask_input._check_autocomplete()
                 return
 
@@ -666,12 +605,22 @@ class AskMode(Vertical):
                 return
 
             if action.action == 'backspace' and action.is_down:
-                # Skip key repeats for backspace (debounce held keys)
-                if action.is_repeat:
-                    return
-                if ask_input.cursor_position > 0:
-                    ask_input.value = ask_input.value[:ask_input.cursor_position - 1] + ask_input.value[ask_input.cursor_position:]
-                    ask_input.cursor_position -= 1
+                # Allow key repeats: held backspace erases like an eraser
+                if ask_input.value:
+                    # Always delete from end (simpler for kids, no cursor confusion)
+                    ask_input.value = ask_input.value[:-1]
+                    ask_input.cursor_position = len(ask_input.value)
+                    ask_input._check_autocomplete()
+                return
+
+            if action.action == 'escape' and action.is_down and not action.is_repeat:
+                # ESC tap clears the prompt (start over button)
+                if ask_input.value:
+                    ask_input.value = ""
+                    ask_input.cursor_position = 0
+                    ask_input.autocomplete_matches = []
+                    ask_input.autocomplete_index = 0
+                    ask_input._double_tap.reset()
                     ask_input._check_autocomplete()
                 return
 
@@ -696,17 +645,30 @@ class AskMode(Vertical):
                     ask_input.cursor_position = len(ask_input.value)
                 return
 
-            # Math operator substitution (* → ×, / → ÷)
-            if char in ask_input.MATH_DISPLAY:
-                display_char = ask_input.MATH_DISPLAY[char]
-                ask_input.value = ask_input.value[:ask_input.cursor_position] + display_char + ask_input.value[ask_input.cursor_position:]
-                ask_input.cursor_position += len(display_char)
+            # Math operators: auto-space for readability and substitute display chars
+            if char in ask_input.MATH_OPERATORS:
+                display_char = ask_input.MATH_DISPLAY.get(char, char)
+                value = ask_input.value
+
+                # Add spaces around operator if there's a digit before (not for negative numbers)
+                # But don't double-space if user already typed a space
+                has_digit_before = value and value[-1].isdigit()
+                has_space_before = value and value[-1] == ' '
+                if has_digit_before:
+                    insert = f" {display_char} "
+                elif has_space_before:
+                    insert = f"{display_char} "
+                else:
+                    insert = display_char
+
+                ask_input.value = value + insert
+                ask_input.cursor_position = len(ask_input.value)
                 ask_input._check_autocomplete()
                 return
 
-            # Normal character
-            ask_input.value = ask_input.value[:ask_input.cursor_position] + char + ask_input.value[ask_input.cursor_position:]
-            ask_input.cursor_position += 1
+            # Normal character (always append at end)
+            ask_input.value += char
+            ask_input.cursor_position = len(ask_input.value)
             ask_input._check_autocomplete()
             return
 

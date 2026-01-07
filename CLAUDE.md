@@ -121,6 +121,15 @@ Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_
 
 **See:** `guides/keyboard-architecture.md` for full details.
 
+**Single Code Path:** All keyboard logic lives in `handle_keyboard_action()`. Textual's `_on_key()` handlers should suppress events (not process them) to avoid duplicate code paths. This makes testing reliable since there's only one path to test.
+
+```python
+async def _on_key(self, event: events.Key) -> None:
+    """Suppress terminal key events. All input comes via evdev/handle_keyboard_action()."""
+    event.stop()
+    event.prevent_default()
+```
+
 ### Adding Keyboard Handling to Widgets
 
 Every mode widget and modal screen that needs keyboard input must implement `handle_keyboard_action()`:

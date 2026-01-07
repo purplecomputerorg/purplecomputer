@@ -30,12 +30,32 @@ def _flush_terminal_input() -> None:
         pass  # Not a TTY or other error, ignore
 
 
-# Menu items: (id, label)
-MENU_ITEMS = [
-    ("menu-shell", "Open Terminal"),
-    ("menu-keyboard", "Recalibrate Keyboard"),
-    ("menu-exit", "Exit"),
-]
+def _is_dev_environment() -> bool:
+    """Check if running in a development environment.
+
+    Returns True if:
+    - PURPLE_TEST_BATTERY env var is set (set by `make run`), OR
+    - .git directory exists in project root (git checkout, not installed)
+
+    In production, Purple is installed to /opt/purple without .git,
+    and PURPLE_TEST_BATTERY is not set.
+    """
+    if os.environ.get("PURPLE_TEST_BATTERY"):
+        return True
+    project_root = Path(__file__).parent.parent.parent
+    return (project_root / ".git").is_dir()
+
+
+def _get_menu_items() -> list:
+    """Get menu items, including dev-only items when appropriate."""
+    items = [
+        ("menu-shell", "Open Terminal"),
+        ("menu-keyboard", "Recalibrate Keyboard"),
+    ]
+    if _is_dev_environment():
+        items.append(("menu-update", "Update & Restart"))
+    items.append(("menu-exit", "Exit"))
+    return items
 
 
 class ParentMenuItem(Static):
@@ -113,16 +133,16 @@ class ParentMenu(ModalScreen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._menu_items = _get_menu_items()
         self._selected_index = 0
         # Escape is always "tainted" since user held it to open this menu
-        # Other keys could be added here if needed
         self._ignore_until_released = {'escape'}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="parent-dialog"):
             yield Static("Parent Menu", id="parent-title")
             with Vertical(id="parent-items"):
-                for item_id, label in MENU_ITEMS:
+                for item_id, label in self._menu_items:
                     yield ParentMenuItem(label, item_id)
             yield Static("↑↓ Enter Esc", id="parent-hint")
 
@@ -132,7 +152,7 @@ class ParentMenu(ModalScreen):
 
     def _update_selection(self) -> None:
         """Update visual selection state"""
-        for i, (item_id, _) in enumerate(MENU_ITEMS):
+        for i, (item_id, _) in enumerate(self._menu_items):
             item = self.query_one(f"#{item_id}", ParentMenuItem)
             if i == self._selected_index:
                 item.add_class("selected")
@@ -149,10 +169,10 @@ class ParentMenu(ModalScreen):
         # Navigation always works immediately
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
-                self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
+                self._selected_index = (self._selected_index - 1) % len(self._menu_items)
                 self._update_selection()
             elif action.direction == 'down':
-                self._selected_index = (self._selected_index + 1) % len(MENU_ITEMS)
+                self._selected_index = (self._selected_index + 1) % len(self._menu_items)
                 self._update_selection()
             return
 
@@ -178,11 +198,13 @@ class ParentMenu(ModalScreen):
 
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""
-        item_id = MENU_ITEMS[self._selected_index][0]
+        item_id = self._menu_items[self._selected_index][0]
         if item_id == "menu-shell":
             self._open_shell()
         elif item_id == "menu-keyboard":
             self._recalibrate_keyboard()
+        elif item_id == "menu-update":
+            self._update_and_restart()
         elif item_id == "menu-exit":
             self.dismiss()
 
@@ -273,3 +295,57 @@ class ParentMenu(ModalScreen):
             # Flush any buffered input to prevent stray characters
             _flush_terminal_input()
             os.system('stty sane')
+
+    def _update_and_restart(self) -> None:
+        """Git pull and restart the app (dev mode only)."""
+        self.dismiss()
+        self.app.call_later(self._run_update_and_restart)
+
+    def _run_update_and_restart(self) -> None:
+        """Actually run the update - called after modal dismissed."""
+        project_root = Path(__file__).parent.parent.parent
+
+        with self.app.suspend_with_terminal_input():
+            os.system('stty sane')
+            os.system('clear')
+
+            print("=" * 60)
+            print("Purple Computer - Update & Restart")
+            print("=" * 60)
+            print()
+
+            # Git pull
+            print("Pulling latest changes...")
+            result = subprocess.run(
+                ["git", "pull"],
+                cwd=project_root,
+            )
+
+            if result.returncode != 0:
+                print()
+                print("Git pull failed. Check the error above.")
+                print("Press Enter to return to Purple Computer...")
+                input()
+                _flush_terminal_input()
+                os.system('stty sane')
+                return
+
+            # Pip install (in case dependencies changed)
+            print()
+            print("Updating dependencies...")
+            venv_pip = project_root / ".venv" / "bin" / "pip"
+            if venv_pip.exists():
+                subprocess.run(
+                    [str(venv_pip), "install", "-q", "-r", "requirements.txt"],
+                    cwd=project_root,
+                )
+
+            print()
+            print("Update complete! Restarting...")
+            print()
+
+            _flush_terminal_input()
+            os.system('stty sane')
+
+        # Restart the app by replacing current process
+        os.execv(sys.executable, [sys.executable] + sys.argv)

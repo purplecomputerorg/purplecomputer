@@ -342,15 +342,20 @@ class EvdevReader:
         Call this after the terminal session ends and before
         the TUI resumes normal operation.
         """
+        import select
+
         if self._device and self._grab:
             try:
                 # Flush any pending events before reacquiring grab
                 # (prevents stale keypresses from terminal session)
+                # Use select() with timeout to avoid blocking forever
                 try:
                     while True:
+                        # Check if there's data to read (0 timeout = non-blocking)
+                        readable, _, _ = select.select([self._device.fd], [], [], 0)
+                        if not readable:
+                            break  # No more events
                         self._device.read_one()
-                except BlockingIOError:
-                    pass  # No more events
                 except Exception:
                     pass
 

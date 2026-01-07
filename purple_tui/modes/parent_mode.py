@@ -16,14 +16,10 @@ from textual import events
 import subprocess
 import os
 import sys
-import time
 import termios
 from pathlib import Path
 
 from ..keyboard import NavigationAction, ControlAction
-
-# Ignore escape events for this long after menu opens (user is still holding key)
-ESCAPE_COOLDOWN = 1.5
 
 
 def _flush_terminal_input() -> None:
@@ -118,7 +114,9 @@ class ParentMenu(ModalScreen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._selected_index = 0
-        self._open_time = time.monotonic()  # Track when menu opened
+        # Escape is always "tainted" since user held it to open this menu
+        # Other keys could be added here if needed
+        self._ignore_until_released = {'escape'}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="parent-dialog"):
@@ -142,26 +140,13 @@ class ParentMenu(ModalScreen):
                 item.remove_class("selected")
 
     def on_key(self, event: events.Key) -> None:
-        """Handle navigation keys (terminal fallback, not used with evdev)"""
-        if event.key == "up":
-            event.stop()
-            self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
-            self._update_selection()
-        elif event.key == "down":
-            event.stop()
-            self._selected_index = (self._selected_index + 1) % len(MENU_ITEMS)
-            self._update_selection()
-        elif event.key == "enter":
-            event.stop()
-            self._activate_selected()
-        elif event.key == "escape":
-            event.stop()
-            # Ignore escape during cooldown (user still holding from long-press)
-            if time.monotonic() - self._open_time > ESCAPE_COOLDOWN:
-                self.dismiss()
+        """Suppress terminal key events - we use evdev exclusively."""
+        event.stop()
+        event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard actions from evdev."""
+        # Navigation always works immediately
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
                 self._selected_index = (self._selected_index - 1) % len(MENU_ITEMS)
@@ -171,12 +156,23 @@ class ParentMenu(ModalScreen):
                 self._update_selection()
             return
 
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                self._activate_selected()
-            elif action.action == 'escape':
-                # Ignore escape during cooldown (user still holding from long-press)
-                if time.monotonic() - self._open_time > ESCAPE_COOLDOWN:
+        if isinstance(action, ControlAction):
+            key = action.action
+
+            # Track key releases to clear "tainted" keys
+            if not action.is_down and key in self._ignore_until_released:
+                self._ignore_until_released.discard(key)
+                return
+
+            # Ignore tainted keys until released
+            if key in self._ignore_until_released:
+                return
+
+            # Handle key presses
+            if action.is_down:
+                if key == 'enter':
+                    self._activate_selected()
+                elif key == 'escape':
                     self.dismiss()
             return
 

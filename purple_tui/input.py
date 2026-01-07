@@ -344,6 +344,16 @@ class EvdevReader:
         """
         if self._device and self._grab:
             try:
+                # Flush any pending events before reacquiring grab
+                # (prevents stale keypresses from terminal session)
+                try:
+                    while True:
+                        self._device.read_one()
+                except BlockingIOError:
+                    pass  # No more events
+                except Exception:
+                    pass
+
                 self._device.grab()
                 logger.info("EvdevReader: reacquired grab")
             except (IOError, OSError) as e:

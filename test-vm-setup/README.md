@@ -12,41 +12,46 @@ https://ubuntu.com/download/server/arm
 
 ### 2. Create VM in UTM
 
-- Click "Create a New Virtual Machine"
-- Select **Virtualize** (not Emulate)
-- Select **Linux**
-- Browse to the Ubuntu ISO
-- Configure:
-  - RAM: 2-4 GB
-  - Disk: 16 GB
-  - **Display**: Set resolution (e.g., 1920x1080). Note: Linux VMs have fixed resolution with Apple Virtualization.
+1. Click **Create a New Virtual Machine**
+2. Select **Virtualize** (not Emulate)
+3. Select **Linux**
+4. Browse to the Ubuntu ISO you downloaded
+5. On the Hardware screen:
+   - **RAM**: 2048 MB (2 GB is enough)
+   - **CPU Cores**: 2
+6. On the Storage screen:
+   - **Size**: 16 GB
+7. On the Shared Directory screen:
+   - Click **Browse** and select a folder (e.g., your `purplecomputer` repo folder)
+   - This becomes `/mnt/share` in the VM
+8. On the Summary screen:
+   - **Name**: `purple-test` (or whatever you like)
+   - Click **Save**
 
-### 3. (Optional) Set up file sharing
+### 3. Configure display resolution
 
-Before first boot, in VM settings:
-- Go to **Sharing** tab
-- Click **Browse** and select a folder on your Mac (e.g., your code directory)
+Before first boot, edit the VM settings:
 
-After Ubuntu install, the shared folder will be at `/mnt/share`.
+1. Select the VM, click the **slider icon** (or right-click → Edit)
+2. Go to **Display**
+3. Set resolution: **1920x1080** (or your preferred size)
+   - This is fixed; Linux VMs don't support dynamic resizing with Apple Virtualization
 
 ### 4. Install Ubuntu Server
 
 Boot the VM and install Ubuntu:
-- Minimized install is fine
-- Enable OpenSSH
-- Create user (e.g., `purple`)
+- Select **minimized** install
+- Enable **OpenSSH** server
+- Create user: `purple` (or any name)
+- Password: your choice
 
 ### 5. Run setup script
 
-SSH into the VM (or use the console) and run:
+SSH into the VM and run:
 
 ```bash
+sudo apt update && sudo apt install -y curl
 curl -fsSL https://raw.githubusercontent.com/purplecomputerorg/purplecomputer/main/test-vm-setup/setup.sh | bash
-```
-
-Or if you have the repo:
-```bash
-bash test-vm-setup/setup.sh
 ```
 
 ### 6. Reboot
@@ -65,13 +70,17 @@ startx
 
 In Alacritty:
 ```bash
-# If using shared folder:
+# If you shared the purplecomputer folder directly:
+cd /mnt/share
+
+# Or if you shared a parent folder:
 cd /mnt/share/purplecomputer
 
 # Or clone fresh:
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 
+# Then:
 make setup
 make run
 ```

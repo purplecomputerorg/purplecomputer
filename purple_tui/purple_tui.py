@@ -668,23 +668,49 @@ class PurpleApp(App):
         This releases the evdev keyboard grab so the terminal can receive
         input, then reacquires it when the context exits.
         """
+        import logging
         from contextlib import contextmanager
+
+        logger = logging.getLogger(__name__)
 
         @contextmanager
         def _suspend_ctx():
+            import sys
+            import time
+            from pathlib import Path
+            log_file = Path.home() / ".purple-debug.log"
+            def debug(msg):
+                ts = time.strftime("%H:%M:%S")
+                line = f"[{ts}] {msg}"
+                print(f"[DEBUG] {msg}", file=sys.stderr, flush=True)
+                with open(log_file, "a") as f:
+                    f.write(line + "\n")
+            debug("suspend_with_terminal_input: entering context")
+
             # Release evdev grab so terminal can receive keyboard input
             if self._evdev_reader:
+                debug("suspend_with_terminal_input: releasing evdev grab")
                 self._evdev_reader.release_grab()
 
             try:
+                debug("suspend_with_terminal_input: calling self.suspend()")
                 with self.suspend():
+                    debug("suspend_with_terminal_input: inside suspend context, yielding")
                     yield
+                    debug("suspend_with_terminal_input: yield returned, exiting suspend context")
+            except Exception as e:
+                debug(f"suspend_with_terminal_input: exception in suspend: {e}")
+                raise
             finally:
+                debug("suspend_with_terminal_input: in finally block")
                 # Reacquire grab when resuming
                 if self._evdev_reader:
+                    debug("suspend_with_terminal_input: reacquiring evdev grab")
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
+                debug("suspend_with_terminal_input: resetting keyboard state")
                 self._keyboard_state_machine.reset()
+                debug("suspend_with_terminal_input: context cleanup complete")
 
         return _suspend_ctx()
 

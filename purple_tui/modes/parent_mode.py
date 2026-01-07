@@ -218,8 +218,21 @@ class ParentMenu(ModalScreen):
 
     def _run_shell(self) -> None:
         """Actually run the shell - called after modal dismissed"""
+        # Debug logging to both stderr and file (file survives terminal issues)
+        import time
+        log_file = Path.home() / ".purple-debug.log"
+        def debug(msg):
+            ts = time.strftime("%H:%M:%S")
+            line = f"[{ts}] {msg}"
+            print(f"[DEBUG shell] {msg}", file=sys.stderr, flush=True)
+            with open(log_file, "a") as f:
+                f.write(line + "\n")
+        debug("_run_shell: starting")
+
         # Suspend the Textual app and release evdev grab for terminal input
+        debug("_run_shell: entering suspend context")
         with self.app.suspend_with_terminal_input():
+            debug("_run_shell: inside suspend context")
             # Reset terminal to sane state (ensures echo is on, etc.)
             os.system('stty sane')
             # Clear screen and show message
@@ -238,8 +251,10 @@ class ParentMenu(ModalScreen):
             # Get the user's default shell or fall back to bash
             shell = os.environ.get('SHELL', '/bin/bash')
 
+            debug(f"_run_shell: launching shell: {shell}")
             # Run the shell interactively
             subprocess.run([shell, '-i'])
+            debug("_run_shell: shell exited")
 
             # When shell exits, clean up before resuming
             print()
@@ -247,11 +262,17 @@ class ParentMenu(ModalScreen):
             sys.stdout.flush()
 
             # Flush any buffered input to prevent stray characters
+            debug("_run_shell: flushing terminal input")
             _flush_terminal_input()
+            debug("_run_shell: running stty sane")
             os.system('stty sane')
+            debug("_run_shell: about to exit suspend context")
 
+        debug("_run_shell: exited suspend context")
+        debug("_run_shell: calling app.refresh(repaint=True)")
         # Force redraw after returning from suspend
         self.app.refresh(repaint=True)
+        debug("_run_shell: refresh called, function complete")
 
     def _recalibrate_keyboard(self) -> None:
         """Run keyboard calibration"""

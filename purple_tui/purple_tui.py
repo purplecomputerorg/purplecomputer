@@ -43,7 +43,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_ERASER, ICON_CAPS_LOCK,
+    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_ERASER, ICON_CAPS_LOCK,
     VOLUME_LEVELS, VOLUME_DEFAULT,
 )
 from .keyboard import (
@@ -200,11 +200,11 @@ class ModeIndicator(Horizontal):
             volume_badge.add_class("dim")
             yield volume_badge
 
-            vol_down_badge = KeyBadge("F11 -", id="key-vol-down")
+            vol_down_badge = KeyBadge(f"F11 {ICON_VOLUME_DOWN}", id="key-vol-down")
             vol_down_badge.add_class("dim")
             yield vol_down_badge
 
-            vol_up_badge = KeyBadge("F12 +", id="key-vol-up")
+            vol_up_badge = KeyBadge(f"F12 {ICON_VOLUME_UP}", id="key-vol-up")
             vol_up_badge.add_class("dim")
             yield vol_up_badge
 
@@ -533,7 +533,7 @@ class PurpleApp(App):
         self._idle_timer = None
         self._sleep_screen_active = False
 
-        # Unified keyboard state (for legacy API compatibility)
+        # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
             sticky_grace_period=STICKY_SHIFT_GRACE,
             double_tap_threshold=DOUBLE_TAP_TIME,
@@ -701,7 +701,6 @@ class PurpleApp(App):
             return
 
         if isinstance(action, CapsLockAction):
-            # Toggle caps lock in the old keyboard state for compatibility
             self.keyboard.handle_caps_lock_press()
             return
 

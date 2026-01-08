@@ -232,14 +232,13 @@ def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     return rgb_to_hex(*rgb)
 
 
-def mix_colors_paint(colors: list[str], weights: list[float] = None) -> str:
+def mix_colors_paint(colors: list[str]) -> str:
     """
     Mix multiple colors like paint using Kubelka-Munk spectral mixing.
     Mixes pairwise, tracking accumulated weight so counts affect result.
 
     Args:
         colors: List of hex color strings (e.g., ["#FF0000", "#0000FF"])
-        weights: Ignored (kept for API compatibility)
 
     Returns:
         Hex color string of the mixed result

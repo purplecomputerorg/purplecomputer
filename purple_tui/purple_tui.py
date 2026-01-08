@@ -195,9 +195,18 @@ class ModeIndicator(Horizontal):
             theme_badge.add_class("dim")
             yield theme_badge
 
+            # Volume controls: F10 mute (shows current level icon), F11 down, F12 up
             volume_badge = KeyBadge(f"F10 {ICON_VOLUME_HIGH}", id="key-volume")
             volume_badge.add_class("dim")
             yield volume_badge
+
+            vol_down_badge = KeyBadge("F11 -", id="key-vol-down")
+            vol_down_badge.add_class("dim")
+            yield vol_down_badge
+
+            vol_up_badge = KeyBadge("F12 +", id="key-vol-up")
+            vol_up_badge.add_class("dim")
+            yield vol_up_badge
 
     def update_mode(self, mode: Mode) -> None:
         self.current_mode = mode

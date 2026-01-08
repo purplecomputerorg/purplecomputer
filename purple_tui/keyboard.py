@@ -9,7 +9,7 @@ Features:
 - Caps lock toggle (direct from hardware)
 - Long-hold detection for parent mode (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key mode switching (F1-F3) and toggles (F11 volume, F12 theme)
+- F-key mode switching (F1-F3) and toggles (F9 theme, F10-F12 volume)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -26,12 +26,16 @@ from .constants import SUPPORT_EMAIL
 # Double-Tap Detection
 # ============================================================================
 
-# Characters that can be shifted via double-tap
+# Characters that can be shifted via double-tap (same as physical shift)
 SHIFT_MAP = {
-    '-': '_', '=': '+', '[': '{', ']': '}', '\\': '|',
+    # Number row symbols
+    '1': '!', '2': '@', '3': '#', '4': '$', '5': '%',
+    '6': '^', '7': '&', '8': '*', '9': '(', '0': ')',
+    '-': '_', '=': '+',
+    # Other symbols
+    '[': '{', ']': '}', '\\': '|',
     ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
     '`': '~',
-    # Numbers are NOT included. They're used in math expressions
 }
 
 # Reverse map for checking if a character is a shifted version
@@ -713,11 +717,17 @@ class KeyboardStateMachine:
             if keycode == KeyCode.KEY_F3:
                 actions.append(ModeAction(mode='write'))
                 return actions
+            if keycode == KeyCode.KEY_F9:
+                actions.append(ControlAction(action='theme_toggle', is_down=True))
+                return actions
+            if keycode == KeyCode.KEY_F10:
+                actions.append(ControlAction(action='volume_mute', is_down=True))
+                return actions
             if keycode == KeyCode.KEY_F11:
-                actions.append(ControlAction(action='volume_toggle', is_down=True))
+                actions.append(ControlAction(action='volume_down', is_down=True))
                 return actions
             if keycode == KeyCode.KEY_F12:
-                actions.append(ControlAction(action='theme_toggle', is_down=True))
+                actions.append(ControlAction(action='volume_up', is_down=True))
                 return actions
 
         # Handle printable characters

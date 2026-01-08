@@ -239,9 +239,17 @@ Parentheses always trigger labels because they imply computation happened, even 
 
 ---
 
-## Speaking Mode
+## Speech
 
-Press Tab to toggle speech. When enabled, results are spoken aloud using Piper TTS.
+Add `!` anywhere in your input to hear it spoken aloud using Piper TTS. The `!` is stripped before display and evaluation.
+
+### Triggers
+
+| Method | Example | Notes |
+|--------|---------|-------|
+| `!` anywhere | `cat!`, `!2+2`, `ca!t` | Most intuitive for kids |
+| `say` or `talk` prefix | `say cat`, `talk 2+2` | Alternative syntax |
+| Enter on empty | (press Enter after a result) | "Say it again" |
 
 ### Principles
 
@@ -252,14 +260,15 @@ Press Tab to toggle speech. When enabled, results are spoken aloud using Piper T
 ### Examples
 
 ```
-cat                   → says "cat"
-3 cats                → says "3 cats"
-cat * 3               → says "cat times 3 equals 3 cats"
-2 + 3 apples          → says "2 plus 3 apples equals 5 apples"
-red + blue            → says "red plus blue equals purple"
-what is 2 + 3         → says "what is 2 plus 3 equals 5"
-what is (2 * 3) cats  → says "what is 2 times 3 cats equals 6 cats"
+cat!                  → shows 🐱, says "cat"
+3 cats!               → shows 🐱🐱🐱, says "3 cats"
+cat * 3!              → shows result, says "cat times 3 equals 3 cats"
+2 + 3 apples!         → says "2 plus 3 apples equals 5 apples"
+red + blue!           → says "red plus blue equals purple"
+what is 2 + 3!        → says "what is 2 plus 3 equals 5"
 ```
+
+After any result, pressing Enter with empty input repeats the last spoken result. This is the "what did it say?" feature for kids who want to hear it again.
 
 ### Operators in Speech
 
@@ -268,20 +277,6 @@ what is (2 * 3) cats  → says "what is 2 times 3 cats equals 6 cats"
 - `-` → "minus"
 - `/` → "divided by"
 - Parentheses are removed
-
-### Speech Prefix (One-Shot TTS)
-
-Type `say` or `talk` before any input to speak the result without enabling speech mode:
-
-```
-say 2 + 2             → shows "2 + 2 → 4", speaks "2 plus 2 equals 4"
-talk cat              → shows "cat → 🐱", speaks "cat"
-say red + blue        → shows color result, speaks "red plus blue equals purple"
-```
-
-The prefix word is stripped from both display and evaluation. Speech is triggered for that line only, then returns to whatever mode was active (on or off).
-
-This is useful when speech mode is off but you want to hear one specific result, or to show a child how something is pronounced.
 
 ---
 

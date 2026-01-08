@@ -12,7 +12,8 @@ directly from evdev, bypassing the terminal. See:
 
 Keyboard controls:
 - F1-F3: Switch modes (Ask, Play, Write)
-- F12: Toggle dark/light theme
+- F9: Toggle dark/light theme
+- F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent mode
 - Caps Lock: Toggle big/small letters
 - Sticky shift: Shift key toggles, stays active for 1 second
@@ -41,8 +42,9 @@ from .constants import (
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
-    ICON_VOLUME_ON, ICON_VOLUME_OFF, ICON_ERASER,
-    ICON_CAPS_LOCK,
+    ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
+    ICON_ERASER, ICON_CAPS_LOCK,
+    VOLUME_LEVELS, VOLUME_DEFAULT,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -185,17 +187,17 @@ class ModeIndicator(Horizontal):
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
 
-        # Volume (F11) and Theme (F12) on the right
+        # Theme (F9) and Volume (F10 mute, F11 down, F12 up) on the right
         with Horizontal(id="keys-right"):
-            volume_badge = KeyBadge(f"F11 {ICON_VOLUME_ON}", id="key-volume")
-            volume_badge.add_class("dim")
-            yield volume_badge
-
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
             theme_icon = ICON_MOON if is_dark else ICON_SUN
-            theme_badge = KeyBadge(f"F12 {theme_icon}", id="key-theme")
+            theme_badge = KeyBadge(f"F9 {theme_icon}", id="key-theme")
             theme_badge.add_class("dim")
             yield theme_badge
+
+            volume_badge = KeyBadge(f"F10 {ICON_VOLUME_HIGH}", id="key-volume")
+            volume_badge.add_class("dim")
+            yield volume_badge
 
     def update_mode(self, mode: Mode) -> None:
         self.current_mode = mode
@@ -211,20 +213,28 @@ class ModeIndicator(Horizontal):
                 pass
 
     def update_theme_icon(self) -> None:
-        """Update the theme badge icon"""
+        """Update the theme badge icon (F9)"""
         try:
             badge = self.query_one("#key-theme", KeyBadge)
             is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            badge.text = f"F12 {ICON_MOON if is_dark else ICON_SUN}"
+            badge.text = f"F9 {ICON_MOON if is_dark else ICON_SUN}"
             badge.refresh()
         except NoMatches:
             pass
 
-    def update_volume_indicator(self, volume_on: bool) -> None:
-        """Update volume indicator badge (icon only, stays dim)"""
+    def update_volume_indicator(self, volume_level: int) -> None:
+        """Update volume indicator badge with level icon (F10)"""
         try:
             badge = self.query_one("#key-volume", KeyBadge)
-            badge.text = f"F11 {ICON_VOLUME_ON if volume_on else ICON_VOLUME_OFF}"
+            if volume_level == 0:
+                icon = ICON_VOLUME_OFF
+            elif volume_level <= 25:
+                icon = ICON_VOLUME_LOW
+            elif volume_level <= 50:
+                icon = ICON_VOLUME_MED
+            else:
+                icon = ICON_VOLUME_HIGH
+            badge.text = f"F10 {icon}"
             badge.refresh()
         except NoMatches:
             pass
@@ -369,7 +379,8 @@ class PurpleApp(App):
     Purple Computer: The calm computer for kids.
 
     F1-F3: Switch between modes (Ask, Play, Write)
-    F12: Toggle dark/light mode
+    F9: Toggle dark/light theme
+    F10: Mute/unmute, F11: Volume down, F12: Volume up
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
     Ctrl+V: Cycle views (Screen, Line, Ears)
@@ -487,11 +498,15 @@ class PurpleApp(App):
     """
 
     # Mode switching uses F-keys for robustness
+    # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
         Binding("f1", "switch_mode('ask')", "Ask", show=False, priority=True),
         Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
         Binding("f3", "switch_mode('write')", "Write", show=False, priority=True),
-        Binding("f12", "toggle_theme", "Theme", show=False, priority=True),
+        Binding("f9", "toggle_theme", "Theme", show=False, priority=True),
+        Binding("f10", "volume_mute", "Mute", show=False, priority=True),
+        Binding("f11", "volume_down", "Vol-", show=False, priority=True),
+        Binding("f12", "volume_up", "Vol+", show=False, priority=True),
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
@@ -501,7 +516,8 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
-        self.volume_on = True  # F11 toggles volume on/off
+        self.volume_level = VOLUME_DEFAULT  # 0-100, F10 mute, F11 down, F12 up
+        self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -695,13 +711,19 @@ class PurpleApp(App):
                 self._cancel_escape_hold_timer()
             # Don't return - let escape events propagate to modes for other uses
 
-        # Handle global toggles (F11 volume, F12 theme)
+        # Handle global toggles (F9 theme, F10-F12 volume)
         if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'volume_toggle':
-                self.action_toggle_volume()
-                return
             if action.action == 'theme_toggle':
                 self.action_toggle_theme()
+                return
+            if action.action == 'volume_mute':
+                self.action_volume_mute()
+                return
+            if action.action == 'volume_down':
+                self.action_volume_down()
+                return
+            if action.action == 'volume_up':
+                self.action_volume_up()
                 return
 
         # Check if a modal screen is active (e.g., ParentMenu)
@@ -992,7 +1014,7 @@ class PurpleApp(App):
                 pass
 
     def action_toggle_theme(self) -> None:
-        """Toggle between dark and light mode (F12)"""
+        """Toggle between dark and light mode (F9)"""
         self.active_theme = "purple-light" if self.active_theme == "purple-dark" else "purple-dark"
         self._apply_theme()
         # Update theme icon in mode indicator
@@ -1002,16 +1024,49 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def action_toggle_volume(self) -> None:
-        """Toggle volume on/off (F11)"""
-        self.volume_on = not self.volume_on
-        # Update TTS mute state
+    def action_volume_mute(self) -> None:
+        """Toggle mute on/off (F10)"""
+        if self.volume_level > 0:
+            # Mute: save current level and set to 0
+            self._volume_before_mute = self.volume_level
+            self.volume_level = 0
+        else:
+            # Unmute: restore previous level
+            self.volume_level = self._volume_before_mute if self._volume_before_mute > 0 else VOLUME_DEFAULT
+        self._apply_volume()
+
+    def action_volume_down(self) -> None:
+        """Decrease volume (F11)"""
+        # Find current position in VOLUME_LEVELS and go down
+        current_idx = 0
+        for i, level in enumerate(VOLUME_LEVELS):
+            if self.volume_level >= level:
+                current_idx = i
+        if current_idx > 0:
+            self.volume_level = VOLUME_LEVELS[current_idx - 1]
+            self._apply_volume()
+
+    def action_volume_up(self) -> None:
+        """Increase volume (F12)"""
+        # Find current position in VOLUME_LEVELS and go up
+        current_idx = len(VOLUME_LEVELS) - 1
+        for i, level in enumerate(VOLUME_LEVELS):
+            if self.volume_level <= level:
+                current_idx = i
+                break
+        if current_idx < len(VOLUME_LEVELS) - 1:
+            self.volume_level = VOLUME_LEVELS[current_idx + 1]
+            self._apply_volume()
+
+    def _apply_volume(self) -> None:
+        """Apply volume level to TTS and update UI"""
         from . import tts
-        tts.set_muted(not self.volume_on)
-        # Update volume indicator in mode indicator
+        tts.set_muted(self.volume_level == 0)
+        # TODO: Set actual volume level when TTS supports it
+        # Update volume indicator
         try:
             indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.update_volume_indicator(self.volume_on)
+            indicator.update_volume_indicator(self.volume_level)
         except NoMatches:
             pass
 

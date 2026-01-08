@@ -38,10 +38,18 @@ DOUBLE_TAP_TIME = 0.5        # Threshold for double-tap to get shifted character
 STICKY_SHIFT_GRACE = 1.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
+# Volume levels (0-100, step by 25)
+VOLUME_LEVELS = [0, 25, 50, 75, 100]
+VOLUME_DEFAULT = 100
+
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 # These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
-ICON_VOLUME_ON = "󰕾"        # nf-md-volume_high
-ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off
+# Volume icons (nf-md-volume variants)
+ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off (muted)
+ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low (25%)
+ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium (50%)
+ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high (75-100%)
+ICON_VOLUME_ON = ICON_VOLUME_HIGH  # Alias for backwards compatibility
 ICON_ERASER = "󰇾"           # nf-md-eraser
 ICON_SAVE = "󰆓"             # nf-md-content_save
 ICON_LOAD = "󰈔"             # nf-md-file_import

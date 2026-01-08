@@ -123,7 +123,7 @@ SOURCES
         xkbset
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
-    # Noto Color Emoji (installed via apt above) provides Unicode emoji (🐱 🎉)
+    # Noto Color Emoji (installed via apt above) provides Unicode emoji
     # Download from host (curl available in Docker container, not in chroot)
     log_info "Installing JetBrainsMono Nerd Font..."
     FONT_DIR="$MOUNT_DIR/usr/share/fonts/truetype/jetbrains-mono-nerd"
@@ -131,6 +131,12 @@ SOURCES
     curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/JetBrainsMono.zip -o /tmp/JetBrainsMono.zip
     unzip -o /tmp/JetBrainsMono.zip -d "$FONT_DIR"
     rm /tmp/JetBrainsMono.zip
+
+    # Install fontconfig rule to prioritize Noto Color Emoji
+    # Without this, some emoji render as monochrome outlines instead of color
+    log_info "Installing emoji fontconfig rule..."
+    cp /purple-src/config/fontconfig/99-emoji.conf "$MOUNT_DIR/etc/fonts/conf.d/"
+
     chroot "$MOUNT_DIR" fc-cache -fv
 
     # Copy application files (project root is mounted at /purple-src)

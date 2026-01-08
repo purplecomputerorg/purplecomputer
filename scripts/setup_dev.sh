@@ -195,7 +195,7 @@ elif [ "$OS" = "linux" ]; then
     fi
 fi
 
-# Install Noto Color Emoji (for Unicode emoji like 🐱 🎉)
+# Install Noto Color Emoji (for Unicode emoji)
 echo_step "Checking Noto Color Emoji font..."
 if [ "$OS" = "mac" ]; then
     # macOS has built-in emoji support via Apple Color Emoji
@@ -211,6 +211,21 @@ elif [ "$OS" = "linux" ]; then
         else
             echo_warn "Could not install Noto Color Emoji (apt not available)"
             echo_warn "Install manually: https://fonts.google.com/noto/specimen/Noto+Color+Emoji"
+        fi
+    fi
+
+    # Install fontconfig rule to prioritize Noto Color Emoji
+    # Without this, some emoji may render as monochrome outlines
+    echo_step "Installing emoji fontconfig rule..."
+    FONTCONFIG_DIR="/etc/fonts/conf.d"
+    EMOJI_CONF="$PROJECT_ROOT/config/fontconfig/99-emoji.conf"
+    if [ -f "$EMOJI_CONF" ]; then
+        if [ ! -f "$FONTCONFIG_DIR/99-emoji.conf" ]; then
+            sudo cp "$EMOJI_CONF" "$FONTCONFIG_DIR/"
+            sudo fc-cache -f
+            echo_info "✓ Emoji fontconfig rule installed"
+        else
+            echo_info "✓ Emoji fontconfig rule already installed"
         fi
     fi
 fi

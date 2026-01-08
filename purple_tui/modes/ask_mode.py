@@ -11,7 +11,7 @@ Features:
 - Emoji display: typing "cat" shows 🐱
 - Emoji math: 3 * cat produces 🐱🐱🐱
 - Typo tolerance: long math expressions forgive accidental keystrokes
-- Speech output (Tab to toggle)
+- Speech: add ! anywhere (e.g., "cat!") or Enter on empty to repeat
 - History (up/down arrows)
 - Emoji autocomplete (Space to accept)
 """
@@ -30,10 +30,7 @@ from rich.text import Text
 import re
 
 from ..content import get_content
-from ..constants import (
-    TOGGLE_DEBOUNCE, DOUBLE_TAP_TIME,
-    ICON_VOLUME_ON, ICON_VOLUME_OFF,
-)
+from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import (
     SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor,
     CharacterAction, NavigationAction, ControlAction, ShiftAction,
@@ -226,10 +223,6 @@ class InlineInput(Input):
             self.value = value
             super().__init__()
 
-    BINDINGS = [
-        ("tab", "toggle_speech", "Toggle speech"),
-    ]
-
     # Display math operators as clearer Unicode versions (not emoji, so they inherit text color)
     # Only substitute * and / since + and - are already clear
     MATH_DISPLAY = {
@@ -272,19 +265,6 @@ class InlineInput(Input):
         # See handle_keyboard_action() in AskMode for the actual input handling.
         event.stop()
         event.prevent_default()
-
-    def action_toggle_speech(self) -> None:
-        """Toggle speech on/off"""
-        try:
-            # Find the AskMode parent and toggle its speech indicator
-            ask_mode = self.ancestors_with_self
-            for ancestor in ask_mode:
-                if isinstance(ancestor, AskMode):
-                    indicator = ancestor.query_one("#speech-indicator", SpeechIndicator)
-                    indicator.toggle()
-                    break
-        except Exception:
-            pass
 
     def _check_autocomplete(self) -> None:
         """Check if current input should show autocomplete for colors and/or emojis.
@@ -401,55 +381,6 @@ class ExampleHint(Static):
         return f"[dim]{text}[/]"
 
 
-class SpeechIndicator(Static):
-    """Shows whether speech is on/off. Tab to toggle."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.speech_on = False
-        self._state_before_toggle = False  # Track state before rapid toggles
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self.speech_on:
-            return f"[bold green]{ICON_VOLUME_ON}  {caps('Tab: talking ON')}[/]"
-        else:
-            return f"[dim]{ICON_VOLUME_OFF}  {caps('Tab: talking off')}[/]"
-
-    def _speak_if_changed(self) -> None:
-        """Speak current state only if it differs from state before toggle sequence"""
-        import threading
-
-        def do_speak():
-            from ..tts import speak, stop, init
-            stop()  # Cancel any previous
-            if self.speech_on != self._state_before_toggle:
-                if self.speech_on:
-                    init()
-                speak("talking on" if self.speech_on else "talking off")
-            # Reset for next toggle sequence
-            self._state_before_toggle = self.speech_on
-
-        # Run in background thread to avoid blocking UI
-        threading.Thread(target=do_speak, daemon=True).start()
-
-    def toggle(self) -> bool:
-        # On first toggle in a sequence, remember the starting state
-        # (if timer fires, it resets _state_before_toggle to current)
-        if self.speech_on == self._state_before_toggle:
-            self._state_before_toggle = self.speech_on
-
-        self.speech_on = not self.speech_on
-
-        # Update UI immediately. Call refresh before anything else
-        self.refresh()
-
-        # Debounce: only speak after delay if state actually changed
-        self.set_timer(TOGGLE_DEBOUNCE, self._speak_if_changed)
-
-        return self.speech_on
-
-
 class AskMode(Vertical):
     """
     Ask Mode: IPython-style REPL interface for kids.
@@ -529,21 +460,16 @@ class AskMode(Vertical):
         text-align: center;
         color: $text-muted;
     }
-
-    #speech-indicator {
-        dock: top;
-        height: 1;
-        text-align: right;
-        padding: 0 1;
-    }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.evaluator = SimpleEvaluator()
+        # Track last input/result for "speak again" (Enter on empty)
+        self._last_eval_text: str = ""
+        self._last_result: str = ""
 
     def compose(self) -> ComposeResult:
-        yield SpeechIndicator(id="speech-indicator")
         yield KeyboardOnlyScroll(id="history-scroll")
         with Vertical(id="bottom-area"):
             with Horizontal(id="input-row"):
@@ -599,6 +525,10 @@ class AskMode(Vertical):
                 if ask_input.value.strip():
                     ask_input.post_message(InlineInput.Submitted(ask_input.value))
                     ask_input.value = ""
+                else:
+                    # Enter on empty: speak last result ("say it again")
+                    if self._last_eval_text or self._last_result:
+                        self._speak(self._last_eval_text, self._last_result)
                 ask_input.autocomplete_matches = []
                 ask_input.autocomplete_index = 0
                 ask_input._double_tap.reset()
@@ -622,10 +552,6 @@ class AskMode(Vertical):
                     ask_input.autocomplete_index = 0
                     ask_input._double_tap.reset()
                     ask_input._check_autocomplete()
-                return
-
-            if action.action == 'tab' and action.is_down:
-                ask_input.action_toggle_speech()
                 return
 
             return
@@ -686,16 +612,29 @@ class AskMode(Vertical):
         input_text = event.value
         scroll = self.query_one("#history-scroll")
 
-        # Check for speak prefix (e.g., "say", "talk"): triggers TTS for this line only
+        # Check for speech triggers:
+        # 1. "!" anywhere in text (strip it)
+        # 2. "say" or "talk" prefix (strip it)
         force_speak = False
         eval_text = input_text
-        words = input_text.split(None, 1)
+
+        # Check for ! anywhere
+        if '!' in eval_text:
+            force_speak = True
+            eval_text = eval_text.replace('!', '')
+
+        # Check for speak prefix (e.g., "say", "talk")
+        words = eval_text.split(None, 1)
         if words and words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES:
             force_speak = True
             eval_text = words[1] if len(words) > 1 else ""
 
-        # Add the "Ask:" line to history (without speak prefix)
-        scroll.mount(HistoryLine(eval_text, line_type="ask"))
+        # Clean up whitespace after stripping
+        eval_text = eval_text.strip()
+
+        # Add the "Ask:" line to history (without speech markers)
+        if eval_text:
+            scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
         # Evaluate and show result
         result = self.evaluator.evaluate(eval_text)
@@ -747,13 +686,13 @@ class AskMode(Vertical):
         # Scroll to bottom
         scroll.scroll_end(animate=False)
 
-        # Handle speech (if TTS enabled or force_speak from say/talk prefix)
-        try:
-            indicator = self.query_one("#speech-indicator", SpeechIndicator)
-            if force_speak or indicator.speech_on:
-                self._speak(eval_text, result)
-        except Exception:
-            pass
+        # Store for "speak again" (Enter on empty)
+        self._last_eval_text = eval_text
+        self._last_result = result or ""
+
+        # Handle speech (if ! or say/talk was used)
+        if force_speak:
+            self._speak(eval_text, result)
 
     def _speak(self, input_text: str, result: str) -> None:
         """Speak the input and result using Piper TTS.

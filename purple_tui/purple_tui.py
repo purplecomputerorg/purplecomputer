@@ -43,7 +43,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_ERASER, ICON_CAPS_LOCK,
+    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK,
     VOLUME_LEVELS, VOLUME_DEFAULT,
 )
 from .keyboard import (
@@ -1229,7 +1229,6 @@ class PurpleApp(App):
             "#canvas-header",
             "#input-prompt",
             "#speech-indicator",
-            "#eraser-indicator",
             "#coming-soon",
             "#art-canvas",
         ]

@@ -19,7 +19,7 @@ from rich.style import Style
 from pathlib import Path
 import os
 
-from ..keyboard import CharacterAction, NavigationAction, ControlAction
+from ..keyboard import CharacterAction
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -76,7 +76,6 @@ except pygame.error:
     _MIXER_READY = False
 
 
-
 # 10x4 grid matching keyboard layout
 GRID_KEYS = [
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
@@ -115,8 +114,6 @@ class PlayGrid(Widget):
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._sounds: dict[str, pygame.mixer.Sound] = {}
         self._sounds_loaded = False
-        # Flash keys for visual feedback in clear mode
-        self._flash_keys: set[str] = set()
 
     def _caps_key(self, key: str) -> str:
         """Transform key label based on caps mode."""
@@ -180,30 +177,6 @@ class PlayGrid(Widget):
         self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
         self.refresh()
 
-    def prev_color(self, key: str) -> None:
-        """Undo color cycle for a key (go back one step)."""
-        current = self.color_state[key]
-        if current == 0:
-            # Was at first color, go back to no color
-            self.color_state[key] = -1
-        elif current == -1:
-            # Was at no color, wrap to last color
-            self.color_state[key] = len(COLORS) - 1
-        else:
-            self.color_state[key] = current - 1
-        self.refresh()
-
-    def clear_color(self, key: str) -> None:
-        """Reset a key to default color."""
-        self.color_state[key] = -1
-        self._flash_keys.add(key)
-        self.refresh()
-
-    def clear_flash(self, key: str) -> None:
-        """Clear the flash indicator for a specific key."""
-        self._flash_keys.discard(key)
-        self.refresh()
-
     def _get_default_bg(self) -> str:
         """Get default background based on current theme."""
         try:
@@ -262,17 +235,8 @@ class PlayGrid(Widget):
             key = GRID_KEYS[row_idx][col_idx]
             bg_color = self.get_color(key)
 
-            # Flash effect: contrasting color when key is flashed
-            is_flashed = key in self._flash_keys
-            if is_flashed:
-                try:
-                    is_dark = "dark" in self.app.theme
-                    bg_color = "#4a3866" if is_dark else "#c4b5fd"
-                except Exception:
-                    bg_color = "#4a3866"
-
             # Determine text color based on background brightness
-            light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT, "#c4b5fd"}  # Include light mode default and flash
+            light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT}
             text_color = "#1e1033" if bg_color in light_backgrounds else "white"
 
             cell_bg_style = Style(bgcolor=bg_color)
@@ -319,13 +283,6 @@ class PlayMode(Container, can_focus=True):
         height: 1fr;
     }
 
-    #eraser-indicator {
-        dock: top;
-        height: 1;
-        text-align: right;
-        padding: 0 1;
-    }
-
     #example-hint {
         dock: bottom;
         height: 1;
@@ -337,10 +294,8 @@ class PlayMode(Container, can_focus=True):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
-        self.eraser_mode = False
 
     def compose(self) -> ComposeResult:
-        yield EraserModeIndicator(id="eraser-indicator")
         self.grid = PlayGrid()
         yield self.grid
         yield PlayExampleHint(id="example-hint")
@@ -356,16 +311,8 @@ class PlayMode(Container, can_focus=True):
         """
         Handle keyboard actions from the main app's KeyboardStateMachine.
 
-        Play mode is simple: character keys cycle colors and play sounds,
-        Tab toggles eraser mode.
+        Play mode is simple: character keys cycle colors and play sounds.
         """
-        # Tab toggles sticky eraser mode
-        if isinstance(action, ControlAction):
-            if action.action == 'tab' and action.is_down:
-                indicator = self.query_one("#eraser-indicator", EraserModeIndicator)
-                self.eraser_mode = indicator.toggle()
-            return
-
         # Character keys cycle colors and play sounds
         if isinstance(action, CharacterAction):
             char = action.char
@@ -375,11 +322,6 @@ class PlayMode(Container, can_focus=True):
             lookup = char.upper() if char.isalpha() else char
 
             if lookup in ALL_KEYS:
-                if self.eraser_mode:
-                    self.grid.clear_color(lookup)
-                    # Clear flash after brief delay (capture key in lambda)
-                    self.set_timer(0.3, lambda k=lookup: self.grid.clear_flash(k))
-                else:
-                    self.grid.next_color(lookup)
+                self.grid.next_color(lookup)
                 self.grid.play_sound(lookup)
             return

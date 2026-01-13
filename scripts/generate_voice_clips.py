@@ -21,8 +21,6 @@ VOICE_SPEAKER = 166  # p6006
 PHRASES = [
     "talking on",
     "talking off",
-    "eraser on",
-    "eraser off",
 ]
 
 

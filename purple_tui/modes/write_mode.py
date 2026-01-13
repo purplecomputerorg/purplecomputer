@@ -74,8 +74,9 @@ ZXCV_ROW = list("zxcvbnm")         # Blue family
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
-# Readable text foreground color
-TEXT_FG = "#FFFFFF"
+# Readable text foreground colors (dark and light themes)
+TEXT_FG_DARK = "#FFFFFF"
+TEXT_FG_LIGHT = "#1e1033"
 
 # Cursor colors
 CURSOR_BG_NORMAL = "#6633AA"
@@ -148,6 +149,27 @@ def get_row_tint_color(char: str) -> str | None:
         return hsl_to_hex(220, 0.5, 0.35)    # Blue family
     else:
         return None  # No tint for unmapped keys
+
+
+def is_text_tint_bg(color: str) -> bool:
+    """Check if a color is a text tint (close to default bg) vs a paint color.
+
+    Text tints are subtle blends with the default background.
+    Paint colors are more saturated/vibrant.
+    """
+    r, g, b = hex_to_rgb(color)
+
+    # Check distance from dark default bg
+    dr, dg, db = hex_to_rgb(DEFAULT_BG_DARK)
+    dark_dist = abs(r - dr) + abs(g - dg) + abs(b - db)
+
+    # Check distance from light default bg
+    lr, lg, lb = hex_to_rgb(DEFAULT_BG_LIGHT)
+    light_dist = abs(r - lr) + abs(g - lg) + abs(b - lb)
+
+    # If close to either default, it's a text tint
+    # Threshold of ~100 covers the 15% tint strength
+    return dark_dist < 100 or light_dist < 100
 
 
 # =============================================================================
@@ -224,6 +246,10 @@ class ArtCanvas(Widget, can_focus=True):
             return "dark" in self.app.theme
         except Exception:
             return True
+
+    def _get_text_fg(self) -> str:
+        """Get text foreground color based on current theme."""
+        return TEXT_FG_DARK if self._is_dark_theme() else TEXT_FG_LIGHT
 
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
@@ -317,6 +343,11 @@ class ArtCanvas(Widget, can_focus=True):
                     # Paint mode: center always shows underlying (the "hole")
                     if cell:
                         char, fg_color, bg_color = cell
+                        # Apply theme to text cells
+                        if char != BRUSH_CHAR:
+                            fg_color = self._get_text_fg()
+                            if is_text_tint_bg(bg_color):
+                                bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         segments.append(Segment(" ", Style(bgcolor=default_bg)))
@@ -333,6 +364,9 @@ class ArtCanvas(Widget, can_focus=True):
 
                     if cell:
                         char, fg_color, bg_color = cell
+                        # Apply theme to text cell backgrounds
+                        if char != BRUSH_CHAR and is_text_tint_bg(bg_color):
+                            bg_color = default_bg
                         # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
                             # Text cell: keep the character, tint it with cursor color
@@ -350,12 +384,29 @@ class ArtCanvas(Widget, can_focus=True):
                     # Blink off: show underlying cell
                     if cell:
                         char, fg_color, bg_color = cell
+                        # Apply theme to text cells
+                        if char != BRUSH_CHAR:
+                            fg_color = self._get_text_fg()
+                            if is_text_tint_bg(bg_color):
+                                bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         segments.append(Segment(" ", Style(bgcolor=default_bg)))
             elif cell:
                 char, fg_color, bg_color = cell
-                char_style = Style(color=fg_color, bgcolor=bg_color)
+                # Paint cells (BRUSH_CHAR): keep stored colors
+                # Text cells: adapt to theme
+                if char == BRUSH_CHAR:
+                    char_style = Style(color=fg_color, bgcolor=bg_color)
+                else:
+                    # Text cell: use theme-appropriate fg
+                    # If bg is a text tint, use theme's default_bg
+                    # If bg is a paint color (text typed over paint), keep it
+                    text_fg = self._get_text_fg()
+                    if is_text_tint_bg(bg_color):
+                        char_style = Style(color=text_fg, bgcolor=default_bg)
+                    else:
+                        char_style = Style(color=text_fg, bgcolor=bg_color)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell
@@ -462,7 +513,7 @@ class ArtCanvas(Widget, can_focus=True):
             new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
 
         # Text always uses readable foreground
-        self._set_cell(pos, char, TEXT_FG, new_bg)
+        self._set_cell(pos, char, self._get_text_fg(), new_bg)
 
         # Move cursor right (with wrapping to next line)
         if not self._move_cursor_right():
@@ -491,7 +542,7 @@ class ArtCanvas(Widget, can_focus=True):
             faded_bg = lerp_color(bg, default_bg, FADE_FACTOR)
             # Clear the glyph but keep faded background
             if faded_bg != default_bg:
-                self._set_cell(pos, " ", TEXT_FG, faded_bg)
+                self._set_cell(pos, " ", self._get_text_fg(), faded_bg)
             else:
                 # Fully faded, remove cell entirely
                 del self._grid[pos]
@@ -548,7 +599,7 @@ class ArtCanvas(Widget, can_focus=True):
                             # Type a space
                             pos = (self._cursor_x, self._cursor_y)
                             existing_bg = self._get_cell_bg(pos)
-                            self._set_cell(pos, " ", TEXT_FG, existing_bg)
+                            self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
                             if not self._move_cursor_right():
                                 self._carriage_return()
                             self._last_space_time = current_time

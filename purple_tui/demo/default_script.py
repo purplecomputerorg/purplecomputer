@@ -30,11 +30,11 @@ from .script import (
 
 DEMO_SCRIPT = [
     # -------------------------------------------------------------------------
-    # SECTION 1: Ask Mode (F1) - Math, Emoji, Speech
+    # SECTION 1: Explore Mode (F1) - Math, Emoji, Speech
     # -------------------------------------------------------------------------
-    Comment("=== ASK MODE: Math and Emoji REPL ==="),
+    Comment("=== EXPLORE MODE: Math and Emoji REPL ==="),
 
-    SwitchMode("ask"),
+    SwitchMode("explore"),
     Pause(0.5),
 
     # Start with a friendly greeting (speech!)
@@ -143,11 +143,11 @@ DEMO_SCRIPT = [
     section_pause(1.0),
 
     # -------------------------------------------------------------------------
-    # SECTION 3: Write Mode (F3) - Text and Drawing
+    # SECTION 3: Doodle Mode (F3) - Text and Drawing
     # -------------------------------------------------------------------------
-    Comment("=== WRITE MODE: Text Canvas with Paint ==="),
+    Comment("=== DOODLE MODE: Drawing Canvas with Paint ==="),
 
-    SwitchMode("write"),
+    SwitchMode("doodle"),
     Pause(0.8),
 
     # Type some text
@@ -207,11 +207,11 @@ DEMO_SCRIPT = [
     section_pause(1.5),
 
     # -------------------------------------------------------------------------
-    # FINALE: Back to Ask mode with a closing message
+    # FINALE: Back to Explore mode with a closing message
     # -------------------------------------------------------------------------
     Comment("=== FINALE ==="),
 
-    SwitchMode("ask"),
+    SwitchMode("explore"),
     Pause(0.5),
 
     # Clear and show final message
@@ -229,8 +229,8 @@ DEMO_SCRIPT = [
 DEMO_SCRIPT_SHORT = [
     Comment("=== QUICK DEMO ==="),
 
-    # Ask mode highlights
-    SwitchMode("ask"),
+    # Explore mode highlights
+    SwitchMode("explore"),
     TypeText("Hello!"),
     PressKey("enter", pause_after=0.8),
     TypeText("2 + 3"),
@@ -245,13 +245,13 @@ DEMO_SCRIPT_SHORT = [
         tempo_bpm=200,
     ),
 
-    # Write mode
-    SwitchMode("write"),
+    # Doodle mode
+    SwitchMode("doodle"),
     TypeText("Purple!", delay_per_char=0.1),
     DrawPath(directions=['right', 'right', 'down', 'down'], color_key='r'),
 
     # End
-    SwitchMode("ask"),
+    SwitchMode("explore"),
     TypeText("Bye!"),
     PressKey("enter", pause_after=1.0),
 ]

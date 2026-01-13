@@ -1,8 +1,8 @@
 """
-Ask Mode: Math and Emoji REPL for Kids
+Explore Mode: Math and Emoji REPL for Kids
 
 IPython-style interface:
-- Ask: user types input
+- Explore: user types input
 - Answer: shows result
 
 Features:
@@ -52,18 +52,18 @@ class KeyboardOnlyScroll(ScrollableContainer):
 
 
 class HistoryLine(Static):
-    """A line in the REPL history (either Ask or Answer)"""
+    """A line in the REPL history (either Explore or Answer)"""
 
     # Arrow colors for dark and light themes
     ARROW_DARK = "#a888d0"
     ARROW_LIGHT = "#7a5a9e"
 
-    def __init__(self, text: str, line_type: str = "ask", **kwargs):
+    def __init__(self, text: str, line_type: str = "explore", **kwargs):
         super().__init__(**kwargs)
         self.text = text
-        self.line_type = line_type  # "ask" or "answer"
-        if line_type == "ask":
-            self.add_class("ask")
+        self.line_type = line_type  # "explore" or "answer"
+        if line_type == "explore":
+            self.add_class("explore")
 
     def _get_arrow_color(self) -> str:
         """Get arrow color based on current theme."""
@@ -75,8 +75,8 @@ class HistoryLine(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self.line_type == "ask":
-            return f"[bold #c4a0e8]{caps('Ask:')}[/] {caps(self.text)}"
+        if self.line_type == "explore":
+            return f"[bold #c4a0e8]{caps('Explore:')}[/] {caps(self.text)}"
         else:
             # Add arrow to each line for multi-line results
             arrow_color = self._get_arrow_color()
@@ -262,7 +262,7 @@ class InlineInput(Input):
         """Suppress terminal key events. All input comes via evdev/handle_keyboard_action()."""
         # Purple Computer uses evdev for keyboard input, bypassing the terminal.
         # This handler suppresses any terminal key events to avoid duplicate processing.
-        # See handle_keyboard_action() in AskMode for the actual input handling.
+        # See handle_keyboard_action() in ExploreMode for the actual input handling.
         event.stop()
         event.prevent_default()
 
@@ -381,13 +381,13 @@ class ExampleHint(Static):
         return f"[dim]{text}[/]"
 
 
-class AskMode(Vertical):
+class ExploreMode(Vertical):
     """
-    Ask Mode: IPython-style REPL interface for kids.
+    Explore Mode: IPython-style REPL interface for kids.
     """
 
     DEFAULT_CSS = """
-    AskMode {
+    ExploreMode {
         width: 100%;
         height: 100%;
         background: $surface;
@@ -410,7 +410,7 @@ class AskMode(Vertical):
         background: $surface;
     }
 
-    HistoryLine.ask {
+    HistoryLine.explore {
         margin-top: 1;
     }
 
@@ -434,7 +434,7 @@ class AskMode(Vertical):
         color: $primary;
     }
 
-    #ask-input {
+    #explore-input {
         width: 1fr;
         height: 1;
         border: none;
@@ -443,7 +443,7 @@ class AskMode(Vertical):
         margin: 0 0 0 1;
     }
 
-    #ask-input:focus {
+    #explore-input:focus {
         border: none;
     }
 
@@ -474,13 +474,13 @@ class AskMode(Vertical):
         with Vertical(id="bottom-area"):
             with Horizontal(id="input-row"):
                 yield InputPrompt(id="input-prompt")
-                yield InlineInput(id="ask-input")
+                yield InlineInput(id="explore-input")
             yield AutocompleteHint(id="autocomplete-hint")
             yield ExampleHint(id="example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
-        self.query_one("#ask-input").focus()
+        self.query_one("#explore-input").focus()
 
     async def handle_keyboard_action(self, action) -> None:
         """
@@ -489,14 +489,14 @@ class AskMode(Vertical):
         This mode uses Textual's Input widget which needs special treatment.
         We handle some actions directly and forward others to the input.
         """
-        ask_input = self.query_one("#ask-input", InlineInput)
+        explore_input = self.query_one("#explore-input", InlineInput)
 
         # Handle navigation (up/down for scrolling history, left/right ignored)
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
-                ask_input.action_scroll_up()
+                explore_input.action_scroll_up()
             elif action.direction == 'down':
-                ask_input.action_scroll_down()
+                explore_input.action_scroll_down()
             # Left/right arrows are ignored (no cursor movement for kids)
             return
 
@@ -504,54 +504,54 @@ class AskMode(Vertical):
         if isinstance(action, ControlAction):
             if action.action == 'space' and action.is_down:
                 # Space: accept autocomplete if there's a suggestion
-                if ask_input.autocomplete_matches:
-                    selected_word = ask_input.autocomplete_matches[ask_input.autocomplete_index][0]
-                    words = ask_input.value.split()
+                if explore_input.autocomplete_matches:
+                    selected_word = explore_input.autocomplete_matches[explore_input.autocomplete_index][0]
+                    words = explore_input.value.split()
                     if words:
                         words[-1] = selected_word
-                        ask_input.value = " ".join(words) + " "
-                        ask_input.cursor_position = len(ask_input.value)
-                    ask_input.autocomplete_matches = []
-                    ask_input.autocomplete_index = 0
-                    ask_input._double_tap.reset()
+                        explore_input.value = " ".join(words) + " "
+                        explore_input.cursor_position = len(explore_input.value)
+                    explore_input.autocomplete_matches = []
+                    explore_input.autocomplete_index = 0
+                    explore_input._double_tap.reset()
                 else:
                     # Type a space (always at end)
-                    ask_input.value += " "
-                    ask_input.cursor_position = len(ask_input.value)
-                    ask_input._check_autocomplete()
+                    explore_input.value += " "
+                    explore_input.cursor_position = len(explore_input.value)
+                    explore_input._check_autocomplete()
                 return
 
             if action.action == 'enter' and action.is_down:
-                if ask_input.value.strip():
-                    ask_input.post_message(InlineInput.Submitted(ask_input.value))
-                    ask_input.value = ""
+                if explore_input.value.strip():
+                    explore_input.post_message(InlineInput.Submitted(explore_input.value))
+                    explore_input.value = ""
                 else:
                     # Enter on empty: speak last result ("say it again")
                     if self._last_eval_text or self._last_result:
                         self._speak(self._last_eval_text, self._last_result)
-                ask_input.autocomplete_matches = []
-                ask_input.autocomplete_index = 0
-                ask_input._double_tap.reset()
+                explore_input.autocomplete_matches = []
+                explore_input.autocomplete_index = 0
+                explore_input._double_tap.reset()
                 return
 
             if action.action == 'backspace' and action.is_down:
                 # Allow key repeats: held backspace erases like an eraser
-                if ask_input.value:
+                if explore_input.value:
                     # Always delete from end (simpler for kids, no cursor confusion)
-                    ask_input.value = ask_input.value[:-1]
-                    ask_input.cursor_position = len(ask_input.value)
-                    ask_input._check_autocomplete()
+                    explore_input.value = explore_input.value[:-1]
+                    explore_input.cursor_position = len(explore_input.value)
+                    explore_input._check_autocomplete()
                 return
 
             if action.action == 'escape' and action.is_down and not action.is_repeat:
                 # ESC tap clears the prompt (start over button)
-                if ask_input.value:
-                    ask_input.value = ""
-                    ask_input.cursor_position = 0
-                    ask_input.autocomplete_matches = []
-                    ask_input.autocomplete_index = 0
-                    ask_input._double_tap.reset()
-                    ask_input._check_autocomplete()
+                if explore_input.value:
+                    explore_input.value = ""
+                    explore_input.cursor_position = 0
+                    explore_input.autocomplete_matches = []
+                    explore_input.autocomplete_index = 0
+                    explore_input._double_tap.reset()
+                    explore_input._check_autocomplete()
                 return
 
             return
@@ -566,9 +566,9 @@ class AskMode(Vertical):
             # Double-tap is handled by keyboard.py (sends backspace + shifted char)
 
             # Math operators: auto-space for readability and substitute display chars
-            if char in ask_input.MATH_OPERATORS:
-                display_char = ask_input.MATH_DISPLAY.get(char, char)
-                value = ask_input.value
+            if char in explore_input.MATH_OPERATORS:
+                display_char = explore_input.MATH_DISPLAY.get(char, char)
+                value = explore_input.value
 
                 # Add spaces around operator if there's a digit before (not for negative numbers)
                 # But don't double-space if user already typed a space
@@ -581,23 +581,23 @@ class AskMode(Vertical):
                 else:
                     insert = display_char
 
-                ask_input.value = value + insert
-                ask_input.cursor_position = len(ask_input.value)
-                ask_input._check_autocomplete()
+                explore_input.value = value + insert
+                explore_input.cursor_position = len(explore_input.value)
+                explore_input._check_autocomplete()
                 return
 
             # Normal character (always append at end)
-            ask_input.value += char
-            ask_input.cursor_position = len(ask_input.value)
-            ask_input._check_autocomplete()
+            explore_input.value += char
+            explore_input.cursor_position = len(explore_input.value)
+            explore_input._check_autocomplete()
             return
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Update autocomplete hint display"""
         try:
-            ask_input = self.query_one("#ask-input", InlineInput)
+            explore_input = self.query_one("#explore-input", InlineInput)
             hint = self.query_one("#autocomplete-hint", AutocompleteHint)
-            hint.update(ask_input.autocomplete_hint)
+            hint.update(explore_input.autocomplete_hint)
         except Exception:
             pass
 
@@ -628,7 +628,7 @@ class AskMode(Vertical):
 
         # Add the "Ask:" line to history (without speech markers)
         if eval_text:
-            scroll.mount(HistoryLine(eval_text, line_type="ask"))
+            scroll.mount(HistoryLine(eval_text, line_type="explore"))
 
         # Evaluate and show result
         result = self.evaluator.evaluate(eval_text)

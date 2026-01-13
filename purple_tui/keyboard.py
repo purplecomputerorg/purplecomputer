@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL
+from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE
 
 
 # ============================================================================
@@ -543,7 +543,7 @@ class NavigationAction(KeyAction):
 @dataclass
 class ModeAction(KeyAction):
     """Mode switch requested."""
-    mode: str  # 'ask' (F1), 'play' (F2), 'write' (F3), 'parent' (long Escape)
+    mode: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'parent' (long Escape)
 
 
 @dataclass
@@ -715,13 +715,13 @@ class KeyboardStateMachine:
         # Handle F-keys for mode switching and volume (no repeats)
         if not is_repeat:
             if keycode == KeyCode.KEY_F1:
-                actions.append(ModeAction(mode='ask'))
+                actions.append(ModeAction(mode=MODE_EXPLORE[0]))
                 return actions
             if keycode == KeyCode.KEY_F2:
-                actions.append(ModeAction(mode='play'))
+                actions.append(ModeAction(mode=MODE_PLAY[0]))
                 return actions
             if keycode == KeyCode.KEY_F3:
-                actions.append(ModeAction(mode='write'))
+                actions.append(ModeAction(mode=MODE_DOODLE[0]))
                 return actions
             if keycode == KeyCode.KEY_F9:
                 actions.append(ControlAction(action='theme_toggle', is_down=True))

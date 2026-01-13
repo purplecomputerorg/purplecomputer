@@ -11,6 +11,16 @@ Central location for constants used across the app.
 SUPPORT_EMAIL = "support@purplecomputer.org"
 
 # =============================================================================
+# MODE NAMES
+# =============================================================================
+# Central location for mode names to keep them DRY across the codebase.
+# Format: (id, label) where id is lowercase for internal use, label is display text.
+
+MODE_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
+MODE_PLAY = ("play", "Play")           # F2: Music and art grid
+MODE_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
+
+# =============================================================================
 # TERMINAL LAYOUT CONSTANTS
 # =============================================================================
 # These define the terminal grid required for the full UI.
@@ -70,9 +80,9 @@ ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
 ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
 ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
-# Mode titles with icons
+# Mode titles with icons (uses mode name constants)
 MODE_TITLES = {
-    "ask": (ICON_CHAT, "Ask"),
-    "play": (ICON_MUSIC, "Play"),
-    "write": (ICON_DOCUMENT, "Write"),
+    MODE_EXPLORE[0]: (ICON_CHAT, MODE_EXPLORE[1]),
+    MODE_PLAY[0]: (ICON_MUSIC, MODE_PLAY[1]),
+    MODE_DOODLE[0]: (ICON_PALETTE, MODE_DOODLE[1]),
 }

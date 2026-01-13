@@ -5,7 +5,7 @@ Each action is a dataclass that describes what should happen.
 
 Example script:
     DEMO_SCRIPT = [
-        SwitchMode("ask"),
+        SwitchMode("explore"),
         TypeText("Hello World!"),
         PressKey("enter"),
         Pause(1.0),
@@ -58,10 +58,10 @@ class SwitchMode(DemoAction):
     """Switch to a different mode.
 
     Args:
-        mode: 'ask' (F1), 'play' (F2), or 'write' (F3)
+        mode: 'explore' (F1), 'play' (F2), or 'doodle' (F3)
         pause_after: Pause after switching to let the mode render
     """
-    mode: Literal["ask", "play", "write"]
+    mode: Literal["explore", "play", "doodle"]
     pause_after: float = 0.5
 
 

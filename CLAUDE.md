@@ -37,8 +37,8 @@ Use the `SUPPORT_EMAIL` constant from `purple_tui/constants.py` for consistency.
 
 **No em-dashes or spaced dashes.** Instead of ` - ` or ` — `, use colons, commas, or periods.
 
-Bad: `Press F1 - opens Ask mode`
-Good: `Press F1: opens Ask mode` or `Press F1 to open Ask mode`
+Bad: `Press F1 - opens Explore mode`
+Good: `Press F1: opens Explore mode` or `Press F1 to open Explore mode`
 
 This applies to docs, comments, and UI strings.
 
@@ -158,10 +158,10 @@ class MyMode(Container):
             return
 ```
 
-**Important:** If your widget is inside a container (like `ArtCanvas` inside `WriteMode`), the container must delegate:
+**Important:** If your widget is inside a container (like `ArtCanvas` inside `DoodleMode`), the container must delegate:
 
 ```python
-class WriteMode(Container):
+class DoodleMode(Container):
     async def handle_keyboard_action(self, action) -> None:
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
@@ -175,7 +175,7 @@ Textual's focus system (Tab/Shift-Tab) doesn't work with evdev since we suppress
 
 This pattern is used in:
 - `PlayMode`: handles character keys for sound/color
-- `AskMode`: handles characters, navigation, autocomplete
-- `WriteMode`: delegates to `ArtCanvas` for painting
+- `ExploreMode`: handles characters, navigation, autocomplete
+- `DoodleMode`: delegates to `ArtCanvas` for painting
 - `ParentMenu`: tracks menu selection with up/down/enter
 - `SleepScreen`: any key wakes the screen

@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F3: Switch modes (Ask, Play, Write)
+- F1-F3: Switch modes (Explore, Play, Doodle)
 - F9: Toggle dark/light theme
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent mode
@@ -37,7 +37,7 @@ import subprocess
 import time
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_DOCUMENT,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE,
     ICON_MOON, ICON_SUN, MODE_TITLES,
     DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -46,6 +46,7 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
+    MODE_EXPLORE, MODE_PLAY, MODE_DOODLE,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -57,14 +58,14 @@ from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer
 from .demo.default_script import DEMO_SCRIPT
-from .modes.write_mode import ColorLegend, PaintModeChanged
+from .modes.doodle_mode import ColorLegend, PaintModeChanged
 
 
 class Mode(Enum):
     """The 3 core modes of Purple Computer"""
-    ASK = 1      # F1: Math and emoji REPL
+    EXPLORE = 1  # F1: Math and emoji REPL
     PLAY = 2     # F2: Music and art grid
-    WRITE = 3    # F3: Simple text editor
+    DOODLE = 3   # F3: Simple drawing canvas
 
 
 class View(Enum):
@@ -74,11 +75,11 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-# Mode display info: F-keys for mode switching
+# Mode display info: F-keys for mode switching (uses mode name constants)
 MODE_INFO = {
-    Mode.ASK: {"key": "F1", "label": "Ask", "emoji": ICON_CHAT},
-    Mode.PLAY: {"key": "F2", "label": "Play", "emoji": ICON_MUSIC},
-    Mode.WRITE: {"key": "F3", "label": "Write", "emoji": ICON_DOCUMENT},
+    Mode.EXPLORE: {"key": "F1", "label": MODE_EXPLORE[1], "emoji": ICON_CHAT},
+    Mode.PLAY: {"key": "F2", "label": MODE_PLAY[1], "emoji": ICON_MUSIC},
+    Mode.DOODLE: {"key": "F3", "label": MODE_DOODLE[1], "emoji": ICON_PALETTE},
 }
 
 
@@ -97,7 +98,7 @@ class ModeTitle(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mode = "ask"
+        self.mode = MODE_EXPLORE[0]
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -391,7 +392,7 @@ class PurpleApp(App):
     """
     Purple Computer: The calm computer for kids.
 
-    F1-F3: Switch between modes (Ask, Play, Write)
+    F1-F3: Switch between modes (Explore, Play, Doodle)
     F9: Toggle dark/light theme
     F10: Mute/unmute, F11: Volume down, F12: Volume up
     Escape (long hold): Parent mode
@@ -524,9 +525,9 @@ class PurpleApp(App):
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
-        Binding("f1", "switch_mode('ask')", "Ask", show=False, priority=True),
-        Binding("f2", "switch_mode('play')", "Play", show=False, priority=True),
-        Binding("f3", "switch_mode('write')", "Write", show=False, priority=True),
+        Binding("f1", f"switch_mode('{MODE_EXPLORE[0]}')", MODE_EXPLORE[1], show=False, priority=True),
+        Binding("f2", f"switch_mode('{MODE_PLAY[0]}')", MODE_PLAY[1], show=False, priority=True),
+        Binding("f3", f"switch_mode('{MODE_DOODLE[0]}')", MODE_DOODLE[1], show=False, priority=True),
         Binding("f9", "toggle_theme", "Theme", show=False, priority=True),
         Binding("f10", "volume_mute", "Mute", show=False, priority=True),
         Binding("f11", "volume_down", "Vol-", show=False, priority=True),
@@ -536,7 +537,7 @@ class PurpleApp(App):
 
     def __init__(self):
         super().__init__()
-        self.active_mode = Mode.ASK
+        self.active_mode = Mode.EXPLORE
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
@@ -671,7 +672,7 @@ class PurpleApp(App):
             self._evdev_reader = None
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Show/hide paint legend when paint mode changes in WriteMode."""
+        """Show/hide paint legend when paint mode changes in DoodleMode."""
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
             legend.set_visible(event.is_painting)
@@ -731,12 +732,12 @@ class PurpleApp(App):
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
         if isinstance(action, ModeAction):
-            if action.mode == 'ask':
-                self.action_switch_mode('ask')
-            elif action.mode == 'play':
-                self.action_switch_mode('play')
-            elif action.mode == 'write':
-                self.action_switch_mode('write')
+            if action.mode == MODE_EXPLORE[0]:
+                self.action_switch_mode(MODE_EXPLORE[0])
+            elif action.mode == MODE_PLAY[0]:
+                self.action_switch_mode(MODE_PLAY[0])
+            elif action.mode == MODE_DOODLE[0]:
+                self.action_switch_mode(MODE_DOODLE[0])
             elif action.mode == 'parent':
                 self.action_parent_mode()
             return
@@ -965,15 +966,15 @@ class PurpleApp(App):
 
     def _create_mode_widget(self, mode: Mode):
         """Create a new mode widget"""
-        if mode == Mode.ASK:
-            from .modes.ask_mode import AskMode
-            return AskMode(classes="mode-content")
+        if mode == Mode.EXPLORE:
+            from .modes.explore_mode import ExploreMode
+            return ExploreMode(classes="mode-content")
         elif mode == Mode.PLAY:
             from .modes.play_mode import PlayMode
             return PlayMode(classes="mode-content")
-        elif mode == Mode.WRITE:
-            from .modes.write_mode import WriteMode
-            return WriteMode(classes="mode-content")
+        elif mode == Mode.DOODLE:
+            from .modes.doodle_mode import DoodleMode
+            return DoodleMode(classes="mode-content")
         return None
 
     def _load_mode_content(self) -> None:
@@ -1004,14 +1005,14 @@ class PurpleApp(App):
     def _focus_mode(self, widget) -> None:
         """Focus the appropriate element in a mode widget"""
         # Each mode has a primary focusable element
-        if self.active_mode == Mode.ASK:
+        if self.active_mode == Mode.EXPLORE:
             try:
-                widget.query_one("#ask-input").focus()
+                widget.query_one("#explore-input").focus()
             except Exception:
                 pass
         elif self.active_mode == Mode.PLAY:
             widget.focus()
-        elif self.active_mode == Mode.WRITE:
+        elif self.active_mode == Mode.DOODLE:
             try:
                 widget.query_one("#art-canvas").focus()
             except Exception:
@@ -1034,36 +1035,36 @@ class PurpleApp(App):
     def action_switch_mode(self, mode_name: str) -> None:
         """Switch to a different mode (F1-F3)"""
         mode_map = {
-            "ask": Mode.ASK,
-            "play": Mode.PLAY,
-            "write": Mode.WRITE,
+            MODE_EXPLORE[0]: Mode.EXPLORE,
+            MODE_PLAY[0]: Mode.PLAY,
+            MODE_DOODLE[0]: Mode.DOODLE,
         }
-        new_mode = mode_map.get(mode_name, Mode.ASK)
+        new_mode = mode_map.get(mode_name, Mode.EXPLORE)
 
         if new_mode != self.active_mode:
-            # Reset viewport border when leaving write mode
-            if self.active_mode == Mode.WRITE:
+            # Reset viewport border when leaving doodle mode
+            if self.active_mode == Mode.DOODLE:
                 self._reset_viewport_border()
 
             # Auto-clear play mode when leaving (ephemeral mode)
             if self.active_mode == Mode.PLAY:
                 try:
                     content_area = self.query_one("#content-area")
-                    play_widget = content_area.query_one("#mode-play")
+                    play_widget = content_area.query_one(f"#mode-{MODE_PLAY[0]}")
                     if hasattr(play_widget, 'reset_state'):
                         play_widget.reset_state()
                 except NoMatches:
                     pass
 
-            # Check if entering write mode with existing content
-            if new_mode == Mode.WRITE:
+            # Check if entering doodle mode with existing content
+            if new_mode == Mode.DOODLE:
                 try:
                     content_area = self.query_one("#content-area")
-                    write_widget = content_area.query_one("#mode-write")
-                    if hasattr(write_widget, 'has_content') and write_widget.has_content():
+                    doodle_widget = content_area.query_one(f"#mode-{MODE_DOODLE[0]}")
+                    if hasattr(doodle_widget, 'has_content') and doodle_widget.has_content():
                         # Switch first (shows drawing), then prompt on top
                         self._complete_mode_switch(new_mode)
-                        self._show_write_prompt()
+                        self._show_doodle_prompt()
                         return
                 except NoMatches:
                     pass  # First time entering, no content yet
@@ -1076,10 +1077,10 @@ class PurpleApp(App):
         self._load_mode_content()
 
         # Update title
-        mode_names = {Mode.ASK: "ask", Mode.PLAY: "play", Mode.WRITE: "write"}
+        mode_names = {Mode.EXPLORE: MODE_EXPLORE[0], Mode.PLAY: MODE_PLAY[0], Mode.DOODLE: MODE_DOODLE[0]}
         try:
             title = self.query_one("#mode-title", ModeTitle)
-            title.set_mode(mode_names.get(new_mode, "ask"))
+            title.set_mode(mode_names.get(new_mode, MODE_EXPLORE[0]))
         except NoMatches:
             pass
 
@@ -1090,30 +1091,30 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Hide paint legend when not in write mode
-        if new_mode != Mode.WRITE:
+        # Hide paint legend when not in doodle mode
+        if new_mode != Mode.DOODLE:
             try:
                 legend = self.query_one("#paint-legend", ColorLegend)
                 legend.set_visible(False)
             except NoMatches:
                 pass
 
-    def _show_write_prompt(self) -> None:
-        """Show prompt when entering Write mode with existing content."""
-        from .modes.write_mode import WritePromptScreen
+    def _show_doodle_prompt(self) -> None:
+        """Show prompt when entering Doodle mode with existing content."""
+        from .modes.doodle_mode import DoodlePromptScreen
 
         def handle_prompt_result(should_clear: bool) -> None:
             # Clear canvas if user chose "New drawing"
             if should_clear:
                 try:
                     content_area = self.query_one("#content-area")
-                    write_widget = content_area.query_one("#mode-write")
-                    if hasattr(write_widget, 'clear_canvas'):
-                        write_widget.clear_canvas()
+                    doodle_widget = content_area.query_one(f"#mode-{MODE_DOODLE[0]}")
+                    if hasattr(doodle_widget, 'clear_canvas'):
+                        doodle_widget.clear_canvas()
                 except NoMatches:
                     pass
 
-        self.push_screen(WritePromptScreen(), handle_prompt_result)
+        self.push_screen(DoodlePromptScreen(), handle_prompt_result)
 
     def action_toggle_theme(self) -> None:
         """Toggle between dark and light mode (F9)"""
@@ -1321,9 +1322,9 @@ class PurpleApp(App):
             except NoMatches:
                 pass
 
-        # Refresh all HistoryLine widgets in ask mode
+        # Refresh all HistoryLine widgets in explore mode
         try:
-            from .modes.ask_mode import HistoryLine
+            from .modes.explore_mode import HistoryLine
             for widget in self.query(HistoryLine):
                 widget.refresh()
         except Exception:

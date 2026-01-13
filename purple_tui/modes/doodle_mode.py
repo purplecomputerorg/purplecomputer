@@ -1,8 +1,8 @@
 """
-Write Mode: Text Canvas with Playful Painting
+Doodle Mode: Drawing Canvas with Playful Painting
 
 A text-focused canvas with paint-by-key features:
-- Normal typing writes readable text (left-to-right, wrapping at edges)
+- Normal typing draws readable text (left-to-right, wrapping at edges)
 - Each key tints the background based on keyboard row
 - Arrow keys move the cursor (no drawing)
 - Hold Space + arrows to paint colored trails
@@ -830,26 +830,26 @@ class CanvasHeader(Static):
             mode_styled = f"[bold {self._last_color}]{caps('Paint')}[/]"
             hint = caps("type=stamp, SHIFT=select, Space+arrows=line")
         else:
-            mode_styled = f"[bold]{caps('Write')}[/]"
+            mode_styled = f"[bold]{caps('Doodle')}[/]"
             hint = caps("Tab = paint")
 
         return f"{mode_styled}  [dim]({hint})[/]"
 
 
 # =============================================================================
-# WRITE MODE CONTAINER
+# DOODLE MODE CONTAINER
 # =============================================================================
 
-class WriteMode(Container):
+class DoodleMode(Container):
     """
-    Write Mode: Text canvas with playful painting.
+    Doodle Mode: Drawing canvas with playful painting.
 
-    Normal typing writes readable text with subtle background tinting.
+    Normal typing draws readable text with subtle background tinting.
     Holding Space while pressing arrows paints colorful trails.
     """
 
     DEFAULT_CSS = """
-    WriteMode {
+    DoodleMode {
         width: 100%;
         height: 100%;
         padding: 0;
@@ -907,23 +907,23 @@ class WriteMode(Container):
 
 
 # =============================================================================
-# WRITE PROMPT SCREEN
+# DOODLE PROMPT SCREEN
 # =============================================================================
 
-class WritePromptScreen(ModalScreen):
+class DoodlePromptScreen(ModalScreen):
     """
-    Modal screen shown when entering Write mode with existing content.
+    Modal screen shown when entering Doodle mode with existing content.
 
     Presents two big buttons: "Keep drawing" and "New drawing".
     Kid-friendly: no text to read, just two clear choices.
     """
 
     CSS = """
-    WritePromptScreen {
+    DoodlePromptScreen {
         align: center middle;
     }
 
-    #write-prompt-dialog {
+    #doodle-prompt-dialog {
         width: 60;
         height: auto;
         padding: 2 4;
@@ -931,20 +931,20 @@ class WritePromptScreen(ModalScreen):
         border: heavy $primary;
     }
 
-    #write-prompt-title {
+    #doodle-prompt-title {
         width: 100%;
         text-align: center;
         text-style: bold;
         margin-bottom: 2;
     }
 
-    #write-prompt-buttons {
+    #doodle-prompt-buttons {
         width: 100%;
         height: auto;
         align: center middle;
     }
 
-    #write-prompt-buttons Button {
+    #doodle-prompt-buttons Button {
         width: 20;
         margin: 1 2;
     }
@@ -965,9 +965,9 @@ class WritePromptScreen(ModalScreen):
         self._selected_index = 0  # 0 = Keep, 1 = New
 
     def compose(self) -> ComposeResult:
-        with Container(id="write-prompt-dialog"):
-            yield Static("Your drawing is still here!", id="write-prompt-title")
-            with Horizontal(id="write-prompt-buttons"):
+        with Container(id="doodle-prompt-dialog"):
+            yield Static("Your drawing is still here!", id="doodle-prompt-title")
+            with Horizontal(id="doodle-prompt-buttons"):
                 yield Button("Keep drawing", id="btn-keep", variant="success")
                 yield Button("New drawing", id="btn-new", variant="primary")
 

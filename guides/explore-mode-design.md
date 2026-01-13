@@ -1,6 +1,6 @@
-# Ask Mode Design Philosophy
+# Explore Mode Design Philosophy
 
-Ask mode is designed around **maximal permissiveness**: always try to do something meaningful with whatever the child types. This document explains how the evaluator thinks about expressions.
+Explore mode is designed around **maximal permissiveness**: always try to do something meaningful with whatever the child types. This document explains how the evaluator thinks about expressions.
 
 ---
 

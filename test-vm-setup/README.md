@@ -144,6 +144,17 @@ sudo mount -t virtiofs share /mnt/share
 
 If virtiofs fails, make sure you selected "Virtualize" (Apple Virtualization), not "Emulate" (QEMU) when creating the VM.
 
+## Recording Demos
+
+To record a screencast of the demo in the VM:
+
+```bash
+make recording-setup   # One-time: installs FFmpeg
+make record-demo       # Records to recordings/demo.mp4
+```
+
+See `recording-setup/README.md` for details.
+
 ## Notes
 
 - This setup uses **Apple Virtualization** (native, fast)

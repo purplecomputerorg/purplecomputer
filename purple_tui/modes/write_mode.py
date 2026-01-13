@@ -70,6 +70,19 @@ QWERTY_ROW = list("qwertyuiop")    # Red family
 ASDF_ROW = list("asdfghjkl")       # Yellow family
 ZXCV_ROW = list("zxcvbnm")         # Blue family
 
+# Color legend: representative colors for each keyboard row (medium brightness)
+# Ordered top-to-bottom to mirror keyboard layout (QWERTY at top, ZXCV at bottom)
+ROW_LEGEND_COLORS = [
+    "#BF4040",  # Red (QWERTY row)
+    "#BFA040",  # Yellow/gold (ASDF row)
+    "#4060BF",  # Blue (ZXCV row)
+]
+
+# Legend positioning
+LEGEND_WIDTH = 2  # Characters wide (block + space)
+LEGEND_MARGIN_RIGHT = 1  # From right edge
+LEGEND_MARGIN_BOTTOM = 0  # From bottom edge
+
 # Default backgrounds (dark and light themes)
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
@@ -315,6 +328,25 @@ class ArtCanvas(Widget, can_focus=True):
         # In the 3x3 area but not the center
         return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
 
+    def _get_legend_row(self, x: int, y: int) -> int | None:
+        """Check if position is part of the color legend.
+
+        Returns the row index (0=red, 1=yellow, 2=blue) if this position
+        should show a legend block, or None if not part of the legend.
+        """
+        height = self.canvas_height
+        width = self.canvas_width
+
+        # Legend is 3 rows tall, positioned at bottom-right
+        legend_start_y = height - LEGEND_MARGIN_BOTTOM - 3
+        legend_x = width - LEGEND_MARGIN_RIGHT - LEGEND_WIDTH
+
+        # Check if in legend area
+        if x >= legend_x and x < legend_x + LEGEND_WIDTH:
+            if y >= legend_start_y and y < legend_start_y + 3:
+                return y - legend_start_y
+        return None
+
     def _caps_char(self, char: str) -> str:
         """Transform character based on caps mode."""
         if hasattr(self.app, 'caps_mode') and self.app.caps_mode and char.isalpha():
@@ -337,6 +369,23 @@ class ArtCanvas(Widget, can_focus=True):
 
             is_cursor_center = (x == self._cursor_x and y == self._cursor_y)
             is_brush_ring = self._paint_mode and self._is_in_brush_ring(x, y)
+
+            # Check if this is a legend position (only show in paint mode)
+            legend_row = self._get_legend_row(x, y) if self._paint_mode else None
+            if legend_row is not None:
+                # Calculate position within the 2-char wide legend
+                legend_x_start = width - LEGEND_MARGIN_RIGHT - LEGEND_WIDTH
+                legend_offset = x - legend_x_start
+                legend_color = ROW_LEGEND_COLORS[legend_row]
+
+                if legend_offset == 0:
+                    # First char: colored block
+                    legend_style = Style(color=legend_color, bgcolor=legend_color)
+                    segments.append(Segment("█", legend_style))
+                else:
+                    # Second char: space (padding)
+                    segments.append(Segment(" ", Style(bgcolor=default_bg)))
+                continue
 
             if is_cursor_center:
                 if self._paint_mode:

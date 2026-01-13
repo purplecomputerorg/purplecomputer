@@ -1,27 +1,32 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo test build-packs build-iso clean clean-iso clean-all
+.PHONY: help setup run run-sleep-demo run-demo test build-packs build-iso clean clean-iso clean-all recording-setup record-demo
 
 help:
 	@echo "Purple Computer - Development Commands"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make setup          - Install dependencies and build packs"
+	@echo "  make setup           - Install dependencies and build packs"
+	@echo "  make recording-setup - Install screen recording tools (VM only)"
 	@echo ""
 	@echo "Running:"
-	@echo "  make run            - Run Purple Computer locally"
-	@echo "  make run-sleep-demo - Test sleep/power states (accelerated timing)"
-	@echo "  make test           - Run tests"
+	@echo "  make run             - Run Purple Computer locally"
+	@echo "  make run-demo        - Run with demo auto-start"
+	@echo "  make run-sleep-demo  - Test sleep/power states (accelerated timing)"
+	@echo "  make test            - Run tests"
+	@echo ""
+	@echo "Recording:"
+	@echo "  make record-demo     - Record demo to recordings/demo.mp4 (VM only)"
 	@echo ""
 	@echo "Building:"
-	@echo "  make build-packs    - Build content packs"
-	@echo "  make build-iso      - Build bootable ISO for installation"
+	@echo "  make build-packs     - Build content packs"
+	@echo "  make build-iso       - Build bootable ISO for installation"
 	@echo ""
 	@echo "Cleaning:"
-	@echo "  make clean          - Remove test environment"
-	@echo "  make clean-iso      - Remove ISO build artifacts"
-	@echo "  make clean-all      - Remove everything"
+	@echo "  make clean           - Remove test environment"
+	@echo "  make clean-iso       - Remove ISO build artifacts"
+	@echo "  make clean-all       - Remove everything"
 	@echo ""
 	@echo "Controls:"
 	@echo "  F1-F3      - Switch modes (Ask, Play, Write)"
@@ -37,6 +42,10 @@ setup:
 run:
 	@echo "Running Purple Computer locally..."
 	PURPLE_TEST_BATTERY=1 ./scripts/run_local.sh
+
+run-demo:
+	@echo "Running Purple Computer with demo auto-start..."
+	PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
 
 run-sleep-demo:
 	@echo "Running sleep/power demo mode..."
@@ -85,5 +94,13 @@ clean-iso:
 
 clean-all: clean clean-iso
 	@echo "✓ All cleaned"
+
+recording-setup:
+	@echo "Setting up screen recording tools..."
+	./recording-setup/setup.sh
+
+record-demo:
+	@echo "Recording demo..."
+	./recording-setup/record-demo.sh
 
 .DEFAULT_GOAL := help

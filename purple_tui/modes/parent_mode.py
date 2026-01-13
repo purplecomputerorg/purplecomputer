@@ -53,6 +53,7 @@ def _get_menu_items() -> list:
         ("menu-keyboard", "Recalibrate Keyboard"),
     ]
     if _is_dev_environment():
+        items.append(("menu-demo", "Start Demo"))
         items.append(("menu-update", "Git Pull & Exit"))
     items.append(("menu-exit", "Exit"))
     return items
@@ -203,6 +204,8 @@ class ParentMenu(ModalScreen):
             self._open_shell()
         elif item_id == "menu-keyboard":
             self._recalibrate_keyboard()
+        elif item_id == "menu-demo":
+            self._start_demo()
         elif item_id == "menu-update":
             self._update_and_restart()
         elif item_id == "menu-exit":
@@ -301,6 +304,12 @@ class ParentMenu(ModalScreen):
 
         # Force redraw after returning from suspend
         self.app.refresh(repaint=True)
+
+    def _start_demo(self) -> None:
+        """Start the demo playback (dev mode only)."""
+        self.dismiss()
+        # Tell the app to start demo after modal is closed
+        self.app.call_later(self.app.start_demo)
 
     def _update_and_restart(self) -> None:
         """Git pull and restart the app (dev mode only)."""

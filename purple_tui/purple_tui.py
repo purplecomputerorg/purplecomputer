@@ -54,6 +54,8 @@ from .keyboard import (
 )
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
+from .demo import DemoPlayer
+from .demo.default_script import DEMO_SCRIPT
 
 
 class Mode(Enum):
@@ -527,6 +529,7 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100, F10 mute, F11 down, F12 up
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
+        self._volume_notification = None  # Track current volume toast for dismissal
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -548,6 +551,10 @@ class PurpleApp(App):
         self._keyboard_state_machine = KeyboardStateMachine()
         self._evdev_reader: EvdevReader | None = None
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
+
+        # Demo playback (dev mode only)
+        self._demo_player: DemoPlayer | None = None
+        self._demo_task = None
 
         # Register our purple themes
         self.register_theme(
@@ -629,6 +636,11 @@ class PurpleApp(App):
         # Show breaking update prompt if available
         if self._pending_update:
             self._show_update_prompt()
+
+        # Auto-start demo if requested (for recording)
+        if os.environ.get("PURPLE_DEMO_AUTOSTART"):
+            # Small delay to let UI render first
+            self.set_timer(1.0, self.start_demo)
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
@@ -1052,7 +1064,7 @@ class PurpleApp(App):
                 current_idx = i
         if current_idx > 0:
             self.volume_level = VOLUME_LEVELS[current_idx - 1]
-            self._apply_volume()
+        self._apply_volume()  # Always show feedback, even at min
 
     def action_volume_up(self) -> None:
         """Increase volume (F12)"""
@@ -1064,7 +1076,7 @@ class PurpleApp(App):
                 break
         if current_idx < len(VOLUME_LEVELS) - 1:
             self.volume_level = VOLUME_LEVELS[current_idx + 1]
-            self._apply_volume()
+        self._apply_volume()  # Always show feedback, even at max
 
     def _apply_volume(self) -> None:
         """Apply volume level to TTS and update UI"""
@@ -1079,29 +1091,34 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+        # Dismiss any existing volume notification
+        if self._volume_notification is not None:
+            self._volume_notification.dismiss()
+            self._volume_notification = None
+
         # Show volume feedback toast
         if self.volume_level == 0:
             icon = ICON_VOLUME_OFF
-            label = "mute"
+            label = "Sound Off"
             bars = "░░░░░░░░"
         elif self.volume_level <= 25:
             icon = ICON_VOLUME_LOW
-            label = "quiet"
+            label = "Quiet Sound"
             bars = "██░░░░░░"
         elif self.volume_level <= 50:
             icon = ICON_VOLUME_MED
-            label = "medium"
+            label = "Low Sound"
             bars = "████░░░░"
         elif self.volume_level <= 75:
             icon = ICON_VOLUME_HIGH
-            label = "loud"
+            label = "Medium Sound"
             bars = "██████░░"
         else:
             icon = ICON_VOLUME_HIGH
-            label = "max"
+            label = "High Sound"
             bars = "████████"
 
-        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        self._volume_notification = self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
@@ -1141,6 +1158,45 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.push_screen(ParentMenu())
+
+    def start_demo(self) -> None:
+        """Start demo playback (dev mode only).
+
+        The demo player dispatches synthetic keyboard actions at human pace,
+        showcasing all modes and features. Called from ParentMenu.
+        """
+        import asyncio
+
+        # Cancel any running demo
+        self.cancel_demo()
+
+        # Create player that dispatches actions through our normal handler
+        self._demo_player = DemoPlayer(
+            dispatch_action=self._dispatch_keyboard_action,
+            speed_multiplier=1.0,  # Normal human pace
+        )
+
+        # Run the demo as a background task
+        async def run_demo():
+            await self._demo_player.play(DEMO_SCRIPT)
+            self._demo_player = None
+            self._demo_task = None
+
+        self._demo_task = asyncio.create_task(run_demo())
+
+    def cancel_demo(self) -> None:
+        """Cancel any running demo playback."""
+        if self._demo_player:
+            self._demo_player.cancel()
+            self._demo_player = None
+        if self._demo_task:
+            self._demo_task.cancel()
+            self._demo_task = None
+
+    @property
+    def demo_running(self) -> bool:
+        """Check if a demo is currently playing."""
+        return self._demo_player is not None and self._demo_player.is_running
 
     def on_key(self, event: events.Key) -> None:
         """

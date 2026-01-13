@@ -70,8 +70,9 @@ QWERTY_ROW = list("qwertyuiop")    # Red family
 ASDF_ROW = list("asdfghjkl")       # Yellow family
 ZXCV_ROW = list("zxcvbnm")         # Blue family
 
-# Default background color (dark purple)
-DEFAULT_BG = "#2a1845"
+# Default backgrounds (dark and light themes)
+DEFAULT_BG_DARK = "#2a1845"
+DEFAULT_BG_LIGHT = "#e8daf0"
 
 # Readable text foreground color
 TEXT_FG = "#FFFFFF"
@@ -136,7 +137,7 @@ def get_key_color(char: str) -> str:
     return KEY_COLORS.get(char.lower(), "#AAAAAA")
 
 
-def get_row_tint_color(char: str) -> str:
+def get_row_tint_color(char: str) -> str | None:
     """Get a tint color based on which keyboard row a character is on."""
     lower = char.lower()
     if lower in QWERTY_ROW:
@@ -146,7 +147,7 @@ def get_row_tint_color(char: str) -> str:
     elif lower in ZXCV_ROW:
         return hsl_to_hex(220, 0.5, 0.35)    # Blue family
     else:
-        return DEFAULT_BG  # No tint for unmapped keys
+        return None  # No tint for unmapped keys
 
 
 # =============================================================================
@@ -208,6 +209,21 @@ class ArtCanvas(Widget, can_focus=True):
         # Backspace hold state
         self._backspace_start_time: float | None = None
         self._clear_animation_active = False
+
+    def _get_default_bg(self) -> str:
+        """Get default background based on current theme."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return DEFAULT_BG_DARK if is_dark else DEFAULT_BG_LIGHT
+        except Exception:
+            return DEFAULT_BG_DARK
+
+    def _is_dark_theme(self) -> bool:
+        """Check if using dark theme."""
+        try:
+            return "dark" in self.app.theme
+        except Exception:
+            return True
 
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
@@ -287,6 +303,7 @@ class ArtCanvas(Widget, can_focus=True):
             return Strip([])
 
         segments = []
+        default_bg = self._get_default_bg()
 
         for x in range(width):
             pos = (x, y)
@@ -302,7 +319,7 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
-                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+                        segments.append(Segment(" ", Style(bgcolor=default_bg)))
                 else:
                     # Text mode cursor
                     cursor_style = Style(color="#FFFFFF", bgcolor=CURSOR_BG_NORMAL, bold=True)
@@ -327,7 +344,7 @@ class ArtCanvas(Widget, can_focus=True):
                             segments.append(Segment(box_char, ring_style))
                     else:
                         # Empty cell: show box char on default bg
-                        ring_style = Style(color=self._last_key_color, bgcolor=DEFAULT_BG)
+                        ring_style = Style(color=self._last_key_color, bgcolor=default_bg)
                         segments.append(Segment(box_char, ring_style))
                 else:
                     # Blink off: show underlying cell
@@ -335,14 +352,14 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
-                        segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+                        segments.append(Segment(" ", Style(bgcolor=default_bg)))
             elif cell:
                 char, fg_color, bg_color = cell
                 char_style = Style(color=fg_color, bgcolor=bg_color)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell
-                segments.append(Segment(" ", Style(bgcolor=DEFAULT_BG)))
+                segments.append(Segment(" ", Style(bgcolor=default_bg)))
 
         return Strip(segments)
 
@@ -397,7 +414,7 @@ class ArtCanvas(Widget, can_focus=True):
         cell = self._grid.get(pos)
         if cell:
             return cell[2]
-        return DEFAULT_BG
+        return self._get_default_bg()
 
     def _set_cell(self, pos: tuple[int, int], char: str, fg: str, bg: str) -> None:
         """Set a cell's content."""
@@ -407,14 +424,15 @@ class ArtCanvas(Widget, can_focus=True):
         """Paint at current cursor position using current color."""
         pos = (self._cursor_x, self._cursor_y)
         existing_bg = self._get_cell_bg(pos)
+        default_bg = self._get_default_bg()
 
         # Blend paint color with existing background using spectral mixing
-        if existing_bg != DEFAULT_BG:
+        if existing_bg != default_bg:
             # Mix existing color with new paint color
             new_bg = mix_colors_paint([existing_bg, self._last_key_color])
         else:
             # Blend paint color with default background
-            new_bg = lerp_color(DEFAULT_BG, self._last_key_color, PAINT_STRENGTH)
+            new_bg = lerp_color(default_bg, self._last_key_color, PAINT_STRENGTH)
 
         # Paint uses solid block character
         self._set_cell(pos, BRUSH_CHAR, new_bg, new_bg)
@@ -429,13 +447,16 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Get tint color based on keyboard row
         tint = get_row_tint_color(char)
+        default_bg = self._get_default_bg()
 
         # Get existing background or start from default
         existing_bg = self._get_cell_bg(pos)
 
         # Blend tint with existing background (subtle tint)
-        if existing_bg == DEFAULT_BG:
-            new_bg = lerp_color(DEFAULT_BG, tint, BG_TINT_STRENGTH)
+        if tint is None:
+            new_bg = existing_bg
+        elif existing_bg == default_bg:
+            new_bg = lerp_color(default_bg, tint, BG_TINT_STRENGTH)
         else:
             # Blend new tint into existing
             new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
@@ -462,13 +483,14 @@ class ArtCanvas(Widget, can_focus=True):
 
         pos = (self._cursor_x, self._cursor_y)
         cell = self._grid.get(pos)
+        default_bg = self._get_default_bg()
 
         if cell:
             _, _, bg = cell
             # Fade background toward default
-            faded_bg = lerp_color(bg, DEFAULT_BG, FADE_FACTOR)
+            faded_bg = lerp_color(bg, default_bg, FADE_FACTOR)
             # Clear the glyph but keep faded background
-            if faded_bg != DEFAULT_BG:
+            if faded_bg != default_bg:
                 self._set_cell(pos, " ", TEXT_FG, faded_bg)
             else:
                 # Fully faded, remove cell entirely
@@ -618,11 +640,11 @@ class ArtCanvas(Widget, can_focus=True):
                         self._last_key_char = lower
                         self._last_key_color = color
                         self.post_message(PaintModeChanged(True, self._last_key_color))
-                        if char.islower():
-                            # Lowercase: stamp and advance
+                        if not action.shift_held:
+                            # No shift: stamp and advance (works with caps lock and double-tap)
                             self._paint_at_cursor()
                             self._move_cursor_right()
-                        # Uppercase (shift): just select brush, no stamp
+                        # Shift held: just select brush, no stamp
                         self.refresh()
             else:
                 # In text mode: type the character

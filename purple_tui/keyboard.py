@@ -521,7 +521,8 @@ class KeyAction:
 class CharacterAction(KeyAction):
     """A printable character was typed."""
     char: str
-    shifted: bool = False  # Was shift applied?
+    shifted: bool = False  # Was the character transformed (by shift, caps, or double-tap)?
+    shift_held: bool = False  # Was physical shift key held? (not caps lock)
     is_repeat: bool = False  # Is this a key repeat?
 
 
@@ -739,12 +740,18 @@ class KeyboardStateMachine:
                 if shifted_char:
                     # Delete the first character (will be replaced)
                     actions.append(ControlAction(action='backspace', is_down=True))
-                    actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True))
+                    # Double-tap acts like shift but shift_held=False (not physical shift)
+                    actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True, shift_held=False))
                     return actions
 
             # Apply shift/caps
             final_char = self._apply_shift(char)
-            actions.append(CharacterAction(char=final_char, shifted=(final_char != char), is_repeat=is_repeat))
+            actions.append(CharacterAction(
+                char=final_char,
+                shifted=(final_char != char),
+                shift_held=self._shift_held,
+                is_repeat=is_repeat,
+            ))
 
             # Consume sticky shift (only on fresh press)
             if not is_repeat and self._sticky_shift_active:

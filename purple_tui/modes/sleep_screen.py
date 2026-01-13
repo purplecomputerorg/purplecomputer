@@ -128,7 +128,7 @@ class SleepScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield SleepFace()
-        yield Static("press any key to wake", id="sleep-hint")
+        yield Static("Press any key to wake", id="sleep-hint")
         yield SleepStatus(id="sleep-status")
         yield Static("Lid closed!", id="lid-warning")
 
@@ -165,12 +165,12 @@ class SleepScreen(Screen):
             remaining = max(0, LID_SHUTDOWN_DELAY - int(elapsed))
 
             if remaining <= 0:
-                lid_warning.update("turning off...")
+                lid_warning.update("Turning off...")
                 lid_warning.add_class("visible")
                 self.call_later(self._do_shutdown)
                 return
             else:
-                lid_warning.update(f"lid closed ({remaining}s)")
+                lid_warning.update(f"Lid closed ({remaining}s)")
                 lid_warning.add_class("visible")
         else:
             lid_warning.remove_class("visible")
@@ -180,7 +180,7 @@ class SleepScreen(Screen):
         hint = self.query_one("#sleep-hint", Static)
 
         if idle >= IDLE_SHUTDOWN:
-            status.set_status("turning off...", "danger")
+            status.set_status("Turning off...", "danger")
             hint.update("")
             self.call_later(self._do_shutdown)
         elif idle >= IDLE_SHUTDOWN_WARN:
@@ -188,26 +188,26 @@ class SleepScreen(Screen):
             mins = remaining // 60
             secs = remaining % 60
             if mins > 0:
-                status.set_status(f"turning off in {mins} minutes", "danger")
+                status.set_status(f"Turning off in {mins} minutes", "danger")
             else:
-                status.set_status(f"turning off in {secs} seconds", "danger")
-            hint.update("press any key to stay on")
+                status.set_status(f"Turning off in {secs} seconds", "danger")
+            hint.update("Press any key to stay on")
         elif idle >= IDLE_SCREEN_OFF:
             if not self._screen_off:
                 pm.set_screen_brightness("off")
                 self._screen_off = True
             remaining = int(IDLE_SHUTDOWN_WARN - idle)
             mins = remaining // 60
-            status.set_status(f"screen off, turning off in {mins} minutes", "warning")
-            hint.update("press any key to wake")
+            status.set_status(f"Screen off, turning off in {mins} minutes", "warning")
+            hint.update("Press any key to wake")
         else:
             remaining = int(IDLE_SCREEN_OFF - idle)
             mins = remaining // 60
             if mins > 0:
-                status.set_status(f"screen dims in {mins} minutes", "")
+                status.set_status(f"Screen dims in {mins} minutes", "")
             else:
                 status.set_status("", "")
-            hint.update("press any key to wake")
+            hint.update("Press any key to wake")
 
     def _do_shutdown(self) -> None:
         """Execute shutdown"""
@@ -215,7 +215,7 @@ class SleepScreen(Screen):
         pm.set_screen_brightness("on")
         if not pm.shutdown():
             status = self.query_one("#sleep-status", SleepStatus)
-            status.set_status("please turn off", "danger")
+            status.set_status("Please turn off", "danger")
 
     def _wake_up(self) -> None:
         """Wake up and return to normal operation"""

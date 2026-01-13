@@ -563,13 +563,7 @@ class AskMode(Vertical):
                 return
 
             char = action.char
-
-            # Double-tap for shifted characters
-            if ask_input._double_tap.check(char):
-                if ask_input.value:
-                    ask_input.value = ask_input.value[:-1] + SHIFT_MAP[char]
-                    ask_input.cursor_position = len(ask_input.value)
-                return
+            # Double-tap is handled by keyboard.py (sends backspace + shifted char)
 
             # Math operators: auto-space for readability and substitute display chars
             if char in ask_input.MATH_OPERATORS:

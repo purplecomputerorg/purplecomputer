@@ -529,7 +529,6 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100, F10 mute, F11 down, F12 up
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
-        self._volume_notification = None  # Track current volume toast for dismissal
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -1016,22 +1015,68 @@ class PurpleApp(App):
             if self.active_mode == Mode.WRITE:
                 self._reset_viewport_border()
 
-            self.active_mode = new_mode
-            self._load_mode_content()
+            # Auto-clear play mode when leaving (ephemeral mode)
+            if self.active_mode == Mode.PLAY:
+                try:
+                    content_area = self.query_one("#content-area")
+                    play_widget = content_area.query_one("#mode-play")
+                    if hasattr(play_widget, 'reset_state'):
+                        play_widget.reset_state()
+                except NoMatches:
+                    pass
 
-            # Update title
-            try:
-                title = self.query_one("#mode-title", ModeTitle)
-                title.set_mode(mode_name)
-            except NoMatches:
-                pass
+            # Check if entering write mode with existing content
+            if new_mode == Mode.WRITE:
+                try:
+                    content_area = self.query_one("#content-area")
+                    write_widget = content_area.query_one("#mode-write")
+                    if hasattr(write_widget, 'has_content') and write_widget.has_content():
+                        # Show prompt and defer mode switch completion
+                        self._show_write_prompt(new_mode)
+                        return
+                except NoMatches:
+                    pass  # First time entering, no content yet
 
-            # Update mode indicator
-            try:
-                indicator = self.query_one("#mode-indicator", ModeIndicator)
-                indicator.update_mode(new_mode)
-            except NoMatches:
-                pass
+            self._complete_mode_switch(new_mode)
+
+    def _complete_mode_switch(self, new_mode: Mode) -> None:
+        """Complete the mode switch (updates UI, loads content)."""
+        self.active_mode = new_mode
+        self._load_mode_content()
+
+        # Update title
+        mode_names = {Mode.ASK: "ask", Mode.PLAY: "play", Mode.WRITE: "write"}
+        try:
+            title = self.query_one("#mode-title", ModeTitle)
+            title.set_mode(mode_names.get(new_mode, "ask"))
+        except NoMatches:
+            pass
+
+        # Update mode indicator
+        try:
+            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator.update_mode(new_mode)
+        except NoMatches:
+            pass
+
+    def _show_write_prompt(self, new_mode: Mode) -> None:
+        """Show prompt when entering Write mode with existing content."""
+        from .modes.write_mode import WritePromptScreen
+
+        def handle_prompt_result(should_clear: bool) -> None:
+            # Clear canvas if user chose "New drawing"
+            if should_clear:
+                try:
+                    content_area = self.query_one("#content-area")
+                    write_widget = content_area.query_one("#mode-write")
+                    if hasattr(write_widget, 'clear_canvas'):
+                        write_widget.clear_canvas()
+                except NoMatches:
+                    pass
+            # Complete the mode switch
+            self._complete_mode_switch(new_mode)
+
+        self.push_screen(WritePromptScreen(), handle_prompt_result)
 
     def action_toggle_theme(self) -> None:
         """Toggle between dark and light mode (F9)"""
@@ -1091,10 +1136,8 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Dismiss any existing volume notification
-        if self._volume_notification is not None:
-            self._volume_notification.dismiss()
-            self._volume_notification = None
+        # Clear any existing notifications before showing new volume toast
+        self.clear_notifications()
 
         # Show volume feedback toast
         if self.volume_level == 0:
@@ -1118,7 +1161,7 @@ class PurpleApp(App):
             label = "High Sound"
             bars = "████████"
 
-        self._volume_notification = self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""

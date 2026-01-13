@@ -172,6 +172,11 @@ class PlayGrid(Widget):
         self._sounds.clear()
         self._sounds_loaded = False
 
+    def reset_colors(self) -> None:
+        """Reset all key colors to default state."""
+        self.color_state = {k: -1 for k in ALL_KEYS}
+        self.refresh()
+
     def next_color(self, key: str) -> None:
         """Cycle color for a key."""
         self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
@@ -306,6 +311,11 @@ class PlayMode(Container, can_focus=True):
     def on_unmount(self) -> None:
         if self.grid:
             self.grid.cleanup_sounds()
+
+    def reset_state(self) -> None:
+        """Reset play mode state (colors). Called when leaving mode."""
+        if self.grid:
+            self.grid.reset_colors()
 
     async def handle_keyboard_action(self, action) -> None:
         """

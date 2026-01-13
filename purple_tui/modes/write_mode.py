@@ -16,12 +16,13 @@ which reads directly from evdev. This gives us true key release detection.
 import colorsys
 import time
 
-from textual.widgets import Static
-from textual.containers import Container
+from textual.widgets import Static, Button
+from textual.containers import Container, Horizontal
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.strip import Strip
 from textual.message import Message
+from textual.screen import ModalScreen
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
@@ -71,17 +72,13 @@ ASDF_ROW = list("asdfghjkl")       # Yellow family
 ZXCV_ROW = list("zxcvbnm")         # Blue family
 
 # Color legend: representative colors for each keyboard row (medium brightness)
-# Ordered top-to-bottom to mirror keyboard layout (QWERTY at top, ZXCV at bottom)
+# Ordered top-to-bottom to mirror keyboard layout (numbers at top, ZXCV at bottom)
 ROW_LEGEND_COLORS = [
+    "#808080",  # Gray (number row, grayscale)
     "#BF4040",  # Red (QWERTY row)
     "#BFA040",  # Yellow/gold (ASDF row)
     "#4060BF",  # Blue (ZXCV row)
 ]
-
-# Legend positioning
-LEGEND_WIDTH = 2  # Characters wide (block + space)
-LEGEND_MARGIN_RIGHT = 1  # From right edge
-LEGEND_MARGIN_BOTTOM = 0  # From bottom edge
 
 # Default backgrounds (dark and light themes)
 DEFAULT_BG_DARK = "#2a1845"
@@ -328,25 +325,6 @@ class ArtCanvas(Widget, can_focus=True):
         # In the 3x3 area but not the center
         return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
 
-    def _get_legend_row(self, x: int, y: int) -> int | None:
-        """Check if position is part of the color legend.
-
-        Returns the row index (0=red, 1=yellow, 2=blue) if this position
-        should show a legend block, or None if not part of the legend.
-        """
-        height = self.canvas_height
-        width = self.canvas_width
-
-        # Legend is 3 rows tall, positioned at bottom-right
-        legend_start_y = height - LEGEND_MARGIN_BOTTOM - 3
-        legend_x = width - LEGEND_MARGIN_RIGHT - LEGEND_WIDTH
-
-        # Check if in legend area
-        if x >= legend_x and x < legend_x + LEGEND_WIDTH:
-            if y >= legend_start_y and y < legend_start_y + 3:
-                return y - legend_start_y
-        return None
-
     def _caps_char(self, char: str) -> str:
         """Transform character based on caps mode."""
         if hasattr(self.app, 'caps_mode') and self.app.caps_mode and char.isalpha():
@@ -369,23 +347,6 @@ class ArtCanvas(Widget, can_focus=True):
 
             is_cursor_center = (x == self._cursor_x and y == self._cursor_y)
             is_brush_ring = self._paint_mode and self._is_in_brush_ring(x, y)
-
-            # Check if this is a legend position (only show in paint mode)
-            legend_row = self._get_legend_row(x, y) if self._paint_mode else None
-            if legend_row is not None:
-                # Calculate position within the 2-char wide legend
-                legend_x_start = width - LEGEND_MARGIN_RIGHT - LEGEND_WIDTH
-                legend_offset = x - legend_x_start
-                legend_color = ROW_LEGEND_COLORS[legend_row]
-
-                if legend_offset == 0:
-                    # First char: colored block
-                    legend_style = Style(color=legend_color, bgcolor=legend_color)
-                    segments.append(Segment("█", legend_style))
-                else:
-                    # Second char: space (padding)
-                    segments.append(Segment(" ", Style(bgcolor=default_bg)))
-                continue
 
             if is_cursor_center:
                 if self._paint_mode:
@@ -611,6 +572,10 @@ class ArtCanvas(Widget, can_focus=True):
         self._clear_animation_active = False
         self.refresh()
 
+    def has_content(self) -> bool:
+        """Check if the canvas has any content."""
+        return len(self._grid) > 0
+
     def _on_edge_hit(self) -> None:
         """Provide feedback when cursor hits an edge."""
         # Could add visual flash or sound here
@@ -757,6 +722,57 @@ class ArtCanvas(Widget, can_focus=True):
 
 
 # =============================================================================
+# COLOR LEGEND WIDGET
+# =============================================================================
+
+class ColorLegend(Widget):
+    """
+    Vertical color legend showing keyboard row colors.
+
+    Displays 4 colored bars representing the keyboard rows:
+    - Gray (number row, grayscale)
+    - Red (QWERTY row)
+    - Yellow (ASDF row)
+    - Blue (ZXCV row)
+
+    Only visible in paint mode.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._visible = False
+
+    def set_visible(self, visible: bool) -> None:
+        """Show or hide the legend."""
+        self._visible = visible
+        self.refresh()
+
+    def _get_default_bg(self) -> str:
+        """Get default background based on current theme."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return DEFAULT_BG_DARK if is_dark else DEFAULT_BG_LIGHT
+        except Exception:
+            return DEFAULT_BG_DARK
+
+    def render_line(self, y: int) -> Strip:
+        """Render a single line of the legend."""
+        default_bg = self._get_default_bg()
+        width = self.size.width
+
+        if not self._visible or y >= len(ROW_LEGEND_COLORS):
+            # Not visible or beyond legend rows: render empty
+            return Strip([Segment(" " * width, Style(bgcolor=default_bg))])
+
+        # Render colored bar (block + space padding)
+        color = ROW_LEGEND_COLORS[y]
+        segments = [Segment("█", Style(color=color, bgcolor=color))]
+        if width > 1:
+            segments.append(Segment(" " * (width - 1), Style(bgcolor=default_bg)))
+        return Strip(segments)
+
+
+# =============================================================================
 # HEADER WIDGET
 # =============================================================================
 
@@ -824,30 +840,177 @@ class WriteMode(Container):
         margin-bottom: 1;
     }
 
-    #art-canvas {
+    #canvas-area {
         width: 100%;
         height: 1fr;
+        layout: horizontal;
+    }
+
+    #art-canvas {
+        width: 1fr;
+        height: 100%;
+    }
+
+    #legend-container {
+        width: 3;
+        height: 100%;
+        align: right bottom;
+    }
+
+    #color-legend {
+        width: 2;
+        height: 4;
+        margin-right: 1;
     }
     """
 
     def compose(self) -> ComposeResult:
         yield CanvasHeader(id="canvas-header")
-        yield ArtCanvas(id="art-canvas")
+        with Container(id="canvas-area"):
+            yield ArtCanvas(id="art-canvas")
+            with Container(id="legend-container"):
+                yield ColorLegend(id="color-legend")
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas.focus()
-        # Initialize header
+        # Initialize header and legend
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(False, "#FFFFFF")
+        legend = self.query_one("#color-legend", ColorLegend)
+        legend.set_visible(False)
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Update header when paint mode changes."""
+        """Update header and legend when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
+        legend = self.query_one("#color-legend", ColorLegend)
+        legend.set_visible(event.is_painting)
+
+    def has_content(self) -> bool:
+        """Check if the canvas has any content."""
+        try:
+            canvas = self.query_one("#art-canvas", ArtCanvas)
+            return canvas.has_content()
+        except Exception:
+            return False
+
+    def clear_canvas(self) -> None:
+        """Clear the canvas (start fresh)."""
+        try:
+            canvas = self.query_one("#art-canvas", ArtCanvas)
+            canvas._clear_canvas()
+        except Exception:
+            pass
 
     async def handle_keyboard_action(self, action) -> None:
         """Delegate keyboard actions to the canvas."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
+
+
+# =============================================================================
+# WRITE PROMPT SCREEN
+# =============================================================================
+
+class WritePromptScreen(ModalScreen):
+    """
+    Modal screen shown when entering Write mode with existing content.
+
+    Presents two big buttons: "Keep drawing" and "New drawing".
+    Kid-friendly: no text to read, just two clear choices.
+    """
+
+    CSS = """
+    WritePromptScreen {
+        align: center middle;
+    }
+
+    #write-prompt-dialog {
+        width: 60;
+        height: auto;
+        padding: 2 4;
+        background: $surface;
+        border: heavy $primary;
+    }
+
+    #write-prompt-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 2;
+    }
+
+    #write-prompt-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+
+    #write-prompt-buttons Button {
+        width: 20;
+        margin: 1 2;
+    }
+
+    #btn-keep {
+        background: $success;
+    }
+
+    #btn-new {
+        background: $primary;
+    }
+    """
+
+    BINDINGS = [("escape", "dismiss(False)", "Keep")]
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._selected_index = 0  # 0 = Keep, 1 = New
+
+    def compose(self) -> ComposeResult:
+        with Container(id="write-prompt-dialog"):
+            yield Static("Your drawing is still here!", id="write-prompt-title")
+            with Horizontal(id="write-prompt-buttons"):
+                yield Button("Keep drawing", id="btn-keep", variant="success")
+                yield Button("New drawing", id="btn-new", variant="primary")
+
+    def on_mount(self) -> None:
+        """Focus the Keep button by default."""
+        self._update_button_focus()
+
+    def _update_button_focus(self) -> None:
+        """Update button visual focus based on selection."""
+        keep_btn = self.query_one("#btn-keep", Button)
+        new_btn = self.query_one("#btn-new", Button)
+
+        if self._selected_index == 0:
+            keep_btn.focus()
+        else:
+            new_btn.focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button clicks."""
+        if event.button.id == "btn-keep":
+            self.dismiss(False)  # False = don't clear
+        else:
+            self.dismiss(True)   # True = clear canvas
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Handle keyboard navigation from evdev."""
+        from ..keyboard import NavigationAction, ControlAction
+
+        if isinstance(action, NavigationAction):
+            if action.direction in ('left', 'right'):
+                # Toggle selection
+                self._selected_index = 1 - self._selected_index
+                self._update_button_focus()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                # Confirm current selection
+                self.dismiss(self._selected_index == 1)
+            elif action.action == 'escape':
+                # Escape = keep drawing
+                self.dismiss(False)

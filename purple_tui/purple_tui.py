@@ -383,6 +383,88 @@ class BatteryIndicator(Static):
         return icon
 
 
+class VolumeOverlay(Static):
+    """Temporary overlay showing volume level when changed.
+
+    Shows a large speaker icon and visual bars for kids to see clearly.
+    Auto-hides after a brief delay.
+    """
+
+    DEFAULT_CSS = """
+    VolumeOverlay {
+        width: 24;
+        height: 7;
+        background: $surface;
+        border: heavy $primary;
+        content-align: center middle;
+        text-align: center;
+        padding: 1;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._level = 100
+        self._hide_timer = None
+
+    def show_volume(self, level: int) -> None:
+        """Show the overlay with current volume level."""
+        self._level = level
+        self.refresh()
+
+        # Show the parent container (which handles positioning)
+        try:
+            center = self.app.query_one("#volume-overlay-center")
+            center.add_class("visible")
+        except Exception:
+            pass
+
+        # Cancel any existing timer
+        if self._hide_timer:
+            self._hide_timer.stop()
+
+        # Auto-hide after 1.5 seconds
+        self._hide_timer = self.set_timer(1.5, self._hide)
+
+    def _hide(self) -> None:
+        """Hide the overlay."""
+        try:
+            center = self.app.query_one("#volume-overlay-center")
+            center.remove_class("visible")
+        except Exception:
+            pass
+        self._hide_timer = None
+
+    def render(self) -> str:
+        """Render volume icon and bars."""
+        # Pick icon and label based on level
+        if self._level == 0:
+            icon = ICON_VOLUME_OFF
+            label = "mute"
+        elif self._level <= 25:
+            icon = ICON_VOLUME_LOW
+            label = "quiet"
+        elif self._level <= 50:
+            icon = ICON_VOLUME_MED
+            label = "medium"
+        elif self._level <= 75:
+            icon = ICON_VOLUME_HIGH
+            label = "loud"
+        else:
+            icon = ICON_VOLUME_HIGH
+            label = "max"
+
+        # Build visual bars: 4 bars for 25/50/75/100 (using wider blocks)
+        bars = ""
+        for threshold in [25, 50, 75, 100]:
+            if self._level >= threshold:
+                bars += "██"
+            else:
+                bars += "░░"
+
+        return f"{icon}  {bars}\n{label}"
+
+
 class PurpleApp(App):
     """
     Purple Computer: The calm computer for kids.
@@ -448,6 +530,7 @@ class PurpleApp(App):
         border: heavy $primary;
         background: $surface;
         padding: 1;
+        layer: base;
     }
 
     #mode-indicator {
@@ -503,6 +586,30 @@ class PurpleApp(App):
 
     #update-buttons Button {
         margin: 0 2;
+    }
+
+    /* Volume overlay: centered on top of viewport */
+    #volume-overlay-center {
+        display: none;
+        layer: overlay;
+        width: 100;
+        height: 28;
+        align: center middle;
+        offset: 0 -28;
+        margin-bottom: -28;
+    }
+
+    #volume-overlay-center.visible {
+        display: block;
+    }
+
+    #volume-overlay-middle {
+        width: auto;
+        height: auto;
+    }
+
+    #viewport-wrapper {
+        layers: base overlay;
     }
     """
 
@@ -593,6 +700,9 @@ class PurpleApp(App):
                     yield BatteryIndicator(id="battery-indicator")
                 with ViewportContainer(id="viewport"):
                     yield Container(id="content-area")
+                with Center(id="volume-overlay-center"):
+                    with Middle(id="volume-overlay-middle"):
+                        yield VolumeOverlay(id="volume-overlay")
             yield ModeIndicator(self.active_mode, id="mode-indicator")
 
     async def on_mount(self) -> None:
@@ -1071,10 +1181,18 @@ class PurpleApp(App):
         from . import tts
         tts.set_muted(self.volume_level == 0)
         # TODO: Set actual volume level when TTS supports it
-        # Update volume indicator
+
+        # Update volume indicator badge
         try:
             indicator = self.query_one("#mode-indicator", ModeIndicator)
             indicator.update_volume_indicator(self.volume_level)
+        except NoMatches:
+            pass
+
+        # Show prominent volume overlay
+        try:
+            overlay = self.query_one("#volume-overlay", VolumeOverlay)
+            overlay.show_volume(self.volume_level)
         except NoMatches:
             pass
 

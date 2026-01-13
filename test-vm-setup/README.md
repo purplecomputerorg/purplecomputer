@@ -144,6 +144,13 @@ sudo mount -t virtiofs share /mnt/share
 
 If virtiofs fails, make sure you selected "Virtualize" (Apple Virtualization), not "Emulate" (QEMU) when creating the VM.
 
+**Emoji showing as outlines (not color):**
+```bash
+# Run make setup to install fontconfig rule
+cd purplecomputer && make setup
+# Then restart Alacritty
+```
+
 ## Recording Demos
 
 To record a screencast of the demo in the VM:

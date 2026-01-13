@@ -220,13 +220,9 @@ elif [ "$OS" = "linux" ]; then
     FONTCONFIG_DIR="/etc/fonts/conf.d"
     EMOJI_CONF="$PROJECT_ROOT/config/fontconfig/99-emoji.conf"
     if [ -f "$EMOJI_CONF" ]; then
-        if [ ! -f "$FONTCONFIG_DIR/99-emoji.conf" ]; then
-            sudo cp "$EMOJI_CONF" "$FONTCONFIG_DIR/"
-            sudo fc-cache -f
-            echo_info "✓ Emoji fontconfig rule installed"
-        else
-            echo_info "✓ Emoji fontconfig rule already installed"
-        fi
+        sudo cp "$EMOJI_CONF" "$FONTCONFIG_DIR/"
+        sudo fc-cache -f
+        echo_info "✓ Emoji fontconfig rule installed"
     fi
 fi
 

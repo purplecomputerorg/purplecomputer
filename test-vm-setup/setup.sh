@@ -75,7 +75,7 @@ sudo apt install -y \
     libsdl2-image-2.0-0 \
     libsdl2-ttf-2.0-0
 
-# Install fonts
+# Install fonts (fontconfig rule installed by make setup)
 echo "[3.6/6] Installing fonts..."
 sudo apt install -y \
     fontconfig \

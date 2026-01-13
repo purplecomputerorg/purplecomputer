@@ -660,8 +660,8 @@ class PurpleApp(App):
 
         # Auto-start demo if requested (for recording)
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
-            # Small delay to let UI render first
-            self.set_timer(1.0, self.start_demo)
+            # Wait 2 seconds for FFmpeg to stabilize (trimmed from final video)
+            self.set_timer(2.0, self.start_demo)
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
@@ -1266,6 +1266,8 @@ class PurpleApp(App):
             self._demo_task = None
             # Exit app if this was an auto-started demo (for recording)
             if exit_after:
+                # Wait 2 seconds before exit (trimmed from final video)
+                await asyncio.sleep(2.0)
                 self.exit()
 
         self._demo_task = asyncio.create_task(run_demo())

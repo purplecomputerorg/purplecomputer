@@ -18,10 +18,11 @@ The recording will be saved to `recordings/demo.mp4`.
 
 ## How It Works
 
-1. **FFmpeg** captures the X11 display at 30fps
+1. **FFmpeg** captures the X11 display at 30fps (with system audio via PulseAudio)
 2. **Purple Computer** starts with `PURPLE_DEMO_AUTOSTART=1`
 3. The demo script (`purple_tui/demo/default_script.py`) plays automatically
 4. Recording stops when you exit Purple (Ctrl+C or demo finishes)
+5. The first and last 2 seconds are automatically trimmed (removes terminal visibility)
 
 ## Customizing the Demo
 
@@ -67,4 +68,4 @@ ffmpeg -i recordings/demo.mp4 -crf 23 -preset slow demo-compressed.mp4
 
 **Choppy recording**: Close other apps, or reduce framerate to 24fps in record-demo.sh.
 
-**No sound in recording**: FFmpeg x11grab doesn't capture audio. Record audio separately or add it in post.
+**No sound in recording**: Audio capture requires PulseAudio. Check that `pactl get-default-sink` returns a valid sink name. If running in a VM, ensure audio is properly configured.

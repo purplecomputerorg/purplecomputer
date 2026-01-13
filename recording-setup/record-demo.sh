@@ -53,28 +53,55 @@ echo ""
 # Remove old recording if exists
 rm -f "$OUTPUT_FILE"
 
+# Get default audio sink for capturing system audio
+AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
+
 # Start FFmpeg recording in background
+# Video: x11grab captures X11 display
+# Audio: pulse captures system audio via PulseAudio monitor
 # -y: overwrite output
 # -video_size: screen dimensions
 # -framerate: 30fps is smooth enough
 # -f x11grab: capture X11 display
-# -i :0: display 0
+# -f pulse: capture PulseAudio
 # -c:v libx264: H.264 codec (widely compatible)
+# -c:a aac: AAC audio codec
 # -preset ultrafast: fast encoding (can re-encode later for smaller size)
 # -crf 18: high quality (lower = better, 18-23 is good)
 # -t: max duration
 echo "Starting recording..."
-ffmpeg -y \
-    -video_size "$SCREEN_SIZE" \
-    -framerate 30 \
-    -f x11grab \
-    -i "$DISPLAY" \
-    -c:v libx264 \
-    -preset ultrafast \
-    -crf 18 \
-    -t "$MAX_DURATION" \
-    "$OUTPUT_FILE" \
-    2>/dev/null &
+TEMP_FILE="${OUTPUT_FILE%.mp4}_raw.mp4"
+
+if [ -n "$AUDIO_SINK" ]; then
+    echo "Audio:      $AUDIO_SINK (system audio)"
+    ffmpeg -y \
+        -video_size "$SCREEN_SIZE" \
+        -framerate 30 \
+        -f x11grab \
+        -i "$DISPLAY" \
+        -f pulse \
+        -i "${AUDIO_SINK}.monitor" \
+        -c:v libx264 \
+        -c:a aac \
+        -preset ultrafast \
+        -crf 18 \
+        -t "$MAX_DURATION" \
+        "$TEMP_FILE" \
+        2>/dev/null &
+else
+    echo "Audio:      none (PulseAudio not available)"
+    ffmpeg -y \
+        -video_size "$SCREEN_SIZE" \
+        -framerate 30 \
+        -f x11grab \
+        -i "$DISPLAY" \
+        -c:v libx264 \
+        -preset ultrafast \
+        -crf 18 \
+        -t "$MAX_DURATION" \
+        "$TEMP_FILE" \
+        2>/dev/null &
+fi
 
 FFMPEG_PID=$!
 
@@ -97,14 +124,30 @@ cleanup() {
     kill $FFMPEG_PID 2>/dev/null || true
     wait $FFMPEG_PID 2>/dev/null || true
 
-    if [ -f "$OUTPUT_FILE" ]; then
-        SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
-        echo ""
-        echo "=== Recording Complete ==="
-        echo "Output: $OUTPUT_FILE ($SIZE)"
-        echo ""
-        echo "To compress further:"
-        echo "  ffmpeg -i $OUTPUT_FILE -crf 23 -preset slow compressed.mp4"
+    if [ -f "$TEMP_FILE" ]; then
+        echo "Trimming video (removing first and last 2 seconds)..."
+        # Get duration and calculate trim points
+        DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
+        if [ -n "$DURATION" ]; then
+            # Calculate trimmed duration (remove 2s from start + 2s from end = 4s total)
+            TRIM_DURATION=$(echo "$DURATION - 4" | bc)
+            # Trim: start at 2s, keep for TRIM_DURATION seconds
+            ffmpeg -y -i "$TEMP_FILE" -ss 2 -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
+            rm -f "$TEMP_FILE"
+        else
+            # Fallback: just rename if we can't get duration
+            mv "$TEMP_FILE" "$OUTPUT_FILE"
+        fi
+
+        if [ -f "$OUTPUT_FILE" ]; then
+            SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
+            echo ""
+            echo "=== Recording Complete ==="
+            echo "Output: $OUTPUT_FILE ($SIZE)"
+            echo ""
+            echo "To compress further:"
+            echo "  ffmpeg -i $OUTPUT_FILE -crf 23 -preset slow compressed.mp4"
+        fi
     fi
 }
 trap cleanup EXIT

@@ -105,6 +105,9 @@ FADE_FACTOR = 0.5
 # Hold duration for backspace clear (in seconds)
 BACKSPACE_HOLD_CLEAR_TIME = 1.0
 
+# Gutter size (cells around content where cursor ring can extend)
+GUTTER = 1
+
 
 # =============================================================================
 # COLOR UTILITIES
@@ -305,13 +308,13 @@ class ArtCanvas(Widget, can_focus=True):
 
     @property
     def canvas_width(self) -> int:
-        """Width of the canvas in characters."""
-        return max(1, self.size.width)
+        """Width of the content area (excluding gutter)."""
+        return max(1, self.size.width - 2 * GUTTER)
 
     @property
     def canvas_height(self) -> int:
-        """Height of the canvas in characters."""
-        return max(1, self.size.height)
+        """Height of the content area (excluding gutter)."""
+        return max(1, self.size.height - 2 * GUTTER)
 
     @property
     def is_painting(self) -> bool:
@@ -332,8 +335,13 @@ class ArtCanvas(Widget, can_focus=True):
         return char
 
     def render_line(self, y: int) -> Strip:
-        """Render a single line of the canvas."""
+        """Render a single line of the canvas.
+
+        Screen coordinates (x, y) map to content coordinates (x - GUTTER, y - GUTTER).
+        The gutter area around the edges is where the cursor ring can extend.
+        """
         width = self.size.width
+        height = self.size.height
 
         if width <= 0:
             return Strip([])
@@ -341,14 +349,29 @@ class ArtCanvas(Widget, can_focus=True):
         segments = []
         default_bg = self._get_default_bg()
 
+        # Cursor position in screen coordinates
+        cursor_screen_x = self._cursor_x + GUTTER
+        cursor_screen_y = self._cursor_y + GUTTER
+
         for x in range(width):
-            pos = (x, y)
-            cell = self._grid.get(pos)
+            # Check if this screen position is in the gutter
+            in_gutter = (x < GUTTER or x >= width - GUTTER or
+                         y < GUTTER or y >= height - GUTTER)
 
-            is_cursor_center = (x == self._cursor_x and y == self._cursor_y)
-            is_brush_ring = self._paint_mode and self._is_in_brush_ring(x, y)
+            # Check cursor ring (uses screen coordinates)
+            dx = x - cursor_screen_x
+            dy = y - cursor_screen_y
+            is_cursor_center = (dx == 0 and dy == 0)
+            is_brush_ring = (self._paint_mode and
+                             abs(dx) <= 1 and abs(dy) <= 1 and
+                             not is_cursor_center)
 
-            if is_cursor_center:
+            # Content coordinates for grid lookup
+            content_x = x - GUTTER
+            content_y = y - GUTTER
+            cell = None if in_gutter else self._grid.get((content_x, content_y))
+
+            if is_cursor_center and not in_gutter:
                 if self._paint_mode:
                     # Paint mode: center always shows underlying (the "hole")
                     if cell:
@@ -367,9 +390,8 @@ class ArtCanvas(Widget, can_focus=True):
                     segments.append(Segment("▌", cursor_style))
             elif is_brush_ring:
                 # 3x3 ring around cursor: blinks on/off with box-drawing chars
+                # This can extend into the gutter area
                 if self._cursor_visible:
-                    dx = x - self._cursor_x
-                    dy = y - self._cursor_y
                     box_char = BOX_CHARS.get((dx, dy), "·")
 
                     if cell:
@@ -387,11 +409,11 @@ class ArtCanvas(Widget, can_focus=True):
                             ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
                             segments.append(Segment(box_char, ring_style))
                     else:
-                        # Empty cell: show box char on default bg
+                        # Empty cell or gutter: show box char on default bg
                         ring_style = Style(color=self._last_key_color, bgcolor=default_bg)
                         segments.append(Segment(box_char, ring_style))
                 else:
-                    # Blink off: show underlying cell
+                    # Blink off: show underlying cell or empty
                     if cell:
                         char, fg_color, bg_color = cell
                         # Apply theme to text cells
@@ -419,7 +441,7 @@ class ArtCanvas(Widget, can_focus=True):
                         char_style = Style(color=text_fg, bgcolor=bg_color)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
-                # Empty cell
+                # Empty cell or gutter
                 segments.append(Segment(" ", Style(bgcolor=default_bg)))
 
         return Strip(segments)
@@ -837,7 +859,6 @@ class WriteMode(Container):
     #canvas-header {
         height: 1;
         dock: top;
-        margin-bottom: 1;
     }
 
     #canvas-area {

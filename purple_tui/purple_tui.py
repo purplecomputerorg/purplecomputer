@@ -445,8 +445,8 @@ class PurpleApp(App):
     }
 
     #viewport {
-        width: 100;
-        height: 28;
+        width: 112;
+        height: 32;
         border: heavy $primary;
         background: $surface;
         padding: 1;

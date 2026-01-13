@@ -248,6 +248,16 @@ else
     fi
 fi
 
+# Install Alacritty config
+if [ "$ALACRITTY_AVAILABLE" = true ]; then
+    ALACRITTY_CONFIG="$PROJECT_ROOT/config/alacritty/alacritty.toml"
+    if [ -f "$ALACRITTY_CONFIG" ]; then
+        mkdir -p ~/.config/alacritty
+        cp "$ALACRITTY_CONFIG" ~/.config/alacritty/
+        echo_info "✓ Alacritty config installed"
+    fi
+fi
+
 # Summary
 echo ""
 echo "╔══════════════════════════════════════════════╗"

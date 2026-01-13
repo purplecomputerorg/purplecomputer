@@ -17,16 +17,16 @@ SUPPORT_EMAIL = "support@purplecomputer.org"
 # Font size is calculated to fill 80% of screen (see scripts/calc_font_size.py).
 #
 # Layout (from purple_tui.py CSS):
-#   - Title row: 100w × 2h (including margin)
-#   - Viewport: 100w × 28h content + border(2) + padding(2) = 104w × 32h
+#   - Title row: VIEWPORT_WIDTH × 2h (including margin)
+#   - Viewport: VIEWPORT_WIDTH × VIEWPORT_HEIGHT + border(2) = +2 each dimension
 #   - Footer: 3h
 #
-# Total: 104 cols × 37 rows
+# Total: (VIEWPORT_WIDTH + 2) cols × (VIEWPORT_HEIGHT + 2 + 3) rows
 
-VIEWPORT_CONTENT_COLS = 100   # Inner content area width
-VIEWPORT_CONTENT_ROWS = 28    # Inner content area height
-REQUIRED_TERMINAL_COLS = 104  # Full UI width
-REQUIRED_TERMINAL_ROWS = 37   # Full UI height
+VIEWPORT_WIDTH = 112          # Viewport widget width (CSS)
+VIEWPORT_HEIGHT = 32          # Viewport widget height (CSS)
+REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
+REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 7  # Full UI height (+ border + title + footer)
 
 # =============================================================================
 # TIMING

@@ -45,6 +45,7 @@ from .constants import (
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK,
     VOLUME_LEVELS, VOLUME_DEFAULT,
+    VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
 )
 from .keyboard import (
     KeyboardState, create_keyboard_state, detect_keyboard_mode,
@@ -56,6 +57,7 @@ from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer
 from .demo.default_script import DEMO_SCRIPT
+from .modes.write_mode import ColorLegend, PaintModeChanged
 
 
 class Mode(Enum):
@@ -414,8 +416,20 @@ class PurpleApp(App):
         height: auto;
     }
 
+    #viewport-row {
+        width: auto;
+        height: auto;
+    }
+
+    #paint-legend {
+        width: 2;
+        height: 4;
+        margin-left: 1;
+        margin-top: __LEGEND_TOP_MARGIN__;
+    }
+
     #title-row {
-        width: 100;
+        width: __VIEWPORT_WIDTH__;
         height: 1;
         margin-bottom: 1;
     }
@@ -445,11 +459,10 @@ class PurpleApp(App):
     }
 
     #viewport {
-        width: 112;
-        height: 32;
+        width: __VIEWPORT_WIDTH__;
+        height: __VIEWPORT_HEIGHT__;
         border: heavy $primary;
         background: $surface;
-        padding: 1;
     }
 
     #mode-indicator {
@@ -506,7 +519,7 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-    """
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT + 2 - 4))  # viewport + border - legend height
 
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -597,14 +610,23 @@ class PurpleApp(App):
                     yield ModeTitle(id="mode-title")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
-                with ViewportContainer(id="viewport"):
-                    yield Container(id="content-area")
+                with Horizontal(id="viewport-row"):
+                    with ViewportContainer(id="viewport"):
+                        yield Container(id="content-area")
+                    yield ColorLegend(id="paint-legend")
             yield ModeIndicator(self.active_mode, id="mode-indicator")
 
     async def on_mount(self) -> None:
         """Called when app starts"""
         self._apply_theme()
         self._load_mode_content()
+
+        # Initialize paint legend as hidden
+        try:
+            legend = self.query_one("#paint-legend", ColorLegend)
+            legend.set_visible(False)
+        except NoMatches:
+            pass
 
         # Start direct evdev keyboard reader
         # This reads keyboard events directly, bypassing the terminal
@@ -647,6 +669,14 @@ class PurpleApp(App):
         if self._evdev_reader:
             await self._evdev_reader.stop()
             self._evdev_reader = None
+
+    def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
+        """Show/hide paint legend when paint mode changes in WriteMode."""
+        try:
+            legend = self.query_one("#paint-legend", ColorLegend)
+            legend.set_visible(event.is_painting)
+        except NoMatches:
+            pass
 
     def suspend_with_terminal_input(self):
         """
@@ -1031,8 +1061,9 @@ class PurpleApp(App):
                     content_area = self.query_one("#content-area")
                     write_widget = content_area.query_one("#mode-write")
                     if hasattr(write_widget, 'has_content') and write_widget.has_content():
-                        # Show prompt and defer mode switch completion
-                        self._show_write_prompt(new_mode)
+                        # Switch first (shows drawing), then prompt on top
+                        self._complete_mode_switch(new_mode)
+                        self._show_write_prompt()
                         return
                 except NoMatches:
                     pass  # First time entering, no content yet
@@ -1059,7 +1090,15 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def _show_write_prompt(self, new_mode: Mode) -> None:
+        # Hide paint legend when not in write mode
+        if new_mode != Mode.WRITE:
+            try:
+                legend = self.query_one("#paint-legend", ColorLegend)
+                legend.set_visible(False)
+            except NoMatches:
+                pass
+
+    def _show_write_prompt(self) -> None:
         """Show prompt when entering Write mode with existing content."""
         from .modes.write_mode import WritePromptScreen
 
@@ -1073,8 +1112,6 @@ class PurpleApp(App):
                         write_widget.clear_canvas()
                 except NoMatches:
                     pass
-            # Complete the mode switch
-            self._complete_mode_switch(new_mode)
 
         self.push_screen(WritePromptScreen(), handle_prompt_result)
 

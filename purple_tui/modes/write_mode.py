@@ -861,53 +861,28 @@ class WriteMode(Container):
         dock: top;
     }
 
-    #canvas-area {
+    #art-canvas {
         width: 100%;
         height: 1fr;
-        layout: horizontal;
-    }
-
-    #art-canvas {
-        width: 1fr;
-        height: 100%;
-    }
-
-    #legend-container {
-        width: 3;
-        height: 100%;
-        align: right bottom;
-    }
-
-    #color-legend {
-        width: 2;
-        height: 4;
-        margin-right: 1;
     }
     """
 
     def compose(self) -> ComposeResult:
         yield CanvasHeader(id="canvas-header")
-        with Container(id="canvas-area"):
-            yield ArtCanvas(id="art-canvas")
-            with Container(id="legend-container"):
-                yield ColorLegend(id="color-legend")
+        yield ArtCanvas(id="art-canvas")
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas.focus()
-        # Initialize header and legend
+        # Initialize header
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(False, "#FFFFFF")
-        legend = self.query_one("#color-legend", ColorLegend)
-        legend.set_visible(False)
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Update header and legend when paint mode changes."""
+        """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
-        legend = self.query_one("#color-legend", ColorLegend)
-        legend.set_visible(event.is_painting)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""

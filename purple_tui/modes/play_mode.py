@@ -75,7 +75,6 @@ try:
 except pygame.error:
     _MIXER_READY = False
 
-from ..constants import TOGGLE_DEBOUNCE, ICON_ERASER
 
 
 # 10x4 grid matching keyboard layout
@@ -295,46 +294,6 @@ class PlayGrid(Widget):
             segments.append(Segment(" " * margin_right, bg_style))
 
         return Strip(segments)
-
-
-class EraserModeIndicator(Static):
-    """Shows whether eraser mode is on/off. Tab to toggle."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.eraser_on = False
-        self._state_before_toggle = False  # Track state before rapid toggles
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self.eraser_on:
-            return f"[bold #ff6b6b]{ICON_ERASER}  {caps('Tab: eraser ON')}[/]"
-        else:
-            return f"[dim]{ICON_ERASER}  {caps('Tab: eraser off')}[/]"
-
-    def _speak_if_changed(self) -> None:
-        """Speak current state only if it differs from state before toggle sequence"""
-        from ..tts import speak, stop
-        stop()  # Cancel any previous
-        if self.eraser_on != self._state_before_toggle:
-            speak("eraser on" if self.eraser_on else "eraser off")
-        # Reset for next toggle sequence
-        self._state_before_toggle = self.eraser_on
-
-    def toggle(self) -> bool:
-        # On first toggle in a sequence, remember the starting state
-        if self.eraser_on == self._state_before_toggle:
-            self._state_before_toggle = self.eraser_on
-
-        self.eraser_on = not self.eraser_on
-
-        # Update UI immediately
-        self.refresh()
-
-        # Debounce: only speak after delay if state actually changed
-        self.set_timer(TOGGLE_DEBOUNCE, self._speak_if_changed)
-
-        return self.eraser_on
 
 
 class PlayExampleHint(Static):

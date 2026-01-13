@@ -1176,11 +1176,17 @@ class PurpleApp(App):
             speed_multiplier=1.0,  # Normal human pace
         )
 
+        # Check if we should exit after demo (for recording)
+        exit_after = os.environ.get("PURPLE_DEMO_AUTOSTART")
+
         # Run the demo as a background task
         async def run_demo():
             await self._demo_player.play(DEMO_SCRIPT)
             self._demo_player = None
             self._demo_task = None
+            # Exit app if this was an auto-started demo (for recording)
+            if exit_after:
+                self.exit()
 
         self._demo_task = asyncio.create_task(run_demo())
 

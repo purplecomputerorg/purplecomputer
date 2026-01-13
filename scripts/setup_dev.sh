@@ -188,6 +188,10 @@ if [ "$OS" = "mac" ]; then
         install_nerd_font
     fi
 elif [ "$OS" = "linux" ]; then
+    # Remove any broken/empty fontconfig files before font checks
+    if [ -f /etc/fonts/conf.d/99-emoji.conf ] && [ ! -s /etc/fonts/conf.d/99-emoji.conf ]; then
+        sudo rm /etc/fonts/conf.d/99-emoji.conf 2>/dev/null
+    fi
     if fc-list | grep -qi "JetBrainsMono Nerd Font" 2>/dev/null; then
         echo_info "✓ JetBrainsMono Nerd Font already installed"
     else

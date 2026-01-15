@@ -92,6 +92,13 @@ TEXT_FG_LIGHT = "#1e1033"
 CURSOR_BG_NORMAL = "#6633AA"
 CURSOR_BG_PAINT = "#FF6600"
 
+# Cursor ring corner colors (high contrast for visibility on any background)
+CURSOR_CORNER_DARK = "#FFFFFF"   # White corners on dark theme
+CURSOR_CORNER_LIGHT = "#1e1033"  # Dark corners on light theme
+
+# Corner positions in the 3x3 ring
+CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
+
 # Background tint strength (0.0 = no tint, 1.0 = full color)
 # Keep low so text stays readable
 BG_TINT_STRENGTH = 0.15
@@ -395,6 +402,13 @@ class ArtCanvas(Widget, can_focus=True):
                 if self._cursor_visible:
                     box_char = BOX_CHARS.get((dx, dy), "·")
 
+                    # Corners use high-contrast color, connectors use brush color
+                    is_corner = (dx, dy) in CORNER_POSITIONS
+                    if is_corner:
+                        ring_fg = CURSOR_CORNER_DARK if self._is_dark_theme() else CURSOR_CORNER_LIGHT
+                    else:
+                        ring_fg = self._last_key_color
+
                     if cell:
                         char, fg_color, bg_color = cell
                         # Apply theme to text cell backgrounds
@@ -402,16 +416,16 @@ class ArtCanvas(Widget, can_focus=True):
                             bg_color = default_bg
                         # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
-                            # Text cell: keep the character, tint it with cursor color
-                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            # Text cell: keep the character, tint it with ring color
+                            ring_style = Style(color=ring_fg, bgcolor=bg_color)
                             segments.append(Segment(self._caps_char(char), ring_style))
                         else:
                             # Painted/empty cell: show box char with underlying bg
-                            ring_style = Style(color=self._last_key_color, bgcolor=bg_color)
+                            ring_style = Style(color=ring_fg, bgcolor=bg_color)
                             segments.append(Segment(box_char, ring_style))
                     else:
                         # Empty cell or gutter: show box char on default bg
-                        ring_style = Style(color=self._last_key_color, bgcolor=default_bg)
+                        ring_style = Style(color=ring_fg, bgcolor=default_bg)
                         segments.append(Segment(box_char, ring_style))
                 else:
                     # Blink off: show underlying cell or empty
@@ -754,16 +768,35 @@ class ArtCanvas(Widget, can_focus=True):
 # COLOR LEGEND WIDGET
 # =============================================================================
 
+# Mini keyboard legend: representative keys from each row showing the gradient
+# Format: [first, middle, last] key from each row
+LEGEND_KEYS = [
+    ["1", "5", "0"],  # Number row: white → gray → black
+    ["Q", "T", "P"],  # QWERTY row: light red → dark red
+    ["A", "F", "L"],  # ASDF row: light yellow → dark yellow
+    ["Z", "B", "M"],  # ZXCV row: light blue → dark blue
+]
+
+
+def get_legend_key_color(key: str) -> str:
+    """Get the color for a legend key."""
+    lower = key.lower()
+    if lower in GRAYSCALE:
+        return GRAYSCALE[lower]
+    return KEY_COLORS.get(lower, "#AAAAAA")
+
+
 class ColorLegend(Widget):
     """
-    Vertical color legend showing keyboard row colors.
+    Mini keyboard legend showing key-to-color mapping.
 
-    Displays 4 colored bars representing the keyboard rows:
-    - Gray (number row, grayscale)
-    - Red (QWERTY row)
-    - Yellow (ASDF row)
-    - Blue (ZXCV row)
+    Displays representative keys from each keyboard row:
+    - Number row: 1 5 0 (white → gray → black)
+    - QWERTY row: Q T P (red gradient)
+    - ASDF row: A F L (yellow gradient)
+    - ZXCV row: Z B M (blue gradient)
 
+    Each key is shown with its actual paint color as background.
     Only visible in paint mode.
     """
 
@@ -784,20 +817,35 @@ class ColorLegend(Widget):
         except Exception:
             return DEFAULT_BG_DARK
 
+    def _get_contrast_text(self, bg_color: str) -> str:
+        """Get contrasting text color for readability."""
+        r, g, b = hex_to_rgb(bg_color)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#1e1033" if luminance > 0.5 else "#FFFFFF"
+
     def render_line(self, y: int) -> Strip:
-        """Render a single line of the legend."""
+        """Render a single line of the legend (one keyboard row)."""
         default_bg = self._get_default_bg()
         width = self.size.width
 
-        if not self._visible or y >= len(ROW_LEGEND_COLORS):
+        if not self._visible or y >= len(LEGEND_KEYS):
             # Not visible or beyond legend rows: render empty
             return Strip([Segment(" " * width, Style(bgcolor=default_bg))])
 
-        # Render colored bar (block + space padding)
-        color = ROW_LEGEND_COLORS[y]
-        segments = [Segment("█", Style(color=color, bgcolor=color))]
-        if width > 1:
-            segments.append(Segment(" " * (width - 1), Style(bgcolor=default_bg)))
+        # Render the 3 representative keys for this row
+        keys = LEGEND_KEYS[y]
+        segments = []
+
+        for key in keys:
+            bg_color = get_legend_key_color(key)
+            fg_color = self._get_contrast_text(bg_color)
+            segments.append(Segment(key, Style(color=fg_color, bgcolor=bg_color)))
+
+        # Pad remaining width with default bg
+        used_width = len(keys)
+        if width > used_width:
+            segments.append(Segment(" " * (width - used_width), Style(bgcolor=default_bg)))
+
         return Strip(segments)
 
 
@@ -830,16 +878,26 @@ class CanvasHeader(Static):
         self._last_color = last_color
         self.refresh()
 
+    def _get_contrast_color(self, color: str) -> str:
+        """Get a color that contrasts well with the given color."""
+        r, g, b = hex_to_rgb(color)
+        # Calculate perceived luminance (human eye is more sensitive to green)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        # Return dark text for light colors, light text for dark colors
+        return "#1e1033" if luminance > 0.5 else "#FFFFFF"
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         if self._is_painting:
-            # Show paint mode with color indicator
-            mode_styled = f"[bold {self._last_color}]{caps('Paint')}[/]"
-            hint = caps("type=stamp, SHIFT=select, Space+arrows=line")
+            # Show paint mode with color swatch (brush color as background)
+            # Use contrasting text color for readability
+            text_color = self._get_contrast_color(self._last_color)
+            mode_styled = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
+            hint = caps("Tab: text")
         else:
             mode_styled = f"[bold]{caps('Doodle')}[/]"
-            hint = caps("Tab = paint")
+            hint = caps("Tab: paint")
 
         return f"{mode_styled}  [dim]({hint})[/]"
 

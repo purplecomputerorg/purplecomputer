@@ -39,6 +39,20 @@ class DemoPlayer:
 
     The player injects actions directly into the app's action dispatcher,
     bypassing evdev entirely. This works both on Linux and for testing.
+
+    IMPORTANT: Understanding mode behaviors for demo scripts:
+
+    Play Mode:
+        - Keys CYCLE through colors on each press (purple → blue → red → off)
+        - Colors PERSIST until cycled again
+        - For demo "flash" effects, use set_play_key_color callback to
+          explicitly turn keys on/off
+
+    Doodle Mode:
+        - Starts in TEXT MODE (typing letters)
+        - Press Tab to enter PAINT MODE
+        - In paint mode: letter keys select brush color and stamp
+        - DrawPath automatically enters paint mode before drawing
     """
 
     def __init__(
@@ -46,6 +60,8 @@ class DemoPlayer:
         dispatch_action: Callable[[object], Awaitable[None]],
         speed_multiplier: float = 1.0,
         clear_all: Callable[[], None] | None = None,
+        set_play_key_color: Callable[[str, int], None] | None = None,
+        is_doodle_paint_mode: Callable[[], bool] | None = None,
     ):
         """Initialize the demo player.
 
@@ -54,10 +70,16 @@ class DemoPlayer:
                 (typically app._dispatch_keyboard_action)
             speed_multiplier: Speed up (>1) or slow down (<1) the demo
             clear_all: Optional function to clear all state at demo start
+            set_play_key_color: Optional function to set a Play mode key's
+                color index directly (0=purple, 1=blue, 2=red, -1=off)
+            is_doodle_paint_mode: Optional function to check if Doodle mode
+                is in paint mode (vs text mode)
         """
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
         self._clear_all = clear_all
+        self._set_play_key_color = set_play_key_color
+        self._is_doodle_paint_mode = is_doodle_paint_mode
         self._running = False
         self._cancelled = False
 
@@ -182,8 +204,16 @@ class DemoPlayer:
         await self._sleep(action.pause_after)
 
     async def _play_keys(self, action: PlayKeys) -> None:
-        """Play a sequence of keys with musical timing."""
+        """Play a sequence of keys with musical timing.
+
+        If set_play_key_color callback is available, uses "flash" behavior
+        where keys light up momentarily then turn off. Otherwise falls back
+        to dispatching CharacterActions (which cycle colors and persist).
+        """
         beat_duration = 60.0 / action.tempo_bpm
+
+        # Use flash behavior if we have direct color control
+        use_flash = self._set_play_key_color is not None
 
         for item in action.sequence:
             if self._cancelled:
@@ -194,28 +224,66 @@ class DemoPlayer:
                 await self._sleep(beat_duration)
             elif isinstance(item, list):
                 # Chord (multiple keys at once)
-                for key in item:
-                    await self._dispatch(CharacterAction(char=key))
-                await self._sleep(beat_duration)
+                keys = [k.upper() if k.isalpha() else k for k in item]
+                if use_flash:
+                    # Turn all chord keys on
+                    for key in keys:
+                        self._set_play_key_color(key, 0)  # 0 = purple (first color)
+                    # Play sounds via dispatch
+                    for key in item:
+                        await self._dispatch(CharacterAction(char=key))
+                    await self._sleep(beat_duration)
+                    # Turn all chord keys off
+                    for key in keys:
+                        self._set_play_key_color(key, -1)  # -1 = off
+                else:
+                    for key in item:
+                        await self._dispatch(CharacterAction(char=key))
+                    await self._sleep(beat_duration)
             else:
                 # Single key
-                await self._dispatch(CharacterAction(char=item))
-                await self._sleep(beat_duration)
+                key = item.upper() if item.isalpha() else item
+                if use_flash:
+                    self._set_play_key_color(key, 0)  # Turn on
+                    await self._dispatch(CharacterAction(char=item))  # Play sound
+                    await self._sleep(beat_duration)
+                    self._set_play_key_color(key, -1)  # Turn off
+                else:
+                    await self._dispatch(CharacterAction(char=item))
+                    await self._sleep(beat_duration)
 
         await self._sleep(action.pause_after)
 
     async def _draw_path(self, action: DrawPath) -> None:
-        """Draw a path by holding space and pressing arrows."""
-        # First, press the color key if specified
-        if action.color_key:
-            await self._dispatch(CharacterAction(char=action.color_key))
+        """Draw a path in Doodle mode's paint mode.
+
+        IMPORTANT: Doodle mode starts in TEXT mode by default. This method
+        automatically switches to PAINT mode (via Tab) before drawing.
+        In paint mode, letter keys select brush colors and stamp.
+        """
+        # Ensure we're in paint mode (Tab toggles between text/paint mode)
+        # Check if we're already in paint mode to avoid toggling out of it
+        in_paint_mode = (
+            self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+        )
+        if not in_paint_mode:
+            await self._dispatch(ControlAction(action='tab', is_down=True))
             await self._sleep(0.1)
 
-        # Hold space down (for paint mode)
+        # Select color by pressing the color key (in paint mode, this selects brush)
+        # Use shift to select without stamping
+        if action.color_key:
+            await self._dispatch(CharacterAction(
+                char=action.color_key,
+                shift_held=True,  # Shift = select color only, don't stamp
+            ))
+            await self._sleep(0.1)
+
+        # Hold space down for line drawing
         await self._dispatch(ControlAction(action='space', is_down=True))
         await self._sleep(0.05)
 
-        # Move in each direction
+        # Move in each direction (space_held=True tells canvas to paint)
         for direction in action.directions:
             for _ in range(action.steps_per_direction):
                 if self._cancelled:

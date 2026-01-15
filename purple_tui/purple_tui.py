@@ -424,10 +424,10 @@ class PurpleApp(App):
     }
 
     #paint-legend {
-        width: 2;
+        width: 3;
         height: 4;
         margin-left: 1;
-        margin-top: __LEGEND_TOP_MARGIN__;
+        margin-top: 1;
     }
 
     #title-row {
@@ -521,7 +521,7 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT + 2 - 4))  # viewport + border - legend height
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT))
 
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -1271,6 +1271,28 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _set_play_key_color(self, key: str, color_index: int) -> None:
+        """Set a Play mode key's color directly. Used by demo player for flash effects."""
+        from .modes.play_mode import PlayMode, PlayGrid
+
+        try:
+            play = self.query_one(PlayMode)
+            grid = play.query_one(PlayGrid)
+            grid.set_color_index(key, color_index)
+        except Exception:
+            pass
+
+    def _is_doodle_paint_mode(self) -> bool:
+        """Check if Doodle mode is in paint mode (vs text mode)."""
+        from .modes.doodle_mode import DoodleMode, ArtCanvas
+
+        try:
+            doodle = self.query_one(DoodleMode)
+            canvas = doodle.query_one(ArtCanvas)
+            return canvas.is_painting
+        except Exception:
+            return False
+
     def start_demo(self) -> None:
         """Start demo playback (dev mode only).
 
@@ -1287,6 +1309,8 @@ class PurpleApp(App):
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=1.0,  # Normal human pace
             clear_all=self.clear_all_state,
+            set_play_key_color=self._set_play_key_color,
+            is_doodle_paint_mode=self._is_doodle_paint_mode,
         )
 
         # Check if we should exit after demo (for recording)

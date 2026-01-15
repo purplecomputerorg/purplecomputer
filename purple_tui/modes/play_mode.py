@@ -183,6 +183,20 @@ class PlayGrid(Widget):
         self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
         self.refresh()
 
+    def set_color_index(self, key: str, index: int) -> None:
+        """Set a key's color to a specific index.
+
+        Used by demo player for "flash" effects where keys light up
+        momentarily then turn off.
+
+        Args:
+            key: The key to set (e.g., 'A', '5')
+            index: Color index: 0=purple, 1=blue, 2=red, -1=off
+        """
+        if key in self.color_state:
+            self.color_state[key] = index
+            self.refresh()
+
     def _get_default_bg(self) -> str:
         """Get default background based on current theme."""
         try:

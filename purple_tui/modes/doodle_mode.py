@@ -945,10 +945,10 @@ class CanvasHeader(Static):
             # Use contrasting text color for readability
             text_color = self._get_contrast_color(self._last_color)
             mode_styled = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
-            hint = caps("Tab: write")
+            hint = caps("Space Space: write")
         else:
             mode_styled = f"[bold]{caps('Write')}[/]"
-            hint = caps("Tab: paint")
+            hint = caps("Space Space: paint")
 
         return f"{mode_styled}  [dim]({hint})[/]"
 

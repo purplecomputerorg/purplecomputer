@@ -152,9 +152,7 @@ Switch away from Play mode and back, or use `ClearAll()` in demo script to reset
 - **Cursor**: 3×3 blinking ring of box-drawing characters
 - **Typing**: Stamps colored blocks and advances cursor
 - **Drawing**: Hold Space + arrows to draw lines
-- **Toggle**: Press **Tab** to switch between modes
-
-**Double-tap Space** (in text mode): Also toggles to paint mode.
+- **Toggle**: Double-tap **Space** to switch between modes (Tab also works)
 
 ## Color System
 
@@ -284,7 +282,7 @@ The 3×3 blinking ring shows:
 ### Combining Text and Paint
 
 1. Paint a colorful background
-2. Press Tab to switch to text mode
+2. Double-tap Space to switch to text mode
 3. Type text over the painted area
 4. Text appears with readable foreground on colored background
 
@@ -405,7 +403,7 @@ Types characters one at a time. Works in any mode.
 ### PressKey
 ```python
 PressKey("enter", pause_after=0.5)
-PressKey("tab")      # Toggle paint mode in Doodle
+PressKey("space", count=2)  # Toggle paint mode in Doodle
 PressKey("space")    # Accept autocomplete or type space
 PressKey("up")       # Navigate/scroll
 ```
@@ -472,7 +470,7 @@ Assign colors by press count.
 1. **Position first**: Use multiple PressKey("down")/("right") to get to starting position
 2. **Draw shapes**: Use DrawPath with directions
 3. **Mix colors**: Draw overlapping paths with different color_keys
-4. **Add text**: PressKey("tab") to exit paint mode, then TypeText
+4. **Add text**: Double-tap Space to exit paint mode, then TypeText
 
 ### Explore Mode Wow Moments
 
@@ -550,5 +548,5 @@ Blue + Yellow = Green
 F1: Explore mode
 F2: Play mode
 F3: Doodle mode
-Tab (in Doodle): Toggle text/paint mode
+Space Space (in Doodle): Toggle text/paint mode
 ```

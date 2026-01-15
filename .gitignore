@@ -14,6 +14,9 @@ build-offline/
 venv/
 env/
 ENV/
+.env
+.env.local
+.env.*
 autoinstall/subiquity/
 
 # Test environments
@@ -73,3 +76,4 @@ purple-computer-*.iso
 
 # USB flash drive whitelist (contains user-specific drive serials)
 .flash-drives.conf
+tools/.env

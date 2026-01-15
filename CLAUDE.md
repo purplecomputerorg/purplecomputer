@@ -1,5 +1,14 @@
 # Claude Code Notes for Purple Computer
 
+## Sensitive Files (DO NOT READ)
+
+Never read or access these files:
+- `tools/.env` (API keys)
+- Any `.env` files
+- `credentials.json`, `secrets.yaml`, or similar
+
+---
+
 ## Target Audience
 
 Purple Computer is for **kids ages 3-8** and their **non-technical parents**.

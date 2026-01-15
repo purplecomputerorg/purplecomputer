@@ -528,6 +528,7 @@ class PurpleApp(App):
         Binding("f1", f"switch_mode('{MODE_EXPLORE[0]}')", MODE_EXPLORE[1], show=False, priority=True),
         Binding("f2", f"switch_mode('{MODE_PLAY[0]}')", MODE_PLAY[1], show=False, priority=True),
         Binding("f3", f"switch_mode('{MODE_DOODLE[0]}')", MODE_DOODLE[1], show=False, priority=True),
+        Binding("f8", "take_screenshot", "Screenshot", show=False, priority=True),
         Binding("f9", "toggle_theme", "Theme", show=False, priority=True),
         Binding("f10", "volume_mute", "Mute", show=False, priority=True),
         Binding("f11", "volume_down", "Vol-", show=False, priority=True),
@@ -1177,6 +1178,35 @@ class PurpleApp(App):
         if current_idx < len(VOLUME_LEVELS) - 1:
             self.volume_level = VOLUME_LEVELS[current_idx + 1]
         self._apply_volume()  # Always show feedback, even at max
+
+    def action_take_screenshot(self) -> None:
+        """Take a screenshot (F8). Used by AI training tools.
+
+        Only works when PURPLE_DEV_MODE=1 is set.
+        Set PURPLE_SCREENSHOT_DIR to specify output directory.
+        Screenshots are saved as SVG files with incrementing numbers.
+        """
+        # Only allow in dev mode
+        if os.environ.get("PURPLE_DEV_MODE") != "1":
+            return
+
+        screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR", "screenshots")
+
+        import glob
+
+        os.makedirs(screenshot_dir, exist_ok=True)
+
+        # Find next screenshot number
+        existing = glob.glob(os.path.join(screenshot_dir, "screenshot_*.svg"))
+        next_num = len(existing) + 1
+
+        filename = os.path.join(screenshot_dir, f"screenshot_{next_num:04d}.svg")
+        self.save_screenshot(filename)
+
+        # Also save path to a "latest" file for easy access
+        latest_path = os.path.join(screenshot_dir, "latest.txt")
+        with open(latest_path, "w") as f:
+            f.write(filename)
 
     def _apply_volume(self) -> None:
         """Apply volume level to TTS and update UI"""

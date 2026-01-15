@@ -87,10 +87,26 @@ def _get_piper_voice():
     if _piper_voice is not None:
         return _piper_voice
 
+    # In demo mode, skip piper entirely to avoid ONNX runtime warnings
+    # Demo should use only pre-generated voice clips
+    if os.environ.get("PURPLE_DEMO_AUTOSTART"):
+        _piper_available = False
+        return None
+
     try:
         # Suppress stderr during piper import (loads ONNX runtime)
-        with _suppress_stderr():
+        # This catches the "Unknown CPU vendor" warning from onnxruntime C code
+        import sys
+        old_stderr = sys.stderr
+        sys.stderr = open(os.devnull, 'w')
+        try:
             from piper import PiperVoice
+        finally:
+            try:
+                sys.stderr.close()
+            except Exception:
+                pass
+            sys.stderr = old_stderr
 
         # Check for voice model in various locations
         model_path = None

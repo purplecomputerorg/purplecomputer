@@ -18,9 +18,22 @@ VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
 # Phrases to pre-generate
+# These are served from cache instead of generating on-the-fly with piper
 PHRASES = [
+    # UI feedback
     "talking on",
     "talking off",
+
+    # Demo phrases (for recorded demos that need speech)
+    # Add any phrases your demo script uses with ! here
+    # Format: exactly what _make_speakable() would produce
+    "red plus blue equals purple",
+    "blue plus yellow equals green",
+    "3 cats plus 2 dogs",
+    "cat",
+    "dog",
+    "cats",
+    "dogs",
 ]
 
 
@@ -80,6 +93,27 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
 
 def main():
     """Generate all voice clips."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate pre-recorded voice clips")
+    parser.add_argument("--force", "-f", action="store_true",
+                        help="Regenerate all clips even if they exist")
+    args = parser.parse_args()
+
+    # Check which clips need generating
+    VOICE_DIR.mkdir(parents=True, exist_ok=True)
+
+    to_generate = []
+    for phrase in PHRASES:
+        filename = phrase_to_filename(phrase)
+        output_path = VOICE_DIR / filename
+        if args.force or not output_path.exists():
+            to_generate.append((phrase, output_path))
+
+    if not to_generate:
+        print("All voice clips already exist. Use --force to regenerate.")
+        return 0
+
     print("Generating Purple Computer voice clips...")
     print()
 
@@ -107,19 +141,13 @@ def main():
 
     voice = PiperVoice.load(str(model_path))
 
-    # Create output directory
-    VOICE_DIR.mkdir(parents=True, exist_ok=True)
-
     # Generate clips
     print("Generating voice clips:")
-    for phrase in PHRASES:
-        filename = phrase_to_filename(phrase)
-        output_path = VOICE_DIR / filename
-
+    for phrase, output_path in to_generate:
         if generate_clip(voice, phrase, output_path):
-            print(f"  Created {filename}")
+            print(f"  Created {output_path.name}")
         else:
-            print(f"  FAILED: {filename}")
+            print(f"  FAILED: {output_path.name}")
 
     print()
     print(f"Done! Voice clips saved to {VOICE_DIR}")

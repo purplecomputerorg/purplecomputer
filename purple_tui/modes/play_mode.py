@@ -108,6 +108,8 @@ class PlayGrid(Widget):
     }
     """
 
+    CLASSES = "caps-sensitive"
+
     def __init__(self) -> None:
         super().__init__()
         # Color state for each key: -1 = default, 0+ = index into COLORS

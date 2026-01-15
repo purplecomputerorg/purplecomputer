@@ -100,6 +100,8 @@ recording-setup:
 	./recording-setup/setup.sh
 
 record-demo:
+	@echo "Generating voice clips (if needed)..."
+	@.venv/bin/python scripts/generate_voice_clips.py
 	@echo "Recording demo..."
 	./recording-setup/record-demo.sh
 

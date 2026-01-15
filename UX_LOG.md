@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2025-01
 
+- **Color mixing fix**: Similar colors no longer produce brighter results when mixed
 - **Demo hides mouse**: Demo recordings no longer show the mouse cursor
 - **Legend 3 shades**: Color legend shows light/medium/dark gradient per row
 - **Cursor thick sides**: Paint cursor uses heavy lines for sides, light corners

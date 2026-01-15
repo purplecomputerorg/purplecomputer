@@ -180,6 +180,38 @@ def get_row_tint_color(char: str) -> str | None:
         return None  # No tint for unmapped keys
 
 
+def get_legend_row_from_color(color: str) -> int:
+    """Get the legend row index (0-3) from a color based on its hue.
+
+    Returns:
+        0 = Gray (number row, low saturation)
+        1 = Red (QWERTY row, hue ~0°)
+        2 = Yellow (ASDF row, hue ~50°)
+        3 = Blue (ZXCV row, hue ~220°)
+    """
+    r, g, b = hex_to_rgb(color)
+    # Convert to HLS to check hue and saturation
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    hue_deg = h * 360
+
+    # Low saturation = grayscale (number row)
+    if s < 0.15:
+        return 0
+
+    # Determine row by hue angle
+    # Red: hue around 0° (or 360°), range roughly 330-30°
+    # Yellow: hue around 50°, range roughly 30-90°
+    # Blue: hue around 220°, range roughly 180-270°
+    if hue_deg < 30 or hue_deg > 330:
+        return 1  # Red
+    elif 30 <= hue_deg < 90:
+        return 2  # Yellow
+    elif 180 <= hue_deg < 270:
+        return 3  # Blue
+
+    return 0  # Default
+
+
 def is_text_tint_bg(color: str) -> bool:
     """Check if a color is a text tint (close to default bg) vs a paint color.
 
@@ -790,7 +822,7 @@ class ArtCanvas(Widget, can_focus=True):
 
 class ColorLegend(Widget):
     """
-    Simple color legend showing keyboard row colors as bars.
+    Simple color legend showing keyboard row colors as bars with active row indicator.
 
     Displays 4 colored bars representing the keyboard rows:
     - Gray (number row, grayscale)
@@ -798,16 +830,26 @@ class ColorLegend(Widget):
     - Yellow (ASDF row)
     - Blue (ZXCV row)
 
+    Shows an arrow pointing to the currently active row.
     Only visible in paint mode. Always occupies space to prevent layout shifts.
     """
+
+    # Arrow character for active row indicator
+    ARROW = "◀"
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._visible = False
+        self._active_row = 0
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide the legend."""
         self._visible = visible
+        self.refresh()
+
+    def set_active_color(self, color: str) -> None:
+        """Set the active row based on the current brush color."""
+        self._active_row = get_legend_row_from_color(color)
         self.refresh()
 
     def _get_app_bg(self) -> str:
@@ -819,28 +861,39 @@ class ColorLegend(Widget):
             return APP_BG_DARK
 
     def render_line(self, y: int) -> Strip:
-        """Render a single line of the legend (3 shades per row)."""
+        """Render a single line of the legend (3 shades + arrow for active row)."""
         width = self.size.width
+        app_bg = self._get_app_bg()
 
         if not self._visible or y >= len(ROW_LEGEND_COLORS):
             # Hidden or beyond legend rows: render as app background
-            return Strip([Segment(" " * width, Style(bgcolor=self._get_app_bg()))])
+            return Strip([Segment(" " * width, Style(bgcolor=app_bg))])
 
-        # Render 3 shades side-by-side
+        # Reserve 1 char for arrow on the right
+        color_width = width - 1
         shades = ROW_LEGEND_COLORS[y]
         segments = []
-        # Divide width into 3 parts
-        third = width // 3
-        remainder = width - (third * 3)
+
+        # Render 3 shades side-by-side
+        third = color_width // 3
+        remainder = color_width - (third * 3)
 
         for i, color in enumerate(shades):
-            # Add extra char to last segment if width not divisible by 3
+            # Distribute remainder across segments
             seg_width = third + (1 if i == 2 and remainder > 0 else 0)
             if i == 1 and remainder > 1:
                 seg_width += 1
             if i == 0 and remainder > 2:
                 seg_width += 1
             segments.append(Segment(" " * seg_width, Style(bgcolor=color)))
+
+        # Add arrow for active row, space for others
+        if y == self._active_row:
+            # Use contrasting color for arrow visibility
+            arrow_fg = TEXT_FG_DARK if "dark" in str(self.app.theme) else TEXT_FG_LIGHT
+            segments.append(Segment(self.ARROW, Style(color=arrow_fg, bgcolor=app_bg)))
+        else:
+            segments.append(Segment(" ", Style(bgcolor=app_bg)))
 
         return Strip(segments)
 

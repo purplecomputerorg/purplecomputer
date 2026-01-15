@@ -423,7 +423,7 @@ class PurpleApp(App):
     }
 
     #paint-legend {
-        width: 2;
+        width: 4;
         height: 4;
         margin-left: 1;
         margin-top: __LEGEND_TOP_MARGIN__;
@@ -672,10 +672,11 @@ class PurpleApp(App):
             self._evdev_reader = None
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Show/hide paint legend when paint mode changes in DoodleMode."""
+        """Show/hide paint legend and update active row when paint mode changes."""
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
             legend.set_visible(event.is_painting)
+            legend.set_active_color(event.last_color)
         except NoMatches:
             pass
 

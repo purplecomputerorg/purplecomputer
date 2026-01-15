@@ -129,9 +129,12 @@ def _linear_rgb_to_spectrum(lrgb: Tuple[float, float, float]) -> list[float]:
     c = min(g, b)
     m = min(r, b)
     y = min(r, g)
-    r = max(0, min(r - b, r - g))
-    g = max(0, min(g - b, g - r))
-    b = max(0, min(b - g, b - r))
+    # Calculate RGB remainder using original values (tuple assignment evaluates RHS first)
+    r, g, b = (
+        max(0, min(r - b, r - g)),
+        max(0, min(g - b, g - r)),
+        max(0, min(b - g, b - r)),
+    )
 
     # Build spectrum from weighted base spectra
     spectrum = []

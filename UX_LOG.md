@@ -6,6 +6,8 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2025-01
 
+- **Space-space toggle**: Double-tap space toggles write/paint both ways, requires consecutive spaces
+- **Mode switch dismisses prompt**: Switching modes while "keep drawing" prompt is showing dismisses it and switches normally
 - **Color mixing fix**: Similar colors no longer produce brighter results when mixed
 - **Demo hides mouse**: Demo recordings no longer show the mouse cursor
 - **Legend 3 shades**: Color legend shows light/medium/dark gradient per row

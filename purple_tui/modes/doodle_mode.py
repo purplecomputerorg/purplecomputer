@@ -685,31 +685,31 @@ class ArtCanvas(Widget, can_focus=True):
         if isinstance(action, ControlAction):
             if action.action == 'space':
                 if action.is_down:
-                    # Space press
-                    if self._paint_mode:
+                    # Space press: check for double-tap to toggle mode
+                    current_time = time.time()
+                    if (current_time - self._last_space_time) < self._double_tap_threshold:
+                        # Double-tap detected: toggle paint mode
+                        self._toggle_paint_mode()
+                        self._last_space_time = 0.0
+                        self.refresh()
+                    elif self._paint_mode:
                         # In paint mode: stamp and enable "pen down" for line drawing
                         self._paint_at_cursor()
                         self._start_space_down()
                         # If an arrow key is held, advance in that direction after stamping
                         if action.arrow_held:
                             self._move_in_direction(action.arrow_held)
+                        self._last_space_time = current_time
                         self.refresh()
                     else:
-                        # In text mode: check for double-tap to toggle, else type space
-                        current_time = time.time()
-                        if (current_time - self._last_space_time) < self._double_tap_threshold:
-                            # Double-tap detected: toggle paint mode
-                            self._toggle_paint_mode()
-                            self._last_space_time = 0.0
-                        else:
-                            # Type a space
-                            pos = (self._cursor_x, self._cursor_y)
-                            existing_bg = self._get_cell_bg(pos)
-                            self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
-                            if not self._move_cursor_right():
-                                self._carriage_return()
-                            self._last_space_time = current_time
-                            self.refresh()
+                        # In text mode: type a space
+                        pos = (self._cursor_x, self._cursor_y)
+                        existing_bg = self._get_cell_bg(pos)
+                        self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
+                        if not self._move_cursor_right():
+                            self._carriage_return()
+                        self._last_space_time = current_time
+                        self.refresh()
                 else:
                     # Space release: stop line drawing
                     if self._paint_mode:
@@ -776,6 +776,8 @@ class ArtCanvas(Widget, can_focus=True):
         if isinstance(action, CharacterAction):
             # Reset backspace timer on character input
             self._backspace_start_time = None
+            # Reset space double-tap detection (must be consecutive spaces)
+            self._last_space_time = 0.0
 
             char = action.char
             # When an arrow is held, advance in that direction after stamping.

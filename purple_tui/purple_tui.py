@@ -1038,12 +1038,25 @@ class PurpleApp(App):
 
     def action_switch_mode(self, mode_name: str) -> None:
         """Switch to a different mode (F1-F3)"""
+        from .modes.doodle_mode import DoodlePromptScreen
+
         mode_map = {
             MODE_EXPLORE[0]: Mode.EXPLORE,
             MODE_PLAY[0]: Mode.PLAY,
             MODE_DOODLE[0]: Mode.DOODLE,
         }
         new_mode = mode_map.get(mode_name, Mode.EXPLORE)
+
+        # If DoodlePromptScreen is showing and we're switching to a different mode,
+        # dismiss it (keeping the drawing) and proceed with the switch
+        if len(self.screen_stack) > 1:
+            active_screen = self.screen
+            if isinstance(active_screen, DoodlePromptScreen):
+                # Dismiss without callback action (we're switching modes anyway)
+                self.pop_screen()
+                # If switching back to doodle, we're already there, just return
+                if new_mode == Mode.DOODLE:
+                    return
 
         if new_mode != self.active_mode:
             # Reset viewport border when leaving doodle mode

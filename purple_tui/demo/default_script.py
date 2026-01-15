@@ -45,79 +45,118 @@ from .script import (
 # THE DEMO SCRIPT
 # =============================================================================
 #
-# Flow: Explore (quick) → Play (draw smiley) → Doodle (art + text) → Explore (color mix)
+# Flow: Explore (greeting + color mixing) → Play (glissando) → Explore (emoji) →
+#       Play (colorful smiley) → Doodle (art + text) → Play (finale)
 #
 
 DEMO_SCRIPT = [
     ClearAll(),
 
     # -------------------------------------------------------------------------
-    # 1. QUICK GREETING (Explore) - 3s
-    # Start with something fun that plays sound
+    # 1. GREETING + COLOR MIXING (Explore) - 8s
+    # Introduce the app and show off color mixing
     # -------------------------------------------------------------------------
     Comment("=== GREETING ==="),
     # Already in Explore mode by default
     Pause(0.3),
-    TypeText("hello!", delay_per_char=0.12),
+    TypeText("Hello! Let's mix colors", delay_per_char=0.08),
+    PressKey("enter", pause_after=1.5),
+
+    TypeText("yellow + blue", delay_per_char=0.08),
+    PressKey("enter", pause_after=1.5),
+
+    TypeText("pink + indigo", delay_per_char=0.08),
     PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------
-    # 2. MUSICAL SMILEY (Play) - 10s
-    # Draw a smiley face while playing music!
+    # 2. PIANO GLISSANDO (Play) - 5s
+    # Rapidly drag finger across QWERTY row back and forth
+    # Like running your hand across piano keys!
+    # -------------------------------------------------------------------------
+    Comment("=== PIANO GLISSANDO ==="),
+    SwitchMode("play"),
+    Pause(0.3),
+
+    # Forward QWERTY (10 keys in ~1s = 600 BPM)
+    PlayKeys(
+        sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+        tempo_bpm=600,
+        pause_after=0.1,
+    ),
+    # Backward QWERTY
+    PlayKeys(
+        sequence=['p', 'o', 'i', 'u', 'y', 't', 'r', 'e', 'w', 'q'],
+        tempo_bpm=600,
+        pause_after=0.1,
+    ),
+    # Forward again
+    PlayKeys(
+        sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+        tempo_bpm=600,
+        pause_after=0.1,
+    ),
+    # Backward again
+    PlayKeys(
+        sequence=['p', 'o', 'i', 'u', 'y', 't', 'r', 'e', 'w', 'q'],
+        tempo_bpm=600,
+        pause_after=0.5,
+    ),
+
+    # -------------------------------------------------------------------------
+    # 3. EMOJI FUN (Explore) - 4s
+    # Quick emoji math
+    # -------------------------------------------------------------------------
+    Comment("=== EMOJI FUN ==="),
+    SwitchMode("explore"),
+    Pause(0.2),
+    TypeText("3 + 2 cats"),
+    PressKey("enter", pause_after=1.5),
+
+    # -------------------------------------------------------------------------
+    # 4. COLORFUL SMILEY (Play) - 8s
+    # Draw a smiley with different colors for each part!
+    # Colors cycle: 1 press = purple, 2 = blue, 3 = red
     #
     # The grid:
-    #     Col:  0 1 2 3 4 5 6 7 8 9
-    #     Row 0: 1 2 3 4 5 6 7 8 9 0    <- 4 and 6 are eyes
-    #     Row 1: Q W E R T Y U I O P    <- T is nose
-    #     Row 2: A S D F G H J K L ;    <- D and J are smile CORNERS (UP)
-    #     Row 3: Z X C V B N M , . /    <- C V B N M is smile BOTTOM (DOWN)
-    #
-    # Corners UP (D, J) + bottom DOWN (CVBNM) = upward-curving smile!
+    #     Row 0: 1 2 3 4 5 6 7 8 9 0    <- 4 and 6 are eyes (PURPLE)
+    #     Row 1: Q W E R T Y U I O P    <- T is nose (BLUE = 2 presses)
+    #     Row 2: A S D F G H J K L ;    <- D and J are corners (RED = 3 presses)
+    #     Row 3: Z X C V B N M , . /    <- C V B N M is bottom (RED = 3 presses)
     # -------------------------------------------------------------------------
-    Comment("=== MUSICAL SMILEY ==="),
+    Comment("=== COLORFUL SMILEY ==="),
     SwitchMode("play"),
-    Pause(0.4),
+    Pause(0.3),
 
-    # Eyes: 4 and 6 (percussion - blink blink!)
+    # Eyes: 4 and 6 (1 press each = PURPLE)
     PlayKeys(
         sequence=['4', None, '6'],
         tempo_bpm=90,
+        pause_after=0.4,
+    ),
+
+    # Nose: T pressed TWICE = BLUE
+    PlayKeys(
+        sequence=['t', 't'],
+        tempo_bpm=120,
+        pause_after=0.4,
+    ),
+
+    # Smile corners: D and J pressed 3x each = RED
+    PlayKeys(
+        sequence=['d', 'd', 'd', None, 'j', 'j', 'j'],
+        tempo_bpm=180,
         pause_after=0.3,
     ),
 
-    # Nose: T (high marimba, cute boop!)
+    # Smile bottom: C V B N M pressed 3x each = RED
     PlayKeys(
-        sequence=['t'],
-        tempo_bpm=100,
-        pause_after=0.3,
-    ),
-
-    # Smile corners: D and J (mid-range, these are UP)
-    PlayKeys(
-        sequence=['d', None, 'j'],
-        tempo_bpm=100,
-        pause_after=0.3,
-    ),
-
-    # Smile bottom: C V B N M (low notes, ascending melody, this is DOWN)
-    PlayKeys(
-        sequence=['c', 'v', 'b', 'n', 'm'],
-        tempo_bpm=140,
+        sequence=['c', 'c', 'c', 'v', 'v', 'v', 'b', 'b', 'b', 'n', 'n', 'n', 'm', 'm', 'm'],
+        tempo_bpm=240,
         pause_after=0.8,
     ),
 
     # -------------------------------------------------------------------------
-    # 3. COLOR MAGIC (Explore) - 5s
-    # Show color mixing!
-    # -------------------------------------------------------------------------
-    Comment("=== COLOR MAGIC ==="),
-    SwitchMode("explore"),
-    Pause(0.3),
-    TypeText("pink+indigo"),
-    PressKey("enter", pause_after=1.8),
-
-    # -------------------------------------------------------------------------
-    # 4. CREATIVE DRAWING (Doodle) - 15s
+    # 5. CREATIVE DRAWING (Doodle) - 15s
     # Show paint mode: color mixing, drawing, and text together
     # -------------------------------------------------------------------------
     Comment("=== CREATIVE DRAWING ==="),
@@ -171,16 +210,6 @@ DEMO_SCRIPT = [
     PressKey("up"),
     TypeText("Purple!", delay_per_char=0.1),
     Pause(0.6),
-
-    # -------------------------------------------------------------------------
-    # 5. EMOJI FUN (Explore) - 4s
-    # Quick emoji math to end
-    # -------------------------------------------------------------------------
-    Comment("=== EMOJI FUN ==="),
-    SwitchMode("explore"),
-    Pause(0.2),
-    TypeText("3+2 cats"),
-    PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------
     # 6. MUSICAL FINALE (Play) - 6s

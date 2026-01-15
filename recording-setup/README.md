@@ -23,6 +23,21 @@ The recording will be saved to `recordings/demo.mp4`.
 3. The demo script (`purple_tui/demo/default_script.py`) plays automatically
 4. Recording stops when you exit Purple (Ctrl+C or demo finishes)
 5. The first and last 2 seconds are automatically trimmed (removes terminal visibility)
+6. **Background music** is mixed in with automatic ducking (music gets quieter when app sounds play)
+
+## Background Music
+
+Place an MP3 file at `recording-setup/demo_music.mp3` to automatically add background music.
+
+The script uses **ducking**: music plays at ~30% volume normally, but automatically drops lower when Purple makes sounds. This keeps the app audio clear while maintaining an engaging soundtrack.
+
+To use different music, replace `demo_music.mp3` or remove it to record without background music.
+
+### Music Attribution
+
+The included `demo_music.mp3` is "Happy Ukulele" by ANtarcticbreeze, licensed under [CC-BY-SA](https://creativecommons.org/licenses/by-sa/4.0/).
+
+Source: https://soundcloud.com/royalty-free-audio-loops/antarcticbreeze-happy-ukulele
 
 ## Customizing the Demo
 

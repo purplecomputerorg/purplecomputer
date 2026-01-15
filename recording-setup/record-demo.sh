@@ -21,6 +21,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-120}"  # Default 2 minutes max
+MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
@@ -125,14 +126,56 @@ cleanup() {
     wait $FFMPEG_PID 2>/dev/null || true
 
     if [ -f "$TEMP_FILE" ]; then
-        echo "Trimming video (removing first and last 2 seconds)..."
+        echo "Processing video (trimming + adding background music)..."
         # Get duration and calculate trim points
         DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
         if [ -n "$DURATION" ]; then
             # Calculate trimmed duration (remove 2s from start + 2s from end = 4s total)
             TRIM_DURATION=$(echo "$DURATION - 4" | bc)
-            # Trim: start at 2s, keep for TRIM_DURATION seconds
-            ffmpeg -y -i "$TEMP_FILE" -ss 2 -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
+
+            # Check if temp file has audio
+            HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$TEMP_FILE" 2>/dev/null)
+
+            if [ -f "$MUSIC_FILE" ] && [ -n "$HAS_AUDIO" ]; then
+                echo "Adding background music with ducking..."
+                # Mix background music with ducking:
+                # - [0:a] is app audio, [1:a] is music
+                # - sidechaincompress: music ducks when app audio plays
+                #   - threshold=0.02: trigger ducking on quiet sounds
+                #   - ratio=6: strong compression when triggered
+                #   - attack=50: duck quickly (50ms)
+                #   - release=500: come back slowly (500ms)
+                # - Music at 30% volume normally, app audio at full volume
+                # - amix combines them (duration=first keeps video length)
+                ffmpeg -y \
+                    -ss 2 -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -stream_loop -1 -i "$MUSIC_FILE" \
+                    -filter_complex "
+                        [0:a]aformat=fltp:44100:stereo,asplit=2[app][sidechain];
+                        [1:a]aformat=fltp:44100:stereo,volume=0.3[music];
+                        [music][sidechain]sidechaincompress=threshold=0.02:ratio=6:attack=50:release=500[ducked];
+                        [app][ducked]amix=inputs=2:duration=first:weights=1 0.7[out]
+                    " \
+                    -map 0:v -map "[out]" \
+                    -c:v libx264 -preset ultrafast -crf 18 \
+                    -c:a aac -b:a 192k \
+                    "$OUTPUT_FILE" 2>/dev/null
+            elif [ -f "$MUSIC_FILE" ]; then
+                echo "Adding background music (no app audio to duck)..."
+                # No app audio, just add music at lower volume
+                ffmpeg -y \
+                    -ss 2 -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -stream_loop -1 -i "$MUSIC_FILE" \
+                    -filter_complex "[1:a]volume=0.25[music]" \
+                    -map 0:v -map "[music]" \
+                    -c:v libx264 -preset ultrafast -crf 18 \
+                    -c:a aac -b:a 192k \
+                    -shortest \
+                    "$OUTPUT_FILE" 2>/dev/null
+            else
+                echo "No music file found, trimming only..."
+                ffmpeg -y -i "$TEMP_FILE" -ss 2 -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
+            fi
             rm -f "$TEMP_FILE"
         else
             # Fallback: just rename if we can't get duration

@@ -17,8 +17,10 @@ Play mode has a 10x4 grid matching the keyboard:
 Each key press CYCLES the color: off → purple → blue → red → off
 Colors PERSIST until cycled again. This means you can "draw" pictures
 by pressing keys strategically. For a smiley face:
-- Eyes: E and I (row 1)
-- Smile: C, V, B, N (row 3) with corners A and L (row 2)
+- Eyes: 4 and 6 (row 0, percussion)
+- Nose: T (row 1)
+- Smile corners: D and J (row 2, UP)
+- Smile bottom: C, V, B, N, M (row 3, DOWN)
 
 Avoid pressing the same key twice in one demo section, or it will
 cycle to the next color instead of staying the same.
@@ -181,21 +183,23 @@ DEMO_SCRIPT = [
     PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------
-    # 6. MUSICAL FINALE (Play) - 4s
-    # End with a musical flourish (new keys, don't disturb the smiley!)
-    # Use number row and bottom row to add to the picture
+    # 6. MUSICAL FINALE (Play) - 6s
+    # End with a musical flourish, then hold on the smiley!
     # -------------------------------------------------------------------------
     Comment("=== FINALE ==="),
     SwitchMode("play"),
     Pause(0.2),
 
     # Play a descending scale on keys we haven't used
-    # This adds color accents without messing up the smiley
+    # This adds color accents around the smiley
     PlayKeys(
-        sequence=['5', '4', '3', '2', '1', ['z', 'm']],
-        tempo_bpm=180,
-        pause_after=0.8,
+        sequence=['5', '3', '2', '1', ['z', '/', 'm']],
+        tempo_bpm=160,
+        pause_after=0.5,
     ),
+
+    # Hold on the finished smiley so viewers can admire it!
+    Pause(2.0),
 
     Comment("Demo complete!"),
 ]

@@ -1065,7 +1065,7 @@ class PurpleApp(App):
                 try:
                     content_area = self.query_one("#content-area")
                     doodle_widget = content_area.query_one(f"#mode-{MODE_DOODLE[0]}")
-                    if hasattr(doodle_widget, 'has_content') and doodle_widget.has_content():
+                    if hasattr(doodle_widget, 'has_content') and doodle_widget.has_content() and not self.demo_running:
                         # Switch first (shows drawing), then prompt on top
                         self._complete_mode_switch(new_mode)
                         self._show_doodle_prompt()

@@ -86,62 +86,75 @@ DEMO_SCRIPT = [
     section_pause(1.0),
 
     # -------------------------------------------------------------------------
-    # SECTION 2: Play Mode (F2) - Music and Colors
+    # SECTION 2: Play Mode (F2) - Music and Colors (draws a heart!)
     # -------------------------------------------------------------------------
     Comment("=== PLAY MODE: Music and Art Grid ==="),
 
     SwitchMode("play"),
     Pause(0.8),
 
-    # Play a simple ascending scale
-    Comment("Simple melody on top row"),
+    # Draw a heart shape with pretty music (max 2 keys at a time for realism)
+    # The heart pattern on the 10x4 grid:
+    #     . 2 3 . . . 7 8 . .
+    #     Q W E R . Y U I O .
+    #     . S D F G H J K . .
+    #     . . C V B N M . . .
+
+    # Start with gentle melody: left side of heart top
+    Comment("Draw heart: left top curve"),
     PlayKeys(
-        sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-        tempo_bpm=180,
-        pause_after=0.5,
+        sequence=['q', 'w', '2', '3', 'e', 'r'],
+        tempo_bpm=140,
+        pause_after=0.3,
     ),
 
-    # Play a descending scale
-    Comment("Descending"),
+    # Right side of heart top (harmonizes with left)
+    Comment("Draw heart: right top curve"),
     PlayKeys(
-        sequence=['p', 'o', 'i', 'u', 'y', 't', 'r', 'e', 'w', 'q'],
-        tempo_bpm=200,
-        pause_after=0.5,
+        sequence=['y', 'u', '7', '8', 'i', 'o'],
+        tempo_bpm=140,
+        pause_after=0.3,
     ),
 
-    # Play a fun pattern
-    Comment("Fun rhythmic pattern"),
+    # Middle section with gentle 2-note harmonies
+    Comment("Draw heart: middle with harmonies"),
     PlayKeys(
         sequence=[
-            'a', 's', 'a', 's', 'd', 'f', 'd', 'f',
-            'g', 'h', 'g', 'h', 'j', 'k', 'l', ';',
+            's', 'd',
+            ['f', 'h'],  # harmony
+            'g',
+            ['j', 'k'],  # harmony
         ],
-        tempo_bpm=240,
+        tempo_bpm=120,
+        pause_after=0.3,
+    ),
+
+    # Bottom of heart converging to point
+    Comment("Draw heart: bottom point"),
+    PlayKeys(
+        sequence=[
+            'c', 'v',
+            ['b', 'n'],  # converging harmony
+            'm',
+            'b',  # the heart's point (press again to change color)
+        ],
+        tempo_bpm=100,
         pause_after=0.5,
     ),
 
-    # Play some chords (simultaneous keys)
-    Comment("Chords"),
+    # Finish with a sweet arpeggio along the heart outline
+    Comment("Sweet melody along the heart"),
     PlayKeys(
         sequence=[
-            ['q', 'e', 't'],  # Chord 1
-            None,            # Rest
-            ['w', 'r', 'y'],  # Chord 2
-            None,
-            ['e', 't', 'u'],  # Chord 3
-            None,
-            ['q', 'e', 't', 'u'],  # Big chord
+            'q', 'w', 'e', 'r',  # left top
+            'f', 'v', 'b',       # down to point
+            'n', 'j', 'o',       # up right side
+            'i', 'u', 'y',       # right top
+            None,                # rest
+            ['q', 'o'],          # final harmony
         ],
-        tempo_bpm=90,
+        tempo_bpm=160,
         pause_after=0.8,
-    ),
-
-    # Numbers row for variety
-    Comment("Number row sounds"),
-    PlayKeys(
-        sequence=['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-        tempo_bpm=200,
-        pause_after=0.5,
     ),
 
     section_pause(1.0),

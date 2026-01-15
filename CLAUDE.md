@@ -33,6 +33,12 @@ Use the `SUPPORT_EMAIL` constant from `purple_tui/constants.py` for consistency.
 
 ---
 
+## UX Change Log
+
+When making UX changes (behavior, interaction patterns, visual feedback), add a brief one-line description to `UX_LOG.md`. Keep entries short and focus on what changed from the user's perspective.
+
+---
+
 ## Writing Style
 
 **No em-dashes or spaced dashes.** Instead of ` - ` or ` — `, use colons, commas, or periods.

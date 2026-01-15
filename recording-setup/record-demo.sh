@@ -131,7 +131,7 @@ cleanup() {
         DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
         if [ -n "$DURATION" ]; then
             # Calculate trimmed duration (remove 2s from start + 2s from end = 4s total)
-            TRIM_DURATION=$(echo "$DURATION - 4" | bc)
+            TRIM_DURATION=$(awk "BEGIN {printf \"%.2f\", $DURATION - 4}")
 
             # Check if temp file has audio
             HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$TEMP_FILE" 2>/dev/null)

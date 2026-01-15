@@ -6,6 +6,8 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2025-01
 
+- **Legend 3 shades**: Color legend shows light/medium/dark gradient per row
+- **Cursor thick sides**: Paint cursor uses heavy lines for sides, light corners
 - **Legend updates**: Improved color legend visibility in paint mode
 - **Paint mode contrast/cursor/legend**: Better cursor visibility and contrast in paint mode
 - **Add spaces to operators**: Explore mode adds spaces around operators when inserting words

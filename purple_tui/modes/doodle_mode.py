@@ -72,13 +72,17 @@ QWERTY_ROW = list("qwertyuiop")    # Red family
 ASDF_ROW = list("asdfghjkl")       # Yellow family
 ZXCV_ROW = list("zxcvbnm")         # Blue family
 
-# Color legend: representative colors for each keyboard row (medium brightness)
+# Color legend: 3 shades per keyboard row (light, medium, dark)
 # Ordered top-to-bottom to mirror keyboard layout (numbers at top, ZXCV at bottom)
 ROW_LEGEND_COLORS = [
-    "#808080",  # Gray (number row, grayscale)
-    "#BF4040",  # Red (QWERTY row)
-    "#BFA040",  # Yellow/gold (ASDF row)
-    "#4060BF",  # Blue (ZXCV row)
+    # Gray (number row, grayscale): light → dark
+    ["#C0C0C0", "#808080", "#404040"],
+    # Red (QWERTY row): light → dark
+    ["#DF7070", "#BF4040", "#802020"],
+    # Yellow/gold (ASDF row): light → dark
+    ["#DFC070", "#BFA040", "#806820"],
+    # Blue (ZXCV row): light → dark
+    ["#7090DF", "#4060BF", "#203080"],
 ]
 
 # Canvas surface backgrounds (inside viewport, matches theme surface)
@@ -815,16 +819,30 @@ class ColorLegend(Widget):
             return APP_BG_DARK
 
     def render_line(self, y: int) -> Strip:
-        """Render a single line of the legend (one color bar)."""
+        """Render a single line of the legend (3 shades per row)."""
         width = self.size.width
 
         if not self._visible or y >= len(ROW_LEGEND_COLORS):
             # Hidden or beyond legend rows: render as app background
             return Strip([Segment(" " * width, Style(bgcolor=self._get_app_bg()))])
 
-        # Render solid color bar
-        color = ROW_LEGEND_COLORS[y]
-        return Strip([Segment(" " * width, Style(bgcolor=color))])
+        # Render 3 shades side-by-side
+        shades = ROW_LEGEND_COLORS[y]
+        segments = []
+        # Divide width into 3 parts
+        third = width // 3
+        remainder = width - (third * 3)
+
+        for i, color in enumerate(shades):
+            # Add extra char to last segment if width not divisible by 3
+            seg_width = third + (1 if i == 2 and remainder > 0 else 0)
+            if i == 1 and remainder > 1:
+                seg_width += 1
+            if i == 0 and remainder > 2:
+                seg_width += 1
+            segments.append(Segment(" " * seg_width, Style(bgcolor=color)))
+
+        return Strip(segments)
 
 
 # =============================================================================

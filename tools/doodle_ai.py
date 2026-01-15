@@ -81,8 +81,14 @@ def svg_to_png_base64(svg_path: str) -> str:
 
 class PurpleController:
     """
-    Controls the real Purple Computer app via PTY.
-    Sends keypresses and captures screenshots.
+    Controls the real Purple Computer app via file-based commands.
+    Sends commands and captures screenshots through the dev mode API.
+
+    The app runs in dev mode (PURPLE_DEV_MODE=1) which enables:
+    - Screenshot trigger via 'trigger' file
+    - Command execution via 'command' file (JSON commands)
+
+    This bypasses the evdev keyboard requirement.
     """
 
     def __init__(self, width: int = 120, height: int = 40):
@@ -98,7 +104,7 @@ class PurpleController:
         self.screenshot_dir = screenshot_dir
         os.makedirs(screenshot_dir, exist_ok=True)
 
-        # Create PTY
+        # Create PTY (for terminal display, not keyboard input)
         self.pty_master, pty_slave = pty.openpty()
 
         # Set terminal size
@@ -124,7 +130,7 @@ class PurpleController:
 
         os.close(pty_slave)
 
-        # Wait for app to start and drain initial output
+        # Wait for app to start
         time.sleep(2)
         self._drain_output()
 
@@ -156,37 +162,23 @@ class PurpleController:
             except:
                 break
 
+    def send_command(self, action: str, value: str = "") -> None:
+        """Send a command to the app via the command file."""
+        command_path = os.path.join(self.screenshot_dir, 'command')
+        cmd = json.dumps({"action": action, "value": value})
+        with open(command_path, 'w') as f:
+            f.write(cmd + '\n')
+        # Wait for app to process (checks every 0.1s)
+        time.sleep(0.15)
+
     def send_key(self, key: str) -> None:
-        """Send a single key to the app."""
-        key_map = {
-            'up': '\x1b[A',
-            'down': '\x1b[B',
-            'right': '\x1b[C',
-            'left': '\x1b[D',
-            'enter': '\r',
-            'space': ' ',
-            'tab': '\t',
-            'backspace': '\x7f',
-            'escape': '\x1b',
-            'f1': '\x1bOP',
-            'f2': '\x1bOQ',
-            'f3': '\x1bOR',
-            'f8': '\x1b[19~',  # Screenshot
-            'f9': '\x1b[20~',
-        }
-
+        """Send a single key to the app via command file."""
+        # Handle shift+key -> uppercase letter
         if key.startswith('shift+'):
-            # Shift+letter = uppercase
             char = key[6:].upper()
-            os.write(self.pty_master, char.encode())
-        elif key in key_map:
-            os.write(self.pty_master, key_map[key].encode())
-        elif len(key) == 1:
-            os.write(self.pty_master, key.encode())
+            self.send_command("key", char)
         else:
-            print(f"[Warning] Unknown key: {key}")
-
-        time.sleep(0.03)  # Small delay for app to process
+            self.send_command("key", key)
 
     def send_keys(self, keys: list[str], delay: float = 0.05) -> None:
         """Send multiple keys with delay between them."""
@@ -196,35 +188,39 @@ class PurpleController:
 
     def take_screenshot(self) -> str | None:
         """
-        Take a screenshot by pressing F8.
+        Take a screenshot via file-based trigger.
         Returns path to the SVG file, or None if failed.
         """
         self._drain_output()
 
-        # Press F8 to trigger screenshot
-        self.send_key('f8')
-        time.sleep(0.2)
-        self._drain_output()
-
-        # Read the latest screenshot path
+        # Get current screenshot count to detect new one
         latest_file = os.path.join(self.screenshot_dir, 'latest.txt')
+        old_path = None
+        if os.path.exists(latest_file):
+            with open(latest_file) as f:
+                old_path = f.read().strip()
 
-        # Wait for file to appear
-        for _ in range(10):
+        # Create trigger file - app will detect and take screenshot
+        trigger_path = os.path.join(self.screenshot_dir, 'trigger')
+        with open(trigger_path, 'w') as f:
+            f.write('1')
+
+        # Wait for new screenshot to appear
+        for _ in range(30):  # 3 seconds max
+            time.sleep(0.1)
             if os.path.exists(latest_file):
                 with open(latest_file) as f:
-                    svg_path = f.read().strip()
-                if os.path.exists(svg_path):
+                    new_path = f.read().strip()
+                if new_path != old_path and os.path.exists(new_path):
                     self.screenshot_count += 1
-                    return svg_path
-            time.sleep(0.1)
+                    return new_path
 
         print("[Warning] Screenshot not captured")
         return None
 
     def switch_to_doodle(self) -> None:
-        """Switch to Doodle mode (F3)."""
-        self.send_key('f3')
+        """Switch to Doodle mode."""
+        self.send_command("mode", "doodle")
         time.sleep(0.3)
 
     def enter_paint_mode(self) -> None:
@@ -253,7 +249,7 @@ class PurpleController:
                 self.send_key('down')
 
         elif action_type == 'select_color':
-            # Shift+key to select without stamping
+            # Shift+key to select without stamping (uppercase letter)
             self.send_key(f"shift+{action['key']}")
 
         elif action_type == 'stamp':
@@ -264,7 +260,7 @@ class PurpleController:
             direction = action['direction']
             length = action.get('length', 1)
 
-            # Select color
+            # Select color (uppercase to select without stamping)
             self.send_key(f"shift+{key}")
             time.sleep(0.02)
 

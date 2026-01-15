@@ -1,0 +1,8 @@
+#!/bin/bash
+# AI drawing tool for Purple Computer
+# Usage: ./tools/doodle-ai "a tree on a green hill"
+#        ./tools/doodle-ai "sunset" --iterations 8
+
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+exec python tools/doodle_ai.py --goal "$@"

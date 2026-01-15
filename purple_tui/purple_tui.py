@@ -665,6 +665,11 @@ class PurpleApp(App):
             # Wait 2 seconds for FFmpeg to stabilize (trimmed from final video)
             self.set_timer(2.0, self.start_demo)
 
+        # In dev mode, check for screenshot and command trigger files (for AI tools)
+        if os.environ.get("PURPLE_DEV_MODE") == "1":
+            self._screenshot_timer = self.set_interval(0.2, self._check_screenshot_trigger)
+            self._command_timer = self.set_interval(0.1, self._check_command_trigger)
+
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
         # Clean up evdev reader
@@ -1190,6 +1195,10 @@ class PurpleApp(App):
         if os.environ.get("PURPLE_DEV_MODE") != "1":
             return
 
+        self._do_screenshot()
+
+    def _do_screenshot(self) -> None:
+        """Actually take the screenshot."""
         screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR", "screenshots")
 
         import glob
@@ -1207,6 +1216,129 @@ class PurpleApp(App):
         latest_path = os.path.join(screenshot_dir, "latest.txt")
         with open(latest_path, "w") as f:
             f.write(filename)
+
+    def _check_screenshot_trigger(self) -> None:
+        """Check for file-based screenshot trigger (for AI tools).
+
+        The AI tool creates a 'trigger' file, we take a screenshot and delete it.
+        This works around evdev keyboard input not coming through PTY.
+        """
+        if os.environ.get("PURPLE_DEV_MODE") != "1":
+            return
+
+        screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR")
+        if not screenshot_dir:
+            return
+
+        trigger_path = os.path.join(screenshot_dir, "trigger")
+        if os.path.exists(trigger_path):
+            try:
+                os.unlink(trigger_path)
+                self._do_screenshot()
+            except Exception:
+                pass
+
+    def _check_command_trigger(self) -> None:
+        """Check for file-based command trigger (for AI tools).
+
+        The AI tool writes commands to a 'command' file, we execute them.
+        This works around evdev keyboard input not coming through PTY.
+
+        Command file format (JSON, one command per line):
+            {"action": "mode", "value": "doodle"}
+            {"action": "key", "value": "a"}
+            {"action": "key", "value": "up"}
+            {"action": "key", "value": "enter"}
+
+        Supported actions:
+            - mode: Switch to a mode (explore, play, doodle)
+            - key: Send a keypress (letters, arrows, enter, escape, space, backspace)
+        """
+        if os.environ.get("PURPLE_DEV_MODE") != "1":
+            return
+
+        screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR")
+        if not screenshot_dir:
+            return
+
+        command_path = os.path.join(screenshot_dir, "command")
+        if not os.path.exists(command_path):
+            return
+
+        try:
+            with open(command_path, "r") as f:
+                content = f.read()
+            os.unlink(command_path)
+
+            import json
+            for line in content.strip().split("\n"):
+                if not line.strip():
+                    continue
+                try:
+                    cmd = json.loads(line)
+                    self._execute_dev_command(cmd)
+                except json.JSONDecodeError:
+                    pass
+        except Exception:
+            pass
+
+    def _execute_dev_command(self, cmd: dict) -> None:
+        """Execute a dev command from the command file."""
+        import asyncio
+
+        action = cmd.get("action")
+        value = cmd.get("value", "")
+
+        if action == "mode":
+            # Switch mode: explore, play, doodle
+            mode_map = {
+                "explore": MODE_EXPLORE[0],
+                "play": MODE_PLAY[0],
+                "doodle": MODE_DOODLE[0],
+            }
+            mode_name = mode_map.get(value.lower())
+            if mode_name:
+                self.action_switch_mode(mode_name)
+
+        elif action == "key":
+            # Send a keypress through the keyboard state machine
+            key_action = self._create_action_from_key(value)
+            if key_action:
+                asyncio.create_task(self._dispatch_keyboard_action(key_action))
+
+    def _create_action_from_key(self, key: str):
+        """Create a keyboard action from a key name."""
+        key = key.lower()
+
+        # Navigation keys
+        nav_keys = {
+            "up": "up",
+            "down": "down",
+            "left": "left",
+            "right": "right",
+        }
+        if key in nav_keys:
+            return NavigationAction(direction=nav_keys[key], is_down=True)
+
+        # Control keys
+        ctrl_keys = {
+            "enter": "enter",
+            "return": "enter",
+            "escape": "escape",
+            "esc": "escape",
+            "backspace": "backspace",
+            "delete": "delete",
+            "tab": "tab",
+            "space": "space",
+        }
+        if key in ctrl_keys:
+            return ControlAction(action=ctrl_keys[key], is_down=True)
+
+        # Single character
+        if len(key) == 1:
+            return CharacterAction(char=key)
+
+        return None
 
     def _apply_volume(self) -> None:
         """Apply volume level to TTS and update UI"""

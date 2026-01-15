@@ -108,10 +108,9 @@ class PlayGrid(Widget):
     }
     """
 
-    CLASSES = "caps-sensitive"
-
     def __init__(self) -> None:
         super().__init__()
+        self.add_class("caps-sensitive")
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._sounds: dict[str, pygame.mixer.Sound] = {}
@@ -270,7 +269,9 @@ class PlayGrid(Widget):
 class PlayExampleHint(Static):
     """Shows example hint with caps support"""
 
-    CLASSES = "caps-sensitive"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)

@@ -363,7 +363,9 @@ class InlineInput(Input):
 class InputPrompt(Static):
     """Shows 'Ask ▶' prompt with input area"""
 
-    CLASSES = "caps-sensitive"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
 
     def render(self) -> str:
         text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
@@ -373,13 +375,17 @@ class InputPrompt(Static):
 class AutocompleteHint(Static):
     """Shows autocomplete suggestion and help hints"""
 
-    CLASSES = "caps-sensitive"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
 
 
 class ExampleHint(Static):
     """Shows example hint with caps support"""
 
-    CLASSES = "caps-sensitive"
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)

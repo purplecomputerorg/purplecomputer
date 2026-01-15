@@ -424,10 +424,10 @@ class PurpleApp(App):
     }
 
     #paint-legend {
-        width: 3;
+        width: 2;
         height: 4;
         margin-left: 1;
-        margin-top: 1;
+        margin-top: __LEGEND_TOP_MARGIN__;
     }
 
     #title-row {
@@ -521,7 +521,7 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT))
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT + 2 - 4))  # align legend bottom with viewport bottom
 
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input

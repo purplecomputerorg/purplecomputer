@@ -80,13 +80,17 @@ ROW_LEGEND_COLORS = [
     "#4060BF",  # Blue (ZXCV row)
 ]
 
-# Default backgrounds (dark and light themes)
+# Canvas surface backgrounds (inside viewport, matches theme surface)
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
+# App outer backgrounds (outside viewport, matches theme background)
+APP_BG_DARK = "#1e1033"
+APP_BG_LIGHT = "#f0e8f8"
+
 # Readable text foreground colors (dark and light themes)
 TEXT_FG_DARK = "#FFFFFF"
-TEXT_FG_LIGHT = "#1e1033"
+TEXT_FG_LIGHT = APP_BG_DARK  # Dark text uses same color as dark app background
 
 # Cursor colors
 CURSOR_BG_NORMAL = "#6633AA"
@@ -94,7 +98,7 @@ CURSOR_BG_PAINT = "#FF6600"
 
 # Cursor ring corner colors (high contrast for visibility on any background)
 CURSOR_CORNER_DARK = "#FFFFFF"   # White corners on dark theme
-CURSOR_CORNER_LIGHT = "#1e1033"  # Dark corners on light theme
+CURSOR_CORNER_LIGHT = APP_BG_DARK  # Dark corners on light theme
 
 # Corner positions in the 3x3 ring
 CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
@@ -253,6 +257,10 @@ class ArtCanvas(Widget, can_focus=True):
         self._backspace_start_time: float | None = None
         self._clear_animation_active = False
 
+    def on_mount(self) -> None:
+        """Start cursor blinking when canvas is mounted."""
+        self._start_blink()
+
     def _get_default_bg(self) -> str:
         """Get default background based on current theme."""
         try:
@@ -277,12 +285,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._paint_mode = not self._paint_mode
         self._space_down = False  # Reset brush state on mode change
 
-        # Start or stop cursor blinking
-        if self._paint_mode:
-            self._start_blink()
-        else:
-            self._stop_blink()
-
+        # Cursor blinks in both modes
         self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
         self.refresh()
 
@@ -393,9 +396,21 @@ class ArtCanvas(Widget, can_focus=True):
                     else:
                         segments.append(Segment(" ", Style(bgcolor=default_bg)))
                 else:
-                    # Text mode cursor
-                    cursor_style = Style(color="#FFFFFF", bgcolor=CURSOR_BG_NORMAL, bold=True)
-                    segments.append(Segment("▌", cursor_style))
+                    # Text mode cursor (blinks)
+                    if self._cursor_visible:
+                        cursor_style = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
+                        segments.append(Segment("▌", cursor_style))
+                    else:
+                        # Blink off: show underlying cell
+                        if cell:
+                            char, fg_color, bg_color = cell
+                            if char != BRUSH_CHAR:
+                                fg_color = self._get_text_fg()
+                                if is_text_tint_bg(bg_color):
+                                    bg_color = default_bg
+                            segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
+                        else:
+                            segments.append(Segment(" ", Style(bgcolor=default_bg)))
             elif is_brush_ring:
                 # 3x3 ring around cursor: blinks on/off with box-drawing chars
                 # This can extend into the gutter area
@@ -778,39 +793,33 @@ class ColorLegend(Widget):
     - Yellow (ASDF row)
     - Blue (ZXCV row)
 
-    Only visible in paint mode. Uses CSS class to fully hide when inactive.
-    """
-
-    DEFAULT_CSS = """
-    ColorLegend {
-        /* Default: visible */
-    }
-    ColorLegend.legend-hidden {
-        display: none;
-    }
+    Only visible in paint mode. Always occupies space to prevent layout shifts.
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._visible = False
-        self.add_class("legend-hidden")  # Start hidden
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide the legend."""
         self._visible = visible
-        if visible:
-            self.remove_class("legend-hidden")
-        else:
-            self.add_class("legend-hidden")
         self.refresh()
+
+    def _get_app_bg(self) -> str:
+        """Get the app's background color to blend in when hidden."""
+        try:
+            is_dark = "dark" in self.app.theme
+            return APP_BG_DARK if is_dark else APP_BG_LIGHT
+        except Exception:
+            return APP_BG_DARK
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the legend (one color bar)."""
         width = self.size.width
 
-        if y >= len(ROW_LEGEND_COLORS):
-            # Beyond legend rows: render empty (shouldn't happen with display:none)
-            return Strip([])
+        if not self._visible or y >= len(ROW_LEGEND_COLORS):
+            # Hidden or beyond legend rows: render as app background
+            return Strip([Segment(" " * width, Style(bgcolor=self._get_app_bg()))])
 
         # Render solid color bar
         color = ROW_LEGEND_COLORS[y]
@@ -852,7 +861,7 @@ class CanvasHeader(Static):
         # Calculate perceived luminance (human eye is more sensitive to green)
         luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
         # Return dark text for light colors, light text for dark colors
-        return "#1e1033" if luminance > 0.5 else "#FFFFFF"
+        return APP_BG_DARK if luminance > 0.5 else TEXT_FG_DARK
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
@@ -862,9 +871,9 @@ class CanvasHeader(Static):
             # Use contrasting text color for readability
             text_color = self._get_contrast_color(self._last_color)
             mode_styled = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
-            hint = caps("Tab: text")
+            hint = caps("Tab: write")
         else:
-            mode_styled = f"[bold]{caps('Doodle')}[/]"
+            mode_styled = f"[bold]{caps('Write')}[/]"
             hint = caps("Tab: paint")
 
         return f"{mode_styled}  [dim]({hint})[/]"

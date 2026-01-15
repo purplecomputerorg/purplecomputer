@@ -136,10 +136,16 @@ EOF
     chmod +x "$LAUNCHER"
 
     # Launch Alacritty with our config
+    # Use fullscreen for demo recording to maximize viewport
+    ALACRITTY_OPTS=""
+    if [ -n "$PURPLE_DEMO_AUTOSTART" ]; then
+        ALACRITTY_OPTS="-o window.startup_mode=\"Fullscreen\""
+    fi
+
     if [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Alacritty.app" ]; then
-        /Applications/Alacritty.app/Contents/MacOS/alacritty --config-file "$ALACRITTY_CONFIG" -e "$LAUNCHER"
+        /Applications/Alacritty.app/Contents/MacOS/alacritty --config-file "$ALACRITTY_CONFIG" $ALACRITTY_OPTS -e "$LAUNCHER"
     else
-        alacritty --config-file "$ALACRITTY_CONFIG" -e "$LAUNCHER"
+        alacritty --config-file "$ALACRITTY_CONFIG" $ALACRITTY_OPTS -e "$LAUNCHER"
     fi
 
     rm -f "$LAUNCHER"

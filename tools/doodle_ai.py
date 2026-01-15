@@ -117,10 +117,13 @@ class PurpleController:
         env['PURPLE_DEV_MODE'] = '1'
         env['PURPLE_SCREENSHOT_DIR'] = screenshot_dir
         env['PURPLE_DEMO_AUTOSTART'] = '0'  # Don't auto-run demo
+        # Add project root to PYTHONPATH so purple_tui can be found
+        project_root = str(Path(__file__).parent.parent)
+        env['PYTHONPATH'] = project_root + ':' + env.get('PYTHONPATH', '')
 
         # Start the app
         self.process = subprocess.Popen(
-            [sys.executable, '-m', 'purple_tui'],
+            [sys.executable, '-m', 'purple_tui.purple_tui'],
             stdin=pty_slave,
             stdout=pty_slave,
             stderr=subprocess.DEVNULL,

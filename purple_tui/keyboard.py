@@ -529,6 +529,7 @@ class CharacterAction(KeyAction):
     shifted: bool = False  # Was the character transformed (by shift, caps, or double-tap)?
     shift_held: bool = False  # Was physical shift key held? (not caps lock)
     is_repeat: bool = False  # Is this a key repeat?
+    arrow_held: str | None = None  # Arrow direction held when this action fired
 
 
 @dataclass
@@ -757,6 +758,7 @@ class KeyboardStateMachine:
                 shifted=(final_char != char),
                 shift_held=self._shift_held,
                 is_repeat=is_repeat,
+                arrow_held=self.held_arrow_direction,
             ))
 
             # Track if physical shift was used for this character (prevents sticky activation)

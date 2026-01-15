@@ -708,16 +708,20 @@ class ArtCanvas(Widget, can_focus=True):
             self._backspace_start_time = None
 
             char = action.char
+            # When arrow is held (except right), don't auto-advance after stamping.
+            # The arrow key movement handles navigation, so advancing would fight it.
+            should_advance = action.arrow_held in (None, 'right')
             if self._paint_mode:
                 # In paint mode:
-                # - Lowercase letters: select color, stamp, advance right
+                # - Lowercase letters: select color, stamp, advance right (unless arrow held)
                 # - Uppercase (shift) letters: just select color (no stamp, no advance)
-                # - Number keys: select grayscale, stamp, advance right
+                # - Number keys: select grayscale, stamp, advance right (unless arrow held)
                 if char in GRAYSCALE:
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
                     self._paint_at_cursor()
-                    self._move_cursor_right()  # Advance after stamp
+                    if should_advance:
+                        self._move_cursor_right()
                     self.post_message(PaintModeChanged(True, self._last_key_color))
                     self.refresh()
                 elif char.isalpha():
@@ -730,7 +734,8 @@ class ArtCanvas(Widget, can_focus=True):
                         if not action.shift_held:
                             # No shift: stamp and advance (works with caps lock and double-tap)
                             self._paint_at_cursor()
-                            self._move_cursor_right()
+                            if should_advance:
+                                self._move_cursor_right()
                         # Shift held: just select brush, no stamp
                         self.refresh()
             else:
@@ -815,6 +820,7 @@ class CanvasHeader(Static):
         super().__init__(**kwargs)
         self._is_painting = False
         self._last_color = "#FFFFFF"
+        self.add_class("caps-sensitive")
 
     def update_state(self, is_painting: bool, last_color: str) -> None:
         """Update displayed state."""

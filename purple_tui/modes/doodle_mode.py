@@ -219,6 +219,7 @@ class ArtCanvas(Widget, can_focus=True):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
         # Grid: dict[(x, y)] = (char, fg_color, bg_color)
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         self._cursor_x = 0
@@ -711,20 +712,19 @@ class ArtCanvas(Widget, can_focus=True):
             self._backspace_start_time = None
 
             char = action.char
-            # When arrow is held (except right), don't auto-advance after stamping.
-            # The arrow key movement handles navigation, so advancing would fight it.
-            should_advance = action.arrow_held in (None, 'right')
+            # When an arrow is held, advance in that direction after stamping.
+            # This lets you type "leftward" or "downward" by holding an arrow while typing.
+            advance_direction = action.arrow_held if action.arrow_held else 'right'
             if self._paint_mode:
                 # In paint mode:
-                # - Lowercase letters: select color, stamp, advance right (unless arrow held)
+                # - Lowercase letters: select color, stamp, advance (direction from held arrow, or right)
                 # - Uppercase (shift) letters: just select color (no stamp, no advance)
-                # - Number keys: select grayscale, stamp, advance right (unless arrow held)
+                # - Number keys: select grayscale, stamp, advance (direction from held arrow, or right)
                 if char in GRAYSCALE:
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
                     self._paint_at_cursor()
-                    if should_advance:
-                        self._move_cursor_right()
+                    self._move_in_direction(advance_direction)
                     self.post_message(PaintModeChanged(True, self._last_key_color))
                     self.refresh()
                 elif char.isalpha():
@@ -735,10 +735,9 @@ class ArtCanvas(Widget, can_focus=True):
                         self._last_key_color = color
                         self.post_message(PaintModeChanged(True, self._last_key_color))
                         if not action.shift_held:
-                            # No shift: stamp and advance (works with caps lock and double-tap)
+                            # No shift: stamp and advance in arrow direction (or right by default)
                             self._paint_at_cursor()
-                            if should_advance:
-                                self._move_cursor_right()
+                            self._move_in_direction(advance_direction)
                         # Shift held: just select brush, no stamp
                         self.refresh()
             else:

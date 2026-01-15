@@ -747,7 +747,6 @@ class PurpleApp(App):
             return
 
         if isinstance(action, CapsLockAction):
-            self.log.info("CAPS ACTION RECEIVED")  # DEBUG
             self.keyboard.handle_caps_lock_press()
             return
 
@@ -1224,7 +1223,6 @@ class PurpleApp(App):
 
     def _on_caps_change(self, caps_on: bool) -> None:
         """Called when caps lock state changes"""
-        self.log.info(f"CAPS CHANGE: {caps_on}")  # DEBUG
         self._refresh_caps_sensitive_widgets()
         try:
             indicator = self.query_one("#caps-indicator", Static)
@@ -1341,9 +1339,7 @@ class PurpleApp(App):
 
         Widgets opt-in by adding the 'caps-sensitive' CSS class.
         """
-        widgets = list(self.query(".caps-sensitive"))
-        self.log.info(f"REFRESH CAPS: found {len(widgets)} widgets: {[type(w).__name__ for w in widgets]}")  # DEBUG
-        for widget in widgets:
+        for widget in self.query(".caps-sensitive"):
             widget.refresh()
 
     @property

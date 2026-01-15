@@ -310,8 +310,6 @@ class CapsState:
     def toggle(self) -> bool:
         """Toggle caps lock state. Returns new state."""
         self.caps_lock_on = not self.caps_lock_on
-        import sys
-        print(f"CAPS TOGGLE: {self.caps_lock_on}, callback={self._on_change is not None}", file=sys.stderr)  # DEBUG
         if self._on_change:
             self._on_change(self.caps_lock_on)
         return self.caps_lock_on
@@ -325,8 +323,6 @@ class CapsState:
 
     def on_change(self, callback: Callable[[bool], None]) -> None:
         """Register callback for caps lock changes."""
-        import sys
-        print(f"CAPS CALLBACK REGISTERED: {callback}", file=sys.stderr)  # DEBUG
         self._on_change = callback
 
 

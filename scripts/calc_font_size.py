@@ -21,8 +21,9 @@ import sys
 REQUIRED_COLS = 104
 REQUIRED_ROWS = 37
 
-# Target: fill 80% of screen (leaves visible border, never clips)
-SCREEN_FILL = 0.80
+# Target screen fill (demo mode fills more for better recordings)
+SCREEN_FILL_NORMAL = 0.80  # Leaves visible border, never clips
+SCREEN_FILL_DEMO = 0.95    # Maximizes viewport for recordings
 
 # Font size limits (always reasonable)
 MIN_FONT = 12
@@ -69,11 +70,19 @@ def probe_cell_size():
     return FALLBACK_CELL
 
 
+def get_screen_fill():
+    """Get screen fill percentage (higher for demo recordings)."""
+    if os.environ.get('PURPLE_DEMO_AUTOSTART'):
+        return SCREEN_FILL_DEMO
+    return SCREEN_FILL_NORMAL
+
+
 def calculate_font(screen_w, screen_h, cell_w, cell_h):
-    """Calculate font size to fill SCREEN_FILL of screen."""
+    """Calculate font size to fill screen."""
+    screen_fill = get_screen_fill()
     # How much space we have
-    available_w = screen_w * SCREEN_FILL
-    available_h = screen_h * SCREEN_FILL
+    available_w = screen_w * screen_fill
+    available_h = screen_h * screen_fill
 
     # How much space the grid needs at probe font size
     grid_w = cell_w * REQUIRED_COLS
@@ -93,10 +102,12 @@ def main():
         screen = get_resolution()
         cell = probe_cell_size()
         font = calculate_font(*screen, *cell)
+        screen_fill = get_screen_fill()
+        demo = " (demo)" if os.environ.get('PURPLE_DEMO_AUTOSTART') else ""
         print(f"Screen: {screen[0]}x{screen[1]}")
         print(f"Cell: {cell[0]}x{cell[1]} (at {PROBE_FONT}pt)")
         print(f"Grid: {REQUIRED_COLS}x{REQUIRED_ROWS}")
-        print(f"Fill: {SCREEN_FILL*100:.0f}%")
+        print(f"Fill: {screen_fill*100:.0f}%{demo}")
         print(f"Font: {font:.1f}pt")
         return
 

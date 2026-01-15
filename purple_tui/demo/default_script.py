@@ -63,40 +63,44 @@ DEMO_SCRIPT = [
     # 2. MUSICAL SMILEY (Play) - 10s
     # Draw a smiley face while playing music!
     #
-    # The grid (corrected for proper upward smile):
+    # The grid:
     #     Col:  0 1 2 3 4 5 6 7 8 9
-    #     Row 0: 1 2 3 4 5 6 7 8 9 0    <- 4 and 7 are eyes (percussion)
-    #     Row 1: Q W E R T Y U I O P
-    #     Row 2: A S D F G H J K L ;    <- F G H are smile CENTER (top of curve)
-    #     Row 3: Z X C V B N M , . /    <- C and M are smile ENDS (bottom of curve)
+    #     Row 0: 1 2 3 4 5 6 7 8 9 0    <- 4 and 6 are eyes
+    #     Row 1: Q W E R T Y U I O P    <- T is nose
+    #     Row 2: A S D F G H J K L ;    <- D and J are smile CORNERS (UP)
+    #     Row 3: Z X C V B N M , . /    <- C V B N M is smile BOTTOM (DOWN)
     #
-    # For a smile that curves UP: center (F,G,H) is on row 2 (higher),
-    # ends (C,M) are on row 3 (lower). This makes an upward curve!
+    # Corners UP (D, J) + bottom DOWN (CVBNM) = upward-curving smile!
     # -------------------------------------------------------------------------
     Comment("=== MUSICAL SMILEY ==="),
     SwitchMode("play"),
     Pause(0.4),
 
-    # Eyes: 4 and 7 (percussion sounds - fun "blink blink"!)
+    # Eyes: 4 and 6 (percussion - blink blink!)
     PlayKeys(
-        sequence=['4', None, '7'],
+        sequence=['4', None, '6'],
         tempo_bpm=90,
-        pause_after=0.4,
-    ),
-
-    # Smile center: F G H (yellow family, warm middle notes)
-    # This is the TOP of the smile curve
-    PlayKeys(
-        sequence=['f', 'g', 'h'],
-        tempo_bpm=120,
         pause_after=0.3,
     ),
 
-    # Smile ends: C and M (blue family, low notes)
-    # These are BELOW the center, completing the upward curve!
+    # Nose: T (high marimba, cute boop!)
     PlayKeys(
-        sequence=['c', None, 'm'],
+        sequence=['t'],
         tempo_bpm=100,
+        pause_after=0.3,
+    ),
+
+    # Smile corners: D and J (mid-range, these are UP)
+    PlayKeys(
+        sequence=['d', None, 'j'],
+        tempo_bpm=100,
+        pause_after=0.3,
+    ),
+
+    # Smile bottom: C V B N M (low notes, ascending melody, this is DOWN)
+    PlayKeys(
+        sequence=['c', 'v', 'b', 'n', 'm'],
+        tempo_bpm=140,
         pause_after=0.8,
     ),
 
@@ -210,11 +214,11 @@ DEMO_SCRIPT_SHORT = [
     TypeText("hi!"),
     PressKey("enter", pause_after=1.0),
 
-    # Draw a quick smiley
+    # Draw a quick smiley: eyes (4 6), nose (T), corners UP (D J), bottom DOWN (CVBNM)
     SwitchMode("play"),
     PlayKeys(
-        sequence=['e', 'i', 'c', 'v', 'b', 'n'],
-        tempo_bpm=160,
+        sequence=['4', '6', 't', 'd', 'j', 'c', 'v', 'b', 'n', 'm'],
+        tempo_bpm=180,
         pause_after=0.3,
     ),
 
@@ -252,12 +256,16 @@ def make_smiley() -> list:
     """Create a smiley face in Play mode.
 
     Returns a list of actions that draw:
-    - Eyes at E and I
-    - Smile corners at A and L
-    - Smile curve at C, V, B, N
+    - Eyes at 4 and 6 (row 0)
+    - Nose at T (row 1)
+    - Smile corners at D and J (row 2, UP)
+    - Smile bottom at C, V, B, N, M (row 3, DOWN)
+
+    The corners are ABOVE the bottom, creating an upward-curving smile!
     """
     return [
-        PlayKeys(sequence=['e', None, 'i'], tempo_bpm=90),
-        PlayKeys(sequence=['a', None, 'l'], tempo_bpm=100),
-        PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140),
+        PlayKeys(sequence=['4', None, '6'], tempo_bpm=90),
+        PlayKeys(sequence=['t'], tempo_bpm=100),
+        PlayKeys(sequence=['d', None, 'j'], tempo_bpm=100),
+        PlayKeys(sequence=['c', 'v', 'b', 'n', 'm'], tempo_bpm=140),
     ]

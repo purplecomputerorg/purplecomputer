@@ -87,20 +87,20 @@ Within each row, left keys are lower pitch, right keys are higher:
 ### Drawing Shapes
 
 **Important**: The grid is only 10 wide × 4 tall. For a proper **smile** (curving UP),
-the mouth's CENTER must be on a HIGHER row than the ENDS.
+the mouth's ENDS must be HIGHER (lower row number) than the CENTER.
 
 To draw a **smiley face** (smile curves UP):
 ```
 Col:  0 1 2 3 4 5 6 7 8 9
-      . . . 4 . . 7 . . .   ← Row 0: Eyes (4 and 7)
-      . . . . . . . . . .   ← Row 1: (empty space)
-      . . . F G H . . . .   ← Row 2: Smile TOP (center of smile is HIGH)
-      . . C . . . . M . .   ← Row 3: Smile ENDS (corners are LOW)
+      . . . 4 . 6 . . . .   ← Row 0: Eyes (4 and 6)
+      . . . . T . . . . .   ← Row 1: Nose (T)
+      . . D . . . J . . .   ← Row 2: Smile CORNERS (UP)
+      . . C V B N M . . .   ← Row 3: Smile BOTTOM (DOWN)
 ```
 
-Keys to press: `4`, `7` (eyes), then `F`, `G`, `H` (smile center), then `C`, `M` (smile corners)
+Keys to press: `4`, `6` (eyes), `T` (nose), `D`, `J` (smile corners), then `C`, `V`, `B`, `N`, `M` (smile bottom)
 
-This creates an upward-curving smile because the middle (F G H) is above the ends (C M)!
+This creates an upward-curving smile because the corners (D, J) are ABOVE the bottom (CVBNM)!
 
 To draw a **simple house**:
 ```

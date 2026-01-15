@@ -613,6 +613,7 @@ class KeyboardStateMachine:
         # Sticky shift
         self._sticky_shift_active = False
         self._sticky_shift_time = 0.0
+        self._shift_used_for_char = False  # Track if physical shift was used for a character
 
         # Double-tap detection
         self._double_tap = DoubleTapDetector(
@@ -758,6 +759,10 @@ class KeyboardStateMachine:
                 is_repeat=is_repeat,
             ))
 
+            # Track if physical shift was used for this character (prevents sticky activation)
+            if self._shift_held and not is_repeat:
+                self._shift_used_for_char = True
+
             # Consume sticky shift (only on fresh press)
             if not is_repeat and self._sticky_shift_active:
                 self._sticky_shift_active = False
@@ -774,13 +779,14 @@ class KeyboardStateMachine:
 
         # Handle modifier releases
         if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
-            # Check for sticky shift (quick tap)
-            if press_time:
+            # Check for sticky shift (quick tap, only if shift wasn't used for a character)
+            if press_time and not self._shift_used_for_char:
                 hold_duration = event.timestamp - press_time
                 if hold_duration < 0.3:  # Quick tap
                     self._sticky_shift_active = True
                     self._sticky_shift_time = event.timestamp
             self._shift_held = False
+            self._shift_used_for_char = False  # Reset for next shift press
             actions.append(ShiftAction(is_down=False))
             return actions
 

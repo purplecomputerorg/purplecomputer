@@ -111,7 +111,7 @@ DEMO_SCRIPT = [
     Comment("=== COLOR MAGIC ==="),
     SwitchMode("explore"),
     Pause(0.3),
-    TypeText("red+blue"),
+    TypeText("pink+indigo"),
     PressKey("enter", pause_after=1.8),
 
     # -------------------------------------------------------------------------
@@ -224,7 +224,7 @@ DEMO_SCRIPT_SHORT = [
 
     # Color mix
     SwitchMode("explore"),
-    TypeText("red+blue"),
+    TypeText("pink+indigo"),
     PressKey("enter", pause_after=1.2),
 
     # Quick doodle

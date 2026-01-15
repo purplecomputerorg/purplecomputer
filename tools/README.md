@@ -8,9 +8,8 @@ Development tools for Purple Computer. Run these inside the VM (requires Linux/e
 # Create tools/.env with your API key
 echo "ANTHROPIC_API_KEY=sk-ant-your-key-here" > tools/.env
 
-# Install dependencies
-source .venv/bin/activate
-pip install cairosvg
+# Dependencies are auto-installed on first run, or install manually:
+pip install -r tools/requirements.txt
 ```
 
 ## AI Drawing Tool (`doodle_ai.py`)

@@ -5,4 +5,11 @@
 
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
+
+# Install tool dependencies if missing
+if ! python -c "import anthropic; import cairosvg" 2>/dev/null; then
+    echo "Installing tool dependencies..."
+    pip install -q -r tools/requirements.txt
+fi
+
 exec python tools/doodle_ai.py --goal "$@"

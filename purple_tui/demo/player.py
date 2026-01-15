@@ -206,51 +206,32 @@ class DemoPlayer:
     async def _play_keys(self, action: PlayKeys) -> None:
         """Play a sequence of keys with musical timing.
 
-        If set_play_key_color callback is available, uses "flash" behavior
-        where keys light up momentarily then turn off. Otherwise falls back
-        to dispatching CharacterActions (which cycle colors and persist).
+        Each key press cycles the key's color (purple → blue → red → off → ...).
+        Colors PERSIST after being set. This is intentional: by pressing keys
+        in strategic patterns, you can "draw" pictures on the keyboard grid
+        while playing music.
+
+        For example, pressing 'e', 'i', 'c', 'v', 'b', 'n' creates a smiley face
+        (eyes + smile) that stays visible.
         """
         beat_duration = 60.0 / action.tempo_bpm
-
-        # Use flash behavior if we have direct color control
-        use_flash = self._set_play_key_color is not None
 
         for item in action.sequence:
             if self._cancelled:
                 return
 
             if item is None:
-                # Rest
+                # Rest (silence, no key press)
                 await self._sleep(beat_duration)
             elif isinstance(item, list):
-                # Chord (multiple keys at once)
-                keys = [k.upper() if k.isalpha() else k for k in item]
-                if use_flash:
-                    # Turn all chord keys on
-                    for key in keys:
-                        self._set_play_key_color(key, 0)  # 0 = purple (first color)
-                    # Play sounds via dispatch
-                    for key in item:
-                        await self._dispatch(CharacterAction(char=key))
-                    await self._sleep(beat_duration)
-                    # Turn all chord keys off
-                    for key in keys:
-                        self._set_play_key_color(key, -1)  # -1 = off
-                else:
-                    for key in item:
-                        await self._dispatch(CharacterAction(char=key))
-                    await self._sleep(beat_duration)
+                # Chord: multiple keys pressed together
+                for key in item:
+                    await self._dispatch(CharacterAction(char=key))
+                await self._sleep(beat_duration)
             else:
                 # Single key
-                key = item.upper() if item.isalpha() else item
-                if use_flash:
-                    self._set_play_key_color(key, 0)  # Turn on
-                    await self._dispatch(CharacterAction(char=item))  # Play sound
-                    await self._sleep(beat_duration)
-                    self._set_play_key_color(key, -1)  # Turn off
-                else:
-                    await self._dispatch(CharacterAction(char=item))
-                    await self._sleep(beat_duration)
+                await self._dispatch(CharacterAction(char=item))
+                await self._sleep(beat_duration)
 
         await self._sleep(action.pause_after)
 

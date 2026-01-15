@@ -16,21 +16,33 @@ The demo system (`purple_tui/demo/`) plays back scripted sequences of keyboard a
 ### Play Mode
 
 **How it works:**
-- Displays a 10x4 grid of keys
+- Displays a 10x4 grid matching the keyboard layout
 - Each key has a color state: -1 (off), 0 (purple), 1 (blue), 2 (red)
 - Pressing a key **cycles** to the next color (purple → blue → red → off → purple...)
 - Colors **persist** until cycled again or reset
 
-**Common mistake:** Assuming keys light up while held and turn off on release (like a piano). They don't. Each press cycles the color and it stays.
+**The key insight:** Persistent colors ARE the feature! By pressing keys strategically,
+you can "draw pictures" on the keyboard grid while playing music. For example,
+pressing E, I (eyes) then C, V, B, N (smile) creates a smiley face.
 
-**For demos:** The demo player uses `set_play_key_color` callback to directly set colors, enabling "flash" behavior where keys light up momentarily then turn off.
+**The grid layout:**
+```
+1 2 3 4 5 6 7 8 9 0
+Q W E R T Y U I O P
+A S D F G H J K L ;
+Z X C V B N M , . /
+```
+
+**Demo strategy:** Plan your key sequences to create recognizable shapes:
+- Smiley: E, I (eyes) + A, L (corners) + C, V, B, N (smile curve)
+- Heart: Design keys that form a heart shape
+- Avoid pressing the same key twice (it cycles to next color)
 
 ```python
-# In PlayKeys, with flash enabled:
-# 1. Set key to purple (index 0)
-# 2. Play sound
-# 3. Wait beat duration
-# 4. Set key to off (index -1)
+# Example: Draw a smiley face
+PlayKeys(sequence=['e', None, 'i'], tempo_bpm=90)      # Eyes
+PlayKeys(sequence=['a', None, 'l'], tempo_bpm=100)    # Corners
+PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140)  # Smile
 ```
 
 ### Doodle Mode
@@ -150,16 +162,19 @@ Within each row, colors go from light (left) to dark (right).
 
 ## Demo Player Callbacks
 
-The demo player accepts callbacks for direct mode manipulation:
+The demo player accepts callbacks for mode state:
 
 ```python
 DemoPlayer(
     dispatch_action=app._dispatch_keyboard_action,
     clear_all=app.clear_all_state,
-    set_play_key_color=app._set_play_key_color,      # For flash effects
-    is_doodle_paint_mode=app._is_doodle_paint_mode,  # Check paint mode
+    set_play_key_color=app._set_play_key_color,      # Direct color control (optional)
+    is_doodle_paint_mode=app._is_doodle_paint_mode,  # Check if in paint mode
 )
 ```
+
+The `is_doodle_paint_mode` callback lets DrawPath check if we're already in paint mode
+before pressing Tab (avoids toggling back to text mode).
 
 ## Example: Good Demo Sequence
 
@@ -167,33 +182,44 @@ DemoPlayer(
 DEMO_SCRIPT = [
     ClearAll(),
 
-    # Play mode: flash keys in sequence
-    SwitchMode("play"),
-    PlayKeys(sequence=['a', 's', 'd', 'f'], tempo_bpm=180),
+    # Quick greeting in Explore mode
+    TypeText("hello!"),
+    PressKey("enter", pause_after=1.0),
 
-    # Explore mode: ask a question
+    # Play mode: draw a smiley face while playing music
+    SwitchMode("play"),
+    PlayKeys(sequence=['e', None, 'i'], tempo_bpm=90),      # Eyes
+    PlayKeys(sequence=['a', None, 'l'], tempo_bpm=100),     # Corners
+    PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140), # Smile
+
+    # Explore mode: show color mixing
     SwitchMode("explore"),
     TypeText("red+blue"),
     PressKey("enter", pause_after=1.5),
 
-    # Doodle mode: draw a colored shape
+    # Doodle mode: draw with colors and add text
     SwitchMode("doodle"),
-    # DrawPath auto-enters paint mode
-    DrawPath(directions=['right', 'right', 'down', 'down'], color_key='g'),
-    DrawPath(directions=['left', 'left'], color_key='r'),
+    DrawPath(directions=['right', 'right', 'down'], color_key='f'),  # Yellow
+    DrawPath(directions=['down', 'left'], color_key='c'),            # Blue (mixes!)
+    PressKey("tab"),  # Switch to text mode
+    TypeText("Purple!"),
 ]
 ```
 
 ## Troubleshooting
 
-**Problem:** Play mode keys stay lit as rectangles instead of flashing.
-**Cause:** set_play_key_color callback not wired up, falling back to cycle behavior.
-**Fix:** Ensure DemoPlayer receives the callback from PurpleApp.
+**Problem:** Play mode shows a blob instead of a recognizable shape.
+**Cause:** Keys pressed randomly without considering grid positions.
+**Fix:** Plan your key sequence to form a picture. Use the grid reference above.
+
+**Problem:** Play mode colors keep changing on same keys.
+**Cause:** Pressing the same key multiple times cycles it through colors.
+**Fix:** Avoid pressing the same key twice. Each key should only be pressed once per picture.
 
 **Problem:** Doodle mode shows typed letters instead of colored paint.
 **Cause:** Drawing while in text mode instead of paint mode.
-**Fix:** DrawPath now auto-enters paint mode. For manual drawing, send Tab first.
+**Fix:** DrawPath auto-enters paint mode. For manual drawing, press Tab first.
 
-**Problem:** Colors are wrong or missing.
+**Problem:** Colors are wrong or missing in Doodle.
 **Cause:** Using wrong key for color (see color reference above).
 **Fix:** Use keys from the correct keyboard row for desired color family.

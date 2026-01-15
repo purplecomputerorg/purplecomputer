@@ -768,85 +768,53 @@ class ArtCanvas(Widget, can_focus=True):
 # COLOR LEGEND WIDGET
 # =============================================================================
 
-# Mini keyboard legend: representative keys from each row showing the gradient
-# Format: [first, middle, last] key from each row
-LEGEND_KEYS = [
-    ["1", "5", "0"],  # Number row: white → gray → black
-    ["Q", "T", "P"],  # QWERTY row: light red → dark red
-    ["A", "F", "L"],  # ASDF row: light yellow → dark yellow
-    ["Z", "B", "M"],  # ZXCV row: light blue → dark blue
-]
-
-
-def get_legend_key_color(key: str) -> str:
-    """Get the color for a legend key."""
-    lower = key.lower()
-    if lower in GRAYSCALE:
-        return GRAYSCALE[lower]
-    return KEY_COLORS.get(lower, "#AAAAAA")
-
-
 class ColorLegend(Widget):
     """
-    Mini keyboard legend showing key-to-color mapping.
+    Simple color legend showing keyboard row colors as bars.
 
-    Displays representative keys from each keyboard row:
-    - Number row: 1 5 0 (white → gray → black)
-    - QWERTY row: Q T P (red gradient)
-    - ASDF row: A F L (yellow gradient)
-    - ZXCV row: Z B M (blue gradient)
+    Displays 4 colored bars representing the keyboard rows:
+    - Gray (number row, grayscale)
+    - Red (QWERTY row)
+    - Yellow (ASDF row)
+    - Blue (ZXCV row)
 
-    Each key is shown with its actual paint color as background.
-    Only visible in paint mode.
+    Only visible in paint mode. Uses CSS class to fully hide when inactive.
+    """
+
+    DEFAULT_CSS = """
+    ColorLegend {
+        /* Default: visible */
+    }
+    ColorLegend.legend-hidden {
+        display: none;
+    }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._visible = False
+        self.add_class("legend-hidden")  # Start hidden
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide the legend."""
         self._visible = visible
+        if visible:
+            self.remove_class("legend-hidden")
+        else:
+            self.add_class("legend-hidden")
         self.refresh()
 
-    def _get_default_bg(self) -> str:
-        """Get default background based on current theme."""
-        try:
-            is_dark = "dark" in self.app.theme
-            return DEFAULT_BG_DARK if is_dark else DEFAULT_BG_LIGHT
-        except Exception:
-            return DEFAULT_BG_DARK
-
-    def _get_contrast_text(self, bg_color: str) -> str:
-        """Get contrasting text color for readability."""
-        r, g, b = hex_to_rgb(bg_color)
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return "#1e1033" if luminance > 0.5 else "#FFFFFF"
-
     def render_line(self, y: int) -> Strip:
-        """Render a single line of the legend (one keyboard row)."""
-        default_bg = self._get_default_bg()
+        """Render a single line of the legend (one color bar)."""
         width = self.size.width
 
-        if not self._visible or y >= len(LEGEND_KEYS):
-            # Not visible or beyond legend rows: render empty
-            return Strip([Segment(" " * width, Style(bgcolor=default_bg))])
+        if y >= len(ROW_LEGEND_COLORS):
+            # Beyond legend rows: render empty (shouldn't happen with display:none)
+            return Strip([])
 
-        # Render the 3 representative keys for this row
-        keys = LEGEND_KEYS[y]
-        segments = []
-
-        for key in keys:
-            bg_color = get_legend_key_color(key)
-            fg_color = self._get_contrast_text(bg_color)
-            segments.append(Segment(key, Style(color=fg_color, bgcolor=bg_color)))
-
-        # Pad remaining width with default bg
-        used_width = len(keys)
-        if width > used_width:
-            segments.append(Segment(" " * (width - used_width), Style(bgcolor=default_bg)))
-
-        return Strip(segments)
+        # Render solid color bar
+        color = ROW_LEGEND_COLORS[y]
+        return Strip([Segment(" " * width, Style(bgcolor=color))])
 
 
 # =============================================================================

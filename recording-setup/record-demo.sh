@@ -78,6 +78,7 @@ if [ -n "$AUDIO_SINK" ]; then
     ffmpeg -y \
         -video_size "$SCREEN_SIZE" \
         -framerate 30 \
+        -draw_mouse 0 \
         -f x11grab \
         -i "$DISPLAY" \
         -f pulse \
@@ -94,6 +95,7 @@ else
     ffmpeg -y \
         -video_size "$SCREEN_SIZE" \
         -framerate 30 \
+        -draw_mouse 0 \
         -f x11grab \
         -i "$DISPLAY" \
         -c:v libx264 \

@@ -53,16 +53,17 @@ class DoubleTapDetector:
 
     Pure logic class with no I/O. Timestamp is injected for deterministic testing.
 
+    Double-tap only triggers when the FIRST tap comes after a pause or space,
+    preventing accidental capitals when typing repeated letters like "pp" in "apple".
+
     Usage:
         detector = DoubleTapDetector(threshold=0.4, allowed_keys={'a', 'b', '-'})
-        result = detector.check('a', timestamp=0.0)  # None (first tap)
-        result = detector.check('a', timestamp=0.2)  # 'a' (double-tap detected!)
-        result = detector.check('a', timestamp=0.8)  # None (too slow, new first tap)
-
-    For evdev (keycodes):
-        detector = DoubleTapDetector(threshold=0.4, allowed_keys={30, 31, 32})
-        result = detector.check(30, timestamp=0.0)  # None
-        result = detector.check(30, timestamp=0.2)  # 30 (double-tap!)
+        # After a pause, double-tap works:
+        result = detector.check('a', timestamp=0.0, eligible=True)   # False (first tap)
+        result = detector.check('a', timestamp=0.2, eligible=False)  # True! (double-tap)
+        # Mid-word, double-tap is blocked:
+        result = detector.check('p', timestamp=0.5, eligible=False)  # False (first tap, not eligible)
+        result = detector.check('p', timestamp=0.7, eligible=False)  # False (blocked, first tap wasn't eligible)
 
     Args:
         threshold: Maximum seconds between taps for double-tap detection
@@ -80,14 +81,18 @@ class DoubleTapDetector:
         self.allowed_keys = allowed_keys
         self._last_key = None
         self._last_time: float = 0.0
+        self._first_tap_eligible: bool = False  # Was first tap after pause/space?
 
-    def check(self, key, timestamp: float = None) -> bool:
+    def check(self, key, timestamp: float = None, eligible: bool = True) -> bool:
         """
         Check if this key press completes a double-tap.
 
         Args:
             key: The key/character pressed (any hashable type)
             timestamp: Current time in seconds (uses time.time() if None)
+            eligible: Whether this tap is "eligible" (after pause or space).
+                      Only matters for the FIRST tap of a potential double-tap.
+                      The second tap's eligibility is ignored.
 
         Returns:
             True if double-tap detected, False otherwise.
@@ -99,23 +104,29 @@ class DoubleTapDetector:
         # Filter to allowed keys if specified
         if self.allowed_keys is not None and key not in self.allowed_keys:
             self._last_key = None
+            self._first_tap_eligible = False
             return False
 
-        # Check for double-tap
-        if self._last_key == key and (timestamp - self._last_time) < self.threshold:
+        # Check for double-tap (requires first tap to have been eligible)
+        if (self._last_key == key and
+            (timestamp - self._last_time) < self.threshold and
+            self._first_tap_eligible):
             # Double-tap detected!
             self._last_key = None  # Reset to prevent triple-tap
+            self._first_tap_eligible = False
             return True
 
-        # First tap or new key: remember it
+        # First tap or new key: remember it and its eligibility
         self._last_key = key
         self._last_time = timestamp
+        self._first_tap_eligible = eligible
         return False
 
     def reset(self) -> None:
         """Reset detector state."""
         self._last_key = None
         self._last_time = 0.0
+        self._first_tap_eligible = False
 
 
 # ============================================================================
@@ -583,7 +594,7 @@ class KeyboardStateMachine:
     - Modifier state (shift, caps lock)
     - Long-hold detection (Escape for parent mode)
     - Space-hold detection (for paint mode drawing)
-    - Double-tap detection
+    - Double-tap detection (only after pause or space, to allow repeated letters)
     - Character translation (keycode to character)
 
     Usage:
@@ -600,6 +611,7 @@ class KeyboardStateMachine:
     # Timing thresholds
     ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
     DOUBLE_TAP_THRESHOLD = 0.4   # seconds between taps
+    DOUBLE_TAP_PAUSE = 0.35      # seconds of pause before first tap for eligibility
     STICKY_SHIFT_GRACE = 1.0     # seconds sticky shift stays active
 
     def __init__(self):
@@ -622,6 +634,8 @@ class KeyboardStateMachine:
             allowed_keys=set(SHIFT_MAP.keys()),
         )
         self._double_tap_enabled = True  # Can be disabled for paint mode
+        self._last_char_time: float = 0.0  # When last printable char was typed
+        self._prev_was_space: bool = False  # Was previous key a space?
 
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
@@ -678,6 +692,8 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_SPACE:
             if not is_repeat:
                 self._space_held = True
+                self._prev_was_space = True  # Next char is eligible for double-tap
+                self._last_char_time = timestamp  # Track timing
             actions.append(ControlAction(
                 action='space',
                 is_down=True,
@@ -744,12 +760,19 @@ class KeyboardStateMachine:
         if char:
             # Check for double-tap (only on fresh press, and only if enabled)
             if not is_repeat and self._double_tap_enabled:
-                shifted_char = self._double_tap.check(char, timestamp)
+                # Double-tap only works after a pause or space (to allow repeated letters like "pp" in "apple")
+                time_since_last = timestamp - self._last_char_time if self._last_char_time else float('inf')
+                eligible = self._prev_was_space or (time_since_last >= self.DOUBLE_TAP_PAUSE)
+
+                shifted_char = self._double_tap.check(char, timestamp, eligible=eligible)
                 if shifted_char:
                     # Delete the first character (will be replaced)
                     actions.append(ControlAction(action='backspace', is_down=True))
                     # Double-tap acts like shift but shift_held=False (not physical shift)
                     actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True, shift_held=False))
+                    # Update timing state
+                    self._last_char_time = timestamp
+                    self._prev_was_space = False
                     return actions
 
             # Apply shift/caps
@@ -769,6 +792,11 @@ class KeyboardStateMachine:
             # Consume sticky shift (only on fresh press)
             if not is_repeat and self._sticky_shift_active:
                 self._sticky_shift_active = False
+
+            # Update timing state for double-tap eligibility
+            if not is_repeat:
+                self._last_char_time = timestamp
+                self._prev_was_space = False
 
         return actions
 
@@ -936,5 +964,7 @@ class KeyboardStateMachine:
         self._sticky_shift_active = False
         self._double_tap.reset()
         self._double_tap_enabled = True
+        self._last_char_time = 0.0
+        self._prev_was_space = False
         self._escape_hold_triggered = False
         self._escape_press_time = None

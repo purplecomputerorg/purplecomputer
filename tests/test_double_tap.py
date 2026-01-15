@@ -194,6 +194,84 @@ class TestDoubleTapEdgeCases:
         assert detector.check('a', timestamp=1000.2) is True
 
 
+class TestDoubleTapEligibility:
+    """Tests for double-tap eligibility (only after pause or space)."""
+
+    def test_eligible_first_tap_allows_double_tap(self):
+        """Double-tap works when first tap is eligible (after pause)."""
+        detector = DoubleTapDetector(threshold=0.4)
+        assert detector.check('a', timestamp=0.0, eligible=True) is False   # First tap, eligible
+        assert detector.check('a', timestamp=0.2, eligible=False) is True   # Double-tap fires!
+
+    def test_ineligible_first_tap_blocks_double_tap(self):
+        """Double-tap is blocked when first tap is not eligible (mid-word)."""
+        detector = DoubleTapDetector(threshold=0.4)
+        assert detector.check('a', timestamp=0.0, eligible=False) is False  # First tap, NOT eligible
+        assert detector.check('a', timestamp=0.2, eligible=False) is False  # No double-tap!
+
+    def test_apple_scenario(self):
+        """Typing 'apple' should not capitalize the 'p'."""
+        detector = DoubleTapDetector(threshold=0.4)
+        # Simulating: a (after pause), p (mid-word), p (mid-word), l, e
+        assert detector.check('a', timestamp=0.0, eligible=True) is False   # First char, after pause
+        assert detector.check('p', timestamp=0.2, eligible=False) is False  # Mid-word, not eligible
+        assert detector.check('p', timestamp=0.4, eligible=False) is False  # First 'p' wasn't eligible, no double-tap!
+        assert detector.check('l', timestamp=0.6, eligible=False) is False
+        assert detector.check('e', timestamp=0.8, eligible=False) is False
+
+    def test_capital_after_space(self):
+        """Double-tap works after a space (start of new word)."""
+        detector = DoubleTapDetector(threshold=0.4)
+        # Type "hi T" where T is double-tapped after space
+        assert detector.check('h', timestamp=0.0, eligible=True) is False
+        assert detector.check('i', timestamp=0.2, eligible=False) is False
+        # Space happens (not tracked by detector, but next char is eligible)
+        assert detector.check('t', timestamp=0.5, eligible=True) is False   # After space, eligible
+        assert detector.check('t', timestamp=0.6, eligible=False) is True   # Double-tap fires!
+
+    def test_capital_at_start(self):
+        """Double-tap works at the very start (after pause)."""
+        detector = DoubleTapDetector(threshold=0.4)
+        assert detector.check('h', timestamp=0.0, eligible=True) is False   # After pause
+        assert detector.check('h', timestamp=0.15, eligible=False) is True  # Double-tap for 'H'
+
+    def test_second_tap_eligibility_ignored(self):
+        """Only the first tap's eligibility matters, not the second."""
+        detector = DoubleTapDetector(threshold=0.4)
+        # First tap eligible
+        assert detector.check('a', timestamp=0.0, eligible=True) is False
+        # Second tap marked ineligible, but it doesn't matter
+        assert detector.check('a', timestamp=0.2, eligible=False) is True  # Still fires!
+
+    def test_eligibility_resets_on_different_key(self):
+        """Eligibility is tracked per first-tap, resets when key changes."""
+        detector = DoubleTapDetector(threshold=0.4)
+        assert detector.check('a', timestamp=0.0, eligible=True) is False   # Eligible first tap
+        assert detector.check('b', timestamp=0.2, eligible=False) is False  # Different key, new first tap (not eligible)
+        assert detector.check('b', timestamp=0.4, eligible=False) is False  # No double-tap, first 'b' wasn't eligible
+
+    def test_eligibility_with_allowed_keys(self):
+        """Eligibility works correctly with allowed_keys filter."""
+        detector = DoubleTapDetector(threshold=0.4, allowed_keys={'a', 'b'})
+
+        # Allowed key, eligible
+        assert detector.check('a', timestamp=0.0, eligible=True) is False
+        assert detector.check('a', timestamp=0.2, eligible=False) is True
+
+        # Allowed key, not eligible
+        assert detector.check('b', timestamp=0.5, eligible=False) is False
+        assert detector.check('b', timestamp=0.7, eligible=False) is False  # Blocked
+
+    def test_reset_clears_eligibility(self):
+        """Reset clears eligibility state."""
+        detector = DoubleTapDetector(threshold=0.4)
+        assert detector.check('a', timestamp=0.0, eligible=True) is False
+        detector.reset()
+        # After reset, need a new eligible first tap
+        assert detector.check('a', timestamp=0.1, eligible=False) is False  # New first tap, not eligible
+        assert detector.check('a', timestamp=0.2, eligible=False) is False  # No double-tap
+
+
 class TestKeyRepeatSuppressor:
     """Tests for the KeyRepeatSuppressor class."""
 

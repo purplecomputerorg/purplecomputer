@@ -592,14 +592,11 @@ class ExploreMode(Vertical):
                 display_char = explore_input.MATH_DISPLAY.get(char, char)
                 value = explore_input.value
 
-                # Add spaces around operator if there's a digit before (not for negative numbers)
-                # But don't double-space if user already typed a space
-                has_digit_before = value and value[-1].isdigit()
-                has_space_before = value and value[-1] == ' '
-                if has_digit_before:
+                # Add spaces around operator only if there's an operand before (binary operation)
+                # No spaces if preceded by space, operator, or open paren (allows negative numbers)
+                has_operand_before = value and value[-1] not in ' +-×÷*/('
+                if has_operand_before:
                     insert = f" {display_char} "
-                elif has_space_before:
-                    insert = f"{display_char} "
                 else:
                     insert = display_char
 

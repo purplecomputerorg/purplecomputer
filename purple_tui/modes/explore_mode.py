@@ -2,7 +2,7 @@
 Explore Mode: Math and Emoji REPL for Kids
 
 IPython-style interface:
-- Explore: user types input
+- Ask ▶ user types input
 - Answer: shows result
 
 Features:
@@ -52,18 +52,18 @@ class KeyboardOnlyScroll(ScrollableContainer):
 
 
 class HistoryLine(Static):
-    """A line in the REPL history (either Explore or Answer)"""
+    """A line in the REPL history (either Ask or Answer)"""
 
     # Arrow colors for dark and light themes
     ARROW_DARK = "#a888d0"
     ARROW_LIGHT = "#7a5a9e"
 
-    def __init__(self, text: str, line_type: str = "explore", **kwargs):
+    def __init__(self, text: str, line_type: str = "ask", **kwargs):
         super().__init__(**kwargs)
         self.text = text
-        self.line_type = line_type  # "explore" or "answer"
-        if line_type == "explore":
-            self.add_class("explore")
+        self.line_type = line_type  # "ask" or "answer"
+        if line_type == "ask":
+            self.add_class("ask")
 
     def _get_arrow_color(self) -> str:
         """Get arrow color based on current theme."""
@@ -75,8 +75,8 @@ class HistoryLine(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self.line_type == "explore":
-            return f"[bold #c4a0e8]{caps('Explore:')}[/] {caps(self.text)}"
+        if self.line_type == "ask":
+            return f"[bold #c4a0e8]{caps('Ask')} ▶[/] {caps(self.text)}"
         else:
             # Add arrow to each line for multi-line results
             arrow_color = self._get_arrow_color()
@@ -360,11 +360,11 @@ class InlineInput(Input):
 
 
 class InputPrompt(Static):
-    """Shows 'Ask:' prompt with input area"""
+    """Shows 'Ask ▶' prompt with input area"""
 
     def render(self) -> str:
-        text = self.app.caps_text("Ask:") if hasattr(self.app, 'caps_text') else "Ask:"
-        return f"[bold #c4a0e8]{text}[/]"
+        text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
+        return f"[bold #c4a0e8]{text} ▶[/]"
 
 
 class AutocompleteHint(Static):
@@ -410,7 +410,7 @@ class ExploreMode(Vertical):
         background: $surface;
     }
 
-    HistoryLine.explore {
+    HistoryLine.ask {
         margin-top: 1;
     }
 
@@ -626,9 +626,9 @@ class ExploreMode(Vertical):
         # Clean up whitespace after stripping
         eval_text = eval_text.strip()
 
-        # Add the "Ask:" line to history (without speech markers)
+        # Add the "Ask ▶" line to history (without speech markers)
         if eval_text:
-            scroll.mount(HistoryLine(eval_text, line_type="explore"))
+            scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
         # Evaluate and show result
         result = self.evaluator.evaluate(eval_text)

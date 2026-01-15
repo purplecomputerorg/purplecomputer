@@ -99,6 +99,7 @@ class ModeTitle(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mode = MODE_EXPLORE[0]
+        self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -1240,6 +1241,33 @@ class PurpleApp(App):
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.push_screen(ParentMenu())
 
+    def clear_all_state(self) -> None:
+        """Clear all state across all modes. Used at start of demo."""
+        from .modes.explore_mode import ExploreMode
+        from .modes.play_mode import PlayMode
+        from .modes.doodle_mode import DoodleMode
+
+        # Clear explore mode history
+        try:
+            explore = self.query_one(ExploreMode)
+            explore.clear_history()
+        except Exception:
+            pass
+
+        # Reset play mode colors
+        try:
+            play = self.query_one(PlayMode)
+            play.reset_state()
+        except Exception:
+            pass
+
+        # Clear doodle mode canvas
+        try:
+            doodle = self.query_one(DoodleMode)
+            doodle.clear_canvas()
+        except Exception:
+            pass
+
     def start_demo(self) -> None:
         """Start demo playback (dev mode only).
 
@@ -1255,6 +1283,7 @@ class PurpleApp(App):
         self._demo_player = DemoPlayer(
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=1.0,  # Normal human pace
+            clear_all=self.clear_all_state,
         )
 
         # Check if we should exit after demo (for recording)
@@ -1303,40 +1332,12 @@ class PurpleApp(App):
         event.prevent_default()
 
     def _refresh_caps_sensitive_widgets(self) -> None:
-        """Refresh all widgets that change based on caps mode"""
-        widget_ids = [
-            "#mode-title",
-            "#example-hint",
-            "#autocomplete-hint",
-            "#write-header",
-            "#canvas-header",
-            "#input-prompt",
-            "#speech-indicator",
-            "#coming-soon",
-            "#art-canvas",
-        ]
-        for widget_id in widget_ids:
-            try:
-                widget = self.query_one(widget_id)
-                widget.refresh()
-            except NoMatches:
-                pass
+        """Refresh all widgets that change based on caps mode.
 
-        # Refresh all HistoryLine widgets in explore mode
-        try:
-            from .modes.explore_mode import HistoryLine
-            for widget in self.query(HistoryLine):
-                widget.refresh()
-        except Exception:
-            pass
-
-        # Refresh PlayGrid in play mode
-        try:
-            from .modes.play_mode import PlayGrid
-            for widget in self.query(PlayGrid):
-                widget.refresh()
-        except Exception:
-            pass
+        Widgets opt-in by adding the 'caps-sensitive' CSS class.
+        """
+        for widget in self.query(".caps-sensitive"):
+            widget.refresh()
 
     @property
     def caps_mode(self) -> bool:

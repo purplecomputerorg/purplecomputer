@@ -62,6 +62,7 @@ class HistoryLine(Static):
         super().__init__(**kwargs)
         self.text = text
         self.line_type = line_type  # "ask" or "answer"
+        self.add_class("caps-sensitive")
         if line_type == "ask":
             self.add_class("ask")
 
@@ -362,6 +363,8 @@ class InlineInput(Input):
 class InputPrompt(Static):
     """Shows 'Ask ▶' prompt with input area"""
 
+    CLASSES = "caps-sensitive"
+
     def render(self) -> str:
         text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
         return f"[bold #c4a0e8]{text} ▶[/]"
@@ -369,11 +372,14 @@ class InputPrompt(Static):
 
 class AutocompleteHint(Static):
     """Shows autocomplete suggestion and help hints"""
-    pass
+
+    CLASSES = "caps-sensitive"
 
 
 class ExampleHint(Static):
     """Shows example hint with caps support"""
+
+    CLASSES = "caps-sensitive"
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
@@ -455,7 +461,7 @@ class ExploreMode(Vertical):
         margin-left: 5;
     }
 
-    #example-hint {
+    #explore-example-hint {
         height: 1;
         text-align: center;
         color: $text-muted;
@@ -476,11 +482,21 @@ class ExploreMode(Vertical):
                 yield InputPrompt(id="input-prompt")
                 yield InlineInput(id="explore-input")
             yield AutocompleteHint(id="autocomplete-hint")
-            yield ExampleHint(id="example-hint")
+            yield ExampleHint(id="explore-example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
         self.query_one("#explore-input").focus()
+
+    def clear_history(self) -> None:
+        """Clear the history scroll and reset last result."""
+        try:
+            scroll = self.query_one("#history-scroll")
+            scroll.remove_children()
+            self._last_eval_text = ""
+            self._last_result = ""
+        except Exception:
+            pass
 
     async def handle_keyboard_action(self, action) -> None:
         """

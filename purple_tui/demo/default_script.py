@@ -12,6 +12,7 @@ from .script import (
     SwitchMode,
     Pause,
     Clear,
+    ClearAll,
     PlayKeys,
     DrawPath,
     Comment,
@@ -29,6 +30,9 @@ from .script import (
 #
 
 DEMO_SCRIPT = [
+    # Clear all state for a fresh start
+    ClearAll(),
+
     # -------------------------------------------------------------------------
     # SECTION 1: Explore Mode (F1) - Math, Emoji, Speech
     # -------------------------------------------------------------------------
@@ -44,30 +48,30 @@ DEMO_SCRIPT = [
 
     # Simple math
     Comment("Basic math"),
-    TypeText("2 + 3"),
+    TypeText("2+3"),
     PressKey("enter", pause_after=1.0),
 
     # Math with words
     Comment("Math with emoji words"),
-    TypeText("2 + 3 apples"),
+    TypeText("2+3 apples"),
     PressKey("enter", pause_after=1.2),
 
     # More complex emoji math
-    TypeText("rabbits + 7 carrots"),
+    TypeText("rabbits+7 carrots"),
     PressKey("enter", pause_after=1.2),
 
     # Color mixing!
     Comment("Color mixing"),
-    TypeText("blue + 2 yellows"),
+    TypeText("blue+2 yellows"),
     PressKey("enter", pause_after=1.5),
 
     # Another color mix
-    TypeText("red + yellow"),
+    TypeText("red+yellow"),
     PressKey("enter", pause_after=1.2),
 
     # Bigger math
     Comment("Multiple numbers"),
-    TypeText("5 + 3 + 2"),
+    TypeText("5+3+2"),
     PressKey("enter", pause_after=1.0),
 
     # Personal statement with speech
@@ -76,7 +80,7 @@ DEMO_SCRIPT = [
     PressKey("enter", pause_after=1.5),
 
     # Fun question
-    TypeText("What is 10 cats + 5 dogs?"),
+    TypeText("What is 10 cats+5 dogs?"),
     PressKey("enter", pause_after=1.5),
 
     section_pause(1.0),
@@ -227,15 +231,18 @@ DEMO_SCRIPT = [
 # =============================================================================
 
 DEMO_SCRIPT_SHORT = [
+    # Clear all state for a fresh start
+    ClearAll(),
+
     Comment("=== QUICK DEMO ==="),
 
     # Explore mode highlights
     SwitchMode("explore"),
     TypeText("Hello!"),
     PressKey("enter", pause_after=0.8),
-    TypeText("2 + 3"),
+    TypeText("2+3"),
     PressKey("enter", pause_after=0.8),
-    TypeText("cats + dogs"),
+    TypeText("cats+dogs"),
     PressKey("enter", pause_after=0.8),
 
     # Play mode

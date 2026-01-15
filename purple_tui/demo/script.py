@@ -9,7 +9,7 @@ Example script:
         TypeText("Hello World!"),
         PressKey("enter"),
         Pause(1.0),
-        TypeText("2 + 3"),
+        TypeText("2+3"),
         PressKey("enter"),
     ]
 """
@@ -83,6 +83,18 @@ class Clear(DemoAction):
     In Write mode: clears canvas
     """
     pause_after: float = 0.3
+
+
+@dataclass
+class ClearAll(DemoAction):
+    """Clear all state across all modes. Use at start of demo.
+
+    Clears:
+    - Explore mode history and last result
+    - Play mode colors (reset to defaults)
+    - Doodle mode canvas
+    """
+    pause_after: float = 0.1
 
 
 @dataclass

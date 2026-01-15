@@ -14,6 +14,7 @@ from .script import (
     SwitchMode,
     Pause,
     Clear,
+    ClearAll,
     PlayKeys,
     DrawPath,
     Comment,
@@ -44,6 +45,7 @@ class DemoPlayer:
         self,
         dispatch_action: Callable[[object], Awaitable[None]],
         speed_multiplier: float = 1.0,
+        clear_all: Callable[[], None] | None = None,
     ):
         """Initialize the demo player.
 
@@ -51,9 +53,11 @@ class DemoPlayer:
             dispatch_action: Async function to dispatch keyboard actions
                 (typically app._dispatch_keyboard_action)
             speed_multiplier: Speed up (>1) or slow down (<1) the demo
+            clear_all: Optional function to clear all state at demo start
         """
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
+        self._clear_all = clear_all
         self._running = False
         self._cancelled = False
 
@@ -107,6 +111,9 @@ class DemoPlayer:
 
         elif isinstance(action, Clear):
             await self._clear(action)
+
+        elif isinstance(action, ClearAll):
+            await self._clear_all_state(action)
 
         elif isinstance(action, PlayKeys):
             await self._play_keys(action)
@@ -166,6 +173,12 @@ class DemoPlayer:
         """
         # Press escape to clear current input
         await self._dispatch(ControlAction(action='escape', is_down=True))
+        await self._sleep(action.pause_after)
+
+    async def _clear_all_state(self, action: ClearAll) -> None:
+        """Clear all state across all modes."""
+        if self._clear_all:
+            self._clear_all()
         await self._sleep(action.pause_after)
 
     async def _play_keys(self, action: PlayKeys) -> None:

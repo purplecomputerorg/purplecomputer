@@ -268,6 +268,8 @@ class PlayGrid(Widget):
 class PlayExampleHint(Static):
     """Shows example hint with caps support"""
 
+    CLASSES = "caps-sensitive"
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         text = caps("Try pressing letters and numbers!")

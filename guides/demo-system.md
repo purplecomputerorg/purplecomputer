@@ -51,7 +51,7 @@ PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140)  # Smile
 1. **Text mode** (default): Typing letters places them on the canvas
 2. **Paint mode**: Letters select brush colors and stamp colored blocks
 
-**How to switch:** Press Tab to toggle between text and paint mode.
+**How to switch:** Double-tap Space to toggle between text and paint mode.
 
 **Paint mode behavior:**
 - Letter keys (a-z) select brush color based on keyboard row:
@@ -63,7 +63,7 @@ PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140)  # Smile
 - Shift+letter: Select color only (no stamp)
 - Space+arrows: Draw lines (hold space while moving)
 
-**Common mistake:** Using `DrawPath` without entering paint mode first. The demo player now automatically presses Tab to enter paint mode before drawing.
+**Common mistake:** Using `DrawPath` without entering paint mode first. The demo player now automatically enters paint mode before drawing.
 
 ```python
 # DrawPath execution:
@@ -94,7 +94,7 @@ TypeText("hello", delay_per_char=0.08)
 Presses special keys (enter, tab, space, arrows, etc).
 ```python
 PressKey("enter", pause_after=0.5)
-PressKey("tab")  # Toggle paint mode in Doodle
+PressKey("space", count=2)  # Toggle paint mode in Doodle
 ```
 
 ### PlayKeys

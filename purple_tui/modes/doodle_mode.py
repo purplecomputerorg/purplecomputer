@@ -55,15 +55,16 @@ GRAYSCALE = {
 BRUSH_CHAR = "█"
 
 # Box-drawing characters for cursor border
+# Sides use heavy lines (in brush color), corners use light lines (in contrast color)
 BOX_CHARS = {
-    (-1, -1): "┌",  # top-left
-    (0, -1): "─",   # top-center
-    (1, -1): "┐",   # top-right
-    (-1, 0): "│",   # middle-left
-    (1, 0): "│",    # middle-right
-    (-1, 1): "└",   # bottom-left
-    (0, 1): "─",    # bottom-center
-    (1, 1): "┘",    # bottom-right
+    (-1, -1): "┌",  # top-left (light corner)
+    (0, -1): "━",   # top-center (heavy horizontal)
+    (1, -1): "┐",   # top-right (light corner)
+    (-1, 0): "┃",   # middle-left (heavy vertical)
+    (1, 0): "┃",    # middle-right (heavy vertical)
+    (-1, 1): "└",   # bottom-left (light corner)
+    (0, 1): "━",    # bottom-center (heavy horizontal)
+    (1, 1): "┘",    # bottom-right (light corner)
 }
 
 # Keyboard rows for colors (letter rows only)

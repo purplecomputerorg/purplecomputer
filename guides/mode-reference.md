@@ -86,24 +86,34 @@ Within each row, left keys are lower pitch, right keys are higher:
 
 ### Drawing Shapes
 
-To draw a **smiley face**:
+**Important**: The grid is only 10 wide × 4 tall. For a proper **smile** (curving UP),
+the mouth's CENTER must be on a HIGHER row than the ENDS.
+
+To draw a **smiley face** (smile curves UP):
 ```
-. . . . . . . . . .
-. . E . . . . I . .   ← Press E, I (eyes)
-A . . . . . . . . L   ← Press A, L (corners)
-. . C V B N . . . .   ← Press C, V, B, N (smile)
+Col:  0 1 2 3 4 5 6 7 8 9
+      . . . 4 . . 7 . . .   ← Row 0: Eyes (4 and 7)
+      . . . . . . . . . .   ← Row 1: (empty space)
+      . . . F G H . . . .   ← Row 2: Smile TOP (center of smile is HIGH)
+      . . C . . . . M . .   ← Row 3: Smile ENDS (corners are LOW)
 ```
 
-Keys to press (in order for nice melody): `E`, `I`, `A`, `L`, `C`, `V`, `B`, `N`
+Keys to press: `4`, `7` (eyes), then `F`, `G`, `H` (smile center), then `C`, `M` (smile corners)
 
-To draw a **heart**:
+This creates an upward-curving smile because the middle (F G H) is above the ends (C M)!
+
+To draw a **simple house**:
 ```
-. 2 3 . . . 8 9 .
-Q . . R T Y . . O P
-. S . . . . . K . .
-. . X C . N M . . .
-. . . . B . . . . .
+Col:  0 1 2 3 4 5 6 7 8 9
+      . . . 4 5 6 . . . .   ← Row 0: Roof peak
+      . . . R . Y . . . .   ← Row 1: Roof sides
+      . . . F G H . . . .   ← Row 2: Upper walls
+      . . . V B N . . . .   ← Row 3: Lower walls + door (B)
 ```
+
+Keys: `4`, `5`, `6`, `R`, `Y`, `F`, `G`, `H`, `V`, `B`, `N`
+
+Then press `B` twice more to make the door blue!
 
 ### Multi-Color Patterns
 

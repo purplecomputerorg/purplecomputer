@@ -63,37 +63,40 @@ DEMO_SCRIPT = [
     # 2. MUSICAL SMILEY (Play) - 10s
     # Draw a smiley face while playing music!
     #
-    # The grid:
-    #     1 2 3 4 5 6 7 8 9 0
-    #     Q W E R T Y U I O P    <- E and I are eyes
-    #     A S D F G H J K L ;    <- A and L are smile corners
-    #     Z X C V B N M , . /    <- C V B N are the smile curve
+    # The grid (corrected for proper upward smile):
+    #     Col:  0 1 2 3 4 5 6 7 8 9
+    #     Row 0: 1 2 3 4 5 6 7 8 9 0    <- 4 and 7 are eyes (percussion)
+    #     Row 1: Q W E R T Y U I O P
+    #     Row 2: A S D F G H J K L ;    <- F G H are smile CENTER (top of curve)
+    #     Row 3: Z X C V B N M , . /    <- C and M are smile ENDS (bottom of curve)
     #
-    # We press keys in order to make both music AND a picture.
+    # For a smile that curves UP: center (F,G,H) is on row 2 (higher),
+    # ends (C,M) are on row 3 (lower). This makes an upward curve!
     # -------------------------------------------------------------------------
     Comment("=== MUSICAL SMILEY ==="),
     SwitchMode("play"),
     Pause(0.4),
 
-    # Draw eyes first (E and I) with a musical pause between
+    # Eyes: 4 and 7 (percussion sounds - fun "blink blink"!)
     PlayKeys(
-        sequence=['e', None, 'i'],
+        sequence=['4', None, '7'],
         tempo_bpm=90,
+        pause_after=0.4,
+    ),
+
+    # Smile center: F G H (yellow family, warm middle notes)
+    # This is the TOP of the smile curve
+    PlayKeys(
+        sequence=['f', 'g', 'h'],
+        tempo_bpm=120,
         pause_after=0.3,
     ),
 
-    # Draw smile: corners first, then curve
-    # Musical sequence that sounds nice descending
+    # Smile ends: C and M (blue family, low notes)
+    # These are BELOW the center, completing the upward curve!
     PlayKeys(
-        sequence=['a', None, 'l'],  # Corners
+        sequence=['c', None, 'm'],
         tempo_bpm=100,
-        pause_after=0.2,
-    ),
-
-    # Smile curve: C V B N (ascending musically, left to right visually)
-    PlayKeys(
-        sequence=['c', 'v', 'b', 'n'],
-        tempo_bpm=140,
         pause_after=0.8,
     ),
 

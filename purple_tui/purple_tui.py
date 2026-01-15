@@ -56,8 +56,7 @@ from .keyboard import (
 )
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
-from .demo import DemoPlayer
-from .demo.default_script import DEMO_SCRIPT
+from .demo import DemoPlayer, get_demo_script
 from .modes.doodle_mode import ColorLegend, PaintModeChanged
 
 
@@ -1318,7 +1317,8 @@ class PurpleApp(App):
 
         # Run the demo as a background task
         async def run_demo():
-            await self._demo_player.play(DEMO_SCRIPT)
+            demo_script = get_demo_script()  # Uses PURPLE_DEMO_NAME env var
+            await self._demo_player.play(demo_script)
             self._demo_player = None
             self._demo_task = None
             # Exit app if this was an auto-started demo (for recording)

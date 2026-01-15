@@ -30,210 +30,140 @@ from .script import (
 #
 
 DEMO_SCRIPT = [
-    # Clear all state for a fresh start
+    # ==========================================================================
+    # DYNAMIC DEMO: ~50 seconds, bouncing between modes, showing off the magic!
+    # ==========================================================================
     ClearAll(),
 
     # -------------------------------------------------------------------------
-    # SECTION 1: Explore Mode (F1) - Math, Emoji, Speech
+    # 1. MUSICAL HELLO (Play) - 4s
+    # Quick ascending flourish to grab attention
     # -------------------------------------------------------------------------
-    Comment("=== EXPLORE MODE: Math and Emoji REPL ==="),
-
-    SwitchMode("explore"),
-    Pause(0.5),
-
-    # Start with a friendly greeting (speech!)
-    Comment("Greeting with speech"),
-    TypeText("Hello World!"),
-    PressKey("enter", pause_after=1.5),
-
-    # Simple math
-    Comment("Basic math"),
-    TypeText("2+3"),
-    PressKey("enter", pause_after=1.0),
-
-    # Math with words
-    Comment("Math with emoji words"),
-    TypeText("2+3 apples"),
-    PressKey("enter", pause_after=1.2),
-
-    # More complex emoji math
-    TypeText("rabbits+7 carrots"),
-    PressKey("enter", pause_after=1.2),
-
-    # Color mixing!
-    Comment("Color mixing"),
-    TypeText("blue+2 yellows"),
-    PressKey("enter", pause_after=1.5),
-
-    # Another color mix
-    TypeText("red+yellow"),
-    PressKey("enter", pause_after=1.2),
-
-    # Bigger math
-    Comment("Multiple numbers"),
-    TypeText("5+3+2"),
-    PressKey("enter", pause_after=1.0),
-
-    # Personal statement with speech
-    Comment("Statement with speech"),
-    TypeText("My name is Purple!"),
-    PressKey("enter", pause_after=1.5),
-
-    # Fun question
-    TypeText("What is 10 cats+5 dogs?"),
-    PressKey("enter", pause_after=1.5),
-
-    section_pause(1.0),
-
-    # -------------------------------------------------------------------------
-    # SECTION 2: Play Mode (F2) - Music and Colors (draws a heart!)
-    # -------------------------------------------------------------------------
-    Comment("=== PLAY MODE: Music and Art Grid ==="),
-
+    Comment("=== MUSICAL HELLO ==="),
     SwitchMode("play"),
-    Pause(0.8),
-
-    # Draw a heart shape with pretty music (max 2 keys at a time for realism)
-    # The heart pattern on the 10x4 grid:
-    #     . 2 3 . . . 7 8 . .
-    #     Q W E R . Y U I O .
-    #     . S D F G H J K . .
-    #     . . C V B N M . . .
-
-    # Start with gentle melody: left side of heart top
-    Comment("Draw heart: left top curve"),
+    Pause(0.3),
     PlayKeys(
-        sequence=['q', 'w', '2', '3', 'e', 'r'],
-        tempo_bpm=140,
-        pause_after=0.3,
+        sequence=['a', 's', 'd', 'f', 'g'],
+        tempo_bpm=220,
+        pause_after=0.4,
     ),
-
-    # Right side of heart top (harmonizes with left)
-    Comment("Draw heart: right top curve"),
-    PlayKeys(
-        sequence=['y', 'u', '7', '8', 'i', 'o'],
-        tempo_bpm=140,
-        pause_after=0.3,
-    ),
-
-    # Middle section with gentle 2-note harmonies
-    Comment("Draw heart: middle with harmonies"),
-    PlayKeys(
-        sequence=[
-            's', 'd',
-            ['f', 'h'],  # harmony
-            'g',
-            ['j', 'k'],  # harmony
-        ],
-        tempo_bpm=120,
-        pause_after=0.3,
-    ),
-
-    # Bottom of heart converging to point
-    Comment("Draw heart: bottom point"),
-    PlayKeys(
-        sequence=[
-            'c', 'v',
-            ['b', 'n'],  # converging harmony
-            'm',
-            'b',  # the heart's point (press again to change color)
-        ],
-        tempo_bpm=100,
-        pause_after=0.5,
-    ),
-
-    # Finish with a sweet arpeggio along the heart outline
-    Comment("Sweet melody along the heart"),
-    PlayKeys(
-        sequence=[
-            'q', 'w', 'e', 'r',  # left top
-            'f', 'v', 'b',       # down to point
-            'n', 'j', 'o',       # up right side
-            'i', 'u', 'y',       # right top
-            None,                # rest
-            ['q', 'o'],          # final harmony
-        ],
-        tempo_bpm=160,
-        pause_after=0.8,
-    ),
-
-    section_pause(1.0),
 
     # -------------------------------------------------------------------------
-    # SECTION 3: Doodle Mode (F3) - Text and Drawing
+    # 2. COLOR MAGIC (Explore) - 7s
+    # The wow moment: mixing colors!
     # -------------------------------------------------------------------------
-    Comment("=== DOODLE MODE: Drawing Canvas with Paint ==="),
+    Comment("=== COLOR MAGIC ==="),
+    SwitchMode("explore"),
+    Pause(0.3),
+    TypeText("red+blue"),
+    PressKey("enter", pause_after=1.8),  # Purple appears!
 
+    # -------------------------------------------------------------------------
+    # 3. DRAW A TREE (Doodle) - 10s
+    # Simple tree: leafy top + trunk
+    # -------------------------------------------------------------------------
+    Comment("=== DRAW A TREE ==="),
     SwitchMode("doodle"),
-    Pause(0.8),
-
-    # Type some text
-    Comment("Type a greeting"),
-    TypeText("Hello!"),
     Pause(0.3),
 
-    # Move down and type more
-    PressKey("enter"),
-    TypeText("Purple Computer"),
-    Pause(0.5),
+    # Position for tree top (move down a bit first)
+    PressKey("down"),
+    PressKey("down"),
 
-    # Move to draw area
-    PressKey("enter"),
-    PressKey("enter"),
-
-    # Draw a simple shape (horizontal line)
-    Comment("Draw with space+arrows"),
+    # Draw leafy crown (green-ish) - a small triangle/blob
     DrawPath(
-        directions=['right', 'right', 'right', 'right', 'right'],
-        steps_per_direction=1,
-        delay_per_step=0.15,
-        color_key='g',  # Green from G row
+        directions=['right', 'right', 'right', 'right'],
+        delay_per_step=0.1,
+        color_key='g',
     ),
-
-    # Move and draw another line
     PressKey("down"),
     PressKey("left"),
     PressKey("left"),
-    PressKey("left"),
-
-    # Draw vertical line
     DrawPath(
-        directions=['down', 'down', 'down'],
-        steps_per_direction=1,
-        delay_per_step=0.15,
-        color_key='r',  # Red from R row
+        directions=['right', 'right'],
+        delay_per_step=0.1,
+        color_key='g',
     ),
 
-    # Draw a trunk (brown-ish)
+    # Draw trunk (reddish-brown)
     PressKey("down"),
     DrawPath(
         directions=['down', 'down'],
-        steps_per_direction=1,
-        delay_per_step=0.15,
-        color_key='b',  # Blue-ish
+        delay_per_step=0.12,
+        color_key='r',
+    ),
+    Pause(0.4),
+
+    # -------------------------------------------------------------------------
+    # 4. MUSICAL SMILEY (Play) - 8s
+    # Draw a smiley face with sounds! Eyes + smile
+    # Grid:  R . . . I   <- eyes
+    #        D . . . K   <- mouth corners
+    #        . F G H .   <- smile
+    # -------------------------------------------------------------------------
+    Comment("=== MUSICAL SMILEY ==="),
+    SwitchMode("play"),
+    Pause(0.3),
+
+    # Eyes (with a little pause between)
+    PlayKeys(
+        sequence=['r', None, 'i'],
+        tempo_bpm=100,
+        pause_after=0.2,
     ),
 
-    Pause(1.0),
-
-    # Type more text
-    PressKey("right"),
-    PressKey("right"),
-    PressKey("right"),
-    TypeText(" Art!", delay_per_char=0.12),
-
-    section_pause(1.5),
+    # Smile curve
+    PlayKeys(
+        sequence=['f', 'g', 'h', ['d', 'k']],  # smile + corners together
+        tempo_bpm=140,
+        pause_after=0.5,
+    ),
 
     # -------------------------------------------------------------------------
-    # FINALE: Back to Explore mode with a closing message
+    # 5. EMOJI MATH (Explore) - 6s
+    # Fun with emoji arithmetic
     # -------------------------------------------------------------------------
-    Comment("=== FINALE ==="),
-
+    Comment("=== EMOJI MATH ==="),
     SwitchMode("explore"),
-    Pause(0.5),
+    Pause(0.3),
+    TypeText("3 cats+2 dogs"),
+    PressKey("enter", pause_after=1.5),
 
-    # Clear and show final message
-    TypeText("Thanks for watching!"),
-    PressKey("enter", pause_after=2.0),
+    # -------------------------------------------------------------------------
+    # 6. QUICK SIGNATURE (Doodle) - 6s
+    # Type "Purple!" on the canvas
+    # -------------------------------------------------------------------------
+    Comment("=== SIGNATURE ==="),
+    SwitchMode("doodle"),
+    Pause(0.2),
+    PressKey("enter"),
+    PressKey("enter"),
+    PressKey("enter"),
+    TypeText("Purple!", delay_per_char=0.1),
+    Pause(0.6),
+
+    # -------------------------------------------------------------------------
+    # 7. ONE MORE COLOR MIX (Explore) - 5s
+    # Another color magic moment
+    # -------------------------------------------------------------------------
+    Comment("=== MORE COLOR MAGIC ==="),
+    SwitchMode("explore"),
+    Pause(0.2),
+    TypeText("blue+yellow"),
+    PressKey("enter", pause_after=1.2),
+
+    # -------------------------------------------------------------------------
+    # 8. MUSICAL GOODBYE (Play) - 4s
+    # Descending flourish to end
+    # -------------------------------------------------------------------------
+    Comment("=== GOODBYE ==="),
+    SwitchMode("play"),
+    Pause(0.2),
+    PlayKeys(
+        sequence=['j', 'h', 'g', 'f', 'd', ['a', 's']],  # descending + final chord
+        tempo_bpm=180,
+        pause_after=0.8,
+    ),
 
     Comment("Demo complete!"),
 ]
@@ -244,36 +174,33 @@ DEMO_SCRIPT = [
 # =============================================================================
 
 DEMO_SCRIPT_SHORT = [
-    # Clear all state for a fresh start
+    # Quick ~20 second demo, same bouncy style
     ClearAll(),
 
     Comment("=== QUICK DEMO ==="),
 
-    # Explore mode highlights
-    SwitchMode("explore"),
-    TypeText("Hello!"),
-    PressKey("enter", pause_after=0.8),
-    TypeText("2+3"),
-    PressKey("enter", pause_after=0.8),
-    TypeText("cats+dogs"),
-    PressKey("enter", pause_after=0.8),
-
-    # Play mode
+    # Musical hello
     SwitchMode("play"),
-    PlayKeys(
-        sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-        tempo_bpm=200,
-    ),
+    PlayKeys(sequence=['a', 's', 'd', 'f'], tempo_bpm=240, pause_after=0.2),
 
-    # Doodle mode
-    SwitchMode("doodle"),
-    TypeText("Purple!", delay_per_char=0.1),
-    DrawPath(directions=['right', 'right', 'down', 'down'], color_key='r'),
-
-    # End
+    # Color magic
     SwitchMode("explore"),
-    TypeText("Bye!"),
+    TypeText("red+blue"),
+    PressKey("enter", pause_after=1.2),
+
+    # Quick draw
+    SwitchMode("doodle"),
+    TypeText("Hi!"),
+    DrawPath(directions=['right', 'right', 'down'], color_key='g', delay_per_step=0.08),
+
+    # Emoji fun
+    SwitchMode("explore"),
+    TypeText("cats+dogs"),
     PressKey("enter", pause_after=1.0),
+
+    # Musical goodbye
+    SwitchMode("play"),
+    PlayKeys(sequence=['g', 'f', 'd', 's', 'a'], tempo_bpm=200, pause_after=0.5),
 ]
 
 

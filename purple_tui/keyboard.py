@@ -621,6 +621,7 @@ class KeyboardStateMachine:
             threshold=self.DOUBLE_TAP_THRESHOLD,
             allowed_keys=set(SHIFT_MAP.keys()),
         )
+        self._double_tap_enabled = True  # Can be disabled for paint mode
 
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
@@ -741,8 +742,8 @@ class KeyboardStateMachine:
         # Handle printable characters
         char = event.char
         if char:
-            # Check for double-tap (only on fresh press)
-            if not is_repeat:
+            # Check for double-tap (only on fresh press, and only if enabled)
+            if not is_repeat and self._double_tap_enabled:
                 shifted_char = self._double_tap.check(char, timestamp)
                 if shifted_char:
                     # Delete the first character (will be replaced)
@@ -888,6 +889,17 @@ class KeyboardStateMachine:
         return self._caps_lock_on
 
     @property
+    def double_tap_enabled(self) -> bool:
+        """Check if double-tap shift is enabled."""
+        return self._double_tap_enabled
+
+    def set_double_tap_enabled(self, enabled: bool) -> None:
+        """Enable or disable double-tap shift (disable for paint mode)."""
+        self._double_tap_enabled = enabled
+        if not enabled:
+            self._double_tap.reset()  # Clear any pending first-tap state
+
+    @property
     def held_arrow_direction(self) -> str | None:
         """Get the currently held arrow direction, if any."""
         arrow_keys = [
@@ -923,5 +935,6 @@ class KeyboardStateMachine:
         self._space_held = False
         self._sticky_shift_active = False
         self._double_tap.reset()
+        self._double_tap_enabled = True
         self._escape_hold_triggered = False
         self._escape_press_time = None

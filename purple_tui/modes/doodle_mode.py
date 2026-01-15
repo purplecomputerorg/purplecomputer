@@ -504,21 +504,24 @@ class ArtCanvas(Widget, can_focus=True):
         self._grid[pos] = (char, fg, bg)
 
     def _paint_at_cursor(self) -> None:
-        """Paint at current cursor position using current color."""
+        """Paint at current cursor position using current color.
+
+        Paint colors are stored as pure key colors, not blended with the background.
+        This ensures colors look identical regardless of light/dark theme.
+        """
         pos = (self._cursor_x, self._cursor_y)
-        existing_bg = self._get_cell_bg(pos)
-        default_bg = self._get_default_bg()
+        cell = self._grid.get(pos)
 
-        # Blend paint color with existing background using spectral mixing
-        if existing_bg != default_bg:
-            # Mix existing color with new paint color
-            new_bg = mix_colors_paint([existing_bg, self._last_key_color])
+        # Check if painting over existing paint
+        if cell and cell[0] == BRUSH_CHAR:
+            # Mix with existing paint color
+            existing_color = cell[2]
+            new_color = mix_colors_paint([existing_color, self._last_key_color])
         else:
-            # Blend paint color with default background
-            new_bg = lerp_color(default_bg, self._last_key_color, PAINT_STRENGTH)
+            # First paint stroke: use pure key color (no background blending)
+            new_color = self._last_key_color
 
-        # Paint uses solid block character
-        self._set_cell(pos, BRUSH_CHAR, new_bg, new_bg)
+        self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
     def type_char(self, char: str) -> None:
         """Type a character at cursor with row-based background tint."""

@@ -680,6 +680,9 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+        # Disable double-tap shift in paint mode (just paint twice instead of caps)
+        self._keyboard_state_machine.set_double_tap_enabled(not event.is_painting)
+
     def suspend_with_terminal_input(self):
         """
         Context manager to suspend the TUI and allow terminal input.

@@ -644,7 +644,6 @@ class PurpleApp(App):
         # Start idle detection timer
         # In demo mode, check every second for responsiveness
         # In normal mode, check every 5 seconds to save resources
-        import os
         from .power_manager import IDLE_SLEEP_UI, IDLE_SHUTDOWN
 
         if os.environ.get("PURPLE_SLEEP_DEMO"):

@@ -1297,7 +1297,7 @@ class PurpleApp(App):
         action = cmd.get("action")
         value = cmd.get("value", "")
 
-        self._dev_log(f"[DevCmd] action={action} value={value}")
+        self._dev_log(f"[DevCmd] action={action} value={value} (current_mode={self.active_mode.name})")
 
         if action == "mode":
             # Switch mode: explore, play, doodle

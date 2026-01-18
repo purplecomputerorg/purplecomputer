@@ -123,12 +123,14 @@ class PurpleController:
         project_root = str(Path(__file__).parent.parent)
         env['PYTHONPATH'] = project_root + ':' + env.get('PYTHONPATH', '')
 
-        # Start the app
+        # Start the app (capture stderr to file for debugging)
+        stderr_log = os.path.join(screenshot_dir, 'stderr.log')
+        self._stderr_file = open(stderr_log, 'w')
         self.process = subprocess.Popen(
             [sys.executable, '-m', 'purple_tui.purple_tui'],
             stdin=pty_slave,
             stdout=pty_slave,
-            stderr=subprocess.DEVNULL,
+            stderr=self._stderr_file,
             env=env,
             preexec_fn=os.setsid,
         )
@@ -162,7 +164,10 @@ class PurpleController:
                 os.close(self.pty_master)
             except:
                 pass
+        if hasattr(self, '_stderr_file') and self._stderr_file:
+            self._stderr_file.close()
         print(f"[App] Debug log: {self.screenshot_dir}/dev_commands.log")
+        print(f"[App] Stderr log: {self.screenshot_dir}/stderr.log")
         print("[App] Purple Computer stopped")
 
     def _drain_output(self) -> None:

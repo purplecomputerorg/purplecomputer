@@ -1056,6 +1056,13 @@ class PurpleApp(App):
         """Switch to a different mode (F1-F3)"""
         from .modes.doodle_mode import DoodlePromptScreen
 
+        # Debug: log who is calling mode switch
+        if os.environ.get("PURPLE_DEV_MODE") == "1":
+            import traceback
+            self._dev_log(f"[ModeSwitch] action_switch_mode({mode_name}) called from:")
+            for line in traceback.format_stack()[-5:-1]:
+                self._dev_log(line.strip())
+
         mode_map = {
             MODE_EXPLORE[0]: Mode.EXPLORE,
             MODE_PLAY[0]: Mode.PLAY,

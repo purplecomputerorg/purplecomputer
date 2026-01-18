@@ -730,6 +730,10 @@ class PurpleApp(App):
         This is called by EvdevReader for each key press/release.
         Events are processed through KeyboardStateMachine to produce actions.
         """
+        # Log evdev events in dev mode to debug mode switching
+        if os.environ.get("PURPLE_DEV_MODE") == "1":
+            self._dev_log(f"[Evdev] keycode={event.keycode} is_down={event.is_down}")
+
         # Record user activity for idle detection
         self._record_user_activity()
 
@@ -737,6 +741,8 @@ class PurpleApp(App):
         actions = self._keyboard_state_machine.process(event)
 
         for action in actions:
+            if os.environ.get("PURPLE_DEV_MODE") == "1":
+                self._dev_log(f"[Evdev] action={action} (current_mode={self.active_mode.name})")
             await self._dispatch_keyboard_action(action)
 
     async def _dispatch_keyboard_action(self, action) -> None:

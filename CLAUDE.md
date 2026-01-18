@@ -208,3 +208,54 @@ print(f"[Debug] {msg}", file=sys.stderr)
 with open("/path/to/debug.log", "a") as f:
     f.write(f"[Debug] {msg}\n")
 ```
+
+---
+
+## Common Python Gotchas
+
+### Environment Variable Checks
+
+**Always compare to "1", never use truthiness.** Any non-empty string is truthy, including "0".
+
+```python
+# Bad: "0" is truthy, this runs even when disabled
+if os.environ.get("PURPLE_DEMO_AUTOSTART"):
+    start_demo()
+
+# Good: explicit check
+if os.environ.get("PURPLE_DEMO_AUTOSTART") == "1":
+    start_demo()
+```
+
+### Local Imports Shadow Module-Level Imports
+
+**Don't use `import X` inside a function if X is already imported at module level.** Python sees the local import and treats X as a local variable throughout the entire function, causing UnboundLocalError before the import line.
+
+```python
+import os  # module level
+
+async def on_mount(self):
+    # Bad: UnboundLocalError here because Python sees 'import os' below
+    if os.environ.get("FOO"):
+        pass
+
+    import os  # This makes 'os' local to entire function!
+
+# Good: just use the module-level import, don't re-import
+async def on_mount(self):
+    if os.environ.get("FOO"):
+        pass
+```
+
+### Dataclass Constructor Parameters
+
+**Check the actual dataclass definition before constructing.** Different action types have different parameters.
+
+```python
+# NavigationAction only has: direction, space_held, is_repeat, other_arrows_held
+# Bad: NavigationAction doesn't have is_down
+NavigationAction(direction='left', is_down=True)
+
+# Good: check the class definition first
+NavigationAction(direction='left')
+```

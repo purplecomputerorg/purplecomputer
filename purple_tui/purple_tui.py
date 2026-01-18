@@ -1238,7 +1238,7 @@ class PurpleApp(App):
             except Exception:
                 pass
 
-    def _check_command_trigger(self) -> None:
+    async def _check_command_trigger(self) -> None:
         """Check for file-based command trigger (for AI tools).
 
         The AI tool writes commands to a 'command' file, we execute them.
@@ -1276,7 +1276,7 @@ class PurpleApp(App):
                     continue
                 try:
                     cmd = json.loads(line)
-                    self._execute_dev_command(cmd)
+                    await self._execute_dev_command(cmd)
                 except json.JSONDecodeError:
                     pass
         except Exception:
@@ -1290,10 +1290,8 @@ class PurpleApp(App):
             with open(log_path, "a") as f:
                 f.write(f"{msg}\n")
 
-    def _execute_dev_command(self, cmd: dict) -> None:
+    async def _execute_dev_command(self, cmd: dict) -> None:
         """Execute a dev command from the command file."""
-        import asyncio
-
         action = cmd.get("action")
         value = cmd.get("value", "")
 
@@ -1318,11 +1316,14 @@ class PurpleApp(App):
                 key_action = self._create_action_from_key(value)
                 self._dev_log(f"[DevCmd] key={value} -> action={key_action}")
                 if key_action:
-                    asyncio.create_task(self._dispatch_keyboard_action(key_action))
+                    # Await the dispatch to ensure it completes before next command
+                    await self._dispatch_keyboard_action(key_action)
+                    self._dev_log(f"[DevCmd] key={value} dispatched, mode now={self.active_mode.name}")
                 else:
                     self._dev_log(f"[DevCmd] WARNING: Unknown key '{value}'")
             except Exception as e:
-                self._dev_log(f"[DevCmd] ERROR: key={value} exception={e}")
+                import traceback
+                self._dev_log(f"[DevCmd] ERROR: key={value} exception={e}\n{traceback.format_exc()}")
 
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""

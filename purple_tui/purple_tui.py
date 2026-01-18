@@ -1285,9 +1285,13 @@ class PurpleApp(App):
     def _execute_dev_command(self, cmd: dict) -> None:
         """Execute a dev command from the command file."""
         import asyncio
+        import sys
 
         action = cmd.get("action")
         value = cmd.get("value", "")
+
+        # Debug output (visible in PTY)
+        print(f"[DevCmd] action={action} value={value}", file=sys.stderr)
 
         if action == "mode":
             # Switch mode: explore, play, doodle
@@ -1297,18 +1301,23 @@ class PurpleApp(App):
                 "doodle": MODE_DOODLE[0],
             }
             mode_name = mode_map.get(value.lower())
+            print(f"[DevCmd] mode_name={mode_name} (from {value.lower()})", file=sys.stderr)
             if mode_name:
                 self.action_switch_mode(mode_name)
+                print(f"[DevCmd] Switched to {mode_name}", file=sys.stderr)
 
         elif action == "key":
             # Send a keypress through the keyboard state machine
             key_action = self._create_action_from_key(value)
+            print(f"[DevCmd] key={value} -> action={key_action}", file=sys.stderr)
             if key_action:
                 asyncio.create_task(self._dispatch_keyboard_action(key_action))
+            else:
+                print(f"[DevCmd] WARNING: Unknown key '{value}'", file=sys.stderr)
 
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""
-        key = key.lower()
+        key_lower = key.lower()
 
         # Navigation keys
         nav_keys = {
@@ -1317,8 +1326,8 @@ class PurpleApp(App):
             "left": "left",
             "right": "right",
         }
-        if key in nav_keys:
-            return NavigationAction(direction=nav_keys[key], is_down=True)
+        if key_lower in nav_keys:
+            return NavigationAction(direction=nav_keys[key_lower], is_down=True)
 
         # Control keys
         ctrl_keys = {
@@ -1331,10 +1340,10 @@ class PurpleApp(App):
             "tab": "tab",
             "space": "space",
         }
-        if key in ctrl_keys:
-            return ControlAction(action=ctrl_keys[key], is_down=True)
+        if key_lower in ctrl_keys:
+            return ControlAction(action=ctrl_keys[key_lower], is_down=True)
 
-        # Single character
+        # Single character (preserve case for shift+letter)
         if len(key) == 1:
             return CharacterAction(char=key)
 

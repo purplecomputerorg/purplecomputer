@@ -121,23 +121,32 @@ class PurpleController:
         project_root = str(Path(__file__).parent.parent)
         env['PYTHONPATH'] = project_root + ':' + env.get('PYTHONPATH', '')
 
-        # Start the app
+        # Start the app (stderr to file for debugging)
+        self.debug_log = open(os.path.join(screenshot_dir, 'app_debug.log'), 'w')
         self.process = subprocess.Popen(
             [sys.executable, '-m', 'purple_tui.purple_tui'],
             stdin=pty_slave,
             stdout=pty_slave,
-            stderr=subprocess.DEVNULL,
+            stderr=self.debug_log,
             env=env,
             preexec_fn=os.setsid,
         )
 
         os.close(pty_slave)
 
-        # Wait for app to start
-        time.sleep(2)
+        # Wait for app to fully start and initialize timers
+        time.sleep(3)
         self._drain_output()
 
         print(f"[App] Purple Computer started (PID: {self.process.pid})")
+
+        # Verify app is responding by taking a test screenshot
+        print("[App] Verifying app is responsive...")
+        test_screenshot = self.take_screenshot()
+        if test_screenshot:
+            print(f"[App] App ready (test screenshot: {test_screenshot})")
+        else:
+            print("[App] Warning: App may not be fully initialized")
 
     def stop(self) -> None:
         """Stop the app."""
@@ -152,6 +161,9 @@ class PurpleController:
                 os.close(self.pty_master)
             except:
                 pass
+        if hasattr(self, 'debug_log') and self.debug_log:
+            self.debug_log.close()
+            print(f"[App] Debug log: {self.screenshot_dir}/app_debug.log")
         print("[App] Purple Computer stopped")
 
     def _drain_output(self) -> None:
@@ -169,18 +181,26 @@ class PurpleController:
         """Send a command to the app via the command file."""
         command_path = os.path.join(self.screenshot_dir, 'command')
         cmd = json.dumps({"action": action, "value": value})
+        print(f"[Debug] Writing command to {command_path}: {cmd}")
         with open(command_path, 'w') as f:
             f.write(cmd + '\n')
         # Wait for app to process (checks every 0.1s)
-        time.sleep(0.15)
+        time.sleep(0.2)
+        # Check if command was consumed
+        if os.path.exists(command_path):
+            print(f"[Debug] WARNING: Command file still exists (not consumed)")
+        else:
+            print(f"[Debug] Command consumed")
 
     def send_key(self, key: str) -> None:
         """Send a single key to the app via command file."""
         # Handle shift+key -> uppercase letter
         if key.startswith('shift+'):
             char = key[6:].upper()
+            print(f"[Key] shift+{key[6:]} -> {char}")
             self.send_command("key", char)
         else:
+            print(f"[Key] {key}")
             self.send_command("key", key)
 
     def send_keys(self, keys: list[str], delay: float = 0.05) -> None:
@@ -202,23 +222,29 @@ class PurpleController:
         if os.path.exists(latest_file):
             with open(latest_file) as f:
                 old_path = f.read().strip()
+        print(f"[Screenshot] Old path: {old_path}")
 
         # Create trigger file - app will detect and take screenshot
         trigger_path = os.path.join(self.screenshot_dir, 'trigger')
+        print(f"[Screenshot] Creating trigger: {trigger_path}")
         with open(trigger_path, 'w') as f:
             f.write('1')
 
         # Wait for new screenshot to appear
-        for _ in range(30):  # 3 seconds max
+        for i in range(30):  # 3 seconds max
             time.sleep(0.1)
+            trigger_exists = os.path.exists(trigger_path)
             if os.path.exists(latest_file):
                 with open(latest_file) as f:
                     new_path = f.read().strip()
                 if new_path != old_path and os.path.exists(new_path):
                     self.screenshot_count += 1
+                    print(f"[Screenshot] Success after {i*0.1:.1f}s: {new_path}")
                     return new_path
+            if i == 10:
+                print(f"[Screenshot] Still waiting... trigger_exists={trigger_exists}")
 
-        print("[Warning] Screenshot not captured")
+        print(f"[Screenshot] FAILED - trigger_exists={os.path.exists(trigger_path)}")
         return None
 
     def switch_to_doodle(self) -> None:
@@ -484,7 +510,9 @@ def run_visual_feedback_loop(
                 print("[Warning] No actions returned")
                 continue
 
-            print(f"[Actions] Executing {len(actions)} actions...")
+            print(f"[Actions] Executing {len(actions)} actions:")
+            for j, act in enumerate(actions):
+                print(f"  {j+1}. {act}")
             all_actions.extend(actions)
 
             # Execute actions

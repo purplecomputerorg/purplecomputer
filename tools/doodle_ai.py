@@ -101,8 +101,9 @@ class PurpleController:
 
     def start(self, screenshot_dir: str) -> None:
         """Start Purple Computer in a PTY with dev mode enabled."""
-        self.screenshot_dir = screenshot_dir
-        os.makedirs(screenshot_dir, exist_ok=True)
+        # Use absolute path to avoid working directory issues
+        self.screenshot_dir = os.path.abspath(screenshot_dir)
+        os.makedirs(self.screenshot_dir, exist_ok=True)
 
         # Create PTY (for terminal display, not keyboard input)
         self.pty_master, pty_slave = pty.openpty()

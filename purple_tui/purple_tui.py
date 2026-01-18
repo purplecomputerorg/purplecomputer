@@ -1314,12 +1314,15 @@ class PurpleApp(App):
 
         elif action == "key":
             # Send a keypress through the keyboard state machine
-            key_action = self._create_action_from_key(value)
-            self._dev_log(f"[DevCmd] key={value} -> action={key_action}")
-            if key_action:
-                asyncio.create_task(self._dispatch_keyboard_action(key_action))
-            else:
-                self._dev_log(f"[DevCmd] WARNING: Unknown key '{value}'")
+            try:
+                key_action = self._create_action_from_key(value)
+                self._dev_log(f"[DevCmd] key={value} -> action={key_action}")
+                if key_action:
+                    asyncio.create_task(self._dispatch_keyboard_action(key_action))
+                else:
+                    self._dev_log(f"[DevCmd] WARNING: Unknown key '{value}'")
+            except Exception as e:
+                self._dev_log(f"[DevCmd] ERROR: key={value} exception={e}")
 
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""
@@ -1333,7 +1336,7 @@ class PurpleApp(App):
             "right": "right",
         }
         if key_lower in nav_keys:
-            return NavigationAction(direction=nav_keys[key_lower], is_down=True)
+            return NavigationAction(direction=nav_keys[key_lower])
 
         # Control keys
         ctrl_keys = {

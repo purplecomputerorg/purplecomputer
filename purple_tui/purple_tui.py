@@ -670,8 +670,10 @@ class PurpleApp(App):
 
         # In dev mode, check for screenshot and command trigger files (for AI tools)
         if os.environ.get("PURPLE_DEV_MODE") == "1":
+            self._dev_log("[Mount] Starting dev mode timers...")
             self._screenshot_timer = self.set_interval(0.2, self._check_screenshot_trigger)
             self._command_timer = self.set_interval(0.1, self._check_command_trigger)
+            self._dev_log("[Mount] Dev mode timers started")
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
@@ -1241,13 +1243,15 @@ class PurpleApp(App):
 
         trigger_path = os.path.join(screenshot_dir, "trigger")
         if os.path.exists(trigger_path):
+            self._dev_log(f"[Trigger] Found screenshot trigger, taking screenshot...")
             try:
                 os.unlink(trigger_path)
                 self._do_screenshot()
-            except Exception:
-                pass
+                self._dev_log(f"[Trigger] Screenshot done")
+            except Exception as e:
+                self._dev_log(f"[Trigger] Screenshot error: {e}")
 
-    async def _check_command_trigger(self) -> None:
+    def _check_command_trigger(self) -> None:
         """Check for file-based command trigger (for AI tools).
 
         The AI tool writes commands to a 'command' file, we execute them.
@@ -1263,6 +1267,8 @@ class PurpleApp(App):
             - mode: Switch to a mode (explore, play, doodle)
             - key: Send a keypress (letters, arrows, enter, escape, space, backspace)
         """
+        import asyncio
+
         if os.environ.get("PURPLE_DEV_MODE") != "1":
             return
 
@@ -1285,7 +1291,7 @@ class PurpleApp(App):
                     continue
                 try:
                     cmd = json.loads(line)
-                    await self._execute_dev_command(cmd)
+                    asyncio.create_task(self._execute_dev_command(cmd))
                 except json.JSONDecodeError:
                     pass
         except Exception:

@@ -60,6 +60,10 @@ Supported actions:
 - `mode`: Switch to a mode (explore, play, doodle)
 - `key`: Send a keypress (letters, arrows, enter, escape, space, backspace, tab)
 
+**Disable real keyboard:** Set `PURPLE_NO_EVDEV=1` to disable evdev keyboard input.
+This prevents the physical keyboard from interfering with programmatic control.
+The AI tool sets this automatically.
+
 ## Environment Variables
 
 Create `tools/.env` (gitignored):

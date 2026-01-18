@@ -630,13 +630,16 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Start direct evdev keyboard reader
+        # Start direct evdev keyboard reader (unless disabled for AI tools)
         # This reads keyboard events directly, bypassing the terminal
-        self._evdev_reader = EvdevReader(
-            callback=self._handle_raw_key_event,
-            grab=True,  # Grab keyboard exclusively in kiosk mode
-        )
-        await self._evdev_reader.start()
+        if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            self._evdev_reader = EvdevReader(
+                callback=self._handle_raw_key_event,
+                grab=True,  # Grab keyboard exclusively in kiosk mode
+            )
+            await self._evdev_reader.start()
+        else:
+            self._evdev_reader = None
 
         # Start idle detection timer
         # In demo mode, check every second for responsiveness

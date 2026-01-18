@@ -1282,16 +1282,22 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _dev_log(self, msg: str) -> None:
+        """Write to dev mode log file."""
+        screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR")
+        if screenshot_dir:
+            log_path = os.path.join(screenshot_dir, "dev_commands.log")
+            with open(log_path, "a") as f:
+                f.write(f"{msg}\n")
+
     def _execute_dev_command(self, cmd: dict) -> None:
         """Execute a dev command from the command file."""
         import asyncio
-        import sys
 
         action = cmd.get("action")
         value = cmd.get("value", "")
 
-        # Debug output (visible in PTY)
-        print(f"[DevCmd] action={action} value={value}", file=sys.stderr)
+        self._dev_log(f"[DevCmd] action={action} value={value}")
 
         if action == "mode":
             # Switch mode: explore, play, doodle
@@ -1301,19 +1307,19 @@ class PurpleApp(App):
                 "doodle": MODE_DOODLE[0],
             }
             mode_name = mode_map.get(value.lower())
-            print(f"[DevCmd] mode_name={mode_name} (from {value.lower()})", file=sys.stderr)
+            self._dev_log(f"[DevCmd] mode_name={mode_name} (from {value.lower()})")
             if mode_name:
                 self.action_switch_mode(mode_name)
-                print(f"[DevCmd] Switched to {mode_name}", file=sys.stderr)
+                self._dev_log(f"[DevCmd] Switched to {mode_name}")
 
         elif action == "key":
             # Send a keypress through the keyboard state machine
             key_action = self._create_action_from_key(value)
-            print(f"[DevCmd] key={value} -> action={key_action}", file=sys.stderr)
+            self._dev_log(f"[DevCmd] key={value} -> action={key_action}")
             if key_action:
                 asyncio.create_task(self._dispatch_keyboard_action(key_action))
             else:
-                print(f"[DevCmd] WARNING: Unknown key '{value}'", file=sys.stderr)
+                self._dev_log(f"[DevCmd] WARNING: Unknown key '{value}'")
 
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""

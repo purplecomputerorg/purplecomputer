@@ -194,3 +194,17 @@ This pattern is used in:
 - `DoodleMode`: delegates to `ArtCanvas` for painting
 - `ParentMenu`: tracks menu selection with up/down/enter
 - `SleepScreen`: any key wakes the screen
+
+### Textual Uses stderr for Rendering
+
+**Do not capture stderr when running Purple Computer as a subprocess.** Textual renders its UI to stderr, so redirecting stderr to a file will capture the entire terminal UI output, not debug messages.
+
+For debug logging from the app, write to a file directly instead:
+```python
+# Bad: debug output goes to stderr (mixed with Textual rendering)
+print(f"[Debug] {msg}", file=sys.stderr)
+
+# Good: write to a dedicated log file
+with open("/path/to/debug.log", "a") as f:
+    f.write(f"[Debug] {msg}\n")
+```

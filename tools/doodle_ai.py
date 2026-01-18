@@ -117,8 +117,8 @@ class PurpleController:
         env['TERM'] = 'xterm-256color'
         env['PURPLE_DEV_MODE'] = '1'
         env['PURPLE_SCREENSHOT_DIR'] = screenshot_dir
-        env['PURPLE_DEMO_AUTOSTART'] = '0'  # Don't auto-run demo
         env['PURPLE_NO_EVDEV'] = '1'  # Disable real keyboard, use file commands only
+        env.pop('PURPLE_DEMO_AUTOSTART', None)  # Ensure demo doesn't auto-start
         # Add project root to PYTHONPATH so purple_tui can be found
         project_root = str(Path(__file__).parent.parent)
         env['PYTHONPATH'] = project_root + ':' + env.get('PYTHONPATH', '')

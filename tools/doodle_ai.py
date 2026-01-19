@@ -1076,7 +1076,7 @@ def load_env_file():
 def run_visual_feedback_loop(
     goal: str,
     iterations: int = 5,
-    output_dir: str = "doodle_ai_output",
+    output_dir: str = None,
     api_key: str = None,
 ) -> None:
     """Run the AI drawing loop with real visual feedback."""
@@ -1089,6 +1089,18 @@ def run_visual_feedback_loop(
     if not api_key:
         print("Error: Set ANTHROPIC_API_KEY in tools/.env or environment")
         sys.exit(1)
+
+    # Always create a timestamped subfolder for each run
+    if output_dir is None:
+        output_dir = generate_output_dir()
+    else:
+        # Check if path already has a timestamp (YYYYMMDD_HHMMSS pattern)
+        import re
+        if not re.search(r'\d{8}_\d{6}$', output_dir):
+            # Add timestamp subfolder
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = os.path.join(output_dir, timestamp)
 
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)

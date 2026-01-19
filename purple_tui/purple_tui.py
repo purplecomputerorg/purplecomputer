@@ -761,6 +761,9 @@ class PurpleApp(App):
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
         if isinstance(action, ModeAction):
+            # Dismiss any open modal (like mode picker) when F-key is pressed
+            if len(self.screen_stack) > 1:
+                self.screen.dismiss(None)
             if action.mode == MODE_EXPLORE[0]:
                 self.action_switch_mode(MODE_EXPLORE[0])
             elif action.mode == MODE_PLAY[0]:
@@ -1390,13 +1393,21 @@ class PurpleApp(App):
 
         elif action == "clear":
             # Clear the doodle canvas
-            from .modes.doodle_mode import DoodleMode
+            from .modes.doodle_mode import DoodleMode, ArtCanvas
             try:
                 doodle = self.query_one("#doodle-mode", DoodleMode)
                 doodle.clear_canvas()
+                # Also directly access and refresh the canvas to ensure clear takes effect
+                try:
+                    canvas = doodle.query_one("#art-canvas", ArtCanvas)
+                    canvas.refresh()
+                    self._dev_log(f"[DevCmd] Canvas cleared, grid size={len(canvas._grid)}")
+                except Exception:
+                    pass
                 self._dev_log("[DevCmd] Canvas cleared")
             except Exception as e:
-                self._dev_log(f"[DevCmd] ERROR: clear failed: {e}")
+                import traceback
+                self._dev_log(f"[DevCmd] ERROR: clear failed: {e}\n{traceback.format_exc()}")
 
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""

@@ -121,7 +121,7 @@ class ModePickerScreen(ModalScreen):
                 for opt_id, icon, label, _ in MODE_OPTIONS:
                     yield ModeOption(opt_id, icon, label, id=f"opt-{opt_id}")
 
-            yield Static("← → to pick, Enter to select", id="picker-hint")
+            yield Static("◀ ▶", id="picker-hint")
 
     def on_mount(self) -> None:
         """Highlight the initially selected option."""

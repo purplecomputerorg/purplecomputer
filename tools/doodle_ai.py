@@ -185,15 +185,34 @@ class PurpleController:
         """Send a command to the app via the command file."""
         self.send_commands([{"action": action, "value": value}])
 
-    def send_commands(self, commands: list[dict]) -> None:
-        """Send multiple commands to the app in a single batch."""
+    def send_commands(self, commands: list[dict], wait_for_consumption: bool = False) -> bool:
+        """Send multiple commands to the app in a single batch.
+
+        Args:
+            commands: List of command dicts
+            wait_for_consumption: If True, wait until command file is consumed
+
+        Returns:
+            True if command was consumed (or wait_for_consumption=False), False if timeout
+        """
         command_path = os.path.join(self.screenshot_dir, 'command')
         # Write all commands as newline-separated JSON
         content = '\n'.join(json.dumps(cmd) for cmd in commands)
         with open(command_path, 'w') as f:
             f.write(content + '\n')
-        # Brief wait for app to process
-        time.sleep(0.05)
+
+        if wait_for_consumption:
+            # Wait for command to be consumed (file deleted)
+            for _ in range(20):  # 2 second timeout
+                time.sleep(0.1)
+                if not os.path.exists(command_path):
+                    return True
+            print(f"[Warning] Command not consumed after 2s")
+            return False
+        else:
+            # Brief wait for app to start processing
+            time.sleep(0.05)
+            return True
 
     def send_key(self, key: str) -> None:
         """Send a single key to the app via command file."""
@@ -258,10 +277,62 @@ class PurpleController:
         self.send_key('tab')
         time.sleep(0.1)
 
-    def clear_canvas(self) -> None:
-        """Clear the entire canvas."""
-        self.send_command("clear", "")
-        time.sleep(0.1)
+    def clear_canvas(self, max_retries: int = 3) -> bool:
+        """Clear the entire canvas. Returns True if verified clear, False otherwise."""
+        for attempt in range(max_retries):
+            print(f"[Clear] Attempt {attempt + 1}/{max_retries}...")
+
+            # Send clear command and wait for it to be consumed
+            consumed = self.send_commands(
+                [{"action": "clear", "value": ""}],
+                wait_for_consumption=True
+            )
+            if not consumed:
+                print("[Clear] Command not consumed by app!")
+                continue
+
+            time.sleep(0.2)  # Give time for clear to take effect
+
+            # Take a screenshot to verify
+            svg_path = self.take_screenshot()
+            if svg_path and self._verify_canvas_clear(svg_path):
+                print("[Clear] Canvas verified clear")
+                return True
+            else:
+                print(f"[Clear] Canvas not clear, retrying...")
+                time.sleep(0.2)
+
+        print("[Clear] WARNING: Could not verify canvas was cleared")
+        return False
+
+    def _verify_canvas_clear(self, svg_path: str) -> bool:
+        """Check if the canvas SVG shows a mostly blank canvas."""
+        try:
+            with open(svg_path, 'r') as f:
+                svg_content = f.read()
+
+            # Count colored rectangles (painted cells)
+            # Blank canvas has mostly the default purple background
+            # Painted cells have different fill colors
+            import re
+
+            # Look for rect elements with fill colors that aren't the default purple background
+            # Default background is around #2a1845 (dark) or #e8daf0 (light)
+            default_colors = ['#2a1845', '#e8daf0', '#1e1033', '#f0e8f8', 'none']
+
+            # Find all fill colors in the SVG
+            fills = re.findall(r'fill="(#[0-9a-fA-F]{6})"', svg_content)
+
+            # Count non-default colors
+            painted_count = sum(1 for f in fills if f.lower() not in [c.lower() for c in default_colors])
+
+            # Allow a small number of non-default colors (cursor, UI elements)
+            is_clear = painted_count < 20
+            print(f"[Clear] Found {painted_count} painted cells (clear={is_clear})")
+            return is_clear
+        except Exception as e:
+            print(f"[Clear] Verification error: {e}")
+            return False
 
     def execute_action(self, action: dict) -> None:
         """Execute a single drawing action using batched commands for speed."""
@@ -816,8 +887,10 @@ def run_visual_feedback_loop(
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
                 print("[Clear] Clearing canvas for fresh attempt...")
-                controller.clear_canvas()
-                time.sleep(0.1)
+                if not controller.clear_canvas():
+                    print("[ERROR] Failed to clear canvas after retries. Aborting.")
+                    print("This may indicate the 'clear' command is not being processed.")
+                    break
 
             # Execute the complete script
             print(f"[Execute] Running script...")

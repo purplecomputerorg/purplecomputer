@@ -8,6 +8,8 @@ Brief descriptions of user experience changes, newest first.
 
 - **ESC toggles mode picker**: Pressing ESC while mode picker is open now closes it instead of reopening
 - **Simplified mode picker**: Mode picker now shows 3 options (Explore, Play, Doodle) instead of 4; Write/Paint are now tools within Doodle, not separate modes
+- **Mode picker hint simplified**: Replaced text instructions with just arrow symbols (◀ ▶) for pre-readers
+- **F-keys work in mode picker**: Pressing F1/F2/F3 while mode picker is open dismisses it and switches directly
 - **Doodle tool overlay**: Non-blocking overlay appears briefly when entering Doodle, showing current tool and "Tab to switch"; dismisses on first action or after 1.2s
 - **Doodle tool indicator**: Header now shows both tools (Write and Paint) with current tool highlighted; Tab hint between them
 

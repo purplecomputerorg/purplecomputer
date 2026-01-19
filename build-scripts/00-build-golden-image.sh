@@ -67,6 +67,13 @@ main() {
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu
 
+    # Mount virtual filesystems for chroot operations (required by systemd commands)
+    log_info "Mounting virtual filesystems for chroot..."
+    mount --bind /proc "$MOUNT_DIR/proc"
+    mount --bind /sys "$MOUNT_DIR/sys"
+    mount --bind /dev "$MOUNT_DIR/dev"
+    mount --bind /dev/pts "$MOUNT_DIR/dev/pts"
+
     # Configure system
     log_info "Configuring PurpleOS..."
 
@@ -416,6 +423,13 @@ EOF
     # Cleanup
     log_info "Cleaning up..."
     sync
+
+    # Unmount virtual filesystems (reverse order)
+    umount "$MOUNT_DIR/dev/pts" 2>/dev/null || true
+    umount "$MOUNT_DIR/dev" 2>/dev/null || true
+    umount "$MOUNT_DIR/sys" 2>/dev/null || true
+    umount "$MOUNT_DIR/proc" 2>/dev/null || true
+
     umount "$MOUNT_DIR/boot/efi"
     umount "$MOUNT_DIR"
     kpartx -dv "$LOOP_DEV"

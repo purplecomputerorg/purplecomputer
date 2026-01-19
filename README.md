@@ -97,7 +97,7 @@ Purple has three core modes:
 | **F3** | **Doodle** | Simple drawing canvas. Just type and paint. |
 
 **Controls:**
-- **Escape (tap):** Mode picker (Explore, Play, Write, Paint)
+- **Escape (tap):** Mode picker (Explore, Play, Doodle)
 - **F1-F3:** Switch modes directly
 - **F12:** Toggle dark/light mode
 - **Ctrl+V:** Cycle views (Screen → Line → Ears)

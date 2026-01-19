@@ -573,6 +573,7 @@ class PurpleApp(App):
         self._evdev_reader: EvdevReader | None = None
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
+        self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -785,14 +786,18 @@ class PurpleApp(App):
         if isinstance(action, ControlAction) and action.action == 'escape':
             if action.is_down and not action.is_repeat:
                 self._escape_triggered_long_hold = False  # Reset on fresh press
+                # Track if modal was open when ESC pressed (for toggle behavior)
+                self._modal_open_at_escape_press = len(self.screen_stack) > 1
                 self._start_escape_hold_timer()
             elif not action.is_down:
                 self._cancel_escape_hold_timer()
-                # If long hold wasn't triggered, this was a tap: show mode picker
-                # But only if no modal is currently showing
-                if not self._escape_triggered_long_hold and len(self.screen_stack) == 1:
-                    self._show_mode_picker()
-                    return
+                # If long hold wasn't triggered, this was a tap: toggle mode picker
+                # Only OPEN picker if no modal was open when ESC was pressed
+                # If modal was open, it handles its own ESC (closes itself)
+                if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press:
+                    if len(self.screen_stack) == 1:
+                        self._show_mode_picker()
+                        return
             # Don't return - let escape events propagate to modes for other uses
 
         # Handle global toggles (F9 theme, F10-F12 volume)
@@ -854,18 +859,8 @@ class PurpleApp(App):
 
     def _show_mode_picker(self) -> None:
         """Show the mode picker modal."""
-        # Determine current state for initial selection
         current_mode = self.active_mode.name.lower()
-        is_paint_mode = False
-        if current_mode == "doodle":
-            try:
-                doodle = self.query_one("#mode-doodle")
-                canvas = doodle.query_one("#art-canvas")
-                is_paint_mode = canvas._paint_mode
-            except Exception:
-                pass
-
-        picker = ModePickerScreen(current_mode=current_mode, is_paint_mode=is_paint_mode)
+        picker = ModePickerScreen(current_mode=current_mode)
         self.push_screen(picker, self._on_mode_picked)
 
     def _on_mode_picked(self, result: dict | None) -> None:
@@ -875,7 +870,6 @@ class PurpleApp(App):
             return
 
         mode_name = result.get("mode")
-        paint_mode = result.get("paint_mode")
 
         # Switch to the selected mode
         if mode_name == "explore":
@@ -884,19 +878,6 @@ class PurpleApp(App):
             self.action_switch_mode(MODE_PLAY[0])
         elif mode_name == "doodle":
             self.action_switch_mode(MODE_DOODLE[0])
-            # Set paint mode after switching
-            if paint_mode is not None:
-                self.call_later(self._set_doodle_paint_mode, paint_mode)
-
-    def _set_doodle_paint_mode(self, paint_mode: bool) -> None:
-        """Set doodle canvas paint mode after mode switch."""
-        try:
-            doodle = self.query_one("#mode-doodle")
-            canvas = doodle.query_one("#art-canvas")
-            if canvas._paint_mode != paint_mode:
-                canvas._toggle_paint_mode()
-        except Exception:
-            pass
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""

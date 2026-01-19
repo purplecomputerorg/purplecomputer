@@ -4,9 +4,18 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+## 2026-01
+
+- **ESC toggles mode picker**: Pressing ESC while mode picker is open now closes it instead of reopening
+- **Simplified mode picker**: Mode picker now shows 3 options (Explore, Play, Doodle) instead of 4; Write/Paint are now tools within Doodle, not separate modes
+- **Doodle tool overlay**: Non-blocking overlay appears briefly when entering Doodle, showing current tool and "Tab to switch"; dismisses on first action or after 1.2s
+- **Doodle tool indicator**: Header now shows both tools (Write and Paint) with current tool highlighted; Tab hint between them
+
+---
+
 ## 2025-01
 
-- **Escape tap mode picker**: Tapping Escape opens a mode picker modal with Explore, Play, Write, Paint options (Write/Paint grouped under Doodle); Esc badge added to mode indicator bar
+- **Escape tap mode picker**: Tapping Escape opens a mode picker modal; Esc badge added to mode indicator bar
 - **Tab toggles paint/write**: Removed space-space toggle, now only Tab switches between paint and write modes in Doodle (avoids accidental triggers while drawing)
 - **Space-space toggle**: Double-tap space toggles write/paint both ways, requires consecutive spaces
 - **Mode switch dismisses prompt**: Switching modes while "keep drawing" prompt is showing dismisses it and switches normally

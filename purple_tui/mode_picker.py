@@ -1,8 +1,7 @@
 """
 Mode Picker Screen: A kid-friendly modal for switching modes.
 
-Shows 4 options: Explore, Play, Write, Paint
-Write and Paint are visually grouped as "Doodle" sub-modes.
+Shows 3 options: Explore, Play, Doodle
 Arrow keys navigate, Enter selects, Escape cancels.
 """
 
@@ -20,8 +19,7 @@ from .keyboard import NavigationAction, ControlAction
 MODE_OPTIONS = [
     ("explore", ICON_CHAT, "Explore", {"mode": "explore"}),
     ("play", ICON_MUSIC, "Play", {"mode": "play"}),
-    ("write", "✏️", "Write", {"mode": "doodle", "paint_mode": False}),
-    ("paint", "🎨", "Paint", {"mode": "doodle", "paint_mode": True}),
+    ("doodle", ICON_PALETTE, "Doodle", {"mode": "doodle"}),
 ]
 
 
@@ -44,10 +42,6 @@ class ModeOption(Static):
         background: $primary;
         color: $background;
         text-style: bold;
-    }
-
-    ModeOption.doodle-group {
-        /* Visual hint that this is part of doodle */
     }
     """
 
@@ -75,7 +69,7 @@ class ModePickerScreen(ModalScreen):
     }
 
     #picker-dialog {
-        width: 72;
+        width: 58;
         height: auto;
         padding: 2 3;
         background: $surface;
@@ -96,20 +90,6 @@ class ModePickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #doodle-label {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 0;
-    }
-
-    #doodle-bracket {
-        width: 100%;
-        height: 1;
-        content-align: center middle;
-        color: $text-muted;
-    }
-
     #picker-hint {
         width: 100%;
         text-align: center;
@@ -118,10 +98,9 @@ class ModePickerScreen(ModalScreen):
     }
     """
 
-    def __init__(self, current_mode: str = "explore", is_paint_mode: bool = False, **kwargs):
+    def __init__(self, current_mode: str = "explore", **kwargs):
         super().__init__(**kwargs)
         self._current_mode = current_mode
-        self._is_paint_mode = is_paint_mode
         self._selected_index = self._get_initial_index()
 
     def _get_initial_index(self) -> int:
@@ -131,7 +110,7 @@ class ModePickerScreen(ModalScreen):
         elif self._current_mode == "play":
             return 1
         elif self._current_mode == "doodle":
-            return 3 if self._is_paint_mode else 2
+            return 2
         return 0
 
     def compose(self) -> ComposeResult:
@@ -139,14 +118,8 @@ class ModePickerScreen(ModalScreen):
             yield Static("Pick a Mode", id="picker-title")
 
             with Horizontal(id="picker-options"):
-                for i, (opt_id, icon, label, _) in enumerate(MODE_OPTIONS):
-                    option = ModeOption(opt_id, icon, label, id=f"opt-{opt_id}")
-                    if i >= 2:  # Write and Paint are doodle group
-                        option.add_class("doodle-group")
-                    yield option
-
-            # Visual bracket under Write and Paint to show they're grouped
-            yield Static("         └───── Doodle ─────┘", id="doodle-bracket")
+                for opt_id, icon, label, _ in MODE_OPTIONS:
+                    yield ModeOption(opt_id, icon, label, id=f"opt-{opt_id}")
 
             yield Static("← → to pick, Enter to select", id="picker-hint")
 

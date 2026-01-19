@@ -890,7 +890,7 @@ class ColorLegend(Widget):
 # =============================================================================
 
 class CanvasHeader(Static):
-    """Shows current mode and hints."""
+    """Shows current mode with both tools visible, current highlighted."""
 
     DEFAULT_CSS = """
     CanvasHeader {
@@ -923,19 +923,92 @@ class CanvasHeader(Static):
         return APP_BG_DARK if luminance > 0.5 else TEXT_FG_DARK
 
     def render(self) -> str:
+        """Render header showing both tools with current highlighted."""
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         if self._is_painting:
-            # Show paint mode with color swatch (brush color as background)
-            # Use contrasting text color for readability
+            # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
-            mode_styled = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
-            hint = caps("Tab: write")
+            write_part = f"[dim]{caps('Write')}[/]"
+            paint_part = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
         else:
-            mode_styled = f"[bold]{caps('Write')}[/]"
-            hint = caps("Tab: paint")
+            # Write mode: WRITE highlighted, Paint dim
+            write_part = f"[bold]{caps('Write')}[/]"
+            paint_part = f"[dim]{caps('Paint')}[/]"
 
-        return f"{mode_styled}  [dim]({hint})[/]"
+        return f"{write_part}  [dim]Tab[/]  {paint_part}"
+
+
+# =============================================================================
+# TOOL OVERLAY WIDGET
+# =============================================================================
+
+class ToolOverlay(Static):
+    """
+    Non-blocking overlay that introduces tool switching.
+
+    Shows on entering Doodle mode, auto-dismisses after 1.2s or on first action.
+    Does NOT block input: kid can immediately type/draw.
+    """
+
+    # How long to show the overlay (seconds)
+    DISPLAY_DURATION = 1.2
+
+    DEFAULT_CSS = """
+    ToolOverlay {
+        dock: bottom;
+        width: 100%;
+        height: 1;
+        text-align: center;
+        background: $primary;
+        color: $background;
+    }
+
+    ToolOverlay.hidden {
+        display: none;
+    }
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._hide_timer = None
+        self._is_painting = False
+        self.add_class("caps-sensitive")
+
+    def on_mount(self) -> None:
+        """Start auto-hide timer when mounted."""
+        self._hide_timer = self.set_timer(self.DISPLAY_DURATION, self._auto_hide)
+
+    def _auto_hide(self) -> None:
+        """Hide the overlay after timeout."""
+        self.add_class("hidden")
+        if self._hide_timer:
+            self._hide_timer.stop()
+            self._hide_timer = None
+
+    def dismiss(self) -> None:
+        """Dismiss the overlay immediately (called on first action)."""
+        if self._hide_timer:
+            self._hide_timer.stop()
+            self._hide_timer = None
+        self.add_class("hidden")
+
+    def is_visible(self) -> bool:
+        """Check if overlay is still visible."""
+        return "hidden" not in self.classes
+
+    def set_paint_mode(self, is_painting: bool) -> None:
+        """Update the displayed mode."""
+        self._is_painting = is_painting
+        self.refresh()
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        if self._is_painting:
+            current = caps("Paint")
+        else:
+            current = caps("Write")
+        return f"  {current} mode. Press Tab to switch tools.  "
 
 
 # =============================================================================
@@ -948,6 +1021,7 @@ class DoodleMode(Container):
 
     Normal typing draws readable text with subtle background tinting.
     Holding Space while pressing arrows paints colorful trails.
+    Shows a non-blocking tool overlay on first enter to teach Tab switching.
     """
 
     DEFAULT_CSS = """
@@ -967,11 +1041,16 @@ class DoodleMode(Container):
         width: 100%;
         height: 1fr;
     }
+
+    #tool-overlay {
+        dock: bottom;
+    }
     """
 
     def compose(self) -> ComposeResult:
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
+        yield ToolOverlay(id="tool-overlay")
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
@@ -982,9 +1061,16 @@ class DoodleMode(Container):
         header.update_state(False, "#FFFFFF")
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Update header when paint mode changes."""
+        """Update header and overlay when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
+        # Update and dismiss overlay on Tab press (mode change is a meaningful action)
+        try:
+            overlay = self.query_one("#tool-overlay", ToolOverlay)
+            overlay.set_paint_mode(event.is_painting)
+            overlay.dismiss()  # Tab press is a meaningful action
+        except Exception:
+            pass
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""
@@ -1002,8 +1088,26 @@ class DoodleMode(Container):
         except Exception:
             pass
 
+    def _dismiss_overlay(self) -> None:
+        """Dismiss the tool overlay on first meaningful action."""
+        try:
+            overlay = self.query_one("#tool-overlay", ToolOverlay)
+            if overlay.is_visible():
+                overlay.dismiss()
+        except Exception:
+            pass
+
     async def handle_keyboard_action(self, action) -> None:
-        """Delegate keyboard actions to the canvas."""
+        """Delegate keyboard actions to the canvas, dismissing overlay on meaningful input."""
+        # Check for meaningful actions that should dismiss the overlay
+        # Meaningful: character typed, space pressed (stamp), or Tab (handled via paint_mode_changed)
+        if isinstance(action, CharacterAction):
+            self._dismiss_overlay()
+        elif isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'space':
+                self._dismiss_overlay()
+
+        # Delegate to canvas
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
 

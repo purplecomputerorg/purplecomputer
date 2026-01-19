@@ -355,17 +355,51 @@ EOF
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
 
     # Create the grub.cfg that will be embedded in the standalone EFI binary
+    # IMPORTANT: Must have fallbacks since label search can fail on some firmware
     cat > /tmp/grub-standalone.cfg <<'EOF'
 # GRUB standalone bootloader for PurpleOS
 terminal_output console
 terminal_input console
 set pager=0
+set timeout=5
 
+# Try multiple methods to find the root partition
+# Method 1: Search by filesystem label (most reliable when it works)
 search --no-floppy --label PURPLE_ROOT --set=root
+
+# Method 2: If label search failed, try searching for our grub.cfg file
+if [ -z "$root" ]; then
+    search --no-floppy --file /boot/grub/grub.cfg --set=root
+fi
+
+# Method 3: If still not found, try common device paths
+if [ -z "$root" ]; then
+    # Try second partition on first few disks (where we install)
+    for dev in hd0,gpt2 hd1,gpt2 hd2,gpt2; do
+        if [ -f ($dev)/boot/grub/grub.cfg ]; then
+            set root=$dev
+            break
+        fi
+    done
+fi
 
 if [ -n "$root" ]; then
     set prefix=($root)/boot/grub
     configfile ($root)/boot/grub/grub.cfg
+else
+    # Nothing worked - show error instead of silent failure
+    echo ""
+    echo "ERROR: Could not find PurpleOS root partition"
+    echo ""
+    echo "Tried:"
+    echo "  - Label: PURPLE_ROOT"
+    echo "  - File: /boot/grub/grub.cfg"
+    echo "  - Devices: hd0-2,gpt2"
+    echo ""
+    echo "Press any key for GRUB shell, or power off and contact support."
+    echo ""
+    read
+    normal
 fi
 EOF
 

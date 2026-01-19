@@ -115,20 +115,27 @@ def parse_json_robust(text: str) -> dict | list | None:
     # Try to parse
     try:
         return json.loads(json_text)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        print(f"[JSON Parse] First attempt failed: {e}")
+        print(f"[JSON Parse] Extracted text length: {len(json_text)}, depth was: {depth}")
+        # Show where the error is
+        if hasattr(e, 'pos') and e.pos:
+            context_start = max(0, e.pos - 50)
+            context_end = min(len(json_text), e.pos + 50)
+            print(f"[JSON Parse] Context around error: ...{json_text[context_start:context_end]}...")
 
     # Last resort: try to extract just the actions array
-    actions_match = re.search(r'"actions"\s*:\s*(\[[\s\S]*\])', text)
+    actions_match = re.search(r'"actions"\s*:\s*(\[[\s\S]*?\])(?=\s*[,}]|$)', text)
     if actions_match:
         try:
             actions_text = actions_match.group(1)
             # Clean trailing commas
             actions_text = re.sub(r',\s*([}\]])', r'\1', actions_text)
             actions = json.loads(actions_text)
+            print(f"[JSON Parse] Fallback extraction got {len(actions)} actions")
             return {"actions": actions}
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            print(f"[JSON Parse] Fallback also failed: {e}")
 
     return None
 
@@ -1387,6 +1394,7 @@ def run_visual_feedback_loop(
         best_image_base64 = None
         best_reason = None
         judge_history = []  # Track all judge comparisons for monitoring
+        skip_next_judge = False  # Skip judge if previous iteration failed (canvas unchanged)
 
         for i in range(iterations):
             print(f"\n{'='*50}")
@@ -1427,18 +1435,31 @@ def run_visual_feedback_loop(
 
             # Get analysis and NEW complete script from AI
             # Pass accumulated learnings (not full scripts) for efficient context
-            result = call_vision_api(
-                image_base64=png_base64,
-                goal=goal,
-                iteration=i + 1,
-                max_iterations=iterations,
-                api_key=api_key,
-                plan=plan,
-                accumulated_learnings=accumulated_learnings,
-                previous_strategy=previous_strategy,
-            )
+            # Retry up to 3 times if we get no actions (JSON parse failure, etc.)
+            actions = []
+            result = {}
+            max_retries = 3
+            for retry in range(max_retries):
+                if retry > 0:
+                    print(f"[Retry] Attempt {retry + 1}/{max_retries} for iteration {i + 1}...")
+                    time.sleep(1)  # Brief pause before retry
 
-            actions = result.get("actions", [])
+                result = call_vision_api(
+                    image_base64=png_base64,
+                    goal=goal,
+                    iteration=i + 1,
+                    max_iterations=iterations,
+                    api_key=api_key,
+                    plan=plan,
+                    accumulated_learnings=accumulated_learnings,
+                    previous_strategy=previous_strategy,
+                )
+
+                actions = result.get("actions", [])
+                if actions:
+                    break  # Got actions, exit retry loop
+                else:
+                    print(f"[Warning] No actions returned (attempt {retry + 1}/{max_retries})")
 
             # Store full result
             all_results.append({
@@ -1449,7 +1470,11 @@ def run_visual_feedback_loop(
             })
 
             if not actions:
-                print("[Warning] No actions returned")
+                print(f"[Error] Failed to get actions after {max_retries} retries")
+                # Don't clear - keep the canvas as-is to preserve progress
+                # But skip the judge on next iteration since canvas won't have changed
+                skip_next_judge = True
+                print("[Skip] Will skip judge comparison on next iteration (canvas unchanged)")
                 continue
 
             # Debug: show action summary to verify they're different each iteration
@@ -1503,7 +1528,11 @@ def run_visual_feedback_loop(
 
             current_attempt_result = i  # The screenshot shows this Attempt's result
 
-            if i == 1:
+            # Check if we should skip judge (previous iteration failed, canvas unchanged)
+            if skip_next_judge:
+                print(f"[Judge] Skipping comparison (previous iteration failed, canvas unchanged)")
+                skip_next_judge = False  # Reset for next iteration
+            elif i == 1:
                 # First real result (Attempt 1), set as initial best - no judging yet
                 best_iteration = current_attempt_result
                 best_image_base64 = png_base64

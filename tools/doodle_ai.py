@@ -1222,7 +1222,20 @@ def run_visual_feedback_loop(
                     "iteration": i + 1,
                     "learning": result["learnings"],
                 })
+                # Save learnings incrementally so user can monitor progress
+                learnings_path = os.path.join(output_dir, "learnings.json")
+                with open(learnings_path, 'w') as f:
+                    json.dump(accumulated_learnings, f, indent=2)
             previous_strategy = result.get("strategy_summary", "")
+
+            # Also save strategy incrementally
+            if result.get("strategy_summary"):
+                strategy_path = os.path.join(output_dir, "latest_strategy.json")
+                with open(strategy_path, 'w') as f:
+                    json.dump({
+                        "iteration": i + 1,
+                        "strategy": result["strategy_summary"]
+                    }, f, indent=2)
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:

@@ -15,8 +15,9 @@ from calc_font_size import (
 
 class TestConstants:
     def test_grid_size(self):
-        assert REQUIRED_COLS == 104
-        assert REQUIRED_ROWS == 37
+        """Grid must match purple_tui.constants (114x39 for current viewport)."""
+        assert REQUIRED_COLS == 114
+        assert REQUIRED_ROWS == 39
 
     def test_limits(self):
         assert MIN_FONT >= 10
@@ -81,22 +82,30 @@ class TestCalculateFont:
 
 
 class TestScript:
+    @staticmethod
+    def _get_env():
+        """Get environment with PYTHONPATH set for purple_tui import."""
+        project_root = os.path.join(os.path.dirname(__file__), '..')
+        env = os.environ.copy()
+        env['PYTHONPATH'] = project_root + ':' + env.get('PYTHONPATH', '')
+        return env
+
     def test_runs(self):
         """Script runs without error."""
         script = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'calc_font_size.py')
-        result = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=10)
+        result = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=10, env=self._get_env())
         assert result.returncode == 0
 
     def test_outputs_number(self):
         """Script outputs valid font size."""
         script = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'calc_font_size.py')
-        result = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=10)
+        result = subprocess.run([sys.executable, script], capture_output=True, text=True, timeout=10, env=self._get_env())
         font = float(result.stdout.strip())
         assert MIN_FONT <= font <= MAX_FONT
 
     def test_info_mode(self):
         """--info outputs diagnostic info."""
         script = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'calc_font_size.py')
-        result = subprocess.run([sys.executable, script, '--info'], capture_output=True, text=True, timeout=10)
+        result = subprocess.run([sys.executable, script, '--info'], capture_output=True, text=True, timeout=10, env=self._get_env())
         assert 'Screen:' in result.stdout
         assert 'Font:' in result.stdout

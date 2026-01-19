@@ -17,9 +17,10 @@ import re
 import os
 import sys
 
-# Terminal grid required for full UI (from purple_tui/constants.py)
-REQUIRED_COLS = 104
-REQUIRED_ROWS = 37
+# Terminal grid required for full UI (must stay in sync with purple_tui)
+from purple_tui.constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
+REQUIRED_COLS = REQUIRED_TERMINAL_COLS
+REQUIRED_ROWS = REQUIRED_TERMINAL_ROWS
 
 # Target: fill 80% of screen (leaves visible border, never clips)
 SCREEN_FILL = 0.80

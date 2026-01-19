@@ -76,6 +76,23 @@ Or use the Makefile shortcuts: `make test`, `make run`, `make setup`.
 
 ---
 
+## Terminal Layout Constants
+
+**Single source of truth:** `purple_tui/constants.py` defines the viewport dimensions.
+
+```python
+VIEWPORT_WIDTH = 112          # Viewport widget width
+VIEWPORT_HEIGHT = 32          # Viewport widget height
+REQUIRED_TERMINAL_COLS = 114  # Full UI width (viewport + border)
+REQUIRED_TERMINAL_ROWS = 39   # Full UI height (viewport + border + title + footer)
+```
+
+**Font size calculation:** `scripts/calc_font_size.py` imports these constants and calculates the Alacritty font size to fit the UI on screen at 80% fill. If you change viewport dimensions in `constants.py`, the font calculator automatically adjusts.
+
+**No fallbacks:** Purple Computer always runs with `purple_tui` installed (either via pip in production or PYTHONPATH in dev). Scripts should import directly from `purple_tui.constants` without try/except fallbacks.
+
+---
+
 ## Textual Framework Workarounds
 
 ### Background Color Updates (Textual 0.67.0)

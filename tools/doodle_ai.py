@@ -183,28 +183,25 @@ class PurpleController:
 
     def send_command(self, action: str, value: str = "") -> None:
         """Send a command to the app via the command file."""
+        self.send_commands([{"action": action, "value": value}])
+
+    def send_commands(self, commands: list[dict]) -> None:
+        """Send multiple commands to the app in a single batch."""
         command_path = os.path.join(self.screenshot_dir, 'command')
-        cmd = json.dumps({"action": action, "value": value})
-        print(f"[Debug] Writing command to {command_path}: {cmd}")
+        # Write all commands as newline-separated JSON
+        content = '\n'.join(json.dumps(cmd) for cmd in commands)
         with open(command_path, 'w') as f:
-            f.write(cmd + '\n')
-        # Wait for app to process (checks every 0.1s)
-        time.sleep(0.2)
-        # Check if command was consumed
-        if os.path.exists(command_path):
-            print(f"[Debug] WARNING: Command file still exists (not consumed)")
-        else:
-            print(f"[Debug] Command consumed")
+            f.write(content + '\n')
+        # Brief wait for app to process
+        time.sleep(0.05)
 
     def send_key(self, key: str) -> None:
         """Send a single key to the app via command file."""
         # Handle shift+key -> uppercase letter
         if key.startswith('shift+'):
             char = key[6:].upper()
-            print(f"[Key] shift+{key[6:]} -> {char}")
             self.send_command("key", char)
         else:
-            print(f"[Key] {key}")
             self.send_command("key", key)
 
     def send_keys(self, keys: list[str], delay: float = 0.05) -> None:
@@ -254,63 +251,58 @@ class PurpleController:
     def switch_to_doodle(self) -> None:
         """Switch to Doodle mode."""
         self.send_command("mode", "doodle")
-        time.sleep(0.3)
+        time.sleep(0.1)
 
     def enter_paint_mode(self) -> None:
         """Enter paint mode (Tab in Doodle mode)."""
         self.send_key('tab')
-        time.sleep(0.2)
+        time.sleep(0.1)
 
     def execute_action(self, action: dict) -> None:
-        """Execute a single drawing action."""
+        """Execute a single drawing action using batched commands for speed."""
         action_type = action.get('type')
 
         if action_type == 'move':
-            self.send_key(action['direction'])
+            self.send_command("key", action['direction'])
 
         elif action_type == 'move_to':
-            # Move to position via repeated arrows
-            # First go to top-left, then navigate
-            for _ in range(50):
-                self.send_key('left')
-            for _ in range(30):
-                self.send_key('up')
-            time.sleep(0.1)
-            for _ in range(action.get('x', 0)):
-                self.send_key('right')
-            for _ in range(action.get('y', 0)):
-                self.send_key('down')
+            # Batch all movement commands for speed
+            commands = []
+            # First go to top-left (112 left + 32 up to be safe)
+            commands.extend([{"action": "key", "value": "left"} for _ in range(112)])
+            commands.extend([{"action": "key", "value": "up"} for _ in range(32)])
+            # Then navigate to target
+            commands.extend([{"action": "key", "value": "right"} for _ in range(action.get('x', 0))])
+            commands.extend([{"action": "key", "value": "down"} for _ in range(action.get('y', 0))])
+            self.send_commands(commands)
 
         elif action_type == 'select_color':
             # Shift+key to select without stamping (uppercase letter)
-            self.send_key(f"shift+{action['key']}")
+            key = action['key'].upper()
+            self.send_command("key", key)
 
         elif action_type == 'stamp':
-            self.send_key('space')
+            self.send_command("key", "space")
 
         elif action_type == 'paint_line':
-            key = action['key']
+            key = action['key'].upper()  # Uppercase for shift (select without stamp)
             direction = action['direction']
             length = action.get('length', 1)
 
-            # Select color (uppercase to select without stamping)
-            self.send_key(f"shift+{key}")
-            time.sleep(0.02)
-
-            # Stamp and move repeatedly
+            # Batch: select color, then stamp+move repeatedly
+            commands = [{"action": "key", "value": key}]  # Select color
             for _ in range(length):
-                self.send_key('space')
-                self.send_key(direction)
+                commands.append({"action": "key", "value": "space"})
+                commands.append({"action": "key", "value": direction})
+            self.send_commands(commands)
 
         elif action_type == 'type_text':
-            # Exit paint mode first
-            self.send_key('tab')
-            time.sleep(0.1)
-            for char in action.get('text', ''):
-                self.send_key(char)
-            # Re-enter paint mode
-            self.send_key('tab')
-            time.sleep(0.1)
+            # Batch: exit paint mode, type text, re-enter paint mode
+            text = action.get('text', '')
+            commands = [{"action": "key", "value": "tab"}]  # Exit paint mode
+            commands.extend([{"action": "key", "value": c} for c in text])
+            commands.append({"action": "key", "value": "tab"})  # Re-enter paint mode
+            self.send_commands(commands)
 
         elif action_type == 'wait':
             time.sleep(action.get('seconds', 0.5))
@@ -603,7 +595,7 @@ def run_visual_feedback_loop(
         print("[Setup] Switching to Doodle mode...")
         controller.switch_to_doodle()
         controller.enter_paint_mode()
-        time.sleep(0.5)
+        time.sleep(0.2)
 
         all_actions = []
         all_learnings = []  # Accumulated observations across iterations
@@ -652,7 +644,7 @@ def run_visual_feedback_loop(
 
             # Execute actions
             controller.execute_actions(actions)
-            time.sleep(0.3)
+            time.sleep(0.1)
 
         # Take final screenshot
         print("\n[Final] Taking final screenshot...")

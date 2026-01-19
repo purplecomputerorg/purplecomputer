@@ -887,11 +887,17 @@ def run_visual_feedback_loop(
 
             print(f"[Screenshot] {svg_path}")
 
-            # Convert to PNG for vision API
+            # Convert to PNG for vision API (with cropping to canvas area)
             png_base64 = svg_to_png_base64(svg_path)
             if not png_base64:
                 print("[Error] Failed to convert SVG to PNG")
                 continue
+
+            # Save the cropped PNG so user can see what Claude sees
+            png_path = svg_path.replace('.svg', '_cropped.png')
+            with open(png_path, 'wb') as f:
+                f.write(base64.standard_b64decode(png_base64))
+            print(f"[Cropped PNG] {png_path}")
 
             # Get analysis and NEW complete script from AI
             analysis, actions = call_vision_api(

@@ -40,12 +40,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # SVG TO PNG CONVERSION
 # =============================================================================
 
-def svg_to_png_base64(svg_path: str) -> str:
-    """Convert SVG file to base64-encoded PNG."""
+def svg_to_png_base64(svg_path: str, crop_to_canvas: bool = True) -> str:
+    """Convert SVG file to base64-encoded PNG, optionally cropping to canvas area.
+
+    Args:
+        svg_path: Path to SVG file
+        crop_to_canvas: If True, crop to just the doodle canvas area
+    """
     try:
         from cairosvg import svg2png
         png_data = svg2png(url=svg_path)
-        return base64.standard_b64encode(png_data).decode('utf-8')
     except ImportError:
         # Fallback: try using rsvg-convert or inkscape
         import tempfile
@@ -72,7 +76,65 @@ def svg_to_png_base64(svg_path: str) -> str:
         with open(tmp_path, 'rb') as f:
             png_data = f.read()
         os.unlink(tmp_path)
-        return base64.standard_b64encode(png_data).decode('utf-8')
+
+    # Optionally crop to just the canvas area
+    if crop_to_canvas and png_data:
+        png_data = crop_to_canvas_area(png_data)
+
+    return base64.standard_b64encode(png_data).decode('utf-8')
+
+
+def crop_to_canvas_area(png_data: bytes) -> bytes:
+    """Crop PNG to just the doodle canvas area, removing UI chrome.
+
+    Uses exact pixel calculations based on Purple Computer's layout:
+    - Terminal: 114 cols × 39 rows (from constants.py)
+    - Viewport/Canvas: 112 cols × 32 rows
+    - Canvas starts at row 4 (title + border + header), col 1 (border)
+    """
+    try:
+        from PIL import Image
+        import io
+
+        img = Image.open(io.BytesIO(png_data))
+        img_width, img_height = img.size
+
+        # Calculate cell dimensions from image size
+        # Terminal is 114 cols × 39 rows (REQUIRED_TERMINAL_COLS × REQUIRED_TERMINAL_ROWS)
+        TERM_COLS = 114
+        TERM_ROWS = 39
+        cell_width = img_width / TERM_COLS
+        cell_height = img_height / TERM_ROWS
+
+        # Canvas position in terminal cells:
+        # - Starts at row 4 (0: title bar, 1: blank/mode, 2: border top, 3: canvas header)
+        # - Starts at col 1 (0: left border)
+        # - Canvas is 112 cols × 32 rows
+        CANVAS_START_ROW = 4
+        CANVAS_START_COL = 1
+        CANVAS_COLS = 112
+        CANVAS_ROWS = 32
+
+        # Calculate pixel coordinates
+        left = int(CANVAS_START_COL * cell_width)
+        top = int(CANVAS_START_ROW * cell_height)
+        right = int((CANVAS_START_COL + CANVAS_COLS) * cell_width)
+        bottom = int((CANVAS_START_ROW + CANVAS_ROWS) * cell_height)
+
+        # Crop the image
+        cropped = img.crop((left, top, right, bottom))
+
+        # Convert back to bytes
+        output = io.BytesIO()
+        cropped.save(output, format='PNG')
+        return output.getvalue()
+
+    except ImportError:
+        print("[Warning] PIL not installed, skipping crop. Install: pip install Pillow")
+        return png_data
+    except Exception as e:
+        print(f"[Warning] Crop failed: {e}")
+        return png_data
 
 
 # =============================================================================

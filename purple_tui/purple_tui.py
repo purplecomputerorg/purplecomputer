@@ -650,22 +650,26 @@ class PurpleApp(App):
         else:
             self._evdev_reader = None
 
-        # Start idle detection timer
+        # Start idle detection timer (disabled in dev mode for AI training)
         # In demo mode, check every second for responsiveness
         # In normal mode, check every 5 seconds to save resources
-        from .power_manager import IDLE_SLEEP_UI, IDLE_SHUTDOWN
-
-        if os.environ.get("PURPLE_SLEEP_DEMO"):
-            check_interval = 1.0
-            self.notify(
-                f"Demo: sleep@{IDLE_SLEEP_UI}s, off@{IDLE_SHUTDOWN}s",
-                title="Sleep Demo",
-                timeout=5,
-            )
+        if os.environ.get("PURPLE_DEV_MODE") == "1":
+            # Dev mode: no sleep screen (for AI training)
+            self._idle_timer = None
         else:
-            check_interval = 5.0
+            from .power_manager import IDLE_SLEEP_UI, IDLE_SHUTDOWN
 
-        self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
+            if os.environ.get("PURPLE_SLEEP_DEMO"):
+                check_interval = 1.0
+                self.notify(
+                    f"Demo: sleep@{IDLE_SLEEP_UI}s, off@{IDLE_SHUTDOWN}s",
+                    title="Sleep Demo",
+                    timeout=5,
+                )
+            else:
+                check_interval = 5.0
+
+            self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
         # Show breaking update prompt if available
         if self._pending_update:

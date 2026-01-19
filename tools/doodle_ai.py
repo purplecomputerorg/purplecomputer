@@ -555,12 +555,16 @@ The canvas is **101 cells wide × 25 cells tall**.
 ## COLOR SYSTEM (with SHADING)
 
 Each row provides a color family with SHADING from light (left) to dark (right):
-- **QWERTY row (q-p, then [ ] \\)**: RED family (pink → burgundy)
-- **ASDF row (a-l, then ; ')**: YELLOW family (gold → brown)
-- **ZXCV row (z-m, then , . /)**: BLUE family (periwinkle → navy)
-- **Number row (` 1-0 - =)**: GRAYSCALE (pure white → pure black)
+- **Number row (` 1 2 3 4 5 6 7 8 9 0 - =)**: GRAYSCALE
+  - ` = pure white, 5 = middle gray, = = pure black
+- **QWERTY row (q w e r t y u i o p [ ] \\)**: RED family
+  - q = lightest pink, t/y = medium red, \\ = darkest burgundy
+- **ASDF row (a s d f g h j k l ; ')**: YELLOW family
+  - a = lightest gold, f/g = medium yellow, ' = darkest brown
+- **ZXCV row (z x c v b n m , . /)**: BLUE family
+  - z = lightest periwinkle, v/b = medium blue, / = darkest navy
 
-**SHADING:** Use left keys for highlights, middle for midtones, right for shadows.
+**SHADING:** Use left keys for highlights, middle for midtones, right keys for shadows.
 
 ## COLOR MIXING (LAYERED PAINTING)
 
@@ -578,6 +582,13 @@ The plan should include:
 1. **Composition**: Where elements go on the 101x25 canvas
 2. **Phases**: Break the work into phases, each assigned to specific iterations
 3. **Color strategy**: Which base colors to paint first, which overlays to add
+4. **Shading plan**: Where to use lighter vs darker shades for 3D depth and realism
+
+**IMPORTANT: Use shading to make drawings look 3D and realistic!**
+- Decide where light comes from (e.g., top-left)
+- Use lighter keys (q, a, z, `) on lit surfaces
+- Use darker keys (\\, ', /, =) on shadowed surfaces
+- Example: A tree trunk lit from the left uses 'd' on left side, 'g' in middle, "'" (apostrophe) on right shadow side
 
 ## RESPONSE FORMAT
 Respond with a JSON object:
@@ -637,41 +648,41 @@ The canvas is **101 cells wide × 25 cells tall**.
 ## COLOR SYSTEM (KEYBOARD ROWS)
 
 Each keyboard row produces a COLOR FAMILY. Within each row, keys go from LIGHTER (left) to DARKER (right).
-**Use this for SHADING:** paint lighter keys for highlights, darker keys for shadows.
+**Use this for SHADING:** paint lighter keys (left side of row) for highlights, darker keys (right side) for shadows.
 
 **GRAYSCALE (Number row: ` 1 2 3 4 5 6 7 8 9 0 - =):**
-- ` (backtick) = pure white
-- 1 = near white
-- 5 = medium gray
-- 0 = near black
-- = (equals) = pure black
+- ` (backtick) = pure white (highlight)
+- 1-3 = light grays
+- 4-6 = medium grays
+- 7-9 = dark grays
+- 0, -, = = near/pure black (shadow)
 
 **RED FAMILY (QWERTY row: q w e r t y u i o p [ ] \\):**
-- q = lightest pink/salmon (highlight)
-- e, r = medium red (primary)
-- p = dark red/burgundy
-- ], \\ = darkest burgundy (shadow)
+- q, w = lightest pink (highlight)
+- e, r, t, y = medium red (primary)
+- u, i, o, p = dark red
+- [, ], \\ = darkest burgundy (shadow)
 
 **YELLOW FAMILY (ASDF row: a s d f g h j k l ; '):**
-- a = lightest gold (highlight)
-- d, f = medium yellow/gold (primary)
-- l = dark brown-gold
-- ; ' = darkest brown (shadow)
+- a, s = lightest gold (highlight)
+- d, f, g = medium yellow (primary)
+- h, j, k, l = dark gold/brown
+- ;, ' = darkest brown (shadow)
 
 **BLUE FAMILY (ZXCV row: z x c v b n m , . /):**
-- z = lightest periwinkle (highlight)
-- c, v = medium blue (primary)
-- m = dark navy
-- , . / = darkest navy (shadow)
+- z, x = lightest periwinkle (highlight)
+- c, v, b = medium blue (primary)
+- n, m = dark blue
+- ,, ., / = darkest navy (shadow)
 
 ## SHADING TECHNIQUE
 
 To create 3D depth and realism, use DIFFERENT keys from the same row:
-- **Highlights**: Use leftmost keys (q, a, z, 1-2)
-- **Midtones**: Use middle keys (r, f, v, 5)
-- **Shadows**: Use rightmost keys (p, l, m, 9-0)
+- **Highlights**: Use leftmost keys (q, a, z, `)
+- **Midtones**: Use middle keys (t, f, b, 5)
+- **Shadows**: Use rightmost keys (\\, ', /, =)
 
-Example for a tree trunk: paint 'd' for lit side, 'h' for middle, 'l' for shadow side.
+Example for a tree trunk: paint 'd' for lit side, 'j' for middle, "'" (apostrophe) for shadow side.
 
 ## COLOR MIXING (CRITICAL!)
 
@@ -733,6 +744,19 @@ The canvas is CLEARED before each attempt. You will see a screenshot of your PRE
 
 Your goal: Generate a BETTER complete script than last time, learning from what worked and what didn't.
 
+## USE SHADING FOR REALISM
+
+**Don't use flat colors!** Use different keys within each row to create 3D depth:
+- Assume light comes from top-left (or specify your light direction)
+- **Lit surfaces**: Use lighter keys (q, a, z, `)
+- **Middle tones**: Use medium keys (t, f, b, 5)
+- **Shadows**: Use darker keys (\\, ', /, =)
+
+Example: For green foliage, don't just use 'f'+'c' everywhere:
+- Lit side: 'a' (light yellow) + 'z' (light blue) = bright green
+- Middle: 'f' (medium yellow) + 'b' (medium blue) = medium green
+- Shadow: 'k' (dark yellow) + '.' (dark blue) = dark green
+
 ## LAYERED PAINTING (within each attempt)
 
 To get mixed colors, you MUST paint in layers within your script:
@@ -765,9 +789,9 @@ Now add any pure red, pure blue, or grayscale elements.
 ```
 
 For SHADING mixed colors, vary the shade of the overlay:
-- Bright green highlight: yellow + light blue ("z")
-- Medium green: yellow + medium blue ("c")
-- Dark green shadow: yellow + dark blue ("m")
+- Bright green highlight: light yellow ("a") + light blue ("z")
+- Medium green: medium yellow ("f") + medium blue ("b")
+- Dark green shadow: dark yellow ("k") + dark blue (".")
 
 ## RESPONSE FORMAT
 

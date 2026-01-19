@@ -37,6 +37,102 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 # =============================================================================
+# ROBUST JSON PARSING
+# =============================================================================
+
+def parse_json_robust(text: str) -> dict | list | None:
+    """Parse JSON from text with fallbacks for common issues.
+
+    Handles:
+    - JSON inside markdown code blocks
+    - Trailing commas
+    - Truncated JSON (attempts to close brackets)
+    - Comments (// style)
+    """
+    import re
+
+    # Try to extract from markdown code block first
+    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
+    if code_block_match:
+        text = code_block_match.group(1)
+
+    # Find the JSON object or array
+    start_obj = text.find('{')
+    start_arr = text.find('[')
+
+    if start_obj < 0 and start_arr < 0:
+        return None
+
+    # Determine if we're looking for object or array
+    if start_arr >= 0 and (start_obj < 0 or start_arr < start_obj):
+        start = start_arr
+        open_char, close_char = '[', ']'
+    else:
+        start = start_obj
+        open_char, close_char = '{', '}'
+
+    # Find matching end by counting brackets
+    depth = 0
+    end = start
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == '\\' and in_string:
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == open_char:
+            depth += 1
+        elif char == close_char:
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+
+    if depth != 0:
+        # Truncated JSON - try to close it
+        json_text = text[start:end] if end > start else text[start:]
+        # Add missing closing brackets
+        json_text += close_char * depth
+    else:
+        json_text = text[start:end]
+
+    # Clean up common issues
+    # Remove trailing commas before ] or }
+    json_text = re.sub(r',\s*([}\]])', r'\1', json_text)
+    # Remove // comments (but not inside strings - simplified)
+    json_text = re.sub(r'//[^\n]*\n', '\n', json_text)
+
+    # Try to parse
+    try:
+        return json.loads(json_text)
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: try to extract just the actions array
+    actions_match = re.search(r'"actions"\s*:\s*(\[[\s\S]*\])', text)
+    if actions_match:
+        try:
+            actions_text = actions_match.group(1)
+            # Clean trailing commas
+            actions_text = re.sub(r',\s*([}\]])', r'\1', actions_text)
+            actions = json.loads(actions_text)
+            return {"actions": actions}
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
+# =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
 
@@ -1055,7 +1151,7 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
 
     text = response.content[0].text
 
-    # Parse JSON response
+    # Parse JSON response using robust parser
     result = {
         "analysis": "",
         "strategy_summary": "",
@@ -1063,44 +1159,33 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
         "actions": [],
     }
 
-    try:
-        # Find the JSON object
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        if start >= 0 and end > start:
-            data = json.loads(text[start:end])
-            result["analysis"] = data.get('analysis', '')
-            result["strategy_summary"] = data.get('strategy_summary', '')
-            result["learnings"] = data.get('learnings', '')
-            result["actions"] = data.get('actions', [])
+    data = parse_json_robust(text)
 
-            # Print feedback
-            if result["analysis"]:
-                print(f"[AI Analysis] {result['analysis']}")
-            if result["strategy_summary"]:
-                strat = result["strategy_summary"]
-                if isinstance(strat, dict):
-                    if strat.get("keep_next_time"):
-                        print(f"[AI Keep] {', '.join(strat['keep_next_time'])}")
-                    if strat.get("change_next_time"):
-                        print(f"[AI Change] {', '.join(strat['change_next_time'])}")
-            if result["learnings"]:
-                print(f"[AI Learning] {result['learnings']}")
+    if data and isinstance(data, dict):
+        result["analysis"] = data.get('analysis', '')
+        result["strategy_summary"] = data.get('strategy_summary', '')
+        result["learnings"] = data.get('learnings', '')
+        result["actions"] = data.get('actions', [])
 
-            return result
-    except json.JSONDecodeError as e:
-        print(f"[Error] JSON parse failed: {e}")
+        # Print feedback
+        if result["analysis"]:
+            print(f"[AI Analysis] {result['analysis']}")
+        if result["strategy_summary"]:
+            strat = result["strategy_summary"]
+            if isinstance(strat, dict):
+                if strat.get("keep_next_time"):
+                    print(f"[AI Keep] {', '.join(strat['keep_next_time'])}")
+                if strat.get("change_next_time"):
+                    print(f"[AI Change] {', '.join(strat['change_next_time'])}")
+        if result["learnings"]:
+            print(f"[AI Learning] {result['learnings']}")
+    elif data and isinstance(data, list):
+        # Got just an array (old format or fallback extraction)
+        result["actions"] = data
+        print(f"[Warning] Only extracted actions array, no metadata")
+    else:
+        print(f"[Error] Could not parse JSON from response")
         print(f"[Debug] Raw response:\n{text[:500]}...")
-
-        # Fallback: try to extract just an array (old format)
-        try:
-            start = text.find('[')
-            end = text.rfind(']') + 1
-            if start >= 0 and end > start:
-                result["actions"] = json.loads(text[start:end])
-                return result
-        except json.JSONDecodeError:
-            pass
 
     return result
 
@@ -1193,29 +1278,33 @@ Respond with JSON only:
 
     text = response.content[0].text
 
-    # Parse JSON response
+    # Parse JSON response using robust parser
     result = {
         "winner": None,
         "reasoning": "",
         "confidence": "low",
     }
 
-    try:
-        start = text.find('{')
-        end = text.rfind('}') + 1
-        if start >= 0 and end > start:
-            data = json.loads(text[start:end])
-            result["winner"] = data.get("winner", "").upper()
-            result["reasoning"] = data.get("reasoning", "")
-            result["confidence"] = data.get("confidence", "low")
-    except json.JSONDecodeError as e:
-        print(f"[Judge] JSON parse failed: {e}")
+    data = parse_json_robust(text)
+
+    if data and isinstance(data, dict):
+        winner = data.get("winner", "")
+        result["winner"] = winner.upper() if isinstance(winner, str) else None
+        result["reasoning"] = data.get("reasoning", "")
+        result["confidence"] = data.get("confidence", "low")
+    else:
+        print(f"[Judge] Could not parse JSON, trying text extraction")
         # Try to extract winner from text
         if "winner" in text.lower():
-            if '"A"' in text or "'A'" in text or "winner: A" in text.lower():
+            if '"A"' in text or "'A'" in text or "winner: A" in text.lower() or "Winner: A" in text:
                 result["winner"] = "A"
-            elif '"B"' in text or "'B'" in text or "winner: B" in text.lower():
+            elif '"B"' in text or "'B'" in text or "winner: B" in text.lower() or "Winner: B" in text:
                 result["winner"] = "B"
+        # Try to extract reasoning
+        import re
+        reason_match = re.search(r'"reasoning"\s*:\s*"([^"]*)"', text)
+        if reason_match:
+            result["reasoning"] = reason_match.group(1)
 
     return result
 

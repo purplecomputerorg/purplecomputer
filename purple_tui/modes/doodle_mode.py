@@ -978,15 +978,19 @@ class CanvasHeader(Static):
         """Render header showing both tools with current highlighted."""
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
+        # Symbols: ABC for Write, colored squares for Paint
+        write_icon = caps("ABC")
+        paint_icon = "[#DF7070]■[/][#DFC070]■[/][#7090DF]■[/]"
+
         if self._is_painting:
             # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
-            write_part = f"[dim]{caps('Write')}[/]"
-            paint_part = f"[{text_color} on {self._last_color}] {caps('Paint')} [/]"
+            write_part = f"[dim]{write_icon}[/]"
+            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
         else:
             # Write mode: WRITE highlighted, Paint dim
-            write_part = f"[bold]{caps('Write')}[/]"
-            paint_part = f"[dim]{caps('Paint')}[/]"
+            write_part = f"[bold]{write_icon}[/]"
+            paint_part = f"[dim]{paint_icon}[/]"
 
         return f"{write_part}  [dim]Tab[/]  {paint_part}"
 

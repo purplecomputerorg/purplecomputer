@@ -822,21 +822,27 @@ Respond with a JSON object:
 }
 ```
 
-**analysis**: What you observe in the previous screenshot and your plan to improve.
+**analysis** (REQUIRED): What you observe in the previous screenshot and your plan to improve.
 
-**strategy_summary**: Structured description of your approach with:
+**strategy_summary** (REQUIRED): Structured description of your approach with:
 - **composition**: Where each element is positioned (x_range, y_range)
 - **layering_order**: Step-by-step painting sequence with colors and coordinates
 - **color_results**: What color combinations worked or failed
 - **keep_next_time**: Specific things that worked well (with coordinates)
 - **change_next_time**: Specific improvements to make (with coordinates)
 
-**learnings**: One key insight that should inform ALL future attempts.
+**learnings** (REQUIRED): One key insight from THIS attempt that should inform future attempts.
+ALWAYS include this field, even on first attempt. Examples:
+- "Yellow must cover ALL areas that will become green before adding blue"
+- "Trunk at x=48-52 is good proportion, keep this"
+- "Blue over brown creates mud - avoid overlapping these colors"
 
-**actions**: Generate 100-500 paint actions for the COMPLETE drawing (canvas starts fresh).
+**actions** (REQUIRED): Generate 100-500 paint actions for the COMPLETE drawing.
 Use paint_line for fills and paint_at for details. More actions = more detail!
 
-Include ALL phases in one script: base colors, overlays for mixing, and details."""
+Include ALL phases in one script: base colors, overlays for mixing, and details.
+
+**IMPORTANT: All four fields (analysis, strategy_summary, learnings, actions) are REQUIRED in every response.**"""
 
 
 def call_planning_api(
@@ -1217,25 +1223,34 @@ def run_visual_feedback_loop(
             iteration_scripts.append({"iteration": i + 1, "actions": actions})
 
             # Accumulate learnings for next iteration (compact, not full scripts)
-            if result.get("learnings"):
+            learning = result.get("learnings")
+            strategy = result.get("strategy_summary")
+
+            print(f"[Debug] Learnings returned: {bool(learning)} - {repr(learning)[:100] if learning else 'None'}")
+            print(f"[Debug] Strategy returned: {bool(strategy)} - type={type(strategy).__name__}")
+
+            if learning:
                 accumulated_learnings.append({
                     "iteration": i + 1,
-                    "learning": result["learnings"],
+                    "learning": learning,
                 })
                 # Save learnings incrementally so user can monitor progress
                 learnings_path = os.path.join(output_dir, "learnings.json")
                 with open(learnings_path, 'w') as f:
                     json.dump(accumulated_learnings, f, indent=2)
-            previous_strategy = result.get("strategy_summary", "")
+                print(f"[Saved] Learnings ({len(accumulated_learnings)} total): {learnings_path}")
+
+            previous_strategy = strategy if strategy else ""
 
             # Also save strategy incrementally
-            if result.get("strategy_summary"):
+            if strategy:
                 strategy_path = os.path.join(output_dir, "latest_strategy.json")
                 with open(strategy_path, 'w') as f:
                     json.dump({
                         "iteration": i + 1,
-                        "strategy": result["strategy_summary"]
+                        "strategy": strategy
                     }, f, indent=2)
+                print(f"[Saved] Strategy: {strategy_path}")
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:

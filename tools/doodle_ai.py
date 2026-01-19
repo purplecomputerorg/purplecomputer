@@ -952,7 +952,7 @@ ALWAYS include this field, even on first attempt. Examples:
 - "Trunk at x=48-52 is good proportion, keep this"
 - "Blue over brown creates mud - avoid overlapping these colors"
 
-**actions** (REQUIRED): Generate 100-500 paint actions for the COMPLETE drawing.
+**actions** (REQUIRED): Generate 100-300 paint actions for the COMPLETE drawing.
 Use paint_line for fills and paint_at for details. More actions = more detail!
 
 Include ALL phases in one script: base colors, overlays for mixing, and details.
@@ -1390,17 +1390,22 @@ def run_visual_feedback_loop(
         previous_strategy = None  # Strategy from previous attempt
 
         # Track best result for A vs B comparison (judged by separate API call)
-        best_iteration = None
+        best_attempt = None  # Which attempt produced the best result
         best_image_base64 = None
         best_reason = None
         judge_history = []  # Track all judge comparisons for monitoring
-        skip_next_judge = False  # Skip judge if previous iteration failed (canvas unchanged)
+
+        # Track what's ACTUALLY on the canvas (not just loop index)
+        # This is crucial when iterations fail - the canvas still shows the last successful result
+        canvas_shows_attempt = None  # Which attempt's result is currently on canvas
 
         for i in range(iterations):
             print(f"\n{'='*50}")
             print(f"ATTEMPT {i + 1}/{iterations}")
-            if best_iteration:
-                print(f"Current Best: Attempt {best_iteration}'s result")
+            if best_attempt:
+                print(f"Current Best: Attempt {best_attempt}'s result")
+            if canvas_shows_attempt:
+                print(f"Canvas currently shows: Attempt {canvas_shows_attempt}'s result")
             print('='*50)
 
             # Take screenshot (shows previous attempt's result, or blank for first)
@@ -1472,9 +1477,8 @@ def run_visual_feedback_loop(
             if not actions:
                 print(f"[Error] Failed to get actions after {max_retries} retries")
                 # Don't clear - keep the canvas as-is to preserve progress
-                # But skip the judge on next iteration since canvas won't have changed
-                skip_next_judge = True
-                print("[Skip] Will skip judge comparison on next iteration (canvas unchanged)")
+                # canvas_shows_attempt stays unchanged, so judge will skip automatically
+                print(f"[Skip] Canvas still shows Attempt {canvas_shows_attempt}'s result (no new execution)")
                 continue
 
             # Debug: show action summary to verify they're different each iteration
@@ -1520,34 +1524,35 @@ def run_visual_feedback_loop(
                 print(f"[Saved] Strategy: {strategy_path}")
 
             # Update best tracking using SEPARATE judge call
-            # Screenshot timing: at loop index i, the screenshot shows the result of Attempt i
-            # (i=0 is blank, i=1 shows Attempt 1's result, i=2 shows Attempt 2's result, etc.)
-            #
-            # We compare starting at i=2 (Attempt 3), comparing Attempt 2's result vs Attempt 1's result
-            # best_attempt tracks which Attempt number produced the best result so far
+            # IMPORTANT: We use canvas_shows_attempt to track what's ACTUALLY on the canvas
+            # This prevents comparing the same image when iterations fail
 
-            current_attempt_result = i  # The screenshot shows this Attempt's result
+            # Only judge if:
+            # 1. Canvas has content (canvas_shows_attempt is set)
+            # 2. Canvas shows something different from best (or no best yet)
+            # 3. Canvas has actually changed since last comparison
 
-            # Check if we should skip judge (previous iteration failed, canvas unchanged)
-            if skip_next_judge:
-                print(f"[Judge] Skipping comparison (previous iteration failed, canvas unchanged)")
-                skip_next_judge = False  # Reset for next iteration
-            elif i == 1:
-                # First real result (Attempt 1), set as initial best - no judging yet
-                best_iteration = current_attempt_result
+            if canvas_shows_attempt is None:
+                # Canvas is blank (first iteration), nothing to judge yet
+                print(f"[Judge] Canvas is blank, nothing to compare yet")
+            elif best_attempt is None:
+                # First real result, set as initial best
+                best_attempt = canvas_shows_attempt
                 best_image_base64 = png_base64
                 best_reason = "Initial drawing (first result)"
-                print(f"[Best] Setting Attempt {best_iteration} as initial best (first drawing)")
-            elif i > 1 and best_image_base64:
-                # Use separate judge API call for objective comparison
-                # We're comparing the latest result (Attempt i) vs the current best
-                print(f"[Judge] Comparing Attempt {current_attempt_result} (latest) vs Attempt {best_iteration} (current best)...")
+                print(f"[Best] Setting Attempt {best_attempt} as initial best (first drawing)")
+            elif canvas_shows_attempt == best_attempt:
+                # Canvas still shows the best attempt (no new successful execution)
+                print(f"[Judge] Skipping - canvas still shows Attempt {canvas_shows_attempt} (same as best)")
+            elif canvas_shows_attempt != best_attempt and best_image_base64:
+                # Canvas shows a NEW result different from best - time to judge!
+                print(f"[Judge] Comparing Attempt {canvas_shows_attempt} (on canvas) vs Attempt {best_attempt} (current best)...")
                 judge_result = call_judge_api(
                     image_a_base64=best_image_base64,
                     image_b_base64=png_base64,
                     goal=goal,
-                    iteration_a=best_iteration,
-                    iteration_b=current_attempt_result,
+                    iteration_a=best_attempt,
+                    iteration_b=canvas_shows_attempt,
                     api_key=api_key,
                 )
                 winner = judge_result.get("winner")
@@ -1557,8 +1562,8 @@ def run_visual_feedback_loop(
                 # Record judgment for monitoring
                 judgment_record = {
                     "judged_during_attempt": i + 1,
-                    "compared_a_attempt": best_iteration,
-                    "compared_b_attempt": current_attempt_result,
+                    "compared_a_attempt": best_attempt,
+                    "compared_b_attempt": canvas_shows_attempt,
                     "winner": winner,
                     "reasoning": reasoning,
                     "confidence": confidence,
@@ -1566,20 +1571,20 @@ def run_visual_feedback_loop(
                 }
 
                 if winner == "B":
-                    # Latest attempt is better
-                    best_iteration = current_attempt_result
+                    # Canvas result is better
+                    best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = reasoning
-                    judgment_record["new_best_attempt"] = current_attempt_result
-                    print(f"[Judge] ✓ Attempt {best_iteration} is the new best ({confidence} confidence)")
+                    judgment_record["new_best_attempt"] = canvas_shows_attempt
+                    print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                 elif winner == "A":
-                    judgment_record["new_best_attempt"] = best_iteration
-                    print(f"[Judge] ✗ Keeping Attempt {best_iteration} as best ({confidence} confidence)")
+                    judgment_record["new_best_attempt"] = best_attempt
+                    print(f"[Judge] ✗ Keeping Attempt {best_attempt} as best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                 else:
-                    judgment_record["new_best_attempt"] = best_iteration
-                    print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_iteration}")
+                    judgment_record["new_best_attempt"] = best_attempt
+                    print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_attempt}")
 
                 # Save judge history incrementally so user can monitor
                 judge_history.append(judgment_record)
@@ -1604,6 +1609,11 @@ def run_visual_feedback_loop(
             print(f"[Execute] Running {len(actions)} actions...")
             controller.execute_actions(actions)
             print(f"[Execute] Done executing actions")
+
+            # Update what's on the canvas - this attempt's result will be visible
+            canvas_shows_attempt = i + 1  # Attempt number (1-indexed)
+            print(f"[Canvas] Now showing Attempt {canvas_shows_attempt}'s result")
+
             # Wait for canvas to fully render before next screenshot
             time.sleep(0.5)
 
@@ -1633,34 +1643,34 @@ def run_visual_feedback_loop(
                 json.dump(accumulated_learnings, f, indent=2)
             print(f"[Saved] Learnings: {learnings_path}")
 
-        # Generate demo script from the BEST iteration (not necessarily the last)
+        # Generate demo script from the BEST attempt (not necessarily the last)
         if iteration_scripts:
-            # Find the best iteration's script
+            # Find the best attempt's script
             best_script = None
-            source_iteration = None
-            if best_iteration:
-                # Find the script for the best iteration
+            source_attempt = None
+            if best_attempt:
+                # Find the script for the best attempt
                 for script_entry in iteration_scripts:
-                    if script_entry["iteration"] == best_iteration:
+                    if script_entry["iteration"] == best_attempt:
                         best_script = script_entry["actions"]
-                        source_iteration = best_iteration
+                        source_attempt = best_attempt
                         break
-            # Fallback to last iteration if best not found
+            # Fallback to last successful iteration if best not found
             if not best_script:
                 best_script = iteration_scripts[-1]["actions"]
-                source_iteration = iteration_scripts[-1]["iteration"]
+                source_attempt = iteration_scripts[-1]["iteration"]
 
             demo_script = generate_demo_script(best_script)
             script_path = os.path.join(output_dir, "generated_demo.py")
             with open(script_path, 'w') as f:
                 f.write(demo_script)
-            print(f"[Saved] Demo script (from best iteration {source_iteration}): {script_path}")
+            print(f"[Saved] Demo script (from best Attempt {source_attempt}): {script_path}")
 
-            # Also save info about which iteration was best
+            # Also save info about which attempt was best
             best_info_path = os.path.join(output_dir, "best_iteration.json")
             with open(best_info_path, 'w') as f:
                 json.dump({
-                    "best_iteration": best_iteration,
+                    "best_attempt": best_attempt,
                     "reason": best_reason,
                     "total_iterations": iterations,
                 }, f, indent=2)

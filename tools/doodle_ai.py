@@ -776,6 +776,8 @@ Respond with a JSON object:
 ```json
 {
   "analysis": "What I see from the previous attempt and what to improve",
+  "strategy_summary": "Brief description of painting approach: Yellow base at y=15-22, blue overlay for green foliage, trunk at x=45-55",
+  "learnings": "Key insight for future attempts: Yellow under blue works well, trunk needs to be wider, edges are too jagged",
   "actions": [
     {"type": "paint_line", "x": 40, "y": 10, "key": "f", "direction": "right", "length": 30},
     {"type": "paint_line", "x": 42, "y": 11, "key": "f", "direction": "right", "length": 26},
@@ -785,7 +787,13 @@ Respond with a JSON object:
 }
 ```
 
-**analysis**: Brief analysis of the previous result and your improvement strategy.
+**analysis**: What you observe in the previous screenshot and your plan to improve.
+
+**strategy_summary**: Concise description of your painting approach (coordinates, color choices, layering order).
+This helps track what strategies work across iterations.
+
+**learnings**: One key insight or lesson from this attempt that should inform future iterations.
+Focus on what worked, what didn't, and why.
 
 **actions**: Generate 100-500 paint actions for the COMPLETE drawing (canvas starts fresh).
 Use paint_line for fills and paint_at for details. More actions = more detail!
@@ -874,28 +882,41 @@ def call_vision_api(
     max_iterations: int,
     api_key: str,
     plan: dict = None,
-    previous_actions: list[dict] = None,
-) -> tuple[str, list[dict]]:
+    accumulated_learnings: list[dict] = None,
+    previous_strategy: str = None,
+) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
+    Args:
+        image_base64: Screenshot as base64 PNG
+        goal: What to draw
+        iteration: Current iteration number (1-indexed)
+        max_iterations: Total iterations
+        api_key: Anthropic API key
+        plan: Drawing plan from planning phase
+        accumulated_learnings: List of {iteration, learning} from previous attempts
+        previous_strategy: Strategy summary from previous attempt
+
     Returns:
-        (analysis, actions) tuple
+        Dict with keys: analysis, strategy_summary, learnings, actions
     """
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Build previous actions section (ALL actions from last iteration)
-    prev_actions_section = ""
-    if previous_actions:
-        prev_actions_section = f"\n## PREVIOUS ATTEMPT'S SCRIPT ({len(previous_actions)} actions)\n"
-        prev_actions_section += "These actions were executed on the previous attempt. The screenshot shows the result.\n"
-        prev_actions_section += "```json\n"
-        # Show all actions (they need to see what they did)
-        for act in previous_actions:
-            prev_actions_section += f"{json.dumps(act)}\n"
-        prev_actions_section += "```\n"
-        prev_actions_section += "\nAnalyze what worked and what didn't. Generate an IMPROVED complete script.\n"
+    # Build accumulated learnings section (compact text, not full scripts)
+    learnings_section = ""
+    if accumulated_learnings:
+        learnings_section = "\n## LEARNINGS FROM PREVIOUS ATTEMPTS\n"
+        for entry in accumulated_learnings:
+            learnings_section += f"- Attempt {entry['iteration']}: {entry['learning']}\n"
+        learnings_section += "\nBuild on these insights. Don't repeat mistakes.\n"
+
+    # Include previous strategy for context (not full script)
+    strategy_section = ""
+    if previous_strategy:
+        strategy_section = f"\n## PREVIOUS STRATEGY\n{previous_strategy}\n"
+        strategy_section += "The screenshot shows the result of this approach.\n"
 
     # Build plan summary
     plan_section = ""
@@ -923,10 +944,10 @@ The canvas will be CLEARED and your new script executed from scratch."""
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
-{plan_section}{prev_actions_section}
+{plan_section}{learnings_section}{strategy_section}
 {instruction}
 
-Respond with a JSON object containing "analysis" and "actions" fields."""
+Respond with a JSON object containing "analysis", "strategy_summary", "learnings", and "actions" fields."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -950,21 +971,32 @@ Respond with a JSON object containing "analysis" and "actions" fields."""
 
     text = response.content[0].text
 
-    # Parse JSON response (object with analysis and actions)
+    # Parse JSON response
+    result = {
+        "analysis": "",
+        "strategy_summary": "",
+        "learnings": "",
+        "actions": [],
+    }
+
     try:
         # Find the JSON object
         start = text.find('{')
         end = text.rfind('}') + 1
         if start >= 0 and end > start:
             data = json.loads(text[start:end])
-            analysis = data.get('analysis', '')
-            actions = data.get('actions', [])
+            result["analysis"] = data.get('analysis', '')
+            result["strategy_summary"] = data.get('strategy_summary', '')
+            result["learnings"] = data.get('learnings', '')
+            result["actions"] = data.get('actions', [])
 
-            # Print analysis
-            if analysis:
-                print(f"[AI Analysis] {analysis}")
+            # Print feedback
+            if result["analysis"]:
+                print(f"[AI Analysis] {result['analysis']}")
+            if result["learnings"]:
+                print(f"[AI Learning] {result['learnings']}")
 
-            return analysis, actions
+            return result
     except json.JSONDecodeError as e:
         print(f"[Error] JSON parse failed: {e}")
         print(f"[Debug] Raw response:\n{text[:500]}...")
@@ -974,12 +1006,12 @@ Respond with a JSON object containing "analysis" and "actions" fields."""
             start = text.find('[')
             end = text.rfind(']') + 1
             if start >= 0 and end > start:
-                actions = json.loads(text[start:end])
-                return "", actions
+                result["actions"] = json.loads(text[start:end])
+                return result
         except json.JSONDecodeError:
             pass
 
-    return "", []
+    return result
 
 
 def load_env_file():
@@ -1039,9 +1071,10 @@ def run_visual_feedback_loop(
         controller.enter_paint_mode()
         time.sleep(0.2)
 
-        all_analyses = []  # Store analysis from each iteration
+        all_results = []  # Store full results from each iteration
         iteration_scripts = []  # Store each iteration's complete script
-        previous_actions = []  # Actions from previous iteration
+        accumulated_learnings = []  # Compact learnings (not full scripts)
+        previous_strategy = None  # Strategy from previous attempt
 
         for i in range(iterations):
             print(f"\n{'='*50}")
@@ -1069,19 +1102,27 @@ def run_visual_feedback_loop(
             print(f"[Cropped PNG] {png_path}")
 
             # Get analysis and NEW complete script from AI
-            analysis, actions = call_vision_api(
+            # Pass accumulated learnings (not full scripts) for efficient context
+            result = call_vision_api(
                 image_base64=png_base64,
                 goal=goal,
                 iteration=i + 1,
                 max_iterations=iterations,
                 api_key=api_key,
                 plan=plan,
-                previous_actions=previous_actions,
+                accumulated_learnings=accumulated_learnings,
+                previous_strategy=previous_strategy,
             )
 
-            # Store analysis
-            if analysis:
-                all_analyses.append({"iteration": i + 1, "analysis": analysis})
+            actions = result.get("actions", [])
+
+            # Store full result
+            all_results.append({
+                "iteration": i + 1,
+                "analysis": result.get("analysis", ""),
+                "strategy_summary": result.get("strategy_summary", ""),
+                "learnings": result.get("learnings", ""),
+            })
 
             if not actions:
                 print("[Warning] No actions returned")
@@ -1091,7 +1132,14 @@ def run_visual_feedback_loop(
 
             # Store this iteration's script
             iteration_scripts.append({"iteration": i + 1, "actions": actions})
-            previous_actions = actions  # Save for next iteration's learning
+
+            # Accumulate learnings for next iteration (compact, not full scripts)
+            if result.get("learnings"):
+                accumulated_learnings.append({
+                    "iteration": i + 1,
+                    "learning": result["learnings"],
+                })
+            previous_strategy = result.get("strategy_summary", "")
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
@@ -1118,12 +1166,19 @@ def run_visual_feedback_loop(
             json.dump(iteration_scripts, f, indent=2)
         print(f"\n[Saved] All scripts: {scripts_path}")
 
-        # Save analyses
-        if all_analyses:
-            analyses_path = os.path.join(output_dir, "analyses.json")
-            with open(analyses_path, 'w') as f:
-                json.dump(all_analyses, f, indent=2)
-            print(f"[Saved] Analyses: {analyses_path}")
+        # Save full results (analyses, strategies, learnings)
+        if all_results:
+            results_path = os.path.join(output_dir, "iteration_results.json")
+            with open(results_path, 'w') as f:
+                json.dump(all_results, f, indent=2)
+            print(f"[Saved] Results (analyses/learnings): {results_path}")
+
+        # Save accumulated learnings summary
+        if accumulated_learnings:
+            learnings_path = os.path.join(output_dir, "learnings.json")
+            with open(learnings_path, 'w') as f:
+                json.dump(accumulated_learnings, f, indent=2)
+            print(f"[Saved] Learnings: {learnings_path}")
 
         # Generate demo script from the FINAL (best) iteration
         if iteration_scripts:

@@ -110,19 +110,10 @@ class PlayGrid(Widget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.add_class("caps-sensitive")
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._sounds: dict[str, pygame.mixer.Sound] = {}
         self._sounds_loaded = False
-
-    def _caps_key(self, key: str) -> str:
-        """Transform key label based on caps mode."""
-        if key.isalpha():
-            if hasattr(self.app, 'caps_mode') and self.app.caps_mode:
-                return key.upper()
-            return key.lower()
-        return key
 
     def _ensure_sounds_loaded(self) -> None:
         """Load sounds if not already loaded."""
@@ -267,7 +258,7 @@ class PlayGrid(Widget):
                 pad_left = (cell_width - 1) // 2
                 pad_right = cell_width - pad_left - 1
                 segments.append(Segment(" " * pad_left, cell_bg_style))
-                segments.append(Segment(self._caps_key(key), text_style))
+                segments.append(Segment(key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
             else:
                 segments.append(Segment(" " * cell_width, cell_bg_style))

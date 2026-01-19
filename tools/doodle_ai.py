@@ -124,24 +124,31 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         cell_height = img_height / REQUIRED_TERMINAL_ROWS
         print(f"[Crop] Cell size: {cell_width:.1f}x{cell_height:.1f}")
 
-        # Layout calculation:
-        # - Rows above canvas: title(1) + mode(1) + border(1) + header(1) = 4 rows
-        # - Cols before canvas: border(1) = 1 col
-        # - Then add GUTTER to get to drawable area
-        ROWS_ABOVE_CANVAS = 4  # title + mode + border + canvas header
-        COLS_BEFORE_CANVAS = 1  # left border
+        # Layout calculation (from top of screenshot):
+        # Row 0: Title row ("□ Doodle")
+        # Row 1: Margin below title
+        # Row 2: Viewport border top
+        # Row 3: CanvasHeader ("Write Tab Paint")
+        # Row 4: ArtCanvas gutter top
+        # Row 5+: Drawable area
+        #
+        # VIEWPORT_HEIGHT (32) = CanvasHeader (1) + ArtCanvas (31)
+        # ArtCanvas (31) = gutter (1) + drawable (29) + gutter (1)
+        ROWS_ABOVE_DRAWABLE = 5  # title(1) + margin(1) + border(1) + header(1) + gutter(1)
+        COLS_BEFORE_DRAWABLE = 2  # border(1) + gutter(1)
 
-        # Drawable area position (inside the gutter)
-        drawable_start_row = ROWS_ABOVE_CANVAS + GUTTER
-        drawable_start_col = COLS_BEFORE_CANVAS + GUTTER
-        drawable_cols = VIEWPORT_WIDTH - (2 * GUTTER)   # Remove left+right gutter
-        drawable_rows = VIEWPORT_HEIGHT - (2 * GUTTER)  # Remove top+bottom gutter
+        # ArtCanvas is VIEWPORT_HEIGHT - 1 (minus CanvasHeader)
+        # Drawable area is ArtCanvas minus 2 gutters
+        art_canvas_height = VIEWPORT_HEIGHT - 1  # 31 rows
+        drawable_cols = VIEWPORT_WIDTH - (2 * GUTTER)   # 110 columns
+        drawable_rows = art_canvas_height - (2 * GUTTER)  # 29 rows
 
         # Calculate pixel coordinates
-        left = int(drawable_start_col * cell_width)
-        top = int(drawable_start_row * cell_height)
-        right = int((drawable_start_col + drawable_cols) * cell_width)
-        bottom = int((drawable_start_row + drawable_rows) * cell_height)
+        left = int(COLS_BEFORE_DRAWABLE * cell_width)
+        top = int(ROWS_ABOVE_DRAWABLE * cell_height)
+        right = int((COLS_BEFORE_DRAWABLE + drawable_cols) * cell_width)
+        bottom = int((ROWS_ABOVE_DRAWABLE + drawable_rows) * cell_height)
+        print(f"[Crop] Drawable area: {drawable_cols}x{drawable_rows} cells")
         print(f"[Crop] Crop box: left={left}, top={top}, right={right}, bottom={bottom}")
 
         # Crop the image

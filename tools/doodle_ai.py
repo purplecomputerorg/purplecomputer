@@ -822,7 +822,16 @@ Respond with a JSON object:
 }
 ```
 
-**analysis** (REQUIRED): What you observe in the previous screenshot and your plan to improve.
+**analysis** (REQUIRED): What you observe and your plan to improve.
+
+**comparison** (REQUIRED after first attempt): Compare your latest result to the previous best.
+```json
+"comparison": {
+  "is_better": true,
+  "reasoning": "Better foliage density, maintained trunk proportions, improved color mixing"
+}
+```
+Be honest! If your latest is worse, say so and explain why. This helps us track the best result.
 
 **strategy_summary** (REQUIRED): Structured description of your approach with:
 - **composition**: Where each element is positioned (x_range, y_range)
@@ -842,7 +851,7 @@ Use paint_line for fills and paint_at for details. More actions = more detail!
 
 Include ALL phases in one script: base colors, overlays for mixing, and details.
 
-**IMPORTANT: All four fields (analysis, strategy_summary, learnings, actions) are REQUIRED in every response.**"""
+**IMPORTANT: All fields are REQUIRED in every response.**"""
 
 
 def call_planning_api(
@@ -928,11 +937,14 @@ def call_vision_api(
     plan: dict = None,
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
+    best_image_base64: str = None,
+    best_iteration: int = None,
+    best_reason: str = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
     Args:
-        image_base64: Screenshot as base64 PNG
+        image_base64: Screenshot as base64 PNG (current/latest result)
         goal: What to draw
         iteration: Current iteration number (1-indexed)
         max_iterations: Total iterations
@@ -940,9 +952,12 @@ def call_vision_api(
         plan: Drawing plan from planning phase
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
+        best_image_base64: Screenshot of best result so far (for comparison)
+        best_iteration: Which iteration was the best
+        best_reason: Why that iteration was considered best
 
     Returns:
-        Dict with keys: analysis, strategy_summary, learnings, actions
+        Dict with keys: analysis, comparison, strategy_summary, learnings, actions
     """
     import anthropic
 
@@ -1011,13 +1026,77 @@ The canvas is blank. Your script should include:
 Analyze what worked and what needs improvement, then generate a BETTER complete script.
 The canvas will be CLEARED and your new script executed from scratch."""
 
+    # Build comparison section if we have a best result to compare against
+    comparison_section = ""
+    if best_image_base64 and best_iteration:
+        comparison_section = f"""
+
+## A vs B COMPARISON (REQUIRED)
+You will see TWO images:
+- **Image A (Current Best)**: Iteration {best_iteration}'s result. This is our best so far.
+  Why it was best: {best_reason or 'Initial best'}
+- **Image B (Latest)**: Your most recent attempt.
+
+You MUST include a "comparison" field in your response:
+```json
+"comparison": {{
+  "is_better": true/false,
+  "reasoning": "Explain why B is better or worse than A"
+}}
+```
+
+Be HONEST! If your latest attempt (B) is worse than the best (A), say so.
+This helps us track the actual best result and avoid regression."""
+
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
-{plan_section}{learnings_section}{strategy_section}
+{plan_section}{learnings_section}{strategy_section}{comparison_section}
 {instruction}
 
-Respond with a JSON object containing "analysis", "strategy_summary", "learnings", and "actions" fields."""
+Respond with a JSON object containing "analysis", "strategy_summary", "learnings", "comparison" (if iteration > 1), and "actions" fields."""
+
+    # Build message content with one or two images
+    message_content = []
+
+    if best_image_base64 and best_iteration and iteration > 1:
+        # Send both images: A (best) and B (current/latest)
+        message_content.append({
+            "type": "text",
+            "text": f"**Image A (Current Best - Iteration {best_iteration}):**",
+        })
+        message_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": best_image_base64,
+            },
+        })
+        message_content.append({
+            "type": "text",
+            "text": "**Image B (Latest Attempt):**",
+        })
+        message_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": image_base64,
+            },
+        })
+    else:
+        # Single image (first iteration or no best yet)
+        message_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": image_base64,
+            },
+        })
+
+    message_content.append({"type": "text", "text": user_message})
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -1025,17 +1104,7 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
         system=EXECUTION_PROMPT,
         messages=[{
             "role": "user",
-            "content": [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": image_base64,
-                    },
-                },
-                {"type": "text", "text": user_message},
-            ],
+            "content": message_content,
         }],
     )
 
@@ -1046,6 +1115,7 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
         "analysis": "",
         "strategy_summary": "",
         "learnings": "",
+        "comparison": None,
         "actions": [],
     }
 
@@ -1058,6 +1128,7 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
             result["analysis"] = data.get('analysis', '')
             result["strategy_summary"] = data.get('strategy_summary', '')
             result["learnings"] = data.get('learnings', '')
+            result["comparison"] = data.get('comparison', None)
             result["actions"] = data.get('actions', [])
 
             # Print feedback
@@ -1072,6 +1143,12 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
                         print(f"[AI Change] {', '.join(strat['change_next_time'])}")
             if result["learnings"]:
                 print(f"[AI Learning] {result['learnings']}")
+            if result["comparison"]:
+                comp = result["comparison"]
+                is_better = comp.get("is_better", False)
+                reasoning = comp.get("reasoning", "")
+                status = "✓ BETTER" if is_better else "✗ WORSE"
+                print(f"[AI Comparison] {status}: {reasoning}")
 
             return result
     except json.JSONDecodeError as e:
@@ -1165,9 +1242,18 @@ def run_visual_feedback_loop(
         accumulated_learnings = []  # Compact learnings (not full scripts)
         previous_strategy = None  # Strategy from previous attempt
 
+        # Track best result for A vs B comparison
+        best_iteration = None
+        best_image_base64 = None
+        best_reason = None
+        # Store image from current iteration (will become "latest" for next iteration)
+        current_image_base64 = None
+
         for i in range(iterations):
             print(f"\n{'='*50}")
             print(f"ATTEMPT {i + 1}/{iterations}")
+            if best_iteration:
+                print(f"Current Best: Iteration {best_iteration}")
             print('='*50)
 
             # Take screenshot (shows previous attempt's result, or blank for first)
@@ -1190,8 +1276,17 @@ def run_visual_feedback_loop(
                 f.write(base64.standard_b64decode(png_base64))
             print(f"[Cropped PNG] {png_path}")
 
+            # The screenshot we just took shows the PREVIOUS iteration's result
+            # (For iteration 1, it's blank canvas)
+            # Store it as current_image for comparison in next iteration
+            if i > 0:
+                # This is the result of iteration i (just completed)
+                # We'll compare it against the best in the next API call
+                current_image_base64 = png_base64
+
             # Get analysis and NEW complete script from AI
             # Pass accumulated learnings (not full scripts) for efficient context
+            # Also pass best image for A vs B comparison (after first iteration)
             result = call_vision_api(
                 image_base64=png_base64,
                 goal=goal,
@@ -1201,6 +1296,9 @@ def run_visual_feedback_loop(
                 plan=plan,
                 accumulated_learnings=accumulated_learnings,
                 previous_strategy=previous_strategy,
+                best_image_base64=best_image_base64,
+                best_iteration=best_iteration,
+                best_reason=best_reason,
             )
 
             actions = result.get("actions", [])
@@ -1252,6 +1350,28 @@ def run_visual_feedback_loop(
                     }, f, indent=2)
                 print(f"[Saved] Strategy: {strategy_path}")
 
+            # Update best iteration tracking based on A vs B comparison
+            # The screenshot (png_base64) shows the result of the PREVIOUS attempt (attempt i)
+            # (For i=0/attempt 1, the screenshot is blank - no result yet)
+            if i == 1:
+                # First real result (attempt 1 just finished), set as initial best
+                best_iteration = i  # i=1 means we're showing attempt 1's result
+                best_image_base64 = png_base64
+                best_reason = "Initial drawing"
+                print(f"[Best] Setting iteration {best_iteration} as initial best")
+            elif i > 1:
+                # Check comparison result from AI
+                comparison = result.get("comparison")
+                if comparison and comparison.get("is_better"):
+                    # Update best to the previous attempt (attempt i)
+                    best_iteration = i  # The screenshot shows attempt i's result
+                    best_image_base64 = png_base64
+                    best_reason = comparison.get("reasoning", "AI determined this is better")
+                    print(f"[Best] ✓ Iteration {best_iteration} is the new best")
+                else:
+                    reason = comparison.get("reasoning", "No improvement") if comparison else "No comparison returned"
+                    print(f"[Best] ✗ Keeping iteration {best_iteration} as best ({reason})")
+
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
                 print("[Clear] Clearing canvas for fresh attempt...")
@@ -1291,14 +1411,38 @@ def run_visual_feedback_loop(
                 json.dump(accumulated_learnings, f, indent=2)
             print(f"[Saved] Learnings: {learnings_path}")
 
-        # Generate demo script from the FINAL (best) iteration
+        # Generate demo script from the BEST iteration (not necessarily the last)
         if iteration_scripts:
-            final_actions = iteration_scripts[-1]["actions"]
-            demo_script = generate_demo_script(final_actions)
+            # Find the best iteration's script
+            best_script = None
+            source_iteration = None
+            if best_iteration:
+                # Find the script for the best iteration
+                for script_entry in iteration_scripts:
+                    if script_entry["iteration"] == best_iteration:
+                        best_script = script_entry["actions"]
+                        source_iteration = best_iteration
+                        break
+            # Fallback to last iteration if best not found
+            if not best_script:
+                best_script = iteration_scripts[-1]["actions"]
+                source_iteration = iteration_scripts[-1]["iteration"]
+
+            demo_script = generate_demo_script(best_script)
             script_path = os.path.join(output_dir, "generated_demo.py")
             with open(script_path, 'w') as f:
                 f.write(demo_script)
-            print(f"[Saved] Demo script (from final attempt): {script_path}")
+            print(f"[Saved] Demo script (from best iteration {source_iteration}): {script_path}")
+
+            # Also save info about which iteration was best
+            best_info_path = os.path.join(output_dir, "best_iteration.json")
+            with open(best_info_path, 'w') as f:
+                json.dump({
+                    "best_iteration": best_iteration,
+                    "reason": best_reason,
+                    "total_iterations": iterations,
+                }, f, indent=2)
+            print(f"[Saved] Best iteration info: {best_info_path}")
 
     finally:
         controller.stop()

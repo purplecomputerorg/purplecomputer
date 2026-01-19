@@ -1407,6 +1407,16 @@ class PurpleApp(App):
                 import traceback
                 self._dev_log(f"[DevCmd] ERROR: key={value} exception={e}\n{traceback.format_exc()}")
 
+        elif action == "clear":
+            # Clear the doodle canvas
+            from .modes.doodle_mode import DoodleMode
+            try:
+                doodle = self.query_one("#doodle-mode", DoodleMode)
+                doodle.clear_canvas()
+                self._dev_log("[DevCmd] Canvas cleared")
+            except Exception as e:
+                self._dev_log(f"[DevCmd] ERROR: clear failed: {e}")
+
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""
         key_lower = key.lower()

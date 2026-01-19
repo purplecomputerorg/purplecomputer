@@ -258,6 +258,11 @@ class PurpleController:
         self.send_key('tab')
         time.sleep(0.1)
 
+    def clear_canvas(self) -> None:
+        """Clear the entire canvas."""
+        self.send_command("clear", "")
+        time.sleep(0.1)
+
     def execute_action(self, action: dict) -> None:
         """Execute a single drawing action using batched commands for speed."""
         action_type = action.get('type')
@@ -474,13 +479,23 @@ The line starts at current position and extends in direction.
 {"type": "wait", "seconds": 0.3}
 ```
 
-## EXECUTION TIPS
+## REGENERATIVE APPROACH
 
-1. Use paint_line for efficiency (one action = many cells)
-2. ONLY use colors specified in your current phase
-3. ONLY paint in target areas specified in your current phase
-4. Check the canvas: don't repaint areas already done
-5. Keep shapes simple and solid
+You are generating a COMPLETE drawing script from scratch each iteration.
+The canvas is CLEARED before each attempt. You will see a screenshot of your PREVIOUS attempt's result.
+
+Your goal: Generate a BETTER complete script than last time, learning from what worked and what didn't.
+
+## LAYERED PAINTING (within each attempt)
+
+To get mixed colors, you must paint in layers WITHIN your script:
+1. First paint YELLOW in areas that will be green, orange, or brown
+2. Then paint BLUE over yellow areas to create GREEN
+3. Then paint RED over yellow for ORANGE, or over blue for PURPLE
+
+Example sequence for green foliage:
+- paint_line with key="f" (yellow) to fill the area
+- paint_line with key="c" (blue) over the SAME area to mix into green
 
 ## RESPONSE FORMAT
 
@@ -488,23 +503,20 @@ Respond with a JSON object:
 
 ```json
 {
-  "observations": [
-    "What I see on the canvas right now",
-    "What my previous actions accomplished",
-    "What still needs to be done for this phase"
-  ],
+  "analysis": "What I see from the previous attempt and what to improve",
   "actions": [
-    {"type": "paint_line", "key": "f", "direction": "right", "length": 10},
+    {"type": "move_to", "x": 50, "y": 10},
+    {"type": "paint_line", "key": "f", "direction": "right", "length": 20},
     ...
   ]
 }
 ```
 
-**observations**: 2-4 specific notes about what you SEE (colors, positions, shapes).
+**analysis**: Brief analysis of the previous result and your improvement strategy.
 
-**actions**: 20-40 drawing actions for THIS PHASE ONLY.
+**actions**: 50-100 actions for the COMPLETE drawing (this is a fresh canvas).
 
-CRITICAL: Stay focused on your current phase. Don't jump ahead to later phases."""
+Include ALL phases in one script: base colors, overlays for mixing, and details."""
 
 
 def call_planning_api(
@@ -589,60 +601,62 @@ def call_vision_api(
     api_key: str,
     plan: dict = None,
     previous_actions: list[dict] = None,
-) -> tuple[list[str], list[dict]]:
-    """Call Claude vision API with screenshot and get observations + actions.
+) -> tuple[str, list[dict]]:
+    """Call Claude vision API with screenshot and get analysis + complete action script.
 
     Returns:
-        (observations, actions) tuple
+        (analysis, actions) tuple
     """
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Get current phase from plan
-    current_phase = get_current_phase(plan, iteration) if plan else None
-
-    # Build phase section
-    phase_section = ""
-    if current_phase:
-        phase_section = f"""
-## CURRENT PHASE: {current_phase.get('name', 'Unknown')}
-**Goal for this phase**: {current_phase.get('goal', 'Continue drawing')}
-**Colors to use**: {', '.join(current_phase.get('color_keys', []))}
-**Target areas**: {current_phase.get('target_areas', 'As specified in plan')}
-
-IMPORTANT: Only work on THIS phase. Do not skip ahead."""
-
-    # Build previous actions section (last iteration only, for context)
+    # Build previous actions section (ALL actions from last iteration)
     prev_actions_section = ""
     if previous_actions:
-        # Show last 10 actions to keep context manageable
-        recent = previous_actions[-10:]
-        prev_actions_section = "\n## YOUR PREVIOUS ACTIONS (last iteration)\n"
-        for act in recent:
-            prev_actions_section += f"- {act}\n"
-        prev_actions_section += "\nCompare what you see to what you did. Did it work as expected?\n"
+        prev_actions_section = f"\n## PREVIOUS ATTEMPT'S SCRIPT ({len(previous_actions)} actions)\n"
+        prev_actions_section += "These actions were executed on the previous attempt. The screenshot shows the result.\n"
+        prev_actions_section += "```json\n"
+        # Show all actions (they need to see what they did)
+        for act in previous_actions:
+            prev_actions_section += f"{json.dumps(act)}\n"
+        prev_actions_section += "```\n"
+        prev_actions_section += "\nAnalyze what worked and what didn't. Generate an IMPROVED complete script.\n"
 
-    # Build full plan summary
+    # Build plan summary
     plan_section = ""
     if plan:
-        plan_section = f"\n## MASTER PLAN\n{plan.get('description', goal)}\n"
-        for phase in plan.get('phases', []):
-            marker = "→ " if phase == current_phase else "  "
-            plan_section += f"{marker}{phase.get('name')}: iterations {phase.get('iterations')}\n"
+        plan_section = f"\n## DRAWING PLAN\n{plan.get('description', goal)}\n"
+        if plan.get('composition'):
+            comp = plan['composition']
+            if comp.get('main_element'):
+                me = comp['main_element']
+                plan_section += f"Main element: {me.get('description', '')} at x={me.get('x_range')}, y={me.get('y_range')}\n"
+
+    # First iteration vs subsequent
+    if iteration == 1:
+        instruction = """This is your FIRST attempt. Generate a complete drawing script based on the plan.
+The canvas is blank. Your script should include:
+1. Yellow base layer for areas that will become green/brown
+2. Blue overlay on yellow to create greens
+3. Red overlay for oranges/purples
+4. Any additional details"""
+    else:
+        instruction = """The screenshot shows your PREVIOUS attempt's result.
+Analyze what worked and what needs improvement, then generate a BETTER complete script.
+The canvas will be CLEARED and your new script executed from scratch."""
 
     user_message = f"""## Goal: {goal}
 
-## Progress: Iteration {iteration} of {max_iterations}
-{plan_section}{phase_section}{prev_actions_section}
-Look at the current canvas. What has been painted? What colors do you see and where?
-Execute actions for your CURRENT PHASE only.
+## Attempt: {iteration} of {max_iterations}
+{plan_section}{prev_actions_section}
+{instruction}
 
-Respond with a JSON object containing "observations" and "actions" fields."""
+Respond with a JSON object containing "analysis" and "actions" fields."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=4000,
+        max_tokens=8000,  # More tokens for complete scripts
         system=EXECUTION_PROMPT,
         messages=[{
             "role": "user",
@@ -662,23 +676,21 @@ Respond with a JSON object containing "observations" and "actions" fields."""
 
     text = response.content[0].text
 
-    # Parse JSON response (object with observations and actions)
+    # Parse JSON response (object with analysis and actions)
     try:
         # Find the JSON object
         start = text.find('{')
         end = text.rfind('}') + 1
         if start >= 0 and end > start:
             data = json.loads(text[start:end])
-            observations = data.get('observations', [])
+            analysis = data.get('analysis', '')
             actions = data.get('actions', [])
 
-            # Print observations
-            if observations:
-                print("[AI Observations]")
-                for obs in observations:
-                    print(f"  - {obs}")
+            # Print analysis
+            if analysis:
+                print(f"[AI Analysis] {analysis}")
 
-            return observations, actions
+            return analysis, actions
     except json.JSONDecodeError as e:
         print(f"[Error] JSON parse failed: {e}")
         print(f"[Debug] Raw response:\n{text[:500]}...")
@@ -689,11 +701,11 @@ Respond with a JSON object containing "observations" and "actions" fields."""
             end = text.rfind(']') + 1
             if start >= 0 and end > start:
                 actions = json.loads(text[start:end])
-                return [], actions
+                return "", actions
         except json.JSONDecodeError:
             pass
 
-    return [], []
+    return "", []
 
 
 def load_env_file():
@@ -753,19 +765,16 @@ def run_visual_feedback_loop(
         controller.enter_paint_mode()
         time.sleep(0.2)
 
-        all_actions = []
-        all_learnings = []
-        previous_iteration_actions = []  # Actions from previous iteration only
+        all_analyses = []  # Store analysis from each iteration
+        iteration_scripts = []  # Store each iteration's complete script
+        previous_actions = []  # Actions from previous iteration
 
         for i in range(iterations):
-            current_phase = get_current_phase(plan, i + 1)
-            phase_name = current_phase.get('name', 'Unknown') if current_phase else 'Unknown'
-
             print(f"\n{'='*50}")
-            print(f"Iteration {i + 1}/{iterations} - {phase_name}")
+            print(f"ATTEMPT {i + 1}/{iterations}")
             print('='*50)
 
-            # Take screenshot
+            # Take screenshot (shows previous attempt's result, or blank for first)
             svg_path = controller.take_screenshot()
             if not svg_path:
                 print("[Error] Failed to capture screenshot")
@@ -779,35 +788,39 @@ def run_visual_feedback_loop(
                 print("[Error] Failed to convert SVG to PNG")
                 continue
 
-            # Get observations and actions from AI
-            observations, actions = call_vision_api(
+            # Get analysis and NEW complete script from AI
+            analysis, actions = call_vision_api(
                 image_base64=png_base64,
                 goal=goal,
                 iteration=i + 1,
                 max_iterations=iterations,
                 api_key=api_key,
                 plan=plan,
-                previous_actions=previous_iteration_actions,
+                previous_actions=previous_actions,
             )
 
-            # Store observations
-            if observations:
-                all_learnings.extend(observations)
+            # Store analysis
+            if analysis:
+                all_analyses.append({"iteration": i + 1, "analysis": analysis})
 
             if not actions:
                 print("[Warning] No actions returned")
                 continue
 
-            print(f"[Actions] Executing {len(actions)} actions:")
-            for j, act in enumerate(actions[:5]):  # Show first 5
-                print(f"  {j+1}. {act}")
-            if len(actions) > 5:
-                print(f"  ... and {len(actions) - 5} more")
+            print(f"[Script] Generated {len(actions)} actions")
 
-            all_actions.extend(actions)
-            previous_iteration_actions = actions  # Save for next iteration
+            # Store this iteration's script
+            iteration_scripts.append({"iteration": i + 1, "actions": actions})
+            previous_actions = actions  # Save for next iteration's learning
 
-            # Execute actions
+            # Clear canvas before executing (except first iteration which starts blank)
+            if i > 0:
+                print("[Clear] Clearing canvas for fresh attempt...")
+                controller.clear_canvas()
+                time.sleep(0.1)
+
+            # Execute the complete script
+            print(f"[Execute] Running script...")
             controller.execute_actions(actions)
             time.sleep(0.1)
 
@@ -817,25 +830,27 @@ def run_visual_feedback_loop(
         if final_svg:
             print(f"[Final] {final_svg}")
 
-        # Save action log
-        actions_path = os.path.join(output_dir, "actions.json")
-        with open(actions_path, 'w') as f:
-            json.dump(all_actions, f, indent=2)
-        print(f"\n[Saved] Actions: {actions_path}")
+        # Save all iteration scripts
+        scripts_path = os.path.join(output_dir, "iteration_scripts.json")
+        with open(scripts_path, 'w') as f:
+            json.dump(iteration_scripts, f, indent=2)
+        print(f"\n[Saved] All scripts: {scripts_path}")
 
-        # Save learnings log
-        if all_learnings:
-            learnings_path = os.path.join(output_dir, "learnings.json")
-            with open(learnings_path, 'w') as f:
-                json.dump(all_learnings, f, indent=2)
-            print(f"[Saved] Learnings: {learnings_path}")
+        # Save analyses
+        if all_analyses:
+            analyses_path = os.path.join(output_dir, "analyses.json")
+            with open(analyses_path, 'w') as f:
+                json.dump(all_analyses, f, indent=2)
+            print(f"[Saved] Analyses: {analyses_path}")
 
-        # Generate demo script
-        demo_script = generate_demo_script(all_actions)
-        script_path = os.path.join(output_dir, "generated_demo.py")
-        with open(script_path, 'w') as f:
-            f.write(demo_script)
-        print(f"[Saved] Demo script: {script_path}")
+        # Generate demo script from the FINAL (best) iteration
+        if iteration_scripts:
+            final_actions = iteration_scripts[-1]["actions"]
+            demo_script = generate_demo_script(final_actions)
+            script_path = os.path.join(output_dir, "generated_demo.py")
+            with open(script_path, 'w') as f:
+                f.write(demo_script)
+            print(f"[Saved] Demo script (from final attempt): {script_path}")
 
     finally:
         controller.stop()
@@ -893,6 +908,13 @@ def generate_demo_script(actions: list[dict]) -> str:
 # MAIN
 # =============================================================================
 
+def generate_output_dir(base_dir: str = "doodle_ai_output") -> str:
+    """Generate a unique output directory with timestamp."""
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{base_dir}/{timestamp}"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="AI-assisted drawing using real Purple Computer app",
@@ -908,31 +930,36 @@ Requirements:
     - cairosvg for SVG to PNG conversion: pip install cairosvg
     - Or rsvg-convert / inkscape installed
 
-Output:
+Output (auto-generated timestamped folder):
     - screenshots/: SVG screenshots from each iteration
+    - plan.json: The AI's drawing plan
     - actions.json: All actions taken
+    - learnings.json: AI observations
     - generated_demo.py: Demo script for Purple Computer
         """
     )
     parser.add_argument("--goal", required=True, help="What to draw")
     parser.add_argument("--iterations", type=int, default=5, help="Feedback iterations")
-    parser.add_argument("--output", default="doodle_ai_output", help="Output directory")
+    parser.add_argument("--output", default=None, help="Output directory (default: auto-generated)")
 
     args = parser.parse_args()
+
+    # Auto-generate output dir if not specified
+    output_dir = args.output if args.output else generate_output_dir()
 
     print("="*60)
     print("Purple Computer AI Drawing Tool")
     print("="*60)
     print(f"Goal: {args.goal}")
     print(f"Iterations: {args.iterations}")
-    print(f"Output: {args.output}/")
+    print(f"Output: {output_dir}/")
     print("="*60)
     print()
 
     run_visual_feedback_loop(
         goal=args.goal,
         iterations=args.iterations,
-        output_dir=args.output,
+        output_dir=output_dir,
     )
 
 

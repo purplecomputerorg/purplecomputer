@@ -1182,7 +1182,7 @@ Respond with JSON only:
     ]
 
     response = client.messages.create(
-        model="claude-haiku-4-20250514",  # Use Haiku for cost efficiency
+        model="claude-3-5-haiku-20241022",  # Use Haiku for cost efficiency
         max_tokens=300,  # Short response needed
         system=judge_prompt,
         messages=[{

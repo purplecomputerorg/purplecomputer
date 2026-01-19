@@ -1385,6 +1385,13 @@ class PurpleApp(App):
                     # Await the dispatch to ensure it completes before next command
                     await self._dispatch_keyboard_action(key_action)
                     self._dev_log(f"[DevCmd] key={value} dispatched, mode now={self.active_mode.name}")
+
+                    # For control keys (especially space), also send key-up event
+                    # Without this, _space_down stays True and arrow movements paint
+                    if isinstance(key_action, ControlAction):
+                        key_up_action = ControlAction(action=key_action.action, is_down=False)
+                        await self._dispatch_keyboard_action(key_up_action)
+                        self._dev_log(f"[DevCmd] key={value} release dispatched")
                 else:
                     self._dev_log(f"[DevCmd] WARNING: Unknown key '{value}'")
             except Exception as e:

@@ -85,41 +85,48 @@ def svg_to_png_base64(svg_path: str, crop_to_canvas: bool = True) -> str:
 
 
 def crop_to_canvas_area(png_data: bytes) -> bytes:
-    """Crop PNG to just the doodle canvas area, removing UI chrome.
+    """Crop PNG to just the drawable canvas area, removing all UI chrome.
 
-    Uses exact pixel calculations based on Purple Computer's layout:
-    - Terminal: 114 cols × 39 rows (from constants.py)
-    - Viewport/Canvas: 112 cols × 32 rows
-    - Canvas starts at row 4 (title + border + header), col 1 (border)
+    Imports constants from Purple Computer to stay in sync with layout changes.
     """
     try:
         from PIL import Image
         import io
 
+        # Import layout constants from Purple Computer
+        from purple_tui.constants import (
+            VIEWPORT_WIDTH,      # Canvas widget width (e.g., 112)
+            VIEWPORT_HEIGHT,     # Canvas widget height (e.g., 32)
+            REQUIRED_TERMINAL_COLS,  # Total terminal width
+            REQUIRED_TERMINAL_ROWS,  # Total terminal height
+        )
+        from purple_tui.modes.doodle_mode import GUTTER  # Gutter inside canvas (e.g., 1)
+
         img = Image.open(io.BytesIO(png_data))
         img_width, img_height = img.size
 
         # Calculate cell dimensions from image size
-        # Terminal is 114 cols × 39 rows (REQUIRED_TERMINAL_COLS × REQUIRED_TERMINAL_ROWS)
-        TERM_COLS = 114
-        TERM_ROWS = 39
-        cell_width = img_width / TERM_COLS
-        cell_height = img_height / TERM_ROWS
+        cell_width = img_width / REQUIRED_TERMINAL_COLS
+        cell_height = img_height / REQUIRED_TERMINAL_ROWS
 
-        # Canvas position in terminal cells:
-        # - Starts at row 4 (0: title bar, 1: blank/mode, 2: border top, 3: canvas header)
-        # - Starts at col 1 (0: left border)
-        # - Canvas is 112 cols × 32 rows
-        CANVAS_START_ROW = 4
-        CANVAS_START_COL = 1
-        CANVAS_COLS = 112
-        CANVAS_ROWS = 32
+        # Layout calculation:
+        # - Rows above canvas: title(1) + mode(1) + border(1) + header(1) = 4 rows
+        # - Cols before canvas: border(1) = 1 col
+        # - Then add GUTTER to get to drawable area
+        ROWS_ABOVE_CANVAS = 4  # title + mode + border + canvas header
+        COLS_BEFORE_CANVAS = 1  # left border
+
+        # Drawable area position (inside the gutter)
+        drawable_start_row = ROWS_ABOVE_CANVAS + GUTTER
+        drawable_start_col = COLS_BEFORE_CANVAS + GUTTER
+        drawable_cols = VIEWPORT_WIDTH - (2 * GUTTER)   # Remove left+right gutter
+        drawable_rows = VIEWPORT_HEIGHT - (2 * GUTTER)  # Remove top+bottom gutter
 
         # Calculate pixel coordinates
-        left = int(CANVAS_START_COL * cell_width)
-        top = int(CANVAS_START_ROW * cell_height)
-        right = int((CANVAS_START_COL + CANVAS_COLS) * cell_width)
-        bottom = int((CANVAS_START_ROW + CANVAS_ROWS) * cell_height)
+        left = int(drawable_start_col * cell_width)
+        top = int(drawable_start_row * cell_height)
+        right = int((drawable_start_col + drawable_cols) * cell_width)
+        bottom = int((drawable_start_row + drawable_rows) * cell_height)
 
         # Crop the image
         cropped = img.crop((left, top, right, bottom))
@@ -129,8 +136,8 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         cropped.save(output, format='PNG')
         return output.getvalue()
 
-    except ImportError:
-        print("[Warning] PIL not installed, skipping crop. Install: pip install Pillow")
+    except ImportError as e:
+        print(f"[Warning] Import failed, skipping crop: {e}")
         return png_data
     except Exception as e:
         print(f"[Warning] Crop failed: {e}")

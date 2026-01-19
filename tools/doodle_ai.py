@@ -470,17 +470,24 @@ The canvas is **112 cells wide × 32 cells tall**.
 - Y coordinates: 0 (top) to 31 (bottom)
 - Origin (0,0) is TOP-LEFT corner
 
-## COLOR SYSTEM
-- **QWERTY row (q-p)**: RED family (light to dark)
-- **ASDF row (a-l)**: YELLOW family (light to dark)
-- **ZXCV row (z-m)**: BLUE family (light to dark)
-- **Number row (1-0)**: GRAYSCALE (white to black)
+## COLOR SYSTEM (with SHADING)
 
-## COLOR MIXING
+Each row provides a color family with SHADING from light (left) to dark (right):
+- **QWERTY row (q-p, then [ ] \\)**: RED family (pink → burgundy)
+- **ASDF row (a-l, then ; ')**: YELLOW family (gold → brown)
+- **ZXCV row (z-m, then , . /)**: BLUE family (periwinkle → navy)
+- **Number row (` 1-0 - =)**: GRAYSCALE (pure white → pure black)
+
+**SHADING:** Use left keys for highlights, middle for midtones, right for shadows.
+
+## COLOR MIXING (LAYERED PAINTING)
+
 When you paint OVER an already-painted cell, colors MIX:
 - Yellow + Blue = GREEN
 - Red + Blue = PURPLE
 - Red + Yellow = ORANGE
+
+**CRITICAL:** To mix colors, paint the ENTIRE area with one color FIRST, then paint the SAME area with the second color. Do NOT alternate cell by cell.
 
 ## YOUR TASK
 Create a detailed PLAN for drawing the requested image. You will have multiple iterations to execute this plan.
@@ -547,34 +554,66 @@ The canvas is **112 cells wide × 32 cells tall**.
 
 ## COLOR SYSTEM (KEYBOARD ROWS)
 
-Each keyboard row produces a COLOR FAMILY. Within each row, LEFT keys are LIGHTER, RIGHT keys are DARKER.
+Each keyboard row produces a COLOR FAMILY. Within each row, keys go from LIGHTER (left) to DARKER (right).
+**Use this for SHADING:** paint lighter keys for highlights, darker keys for shadows.
 
-**GRAYSCALE (Number row 1-0):**
-- 1 = white (#FFFFFF)
-- 5 = medium gray (#808080)
-- 0 = black (#000000)
+**GRAYSCALE (Number row: ` 1 2 3 4 5 6 7 8 9 0 - =):**
+- ` (backtick) = pure white
+- 1 = near white
+- 5 = medium gray
+- 0 = near black
+- = (equals) = pure black
 
-**RED FAMILY (QWERTY row: q w e r t y u i o p):**
-- q = lightest pink/salmon
-- e, r = medium red (good primary red)
-- p = darkest burgundy
+**RED FAMILY (QWERTY row: q w e r t y u i o p [ ] \\):**
+- q = lightest pink/salmon (highlight)
+- e, r = medium red (primary)
+- p = dark red/burgundy
+- ], \\ = darkest burgundy (shadow)
 
-**YELLOW FAMILY (ASDF row: a s d f g h j k l):**
-- a = lightest gold
-- d, f = medium yellow/gold (good primary yellow)
-- l = darkest brown-gold
+**YELLOW FAMILY (ASDF row: a s d f g h j k l ; '):**
+- a = lightest gold (highlight)
+- d, f = medium yellow/gold (primary)
+- l = dark brown-gold
+- ; ' = darkest brown (shadow)
 
-**BLUE FAMILY (ZXCV row: z x c v b n m):**
-- z = lightest periwinkle
-- c, v = medium blue (good primary blue)
-- m = darkest navy
+**BLUE FAMILY (ZXCV row: z x c v b n m , . /):**
+- z = lightest periwinkle (highlight)
+- c, v = medium blue (primary)
+- m = dark navy
+- , . / = darkest navy (shadow)
 
-## COLOR MIXING
+## SHADING TECHNIQUE
+
+To create 3D depth and realism, use DIFFERENT keys from the same row:
+- **Highlights**: Use leftmost keys (q, a, z, 1-2)
+- **Midtones**: Use middle keys (r, f, v, 5)
+- **Shadows**: Use rightmost keys (p, l, m, 9-0)
+
+Example for a tree trunk: paint 'd' for lit side, 'h' for middle, 'l' for shadow side.
+
+## COLOR MIXING (CRITICAL!)
 
 When you paint OVER an already-painted cell, colors MIX like real paint:
 - Yellow + Blue = GREEN
 - Red + Blue = PURPLE
 - Red + Yellow = ORANGE
+
+**IMPORTANT: For mixed colors, you MUST paint in this order:**
+1. Paint the ENTIRE area with the FIRST color (e.g., all yellow for future green)
+2. THEN paint the SAME area again with the SECOND color (e.g., blue over yellow)
+3. Do NOT alternate between colors cell by cell - that creates stripes, not mixing!
+
+**Correct (GREEN grass):**
+```
+paint_line y=20, x=0-50, color="f" (yellow)
+paint_line y=20, x=0-50, color="c" (blue over SAME cells = GREEN)
+```
+
+**Wrong (stripey mess):**
+```
+paint_at x=0, y=20, color="f"
+paint_at x=1, y=20, color="c"  # Different cell! No mixing!
+```
 
 The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
 
@@ -614,14 +653,39 @@ Your goal: Generate a BETTER complete script than last time, learning from what 
 
 ## LAYERED PAINTING (within each attempt)
 
-To get mixed colors, you must paint in layers WITHIN your script:
-1. First paint YELLOW in areas that will be green, orange, or brown
-2. Then paint BLUE over yellow areas to create GREEN
-3. Then paint RED over yellow for ORANGE, or over blue for PURPLE
+To get mixed colors, you MUST paint in layers within your script:
 
-Example sequence for green foliage:
-- Use paint_line with key="f" (yellow) to fill the foliage area
-- Use paint_line with key="c" (blue) over the SAME area to mix into green
+**STEP 1: Paint ALL yellow areas first**
+Paint yellow ("f", "g", "d") on every cell that will become green, orange, OR brown.
+This includes: grass, leaves, tree trunks, ground.
+
+**STEP 2: Paint blue OVER yellow to make GREEN**
+Go back and paint blue ("c", "v", "b") over the yellow cells that should be green.
+The blue mixes with underlying yellow = GREEN.
+
+**STEP 3: Paint red OVER yellow to make ORANGE**
+Paint red ("r", "e") over yellow cells that should be orange.
+The red mixes with underlying yellow = ORANGE.
+
+**STEP 4: Add details and pure colors**
+Now add any pure red, pure blue, or grayscale elements.
+
+**Example: Green grass with brown path**
+```json
+// Step 1: Yellow everywhere (grass + path area)
+{"type": "paint_line", "x": 0, "y": 28, "key": "f", "direction": "right", "length": 112},
+{"type": "paint_line", "x": 0, "y": 29, "key": "f", "direction": "right", "length": 112},
+// Step 2: Blue over grass ONLY (not path) = GREEN
+{"type": "paint_line", "x": 0, "y": 28, "key": "c", "direction": "right", "length": 50},
+{"type": "paint_line", "x": 60, "y": 28, "key": "c", "direction": "right", "length": 52},
+// Path (x=50-60) keeps yellow, becomes brown with darker overlays
+{"type": "paint_line", "x": 50, "y": 28, "key": "l", "direction": "right", "length": 10}
+```
+
+For SHADING mixed colors, vary the shade of the overlay:
+- Bright green highlight: yellow + light blue ("z")
+- Medium green: yellow + medium blue ("c")
+- Dark green shadow: yellow + dark blue ("m")
 
 ## RESPONSE FORMAT
 

@@ -37,18 +37,21 @@ from ..keyboard import (
 # CONSTANTS
 # =============================================================================
 
-# Grayscale values (selected by number keys: 1=white, 0=black)
+# Grayscale values (selected by number row keys: `=lightest, 1-0, then -=darkest)
 GRAYSCALE = {
-    "1": "#FFFFFF",  # White
-    "2": "#E0E0E0",
+    "`": "#FFFFFF",  # Pure white (backtick, left of 1)
+    "1": "#F0F0F0",  # Near white
+    "2": "#D8D8D8",
     "3": "#C0C0C0",
-    "4": "#A0A0A0",
-    "5": "#808080",  # Middle gray
-    "6": "#606060",
-    "7": "#404040",
-    "8": "#202020",
-    "9": "#101010",
-    "0": "#000000",  # Black
+    "4": "#A8A8A8",
+    "5": "#909090",  # Middle gray
+    "6": "#787878",
+    "7": "#606060",
+    "8": "#484848",
+    "9": "#303030",
+    "0": "#181818",  # Near black
+    "-": "#080808",  # Very dark
+    "=": "#000000",  # Pure black (equals, right of -)
 }
 
 # Brush character for painting
@@ -67,10 +70,10 @@ BOX_CHARS = {
     (1, 1): "┘",    # bottom-right (light corner)
 }
 
-# Keyboard rows for colors (letter rows only)
-QWERTY_ROW = list("qwertyuiop")    # Red family
-ASDF_ROW = list("asdfghjkl")       # Yellow family
-ZXCV_ROW = list("zxcvbnm")         # Blue family
+# Keyboard rows for colors (full rows including symbols)
+QWERTY_ROW = list("qwertyuiop[]\\")   # Red family (top letter row + brackets + backslash)
+ASDF_ROW = list("asdfghjkl;'")        # Yellow family (home row + semicolon + quote)
+ZXCV_ROW = list("zxcvbnm,./")         # Blue family (bottom row + comma + period + slash)
 
 # Color legend: 3 shades per keyboard row (light, medium, dark)
 # Ordered top-to-bottom to mirror keyboard layout (numbers at top, ZXCV at bottom)

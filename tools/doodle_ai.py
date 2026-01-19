@@ -19,6 +19,7 @@ Usage:
 
 import argparse
 import base64
+import hashlib
 import io
 import json
 import os
@@ -1411,6 +1412,7 @@ def run_visual_feedback_loop(
                 print(f"[Screenshot] {svg_path}")
                 print(f"[Screenshot] screenshot_{screenshot_num} = Attempt {i}'s result")
 
+
             # Convert to PNG for vision API (with cropping to canvas area)
             png_base64 = svg_to_png_base64(svg_path)
             if not png_base64:
@@ -1450,7 +1452,14 @@ def run_visual_feedback_loop(
                 print("[Warning] No actions returned")
                 continue
 
-            print(f"[Script] Generated {len(actions)} actions")
+            # Debug: show action summary to verify they're different each iteration
+            actions_str = json.dumps(actions, sort_keys=True)
+            actions_hash = hashlib.md5(actions_str.encode()).hexdigest()[:8]
+            first_action = actions[0] if actions else None
+            last_action = actions[-1] if actions else None
+            print(f"[Script] Generated {len(actions)} actions (hash: {actions_hash})")
+            print(f"[Script] First action: {first_action}")
+            print(f"[Script] Last action: {last_action}")
 
             # Store this iteration's script
             iteration_scripts.append({"iteration": i + 1, "actions": actions})
@@ -1553,15 +1562,21 @@ def run_visual_feedback_loop(
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
                 print("[Clear] Clearing canvas for fresh attempt...")
-                if not controller.clear_canvas():
+                clear_success = controller.clear_canvas()
+                print(f"[Clear] Clear result: {clear_success}")
+                if not clear_success:
                     print("[ERROR] Failed to clear canvas after retries. Aborting.")
                     print("This may indicate the 'clear' command is not being processed.")
                     break
+                # Extra wait after clear to ensure it takes effect
+                time.sleep(0.3)
 
             # Execute the complete script
-            print(f"[Execute] Running script...")
+            print(f"[Execute] Running {len(actions)} actions...")
             controller.execute_actions(actions)
-            time.sleep(0.1)
+            print(f"[Execute] Done executing actions")
+            # Wait for canvas to fully render before next screenshot
+            time.sleep(0.5)
 
         # Take final screenshot
         print("\n[Final] Taking final screenshot...")

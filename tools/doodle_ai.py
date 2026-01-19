@@ -230,6 +230,17 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         cropped = img.crop((left, top, right, bottom))
         print(f"[Crop] Cropped to: {cropped.size[0]}x{cropped.size[1]}")
 
+        # Resize if larger than needed to reduce API token costs
+        # Canvas is 101x25 cells, so ~500x200 pixels is plenty of resolution
+        MAX_WIDTH = 500
+        MAX_HEIGHT = 200
+        if cropped.width > MAX_WIDTH or cropped.height > MAX_HEIGHT:
+            original_size = cropped.size
+            # Use Resampling.LANCZOS for Pillow 10+ (falls back to LANCZOS for older)
+            resample = getattr(Image, 'Resampling', Image).LANCZOS
+            cropped.thumbnail((MAX_WIDTH, MAX_HEIGHT), resample)
+            print(f"[Resize] {original_size[0]}x{original_size[1]} → {cropped.size[0]}x{cropped.size[1]} (cost reduction)")
+
         # Convert back to bytes
         output = io.BytesIO()
         cropped.save(output, format='PNG')

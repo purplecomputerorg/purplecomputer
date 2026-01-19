@@ -6,6 +6,8 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2025-01
 
+- **Escape tap mode picker**: Tapping Escape opens a mode picker modal with Explore, Play, Write, Paint options (Write/Paint grouped under Doodle); Esc badge added to mode indicator bar
+- **Tab toggles paint/write**: Removed space-space toggle, now only Tab switches between paint and write modes in Doodle (avoids accidental triggers while drawing)
 - **Space-space toggle**: Double-tap space toggles write/paint both ways, requires consecutive spaces
 - **Mode switch dismisses prompt**: Switching modes while "keep drawing" prompt is showing dismisses it and switches normally
 - **Color mixing fix**: Similar colors no longer produce brighter results when mixed

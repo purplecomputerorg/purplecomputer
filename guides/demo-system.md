@@ -51,7 +51,7 @@ PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140)  # Smile
 1. **Text mode** (default): Typing letters places them on the canvas
 2. **Paint mode**: Letters select brush colors and stamp colored blocks
 
-**How to switch:** Double-tap Space to toggle between text and paint mode.
+**How to switch:** Press Tab to toggle between text and paint mode.
 
 **Paint mode behavior:**
 - Letter keys (a-z) select brush color based on keyboard row:

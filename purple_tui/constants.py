@@ -71,6 +71,9 @@ ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
 ICON_CAPS_LOCK = "󰬈"        # nf-md-caps_lock
+ICON_MENU = "󰀻"             # nf-md-apps (grid icon for mode picker)
+ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
+ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

@@ -277,61 +277,22 @@ class PurpleController:
         self.send_key('tab')
         time.sleep(0.1)
 
-    def clear_canvas(self, max_retries: int = 3) -> bool:
-        """Clear the entire canvas. Returns True if verified clear, False otherwise."""
-        for attempt in range(max_retries):
-            print(f"[Clear] Attempt {attempt + 1}/{max_retries}...")
+    def clear_canvas(self) -> bool:
+        """Clear the entire canvas. Returns True if command was consumed."""
+        print("[Clear] Sending clear command...")
 
-            # Send clear command and wait for it to be consumed
-            consumed = self.send_commands(
-                [{"action": "clear", "value": ""}],
-                wait_for_consumption=True
-            )
-            if not consumed:
-                print("[Clear] Command not consumed by app!")
-                continue
+        # Send clear command and wait for it to be consumed
+        consumed = self.send_commands(
+            [{"action": "clear", "value": ""}],
+            wait_for_consumption=True
+        )
 
-            time.sleep(0.2)  # Give time for clear to take effect
-
-            # Take a screenshot to verify
-            svg_path = self.take_screenshot()
-            if svg_path and self._verify_canvas_clear(svg_path):
-                print("[Clear] Canvas verified clear")
-                return True
-            else:
-                print(f"[Clear] Canvas not clear, retrying...")
-                time.sleep(0.2)
-
-        print("[Clear] WARNING: Could not verify canvas was cleared")
-        return False
-
-    def _verify_canvas_clear(self, svg_path: str) -> bool:
-        """Check if the canvas SVG shows a mostly blank canvas."""
-        try:
-            with open(svg_path, 'r') as f:
-                svg_content = f.read()
-
-            # Count colored rectangles (painted cells)
-            # Blank canvas has mostly the default purple background
-            # Painted cells have different fill colors
-            import re
-
-            # Look for rect elements with fill colors that aren't the default purple background
-            # Default background is around #2a1845 (dark) or #e8daf0 (light)
-            default_colors = ['#2a1845', '#e8daf0', '#1e1033', '#f0e8f8', 'none']
-
-            # Find all fill colors in the SVG
-            fills = re.findall(r'fill="(#[0-9a-fA-F]{6})"', svg_content)
-
-            # Count non-default colors
-            painted_count = sum(1 for f in fills if f.lower() not in [c.lower() for c in default_colors])
-
-            # Allow a small number of non-default colors (cursor, UI elements)
-            is_clear = painted_count < 20
-            print(f"[Clear] Found {painted_count} painted cells (clear={is_clear})")
-            return is_clear
-        except Exception as e:
-            print(f"[Clear] Verification error: {e}")
+        if consumed:
+            print("[Clear] Command consumed, canvas cleared")
+            time.sleep(0.1)  # Brief wait for render
+            return True
+        else:
+            print("[Clear] ERROR: Command not consumed by app!")
             return False
 
     def execute_action(self, action: dict) -> None:

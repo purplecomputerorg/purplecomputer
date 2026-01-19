@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-01
 
+- **Visible gutter border**: Canvas gutter now has a distinct color (black in dark mode, white in light mode) so users can see the non-drawable border area
 - **ESC toggles mode picker**: Pressing ESC while mode picker is open now closes it instead of reopening
 - **Simplified mode picker**: Mode picker now shows 3 options (Explore, Play, Doodle) instead of 4; Write/Paint are now tools within Doodle, not separate modes
 - **Mode picker hint simplified**: Replaced text instructions with just arrow symbols (◀ ▶) for pre-readers

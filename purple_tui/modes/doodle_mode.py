@@ -124,6 +124,10 @@ BACKSPACE_HOLD_CLEAR_TIME = 1.0
 # Gutter size (cells around content where cursor ring can extend)
 GUTTER = 1
 
+# Gutter background colors (visually distinct non-drawable border)
+GUTTER_BG_DARK = "#000000"   # Black for dark mode
+GUTTER_BG_LIGHT = "#FFFFFF"  # White for light mode
+
 
 # =============================================================================
 # COLOR UTILITIES
@@ -313,6 +317,10 @@ class ArtCanvas(Widget, can_focus=True):
         """Get text foreground color based on current theme."""
         return TEXT_FG_DARK if self._is_dark_theme() else TEXT_FG_LIGHT
 
+    def _get_gutter_bg(self) -> str:
+        """Get gutter background color based on current theme."""
+        return GUTTER_BG_DARK if self._is_dark_theme() else GUTTER_BG_LIGHT
+
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
         self._paint_mode = not self._paint_mode
@@ -392,6 +400,7 @@ class ArtCanvas(Widget, can_focus=True):
 
         segments = []
         default_bg = self._get_default_bg()
+        gutter_bg = self._get_gutter_bg()
 
         # Cursor position in screen coordinates
         cursor_screen_x = self._cursor_x + GUTTER
@@ -472,8 +481,9 @@ class ArtCanvas(Widget, can_focus=True):
                             ring_style = Style(color=ring_fg, bgcolor=bg_color)
                             segments.append(Segment(box_char, ring_style))
                     else:
-                        # Empty cell or gutter: show box char on default bg
-                        ring_style = Style(color=ring_fg, bgcolor=default_bg)
+                        # Empty cell or gutter: show box char on appropriate bg
+                        bg = gutter_bg if in_gutter else default_bg
+                        ring_style = Style(color=ring_fg, bgcolor=bg)
                         segments.append(Segment(box_char, ring_style))
                 else:
                     # Blink off: show underlying cell or empty
@@ -486,7 +496,9 @@ class ArtCanvas(Widget, can_focus=True):
                                 bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
-                        segments.append(Segment(" ", Style(bgcolor=default_bg)))
+                        # Empty: use gutter bg if in gutter, else default bg
+                        bg = gutter_bg if in_gutter else default_bg
+                        segments.append(Segment(" ", Style(bgcolor=bg)))
             elif cell:
                 char, fg_color, bg_color = cell
                 # Paint cells (BRUSH_CHAR): keep stored colors
@@ -504,8 +516,9 @@ class ArtCanvas(Widget, can_focus=True):
                         char_style = Style(color=text_fg, bgcolor=bg_color)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
-                # Empty cell or gutter
-                segments.append(Segment(" ", Style(bgcolor=default_bg)))
+                # Empty cell or gutter: use gutter bg if in gutter
+                bg = gutter_bg if in_gutter else default_bg
+                segments.append(Segment(" ", Style(bgcolor=bg)))
 
         return Strip(segments)
 

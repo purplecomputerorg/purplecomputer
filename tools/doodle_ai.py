@@ -84,11 +84,107 @@ def svg_to_png_base64(svg_path: str, crop_to_canvas: bool = True) -> str:
     return base64.standard_b64encode(png_data).decode('utf-8')
 
 
+def _is_dark_pixel(r: int, g: int, b: int, threshold: int = 30) -> bool:
+    """Check if a pixel is dark (part of gutter)."""
+    return r < threshold and g < threshold and b < threshold
+
+
+def _find_drawable_bounds(img) -> tuple[int, int, int, int]:
+    """Find the drawable canvas area by detecting gutter boundaries.
+
+    Scans for transitions between dark (gutter) and light (canvas) regions.
+    Returns (left, top, right, bottom) pixel coordinates.
+    """
+    width, height = img.size
+
+    # Sample the middle of the image to find vertical gutter positions
+    # (gutters are black, canvas is purple)
+    mid_y = height // 2
+
+    # Find left boundary: scan right until we exit the dark gutter
+    left = 0
+    for x in range(0, width // 2, 5):
+        # Sample a small vertical strip
+        r, g, b = 0, 0, 0
+        for dy in range(-5, 6):
+            y = mid_y + dy
+            if 0 <= y < height:
+                px = img.getpixel((x, y))
+                r += px[0]
+                g += px[1]
+                b += px[2]
+        r, g, b = r // 11, g // 11, b // 11
+
+        if _is_dark_pixel(r, g, b):
+            # Found dark region, continue
+            left = x + 10  # Move past gutter
+        elif left > 0:
+            # Transitioned from dark to light
+            break
+
+    # Find right boundary: scan left from right edge
+    right = width
+    for x in range(width - 1, width // 2, -5):
+        r, g, b = 0, 0, 0
+        for dy in range(-5, 6):
+            y = mid_y + dy
+            if 0 <= y < height:
+                px = img.getpixel((x, y))
+                r += px[0]
+                g += px[1]
+                b += px[2]
+        r, g, b = r // 11, g // 11, b // 11
+
+        if _is_dark_pixel(r, g, b):
+            right = x - 5
+        elif right < width:
+            break
+
+    # Find top boundary: scan down from middle-x
+    mid_x = (left + right) // 2
+    top = 0
+    for y in range(0, height // 2, 5):
+        r, g, b = 0, 0, 0
+        for dx in range(-5, 6):
+            x = mid_x + dx
+            if 0 <= x < width:
+                px = img.getpixel((x, y))
+                r += px[0]
+                g += px[1]
+                b += px[2]
+        r, g, b = r // 11, g // 11, b // 11
+
+        if _is_dark_pixel(r, g, b):
+            top = y + 10
+        elif top > 0:
+            break
+
+    # Find bottom boundary: scan up from bottom
+    bottom = height
+    for y in range(height - 1, height // 2, -5):
+        r, g, b = 0, 0, 0
+        for dx in range(-5, 6):
+            x = mid_x + dx
+            if 0 <= x < width:
+                px = img.getpixel((x, y))
+                r += px[0]
+                g += px[1]
+                b += px[2]
+        r, g, b = r // 11, g // 11, b // 11
+
+        if _is_dark_pixel(r, g, b):
+            bottom = y - 5
+        elif bottom < height:
+            break
+
+    return left, top, right, bottom
+
+
 def crop_to_canvas_area(png_data: bytes) -> bytes:
     """Crop PNG to just the drawable canvas area, removing all UI chrome.
 
-    Imports constants from Purple Computer to stay in sync with layout changes.
-    Falls back to hardcoded values if imports fail.
+    Automatically detects the gutter boundaries by scanning for dark regions.
+    Falls back to constant-based calculation if detection fails.
     """
     try:
         from PIL import Image
@@ -97,58 +193,37 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         print("[Warning] PIL not installed, skipping crop. Install: pip install Pillow")
         return png_data
 
-    # Try to import layout constants, fall back to hardcoded values
+    # Import constants for fallback
     try:
-        from purple_tui.constants import (
-            VIEWPORT_WIDTH,
-            VIEWPORT_HEIGHT,
-            REQUIRED_TERMINAL_COLS,
-            REQUIRED_TERMINAL_ROWS,
-        )
-        from purple_tui.modes.doodle_mode import GUTTER
-    except ImportError as e:
-        print(f"[Crop] Using hardcoded constants (import failed: {e})")
-        VIEWPORT_WIDTH = 112
-        VIEWPORT_HEIGHT = 32
+        from purple_tui.constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
+    except ImportError:
         REQUIRED_TERMINAL_COLS = 114
         REQUIRED_TERMINAL_ROWS = 39
-        GUTTER = 1
 
     try:
         img = Image.open(io.BytesIO(png_data))
         img_width, img_height = img.size
         print(f"[Crop] Image size: {img_width}x{img_height}")
 
-        # Calculate cell dimensions from image size
-        cell_width = img_width / REQUIRED_TERMINAL_COLS
-        cell_height = img_height / REQUIRED_TERMINAL_ROWS
-        print(f"[Crop] Cell size: {cell_width:.1f}x{cell_height:.1f}")
+        # Detect gutter boundaries by scanning for dark regions
+        left, top, right, bottom = _find_drawable_bounds(img)
 
-        # Layout calculation (from top of screenshot):
-        # Row 0: Title row ("□ Doodle")
-        # Row 1: Margin below title
-        # Row 2: Viewport border top
-        # Row 3: CanvasHeader ("Write Tab Paint")
-        # Row 4: ArtCanvas gutter top
-        # Row 5+: Drawable area
-        #
-        # VIEWPORT_HEIGHT (32) = CanvasHeader (1) + ArtCanvas (31)
-        # ArtCanvas (31) = gutter (1) + drawable (29) + gutter (1)
-        ROWS_ABOVE_DRAWABLE = 5  # title(1) + margin(1) + border(1) + header(1) + gutter(1)
-        COLS_BEFORE_DRAWABLE = 2  # border(1) + gutter(1)
+        # If detection returned full image, use fallback constants
+        # (This happens when not in Doodle paint mode, or no gutter visible)
+        if left == 0 and top == 0 and right == img_width and bottom == img_height:
+            print("[Crop] No gutter detected, using fallback bounds")
+            cell_width = img_width / REQUIRED_TERMINAL_COLS
+            cell_height = img_height / REQUIRED_TERMINAL_ROWS
+            # Fallback: approximate Doodle mode canvas area
+            # Rows 7-31 (25 rows), Cols 4-104 (100 cols)
+            left = int(4 * cell_width)
+            top = int(7 * cell_height)
+            right = int(105 * cell_width)
+            bottom = int(32 * cell_height)
 
-        # ArtCanvas is VIEWPORT_HEIGHT - 1 (minus CanvasHeader)
-        # Drawable area is ArtCanvas minus 2 gutters
-        art_canvas_height = VIEWPORT_HEIGHT - 1  # 31 rows
-        drawable_cols = VIEWPORT_WIDTH - (2 * GUTTER)   # 110 columns
-        drawable_rows = art_canvas_height - (2 * GUTTER)  # 29 rows
-
-        # Calculate pixel coordinates
-        left = int(COLS_BEFORE_DRAWABLE * cell_width)
-        top = int(ROWS_ABOVE_DRAWABLE * cell_height)
-        right = int((COLS_BEFORE_DRAWABLE + drawable_cols) * cell_width)
-        bottom = int((ROWS_ABOVE_DRAWABLE + drawable_rows) * cell_height)
-        print(f"[Crop] Drawable area: {drawable_cols}x{drawable_rows} cells")
+        drawable_width = right - left
+        drawable_height = bottom - top
+        print(f"[Crop] Drawable area: {drawable_width}x{drawable_height} pixels")
         print(f"[Crop] Crop box: left={left}, top={top}, right={right}, bottom={bottom}")
 
         # Crop the image
@@ -472,9 +547,9 @@ class PurpleController:
 PLANNING_PROMPT = """You are an AI artist planning a pixel art drawing in Purple Computer's Doodle mode.
 
 ## CANVAS SIZE
-The canvas is **112 cells wide × 32 cells tall**.
-- X coordinates: 0 (left) to 111 (right)
-- Y coordinates: 0 (top) to 31 (bottom)
+The canvas is **101 cells wide × 25 cells tall**.
+- X coordinates: 0 (left) to 100 (right)
+- Y coordinates: 0 (top) to 24 (bottom)
 - Origin (0,0) is TOP-LEFT corner
 
 ## COLOR SYSTEM (with SHADING)
@@ -500,7 +575,7 @@ When you paint OVER an already-painted cell, colors MIX:
 Create a detailed PLAN for drawing the requested image. You will have multiple iterations to execute this plan.
 
 The plan should include:
-1. **Composition**: Where elements go on the 112x32 canvas
+1. **Composition**: Where elements go on the 101x25 canvas
 2. **Phases**: Break the work into phases, each assigned to specific iterations
 3. **Color strategy**: Which base colors to paint first, which overlays to add
 
@@ -548,9 +623,9 @@ Be specific about coordinates and areas. The execution AI will follow this plan.
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
 ## CANVAS SIZE
-The canvas is **112 cells wide × 32 cells tall**.
-- X coordinates: 0 (left) to 111 (right)
-- Y coordinates: 0 (top) to 31 (bottom)
+The canvas is **101 cells wide × 25 cells tall**.
+- X coordinates: 0 (left) to 100 (right)
+- Y coordinates: 0 (top) to 24 (bottom)
 - Origin (0,0) is TOP-LEFT corner
 
 ## WHAT YOU SEE IN SCREENSHOTS
@@ -680,13 +755,13 @@ Now add any pure red, pure blue, or grayscale elements.
 **Example: Green grass with brown path**
 ```json
 // Step 1: Yellow everywhere (grass + path area)
-{"type": "paint_line", "x": 0, "y": 28, "key": "f", "direction": "right", "length": 112},
-{"type": "paint_line", "x": 0, "y": 29, "key": "f", "direction": "right", "length": 112},
+{"type": "paint_line", "x": 0, "y": 22, "key": "f", "direction": "right", "length": 101},
+{"type": "paint_line", "x": 0, "y": 23, "key": "f", "direction": "right", "length": 101},
 // Step 2: Blue over grass ONLY (not path) = GREEN
-{"type": "paint_line", "x": 0, "y": 28, "key": "c", "direction": "right", "length": 50},
-{"type": "paint_line", "x": 60, "y": 28, "key": "c", "direction": "right", "length": 52},
-// Path (x=50-60) keeps yellow, becomes brown with darker overlays
-{"type": "paint_line", "x": 50, "y": 28, "key": "l", "direction": "right", "length": 10}
+{"type": "paint_line", "x": 0, "y": 22, "key": "c", "direction": "right", "length": 45},
+{"type": "paint_line", "x": 55, "y": 22, "key": "c", "direction": "right", "length": 46},
+// Path (x=45-55) keeps yellow, becomes brown with darker overlays
+{"type": "paint_line", "x": 45, "y": 22, "key": "l", "direction": "right", "length": 10}
 ```
 
 For SHADING mixed colors, vary the shade of the overlay:

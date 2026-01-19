@@ -88,26 +88,41 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
     """Crop PNG to just the drawable canvas area, removing all UI chrome.
 
     Imports constants from Purple Computer to stay in sync with layout changes.
+    Falls back to hardcoded values if imports fail.
     """
     try:
         from PIL import Image
         import io
+    except ImportError:
+        print("[Warning] PIL not installed, skipping crop. Install: pip install Pillow")
+        return png_data
 
-        # Import layout constants from Purple Computer
+    # Try to import layout constants, fall back to hardcoded values
+    try:
         from purple_tui.constants import (
-            VIEWPORT_WIDTH,      # Canvas widget width (e.g., 112)
-            VIEWPORT_HEIGHT,     # Canvas widget height (e.g., 32)
-            REQUIRED_TERMINAL_COLS,  # Total terminal width
-            REQUIRED_TERMINAL_ROWS,  # Total terminal height
+            VIEWPORT_WIDTH,
+            VIEWPORT_HEIGHT,
+            REQUIRED_TERMINAL_COLS,
+            REQUIRED_TERMINAL_ROWS,
         )
-        from purple_tui.modes.doodle_mode import GUTTER  # Gutter inside canvas (e.g., 1)
+        from purple_tui.modes.doodle_mode import GUTTER
+    except ImportError as e:
+        print(f"[Crop] Using hardcoded constants (import failed: {e})")
+        VIEWPORT_WIDTH = 112
+        VIEWPORT_HEIGHT = 32
+        REQUIRED_TERMINAL_COLS = 114
+        REQUIRED_TERMINAL_ROWS = 39
+        GUTTER = 1
 
+    try:
         img = Image.open(io.BytesIO(png_data))
         img_width, img_height = img.size
+        print(f"[Crop] Image size: {img_width}x{img_height}")
 
         # Calculate cell dimensions from image size
         cell_width = img_width / REQUIRED_TERMINAL_COLS
         cell_height = img_height / REQUIRED_TERMINAL_ROWS
+        print(f"[Crop] Cell size: {cell_width:.1f}x{cell_height:.1f}")
 
         # Layout calculation:
         # - Rows above canvas: title(1) + mode(1) + border(1) + header(1) = 4 rows
@@ -127,20 +142,21 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         top = int(drawable_start_row * cell_height)
         right = int((drawable_start_col + drawable_cols) * cell_width)
         bottom = int((drawable_start_row + drawable_rows) * cell_height)
+        print(f"[Crop] Crop box: left={left}, top={top}, right={right}, bottom={bottom}")
 
         # Crop the image
         cropped = img.crop((left, top, right, bottom))
+        print(f"[Crop] Cropped to: {cropped.size[0]}x{cropped.size[1]}")
 
         # Convert back to bytes
         output = io.BytesIO()
         cropped.save(output, format='PNG')
         return output.getvalue()
 
-    except ImportError as e:
-        print(f"[Warning] Import failed, skipping crop: {e}")
-        return png_data
     except Exception as e:
+        import traceback
         print(f"[Warning] Crop failed: {e}")
+        traceback.print_exc()
         return png_data
 
 

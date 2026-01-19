@@ -1395,11 +1395,12 @@ class PurpleApp(App):
             # Clear the doodle canvas
             from .modes.doodle_mode import DoodleMode, ArtCanvas
             try:
-                doodle = self.query_one("#doodle-mode", DoodleMode)
+                # Query by type, not ID (DoodleMode has no ID)
+                doodle = self.query_one(DoodleMode)
                 doodle.clear_canvas()
                 # Also directly access and refresh the canvas to ensure clear takes effect
                 try:
-                    canvas = doodle.query_one("#art-canvas", ArtCanvas)
+                    canvas = doodle.query_one(ArtCanvas)
                     canvas.refresh()
                     self._dev_log(f"[DevCmd] Canvas cleared, grid size={len(canvas._grid)}")
                 except Exception:

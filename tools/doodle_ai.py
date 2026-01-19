@@ -330,46 +330,144 @@ class PurpleController:
 
 SYSTEM_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
-## What You See
-You're looking at a screenshot of the Purple Computer app in Doodle/Paint mode.
-The canvas is a grid of colored cells. The cursor shows your current position.
+## CANVAS SIZE
+The canvas is **112 cells wide × 32 cells tall**.
+- X coordinates: 0 (left) to 111 (right)
+- Y coordinates: 0 (top) to 31 (bottom)
+- Origin (0,0) is TOP-LEFT corner
 
-## How Painting Works
-- You're in PAINT mode (not text mode)
-- Select color with shift+key (doesn't stamp)
-- Press space to stamp at cursor
-- Arrow keys move the cursor
-- Or use paint_line to draw multiple cells at once
+## WHAT YOU SEE IN SCREENSHOTS
+- Colored cells are painted areas
+- Letters visible on cells (like "F", "C", "R") are just labels showing which key painted that cell
+- The cursor is a 3×3 blinking ring of box-drawing characters (┌━┐ etc.)
+- Purple background = unpainted canvas
 
-## Color Keys (KEYBOARD ROW = COLOR FAMILY)
-Left keys are LIGHT, right keys are DARK:
-- QWERTY (q,w,e,r,t,y,u,i,o,p): RED/PINK family
-- ASDF (a,s,d,f,g,h,j,k,l): YELLOW/ORANGE family
-- ZXCV (z,x,c,v,b,n,m): BLUE family
-- Numbers 1-0: Grayscale (1=white, 0=black)
+## COLOR SYSTEM (KEYBOARD ROWS)
 
-## Color Mixing (IMPORTANT!)
-When you paint over existing paint, colors MIX like real paint:
-- Yellow (f) + Blue (c) = GREEN
-- Red (r) + Blue (c) = PURPLE
-- Red (r) + Yellow (f) = ORANGE
+Each keyboard row produces a COLOR FAMILY. Within each row, LEFT keys are LIGHTER, RIGHT keys are DARKER.
 
-## Available Actions (respond with JSON array)
-- {"type": "move", "direction": "up|down|left|right"}
-- {"type": "move_to", "x": 10, "y": 5}
-- {"type": "select_color", "key": "f"}
-- {"type": "stamp"}
-- {"type": "paint_line", "key": "f", "direction": "right", "length": 5}
-- {"type": "wait", "seconds": 0.3}
+**GRAYSCALE (Number row 1-0):**
+- 1 = white (#FFFFFF)
+- 5 = medium gray (#808080)
+- 0 = black (#000000)
 
-## Tips for Good Art
-1. Background first (sky, ground), then details
-2. Use color mixing! Yellow then blue = green grass/leaves
-3. Darker shades for shadows, lighter for highlights
-4. Build shapes with multiple paint_line actions
-5. Leave some negative space
+**RED FAMILY (QWERTY row: q w e r t y u i o p):**
+- q = lightest pink/salmon
+- e, r = medium red (good primary red)
+- p = darkest burgundy
 
-Respond with a JSON array of 10-20 actions. Start with // comment explaining your plan."""
+**YELLOW FAMILY (ASDF row: a s d f g h j k l):**
+- a = lightest gold
+- d, f = medium yellow/gold (good primary yellow)
+- l = darkest brown-gold
+
+**BLUE FAMILY (ZXCV row: z x c v b n m):**
+- z = lightest periwinkle
+- c, v = medium blue (good primary blue)
+- m = darkest navy
+
+## COLOR MIXING
+
+When you paint OVER an already-painted cell, colors MIX like real paint:
+- Yellow + Blue = GREEN
+- Red + Blue = PURPLE
+- Red + Yellow = ORANGE
+
+The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
+
+## AVAILABLE ACTIONS
+
+Respond with a JSON array. Each action is an object:
+
+**move** - Move cursor without painting
+```json
+{"type": "move", "direction": "up"}
+```
+Directions: "up", "down", "left", "right"
+
+**move_to** - Jump to absolute coordinates
+```json
+{"type": "move_to", "x": 50, "y": 15}
+```
+Note: x must be 0-111, y must be 0-31
+
+**select_color** - Load brush with color (no painting)
+```json
+{"type": "select_color", "key": "f"}
+```
+
+**stamp** - Paint one cell at cursor position
+```json
+{"type": "stamp"}
+```
+
+**paint_line** - Draw a line of cells (MOST USEFUL!)
+```json
+{"type": "paint_line", "key": "f", "direction": "right", "length": 10}
+```
+This selects color, then stamps and moves repeatedly.
+The line starts at current position and extends in direction.
+
+**wait** - Pause (rarely needed)
+```json
+{"type": "wait", "seconds": 0.3}
+```
+
+## LAYERED PAINTING STRATEGY
+
+To demonstrate color mixing, paint in LAYERS rather than final colors:
+
+**Phase 1 - YELLOW BASE**: Paint yellow (d, f, g keys) everywhere you want:
+- Green (grass, leaves, trees)
+- Orange (sun, flowers)
+- Brown (trunks, ground)
+
+**Phase 2 - BLUE OVERLAY**: Paint blue (c, v, b keys) OVER yellow areas:
+- Yellow + Blue = Green (for grass, leaves)
+
+**Phase 3 - RED OVERLAY**: Paint red (r, t, e keys):
+- Over yellow = Orange (for sun, flowers)
+- Over blue = Purple (for shadows, flowers)
+
+Example for "tree on grass":
+1. Paint yellow rectangle for grass area (y=25 to y=31)
+2. Paint yellow oval for tree foliage (around y=8-18)
+3. Paint blue OVER the grass (makes it green)
+4. Paint blue OVER the foliage (makes it green)
+5. Paint yellow vertical line for trunk
+6. Paint red OVER trunk (makes it brown/orange)
+
+## TIPS
+
+1. Plan your composition: what goes where on the 112×32 canvas
+2. Use paint_line for efficiency (one action = many cells)
+3. Work in layers: base colors first, then overlay to mix
+4. Center your art: start around x=40-60, y=10-20
+5. Keep it simple: large shapes read better than tiny details
+
+## RESPONSE FORMAT
+
+Respond with a JSON object containing TWO fields:
+
+```json
+{
+  "observations": [
+    "What I learned or noticed this iteration",
+    "What worked or didn't work",
+    "Insights about coordinates, colors, or mixing"
+  ],
+  "actions": [
+    {"type": "paint_line", "key": "f", "direction": "right", "length": 10},
+    ...
+  ]
+}
+```
+
+**observations**: 2-5 short notes about what you see and learn. These will be shown to you in future iterations so you can build understanding.
+
+**actions**: 20-40 drawing actions to execute.
+
+IMPORTANT: Response must be valid JSON. No comments inside the JSON."""
 
 
 def call_vision_api(
@@ -378,26 +476,37 @@ def call_vision_api(
     iteration: int,
     max_iterations: int,
     api_key: str,
-) -> list[dict]:
-    """Call Claude vision API with screenshot and get next actions."""
+    accumulated_learnings: list[str] = None,
+) -> tuple[list[str], list[dict]]:
+    """Call Claude vision API with screenshot and get observations + actions.
+
+    Returns:
+        (observations, actions) tuple
+    """
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
 
+    # Build user message with accumulated learnings
+    learnings_section = ""
+    if accumulated_learnings:
+        learnings_section = "\n## LEARNINGS FROM PREVIOUS ITERATIONS\n"
+        for i, learning in enumerate(accumulated_learnings, 1):
+            learnings_section += f"- {learning}\n"
+        learnings_section += "\nUse these insights to improve your approach.\n"
+
     user_message = f"""## Goal: {goal}
 
 ## Progress: Iteration {iteration} of {max_iterations}
-
+{learnings_section}
 Look at the current canvas. What has been drawn? What's missing?
-Generate 10-20 actions to continue toward the goal.
+Based on what you see and any previous learnings, plan your next actions.
 
-Respond with:
-1. // Brief comment about what you'll draw
-2. JSON array of actions"""
+Respond with a JSON object containing "observations" and "actions" fields."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=3000,
+        max_tokens=4000,
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
@@ -417,22 +526,38 @@ Respond with:
 
     text = response.content[0].text
 
-    # Print the AI's comment
-    for line in text.split('\n'):
-        if line.strip().startswith('//'):
-            print(f"[AI] {line.strip()}")
-            break
-
-    # Extract JSON array
+    # Parse JSON response (object with observations and actions)
     try:
-        start = text.find('[')
-        end = text.rfind(']') + 1
+        # Find the JSON object
+        start = text.find('{')
+        end = text.rfind('}') + 1
         if start >= 0 and end > start:
-            return json.loads(text[start:end])
+            data = json.loads(text[start:end])
+            observations = data.get('observations', [])
+            actions = data.get('actions', [])
+
+            # Print observations
+            if observations:
+                print("[AI Observations]")
+                for obs in observations:
+                    print(f"  - {obs}")
+
+            return observations, actions
     except json.JSONDecodeError as e:
         print(f"[Error] JSON parse failed: {e}")
+        print(f"[Debug] Raw response:\n{text[:500]}...")
 
-    return []
+        # Fallback: try to extract just an array (old format)
+        try:
+            start = text.find('[')
+            end = text.rfind(']') + 1
+            if start >= 0 and end > start:
+                actions = json.loads(text[start:end])
+                return [], actions
+        except json.JSONDecodeError:
+            pass
+
+    return [], []
 
 
 def load_env_file():
@@ -481,6 +606,7 @@ def run_visual_feedback_loop(
         time.sleep(0.5)
 
         all_actions = []
+        all_learnings = []  # Accumulated observations across iterations
 
         for i in range(iterations):
             print(f"\n{'='*50}")
@@ -501,14 +627,19 @@ def run_visual_feedback_loop(
                 print("[Error] Failed to convert SVG to PNG")
                 continue
 
-            # Get actions from AI
-            actions = call_vision_api(
+            # Get observations and actions from AI
+            observations, actions = call_vision_api(
                 image_base64=png_base64,
                 goal=goal,
                 iteration=i + 1,
                 max_iterations=iterations,
                 api_key=api_key,
+                accumulated_learnings=all_learnings,
             )
+
+            # Accumulate learnings for next iteration
+            if observations:
+                all_learnings.extend(observations)
 
             if not actions:
                 print("[Warning] No actions returned")
@@ -534,6 +665,13 @@ def run_visual_feedback_loop(
         with open(actions_path, 'w') as f:
             json.dump(all_actions, f, indent=2)
         print(f"\n[Saved] Actions: {actions_path}")
+
+        # Save learnings log
+        if all_learnings:
+            learnings_path = os.path.join(output_dir, "learnings.json")
+            with open(learnings_path, 'w') as f:
+                json.dump(all_learnings, f, indent=2)
+            print(f"[Saved] Learnings: {learnings_path}")
 
         # Generate demo script
         demo_script = generate_demo_script(all_actions)

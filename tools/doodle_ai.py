@@ -835,15 +835,6 @@ Respond with a JSON object:
 
 **analysis** (REQUIRED): What you observe and your plan to improve.
 
-**comparison** (REQUIRED after first attempt): Compare your latest result to the previous best.
-```json
-"comparison": {
-  "is_better": true,
-  "reasoning": "Better foliage density, maintained trunk proportions, improved color mixing"
-}
-```
-Be honest! If your latest is worse, say so and explain why. This helps us track the best result.
-
 **strategy_summary** (REQUIRED): Structured description of your approach with:
 - **composition**: Where each element is positioned (x_range, y_range)
 - **layering_order**: Step-by-step painting sequence with colors and coordinates
@@ -948,9 +939,6 @@ def call_vision_api(
     plan: dict = None,
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
-    best_image_base64: str = None,
-    best_iteration: int = None,
-    best_reason: str = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -963,12 +951,9 @@ def call_vision_api(
         plan: Drawing plan from planning phase
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
-        best_image_base64: Screenshot of best result so far (for comparison)
-        best_iteration: Which iteration was the best
-        best_reason: Why that iteration was considered best
 
     Returns:
-        Dict with keys: analysis, comparison, strategy_summary, learnings, actions
+        Dict with keys: analysis, strategy_summary, learnings, actions
     """
     import anthropic
 
@@ -1037,77 +1022,26 @@ The canvas is blank. Your script should include:
 Analyze what worked and what needs improvement, then generate a BETTER complete script.
 The canvas will be CLEARED and your new script executed from scratch."""
 
-    # Build comparison section if we have a best result to compare against
-    comparison_section = ""
-    if best_image_base64 and best_iteration:
-        comparison_section = f"""
-
-## A vs B COMPARISON (REQUIRED)
-You will see TWO images:
-- **Image A (Current Best)**: Iteration {best_iteration}'s result. This is our best so far.
-  Why it was best: {best_reason or 'Initial best'}
-- **Image B (Latest)**: Your most recent attempt.
-
-You MUST include a "comparison" field in your response:
-```json
-"comparison": {{
-  "is_better": true/false,
-  "reasoning": "Explain why B is better or worse than A"
-}}
-```
-
-Be HONEST! If your latest attempt (B) is worse than the best (A), say so.
-This helps us track the actual best result and avoid regression."""
-
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
-{plan_section}{learnings_section}{strategy_section}{comparison_section}
+{plan_section}{learnings_section}{strategy_section}
 {instruction}
 
-Respond with a JSON object containing "analysis", "strategy_summary", "learnings", "comparison" (if iteration > 1), and "actions" fields."""
+Respond with a JSON object containing "analysis", "strategy_summary", "learnings", and "actions" fields."""
 
-    # Build message content with one or two images
-    message_content = []
-
-    if best_image_base64 and best_iteration and iteration > 1:
-        # Send both images: A (best) and B (current/latest)
-        message_content.append({
-            "type": "text",
-            "text": f"**Image A (Current Best - Iteration {best_iteration}):**",
-        })
-        message_content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": best_image_base64,
-            },
-        })
-        message_content.append({
-            "type": "text",
-            "text": "**Image B (Latest Attempt):**",
-        })
-        message_content.append({
+    # Build message content with single image
+    message_content = [
+        {
             "type": "image",
             "source": {
                 "type": "base64",
                 "media_type": "image/png",
                 "data": image_base64,
             },
-        })
-    else:
-        # Single image (first iteration or no best yet)
-        message_content.append({
-            "type": "image",
-            "source": {
-                "type": "base64",
-                "media_type": "image/png",
-                "data": image_base64,
-            },
-        })
-
-    message_content.append({"type": "text", "text": user_message})
+        },
+        {"type": "text", "text": user_message},
+    ]
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -1126,7 +1060,6 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
         "analysis": "",
         "strategy_summary": "",
         "learnings": "",
-        "comparison": None,
         "actions": [],
     }
 
@@ -1139,7 +1072,6 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
             result["analysis"] = data.get('analysis', '')
             result["strategy_summary"] = data.get('strategy_summary', '')
             result["learnings"] = data.get('learnings', '')
-            result["comparison"] = data.get('comparison', None)
             result["actions"] = data.get('actions', [])
 
             # Print feedback
@@ -1154,12 +1086,6 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
                         print(f"[AI Change] {', '.join(strat['change_next_time'])}")
             if result["learnings"]:
                 print(f"[AI Learning] {result['learnings']}")
-            if result["comparison"]:
-                comp = result["comparison"]
-                is_better = comp.get("is_better", False)
-                reasoning = comp.get("reasoning", "")
-                status = "✓ BETTER" if is_better else "✗ WORSE"
-                print(f"[AI Comparison] {status}: {reasoning}")
 
             return result
     except json.JSONDecodeError as e:
@@ -1175,6 +1101,121 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
                 return result
         except json.JSONDecodeError:
             pass
+
+    return result
+
+
+def call_judge_api(
+    image_a_base64: str,
+    image_b_base64: str,
+    goal: str,
+    iteration_a: int,
+    iteration_b: int,
+    api_key: str,
+) -> dict:
+    """Separate API call to judge which image is better.
+
+    Uses a fresh context and focused prompt to get an objective comparison.
+    Uses Haiku for cost efficiency since this is just evaluation, not generation.
+
+    Args:
+        image_a_base64: Current best image (PNG base64)
+        image_b_base64: Latest attempt image (PNG base64)
+        goal: What we're trying to draw
+        iteration_a: Which iteration produced image A
+        iteration_b: Which iteration produced image B
+        api_key: Anthropic API key
+
+    Returns:
+        Dict with keys: winner ("A" or "B"), reasoning, confidence
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    judge_prompt = f"""You are judging pixel art drawings. Your ONLY job is to decide which image better represents the goal.
+
+GOAL: "{goal}"
+
+You will see two images:
+- Image A (iteration {iteration_a})
+- Image B (iteration {iteration_b})
+
+Evaluate based on:
+1. Does it look like the goal? (most important)
+2. Recognizable shape/structure
+3. Appropriate colors
+4. Overall quality and completeness
+
+Be OBJECTIVE. Newer is not always better. Simpler is not always worse.
+A messy attempt with stripes everywhere is WORSE than a clean simple drawing.
+
+Respond with JSON only:
+```json
+{{
+  "winner": "A" or "B",
+  "reasoning": "Brief explanation of why the winner is better",
+  "confidence": "high" or "medium" or "low"
+}}
+```"""
+
+    message_content = [
+        {"type": "text", "text": f"**Image A (iteration {iteration_a}):**"},
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": image_a_base64,
+            },
+        },
+        {"type": "text", "text": f"**Image B (iteration {iteration_b}):**"},
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": image_b_base64,
+            },
+        },
+        {"type": "text", "text": "Which image better represents the goal? Respond with JSON only."},
+    ]
+
+    response = client.messages.create(
+        model="claude-haiku-4-20250514",  # Use Haiku for cost efficiency
+        max_tokens=300,  # Short response needed
+        system=judge_prompt,
+        messages=[{
+            "role": "user",
+            "content": message_content,
+        }],
+    )
+
+    text = response.content[0].text
+
+    # Parse JSON response
+    result = {
+        "winner": None,
+        "reasoning": "",
+        "confidence": "low",
+    }
+
+    try:
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start >= 0 and end > start:
+            data = json.loads(text[start:end])
+            result["winner"] = data.get("winner", "").upper()
+            result["reasoning"] = data.get("reasoning", "")
+            result["confidence"] = data.get("confidence", "low")
+    except json.JSONDecodeError as e:
+        print(f"[Judge] JSON parse failed: {e}")
+        # Try to extract winner from text
+        if "winner" in text.lower():
+            if '"A"' in text or "'A'" in text or "winner: A" in text.lower():
+                result["winner"] = "A"
+            elif '"B"' in text or "'B'" in text or "winner: B" in text.lower():
+                result["winner"] = "B"
 
     return result
 
@@ -1253,12 +1294,11 @@ def run_visual_feedback_loop(
         accumulated_learnings = []  # Compact learnings (not full scripts)
         previous_strategy = None  # Strategy from previous attempt
 
-        # Track best result for A vs B comparison
+        # Track best result for A vs B comparison (judged by separate API call)
         best_iteration = None
         best_image_base64 = None
         best_reason = None
-        # Store image from current iteration (will become "latest" for next iteration)
-        current_image_base64 = None
+        judge_history = []  # Track all judge comparisons for monitoring
 
         for i in range(iterations):
             print(f"\n{'='*50}")
@@ -1287,17 +1327,8 @@ def run_visual_feedback_loop(
                 f.write(base64.standard_b64decode(png_base64))
             print(f"[Cropped PNG] {png_path}")
 
-            # The screenshot we just took shows the PREVIOUS iteration's result
-            # (For iteration 1, it's blank canvas)
-            # Store it as current_image for comparison in next iteration
-            if i > 0:
-                # This is the result of iteration i (just completed)
-                # We'll compare it against the best in the next API call
-                current_image_base64 = png_base64
-
             # Get analysis and NEW complete script from AI
             # Pass accumulated learnings (not full scripts) for efficient context
-            # Also pass best image for A vs B comparison (after first iteration)
             result = call_vision_api(
                 image_base64=png_base64,
                 goal=goal,
@@ -1307,9 +1338,6 @@ def run_visual_feedback_loop(
                 plan=plan,
                 accumulated_learnings=accumulated_learnings,
                 previous_strategy=previous_strategy,
-                best_image_base64=best_image_base64,
-                best_iteration=best_iteration,
-                best_reason=best_reason,
             )
 
             actions = result.get("actions", [])
@@ -1361,7 +1389,7 @@ def run_visual_feedback_loop(
                     }, f, indent=2)
                 print(f"[Saved] Strategy: {strategy_path}")
 
-            # Update best iteration tracking based on A vs B comparison
+            # Update best iteration tracking using SEPARATE judge call
             # The screenshot (png_base64) shows the result of the PREVIOUS attempt (attempt i)
             # (For i=0/attempt 1, the screenshot is blank - no result yet)
             if i == 1:
@@ -1370,18 +1398,54 @@ def run_visual_feedback_loop(
                 best_image_base64 = png_base64
                 best_reason = "Initial drawing"
                 print(f"[Best] Setting iteration {best_iteration} as initial best")
-            elif i > 1:
-                # Check comparison result from AI
-                comparison = result.get("comparison")
-                if comparison and comparison.get("is_better"):
-                    # Update best to the previous attempt (attempt i)
-                    best_iteration = i  # The screenshot shows attempt i's result
+            elif i > 1 and best_image_base64:
+                # Use separate judge API call for objective comparison
+                print(f"[Judge] Comparing iteration {i} (latest) vs iteration {best_iteration} (current best)...")
+                judge_result = call_judge_api(
+                    image_a_base64=best_image_base64,
+                    image_b_base64=png_base64,
+                    goal=goal,
+                    iteration_a=best_iteration,
+                    iteration_b=i,
+                    api_key=api_key,
+                )
+                winner = judge_result.get("winner")
+                reasoning = judge_result.get("reasoning", "")
+                confidence = judge_result.get("confidence", "low")
+
+                # Record judgment for monitoring
+                judgment_record = {
+                    "compared_at_iteration": i + 1,
+                    "iteration_a": best_iteration,
+                    "iteration_b": i,
+                    "winner": winner,
+                    "reasoning": reasoning,
+                    "confidence": confidence,
+                    "new_best": None,
+                }
+
+                if winner == "B":
+                    # Latest attempt (B) is better
+                    best_iteration = i
                     best_image_base64 = png_base64
-                    best_reason = comparison.get("reasoning", "AI determined this is better")
-                    print(f"[Best] ✓ Iteration {best_iteration} is the new best")
+                    best_reason = reasoning
+                    judgment_record["new_best"] = i
+                    print(f"[Judge] ✓ Iteration {best_iteration} is the new best ({confidence} confidence)")
+                    print(f"[Judge]   Reason: {reasoning}")
+                elif winner == "A":
+                    judgment_record["new_best"] = best_iteration
+                    print(f"[Judge] ✗ Keeping iteration {best_iteration} as best ({confidence} confidence)")
+                    print(f"[Judge]   Reason: {reasoning}")
                 else:
-                    reason = comparison.get("reasoning", "No improvement") if comparison else "No comparison returned"
-                    print(f"[Best] ✗ Keeping iteration {best_iteration} as best ({reason})")
+                    judgment_record["new_best"] = best_iteration
+                    print(f"[Judge] ⚠ Could not determine winner, keeping iteration {best_iteration}")
+
+                # Save judge history incrementally so user can monitor
+                judge_history.append(judgment_record)
+                judge_path = os.path.join(output_dir, "judge_history.json")
+                with open(judge_path, 'w') as f:
+                    json.dump(judge_history, f, indent=2)
+                print(f"[Saved] Judge history: {judge_path}")
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:

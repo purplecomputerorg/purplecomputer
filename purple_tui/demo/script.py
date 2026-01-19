@@ -134,6 +134,23 @@ class DrawPath(DemoAction):
 
 
 @dataclass
+class MoveSequence(DemoAction):
+    """Move cursor without painting (just arrow keys, no space held).
+
+    Use this for repositioning the cursor between paint operations.
+    For actual painting, use DrawPath instead.
+
+    Args:
+        directions: List of arrow directions: 'up', 'down', 'left', 'right'
+        delay_per_step: Seconds between each step (fast by default)
+        pause_after: Pause after the sequence
+    """
+    directions: list[str]
+    delay_per_step: float = 0.01
+    pause_after: float = 0.05
+
+
+@dataclass
 class Comment(DemoAction):
     """A comment in the script (does nothing, just for documentation).
 

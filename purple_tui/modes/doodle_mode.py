@@ -664,6 +664,41 @@ class ArtCanvas(Widget, can_focus=True):
         """Check if the canvas has any content."""
         return len(self._grid) > 0
 
+    def set_cursor_position(self, x: int, y: int) -> None:
+        """Set cursor position directly (for dev/AI tools)."""
+        self._cursor_x = max(0, min(x, self.canvas_width - 1))
+        self._cursor_y = max(0, min(y, self.canvas_height - 1))
+        self.refresh()
+
+    def paint_at(self, x: int, y: int, color_key: str) -> None:
+        """Paint a color at a specific position (for dev/AI tools).
+
+        Args:
+            x: X coordinate (0 to canvas_width-1)
+            y: Y coordinate (0 to canvas_height-1)
+            color_key: Key character for color (e.g., 'f' for yellow, 'c' for blue)
+        """
+        # Clamp coordinates
+        x = max(0, min(x, self.canvas_width - 1))
+        y = max(0, min(y, self.canvas_height - 1))
+
+        # Set cursor position
+        self._cursor_x = x
+        self._cursor_y = y
+
+        # Determine color from key
+        key_lower = color_key.lower()
+        if key_lower in GRAYSCALE:
+            self._last_key_char = key_lower
+            self._last_key_color = GRAYSCALE[key_lower]
+        elif key_lower in KEYBOARD_COLORS:
+            row_colors = KEYBOARD_COLORS[key_lower]
+            self._last_key_char = key_lower
+            self._last_key_color = row_colors[0]  # Primary color
+
+        # Paint
+        self._paint_at_cursor()
+
     def _on_edge_hit(self) -> None:
         """Provide feedback when cursor hits an edge."""
         # Could add visual flash or sound here

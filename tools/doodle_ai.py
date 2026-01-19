@@ -98,6 +98,9 @@ class PurpleController:
         self.pty_master = None
         self.screenshot_dir = None
         self.screenshot_count = 0
+        # Track cursor position for paint_line starting position
+        self._cursor_x = 0
+        self._cursor_y = 0
 
     def start(self, screenshot_dir: str) -> None:
         """Start Purple Computer in a PTY with dev mode enabled."""
@@ -296,22 +299,19 @@ class PurpleController:
             return False
 
     def execute_action(self, action: dict) -> None:
-        """Execute a single drawing action using batched commands for speed."""
+        """Execute a single drawing action using direct commands for speed."""
         action_type = action.get('type')
 
         if action_type == 'move':
             self.send_command("key", action['direction'])
 
         elif action_type == 'move_to':
-            # Batch all movement commands for speed
-            commands = []
-            # First go to top-left (112 left + 32 up to be safe)
-            commands.extend([{"action": "key", "value": "left"} for _ in range(112)])
-            commands.extend([{"action": "key", "value": "up"} for _ in range(32)])
-            # Then navigate to target
-            commands.extend([{"action": "key", "value": "right"} for _ in range(action.get('x', 0))])
-            commands.extend([{"action": "key", "value": "down"} for _ in range(action.get('y', 0))])
-            self.send_commands(commands)
+            # Use direct set_position command (instant, no arrow keys)
+            x = action.get('x', 0)
+            y = action.get('y', 0)
+            self.send_commands([{"action": "set_position", "x": x, "y": y}])
+            self._cursor_x = x
+            self._cursor_y = y
 
         elif action_type == 'select_color':
             # Shift+key to select without stamping (uppercase letter)
@@ -321,17 +321,37 @@ class PurpleController:
         elif action_type == 'stamp':
             self.send_command("key", "space")
 
+        elif action_type == 'paint_at':
+            # Direct paint at position (instant, no cursor movement needed)
+            x = action.get('x', 0)
+            y = action.get('y', 0)
+            color = action.get('color', action.get('key', 'f'))
+            self.send_commands([{"action": "paint_at", "x": x, "y": y, "color": color}])
+            self._cursor_x = x
+            self._cursor_y = y
+
         elif action_type == 'paint_line':
-            key = action['key'].upper()  # Uppercase for shift (select without stamp)
+            # Paint a line using direct paint_at commands
+            key = action.get('key', 'f')
             direction = action['direction']
             length = action.get('length', 1)
+            start_x = action.get('x', getattr(self, '_cursor_x', 0))
+            start_y = action.get('y', getattr(self, '_cursor_y', 0))
 
-            # Batch: select color, then stamp+move repeatedly
-            commands = [{"action": "key", "value": key}]  # Select color
+            # Calculate direction deltas
+            dx = {'right': 1, 'left': -1, 'up': 0, 'down': 0}.get(direction, 0)
+            dy = {'right': 0, 'left': 0, 'up': -1, 'down': 1}.get(direction, 0)
+
+            # Batch all paint_at commands
+            commands = []
+            x, y = start_x, start_y
             for _ in range(length):
-                commands.append({"action": "key", "value": "space"})
-                commands.append({"action": "key", "value": direction})
+                commands.append({"action": "paint_at", "x": x, "y": y, "color": key})
+                x += dx
+                y += dy
             self.send_commands(commands)
+            self._cursor_x = x
+            self._cursor_y = y
 
         elif action_type == 'type_text':
             # Batch: exit paint mode, type text, re-enter paint mode
@@ -475,36 +495,25 @@ The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
 
 ## AVAILABLE ACTIONS
 
-Respond with a JSON array. Each action is an object:
+Respond with a JSON array of actions:
 
-**move** - Move cursor without painting
+**paint_at** - Paint a color at specific coordinates (MOST EFFICIENT!)
 ```json
-{"type": "move", "direction": "up"}
+{"type": "paint_at", "x": 50, "y": 15, "color": "f"}
 ```
+This instantly paints at the given position. Use this for most painting.
+
+**paint_line** - Draw a horizontal or vertical line
+```json
+{"type": "paint_line", "x": 40, "y": 10, "key": "f", "direction": "right", "length": 20}
+```
+Starts at (x,y) and draws `length` cells in `direction`.
 Directions: "up", "down", "left", "right"
 
-**move_to** - Jump to absolute coordinates
+**move_to** - Position cursor without painting (for visual feedback)
 ```json
 {"type": "move_to", "x": 50, "y": 15}
 ```
-Note: x must be 0-111, y must be 0-31
-
-**select_color** - Load brush with color (no painting)
-```json
-{"type": "select_color", "key": "f"}
-```
-
-**stamp** - Paint one cell at cursor position
-```json
-{"type": "stamp"}
-```
-
-**paint_line** - Draw a line of cells (MOST USEFUL!)
-```json
-{"type": "paint_line", "key": "f", "direction": "right", "length": 10}
-```
-This selects color, then stamps and moves repeatedly.
-The line starts at current position and extends in direction.
 
 **wait** - Pause (rarely needed)
 ```json
@@ -526,8 +535,8 @@ To get mixed colors, you must paint in layers WITHIN your script:
 3. Then paint RED over yellow for ORANGE, or over blue for PURPLE
 
 Example sequence for green foliage:
-- paint_line with key="f" (yellow) to fill the area
-- paint_line with key="c" (blue) over the SAME area to mix into green
+- Use paint_line with key="f" (yellow) to fill the foliage area
+- Use paint_line with key="c" (blue) over the SAME area to mix into green
 
 ## RESPONSE FORMAT
 
@@ -537,8 +546,9 @@ Respond with a JSON object:
 {
   "analysis": "What I see from the previous attempt and what to improve",
   "actions": [
-    {"type": "move_to", "x": 50, "y": 10},
-    {"type": "paint_line", "key": "f", "direction": "right", "length": 20},
+    {"type": "paint_line", "x": 40, "y": 10, "key": "f", "direction": "right", "length": 30},
+    {"type": "paint_line", "x": 42, "y": 11, "key": "f", "direction": "right", "length": 26},
+    {"type": "paint_at", "x": 55, "y": 20, "color": "r"},
     ...
   ]
 }
@@ -546,7 +556,8 @@ Respond with a JSON object:
 
 **analysis**: Brief analysis of the previous result and your improvement strategy.
 
-**actions**: 50-100 actions for the COMPLETE drawing (this is a fresh canvas).
+**actions**: Generate 100-500 paint actions for the COMPLETE drawing (canvas starts fresh).
+Use paint_line for fills and paint_at for details. More actions = more detail!
 
 Include ALL phases in one script: base colors, overlays for mixing, and details."""
 
@@ -896,12 +907,16 @@ def run_visual_feedback_loop(
 
 
 def generate_demo_script(actions: list[dict]) -> str:
-    """Convert actions to a Purple Computer demo script."""
+    """Convert actions to a Purple Computer demo script with interpolated cursor movement.
+
+    The AI training uses fast direct paint_at commands, but the demo script
+    shows the cursor moving between positions to look natural during playback.
+    """
     lines = [
         '"""AI-generated drawing demo."""',
         '',
         'from purple_tui.demo.script import (',
-        '    PressKey, SwitchMode, Pause, DrawPath, Comment,',
+        '    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,',
         ')',
         '',
         'AI_DRAWING = [',
@@ -912,19 +927,88 @@ def generate_demo_script(actions: list[dict]) -> str:
         '',
     ]
 
+    # Track cursor position for movement interpolation
+    cursor_x, cursor_y = 0, 0
+
+    def move_to(target_x: int, target_y: int) -> list[str]:
+        """Generate movement commands to reach target position (L-shaped path)."""
+        nonlocal cursor_x, cursor_y
+        result = []
+
+        # Move horizontally first, then vertically
+        dx = target_x - cursor_x
+        dy = target_y - cursor_y
+
+        if dx != 0 or dy != 0:
+            # Use MoveSequence for fast cursor movement without painting
+            # This generates arrow key presses without holding space
+            directions = []
+            if dx > 0:
+                directions.extend(['right'] * dx)
+            elif dx < 0:
+                directions.extend(['left'] * (-dx))
+            if dy > 0:
+                directions.extend(['down'] * dy)
+            elif dy < 0:
+                directions.extend(['up'] * (-dy))
+
+            result.append(f'    MoveSequence(directions={directions}, delay_per_step=0.008),')
+
+            cursor_x = target_x
+            cursor_y = target_y
+
+        return result
+
     for action in actions:
         t = action.get('type')
 
         if t == 'move':
             lines.append(f'    PressKey("{action["direction"]}"),')
+            # Update cursor position
+            if action["direction"] == "right": cursor_x += 1
+            elif action["direction"] == "left": cursor_x -= 1
+            elif action["direction"] == "down": cursor_y += 1
+            elif action["direction"] == "up": cursor_y -= 1
+
+        elif t == 'move_to':
+            target_x = action.get('x', 0)
+            target_y = action.get('y', 0)
+            lines.extend(move_to(target_x, target_y))
+
         elif t == 'stamp':
             lines.append('    PressKey("space"),')
+
+        elif t == 'paint_at':
+            # Move to position, then paint
+            target_x = action.get('x', cursor_x)
+            target_y = action.get('y', cursor_y)
+            color = action.get('color', action.get('key', 'f'))
+
+            lines.extend(move_to(target_x, target_y))
+            # Paint: lowercase key stamps and advances, so we use it directly
+            lines.append(f'    PressKey("{color.lower()}"),')
+            cursor_x += 1  # Painting advances cursor right by default
+
         elif t == 'paint_line':
-            key = action['key']
+            key = action.get('key', 'f')
             direction = action['direction']
             length = action.get('length', 1)
+            start_x = action.get('x', cursor_x)
+            start_y = action.get('y', cursor_y)
+
+            # Move to start position
+            lines.extend(move_to(start_x, start_y))
+
+            # Draw the line
             dirs = [direction] * length
-            lines.append(f'    DrawPath(directions={dirs}, color_key="{key}", delay_per_step=0.05),')
+            lines.append(f'    DrawPath(directions={dirs}, color_key="{key}", delay_per_step=0.02),')
+
+            # Update cursor position based on direction
+            if direction == 'right': cursor_x += length
+            elif direction == 'left': cursor_x -= length
+            elif direction == 'down': cursor_y += length
+            elif direction == 'up': cursor_y -= length
+
         elif t == 'wait':
             lines.append(f'    Pause({action.get("seconds", 0.3)}),')
 

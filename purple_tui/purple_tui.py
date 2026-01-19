@@ -1417,6 +1417,33 @@ class PurpleApp(App):
                 import traceback
                 self._dev_log(f"[DevCmd] ERROR: clear failed: {e}\n{traceback.format_exc()}")
 
+        elif action == "set_position":
+            # Set cursor position directly (fast alternative to arrow keys)
+            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            try:
+                x = int(cmd.get("x", 0))
+                y = int(cmd.get("y", 0))
+                doodle = self.query_one(DoodleMode)
+                canvas = doodle.query_one(ArtCanvas)
+                canvas.set_cursor_position(x, y)
+                self._dev_log(f"[DevCmd] set_position x={x} y={y}")
+            except Exception as e:
+                self._dev_log(f"[DevCmd] ERROR: set_position failed: {e}")
+
+        elif action == "paint_at":
+            # Paint a color at specific position (combines move + select + stamp)
+            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            try:
+                x = int(cmd.get("x", 0))
+                y = int(cmd.get("y", 0))
+                color_key = cmd.get("color", "f")
+                doodle = self.query_one(DoodleMode)
+                canvas = doodle.query_one(ArtCanvas)
+                canvas.paint_at(x, y, color_key)
+                self._dev_log(f"[DevCmd] paint_at x={x} y={y} color={color_key}")
+            except Exception as e:
+                self._dev_log(f"[DevCmd] ERROR: paint_at failed: {e}")
+
     def _create_action_from_key(self, key: str):
         """Create a keyboard action from a key name."""
         key_lower = key.lower()

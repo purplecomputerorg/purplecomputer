@@ -17,6 +17,7 @@ from .script import (
     ClearAll,
     PlayKeys,
     DrawPath,
+    MoveSequence,
     Comment,
 )
 from ..keyboard import (
@@ -142,6 +143,9 @@ class DemoPlayer:
 
         elif isinstance(action, DrawPath):
             await self._draw_path(action)
+
+        elif isinstance(action, MoveSequence):
+            await self._move_sequence(action)
 
     async def _type_text(self, action: TypeText) -> None:
         """Type text character by character."""
@@ -280,4 +284,22 @@ class DemoPlayer:
 
         # Release space
         await self._dispatch(ControlAction(action='space', is_down=False))
+        await self._sleep(action.pause_after)
+
+    async def _move_sequence(self, action: MoveSequence) -> None:
+        """Move cursor without painting (just arrow keys).
+
+        Unlike DrawPath, this does NOT hold space, so no painting occurs.
+        Use this for repositioning the cursor between paint operations.
+        """
+        for direction in action.directions:
+            if self._cancelled:
+                return
+
+            await self._dispatch(NavigationAction(
+                direction=direction,
+                space_held=False,
+            ))
+            await self._sleep(action.delay_per_step)
+
         await self._sleep(action.pause_after)

@@ -320,7 +320,76 @@ class PurpleController:
 # AI VISION FEEDBACK LOOP
 # =============================================================================
 
-SYSTEM_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
+PLANNING_PROMPT = """You are an AI artist planning a pixel art drawing in Purple Computer's Doodle mode.
+
+## CANVAS SIZE
+The canvas is **112 cells wide × 32 cells tall**.
+- X coordinates: 0 (left) to 111 (right)
+- Y coordinates: 0 (top) to 31 (bottom)
+- Origin (0,0) is TOP-LEFT corner
+
+## COLOR SYSTEM
+- **QWERTY row (q-p)**: RED family (light to dark)
+- **ASDF row (a-l)**: YELLOW family (light to dark)
+- **ZXCV row (z-m)**: BLUE family (light to dark)
+- **Number row (1-0)**: GRAYSCALE (white to black)
+
+## COLOR MIXING
+When you paint OVER an already-painted cell, colors MIX:
+- Yellow + Blue = GREEN
+- Red + Blue = PURPLE
+- Red + Yellow = ORANGE
+
+## YOUR TASK
+Create a detailed PLAN for drawing the requested image. You will have multiple iterations to execute this plan.
+
+The plan should include:
+1. **Composition**: Where elements go on the 112x32 canvas
+2. **Phases**: Break the work into phases, each assigned to specific iterations
+3. **Color strategy**: Which base colors to paint first, which overlays to add
+
+## RESPONSE FORMAT
+Respond with a JSON object:
+
+```json
+{
+  "plan": {
+    "description": "Brief description of what we're drawing",
+    "composition": {
+      "main_element": {"x_range": [40, 70], "y_range": [5, 25], "description": "..."},
+      "other_elements": [...]
+    },
+    "phases": [
+      {
+        "name": "Phase 1: Yellow base",
+        "iterations": [1, 2, 3],
+        "goal": "Paint yellow in all areas that will become green or brown",
+        "color_keys": ["f", "g", "d"],
+        "target_areas": "foliage area (y=5-18), trunk area (x=54-58, y=18-28)"
+      },
+      {
+        "name": "Phase 2: Blue overlay",
+        "iterations": [4, 5, 6],
+        "goal": "Paint blue over yellow foliage to create green",
+        "color_keys": ["c", "v"],
+        "target_areas": "foliage area only (y=5-18)"
+      },
+      {
+        "name": "Phase 3: Details",
+        "iterations": [7, 8, 9, 10],
+        "goal": "Add red apples, brown trunk details",
+        "color_keys": ["r", "e"],
+        "target_areas": "scattered in foliage for apples, trunk for brown"
+      }
+    ]
+  }
+}
+```
+
+Be specific about coordinates and areas. The execution AI will follow this plan."""
+
+
+EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
 ## CANVAS SIZE
 The canvas is **112 cells wide × 32 cells tall**.
@@ -405,48 +474,24 @@ The line starts at current position and extends in direction.
 {"type": "wait", "seconds": 0.3}
 ```
 
-## LAYERED PAINTING STRATEGY
+## EXECUTION TIPS
 
-To demonstrate color mixing, paint in LAYERS rather than final colors:
-
-**Phase 1 - YELLOW BASE**: Paint yellow (d, f, g keys) everywhere you want:
-- Green (grass, leaves, trees)
-- Orange (sun, flowers)
-- Brown (trunks, ground)
-
-**Phase 2 - BLUE OVERLAY**: Paint blue (c, v, b keys) OVER yellow areas:
-- Yellow + Blue = Green (for grass, leaves)
-
-**Phase 3 - RED OVERLAY**: Paint red (r, t, e keys):
-- Over yellow = Orange (for sun, flowers)
-- Over blue = Purple (for shadows, flowers)
-
-Example for "tree on grass":
-1. Paint yellow rectangle for grass area (y=25 to y=31)
-2. Paint yellow oval for tree foliage (around y=8-18)
-3. Paint blue OVER the grass (makes it green)
-4. Paint blue OVER the foliage (makes it green)
-5. Paint yellow vertical line for trunk
-6. Paint red OVER trunk (makes it brown/orange)
-
-## TIPS
-
-1. Plan your composition: what goes where on the 112×32 canvas
-2. Use paint_line for efficiency (one action = many cells)
-3. Work in layers: base colors first, then overlay to mix
-4. Center your art: start around x=40-60, y=10-20
-5. Keep it simple: large shapes read better than tiny details
+1. Use paint_line for efficiency (one action = many cells)
+2. ONLY use colors specified in your current phase
+3. ONLY paint in target areas specified in your current phase
+4. Check the canvas: don't repaint areas already done
+5. Keep shapes simple and solid
 
 ## RESPONSE FORMAT
 
-Respond with a JSON object containing TWO fields:
+Respond with a JSON object:
 
 ```json
 {
   "observations": [
-    "What I learned or noticed this iteration",
-    "What worked or didn't work",
-    "Insights about coordinates, colors, or mixing"
+    "What I see on the canvas right now",
+    "What my previous actions accomplished",
+    "What still needs to be done for this phase"
   ],
   "actions": [
     {"type": "paint_line", "key": "f", "direction": "right", "length": 10},
@@ -455,11 +500,85 @@ Respond with a JSON object containing TWO fields:
 }
 ```
 
-**observations**: 2-5 short notes about what you see and learn. These will be shown to you in future iterations so you can build understanding.
+**observations**: 2-4 specific notes about what you SEE (colors, positions, shapes).
 
-**actions**: 20-40 drawing actions to execute.
+**actions**: 20-40 drawing actions for THIS PHASE ONLY.
 
-IMPORTANT: Response must be valid JSON. No comments inside the JSON."""
+CRITICAL: Stay focused on your current phase. Don't jump ahead to later phases."""
+
+
+def call_planning_api(
+    goal: str,
+    iterations: int,
+    api_key: str,
+) -> dict:
+    """Call Claude API to create a drawing plan.
+
+    Returns:
+        Plan dict with phases and composition details
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    user_message = f"""## Goal: {goal}
+
+## Available Iterations: {iterations}
+
+Create a detailed plan for drawing this image across {iterations} iterations.
+Divide the work into phases that fit within the iteration count.
+
+Respond with a JSON object containing a "plan" field."""
+
+    print("[Planning] Creating drawing plan...")
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2000,
+        system=PLANNING_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": user_message,
+        }],
+    )
+
+    text = response.content[0].text
+
+    # Parse JSON response
+    try:
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start >= 0 and end > start:
+            data = json.loads(text[start:end])
+            plan = data.get('plan', data)  # Handle both {plan: ...} and direct plan
+
+            # Print the plan
+            print("[Plan] Created drawing plan:")
+            print(f"  Description: {plan.get('description', 'N/A')}")
+            for phase in plan.get('phases', []):
+                print(f"  - {phase.get('name')}: iterations {phase.get('iterations')}")
+                print(f"    Goal: {phase.get('goal')}")
+
+            return plan
+    except json.JSONDecodeError as e:
+        print(f"[Error] Plan JSON parse failed: {e}")
+        print(f"[Debug] Raw response:\n{text[:500]}...")
+
+    # Return a default plan if parsing fails
+    return {
+        "description": goal,
+        "phases": [
+            {"name": "Phase 1", "iterations": list(range(1, iterations + 1)), "goal": goal, "color_keys": ["f", "c", "r"]}
+        ]
+    }
+
+
+def get_current_phase(plan: dict, iteration: int) -> dict | None:
+    """Get the phase that contains the given iteration number."""
+    for phase in plan.get('phases', []):
+        if iteration in phase.get('iterations', []):
+            return phase
+    return None
 
 
 def call_vision_api(
@@ -468,7 +587,8 @@ def call_vision_api(
     iteration: int,
     max_iterations: int,
     api_key: str,
-    accumulated_learnings: list[str] = None,
+    plan: dict = None,
+    previous_actions: list[dict] = None,
 ) -> tuple[list[str], list[dict]]:
     """Call Claude vision API with screenshot and get observations + actions.
 
@@ -479,27 +599,51 @@ def call_vision_api(
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    # Build user message with accumulated learnings
-    learnings_section = ""
-    if accumulated_learnings:
-        learnings_section = "\n## LEARNINGS FROM PREVIOUS ITERATIONS\n"
-        for i, learning in enumerate(accumulated_learnings, 1):
-            learnings_section += f"- {learning}\n"
-        learnings_section += "\nUse these insights to improve your approach.\n"
+    # Get current phase from plan
+    current_phase = get_current_phase(plan, iteration) if plan else None
+
+    # Build phase section
+    phase_section = ""
+    if current_phase:
+        phase_section = f"""
+## CURRENT PHASE: {current_phase.get('name', 'Unknown')}
+**Goal for this phase**: {current_phase.get('goal', 'Continue drawing')}
+**Colors to use**: {', '.join(current_phase.get('color_keys', []))}
+**Target areas**: {current_phase.get('target_areas', 'As specified in plan')}
+
+IMPORTANT: Only work on THIS phase. Do not skip ahead."""
+
+    # Build previous actions section (last iteration only, for context)
+    prev_actions_section = ""
+    if previous_actions:
+        # Show last 10 actions to keep context manageable
+        recent = previous_actions[-10:]
+        prev_actions_section = "\n## YOUR PREVIOUS ACTIONS (last iteration)\n"
+        for act in recent:
+            prev_actions_section += f"- {act}\n"
+        prev_actions_section += "\nCompare what you see to what you did. Did it work as expected?\n"
+
+    # Build full plan summary
+    plan_section = ""
+    if plan:
+        plan_section = f"\n## MASTER PLAN\n{plan.get('description', goal)}\n"
+        for phase in plan.get('phases', []):
+            marker = "→ " if phase == current_phase else "  "
+            plan_section += f"{marker}{phase.get('name')}: iterations {phase.get('iterations')}\n"
 
     user_message = f"""## Goal: {goal}
 
 ## Progress: Iteration {iteration} of {max_iterations}
-{learnings_section}
-Look at the current canvas. What has been drawn? What's missing?
-Based on what you see and any previous learnings, plan your next actions.
+{plan_section}{phase_section}{prev_actions_section}
+Look at the current canvas. What has been painted? What colors do you see and where?
+Execute actions for your CURRENT PHASE only.
 
 Respond with a JSON object containing "observations" and "actions" fields."""
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=4000,
-        system=SYSTEM_PROMPT,
+        system=EXECUTION_PROMPT,
         messages=[{
             "role": "user",
             "content": [
@@ -591,18 +735,34 @@ def run_visual_feedback_loop(
     try:
         controller.start(screenshot_dir)
 
+        # Create drawing plan FIRST (before any drawing)
+        print("\n" + "="*50)
+        print("PLANNING PHASE")
+        print("="*50)
+        plan = call_planning_api(goal, iterations, api_key)
+
+        # Save plan to file
+        plan_path = os.path.join(output_dir, "plan.json")
+        with open(plan_path, 'w') as f:
+            json.dump(plan, f, indent=2)
+        print(f"[Saved] Plan: {plan_path}")
+
         # Switch to Doodle mode and enter paint mode
-        print("[Setup] Switching to Doodle mode...")
+        print("\n[Setup] Switching to Doodle mode...")
         controller.switch_to_doodle()
         controller.enter_paint_mode()
         time.sleep(0.2)
 
         all_actions = []
-        all_learnings = []  # Accumulated observations across iterations
+        all_learnings = []
+        previous_iteration_actions = []  # Actions from previous iteration only
 
         for i in range(iterations):
+            current_phase = get_current_phase(plan, i + 1)
+            phase_name = current_phase.get('name', 'Unknown') if current_phase else 'Unknown'
+
             print(f"\n{'='*50}")
-            print(f"Iteration {i + 1}/{iterations}")
+            print(f"Iteration {i + 1}/{iterations} - {phase_name}")
             print('='*50)
 
             # Take screenshot
@@ -626,10 +786,11 @@ def run_visual_feedback_loop(
                 iteration=i + 1,
                 max_iterations=iterations,
                 api_key=api_key,
-                accumulated_learnings=all_learnings,
+                plan=plan,
+                previous_actions=previous_iteration_actions,
             )
 
-            # Accumulate learnings for next iteration
+            # Store observations
             if observations:
                 all_learnings.extend(observations)
 
@@ -638,9 +799,13 @@ def run_visual_feedback_loop(
                 continue
 
             print(f"[Actions] Executing {len(actions)} actions:")
-            for j, act in enumerate(actions):
+            for j, act in enumerate(actions[:5]):  # Show first 5
                 print(f"  {j+1}. {act}")
+            if len(actions) > 5:
+                print(f"  ... and {len(actions) - 5} more")
+
             all_actions.extend(actions)
+            previous_iteration_actions = actions  # Save for next iteration
 
             # Execute actions
             controller.execute_actions(actions)

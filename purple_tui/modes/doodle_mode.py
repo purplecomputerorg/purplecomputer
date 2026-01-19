@@ -279,8 +279,13 @@ class ArtCanvas(Widget, can_focus=True):
         self._last_key_char = ""  # Last key pressed
 
         # Double-tap detection for Space to toggle paint mode
-        self._last_space_time: float = 0.0
-        self._double_tap_threshold = 0.4  # seconds
+        # Uses deferred execution to avoid triggering input on first space
+        self._double_tap_threshold = 0.4  # seconds between taps
+        self._space_tap_threshold = 0.2  # max duration for a "tap" (not a long press)
+
+        # Pending space state: tracks first space waiting to see if double-tap
+        self._pending_space: dict | None = None  # {press_time, released, release_time, arrow_held}
+        self._pending_space_timer = None  # Timer for executing deferred space action
 
         # Space-hold for drawing lines in paint mode
         # With evdev, we get true key release events

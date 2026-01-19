@@ -58,6 +58,7 @@ from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script
 from .modes.doodle_mode import ColorLegend, PaintModeChanged
+from .modes.parent_mode import apply_saved_display_settings
 from .mode_picker import ModePickerScreen
 
 
@@ -630,6 +631,7 @@ class PurpleApp(App):
     async def on_mount(self) -> None:
         """Called when app starts"""
         self._apply_theme()
+        apply_saved_display_settings()
         self._load_mode_content()
 
         # Initialize paint legend as hidden

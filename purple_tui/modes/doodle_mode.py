@@ -686,15 +686,16 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_x = x
         self._cursor_y = y
 
-        # Determine color from key
+        # Determine color from key (same logic as keyboard input)
         key_lower = color_key.lower()
         if key_lower in GRAYSCALE:
             self._last_key_char = key_lower
             self._last_key_color = GRAYSCALE[key_lower]
-        elif key_lower in KEYBOARD_COLORS:
-            row_colors = KEYBOARD_COLORS[key_lower]
-            self._last_key_char = key_lower
-            self._last_key_color = row_colors[0]  # Primary color
+        elif key_lower.isalpha():
+            color = get_key_color(key_lower)
+            if color != "#AAAAAA":  # Only if it's a mapped color
+                self._last_key_char = key_lower
+                self._last_key_color = color
 
         # Paint
         self._paint_at_cursor()

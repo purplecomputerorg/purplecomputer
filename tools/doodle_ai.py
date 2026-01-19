@@ -1342,7 +1342,7 @@ def run_visual_feedback_loop(
         output_dir = generate_output_dir()
     else:
         # Check if path already has a timestamp (YYYYMMDD_HHMMSS pattern)
-            if not re.search(r'\d{8}_\d{6}$', output_dir):
+        if not re.search(r'\d{8}_\d{6}$', output_dir):
             # Add timestamp subfolder
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

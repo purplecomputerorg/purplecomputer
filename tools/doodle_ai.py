@@ -23,6 +23,7 @@ import io
 import json
 import os
 import pty
+import re
 import select
 import struct
 import subprocess
@@ -49,7 +50,6 @@ def parse_json_robust(text: str) -> dict | list | None:
     - Truncated JSON (attempts to close brackets)
     - Comments (// style)
     """
-    import re
 
     # Try to extract from markdown code block first
     code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text)
@@ -1267,7 +1267,7 @@ Respond with JSON only:
     ]
 
     response = client.messages.create(
-        model="claude-3-5-haiku-20241022",  # Use Haiku for cost efficiency
+        model="claude-haiku-4-5-20251001",  # Haiku 4.5: fast, cheap, good vision
         max_tokens=300,  # Short response needed
         system=judge_prompt,
         messages=[{
@@ -1301,8 +1301,7 @@ Respond with JSON only:
             elif '"B"' in text or "'B'" in text or "winner: B" in text.lower() or "Winner: B" in text:
                 result["winner"] = "B"
         # Try to extract reasoning
-        import re
-        reason_match = re.search(r'"reasoning"\s*:\s*"([^"]*)"', text)
+            reason_match = re.search(r'"reasoning"\s*:\s*"([^"]*)"', text)
         if reason_match:
             result["reasoning"] = reason_match.group(1)
 
@@ -1343,8 +1342,7 @@ def run_visual_feedback_loop(
         output_dir = generate_output_dir()
     else:
         # Check if path already has a timestamp (YYYYMMDD_HHMMSS pattern)
-        import re
-        if not re.search(r'\d{8}_\d{6}$', output_dir):
+            if not re.search(r'\d{8}_\d{6}$', output_dir):
             # Add timestamp subfolder
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1393,7 +1391,7 @@ def run_visual_feedback_loop(
             print(f"\n{'='*50}")
             print(f"ATTEMPT {i + 1}/{iterations}")
             if best_iteration:
-                print(f"Current Best: Iteration {best_iteration}")
+                print(f"Current Best: Attempt {best_iteration}'s result")
             print('='*50)
 
             # Take screenshot (shows previous attempt's result, or blank for first)
@@ -1402,7 +1400,16 @@ def run_visual_feedback_loop(
                 print("[Error] Failed to capture screenshot")
                 continue
 
-            print(f"[Screenshot] {svg_path}")
+            # Extract screenshot number from filename for clarity
+            screenshot_num_match = re.search(r'screenshot_(\d+)', svg_path)
+            screenshot_num = screenshot_num_match.group(1) if screenshot_num_match else "?"
+
+            if i == 0:
+                print(f"[Screenshot] {svg_path}")
+                print(f"[Screenshot] screenshot_{screenshot_num} = blank canvas (before any drawing)")
+            else:
+                print(f"[Screenshot] {svg_path}")
+                print(f"[Screenshot] screenshot_{screenshot_num} = Attempt {i}'s result")
 
             # Convert to PNG for vision API (with cropping to canvas area)
             png_base64 = svg_to_png_base64(svg_path)
@@ -1478,24 +1485,31 @@ def run_visual_feedback_loop(
                     }, f, indent=2)
                 print(f"[Saved] Strategy: {strategy_path}")
 
-            # Update best iteration tracking using SEPARATE judge call
-            # The screenshot (png_base64) shows the result of the PREVIOUS attempt (attempt i)
-            # (For i=0/attempt 1, the screenshot is blank - no result yet)
+            # Update best tracking using SEPARATE judge call
+            # Screenshot timing: at loop index i, the screenshot shows the result of Attempt i
+            # (i=0 is blank, i=1 shows Attempt 1's result, i=2 shows Attempt 2's result, etc.)
+            #
+            # We compare starting at i=2 (Attempt 3), comparing Attempt 2's result vs Attempt 1's result
+            # best_attempt tracks which Attempt number produced the best result so far
+
+            current_attempt_result = i  # The screenshot shows this Attempt's result
+
             if i == 1:
-                # First real result (attempt 1 just finished), set as initial best
-                best_iteration = i  # i=1 means we're showing attempt 1's result
+                # First real result (Attempt 1), set as initial best - no judging yet
+                best_iteration = current_attempt_result
                 best_image_base64 = png_base64
-                best_reason = "Initial drawing"
-                print(f"[Best] Setting iteration {best_iteration} as initial best")
+                best_reason = "Initial drawing (first result)"
+                print(f"[Best] Setting Attempt {best_iteration} as initial best (first drawing)")
             elif i > 1 and best_image_base64:
                 # Use separate judge API call for objective comparison
-                print(f"[Judge] Comparing iteration {i} (latest) vs iteration {best_iteration} (current best)...")
+                # We're comparing the latest result (Attempt i) vs the current best
+                print(f"[Judge] Comparing Attempt {current_attempt_result} (latest) vs Attempt {best_iteration} (current best)...")
                 judge_result = call_judge_api(
                     image_a_base64=best_image_base64,
                     image_b_base64=png_base64,
                     goal=goal,
                     iteration_a=best_iteration,
-                    iteration_b=i,
+                    iteration_b=current_attempt_result,
                     api_key=api_key,
                 )
                 winner = judge_result.get("winner")
@@ -1504,30 +1518,30 @@ def run_visual_feedback_loop(
 
                 # Record judgment for monitoring
                 judgment_record = {
-                    "compared_at_iteration": i + 1,
-                    "iteration_a": best_iteration,
-                    "iteration_b": i,
+                    "judged_during_attempt": i + 1,
+                    "compared_a_attempt": best_iteration,
+                    "compared_b_attempt": current_attempt_result,
                     "winner": winner,
                     "reasoning": reasoning,
                     "confidence": confidence,
-                    "new_best": None,
+                    "new_best_attempt": None,
                 }
 
                 if winner == "B":
-                    # Latest attempt (B) is better
-                    best_iteration = i
+                    # Latest attempt is better
+                    best_iteration = current_attempt_result
                     best_image_base64 = png_base64
                     best_reason = reasoning
-                    judgment_record["new_best"] = i
-                    print(f"[Judge] ✓ Iteration {best_iteration} is the new best ({confidence} confidence)")
+                    judgment_record["new_best_attempt"] = current_attempt_result
+                    print(f"[Judge] ✓ Attempt {best_iteration} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                 elif winner == "A":
-                    judgment_record["new_best"] = best_iteration
-                    print(f"[Judge] ✗ Keeping iteration {best_iteration} as best ({confidence} confidence)")
+                    judgment_record["new_best_attempt"] = best_iteration
+                    print(f"[Judge] ✗ Keeping Attempt {best_iteration} as best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                 else:
-                    judgment_record["new_best"] = best_iteration
-                    print(f"[Judge] ⚠ Could not determine winner, keeping iteration {best_iteration}")
+                    judgment_record["new_best_attempt"] = best_iteration
+                    print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_iteration}")
 
                 # Save judge history incrementally so user can monitor
                 judge_history.append(judgment_record)

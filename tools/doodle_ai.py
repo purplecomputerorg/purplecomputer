@@ -776,24 +776,38 @@ Respond with a JSON object:
 ```json
 {
   "analysis": "What I see from the previous attempt and what to improve",
-  "strategy_summary": "Brief description of painting approach: Yellow base at y=15-22, blue overlay for green foliage, trunk at x=45-55",
-  "learnings": "Key insight for future attempts: Yellow under blue works well, trunk needs to be wider, edges are too jagged",
-  "actions": [
-    {"type": "paint_line", "x": 40, "y": 10, "key": "f", "direction": "right", "length": 30},
-    {"type": "paint_line", "x": 42, "y": 11, "key": "f", "direction": "right", "length": 26},
-    {"type": "paint_at", "x": 55, "y": 20, "color": "r"},
-    ...
-  ]
+  "strategy_summary": {
+    "composition": {
+      "element_name": {"x_range": [start, end], "y_range": [start, end], "description": "what this element is"},
+      "another_element": {"x_range": [start, end], "y_range": [start, end], "description": "..."}
+    },
+    "layering_order": [
+      "Step 1: Yellow 'f' base on foliage + trunk area (y=5-24)",
+      "Step 2: Blue 'c' overlay on foliage only (y=5-18) → green",
+      "Step 3: Dark 'l' on trunk (x=48-52) for brown"
+    ],
+    "color_results": {
+      "worked": ["f+c = good green", "l alone = nice brown"],
+      "failed": ["c over l = muddy purple"]
+    },
+    "keep_next_time": ["trunk position at x=48-52", "foliage shape"],
+    "change_next_time": ["make trunk wider (x=46-54)", "add more foliage density at edges"]
+  },
+  "learnings": "Key insight: Blue over brown makes mud. Layer yellow FIRST on all areas, then overlay blue only where green is needed.",
+  "actions": [...]
 }
 ```
 
 **analysis**: What you observe in the previous screenshot and your plan to improve.
 
-**strategy_summary**: Concise description of your painting approach (coordinates, color choices, layering order).
-This helps track what strategies work across iterations.
+**strategy_summary**: Structured description of your approach with:
+- **composition**: Where each element is positioned (x_range, y_range)
+- **layering_order**: Step-by-step painting sequence with colors and coordinates
+- **color_results**: What color combinations worked or failed
+- **keep_next_time**: Specific things that worked well (with coordinates)
+- **change_next_time**: Specific improvements to make (with coordinates)
 
-**learnings**: One key insight or lesson from this attempt that should inform future iterations.
-Focus on what worked, what didn't, and why.
+**learnings**: One key insight that should inform ALL future attempts.
 
 **actions**: Generate 100-500 paint actions for the COMPLETE drawing (canvas starts fresh).
 Use paint_line for fills and paint_at for details. More actions = more detail!
@@ -915,8 +929,34 @@ def call_vision_api(
     # Include previous strategy for context (not full script)
     strategy_section = ""
     if previous_strategy:
-        strategy_section = f"\n## PREVIOUS STRATEGY\n{previous_strategy}\n"
-        strategy_section += "The screenshot shows the result of this approach.\n"
+        strategy_section = "\n## PREVIOUS STRATEGY\n"
+        if isinstance(previous_strategy, dict):
+            # Format structured strategy nicely
+            if previous_strategy.get("composition"):
+                strategy_section += "Composition:\n"
+                for name, pos in previous_strategy["composition"].items():
+                    x_range = pos.get("x_range", "?")
+                    y_range = pos.get("y_range", "?")
+                    desc = pos.get("description", "")
+                    strategy_section += f"  - {name}: x={x_range}, y={y_range} ({desc})\n"
+            if previous_strategy.get("layering_order"):
+                strategy_section += "Layering order:\n"
+                for step in previous_strategy["layering_order"]:
+                    strategy_section += f"  - {step}\n"
+            if previous_strategy.get("color_results"):
+                cr = previous_strategy["color_results"]
+                if cr.get("worked"):
+                    strategy_section += f"What worked: {', '.join(cr['worked'])}\n"
+                if cr.get("failed"):
+                    strategy_section += f"What failed: {', '.join(cr['failed'])}\n"
+            if previous_strategy.get("keep_next_time"):
+                strategy_section += f"Keep: {', '.join(previous_strategy['keep_next_time'])}\n"
+            if previous_strategy.get("change_next_time"):
+                strategy_section += f"Change: {', '.join(previous_strategy['change_next_time'])}\n"
+        else:
+            # Fallback for string format
+            strategy_section += f"{previous_strategy}\n"
+        strategy_section += "\nThe screenshot shows the result of this approach.\n"
 
     # Build plan summary
     plan_section = ""
@@ -993,6 +1033,13 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
             # Print feedback
             if result["analysis"]:
                 print(f"[AI Analysis] {result['analysis']}")
+            if result["strategy_summary"]:
+                strat = result["strategy_summary"]
+                if isinstance(strat, dict):
+                    if strat.get("keep_next_time"):
+                        print(f"[AI Keep] {', '.join(strat['keep_next_time'])}")
+                    if strat.get("change_next_time"):
+                        print(f"[AI Change] {', '.join(strat['change_next_time'])}")
             if result["learnings"]:
                 print(f"[AI Learning] {result['learnings']}")
 

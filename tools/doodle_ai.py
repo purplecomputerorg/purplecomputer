@@ -791,83 +791,67 @@ The canvas is **101 cells wide × 25 cells tall**.
 - Y coordinates: 0 (top) to 24 (bottom)
 - Origin (0,0) is TOP-LEFT corner
 
-## COLOR SYSTEM (with SHADING)
+## HOW THIS WORKS (REGENERATIVE MODEL)
 
-Each row provides a color family with SHADING from light (left) to dark (right):
-- **Number row (` 1 2 3 4 5 6 7 8 9 0 - =)**: GRAYSCALE
-  - ` = pure white, 5 = middle gray, = = pure black
-- **QWERTY row (q w e r t y u i o p [ ] \\)**: RED family
-  - q = lightest pink, t/y = medium red, \\ = darkest burgundy
-- **ASDF row (a s d f g h j k l ; ')**: YELLOW family
-  - a = lightest gold, f/g = medium yellow, ' = darkest brown
-- **ZXCV row (z x c v b n m , . /)**: BLUE family
-  - z = lightest periwinkle, v/b = medium blue, / = darkest navy
+Each iteration draws a COMPLETE image from scratch. The canvas is cleared between iterations.
+You are planning what the FINAL DRAWING should look like, not how to build it incrementally.
 
-**SHADING:** Use left keys for highlights, middle for midtones, right keys for shadows.
+The execution AI will see its previous attempt and try to improve, but each attempt is a complete redraw.
 
-## COLOR MIXING (LAYERED PAINTING)
+## COLOR SYSTEM
 
-When you paint OVER an already-painted cell, colors MIX:
+Each row provides a color family:
+- **Number row (` 1 2 3 4 5 6 7 8 9 0 - =)**: GRAYSCALE (white to black)
+- **QWERTY row (q w e r t y u i o p [ ] \\)**: RED family (pink to burgundy)
+- **ASDF row (a s d f g h j k l ; ')**: YELLOW family (gold to brown)
+- **ZXCV row (z x c v b n m , . /)**: BLUE family (periwinkle to navy)
+
+## COLOR MIXING
+
+Colors MIX when painted on the SAME cell:
 - Yellow + Blue = GREEN
 - Red + Blue = PURPLE
 - Red + Yellow = ORANGE
 
-**CRITICAL:** To mix colors, paint the ENTIRE area with one color FIRST, then paint the SAME area with the second color. Do NOT alternate cell by cell.
+**To get green:** Paint yellow on an area, then paint blue on the SAME area.
 
 ## YOUR TASK
-Create a detailed PLAN for drawing the requested image. You will have multiple iterations to execute this plan.
 
-The plan should include:
-1. **Composition**: Where elements go on the 101x25 canvas
-2. **Phases**: Break the work into phases, each assigned to specific iterations
-3. **Color strategy**: Which base colors to paint first, which overlays to add
-4. **Shading plan**: Where to use lighter vs darker shades for 3D depth and realism
+Create a plan describing what the FINAL drawing should look like:
+1. **Composition**: Where each element goes (x/y coordinates)
+2. **Colors**: What final color each area should be
+3. **Mixing recipe**: For mixed colors, which base colors to use
+4. **Style**: Simple, clean shapes with SOLID color regions (no stripes!)
 
-**IMPORTANT: Use shading to make drawings look 3D and realistic!**
-- Decide where light comes from (e.g., top-left)
-- Use lighter keys (q, a, z, `) on lit surfaces
-- Use darker keys (\\, ', /, =) on shadowed surfaces
-- Example: A tree trunk lit from the left uses 'd' on left side, 'g' in middle, "'" (apostrophe) on right shadow side
+## KEY RULES FOR SUCCESS
+
+- Use SOLID color regions, not alternating stripe patterns
+- Keep shapes SIMPLE and recognizable (think: what would a 4-year-old recognize?)
+- Use LARGE, BOLD features that fill the canvas
+- NO dithering or checkerboard patterns (don't alternate A-B-A-B to "blend" colors)
 
 ## RESPONSE FORMAT
-Respond with a JSON object:
 
 ```json
 {
   "plan": {
-    "description": "Brief description of what we're drawing",
+    "description": "Brief description of the final drawing",
     "composition": {
-      "main_element": {"x_range": [40, 70], "y_range": [5, 25], "description": "..."},
-      "other_elements": [...]
-    },
-    "phases": [
-      {
-        "name": "Phase 1: Yellow base",
-        "iterations": [1, 2, 3],
-        "goal": "Paint yellow in all areas that will become green or brown",
-        "color_keys": ["f", "g", "d"],
-        "target_areas": "foliage area (y=5-18), trunk area (x=54-58, y=18-28)"
-      },
-      {
-        "name": "Phase 2: Blue overlay",
-        "iterations": [4, 5, 6],
-        "goal": "Paint blue over yellow foliage to create green",
-        "color_keys": ["c", "v"],
-        "target_areas": "foliage area only (y=5-18)"
-      },
-      {
-        "name": "Phase 3: Details",
-        "iterations": [7, 8, 9, 10],
-        "goal": "Add red apples, brown trunk details",
-        "color_keys": ["r", "e"],
-        "target_areas": "scattered in foliage for apples, trunk for brown"
+      "element_name": {
+        "x_range": [start, end],
+        "y_range": [start, end],
+        "final_color": "green (or red, blue, yellow, brown, etc.)",
+        "mixing_recipe": "yellow base + blue overlay" or null for pure colors,
+        "description": "what this element is"
       }
-    ]
+    },
+    "style_notes": "Key points about the visual style (e.g., 'cartoon-style tree with round foliage')",
+    "recognition_test": "A 4-year-old should see: [what they should recognize]"
   }
 }
 ```
 
-Be specific about coordinates and areas. The execution AI will follow this plan."""
+Be specific about coordinates. The execution AI will use this as a reference for composition."""
 
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
@@ -948,6 +932,40 @@ paint_at x=1, y=20, color="c"  # Different cell! No mixing!
 ```
 
 The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
+
+## CRITICAL: NO DITHERING
+
+This system has REAL color mixing, NOT dithering. When you paint over a cell, the colors physically mix.
+
+**WRONG (dithering - creates ugly vertical stripes):**
+```
+Pf0,10
+Pc1,10
+Pf2,10
+Pc3,10
+```
+This alternates colors in a repeating pattern (A-B-A-B). It looks terrible - like a barcode.
+
+**RIGHT (actual color mixing - creates solid green):**
+```
+Lf0,10,50,10
+Lc0,10,50,10
+```
+This paints yellow on cells 0-50, then blue on the SAME cells. Result: solid green.
+
+**THE RULE:**
+NEVER create alternating single-cell patterns (A-B-A-B or checkerboard).
+To mix colors, paint in LAYERS on the SAME cells, not alternating cells.
+
+**What IS allowed:**
+- Different colors for different regions (trunk brown, foliage green)
+- Gradual shading (light green → medium green → dark green across an area)
+- Color boundaries between elements
+
+**What is FORBIDDEN:**
+- Alternating patterns like: Pf0,10 Pc1,10 Pf2,10 Pc3,10 Pf4,10 Pc5,10...
+- Any pattern where colors repeat A-B-A-B-A-B across adjacent cells
+- Thinking "if I alternate yellow and blue cells, it will look green from far away" - NO, use real mixing instead
 
 ## COMPACT ACTION FORMAT (REQUIRED)
 
@@ -1146,12 +1164,28 @@ def get_current_phase(plan: dict, iteration: int) -> dict | None:
     return None
 
 
-def get_complexity_guidance(iteration: int, max_iterations: int) -> str:
-    """Option D: Get progressive complexity guidance based on iteration progress.
+def get_complexity_guidance(iteration: int, max_iterations: int, consecutive_losses: int = 0) -> str:
+    """Get progressive complexity guidance based on iteration progress and judge feedback.
 
     Early iterations focus on structure, later ones add detail and shading.
+    If judge keeps rejecting attempts (consecutive_losses >= 3), force simpler complexity.
     """
     progress = iteration / max_iterations
+
+    # ADAPTIVE COMPLEXITY: If stuck (judge keeps preferring earlier attempt), reduce complexity
+    if consecutive_losses >= 3:
+        return """## COMPLEXITY: FORCED SIMPLIFICATION (Judge Feedback)
+**The judge has rejected your last 3+ attempts in favor of an earlier, simpler version.**
+
+You MUST simplify:
+- Return to BASIC STRUCTURE with clean, simple shapes
+- Use SOLID color blocks, NO gradients or detailed shading
+- Use 150-300 actions maximum
+- Focus on clear, recognizable silhouette
+- Avoid complexity - the judge clearly prefers simpler drawings
+- Look at what made the earlier winning attempt successful and replicate that approach
+
+STOP adding detail. STOP adding stripes. Make it CLEAN and SIMPLE."""
 
     if progress <= 0.25:
         return """## COMPLEXITY: FOUNDATION (Early Phase)
@@ -1182,12 +1216,12 @@ Add depth and detail:
 
     else:
         return """## COMPLEXITY: REFINEMENT (Final Phase)
-Maximum detail and polish:
-- Use FULL shading range (extreme light to extreme dark)
-- Add fine details and highlights
+Polish and refine (but keep it clean):
+- Add shading carefully - don't overdo it
+- Fine-tune details and highlights
 - Perfect the color transitions
-- Add any final touches
-- Use 500-800 actions for maximum detail"""
+- Keep the drawing CLEAN and recognizable
+- Use 400-700 actions - quality over quantity"""
 
 
 def call_vision_api(
@@ -1200,6 +1234,8 @@ def call_vision_api(
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
     judge_feedback: dict = None,
+    consecutive_losses: int = 0,
+    best_script: list[dict] = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1213,6 +1249,8 @@ def call_vision_api(
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
         judge_feedback: Dict with judge's evaluation of recent comparison (reasoning, winner, etc.)
+        consecutive_losses: Number of consecutive times judge picked earlier iteration over recent attempts
+        best_script: The action script from the current best iteration (for template when stuck)
 
     Returns:
         Dict with keys: analysis, strategy_summary, learnings, actions
@@ -1292,8 +1330,43 @@ def call_vision_api(
                 me = comp['main_element']
                 plan_section += f"Main element: {me.get('description', '')} at x={me.get('x_range')}, y={me.get('y_range')}\n"
 
-    # Option D: Get progressive complexity guidance
-    complexity_section = get_complexity_guidance(iteration, max_iterations)
+    # Option D: Get progressive complexity guidance (adaptive based on judge feedback)
+    complexity_section = get_complexity_guidance(iteration, max_iterations, consecutive_losses)
+
+    # Winner-as-template: When stuck, show the winning script as reference
+    template_section = ""
+    if consecutive_losses >= 3 and best_script:
+        # Convert best_script actions back to compact format for reference
+        template_lines = []
+        for action in best_script[:100]:  # Limit to first 100 actions to avoid overwhelming
+            if action.get("type") == "paint_at":
+                template_lines.append(f"P{action.get('key', 'f')}{action.get('x', 0)},{action.get('y', 0)}")
+            elif action.get("type") == "paint_line":
+                # Reconstruct line format
+                x = action.get("x", 0)
+                y = action.get("y", 0)
+                direction = action.get("direction", "right")
+                length = action.get("length", 1)
+                key = action.get("key", "f")
+                if direction == "right":
+                    template_lines.append(f"L{key}{x},{y},{x + length - 1},{y}")
+                elif direction == "down":
+                    template_lines.append(f"L{key}{x},{y},{x},{y + length - 1}")
+
+        if template_lines:
+            template_section = f"""
+## REFERENCE SCRIPT (from winning Attempt - USE THIS AS TEMPLATE)
+
+The judge keeps preferring an earlier attempt. Here is the START of that winning script.
+**Study this structure and replicate its approach.** Make only small improvements.
+
+```actions
+{chr(10).join(template_lines[:50])}
+```
+{"(truncated - " + str(len(template_lines)) + " actions total)" if len(template_lines) > 50 else ""}
+
+**KEY: Maintain this script's structure. Don't reinvent - refine.**
+"""
 
     # First iteration vs subsequent
     if iteration == 1:
@@ -1313,7 +1386,7 @@ The canvas will be CLEARED and your new script executed from scratch."""
 ## Attempt: {iteration} of {max_iterations}
 
 {complexity_section}
-{plan_section}{learnings_section}{strategy_section}{judge_section}
+{template_section}{plan_section}{learnings_section}{strategy_section}{judge_section}
 {instruction}
 
 Respond with JSON metadata followed by a compact ```actions``` block."""
@@ -1598,6 +1671,7 @@ def run_visual_feedback_loop(
 
         judge_history = []  # Track all judge comparisons for monitoring
         last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
+        consecutive_losses = 0  # Track how many times judge picked earlier attempt over recent ones
 
         # Track what's ACTUALLY on the canvas (not just loop index)
         # This is crucial when iterations fail - the canvas still shows the last successful result
@@ -1653,6 +1727,14 @@ def run_visual_feedback_loop(
                     print(f"[Retry] Attempt {retry + 1}/{max_retries} for iteration {i + 1}...")
                     time.sleep(1)  # Brief pause before retry
 
+                # Find the best script for template mechanism
+                best_script_for_template = None
+                if best_attempt and iteration_scripts:
+                    for script_entry in iteration_scripts:
+                        if script_entry["iteration"] == best_attempt:
+                            best_script_for_template = script_entry["actions"]
+                            break
+
                 result = call_vision_api(
                     image_base64=png_base64,
                     goal=goal,
@@ -1663,6 +1745,8 @@ def run_visual_feedback_loop(
                     accumulated_learnings=accumulated_learnings,
                     previous_strategy=previous_strategy,
                     judge_feedback=last_judge_feedback,
+                    consecutive_losses=consecutive_losses,
+                    best_script=best_script_for_template,
                 )
 
                 actions = result.get("actions", [])
@@ -1785,6 +1869,7 @@ def run_visual_feedback_loop(
                     best_image_base64 = png_base64
                     best_reason = reasoning
                     judgment_record["new_best_attempt"] = canvas_shows_attempt
+                    consecutive_losses = 0  # Reset - we improved!
                     print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                     if runner_up_attempt:
@@ -1798,9 +1883,13 @@ def run_visual_feedback_loop(
                         runner_up_reason = reasoning
 
                     judgment_record["new_best_attempt"] = best_attempt
+                    consecutive_losses += 1  # Track consecutive failures to beat best
                     print(f"[Judge] ✗ Keeping Attempt {best_attempt} as best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                     print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
+                    print(f"[Judge]   Consecutive losses: {consecutive_losses}")
+                    if consecutive_losses >= 3:
+                        print(f"[Judge] ⚠ STUCK: {consecutive_losses} consecutive losses - will simplify next attempt")
                 else:
                     judgment_record["new_best_attempt"] = best_attempt
                     print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_attempt}")

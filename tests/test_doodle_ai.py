@@ -321,5 +321,5 @@ class TestComplexityGuidance:
 
         # Early should suggest fewer actions (100-300)
         assert "100-300" in early or "100" in early
-        # Late should suggest more actions (500-800)
-        assert "500-800" in late or "800" in late
+        # Late should suggest more actions (400-700)
+        assert "400-700" in late or "700" in late

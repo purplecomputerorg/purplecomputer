@@ -276,3 +276,65 @@ NavigationAction(direction='left', is_down=True)
 # Good: check the class definition first
 NavigationAction(direction='left')
 ```
+
+---
+
+## UEFI Boot and Hardware Compatibility
+
+Purple Computer must boot reliably on diverse hardware: ThinkPads, Dell Latitudes, Microsoft Surface, consumer PCs, and other quirky UEFI implementations.
+
+### Philosophy: Robust but Minimal
+
+- **Accumulate small, proven fixes** that help across many devices
+- **Avoid abstraction layers** for one-time operations
+- **Device-specific workarounds are OK** if they're small and necessary
+- **Comments over docs** for boot logic (the code IS the documentation)
+
+### Key Boot Principles
+
+**1. UUID over labels for root partition:**
+```bash
+# Bad: label search is non-deterministic if multiple disks have same label
+search --no-floppy --label PURPLE_ROOT --set=root
+root=LABEL=PURPLE_ROOT
+
+# Good: UUID is unique per filesystem
+search --no-floppy --fs-uuid a1b2c3d4-... --set=root
+root=UUID=a1b2c3d4-...
+```
+
+**2. Multiple EFI paths (belt and suspenders):**
+```
+/EFI/BOOT/BOOTX64.EFI           # UEFI spec fallback, all firmware checks this
+/EFI/Microsoft/Boot/bootmgfw.efi # Some firmware (Surface, HP) only boot this
+/EFI/purple/grubx64.efi          # Vendor path for NVRAM entry
+```
+All three contain the same GRUB binary. Duplication is intentional.
+
+**3. NVRAM entries are bonus, not requirement:**
+- Create them (helps compliant firmware)
+- Don't depend on them (firmware resets them, ignores them)
+- Fallback paths ensure boot even with empty NVRAM
+
+**4. Embedded GRUB config should have multiple search fallbacks:**
+```
+1. UUID search (primary, set by installer)
+2. Label search (fallback for old images)
+3. File search (/boot/grub/grub.cfg)
+4. Device probe (hd0,gpt2, hd1,gpt2, nvme0n1p2)
+```
+
+### When Adding Device-Specific Fixes
+
+1. Add a comment explaining which device/firmware needs it
+2. Make it a fallback, not the primary path
+3. Test that it doesn't break other devices
+4. Keep it under 10 lines if possible
+
+### Debugging Boot Issues
+
+Run `build-scripts/diagnose-boot.sh` on a booted system to check:
+- EFI paths present
+- NVRAM entries
+- UUID vs label usage
+- Partition layout

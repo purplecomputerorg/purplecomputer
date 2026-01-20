@@ -362,52 +362,73 @@ EOF
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
 
     # Create the grub.cfg that will be embedded in the standalone EFI binary
-    # IMPORTANT: Must have fallbacks since label search can fail on some firmware
+    # Uses multiple fallback methods for maximum hardware compatibility
+    # See CLAUDE.md "UEFI Boot and Hardware Compatibility" for rationale
     cat > /tmp/grub-standalone.cfg <<'EOF'
-# GRUB standalone bootloader for PurpleOS
+# PurpleOS embedded GRUB config
+# Installer will update /boot/grub/grub.cfg with actual UUID
 terminal_output console
 terminal_input console
 set pager=0
-set timeout=5
+set timeout=3
 
-# Try multiple methods to find the root partition
-# Method 1: Search by filesystem label (most reliable when it works)
-search --no-floppy --label PURPLE_ROOT --set=root
-
-# Method 2: If label search failed, try searching for our grub.cfg file
-if [ -z "$root" ]; then
-    search --no-floppy --file /boot/grub/grub.cfg --set=root
+# Method 1: UUID search (installer replaces PURPLE_ROOT_UUID_PLACEHOLDER)
+search --no-floppy --fs-uuid --set=root PURPLE_ROOT_UUID_PLACEHOLDER
+if [ -n "$root" ] && [ -f ($root)/boot/grub/grub.cfg ]; then
+    configfile ($root)/boot/grub/grub.cfg
 fi
 
-# Method 3: If still not found, try common device paths
+# Method 2: Label search (fallback for images not updated by installer)
 if [ -z "$root" ]; then
-    # Try second partition on first few disks (where we install)
+    search --no-floppy --label PURPLE_ROOT --set=root
+    if [ -n "$root" ] && [ -f ($root)/boot/grub/grub.cfg ]; then
+        configfile ($root)/boot/grub/grub.cfg
+    fi
+fi
+
+# Method 3: File search
+if [ -z "$root" ]; then
+    search --no-floppy --file /boot/grub/grub.cfg --set=root
+    if [ -n "$root" ]; then
+        configfile ($root)/boot/grub/grub.cfg
+    fi
+fi
+
+# Method 4: Device probe (SATA/SAS)
+if [ -z "$root" ]; then
     for dev in hd0,gpt2 hd1,gpt2 hd2,gpt2; do
         if [ -f ($dev)/boot/grub/grub.cfg ]; then
             set root=$dev
+            configfile ($dev)/boot/grub/grub.cfg
             break
         fi
     done
 fi
 
-if [ -n "$root" ]; then
-    set prefix=($root)/boot/grub
-    configfile ($root)/boot/grub/grub.cfg
-else
-    # Nothing worked - show error instead of silent failure
-    echo ""
-    echo "ERROR: Could not find PurpleOS root partition"
-    echo ""
-    echo "Tried:"
-    echo "  - Label: PURPLE_ROOT"
-    echo "  - File: /boot/grub/grub.cfg"
-    echo "  - Devices: hd0-2,gpt2"
-    echo ""
-    echo "Press any key for GRUB shell, or power off and contact support."
-    echo ""
-    read
-    normal
+# Method 5: NVMe device probe
+if [ -z "$root" ]; then
+    for dev in (nvme0n1,gpt2) (nvme1n1,gpt2); do
+        if [ -f $dev/boot/grub/grub.cfg ]; then
+            set root=$dev
+            configfile $dev/boot/grub/grub.cfg
+            break
+        fi
+    done
 fi
+
+# Nothing worked - friendly error
+echo ""
+echo "Purple Computer could not start."
+echo ""
+echo "The boot files were not found."
+echo "This usually means installation"
+echo "did not complete successfully."
+echo ""
+echo "Please reinstall or contact support."
+echo ""
+echo "(Technical: root partition not found)"
+echo ""
+sleep 10
 EOF
 
     # Generate standalone GRUB EFI with all required modules

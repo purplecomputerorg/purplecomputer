@@ -197,77 +197,115 @@ main() {
     ls -la /dev/${TARGET}* 2>/dev/null || warn "Partition devices not visible yet"
 
     # ==========================================================================
-    # ROBUST UEFI BOOT SETUP - Multi-layer approach for maximum compatibility
+    # UEFI BOOT SETUP - See CLAUDE.md "UEFI Boot and Hardware Compatibility"
     # ==========================================================================
-    # Many firmwares (especially Surface, HP, some Dell) have buggy UEFI that:
-    # - Ignores BootOrder changes from efibootmgr
-    # - Resets boot order on every boot
-    # - Only boots from specific paths
-    #
-    # Our strategy uses THREE layers of fallback:
-    # 1. Standard EFI/BOOT/BOOTX64.EFI (fallback path all UEFI checks)
-    # 2. EFI/Microsoft/Boot/bootmgfw.efi (some firmwares ONLY boot this)
-    # 3. efibootmgr entry with explicit boot order (for compliant firmwares)
+    # Multiple EFI paths for hardware compatibility:
+    # 1. /EFI/BOOT/BOOTX64.EFI - UEFI spec fallback (all firmware)
+    # 2. /EFI/Microsoft/Boot/bootmgfw.efi - Surface, HP firmware bias
+    # 3. /EFI/purple/grubx64.efi - vendor path for NVRAM entry
+    # 4. NVRAM Boot#### entry - bonus for compliant firmware
+    # Plus: Update grub.cfg with actual UUID for deterministic boot
     # ==========================================================================
 
-    log "Setting up UEFI boot (multi-layer approach for compatibility)..."
+    log "Setting up UEFI boot..."
 
-    # Determine EFI partition device name
+    # Determine partition device names
     case "$TARGET" in
-        nvme*) EFI_PART="/dev/${TARGET}p1" ;;
-        *)     EFI_PART="/dev/${TARGET}1" ;;
+        nvme*|mmcblk*)
+            EFI_PART="/dev/${TARGET}p1"
+            ROOT_PART="/dev/${TARGET}p2"
+            ;;
+        *)
+            EFI_PART="/dev/${TARGET}1"
+            ROOT_PART="/dev/${TARGET}2"
+            ;;
     esac
 
+    # Get root UUID for deterministic boot (critical fix for multi-disk systems)
+    ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART" 2>/dev/null || true)
+    if [ -n "$ROOT_UUID" ]; then
+        log "  Root UUID: $ROOT_UUID"
+    else
+        warn "  Could not get root UUID, falling back to label-based boot"
+    fi
+
     if [ -b "$EFI_PART" ]; then
-        mkdir -p /mnt/efi
+        mkdir -p /mnt/efi /mnt/root
         if mount "$EFI_PART" /mnt/efi 2>/dev/null; then
 
-            # Layer 1: Standard fallback path (EFI/BOOT/BOOTX64.EFI)
+            # Layer 1: Standard fallback path (already in golden image)
             if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
-                log "  Layer 1: EFI/BOOT/BOOTX64.EFI present (standard fallback)"
+                log "  Layer 1: /EFI/BOOT/BOOTX64.EFI present"
             else
-                warn "  Layer 1: EFI/BOOT/BOOTX64.EFI missing!"
+                warn "  Layer 1: BOOTX64.EFI missing!"
             fi
 
-            # Layer 2: Microsoft bootloader path hijack
-            # Some buggy firmwares (HP, some Surface) ONLY boot EFI/Microsoft/Boot/bootmgfw.efi
-            mkdir -p /mnt/efi/EFI/Microsoft/Boot
-            if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
+            # Layer 2: Vendor path for NVRAM entry
+            mkdir -p /mnt/efi/EFI/purple
+            cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/grubx64.efi 2>/dev/null || true
+            log "  Layer 2: /EFI/purple/grubx64.efi"
+
+            # Layer 3: Microsoft path (Surface, HP need this)
+            # Check for existing Windows first
+            WINDOWS_DETECTED=0
+            if [ -f /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi ]; then
+                MS_SIZE=$(stat -c%s /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi 2>/dev/null || echo 0)
+                # Windows bootmgfw.efi is ~1.5-2.5MB, our GRUB is ~3-6MB
+                if [ "$MS_SIZE" -gt 1000000 ] && [ "$MS_SIZE" -lt 2800000 ]; then
+                    log "  Layer 3: Windows detected, preserving bootmgfw.efi"
+                    WINDOWS_DETECTED=1
+                fi
+            fi
+            if [ "$WINDOWS_DETECTED" -eq 0 ]; then
+                mkdir -p /mnt/efi/EFI/Microsoft/Boot
                 cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
-                log "  Layer 2: Installed to EFI/Microsoft/Boot/bootmgfw.efi"
+                log "  Layer 3: /EFI/Microsoft/Boot/bootmgfw.efi"
             fi
 
-            # Layer 3: Create proper UEFI boot entry
+            # Layer 4: NVRAM entry (bonus, not required)
             if command -v efibootmgr >/dev/null 2>&1; then
-                # Remove any existing PurpleOS entries
-                for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | sed 's/Boot//' || true); do
+                # Remove existing PurpleOS entries
+                for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | sed 's/Boot//' || true); do
                     efibootmgr -b "$bootnum" -B 2>/dev/null || true
                 done
 
-                # Create new boot entry
-                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\BOOT\BOOTX64.EFI' 2>/dev/null; then
-                    log "  Layer 3: Created UEFI boot entry 'PurpleOS'"
-
-                    # Set as first in boot order
-                    PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9]+" | head -1 | sed 's/Boot//' || true)
+                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\purple\grubx64.efi' 2>/dev/null; then
+                    log "  Layer 4: NVRAM entry created"
+                    # Set boot order
+                    PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | head -1 | sed 's/Boot//')
                     if [ -n "$PURPLE_BOOTNUM" ]; then
-                        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep "BootOrder:" | sed 's/BootOrder: //' || true)
-                        NEW_ORDER=$(echo "$CURRENT_ORDER" | sed "s/$PURPLE_BOOTNUM,//g" | sed "s/,$PURPLE_BOOTNUM//g" | sed "s/^$PURPLE_BOOTNUM$//" || true)
-                        [ -n "$NEW_ORDER" ] && NEW_ORDER="$PURPLE_BOOTNUM,$NEW_ORDER" || NEW_ORDER="$PURPLE_BOOTNUM"
-                        efibootmgr -o "$NEW_ORDER" 2>/dev/null && \
-                            log "  Layer 3: Set boot order to $NEW_ORDER" || \
-                            warn "  Layer 3: Could not set boot order"
+                        CURRENT_ORDER=$(efibootmgr 2>/dev/null | grep "BootOrder:" | sed 's/BootOrder: //')
+                        NEW_ORDER="$PURPLE_BOOTNUM"
+                        for entry in $(echo "$CURRENT_ORDER" | tr ',' ' '); do
+                            [ "$entry" != "$PURPLE_BOOTNUM" ] && NEW_ORDER="$NEW_ORDER,$entry"
+                        done
+                        efibootmgr -o "$NEW_ORDER" 2>/dev/null || true
                     fi
                 else
-                    warn "  Layer 3: Could not create UEFI entry (layers 1-2 should still work)"
+                    log "  Layer 4: NVRAM entry failed (fallback paths will work)"
                 fi
             fi
 
             umount /mnt/efi 2>/dev/null || true
-            log "UEFI boot setup complete"
         else
-            warn "Could not mount EFI partition for boot setup"
+            warn "Could not mount EFI partition"
         fi
+
+        # Layer 5: Update grub.cfg with UUID (critical for multi-disk reliability)
+        if [ -n "$ROOT_UUID" ] && mount "$ROOT_PART" /mnt/root 2>/dev/null; then
+            if [ -f /mnt/root/boot/grub/grub.cfg ]; then
+                # Replace label-based with UUID-based
+                sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                log "  Layer 5: Updated grub.cfg with UUID"
+            fi
+            umount /mnt/root 2>/dev/null || true
+        fi
+
+        rmdir /mnt/efi /mnt/root 2>/dev/null || true
+        log "UEFI boot setup complete"
+    else
+        warn "EFI partition not found"
     fi
 
     log ""

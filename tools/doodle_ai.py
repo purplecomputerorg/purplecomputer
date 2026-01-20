@@ -294,55 +294,150 @@ def get_color_priority(color: str) -> int:
         return 3
 
 
+def get_color_family(color: str) -> str:
+    """Get the color family name for a color key."""
+    if color in YELLOW_FAMILY:
+        return "yellow"
+    elif color in RED_FAMILY:
+        return "red"
+    elif color in BLUE_FAMILY:
+        return "blue"
+    else:
+        return "gray"
+
+
 def fix_color_mixing_order(actions: list[dict]) -> list[dict]:
-    """Reorder actions so colors are layered properly for mixing.
+    """Fix color mixing by filling gaps and reordering.
 
-    Groups actions by the cell they paint, then orders colors so that
-    base colors (yellow, red) come before overlay colors (blue).
-
-    This fixes the common AI mistake of interleaving colors like:
-    yellow row 10, blue row 11, yellow row 12, blue row 13
-
-    By reordering to:
-    yellow row 10, yellow row 12, blue row 11, blue row 13
-
-    And if both colors should be on the same cell, ensures yellow comes first.
+    Two-phase fix:
+    1. Fill gaps: If yellow is at rows 10,12,14 and blue at 11,13,15 in same x-range,
+       they intended green - add yellow to 11,13,15 and blue to 10,12,14
+    2. Reorder: All yellows first, then reds, then blues, then grayscale
     """
     if not actions:
         return actions
 
-    # Group actions by cell coordinate
-    cell_actions = {}  # (x, y) -> list of actions
-    non_paint_actions = []  # Actions that aren't paint_at
+    # Separate paint_at actions by color family
+    yellow_cells = set()  # (x, y) tuples
+    blue_cells = set()
+    red_cells = set()
+    gray_cells = set()
+
+    yellow_color = 'f'  # default yellow key to use for fills
+    blue_color = 'c'    # default blue key
+    red_color = 'r'     # default red key
+
+    non_paint_actions = []
 
     for action in actions:
         if action.get("type") == "paint_at":
-            key = (action.get("x"), action.get("y"))
-            if key not in cell_actions:
-                cell_actions[key] = []
-            cell_actions[key].append(action)
+            x, y = action.get("x"), action.get("y")
+            color = action.get("color", "")
+            family = get_color_family(color)
+
+            if family == "yellow":
+                yellow_cells.add((x, y))
+                yellow_color = color  # use the actual color key
+            elif family == "blue":
+                blue_cells.add((x, y))
+                blue_color = color
+            elif family == "red":
+                red_cells.add((x, y))
+                red_color = color
+            else:
+                gray_cells.add((x, y))
         else:
             non_paint_actions.append(action)
 
-    # For each cell, sort by color priority
-    reordered = []
-    for (x, y), cell_acts in sorted(cell_actions.items()):
-        # Sort actions for this cell by color priority
-        sorted_acts = sorted(cell_acts, key=lambda a: get_color_priority(a.get("color", "")))
-        reordered.extend(sorted_acts)
+    # Phase 1: Fill gaps for color mixing
+    # If yellow and blue cells are interleaved (adjacent rows, similar x-range),
+    # they probably intended green - fill both colors on all those cells
 
-    # Now reorder globally: all yellows, then all reds, then all blues, then grayscale
-    # This ensures that if AI painted yellow at (10,5) and blue at (10,6),
-    # all yellows execute first, creating the right layering
-    final_actions = sorted(reordered, key=lambda a: get_color_priority(a.get("color", "")))
+    def find_overlapping_region(cells1: set, cells2: set) -> set:
+        """Find cells where two color families are interleaved/adjacent."""
+        if not cells1 or not cells2:
+            return set()
 
-    # Add back any non-paint actions at the end
+        # Get bounding box of each
+        x1_vals = [c[0] for c in cells1]
+        y1_vals = [c[1] for c in cells1]
+        x2_vals = [c[0] for c in cells2]
+        y2_vals = [c[1] for c in cells2]
+
+        # Check for x-range overlap
+        x_overlap_start = max(min(x1_vals), min(x2_vals))
+        x_overlap_end = min(max(x1_vals), max(x2_vals))
+
+        if x_overlap_start > x_overlap_end:
+            return set()  # No x overlap
+
+        # Check for y-range adjacency (within 2 rows of each other)
+        y_min = min(min(y1_vals), min(y2_vals))
+        y_max = max(max(y1_vals), max(y2_vals))
+
+        # If the y-ranges are interleaved or overlapping, fill the region
+        all_cells = cells1 | cells2
+        region_cells = {(x, y) for (x, y) in all_cells
+                       if x_overlap_start <= x <= x_overlap_end}
+
+        if len(region_cells) > 5:  # Only fill if substantial region
+            # Fill in all cells in the bounding box of the region
+            filled = set()
+            for y in range(y_min, y_max + 1):
+                for x in range(x_overlap_start, x_overlap_end + 1):
+                    filled.add((x, y))
+            return filled
+
+        return set()
+
+    # Find regions where yellow+blue should become green
+    green_region = find_overlapping_region(yellow_cells, blue_cells)
+    if green_region:
+        added_yellow = green_region - yellow_cells
+        added_blue = green_region - blue_cells
+        if added_yellow or added_blue:
+            print(f"[Script Fix] Filling {len(added_yellow)} yellow + {len(added_blue)} blue cells for green mixing")
+        yellow_cells |= green_region
+        blue_cells |= green_region
+
+    # Find regions where red+blue should become purple
+    purple_region = find_overlapping_region(red_cells, blue_cells)
+    if purple_region:
+        red_cells |= purple_region
+        blue_cells |= purple_region
+
+    # Find regions where yellow+red should become orange
+    orange_region = find_overlapping_region(yellow_cells, red_cells)
+    if orange_region:
+        yellow_cells |= orange_region
+        red_cells |= orange_region
+
+    # Phase 2: Rebuild actions in correct order
+    final_actions = []
+
+    # Yellow first
+    for (x, y) in sorted(yellow_cells):
+        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": yellow_color})
+
+    # Red second
+    for (x, y) in sorted(red_cells):
+        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": red_color})
+
+    # Blue third
+    for (x, y) in sorted(blue_cells):
+        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": blue_color})
+
+    # Grayscale last
+    for (x, y) in sorted(gray_cells):
+        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": "5"})
+
+    # Add non-paint actions
     final_actions.extend(non_paint_actions)
 
-    # Log if we made changes
-    original_order = [a.get("color", "") for a in actions if a.get("type") == "paint_at"]
-    new_order = [a.get("color", "") for a in final_actions if a.get("type") == "paint_at"]
-    if original_order != new_order:
+    # Log changes
+    original_count = len([a for a in actions if a.get("type") == "paint_at"])
+    new_count = len([a for a in final_actions if a.get("type") == "paint_at"])
+    if new_count != original_count:
         print(f"[Script Fix] Reordered {len(final_actions)} actions for proper color mixing")
 
     return final_actions

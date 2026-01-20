@@ -364,59 +364,56 @@ EOF
     # Create the grub.cfg that will be embedded in the standalone EFI binary
     # Uses multiple fallback methods for maximum hardware compatibility
     # See CLAUDE.md "UEFI Boot and Hardware Compatibility" for rationale
+    #
+    # IMPORTANT: This config must NOT call configfile multiple times, as each call
+    # adds to the stack and causes "recursion depth exceeded" errors.
+    # Instead, we find root first, then call configfile exactly once at the end.
     cat > /tmp/grub-standalone.cfg <<'EOF'
 # PurpleOS embedded GRUB config
-# Installer will update /boot/grub/grub.cfg with actual UUID
 terminal_output console
 terminal_input console
 set pager=0
 set timeout=3
 
-# Method 1: UUID search (installer replaces PURPLE_ROOT_UUID_PLACEHOLDER)
-search --no-floppy --fs-uuid --set=root PURPLE_ROOT_UUID_PLACEHOLDER
-if [ -n "$root" ] && [ -f ($root)/boot/grub/grub.cfg ]; then
-    configfile ($root)/boot/grub/grub.cfg
-fi
+# Find root partition using multiple fallback methods
+# We set root variable but DON'T call configfile until the end
 
-# Method 2: Label search (fallback for images not updated by installer)
-if [ -z "$root" ]; then
-    search --no-floppy --label PURPLE_ROOT --set=root
-    if [ -n "$root" ] && [ -f ($root)/boot/grub/grub.cfg ]; then
-        configfile ($root)/boot/grub/grub.cfg
-    fi
-fi
+# Method 1: Label search (most reliable, works on fresh installs)
+search --no-floppy --label PURPLE_ROOT --set=root
 
-# Method 3: File search
+# Method 2: File search (works if label is missing/changed)
 if [ -z "$root" ]; then
     search --no-floppy --file /boot/grub/grub.cfg --set=root
-    if [ -n "$root" ]; then
-        configfile ($root)/boot/grub/grub.cfg
-    fi
 fi
 
-# Method 4: Device probe (SATA/SAS)
+# Method 3: Device probe for SATA/SAS
 if [ -z "$root" ]; then
     for dev in hd0,gpt2 hd1,gpt2 hd2,gpt2; do
         if [ -f ($dev)/boot/grub/grub.cfg ]; then
             set root=$dev
-            configfile ($dev)/boot/grub/grub.cfg
             break
         fi
     done
 fi
 
-# Method 5: NVMe device probe
+# Method 4: NVMe device probe
 if [ -z "$root" ]; then
-    for dev in (nvme0n1,gpt2) (nvme1n1,gpt2); do
-        if [ -f $dev/boot/grub/grub.cfg ]; then
+    for dev in nvme0n1,gpt2 nvme1n1,gpt2; do
+        if [ -f ($dev)/boot/grub/grub.cfg ]; then
             set root=$dev
-            configfile $dev/boot/grub/grub.cfg
             break
         fi
     done
 fi
 
-# Nothing worked - friendly error
+# Now load the real config exactly once (or show error)
+if [ -n "$root" ]; then
+    set prefix=($root)/boot/grub
+    configfile ($root)/boot/grub/grub.cfg
+fi
+
+# If we get here, either root wasn't found or configfile returned
+# (configfile returning means the loaded config didn't boot the kernel)
 echo ""
 echo "Purple Computer could not start."
 echo ""

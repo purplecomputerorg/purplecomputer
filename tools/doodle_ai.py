@@ -265,185 +265,6 @@ def parse_compact_actions(text: str) -> list[dict] | None:
 
 
 # =============================================================================
-# SCRIPT FIXER - REORDER FOR PROPER COLOR MIXING
-# =============================================================================
-
-# Color families by keyboard row
-YELLOW_FAMILY = set("asdfghjkl;'")  # ASDF row
-RED_FAMILY = set("qwertyuiop[]\\")  # QWERTY row
-BLUE_FAMILY = set("zxcvbnm,./")     # ZXCV row
-GRAYSCALE = set("`1234567890-=")    # Number row
-
-
-def get_color_priority(color: str) -> int:
-    """Get sorting priority for a color key.
-
-    For proper color mixing:
-    - Yellow first (base for green and orange)
-    - Red second (base for purple, overlay for orange)
-    - Blue third (overlay for green and purple)
-    - Grayscale last (outlines, details)
-    """
-    if color in YELLOW_FAMILY:
-        return 0
-    elif color in RED_FAMILY:
-        return 1
-    elif color in BLUE_FAMILY:
-        return 2
-    else:  # grayscale or unknown
-        return 3
-
-
-def get_color_family(color: str) -> str:
-    """Get the color family name for a color key."""
-    if color in YELLOW_FAMILY:
-        return "yellow"
-    elif color in RED_FAMILY:
-        return "red"
-    elif color in BLUE_FAMILY:
-        return "blue"
-    else:
-        return "gray"
-
-
-def fix_color_mixing_order(actions: list[dict]) -> list[dict]:
-    """Fix color mixing by filling gaps and reordering.
-
-    Two-phase fix:
-    1. Fill gaps: If yellow is at rows 10,12,14 and blue at 11,13,15 in same x-range,
-       they intended green - add yellow to 11,13,15 and blue to 10,12,14
-    2. Reorder: All yellows first, then reds, then blues, then grayscale
-    """
-    if not actions:
-        return actions
-
-    # Separate paint_at actions by color family
-    yellow_cells = set()  # (x, y) tuples
-    blue_cells = set()
-    red_cells = set()
-    gray_cells = set()
-
-    yellow_color = 'f'  # default yellow key to use for fills
-    blue_color = 'c'    # default blue key
-    red_color = 'r'     # default red key
-
-    non_paint_actions = []
-
-    for action in actions:
-        if action.get("type") == "paint_at":
-            x, y = action.get("x"), action.get("y")
-            color = action.get("color", "")
-            family = get_color_family(color)
-
-            if family == "yellow":
-                yellow_cells.add((x, y))
-                yellow_color = color  # use the actual color key
-            elif family == "blue":
-                blue_cells.add((x, y))
-                blue_color = color
-            elif family == "red":
-                red_cells.add((x, y))
-                red_color = color
-            else:
-                gray_cells.add((x, y))
-        else:
-            non_paint_actions.append(action)
-
-    # Phase 1: Fill gaps for color mixing
-    # If yellow and blue cells are interleaved (adjacent rows, similar x-range),
-    # they probably intended green - fill both colors on all those cells
-
-    def find_overlapping_region(cells1: set, cells2: set) -> set:
-        """Find cells where two color families are interleaved/adjacent."""
-        if not cells1 or not cells2:
-            return set()
-
-        # Get bounding box of each
-        x1_vals = [c[0] for c in cells1]
-        y1_vals = [c[1] for c in cells1]
-        x2_vals = [c[0] for c in cells2]
-        y2_vals = [c[1] for c in cells2]
-
-        # Check for x-range overlap
-        x_overlap_start = max(min(x1_vals), min(x2_vals))
-        x_overlap_end = min(max(x1_vals), max(x2_vals))
-
-        if x_overlap_start > x_overlap_end:
-            return set()  # No x overlap
-
-        # Check for y-range adjacency (within 2 rows of each other)
-        y_min = min(min(y1_vals), min(y2_vals))
-        y_max = max(max(y1_vals), max(y2_vals))
-
-        # If the y-ranges are interleaved or overlapping, fill the region
-        all_cells = cells1 | cells2
-        region_cells = {(x, y) for (x, y) in all_cells
-                       if x_overlap_start <= x <= x_overlap_end}
-
-        if len(region_cells) > 5:  # Only fill if substantial region
-            # Fill in all cells in the bounding box of the region
-            filled = set()
-            for y in range(y_min, y_max + 1):
-                for x in range(x_overlap_start, x_overlap_end + 1):
-                    filled.add((x, y))
-            return filled
-
-        return set()
-
-    # Find regions where yellow+blue should become green
-    green_region = find_overlapping_region(yellow_cells, blue_cells)
-    if green_region:
-        added_yellow = green_region - yellow_cells
-        added_blue = green_region - blue_cells
-        if added_yellow or added_blue:
-            print(f"[Script Fix] Filling {len(added_yellow)} yellow + {len(added_blue)} blue cells for green mixing")
-        yellow_cells |= green_region
-        blue_cells |= green_region
-
-    # Find regions where red+blue should become purple
-    purple_region = find_overlapping_region(red_cells, blue_cells)
-    if purple_region:
-        red_cells |= purple_region
-        blue_cells |= purple_region
-
-    # Find regions where yellow+red should become orange
-    orange_region = find_overlapping_region(yellow_cells, red_cells)
-    if orange_region:
-        yellow_cells |= orange_region
-        red_cells |= orange_region
-
-    # Phase 2: Rebuild actions in correct order
-    final_actions = []
-
-    # Yellow first
-    for (x, y) in sorted(yellow_cells):
-        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": yellow_color})
-
-    # Red second
-    for (x, y) in sorted(red_cells):
-        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": red_color})
-
-    # Blue third
-    for (x, y) in sorted(blue_cells):
-        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": blue_color})
-
-    # Grayscale last
-    for (x, y) in sorted(gray_cells):
-        final_actions.append({"type": "paint_at", "x": x, "y": y, "color": "5"})
-
-    # Add non-paint actions
-    final_actions.extend(non_paint_actions)
-
-    # Log changes
-    original_count = len([a for a in actions if a.get("type") == "paint_at"])
-    new_count = len([a for a in final_actions if a.get("type") == "paint_at"])
-    if new_count != original_count:
-        print(f"[Script Fix] Reordered {len(final_actions)} actions for proper color mixing")
-
-    return final_actions
-
-
-# =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
 
@@ -1616,10 +1437,17 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
         "strategy_summary": "",
         "learnings": "",
         "actions": [],
+        "raw_response": text,  # For debugging
+        "compact_actions_text": "",  # Raw L/P commands before expansion
     }
 
     # 1. Try to extract compact actions from ```actions block
     compact_actions = parse_compact_actions(text)
+
+    # Also capture the raw compact text for debugging
+    actions_match = re.search(r'```actions\s*([\s\S]*?)\s*```', text)
+    if actions_match:
+        result["compact_actions_text"] = actions_match.group(1).strip()
     if compact_actions:
         result["actions"] = compact_actions
         print(f"[Parse] Got {len(compact_actions)} actions from compact format")
@@ -1945,8 +1773,6 @@ def run_visual_feedback_loop(
 
                 actions = result.get("actions", [])
                 if actions:
-                    # Fix color ordering for proper mixing
-                    actions = fix_color_mixing_order(actions)
                     break  # Got actions, exit retry loop
                 else:
                     print(f"[Warning] No actions returned (attempt {retry + 1}/{max_retries})")
@@ -1977,6 +1803,21 @@ def run_visual_feedback_loop(
 
             # Store this iteration's script
             iteration_scripts.append({"iteration": i + 1, "actions": actions})
+
+            # Save debug info: raw response and compact actions
+            debug_dir = os.path.join(output_dir, "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+
+            # Save raw AI response
+            raw_response_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_raw_response.txt")
+            with open(raw_response_path, 'w') as f:
+                f.write(result.get("raw_response", ""))
+
+            # Save compact actions (the L/P commands before expansion)
+            compact_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_compact_actions.txt")
+            with open(compact_path, 'w') as f:
+                f.write(result.get("compact_actions_text", ""))
+            print(f"[Debug] Saved raw response and compact actions to {debug_dir}")
 
             # Accumulate learnings for next iteration (compact, not full scripts)
             learning = result.get("learnings")

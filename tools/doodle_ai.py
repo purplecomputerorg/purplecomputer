@@ -856,24 +856,36 @@ Be specific about coordinates. The execution AI will use this as a reference for
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
-## ⚠️ CRITICAL: HOW TO MAKE GREEN (AND OTHER MIXED COLORS)
+## ⚠️ CRITICAL: HOW COLOR MIXING WORKS
 
-To make GREEN, you paint yellow and blue ON THE SAME CELL (not adjacent cells):
-```
-Lf10,5,30,5   ← paints yellow on cells x=10 to x=30, row 5
-Lc10,5,30,5   ← paints blue on THE SAME cells → now those cells are GREEN
-```
+Painting a cell that already has color MIXES the colors (does NOT replace).
+- Yellow cell + paint blue on it → GREEN cell
+- Yellow cell + paint red on it → ORANGE cell
+- Blue cell + paint red on it → PURPLE cell
 
-**WRONG (creates ugly stripes):**
-```
-Pf10,5   ← yellow at x=10
-Pc11,5   ← blue at x=11 (DIFFERENT cell - no mixing!)
-Pf12,5   ← yellow at x=12
-Pc13,5   ← blue at x=13
-```
-This creates yellow-blue-yellow-blue stripes. It looks terrible.
+**To make a GREEN rectangle (rows 10-12, columns 0-50):**
 
-**The rule:** To mix colors, paint the SAME cells twice. First color, then second color, SAME coordinates.
+CORRECT way:
+```
+Lf0,10,50,10
+Lf0,11,50,11
+Lf0,12,50,12
+Lc0,10,50,10
+Lc0,11,50,11
+Lc0,12,50,12
+```
+All yellow first, then blue ON THE SAME ROWS. Result: solid green.
+
+WRONG way (causes stripes):
+```
+Lf0,10,50,10
+Lc0,11,50,11
+Lf0,12,50,12
+Lc0,13,50,13
+```
+Yellow row, blue row, yellow row, blue row = STRIPES, not green!
+
+**The pattern:** ALL of color1 first, then ALL of color2 on the SAME coordinates.
 
 ## CANVAS SIZE
 The canvas is **101 cells wide × 25 cells tall**.

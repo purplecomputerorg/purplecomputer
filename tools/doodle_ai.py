@@ -856,6 +856,25 @@ Be specific about coordinates. The execution AI will use this as a reference for
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
+## ⚠️ CRITICAL: HOW TO MAKE GREEN (AND OTHER MIXED COLORS)
+
+To make GREEN, you paint yellow and blue ON THE SAME CELL (not adjacent cells):
+```
+Lf10,5,30,5   ← paints yellow on cells x=10 to x=30, row 5
+Lc10,5,30,5   ← paints blue on THE SAME cells → now those cells are GREEN
+```
+
+**WRONG (creates ugly stripes):**
+```
+Pf10,5   ← yellow at x=10
+Pc11,5   ← blue at x=11 (DIFFERENT cell - no mixing!)
+Pf12,5   ← yellow at x=12
+Pc13,5   ← blue at x=13
+```
+This creates yellow-blue-yellow-blue stripes. It looks terrible.
+
+**The rule:** To mix colors, paint the SAME cells twice. First color, then second color, SAME coordinates.
+
 ## CANVAS SIZE
 The canvas is **101 cells wide × 25 cells tall**.
 - X coordinates: 0 (left) to 100 (right)
@@ -933,39 +952,7 @@ paint_at x=1, y=20, color="c"  # Different cell! No mixing!
 
 The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
 
-## CRITICAL: NO DITHERING
-
-This system has REAL color mixing, NOT dithering. When you paint over a cell, the colors physically mix.
-
-**WRONG (dithering - creates ugly vertical stripes):**
-```
-Pf0,10
-Pc1,10
-Pf2,10
-Pc3,10
-```
-This alternates colors in a repeating pattern (A-B-A-B). It looks terrible - like a barcode.
-
-**RIGHT (actual color mixing - creates solid green):**
-```
-Lf0,10,50,10
-Lc0,10,50,10
-```
-This paints yellow on cells 0-50, then blue on the SAME cells. Result: solid green.
-
-**THE RULE:**
-NEVER create alternating single-cell patterns (A-B-A-B or checkerboard).
-To mix colors, paint in LAYERS on the SAME cells, not alternating cells.
-
-**What IS allowed:**
-- Different colors for different regions (trunk brown, foliage green)
-- Gradual shading (light green → medium green → dark green across an area)
-- Color boundaries between elements
-
-**What is FORBIDDEN:**
-- Alternating patterns like: Pf0,10 Pc1,10 Pf2,10 Pc3,10 Pf4,10 Pc5,10...
-- Any pattern where colors repeat A-B-A-B-A-B across adjacent cells
-- Thinking "if I alternate yellow and blue cells, it will look green from far away" - NO, use real mixing instead
+**REMINDER:** See the top of this prompt for how to make green correctly. Never alternate colors A-B-A-B.
 
 ## COMPACT ACTION FORMAT (REQUIRED)
 

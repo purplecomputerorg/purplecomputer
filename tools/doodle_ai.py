@@ -856,6 +856,12 @@ Be specific about coordinates. The execution AI will use this as a reference for
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
+## GOALS
+Your drawings should be:
+1. **Colorful** - use lots of pretty colors, not just one or two
+2. **Shaded** - use color mixing to create depth (lighter colors for highlights, darker for shadows)
+3. **Recognizable** - a 4-year-old should be able to identify what it is
+
 ## ⚠️ CRITICAL: HOW COLOR MIXING WORKS
 
 Painting a cell that already has color MIXES the colors (does NOT replace).
@@ -876,16 +882,23 @@ Lc0,12,50,12
 ```
 All yellow first, then blue ON THE SAME ROWS. Result: solid green.
 
-WRONG way (causes stripes):
+WRONG (interleaved colors = stripes):
 ```
 Lf0,10,50,10
 Lc0,11,50,11
 Lf0,12,50,12
 Lc0,13,50,13
 ```
-Yellow row, blue row, yellow row, blue row = STRIPES, not green!
 
-**The pattern:** ALL of color1 first, then ALL of color2 on the SAME coordinates.
+ALSO WRONG (skipping rows = gaps):
+```
+Lf0,10,50,10
+Lf0,12,50,12
+Lf0,14,50,14
+```
+To fill rows 10-14, paint consecutive rows: 10, 11, 12, 13, 14 - not 10, 12, 14 with gaps!
+
+**The pattern:** ALL of color1 on consecutive rows (no gaps), then ALL of color2 on the SAME rows.
 
 ## CANVAS SIZE
 The canvas is **101 cells wide × 25 cells tall**.
@@ -1079,12 +1092,15 @@ Pk25,10
 
 **learnings** (REQUIRED): One key insight from THIS attempt.
 
-**actions block** (REQUIRED): Generate 300-800 compact actions for a detailed drawing.
-- Use L for lines (fills, strokes)
-- Use P for individual points (details, highlights)
-- More actions = more detail and better shading!
+**actions block** (REQUIRED): Generate compact actions for the drawing.
+- Use L (lines) to fill areas
+- Use P (points) for details and highlights
+- When filling a rectangle, paint EVERY row (y, y+1, y+2...) - don't skip rows!
 
-Include ALL phases: base colors, overlays for mixing, shading, and details.
+**SELF-CHECK before outputting:** For mixed color areas (green, orange, purple):
+1. Are ALL base color lines grouped together?
+2. Then ALL overlay lines on the EXACT SAME rows?
+3. No gaps - every row from y_start to y_end is covered?
 
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
 

@@ -265,6 +265,90 @@ def parse_compact_actions(text: str) -> list[dict] | None:
 
 
 # =============================================================================
+# SCRIPT FIXER - REORDER FOR PROPER COLOR MIXING
+# =============================================================================
+
+# Color families by keyboard row
+YELLOW_FAMILY = set("asdfghjkl;'")  # ASDF row
+RED_FAMILY = set("qwertyuiop[]\\")  # QWERTY row
+BLUE_FAMILY = set("zxcvbnm,./")     # ZXCV row
+GRAYSCALE = set("`1234567890-=")    # Number row
+
+
+def get_color_priority(color: str) -> int:
+    """Get sorting priority for a color key.
+
+    For proper color mixing:
+    - Yellow first (base for green and orange)
+    - Red second (base for purple, overlay for orange)
+    - Blue third (overlay for green and purple)
+    - Grayscale last (outlines, details)
+    """
+    if color in YELLOW_FAMILY:
+        return 0
+    elif color in RED_FAMILY:
+        return 1
+    elif color in BLUE_FAMILY:
+        return 2
+    else:  # grayscale or unknown
+        return 3
+
+
+def fix_color_mixing_order(actions: list[dict]) -> list[dict]:
+    """Reorder actions so colors are layered properly for mixing.
+
+    Groups actions by the cell they paint, then orders colors so that
+    base colors (yellow, red) come before overlay colors (blue).
+
+    This fixes the common AI mistake of interleaving colors like:
+    yellow row 10, blue row 11, yellow row 12, blue row 13
+
+    By reordering to:
+    yellow row 10, yellow row 12, blue row 11, blue row 13
+
+    And if both colors should be on the same cell, ensures yellow comes first.
+    """
+    if not actions:
+        return actions
+
+    # Group actions by cell coordinate
+    cell_actions = {}  # (x, y) -> list of actions
+    non_paint_actions = []  # Actions that aren't paint_at
+
+    for action in actions:
+        if action.get("type") == "paint_at":
+            key = (action.get("x"), action.get("y"))
+            if key not in cell_actions:
+                cell_actions[key] = []
+            cell_actions[key].append(action)
+        else:
+            non_paint_actions.append(action)
+
+    # For each cell, sort by color priority
+    reordered = []
+    for (x, y), cell_acts in sorted(cell_actions.items()):
+        # Sort actions for this cell by color priority
+        sorted_acts = sorted(cell_acts, key=lambda a: get_color_priority(a.get("color", "")))
+        reordered.extend(sorted_acts)
+
+    # Now reorder globally: all yellows, then all reds, then all blues, then grayscale
+    # This ensures that if AI painted yellow at (10,5) and blue at (10,6),
+    # all yellows execute first, creating the right layering
+    final_actions = sorted(reordered, key=lambda a: get_color_priority(a.get("color", "")))
+
+    # Add back any non-paint actions at the end
+    final_actions.extend(non_paint_actions)
+
+    # Log if we made changes
+    original_order = [a.get("color", "") for a in actions if a.get("type") == "paint_at"]
+    new_order = [a.get("color", "") for a in final_actions if a.get("type") == "paint_at"]
+    if original_order != new_order:
+        print(f"[Script Fix] Reordered {len(final_actions)} actions for proper color mixing")
+
+    return final_actions
+
+
+# =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
 
@@ -1766,6 +1850,8 @@ def run_visual_feedback_loop(
 
                 actions = result.get("actions", [])
                 if actions:
+                    # Fix color ordering for proper mixing
+                    actions = fix_color_mixing_order(actions)
                     break  # Got actions, exit retry loop
                 else:
                     print(f"[Warning] No actions returned (attempt {retry + 1}/{max_retries})")

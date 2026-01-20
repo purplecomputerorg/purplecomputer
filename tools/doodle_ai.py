@@ -141,6 +141,130 @@ def parse_json_robust(text: str) -> dict | list | None:
 
 
 # =============================================================================
+# COMPACT ACTION FORMAT PARSER
+# =============================================================================
+
+def parse_compact_actions(text: str) -> list[dict] | None:
+    """Parse compact DSL action format into full action dictionaries.
+
+    Compact format (one per line):
+    - L<color><x1>,<y1>,<x2>,<y2>  → paint_line (horizontal or vertical)
+    - P<color><x>,<y>              → paint_at
+
+    Lines are expanded into individual paint_at commands for the controller.
+
+    Examples:
+        Lf10,5,50,5   → horizontal line from (10,5) to (50,5) in yellow
+        Lf20,0,20,24  → vertical line from (20,0) to (20,24) in yellow
+        Pz25,10       → single point at (25,10) in light blue
+
+    Returns list of action dicts, or None if parsing fails.
+    """
+    # Try to find the actions block (might be in a code block)
+    # Look for ```actions specifically first, then generic code blocks
+    actions_match = re.search(r'```actions\s*([\s\S]*?)\s*```', text)
+    if not actions_match:
+        actions_match = re.search(r'```\s*([\s\S]*?)\s*```', text)
+        # Make sure it's not a JSON block
+        if actions_match and actions_match.group(1).strip().startswith('{'):
+            actions_match = None
+
+    if actions_match:
+        actions_text = actions_match.group(1)
+    else:
+        # Look for lines starting with L or P
+        lines = text.split('\n')
+        action_lines = [l.strip() for l in lines if l.strip() and l.strip()[0] in 'LP']
+        if not action_lines:
+            return None
+        actions_text = '\n'.join(action_lines)
+
+    actions = []
+    for line in actions_text.strip().split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#'):  # Skip empty lines and comments
+            continue
+
+        try:
+            if line.startswith('L'):
+                # Paint line: L<color><x1>,<y1>,<x2>,<y2>
+                color = line[1]
+                coords = line[2:].split(',')
+                if len(coords) >= 4:
+                    x1, y1 = int(coords[0]), int(coords[1])
+                    x2, y2 = int(coords[2]), int(coords[3])
+
+                    # Expand line into paint_at commands
+                    # Determine direction
+                    if y1 == y2:
+                        # Horizontal line
+                        start_x, end_x = min(x1, x2), max(x1, x2)
+                        for x in range(start_x, end_x + 1):
+                            actions.append({
+                                "type": "paint_at",
+                                "x": x,
+                                "y": y1,
+                                "color": color,
+                            })
+                    elif x1 == x2:
+                        # Vertical line
+                        start_y, end_y = min(y1, y2), max(y1, y2)
+                        for y in range(start_y, end_y + 1):
+                            actions.append({
+                                "type": "paint_at",
+                                "x": x1,
+                                "y": y,
+                                "color": color,
+                            })
+                    else:
+                        # Diagonal or arbitrary: use Bresenham-like stepping
+                        dx = abs(x2 - x1)
+                        dy = abs(y2 - y1)
+                        sx = 1 if x1 < x2 else -1
+                        sy = 1 if y1 < y2 else -1
+                        err = dx - dy
+                        x, y = x1, y1
+                        while True:
+                            actions.append({
+                                "type": "paint_at",
+                                "x": x,
+                                "y": y,
+                                "color": color,
+                            })
+                            if x == x2 and y == y2:
+                                break
+                            e2 = 2 * err
+                            if e2 > -dy:
+                                err -= dy
+                                x += sx
+                            if e2 < dx:
+                                err += dx
+                                y += sy
+
+            elif line.startswith('P'):
+                # Paint at: P<color><x>,<y>
+                color = line[1]
+                coords = line[2:].split(',')
+                if len(coords) >= 2:
+                    actions.append({
+                        "type": "paint_at",
+                        "color": color,
+                        "x": int(coords[0]),
+                        "y": int(coords[1]),
+                    })
+        except (ValueError, IndexError) as e:
+            # Skip malformed lines but continue parsing
+            print(f"[Compact Parse] Skipping malformed line: {line} ({e})")
+            continue
+
+    if actions:
+        print(f"[Compact Parse] Parsed {len(actions)} paint commands from compact format")
+        return actions
+
+    return None
+
+
+# =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
 
@@ -825,32 +949,30 @@ paint_at x=1, y=20, color="c"  # Different cell! No mixing!
 
 The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
 
-## AVAILABLE ACTIONS
+## COMPACT ACTION FORMAT (REQUIRED)
 
-Respond with a JSON array of actions:
+Use this compact format for actions (one per line in a code block):
 
-**paint_at** - Paint a color at specific coordinates (MOST EFFICIENT!)
-```json
-{"type": "paint_at", "x": 50, "y": 15, "color": "f"}
-```
-This instantly paints at the given position. Use this for most painting.
+**L = Line**: `L<color><x1>,<y1>,<x2>,<y2>`
+Draw from (x1,y1) to (x2,y2) with the specified color key.
 
-**paint_line** - Draw a horizontal or vertical line
-```json
-{"type": "paint_line", "x": 40, "y": 10, "key": "f", "direction": "right", "length": 20}
-```
-Starts at (x,y) and draws `length` cells in `direction`.
-Directions: "up", "down", "left", "right"
+**P = Point**: `P<color><x>,<y>`
+Paint a single cell at (x,y) with the specified color key.
 
-**move_to** - Position cursor without painting (for visual feedback)
-```json
-{"type": "move_to", "x": 50, "y": 15}
+Examples:
+```actions
+Lf0,20,100,20
+Lf0,21,100,21
+Lc0,20,45,20
+Lc55,20,100,20
+Pk45,22
+Pk46,22
 ```
 
-**wait** - Pause (rarely needed)
-```json
-{"type": "wait", "seconds": 0.3}
-```
+This draws:
+- Yellow (f) lines across rows 20-21
+- Blue (c) overlay on parts of row 20 (creates green)
+- Dark yellow (k) points for details
 
 ## REGENERATIVE APPROACH
 
@@ -910,54 +1032,44 @@ For SHADING mixed colors, vary the shade of the overlay:
 
 ## RESPONSE FORMAT
 
-Respond with a JSON object:
+Respond with a JSON object followed by a compact actions block:
 
 ```json
 {
   "analysis": "What I see from the previous attempt and what to improve",
   "strategy_summary": {
     "composition": {
-      "element_name": {"x_range": [start, end], "y_range": [start, end], "description": "what this element is"},
-      "another_element": {"x_range": [start, end], "y_range": [start, end], "description": "..."}
+      "element_name": {"x_range": [start, end], "y_range": [start, end], "description": "what this element is"}
     },
-    "layering_order": [
-      "Step 1: Yellow 'f' base on foliage + trunk area (y=5-24)",
-      "Step 2: Blue 'c' overlay on foliage only (y=5-18) → green",
-      "Step 3: Dark 'l' on trunk (x=48-52) for brown"
-    ],
-    "color_results": {
-      "worked": ["f+c = good green", "l alone = nice brown"],
-      "failed": ["c over l = muddy purple"]
-    },
-    "keep_next_time": ["trunk position at x=48-52", "foliage shape"],
-    "change_next_time": ["make trunk wider (x=46-54)", "add more foliage density at edges"]
+    "layering_order": ["Step 1: Yellow base", "Step 2: Blue overlay", "Step 3: Details"],
+    "keep_next_time": ["trunk position at x=48-52"],
+    "change_next_time": ["make trunk wider"]
   },
-  "learnings": "Key insight: Blue over brown makes mud. Layer yellow FIRST on all areas, then overlay blue only where green is needed.",
-  "actions": [...]
+  "learnings": "Key insight from this attempt"
 }
+```
+
+```actions
+Lf0,5,100,5
+Lf0,6,100,6
+Lc0,5,50,5
+Pk25,10
 ```
 
 **analysis** (REQUIRED): What you observe and your plan to improve.
 
-**strategy_summary** (REQUIRED): Structured description of your approach with:
-- **composition**: Where each element is positioned (x_range, y_range)
-- **layering_order**: Step-by-step painting sequence with colors and coordinates
-- **color_results**: What color combinations worked or failed
-- **keep_next_time**: Specific things that worked well (with coordinates)
-- **change_next_time**: Specific improvements to make (with coordinates)
+**strategy_summary** (REQUIRED): Structured description with composition, layering_order, keep_next_time, change_next_time.
 
-**learnings** (REQUIRED): One key insight from THIS attempt that should inform future attempts.
-ALWAYS include this field, even on first attempt. Examples:
-- "Yellow must cover ALL areas that will become green before adding blue"
-- "Trunk at x=48-52 is good proportion, keep this"
-- "Blue over brown creates mud - avoid overlapping these colors"
+**learnings** (REQUIRED): One key insight from THIS attempt.
 
-**actions** (REQUIRED): Generate 100-300 paint actions for the COMPLETE drawing.
-Use paint_line for fills and paint_at for details. More actions = more detail!
+**actions block** (REQUIRED): Generate 300-800 compact actions for a detailed drawing.
+- Use L for lines (fills, strokes)
+- Use P for individual points (details, highlights)
+- More actions = more detail and better shading!
 
-Include ALL phases in one script: base colors, overlays for mixing, and details.
+Include ALL phases: base colors, overlays for mixing, shading, and details.
 
-**IMPORTANT: All fields are REQUIRED in every response.**"""
+**IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
 
 
 def call_planning_api(
@@ -1034,6 +1146,50 @@ def get_current_phase(plan: dict, iteration: int) -> dict | None:
     return None
 
 
+def get_complexity_guidance(iteration: int, max_iterations: int) -> str:
+    """Option D: Get progressive complexity guidance based on iteration progress.
+
+    Early iterations focus on structure, later ones add detail and shading.
+    """
+    progress = iteration / max_iterations
+
+    if progress <= 0.25:
+        return """## COMPLEXITY: FOUNDATION (Early Phase)
+Focus on BASIC STRUCTURE only:
+- Get the overall shape and composition right
+- Use simple fills with primary colors (f, c, r)
+- Don't worry about shading yet
+- Establish correct proportions and placement
+- Use 100-300 actions for clean, simple shapes"""
+
+    elif progress <= 0.5:
+        return """## COMPLEXITY: STRUCTURE (Mid-Early Phase)
+Build on the foundation:
+- Refine shapes and proportions
+- Add secondary elements
+- Start using color mixing (yellow+blue=green, etc.)
+- Begin distinguishing different areas
+- Use 200-400 actions"""
+
+    elif progress <= 0.75:
+        return """## COMPLEXITY: DETAIL (Mid-Late Phase)
+Add depth and detail:
+- Add shading with lighter/darker keys from same row
+- Use highlights (z, a, q) and shadows (/, ', \\)
+- Add texture variations within areas
+- Refine edges and transitions
+- Use 400-600 actions for richer detail"""
+
+    else:
+        return """## COMPLEXITY: REFINEMENT (Final Phase)
+Maximum detail and polish:
+- Use FULL shading range (extreme light to extreme dark)
+- Add fine details and highlights
+- Perfect the color transitions
+- Add any final touches
+- Use 500-800 actions for maximum detail"""
+
+
 def call_vision_api(
     image_base64: str,
     goal: str,
@@ -1043,6 +1199,7 @@ def call_vision_api(
     plan: dict = None,
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
+    judge_feedback: dict = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1055,6 +1212,7 @@ def call_vision_api(
         plan: Drawing plan from planning phase
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
+        judge_feedback: Dict with judge's evaluation of recent comparison (reasoning, winner, etc.)
 
     Returns:
         Dict with keys: analysis, strategy_summary, learnings, actions
@@ -1103,6 +1261,27 @@ def call_vision_api(
             strategy_section += f"{previous_strategy}\n"
         strategy_section += "\nThe screenshot shows the result of this approach.\n"
 
+    # Build judge feedback section (Option A: pass judge reasoning to execution AI)
+    judge_section = ""
+    if judge_feedback:
+        winner = judge_feedback.get("winner", "")
+        reasoning = judge_feedback.get("reasoning", "")
+        compared_best = judge_feedback.get("compared_best_attempt")
+        compared_new = judge_feedback.get("compared_new_attempt")
+
+        if winner == "B":
+            # Previous attempt was better than the old best
+            judge_section = f"\n## JUDGE FEEDBACK (Your last attempt WON)\n"
+            judge_section += f"Your Attempt {compared_new} beat the previous best (Attempt {compared_best}).\n"
+            judge_section += f"Judge's reasoning: {reasoning}\n"
+            judge_section += "Keep doing what worked! Build on this success.\n"
+        elif winner == "A":
+            # Previous attempt was worse than the best
+            judge_section = f"\n## JUDGE FEEDBACK (Your last attempt LOST)\n"
+            judge_section += f"Your Attempt {compared_new} was worse than Attempt {compared_best}.\n"
+            judge_section += f"Judge's reasoning: {reasoning}\n"
+            judge_section += "Change your approach. The current best is still Attempt {compared_best}.\n"
+
     # Build plan summary
     plan_section = ""
     if plan:
@@ -1112,6 +1291,9 @@ def call_vision_api(
             if comp.get('main_element'):
                 me = comp['main_element']
                 plan_section += f"Main element: {me.get('description', '')} at x={me.get('x_range')}, y={me.get('y_range')}\n"
+
+    # Option D: Get progressive complexity guidance
+    complexity_section = get_complexity_guidance(iteration, max_iterations)
 
     # First iteration vs subsequent
     if iteration == 1:
@@ -1129,10 +1311,12 @@ The canvas will be CLEARED and your new script executed from scratch."""
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
-{plan_section}{learnings_section}{strategy_section}
+
+{complexity_section}
+{plan_section}{learnings_section}{strategy_section}{judge_section}
 {instruction}
 
-Respond with a JSON object containing "analysis", "strategy_summary", "learnings", and "actions" fields."""
+Respond with JSON metadata followed by a compact ```actions``` block."""
 
     # Build message content with single image
     message_content = [
@@ -1159,7 +1343,7 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
 
     text = response.content[0].text
 
-    # Parse JSON response using robust parser
+    # Parse response: try compact action format first, fall back to JSON
     result = {
         "analysis": "",
         "strategy_summary": "",
@@ -1167,32 +1351,45 @@ Respond with a JSON object containing "analysis", "strategy_summary", "learnings
         "actions": [],
     }
 
+    # 1. Try to extract compact actions from ```actions block
+    compact_actions = parse_compact_actions(text)
+    if compact_actions:
+        result["actions"] = compact_actions
+        print(f"[Parse] Got {len(compact_actions)} actions from compact format")
+
+    # 2. Extract JSON metadata (analysis, strategy, learnings) regardless of action format
     data = parse_json_robust(text)
 
     if data and isinstance(data, dict):
         result["analysis"] = data.get('analysis', '')
         result["strategy_summary"] = data.get('strategy_summary', '')
         result["learnings"] = data.get('learnings', '')
-        result["actions"] = data.get('actions', [])
+
+        # If we didn't get compact actions, try JSON actions as fallback
+        if not result["actions"]:
+            json_actions = data.get('actions', [])
+            if json_actions:
+                result["actions"] = json_actions
+                print(f"[Parse] Got {len(json_actions)} actions from JSON format")
 
         # Print feedback
         if result["analysis"]:
-            print(f"[AI Analysis] {result['analysis']}")
+            print(f"[AI Analysis] {result['analysis'][:200]}...")
         if result["strategy_summary"]:
             strat = result["strategy_summary"]
             if isinstance(strat, dict):
                 if strat.get("keep_next_time"):
-                    print(f"[AI Keep] {', '.join(strat['keep_next_time'])}")
+                    print(f"[AI Keep] {', '.join(strat['keep_next_time'][:3])}")
                 if strat.get("change_next_time"):
-                    print(f"[AI Change] {', '.join(strat['change_next_time'])}")
+                    print(f"[AI Change] {', '.join(strat['change_next_time'][:3])}")
         if result["learnings"]:
             print(f"[AI Learning] {result['learnings']}")
-    elif data and isinstance(data, list):
+    elif data and isinstance(data, list) and not result["actions"]:
         # Got just an array (old format or fallback extraction)
         result["actions"] = data
         print(f"[Warning] Only extracted actions array, no metadata")
-    else:
-        print(f"[Error] Could not parse JSON from response")
+    elif not result["actions"]:
+        print(f"[Error] Could not parse actions from response")
         print(f"[Debug] Raw response:\n{text[:500]}...")
 
     return result
@@ -1393,7 +1590,14 @@ def run_visual_feedback_loop(
         best_attempt = None  # Which attempt produced the best result
         best_image_base64 = None
         best_reason = None
+
+        # Option B: Track runner-up (second best) for more context
+        runner_up_attempt = None
+        runner_up_image_base64 = None
+        runner_up_reason = None
+
         judge_history = []  # Track all judge comparisons for monitoring
+        last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
 
         # Track what's ACTUALLY on the canvas (not just loop index)
         # This is crucial when iterations fail - the canvas still shows the last successful result
@@ -1458,6 +1662,7 @@ def run_visual_feedback_loop(
                     plan=plan,
                     accumulated_learnings=accumulated_learnings,
                     previous_strategy=previous_strategy,
+                    judge_feedback=last_judge_feedback,
                 )
 
                 actions = result.get("actions", [])
@@ -1571,17 +1776,31 @@ def run_visual_feedback_loop(
                 }
 
                 if winner == "B":
-                    # Canvas result is better
+                    # Canvas result is better - old best becomes runner-up
+                    runner_up_attempt = best_attempt
+                    runner_up_image_base64 = best_image_base64
+                    runner_up_reason = best_reason
+
                     best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = reasoning
                     judgment_record["new_best_attempt"] = canvas_shows_attempt
                     print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
+                    if runner_up_attempt:
+                        print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
                 elif winner == "A":
+                    # Current best stays - canvas result becomes runner-up if better than current runner-up
+                    # (For simplicity, we just track the most recent loser as potential runner-up)
+                    if runner_up_attempt is None or canvas_shows_attempt != runner_up_attempt:
+                        runner_up_attempt = canvas_shows_attempt
+                        runner_up_image_base64 = png_base64
+                        runner_up_reason = reasoning
+
                     judgment_record["new_best_attempt"] = best_attempt
                     print(f"[Judge] ✗ Keeping Attempt {best_attempt} as best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
+                    print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
                 else:
                     judgment_record["new_best_attempt"] = best_attempt
                     print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_attempt}")
@@ -1592,6 +1811,15 @@ def run_visual_feedback_loop(
                 with open(judge_path, 'w') as f:
                     json.dump(judge_history, f, indent=2)
                 print(f"[Saved] Judge history: {judge_path}")
+
+                # Option A: Store judge feedback to pass to next execution call
+                last_judge_feedback = {
+                    "winner": winner,
+                    "reasoning": reasoning,
+                    "confidence": confidence,
+                    "compared_best_attempt": best_attempt if winner == "A" else judgment_record["compared_a_attempt"],
+                    "compared_new_attempt": canvas_shows_attempt,
+                }
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
@@ -1666,12 +1894,14 @@ def run_visual_feedback_loop(
                 f.write(demo_script)
             print(f"[Saved] Demo script (from best Attempt {source_attempt}): {script_path}")
 
-            # Also save info about which attempt was best
+            # Also save info about which attempt was best (and runner-up)
             best_info_path = os.path.join(output_dir, "best_iteration.json")
             with open(best_info_path, 'w') as f:
                 json.dump({
                     "best_attempt": best_attempt,
                     "reason": best_reason,
+                    "runner_up_attempt": runner_up_attempt,
+                    "runner_up_reason": runner_up_reason,
                     "total_iterations": iterations,
                 }, f, indent=2)
             print(f"[Saved] Best iteration info: {best_info_path}")

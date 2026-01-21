@@ -809,9 +809,14 @@ class PurpleController:
                         processed = int(f.read().strip())
                     os.unlink(response_path)
                     if processed != len(paint_at_batch):
-                        print(f"[ERROR] Command loss detected! Sent {len(paint_at_batch)}, app processed {processed}")
+                        raise RuntimeError(
+                            f"Command loss detected! Sent {len(paint_at_batch)}, app processed {processed}. "
+                            f"Lost {len(paint_at_batch) - processed} commands."
+                        )
                     else:
                         print(f"[Execute] Verified: all {processed} commands processed")
+            except RuntimeError:
+                raise  # Re-raise our own error
             except Exception as e:
                 print(f"[Warning] Could not verify command count: {e}")
 

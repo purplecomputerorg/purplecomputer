@@ -771,12 +771,49 @@ class PurpleController:
             time.sleep(action.get('seconds', 0.5))
 
     def execute_actions(self, actions: list[dict]) -> None:
-        """Execute a list of actions."""
+        """Execute a list of actions, batching paint_at commands for reliability."""
+        # Batch paint_at commands to avoid race conditions
+        # (individual sends can be overwritten before app reads them)
+        paint_at_batch = []
+
         for action in actions:
             try:
-                self.execute_action(action)
+                if action.get('type') == 'paint_at':
+                    # Collect paint_at for batching
+                    x = action.get('x', 0)
+                    y = action.get('y', 0)
+                    color = action.get('color', action.get('key', 'f'))
+                    paint_at_batch.append({"action": "paint_at", "x": x, "y": y, "color": color})
+                else:
+                    # Flush any pending paint_at batch first
+                    if paint_at_batch:
+                        self.send_commands(paint_at_batch)
+                        paint_at_batch = []
+                        time.sleep(0.1)  # Wait for batch to process
+                    # Execute non-paint_at action
+                    self.execute_action(action)
             except Exception as e:
                 print(f"[Warning] Action failed: {action} - {e}")
+
+        # Flush remaining paint_at batch
+        if paint_at_batch:
+            print(f"[Execute] Sending batch of {len(paint_at_batch)} paint_at commands")
+            self.send_commands(paint_at_batch)
+            time.sleep(0.3)  # Wait for large batch to process
+
+            # Verify commands were received
+            response_path = os.path.join(self.screenshot_dir, "command_response")
+            try:
+                if os.path.exists(response_path):
+                    with open(response_path, "r") as f:
+                        processed = int(f.read().strip())
+                    os.unlink(response_path)
+                    if processed != len(paint_at_batch):
+                        print(f"[ERROR] Command loss detected! Sent {len(paint_at_batch)}, app processed {processed}")
+                    else:
+                        print(f"[Execute] Verified: all {processed} commands processed")
+            except Exception as e:
+                print(f"[Warning] Could not verify command count: {e}")
 
 
 # =============================================================================

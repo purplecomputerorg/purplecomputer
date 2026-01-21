@@ -1343,14 +1343,21 @@ class PurpleApp(App):
             os.unlink(command_path)
 
             import json
+            cmd_count = 0
             for line in content.strip().split("\n"):
                 if not line.strip():
                     continue
                 try:
                     cmd = json.loads(line)
                     asyncio.create_task(self._execute_dev_command(cmd))
+                    cmd_count += 1
                 except json.JSONDecodeError:
                     pass
+
+            # Write response with count of commands processed
+            response_path = os.path.join(screenshot_dir, "command_response")
+            with open(response_path, "w") as f:
+                f.write(f"{cmd_count}\n")
         except Exception:
             pass
 

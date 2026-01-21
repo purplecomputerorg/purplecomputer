@@ -900,13 +900,11 @@ EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer
 
 ## GOALS
 Your drawings should be:
-1. **Colorful** - use lots of pretty colors, not just one or two
-2. **Shaded** - use color mixing to create depth (lighter colors for highlights, darker for shadows)
-3. **Organic & Curvy** - use diagonal lines to create curves and natural shapes, not just rectangles
-4. **Detailed** - add texture, highlights, and fine details to make it rich and interesting
+1. **Colorful** - use lots of pretty colors across the whole image
+2. **Shaded** - use lighter and darker shades for depth and dimension
+3. **Detailed** - add texture, highlights, gradients, and fine details
+4. **Organic** - use varied shapes, not just rectangles
 5. **Recognizable** - a 4-year-old should be able to identify what it is
-
-**Avoid blocky rectangles!** Real objects have curves. Use diagonal L commands (where x1≠x2 AND y1≠y2) to create rounded edges, organic shapes, and natural contours.
 
 ## COLOR MIXING
 
@@ -1017,26 +1015,7 @@ Draw from (x1,y1) to (x2,y2) with the specified color key.
 **P = Point**: `P<color><x>,<y>`
 Paint a single cell at (x,y) with the specified color key.
 
-**Creating curves and organic shapes:**
-```actions
-# Round tree crown (not a rectangle!)
-Lf40,2,60,2
-Lf35,3,65,3
-Lf32,4,68,4
-Lf30,5,70,5
-Lf30,6,70,6
-Lf32,7,68,7
-Lf35,8,65,8
-Lf40,9,60,9
-```
-This creates a rounded/oval shape by varying the x-range per row.
-
-**Use diagonals for natural contours:**
-```actions
-Lf20,10,30,15
-Lf30,15,25,20
-```
-Diagonal lines create slopes, curves, and organic edges.
+**Remember:** Vary the x-range per row to create curves. Don't use the same x-range for every row (that makes rectangles).
 
 ## REGENERATIVE APPROACH
 
@@ -1215,64 +1194,32 @@ def get_current_phase(plan: dict, iteration: int) -> dict | None:
     return None
 
 
-def get_complexity_guidance(iteration: int, max_iterations: int, consecutive_losses: int = 0) -> str:
-    """Get progressive complexity guidance based on iteration progress and judge feedback.
+def get_complexity_guidance(iteration: int, max_iterations: int) -> str:
+    """Get progressive complexity guidance based on iteration progress.
 
-    Early iterations focus on structure, later ones add detail and shading.
-    If judge keeps rejecting attempts (consecutive_losses >= 3), force simpler complexity.
+    Encourages detail and richness throughout.
     """
     progress = iteration / max_iterations
 
-    # ADAPTIVE COMPLEXITY: If stuck (judge keeps preferring earlier attempt), reduce complexity
-    if consecutive_losses >= 3:
-        return """## COMPLEXITY: FORCED SIMPLIFICATION (Judge Feedback)
-**The judge has rejected your last 3+ attempts in favor of an earlier, simpler version.**
-
-You MUST simplify:
-- Return to BASIC STRUCTURE with clean, simple shapes
-- Use SOLID color blocks, NO gradients or detailed shading
-- Use 150-300 actions maximum
-- Focus on clear, recognizable silhouette
-- Avoid complexity - the judge clearly prefers simpler drawings
-- Look at what made the earlier winning attempt successful and replicate that approach
-
-STOP adding detail. STOP adding stripes. Make it CLEAN and SIMPLE."""
-
     if progress <= 0.25:
-        return """## COMPLEXITY: FOUNDATION (Early Phase)
-Focus on BASIC STRUCTURE only:
-- Get the overall shape and composition right
-- Use simple fills with primary colors (f, c, r)
-- Don't worry about shading yet
-- Establish correct proportions and placement
-- Use 100-300 actions for clean, simple shapes"""
+        return """## ITERATION PHASE: Foundation
+Establish the basic composition and main shapes. Use color mixing to create greens, oranges, purples.
+Feel free to add detail - more actions create richer, more interesting drawings."""
 
     elif progress <= 0.5:
-        return """## COMPLEXITY: STRUCTURE (Mid-Early Phase)
-Build on the foundation:
-- Refine shapes and proportions
-- Add secondary elements
-- Start using color mixing (yellow+blue=green, etc.)
-- Begin distinguishing different areas
-- Use 200-400 actions"""
+        return """## ITERATION PHASE: Development
+Build out the drawing with more colors and shading. Add texture and visual interest.
+Use the full range of colors - lights for highlights, darks for shadows."""
 
     elif progress <= 0.75:
-        return """## COMPLEXITY: DETAIL (Mid-Late Phase)
-Add depth and detail:
-- Add shading with lighter/darker keys from same row
-- Use highlights (z, a, q) and shadows (/, ', \\)
-- Add texture variations within areas
-- Refine edges and transitions
-- Use 400-600 actions for richer detail"""
+        return """## ITERATION PHASE: Refinement
+Add fine details, highlights, and finishing touches. Make it rich and visually interesting.
+Don't hold back on detail - the more texture and shading, the better."""
 
     else:
-        return """## COMPLEXITY: REFINEMENT (Final Phase)
-Polish and refine (but keep it clean):
-- Add shading carefully - don't overdo it
-- Fine-tune details and highlights
-- Perfect the color transitions
-- Keep the drawing CLEAN and recognizable
-- Use 400-700 actions - quality over quantity"""
+        return """## ITERATION PHASE: Polish
+Perfect the details. Add any missing highlights, shadows, or textures.
+Make every part of the drawing interesting to look at."""
 
 
 def call_vision_api(
@@ -1285,8 +1232,6 @@ def call_vision_api(
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
     judge_feedback: dict = None,
-    consecutive_losses: int = 0,
-    best_script: list[dict] = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1300,8 +1245,6 @@ def call_vision_api(
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
         judge_feedback: Dict with judge's evaluation of recent comparison (reasoning, winner, etc.)
-        consecutive_losses: Number of consecutive times judge picked earlier iteration over recent attempts
-        best_script: The action script from the current best iteration (for template when stuck)
 
     Returns:
         Dict with keys: analysis, strategy_summary, learnings, actions
@@ -1381,43 +1324,8 @@ def call_vision_api(
                 me = comp['main_element']
                 plan_section += f"Main element: {me.get('description', '')} at x={me.get('x_range')}, y={me.get('y_range')}\n"
 
-    # Option D: Get progressive complexity guidance (adaptive based on judge feedback)
-    complexity_section = get_complexity_guidance(iteration, max_iterations, consecutive_losses)
-
-    # Winner-as-template: When stuck, show the winning script as reference
-    template_section = ""
-    if consecutive_losses >= 3 and best_script:
-        # Convert best_script actions back to compact format for reference
-        template_lines = []
-        for action in best_script[:100]:  # Limit to first 100 actions to avoid overwhelming
-            if action.get("type") == "paint_at":
-                template_lines.append(f"P{action.get('key', 'f')}{action.get('x', 0)},{action.get('y', 0)}")
-            elif action.get("type") == "paint_line":
-                # Reconstruct line format
-                x = action.get("x", 0)
-                y = action.get("y", 0)
-                direction = action.get("direction", "right")
-                length = action.get("length", 1)
-                key = action.get("key", "f")
-                if direction == "right":
-                    template_lines.append(f"L{key}{x},{y},{x + length - 1},{y}")
-                elif direction == "down":
-                    template_lines.append(f"L{key}{x},{y},{x},{y + length - 1}")
-
-        if template_lines:
-            template_section = f"""
-## REFERENCE SCRIPT (from winning Attempt - USE THIS AS TEMPLATE)
-
-The judge keeps preferring an earlier attempt. Here is the START of that winning script.
-**Study this structure and replicate its approach.** Make only small improvements.
-
-```actions
-{chr(10).join(template_lines[:50])}
-```
-{"(truncated - " + str(len(template_lines)) + " actions total)" if len(template_lines) > 50 else ""}
-
-**KEY: Maintain this script's structure. Don't reinvent - refine.**
-"""
+    # Option D: Get progressive complexity guidance
+    complexity_section = get_complexity_guidance(iteration, max_iterations)
 
     # First iteration vs subsequent
     if iteration == 1:
@@ -1437,7 +1345,7 @@ The canvas will be CLEARED and your new script executed from scratch."""
 ## Attempt: {iteration} of {max_iterations}
 
 {complexity_section}
-{template_section}{plan_section}{learnings_section}{strategy_section}{judge_section}
+{plan_section}{learnings_section}{strategy_section}{judge_section}
 {instruction}
 
 Respond with JSON metadata followed by a compact ```actions``` block."""
@@ -1729,7 +1637,6 @@ def run_visual_feedback_loop(
 
         judge_history = []  # Track all judge comparisons for monitoring
         last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
-        consecutive_losses = 0  # Track how many times judge picked earlier attempt over recent ones
 
         # Track what's ACTUALLY on the canvas (not just loop index)
         # This is crucial when iterations fail - the canvas still shows the last successful result
@@ -1785,14 +1692,6 @@ def run_visual_feedback_loop(
                     print(f"[Retry] Attempt {retry + 1}/{max_retries} for iteration {i + 1}...")
                     time.sleep(1)  # Brief pause before retry
 
-                # Find the best script for template mechanism
-                best_script_for_template = None
-                if best_attempt and iteration_scripts:
-                    for script_entry in iteration_scripts:
-                        if script_entry["iteration"] == best_attempt:
-                            best_script_for_template = script_entry["actions"]
-                            break
-
                 result = call_vision_api(
                     image_base64=png_base64,
                     goal=goal,
@@ -1803,8 +1702,6 @@ def run_visual_feedback_loop(
                     accumulated_learnings=accumulated_learnings,
                     previous_strategy=previous_strategy,
                     judge_feedback=last_judge_feedback,
-                    consecutive_losses=consecutive_losses,
-                    best_script=best_script_for_template,
                 )
 
                 actions = result.get("actions", [])
@@ -1942,7 +1839,6 @@ def run_visual_feedback_loop(
                     best_image_base64 = png_base64
                     best_reason = reasoning
                     judgment_record["new_best_attempt"] = canvas_shows_attempt
-                    consecutive_losses = 0  # Reset - we improved!
                     print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                     if runner_up_attempt:
@@ -1956,13 +1852,9 @@ def run_visual_feedback_loop(
                         runner_up_reason = reasoning
 
                     judgment_record["new_best_attempt"] = best_attempt
-                    consecutive_losses += 1  # Track consecutive failures to beat best
                     print(f"[Judge] ✗ Keeping Attempt {best_attempt} as best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
                     print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
-                    print(f"[Judge]   Consecutive losses: {consecutive_losses}")
-                    if consecutive_losses >= 3:
-                        print(f"[Judge] ⚠ STUCK: {consecutive_losses} consecutive losses - will simplify next attempt")
                 else:
                     judgment_record["new_best_attempt"] = best_attempt
                     print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_attempt}")

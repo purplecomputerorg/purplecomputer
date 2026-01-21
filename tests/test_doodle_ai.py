@@ -284,42 +284,40 @@ class TestComplexityGuidance:
             return
 
         guidance = get_complexity_guidance(1, 20)
-        assert "FOUNDATION" in guidance
-        assert "BASIC STRUCTURE" in guidance
+        assert "Foundation" in guidance
 
     def test_mid_early_phase(self):
-        """Mid-early iterations get structure guidance."""
+        """Mid-early iterations get development guidance."""
         if not IMPORTS_AVAILABLE:
             return
 
         guidance = get_complexity_guidance(6, 20)
-        assert "STRUCTURE" in guidance
+        assert "Development" in guidance
 
     def test_mid_late_phase(self):
-        """Mid-late iterations get detail guidance."""
+        """Mid-late iterations get refinement guidance."""
         if not IMPORTS_AVAILABLE:
             return
 
         guidance = get_complexity_guidance(12, 20)
-        assert "DETAIL" in guidance
+        assert "Refinement" in guidance
 
     def test_final_phase(self):
-        """Final iterations get refinement guidance."""
+        """Final iterations get polish guidance."""
         if not IMPORTS_AVAILABLE:
             return
 
         guidance = get_complexity_guidance(18, 20)
-        assert "REFINEMENT" in guidance
+        assert "Polish" in guidance
 
-    def test_action_counts_increase(self):
-        """Later phases suggest more actions."""
+    def test_phases_encourage_detail(self):
+        """All phases should encourage detail, not restrict it."""
         if not IMPORTS_AVAILABLE:
             return
 
         early = get_complexity_guidance(1, 20)
         late = get_complexity_guidance(19, 20)
 
-        # Early should suggest fewer actions (100-300)
-        assert "100-300" in early or "100" in early
-        # Late should suggest more actions (400-700)
-        assert "400-700" in late or "700" in late
+        # No action count limits - we encourage detail
+        assert "100-300" not in early  # No restrictive limits
+        assert "detail" in late.lower()  # Encourages detail

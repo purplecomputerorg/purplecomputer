@@ -867,10 +867,10 @@ Create a plan describing what the FINAL drawing should look like:
 
 ## KEY RULES FOR SUCCESS
 
-- Use SOLID color regions, not alternating stripe patterns
-- Keep shapes SIMPLE and recognizable (think: what would a 4-year-old recognize?)
+- Keep the main subject RECOGNIZABLE (a 4-year-old should identify it)
 - Use LARGE, BOLD features that fill the canvas
-- NO dithering or checkerboard patterns (don't alternate A-B-A-B to "blend" colors)
+- Add SHADING for depth (lighter colors for highlights, darker for shadows)
+- Use color mixing to create greens, oranges, and purples
 
 ## RESPONSE FORMAT
 
@@ -887,7 +887,7 @@ Create a plan describing what the FINAL drawing should look like:
         "description": "what this element is"
       }
     },
-    "style_notes": "Key points about the visual style (e.g., 'cartoon-style tree with round foliage')",
+    "style_notes": "Key points about the visual style - emphasize CURVED, ORGANIC shapes (e.g., 'round fluffy foliage, not rectangular')",
     "recognition_test": "A 4-year-old should see: [what they should recognize]"
   }
 }
@@ -902,18 +902,22 @@ EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer
 Your drawings should be:
 1. **Colorful** - use lots of pretty colors, not just one or two
 2. **Shaded** - use color mixing to create depth (lighter colors for highlights, darker for shadows)
-3. **Recognizable** - a 4-year-old should be able to identify what it is
+3. **Organic & Curvy** - use diagonal lines to create curves and natural shapes, not just rectangles
+4. **Detailed** - add texture, highlights, and fine details to make it rich and interesting
+5. **Recognizable** - a 4-year-old should be able to identify what it is
 
-## ⚠️ CRITICAL: HOW COLOR MIXING WORKS
+**Avoid blocky rectangles!** Real objects have curves. Use diagonal L commands (where x1≠x2 AND y1≠y2) to create rounded edges, organic shapes, and natural contours.
 
-Painting a cell that already has color MIXES the colors (does NOT replace).
-- Yellow cell + paint blue on it → GREEN cell
-- Yellow cell + paint red on it → ORANGE cell
-- Blue cell + paint red on it → PURPLE cell
+## COLOR MIXING
 
-**To make a GREEN rectangle (rows 10-12, columns 0-50):**
+Painting over an existing color MIXES them (like real paint!):
+- Yellow + Blue → GREEN
+- Yellow + Red → ORANGE
+- Blue + Red → PURPLE
 
-CORRECT way:
+To mix: paint the base color on an area, then paint the second color on the SAME cells.
+
+Example for green (rows 10-12):
 ```
 Lf0,10,50,10
 Lf0,11,50,11
@@ -922,25 +926,6 @@ Lc0,10,50,10
 Lc0,11,50,11
 Lc0,12,50,12
 ```
-All yellow first, then blue ON THE SAME ROWS. Result: solid green.
-
-WRONG (interleaved colors = stripes):
-```
-Lf0,10,50,10
-Lc0,11,50,11
-Lf0,12,50,12
-Lc0,13,50,13
-```
-
-ALSO WRONG (skipping rows = gaps):
-```
-Lf0,10,50,10
-Lf0,12,50,12
-Lf0,14,50,14
-```
-To fill rows 10-14, paint consecutive rows: 10, 11, 12, 13, 14 - not 10, 12, 14 with gaps!
-
-**The pattern:** ALL of color1 on consecutive rows (no gaps), then ALL of color2 on the SAME rows.
 
 ## CANVAS SIZE
 The canvas is **101 cells wide × 25 cells tall**.
@@ -1017,9 +1002,7 @@ paint_at x=0, y=20, color="f"
 paint_at x=1, y=20, color="c"  # Different cell! No mixing!
 ```
 
-The mixing is realistic (Kubelka-Munk spectral mixing), not just RGB blending.
-
-**REMINDER:** See the top of this prompt for how to make green correctly. Never alternate colors A-B-A-B.
+The mixing is realistic (Kubelka-Munk spectral mixing), like real paint.
 
 ## COMPACT ACTION FORMAT (REQUIRED)
 
@@ -1027,24 +1010,33 @@ Use this compact format for actions (one per line in a code block):
 
 **L = Line**: `L<color><x1>,<y1>,<x2>,<y2>`
 Draw from (x1,y1) to (x2,y2) with the specified color key.
+- Horizontal: `Lf0,10,50,10` (same y)
+- Vertical: `Lf20,0,20,24` (same x)
+- **Diagonal**: `Lf10,5,30,15` (different x AND y - creates curves!)
 
 **P = Point**: `P<color><x>,<y>`
 Paint a single cell at (x,y) with the specified color key.
 
-Examples:
+**Creating curves and organic shapes:**
 ```actions
-Lf0,20,100,20
-Lf0,21,100,21
-Lc0,20,45,20
-Lc55,20,100,20
-Pk45,22
-Pk46,22
+# Round tree crown (not a rectangle!)
+Lf40,2,60,2
+Lf35,3,65,3
+Lf32,4,68,4
+Lf30,5,70,5
+Lf30,6,70,6
+Lf32,7,68,7
+Lf35,8,65,8
+Lf40,9,60,9
 ```
+This creates a rounded/oval shape by varying the x-range per row.
 
-This draws:
-- Yellow (f) lines across rows 20-21
-- Blue (c) overlay on parts of row 20 (creates green)
-- Dark yellow (k) points for details
+**Use diagonals for natural contours:**
+```actions
+Lf20,10,30,15
+Lf30,15,25,20
+```
+Diagonal lines create slopes, curves, and organic edges.
 
 ## REGENERATIVE APPROACH
 
@@ -1135,13 +1127,15 @@ Pk25,10
 **learnings** (REQUIRED): One key insight from THIS attempt.
 
 **actions block** (REQUIRED): Generate compact actions for the drawing.
-- Use L (lines) to fill areas
-- Use P (points) for details and highlights
-- When filling a rectangle, paint EVERY row (y, y+1, y+2...) - don't skip rows!
+- Use L (lines) to fill solid areas
+- Use P (points) for details, highlights, and texture
+- Use diagonal lines (L with different x1,y1 and x2,y2) for organic shapes
+- More actions = more detail and richer shading!
 
-**SELF-CHECK before outputting:** For mixed color areas (green, orange, purple):
-1. Are ALL base color lines grouped together?
-2. Then ALL overlay lines on the EXACT SAME rows?
+**Tips for beautiful drawings:**
+- Add shading: use lighter colors on lit surfaces, darker in shadows
+- Add texture: sprinkle in detail points with varied colors
+- Create depth: foreground elements overlap background
 3. No gaps - every row from y_start to y_end is covered?
 
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""

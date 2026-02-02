@@ -868,7 +868,8 @@ Create a plan describing what the FINAL drawing should look like:
 ## KEY RULES FOR SUCCESS
 
 - Keep the main subject RECOGNIZABLE (a 4-year-old should identify it)
-- Use LARGE, BOLD features that fill the canvas
+- Use LARGE, BOLD features so the subject is prominent
+- The subject should look good WITHIN the canvas, but does NOT need to fill it edge to edge. Leave empty space where it makes sense (e.g., sky around a tree, ground around a house). Stretching the subject to fill the full width looks unnatural.
 - Add SHADING for depth (lighter colors for highlights, darker for shadows)
 - Use color mixing to create greens, oranges, and purples
 
@@ -893,7 +894,9 @@ Create a plan describing what the FINAL drawing should look like:
 }
 ```
 
-Be specific about coordinates. The execution AI will use this as a reference for composition."""
+Be specific about coordinates. The execution AI will use this as a reference for composition.
+
+**COMPOSITION TIP:** Only backgrounds (sky, grass, water) should span the full canvas width (0-100). The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-100."""
 
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
@@ -1093,10 +1096,10 @@ Respond with a JSON object followed by a compact actions block:
 ```
 
 ```actions
-Lf0,5,100,5
-Lf0,6,100,6
-Lc0,5,50,5
-Pk25,10
+Lf20,5,80,5
+Lf18,6,82,6
+Lc20,5,50,5
+Pk35,10
 ```
 
 **analysis** (REQUIRED): What you observe and your plan to improve.
@@ -1115,7 +1118,7 @@ Pk25,10
 - Add shading: use lighter colors on lit surfaces, darker in shadows
 - Add texture: sprinkle in detail points with varied colors
 - Create depth: foreground elements overlap background
-3. No gaps - every row from y_start to y_end is covered?
+- Compose naturally: the subject should look good in the canvas, NOT stretch to fill the full width. A tree canopy should be round, not 101 cells wide. Leave sky, ground, or empty space around the subject. Only backgrounds (sky, grass) should span the full width.
 
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
 

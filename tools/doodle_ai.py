@@ -24,6 +24,7 @@ import io
 import json
 import os
 import pty
+import random
 import re
 import select
 import struct
@@ -1441,21 +1442,19 @@ def call_judge_api(
     image_a_base64: str,
     image_b_base64: str,
     goal: str,
-    iteration_a: int,
-    iteration_b: int,
     api_key: str,
 ) -> dict:
-    """Separate API call to judge which image is better.
+    """Single judge API call comparing two images.
 
     Uses a fresh context and focused prompt to get an objective comparison.
     Uses Haiku for cost efficiency since this is just evaluation, not generation.
+    Images are labeled neutrally as "Image A" and "Image B" with no temporal
+    or iteration information to avoid biasing the model.
 
     Args:
-        image_a_base64: Current best image (PNG base64)
-        image_b_base64: Latest attempt image (PNG base64)
+        image_a_base64: First image (PNG base64)
+        image_b_base64: Second image (PNG base64)
         goal: What we're trying to draw
-        iteration_a: Which iteration produced image A
-        iteration_b: Which iteration produced image B
         api_key: Anthropic API key
 
     Returns:
@@ -1469,9 +1468,7 @@ def call_judge_api(
 
 GOAL: "{goal}"
 
-You will see two images:
-- Image A (iteration {iteration_a})
-- Image B (iteration {iteration_b})
+You will see two images: Image A and Image B.
 
 Evaluate based on:
 1. Does it look like the goal? (most important)
@@ -1479,7 +1476,7 @@ Evaluate based on:
 3. Appropriate colors
 4. Overall quality and completeness
 
-Be OBJECTIVE. Newer is not always better. Simpler is not always worse.
+Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.
 
 Respond with JSON only:
@@ -1492,7 +1489,7 @@ Respond with JSON only:
 ```"""
 
     message_content = [
-        {"type": "text", "text": f"**Image A (iteration {iteration_a}):**"},
+        {"type": "text", "text": "**Image A:**"},
         {
             "type": "image",
             "source": {
@@ -1501,7 +1498,7 @@ Respond with JSON only:
                 "data": image_a_base64,
             },
         },
-        {"type": "text", "text": f"**Image B (iteration {iteration_b}):**"},
+        {"type": "text", "text": "**Image B:**"},
         {
             "type": "image",
             "source": {
@@ -1553,6 +1550,90 @@ Respond with JSON only:
             result["reasoning"] = reason_match.group(1)
 
     return result
+
+
+def judge_with_double_call(
+    best_image_base64: str,
+    challenger_image_base64: str,
+    goal: str,
+    api_key: str,
+) -> dict:
+    """Judge two images using double-call with swapped positions.
+
+    Calls the judge twice: once with the original order, once with images
+    swapped. This eliminates positional bias (A vs B preference). If both
+    calls agree on the same image, that result is used. If they disagree,
+    the current best is kept (burden of proof is on the challenger).
+
+    Args:
+        best_image_base64: Current best image (PNG base64)
+        challenger_image_base64: New challenger image (PNG base64)
+        goal: What we're trying to draw
+        api_key: Anthropic API key
+
+    Returns:
+        Dict with keys: winner ("best" or "challenger"), reasoning, confidence
+    """
+    # Randomize which image is A in the first call
+    first_call_swapped = random.choice([True, False])
+
+    if first_call_swapped:
+        img_a_1, img_b_1 = challenger_image_base64, best_image_base64
+    else:
+        img_a_1, img_b_1 = best_image_base64, challenger_image_base64
+
+    result1 = call_judge_api(img_a_1, img_b_1, goal, api_key)
+
+    # Map result1 back to best/challenger
+    if result1["winner"] == "A":
+        winner1 = "challenger" if first_call_swapped else "best"
+    elif result1["winner"] == "B":
+        winner1 = "best" if first_call_swapped else "challenger"
+    else:
+        # Could not determine winner, keep best
+        print(f"[Judge] Call 1 inconclusive, keeping current best")
+        return {"winner": "best", "reasoning": "Judge call 1 inconclusive", "confidence": "low"}
+
+    print(f"[Judge] Call 1: {winner1} (raw: {result1['winner']}, swapped: {first_call_swapped})")
+
+    # Second call with opposite order
+    if first_call_swapped:
+        img_a_2, img_b_2 = best_image_base64, challenger_image_base64
+    else:
+        img_a_2, img_b_2 = challenger_image_base64, best_image_base64
+
+    result2 = call_judge_api(img_a_2, img_b_2, goal, api_key)
+
+    # Map result2 back to best/challenger (opposite swap from call 1)
+    second_call_swapped = not first_call_swapped
+    if result2["winner"] == "A":
+        winner2 = "challenger" if second_call_swapped else "best"
+    elif result2["winner"] == "B":
+        winner2 = "best" if second_call_swapped else "challenger"
+    else:
+        print(f"[Judge] Call 2 inconclusive, keeping current best")
+        return {"winner": "best", "reasoning": "Judge call 2 inconclusive", "confidence": "low"}
+
+    print(f"[Judge] Call 2: {winner2} (raw: {result2['winner']}, swapped: {second_call_swapped})")
+
+    # Both calls agree: high confidence result
+    if winner1 == winner2:
+        print(f"[Judge] Both calls agree: {winner1}")
+        # Use reasoning from whichever call had higher confidence
+        best_result = result1 if result1.get("confidence") == "high" else result2
+        return {
+            "winner": winner1,
+            "reasoning": best_result["reasoning"],
+            "confidence": "high",
+        }
+
+    # Calls disagree: keep current best (challenger didn't prove itself)
+    print(f"[Judge] Disagreement ({winner1} vs {winner2}), keeping current best")
+    return {
+        "winner": "best",
+        "reasoning": f"Split decision: call 1 said {winner1}, call 2 said {winner2}. Keeping current best.",
+        "confidence": "low",
+    }
 
 
 def load_env_file():
@@ -1809,15 +1890,20 @@ def run_visual_feedback_loop(
             elif canvas_shows_attempt != best_attempt and best_image_base64:
                 # Canvas shows a NEW result different from best - time to judge!
                 print(f"[Judge] Comparing Attempt {canvas_shows_attempt} (on canvas) vs Attempt {best_attempt} (current best)...")
-                judge_result = call_judge_api(
-                    image_a_base64=best_image_base64,
-                    image_b_base64=png_base64,
+                judge_result = judge_with_double_call(
+                    best_image_base64=best_image_base64,
+                    challenger_image_base64=png_base64,
                     goal=goal,
-                    iteration_a=best_attempt,
-                    iteration_b=canvas_shows_attempt,
                     api_key=api_key,
                 )
-                winner = judge_result.get("winner")
+                # Map "best"/"challenger" back to "A"/"B" for existing logic
+                raw_winner = judge_result.get("winner")
+                if raw_winner == "challenger":
+                    winner = "B"
+                elif raw_winner == "best":
+                    winner = "A"
+                else:
+                    winner = None
                 reasoning = judge_result.get("reasoning", "")
                 confidence = judge_result.get("confidence", "low")
 

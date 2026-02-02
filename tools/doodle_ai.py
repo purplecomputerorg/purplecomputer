@@ -1517,6 +1517,30 @@ Respond with JSON only:
         result["winner"] = winner.upper() if isinstance(winner, str) else None
         result["reasoning"] = data.get("reasoning", "")
         result["confidence"] = data.get("confidence", "low")
+
+        # Sanity check: does the reasoning contradict the winner?
+        # Haiku sometimes writes reasoning favoring one image but puts the wrong
+        # letter in the winner field.
+        if result["winner"] in ("A", "B") and result["reasoning"]:
+            reasoning_lower = result["reasoning"].lower()
+            other = "B" if result["winner"] == "A" else "A"
+            # Check if reasoning says the OTHER image is better
+            favors_other = (
+                f"image {other.lower()} better" in reasoning_lower
+                or f"image {other.lower()} is better" in reasoning_lower
+                or f"image {other.lower()} more closely" in reasoning_lower
+                or f"image {other.lower()} more accurately" in reasoning_lower
+            )
+            # Check reasoning does NOT also favor the declared winner
+            favors_winner = (
+                f"image {result['winner'].lower()} better" in reasoning_lower
+                or f"image {result['winner'].lower()} is better" in reasoning_lower
+                or f"image {result['winner'].lower()} more closely" in reasoning_lower
+                or f"image {result['winner'].lower()} more accurately" in reasoning_lower
+            )
+            if favors_other and not favors_winner:
+                print(f"[Judge] Reasoning contradicts winner! Reasoning favors {other}, winner says {result['winner']}. Flipping to {other}.")
+                result["winner"] = other
     else:
         print(f"[Judge] Could not parse JSON, trying text extraction")
         # Try to extract winner from text
@@ -1533,11 +1557,31 @@ Respond with JSON only:
     return result
 
 
+def _is_blank_image(png_base64: str, max_colors: int = 10) -> bool:
+    """Check if a PNG image is nearly uniform (blank canvas).
+
+    A blank or near-blank image has very few unique colors (e.g., just the
+    background). Real drawings have many colors from brush strokes, shading, etc.
+
+    Returns True if the image has fewer than max_colors unique colors.
+    """
+    try:
+        from PIL import Image
+        img_bytes = base64.b64decode(png_base64)
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        # getcolors returns None if more than maxcolors unique colors
+        colors = img.getcolors(maxcolors=max_colors + 1)
+        return colors is not None  # fewer than max_colors unique colors = blank
+    except Exception:
+        return False  # can't determine, assume not blank
+
+
 def judge_with_double_call(
     best_image_base64: str,
     challenger_image_base64: str,
     goal: str,
     api_key: str,
+    best_is_unvalidated: bool = False,
 ) -> dict:
     """Judge two images using double-call with swapped positions.
 
@@ -1551,6 +1595,9 @@ def judge_with_double_call(
         challenger_image_base64: New challenger image (PNG base64)
         goal: What we're trying to draw
         api_key: Anthropic API key
+        best_is_unvalidated: If True, the current best has never won a judge
+            comparison (e.g., it was auto-set as the first result). On split
+            decisions, the challenger wins instead of the incumbent.
 
     Returns:
         Dict with keys: winner ("best" or "challenger"), reasoning, confidence
@@ -1608,7 +1655,17 @@ def judge_with_double_call(
             "confidence": "high",
         }
 
-    # Calls disagree: keep current best (challenger didn't prove itself)
+    # Calls disagree: normally keep current best (burden of proof on challenger).
+    # But if the best has never been validated by a judge, prefer the challenger
+    # since the incumbent has no proven merit.
+    if best_is_unvalidated:
+        print(f"[Judge] Disagreement ({winner1} vs {winner2}), but best is unvalidated. Accepting challenger.")
+        return {
+            "winner": "challenger",
+            "reasoning": f"Split decision: call 1 said {winner1}, call 2 said {winner2}. Challenger wins because current best was never validated.",
+            "confidence": "low",
+        }
+
     print(f"[Judge] Disagreement ({winner1} vs {winner2}), keeping current best")
     return {
         "winner": "best",
@@ -1870,12 +1927,40 @@ def run_visual_feedback_loop(
                 print(f"[Judge] Skipping - canvas still shows Attempt {canvas_shows_attempt} (same as best)")
             elif canvas_shows_attempt != best_attempt and best_image_base64:
                 # Canvas shows a NEW result different from best - time to judge!
+                # But first: if the current best is a blank/near-blank image,
+                # skip the judge and auto-accept the challenger.
+                if _is_blank_image(best_image_base64):
+                    print(f"[Judge] Current best (Attempt {best_attempt}) is blank/near-blank, auto-accepting Attempt {canvas_shows_attempt}")
+                    runner_up_attempt = best_attempt
+                    runner_up_image_base64 = best_image_base64
+                    runner_up_reason = best_reason
+
+                    best_attempt = canvas_shows_attempt
+                    best_image_base64 = png_base64
+                    best_reason = "Auto-accepted (previous best was blank)"
+
+                    judge_history.append({
+                        "judged_during_attempt": i + 1,
+                        "compared_a_attempt": runner_up_attempt,
+                        "compared_b_attempt": canvas_shows_attempt,
+                        "winner": "B",
+                        "reasoning": "Previous best was blank/near-blank, auto-accepted challenger",
+                        "confidence": "high",
+                        "new_best_attempt": canvas_shows_attempt,
+                    })
+                    judge_path = os.path.join(output_dir, "judge_history.json")
+                    with open(judge_path, 'w') as f:
+                        json.dump(judge_history, f, indent=2)
+                    continue
+
+                is_unvalidated = best_reason == "Initial drawing (first result)"
                 print(f"[Judge] Comparing Attempt {canvas_shows_attempt} (on canvas) vs Attempt {best_attempt} (current best)...")
                 judge_result = judge_with_double_call(
                     best_image_base64=best_image_base64,
                     challenger_image_base64=png_base64,
                     goal=goal,
                     api_key=api_key,
+                    best_is_unvalidated=is_unvalidated,
                 )
                 # Map "best"/"challenger" back to "A"/"B" for existing logic
                 raw_winner = judge_result.get("winner")

@@ -145,6 +145,25 @@ def parse_json_robust(text: str) -> dict | list | None:
 # COMPACT ACTION FORMAT PARSER
 # =============================================================================
 
+def _extract_color_and_coords(line: str, start: int) -> tuple[str, str]:
+    """Extract color key and coordinate string from a compact action line.
+
+    The color key is everything between start and the first digit (or minus sign
+    for negative coords). This handles the AI occasionally outputting multi-character
+    color keys like 're' instead of just 'r'.
+
+    Returns (color_key, coords_string). The color_key is the last character before
+    digits, since that's the most likely intended single-char color key.
+    """
+    i = start
+    while i < len(line) and not line[i].isdigit() and line[i] != '-':
+        i += 1
+    # Use the last non-digit character as the color key
+    color = line[i - 1] if i > start else line[start]
+    coords_str = line[i:]
+    return color, coords_str
+
+
 def parse_compact_actions(text: str) -> list[dict] | None:
     """Parse compact DSL action format into full action dictionaries.
 
@@ -189,8 +208,8 @@ def parse_compact_actions(text: str) -> list[dict] | None:
         try:
             if line.startswith('L'):
                 # Paint line: L<color><x1>,<y1>,<x2>,<y2>
-                color = line[1]
-                coords = line[2:].split(',')
+                color, coords_str = _extract_color_and_coords(line, 1)
+                coords = coords_str.split(',')
                 if len(coords) >= 4:
                     x1, y1 = int(coords[0]), int(coords[1])
                     x2, y2 = int(coords[2]), int(coords[3])
@@ -244,8 +263,8 @@ def parse_compact_actions(text: str) -> list[dict] | None:
 
             elif line.startswith('P'):
                 # Paint at: P<color><x>,<y>
-                color = line[1]
-                coords = line[2:].split(',')
+                color, coords_str = _extract_color_and_coords(line, 1)
+                coords = coords_str.split(',')
                 if len(coords) >= 2:
                     actions.append({
                         "type": "paint_at",

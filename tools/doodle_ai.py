@@ -1019,7 +1019,44 @@ Draw from (x1,y1) to (x2,y2) with the specified color key.
 **P = Point**: `P<color><x>,<y>`
 Paint a single cell at (x,y) with the specified color key.
 
-**Remember:** Vary the x-range per row to create curves. Don't use the same x-range for every row (that makes rectangles).
+## CURVES AND ORGANIC SHAPES
+
+Chain short diagonal L commands to draw curves. Shorter segments = smoother curves.
+
+**Arc** (upward curve from left to right):
+```actions
+Lf10,20,15,17
+Lf15,17,20,15
+Lf20,15,30,14
+Lf30,14,40,15
+Lf40,15,45,17
+Lf45,17,50,20
+```
+
+**Circle outline** (8 segments approximating a circle, center ~50,12, radius ~8):
+```actions
+Lf50,4,56,6
+Lf56,6,58,12
+Lf58,12,56,18
+Lf56,18,50,20
+Lf50,20,44,18
+Lf44,18,42,12
+Lf42,12,44,6
+Lf44,6,50,4
+```
+
+**Wavy line** (alternating up/down slopes):
+```actions
+Lf0,12,10,8
+Lf10,8,20,12
+Lf20,12,30,8
+Lf30,8,40,12
+Lf40,12,50,8
+```
+
+Key principle: Each segment covers only 5-10 x-units. The shorter the segment, the smoother the curve.
+
+For filled shapes, vary the x-range per row to create curved edges. Don't use the same x-range for every row (that makes rectangles).
 
 ## REGENERATIVE APPROACH
 
@@ -1236,6 +1273,10 @@ def call_vision_api(
     accumulated_learnings: list[dict] = None,
     previous_strategy: str = None,
     judge_feedback: dict = None,
+    best_image_base64: str = None,
+    best_attempt_num: int = None,
+    runner_up_image_base64: str = None,
+    runner_up_attempt_num: int = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1249,6 +1290,10 @@ def call_vision_api(
         accumulated_learnings: List of {iteration, learning} from previous attempts
         previous_strategy: Strategy summary from previous attempt
         judge_feedback: Dict with judge's evaluation of recent comparison (reasoning, winner, etc.)
+        best_image_base64: Screenshot of the current best attempt (PNG base64)
+        best_attempt_num: Which attempt number produced the best result
+        runner_up_image_base64: Screenshot of the runner-up attempt (PNG base64)
+        runner_up_attempt_num: Which attempt number is the runner-up
 
     Returns:
         Dict with keys: analysis, strategy_summary, learnings, actions
@@ -1344,17 +1389,26 @@ The canvas is blank. Your script should include:
 Analyze what worked and what needs improvement, then generate a BETTER complete script.
 The canvas will be CLEARED and your new script executed from scratch."""
 
+    # Build top performers section (references images sent alongside)
+    top_performers_text = ""
+    if best_image_base64 and best_image_base64 != image_base64:
+        top_performers_text += f"\n## TOP PERFORMERS\n"
+        top_performers_text += f"The BEST ATTEMPT image (Attempt {best_attempt_num}) is included below.\n"
+        if runner_up_image_base64 and runner_up_image_base64 != image_base64 and runner_up_image_base64 != best_image_base64:
+            top_performers_text += f"The RUNNER-UP image (Attempt {runner_up_attempt_num}) is also included.\n"
+        top_performers_text += "Study what these top attempts did well and combine their strengths in your new attempt.\n"
+
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
 
 {complexity_section}
-{plan_section}{learnings_section}{strategy_section}{judge_section}
+{plan_section}{learnings_section}{strategy_section}{judge_section}{top_performers_text}
 {instruction}
 
 Respond with JSON metadata followed by a compact ```actions``` block."""
 
-    # Build message content with single image
+    # Build message content with images (canvas + optional best + optional runner-up)
     message_content = [
         {
             "type": "image",
@@ -1364,8 +1418,41 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
                 "data": image_base64,
             },
         },
-        {"type": "text", "text": user_message},
+        {"type": "text", "text": "CURRENT CANVAS (your most recent attempt)"},
     ]
+
+    # Add best attempt image if it differs from canvas
+    if best_image_base64 and best_image_base64 != image_base64:
+        message_content.extend([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": best_image_base64,
+                },
+            },
+            {"type": "text", "text": f"BEST ATTEMPT (Attempt {best_attempt_num})"},
+        ])
+
+    # Add runner-up image if it differs from canvas and best
+    if (runner_up_image_base64
+            and runner_up_image_base64 != image_base64
+            and runner_up_image_base64 != best_image_base64):
+        message_content.extend([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": runner_up_image_base64,
+                },
+            },
+            {"type": "text", "text": f"RUNNER-UP (Attempt {runner_up_attempt_num})"},
+        ])
+
+    # Add the main text prompt last
+    message_content.append({"type": "text", "text": user_message})
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -1843,6 +1930,10 @@ def run_visual_feedback_loop(
                     accumulated_learnings=accumulated_learnings,
                     previous_strategy=previous_strategy,
                     judge_feedback=last_judge_feedback,
+                    best_image_base64=best_image_base64,
+                    best_attempt_num=best_attempt,
+                    runner_up_image_base64=runner_up_image_base64,
+                    runner_up_attempt_num=runner_up_attempt,
                 )
 
                 actions = result.get("actions", [])

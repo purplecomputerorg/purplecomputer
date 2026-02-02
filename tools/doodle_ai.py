@@ -1074,7 +1074,7 @@ Lf40,15,45,17
 Lf45,17,50,20
 ```
 
-**Circle outline** (8 segments approximating a circle, center ~50,12, radius ~8):
+**Circle outline** (for OUTLINES only, not fills; 8 segments, center ~50,12, radius ~8):
 ```actions
 Lf50,4,56,6
 Lf56,6,58,12
@@ -1098,6 +1098,40 @@ Lf40,12,50,8
 Key principle: Each segment covers only 5-10 x-units. The shorter the segment, the smoother the curve.
 
 For filled shapes, vary the x-range per row to create curved edges. Don't use the same x-range for every row (that makes rectangles).
+
+## FILLING SHAPES (PRIMARY TECHNIQUE)
+
+For solid regions (canopies, ground, sky, trunks, bodies), use ROW-BY-ROW HORIZONTAL FILLS
+with varying width to create round/organic shapes. This is the MOST IMPORTANT technique.
+
+**Round canopy (filled circle):**
+```actions
+Lf36,5,54,5
+Lf32,6,58,6
+Lf28,7,62,7
+Lf26,8,64,8
+Lf25,9,65,9
+Lf25,10,65,10
+Lf26,11,64,11
+Lf28,12,62,12
+Lf32,13,58,13
+Lf36,14,54,14
+```
+
+**Thick trunk (filled rectangle with slight taper):**
+```actions
+Lf43,15,57,15
+Lf44,16,56,16
+Lf44,17,56,17
+Lf44,18,56,18
+Lf45,19,55,19
+```
+
+Vary the x start/end per row: wider in the middle, narrower at top and bottom.
+This creates smooth, solid shapes. Use this for ALL filled regions.
+
+Diagonal lines and arcs are for OUTLINES and DETAILS only, not for filling areas.
+Using diagonals to fill produces a stripy, sparse look. Always prefer horizontal fills.
 
 ## REGENERATIVE APPROACH
 
@@ -1425,6 +1459,9 @@ make TARGETED improvements:
 - Modify specific sections (shading, details, proportions)
 - Change at most 20-30% of the lines
 - Focus on what the judge said was missing
+
+IMPORTANT: If the best script uses horizontal line fills for solid shapes, keep that approach.
+Do NOT convert horizontal fills into diagonal outlines or sparse line patterns.
 
 Start from the best script and improve it.\n"""
 
@@ -1943,6 +1980,7 @@ def run_visual_feedback_loop(
         # Track consecutive losses for refinement mode and early stopping
         consecutive_losses = 0
         best_compact_actions = None  # Compact L/P text of the best attempt's script
+        iteration_compact_actions = {}  # Map iteration_num -> compact_actions_text
         max_stale_iterations = 6  # Stop after this many consecutive losses
 
         judge_history = []  # Track all judge comparisons for monitoring
@@ -2030,6 +2068,9 @@ def run_visual_feedback_loop(
                     break  # Got actions, exit retry loop
                 else:
                     print(f"[Warning] No actions returned (attempt {retry + 1}/{max_retries})")
+
+            # Store this iteration's compact actions for correct lookup later
+            iteration_compact_actions[i + 1] = result.get("compact_actions_text", "")
 
             # Store full result
             all_results.append({
@@ -2120,7 +2161,7 @@ def run_visual_feedback_loop(
                 best_attempt = canvas_shows_attempt
                 best_image_base64 = png_base64
                 best_reason = "Initial drawing (first result)"
-                best_compact_actions = result.get("compact_actions_text", "")
+                best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
                 print(f"[Best] Setting Attempt {best_attempt} as initial best (first drawing)")
             elif canvas_shows_attempt == best_attempt:
                 # Canvas still shows the best attempt (no new successful execution)
@@ -2138,7 +2179,7 @@ def run_visual_feedback_loop(
                     best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = "Auto-accepted (previous best was blank)"
-                    best_compact_actions = result.get("compact_actions_text", "")
+                    best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
                     consecutive_losses = 0
 
                     judge_history.append({
@@ -2195,7 +2236,7 @@ def run_visual_feedback_loop(
                     best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = reasoning
-                    best_compact_actions = result.get("compact_actions_text", "")
+                    best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
                     consecutive_losses = 0
                     judgment_record["new_best_attempt"] = canvas_shows_attempt
                     print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")

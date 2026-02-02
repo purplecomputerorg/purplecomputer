@@ -595,34 +595,49 @@ class PurpleController:
         """Send a command to the app via the command file."""
         self.send_commands([{"action": action, "value": value}])
 
-    def send_commands(self, commands: list[dict], wait_for_consumption: bool = False) -> bool:
+    def send_commands(self, commands: list[dict]) -> None:
         """Send multiple commands to the app in a single batch.
 
-        Args:
-            commands: List of command dicts
-            wait_for_consumption: If True, wait until command file is consumed
-
-        Returns:
-            True if command was consumed (or wait_for_consumption=False), False if timeout
+        Uses atomic file writes (tmp + rename) and waits for the app to consume
+        and verify the command batch before returning.
         """
         command_path = os.path.join(self.screenshot_dir, 'command')
-        # Write all commands as newline-separated JSON
-        content = '\n'.join(json.dumps(cmd) for cmd in commands)
-        with open(command_path, 'w') as f:
-            f.write(content + '\n')
+        tmp_path = command_path + '.tmp'
+        response_path = os.path.join(self.screenshot_dir, 'command_response')
 
-        if wait_for_consumption:
-            # Wait for command to be consumed (file deleted)
-            for _ in range(20):  # 2 second timeout
-                time.sleep(0.1)
-                if not os.path.exists(command_path):
-                    return True
-            print(f"[Warning] Command not consumed after 2s")
-            return False
+        # Clean stale response file
+        if os.path.exists(response_path):
+            os.unlink(response_path)
+
+        # Atomic write: write to tmp file, then rename
+        content = '\n'.join(json.dumps(cmd) for cmd in commands)
+        with open(tmp_path, 'w') as f:
+            f.write(content + '\n')
+        os.rename(tmp_path, command_path)
+
+        # Wait for app to consume the command file (deleted after reading)
+        for _ in range(50):  # 5 second timeout
+            time.sleep(0.1)
+            if not os.path.exists(command_path):
+                break
         else:
-            # Brief wait for app to start processing
-            time.sleep(0.05)
-            return True
+            raise RuntimeError(f"App did not consume command file within 5s ({len(commands)} commands)")
+
+        # Verify command count via response file
+        for _ in range(10):  # 1 second timeout for response
+            if os.path.exists(response_path):
+                with open(response_path, 'r') as f:
+                    processed = int(f.read().strip())
+                os.unlink(response_path)
+                if processed != len(commands):
+                    raise RuntimeError(
+                        f"Command loss! Sent {len(commands)}, app processed {processed}. "
+                        f"Lost {len(commands) - processed} commands."
+                    )
+                return
+            time.sleep(0.1)
+
+        raise RuntimeError(f"No command_response after consumption ({len(commands)} commands)")
 
     def send_key(self, key: str) -> None:
         """Send a single key to the app via command file."""
@@ -687,23 +702,12 @@ class PurpleController:
         self.send_key('tab')
         time.sleep(0.1)
 
-    def clear_canvas(self) -> bool:
-        """Clear the entire canvas. Returns True if command was consumed."""
+    def clear_canvas(self) -> None:
+        """Clear the entire canvas."""
         print("[Clear] Sending clear command...")
-
-        # Send clear command and wait for it to be consumed
-        consumed = self.send_commands(
-            [{"action": "clear", "value": ""}],
-            wait_for_consumption=True
-        )
-
-        if consumed:
-            print("[Clear] Command consumed, canvas cleared")
-            time.sleep(0.1)  # Brief wait for render
-            return True
-        else:
-            print("[Clear] ERROR: Command not consumed by app!")
-            return False
+        self.send_commands([{"action": "clear", "value": ""}])
+        print("[Clear] Command consumed, canvas cleared")
+        time.sleep(0.1)  # Brief wait for render
 
     def execute_action(self, action: dict) -> None:
         """Execute a single drawing action using direct commands for speed."""
@@ -773,8 +777,6 @@ class PurpleController:
 
     def execute_actions(self, actions: list[dict]) -> None:
         """Execute a list of actions, batching paint_at commands for reliability."""
-        # Batch paint_at commands to avoid race conditions
-        # (individual sends can be overwritten before app reads them)
         paint_at_batch = []
 
         for action in actions:
@@ -790,7 +792,6 @@ class PurpleController:
                     if paint_at_batch:
                         self.send_commands(paint_at_batch)
                         paint_at_batch = []
-                        time.sleep(0.1)  # Wait for batch to process
                     # Execute non-paint_at action
                     self.execute_action(action)
             except Exception as e:
@@ -800,26 +801,6 @@ class PurpleController:
         if paint_at_batch:
             print(f"[Execute] Sending batch of {len(paint_at_batch)} paint_at commands")
             self.send_commands(paint_at_batch)
-            time.sleep(0.3)  # Wait for large batch to process
-
-            # Verify commands were received
-            response_path = os.path.join(self.screenshot_dir, "command_response")
-            try:
-                if os.path.exists(response_path):
-                    with open(response_path, "r") as f:
-                        processed = int(f.read().strip())
-                    os.unlink(response_path)
-                    if processed != len(paint_at_batch):
-                        raise RuntimeError(
-                            f"Command loss detected! Sent {len(paint_at_batch)}, app processed {processed}. "
-                            f"Lost {len(paint_at_batch) - processed} commands."
-                        )
-                    else:
-                        print(f"[Execute] Verified: all {processed} commands processed")
-            except RuntimeError:
-                raise  # Re-raise our own error
-            except Exception as e:
-                print(f"[Warning] Could not verify command count: {e}")
 
 
 # =============================================================================
@@ -1967,10 +1948,10 @@ def run_visual_feedback_loop(
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:
                 print("[Clear] Clearing canvas for fresh attempt...")
-                clear_success = controller.clear_canvas()
-                print(f"[Clear] Clear result: {clear_success}")
-                if not clear_success:
-                    print("[ERROR] Failed to clear canvas after retries. Aborting.")
+                try:
+                    controller.clear_canvas()
+                except RuntimeError as e:
+                    print(f"[ERROR] Failed to clear canvas: {e}")
                     print("This may indicate the 'clear' command is not being processed.")
                     break
                 # Extra wait after clear to ensure it takes effect

@@ -285,6 +285,47 @@ def parse_compact_actions(text: str) -> list[dict] | None:
 
 
 # =============================================================================
+# LEARNING DEDUPLICATION
+# =============================================================================
+
+def _word_set(text: str) -> set[str]:
+    """Extract lowercase words (3+ chars) from text for similarity comparison."""
+    return {w.lower() for w in re.findall(r'[a-zA-Z]{3,}', text)}
+
+
+def deduplicate_learnings(
+    learnings: list[dict],
+    new_learning: dict,
+    max_count: int = 5,
+    similarity_threshold: float = 0.6,
+) -> list[dict]:
+    """Keep only unique, recent learnings up to max_count.
+
+    Skips adding new_learning if it is >similarity_threshold similar
+    (by word overlap) to any existing entry. Then trims to the most
+    recent max_count entries.
+
+    Returns a new list (does not mutate the input).
+    """
+    new_words = _word_set(new_learning.get("learning", ""))
+    if not new_words:
+        return learnings[-max_count:] if len(learnings) > max_count else list(learnings)
+
+    for entry in learnings:
+        existing_words = _word_set(entry.get("learning", ""))
+        if not existing_words:
+            continue
+        overlap = len(new_words & existing_words)
+        union = len(new_words | existing_words)
+        if union > 0 and overlap / union >= similarity_threshold:
+            print(f"[Learnings] Skipping duplicate learning (similarity {overlap/union:.0%})")
+            return learnings[-max_count:] if len(learnings) > max_count else list(learnings)
+
+    result = list(learnings) + [new_learning]
+    return result[-max_count:]
+
+
+# =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
 
@@ -1277,6 +1318,8 @@ def call_vision_api(
     best_attempt_num: int = None,
     runner_up_image_base64: str = None,
     runner_up_attempt_num: int = None,
+    best_script_text: str = None,
+    consecutive_losses: int = 0,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1294,6 +1337,8 @@ def call_vision_api(
         best_attempt_num: Which attempt number produced the best result
         runner_up_image_base64: Screenshot of the runner-up attempt (PNG base64)
         runner_up_attempt_num: Which attempt number is the runner-up
+        best_script_text: Compact action text (L/P commands) of the best attempt
+        consecutive_losses: How many iterations the best hasn't changed
 
     Returns:
         Dict with keys: analysis, strategy_summary, learnings, actions
@@ -1363,6 +1408,34 @@ def call_vision_api(
             judge_section += f"Judge's reasoning: {reasoning}\n"
             judge_section += "Change your approach. The current best is still Attempt {compared_best}.\n"
 
+    # Build best script section (highest-impact: AI sees the exact source code)
+    best_script_section = ""
+    if best_script_text and best_attempt_num:
+        best_script_section = f"\n## BEST ATTEMPT'S SCRIPT (Attempt {best_attempt_num})\n"
+        best_script_section += "This script produced the current best result. Study it and improve upon it.\n"
+        best_script_section += f"```actions\n{best_script_text}\n```\n"
+
+    # Build refinement mode section (after 3+ consecutive losses)
+    refinement_section = ""
+    if consecutive_losses >= 3 and best_script_text:
+        refinement_section = """\n## REFINEMENT MODE
+The best attempt's script is provided above. Instead of generating from scratch,
+make TARGETED improvements:
+- Keep the overall structure that's working
+- Modify specific sections (shading, details, proportions)
+- Change at most 20-30% of the lines
+- Focus on what the judge said was missing
+
+Start from the best script and improve it.\n"""
+
+    # Build diversity nudge (after 5+ consecutive losses)
+    diversity_section = ""
+    if consecutive_losses >= 5:
+        diversity_section = f"""\n## IMPORTANT: TRY A DIFFERENT APPROACH
+You have lost {consecutive_losses} times in a row trying similar approaches.
+Try something FUNDAMENTALLY different: different proportions, different composition,
+different technique. The current approach is not working.\n"""
+
     # Build plan summary
     plan_section = ""
     if plan:
@@ -1403,7 +1476,7 @@ The canvas will be CLEARED and your new script executed from scratch."""
 ## Attempt: {iteration} of {max_iterations}
 
 {complexity_section}
-{plan_section}{learnings_section}{strategy_section}{judge_section}{top_performers_text}
+{plan_section}{learnings_section}{strategy_section}{judge_section}{best_script_section}{refinement_section}{diversity_section}{top_performers_text}
 {instruction}
 
 Respond with JSON metadata followed by a compact ```actions``` block."""
@@ -1454,9 +1527,13 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     # Add the main text prompt last
     message_content.append({"type": "text", "text": user_message})
 
+    # Increase temperature after repeated failures to encourage exploration
+    temperature = 0.9 if consecutive_losses >= 5 else 1.0
+
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
         max_tokens=8000,  # More tokens for complete scripts
+        temperature=temperature,
         system=EXECUTION_PROMPT,
         messages=[{
             "role": "user",
@@ -1863,6 +1940,11 @@ def run_visual_feedback_loop(
         runner_up_image_base64 = None
         runner_up_reason = None
 
+        # Track consecutive losses for refinement mode and early stopping
+        consecutive_losses = 0
+        best_compact_actions = None  # Compact L/P text of the best attempt's script
+        max_stale_iterations = 6  # Stop after this many consecutive losses
+
         judge_history = []  # Track all judge comparisons for monitoring
         last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
 
@@ -1875,8 +1957,13 @@ def run_visual_feedback_loop(
             print(f"ATTEMPT {i + 1}/{iterations}")
             if best_attempt:
                 print(f"Current Best: Attempt {best_attempt}'s result")
+            if runner_up_attempt:
+                print(f"Runner-up: Attempt {runner_up_attempt}'s result")
             if canvas_shows_attempt:
                 print(f"Canvas currently shows: Attempt {canvas_shows_attempt}'s result")
+            if consecutive_losses > 0:
+                mode = "refinement" if consecutive_losses >= 3 and best_compact_actions else "normal"
+                print(f"Consecutive losses: {consecutive_losses} (mode: {mode})")
             print('='*50)
 
             # Take screenshot (shows previous attempt's result, or blank for first)
@@ -1934,6 +2021,8 @@ def run_visual_feedback_loop(
                     best_attempt_num=best_attempt,
                     runner_up_image_base64=runner_up_image_base64,
                     runner_up_attempt_num=runner_up_attempt,
+                    best_script_text=best_compact_actions,
+                    consecutive_losses=consecutive_losses,
                 )
 
                 actions = result.get("actions", [])
@@ -1992,10 +2081,10 @@ def run_visual_feedback_loop(
             print(f"[Debug] Strategy returned: {bool(strategy)} - type={type(strategy).__name__}")
 
             if learning:
-                accumulated_learnings.append({
-                    "iteration": i + 1,
-                    "learning": learning,
-                })
+                new_entry = {"iteration": i + 1, "learning": learning}
+                accumulated_learnings = deduplicate_learnings(
+                    accumulated_learnings, new_entry, max_count=5,
+                )
                 # Save learnings incrementally so user can monitor progress
                 learnings_path = os.path.join(output_dir, "learnings.json")
                 with open(learnings_path, 'w') as f:
@@ -2031,6 +2120,7 @@ def run_visual_feedback_loop(
                 best_attempt = canvas_shows_attempt
                 best_image_base64 = png_base64
                 best_reason = "Initial drawing (first result)"
+                best_compact_actions = result.get("compact_actions_text", "")
                 print(f"[Best] Setting Attempt {best_attempt} as initial best (first drawing)")
             elif canvas_shows_attempt == best_attempt:
                 # Canvas still shows the best attempt (no new successful execution)
@@ -2048,6 +2138,8 @@ def run_visual_feedback_loop(
                     best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = "Auto-accepted (previous best was blank)"
+                    best_compact_actions = result.get("compact_actions_text", "")
+                    consecutive_losses = 0
 
                     judge_history.append({
                         "judged_during_attempt": i + 1,
@@ -2103,6 +2195,8 @@ def run_visual_feedback_loop(
                     best_attempt = canvas_shows_attempt
                     best_image_base64 = png_base64
                     best_reason = reasoning
+                    best_compact_actions = result.get("compact_actions_text", "")
+                    consecutive_losses = 0
                     judgment_record["new_best_attempt"] = canvas_shows_attempt
                     print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
                     print(f"[Judge]   Reason: {reasoning}")
@@ -2111,6 +2205,8 @@ def run_visual_feedback_loop(
                 elif winner == "A":
                     # Current best stays - canvas result becomes runner-up if better than current runner-up
                     # (For simplicity, we just track the most recent loser as potential runner-up)
+                    consecutive_losses += 1
+                    print(f"[Judge]   Consecutive losses: {consecutive_losses}")
                     if runner_up_attempt is None or canvas_shows_attempt != runner_up_attempt:
                         runner_up_attempt = canvas_shows_attempt
                         runner_up_image_base64 = png_base64
@@ -2139,6 +2235,11 @@ def run_visual_feedback_loop(
                     "compared_best_attempt": best_attempt if winner == "A" else judgment_record["compared_a_attempt"],
                     "compared_new_attempt": canvas_shows_attempt,
                 }
+
+            # Early stopping: if the best hasn't changed in max_stale_iterations
+            if consecutive_losses >= max_stale_iterations:
+                print(f"\n[Early stop] Best hasn't changed in {consecutive_losses} iterations. Stopping.")
+                break
 
             # Clear canvas before executing (except first iteration which starts blank)
             if i > 0:

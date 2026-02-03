@@ -1133,6 +1133,39 @@ This creates smooth, solid shapes. Use this for ALL filled regions.
 Diagonal lines and arcs are for OUTLINES and DETAILS only, not for filling areas.
 Using diagonals to fill produces a stripy, sparse look. Always prefer horizontal fills.
 
+**Small triangle/plate (pointing up):**
+```actions
+Lf48,12,52,12
+Lf49,11,51,11
+Pf50,10
+```
+
+**Row of triangular plates along a spine (like stegosaurus):**
+```actions
+Lf30,12,34,12
+Lf31,11,33,11
+Pf32,10
+Lf37,12,41,12
+Lf38,11,40,11
+Pf39,10
+Lf44,12,48,12
+Lf45,11,47,11
+Pf46,10
+```
+
+For tapered shapes (legs, tails, spikes), use progressively shorter horizontal fills.
+
+## DRAWING MULTI-PART FIGURES (animals, people, vehicles)
+
+For complex objects, draw each body part as a SEPARATE filled shape at its planned position:
+1. Draw the largest part first (body: a wide oval of horizontal fills)
+2. Draw connected parts overlapping slightly (head, neck, tail)
+3. Draw appendages (legs, arms, wings)
+4. Draw details last (eyes, plates, patterns)
+
+Each part is its own group of horizontal fills at different x/y ranges.
+Do NOT try to draw the whole figure with one set of lines.
+
 ## REGENERATIVE APPROACH
 
 You are generating a COMPLETE drawing script from scratch each iteration.
@@ -1479,9 +1512,16 @@ different technique. The current approach is not working.\n"""
         plan_section = f"\n## DRAWING PLAN\n{plan.get('description', goal)}\n"
         if plan.get('composition'):
             comp = plan['composition']
-            if comp.get('main_element'):
-                me = comp['main_element']
-                plan_section += f"Main element: {me.get('description', '')} at x={me.get('x_range')}, y={me.get('y_range')}\n"
+            plan_section += "\n**Parts to draw (with coordinates):**\n"
+            for part_name, part_info in comp.items():
+                if isinstance(part_info, dict):
+                    desc = part_info.get('description', part_name)
+                    x_range = part_info.get('x_range', '')
+                    y_range = part_info.get('y_range', '')
+                    color = part_info.get('final_color', '')
+                    plan_section += f"- **{part_name}**: {desc}, x={x_range}, y={y_range}, color={color}\n"
+        if plan.get('style_notes'):
+            plan_section += f"\nStyle: {plan['style_notes']}\n"
 
     # Option D: Get progressive complexity guidance
     complexity_section = get_complexity_guidance(iteration, max_iterations)

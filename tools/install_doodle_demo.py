@@ -72,7 +72,7 @@ Examples:
     ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --iteration 3 --duration 12
 
 After installing, run:
-    PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
+    make run-demo
         """,
     )
     parser.add_argument("--output-dir", required=True,
@@ -158,7 +158,7 @@ After installing, run:
     print(f"  Target duration: {target:.1f}s")
     print(f"  Speed multiplier: {speed_multiplier:.4f}")
     print("\nTo run:")
-    print("  PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh")
+    print("  make run-demo")
 
 
 if __name__ == "__main__":

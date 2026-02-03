@@ -55,7 +55,7 @@ git commit -m "Add AI-generated doodle demo"
 ## 5. Run the demo
 
 ```bash
-PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
+make run-demo
 ```
 
 ## 6. To revert to the default demo

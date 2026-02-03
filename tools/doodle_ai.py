@@ -2547,7 +2547,7 @@ def run_visual_feedback_loop(
     print("="*50)
 
 
-def generate_demo_script(actions: list[dict]) -> str:
+def generate_demo_script(actions: list[dict], canvas_width: int = 101, canvas_height: int = 25) -> str:
     """Convert actions to a Purple Computer demo script with interpolated cursor movement.
 
     The AI training uses fast direct paint_at commands, but the demo script
@@ -2571,9 +2571,14 @@ def generate_demo_script(actions: list[dict]) -> str:
     # Track cursor position for movement interpolation
     cursor_x, cursor_y = 0, 0
 
+    def clamp(x: int, y: int) -> tuple[int, int]:
+        """Clamp coordinates to canvas bounds (matches UI edge behavior)."""
+        return max(0, min(x, canvas_width - 1)), max(0, min(y, canvas_height - 1))
+
     def move_to(target_x: int, target_y: int) -> list[str]:
         """Generate movement commands to reach target position (L-shaped path)."""
         nonlocal cursor_x, cursor_y
+        target_x, target_y = clamp(target_x, target_y)
         result = []
 
         # Move horizontally first, then vertically
@@ -2606,11 +2611,12 @@ def generate_demo_script(actions: list[dict]) -> str:
         if t == 'move':
             direction = action["direction"]
             lines.append(f'    PressKey({repr(direction)}),')
-            # Update cursor position
+            # Update cursor position (clamped to canvas bounds)
             if direction == "right": cursor_x += 1
             elif direction == "left": cursor_x -= 1
             elif direction == "down": cursor_y += 1
             elif direction == "up": cursor_y -= 1
+            cursor_x, cursor_y = clamp(cursor_x, cursor_y)
 
         elif t == 'move_to':
             target_x = action.get('x', 0)
@@ -2627,9 +2633,9 @@ def generate_demo_script(actions: list[dict]) -> str:
             color = action.get('color', action.get('key', 'f'))
 
             lines.extend(move_to(target_x, target_y))
-            # Paint: lowercase key stamps and advances, so we use it directly
+            # In paint mode, pressing a key stamps and advances cursor right by 1
             lines.append(f'    PressKey({repr(color.lower())}),')
-            cursor_x += 1  # Painting advances cursor right by default
+            cursor_x = min(target_x + 1, canvas_width - 1)
 
         elif t == 'paint_line':
             key = action.get('key', 'f')
@@ -2645,11 +2651,12 @@ def generate_demo_script(actions: list[dict]) -> str:
             dirs = [direction] * length
             lines.append(f'    DrawPath(directions={dirs}, color_key={repr(key)}, delay_per_step=0.02),')
 
-            # Update cursor position based on direction
+            # Update cursor position based on direction (clamped to canvas bounds)
             if direction == 'right': cursor_x += length
             elif direction == 'left': cursor_x -= length
             elif direction == 'down': cursor_y += length
             elif direction == 'up': cursor_y -= length
+            cursor_x, cursor_y = clamp(cursor_x, cursor_y)
 
         elif t == 'wait':
             lines.append(f'    Pause({action.get("seconds", 0.3)}),')

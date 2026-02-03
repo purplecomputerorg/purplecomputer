@@ -915,6 +915,16 @@ Create a plan describing what the FINAL drawing should look like:
 - Add SHADING for depth (lighter colors for highlights, darker for shadows)
 - Use color mixing to create greens, oranges, and purples
 
+## ENTERTAINMENT VALUE (CRITICAL)
+
+The drawing is watched in real-time by a child. Every paint stroke appears as it's drawn.
+Plan compositions that are FUN TO WATCH being drawn:
+- **Minimize large background fills.** A solid blue sky or green ground covering 50+ cells per row is BORING to watch. Instead, leave the canvas background showing, or use just a few accent lines for sky/ground.
+- **Focus on the SUBJECT.** The interesting part is the subject itself: its shape, colors, shading, and details. Maximize time spent on the subject.
+- **Color mixing is exciting.** Watching yellow turn to green or orange is visually delightful. Plan compositions that use lots of mixing.
+- **Details and texture are engaging.** Small highlights, shadow lines, and decorative touches keep the viewer interested.
+- **Avoid monotone fills.** Large areas of a single flat color are the least interesting thing to watch. If a background is needed, make it minimal (a few rows, not the entire canvas).
+
 ## RESPONSE FORMAT
 
 ```json
@@ -938,18 +948,21 @@ Create a plan describing what the FINAL drawing should look like:
 
 Be specific about coordinates. The execution AI will use this as a reference for composition.
 
-**COMPOSITION TIP:** Only backgrounds (sky, grass, water) should span the full canvas width (0-100). The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-100."""
+**COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-100.
+
+**BACKGROUND TIP:** Keep backgrounds MINIMAL. A tree doesn't need a full blue sky fill (25 rows x 101 columns = boring). Instead, leave most of the canvas background showing and focus detail on the subject. If you want a ground line, use 2-3 rows, not 10. If you want sky, use a few accent strokes or a gradient strip, not a full fill."""
 
 
 EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
 ## GOALS
 Your drawings should be:
-1. **Colorful** - use lots of pretty colors across the whole image
+1. **Colorful** - use lots of pretty colors, especially through color mixing
 2. **Shaded** - use lighter and darker shades for depth and dimension
 3. **Detailed** - add texture, highlights, gradients, and fine details
 4. **Organic** - use varied shapes, not just rectangles
 5. **Recognizable** - a 4-year-old should be able to identify what it is
+6. **Fun to watch** - a child watches every stroke appear in real-time (see ENTERTAINMENT section)
 
 ## COLOR MIXING
 
@@ -1101,8 +1114,9 @@ For filled shapes, vary the x-range per row to create curved edges. Don't use th
 
 ## FILLING SHAPES (PRIMARY TECHNIQUE)
 
-For solid regions (canopies, ground, sky, trunks, bodies), use ROW-BY-ROW HORIZONTAL FILLS
+For solid regions (canopies, trunks, bodies), use ROW-BY-ROW HORIZONTAL FILLS
 with varying width to create round/organic shapes. This is the MOST IMPORTANT technique.
+(For backgrounds like sky/ground, keep them minimal: 2-3 rows max, or skip entirely.)
 
 **Round canopy (filled circle):**
 ```actions
@@ -1208,36 +1222,58 @@ Example: For green foliage, don't just use 'f'+'c' everywhere:
 - Middle: 'f' (medium yellow) + 'b' (medium blue) = medium green
 - Shadow: 'k' (dark yellow) + '.' (dark blue) = dark green
 
+## ENTERTAINMENT VALUE (CRITICAL)
+
+A child watches every stroke appear in real-time. The drawing process itself must be fun to watch.
+
+**DRAW THE SUBJECT FIRST.** The subject (tree, animal, house) is the interesting part. Draw it before any background.
+
+**MINIMIZE BACKGROUNDS.** Large monotone fills (solid blue sky, solid green ground) are BORING to watch: hundreds of identical horizontal lines with no visual change. Instead:
+- Leave the canvas background showing where possible
+- If you need ground, use 2-3 rows with color variation, not 10 flat rows
+- If you need sky, use a thin gradient strip or a few accent lines, not a full fill
+- A drawing with NO background but a detailed, colorful subject is better than one with full sky+ground fills and a simple subject
+
+**COLOR MIXING IS THE STAR.** Watching yellow cells transform into green or orange is visually delightful. Prioritize compositions that use lots of mixing.
+
+**DRAW ORDER MATTERS.** Structure your actions so interesting things happen throughout:
+- Start with the subject's base colors (exciting: shapes appearing)
+- Add mixing overlays (exciting: colors transforming)
+- Add shading and details (exciting: depth appearing)
+- Add minimal background last, if at all (least exciting)
+
 ## LAYERED PAINTING (within each attempt)
 
-To get mixed colors, you MUST paint in layers within your script:
+To get mixed colors, paint in layers PER ELEMENT (not all-yellow-first):
 
-**STEP 1: Paint ALL yellow areas first**
-Paint yellow ("f", "g", "d") on every cell that will become green, orange, OR brown.
-This includes: grass, leaves, tree trunks, ground.
+**Draw each element completely before moving to the next:**
+1. Paint the element's base color (yellow for things that will be green/orange)
+2. Immediately overlay the mixing color on that SAME element
+3. Add shading to that element
+4. Move to the next element
 
-**STEP 2: Paint blue OVER yellow to make GREEN**
-Go back and paint blue ("c", "v", "b") over the yellow cells that should be green.
-The blue mixes with underlying yellow = GREEN.
+This keeps the drawing visually interesting because you see each part take shape and get its final color before moving on.
 
-**STEP 3: Paint red OVER yellow to make ORANGE**
-Paint red ("r", "e") over yellow cells that should be orange.
-The red mixes with underlying yellow = ORANGE.
-
-**STEP 4: Add details and pure colors**
-Now add any pure red, pure blue, or grayscale elements.
-
-**Example: Green grass with brown path**
-```json
-// Step 1: Yellow everywhere (grass + path area)
-{"type": "paint_line", "x": 0, "y": 22, "key": "f", "direction": "right", "length": 101},
-{"type": "paint_line", "x": 0, "y": 23, "key": "f", "direction": "right", "length": 101},
-// Step 2: Blue over grass ONLY (not path) = GREEN
-{"type": "paint_line", "x": 0, "y": 22, "key": "c", "direction": "right", "length": 45},
-{"type": "paint_line", "x": 55, "y": 22, "key": "c", "direction": "right", "length": 46},
-// Path (x=45-55) keeps yellow, becomes brown with darker overlays
-{"type": "paint_line", "x": 45, "y": 22, "key": "l", "direction": "right", "length": 10}
+**Example: Tree with green canopy and brown trunk**
+```actions
+// Canopy: yellow base, then blue overlay = GREEN
+Lf30,5,70,5
+Lf28,6,72,6
+Lf26,7,74,7
+Lc30,5,70,5
+Lc28,6,72,6
+Lc26,7,74,7
+// Trunk: yellow base, then dark overlay = BROWN
+Lf45,15,55,15
+Lf45,16,55,16
+Ll45,15,55,15
+Ll45,16,55,16
+// Minimal ground: just 2 rows
+Lf0,23,100,23
+Lc0,23,100,23
 ```
+
+Notice how the canopy gets its yellow AND blue (becoming green) before we move to the trunk. This is more fun to watch than painting all yellow first.
 
 For SHADING mixed colors, vary the shade of the overlay:
 - Bright green highlight: light yellow ("a") + light blue ("z")
@@ -1286,7 +1322,8 @@ Pk35,10
 - Add shading: use lighter colors on lit surfaces, darker in shadows
 - Add texture: sprinkle in detail points with varied colors
 - Create depth: foreground elements overlap background
-- Compose naturally: the subject should look good in the canvas, NOT stretch to fill the full width. A tree canopy should be round, not 101 cells wide. Leave sky, ground, or empty space around the subject. Only backgrounds (sky, grass) should span the full width.
+- Compose naturally: the subject should look good in the canvas, NOT stretch to fill the full width. A tree canopy should be round, not 101 cells wide. Leave empty space around the subject.
+- Minimize backgrounds: skip large sky/ground fills. A detailed subject on a mostly-empty canvas looks better than a simple subject buried in monotone background fills.
 
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
 
@@ -1375,22 +1412,22 @@ def get_complexity_guidance(iteration: int, max_iterations: int) -> str:
     if progress <= 0.25:
         return """## ITERATION PHASE: Foundation
 Establish the basic composition and main shapes. Use color mixing to create greens, oranges, purples.
-Feel free to add detail - more actions create richer, more interesting drawings."""
+Focus on the SUBJECT first. Skip or minimize background fills (sky, ground). Draw the interesting parts."""
 
     elif progress <= 0.5:
         return """## ITERATION PHASE: Development
 Build out the drawing with more colors and shading. Add texture and visual interest.
-Use the full range of colors - lights for highlights, darks for shadows."""
+Use the full range of colors: lights for highlights, darks for shadows. Keep backgrounds minimal."""
 
     elif progress <= 0.75:
         return """## ITERATION PHASE: Refinement
 Add fine details, highlights, and finishing touches. Make it rich and visually interesting.
-Don't hold back on detail - the more texture and shading, the better."""
+Don't hold back on detail. The more texture, shading, and color mixing, the better."""
 
     else:
         return """## ITERATION PHASE: Polish
 Perfect the details. Add any missing highlights, shadows, or textures.
-Make every part of the drawing interesting to look at."""
+Make every part of the SUBJECT interesting to look at. Avoid adding large background fills at this stage."""
 
 
 def call_vision_api(
@@ -1568,11 +1605,11 @@ You may change 70-100% of the lines. Keep only the general layout from the best 
     # First iteration vs subsequent
     if iteration == 1:
         instruction = """This is your FIRST attempt. Generate a complete drawing script based on the plan.
-The canvas is blank. Your script should include:
-1. Yellow base layer for areas that will become green/brown
-2. Blue overlay on yellow to create greens
-3. Red overlay for oranges/purples
-4. Any additional details"""
+The canvas is blank. Draw the SUBJECT first (the interesting part), then add minimal background if needed.
+For each element, paint its base color then immediately overlay the mixing color:
+1. Draw main subject elements one by one (base color + mixing overlay per element)
+2. Add shading and details to the subject
+3. Add minimal background last (2-3 rows of ground, thin sky strip, or nothing)"""
     else:
         instruction = """The screenshot shows your PREVIOUS attempt's result.
 Analyze what worked and what needs improvement, then generate a BETTER complete script.
@@ -1759,6 +1796,8 @@ Evaluate based on (in priority order):
 5. Overall quality: Shading, detail, completeness
 
 SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be. These are common pixel art mistakes.
+
+BACKGROUND PENALTIES: Penalize large monotone background fills (solid blue sky covering half the canvas, solid green ground covering many rows). A detailed subject on a mostly-empty canvas is BETTER than a simple subject surrounded by flat background fills. Minimal or absent backgrounds are fine.
 
 Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.

@@ -38,6 +38,11 @@ from pathlib import Path
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from purple_tui.doodle_config import (
+    CANVAS_WIDTH, CANVAS_HEIGHT,
+    describe_canvas, describe_colors, describe_colors_brief,
+)
+
 
 # =============================================================================
 # ROBUST JSON PARSING
@@ -482,12 +487,7 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         print("[Warning] PIL not installed, skipping crop. Install: pip install Pillow")
         return png_data
 
-    # Import constants for fallback
-    try:
-        from purple_tui.constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
-    except ImportError:
-        REQUIRED_TERMINAL_COLS = 114
-        REQUIRED_TERMINAL_ROWS = 39
+    from purple_tui.constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
 
     try:
         img = Image.open(io.BytesIO(png_data))
@@ -503,12 +503,16 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
             print("[Crop] No gutter detected, using fallback bounds")
             cell_width = img_width / REQUIRED_TERMINAL_COLS
             cell_height = img_height / REQUIRED_TERMINAL_ROWS
-            # Fallback: approximate Doodle mode canvas area
-            # Rows 7-31 (25 rows), Cols 4-104 (100 cols)
-            left = int(4 * cell_width)
-            top = int(7 * cell_height)
-            right = int(105 * cell_width)
-            bottom = int(32 * cell_height)
+            # Fallback: approximate Doodle mode canvas area from config
+            # Title(2) + border(1) + header(DOODLE_HEADER_ROWS) + gutter(GUTTER)
+            from purple_tui.doodle_config import DOODLE_HEADER_ROWS
+            from purple_tui.modes.doodle_mode import GUTTER
+            col_start = GUTTER + 1  # +1 for border
+            row_start = 2 + 1 + DOODLE_HEADER_ROWS + GUTTER  # title + border + header + gutter
+            left = int(col_start * cell_width)
+            top = int(row_start * cell_height)
+            right = int((col_start + CANVAS_WIDTH) * cell_width)
+            bottom = int((row_start + CANVAS_HEIGHT) * cell_height)
 
         drawable_width = right - left
         drawable_height = bottom - top
@@ -520,7 +524,7 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         print(f"[Crop] Cropped to: {cropped.size[0]}x{cropped.size[1]}")
 
         # Resize if larger than needed to reduce API token costs
-        # Canvas is 101x25 cells, so ~500x200 pixels is plenty of resolution
+        # Canvas cells are small, so ~500x200 pixels is plenty of resolution
         MAX_WIDTH = 500
         MAX_HEIGHT = 200
         if cropped.width > MAX_WIDTH or cropped.height > MAX_HEIGHT:
@@ -867,13 +871,10 @@ class PurpleController:
 # AI VISION FEEDBACK LOOP
 # =============================================================================
 
-PLANNING_PROMPT = """You are an AI artist planning a pixel art drawing in Purple Computer's Doodle mode.
+PLANNING_PROMPT = f"""You are an AI artist planning a pixel art drawing in Purple Computer's Doodle mode.
 
 ## CANVAS SIZE
-The canvas is **101 cells wide × 25 cells tall**.
-- X coordinates: 0 (left) to 100 (right)
-- Y coordinates: 0 (top) to 24 (bottom)
-- Origin (0,0) is TOP-LEFT corner
+{describe_canvas()}
 
 ## HOW THIS WORKS (REGENERATIVE MODEL)
 
@@ -884,11 +885,7 @@ The execution AI will see its previous attempt and try to improve, but each atte
 
 ## COLOR SYSTEM
 
-Each row provides a color family:
-- **Number row (` 1 2 3 4 5 6 7 8 9 0 - =)**: GRAYSCALE (white to black)
-- **QWERTY row (q w e r t y u i o p [ ] \\)**: RED family (pink to burgundy)
-- **ASDF row (a s d f g h j k l ; ')**: YELLOW family (gold to brown)
-- **ZXCV row (z x c v b n m , . /)**: BLUE family (periwinkle to navy)
+{describe_colors_brief()}
 
 ## COLOR MIXING
 
@@ -905,7 +902,7 @@ Before planning coordinates, analyze the subject:
 1. **Defining features**: 3-5 visual features that make this subject instantly recognizable
 2. **Common mistakes**: What similar-looking thing might you accidentally draw instead?
 3. **Key proportions**: What proportions are critical for recognition?
-4. **Pixel art translation**: At 101x25 resolution, how to capture these features?
+4. **Pixel art translation**: At {CANVAS_WIDTH}x{CANVAS_HEIGHT} resolution, how to capture these features?
 
 ## YOUR TASK
 
@@ -936,38 +933,38 @@ Plan compositions that are FUN TO WATCH being drawn:
 ## RESPONSE FORMAT
 
 ```json
-{
-  "plan": {
-    "visual_identity": {
+{{
+  "plan": {{
+    "visual_identity": {{
       "defining_features": ["feature 1", "feature 2", "feature 3"],
       "common_mistakes": ["What you might accidentally draw instead"],
       "key_proportions": "Critical proportions for recognition",
-      "pixel_art_notes": "How to capture defining features at 101x25"
-    },
+      "pixel_art_notes": "How to capture defining features at {CANVAS_WIDTH}x{CANVAS_HEIGHT}"
+    }},
     "description": "Brief description of the final drawing",
-    "composition": {
-      "element_name": {
+    "composition": {{
+      "element_name": {{
         "x_range": [start, end],
         "y_range": [start, end],
         "final_color": "green (or red, blue, yellow, brown, etc.)",
         "mixing_recipe": "yellow base + blue overlay" or null for pure colors,
         "description": "what this element is"
-      }
-    },
+      }}
+    }},
     "style_notes": "Key points about the visual style - emphasize CURVED, ORGANIC shapes (e.g., 'round fluffy foliage, not rectangular')",
     "recognition_test": "A 4-year-old should see: [what they should recognize]"
-  }
-}
+  }}
+}}
 ```
 
 Be specific about coordinates. The execution AI will use this as a reference for composition.
 
-**COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-100.
+**COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-{CANVAS_WIDTH - 1}.
 
-**BACKGROUND TIP:** Keep backgrounds MINIMAL. A tree doesn't need a full blue sky fill (25 rows x 101 columns = boring). Instead, leave most of the canvas background showing and focus detail on the subject. If you want a ground line, use 2-3 rows, not 10. If you want sky, use a few accent strokes or a gradient strip, not a full fill."""
+**BACKGROUND TIP:** Keep backgrounds MINIMAL. A tree doesn't need a full blue sky fill ({CANVAS_HEIGHT} rows x {CANVAS_WIDTH} columns = boring). Instead, leave most of the canvas background showing and focus detail on the subject. If you want a ground line, use 2-3 rows, not 10. If you want sky, use a few accent strokes or a gradient strip, not a full fill."""
 
 
-EXECUTION_PROMPT = """You are an AI artist creating pixel art in Purple Computer's Doodle mode.
+EXECUTION_PROMPT = f"""You are an AI artist creating pixel art in Purple Computer's Doodle mode.
 
 ## GOALS
 Your drawings should be:
@@ -998,10 +995,7 @@ Lc0,12,50,12
 ```
 
 ## CANVAS SIZE
-The canvas is **101 cells wide × 25 cells tall**.
-- X coordinates: 0 (left) to 100 (right)
-- Y coordinates: 0 (top) to 24 (bottom)
-- Origin (0,0) is TOP-LEFT corner
+{describe_canvas()}
 
 ## WHAT YOU SEE IN SCREENSHOTS
 - Colored cells are painted areas
@@ -1011,33 +1005,7 @@ The canvas is **101 cells wide × 25 cells tall**.
 
 ## COLOR SYSTEM (KEYBOARD ROWS)
 
-Each keyboard row produces a COLOR FAMILY. Within each row, keys go from LIGHTER (left) to DARKER (right).
-**Use this for SHADING:** paint lighter keys (left side of row) for highlights, darker keys (right side) for shadows.
-
-**GRAYSCALE (Number row: ` 1 2 3 4 5 6 7 8 9 0 - =):**
-- ` (backtick) = pure white (highlight)
-- 1-3 = light grays
-- 4-6 = medium grays
-- 7-9 = dark grays
-- 0, -, = = near/pure black (shadow)
-
-**RED FAMILY (QWERTY row: q w e r t y u i o p [ ] \\):**
-- q, w = lightest pink (highlight)
-- e, r, t, y = medium red (primary)
-- u, i, o, p = dark red
-- [, ], \\ = darkest burgundy (shadow)
-
-**YELLOW FAMILY (ASDF row: a s d f g h j k l ; '):**
-- a, s = lightest gold (highlight)
-- d, f, g = medium yellow (primary)
-- h, j, k, l = dark gold/brown
-- ;, ' = darkest brown (shadow)
-
-**BLUE FAMILY (ZXCV row: z x c v b n m , . /):**
-- z, x = lightest periwinkle (highlight)
-- c, v, b = medium blue (primary)
-- n, m = dark blue
-- ,, ., / = darkest navy (shadow)
+{describe_colors()}
 
 ## SHADING TECHNIQUE
 
@@ -1314,18 +1282,18 @@ For SHADING mixed colors, vary the shade of the overlay:
 Respond with a JSON object followed by a compact actions block:
 
 ```json
-{
+{{
   "analysis": "What I see from the previous attempt and what to improve",
-  "strategy_summary": {
-    "composition": {
-      "element_name": {"x_range": [start, end], "y_range": [start, end], "description": "what this element is"}
-    },
+  "strategy_summary": {{
+    "composition": {{
+      "element_name": {{"x_range": [start, end], "y_range": [start, end], "description": "what this element is"}}
+    }},
     "layering_order": ["Step 1: Yellow base", "Step 2: Blue overlay", "Step 3: Details"],
     "keep_next_time": ["trunk position at x=48-52"],
     "change_next_time": ["make trunk wider"]
-  },
+  }},
   "learnings": "Key insight from this attempt"
-}
+}}
 ```
 
 ```actions
@@ -1351,7 +1319,7 @@ Pk35,10
 - Add shading: use lighter colors on lit surfaces, darker in shadows
 - Add texture: sprinkle in detail points with varied colors
 - Create depth: foreground elements overlap background
-- Compose naturally: the subject should look good in the canvas, NOT stretch to fill the full width. A tree canopy should be round, not 101 cells wide. Leave empty space around the subject.
+- Compose naturally: the subject should look good in the canvas, NOT stretch to fill the full width. A tree canopy should be round, not {CANVAS_WIDTH} cells wide. Leave empty space around the subject.
 - Minimize backgrounds: skip large sky/ground fills. A detailed subject on a mostly-empty canvas looks better than a simple subject buried in monotone background fills.
 
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
@@ -2547,7 +2515,7 @@ def run_visual_feedback_loop(
     print("="*50)
 
 
-def generate_demo_script(actions: list[dict], canvas_width: int = 101, canvas_height: int = 25) -> str:
+def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, canvas_height: int = CANVAS_HEIGHT) -> str:
     """Convert actions to a Purple Computer demo script with interpolated cursor movement.
 
     The AI training uses fast direct paint_at commands, but the demo script

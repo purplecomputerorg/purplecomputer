@@ -1,6 +1,6 @@
 # Installing a Doodle AI Demo
 
-After running `./tools/doodle-ai` on the VM, follow these steps to install the result as a playable demo.
+After running `./tools/doodle-ai` on the VM, follow these steps to install the result and run it.
 
 ## 1. Copy the output from the VM
 
@@ -43,22 +43,35 @@ Options:
 ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --duration 15
 ```
 
-This writes `purple_tui/demo/ai_generated_script.py` (gitignored). The demo system picks it up automatically.
+This writes `purple_tui/demo/ai_generated_script.py`. The demo system picks it up automatically.
 
-## 4. Test it
+## 4. Commit and push to the VM
 
-On a Linux machine with Purple Computer:
+```bash
+git add purple_tui/demo/ai_generated_script.py
+git commit -m "Add AI-generated doodle demo"
+git push
+```
+
+Then on the VM:
+
+```bash
+git pull
+```
+
+## 5. Run the demo on the VM
 
 ```bash
 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
 ```
 
-## 5. To revert to the default demo
+## 6. To revert to the default demo
 
-Delete the generated file:
+Delete the generated file and commit:
 
 ```bash
-rm purple_tui/demo/ai_generated_script.py
+git rm purple_tui/demo/ai_generated_script.py
+git commit -m "Revert to default demo"
 ```
 
 The demo system falls back to the hand-crafted default script.

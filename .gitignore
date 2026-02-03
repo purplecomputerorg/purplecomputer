@@ -77,6 +77,3 @@ purple-computer-*.iso
 # USB flash drive whitelist (contains user-specific drive serials)
 .flash-drives.conf
 tools/.env
-
-# AI-generated demo scripts (created by tools/install-doodle-demo)
-purple_tui/demo/ai_generated_script.py

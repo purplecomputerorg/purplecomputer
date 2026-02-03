@@ -1034,6 +1034,8 @@ To create 3D depth and realism, use DIFFERENT keys from the same row:
 
 Example for a tree trunk: paint 'd' for lit side, 'j' for middle, "'" (apostrophe) for shadow side.
 
+**Brown requires cross-family mixing!** Yellow-on-yellow (e.g., 'f' then 'k') stays yellow/gold. To get brown, paint yellow ('f') then overlay with red ('t' or 'y'). For dark brown, use dark yellow (';') + dark red ('p').
+
 ## COLOR MIXING (CRITICAL!)
 
 When you paint OVER an already-painted cell, colors MIX like real paint:
@@ -1132,6 +1134,17 @@ Lf32,13,58,13
 Lf36,14,54,14
 ```
 
+**Small filled circle (sun, ball, apple):**
+```actions
+Lf48,3,52,3
+Lf46,4,54,4
+Lf45,5,55,5
+Lf45,6,55,6
+Lf46,7,54,7
+Lf48,8,52,8
+```
+Use this for compact round objects. Do NOT draw suns as a small rectangle with long horizontal rays extending out. That creates a trophy/goblet shape. Instead, use a filled circle like this.
+
 **Thick trunk (filled rectangle with slight taper):**
 ```actions
 Lf43,15,57,15
@@ -1222,6 +1235,8 @@ Example: For green foliage, don't just use 'f'+'c' everywhere:
 - Middle: 'f' (medium yellow) + 'b' (medium blue) = medium green
 - Shadow: 'k' (dark yellow) + '.' (dark blue) = dark green
 
+**OVERLAP RULE:** Shadow and highlight overlays MUST stay WITHIN the base shape's boundaries. If the canopy's yellow base on row 12 spans x:28-68, then any blue or dark overlay on row 12 must also be within x:28-68. Painting overlay colors outside the base shape creates stray colored pixels (artifacts). Always check that your overlay coordinates fit inside the base fill coordinates for that row.
+
 ## ENTERTAINMENT VALUE (CRITICAL)
 
 A child watches every stroke appear in real-time. The drawing process itself must be fun to watch.
@@ -1263,17 +1278,17 @@ Lf26,7,74,7
 Lc30,5,70,5
 Lc28,6,72,6
 Lc26,7,74,7
-// Trunk: yellow base, then dark overlay = BROWN
+// Trunk: yellow base + red overlay = BROWN (cross-family mixing!)
 Lf45,15,55,15
 Lf45,16,55,16
-Ll45,15,55,15
-Ll45,16,55,16
+Lt45,15,55,15
+Lt45,16,55,16
 // Minimal ground: just 2 rows
 Lf0,23,100,23
 Lc0,23,100,23
 ```
 
-Notice how the canopy gets its yellow AND blue (becoming green) before we move to the trunk. This is more fun to watch than painting all yellow first.
+Notice how the canopy gets its yellow AND blue (becoming green) before we move to the trunk. The trunk uses yellow + red = brown (cross-family mixing). This is more fun to watch than painting all yellow first.
 
 For SHADING mixed colors, vary the shade of the overlay:
 - Bright green highlight: light yellow ("a") + light blue ("z")
@@ -1798,6 +1813,8 @@ Evaluate based on (in priority order):
 SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be. These are common pixel art mistakes.
 
 BACKGROUND PENALTIES: Penalize large monotone background fills (solid blue sky covering half the canvas, solid green ground covering many rows). A detailed subject on a mostly-empty canvas is BETTER than a simple subject surrounded by flat background fills. Minimal or absent backgrounds are fine.
+
+ARTIFACT PENALTIES: Penalize stray colored pixels outside shape boundaries. For example, blue or dark pixels hanging off the edge of a tree canopy, or shadow colors painted beyond where the base shape was filled. Clean edges are better than messy overhangs.
 
 Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.

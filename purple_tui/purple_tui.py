@@ -1265,17 +1265,17 @@ class PurpleApp(App):
 
         self._do_screenshot()
 
+    _screenshot_counter = -1  # Monotonic counter, first screenshot is 0
+
     def _do_screenshot(self) -> None:
         """Actually take the screenshot."""
         screenshot_dir = os.environ.get("PURPLE_SCREENSHOT_DIR", "screenshots")
 
-        import glob
-
         os.makedirs(screenshot_dir, exist_ok=True)
 
-        # Find next screenshot number
-        existing = glob.glob(os.path.join(screenshot_dir, "screenshot_*.svg"))
-        next_num = len(existing) + 1
+        # Use monotonic counter so renames of previous files don't cause collisions
+        PurpleTUI._screenshot_counter += 1
+        next_num = PurpleTUI._screenshot_counter
 
         filename = os.path.join(screenshot_dir, f"screenshot_{next_num:04d}.svg")
         self.save_screenshot(filename)

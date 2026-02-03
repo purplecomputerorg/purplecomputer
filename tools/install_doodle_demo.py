@@ -150,15 +150,15 @@ After installing, run:
     with open(dest_path, 'w') as f:
         f.write(output_content)
 
-    print(f"\nInstalled demo script:")
+    print("\nInstalled demo script:")
     print(f"  Source: {output_dir} (iteration {iteration})")
     print(f"  Destination: {dest_path}")
     print(f"  Actions: {len(actions)}")
     print(f"  Estimated duration: {estimated:.1f}s")
     print(f"  Target duration: {target:.1f}s")
     print(f"  Speed multiplier: {speed_multiplier:.4f}")
-    print(f"\nTo run:")
-    print(f"  PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh")
+    print("\nTo run:")
+    print("  PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh")
 
 
 if __name__ == "__main__":

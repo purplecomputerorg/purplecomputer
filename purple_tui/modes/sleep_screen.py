@@ -8,7 +8,6 @@ Features a cute sleeping face and clear instructions.
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Static
-from textual.containers import Container, Vertical, Center, Middle
 from textual import events
 import time
 

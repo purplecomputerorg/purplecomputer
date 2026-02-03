@@ -7,7 +7,6 @@ Pure logic tests with injected timestamps for deterministic behavior.
 import sys
 from pathlib import Path
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

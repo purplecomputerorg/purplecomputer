@@ -270,7 +270,6 @@ class EvdevReader:
 
     async def start(self) -> None:
         """Start reading keyboard events in background."""
-        import evdev
         from evdev import InputDevice
 
         # Find or open device

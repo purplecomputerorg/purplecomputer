@@ -7,7 +7,7 @@ Run with: pytest tests/test_power_manager.py -v
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,8 +21,6 @@ except ImportError:
 from purple_tui.power_manager import (
     PowerManager,
     IDLE_SLEEP_UI,
-    IDLE_SCREEN_OFF,
-    IDLE_SHUTDOWN,
 )
 
 
@@ -165,7 +163,6 @@ if HAS_PYTEST:
             from textual import events
 
             # Create a mock app with the on_event method
-            from purple_tui.purple_tui import PurpleApp
 
             # We can't easily instantiate the full app, so test the logic directly
             # The key insight is that on_event checks isinstance(event, events.Key)

@@ -5,7 +5,6 @@ Piper is a fast, local, neural TTS system.
 https://github.com/rhasspy/piper
 """
 
-import subprocess
 import sys
 import tempfile
 import threading
@@ -26,7 +25,6 @@ from contextlib import contextmanager
 @contextmanager
 def _suppress_stderr():
     """Temporarily redirect stderr to suppress ONNX runtime warnings."""
-    import sys
     old_stderr = sys.stderr
     try:
         sys.stderr = open(os.devnull, 'w')

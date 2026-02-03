@@ -1539,13 +1539,13 @@ def call_vision_api(
 
         if winner == "B":
             # Previous attempt was better than the old best
-            judge_section = f"\n## JUDGE FEEDBACK (Your last attempt WON)\n"
+            judge_section = "\n## JUDGE FEEDBACK (Your last attempt WON)\n"
             judge_section += f"Your Attempt {compared_new} beat the previous best (Attempt {compared_best}).\n"
             judge_section += f"Judge's reasoning: {reasoning}\n"
             judge_section += "Keep doing what worked! Build on this success.\n"
         elif winner == "A":
             # Previous attempt was worse than the best
-            judge_section = f"\n## JUDGE FEEDBACK (Your last attempt LOST)\n"
+            judge_section = "\n## JUDGE FEEDBACK (Your last attempt LOST)\n"
             judge_section += f"Your Attempt {compared_new} was worse than Attempt {compared_best}.\n"
             judge_section += f"Judge's reasoning: {reasoning}\n"
             judge_section += "Change your approach. The current best is still Attempt {compared_best}.\n"
@@ -1633,7 +1633,7 @@ The canvas will be CLEARED and your new script executed from scratch."""
     # Build top performers section (references images sent alongside)
     top_performers_text = ""
     if best_image_base64 and best_image_base64 != image_base64:
-        top_performers_text += f"\n## TOP PERFORMERS\n"
+        top_performers_text += "\n## TOP PERFORMERS\n"
         top_performers_text += f"The BEST ATTEMPT image (Attempt {best_attempt_num}) is included below.\n"
         if runner_up_image_base64 and runner_up_image_base64 != image_base64 and runner_up_image_base64 != best_image_base64:
             top_performers_text += f"The RUNNER-UP image (Attempt {runner_up_attempt_num}) is also included.\n"
@@ -1762,9 +1762,9 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     elif data and isinstance(data, list) and not result["actions"]:
         # Got just an array (old format or fallback extraction)
         result["actions"] = data
-        print(f"[Warning] Only extracted actions array, no metadata")
+        print("[Warning] Only extracted actions array, no metadata")
     elif not result["actions"]:
-        print(f"[Error] Could not parse actions from response")
+        print("[Error] Could not parse actions from response")
         print(f"[Debug] Raw response:\n{text[:500]}...")
 
     return result
@@ -1901,7 +1901,7 @@ Respond with JSON only:
                 print(f"[Judge] Reasoning contradicts winner! Reasoning favors {other}, winner says {result['winner']}. Flipping to {other}.")
                 result["winner"] = other
     else:
-        print(f"[Judge] Could not parse JSON, trying text extraction")
+        print("[Judge] Could not parse JSON, trying text extraction")
         # Try to extract winner from text
         if "winner" in text.lower():
             if '"A"' in text or "'A'" in text or "winner: A" in text.lower() or "Winner: A" in text:
@@ -1978,7 +1978,7 @@ def judge_with_single_call(
     elif result["winner"] == "B":
         winner = "best" if swapped else "challenger"
     else:
-        print(f"[Judge] Inconclusive, keeping current best")
+        print("[Judge] Inconclusive, keeping current best")
         return {"winner": "best", "reasoning": "Judge inconclusive", "confidence": "low"}
 
     print(f"[Judge] Result: {winner} (raw: {result['winner']}, swapped: {swapped})")
@@ -2119,7 +2119,7 @@ def run_visual_feedback_loop(
             screenshot_dir_path = os.path.dirname(svg_path)
             if i == 0:
                 new_name = "iteration_0_blank.svg"
-                print(f"[Screenshot] iteration_0_blank = blank canvas (before any drawing)")
+                print("[Screenshot] iteration_0_blank = blank canvas (before any drawing)")
             else:
                 new_name = f"iteration_{i}.svg"
                 print(f"[Screenshot] iteration_{i} = Attempt {i}'s result")
@@ -2261,7 +2261,7 @@ def run_visual_feedback_loop(
 
             if canvas_shows_attempt is None:
                 # Canvas is blank (first iteration), nothing to judge yet
-                print(f"[Judge] Canvas is blank, nothing to compare yet")
+                print("[Judge] Canvas is blank, nothing to compare yet")
             elif best_attempt is None:
                 # First real result, set as initial best
                 best_attempt = canvas_shows_attempt
@@ -2404,7 +2404,7 @@ def run_visual_feedback_loop(
             # Execute the complete script
             print(f"[Execute] Running {len(actions)} actions...")
             controller.execute_actions(actions)
-            print(f"[Execute] Done executing actions")
+            print("[Execute] Done executing actions")
 
             # Update what's on the canvas - this attempt's result will be visible
             canvas_shows_attempt = i + 1  # Attempt number (1-indexed)

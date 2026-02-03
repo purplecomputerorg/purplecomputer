@@ -5,7 +5,6 @@ The color mixing implementation is based on spectral.js by Ronald van Wijnen:
 https://github.com/rvanwijnen/spectral.js (MIT License)
 """
 
-import math
 import pytest
 from purple_tui.color_mixing import (
     get_color_name_approximation,

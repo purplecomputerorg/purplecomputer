@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo test build-packs build-iso clean clean-iso clean-all recording-setup record-demo
+.PHONY: help setup run run-sleep-demo run-demo test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -65,6 +65,9 @@ run-sleep-demo:
 
 test:
 	@.venv/bin/python -m pytest tests/ -v
+
+lint:
+	@.venv/bin/ruff check purple_tui/ tools/ scripts/ tests/
 
 build-packs:
 	@echo "Building content packs..."

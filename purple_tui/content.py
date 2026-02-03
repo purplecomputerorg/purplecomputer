@@ -142,8 +142,8 @@ class ContentManager:
             "poop": "💩", "skull": "💀", "eye": "👁️", "brain": "🧠",
 
             # Holidays
-            "pumpkin": "🎃", "snowman": "☃️", "santa": "🎅", "tree": "🎄",
-            "present": "🎁", "firework": "🎆", "egg": "🥚", "bunny": "🐰",
+            "pumpkin": "🎃", "snowman": "☃️", "santa": "🎅",
+            "present": "🎁", "firework": "🎆", "bunny": "🐰",
 
             # Synonyms (same emoji, different words)
             "kitty": "🐱", "kitten": "🐱", "meow": "🐱",

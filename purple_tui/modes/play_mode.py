@@ -13,7 +13,6 @@ from textual.containers import Container
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.strip import Strip
-from textual import events
 from rich.segment import Segment
 from rich.style import Style
 from pathlib import Path

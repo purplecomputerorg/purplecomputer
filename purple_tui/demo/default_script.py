@@ -31,13 +31,10 @@ from .script import (
     PressKey,
     SwitchMode,
     Pause,
-    Clear,
     ClearAll,
     PlayKeys,
     DrawPath,
     Comment,
-    type_and_enter,
-    section_pause,
 )
 
 

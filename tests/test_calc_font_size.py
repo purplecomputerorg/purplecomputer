@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from calc_font_size import (
     REQUIRED_COLS, REQUIRED_ROWS, SCREEN_FILL, MIN_FONT, MAX_FONT,
-    PROBE_FONT, FALLBACK_RESOLUTION, FALLBACK_CELL,
     get_resolution, probe_cell_size, calculate_font
 )
 

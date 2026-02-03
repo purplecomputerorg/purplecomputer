@@ -6,11 +6,11 @@ Arrow keys navigate, Enter selects, Escape cancels.
 """
 
 from textual.screen import ModalScreen
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal
 from textual.widgets import Static
 from textual.app import ComposeResult
 
-from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_PENCIL, ICON_BRUSH
+from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE
 from .keyboard import NavigationAction, ControlAction
 
 

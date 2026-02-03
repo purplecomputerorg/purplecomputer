@@ -9,11 +9,10 @@ See guides/keyboard-architecture.md for details.
 import sys
 from pathlib import Path
 
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from keyboard_normalizer import KeyCodes, load_scancode_map, save_scancode_map, MAPPING_FILE
+from keyboard_normalizer import KeyCodes, load_scancode_map, save_scancode_map
 
 
 class TestKeyCodesConstants:

@@ -29,7 +29,7 @@ from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
 from ..keyboard import (
-    CharacterAction, NavigationAction, ControlAction, ShiftAction,
+    CharacterAction, NavigationAction, ControlAction,
 )
 
 

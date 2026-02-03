@@ -9,7 +9,7 @@ Up/Down arrows move selection, Enter activates, Escape exits.
 """
 
 from textual.widgets import Static
-from textual.containers import Container, Vertical, Horizontal, Center
+from textual.containers import Vertical, Horizontal
 from textual.app import ComposeResult
 from textual.screen import ModalScreen
 from textual import events

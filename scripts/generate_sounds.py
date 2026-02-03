@@ -10,7 +10,6 @@ Creates vibrant, kid-friendly sounds:
 import wave
 import math
 import random
-import os
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent

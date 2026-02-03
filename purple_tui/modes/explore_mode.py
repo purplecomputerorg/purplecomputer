@@ -33,7 +33,7 @@ from ..content import get_content
 from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import (
     SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor,
-    CharacterAction, NavigationAction, ControlAction, ShiftAction,
+    CharacterAction, NavigationAction, ControlAction,
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget

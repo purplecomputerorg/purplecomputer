@@ -103,7 +103,7 @@ class PackInstaller:
                 # Security: check for path traversal
                 for member in tar.getmembers():
                     if member.name.startswith('/') or '..' in member.name:
-                        return False, f"Security error: Invalid path in pack"
+                        return False, "Security error: Invalid path in pack"
                 tar.extractall(temp_dir)
 
             # Load and validate manifest

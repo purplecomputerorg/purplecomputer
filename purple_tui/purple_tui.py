@@ -26,15 +26,13 @@ os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal, Center, Middle
-from textual.widgets import Static, Footer
+from textual.containers import Container, Vertical, Horizontal
+from textual.widgets import Static
 from textual.binding import Binding
 from textual.css.query import NoMatches
 from textual.theme import Theme
 from textual import events
 from enum import Enum
-import subprocess
-import time
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
@@ -49,10 +47,9 @@ from .constants import (
     MODE_EXPLORE, MODE_PLAY, MODE_DOODLE,
 )
 from .keyboard import (
-    KeyboardState, create_keyboard_state, detect_keyboard_mode,
-    KeyboardMode, SHIFT_MAP,
+    create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
-    ModeAction, ControlAction, ShiftAction, CapsLockAction, LongHoldAction,
+    ModeAction, ControlAction, CapsLockAction, LongHoldAction,
 )
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
@@ -1274,8 +1271,8 @@ class PurpleApp(App):
         os.makedirs(screenshot_dir, exist_ok=True)
 
         # Use monotonic counter so renames of previous files don't cause collisions
-        PurpleTUI._screenshot_counter += 1
-        next_num = PurpleTUI._screenshot_counter
+        PurpleApp._screenshot_counter += 1
+        next_num = PurpleApp._screenshot_counter
 
         filename = os.path.join(screenshot_dir, f"screenshot_{next_num:04d}.svg")
         self.save_screenshot(filename)
@@ -1300,11 +1297,11 @@ class PurpleApp(App):
 
         trigger_path = os.path.join(screenshot_dir, "trigger")
         if os.path.exists(trigger_path):
-            self._dev_log(f"[Trigger] Found screenshot trigger, taking screenshot...")
+            self._dev_log("[Trigger] Found screenshot trigger, taking screenshot...")
             try:
                 os.unlink(trigger_path)
                 self._do_screenshot()
-                self._dev_log(f"[Trigger] Screenshot done")
+                self._dev_log("[Trigger] Screenshot done")
             except Exception as e:
                 self._dev_log(f"[Trigger] Screenshot error: {e}")
 

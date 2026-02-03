@@ -489,13 +489,13 @@ def detect_keyboard_mode() -> KeyboardMode:
         devices = evdev.list_devices()
         if devices:
             return KeyboardMode.LINUX_EVDEV
-    except ImportError as e:
+    except ImportError:
         raise RuntimeError(
             "Purple Computer needs to be set up before it can run.\n\n"
             f"Please contact {SUPPORT_EMAIL} for help.\n\n"
             "(Technical: evdev library not installed)"
         )
-    except PermissionError as e:
+    except PermissionError:
         raise RuntimeError(
             "Purple Computer doesn't have permission to use the keyboard.\n\n"
             "Please restart your Purple Computer. If this keeps happening,\n"
@@ -522,7 +522,7 @@ def detect_keyboard_mode() -> KeyboardMode:
 # ============================================================================
 
 import logging
-from typing import Union, List
+from typing import List
 from .input import RawKeyEvent, KeyCode
 
 logger = logging.getLogger(__name__)

@@ -28,7 +28,7 @@ from ..keyboard import (
 )
 
 if TYPE_CHECKING:
-    from ..purple_tui import PurpleApp
+    pass
 
 
 class DemoPlayer:

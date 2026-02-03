@@ -4,6 +4,12 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+## 2026-02
+
+- **Doodle AI: better shape judging and refinement**: AI judge now evaluates shape quality (organic curves vs boxy rectangles), refinement escalates from targeted tweaks to full restructuring after repeated losses, and color mixing recipes are passed through to the drawing AI
+
+---
+
 ## 2026-01
 
 - **Display settings in parent menu**: Parents can now adjust screen brightness and contrast via Parent Menu > Adjust Display; settings persist across sessions

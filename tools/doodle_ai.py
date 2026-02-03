@@ -1127,6 +1127,28 @@ Lf44,18,56,18
 Lf45,19,55,19
 ```
 
+**Oval body (animal, widest at center):**
+```actions
+Lf38,12,62,12
+Lf34,13,66,13
+Lf31,14,69,14
+Lf30,15,70,15
+Lf30,16,70,16
+Lf31,17,69,17
+Lf34,18,66,18
+Lf38,19,62,19
+```
+
+**WRONG (rectangle body):** same x-range every row = boxy, unnatural shape. ALWAYS vary the width.
+
+**Tapered tail (progressively shorter fills):**
+```actions
+Lf70,14,82,14
+Lf72,15,84,15
+Lf75,16,86,16
+Lf78,17,88,17
+```
+
 Vary the x start/end per row: wider in the middle, narrower at top and bottom.
 This creates smooth, solid shapes. Use this for ALL filled regions.
 
@@ -1387,6 +1409,7 @@ def call_vision_api(
     runner_up_attempt_num: int = None,
     best_script_text: str = None,
     consecutive_losses: int = 0,
+    execution_model: str = "claude-sonnet-4-20250514",
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1482,12 +1505,13 @@ def call_vision_api(
         best_script_section += "This script produced the current best result. Study it and improve upon it.\n"
         best_script_section += f"```actions\n{best_script_text}\n```\n"
 
-    # Build refinement mode section (after 3+ consecutive losses)
+    # Build refinement mode section with escalating freedom based on consecutive losses
     refinement_section = ""
+    diversity_section = ""
     if consecutive_losses >= 3 and best_script_text:
-        refinement_section = """\n## REFINEMENT MODE
-The best attempt's script is provided above. Instead of generating from scratch,
-make TARGETED improvements:
+        if consecutive_losses <= 4:
+            refinement_section = """\n## REFINEMENT MODE (Targeted)
+The best attempt's script is provided above. Make TARGETED improvements:
 - Keep the overall structure that's working
 - Modify specific sections (shading, details, proportions)
 - Change at most 20-30% of the lines
@@ -1497,14 +1521,25 @@ IMPORTANT: If the best script uses horizontal line fills for solid shapes, keep 
 Do NOT convert horizontal fills into diagonal outlines or sparse line patterns.
 
 Start from the best script and improve it.\n"""
+        elif consecutive_losses <= 6:
+            refinement_section = f"""\n## REFINEMENT MODE (Restructure)
+You have lost {consecutive_losses} times with small tweaks. Time for bigger changes.
+The best attempt's script is provided above. You may change 40-60% of the lines:
+- RESTRUCTURE problem areas: reshape rectangular bodies into ovals (vary x-range per row)
+- Smooth stepped/staircase shapes into tapered forms (progressively shorter fills)
+- Improve proportions and organic curves
+- Keep the overall layout and color scheme
 
-    # Build diversity nudge (after 5+ consecutive losses)
-    diversity_section = ""
-    if consecutive_losses >= 5:
-        diversity_section = f"""\n## IMPORTANT: TRY A DIFFERENT APPROACH
-You have lost {consecutive_losses} times in a row trying similar approaches.
-Try something FUNDAMENTALLY different: different proportions, different composition,
-different technique. The current approach is not working.\n"""
+Focus on SHAPE QUALITY: organic curves beat straight edges.\n"""
+        else:
+            refinement_section = f"""\n## REFINEMENT MODE (Major Overhaul)
+You have lost {consecutive_losses} times. The current approach has plateaued.
+You may change 70-100% of the lines. Keep only the general layout from the best attempt:
+- REDRAW shapes from scratch with better technique
+- Use varying x-ranges for organic oval bodies (wider in middle, narrower at edges)
+- Use progressively shorter fills for tapered tails and limbs
+- Rebuild with proper shading and 3D depth
+- The layout and composition are good, but the shapes need major improvement.\n"""
 
     # Build plan summary
     plan_section = ""
@@ -1519,7 +1554,11 @@ different technique. The current approach is not working.\n"""
                     x_range = part_info.get('x_range', '')
                     y_range = part_info.get('y_range', '')
                     color = part_info.get('final_color', '')
-                    plan_section += f"- **{part_name}**: {desc}, x={x_range}, y={y_range}, color={color}\n"
+                    recipe = part_info.get('mixing_recipe', '')
+                    line = f"- **{part_name}**: {desc}, x={x_range}, y={y_range}, color={color}"
+                    if recipe:
+                        line += f", mix={recipe}"
+                    plan_section += line + "\n"
         if plan.get('style_notes'):
             plan_section += f"\nStyle: {plan['style_notes']}\n"
 
@@ -1608,7 +1647,7 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     temperature = 0.9 if consecutive_losses >= 5 else 1.0
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=execution_model,
         max_tokens=8000,  # More tokens for complete scripts
         temperature=temperature,
         system=EXECUTION_PROMPT,
@@ -1684,11 +1723,11 @@ def call_judge_api(
     image_b_base64: str,
     goal: str,
     api_key: str,
+    judge_model: str = "claude-sonnet-4-20250514",
 ) -> dict:
     """Single judge API call comparing two images.
 
     Uses a fresh context and focused prompt to get an objective comparison.
-    Uses Haiku for cost efficiency since this is just evaluation, not generation.
     Images are labeled neutrally as "Image A" and "Image B" with no temporal
     or iteration information to avoid biasing the model.
 
@@ -1697,6 +1736,7 @@ def call_judge_api(
         image_b_base64: Second image (PNG base64)
         goal: What we're trying to draw
         api_key: Anthropic API key
+        judge_model: Model to use for judging
 
     Returns:
         Dict with keys: winner ("A" or "B"), reasoning, confidence
@@ -1711,11 +1751,14 @@ GOAL: "{goal}"
 
 You will see two images: Image A and Image B.
 
-Evaluate based on:
-1. Does it look like the goal? (most important)
-2. Recognizable shape/structure
-3. Appropriate colors
-4. Overall quality and completeness
+Evaluate based on (in priority order):
+1. Shape accuracy (most important): Do the shapes look like the goal? Organic oval bodies beat flat rectangles. Smooth tapered tails beat stepped staircases. Curved edges beat straight edges.
+2. Recognizable structure: Can you tell what it is at a glance?
+3. Proportions: Are body parts the right relative sizes?
+4. Color accuracy: Are the colors appropriate? (lower priority than shape)
+5. Overall quality: Shading, detail, completeness
+
+SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be. These are common pixel art mistakes.
 
 Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.
@@ -1752,7 +1795,7 @@ Respond with JSON only:
     ]
 
     response = client.messages.create(
-        model="claude-haiku-4-5-20251001",  # Haiku 4.5: fast, cheap, good vision
+        model=judge_model,
         max_tokens=300,  # Short response needed
         system=judge_prompt,
         messages=[{
@@ -1836,19 +1879,19 @@ def _is_blank_image(png_base64: str, max_colors: int = 10) -> bool:
         return False  # can't determine, assume not blank
 
 
-def judge_with_double_call(
+def judge_with_single_call(
     best_image_base64: str,
     challenger_image_base64: str,
     goal: str,
     api_key: str,
     best_is_unvalidated: bool = False,
+    judge_model: str = "claude-sonnet-4-20250514",
 ) -> dict:
-    """Judge two images using double-call with swapped positions.
+    """Judge two images with a single Sonnet call, randomized A/B position.
 
-    Calls the judge twice: once with the original order, once with images
-    swapped. This eliminates positional bias (A vs B preference). If both
-    calls agree on the same image, that result is used. If they disagree,
-    the current best is kept (burden of proof is on the challenger).
+    Randomizes which image is A vs B to eliminate positional bias.
+    Uses Sonnet for reliable single-call judging (cheaper and more consistent
+    than double-Haiku, which produced 37% split decisions).
 
     Args:
         best_image_base64: Current best image (PNG base64)
@@ -1856,81 +1899,38 @@ def judge_with_double_call(
         goal: What we're trying to draw
         api_key: Anthropic API key
         best_is_unvalidated: If True, the current best has never won a judge
-            comparison (e.g., it was auto-set as the first result). On split
-            decisions, the challenger wins instead of the incumbent.
+            comparison. Not used for split decisions (no splits with single call)
+            but kept for API compatibility.
+        judge_model: Model to use for judging
 
     Returns:
         Dict with keys: winner ("best" or "challenger"), reasoning, confidence
     """
-    # Randomize which image is A in the first call
-    first_call_swapped = random.choice([True, False])
+    # Randomize which image is A to eliminate positional bias
+    swapped = random.choice([True, False])
 
-    if first_call_swapped:
-        img_a_1, img_b_1 = challenger_image_base64, best_image_base64
+    if swapped:
+        img_a, img_b = challenger_image_base64, best_image_base64
     else:
-        img_a_1, img_b_1 = best_image_base64, challenger_image_base64
+        img_a, img_b = best_image_base64, challenger_image_base64
 
-    result1 = call_judge_api(img_a_1, img_b_1, goal, api_key)
+    result = call_judge_api(img_a, img_b, goal, api_key, judge_model=judge_model)
 
-    # Map result1 back to best/challenger
-    if result1["winner"] == "A":
-        winner1 = "challenger" if first_call_swapped else "best"
-    elif result1["winner"] == "B":
-        winner1 = "best" if first_call_swapped else "challenger"
+    # Map A/B back to best/challenger
+    if result["winner"] == "A":
+        winner = "challenger" if swapped else "best"
+    elif result["winner"] == "B":
+        winner = "best" if swapped else "challenger"
     else:
-        # Could not determine winner, keep best
-        print(f"[Judge] Call 1 inconclusive, keeping current best")
-        return {"winner": "best", "reasoning": "Judge call 1 inconclusive", "confidence": "low"}
+        print(f"[Judge] Inconclusive, keeping current best")
+        return {"winner": "best", "reasoning": "Judge inconclusive", "confidence": "low"}
 
-    print(f"[Judge] Call 1: {winner1} (raw: {result1['winner']}, swapped: {first_call_swapped})")
+    print(f"[Judge] Result: {winner} (raw: {result['winner']}, swapped: {swapped})")
 
-    # Second call with opposite order
-    if first_call_swapped:
-        img_a_2, img_b_2 = best_image_base64, challenger_image_base64
-    else:
-        img_a_2, img_b_2 = challenger_image_base64, best_image_base64
-
-    result2 = call_judge_api(img_a_2, img_b_2, goal, api_key)
-
-    # Map result2 back to best/challenger (opposite swap from call 1)
-    second_call_swapped = not first_call_swapped
-    if result2["winner"] == "A":
-        winner2 = "challenger" if second_call_swapped else "best"
-    elif result2["winner"] == "B":
-        winner2 = "best" if second_call_swapped else "challenger"
-    else:
-        print(f"[Judge] Call 2 inconclusive, keeping current best")
-        return {"winner": "best", "reasoning": "Judge call 2 inconclusive", "confidence": "low"}
-
-    print(f"[Judge] Call 2: {winner2} (raw: {result2['winner']}, swapped: {second_call_swapped})")
-
-    # Both calls agree: high confidence result
-    if winner1 == winner2:
-        print(f"[Judge] Both calls agree: {winner1}")
-        # Use reasoning from whichever call had higher confidence
-        best_result = result1 if result1.get("confidence") == "high" else result2
-        return {
-            "winner": winner1,
-            "reasoning": best_result["reasoning"],
-            "confidence": "high",
-        }
-
-    # Calls disagree: normally keep current best (burden of proof on challenger).
-    # But if the best has never been validated by a judge, prefer the challenger
-    # since the incumbent has no proven merit.
-    if best_is_unvalidated:
-        print(f"[Judge] Disagreement ({winner1} vs {winner2}), but best is unvalidated. Accepting challenger.")
-        return {
-            "winner": "challenger",
-            "reasoning": f"Split decision: call 1 said {winner1}, call 2 said {winner2}. Challenger wins because current best was never validated.",
-            "confidence": "low",
-        }
-
-    print(f"[Judge] Disagreement ({winner1} vs {winner2}), keeping current best")
     return {
-        "winner": "best",
-        "reasoning": f"Split decision: call 1 said {winner1}, call 2 said {winner2}. Keeping current best.",
-        "confidence": "low",
+        "winner": winner,
+        "reasoning": result["reasoning"],
+        "confidence": result.get("confidence", "medium"),
     }
 
 
@@ -1951,6 +1951,8 @@ def run_visual_feedback_loop(
     iterations: int = 5,
     output_dir: str = None,
     api_key: str = None,
+    execution_model: str = "claude-sonnet-4-20250514",
+    judge_model: str = "claude-sonnet-4-20250514",
 ) -> None:
     """Run the AI drawing loop with real visual feedback."""
 
@@ -2021,7 +2023,7 @@ def run_visual_feedback_loop(
         consecutive_losses = 0
         best_compact_actions = None  # Compact L/P text of the best attempt's script
         iteration_compact_actions = {}  # Map iteration_num -> compact_actions_text
-        max_stale_iterations = 6  # Stop after this many consecutive losses
+        max_stale_iterations = 10  # Stop after this many consecutive losses
 
         judge_history = []  # Track all judge comparisons for monitoring
         last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
@@ -2040,7 +2042,14 @@ def run_visual_feedback_loop(
             if canvas_shows_attempt:
                 print(f"Canvas currently shows: Attempt {canvas_shows_attempt}'s result")
             if consecutive_losses > 0:
-                mode = "refinement" if consecutive_losses >= 3 and best_compact_actions else "normal"
+                if consecutive_losses < 3 or not best_compact_actions:
+                    mode = "normal"
+                elif consecutive_losses <= 4:
+                    mode = "refinement-targeted"
+                elif consecutive_losses <= 6:
+                    mode = "refinement-restructure"
+                else:
+                    mode = "refinement-overhaul"
                 print(f"Consecutive losses: {consecutive_losses} (mode: {mode})")
             print('='*50)
 
@@ -2101,6 +2110,7 @@ def run_visual_feedback_loop(
                     runner_up_attempt_num=runner_up_attempt,
                     best_script_text=best_compact_actions,
                     consecutive_losses=consecutive_losses,
+                    execution_model=execution_model,
                 )
 
                 actions = result.get("actions", [])
@@ -2238,12 +2248,13 @@ def run_visual_feedback_loop(
 
                 is_unvalidated = best_reason == "Initial drawing (first result)"
                 print(f"[Judge] Comparing Attempt {canvas_shows_attempt} (on canvas) vs Attempt {best_attempt} (current best)...")
-                judge_result = judge_with_double_call(
+                judge_result = judge_with_single_call(
                     best_image_base64=best_image_base64,
                     challenger_image_base64=png_base64,
                     goal=goal,
                     api_key=api_key,
                     best_is_unvalidated=is_unvalidated,
+                    judge_model=judge_model,
                 )
                 # Map "best"/"challenger" back to "A"/"B" for existing logic
                 raw_winner = judge_result.get("winner")
@@ -2569,6 +2580,10 @@ Output (auto-generated timestamped folder):
     parser.add_argument("--goal", required=True, help="What to draw")
     parser.add_argument("--iterations", type=int, default=5, help="Feedback iterations")
     parser.add_argument("--output", default=None, help="Output directory (default: auto-generated)")
+    parser.add_argument("--execution-model", default="claude-sonnet-4-20250514",
+                        help="Model for drawing execution (default: claude-sonnet-4-20250514)")
+    parser.add_argument("--judge-model", default="claude-sonnet-4-20250514",
+                        help="Model for judging comparisons (default: claude-sonnet-4-20250514)")
 
     args = parser.parse_args()
 
@@ -2580,6 +2595,8 @@ Output (auto-generated timestamped folder):
     print("="*60)
     print(f"Goal: {args.goal}")
     print(f"Iterations: {args.iterations}")
+    print(f"Execution model: {args.execution_model}")
+    print(f"Judge model: {args.judge_model}")
     print(f"Output: {output_dir}/")
     print("="*60)
     print()
@@ -2588,6 +2605,8 @@ Output (auto-generated timestamped folder):
         goal=args.goal,
         iterations=args.iterations,
         output_dir=output_dir,
+        execution_model=args.execution_model,
+        judge_model=args.judge_model,
     )
 
 

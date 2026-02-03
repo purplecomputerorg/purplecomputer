@@ -899,6 +899,14 @@ Colors MIX when painted on the SAME cell:
 
 **To get green:** Paint yellow on an area, then paint blue on the SAME area.
 
+## VISUAL IDENTITY ANALYSIS (DO THIS FIRST)
+
+Before planning coordinates, analyze the subject:
+1. **Defining features**: 3-5 visual features that make this subject instantly recognizable
+2. **Common mistakes**: What similar-looking thing might you accidentally draw instead?
+3. **Key proportions**: What proportions are critical for recognition?
+4. **Pixel art translation**: At 101x25 resolution, how to capture these features?
+
 ## YOUR TASK
 
 Create a plan describing what the FINAL drawing should look like:
@@ -930,6 +938,12 @@ Plan compositions that are FUN TO WATCH being drawn:
 ```json
 {
   "plan": {
+    "visual_identity": {
+      "defining_features": ["feature 1", "feature 2", "feature 3"],
+      "common_mistakes": ["What you might accidentally draw instead"],
+      "key_proportions": "Critical proportions for recognition",
+      "pixel_art_notes": "How to capture defining features at 101x25"
+    },
     "description": "Brief description of the final drawing",
     "composition": {
       "element_name": {
@@ -1613,6 +1627,21 @@ You may change 70-100% of the lines. Keep only the general layout from the best 
                     plan_section += line + "\n"
         if plan.get('style_notes'):
             plan_section += f"\nStyle: {plan['style_notes']}\n"
+        if plan.get('visual_identity'):
+            vi = plan['visual_identity']
+            plan_section += "\n## VISUAL IDENTITY (what makes this subject recognizable)\n"
+            if vi.get('defining_features'):
+                plan_section += "**Must show:** " + ", ".join(vi['defining_features']) + "\n"
+            if vi.get('common_mistakes'):
+                mistakes = vi['common_mistakes']
+                if isinstance(mistakes, list):
+                    plan_section += "**AVOID:** " + "; ".join(mistakes) + "\n"
+                else:
+                    plan_section += f"**AVOID:** {mistakes}\n"
+            if vi.get('key_proportions'):
+                plan_section += f"**Proportions:** {vi['key_proportions']}\n"
+            if vi.get('pixel_art_notes'):
+                plan_section += f"**Pixel art approach:** {vi['pixel_art_notes']}\n"
 
     # Option D: Get progressive complexity guidance
     complexity_section = get_complexity_guidance(iteration, max_iterations)
@@ -1770,12 +1799,31 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     return result
 
 
+def _format_judge_visual_identity(visual_identity: dict = None) -> str:
+    """Format visual identity info for the judge prompt."""
+    if not visual_identity:
+        return ""
+    lines = []
+    if visual_identity.get('defining_features'):
+        features = ", ".join(visual_identity['defining_features'])
+        lines.append(f"SUBJECT-SPECIFIC: The drawing MUST show these defining features: {features}")
+    if visual_identity.get('common_mistakes'):
+        mistakes = visual_identity['common_mistakes']
+        if isinstance(mistakes, list):
+            mistakes = "; ".join(mistakes)
+        lines.append(f"PENALIZE if the drawing shows these mistakes: {mistakes}")
+    if lines:
+        return "\n".join(lines) + "\n\n"
+    return ""
+
+
 def call_judge_api(
     image_a_base64: str,
     image_b_base64: str,
     goal: str,
     api_key: str,
     judge_model: str = "claude-sonnet-4-20250514",
+    visual_identity: dict = None,
 ) -> dict:
     """Single judge API call comparing two images.
 
@@ -1816,7 +1864,7 @@ BACKGROUND PENALTIES: Penalize large monotone background fills (solid blue sky c
 
 ARTIFACT PENALTIES: Penalize stray colored pixels outside shape boundaries. For example, blue or dark pixels hanging off the edge of a tree canopy, or shadow colors painted beyond where the base shape was filled. Clean edges are better than messy overhangs.
 
-Be OBJECTIVE. Simpler is not always worse.
+{_format_judge_visual_identity(visual_identity)}Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.
 
 Respond with JSON only:
@@ -1942,6 +1990,7 @@ def judge_with_single_call(
     api_key: str,
     best_is_unvalidated: bool = False,
     judge_model: str = "claude-sonnet-4-20250514",
+    visual_identity: dict = None,
 ) -> dict:
     """Judge two images with a single Sonnet call, randomized A/B position.
 
@@ -1970,7 +2019,7 @@ def judge_with_single_call(
     else:
         img_a, img_b = best_image_base64, challenger_image_base64
 
-    result = call_judge_api(img_a, img_b, goal, api_key, judge_model=judge_model)
+    result = call_judge_api(img_a, img_b, goal, api_key, judge_model=judge_model, visual_identity=visual_identity)
 
     # Map A/B back to best/challenger
     if result["winner"] == "A":
@@ -2047,6 +2096,7 @@ def run_visual_feedback_loop(
         print("PLANNING PHASE")
         print("="*50)
         plan = call_planning_api(goal, iterations, api_key)
+        visual_identity = plan.get('visual_identity') if plan else None
 
         # Save plan to file
         plan_path = os.path.join(output_dir, "plan.json")
@@ -2311,6 +2361,7 @@ def run_visual_feedback_loop(
                     api_key=api_key,
                     best_is_unvalidated=is_unvalidated,
                     judge_model=judge_model,
+                    visual_identity=visual_identity,
                 )
                 # Map "best"/"challenger" back to "A"/"B" for existing logic
                 raw_winner = judge_result.get("winner")

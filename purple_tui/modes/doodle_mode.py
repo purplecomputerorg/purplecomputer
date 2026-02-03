@@ -707,7 +707,7 @@ class ArtCanvas(Widget, can_focus=True):
         if key_lower in GRAYSCALE:
             self._last_key_char = key_lower
             self._last_key_color = GRAYSCALE[key_lower]
-        elif key_lower.isalpha():
+        elif key_lower.isalpha() or key_lower in KEY_COLORS:
             color = get_key_color(key_lower)
             if color != "#AAAAAA":  # Only if it's a mapped color
                 self._last_key_char = key_lower
@@ -832,7 +832,7 @@ class ArtCanvas(Widget, can_focus=True):
                     self._move_in_direction(advance_direction)
                     self.post_message(PaintModeChanged(True, self._last_key_color))
                     self.refresh()
-                elif char.isalpha():
+                elif char.isalpha() or char in KEY_COLORS:
                     lower = char.lower()
                     color = get_key_color(lower)
                     if color != "#AAAAAA":  # Only if it's a mapped color

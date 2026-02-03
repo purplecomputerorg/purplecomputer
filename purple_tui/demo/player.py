@@ -184,6 +184,10 @@ class DemoPlayer:
                 await self._sleep(action.hold_duration)
                 await self._dispatch(ControlAction(action=key, is_down=False))
 
+        elif len(key) == 1:
+            # Single character (e.g. paint color key in doodle mode)
+            await self._dispatch(CharacterAction(char=key))
+
         await self._sleep(action.pause_after)
 
     async def _switch_mode(self, action: SwitchMode) -> None:

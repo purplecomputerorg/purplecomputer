@@ -56,7 +56,7 @@ from .keyboard import (
 )
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
-from .demo import DemoPlayer, get_demo_script
+from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .modes.doodle_mode import ColorLegend, PaintModeChanged
 from .modes.parent_mode import apply_saved_display_settings
 from .mode_picker import ModePickerScreen
@@ -1633,7 +1633,7 @@ class PurpleApp(App):
         # Create player that dispatches actions through our normal handler
         self._demo_player = DemoPlayer(
             dispatch_action=self._dispatch_keyboard_action,
-            speed_multiplier=1.0,  # Normal human pace
+            speed_multiplier=get_speed_multiplier(),
             clear_all=self.clear_all_state,
             set_play_key_color=self._set_play_key_color,
             is_doodle_paint_mode=self._is_doodle_paint_mode,

@@ -2059,17 +2059,17 @@ def run_visual_feedback_loop(
                 print("[Error] Failed to capture screenshot")
                 continue
 
-            # Extract screenshot number from filename for clarity
-            screenshot_num_match = re.search(r'screenshot_(\d+)', svg_path)
-            screenshot_num = screenshot_num_match.group(1) if screenshot_num_match else "?"
-
+            # Rename screenshot to match iteration numbering
+            screenshot_dir_path = os.path.dirname(svg_path)
             if i == 0:
-                print(f"[Screenshot] {svg_path}")
-                print(f"[Screenshot] screenshot_{screenshot_num} = blank canvas (before any drawing)")
+                new_name = "iteration_0_blank.svg"
+                print(f"[Screenshot] iteration_0_blank = blank canvas (before any drawing)")
             else:
-                print(f"[Screenshot] {svg_path}")
-                print(f"[Screenshot] screenshot_{screenshot_num} = Attempt {i}'s result")
-
+                new_name = f"iteration_{i}.svg"
+                print(f"[Screenshot] iteration_{i} = Attempt {i}'s result")
+            new_svg_path = os.path.join(screenshot_dir_path, new_name)
+            os.rename(svg_path, new_svg_path)
+            svg_path = new_svg_path
 
             # Convert to PNG for vision API (with cropping to canvas area)
             png_base64 = svg_to_png_base64(svg_path)
@@ -2361,7 +2361,20 @@ def run_visual_feedback_loop(
         print("\n[Final] Taking final screenshot...")
         final_svg = controller.take_screenshot()
         if final_svg:
+            # Rename to match iteration numbering
+            screenshot_dir_path = os.path.dirname(final_svg)
+            final_name = f"iteration_{canvas_shows_attempt}.svg" if canvas_shows_attempt else "iteration_final.svg"
+            new_final_path = os.path.join(screenshot_dir_path, final_name)
+            os.rename(final_svg, new_final_path)
+            final_svg = new_final_path
             print(f"[Final] {final_svg}")
+            # Also generate cropped PNG for the final screenshot
+            final_png_base64 = svg_to_png_base64(final_svg)
+            if final_png_base64:
+                final_png_path = final_svg.replace('.svg', '_cropped.png')
+                with open(final_png_path, 'wb') as f:
+                    f.write(base64.standard_b64decode(final_png_base64))
+                print(f"[Final Cropped PNG] {final_png_path}")
 
         # Save all iteration scripts
         scripts_path = os.path.join(output_dir, "iteration_scripts.json")

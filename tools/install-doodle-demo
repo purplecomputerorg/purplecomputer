@@ -1,0 +1,8 @@
+#!/bin/bash
+# Install an AI-generated doodle demo into Purple Computer
+# Usage: ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022
+
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+
+exec python tools/install_doodle_demo.py "$@"

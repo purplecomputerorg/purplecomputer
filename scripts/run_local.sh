@@ -130,6 +130,7 @@ export PYTHONPATH="$PROJECT_ROOT:\$PYTHONPATH"
 # Pass through test/demo environment variables
 export PURPLE_TEST_BATTERY="${PURPLE_TEST_BATTERY:-}"
 export PURPLE_SLEEP_DEMO="${PURPLE_SLEEP_DEMO:-}"
+export PURPLE_DEMO_AUTOSTART="${PURPLE_DEMO_AUTOSTART:-}"
 cd "$PROJECT_ROOT"
 python -m purple_tui.purple_tui
 EOF

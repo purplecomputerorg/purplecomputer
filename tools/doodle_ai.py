@@ -2604,12 +2604,13 @@ def generate_demo_script(actions: list[dict]) -> str:
         t = action.get('type')
 
         if t == 'move':
-            lines.append(f'    PressKey("{action["direction"]}"),')
+            direction = action["direction"]
+            lines.append(f'    PressKey({repr(direction)}),')
             # Update cursor position
-            if action["direction"] == "right": cursor_x += 1
-            elif action["direction"] == "left": cursor_x -= 1
-            elif action["direction"] == "down": cursor_y += 1
-            elif action["direction"] == "up": cursor_y -= 1
+            if direction == "right": cursor_x += 1
+            elif direction == "left": cursor_x -= 1
+            elif direction == "down": cursor_y += 1
+            elif direction == "up": cursor_y -= 1
 
         elif t == 'move_to':
             target_x = action.get('x', 0)
@@ -2627,7 +2628,7 @@ def generate_demo_script(actions: list[dict]) -> str:
 
             lines.extend(move_to(target_x, target_y))
             # Paint: lowercase key stamps and advances, so we use it directly
-            lines.append(f'    PressKey("{color.lower()}"),')
+            lines.append(f'    PressKey({repr(color.lower())}),')
             cursor_x += 1  # Painting advances cursor right by default
 
         elif t == 'paint_line':
@@ -2642,7 +2643,7 @@ def generate_demo_script(actions: list[dict]) -> str:
 
             # Draw the line
             dirs = [direction] * length
-            lines.append(f'    DrawPath(directions={dirs}, color_key="{key}", delay_per_step=0.02),')
+            lines.append(f'    DrawPath(directions={dirs}, color_key={repr(key)}, delay_per_step=0.02),')
 
             # Update cursor position based on direction
             if direction == 'right': cursor_x += length

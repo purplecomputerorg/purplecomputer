@@ -1,14 +1,14 @@
 # Installing a Doodle AI Demo
 
-After running `./tools/doodle-ai` on the VM, follow these steps to install the result and run it.
+Run everything on the VM. No need to copy files back and forth.
 
-## 1. Copy the output from the VM
-
-The training creates a timestamped folder like `doodle_ai_output/20260202_143022/`. Copy the whole folder to your dev machine:
+## 1. Generate the drawing on the VM
 
 ```bash
-scp -r vm:~/purple/doodle_ai_output/20260202_143022 ./doodle_ai_output/
+./tools/doodle-ai
 ```
+
+This creates a timestamped folder like `doodle_ai_output/20260202_143022/`.
 
 ## 2. Review the results
 
@@ -45,21 +45,14 @@ Options:
 
 This writes `purple_tui/demo/ai_generated_script.py`. The demo system picks it up automatically.
 
-## 4. Commit and push to the VM
+## 4. Commit
 
 ```bash
 git add purple_tui/demo/ai_generated_script.py
 git commit -m "Add AI-generated doodle demo"
-git push
 ```
 
-Then on the VM:
-
-```bash
-git pull
-```
-
-## 5. Run the demo on the VM
+## 5. Run the demo
 
 ```bash
 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh

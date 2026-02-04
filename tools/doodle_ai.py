@@ -3281,9 +3281,19 @@ def judge_components_human(
         else:
             left_img, right_img = cand_img, lib_img
 
+        # Scale up small crops so they're visible on high-res displays
+        from PIL import ImageDraw
+        min_width = 400
+        if left_img.width < min_width:
+            scale = min_width // left_img.width
+            left_img = left_img.resize(
+                (left_img.width * scale, left_img.height * scale), Image.NEAREST)
+            right_img = right_img.resize(
+                (right_img.width * scale, right_img.height * scale), Image.NEAREST)
+
         # Build side-by-side composite with labels
-        gap = 20
-        label_height = 30
+        gap = 40
+        label_height = 60
         max_h = max(left_img.height, right_img.height)
         composite_w = left_img.width + gap + right_img.width
         composite_h = max_h + label_height
@@ -3291,11 +3301,16 @@ def judge_components_human(
         composite.paste(left_img, (0, label_height))
         composite.paste(right_img, (left_img.width + gap, label_height))
 
-        # Add number labels using simple pixel drawing (no font dependency)
-        from PIL import ImageDraw
+        # Add number labels
         draw = ImageDraw.Draw(composite)
-        draw.text((left_img.width // 2 - 5, 5), "1", fill=(255, 255, 255))
-        draw.text((left_img.width + gap + right_img.width // 2 - 5, 5), "2", fill=(255, 255, 255))
+        # Use a larger font size for visibility
+        try:
+            from PIL import ImageFont
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
+        except (OSError, ImportError):
+            font = ImageDraw.getfont()
+        draw.text((left_img.width // 2 - 10, 5), "1", fill=(255, 255, 255), font=font)
+        draw.text((left_img.width + gap + right_img.width // 2 - 10, 5), "2", fill=(255, 255, 255), font=font)
 
         # Save to temp file and display
         tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix=f'judge_{name}_')
@@ -3306,7 +3321,7 @@ def judge_components_human(
         try:
             if has_feh:
                 feh_proc = subprocess.Popen(
-                    ['feh', '--scale-down', '--auto-zoom', '--title', f'Component: {name}', tmp.name],
+                    ['feh', '--zoom', 'fill', '--title', f'Component: {name}', tmp.name],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
                 time.sleep(0.3)

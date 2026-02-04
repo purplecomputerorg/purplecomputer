@@ -3241,22 +3241,65 @@ For each component pair, score on these criteria (1-5):
     return results
 
 
+def _highlight_component_on_canvas(
+    canvas_base64: str,
+    composition: dict,
+    component_name: str,
+):
+    """Draw the full canvas with a highlight rectangle around a component region."""
+    from PIL import Image, ImageDraw
+
+    img = Image.open(io.BytesIO(base64.standard_b64decode(canvas_base64)))
+    comp = composition.get(component_name, {})
+    x_range = comp.get("x_range")
+    y_range = comp.get("y_range")
+    if not x_range or not y_range:
+        return img
+
+    # Map cell coordinates to pixel coordinates
+    px_per_cell_x = img.width / CANVAS_WIDTH
+    px_per_cell_y = img.height / CANVAS_HEIGHT
+    left = int(x_range[0] * px_per_cell_x)
+    top = int(y_range[0] * px_per_cell_y)
+    right = int(x_range[1] * px_per_cell_x)
+    bottom = int(y_range[1] * px_per_cell_y)
+
+    draw = ImageDraw.Draw(img)
+    for offset in range(3):  # thick border
+        draw.rectangle(
+            [left - offset, top - offset, right + offset, bottom + offset],
+            outline=(255, 50, 50),
+        )
+    return img
+
+
 def judge_components_human(
     candidate_crops: dict[str, str],
     library: 'ComponentLibrary',
     goal: str,
+    candidate_full_image: str = None,
+    library_full_image: str = None,
 ) -> dict[str, dict]:
     """Judge each component using interactive human input instead of AI.
 
-    Shows candidate and library crops side-by-side, asks human to pick a winner.
-    Returns same format as judge_components_batch().
+    Shows full canvas images side-by-side with the component region highlighted,
+    then asks the human to pick a winner. Returns same format as judge_components_batch().
     """
     from PIL import Image
 
     has_feh = shutil.which('feh') is not None
+    has_xdotool = shutil.which('xdotool') is not None
     if not has_feh:
         print("[Human Judge] feh not found. Install with: sudo apt install feh")
         print("[Human Judge] Will print file paths for manual viewing instead.")
+
+    # Load font once
+    try:
+        from PIL import ImageFont
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
+    except (OSError, ImportError):
+        from PIL import ImageDraw as _ID
+        font = _ID.getfont()
 
     results = {}
 
@@ -3267,33 +3310,40 @@ def judge_components_human(
             pairs.append(name)
 
     for name in pairs:
-        cand_crop_b64 = candidate_crops[name]
-        lib_crop_b64 = library.best[name].image_base64
-
-        # Decode images
-        cand_img = Image.open(io.BytesIO(base64.standard_b64decode(cand_crop_b64)))
-        lib_img = Image.open(io.BytesIO(base64.standard_b64decode(lib_crop_b64)))
-
         # Randomize left/right to avoid positional bias
         swapped = random.choice([True, False])
-        if swapped:
-            left_img, right_img = lib_img, cand_img
-        else:
-            left_img, right_img = cand_img, lib_img
 
-        # Scale up small crops so they're visible on high-res displays
-        from PIL import ImageDraw
-        min_width = 400
-        if left_img.width < min_width:
-            scale = min_width // left_img.width
-            left_img = left_img.resize(
-                (left_img.width * scale, left_img.height * scale), Image.NEAREST)
-            right_img = right_img.resize(
-                (right_img.width * scale, right_img.height * scale), Image.NEAREST)
+        # Build comparison image: full canvas with component highlighted
+        if candidate_full_image and library_full_image:
+            cand_ctx = _highlight_component_on_canvas(
+                candidate_full_image, library.composition, name)
+            lib_ctx = _highlight_component_on_canvas(
+                library_full_image, library.composition, name)
+            if swapped:
+                left_img, right_img = lib_ctx, cand_ctx
+            else:
+                left_img, right_img = cand_ctx, lib_ctx
+        else:
+            # Fallback: use isolated crops if full images unavailable
+            cand_img = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
+            lib_img = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
+            # Scale up small crops
+            min_width = 400
+            if cand_img.width < min_width:
+                scale = min_width // cand_img.width
+                cand_img = cand_img.resize(
+                    (cand_img.width * scale, cand_img.height * scale), Image.NEAREST)
+                lib_img = lib_img.resize(
+                    (lib_img.width * scale, lib_img.height * scale), Image.NEAREST)
+            if swapped:
+                left_img, right_img = lib_img, cand_img
+            else:
+                left_img, right_img = cand_img, lib_img
 
         # Build side-by-side composite with labels
-        gap = 40
-        label_height = 60
+        from PIL import ImageDraw
+        gap = 20
+        label_height = 40
         max_h = max(left_img.height, right_img.height)
         composite_w = left_img.width + gap + right_img.width
         composite_h = max_h + label_height
@@ -3301,16 +3351,11 @@ def judge_components_human(
         composite.paste(left_img, (0, label_height))
         composite.paste(right_img, (left_img.width + gap, label_height))
 
-        # Add number labels
         draw = ImageDraw.Draw(composite)
-        # Use a larger font size for visibility
-        try:
-            from PIL import ImageFont
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 40)
-        except (OSError, ImportError):
-            font = ImageDraw.getfont()
         draw.text((left_img.width // 2 - 10, 5), "1", fill=(255, 255, 255), font=font)
         draw.text((left_img.width + gap + right_img.width // 2 - 10, 5), "2", fill=(255, 255, 255), font=font)
+        # Component name centered at top
+        draw.text((composite_w // 2 - 40, 5), f"[{name}]", fill=(255, 200, 100), font=font)
 
         # Save to temp file and display
         tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix=f'judge_{name}_')
@@ -3324,7 +3369,13 @@ def judge_components_human(
                     ['feh', '--zoom', 'fill', '--title', f'Component: {name}', tmp.name],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
-                time.sleep(0.3)
+                time.sleep(0.5)
+                # Refocus terminal so input() works
+                if has_xdotool:
+                    subprocess.run(
+                        ['xdotool', 'search', '--class', 'Alacritty', 'windowfocus'],
+                        capture_output=True,
+                    )
             else:
                 print(f"[Human Judge] View: {tmp.name}")
 
@@ -3863,6 +3914,8 @@ def run_visual_feedback_loop(
                             candidate_crops=component_crops,
                             library=library,
                             goal=goal,
+                            candidate_full_image=c_png,
+                            library_full_image=composite_image_base64,
                         )
                     else:
                         comp_results = judge_components_batch(

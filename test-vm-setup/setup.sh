@@ -60,7 +60,7 @@ install_if_needed \
     xorg xinit xauth x11-xserver-utils \
     xserver-xorg-core xserver-xorg-input-all \
     libgl1-mesa-dri \
-    matchbox-window-manager dwm feh \
+    matchbox-window-manager dwm feh xdotool \
     alacritty xterm \
     libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
     ncurses-term unclutter xkbset evtest

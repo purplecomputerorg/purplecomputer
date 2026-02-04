@@ -4,6 +4,8 @@
 #
 # This is for VM-based testing only. Not for production.
 # For production builds, see build-scripts/
+#
+# Safe to re-run: skips steps that are already done.
 
 set -e
 
@@ -25,65 +27,55 @@ fi
 echo "Architecture: $ARCH"
 echo ""
 
-# Update package lists
-echo "[1/6] Updating packages..."
-sudo apt update
+# --- Helper: install packages only if any are missing ---
+install_if_needed() {
+    local missing=()
+    for pkg in "$@"; do
+        if ! dpkg -s "$pkg" &>/dev/null; then
+            missing+=("$pkg")
+        fi
+    done
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "  Installing: ${missing[*]}"
+        sudo apt install -y "${missing[@]}"
+    else
+        echo "  All packages already installed, skipping."
+    fi
+}
+
+# Update package lists (always, so install_if_needed can find new packages)
+echo "[1/7] Updating package lists..."
+sudo apt update -qq
 
 # Install base packages
-echo "[2/6] Installing base packages..."
-sudo apt install -y \
-    git \
-    make \
-    unzip \
-    curl \
-    fontconfig \
-    python3 \
-    python3-venv \
-    python3-pip \
-    build-essential \
-    gcc \
-    python3-dev
+echo "[2/7] Base packages..."
+install_if_needed \
+    git make unzip curl fontconfig \
+    python3 python3-venv python3-pip \
+    build-essential gcc python3-dev
 
 # Install X11 stack
-echo "[3/6] Installing X11 and Alacritty..."
-sudo apt install -y \
-    xorg \
-    xinit \
-    xauth \
-    x11-xserver-utils \
-    xserver-xorg-core \
-    xserver-xorg-input-all \
+echo "[3/7] X11, window managers, and terminal..."
+install_if_needed \
+    xorg xinit xauth x11-xserver-utils \
+    xserver-xorg-core xserver-xorg-input-all \
     libgl1-mesa-dri \
-    matchbox-window-manager \
-    i3 \
-    feh \
-    alacritty \
-    xterm \
-    libxkbcommon-x11-0 \
-    libgl1 \
-    libegl1 \
-    libgles2 \
-    ncurses-term \
-    unclutter \
-    xkbset
+    matchbox-window-manager i3 feh \
+    alacritty xterm \
+    libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
+    ncurses-term unclutter xkbset evtest
 
 # Install audio (pygame/sound)
-echo "[3.5/6] Installing audio and SDL libraries..."
-sudo apt install -y \
-    pulseaudio \
-    alsa-utils \
-    libsdl2-2.0-0 \
-    libsdl2-mixer-2.0-0 \
-    libsdl2-image-2.0-0 \
-    libsdl2-ttf-2.0-0
+echo "[4/7] Audio and SDL libraries..."
+install_if_needed \
+    pulseaudio alsa-utils \
+    libsdl2-2.0-0 libsdl2-mixer-2.0-0 \
+    libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
 
-# Install fonts (fontconfig rule installed by make setup)
-echo "[3.6/6] Installing fonts..."
-sudo apt install -y \
-    fontconfig \
-    fonts-noto-color-emoji
+# Install fonts
+echo "[5/7] Fonts..."
+install_if_needed fontconfig fonts-noto-color-emoji
 
-# Install JetBrainsMono Nerd Font (for UI icons)
 FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
 if [ ! -d "$FONT_DIR" ]; then
     echo "  Downloading JetBrainsMono Nerd Font..."
@@ -92,45 +84,62 @@ if [ ! -d "$FONT_DIR" ]; then
     sudo unzip -o /tmp/JetBrainsMono.zip -d "$FONT_DIR"
     rm /tmp/JetBrainsMono.zip
     sudo fc-cache -fv
+else
+    echo "  JetBrainsMono Nerd Font already installed, skipping."
 fi
 
-# Install evtest for debugging
-sudo apt install -y evtest
+# --- System configuration ---
+echo "[6/7] System configuration..."
 
-# Set up VirtioFS support (Apple Virtualization file sharing)
-# This adds virtiofs to initramfs so it loads early enough to mount shares
+# VirtioFS support (Apple Virtualization file sharing)
 if ! grep -q "^virtiofs" /etc/initramfs-tools/modules 2>/dev/null; then
     echo "  Enabling virtiofs in initramfs..."
     echo "virtiofs" | sudo tee -a /etc/initramfs-tools/modules > /dev/null
     sudo update-initramfs -u
 fi
 
-# Create mount point for shared folder
+# Mount point for shared folder
 sudo mkdir -p /mnt/share
-# Add fstab entry (won't fail if share doesn't exist)
 if ! grep -q "virtiofs" /etc/fstab 2>/dev/null; then
     echo "share /mnt/share virtiofs rw,nofail 0 0" | sudo tee -a /etc/fstab > /dev/null
 fi
 
-# Add user to input group
-echo "[4/6] Configuring input permissions..."
-sudo usermod -aG input "$USER"
+# Input group for evdev access
+if ! id -nG "$USER" | grep -qw input; then
+    echo "  Adding $USER to input group..."
+    sudo usermod -aG input "$USER"
+fi
 
-# Set up uinput permissions (persistent)
-echo 'KERNEL=="uinput", GROUP="input", MODE="0660"' | sudo tee /etc/udev/rules.d/99-purple-uinput.rules > /dev/null
-sudo udevadm control --reload-rules
-sudo udevadm trigger
+# uinput permissions
+UINPUT_RULE='KERNEL=="uinput", GROUP="input", MODE="0660"'
+UINPUT_FILE="/etc/udev/rules.d/99-purple-uinput.rules"
+if [ ! -f "$UINPUT_FILE" ] || ! grep -qF "$UINPUT_RULE" "$UINPUT_FILE"; then
+    echo "$UINPUT_RULE" | sudo tee "$UINPUT_FILE" > /dev/null
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+fi
 
-# Fix X permissions for non-root users
-echo "[5/6] Configuring X permissions..."
-sudo tee /etc/X11/Xwrapper.config > /dev/null << 'EOF'
+# X permissions for non-root users
+sudo tee /etc/X11/Xwrapper.config > /dev/null << 'XWRAP'
 allowed_users=anybody
 needs_root_rights=yes
-EOF
+XWRAP
 
-# Create .xinitrc
-echo "[6/6] Creating .xinitrc..."
-cat > ~/.xinitrc << 'EOF'
+# --- X11 startup and helper scripts ---
+echo "[7/7] Creating X11 startup files..."
+
+# i3 config (written once, not inside xinitrc to avoid nested heredoc issues)
+mkdir -p ~/.config/i3
+cat > ~/.config/i3/config << 'I3CFG'
+# Minimal i3 config for Purple Computer test VM
+font pango:monospace 10
+default_border none
+default_floating_border none
+bar { mode invisible }
+I3CFG
+
+# .xinitrc
+cat > ~/.xinitrc << 'XINITRC'
 #!/bin/bash
 # Purple Computer Test VM X11 Startup
 
@@ -155,19 +164,10 @@ command -v unclutter &>/dev/null && unclutter -idle 2 &
 # Purple background
 xsetroot -solid "#2d1b4e"
 
-# Window manager (set WM=i3 for tiling, e.g. for doodle_ai --human)
+# Window manager: WM=i3 for tiling, matchbox (default) for fullscreen
 WM="${WM:-matchbox}"
+echo "Starting WM: $WM"
 if [ "$WM" = "i3" ]; then
-    # i3 auto-tiles windows side-by-side (useful for image judging)
-    mkdir -p ~/.config/i3
-    cat > ~/.config/i3/config << 'I3CFG'
-# Minimal i3 config for Purple Computer
-font pango:monospace 10
-default_border none
-default_floating_border none
-# No bar
-bar { mode invisible }
-I3CFG
     i3 &
 else
     matchbox-window-manager -use_titlebar no &
@@ -176,22 +176,16 @@ sleep 0.5
 
 # Launch Alacritty (user runs Purple manually)
 exec alacritty
-EOF
+XINITRC
 chmod +x ~/.xinitrc
 
-# Create startx-tiling shortcut for i3 tiling mode
-mkdir -p ~/bin
-cat > ~/bin/startx-tiling << 'EOF'
+# startx-tiling: launches X with i3 tiling WM
+sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
 #!/bin/bash
-# Start X with i3 tiling WM (for doodle_ai --human, etc.)
+# Start X with i3 tiling WM (for doodle_ai --human, image review, etc.)
 WM=i3 exec startx
-EOF
-chmod +x ~/bin/startx-tiling
-
-# Ensure ~/bin is on PATH
-if ! grep -q 'PATH="$HOME/bin:' ~/.profile 2>/dev/null; then
-    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.profile
-fi
+STILING
+sudo chmod +x /usr/local/bin/startx-tiling
 
 echo ""
 echo "=== Setup Complete ==="

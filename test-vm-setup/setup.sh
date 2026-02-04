@@ -169,12 +169,21 @@ exec alacritty
 XINITRC
 chmod +x ~/.xinitrc
 
+# startx wrapper: always uses our .xinitrc (Ubuntu's system xinitrc ignores it)
+sudo tee /usr/local/bin/startx-purple > /dev/null << 'SPX'
+#!/bin/bash
+# Start X with Purple Computer's xinitrc
+# Default: matchbox (fullscreen). Set WM=tiling for dwm (side-by-side).
+exec /usr/bin/startx ~/.xinitrc
+SPX
+sudo chmod +x /usr/local/bin/startx-purple
+
 # startx-tiling: launches X with dwm tiling WM
 sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
 #!/bin/bash
 # Start X with dwm tiling WM (for doodle_ai --human, image review, etc.)
 # dwm shows all windows side-by-side automatically (master+stack layout)
-WM=tiling exec startx
+WM=tiling exec startx-purple
 STILING
 sudo chmod +x /usr/local/bin/startx-tiling
 
@@ -184,7 +193,7 @@ echo ""
 echo "Next steps:"
 echo "  1. Reboot:  sudo reboot"
 echo "  2. Log into VM console (not SSH)"
-echo "  3. Run:     startx"
+echo "  3. Run:     startx-purple"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
 echo "  5. Setup:   cd purplecomputer && make setup"
 echo "  6. Run:     make run"

@@ -19,8 +19,9 @@ Usage:
     # Use a reference image
     python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
 
-    # Refine a previous run's plan
-    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "add a bird"
+    # Resume from a previous run
+    python tools/doodle_ai.py --from doodle_ai_output/20260203_143022/screenshots/iteration_2b_refinement_cropped.png
+    python tools/doodle_ai.py --from doodle_ai_output/20260203_143022 --instruction "add a bird"
 """
 
 import argparse
@@ -3453,6 +3454,26 @@ def run_visual_feedback_loop(
         else:
             screenshot_dir_path = screenshot_dir
 
+        # If resuming with a pre-populated library, draw its composite on canvas
+        # so we have a composite_image_base64 for refinement candidates
+        if initial_library and initial_library.best:
+            print("\n[Resume] Drawing initial library composite on canvas...")
+            composite_actions = initial_library.get_composite_actions()
+            if composite_actions:
+                controller.execute_actions(composite_actions)
+                time.sleep(0.5)
+                resume_svg = controller.take_screenshot()
+                if resume_svg:
+                    resume_svg_path = os.path.join(screenshot_dir_path, "iteration_0_resumed.svg")
+                    os.rename(resume_svg, resume_svg_path)
+                    composite_image_base64 = svg_to_png_base64(resume_svg_path)
+                    if composite_image_base64:
+                        resume_png_path = resume_svg_path.replace('.svg', '_cropped.png')
+                        with open(resume_png_path, 'wb') as f:
+                            f.write(base64.standard_b64decode(composite_image_base64))
+                        print(f"[Resume] Initial composite rendered: {resume_png_path}")
+                    canvas_shows_attempt = "resumed"
+
         for i in range(iterations):
             print(f"\n{'='*50}")
             print(f"ITERATION {i + 1}/{iterations}")
@@ -4053,9 +4074,6 @@ Examples:
     # Resume from final state of a run
     python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP --instruction "add more shading"
 
-    # Legacy: --refine works as an alias for --from <dir>
-    python tools/doodle_ai.py --refine doodle_ai_output/TIMESTAMP --instruction "add a bird"
-
 Requirements:
     - ANTHROPIC_API_KEY environment variable
     - cairosvg for SVG to PNG conversion: pip install cairosvg
@@ -4069,13 +4087,11 @@ Output (auto-generated timestamped folder):
     - generated_demo.py: Demo script for Purple Computer
         """
     )
-    parser.add_argument("--goal", default=None, help="What to draw (required unless using --from or --refine)")
+    parser.add_argument("--goal", default=None, help="What to draw (required unless using --from)")
     parser.add_argument("--from", dest="from_path", default=None, metavar="PATH",
-                        help="Resume from a previous screenshot PNG or output directory")
-    parser.add_argument("--refine", default=None, metavar="PREV_OUTPUT_DIR",
-                        help="(Deprecated, use --from) Refine a previous run's plan")
+                        help="Resume from a previous screenshot (PNG or SVG) or output directory")
     parser.add_argument("--instruction", default=None,
-                        help="How to refine the plan (optional with --from, required with --refine)")
+                        help="How to refine the plan when using --from")
     parser.add_argument("--reference", default=None, metavar="IMAGE_PATH",
                         help="Reference image to guide composition and style (png, jpg, gif, webp)")
     parser.add_argument("--iterations", type=int, default=5, help="Feedback iterations")
@@ -4089,10 +4105,6 @@ Output (auto-generated timestamped folder):
 
     args = parser.parse_args()
 
-    # --refine is an alias for --from <dir>
-    if args.refine and not args.from_path:
-        args.from_path = args.refine
-
     # Validate args
     existing_plan = None
     initial_library = None
@@ -4103,14 +4115,22 @@ Output (auto-generated timestamped folder):
         if not os.path.exists(from_path):
             parser.error(f"Path not found: {from_path}")
 
-        if from_path.lower().endswith('.png'):
-            # Resume from a specific screenshot
+        if from_path.lower().endswith(('.png', '.svg')):
+            # Resume from a specific screenshot (SVG or PNG)
+            # For SVG, look for the corresponding _cropped.png next to it
+            if from_path.lower().endswith('.svg'):
+                # Try to find the corresponding cropped PNG
+                png_candidate = from_path.rsplit('.', 1)[0] + '_cropped.png'
+                if os.path.exists(png_candidate):
+                    from_path = png_candidate
+                else:
+                    parser.error(f"No cropped PNG found for SVG (expected {png_candidate})")
             plan, initial_library, goal_from_plan = reconstruct_library_from_run(from_path)
         elif os.path.isdir(from_path):
             # Resume from output directory
             plan, initial_library, goal_from_plan = reconstruct_library_from_dir(from_path)
         else:
-            parser.error(f"--from expects a PNG file or output directory, got: {from_path}")
+            parser.error(f"--from expects a PNG/SVG file or output directory, got: {from_path}")
 
         if not goal:
             goal = goal_from_plan
@@ -4133,15 +4153,11 @@ Output (auto-generated timestamped folder):
             # Update library composition if plan refinement changed components
             new_composition = existing_plan.get('composition', {})
             if set(new_composition.keys()) != set(initial_library.composition.keys()):
-                print(f"[Warning] Plan refinement changed components. Rebuilding library from new plan.")
+                print("[Warning] Plan refinement changed components. Rebuilding library from new plan.")
                 initial_library = ComponentLibrary.from_plan(existing_plan)
 
-        # Legacy --refine required --instruction
-        if args.refine and not args.from_path.lower().endswith('.png') and not args.instruction:
-            parser.error("--instruction is required when using --refine")
-
     elif not goal:
-        parser.error("--goal is required (unless using --from or --refine)")
+        parser.error("--goal is required (unless using --from)")
 
     if args.reference and not os.path.exists(args.reference):
         parser.error(f"Reference image not found: {args.reference}")

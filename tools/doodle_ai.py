@@ -1906,6 +1906,7 @@ def call_plan_refinement_api(
     iterations: int,
     api_key: str,
     reference_image: str = None,
+    preserve_components: bool = False,
 ) -> dict:
     """Refine an existing drawing plan based on user instruction.
 
@@ -1914,6 +1915,8 @@ def call_plan_refinement_api(
 
     Args:
         reference_image: Optional path to a reference image
+        preserve_components: If True, the composition keys must not change
+            (used when resuming from a library that already has those components)
 
     Returns:
         Refined plan dict
@@ -1921,6 +1924,15 @@ def call_plan_refinement_api(
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
+
+    component_constraint = ""
+    if preserve_components:
+        comp_names = list(original_plan.get('composition', {}).keys())
+        component_constraint = f"""
+CRITICAL: You MUST keep the exact same composition component names: {comp_names}
+Do NOT add, remove, rename, or split components. The caller has a pre-trained library
+with these exact component keys. You may change descriptions, coordinates, colors,
+and other properties within each component, but the keys must stay identical."""
 
     text_message = f"""## Original Plan
 ```json
@@ -1936,7 +1948,7 @@ Modify the plan above based on the refinement instruction.
 Keep everything that isn't mentioned in the instruction.
 Adjust coordinates, colors, and composition as needed to incorporate the changes.
 Divide the work into phases that fit within the iteration count.
-
+{component_constraint}
 Respond with a JSON object containing a "plan" field."""
 
     message_content = []
@@ -4153,18 +4165,21 @@ Output (auto-generated timestamped folder):
             if not api_key:
                 print("Error: Set ANTHROPIC_API_KEY in tools/.env or environment")
                 sys.exit(1)
+            has_library = initial_library and initial_library.best
             existing_plan = call_plan_refinement_api(
                 original_plan=plan,
                 instruction=args.instruction,
                 iterations=args.iterations,
                 api_key=api_key,
                 reference_image=args.reference,
+                preserve_components=has_library,
             )
-            # Update library composition if plan refinement changed components
-            new_composition = existing_plan.get('composition', {})
-            if set(new_composition.keys()) != set(initial_library.composition.keys()):
-                print("[Warning] Plan refinement changed components. Rebuilding library from new plan.")
-                initial_library = ComponentLibrary.from_plan(existing_plan)
+            # Verify component names weren't changed despite the constraint
+            if has_library:
+                new_composition = existing_plan.get('composition', {})
+                if set(new_composition.keys()) != set(initial_library.composition.keys()):
+                    print("[Warning] Plan refinement changed components despite constraint. Forcing original component names.")
+                    existing_plan['composition'] = plan['composition']
 
     elif not goal:
         parser.error("--goal is required (unless using --from)")

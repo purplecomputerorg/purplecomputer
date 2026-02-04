@@ -174,7 +174,8 @@ sudo tee /usr/local/bin/startx-purple > /dev/null << 'SPX'
 #!/bin/bash
 # Start X with Purple Computer's xinitrc
 # Default: matchbox (fullscreen). Set WM=tiling for dwm (side-by-side).
-exec /usr/bin/startx ~/.xinitrc
+export WM="${WM:-matchbox}"
+exec /usr/bin/startx "$HOME/.xinitrc"
 SPX
 sudo chmod +x /usr/local/bin/startx-purple
 
@@ -183,7 +184,8 @@ sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
 #!/bin/bash
 # Start X with dwm tiling WM (for doodle_ai --human, image review, etc.)
 # dwm shows all windows side-by-side automatically (master+stack layout)
-WM=tiling exec startx-purple
+export WM=tiling
+exec startx-purple
 STILING
 sudo chmod +x /usr/local/bin/startx-tiling
 

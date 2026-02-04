@@ -85,6 +85,7 @@ try:
         get_complexity_guidance,
         load_reference_image,
         prepare_reference_for_execution,
+        _images_are_similar,
     )
     IMPORTS_AVAILABLE = True
 except ImportError:
@@ -336,11 +337,11 @@ class TestCliArgs:
             capture_output=True, text=True, timeout=10, env=env,
         )
 
-    def test_help_shows_refine(self):
-        """--help mentions --refine."""
+    def test_help_shows_from(self):
+        """--help mentions --from."""
         result = self._run_cli("--help")
         assert result.returncode == 0
-        assert "--refine" in result.stdout
+        assert "--from" in result.stdout
 
     def test_help_shows_reference(self):
         """--help mentions --reference."""
@@ -366,13 +367,12 @@ class TestCliArgs:
         assert result.returncode != 0
         assert "instruction" in result.stderr.lower()
 
-    def test_refine_requires_plan_json(self):
-        """--refine with missing plan.json errors."""
+    def test_from_requires_valid_content(self):
+        """--from with empty directory errors."""
         import tempfile
         with tempfile.TemporaryDirectory() as d:
-            result = self._run_cli("--refine", d, "--instruction", "test")
+            result = self._run_cli("--from", d, "--instruction", "test")
             assert result.returncode != 0
-            assert "plan.json" in result.stderr
 
     def test_reference_file_must_exist(self):
         """--reference with nonexistent file errors."""
@@ -486,3 +486,107 @@ class TestReferenceImage:
             assert result_img.height == 30
         finally:
             os.unlink(tmp_path)
+
+
+class TestImagesAreSimilar:
+    """Test the _images_are_similar pixel comparison function."""
+
+    def _make_image(self, width, height, color):
+        """Create a solid-color PIL Image."""
+        try:
+            from PIL import Image
+        except ImportError:
+            return None
+        return Image.new("RGB", (width, height), color)
+
+    def test_identical_images(self):
+        """Two identical images should be similar."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        img = self._make_image(32, 32, (255, 0, 0))
+        assert _images_are_similar(img, img.copy()) is True
+
+    def test_completely_different_images(self):
+        """Black vs white should not be similar."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        black = self._make_image(32, 32, (0, 0, 0))
+        white = self._make_image(32, 32, (255, 255, 255))
+        assert _images_are_similar(black, white) is False
+
+    def test_slightly_different_images(self):
+        """Images with tiny per-pixel differences should still be similar."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        from PIL import Image
+        import random as rng
+
+        # Create a base image with random pixels
+        base = Image.new("RGB", (32, 32))
+        pixels = base.load()
+        rng.seed(42)
+        for y in range(32):
+            for x in range(32):
+                pixels[x, y] = (rng.randint(0, 255), rng.randint(0, 255), rng.randint(0, 255))
+
+        # Create a copy with tiny noise (max 3 per channel)
+        noisy = base.copy()
+        noisy_pixels = noisy.load()
+        rng.seed(99)
+        for y in range(32):
+            for x in range(32):
+                r, g, b = pixels[x, y]
+                noisy_pixels[x, y] = (
+                    min(255, max(0, r + rng.randint(-3, 3))),
+                    min(255, max(0, g + rng.randint(-3, 3))),
+                    min(255, max(0, b + rng.randint(-3, 3))),
+                )
+
+        assert _images_are_similar(base, noisy) is True
+
+    def test_moderately_different_images(self):
+        """Images that differ significantly on many pixels should not be similar."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        from PIL import Image
+        import random as rng
+
+        base = Image.new("RGB", (32, 32), (100, 100, 100))
+        modified = base.copy()
+        mod_pixels = modified.load()
+        rng.seed(7)
+
+        # Change half the pixels to a very different color
+        for y in range(32):
+            for x in range(16):  # left half
+                mod_pixels[x, y] = (rng.randint(200, 255), 0, 0)
+
+        assert _images_are_similar(base, modified) is False
+
+    def test_different_sizes_resized(self):
+        """Images of different sizes are resized for comparison."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        # Same color, different size: should be similar after resize
+        small = self._make_image(16, 16, (50, 100, 150))
+        large = self._make_image(64, 64, (50, 100, 150))
+        assert _images_are_similar(small, large) is True
+
+    def test_custom_threshold(self):
+        """Custom threshold makes comparison stricter or looser."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        a = self._make_image(32, 32, (100, 100, 100))
+        # Slightly different color
+        b = self._make_image(32, 32, (105, 105, 105))
+
+        # With default threshold (0.98), small diff should pass
+        assert _images_are_similar(a, b) is True
+        # With very strict threshold (0.999), it should fail
+        assert _images_are_similar(a, b, threshold=0.999) is False

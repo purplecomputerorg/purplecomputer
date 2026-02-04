@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Doodle AI: smarter human judging**: auto-skips identical components, allows quitting mid-session with `q`, shows summary of reviewed/skipped/remaining counts
 - **Doodle AI: human judging mode**: `--human` flag replaces AI judge with interactive side-by-side comparison, letting a human pick the better component version
 - **Doodle AI: multi-candidate iteration with focused mutation**: AI now generates multiple candidates per iteration (mutation, informed regen, fresh regen) to escape local maxima; judge provides per-criterion scores and specific improvement targets; contradictory learnings are automatically resolved
 - **Doodle AI: structural connection accuracy**: AI now plans where parts attach to each other, draws connection points correctly (e.g., fronds at top of trunk), and judge penalizes anatomically wrong connections

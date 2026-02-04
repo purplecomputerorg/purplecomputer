@@ -3273,6 +3273,19 @@ def _highlight_component_on_canvas(
     return img
 
 
+def _images_are_similar(img_a, img_b, threshold=0.98):
+    """Return True if two images are nearly identical (pixel-level comparison)."""
+    from PIL import ImageChops, ImageStat, Image
+    if img_a.size != img_b.size:
+        img_b = img_b.resize(img_a.size, Image.NEAREST)
+    diff = ImageChops.difference(img_a, img_b)
+    stat = ImageStat.Stat(diff)
+    # Mean difference across all channels (0 = identical, 255 = max difference)
+    mean_diff = sum(stat.mean) / len(stat.mean)
+    similarity = 1.0 - (mean_diff / 255.0)
+    return similarity >= threshold
+
+
 def judge_components_human(
     candidate_crops: dict[str, str],
     library: 'ComponentLibrary',
@@ -3283,7 +3296,9 @@ def judge_components_human(
     """Judge each component using interactive human input instead of AI.
 
     Shows full canvas images side-by-side with the component region highlighted,
-    then asks the human to pick a winner. Returns same format as judge_components_batch().
+    then asks the human to pick a winner. Auto-skips components that are nearly
+    identical between candidate and library. Returns same format as
+    judge_components_batch().
     """
     from PIL import Image
 
@@ -3301,6 +3316,9 @@ def judge_components_human(
         font = _ID.getfont()
 
     results = {}
+    count_reviewed = 0
+    count_auto_skipped = 0
+    count_quit_remaining = 0
 
     # Build pairs (same logic as judge_components_batch)
     pairs = []
@@ -3308,7 +3326,25 @@ def judge_components_human(
         if name in candidate_crops and name in library.best and library.best[name].image_base64:
             pairs.append(name)
 
-    for name in pairs:
+    quit_requested = False
+
+    for idx, name in enumerate(pairs):
+        # Load component crops for similarity check
+        cand_crop = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
+        lib_crop = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
+
+        # Auto-skip if the crops are nearly identical
+        if _images_are_similar(cand_crop, lib_crop):
+            results[name] = {
+                "winner": "library",
+                "reasoning": "Auto-skipped: identical to library version",
+                "scores_candidate": None,
+                "scores_library": None,
+            }
+            print(f"[Human Judge] {name}: identical, keeping library version")
+            count_auto_skipped += 1
+            continue
+
         # Randomize left/right to avoid positional bias
         swapped = random.choice([True, False])
 
@@ -3320,8 +3356,8 @@ def judge_components_human(
                 library_full_image, library.composition, name)
         else:
             # Fallback: use isolated crops if full images unavailable
-            cand_ctx = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
-            lib_ctx = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
+            cand_ctx = cand_crop
+            lib_ctx = lib_crop
 
         if swapped:
             left_img, right_img = lib_ctx, cand_ctx
@@ -3374,10 +3410,25 @@ def judge_components_human(
 
             # Prompt for choice (after feh closes)
             while True:
-                choice = input(f'Component "{name}": enter 1 or 2 (s to skip): ').strip().lower()
-                if choice in ('1', '2', 's'):
+                choice = input(f'Component "{name}": 1, 2, s(kip), q(uit): ').strip().lower()
+                if choice in ('1', '2', 's', 'q'):
                     break
-                print("Please enter 1, 2, or s.")
+                print("Please enter 1, 2, s, or q.")
+
+            if choice == 'q':
+                # Keep library versions for this and all remaining components
+                print("[Human Judge] Quitting. Keeping library versions for remaining components.")
+                for remaining_name in pairs[idx:]:
+                    if remaining_name not in results:
+                        results[remaining_name] = {
+                            "winner": "library",
+                            "reasoning": "Kept library version (human quit early)",
+                            "scores_candidate": None,
+                            "scores_library": None,
+                        }
+                        count_quit_remaining += 1
+                quit_requested = True
+                break
 
             feedback = ""
             if choice != 's':
@@ -3404,12 +3455,16 @@ def judge_components_human(
                 "scores_library": None,
             }
             print(f"[Human Judge] {name}: {winner} wins ({reasoning[:60]})")
+            count_reviewed += 1
 
         finally:
             try:
                 os.unlink(tmp.name)
             except OSError:
                 pass
+
+        if quit_requested:
+            break
 
     # Components with no library version: candidate wins by default
     for name in candidate_crops:
@@ -3420,6 +3475,12 @@ def judge_components_human(
                 "scores_candidate": None,
                 "scores_library": None,
             }
+
+    # Print summary
+    parts = [f"{count_reviewed} reviewed", f"{count_auto_skipped} auto-skipped (identical)"]
+    if count_quit_remaining > 0:
+        parts.append(f"{count_quit_remaining} remaining (quit)")
+    print(f"[Human Judge] Done: {', '.join(parts)}")
 
     return results
 

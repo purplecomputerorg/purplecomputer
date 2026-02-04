@@ -1,7 +1,8 @@
 #!/bin/bash
 # AI drawing tool for Purple Computer
-# Usage: ./tools/doodle-ai "a tree on a green hill"
-#        ./tools/doodle-ai "sunset" --iterations 8
+# Usage: ./tools/doodle-ai --goal "a tree on a green hill"
+#        ./tools/doodle-ai --goal "sunset" --iterations 8
+#        ./tools/doodle-ai --from path/to/screenshot.png --instruction "add a bird"
 
 cd "$(dirname "$0")/.."
 source .venv/bin/activate
@@ -12,4 +13,4 @@ if ! python -c "import anthropic; import cairosvg" 2>/dev/null; then
     pip install -q -r tools/requirements.txt
 fi
 
-exec python tools/doodle_ai.py --goal "$@"
+exec python tools/doodle_ai.py "$@"

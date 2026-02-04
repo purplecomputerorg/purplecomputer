@@ -4095,6 +4095,8 @@ Output (auto-generated timestamped folder):
     - generated_demo.py: Demo script for Purple Computer
         """
     )
+    parser.add_argument("goal_positional", nargs="?", default=None, metavar="GOAL",
+                        help="What to draw (positional, e.g. ./tools/doodle-ai \"a tree\")")
     parser.add_argument("--goal", default=None, help="What to draw (required unless using --from)")
     parser.add_argument("--from", dest="from_path", default=None, metavar="PATH",
                         help="Resume from a previous screenshot (PNG or SVG) or output directory")
@@ -4116,7 +4118,7 @@ Output (auto-generated timestamped folder):
     # Validate args
     existing_plan = None
     initial_library = None
-    goal = args.goal
+    goal = args.goal or args.goal_positional
 
     if args.from_path:
         from_path = args.from_path

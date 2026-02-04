@@ -1957,15 +1957,7 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     # Add the main text prompt last
     message_content.append({"type": "text", "text": user_message})
 
-    # Raise temperature after repeated failures to encourage exploration
-    if consecutive_losses >= 7:
-        temperature = 1.3
-    elif consecutive_losses >= 5:
-        temperature = 1.2
-    elif consecutive_losses >= 3:
-        temperature = 1.1
-    else:
-        temperature = 1.0
+    temperature = 1.0
 
     response = client.messages.create(
         model=execution_model,

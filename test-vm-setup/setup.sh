@@ -131,11 +131,15 @@ echo "[7/7] Creating X11 startup files..."
 # i3 config (written once, not inside xinitrc to avoid nested heredoc issues)
 mkdir -p ~/.config/i3
 cat > ~/.config/i3/config << 'I3CFG'
-# Minimal i3 config for Purple Computer test VM
+# i3 config file (v4)
+# Minimal config for Purple Computer test VM (used by startx-tiling)
+
 font pango:monospace 10
 default_border none
 default_floating_border none
-bar { mode invisible }
+bar {
+    mode invisible
+}
 I3CFG
 
 # .xinitrc

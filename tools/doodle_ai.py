@@ -38,6 +38,7 @@ import sys
 import termios
 import fcntl
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Add parent to path for imports
@@ -174,14 +175,114 @@ def _extract_color_and_coords(line: str, start: int) -> tuple[str, str]:
     return color, coords_str
 
 
+def _parse_action_line(line: str) -> dict | None:
+    """Parse a single compact action line (L or P) into an action dict.
+
+    Returns a single action dict or None if the line can't be parsed.
+    For L (line) commands, returns a dict with type='paint_line_raw' containing
+    the raw coordinates. Use _expand_line_action() to expand into paint_at commands.
+    """
+    line = line.strip()
+    if not line:
+        return None
+
+    try:
+        if line.startswith('L'):
+            color, coords_str = _extract_color_and_coords(line, 1)
+            coords = coords_str.split(',')
+            if len(coords) >= 4:
+                return {
+                    "type": "paint_line_raw",
+                    "color": color,
+                    "x1": int(coords[0]), "y1": int(coords[1]),
+                    "x2": int(coords[2]), "y2": int(coords[3]),
+                }
+        elif line.startswith('P'):
+            color, coords_str = _extract_color_and_coords(line, 1)
+            coords = coords_str.split(',')
+            if len(coords) >= 2:
+                return {
+                    "type": "paint_at",
+                    "color": color,
+                    "x": int(coords[0]),
+                    "y": int(coords[1]),
+                }
+    except (ValueError, IndexError) as e:
+        print(f"[Compact Parse] Skipping malformed line: {line} ({e})")
+    return None
+
+
+def _expand_line_action(raw: dict) -> list[dict]:
+    """Expand a paint_line_raw action into individual paint_at commands."""
+    x1, y1 = raw["x1"], raw["y1"]
+    x2, y2 = raw["x2"], raw["y2"]
+    color = raw["color"]
+    actions = []
+
+    if y1 == y2:
+        start_x, end_x = min(x1, x2), max(x1, x2)
+        for x in range(start_x, end_x + 1):
+            actions.append({"type": "paint_at", "x": x, "y": y1, "color": color})
+    elif x1 == x2:
+        start_y, end_y = min(y1, y2), max(y1, y2)
+        for y in range(start_y, end_y + 1):
+            actions.append({"type": "paint_at", "x": x1, "y": y, "color": color})
+    else:
+        # Bresenham-like stepping
+        dx = abs(x2 - x1)
+        dy = abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx - dy
+        x, y = x1, y1
+        while True:
+            actions.append({"type": "paint_at", "x": x, "y": y, "color": color})
+            if x == x2 and y == y2:
+                break
+            e2 = 2 * err
+            if e2 > -dy:
+                err -= dy
+                x += sx
+            if e2 < dx:
+                err += dx
+                y += sy
+
+    return actions
+
+
+def _extract_actions_text(text: str) -> str | None:
+    """Extract the raw actions text from an API response.
+
+    Looks for ```actions code blocks first, then generic code blocks,
+    then bare L/P lines.
+    """
+    actions_match = re.search(r'```actions\s*([\s\S]*?)\s*```', text)
+    if not actions_match:
+        actions_match = re.search(r'```\s*([\s\S]*?)\s*```', text)
+        if actions_match and actions_match.group(1).strip().startswith('{'):
+            actions_match = None
+
+    if actions_match:
+        return actions_match.group(1)
+
+    # Look for lines starting with L or P (or ## headers)
+    lines = text.split('\n')
+    action_lines = [l.strip() for l in lines if l.strip() and (l.strip()[0] in 'LP' or l.strip().startswith('##'))]
+    if not action_lines:
+        return None
+    return '\n'.join(action_lines)
+
+
 def parse_compact_actions(text: str) -> list[dict] | None:
     """Parse compact DSL action format into full action dictionaries.
 
     Compact format (one per line):
     - L<color><x1>,<y1>,<x2>,<y2>  → paint_line (horizontal or vertical)
     - P<color><x>,<y>              → paint_at
+    - ## component_name            → component header (optional)
 
     Lines are expanded into individual paint_at commands for the controller.
+    When component headers are present, each action dict gets a "component" key.
 
     Examples:
         Lf10,5,50,5   → horizontal line from (10,5) to (50,5) in yellow
@@ -190,108 +291,97 @@ def parse_compact_actions(text: str) -> list[dict] | None:
 
     Returns list of action dicts, or None if parsing fails.
     """
-    # Try to find the actions block (might be in a code block)
-    # Look for ```actions specifically first, then generic code blocks
-    actions_match = re.search(r'```actions\s*([\s\S]*?)\s*```', text)
-    if not actions_match:
-        actions_match = re.search(r'```\s*([\s\S]*?)\s*```', text)
-        # Make sure it's not a JSON block
-        if actions_match and actions_match.group(1).strip().startswith('{'):
-            actions_match = None
-
-    if actions_match:
-        actions_text = actions_match.group(1)
-    else:
-        # Look for lines starting with L or P
-        lines = text.split('\n')
-        action_lines = [l.strip() for l in lines if l.strip() and l.strip()[0] in 'LP']
-        if not action_lines:
-            return None
-        actions_text = '\n'.join(action_lines)
+    actions_text = _extract_actions_text(text)
+    if not actions_text:
+        return None
 
     actions = []
+    current_component = None
+    has_components = False
+
     for line in actions_text.strip().split('\n'):
         line = line.strip()
-        if not line or line.startswith('#'):  # Skip empty lines and comments
+        if not line or (line.startswith('#') and not line.startswith('##')):
+            # Skip empty lines and single-# comments
             continue
 
-        try:
-            if line.startswith('L'):
-                # Paint line: L<color><x1>,<y1>,<x2>,<y2>
-                color, coords_str = _extract_color_and_coords(line, 1)
-                coords = coords_str.split(',')
-                if len(coords) >= 4:
-                    x1, y1 = int(coords[0]), int(coords[1])
-                    x2, y2 = int(coords[2]), int(coords[3])
-
-                    # Expand line into paint_at commands
-                    # Determine direction
-                    if y1 == y2:
-                        # Horizontal line
-                        start_x, end_x = min(x1, x2), max(x1, x2)
-                        for x in range(start_x, end_x + 1):
-                            actions.append({
-                                "type": "paint_at",
-                                "x": x,
-                                "y": y1,
-                                "color": color,
-                            })
-                    elif x1 == x2:
-                        # Vertical line
-                        start_y, end_y = min(y1, y2), max(y1, y2)
-                        for y in range(start_y, end_y + 1):
-                            actions.append({
-                                "type": "paint_at",
-                                "x": x1,
-                                "y": y,
-                                "color": color,
-                            })
-                    else:
-                        # Diagonal or arbitrary: use Bresenham-like stepping
-                        dx = abs(x2 - x1)
-                        dy = abs(y2 - y1)
-                        sx = 1 if x1 < x2 else -1
-                        sy = 1 if y1 < y2 else -1
-                        err = dx - dy
-                        x, y = x1, y1
-                        while True:
-                            actions.append({
-                                "type": "paint_at",
-                                "x": x,
-                                "y": y,
-                                "color": color,
-                            })
-                            if x == x2 and y == y2:
-                                break
-                            e2 = 2 * err
-                            if e2 > -dy:
-                                err -= dy
-                                x += sx
-                            if e2 < dx:
-                                err += dx
-                                y += sy
-
-            elif line.startswith('P'):
-                # Paint at: P<color><x>,<y>
-                color, coords_str = _extract_color_and_coords(line, 1)
-                coords = coords_str.split(',')
-                if len(coords) >= 2:
-                    actions.append({
-                        "type": "paint_at",
-                        "color": color,
-                        "x": int(coords[0]),
-                        "y": int(coords[1]),
-                    })
-        except (ValueError, IndexError) as e:
-            # Skip malformed lines but continue parsing
-            print(f"[Compact Parse] Skipping malformed line: {line} ({e})")
+        # Detect component headers: ## component_name
+        if line.startswith('## '):
+            current_component = line[3:].strip()
+            has_components = True
             continue
+        if line.startswith('##'):
+            # "##component_name" without space
+            current_component = line[2:].strip()
+            has_components = True
+            continue
+
+        # Skip non-action lines (comments starting with //)
+        if line.startswith('//'):
+            continue
+
+        raw = _parse_action_line(line)
+        if raw is None:
+            continue
+
+        if raw["type"] == "paint_line_raw":
+            expanded = _expand_line_action(raw)
+            for a in expanded:
+                if current_component:
+                    a["component"] = current_component
+                actions.append(a)
+        else:
+            if current_component:
+                raw["component"] = current_component
+            actions.append(raw)
 
     if actions:
-        print(f"[Compact Parse] Parsed {len(actions)} paint commands from compact format")
+        if has_components:
+            components = set(a.get("component", "(none)") for a in actions)
+            print(f"[Compact Parse] Parsed {len(actions)} paint commands from compact format ({len(components)} components: {', '.join(sorted(components))})")
+        else:
+            print(f"[Compact Parse] Parsed {len(actions)} paint commands from compact format")
         return actions
 
     return None
+
+
+def extract_component_texts(text: str) -> dict[str, str]:
+    """Extract per-component raw L/P text from a response with ## headers.
+
+    Returns a dict mapping component_name -> raw L/P text for that component.
+    Returns empty dict if no component headers found.
+    """
+    actions_text = _extract_actions_text(text)
+    if not actions_text:
+        return {}
+
+    components = {}
+    current_component = None
+    current_lines = []
+
+    for line in actions_text.strip().split('\n'):
+        stripped = line.strip()
+        if stripped.startswith('## '):
+            # Save previous component
+            if current_component and current_lines:
+                components[current_component] = '\n'.join(current_lines)
+            current_component = stripped[3:].strip()
+            current_lines = []
+        elif stripped.startswith('##'):
+            if current_component and current_lines:
+                components[current_component] = '\n'.join(current_lines)
+            current_component = stripped[2:].strip()
+            current_lines = []
+        elif stripped and not stripped.startswith('#') and not stripped.startswith('//'):
+            if stripped[0] in 'LP':
+                current_lines.append(stripped)
+
+    # Save last component
+    if current_component and current_lines:
+        components[current_component] = '\n'.join(current_lines)
+
+    return components
 
 
 # =============================================================================
@@ -400,6 +490,96 @@ def deduplicate_learnings(
         result.append(new_learning)
 
     return result[-max_count:]
+
+
+# =============================================================================
+# COMPONENT LIBRARY
+# =============================================================================
+
+@dataclass
+class ComponentVersion:
+    """A single version of a component (from one candidate/iteration)."""
+    iteration: str  # e.g., "2a", "3c"
+    actions_text: str  # Raw L/P commands for this component
+    actions: list[dict]  # Expanded paint_at actions
+    image_base64: str | None = None  # Cropped image of this component
+    scores: dict | None = None  # Per-criterion scores from judge
+
+
+@dataclass
+class ComponentLibrary:
+    """Tracks the best version of each component and assembles composites.
+
+    The composition dict comes from the plan's composition field, providing
+    bounding boxes for each component.
+    """
+    composition: dict  # plan composition: name -> {x_range, y_range, ...}
+    best: dict = field(default_factory=dict)  # name -> ComponentVersion
+    component_order: list[str] = field(default_factory=list)  # render order
+
+    def __post_init__(self):
+        if not self.component_order:
+            self.component_order = list(self.composition.keys())
+
+    def update_component(self, name: str, version: ComponentVersion) -> None:
+        """Update the best version of a component."""
+        self.best[name] = version
+        print(f"[Library] Updated '{name}' with version from {version.iteration}")
+
+    def get_composite_script(self) -> str:
+        """Concatenate best components' action text in order, with ## headers."""
+        parts = []
+        for name in self.component_order:
+            if name in self.best:
+                parts.append(f"## {name}")
+                parts.append(self.best[name].actions_text)
+        return '\n'.join(parts)
+
+    def get_composite_actions(self) -> list[dict]:
+        """Get flat list of all best components' actions in render order."""
+        actions = []
+        for name in self.component_order:
+            if name in self.best:
+                actions.extend(self.best[name].actions)
+        return actions
+
+    def get_component_names(self) -> list[str]:
+        """Get component names in render order."""
+        return list(self.component_order)
+
+    def get_weakest_components(self, count: int = 2) -> list[str]:
+        """Get the weakest components by total score, for refinement targeting."""
+        scored = []
+        for name in self.component_order:
+            if name in self.best and self.best[name].scores:
+                total = sum(self.best[name].scores.values())
+                scored.append((name, total))
+            elif name in self.best:
+                # No scores yet, treat as weak
+                scored.append((name, 0))
+        scored.sort(key=lambda x: x[1])
+        return [name for name, _ in scored[:count]]
+
+    def to_dict(self) -> dict:
+        """Serialize for saving to JSON."""
+        result = {}
+        for name, version in self.best.items():
+            result[name] = {
+                "iteration": version.iteration,
+                "actions_text": version.actions_text,
+                "scores": version.scores,
+                "num_actions": len(version.actions),
+            }
+        return result
+
+    @staticmethod
+    def from_plan(plan: dict) -> 'ComponentLibrary':
+        """Create a ComponentLibrary from a plan's composition dict."""
+        composition = plan.get('composition', {})
+        return ComponentLibrary(
+            composition=composition,
+            component_order=list(composition.keys()),
+        )
 
 
 # =============================================================================
@@ -616,6 +796,85 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         print(f"[Warning] Crop failed: {e}")
         traceback.print_exc()
         return png_data
+
+
+def crop_component_from_canvas(
+    canvas_png_base64: str,
+    x_range: list[int],
+    y_range: list[int],
+    padding: int = 2,
+) -> str | None:
+    """Crop a component's region from the canvas image.
+
+    The canvas image from crop_to_canvas_area() is 400x160px mapped to
+    CANVAS_WIDTH x CANVAS_HEIGHT cells. Converts cell coordinates to pixel
+    coordinates and crops.
+
+    Args:
+        canvas_png_base64: Base64 PNG of the cropped canvas (400x160)
+        x_range: [start_x, end_x] in cell coordinates
+        y_range: [start_y, end_y] in cell coordinates
+        padding: Extra cells of padding around the component
+
+    Returns:
+        Base64 PNG of the cropped component, or None on failure
+    """
+    try:
+        from PIL import Image
+
+        img_bytes = base64.b64decode(canvas_png_base64)
+        img = Image.open(io.BytesIO(img_bytes))
+        img_w, img_h = img.size
+
+        # Map cell coordinates to pixel coordinates
+        px_per_cell_x = img_w / CANVAS_WIDTH
+        px_per_cell_y = img_h / CANVAS_HEIGHT
+
+        x_start = max(0, x_range[0] - padding)
+        x_end = min(CANVAS_WIDTH, x_range[1] + padding)
+        y_start = max(0, y_range[0] - padding)
+        y_end = min(CANVAS_HEIGHT, y_range[1] + padding)
+
+        left = int(x_start * px_per_cell_x)
+        top = int(y_start * px_per_cell_y)
+        right = int(x_end * px_per_cell_x)
+        bottom = int(y_end * px_per_cell_y)
+
+        cropped = img.crop((left, top, right, bottom))
+        buf = io.BytesIO()
+        cropped.save(buf, format='PNG')
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    except Exception as e:
+        print(f"[Component Crop] Failed: {e}")
+        return None
+
+
+def extract_all_components(
+    canvas_png_base64: str,
+    composition: dict,
+) -> dict[str, str]:
+    """Extract cropped images for all components from a canvas image.
+
+    Args:
+        canvas_png_base64: Base64 PNG of the cropped canvas
+        composition: Plan composition dict mapping name -> {x_range, y_range, ...}
+
+    Returns:
+        Dict mapping component name -> base64 PNG of that component's region
+    """
+    crops = {}
+    for name, info in composition.items():
+        if not isinstance(info, dict):
+            continue
+        x_range = info.get('x_range')
+        y_range = info.get('y_range')
+        if not x_range or not y_range:
+            continue
+        crop = crop_component_from_canvas(canvas_png_base64, x_range, y_range)
+        if crop:
+            crops[name] = crop
+    return crops
 
 
 # =============================================================================
@@ -1033,6 +1292,19 @@ Plan compositions that are FUN TO WATCH being drawn:
 
 Be specific about coordinates. The execution AI will use this as a reference for composition.
 
+## COMPONENT SYSTEM (CRITICAL)
+
+Each composition element will be independently evaluated, scored, and potentially replaced. The system mixes the best version of each component from different iterations. This means:
+
+1. **Aim for 3-7 composition elements.** Too few (1-2) defeats the purpose. Too many (>10) makes judging noisy.
+2. **Each element needs a clear bounding box** (x_range and y_range). These define where the element can paint.
+3. **Elements can overlap slightly** (1-2 rows) at connection points (e.g., where trunk meets canopy). Later elements paint over earlier ones where they overlap.
+4. **Each element should be self-contained.** Its color mixing recipe should be completable within its bounds.
+5. **Don't make elements too granular** (every leaf as a separate component) or too coarse (entire drawing as one component).
+
+Good component breakdown for a tree: canopy, trunk, ground, shadows, highlights
+Bad: "left_leaf_1", "left_leaf_2" (too granular) or "tree" (too coarse)
+
 **COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-{CANVAS_WIDTH - 1}.
 
 **BACKGROUND TIP:** Keep backgrounds MINIMAL. A tree doesn't need a full blue sky fill ({CANVAS_HEIGHT} rows x {CANVAS_WIDTH} columns = boring). Instead, leave most of the canvas background showing and focus detail on the subject. If you want a ground line, use 2-3 rows, not 10. If you want sky, use a few accent strokes or a gradient strip, not a full fill."""
@@ -1130,6 +1402,27 @@ Draw from (x1,y1) to (x2,y2) with the specified color key.
 
 **P = Point**: `P<color><x>,<y>`
 Paint a single cell at (x,y) with the specified color key.
+
+## COMPONENT HEADERS (REQUIRED)
+
+Your actions block MUST use `## component_name` headers to label which composition element each group of actions belongs to. Use the same element names from the plan's composition.
+
+**Example (tree with canopy, trunk, ground):**
+```actions
+## canopy
+Lf30,5,70,5
+Lf28,6,72,6
+Lc30,5,70,5
+Lc28,6,72,6
+## trunk
+Lf45,15,55,15
+Lt45,15,55,15
+## ground
+Lf0,23,100,23
+Lc0,23,100,23
+```
+
+Each component's actions should stay within its bounding box from the plan. Draw each component completely (base color + mixing overlay + shading) before moving to the next. Components are evaluated independently, so each must be self-contained.
 
 ## CURVES AND ORGANIC SHAPES
 
@@ -1373,9 +1666,11 @@ Respond with a JSON object followed by a compact actions block:
 ```
 
 ```actions
+## canopy
 Lf20,5,80,5
 Lf18,6,82,6
 Lc20,5,50,5
+## details
 Pk35,10
 ```
 
@@ -1385,11 +1680,12 @@ Pk35,10
 
 **learnings** (REQUIRED): One key insight from THIS attempt.
 
-**actions block** (REQUIRED): Generate compact actions for the drawing.
+**actions block** (REQUIRED): Generate compact actions with `## component_name` headers matching the plan's composition elements.
 - Use L (lines) to fill solid areas
 - Use P (points) for details, highlights, and texture
 - Use diagonal lines (L with different x1,y1 and x2,y2) for organic shapes
 - More actions = more detail and richer shading!
+- Each component is evaluated independently, so complete each fully before the next
 
 **Tips for beautiful drawings:**
 - Add shading: use lighter colors on lit surfaces, darker in shadows
@@ -1675,6 +1971,7 @@ def call_vision_api(
     execution_model: str = "claude-sonnet-4-20250514",
     reference_image_base64: str = None,
     reference_image_media_type: str = None,
+    component_library: 'ComponentLibrary | None' = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1784,41 +2081,9 @@ def call_vision_api(
         best_script_section += "This script produced the current best result. Study it and improve upon it.\n"
         best_script_section += f"```actions\n{best_script_text}\n```\n"
 
-    # Build refinement mode section with escalating freedom based on consecutive losses
+    # No longer using escalating refinement modes; component refinement handles this
     refinement_section = ""
     diversity_section = ""
-    if consecutive_losses >= 3 and best_script_text:
-        if consecutive_losses <= 4:
-            refinement_section = """\n## REFINEMENT MODE (Targeted)
-The best attempt's script is provided above. Make TARGETED improvements:
-- Keep the overall structure that's working
-- Modify specific sections (shading, details, proportions)
-- Change at most 20-30% of the lines
-- Focus on what the judge said was missing
-
-IMPORTANT: If the best script uses horizontal line fills for solid shapes, keep that approach.
-Do NOT convert horizontal fills into diagonal outlines or sparse line patterns.
-
-Start from the best script and improve it.\n"""
-        elif consecutive_losses <= 6:
-            refinement_section = f"""\n## REFINEMENT MODE (Restructure)
-You have lost {consecutive_losses} times with small tweaks. Time for bigger changes.
-The best attempt's script is provided above. You may change 40-60% of the lines:
-- RESTRUCTURE problem areas: reshape rectangular bodies into ovals (vary x-range per row)
-- Smooth stepped/staircase shapes into tapered forms (progressively shorter fills)
-- Improve proportions and organic curves
-- Keep the overall layout and color scheme
-
-Focus on SHAPE QUALITY: organic curves beat straight edges.\n"""
-        else:
-            refinement_section = f"""\n## REFINEMENT MODE (Major Overhaul)
-You have lost {consecutive_losses} times. The current approach has plateaued.
-You may change 70-100% of the lines. Keep only the general layout from the best attempt:
-- REDRAW shapes from scratch with better technique
-- Use varying x-ranges for organic oval bodies (wider in middle, narrower at edges)
-- Use progressively shorter fills for tapered tails and limbs
-- Rebuild with proper shading and 3D depth
-- The layout and composition are good, but the shapes need major improvement.\n"""
 
     # Build plan summary
     plan_section = ""
@@ -1887,15 +2152,43 @@ The canvas will be CLEARED and your new script executed from scratch."""
             top_performers_text += f"The RUNNER-UP image (Attempt {runner_up_attempt_num}) is also included.\n"
         top_performers_text += "Study what these top attempts did well and combine their strengths in your new attempt.\n"
 
+    # Build component library context
+    component_library_section = ""
+    if component_library and component_library.best:
+        component_library_section = "\n## COMPONENT LIBRARY (best versions per component)\n"
+        component_library_section += "The current best composite is assembled from these components. "
+        component_library_section += "Improve weak components while maintaining strong ones.\n\n"
+        for name in component_library.component_order:
+            if name not in component_library.best:
+                component_library_section += f"- **{name}**: not yet drawn\n"
+                continue
+            ver = component_library.best[name]
+            comp_info = component_library.composition.get(name, {})
+            x_range = comp_info.get('x_range', '?')
+            y_range = comp_info.get('y_range', '?')
+            component_library_section += f"- **{name}** (x={x_range}, y={y_range}): "
+            if ver.scores:
+                total = sum(ver.scores.values())
+                component_library_section += f"score={total}"
+                # Highlight weak scores
+                weak = [k for k, v in ver.scores.items() if v <= 2]
+                if weak:
+                    component_library_section += f" (weak: {', '.join(weak)})"
+            else:
+                component_library_section += "not yet scored"
+            component_library_section += f", from iteration {ver.iteration}\n"
+            # Include the script text so the AI can see what worked
+            component_library_section += f"  ```\n  {ver.actions_text[:200]}\n  ```\n"
+
     user_message = f"""## Goal: {goal}
 
 ## Attempt: {iteration} of {max_iterations}
 
 {complexity_section}
-{plan_section}{learnings_section}{strategy_section}{judge_section}{best_script_section}{refinement_section}{diversity_section}{top_performers_text}
+{plan_section}{learnings_section}{strategy_section}{judge_section}{best_script_section}{refinement_section}{diversity_section}{component_library_section}{top_performers_text}
 {instruction}
 
-Respond with JSON metadata followed by a compact ```actions``` block."""
+Respond with JSON metadata followed by a compact ```actions``` block with ## component headers."""
 
     # Build message content with images (canvas + optional best + optional runner-up)
     message_content = [
@@ -2031,18 +2324,24 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     return result
 
 
-MUTATION_PROMPT = f"""You are an AI artist editing an existing pixel art script in Purple Computer's Doodle mode.
+COMPONENT_REFINEMENT_PROMPT = f"""You are an AI artist refining ONE component of a pixel art drawing in Purple Computer's Doodle mode.
 
-You will receive the BEST script so far and a screenshot of its result, plus a specific improvement target from the judge.
+You will receive:
+1. The FULL composite drawing (all components combined)
+2. A CROPPED view of just the component you need to improve
+3. The current action script for that component
+4. The component's bounding box constraints
+5. A specific improvement target
 
-Your job: modify the script to fix ONLY the identified weakness while keeping everything else the same.
+Your job: generate a REPLACEMENT script for this ONE component only.
 
 ## RULES
-1. Keep 70-90% of the script unchanged. Only modify the lines related to the weakness.
-2. Do NOT restructure the entire drawing. Preserve the overall layout, colors, and composition.
-3. The canvas is {CANVAS_WIDTH}x{CANVAS_HEIGHT}. Coordinates must stay in bounds.
-4. Use the same compact format: L<color><x1>,<y1>,<x2>,<y2> for lines, P<color><x>,<y> for points.
+1. Output ONLY the actions for this ONE component, not the whole drawing.
+2. Stay WITHIN the bounding box. Do not paint outside the component's x_range/y_range.
+3. The canvas is {CANVAS_WIDTH}x{CANVAS_HEIGHT}. All coordinates must be in bounds.
+4. Use the compact format: L<color><x1>,<y1>,<x2>,<y2> for lines, P<color><x>,<y> for points.
 5. Color mixing works by painting over: Yellow + Blue = GREEN, Yellow + Red = ORANGE, Red + Blue = PURPLE.
+6. Complete the component fully: base color + mixing overlay + shading, all within the bounding box.
 
 ## COMPACT ACTION FORMAT
 **L = Line**: `L<color><x1>,<y1>,<x2>,<y2>` (horizontal, vertical, or diagonal)
@@ -2053,20 +2352,24 @@ Your job: modify the script to fix ONLY the identified weakness while keeping ev
 ```json
 {{
   "analysis": "What I changed and why",
-  "learnings": "Key insight from this edit"
+  "learnings": "Key insight from this refinement"
 }}
 ```
 
 ```actions
-(modified script here)
+(replacement actions for this component ONLY)
 ```
 
-Output the COMPLETE modified script (not just the changed lines). The canvas is cleared and this script runs from scratch."""
+Do NOT include ## headers. Output actions for THIS component only."""
 
 
-def call_focused_mutation_api(
-    best_image_base64: str,
-    best_script_text: str,
+def call_component_refinement_api(
+    composite_image_base64: str,
+    component_crop_base64: str,
+    component_script_text: str,
+    component_name: str,
+    x_range: list[int],
+    y_range: list[int],
     improvement_target: str,
     goal: str,
     api_key: str,
@@ -2074,25 +2377,13 @@ def call_focused_mutation_api(
     reference_image_base64: str = None,
     reference_image_media_type: str = None,
 ) -> dict:
-    """Generate a focused mutation of the best script targeting a specific weakness.
+    """Generate a refined version of a single component.
 
-    Unlike call_vision_api which generates from scratch with full context,
-    this function sends only the best image + script + a specific improvement
-    target from the judge. The AI edits the existing script rather than
-    regenerating from scratch.
-
-    Args:
-        best_image_base64: Screenshot of the current best attempt (PNG base64)
-        best_script_text: The L/P command text of the best attempt
-        improvement_target: Specific improvement suggestion from the judge
-        goal: What we're trying to draw
-        api_key: Anthropic API key
-        execution_model: Model to use
-        reference_image_base64: Optional reference image
-        reference_image_media_type: Media type for reference image
+    Sends the full composite image plus the component crop and script,
+    and asks the AI to output replacement actions for just that component.
 
     Returns:
-        Dict with keys: analysis, strategy_summary, learnings, actions
+        Dict with keys: analysis, learnings, actions, compact_actions_text
     """
     import anthropic
 
@@ -2100,16 +2391,19 @@ def call_focused_mutation_api(
 
     user_message = f"""## Goal: {goal}
 
-## CURRENT BEST SCRIPT
+## COMPONENT TO REFINE: {component_name}
+Bounding box: x={x_range}, y={y_range}
+
+## CURRENT COMPONENT SCRIPT
 ```actions
-{best_script_text}
+{component_script_text}
 ```
 
 ## IMPROVEMENT TARGET
 {improvement_target}
 
-Modify the script above to address this specific weakness. Keep everything else the same.
-Output the complete modified script."""
+Generate replacement actions for the "{component_name}" component ONLY.
+Stay within x={x_range}, y={y_range}. Output the complete replacement script for this component."""
 
     message_content = [
         {
@@ -2117,11 +2411,24 @@ Output the complete modified script."""
             "source": {
                 "type": "base64",
                 "media_type": "image/png",
-                "data": best_image_base64,
+                "data": composite_image_base64,
             },
         },
-        {"type": "text", "text": "CURRENT BEST (the script above produced this image)"},
+        {"type": "text", "text": "FULL COMPOSITE DRAWING (all components combined)"},
     ]
+
+    if component_crop_base64:
+        message_content.extend([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": component_crop_base64,
+                },
+            },
+            {"type": "text", "text": f"CROPPED VIEW of '{component_name}' (the component to refine)"},
+        ])
 
     if reference_image_base64:
         message_content.extend([
@@ -2141,8 +2448,7 @@ Output the complete modified script."""
     response = client.messages.create(
         model=execution_model,
         max_tokens=4000,
-        temperature=1.0,
-        system=MUTATION_PROMPT,
+        system=COMPONENT_REFINEMENT_PROMPT,
         messages=[{
             "role": "user",
             "content": message_content,
@@ -2166,7 +2472,7 @@ Output the complete modified script."""
         result["compact_actions_text"] = actions_match.group(1).strip()
     if compact_actions:
         result["actions"] = compact_actions
-        print(f"[Mutation Parse] Got {len(compact_actions)} actions from compact format")
+        print(f"[Component Refinement] Got {len(compact_actions)} actions for '{component_name}'")
 
     data = parse_json_robust(text)
     if data and isinstance(data, dict):
@@ -2606,6 +2912,207 @@ Respond with JSON only:
     return result
 
 
+def judge_components_batch(
+    candidate_crops: dict[str, str],
+    library: ComponentLibrary,
+    goal: str,
+    api_key: str,
+    judge_model: str = "claude-sonnet-4-20250514",
+    visual_identity: dict = None,
+) -> dict[str, dict]:
+    """Judge each component of a candidate against the library's best version.
+
+    For each component, sends the candidate crop and library best crop side-by-side
+    in a single API call. Returns per-component winners and scores.
+
+    Args:
+        candidate_crops: Dict of component_name -> base64 PNG crop from the candidate
+        library: The current component library
+        goal: What we're trying to draw
+        api_key: Anthropic API key
+        judge_model: Model to use for judging
+
+    Returns:
+        Dict of component_name -> {winner: "candidate"|"library", scores_candidate, scores_library, reasoning}
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # Build pairs: only judge components that exist in both candidate and library
+    pairs = []
+    for name in library.component_order:
+        if name in candidate_crops and name in library.best and library.best[name].image_base64:
+            pairs.append(name)
+
+    if not pairs:
+        # If no pairs (first iteration), all candidate components win by default
+        results = {}
+        for name in candidate_crops:
+            results[name] = {
+                "winner": "candidate",
+                "reasoning": "No library version to compare against",
+                "scores_candidate": None,
+                "scores_library": None,
+            }
+        return results
+
+    # Build a single judge call with all component pairs
+    pair_descriptions = ", ".join(pairs)
+
+    judge_prompt = f"""You are judging individual COMPONENTS of pixel art drawings.
+
+GOAL: "{goal}"
+
+You will see pairs of component crops. For each pair, decide which version is better.
+The components are: {pair_descriptions}
+
+For each component pair, score on these criteria (1-5):
+1. **shape_accuracy**: Does it look right for this component?
+2. **color_quality**: Appropriate colors, good mixing?
+3. **detail_and_shading**: Texture, highlights, depth?
+4. **cleanliness**: Clean edges vs artifacts?
+
+{_format_judge_visual_identity(visual_identity)}Respond with JSON only:
+```json
+{{
+  "components": {{
+    "component_name": {{
+      "winner": "A" or "B",
+      "reasoning": "brief explanation",
+      "scores_a": {{"shape_accuracy": 3, "color_quality": 3, "detail_and_shading": 3, "cleanliness": 3}},
+      "scores_b": {{"shape_accuracy": 3, "color_quality": 3, "detail_and_shading": 3, "cleanliness": 3}}
+    }}
+  }}
+}}
+```"""
+
+    message_content = []
+    # Randomize A/B per component to avoid positional bias
+    swap_map = {}  # component_name -> bool (True if candidate=B)
+    for name in pairs:
+        swapped = random.choice([True, False])
+        swap_map[name] = swapped
+
+        cand_crop = candidate_crops[name]
+        lib_crop = library.best[name].image_base64
+
+        if swapped:
+            img_a, img_b = lib_crop, cand_crop
+        else:
+            img_a, img_b = cand_crop, lib_crop
+
+        message_content.extend([
+            {"type": "text", "text": f"**Component '{name}' - Version A:**"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_a}},
+            {"type": "text", "text": f"**Component '{name}' - Version B:**"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img_b}},
+        ])
+
+    message_content.append({"type": "text", "text": "For each component, which version (A or B) is better? Respond with JSON only."})
+
+    response = client.messages.create(
+        model=judge_model,
+        max_tokens=1200,
+        system=judge_prompt,
+        messages=[{"role": "user", "content": message_content}],
+    )
+
+    text = response.content[0].text
+    data = parse_json_robust(text)
+
+    results = {}
+    if data and isinstance(data, dict):
+        components_data = data.get("components", data)
+        for name in pairs:
+            comp_result = components_data.get(name, {})
+            raw_winner = str(comp_result.get("winner", "")).upper()
+            swapped = swap_map.get(name, False)
+
+            # Map A/B back to candidate/library
+            if raw_winner == "A":
+                winner = "library" if swapped else "candidate"
+            elif raw_winner == "B":
+                winner = "candidate" if swapped else "library"
+            else:
+                winner = "library"  # default to keeping library
+
+            # Map scores back
+            if swapped:
+                scores_candidate = comp_result.get("scores_b")
+                scores_library = comp_result.get("scores_a")
+            else:
+                scores_candidate = comp_result.get("scores_a")
+                scores_library = comp_result.get("scores_b")
+
+            results[name] = {
+                "winner": winner,
+                "reasoning": comp_result.get("reasoning", ""),
+                "scores_candidate": scores_candidate,
+                "scores_library": scores_library,
+            }
+            print(f"[Component Judge] {name}: {winner} wins ({comp_result.get('reasoning', '')[:60]})")
+
+    # Components not in pairs: candidate wins by default (no library version)
+    for name in candidate_crops:
+        if name not in results:
+            results[name] = {
+                "winner": "candidate",
+                "reasoning": "No library version to compare against",
+                "scores_candidate": None,
+                "scores_library": None,
+            }
+
+    return results
+
+
+def check_composite_coherence(
+    new_composite_base64: str,
+    old_composite_base64: str,
+    goal: str,
+    api_key: str,
+    judge_model: str = "claude-sonnet-4-20250514",
+) -> bool:
+    """Check if a new composite image is coherent (parts work together).
+
+    Compares the new composite against the old one. If the new one looks
+    broken or incoherent (parts don't connect properly), returns False.
+
+    Returns True if the new composite is acceptable.
+    """
+    if not old_composite_base64:
+        return True  # No previous composite to compare against
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    message_content = [
+        {"type": "text", "text": "**Previous composite:**"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": old_composite_base64}},
+        {"type": "text", "text": "**New composite (after updating some components):**"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": new_composite_base64}},
+        {"type": "text", "text": f'Goal: "{goal}". Does the new composite look coherent? Do the parts connect properly? Respond with JSON: {{"coherent": true/false, "reason": "brief explanation"}}'},
+    ]
+
+    response = client.messages.create(
+        model=judge_model,
+        max_tokens=200,
+        messages=[{"role": "user", "content": message_content}],
+    )
+
+    text = response.content[0].text
+    data = parse_json_robust(text)
+
+    if data and isinstance(data, dict):
+        coherent = data.get("coherent", True)
+        reason = data.get("reason", "")
+        print(f"[Coherence] {'OK' if coherent else 'FAILED'}: {reason}")
+        return bool(coherent)
+
+    return True  # Default to accepting if we can't parse
+
+
 def load_env_file():
     """Load environment variables from tools/.env if it exists."""
     env_path = Path(__file__).parent / '.env'
@@ -2616,6 +3123,54 @@ def load_env_file():
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
                     os.environ.setdefault(key.strip(), value.strip())
+
+
+def _execute_and_screenshot(
+    controller: 'PurpleController',
+    actions: list[dict],
+    label: str,
+    attempt_label: str,
+    screenshot_dir_path: str,
+    canvas_shows_attempt,
+) -> tuple[str | None, str | None]:
+    """Clear canvas, execute actions, take screenshot, return (svg_path, png_base64).
+
+    Returns (None, None) on failure.
+    """
+    # Clear canvas if needed
+    if canvas_shows_attempt is not None:
+        print(f"[Clear] Clearing canvas for candidate {label}...")
+        try:
+            controller.clear_canvas()
+        except RuntimeError as e:
+            print(f"[ERROR] Failed to clear canvas: {e}")
+            return None, None
+        time.sleep(0.3)
+
+    # Execute
+    print(f"[Execute] Running candidate {label}: {len(actions)} actions...")
+    controller.execute_actions(actions)
+    time.sleep(0.5)
+
+    # Take screenshot
+    c_svg = controller.take_screenshot()
+    if not c_svg:
+        print(f"[Error] Failed to capture screenshot for candidate {label}")
+        return None, None
+
+    c_svg_new = os.path.join(screenshot_dir_path, f"iteration_{attempt_label}_{label}.svg")
+    os.rename(c_svg, c_svg_new)
+    c_png = svg_to_png_base64(c_svg_new)
+    if not c_png:
+        print(f"[Error] Failed to convert candidate {label} SVG to PNG")
+        return c_svg_new, None
+
+    # Save cropped PNG
+    c_png_path = c_svg_new.replace('.svg', '_cropped.png')
+    with open(c_png_path, 'wb') as f:
+        f.write(base64.standard_b64decode(c_png))
+
+    return c_svg_new, c_png
 
 
 def run_visual_feedback_loop(
@@ -2629,7 +3184,11 @@ def run_visual_feedback_loop(
     reference_image: str = None,
     max_candidates: int = 3,
 ) -> None:
-    """Run the AI drawing loop with real visual feedback.
+    """Run the AI drawing loop with component-based visual feedback.
+
+    Uses a ComponentLibrary to track the best version of each composition element.
+    Candidates are judged per-component, and individual components can be cherry-picked
+    from different candidates/iterations.
 
     If existing_plan is provided, skips the planning phase and uses that plan directly.
     """
@@ -2649,7 +3208,6 @@ def run_visual_feedback_loop(
     else:
         # Check if path already has a timestamp (YYYYMMDD_HHMMSS pattern)
         if not re.search(r'\d{8}_\d{6}$', output_dir):
-            # Add timestamp subfolder
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_dir = os.path.join(output_dir, timestamp)
@@ -2657,6 +3215,8 @@ def run_visual_feedback_loop(
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     screenshot_dir = os.path.join(output_dir, "screenshots")
+    debug_dir = os.path.join(output_dir, "debug")
+    os.makedirs(debug_dir, exist_ok=True)
 
     # Prepare small reference image for execution model (once)
     ref_base64 = None
@@ -2688,112 +3248,70 @@ def run_visual_feedback_loop(
             json.dump(plan, f, indent=2)
         print(f"[Saved] Plan: {plan_path}")
 
+        # Initialize component library from plan
+        library = ComponentLibrary.from_plan(plan)
+        print(f"[Library] Initialized with {len(library.component_order)} components: {', '.join(library.component_order)}")
+
         # Switch to Doodle mode and enter paint mode
         print("\n[Setup] Switching to Doodle mode...")
         controller.switch_to_doodle()
         controller.enter_paint_mode()
         time.sleep(0.2)
 
-        all_results = []  # Store full results from each iteration
-        iteration_scripts = []  # Store each iteration's complete script
-        accumulated_learnings = []  # Compact learnings (not full scripts)
-        previous_strategy = None  # Strategy from previous attempt
+        all_results = []
+        iteration_scripts = []
+        accumulated_learnings = []
+        previous_strategy = None
 
-        # Track best result for A vs B comparison (judged by separate API call)
-        best_attempt = None  # Which attempt produced the best result
-        best_image_base64 = None
-        best_reason = None
+        # Component-based state
+        composite_image_base64 = None  # Current best composite rendering
+        component_staleness = {name: 0 for name in library.component_order}  # Per-component staleness
+        max_component_staleness = 8  # Stop when all components are stale
 
-        # Option B: Track runner-up (second best) for more context
-        runner_up_attempt = None
-        runner_up_image_base64 = None
-        runner_up_reason = None
+        judge_history = []
+        last_judge_feedback = None
+        canvas_shows_attempt = None
 
-        # Track consecutive losses for refinement mode and early stopping
-        consecutive_losses = 0
-        best_compact_actions = None  # Compact L/P text of the best attempt's script
-        iteration_compact_actions = {}  # Map iteration_num -> compact_actions_text
-        max_stale_iterations = 10  # Stop after this many consecutive losses
-
-        judge_history = []  # Track all judge comparisons for monitoring
-        last_judge_feedback = None  # Option A: pass judge reasoning to execution AI
-
-        # Track what's ACTUALLY on the canvas (not just loop index)
-        # This is crucial when iterations fail - the canvas still shows the last successful result
-        canvas_shows_attempt = None  # Which attempt's result is currently on canvas
+        # Take initial blank screenshot
+        blank_png = None
+        svg_path = controller.take_screenshot()
+        if svg_path:
+            screenshot_dir_path = os.path.dirname(svg_path)
+            new_svg_path = os.path.join(screenshot_dir_path, "iteration_0_blank.svg")
+            os.rename(svg_path, new_svg_path)
+            blank_png = svg_to_png_base64(new_svg_path)
+            if blank_png:
+                png_path = new_svg_path.replace('.svg', '_cropped.png')
+                with open(png_path, 'wb') as f:
+                    f.write(base64.standard_b64decode(blank_png))
+        else:
+            screenshot_dir_path = screenshot_dir
 
         for i in range(iterations):
             print(f"\n{'='*50}")
-            print(f"ATTEMPT {i + 1}/{iterations}")
-            if best_attempt:
-                print(f"Current Best: Attempt {best_attempt}'s result")
-            if runner_up_attempt:
-                print(f"Runner-up: Attempt {runner_up_attempt}'s result")
-            if consecutive_losses > 0:
-                if consecutive_losses < 3 or not best_compact_actions:
-                    mode = "normal"
-                elif consecutive_losses <= 4:
-                    mode = "refinement-targeted"
-                elif consecutive_losses <= 6:
-                    mode = "refinement-restructure"
-                else:
-                    mode = "refinement-overhaul"
-                print(f"Consecutive losses: {consecutive_losses} (mode: {mode})")
+            print(f"ITERATION {i + 1}/{iterations}")
+            if library.best:
+                filled = [n for n in library.component_order if n in library.best]
+                print(f"Library: {len(filled)}/{len(library.component_order)} components filled")
+                stale_info = {n: component_staleness.get(n, 0) for n in filled}
+                print(f"Staleness: {stale_info}")
             print('='*50)
 
-            # Determine how many candidates to generate this iteration
-            # Ramp-up: 2 candidates when not stuck, all candidates when stuck
-            if consecutive_losses < 3 or not best_compact_actions:
-                num_candidates = min(2, max_candidates)
-            else:
-                num_candidates = max_candidates
-
-            # For the first iteration, just generate one candidate (no best to compare against)
-            if best_attempt is None:
-                num_candidates = 1
-
-            # Take screenshot of current canvas state (for the informed regen candidate)
-            svg_path = controller.take_screenshot()
-            if not svg_path:
-                print("[Error] Failed to capture screenshot")
-                continue
-
-            screenshot_dir_path = os.path.dirname(svg_path)
-            if i == 0:
-                new_name = "iteration_0_blank.svg"
-                print("[Screenshot] iteration_0_blank = blank canvas (before any drawing)")
-            else:
-                new_name = f"iteration_{i}.svg"
-                print(f"[Screenshot] iteration_{i} = Attempt {i}'s result")
-            new_svg_path = os.path.join(screenshot_dir_path, new_name)
-            os.rename(svg_path, new_svg_path)
-            svg_path = new_svg_path
-
-            png_base64 = svg_to_png_base64(svg_path)
-            if not png_base64:
-                print("[Error] Failed to convert SVG to PNG")
-                continue
-
-            png_path = svg_path.replace('.svg', '_cropped.png')
-            with open(png_path, 'wb') as f:
-                f.write(base64.standard_b64decode(png_base64))
-
-            # Generate candidates using different strategies
-            # Each candidate is: (label, actions, result, compact_text)
+            is_first = not library.best
             candidates = []
 
-            debug_dir = os.path.join(output_dir, "debug")
-            os.makedirs(debug_dir, exist_ok=True)
+            # Get current canvas screenshot for context
+            canvas_png = composite_image_base64 or blank_png
 
-            # --- Candidate B: Informed regen (current approach, always generated) ---
-            print("\n[Candidate B] Generating informed regen (full context)...")
+            # --- Candidate A: Informed regen (full image with ## headers, sees library) ---
+            print("\n[Candidate A] Generating informed regen (with library context)...")
             informed_result = None
             for retry in range(3):
                 if retry > 0:
                     print(f"[Retry] Attempt {retry + 1}/3 for informed regen...")
                     time.sleep(1)
                 informed_result = call_vision_api(
-                    image_base64=png_base64,
+                    image_base64=canvas_png,
                     goal=goal,
                     iteration=i + 1,
                     max_iterations=iterations,
@@ -2802,109 +3320,97 @@ def run_visual_feedback_loop(
                     accumulated_learnings=accumulated_learnings,
                     previous_strategy=previous_strategy,
                     judge_feedback=last_judge_feedback,
-                    best_image_base64=best_image_base64,
-                    best_attempt_num=best_attempt,
-                    runner_up_image_base64=runner_up_image_base64,
-                    runner_up_attempt_num=runner_up_attempt,
-                    best_script_text=best_compact_actions,
-                    consecutive_losses=consecutive_losses,
+                    best_image_base64=composite_image_base64,
+                    best_attempt_num="composite",
+                    best_script_text=library.get_composite_script() if library.best else None,
+                    consecutive_losses=0,
                     execution_model=execution_model,
                     reference_image_base64=ref_base64,
                     reference_image_media_type=ref_media_type,
+                    component_library=library if library.best else None,
                 )
-                if informed_result.get("actions"):
+                if informed_result and informed_result.get("actions"):
                     break
             if informed_result and informed_result.get("actions"):
-                candidates.append(("informed", informed_result.get("actions"), informed_result, informed_result.get("compact_actions_text", "")))
-                # Save debug
+                candidates.append(("informed", informed_result))
                 raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_informed_raw.txt")
                 with open(raw_path, 'w') as f:
                     f.write(informed_result.get("raw_response", ""))
-                compact_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_informed_compact.txt")
-                with open(compact_path, 'w') as f:
-                    f.write(informed_result.get("compact_actions_text", ""))
-                print(f"[Candidate B] Got {len(informed_result['actions'])} actions")
+                print(f"[Candidate A] Got {len(informed_result['actions'])} actions")
 
-            # --- Candidate A: Focused mutation (only when we have a best script and judge feedback) ---
-            if num_candidates >= 2 and best_compact_actions and last_judge_feedback:
-                improvement_target = last_judge_feedback.get("specific_improvement", "")
-                weakest = last_judge_feedback.get("weakest_criterion", "")
-                if improvement_target:
-                    mutation_instruction = f"Weakness: {weakest}. Fix: {improvement_target}"
-                else:
-                    mutation_instruction = f"Improve the weakest area: {weakest}" if weakest else "Improve overall quality"
+            # --- Candidate B: Component refinement (only weakest 1-2 components, rest from library) ---
+            if not is_first and library.best:
+                weak_components = library.get_weakest_components(count=2)
+                # Filter to components that have been scored (not just initialized)
+                weak_with_scores = [n for n in weak_components if n in library.best]
+                if weak_with_scores:
+                    target_name = weak_with_scores[0]
+                    comp_info = library.composition.get(target_name, {})
+                    x_range = comp_info.get('x_range', [0, CANVAS_WIDTH])
+                    y_range = comp_info.get('y_range', [0, CANVAS_HEIGHT])
 
-                print(f"\n[Candidate A] Generating focused mutation: {mutation_instruction[:80]}...")
-                mutation_result = call_focused_mutation_api(
-                    best_image_base64=best_image_base64,
-                    best_script_text=best_compact_actions,
-                    improvement_target=mutation_instruction,
-                    goal=goal,
-                    api_key=api_key,
-                    execution_model=execution_model,
-                    reference_image_base64=ref_base64,
-                    reference_image_media_type=ref_media_type,
-                )
-                if mutation_result.get("actions"):
-                    candidates.append(("mutation", mutation_result.get("actions"), mutation_result, mutation_result.get("compact_actions_text", "")))
-                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_mutation_raw.txt")
-                    with open(raw_path, 'w') as f:
-                        f.write(mutation_result.get("raw_response", ""))
-                    print(f"[Candidate A] Got {len(mutation_result['actions'])} actions")
-                else:
-                    print("[Candidate A] Failed to generate mutation")
+                    # Get component crop from composite
+                    comp_crop = None
+                    if composite_image_base64:
+                        comp_crop = crop_component_from_canvas(composite_image_base64, x_range, y_range)
 
-            # --- Candidate C: Fresh regen (no script context, higher temp) ---
-            if best_image_base64:
-                print("\n[Candidate C] Generating fresh regen (no script, temp 1.2)...")
+                    # Get improvement target
+                    improvement = "Improve overall quality"
+                    if library.best[target_name].scores:
+                        weak_criteria = sorted(library.best[target_name].scores.items(), key=lambda x: x[1])
+                        if weak_criteria:
+                            improvement = f"Improve {weak_criteria[0][0]} (currently {weak_criteria[0][1]}/5)"
+
+                    print(f"\n[Candidate B] Refining component '{target_name}': {improvement}")
+                    refinement_result = call_component_refinement_api(
+                        composite_image_base64=composite_image_base64,
+                        component_crop_base64=comp_crop,
+                        component_script_text=library.best[target_name].actions_text,
+                        component_name=target_name,
+                        x_range=x_range,
+                        y_range=y_range,
+                        improvement_target=improvement,
+                        goal=goal,
+                        api_key=api_key,
+                        execution_model=execution_model,
+                        reference_image_base64=ref_base64,
+                        reference_image_media_type=ref_media_type,
+                    )
+                    if refinement_result and refinement_result.get("actions"):
+                        # Build a full action list: library components + refined component
+                        full_actions = []
+                        full_compact_parts = []
+                        for name in library.component_order:
+                            if name == target_name:
+                                full_actions.extend(refinement_result["actions"])
+                                full_compact_parts.append(f"## {name}")
+                                full_compact_parts.append(refinement_result.get("compact_actions_text", ""))
+                            elif name in library.best:
+                                full_actions.extend(library.best[name].actions)
+                                full_compact_parts.append(f"## {name}")
+                                full_compact_parts.append(library.best[name].actions_text)
+                        refinement_result["actions"] = full_actions
+                        refinement_result["compact_actions_text"] = '\n'.join(full_compact_parts)
+                        refinement_result["_refined_component"] = target_name
+                        refinement_result["_refined_component_actions"] = refinement_result.get("compact_actions_text", "")
+                        candidates.append(("refinement", refinement_result))
+                        raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_refinement_raw.txt")
+                        with open(raw_path, 'w') as f:
+                            f.write(refinement_result.get("raw_response", ""))
+                        print(f"[Candidate B] Got refined '{target_name}' ({len(refinement_result['actions'])} total actions)")
+                    else:
+                        print(f"[Candidate B] Failed to refine '{target_name}'")
+
+            # --- Candidate C: Fresh regen (independent, no library context) ---
+            if not is_first:
+                print("\n[Candidate C] Generating fresh regen (no library context)...")
                 fresh_result = None
                 for retry in range(2):
                     if retry > 0:
                         print(f"[Retry] Attempt {retry + 1}/2 for fresh regen...")
                         time.sleep(1)
-                    # Fresh regen: send best image but NOT the best script
-                    # Use a higher consecutive_losses to trigger higher temperature
                     fresh_result = call_vision_api(
-                        image_base64=png_base64,
-                        goal=goal,
-                        iteration=i + 1,
-                        max_iterations=iterations,
-                        api_key=api_key,
-                        plan=plan,
-                        accumulated_learnings=accumulated_learnings,
-                        previous_strategy=None,  # No strategy anchoring
-                        judge_feedback=last_judge_feedback,
-                        best_image_base64=best_image_base64,
-                        best_attempt_num=best_attempt,
-                        runner_up_image_base64=None,  # Skip runner-up to save tokens
-                        runner_up_attempt_num=None,
-                        best_script_text=None,  # Key: no script = forces fresh approach
-                        consecutive_losses=max(consecutive_losses, 5),  # Force higher temp
-                        execution_model=execution_model,
-                        reference_image_base64=ref_base64,
-                        reference_image_media_type=ref_media_type,
-                    )
-                    if fresh_result and fresh_result.get("actions"):
-                        break
-                if fresh_result and fresh_result.get("actions"):
-                    candidates.append(("fresh", fresh_result.get("actions"), fresh_result, fresh_result.get("compact_actions_text", "")))
-                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_fresh_raw.txt")
-                    with open(raw_path, 'w') as f:
-                        f.write(fresh_result.get("raw_response", ""))
-                    print(f"[Candidate C] Got {len(fresh_result['actions'])} actions")
-                else:
-                    print("[Candidate C] Failed to generate fresh regen")
-
-            # --- Candidate D: Second fresh regen (independent take) ---
-            if best_image_base64:
-                print("\n[Candidate D] Generating second fresh regen...")
-                fresh2_result = None
-                for retry in range(2):
-                    if retry > 0:
-                        print(f"[Retry] Attempt {retry + 1}/2 for fresh regen 2...")
-                        time.sleep(1)
-                    fresh2_result = call_vision_api(
-                        image_base64=png_base64,
+                        image_base64=canvas_png,
                         goal=goal,
                         iteration=i + 1,
                         max_iterations=iterations,
@@ -2913,26 +3419,24 @@ def run_visual_feedback_loop(
                         accumulated_learnings=accumulated_learnings,
                         previous_strategy=None,
                         judge_feedback=last_judge_feedback,
-                        best_image_base64=best_image_base64,
-                        best_attempt_num=best_attempt,
-                        runner_up_image_base64=None,
-                        runner_up_attempt_num=None,
+                        best_image_base64=composite_image_base64,
+                        best_attempt_num="composite",
                         best_script_text=None,
-                        consecutive_losses=max(consecutive_losses, 5),
+                        consecutive_losses=0,
                         execution_model=execution_model,
                         reference_image_base64=ref_base64,
                         reference_image_media_type=ref_media_type,
                     )
-                    if fresh2_result and fresh2_result.get("actions"):
+                    if fresh_result and fresh_result.get("actions"):
                         break
-                if fresh2_result and fresh2_result.get("actions"):
-                    candidates.append(("fresh2", fresh2_result.get("actions"), fresh2_result, fresh2_result.get("compact_actions_text", "")))
-                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_fresh2_raw.txt")
+                if fresh_result and fresh_result.get("actions"):
+                    candidates.append(("fresh", fresh_result))
+                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_fresh_raw.txt")
                     with open(raw_path, 'w') as f:
-                        f.write(fresh2_result.get("raw_response", ""))
-                    print(f"[Candidate D] Got {len(fresh2_result['actions'])} actions")
+                        f.write(fresh_result.get("raw_response", ""))
+                    print(f"[Candidate C] Got {len(fresh_result['actions'])} actions")
                 else:
-                    print("[Candidate D] Failed to generate fresh regen 2")
+                    print("[Candidate C] Failed to generate fresh regen")
 
             if not candidates:
                 print(f"[Error] No candidates generated for iteration {i + 1}")
@@ -2941,294 +3445,227 @@ def run_visual_feedback_loop(
             print(f"\n[Candidates] Generated {len(candidates)} candidates: {[c[0] for c in candidates]}")
 
             # === PHASE 1: Execute all candidates and collect screenshots ===
-            # Each entry: (label, attempt_label, actions, result, compact, png_base64)
-            executed_candidates = []
+            executed_candidates = []  # (label, attempt_label, result, compact_text, png_base64, component_crops)
 
-            for c_idx, (label, c_actions, c_result, c_compact) in enumerate(candidates):
-                attempt_label = f"{i + 1}{chr(ord('a') + c_idx)}"  # e.g., "2a", "2b", "2c", "2d"
+            for c_idx, (label, c_result) in enumerate(candidates):
+                attempt_label = f"{i + 1}{chr(ord('a') + c_idx)}"
+                c_actions = c_result["actions"]
+                c_compact = c_result.get("compact_actions_text", "")
 
-                # Clear canvas
-                if canvas_shows_attempt is not None or c_idx > 0:
-                    print(f"[Clear] Clearing canvas for candidate {label}...")
-                    try:
-                        controller.clear_canvas()
-                    except RuntimeError as e:
-                        print(f"[ERROR] Failed to clear canvas: {e}")
-                        break
-                    time.sleep(0.3)
-
-                # Execute
-                print(f"[Execute] Running candidate {label}: {len(c_actions)} actions...")
-                controller.execute_actions(c_actions)
-                time.sleep(0.5)
-
-                # Take screenshot
-                c_svg = controller.take_screenshot()
-                if not c_svg:
-                    print(f"[Error] Failed to capture screenshot for candidate {label}")
-                    continue
-
-                c_svg_new = os.path.join(screenshot_dir_path, f"iteration_{attempt_label}_{label}.svg")
-                os.rename(c_svg, c_svg_new)
-                c_png = svg_to_png_base64(c_svg_new)
+                _, c_png = _execute_and_screenshot(
+                    controller, c_actions, label, attempt_label,
+                    screenshot_dir_path, canvas_shows_attempt,
+                )
                 if not c_png:
-                    print(f"[Error] Failed to convert candidate {label} SVG to PNG")
                     continue
 
-                # Save cropped PNG
-                c_png_path = c_svg_new.replace('.svg', '_cropped.png')
-                with open(c_png_path, 'wb') as f:
-                    f.write(base64.standard_b64decode(c_png))
-
-                # Store compact actions and script
-                iteration_compact_actions[attempt_label] = c_compact
-                iteration_scripts.append({"iteration": attempt_label, "actions": c_actions})
                 canvas_shows_attempt = attempt_label
+                iteration_scripts.append({"iteration": attempt_label, "actions": c_actions})
 
-                executed_candidates.append((label, attempt_label, c_actions, c_result, c_compact, c_png))
+                # Extract component crops
+                component_crops = extract_all_components(c_png, library.composition)
+                print(f"[Crops] Extracted {len(component_crops)} component crops from {label}")
+
+                executed_candidates.append((label, attempt_label, c_result, c_compact, c_png, component_crops))
 
             if not executed_candidates:
                 print(f"[Error] No candidates executed successfully for iteration {i + 1}")
                 continue
 
-            # === PHASE 2: Judge all candidates against best ===
-            best_challenger_label = None
-            best_challenger_result = None
-            best_challenger_judge = None
+            # === PHASE 2: Per-component judging ===
+            any_component_updated = False
+            old_composite = composite_image_base64
 
-            if best_attempt is None:
-                # No best yet: pick the first executed candidate as initial best
-                label, attempt_label, c_actions, c_result, c_compact, c_png = executed_candidates[0]
-                best_attempt = attempt_label
-                best_image_base64 = c_png
-                best_reason = "Initial drawing (first result)"
-                best_compact_actions = c_compact
-                best_challenger_label = label
-                best_challenger_result = c_result
-                print(f"[Best] Setting candidate {label} (Attempt {attempt_label}) as initial best")
+            for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates:
+                if not component_crops:
+                    continue
 
-                # If there are more candidates from the first iteration, judge them
-                remaining = executed_candidates[1:]
-                if remaining:
-                    # Use batch judge for the remaining candidates
-                    candidate_images = [(lbl, png) for lbl, _, _, _, _, png in remaining]
-                    print(f"\n[Judge Batch] Comparing {len(candidate_images)} remaining candidates against initial best...")
-                    batch_result = call_batch_judge_api(
-                        candidate_images=candidate_images,
-                        best_image_base64=best_image_base64,
+                if not library.best:
+                    # First iteration: all components from this candidate become the library
+                    # Extract per-component text from the response
+                    comp_texts = extract_component_texts(c_result.get("raw_response", ""))
+                    for name in library.component_order:
+                        if name in component_crops:
+                            # Get component-specific actions
+                            comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
+                            comp_text = comp_texts.get(name, "")
+                            if not comp_actions:
+                                # Fallback: use all actions if no component tags
+                                comp_actions = c_result["actions"]
+                                comp_text = c_compact
+                            library.update_component(name, ComponentVersion(
+                                iteration=attempt_label,
+                                actions_text=comp_text,
+                                actions=comp_actions,
+                                image_base64=component_crops[name],
+                            ))
+                    composite_image_base64 = c_png
+                    any_component_updated = True
+                    print(f"[Library] Initialized all components from candidate {label}")
+                    break  # Only use first candidate for initialization
+
+                else:
+                    # Normal case: per-component judging against library
+                    print(f"\n[Component Judge] Judging candidate {label} components against library...")
+                    comp_results = judge_components_batch(
+                        candidate_crops=component_crops,
+                        library=library,
                         goal=goal,
                         api_key=api_key,
                         judge_model=judge_model,
                         visual_identity=visual_identity,
                     )
-                    winner_label = batch_result.get("winner_label", "best")
-                    if winner_label != "best":
-                        # A candidate beat the initial best
-                        for lbl, albl, c_act, c_res, c_cmp, c_img in remaining:
-                            if lbl == winner_label:
-                                runner_up_attempt = best_attempt
-                                runner_up_image_base64 = best_image_base64
-                                runner_up_reason = best_reason
-                                best_attempt = albl
-                                best_image_base64 = c_img
-                                best_reason = batch_result.get("reasoning", "")
-                                best_compact_actions = c_cmp
-                                best_challenger_label = lbl
-                                best_challenger_result = c_res
-                                print(f"[Judge] ✓ Candidate {lbl} (Attempt {albl}) is the new best")
-                                break
 
-                    judge_history.append({
-                        "judged_during_attempt": f"{i + 1}",
-                        "judge_type": "batch",
-                        "candidates": [lbl for lbl, _, _, _, _, _ in executed_candidates],
-                        "winner_label": winner_label,
-                        "new_best_attempt": best_attempt,
-                        "reasoning": batch_result.get("reasoning", ""),
-                        "confidence": batch_result.get("confidence", "low"),
-                        "scores": batch_result.get("scores", {}),
-                        "weakest_criterion": batch_result.get("weakest_criterion"),
-                        "specific_improvement": batch_result.get("specific_improvement"),
-                    })
-                    best_challenger_judge = batch_result
+                    # Extract per-component text from the response
+                    comp_texts = extract_component_texts(c_result.get("raw_response", ""))
 
-            elif _is_blank_image(best_image_base64):
-                # Best is blank, auto-accept first candidate
-                label, attempt_label, c_actions, c_result, c_compact, c_png = executed_candidates[0]
-                runner_up_attempt = best_attempt
-                runner_up_image_base64 = best_image_base64
-                runner_up_reason = best_reason
-                best_attempt = attempt_label
-                best_image_base64 = c_png
-                best_reason = "Auto-accepted (previous best was blank)"
-                best_compact_actions = c_compact
-                consecutive_losses = 0
-                best_challenger_label = label
-                best_challenger_result = c_result
-                print(f"[Judge] Auto-accepted candidate {label} (previous best was blank)")
-                judge_history.append({
-                    "judged_during_attempt": f"{i + 1}",
-                    "judge_type": "auto",
-                    "winner_label": label,
-                    "new_best_attempt": attempt_label,
-                    "reasoning": "Previous best was blank, auto-accepted",
-                    "confidence": "high",
-                })
+                    for name, result in comp_results.items():
+                        if result["winner"] == "candidate":
+                            comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
+                            comp_text = comp_texts.get(name, "")
+                            if not comp_actions:
+                                comp_actions = c_result["actions"]
+                                comp_text = c_compact
+                            library.update_component(name, ComponentVersion(
+                                iteration=attempt_label,
+                                actions_text=comp_text,
+                                actions=comp_actions,
+                                image_base64=component_crops.get(name),
+                                scores=result.get("scores_candidate"),
+                            ))
+                            component_staleness[name] = 0
+                            any_component_updated = True
+                            print(f"[Library] ✓ '{name}' updated from candidate {label}")
+                        else:
+                            # Update library scores if we got new ones
+                            if result.get("scores_library") and name in library.best:
+                                library.best[name].scores = result["scores_library"]
+                            component_staleness[name] = component_staleness.get(name, 0) + 1
+                            print(f"[Library] ✗ '{name}' kept (staleness: {component_staleness[name]})")
 
-            else:
-                # Normal case: batch judge all candidates against current best
-                candidate_images = [(lbl, png) for lbl, _, _, _, _, png in executed_candidates]
-                print(f"\n[Judge Batch] Comparing {len(candidate_images)} candidates against best (Attempt {best_attempt})...")
-                batch_result = call_batch_judge_api(
-                    candidate_images=candidate_images,
-                    best_image_base64=best_image_base64,
-                    goal=goal,
-                    api_key=api_key,
-                    judge_model=judge_model,
-                    visual_identity=visual_identity,
-                )
+            # === PHASE 3: Render composite and coherence check ===
+            if any_component_updated and library.best:
+                # Render the new composite by executing all best components
+                composite_actions = library.get_composite_actions()
+                if composite_actions:
+                    composite_label = f"{i + 1}_composite"
+                    _, new_composite_png = _execute_and_screenshot(
+                        controller, composite_actions, "composite", composite_label,
+                        screenshot_dir_path, canvas_shows_attempt,
+                    )
+                    if new_composite_png:
+                        canvas_shows_attempt = composite_label
 
-                winner_label = batch_result.get("winner_label", "best")
-                reasoning = batch_result.get("reasoning", "")
-                confidence = batch_result.get("confidence", "low")
+                        # Coherence check
+                        if old_composite:
+                            coherent = check_composite_coherence(
+                                new_composite_base64=new_composite_png,
+                                old_composite_base64=old_composite,
+                                goal=goal,
+                                api_key=api_key,
+                                judge_model=judge_model,
+                            )
+                            if not coherent:
+                                print("[Coherence] REVERTING: new composite is incoherent")
+                                # Revert: re-render old composite
+                                if old_composite:
+                                    composite_image_base64 = old_composite
+                                    # Don't revert library; just note it
+                            else:
+                                composite_image_base64 = new_composite_png
+                        else:
+                            composite_image_base64 = new_composite_png
 
-                if winner_label != "best":
-                    # A candidate beat the current best
-                    for lbl, albl, c_act, c_res, c_cmp, c_img in executed_candidates:
-                        if lbl == winner_label:
-                            runner_up_attempt = best_attempt
-                            runner_up_image_base64 = best_image_base64
-                            runner_up_reason = best_reason
+                        # Update component crops from the new composite
+                        if composite_image_base64:
+                            new_crops = extract_all_components(composite_image_base64, library.composition)
+                            for name, crop in new_crops.items():
+                                if name in library.best:
+                                    library.best[name].image_base64 = crop
 
-                            best_attempt = albl
-                            best_image_base64 = c_img
-                            best_reason = reasoning
-                            best_compact_actions = c_cmp
-                            consecutive_losses = 0
+            # === PHASE 4: Extract learnings from ALL candidates ===
+            for label, attempt_label, c_result, _, _, _ in executed_candidates:
+                learning = c_result.get("learnings")
+                if learning:
+                    new_entry = {"iteration": f"{i + 1} ({label})", "learning": learning}
+                    accumulated_learnings = deduplicate_learnings(
+                        accumulated_learnings, new_entry, max_count=5,
+                    )
 
-                            best_challenger_label = lbl
-                            best_challenger_result = c_res
-                            best_challenger_judge = batch_result
-                            print(f"[Judge] ✓ Candidate {lbl} (Attempt {albl}) is the new best ({confidence})")
-                            print(f"[Judge]   Reason: {reasoning}")
-                            break
-                else:
-                    print(f"[Judge] ✗ Current best (Attempt {best_attempt}) remains best ({confidence})")
-                    print(f"[Judge]   Reason: {reasoning}")
-                    # Pick the highest-scoring loser as runner-up
-                    best_loser_score = -1
-                    for lbl, albl, _, _, _, c_img in executed_candidates:
-                        scores = batch_result.get("scores", {}).get(lbl)
-                        if scores and isinstance(scores, dict):
-                            total = sum(scores.values())
-                            if total > best_loser_score:
-                                best_loser_score = total
-                                runner_up_attempt = albl
-                                runner_up_image_base64 = c_img
-                                runner_up_reason = reasoning
+                strategy = c_result.get("strategy_summary")
+                if strategy:
+                    previous_strategy = strategy
 
-                judge_history.append({
-                    "judged_during_attempt": f"{i + 1}",
-                    "judge_type": "batch",
-                    "candidates": [lbl for lbl, _, _, _, _, _ in executed_candidates],
-                    "winner_label": winner_label,
-                    "new_best_attempt": best_attempt,
-                    "reasoning": reasoning,
-                    "confidence": confidence,
-                    "scores": batch_result.get("scores", {}),
-                    "weakest_criterion": batch_result.get("weakest_criterion"),
-                    "specific_improvement": batch_result.get("specific_improvement"),
-                })
-                best_challenger_judge = batch_result
+            # Save learnings
+            if accumulated_learnings:
+                learnings_path = os.path.join(output_dir, "learnings.json")
+                with open(learnings_path, 'w') as f:
+                    json.dump(accumulated_learnings, f, indent=2)
 
-            # Save judge history after judging
+            # Save component library state
+            library_path = os.path.join(output_dir, "component_library.json")
+            with open(library_path, 'w') as f:
+                json.dump({
+                    "iteration": i + 1,
+                    "components": library.to_dict(),
+                    "staleness": component_staleness,
+                }, f, indent=2)
+
+            # Build judge feedback for next iteration
+            last_judge_feedback = None
+            # Find weakest component for feedback
+            weakest = library.get_weakest_components(count=1)
+            if weakest and weakest[0] in library.best:
+                weak_name = weakest[0]
+                weak_ver = library.best[weak_name]
+                if weak_ver.scores:
+                    weak_criteria = sorted(weak_ver.scores.items(), key=lambda x: x[1])
+                    last_judge_feedback = {
+                        "winner": "B" if any_component_updated else "A",
+                        "reasoning": f"Component '{weak_name}' is weakest",
+                        "confidence": "medium",
+                        "weakest_criterion": weak_criteria[0][0] if weak_criteria else None,
+                        "specific_improvement": f"Improve '{weak_name}' {weak_criteria[0][0]}" if weak_criteria else None,
+                    }
+
+            judge_history.append({
+                "iteration": i + 1,
+                "judge_type": "component",
+                "any_updated": any_component_updated,
+                "staleness": dict(component_staleness),
+                "library_summary": {n: v.iteration for n, v in library.best.items()},
+            })
+
             judge_path = os.path.join(output_dir, "judge_history.json")
             with open(judge_path, 'w') as f:
                 json.dump(judge_history, f, indent=2)
 
-            # If no candidate won, increment consecutive losses
-            if best_challenger_label is None and best_attempt is not None:
-                consecutive_losses += 1
-                print(f"[Judge] No candidate beat the best. Consecutive losses: {consecutive_losses}")
-
-            # Use the winning candidate's result (or the informed regen) for learnings/strategy
-            winning_result = None
-            if best_challenger_result:
-                winning_result = best_challenger_result
-            elif candidates:
-                winning_result = candidates[0][2]
-
-            if winning_result:
-                learning = winning_result.get("learnings")
-                strategy = winning_result.get("strategy_summary")
-
-                if learning:
-                    new_entry = {"iteration": i + 1, "learning": learning}
-                    accumulated_learnings = deduplicate_learnings(
-                        accumulated_learnings, new_entry, max_count=5,
-                    )
-                    learnings_path = os.path.join(output_dir, "learnings.json")
-                    with open(learnings_path, 'w') as f:
-                        json.dump(accumulated_learnings, f, indent=2)
-
-                previous_strategy = strategy if strategy else ""
-                if strategy:
-                    strategy_path = os.path.join(output_dir, "latest_strategy.json")
-                    with open(strategy_path, 'w') as f:
-                        json.dump({"iteration": i + 1, "strategy": strategy}, f, indent=2)
-
-            # Store judge feedback for next iteration
-            if best_challenger_judge:
-                winner_scores = best_challenger_judge.get("scores", {}).get(best_challenger_label) if best_challenger_label else None
-                last_judge_feedback = {
-                    "winner": "B" if best_challenger_label else "A",
-                    "reasoning": best_challenger_judge.get("reasoning", ""),
-                    "confidence": best_challenger_judge.get("confidence", "medium"),
-                    "compared_best_attempt": runner_up_attempt,
-                    "compared_new_attempt": best_attempt,
-                    "weakest_criterion": best_challenger_judge.get("weakest_criterion"),
-                    "specific_improvement": best_challenger_judge.get("specific_improvement"),
-                    "scores_best": winner_scores,
-                }
-            elif judge_history:
-                last_record = judge_history[-1]
-                last_judge_feedback = {
-                    "winner": "A" if last_record.get("winner_label") == "best" else "B",
-                    "reasoning": last_record.get("reasoning", ""),
-                    "confidence": last_record.get("confidence", "low"),
-                    "compared_best_attempt": best_attempt,
-                    "compared_new_attempt": last_record.get("new_best_attempt"),
-                    "weakest_criterion": last_record.get("weakest_criterion"),
-                    "specific_improvement": last_record.get("specific_improvement"),
-                }
-
-            # Store full results for monitoring
+            # Store full results
             all_results.append({
                 "iteration": i + 1,
                 "num_candidates": len(candidates),
                 "candidate_types": [c[0] for c in candidates],
-                "winning_candidate": best_challenger_label,
-                "analysis": winning_result.get("analysis", "") if winning_result else "",
-                "learnings": winning_result.get("learnings", "") if winning_result else "",
+                "any_component_updated": any_component_updated,
+                "staleness": dict(component_staleness),
             })
 
-            # Early stopping
-            if consecutive_losses >= max_stale_iterations:
-                print(f"\n[Early stop] Best hasn't changed in {consecutive_losses} iterations. Stopping.")
+            # Early stopping: all components are stale
+            min_staleness = min(component_staleness.values()) if component_staleness else 0
+            if min_staleness >= max_component_staleness:
+                print(f"\n[Early stop] All components stale for {min_staleness}+ iterations. Stopping.")
                 break
 
+        # === FINAL OUTPUTS ===
         # Take final screenshot
         print("\n[Final] Taking final screenshot...")
         final_svg = controller.take_screenshot()
         if final_svg:
-            # Rename to match iteration numbering
             screenshot_dir_path = os.path.dirname(final_svg)
             final_name = f"iteration_{canvas_shows_attempt}.svg" if canvas_shows_attempt else "iteration_final.svg"
             new_final_path = os.path.join(screenshot_dir_path, final_name)
             os.rename(final_svg, new_final_path)
             final_svg = new_final_path
             print(f"[Final] {final_svg}")
-            # Also generate cropped PNG for the final screenshot
             final_png_base64 = svg_to_png_base64(final_svg)
             if final_png_base64:
                 final_png_path = final_svg.replace('.svg', '_cropped.png')
@@ -3236,60 +3673,55 @@ def run_visual_feedback_loop(
                     f.write(base64.standard_b64decode(final_png_base64))
                 print(f"[Final Cropped PNG] {final_png_path}")
 
-        # Save all iteration scripts
+        # Save iteration scripts
         scripts_path = os.path.join(output_dir, "iteration_scripts.json")
         with open(scripts_path, 'w') as f:
             json.dump(iteration_scripts, f, indent=2)
         print(f"\n[Saved] All scripts: {scripts_path}")
 
-        # Save full results (analyses, strategies, learnings)
+        # Save results
         if all_results:
             results_path = os.path.join(output_dir, "iteration_results.json")
             with open(results_path, 'w') as f:
                 json.dump(all_results, f, indent=2)
-            print(f"[Saved] Results (analyses/learnings): {results_path}")
+            print(f"[Saved] Results: {results_path}")
 
-        # Save accumulated learnings summary
+        # Save learnings
         if accumulated_learnings:
             learnings_path = os.path.join(output_dir, "learnings.json")
             with open(learnings_path, 'w') as f:
                 json.dump(accumulated_learnings, f, indent=2)
             print(f"[Saved] Learnings: {learnings_path}")
 
-        # Generate demo script from the BEST attempt (not necessarily the last)
-        if iteration_scripts:
-            # Find the best attempt's script
-            best_script = None
-            source_attempt = None
-            if best_attempt:
-                # Find the script for the best attempt
-                for script_entry in iteration_scripts:
-                    if script_entry["iteration"] == best_attempt:
-                        best_script = script_entry["actions"]
-                        source_attempt = best_attempt
-                        break
-            # Fallback to last successful iteration if best not found
-            if not best_script:
-                best_script = iteration_scripts[-1]["actions"]
-                source_attempt = iteration_scripts[-1]["iteration"]
+        # Generate demo script from the composite best
+        if library.best:
+            composite_actions = library.get_composite_actions()
+            if composite_actions:
+                demo_script = generate_demo_script(composite_actions)
+                script_path = os.path.join(output_dir, "generated_demo.py")
+                with open(script_path, 'w') as f:
+                    f.write(demo_script)
+                source_components = {n: v.iteration for n, v in library.best.items()}
+                print(f"[Saved] Demo script (composite from: {source_components}): {script_path}")
 
+                # Save best info
+                best_info_path = os.path.join(output_dir, "best_iteration.json")
+                with open(best_info_path, 'w') as f:
+                    json.dump({
+                        "type": "component_composite",
+                        "components": source_components,
+                        "library": library.to_dict(),
+                        "total_iterations": iterations,
+                    }, f, indent=2)
+                print(f"[Saved] Best iteration info: {best_info_path}")
+        elif iteration_scripts:
+            # Fallback: use last script if no library populated
+            best_script = iteration_scripts[-1]["actions"]
             demo_script = generate_demo_script(best_script)
             script_path = os.path.join(output_dir, "generated_demo.py")
             with open(script_path, 'w') as f:
                 f.write(demo_script)
-            print(f"[Saved] Demo script (from best Attempt {source_attempt}): {script_path}")
-
-            # Also save info about which attempt was best (and runner-up)
-            best_info_path = os.path.join(output_dir, "best_iteration.json")
-            with open(best_info_path, 'w') as f:
-                json.dump({
-                    "best_attempt": best_attempt,
-                    "reason": best_reason,
-                    "runner_up_attempt": runner_up_attempt,
-                    "runner_up_reason": runner_up_reason,
-                    "total_iterations": iterations,
-                }, f, indent=2)
-            print(f"[Saved] Best iteration info: {best_info_path}")
+            print(f"[Saved] Demo script (fallback): {script_path}")
 
     finally:
         controller.stop()

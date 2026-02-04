@@ -69,6 +69,9 @@ test:
 lint:
 	@.venv/bin/ruff check purple_tui/ tools/ scripts/ tests/
 
+lint-fix:
+	@.venv/bin/ruff check purple_tui/ tools/ scripts/ tests/ --fix
+
 build-packs:
 	@echo "Building content packs..."
 	@cd packs/core-emoji && tar -czvf ../core-emoji.purplepack manifest.json content/

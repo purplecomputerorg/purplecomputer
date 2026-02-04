@@ -169,6 +169,9 @@ exec alacritty
 XINITRC
 chmod +x ~/.xinitrc
 
+# Clean up old scripts from ~/bin (moved to /usr/local/bin)
+rm -f ~/bin/startx-tiling ~/bin/startx-purple
+
 # startx wrapper: always uses our .xinitrc (Ubuntu's system xinitrc ignores it)
 sudo tee /usr/local/bin/startx-purple > /dev/null << 'SPX'
 #!/bin/bash

@@ -33,12 +33,14 @@ import pty
 import random
 import re
 import select
+import shutil
 import struct
 import subprocess
 import sys
 import termios
 import fcntl
 import time
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -3239,6 +3241,132 @@ For each component pair, score on these criteria (1-5):
     return results
 
 
+def judge_components_human(
+    candidate_crops: dict[str, str],
+    library: 'ComponentLibrary',
+    goal: str,
+) -> dict[str, dict]:
+    """Judge each component using interactive human input instead of AI.
+
+    Shows candidate and library crops side-by-side, asks human to pick a winner.
+    Returns same format as judge_components_batch().
+    """
+    from PIL import Image
+
+    has_feh = shutil.which('feh') is not None
+    if not has_feh:
+        print("[Human Judge] feh not found. Install with: sudo apt install feh")
+        print("[Human Judge] Will print file paths for manual viewing instead.")
+
+    results = {}
+
+    # Build pairs (same logic as judge_components_batch)
+    pairs = []
+    for name in library.component_order:
+        if name in candidate_crops and name in library.best and library.best[name].image_base64:
+            pairs.append(name)
+
+    for name in pairs:
+        cand_crop_b64 = candidate_crops[name]
+        lib_crop_b64 = library.best[name].image_base64
+
+        # Decode images
+        cand_img = Image.open(io.BytesIO(base64.standard_b64decode(cand_crop_b64)))
+        lib_img = Image.open(io.BytesIO(base64.standard_b64decode(lib_crop_b64)))
+
+        # Randomize left/right to avoid positional bias
+        swapped = random.choice([True, False])
+        if swapped:
+            left_img, right_img = lib_img, cand_img
+        else:
+            left_img, right_img = cand_img, lib_img
+
+        # Build side-by-side composite with labels
+        gap = 20
+        label_height = 30
+        max_h = max(left_img.height, right_img.height)
+        composite_w = left_img.width + gap + right_img.width
+        composite_h = max_h + label_height
+        composite = Image.new("RGB", (composite_w, composite_h), (40, 40, 40))
+        composite.paste(left_img, (0, label_height))
+        composite.paste(right_img, (left_img.width + gap, label_height))
+
+        # Add number labels using simple pixel drawing (no font dependency)
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(composite)
+        draw.text((left_img.width // 2 - 5, 5), "1", fill=(255, 255, 255))
+        draw.text((left_img.width + gap + right_img.width // 2 - 5, 5), "2", fill=(255, 255, 255))
+
+        # Save to temp file and display
+        tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix=f'judge_{name}_')
+        composite.save(tmp.name)
+        tmp.close()
+
+        feh_proc = None
+        try:
+            if has_feh:
+                feh_proc = subprocess.Popen(
+                    ['feh', '--scale-down', '--title', f'Component: {name}', tmp.name],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            else:
+                print(f"[Human Judge] View: {tmp.name}")
+
+            # Prompt for choice
+            while True:
+                choice = input(f'\nComponent "{name}" ({goal}): enter 1 or 2 (s to skip): ').strip().lower()
+                if choice in ('1', '2', 's'):
+                    break
+                print("Please enter 1, 2, or s.")
+
+            feedback = ""
+            if choice != 's':
+                feedback = input("Feedback (optional, Enter to skip): ").strip()
+
+            if choice == 's':
+                winner = "library"  # keep current on skip
+                reasoning = "Skipped by human judge"
+            else:
+                picked = int(choice)
+                # Map back through randomization
+                if swapped:
+                    # 1=library, 2=candidate
+                    winner = "library" if picked == 1 else "candidate"
+                else:
+                    # 1=candidate, 2=library
+                    winner = "candidate" if picked == 1 else "library"
+                reasoning = feedback if feedback else "Human judge preference"
+
+            results[name] = {
+                "winner": winner,
+                "reasoning": reasoning,
+                "scores_candidate": None,
+                "scores_library": None,
+            }
+            print(f"[Human Judge] {name}: {winner} wins ({reasoning[:60]})")
+
+        finally:
+            if feh_proc:
+                feh_proc.terminate()
+                feh_proc.wait()
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+    # Components with no library version: candidate wins by default
+    for name in candidate_crops:
+        if name not in results:
+            results[name] = {
+                "winner": "candidate",
+                "reasoning": "No library version to compare against",
+                "scores_candidate": None,
+                "scores_library": None,
+            }
+
+    return results
+
+
 def check_composite_coherence(
     new_composite_base64: str,
     old_composite_base64: str,
@@ -3357,6 +3485,7 @@ def run_visual_feedback_loop(
     reference_image: str = None,
     max_candidates: int = 3,
     initial_library: 'ComponentLibrary' = None,
+    human_judge: bool = False,
 ) -> None:
     """Run the AI drawing loop with component-based visual feedback.
 
@@ -3713,14 +3842,21 @@ def run_visual_feedback_loop(
                 else:
                     # Normal case: per-component judging against library
                     print(f"\n[Component Judge] Judging candidate {label} components against library...")
-                    comp_results = judge_components_batch(
-                        candidate_crops=component_crops,
-                        library=library,
-                        goal=goal,
-                        api_key=api_key,
-                        judge_model=judge_model,
-                        visual_identity=visual_identity,
-                    )
+                    if human_judge:
+                        comp_results = judge_components_human(
+                            candidate_crops=component_crops,
+                            library=library,
+                            goal=goal,
+                        )
+                    else:
+                        comp_results = judge_components_batch(
+                            candidate_crops=component_crops,
+                            library=library,
+                            goal=goal,
+                            api_key=api_key,
+                            judge_model=judge_model,
+                            visual_identity=visual_identity,
+                        )
 
                     # Extract per-component text from the response
                     comp_texts = extract_component_texts(c_result.get("raw_response", ""))
@@ -3764,8 +3900,8 @@ def run_visual_feedback_loop(
                     if new_composite_png:
                         canvas_shows_attempt = composite_label
 
-                        # Coherence check
-                        if old_composite:
+                        # Coherence check (skip for human judge)
+                        if not human_judge and old_composite:
                             coherent = check_composite_coherence(
                                 new_composite_base64=new_composite_png,
                                 old_composite_base64=old_composite,
@@ -4123,10 +4259,16 @@ Output (auto-generated timestamped folder):
                         help="Model for drawing execution (default: claude-sonnet-4-20250514)")
     parser.add_argument("--judge-model", default="claude-sonnet-4-20250514",
                         help="Model for judging comparisons (default: claude-sonnet-4-20250514)")
-    parser.add_argument("--max-candidates", type=int, default=3,
-                        help="Max candidates per iteration: mutation, informed regen, fresh regen (default: 3)")
+    parser.add_argument("--max-candidates", type=int, default=None,
+                        help="Max candidates per iteration: mutation, informed regen, fresh regen (default: 3, or 1 with --human)")
+    parser.add_argument("--human", action="store_true", default=False,
+                        help="Use human judging instead of AI (shows images side-by-side)")
 
     args = parser.parse_args()
+
+    # Default max_candidates: 1 for human judge (less judging burden), 3 otherwise
+    if args.max_candidates is None:
+        args.max_candidates = 1 if args.human else 3
 
     # Validate args
     existing_plan = None
@@ -4207,7 +4349,7 @@ Output (auto-generated timestamped folder):
     print(f"Iterations: {args.iterations}")
     print(f"Max candidates per iteration: {args.max_candidates}")
     print(f"Execution model: {args.execution_model}")
-    print(f"Judge model: {args.judge_model}")
+    print(f"Judge: {'human' if args.human else args.judge_model}")
     print(f"Output: {output_dir}/")
     print("="*60)
     print()
@@ -4222,6 +4364,7 @@ Output (auto-generated timestamped folder):
         reference_image=args.reference,
         max_candidates=args.max_candidates,
         initial_library=initial_library,
+        human_judge=args.human,
     )
 
 

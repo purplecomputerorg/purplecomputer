@@ -903,6 +903,7 @@ Before planning coordinates, analyze the subject:
 2. **Common mistakes**: What similar-looking thing might you accidentally draw instead?
 3. **Key proportions**: What proportions are critical for recognition?
 4. **Pixel art translation**: At {CANVAS_WIDTH}x{CANVAS_HEIGHT} resolution, how to capture these features?
+5. **Structural connections**: Where do parts physically attach? For each connection, specify which part connects to which and WHERE (e.g., 'fronds grow from the TOP of the trunk, not the middle')
 
 ## YOUR TASK
 
@@ -939,7 +940,8 @@ Plan compositions that are FUN TO WATCH being drawn:
       "defining_features": ["feature 1", "feature 2", "feature 3"],
       "common_mistakes": ["What you might accidentally draw instead"],
       "key_proportions": "Critical proportions for recognition",
-      "pixel_art_notes": "How to capture defining features at {CANVAS_WIDTH}x{CANVAS_HEIGHT}"
+      "pixel_art_notes": "How to capture defining features at {CANVAS_WIDTH}x{CANVAS_HEIGHT}",
+      "structural_connections": ["fronds attach at the TOP of the trunk", "legs attach at the BOTTOM of the body"]
     }},
     "description": "Brief description of the final drawing",
     "composition": {{
@@ -1196,6 +1198,8 @@ For complex objects, draw each body part as a SEPARATE filled shape at its plann
 
 Each part is its own group of horizontal fills at different x/y ranges.
 Do NOT try to draw the whole figure with one set of lines.
+
+**CONNECTION POINTS ARE CRITICAL:** Check WHERE each part attaches. Tree fronds start at the TOP of the trunk. Legs attach at the BOTTOM of a body. Arms attach at the SIDES of a torso, not the middle. Get connection points right BEFORE worrying about details. Wrong attachment points make the drawing look broken even if individual shapes are good.
 
 ## REGENERATIVE APPROACH
 
@@ -1610,6 +1614,12 @@ You may change 70-100% of the lines. Keep only the general layout from the best 
                 plan_section += f"**Proportions:** {vi['key_proportions']}\n"
             if vi.get('pixel_art_notes'):
                 plan_section += f"**Pixel art approach:** {vi['pixel_art_notes']}\n"
+            if vi.get('structural_connections'):
+                connections = vi['structural_connections']
+                if isinstance(connections, list):
+                    plan_section += "**CONNECTION POINTS:** " + "; ".join(connections) + "\n"
+                else:
+                    plan_section += f"**CONNECTION POINTS:** {connections}\n"
 
     # Option D: Get progressive complexity guidance
     complexity_section = get_complexity_guidance(iteration, max_iterations)
@@ -1780,6 +1790,11 @@ def _format_judge_visual_identity(visual_identity: dict = None) -> str:
         if isinstance(mistakes, list):
             mistakes = "; ".join(mistakes)
         lines.append(f"PENALIZE if the drawing shows these mistakes: {mistakes}")
+    if visual_identity.get('structural_connections'):
+        connections = visual_identity['structural_connections']
+        if isinstance(connections, list):
+            connections = "; ".join(connections)
+        lines.append(f"STRUCTURAL CONNECTIONS: Check that these are correct: {connections}")
     if lines:
         return "\n".join(lines) + "\n\n"
     return ""
@@ -1822,9 +1837,10 @@ You will see two images: Image A and Image B.
 Evaluate based on (in priority order):
 1. Shape accuracy (most important): Do the shapes look like the goal? Organic oval bodies beat flat rectangles. Smooth tapered tails beat stepped staircases. Curved edges beat straight edges.
 2. Recognizable structure: Can you tell what it is at a glance?
-3. Proportions: Are body parts the right relative sizes?
-4. Color accuracy: Are the colors appropriate? (lower priority than shape)
-5. Overall quality: Shading, detail, completeness
+3. Structural accuracy: Do parts connect at correct positions? Fronds should grow from the TOP of a trunk, legs from the BOTTOM of a body, branches from the SIDES of a trunk. Anatomically wrong connections are a major penalty even if individual shapes look good.
+4. Proportions: Are body parts the right relative sizes?
+5. Color accuracy: Are the colors appropriate? (lower priority than shape)
+6. Overall quality: Shading, detail, completeness
 
 SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be. These are common pixel art mistakes.
 

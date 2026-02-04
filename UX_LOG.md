@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Doodle AI: structural connection accuracy**: AI now plans where parts attach to each other, draws connection points correctly (e.g., fronds at top of trunk), and judge penalizes anatomically wrong connections
 - **Demo playback: fix right-side artifacts** by clamping cursor coordinates to canvas bounds in demo script generation
 - **Doodle AI: entertaining draw order**: AI now draws the subject first with per-element color mixing (fun to watch), minimizes large monotone background fills (boring to watch), and judge penalizes flat backgrounds
 - **Doodle AI: better shape judging and refinement**: AI judge now evaluates shape quality (organic curves vs boxy rectangles), refinement escalates from targeted tweaks to full restructuring after repeated losses, and color mixing recipes are passed through to the drawing AI

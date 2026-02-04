@@ -3671,15 +3671,21 @@ def run_visual_feedback_loop(
                     # First iteration: all components from this candidate become the library
                     # Extract per-component text from the response
                     comp_texts = extract_component_texts(c_result.get("raw_response", ""))
+                    # Check if any actions have component tags at all
+                    any_tagged = any(a.get("component") for a in c_result["actions"])
                     for name in library.component_order:
                         if name in component_crops:
                             # Get component-specific actions
                             comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
                             comp_text = comp_texts.get(name, "")
-                            if not comp_actions:
-                                # Fallback: use all actions if no component tags
-                                comp_actions = c_result["actions"]
-                                comp_text = c_compact
+                            if not comp_actions and not any_tagged:
+                                # No component tags at all: assign all actions to first component only
+                                if name == library.component_order[0]:
+                                    comp_actions = c_result["actions"]
+                                    comp_text = c_compact
+                                else:
+                                    # Other components get empty actions (image crop only)
+                                    comp_actions = []
                             library.update_component(name, ComponentVersion(
                                 iteration=attempt_label,
                                 actions_text=comp_text,
@@ -3711,8 +3717,10 @@ def run_visual_feedback_loop(
                             comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
                             comp_text = comp_texts.get(name, "")
                             if not comp_actions:
-                                comp_actions = c_result["actions"]
-                                comp_text = c_compact
+                                # Can't isolate this component's actions, skip update
+                                print(f"[Library] ✗ '{name}' won judging but has no tagged actions, skipping")
+                                component_staleness[name] = component_staleness.get(name, 0) + 1
+                                continue
                             library.update_component(name, ComponentVersion(
                                 iteration=attempt_label,
                                 actions_text=comp_text,

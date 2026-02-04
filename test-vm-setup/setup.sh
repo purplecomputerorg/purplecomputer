@@ -137,6 +137,17 @@ cat > ~/.config/i3/config << 'I3CFG'
 font pango:monospace 10
 default_border none
 default_floating_border none
+
+# Force horizontal split so new windows appear side-by-side
+default_orientation horizontal
+workspace_layout splith
+
+# Use Alt as modifier
+set $mod Mod1
+bindsym $mod+Return exec alacritty
+bindsym $mod+h focus left
+bindsym $mod+l focus right
+
 bar {
     mode invisible
 }

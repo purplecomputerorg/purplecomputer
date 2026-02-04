@@ -3288,7 +3288,6 @@ def judge_components_human(
     from PIL import Image
 
     has_feh = shutil.which('feh') is not None
-    has_xdotool = shutil.which('xdotool') is not None
     if not has_feh:
         print("[Human Judge] feh not found. Install with: sudo apt install feh")
         print("[Human Judge] Will print file paths for manual viewing instead.")
@@ -3319,69 +3318,63 @@ def judge_components_human(
                 candidate_full_image, library.composition, name)
             lib_ctx = _highlight_component_on_canvas(
                 library_full_image, library.composition, name)
-            if swapped:
-                left_img, right_img = lib_ctx, cand_ctx
-            else:
-                left_img, right_img = cand_ctx, lib_ctx
         else:
             # Fallback: use isolated crops if full images unavailable
-            cand_img = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
-            lib_img = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
-            # Scale up small crops
-            min_width = 400
-            if cand_img.width < min_width:
-                scale = min_width // cand_img.width
-                cand_img = cand_img.resize(
-                    (cand_img.width * scale, cand_img.height * scale), Image.NEAREST)
-                lib_img = lib_img.resize(
-                    (lib_img.width * scale, lib_img.height * scale), Image.NEAREST)
-            if swapped:
-                left_img, right_img = lib_img, cand_img
-            else:
-                left_img, right_img = cand_img, lib_img
+            cand_ctx = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
+            lib_ctx = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
 
-        # Build side-by-side composite with labels
+        if swapped:
+            left_img, right_img = lib_ctx, cand_ctx
+        else:
+            left_img, right_img = cand_ctx, lib_ctx
+
+        # Scale both images up to at least 800px wide (nearest neighbor for pixel art)
+        for_scale = [left_img, right_img]
+        scaled = []
+        for img in for_scale:
+            if img.width < 800:
+                s = max(2, 800 // img.width)
+                img = img.resize((img.width * s, img.height * s), Image.NEAREST)
+            scaled.append(img)
+        left_img, right_img = scaled
+
+        # Build side-by-side composite: [1: left] [gap] [2: right]
         from PIL import ImageDraw
-        gap = 20
-        label_height = 40
+        gap = 10
+        label_h = 32
         max_h = max(left_img.height, right_img.height)
         composite_w = left_img.width + gap + right_img.width
-        composite_h = max_h + label_height
-        composite = Image.new("RGB", (composite_w, composite_h), (40, 40, 40))
-        composite.paste(left_img, (0, label_height))
-        composite.paste(right_img, (left_img.width + gap, label_height))
+        composite_h = max_h + label_h
+        composite = Image.new("RGB", (composite_w, composite_h), (30, 30, 30))
+        composite.paste(left_img, (0, label_h))
+        composite.paste(right_img, (left_img.width + gap, label_h))
 
+        # Draw labels: "1" over left, "2" over right, component name in center
         draw = ImageDraw.Draw(composite)
-        draw.text((left_img.width // 2 - 10, 5), "1", fill=(255, 255, 255), font=font)
-        draw.text((left_img.width + gap + right_img.width // 2 - 10, 5), "2", fill=(255, 255, 255), font=font)
-        # Component name centered at top
-        draw.text((composite_w // 2 - 40, 5), f"[{name}]", fill=(255, 200, 100), font=font)
+        draw.text((4, 2), "1", fill=(255, 255, 255), font=font)
+        draw.text((left_img.width + gap + 4, 2), "2", fill=(255, 255, 255), font=font)
+        draw.text((composite_w // 2 - 60, 2), name, fill=(255, 200, 100), font=font)
 
         # Save to temp file and display
         tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix=f'judge_{name}_')
         composite.save(tmp.name)
         tmp.close()
 
-        feh_proc = None
         try:
             if has_feh:
-                feh_proc = subprocess.Popen(
-                    ['feh', '--zoom', 'fill', '--title', f'Component: {name}', tmp.name],
+                print(f'\n[Human Judge] Showing "{name}". Close feh (Esc or q) to choose.')
+                # Blocking: feh runs fullscreen, user reviews then closes it
+                subprocess.run(
+                    ['feh', '--fullscreen', '--scale-down', '--image-bg', 'black',
+                     '--title', f'Component: {name}', tmp.name],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
-                time.sleep(0.5)
-                # Refocus terminal so input() works
-                if has_xdotool:
-                    subprocess.run(
-                        ['xdotool', 'search', '--class', 'Alacritty', 'windowfocus'],
-                        capture_output=True,
-                    )
             else:
                 print(f"[Human Judge] View: {tmp.name}")
 
-            # Prompt for choice
+            # Prompt for choice (after feh closes)
             while True:
-                choice = input(f'\nComponent "{name}" ({goal}): enter 1 or 2 (s to skip): ').strip().lower()
+                choice = input(f'Component "{name}": enter 1 or 2 (s to skip): ').strip().lower()
                 if choice in ('1', '2', 's'):
                     break
                 print("Please enter 1, 2, or s.")
@@ -3413,9 +3406,6 @@ def judge_components_human(
             print(f"[Human Judge] {name}: {winner} wins ({reasoning[:60]})")
 
         finally:
-            if feh_proc:
-                feh_proc.terminate()
-                feh_proc.wait()
             try:
                 os.unlink(tmp.name)
             except OSError:

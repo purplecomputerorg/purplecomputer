@@ -55,12 +55,12 @@ install_if_needed \
     build-essential gcc python3-dev
 
 # Install X11 stack
-echo "[3/7] X11, window managers, and terminal..."
+echo "[3/7] X11 and terminal..."
 install_if_needed \
     xorg xinit xauth x11-xserver-utils \
     xserver-xorg-core xserver-xorg-input-all \
     libgl1-mesa-dri \
-    matchbox-window-manager dwm feh xdotool \
+    matchbox-window-manager feh \
     alacritty xterm \
     libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
     ncurses-term unclutter xkbset evtest
@@ -125,7 +125,7 @@ allowed_users=anybody
 needs_root_rights=yes
 XWRAP
 
-# --- X11 startup and helper scripts ---
+# --- X11 startup ---
 echo "[7/7] Creating X11 startup files..."
 
 # .xinitrc
@@ -154,44 +154,25 @@ command -v unclutter &>/dev/null && unclutter -idle 2 &
 # Purple background
 xsetroot -solid "#2d1b4e"
 
-# Window manager: WM=tiling for side-by-side (dwm), matchbox (default) for fullscreen
-WM="${WM:-matchbox}"
-echo "Starting WM: $WM"
-if [ "$WM" = "tiling" ]; then
-    # dwm must be the exec'd process (manages all windows including Alacritty)
-    alacritty &
-    sleep 0.5
-    exec dwm
-else
-    matchbox-window-manager -use_titlebar no &
-    sleep 0.5
-    exec alacritty
-fi
+# Window manager (matchbox: fullscreen, no titlebar)
+matchbox-window-manager -use_titlebar no &
+sleep 0.5
+
+# Launch Alacritty
+exec alacritty
 XINITRC
 chmod +x ~/.xinitrc
-
-# Clean up old scripts from ~/bin (moved to /usr/local/bin)
-rm -f ~/bin/startx-tiling ~/bin/startx-purple
 
 # startx wrapper: always uses our .xinitrc (Ubuntu's system xinitrc ignores it)
 sudo tee /usr/local/bin/startx-purple > /dev/null << 'SPX'
 #!/bin/bash
-# Start X with Purple Computer's xinitrc
-# Default: matchbox (fullscreen). Set WM=tiling for dwm (side-by-side).
-export WM="${WM:-matchbox}"
 exec /usr/bin/startx "$HOME/.xinitrc"
 SPX
 sudo chmod +x /usr/local/bin/startx-purple
 
-# startx-tiling: launches X with dwm tiling WM
-sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
-#!/bin/bash
-# Start X with dwm tiling WM (for doodle_ai --human, image review, etc.)
-# dwm shows all windows side-by-side automatically (master+stack layout)
-export WM=tiling
-exec startx-purple
-STILING
-sudo chmod +x /usr/local/bin/startx-tiling
+# Clean up old scripts
+rm -f ~/bin/startx-tiling ~/bin/startx-purple
+sudo rm -f /usr/local/bin/startx-tiling
 
 echo ""
 echo "=== Setup Complete ==="
@@ -203,8 +184,6 @@ echo "  3. Run:     startx-purple"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
 echo "  5. Setup:   cd purplecomputer && make setup"
 echo "  6. Run:     make run"
-echo ""
-echo "For doodle AI human judging: startx-tiling (uses dwm tiling WM)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

@@ -55,6 +55,8 @@ sudo apt install -y \
     xserver-xorg-input-all \
     libgl1-mesa-dri \
     matchbox-window-manager \
+    i3 \
+    feh \
     alacritty \
     xterm \
     libxkbcommon-x11-0 \
@@ -153,14 +155,43 @@ command -v unclutter &>/dev/null && unclutter -idle 2 &
 # Purple background
 xsetroot -solid "#2d1b4e"
 
-# Window manager
-matchbox-window-manager -use_titlebar no &
+# Window manager (set WM=i3 for tiling, e.g. for doodle_ai --human)
+WM="${WM:-matchbox}"
+if [ "$WM" = "i3" ]; then
+    # i3 auto-tiles windows side-by-side (useful for image judging)
+    mkdir -p ~/.config/i3
+    cat > ~/.config/i3/config << 'I3CFG'
+# Minimal i3 config for Purple Computer
+font pango:monospace 10
+default_border none
+default_floating_border none
+# No bar
+bar { mode invisible }
+I3CFG
+    i3 &
+else
+    matchbox-window-manager -use_titlebar no &
+fi
 sleep 0.5
 
 # Launch Alacritty (user runs Purple manually)
 exec alacritty
 EOF
 chmod +x ~/.xinitrc
+
+# Create startx-tiling shortcut for i3 tiling mode
+mkdir -p ~/bin
+cat > ~/bin/startx-tiling << 'EOF'
+#!/bin/bash
+# Start X with i3 tiling WM (for doodle_ai --human, etc.)
+WM=i3 exec startx
+EOF
+chmod +x ~/bin/startx-tiling
+
+# Ensure ~/bin is on PATH
+if ! grep -q 'PATH="$HOME/bin:' ~/.profile 2>/dev/null; then
+    echo 'export PATH="$HOME/bin:$PATH"' >> ~/.profile
+fi
 
 echo ""
 echo "=== Setup Complete ==="
@@ -172,6 +203,8 @@ echo "  3. Run:     startx"
 echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecomputer.git"
 echo "  5. Setup:   cd purplecomputer && make setup"
 echo "  6. Run:     make run"
+echo ""
+echo "For doodle AI human judging: startx-tiling (uses i3 tiling WM)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

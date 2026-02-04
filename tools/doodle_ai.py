@@ -3306,13 +3306,13 @@ def judge_components_human(
         try:
             if has_feh:
                 feh_proc = subprocess.Popen(
-                    ['feh', '--scale-down', '--title', f'Component: {name}', tmp.name],
+                    ['feh', '--scale-down', '--auto-zoom', '--title', f'Component: {name}', tmp.name],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
             else:
                 print(f"[Human Judge] View: {tmp.name}")
 
-            # Prompt for choice
+            # Prompt for choice (click terminal first if feh has focus)
             while True:
                 choice = input(f'\nComponent "{name}" ({goal}): enter 1 or 2 (s to skip): ').strip().lower()
                 if choice in ('1', '2', 's'):

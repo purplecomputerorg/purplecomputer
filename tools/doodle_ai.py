@@ -582,6 +582,165 @@ class ComponentLibrary:
         )
 
 
+def reconstruct_library_from_run(png_path: str) -> tuple[dict, 'ComponentLibrary', str]:
+    """Reconstruct a ComponentLibrary from a previous run's screenshot PNG.
+
+    Given a screenshot PNG path (e.g. .../screenshots/iteration_2b_refinement_cropped.png),
+    finds the output directory, loads the plan and iteration scripts, and rebuilds
+    the component library state at that iteration.
+
+    Returns (plan, library, goal).
+    """
+    png_path = os.path.abspath(png_path)
+
+    # Find output dir: go up from screenshots/ to parent
+    png_dir = os.path.dirname(png_path)
+    if os.path.basename(png_dir) == "screenshots":
+        output_dir = os.path.dirname(png_dir)
+    else:
+        raise FileNotFoundError(f"Expected PNG to be inside a screenshots/ directory: {png_path}")
+
+    # Load plan
+    plan_path = os.path.join(output_dir, "plan.json")
+    if not os.path.exists(plan_path):
+        raise FileNotFoundError(f"No plan.json found in {output_dir}")
+    with open(plan_path) as f:
+        plan = json.load(f)
+    goal = plan.get('description', 'drawing')
+
+    # Extract attempt label from filename (e.g. "iteration_2b_refinement_cropped.png" -> "2b")
+    basename = os.path.basename(png_path)
+    m = re.search(r'iteration_(\w+?)_', basename)
+    if not m:
+        raise ValueError(f"Could not extract iteration label from filename: {basename}")
+    target_label = m.group(1)
+
+    # Load iteration scripts
+    scripts_path = os.path.join(output_dir, "iteration_scripts.json")
+    if not os.path.exists(scripts_path):
+        raise FileNotFoundError(f"No iteration_scripts.json found in {output_dir}")
+    with open(scripts_path) as f:
+        iteration_scripts = json.load(f)
+
+    # Find matching entry
+    entry = None
+    for e in iteration_scripts:
+        if e["iteration"] == target_label:
+            entry = e
+            break
+    if entry is None:
+        available = [e["iteration"] for e in iteration_scripts]
+        raise ValueError(f"No iteration '{target_label}' found in iteration_scripts.json (available: {available})")
+
+    # Reconstruct library from compact_actions_text
+    library = ComponentLibrary.from_plan(plan)
+    compact_text = entry.get("compact_actions_text", "")
+    actions = entry.get("actions", [])
+
+    if compact_text:
+        # Parse component texts from the compact format with ## headers
+        comp_texts = extract_component_texts(compact_text)
+        for name in library.component_order:
+            comp_text = comp_texts.get(name, "")
+            # Get component-specific actions
+            comp_actions = [a for a in actions if a.get("component") == name]
+            if not comp_actions and comp_text:
+                # Re-parse from compact text for this component
+                comp_actions = parse_compact_actions(f"## {name}\n{comp_text}") or []
+            if comp_text or comp_actions:
+                library.update_component(name, ComponentVersion(
+                    iteration=target_label,
+                    actions_text=comp_text,
+                    actions=comp_actions,
+                ))
+    else:
+        # No compact text: use actions grouped by component tag
+        for name in library.component_order:
+            comp_actions = [a for a in actions if a.get("component") == name]
+            if comp_actions:
+                library.update_component(name, ComponentVersion(
+                    iteration=target_label,
+                    actions_text="",
+                    actions=comp_actions,
+                ))
+
+    populated = [n for n in library.component_order if n in library.best]
+    print(f"[Reconstruct] Loaded {len(populated)}/{len(library.component_order)} components from iteration {target_label}")
+
+    return plan, library, goal
+
+
+def reconstruct_library_from_dir(dir_path: str) -> tuple[dict, 'ComponentLibrary', str]:
+    """Reconstruct a ComponentLibrary from a previous run's output directory.
+
+    Loads the plan and component_library.json (or iteration_scripts.json as fallback),
+    and rebuilds the library to its final state.
+
+    Returns (plan, library, goal).
+    """
+    dir_path = os.path.abspath(dir_path)
+
+    # Load plan
+    plan_path = os.path.join(dir_path, "plan.json")
+    if not os.path.exists(plan_path):
+        raise FileNotFoundError(f"No plan.json found in {dir_path}")
+    with open(plan_path) as f:
+        plan = json.load(f)
+    goal = plan.get('description', 'drawing')
+
+    library = ComponentLibrary.from_plan(plan)
+
+    # Try component_library.json first (has actions_text per component)
+    lib_path = os.path.join(dir_path, "component_library.json")
+    if os.path.exists(lib_path):
+        with open(lib_path) as f:
+            lib_data = json.load(f)
+        components = lib_data.get("components", {})
+        for name in library.component_order:
+            if name in components:
+                comp = components[name]
+                actions_text = comp.get("actions_text", "")
+                # Re-parse actions from text
+                comp_actions = (parse_compact_actions(f"## {name}\n{actions_text}") or []) if actions_text else []
+                library.update_component(name, ComponentVersion(
+                    iteration=comp.get("iteration", "?"),
+                    actions_text=actions_text,
+                    actions=comp_actions,
+                    scores=comp.get("scores"),
+                ))
+        populated = [n for n in library.component_order if n in library.best]
+        print(f"[Reconstruct] Loaded {len(populated)}/{len(library.component_order)} components from component_library.json")
+    else:
+        # Fallback: use last entry in iteration_scripts.json
+        scripts_path = os.path.join(dir_path, "iteration_scripts.json")
+        if os.path.exists(scripts_path):
+            with open(scripts_path) as f:
+                iteration_scripts = json.load(f)
+            if iteration_scripts:
+                entry = iteration_scripts[-1]
+                compact_text = entry.get("compact_actions_text", "")
+                actions = entry.get("actions", [])
+                if compact_text:
+                    comp_texts = extract_component_texts(compact_text)
+                    for name in library.component_order:
+                        comp_text = comp_texts.get(name, "")
+                        comp_actions = [a for a in actions if a.get("component") == name]
+                        if not comp_actions and comp_text:
+                            comp_actions = parse_compact_actions(f"## {name}\n{comp_text}") or []
+                        if comp_text or comp_actions:
+                            library.update_component(name, ComponentVersion(
+                                iteration=entry["iteration"],
+                                actions_text=comp_text,
+                                actions=comp_actions,
+                            ))
+                populated = [n for n in library.component_order if n in library.best]
+                print(f"[Reconstruct] Loaded {len(populated)}/{len(library.component_order)} components from iteration_scripts.json (last entry)")
+        else:
+            print(f"[Reconstruct] Warning: no component_library.json or iteration_scripts.json in {dir_path}")
+
+    return plan, library, goal
+
+
 # =============================================================================
 # SVG TO PNG CONVERSION
 # =============================================================================
@@ -3183,6 +3342,7 @@ def run_visual_feedback_loop(
     existing_plan: dict = None,
     reference_image: str = None,
     max_candidates: int = 3,
+    initial_library: 'ComponentLibrary' = None,
 ) -> None:
     """Run the AI drawing loop with component-based visual feedback.
 
@@ -3191,6 +3351,7 @@ def run_visual_feedback_loop(
     from different candidates/iterations.
 
     If existing_plan is provided, skips the planning phase and uses that plan directly.
+    If initial_library is provided, uses it as the starting state (skips first-iteration init).
     """
 
     # Load from tools/.env if present
@@ -3248,9 +3409,14 @@ def run_visual_feedback_loop(
             json.dump(plan, f, indent=2)
         print(f"[Saved] Plan: {plan_path}")
 
-        # Initialize component library from plan
-        library = ComponentLibrary.from_plan(plan)
-        print(f"[Library] Initialized with {len(library.component_order)} components: {', '.join(library.component_order)}")
+        # Initialize component library from plan (or use provided one)
+        if initial_library is not None:
+            library = initial_library
+            populated = [n for n in library.component_order if n in library.best]
+            print(f"[Library] Using pre-populated library with {len(populated)}/{len(library.component_order)} components")
+        else:
+            library = ComponentLibrary.from_plan(plan)
+            print(f"[Library] Initialized with {len(library.component_order)} components: {', '.join(library.component_order)}")
 
         # Switch to Doodle mode and enter paint mode
         print("\n[Setup] Switching to Doodle mode...")
@@ -3460,7 +3626,7 @@ def run_visual_feedback_loop(
                     continue
 
                 canvas_shows_attempt = attempt_label
-                iteration_scripts.append({"iteration": attempt_label, "actions": c_actions})
+                iteration_scripts.append({"iteration": attempt_label, "actions": c_actions, "compact_actions_text": c_compact})
 
                 # Extract component crops
                 component_crops = extract_all_components(c_png, library.composition)
@@ -3880,12 +4046,15 @@ Examples:
     # Use a reference image
     python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
 
-    # Refine a previous run
-    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "add a bird on a branch"
-    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "make trunk thicker" --iterations 3
+    # Resume from a specific screenshot
+    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png
+    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png --instruction "make trunk thicker"
 
-    # Refine with a reference image
-    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "make it look more like this" --reference palm_photo.jpg
+    # Resume from final state of a run
+    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP --instruction "add more shading"
+
+    # Legacy: --refine works as an alias for --from <dir>
+    python tools/doodle_ai.py --refine doodle_ai_output/TIMESTAMP --instruction "add a bird"
 
 Requirements:
     - ANTHROPIC_API_KEY environment variable
@@ -3900,11 +4069,13 @@ Output (auto-generated timestamped folder):
     - generated_demo.py: Demo script for Purple Computer
         """
     )
-    parser.add_argument("--goal", default=None, help="What to draw (required unless using --refine)")
+    parser.add_argument("--goal", default=None, help="What to draw (required unless using --from or --refine)")
+    parser.add_argument("--from", dest="from_path", default=None, metavar="PATH",
+                        help="Resume from a previous screenshot PNG or output directory")
     parser.add_argument("--refine", default=None, metavar="PREV_OUTPUT_DIR",
-                        help="Refine a previous run's plan. Pass the output directory containing plan.json")
+                        help="(Deprecated, use --from) Refine a previous run's plan")
     parser.add_argument("--instruction", default=None,
-                        help="How to refine the plan (required with --refine)")
+                        help="How to refine the plan (optional with --from, required with --refine)")
     parser.add_argument("--reference", default=None, metavar="IMAGE_PATH",
                         help="Reference image to guide composition and style (png, jpg, gif, webp)")
     parser.add_argument("--iterations", type=int, default=5, help="Feedback iterations")
@@ -3918,15 +4089,59 @@ Output (auto-generated timestamped folder):
 
     args = parser.parse_args()
 
+    # --refine is an alias for --from <dir>
+    if args.refine and not args.from_path:
+        args.from_path = args.refine
+
     # Validate args
-    if args.refine:
-        if not args.instruction:
+    existing_plan = None
+    initial_library = None
+    goal = args.goal
+
+    if args.from_path:
+        from_path = args.from_path
+        if not os.path.exists(from_path):
+            parser.error(f"Path not found: {from_path}")
+
+        if from_path.lower().endswith('.png'):
+            # Resume from a specific screenshot
+            plan, initial_library, goal_from_plan = reconstruct_library_from_run(from_path)
+        elif os.path.isdir(from_path):
+            # Resume from output directory
+            plan, initial_library, goal_from_plan = reconstruct_library_from_dir(from_path)
+        else:
+            parser.error(f"--from expects a PNG file or output directory, got: {from_path}")
+
+        if not goal:
+            goal = goal_from_plan
+        existing_plan = plan
+
+        # If --instruction provided, refine the plan
+        if args.instruction:
+            load_env_file()
+            api_key = os.environ.get('ANTHROPIC_API_KEY')
+            if not api_key:
+                print("Error: Set ANTHROPIC_API_KEY in tools/.env or environment")
+                sys.exit(1)
+            existing_plan = call_plan_refinement_api(
+                original_plan=plan,
+                instruction=args.instruction,
+                iterations=args.iterations,
+                api_key=api_key,
+                reference_image=args.reference,
+            )
+            # Update library composition if plan refinement changed components
+            new_composition = existing_plan.get('composition', {})
+            if set(new_composition.keys()) != set(initial_library.composition.keys()):
+                print(f"[Warning] Plan refinement changed components. Rebuilding library from new plan.")
+                initial_library = ComponentLibrary.from_plan(existing_plan)
+
+        # Legacy --refine required --instruction
+        if args.refine and not args.from_path.lower().endswith('.png') and not args.instruction:
             parser.error("--instruction is required when using --refine")
-        plan_path = os.path.join(args.refine, "plan.json")
-        if not os.path.exists(plan_path):
-            parser.error(f"No plan.json found in {args.refine}")
-    elif not args.goal:
-        parser.error("--goal is required (unless using --refine)")
+
+    elif not goal:
+        parser.error("--goal is required (unless using --from or --refine)")
 
     if args.reference and not os.path.exists(args.reference):
         parser.error(f"Reference image not found: {args.reference}")
@@ -3934,37 +4149,17 @@ Output (auto-generated timestamped folder):
     # Auto-generate output dir
     output_dir = args.output if args.output else generate_output_dir()
 
-    # Handle refinement: load previous plan, refine it, then run
-    existing_plan = None
-    goal = args.goal
-    if args.refine:
-        plan_path = os.path.join(args.refine, "plan.json")
-        with open(plan_path) as f:
-            original_plan = json.load(f)
-        goal = original_plan.get('description', 'drawing')
-
-        # Load env/API key for refinement call
-        load_env_file()
-        api_key = os.environ.get('ANTHROPIC_API_KEY')
-        if not api_key:
-            print("Error: Set ANTHROPIC_API_KEY in tools/.env or environment")
-            sys.exit(1)
-
-        existing_plan = call_plan_refinement_api(
-            original_plan=original_plan,
-            instruction=args.instruction,
-            iterations=args.iterations,
-            api_key=api_key,
-            reference_image=args.reference,
-        )
-
     print("="*60)
     print("Purple Computer AI Drawing Tool")
     print("="*60)
     if args.reference:
         print(f"Reference: {args.reference}")
-    if args.refine:
-        print(f"Refining: {args.refine}")
+    if args.from_path:
+        print(f"Resuming from: {args.from_path}")
+        if initial_library and initial_library.best:
+            populated = [n for n in initial_library.component_order if n in initial_library.best]
+            print(f"Pre-loaded components: {', '.join(populated)}")
+    if args.instruction:
         print(f"Instruction: {args.instruction}")
     print(f"Goal: {goal}")
     print(f"Iterations: {args.iterations}")
@@ -3984,6 +4179,7 @@ Output (auto-generated timestamped folder):
         existing_plan=existing_plan,
         reference_image=args.reference,
         max_candidates=args.max_candidates,
+        initial_library=initial_library,
     )
 
 

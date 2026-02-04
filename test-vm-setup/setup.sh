@@ -169,7 +169,7 @@ exec alacritty
 XINITRC
 chmod +x ~/.xinitrc
 
-# startx-tiling: launches X with i3 tiling WM
+# startx-tiling: launches X with dwm tiling WM
 sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
 #!/bin/bash
 # Start X with dwm tiling WM (for doodle_ai --human, image review, etc.)
@@ -189,7 +189,7 @@ echo "  4. Clone:   git clone https://github.com/purplecomputerorg/purplecompute
 echo "  5. Setup:   cd purplecomputer && make setup"
 echo "  6. Run:     make run"
 echo ""
-echo "For doodle AI human judging: startx-tiling (uses i3 tiling WM)"
+echo "For doodle AI human judging: startx-tiling (uses dwm tiling WM)"
 echo ""
 echo "Remember: SSH is for editing. Use VM console for testing keyboard."
 echo ""

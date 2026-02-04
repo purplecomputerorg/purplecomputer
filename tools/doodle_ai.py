@@ -530,9 +530,9 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         print(f"[Crop] Cropped to: {cropped.size[0]}x{cropped.size[1]}")
 
         # Resize if larger than needed to reduce API token costs
-        # Canvas cells are small, so ~500x200 pixels is plenty of resolution
-        MAX_WIDTH = 500
-        MAX_HEIGHT = 200
+        # Canvas is 110x30 cells, so 400x160 is plenty of resolution
+        MAX_WIDTH = 400
+        MAX_HEIGHT = 160
         if cropped.width > MAX_WIDTH or cropped.height > MAX_HEIGHT:
             original_size = cropped.size
             # Use Resampling.LANCZOS for Pillow 10+ (falls back to LANCZOS for older)
@@ -1353,6 +1353,31 @@ def load_reference_image(path: str) -> tuple[str, str]:
     return data, media_type
 
 
+def prepare_reference_for_execution(path: str) -> tuple[str, str]:
+    """Load and downsize a reference image for the execution model.
+
+    Returns a small version (max 200x200) to minimize token cost,
+    since the execution model just needs a rough visual target.
+    """
+    from PIL import Image
+
+    img = Image.open(path)
+    resample = getattr(Image, 'Resampling', Image).LANCZOS
+    img.thumbnail((200, 200), resample)
+
+    ext = os.path.splitext(path)[1].lower()
+    if ext in ('.jpg', '.jpeg'):
+        fmt, media_type = 'JPEG', 'image/jpeg'
+    else:
+        fmt, media_type = 'PNG', 'image/png'
+
+    buf = io.BytesIO()
+    img.save(buf, format=fmt)
+    data = base64.b64encode(buf.getvalue()).decode('utf-8')
+    print(f"[Reference] Resized to {img.size[0]}x{img.size[1]} for execution model")
+    return data, media_type
+
+
 def call_plan_refinement_api(
     original_plan: dict,
     instruction: str,
@@ -1582,6 +1607,8 @@ def call_vision_api(
     best_script_text: str = None,
     consecutive_losses: int = 0,
     execution_model: str = "claude-sonnet-4-20250514",
+    reference_image_base64: str = None,
+    reference_image_media_type: str = None,
 ) -> dict:
     """Call Claude vision API with screenshot and get analysis + complete action script.
 
@@ -1831,6 +1858,20 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
                 },
             },
             {"type": "text", "text": f"RUNNER-UP (Attempt {runner_up_attempt_num})"},
+        ])
+
+    # Add reference image if provided
+    if reference_image_base64:
+        message_content.extend([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": reference_image_media_type or "image/png",
+                    "data": reference_image_base64,
+                },
+            },
+            {"type": "text", "text": "REFERENCE IMAGE: Use this as a visual guide for proportions, composition, and style."},
         ])
 
     # Add the main text prompt last
@@ -2208,6 +2249,12 @@ def run_visual_feedback_loop(
     os.makedirs(output_dir, exist_ok=True)
     screenshot_dir = os.path.join(output_dir, "screenshots")
 
+    # Prepare small reference image for execution model (once)
+    ref_base64 = None
+    ref_media_type = None
+    if reference_image:
+        ref_base64, ref_media_type = prepare_reference_for_execution(reference_image)
+
     # Start the app
     controller = PurpleController()
 
@@ -2345,6 +2392,8 @@ def run_visual_feedback_loop(
                     best_script_text=best_compact_actions,
                     consecutive_losses=consecutive_losses,
                     execution_model=execution_model,
+                    reference_image_base64=ref_base64,
+                    reference_image_media_type=ref_media_type,
                 )
 
                 actions = result.get("actions", [])

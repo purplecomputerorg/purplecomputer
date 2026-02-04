@@ -83,6 +83,8 @@ try:
         parse_compact_actions,
         parse_json_robust,
         get_complexity_guidance,
+        load_reference_image,
+        prepare_reference_for_execution,
     )
     IMPORTS_AVAILABLE = True
 except ImportError:
@@ -321,3 +323,166 @@ class TestComplexityGuidance:
         # No action count limits - we encourage detail
         assert "100-300" not in early  # No restrictive limits
         assert "detail" in late.lower()  # Encourages detail
+
+
+class TestCliArgs:
+    """Test CLI argument validation."""
+
+    def _run_cli(self, *args):
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(TOOLS_DIR.parent) + ":" + env.get("PYTHONPATH", "")
+        return subprocess.run(
+            [sys.executable, str(DOODLE_AI)] + list(args),
+            capture_output=True, text=True, timeout=10, env=env,
+        )
+
+    def test_help_shows_refine(self):
+        """--help mentions --refine."""
+        result = self._run_cli("--help")
+        assert result.returncode == 0
+        assert "--refine" in result.stdout
+
+    def test_help_shows_reference(self):
+        """--help mentions --reference."""
+        result = self._run_cli("--help")
+        assert result.returncode == 0
+        assert "--reference" in result.stdout
+
+    def test_help_shows_instruction(self):
+        """--help mentions --instruction."""
+        result = self._run_cli("--help")
+        assert result.returncode == 0
+        assert "--instruction" in result.stdout
+
+    def test_goal_required_without_refine(self):
+        """Error when neither --goal nor --refine is given."""
+        result = self._run_cli()
+        assert result.returncode != 0
+        assert "goal" in result.stderr.lower()
+
+    def test_refine_requires_instruction(self):
+        """--refine without --instruction errors."""
+        result = self._run_cli("--refine", "/tmp/nonexistent")
+        assert result.returncode != 0
+        assert "instruction" in result.stderr.lower()
+
+    def test_refine_requires_plan_json(self):
+        """--refine with missing plan.json errors."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            result = self._run_cli("--refine", d, "--instruction", "test")
+            assert result.returncode != 0
+            assert "plan.json" in result.stderr
+
+    def test_reference_file_must_exist(self):
+        """--reference with nonexistent file errors."""
+        result = self._run_cli("--goal", "tree", "--reference", "/tmp/no_such_img.png")
+        assert result.returncode != 0
+        assert "not found" in result.stderr.lower() or "Reference" in result.stderr
+
+
+class TestReferenceImage:
+    """Test reference image loading and resizing."""
+
+    def test_load_reference_png(self):
+        """Load a PNG reference image."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        # Create a tiny test PNG
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (10, 10), color=(255, 0, 0))
+            img.save(f, format="PNG")
+            tmp_path = f.name
+
+        try:
+            data, media_type = load_reference_image(tmp_path)
+            assert media_type == "image/png"
+            assert len(data) > 0
+        finally:
+            os.unlink(tmp_path)
+
+    def test_load_reference_jpeg(self):
+        """Load a JPEG reference image."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        try:
+            from PIL import Image
+        except ImportError:
+            return
+
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+            img = Image.new("RGB", (10, 10), color=(0, 255, 0))
+            img.save(f, format="JPEG")
+            tmp_path = f.name
+
+        try:
+            data, media_type = load_reference_image(tmp_path)
+            assert media_type == "image/jpeg"
+            assert len(data) > 0
+        finally:
+            os.unlink(tmp_path)
+
+    def test_prepare_reference_downsizes(self):
+        """prepare_reference_for_execution shrinks large images."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        try:
+            from PIL import Image
+            import base64
+            import io
+        except ImportError:
+            return
+
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (800, 600), color=(0, 0, 255))
+            img.save(f, format="PNG")
+            tmp_path = f.name
+
+        try:
+            data, media_type = prepare_reference_for_execution(tmp_path)
+            # Decode and check size
+            decoded = base64.b64decode(data)
+            result_img = Image.open(io.BytesIO(decoded))
+            assert result_img.width <= 200
+            assert result_img.height <= 200
+        finally:
+            os.unlink(tmp_path)
+
+    def test_prepare_reference_small_image_unchanged(self):
+        """Small images stay small (not upscaled)."""
+        if not IMPORTS_AVAILABLE:
+            return
+
+        try:
+            from PIL import Image
+            import base64
+            import io
+        except ImportError:
+            return
+
+        import tempfile
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            img = Image.new("RGB", (50, 30), color=(255, 255, 0))
+            img.save(f, format="PNG")
+            tmp_path = f.name
+
+        try:
+            data, media_type = prepare_reference_for_execution(tmp_path)
+            decoded = base64.b64decode(data)
+            result_img = Image.open(io.BytesIO(decoded))
+            # thumbnail doesn't upscale
+            assert result_img.width == 50
+            assert result_img.height == 30
+        finally:
+            os.unlink(tmp_path)

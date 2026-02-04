@@ -2302,8 +2302,9 @@ def call_vision_api(
     # Option D: Get progressive complexity guidance
     complexity_section = get_complexity_guidance(iteration, max_iterations)
 
-    # First iteration vs subsequent
-    if iteration == 1:
+    # First iteration vs subsequent (library-aware)
+    has_library = component_library and component_library.best
+    if iteration == 1 and not has_library:
         instruction = """This is your FIRST attempt. Generate a complete drawing script based on the plan.
 The canvas is blank. Draw the SUBJECT first (the interesting part), then add minimal background if needed.
 For each element, paint its base color then immediately overlay the mixing color:

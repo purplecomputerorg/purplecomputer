@@ -158,14 +158,15 @@ xsetroot -solid "#2d1b4e"
 WM="${WM:-matchbox}"
 echo "Starting WM: $WM"
 if [ "$WM" = "tiling" ]; then
-    dwm &
+    # dwm must be the exec'd process (manages all windows including Alacritty)
+    alacritty &
+    sleep 0.5
+    exec dwm
 else
     matchbox-window-manager -use_titlebar no &
+    sleep 0.5
+    exec alacritty
 fi
-sleep 0.5
-
-# Launch Alacritty (user runs Purple manually)
-exec alacritty
 XINITRC
 chmod +x ~/.xinitrc
 

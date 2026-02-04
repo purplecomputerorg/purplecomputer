@@ -304,6 +304,54 @@ def _word_set(text: str) -> set[str]:
     return {w.lower() for w in re.findall(r'[a-zA-Z]{3,}', text)}
 
 
+_CONTRADICTION_PAIRS = [
+    ({"more", "increase", "add", "bigger", "larger", "thicker"},
+     {"less", "decrease", "remove", "smaller", "thinner", "fewer"}),
+    ({"detail", "detailed", "complex", "intricate"},
+     {"simple", "clean", "minimal", "sparse"}),
+    ({"brighter", "lighter", "vivid"},
+     {"darker", "muted", "subdued"}),
+    ({"spread", "wider", "expand"},
+     {"compact", "narrower", "shrink"}),
+]
+
+
+def _contradicts(text_a: str, text_b: str) -> bool:
+    """Check if two learnings contradict each other using keyword-pair detection.
+
+    Returns True if one text uses "positive" terms and the other uses "negative"
+    terms from the same dimension pair, and they share at least one topic word
+    (or both are short enough that topic overlap is likely).
+    """
+    words_a = _word_set(text_a)
+    words_b = _word_set(text_b)
+    all_keywords = set()
+    for group_pos, group_neg in _CONTRADICTION_PAIRS:
+        all_keywords |= group_pos | group_neg
+
+    for group_pos, group_neg in _CONTRADICTION_PAIRS:
+        a_pos = bool(words_a & group_pos)
+        a_neg = bool(words_a & group_neg)
+        b_pos = bool(words_b & group_pos)
+        b_neg = bool(words_b & group_neg)
+        # Only trigger if one text is clearly positive and the other clearly negative
+        a_is_pos = a_pos and not a_neg
+        a_is_neg = a_neg and not a_pos
+        b_is_pos = b_pos and not b_neg
+        b_is_neg = b_neg and not b_pos
+        if (a_is_pos and b_is_neg) or (a_is_neg and b_is_pos):
+            # Verify they're about the same subject
+            topic_a = words_a - all_keywords
+            topic_b = words_b - all_keywords
+            overlap = len(topic_a & topic_b) if topic_a and topic_b else 0
+            if overlap >= 1:
+                return True
+            # Short learnings likely about the same thing (few non-keyword words)
+            if len(topic_a) < 6 and len(topic_b) < 6:
+                return True
+    return False
+
+
 def deduplicate_learnings(
     learnings: list[dict],
     new_learning: dict,
@@ -312,27 +360,46 @@ def deduplicate_learnings(
 ) -> list[dict]:
     """Keep only unique, recent learnings up to max_count.
 
-    Skips adding new_learning if it is >similarity_threshold similar
-    (by word overlap) to any existing entry. Then trims to the most
-    recent max_count entries.
+    Handles three cases:
+    1. If new_learning is >similarity_threshold similar to an existing entry, skip it.
+    2. If new_learning contradicts an existing entry, replace the old one.
+    3. Otherwise, append the new learning.
 
     Returns a new list (does not mutate the input).
     """
-    new_words = _word_set(new_learning.get("learning", ""))
+    new_text = new_learning.get("learning", "")
+    new_words = _word_set(new_text)
     if not new_words:
         return learnings[-max_count:] if len(learnings) > max_count else list(learnings)
 
+    result = []
+    replaced = False
     for entry in learnings:
-        existing_words = _word_set(entry.get("learning", ""))
+        existing_text = entry.get("learning", "")
+        existing_words = _word_set(existing_text)
         if not existing_words:
+            result.append(entry)
             continue
+
+        # Check for duplicate
         overlap = len(new_words & existing_words)
         union = len(new_words | existing_words)
         if union > 0 and overlap / union >= similarity_threshold:
             print(f"[Learnings] Skipping duplicate learning (similarity {overlap/union:.0%})")
             return learnings[-max_count:] if len(learnings) > max_count else list(learnings)
 
-    result = list(learnings) + [new_learning]
+        # Check for contradiction: replace old with new
+        if not replaced and _contradicts(new_text, existing_text):
+            print(f"[Learnings] Replacing contradicted learning: '{existing_text[:60]}...' with '{new_text[:60]}...'")
+            result.append(new_learning)
+            replaced = True
+            continue
+
+        result.append(entry)
+
+    if not replaced:
+        result.append(new_learning)
+
     return result[-max_count:]
 
 
@@ -1697,6 +1764,20 @@ def call_vision_api(
             judge_section += f"Judge's reasoning: {reasoning}\n"
             judge_section += "Change your approach. The current best is still Attempt {compared_best}.\n"
 
+        # Add per-criterion scores if available
+        weakest = judge_feedback.get("weakest_criterion")
+        improvement = judge_feedback.get("specific_improvement")
+        if weakest and improvement:
+            judge_section += f"\n**WEAKEST AREA:** {weakest}\n"
+            judge_section += f"**SPECIFIC FIX:** {improvement}\n"
+            judge_section += "Focus your changes on this specific weakness.\n"
+
+        scores_best = judge_feedback.get("scores_best")
+        if scores_best and isinstance(scores_best, dict):
+            judge_section += "\n**Best attempt scores:** "
+            judge_section += ", ".join(f"{k}={v}" for k, v in scores_best.items())
+            judge_section += "\n"
+
     # Build best script section (highest-impact: AI sees the exact source code)
     best_script_section = ""
     if best_script_text and best_attempt_num:
@@ -1877,8 +1958,15 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     # Add the main text prompt last
     message_content.append({"type": "text", "text": user_message})
 
-    # Increase temperature after repeated failures to encourage exploration
-    temperature = 0.9 if consecutive_losses >= 5 else 1.0
+    # Raise temperature after repeated failures to encourage exploration
+    if consecutive_losses >= 7:
+        temperature = 1.3
+    elif consecutive_losses >= 5:
+        temperature = 1.2
+    elif consecutive_losses >= 3:
+        temperature = 1.1
+    else:
+        temperature = 1.0
 
     response = client.messages.create(
         model=execution_model,
@@ -1952,6 +2040,155 @@ Respond with JSON metadata followed by a compact ```actions``` block."""
     return result
 
 
+MUTATION_PROMPT = f"""You are an AI artist editing an existing pixel art script in Purple Computer's Doodle mode.
+
+You will receive the BEST script so far and a screenshot of its result, plus a specific improvement target from the judge.
+
+Your job: modify the script to fix ONLY the identified weakness while keeping everything else the same.
+
+## RULES
+1. Keep 70-90% of the script unchanged. Only modify the lines related to the weakness.
+2. Do NOT restructure the entire drawing. Preserve the overall layout, colors, and composition.
+3. The canvas is {CANVAS_WIDTH}x{CANVAS_HEIGHT}. Coordinates must stay in bounds.
+4. Use the same compact format: L<color><x1>,<y1>,<x2>,<y2> for lines, P<color><x>,<y> for points.
+5. Color mixing works by painting over: Yellow + Blue = GREEN, Yellow + Red = ORANGE, Red + Blue = PURPLE.
+
+## COMPACT ACTION FORMAT
+**L = Line**: `L<color><x1>,<y1>,<x2>,<y2>` (horizontal, vertical, or diagonal)
+**P = Point**: `P<color><x>,<y>` (single cell)
+
+## RESPONSE FORMAT
+
+```json
+{{
+  "analysis": "What I changed and why",
+  "learnings": "Key insight from this edit"
+}}
+```
+
+```actions
+(modified script here)
+```
+
+Output the COMPLETE modified script (not just the changed lines). The canvas is cleared and this script runs from scratch."""
+
+
+def call_focused_mutation_api(
+    best_image_base64: str,
+    best_script_text: str,
+    improvement_target: str,
+    goal: str,
+    api_key: str,
+    execution_model: str = "claude-sonnet-4-20250514",
+    reference_image_base64: str = None,
+    reference_image_media_type: str = None,
+) -> dict:
+    """Generate a focused mutation of the best script targeting a specific weakness.
+
+    Unlike call_vision_api which generates from scratch with full context,
+    this function sends only the best image + script + a specific improvement
+    target from the judge. The AI edits the existing script rather than
+    regenerating from scratch.
+
+    Args:
+        best_image_base64: Screenshot of the current best attempt (PNG base64)
+        best_script_text: The L/P command text of the best attempt
+        improvement_target: Specific improvement suggestion from the judge
+        goal: What we're trying to draw
+        api_key: Anthropic API key
+        execution_model: Model to use
+        reference_image_base64: Optional reference image
+        reference_image_media_type: Media type for reference image
+
+    Returns:
+        Dict with keys: analysis, strategy_summary, learnings, actions
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    user_message = f"""## Goal: {goal}
+
+## CURRENT BEST SCRIPT
+```actions
+{best_script_text}
+```
+
+## IMPROVEMENT TARGET
+{improvement_target}
+
+Modify the script above to address this specific weakness. Keep everything else the same.
+Output the complete modified script."""
+
+    message_content = [
+        {
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": best_image_base64,
+            },
+        },
+        {"type": "text", "text": "CURRENT BEST (the script above produced this image)"},
+    ]
+
+    if reference_image_base64:
+        message_content.extend([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": reference_image_media_type or "image/png",
+                    "data": reference_image_base64,
+                },
+            },
+            {"type": "text", "text": "REFERENCE IMAGE: Use as a visual guide."},
+        ])
+
+    message_content.append({"type": "text", "text": user_message})
+
+    response = client.messages.create(
+        model=execution_model,
+        max_tokens=4000,
+        temperature=1.0,
+        system=MUTATION_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": message_content,
+        }],
+    )
+
+    text = response.content[0].text
+
+    result = {
+        "analysis": "",
+        "strategy_summary": "",
+        "learnings": "",
+        "actions": [],
+        "raw_response": text,
+        "compact_actions_text": "",
+    }
+
+    compact_actions = parse_compact_actions(text)
+    actions_match = re.search(r'```actions\s*([\s\S]*?)\s*```', text)
+    if actions_match:
+        result["compact_actions_text"] = actions_match.group(1).strip()
+    if compact_actions:
+        result["actions"] = compact_actions
+        print(f"[Mutation Parse] Got {len(compact_actions)} actions from compact format")
+
+    data = parse_json_robust(text)
+    if data and isinstance(data, dict):
+        result["analysis"] = data.get('analysis', '')
+        result["learnings"] = data.get('learnings', '')
+        if not result["actions"]:
+            json_actions = data.get('actions', [])
+            if json_actions:
+                result["actions"] = json_actions
+
+    return result
+
+
 def _format_judge_visual_identity(visual_identity: dict = None) -> str:
     """Format visual identity info for the judge prompt."""
     if not visual_identity:
@@ -2009,19 +2246,19 @@ GOAL: "{goal}"
 
 You will see two images: Image A and Image B.
 
-Evaluate based on (in priority order):
-1. Shape accuracy (most important): Do the shapes look like the goal? Organic oval bodies beat flat rectangles. Smooth tapered tails beat stepped staircases. Curved edges beat straight edges.
-2. Recognizable structure: Can you tell what it is at a glance?
-3. Structural accuracy: Do parts connect at correct positions? Fronds should grow from the TOP of a trunk, legs from the BOTTOM of a body, branches from the SIDES of a trunk. Anatomically wrong connections are a major penalty even if individual shapes look good.
-4. Proportions: Are body parts the right relative sizes?
-5. Color accuracy: Are the colors appropriate? (lower priority than shape)
-6. Overall quality: Shading, detail, completeness
+Score EACH image on these criteria (1-5 scale, 5 is best):
+1. **shape_accuracy**: Do the shapes look like the goal? Organic oval bodies beat flat rectangles. Curved edges beat straight edges.
+2. **recognizability**: Can you tell what it is at a glance?
+3. **structural_connections**: Do parts connect at correct positions? Fronds from TOP of trunk, legs from BOTTOM of body, etc.
+4. **color_quality**: Are the colors appropriate and well-mixed?
+5. **detail_and_shading**: Texture, highlights, gradients, fine details, 3D depth.
+6. **cleanliness**: Clean edges vs stray pixels, artifacts, messy overhangs.
 
-SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be. These are common pixel art mistakes.
+SHAPE PENALTIES: Penalize rectangular/boxy bodies (same width every row), stepped/staircase tails or limbs, and flat straight edges where curves should be.
 
-BACKGROUND PENALTIES: Penalize large monotone background fills (solid blue sky covering half the canvas, solid green ground covering many rows). A detailed subject on a mostly-empty canvas is BETTER than a simple subject surrounded by flat background fills. Minimal or absent backgrounds are fine.
+BACKGROUND PENALTIES: Penalize large monotone background fills. A detailed subject on a mostly-empty canvas is BETTER than a simple subject surrounded by flat fills.
 
-ARTIFACT PENALTIES: Penalize stray colored pixels outside shape boundaries. For example, blue or dark pixels hanging off the edge of a tree canopy, or shadow colors painted beyond where the base shape was filled. Clean edges are better than messy overhangs.
+ARTIFACT PENALTIES: Penalize stray colored pixels outside shape boundaries.
 
 {_format_judge_visual_identity(visual_identity)}Be OBJECTIVE. Simpler is not always worse.
 A messy attempt with stripes everywhere is WORSE than a clean simple drawing.
@@ -2031,7 +2268,11 @@ Respond with JSON only:
 {{
   "winner": "A" or "B",
   "reasoning": "Brief explanation of why the winner is better",
-  "confidence": "high" or "medium" or "low"
+  "confidence": "high" or "medium" or "low",
+  "scores_a": {{"shape_accuracy": 3, "recognizability": 4, "structural_connections": 3, "color_quality": 3, "detail_and_shading": 2, "cleanliness": 4}},
+  "scores_b": {{"shape_accuracy": 3, "recognizability": 4, "structural_connections": 3, "color_quality": 3, "detail_and_shading": 2, "cleanliness": 4}},
+  "weakest_criterion": "the criterion name where the winner scored lowest or could improve most",
+  "specific_improvement": "one concrete, actionable suggestion to improve the winner's weakest area"
 }}
 ```"""
 
@@ -2059,7 +2300,7 @@ Respond with JSON only:
 
     response = client.messages.create(
         model=judge_model,
-        max_tokens=300,  # Short response needed
+        max_tokens=600,  # Room for per-criterion scores
         system=judge_prompt,
         messages=[{
             "role": "user",
@@ -2074,6 +2315,10 @@ Respond with JSON only:
         "winner": None,
         "reasoning": "",
         "confidence": "low",
+        "scores_a": None,
+        "scores_b": None,
+        "weakest_criterion": None,
+        "specific_improvement": None,
     }
 
     data = parse_json_robust(text)
@@ -2083,6 +2328,10 @@ Respond with JSON only:
         result["winner"] = winner.upper() if isinstance(winner, str) else None
         result["reasoning"] = data.get("reasoning", "")
         result["confidence"] = data.get("confidence", "low")
+        result["scores_a"] = data.get("scores_a")
+        result["scores_b"] = data.get("scores_b")
+        result["weakest_criterion"] = data.get("weakest_criterion")
+        result["specific_improvement"] = data.get("specific_improvement")
 
         # Sanity check: does the reasoning contradict the winner?
         # Haiku sometimes writes reasoning favoring one image but puts the wrong
@@ -2191,10 +2440,22 @@ def judge_with_single_call(
 
     print(f"[Judge] Result: {winner} (raw: {result['winner']}, swapped: {swapped})")
 
+    # Map scores back: if swapped, A=challenger and B=best, so swap them back
+    if swapped:
+        scores_best = result.get("scores_b")
+        scores_challenger = result.get("scores_a")
+    else:
+        scores_best = result.get("scores_a")
+        scores_challenger = result.get("scores_b")
+
     return {
         "winner": winner,
         "reasoning": result["reasoning"],
         "confidence": result.get("confidence", "medium"),
+        "scores_best": scores_best,
+        "scores_challenger": scores_challenger,
+        "weakest_criterion": result.get("weakest_criterion"),
+        "specific_improvement": result.get("specific_improvement"),
     }
 
 
@@ -2219,6 +2480,7 @@ def run_visual_feedback_loop(
     judge_model: str = "claude-sonnet-4-20250514",
     existing_plan: dict = None,
     reference_image: str = None,
+    max_candidates: int = 3,
 ) -> None:
     """Run the AI drawing loop with real visual feedback.
 
@@ -2320,8 +2582,6 @@ def run_visual_feedback_loop(
                 print(f"Current Best: Attempt {best_attempt}'s result")
             if runner_up_attempt:
                 print(f"Runner-up: Attempt {runner_up_attempt}'s result")
-            if canvas_shows_attempt:
-                print(f"Canvas currently shows: Attempt {canvas_shows_attempt}'s result")
             if consecutive_losses > 0:
                 if consecutive_losses < 3 or not best_compact_actions:
                     mode = "normal"
@@ -2334,13 +2594,23 @@ def run_visual_feedback_loop(
                 print(f"Consecutive losses: {consecutive_losses} (mode: {mode})")
             print('='*50)
 
-            # Take screenshot (shows previous attempt's result, or blank for first)
+            # Determine how many candidates to generate this iteration
+            # Ramp-up: 2 candidates when not stuck, all candidates when stuck
+            if consecutive_losses < 3 or not best_compact_actions:
+                num_candidates = min(2, max_candidates)
+            else:
+                num_candidates = max_candidates
+
+            # For the first iteration, just generate one candidate (no best to compare against)
+            if best_attempt is None:
+                num_candidates = 1
+
+            # Take screenshot of current canvas state (for the informed regen candidate)
             svg_path = controller.take_screenshot()
             if not svg_path:
                 print("[Error] Failed to capture screenshot")
                 continue
 
-            # Rename screenshot to match iteration numbering
             screenshot_dir_path = os.path.dirname(svg_path)
             if i == 0:
                 new_name = "iteration_0_blank.svg"
@@ -2352,30 +2622,30 @@ def run_visual_feedback_loop(
             os.rename(svg_path, new_svg_path)
             svg_path = new_svg_path
 
-            # Convert to PNG for vision API (with cropping to canvas area)
             png_base64 = svg_to_png_base64(svg_path)
             if not png_base64:
                 print("[Error] Failed to convert SVG to PNG")
                 continue
 
-            # Save the cropped PNG so user can see what Claude sees
             png_path = svg_path.replace('.svg', '_cropped.png')
             with open(png_path, 'wb') as f:
                 f.write(base64.standard_b64decode(png_base64))
-            print(f"[Cropped PNG] {png_path}")
 
-            # Get analysis and NEW complete script from AI
-            # Pass accumulated learnings (not full scripts) for efficient context
-            # Retry up to 3 times if we get no actions (JSON parse failure, etc.)
-            actions = []
-            result = {}
-            max_retries = 3
-            for retry in range(max_retries):
+            # Generate candidates using different strategies
+            # Each candidate is: (label, actions, result, compact_text)
+            candidates = []
+
+            debug_dir = os.path.join(output_dir, "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+
+            # --- Candidate B: Informed regen (current approach, always generated) ---
+            print(f"\n[Candidate B] Generating informed regen (full context)...")
+            informed_result = None
+            for retry in range(3):
                 if retry > 0:
-                    print(f"[Retry] Attempt {retry + 1}/{max_retries} for iteration {i + 1}...")
-                    time.sleep(1)  # Brief pause before retry
-
-                result = call_vision_api(
+                    print(f"[Retry] Attempt {retry + 1}/3 for informed regen...")
+                    time.sleep(1)
+                informed_result = call_vision_api(
                     image_base64=png_base64,
                     goal=goal,
                     iteration=i + 1,
@@ -2395,251 +2665,334 @@ def run_visual_feedback_loop(
                     reference_image_base64=ref_base64,
                     reference_image_media_type=ref_media_type,
                 )
+                if informed_result.get("actions"):
+                    break
+            if informed_result and informed_result.get("actions"):
+                candidates.append(("informed", informed_result.get("actions"), informed_result, informed_result.get("compact_actions_text", "")))
+                # Save debug
+                raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_informed_raw.txt")
+                with open(raw_path, 'w') as f:
+                    f.write(informed_result.get("raw_response", ""))
+                compact_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_informed_compact.txt")
+                with open(compact_path, 'w') as f:
+                    f.write(informed_result.get("compact_actions_text", ""))
+                print(f"[Candidate B] Got {len(informed_result['actions'])} actions")
 
-                actions = result.get("actions", [])
-                if actions:
-                    break  # Got actions, exit retry loop
+            # --- Candidate A: Focused mutation (only when we have a best script and judge feedback) ---
+            if num_candidates >= 2 and best_compact_actions and last_judge_feedback:
+                improvement_target = last_judge_feedback.get("specific_improvement", "")
+                weakest = last_judge_feedback.get("weakest_criterion", "")
+                if improvement_target:
+                    mutation_instruction = f"Weakness: {weakest}. Fix: {improvement_target}"
                 else:
-                    print(f"[Warning] No actions returned (attempt {retry + 1}/{max_retries})")
+                    mutation_instruction = f"Improve the weakest area: {weakest}" if weakest else "Improve overall quality"
 
-            # Store this iteration's compact actions for correct lookup later
-            iteration_compact_actions[i + 1] = result.get("compact_actions_text", "")
+                print(f"\n[Candidate A] Generating focused mutation: {mutation_instruction[:80]}...")
+                mutation_result = call_focused_mutation_api(
+                    best_image_base64=best_image_base64,
+                    best_script_text=best_compact_actions,
+                    improvement_target=mutation_instruction,
+                    goal=goal,
+                    api_key=api_key,
+                    execution_model=execution_model,
+                    reference_image_base64=ref_base64,
+                    reference_image_media_type=ref_media_type,
+                )
+                if mutation_result.get("actions"):
+                    candidates.append(("mutation", mutation_result.get("actions"), mutation_result, mutation_result.get("compact_actions_text", "")))
+                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_mutation_raw.txt")
+                    with open(raw_path, 'w') as f:
+                        f.write(mutation_result.get("raw_response", ""))
+                    print(f"[Candidate A] Got {len(mutation_result['actions'])} actions")
+                else:
+                    print("[Candidate A] Failed to generate mutation")
 
-            # Store full result
-            all_results.append({
-                "iteration": i + 1,
-                "analysis": result.get("analysis", ""),
-                "strategy_summary": result.get("strategy_summary", ""),
-                "learnings": result.get("learnings", ""),
-            })
+            # --- Candidate C: Fresh regen (no script context, higher temp, only when stuck) ---
+            if num_candidates >= 3 and best_image_base64:
+                print(f"\n[Candidate C] Generating fresh regen (no script, temp 1.2)...")
+                fresh_result = None
+                for retry in range(2):
+                    if retry > 0:
+                        print(f"[Retry] Attempt {retry + 1}/2 for fresh regen...")
+                        time.sleep(1)
+                    # Fresh regen: send best image but NOT the best script
+                    # Use a higher consecutive_losses to trigger higher temperature
+                    fresh_result = call_vision_api(
+                        image_base64=png_base64,
+                        goal=goal,
+                        iteration=i + 1,
+                        max_iterations=iterations,
+                        api_key=api_key,
+                        plan=plan,
+                        accumulated_learnings=accumulated_learnings,
+                        previous_strategy=None,  # No strategy anchoring
+                        judge_feedback=last_judge_feedback,
+                        best_image_base64=best_image_base64,
+                        best_attempt_num=best_attempt,
+                        runner_up_image_base64=None,  # Skip runner-up to save tokens
+                        runner_up_attempt_num=None,
+                        best_script_text=None,  # Key: no script = forces fresh approach
+                        consecutive_losses=max(consecutive_losses, 5),  # Force higher temp
+                        execution_model=execution_model,
+                        reference_image_base64=ref_base64,
+                        reference_image_media_type=ref_media_type,
+                    )
+                    if fresh_result and fresh_result.get("actions"):
+                        break
+                if fresh_result and fresh_result.get("actions"):
+                    candidates.append(("fresh", fresh_result.get("actions"), fresh_result, fresh_result.get("compact_actions_text", "")))
+                    raw_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_fresh_raw.txt")
+                    with open(raw_path, 'w') as f:
+                        f.write(fresh_result.get("raw_response", ""))
+                    print(f"[Candidate C] Got {len(fresh_result['actions'])} actions")
+                else:
+                    print("[Candidate C] Failed to generate fresh regen")
 
-            if not actions:
-                print(f"[Error] Failed to get actions after {max_retries} retries")
-                # Don't clear - keep the canvas as-is to preserve progress
-                # canvas_shows_attempt stays unchanged, so judge will skip automatically
-                print(f"[Skip] Canvas still shows Attempt {canvas_shows_attempt}'s result (no new execution)")
+            if not candidates:
+                print(f"[Error] No candidates generated for iteration {i + 1}")
                 continue
 
-            # Debug: show action summary to verify they're different each iteration
-            actions_str = json.dumps(actions, sort_keys=True)
-            actions_hash = hashlib.md5(actions_str.encode()).hexdigest()[:8]
-            first_action = actions[0] if actions else None
-            last_action = actions[-1] if actions else None
-            print(f"[Script] Generated {len(actions)} actions (hash: {actions_hash})")
-            print(f"[Script] First action: {first_action}")
-            print(f"[Script] Last action: {last_action}")
+            print(f"\n[Candidates] Generated {len(candidates)} candidates: {[c[0] for c in candidates]}")
 
-            # Store this iteration's script
-            iteration_scripts.append({"iteration": i + 1, "actions": actions})
+            # Execute each candidate, take a screenshot, and judge against best
+            best_challenger_label = None
+            best_challenger_actions = None
+            best_challenger_result = None
+            best_challenger_compact = None
+            best_challenger_image = None
+            best_challenger_judge = None
 
-            # Save debug info: raw response and compact actions
-            debug_dir = os.path.join(output_dir, "debug")
-            os.makedirs(debug_dir, exist_ok=True)
+            for c_idx, (label, c_actions, c_result, c_compact) in enumerate(candidates):
+                attempt_label = f"{i + 1}{chr(ord('a') + c_idx)}"  # e.g., "2a", "2b", "2c"
 
-            # Save raw AI response
-            raw_response_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_raw_response.txt")
-            with open(raw_response_path, 'w') as f:
-                f.write(result.get("raw_response", ""))
+                # Clear canvas
+                if canvas_shows_attempt is not None or c_idx > 0:
+                    print(f"[Clear] Clearing canvas for candidate {label}...")
+                    try:
+                        controller.clear_canvas()
+                    except RuntimeError as e:
+                        print(f"[ERROR] Failed to clear canvas: {e}")
+                        break
+                    time.sleep(0.3)
 
-            # Save compact actions (the L/P commands before expansion)
-            compact_path = os.path.join(debug_dir, f"iteration_{i+1:02d}_compact_actions.txt")
-            with open(compact_path, 'w') as f:
-                f.write(result.get("compact_actions_text", ""))
-            print(f"[Debug] Saved raw response and compact actions to {debug_dir}")
+                # Execute
+                print(f"[Execute] Running candidate {label}: {len(c_actions)} actions...")
+                controller.execute_actions(c_actions)
+                time.sleep(0.5)
 
-            # Accumulate learnings for next iteration (compact, not full scripts)
-            learning = result.get("learnings")
-            strategy = result.get("strategy_summary")
+                # Take screenshot
+                c_svg = controller.take_screenshot()
+                if not c_svg:
+                    print(f"[Error] Failed to capture screenshot for candidate {label}")
+                    continue
 
-            print(f"[Debug] Learnings returned: {bool(learning)} - {repr(learning)[:100] if learning else 'None'}")
-            print(f"[Debug] Strategy returned: {bool(strategy)} - type={type(strategy).__name__}")
+                c_svg_new = os.path.join(screenshot_dir_path, f"iteration_{attempt_label}_{label}.svg")
+                os.rename(c_svg, c_svg_new)
+                c_png = svg_to_png_base64(c_svg_new)
+                if not c_png:
+                    print(f"[Error] Failed to convert candidate {label} SVG to PNG")
+                    continue
 
-            if learning:
-                new_entry = {"iteration": i + 1, "learning": learning}
-                accumulated_learnings = deduplicate_learnings(
-                    accumulated_learnings, new_entry, max_count=5,
-                )
-                # Save learnings incrementally so user can monitor progress
-                learnings_path = os.path.join(output_dir, "learnings.json")
-                with open(learnings_path, 'w') as f:
-                    json.dump(accumulated_learnings, f, indent=2)
-                print(f"[Saved] Learnings ({len(accumulated_learnings)} total): {learnings_path}")
+                # Save cropped PNG
+                c_png_path = c_svg_new.replace('.svg', '_cropped.png')
+                with open(c_png_path, 'wb') as f:
+                    f.write(base64.standard_b64decode(c_png))
 
-            previous_strategy = strategy if strategy else ""
+                # Store compact actions
+                iteration_compact_actions[attempt_label] = c_compact
 
-            # Also save strategy incrementally
-            if strategy:
-                strategy_path = os.path.join(output_dir, "latest_strategy.json")
-                with open(strategy_path, 'w') as f:
-                    json.dump({
-                        "iteration": i + 1,
-                        "strategy": strategy
-                    }, f, indent=2)
-                print(f"[Saved] Strategy: {strategy_path}")
+                # If no best yet, first candidate becomes best
+                if best_attempt is None:
+                    best_attempt = attempt_label
+                    best_image_base64 = c_png
+                    best_reason = "Initial drawing (first result)"
+                    best_compact_actions = c_compact
+                    best_challenger_label = label
+                    best_challenger_actions = c_actions
+                    best_challenger_result = c_result
+                    best_challenger_compact = c_compact
+                    best_challenger_image = c_png
+                    canvas_shows_attempt = attempt_label
+                    print(f"[Best] Setting candidate {label} (Attempt {attempt_label}) as initial best")
 
-            # Update best tracking using SEPARATE judge call
-            # IMPORTANT: We use canvas_shows_attempt to track what's ACTUALLY on the canvas
-            # This prevents comparing the same image when iterations fail
+                    # Save to iteration scripts
+                    iteration_scripts.append({"iteration": attempt_label, "actions": c_actions})
+                    continue
 
-            # Only judge if:
-            # 1. Canvas has content (canvas_shows_attempt is set)
-            # 2. Canvas shows something different from best (or no best yet)
-            # 3. Canvas has actually changed since last comparison
-
-            if canvas_shows_attempt is None:
-                # Canvas is blank (first iteration), nothing to judge yet
-                print("[Judge] Canvas is blank, nothing to compare yet")
-            elif best_attempt is None:
-                # First real result, set as initial best
-                best_attempt = canvas_shows_attempt
-                best_image_base64 = png_base64
-                best_reason = "Initial drawing (first result)"
-                best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
-                print(f"[Best] Setting Attempt {best_attempt} as initial best (first drawing)")
-            elif canvas_shows_attempt == best_attempt:
-                # Canvas still shows the best attempt (no new successful execution)
-                print(f"[Judge] Skipping - canvas still shows Attempt {canvas_shows_attempt} (same as best)")
-            elif canvas_shows_attempt != best_attempt and best_image_base64:
-                # Canvas shows a NEW result different from best - time to judge!
-                # But first: if the current best is a blank/near-blank image,
-                # skip the judge and auto-accept the challenger.
+                # If best is blank, auto-accept
                 if _is_blank_image(best_image_base64):
-                    print(f"[Judge] Current best (Attempt {best_attempt}) is blank/near-blank, auto-accepting Attempt {canvas_shows_attempt}")
                     runner_up_attempt = best_attempt
                     runner_up_image_base64 = best_image_base64
                     runner_up_reason = best_reason
-
-                    best_attempt = canvas_shows_attempt
-                    best_image_base64 = png_base64
+                    best_attempt = attempt_label
+                    best_image_base64 = c_png
                     best_reason = "Auto-accepted (previous best was blank)"
-                    best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
+                    best_compact_actions = c_compact
                     consecutive_losses = 0
+                    canvas_shows_attempt = attempt_label
 
                     judge_history.append({
-                        "judged_during_attempt": i + 1,
+                        "judged_during_attempt": f"{i + 1}",
+                        "candidate_type": label,
                         "compared_a_attempt": runner_up_attempt,
-                        "compared_b_attempt": canvas_shows_attempt,
+                        "compared_b_attempt": attempt_label,
                         "winner": "B",
-                        "reasoning": "Previous best was blank/near-blank, auto-accepted challenger",
+                        "reasoning": "Previous best was blank, auto-accepted",
                         "confidence": "high",
-                        "new_best_attempt": canvas_shows_attempt,
+                        "new_best_attempt": attempt_label,
                     })
-                    judge_path = os.path.join(output_dir, "judge_history.json")
-                    with open(judge_path, 'w') as f:
-                        json.dump(judge_history, f, indent=2)
                     continue
 
+                # Judge this candidate against the current best
+                print(f"[Judge] Comparing candidate {label} vs best (Attempt {best_attempt})...")
                 is_unvalidated = best_reason == "Initial drawing (first result)"
-                print(f"[Judge] Comparing Attempt {canvas_shows_attempt} (on canvas) vs Attempt {best_attempt} (current best)...")
                 judge_result = judge_with_single_call(
                     best_image_base64=best_image_base64,
-                    challenger_image_base64=png_base64,
+                    challenger_image_base64=c_png,
                     goal=goal,
                     api_key=api_key,
                     best_is_unvalidated=is_unvalidated,
                     judge_model=judge_model,
                     visual_identity=visual_identity,
                 )
-                # Map "best"/"challenger" back to "A"/"B" for existing logic
+
                 raw_winner = judge_result.get("winner")
-                if raw_winner == "challenger":
-                    winner = "B"
-                elif raw_winner == "best":
-                    winner = "A"
-                else:
-                    winner = None
                 reasoning = judge_result.get("reasoning", "")
                 confidence = judge_result.get("confidence", "low")
 
-                # Record judgment for monitoring
                 judgment_record = {
-                    "judged_during_attempt": i + 1,
+                    "judged_during_attempt": f"{i + 1}",
+                    "candidate_type": label,
                     "compared_a_attempt": best_attempt,
-                    "compared_b_attempt": canvas_shows_attempt,
-                    "winner": winner,
+                    "compared_b_attempt": attempt_label,
+                    "winner": "B" if raw_winner == "challenger" else ("A" if raw_winner == "best" else None),
                     "reasoning": reasoning,
                     "confidence": confidence,
                     "new_best_attempt": None,
+                    "scores_best": judge_result.get("scores_best"),
+                    "scores_challenger": judge_result.get("scores_challenger"),
+                    "weakest_criterion": judge_result.get("weakest_criterion"),
+                    "specific_improvement": judge_result.get("specific_improvement"),
                 }
 
-                if winner == "B":
-                    # Canvas result is better - old best becomes runner-up
+                if raw_winner == "challenger":
+                    # This candidate beat the current best
+                    judgment_record["new_best_attempt"] = attempt_label
+                    print(f"[Judge] ✓ Candidate {label} (Attempt {attempt_label}) beats best ({confidence})")
+                    print(f"[Judge]   Reason: {reasoning}")
+
+                    # Update best
                     runner_up_attempt = best_attempt
                     runner_up_image_base64 = best_image_base64
                     runner_up_reason = best_reason
 
-                    best_attempt = canvas_shows_attempt
-                    best_image_base64 = png_base64
+                    best_attempt = attempt_label
+                    best_image_base64 = c_png
                     best_reason = reasoning
-                    best_compact_actions = iteration_compact_actions.get(canvas_shows_attempt, "")
+                    best_compact_actions = c_compact
                     consecutive_losses = 0
-                    judgment_record["new_best_attempt"] = canvas_shows_attempt
-                    print(f"[Judge] ✓ Attempt {best_attempt} is the new best ({confidence} confidence)")
-                    print(f"[Judge]   Reason: {reasoning}")
-                    if runner_up_attempt:
-                        print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
-                elif winner == "A":
-                    # Current best stays - canvas result becomes runner-up if better than current runner-up
-                    # (For simplicity, we just track the most recent loser as potential runner-up)
-                    consecutive_losses += 1
-                    print(f"[Judge]   Consecutive losses: {consecutive_losses}")
-                    if runner_up_attempt is None or canvas_shows_attempt != runner_up_attempt:
-                        runner_up_attempt = canvas_shows_attempt
-                        runner_up_image_base64 = png_base64
-                        runner_up_reason = reasoning
 
-                    judgment_record["new_best_attempt"] = best_attempt
-                    print(f"[Judge] ✗ Keeping Attempt {best_attempt} as best ({confidence} confidence)")
-                    print(f"[Judge]   Reason: {reasoning}")
-                    print(f"[Judge]   Runner-up: Attempt {runner_up_attempt}")
+                    best_challenger_label = label
+                    best_challenger_actions = c_actions
+                    best_challenger_result = c_result
+                    best_challenger_compact = c_compact
+                    best_challenger_image = c_png
+                    best_challenger_judge = judge_result
                 else:
                     judgment_record["new_best_attempt"] = best_attempt
-                    print(f"[Judge] ⚠ Could not determine winner, keeping Attempt {best_attempt}")
+                    print(f"[Judge] ✗ Candidate {label} lost to best ({confidence})")
+                    print(f"[Judge]   Reason: {reasoning}")
 
-                # Save judge history incrementally so user can monitor
+                    # Track as potential runner-up
+                    if best_challenger_label is None:
+                        # No winning challenger yet, this is the best loser so far
+                        runner_up_attempt = attempt_label
+                        runner_up_image_base64 = c_png
+                        runner_up_reason = reasoning
+
                 judge_history.append(judgment_record)
-                judge_path = os.path.join(output_dir, "judge_history.json")
-                with open(judge_path, 'w') as f:
-                    json.dump(judge_history, f, indent=2)
-                print(f"[Saved] Judge history: {judge_path}")
+                canvas_shows_attempt = attempt_label
+                iteration_scripts.append({"iteration": attempt_label, "actions": c_actions})
 
-                # Option A: Store judge feedback to pass to next execution call
+            # Save judge history after all candidates
+            judge_path = os.path.join(output_dir, "judge_history.json")
+            with open(judge_path, 'w') as f:
+                json.dump(judge_history, f, indent=2)
+
+            # If no candidate won, increment consecutive losses
+            if best_challenger_label is None and best_attempt is not None:
+                consecutive_losses += 1
+                print(f"[Judge] No candidate beat the best. Consecutive losses: {consecutive_losses}")
+
+            # Use the winning candidate's result (or the informed regen) for learnings/strategy
+            winning_result = None
+            if best_challenger_result:
+                winning_result = best_challenger_result
+            elif candidates:
+                # Use informed regen result for learnings even if it lost
+                winning_result = candidates[0][2]
+
+            if winning_result:
+                learning = winning_result.get("learnings")
+                strategy = winning_result.get("strategy_summary")
+
+                if learning:
+                    new_entry = {"iteration": i + 1, "learning": learning}
+                    accumulated_learnings = deduplicate_learnings(
+                        accumulated_learnings, new_entry, max_count=5,
+                    )
+                    learnings_path = os.path.join(output_dir, "learnings.json")
+                    with open(learnings_path, 'w') as f:
+                        json.dump(accumulated_learnings, f, indent=2)
+
+                previous_strategy = strategy if strategy else ""
+                if strategy:
+                    strategy_path = os.path.join(output_dir, "latest_strategy.json")
+                    with open(strategy_path, 'w') as f:
+                        json.dump({"iteration": i + 1, "strategy": strategy}, f, indent=2)
+
+            # Store judge feedback for next iteration
+            if best_challenger_judge:
                 last_judge_feedback = {
-                    "winner": winner,
-                    "reasoning": reasoning,
-                    "confidence": confidence,
-                    "compared_best_attempt": best_attempt if winner == "A" else judgment_record["compared_a_attempt"],
-                    "compared_new_attempt": canvas_shows_attempt,
+                    "winner": "B",
+                    "reasoning": best_challenger_judge.get("reasoning", ""),
+                    "confidence": best_challenger_judge.get("confidence", "medium"),
+                    "compared_best_attempt": runner_up_attempt,
+                    "compared_new_attempt": best_attempt,
+                    "weakest_criterion": best_challenger_judge.get("weakest_criterion"),
+                    "specific_improvement": best_challenger_judge.get("specific_improvement"),
+                    "scores_best": best_challenger_judge.get("scores_best"),
+                    "scores_challenger": best_challenger_judge.get("scores_challenger"),
+                }
+            elif judge_history:
+                # Use the last judge record
+                last_record = judge_history[-1]
+                last_judge_feedback = {
+                    "winner": last_record.get("winner", "A"),
+                    "reasoning": last_record.get("reasoning", ""),
+                    "confidence": last_record.get("confidence", "low"),
+                    "compared_best_attempt": best_attempt,
+                    "compared_new_attempt": last_record.get("compared_b_attempt"),
+                    "weakest_criterion": last_record.get("weakest_criterion"),
+                    "specific_improvement": last_record.get("specific_improvement"),
+                    "scores_best": last_record.get("scores_best"),
+                    "scores_challenger": last_record.get("scores_challenger"),
                 }
 
-            # Early stopping: if the best hasn't changed in max_stale_iterations
+            # Store full results for monitoring
+            all_results.append({
+                "iteration": i + 1,
+                "num_candidates": len(candidates),
+                "candidate_types": [c[0] for c in candidates],
+                "winning_candidate": best_challenger_label,
+                "analysis": winning_result.get("analysis", "") if winning_result else "",
+                "learnings": winning_result.get("learnings", "") if winning_result else "",
+            })
+
+            # Early stopping
             if consecutive_losses >= max_stale_iterations:
                 print(f"\n[Early stop] Best hasn't changed in {consecutive_losses} iterations. Stopping.")
                 break
-
-            # Clear canvas before executing (except first iteration which starts blank)
-            if i > 0:
-                print("[Clear] Clearing canvas for fresh attempt...")
-                try:
-                    controller.clear_canvas()
-                except RuntimeError as e:
-                    print(f"[ERROR] Failed to clear canvas: {e}")
-                    print("This may indicate the 'clear' command is not being processed.")
-                    break
-                # Extra wait after clear to ensure it takes effect
-                time.sleep(0.3)
-
-            # Execute the complete script
-            print(f"[Execute] Running {len(actions)} actions...")
-            controller.execute_actions(actions)
-            print("[Execute] Done executing actions")
-
-            # Update what's on the canvas - this attempt's result will be visible
-            canvas_shows_attempt = i + 1  # Attempt number (1-indexed)
-            print(f"[Canvas] Now showing Attempt {canvas_shows_attempt}'s result")
-
-            # Wait for canvas to fully render before next screenshot
-            time.sleep(0.5)
 
         # Take final screenshot
         print("\n[Final] Taking final screenshot...")
@@ -2905,6 +3258,8 @@ Output (auto-generated timestamped folder):
                         help="Model for drawing execution (default: claude-sonnet-4-20250514)")
     parser.add_argument("--judge-model", default="claude-sonnet-4-20250514",
                         help="Model for judging comparisons (default: claude-sonnet-4-20250514)")
+    parser.add_argument("--max-candidates", type=int, default=3,
+                        help="Max candidates per iteration: mutation, informed regen, fresh regen (default: 3)")
 
     args = parser.parse_args()
 
@@ -2958,6 +3313,7 @@ Output (auto-generated timestamped folder):
         print(f"Instruction: {args.instruction}")
     print(f"Goal: {goal}")
     print(f"Iterations: {args.iterations}")
+    print(f"Max candidates per iteration: {args.max_candidates}")
     print(f"Execution model: {args.execution_model}")
     print(f"Judge model: {args.judge_model}")
     print(f"Output: {output_dir}/")
@@ -2972,6 +3328,7 @@ Output (auto-generated timestamped folder):
         judge_model=args.judge_model,
         existing_plan=existing_plan,
         reference_image=args.reference,
+        max_candidates=args.max_candidates,
     )
 
 

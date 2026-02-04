@@ -15,6 +15,12 @@ This ensures the AI learns from the ACTUAL app behavior.
 Usage:
     python tools/doodle_ai.py --goal "a tree with green leaves"
     python tools/doodle_ai.py --goal "sunset landscape" --iterations 10
+
+    # Use a reference image
+    python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
+
+    # Refine a previous run's plan
+    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "add a bird"
 """
 
 import argparse
@@ -1329,12 +1335,125 @@ Pk35,10
 **IMPORTANT: All fields are REQUIRED. Use the compact action format, NOT JSON arrays.**"""
 
 
+def load_reference_image(path: str) -> tuple[str, str]:
+    """Load an image file and return (base64_data, media_type)."""
+    ext = os.path.splitext(path)[1].lower()
+    media_types = {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+    }
+    media_type = media_types.get(ext, 'image/png')
+
+    with open(path, 'rb') as f:
+        data = base64.b64encode(f.read()).decode('utf-8')
+
+    return data, media_type
+
+
+def call_plan_refinement_api(
+    original_plan: dict,
+    instruction: str,
+    iterations: int,
+    api_key: str,
+    reference_image: str = None,
+) -> dict:
+    """Refine an existing drawing plan based on user instruction.
+
+    Takes a previous plan and modifies it according to the instruction,
+    keeping elements that aren't mentioned.
+
+    Args:
+        reference_image: Optional path to a reference image
+
+    Returns:
+        Refined plan dict
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    text_message = f"""## Original Plan
+```json
+{json.dumps(original_plan, indent=2)}
+```
+
+## Refinement Instruction
+{instruction}
+
+## Available Iterations: {iterations}
+
+Modify the plan above based on the refinement instruction.
+Keep everything that isn't mentioned in the instruction.
+Adjust coordinates, colors, and composition as needed to incorporate the changes.
+Divide the work into phases that fit within the iteration count.
+
+Respond with a JSON object containing a "plan" field."""
+
+    message_content = []
+    if reference_image:
+        img_data, media_type = load_reference_image(reference_image)
+        message_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": img_data,
+            },
+        })
+        message_content.append({"type": "text", "text": "**Reference image above.** Use it to guide proportions, composition, and style.\n\n" + text_message})
+        print(f"[Planning] Refining plan with reference image: {instruction}")
+    else:
+        message_content = text_message
+        print(f"[Planning] Refining plan: {instruction}")
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2000,
+        system=PLANNING_PROMPT,
+        messages=[{
+            "role": "user",
+            "content": message_content,
+        }],
+    )
+
+    text = response.content[0].text
+
+    try:
+        start = text.find('{')
+        end = text.rfind('}') + 1
+        if start >= 0 and end > start:
+            data = json.loads(text[start:end])
+            plan = data.get('plan', data)
+
+            print("[Plan] Refined drawing plan:")
+            print(f"  Description: {plan.get('description', 'N/A')}")
+            for phase in plan.get('phases', []):
+                print(f"  - {phase.get('name')}: iterations {phase.get('iterations')}")
+                print(f"    Goal: {phase.get('goal')}")
+
+            return plan
+    except json.JSONDecodeError as e:
+        print(f"[Error] Refined plan JSON parse failed: {e}")
+        print(f"[Debug] Raw response:\n{text[:500]}...")
+
+    # If parsing fails, return the original plan unchanged
+    print("[Warning] Could not parse refined plan, using original")
+    return original_plan
+
+
 def call_planning_api(
     goal: str,
     iterations: int,
     api_key: str,
+    reference_image: str = None,
 ) -> dict:
     """Call Claude API to create a drawing plan.
+
+    Args:
+        reference_image: Optional path to a reference image
 
     Returns:
         Plan dict with phases and composition details
@@ -1343,7 +1462,7 @@ def call_planning_api(
 
     client = anthropic.Anthropic(api_key=api_key)
 
-    user_message = f"""## Goal: {goal}
+    text_message = f"""## Goal: {goal}
 
 ## Available Iterations: {iterations}
 
@@ -1352,7 +1471,22 @@ Divide the work into phases that fit within the iteration count.
 
 Respond with a JSON object containing a "plan" field."""
 
-    print("[Planning] Creating drawing plan...")
+    message_content = []
+    if reference_image:
+        img_data, media_type = load_reference_image(reference_image)
+        message_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": img_data,
+            },
+        })
+        message_content.append({"type": "text", "text": "**Reference image above.** Use it to guide proportions, composition, and style.\n\n" + text_message})
+        print(f"[Planning] Creating drawing plan with reference image...")
+    else:
+        message_content = text_message
+        print("[Planning] Creating drawing plan...")
 
     response = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -1360,7 +1494,7 @@ Respond with a JSON object containing a "plan" field."""
         system=PLANNING_PROMPT,
         messages=[{
             "role": "user",
-            "content": user_message,
+            "content": message_content,
         }],
     )
 
@@ -2042,8 +2176,13 @@ def run_visual_feedback_loop(
     api_key: str = None,
     execution_model: str = "claude-sonnet-4-20250514",
     judge_model: str = "claude-sonnet-4-20250514",
+    existing_plan: dict = None,
+    reference_image: str = None,
 ) -> None:
-    """Run the AI drawing loop with real visual feedback."""
+    """Run the AI drawing loop with real visual feedback.
+
+    If existing_plan is provided, skips the planning phase and uses that plan directly.
+    """
 
     # Load from tools/.env if present
     load_env_file()
@@ -2075,11 +2214,16 @@ def run_visual_feedback_loop(
     try:
         controller.start(screenshot_dir)
 
-        # Create drawing plan FIRST (before any drawing)
+        # Create or use existing drawing plan
         print("\n" + "="*50)
         print("PLANNING PHASE")
         print("="*50)
-        plan = call_planning_api(goal, iterations, api_key)
+        if existing_plan is not None:
+            plan = existing_plan
+            print("[Plan] Using provided plan:")
+            print(f"  Description: {plan.get('description', 'N/A')}")
+        else:
+            plan = call_planning_api(goal, iterations, api_key, reference_image=reference_image)
         visual_identity = plan.get('visual_identity') if plan else None
 
         # Save plan to file
@@ -2676,6 +2820,16 @@ Examples:
     python tools/doodle_ai.py --goal "sunset with orange sky" --iterations 8
     python tools/doodle_ai.py --goal "simple house" --iterations 3
 
+    # Use a reference image
+    python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
+
+    # Refine a previous run
+    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "add a bird on a branch"
+    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "make trunk thicker" --iterations 3
+
+    # Refine with a reference image
+    python tools/doodle_ai.py --refine doodle_ai_output/20260203_143022 --instruction "make it look more like this" --reference palm_photo.jpg
+
 Requirements:
     - ANTHROPIC_API_KEY environment variable
     - cairosvg for SVG to PNG conversion: pip install cairosvg
@@ -2689,7 +2843,13 @@ Output (auto-generated timestamped folder):
     - generated_demo.py: Demo script for Purple Computer
         """
     )
-    parser.add_argument("--goal", required=True, help="What to draw")
+    parser.add_argument("--goal", default=None, help="What to draw (required unless using --refine)")
+    parser.add_argument("--refine", default=None, metavar="PREV_OUTPUT_DIR",
+                        help="Refine a previous run's plan. Pass the output directory containing plan.json")
+    parser.add_argument("--instruction", default=None,
+                        help="How to refine the plan (required with --refine)")
+    parser.add_argument("--reference", default=None, metavar="IMAGE_PATH",
+                        help="Reference image to guide composition and style (png, jpg, gif, webp)")
     parser.add_argument("--iterations", type=int, default=5, help="Feedback iterations")
     parser.add_argument("--output", default=None, help="Output directory (default: auto-generated)")
     parser.add_argument("--execution-model", default="claude-sonnet-4-20250514",
@@ -2699,13 +2859,55 @@ Output (auto-generated timestamped folder):
 
     args = parser.parse_args()
 
-    # Auto-generate output dir if not specified
+    # Validate args
+    if args.refine:
+        if not args.instruction:
+            parser.error("--instruction is required when using --refine")
+        plan_path = os.path.join(args.refine, "plan.json")
+        if not os.path.exists(plan_path):
+            parser.error(f"No plan.json found in {args.refine}")
+    elif not args.goal:
+        parser.error("--goal is required (unless using --refine)")
+
+    if args.reference and not os.path.exists(args.reference):
+        parser.error(f"Reference image not found: {args.reference}")
+
+    # Auto-generate output dir
     output_dir = args.output if args.output else generate_output_dir()
+
+    # Handle refinement: load previous plan, refine it, then run
+    existing_plan = None
+    goal = args.goal
+    if args.refine:
+        plan_path = os.path.join(args.refine, "plan.json")
+        with open(plan_path) as f:
+            original_plan = json.load(f)
+        goal = original_plan.get('description', 'drawing')
+
+        # Load env/API key for refinement call
+        load_env_file()
+        api_key = os.environ.get('ANTHROPIC_API_KEY')
+        if not api_key:
+            print("Error: Set ANTHROPIC_API_KEY in tools/.env or environment")
+            sys.exit(1)
+
+        existing_plan = call_plan_refinement_api(
+            original_plan=original_plan,
+            instruction=args.instruction,
+            iterations=args.iterations,
+            api_key=api_key,
+            reference_image=args.reference,
+        )
 
     print("="*60)
     print("Purple Computer AI Drawing Tool")
     print("="*60)
-    print(f"Goal: {args.goal}")
+    if args.reference:
+        print(f"Reference: {args.reference}")
+    if args.refine:
+        print(f"Refining: {args.refine}")
+        print(f"Instruction: {args.instruction}")
+    print(f"Goal: {goal}")
     print(f"Iterations: {args.iterations}")
     print(f"Execution model: {args.execution_model}")
     print(f"Judge model: {args.judge_model}")
@@ -2714,11 +2916,13 @@ Output (auto-generated timestamped folder):
     print()
 
     run_visual_feedback_loop(
-        goal=args.goal,
+        goal=goal,
         iterations=args.iterations,
         output_dir=output_dir,
         execution_model=args.execution_model,
         judge_model=args.judge_model,
+        existing_plan=existing_plan,
+        reference_image=args.reference,
     )
 
 

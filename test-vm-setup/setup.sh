@@ -60,7 +60,7 @@ install_if_needed \
     xorg xinit xauth x11-xserver-utils \
     xserver-xorg-core xserver-xorg-input-all \
     libgl1-mesa-dri \
-    matchbox-window-manager i3 feh \
+    matchbox-window-manager dwm feh \
     alacritty xterm \
     libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
     ncurses-term unclutter xkbset evtest
@@ -128,31 +128,6 @@ XWRAP
 # --- X11 startup and helper scripts ---
 echo "[7/7] Creating X11 startup files..."
 
-# i3 config (written once, not inside xinitrc to avoid nested heredoc issues)
-mkdir -p ~/.config/i3
-cat > ~/.config/i3/config << 'I3CFG'
-# i3 config file (v4)
-# Minimal config for Purple Computer test VM (used by startx-tiling)
-
-font pango:monospace 10
-default_border none
-default_floating_border none
-
-# Force horizontal split so new windows appear side-by-side
-default_orientation horizontal
-workspace_layout splith
-
-# Use Alt as modifier
-set $mod Mod1
-bindsym $mod+Return exec alacritty
-bindsym $mod+h focus left
-bindsym $mod+l focus right
-
-bar {
-    mode invisible
-}
-I3CFG
-
 # .xinitrc
 cat > ~/.xinitrc << 'XINITRC'
 #!/bin/bash
@@ -179,11 +154,11 @@ command -v unclutter &>/dev/null && unclutter -idle 2 &
 # Purple background
 xsetroot -solid "#2d1b4e"
 
-# Window manager: WM=i3 for tiling, matchbox (default) for fullscreen
+# Window manager: WM=tiling for side-by-side (dwm), matchbox (default) for fullscreen
 WM="${WM:-matchbox}"
 echo "Starting WM: $WM"
-if [ "$WM" = "i3" ]; then
-    i3 &
+if [ "$WM" = "tiling" ]; then
+    dwm &
 else
     matchbox-window-manager -use_titlebar no &
 fi
@@ -197,8 +172,9 @@ chmod +x ~/.xinitrc
 # startx-tiling: launches X with i3 tiling WM
 sudo tee /usr/local/bin/startx-tiling > /dev/null << 'STILING'
 #!/bin/bash
-# Start X with i3 tiling WM (for doodle_ai --human, image review, etc.)
-WM=i3 exec startx
+# Start X with dwm tiling WM (for doodle_ai --human, image review, etc.)
+# dwm shows all windows side-by-side automatically (master+stack layout)
+WM=tiling exec startx
 STILING
 sudo chmod +x /usr/local/bin/startx-tiling
 

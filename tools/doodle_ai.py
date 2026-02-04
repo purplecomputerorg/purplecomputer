@@ -3305,17 +3305,11 @@ def judge_components_human(
         feh_proc = None
         try:
             if has_feh:
-                # Ensure i3 uses horizontal split so feh appears beside the terminal
-                if shutil.which('i3-msg'):
-                    subprocess.run(['i3-msg', 'layout splith'], capture_output=True)
                 feh_proc = subprocess.Popen(
                     ['feh', '--scale-down', '--auto-zoom', '--title', f'Component: {name}', tmp.name],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
                 time.sleep(0.3)
-                # Refocus terminal so input() works
-                if shutil.which('i3-msg'):
-                    subprocess.run(['i3-msg', '[class="Alacritty"] focus'], capture_output=True)
             else:
                 print(f"[Human Judge] View: {tmp.name}")
 

@@ -5,8 +5,9 @@ Reads training output from doodle_ai.py and generates a demo script
 that can be played back with PURPLE_DEMO_AUTOSTART=1.
 
 Usage:
-    ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022
-    ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --iteration 3 --duration 12
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 12
 """
 
 import argparse
@@ -65,28 +66,50 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Pick best iteration, target 10s playback
-    ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022
+    # From output directory (picks best iteration)
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022
+
+    # From a specific screenshot (uses that iteration)
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
 
     # Pick specific iteration, target 12s
-    ./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --iteration 3 --duration 12
+    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 12
 
 After installing, run:
     make run-demo
         """,
     )
-    parser.add_argument("--output-dir", required=True,
-                        help="Path to doodle_ai training output directory")
-    parser.add_argument("--iteration", type=int, default=None,
-                        help="Which iteration to use (default: best)")
+    parser.add_argument("--from", dest="from_path", required=True, metavar="PATH",
+                        help="Training output directory, or a screenshot PNG/SVG from it")
+    parser.add_argument("--iteration", default=None,
+                        help="Which iteration to use (default: best, or inferred from screenshot)")
     parser.add_argument("--duration", type=float, default=10.0,
                         help="Target playback duration in seconds (default: 10)")
 
     args = parser.parse_args()
 
-    output_dir = args.output_dir
-    if not os.path.isdir(output_dir):
-        print(f"Error: output directory not found: {output_dir}")
+    from_path = args.from_path
+    iteration = args.iteration
+
+    # Resolve --from to an output directory (and optionally an iteration)
+    if os.path.isfile(from_path) and from_path.lower().endswith(('.png', '.svg')):
+        from tools.doodle_ai import resolve_screenshot_to_output_dir, extract_iteration_label
+
+        # For SVG, look for the corresponding _cropped.png
+        if from_path.lower().endswith('.svg'):
+            png_candidate = from_path.rsplit('.', 1)[0] + '_cropped.png'
+            if os.path.exists(png_candidate):
+                from_path = png_candidate
+
+        output_dir = resolve_screenshot_to_output_dir(from_path)
+
+        if iteration is None:
+            iteration = extract_iteration_label(from_path)
+            print(f"Using iteration from screenshot: {iteration}")
+    elif os.path.isdir(from_path):
+        output_dir = from_path
+    else:
+        print(f"Error: path not found: {from_path}")
         sys.exit(1)
 
     # Load iteration scripts
@@ -101,8 +124,7 @@ After installing, run:
         print("Error: iteration_scripts.json is empty")
         sys.exit(1)
 
-    # Determine which iteration to use
-    iteration = args.iteration
+    # Determine which iteration to use (if not already set from screenshot)
     if iteration is None:
         # Read best_iteration.json
         best_path = os.path.join(output_dir, "best_iteration.json")

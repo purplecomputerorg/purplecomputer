@@ -30,17 +30,20 @@ The `_cropped.png` files show exactly what the AI saw (just the canvas area). Op
 
 ```bash
 # Use the best iteration, target 10 seconds of playback
-./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022
+./tools/install-doodle-demo --from doodle_ai_output/20260202_143022
 ```
 
 Options:
 
 ```bash
-# Pick a specific iteration
-./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --iteration 3
+# Install from a specific screenshot (uses that iteration automatically)
+./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
+
+# Pick a specific iteration by name
+./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3
 
 # Change target playback duration (default: 10 seconds)
-./tools/install-doodle-demo --output-dir doodle_ai_output/20260202_143022 --duration 15
+./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --duration 15
 ```
 
 This writes `purple_tui/demo/ai_generated_script.py`. The demo system picks it up automatically.

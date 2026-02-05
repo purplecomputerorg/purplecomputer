@@ -585,6 +585,30 @@ class ComponentLibrary:
         )
 
 
+def resolve_screenshot_to_output_dir(image_path: str) -> str:
+    """Resolve a screenshot PNG/SVG path to its parent output directory.
+
+    Screenshots live in <output_dir>/screenshots/, so this goes up one level.
+    """
+    image_path = os.path.abspath(image_path)
+    parent = os.path.dirname(image_path)
+    if os.path.basename(parent) == "screenshots":
+        return os.path.dirname(parent)
+    raise FileNotFoundError(f"Expected image to be inside a screenshots/ directory: {image_path}")
+
+
+def extract_iteration_label(image_path: str) -> str:
+    """Extract the iteration label from a screenshot filename.
+
+    E.g. "iteration_2b_refinement_cropped.png" -> "2b"
+    """
+    basename = os.path.basename(image_path)
+    m = re.search(r'iteration_(\w+?)_', basename)
+    if not m:
+        raise ValueError(f"Could not extract iteration label from filename: {basename}")
+    return m.group(1)
+
+
 def reconstruct_library_from_run(png_path: str) -> tuple[dict, 'ComponentLibrary', str]:
     """Reconstruct a ComponentLibrary from a previous run's screenshot PNG.
 
@@ -594,14 +618,7 @@ def reconstruct_library_from_run(png_path: str) -> tuple[dict, 'ComponentLibrary
 
     Returns (plan, library, goal).
     """
-    png_path = os.path.abspath(png_path)
-
-    # Find output dir: go up from screenshots/ to parent
-    png_dir = os.path.dirname(png_path)
-    if os.path.basename(png_dir) == "screenshots":
-        output_dir = os.path.dirname(png_dir)
-    else:
-        raise FileNotFoundError(f"Expected PNG to be inside a screenshots/ directory: {png_path}")
+    output_dir = resolve_screenshot_to_output_dir(png_path)
 
     # Load plan
     plan_path = os.path.join(output_dir, "plan.json")
@@ -611,12 +628,7 @@ def reconstruct_library_from_run(png_path: str) -> tuple[dict, 'ComponentLibrary
         plan = json.load(f)
     goal = plan.get('description', 'drawing')
 
-    # Extract attempt label from filename (e.g. "iteration_2b_refinement_cropped.png" -> "2b")
-    basename = os.path.basename(png_path)
-    m = re.search(r'iteration_(\w+?)_', basename)
-    if not m:
-        raise ValueError(f"Could not extract iteration label from filename: {basename}")
-    target_label = m.group(1)
+    target_label = extract_iteration_label(png_path)
 
     # Load iteration scripts
     scripts_path = os.path.join(output_dir, "iteration_scripts.json")

@@ -82,6 +82,85 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     return True
 
 
+def _stub_ui_modules():
+    """Stub out textual/rich/pygame so we can import SimpleEvaluator without UI deps.
+
+    SimpleEvaluator is pure computation (no textual dependency), but it lives
+    in explore_mode.py which imports textual at module level for the UI classes.
+    The modes/__init__.py also imports all modes, pulling in their dependencies.
+    """
+    import types
+
+    class _StubClass:
+        """Dummy class that accepts any args and returns itself for chaining."""
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __init_subclass__(cls, **kwargs):
+            pass
+
+        def __call__(self, *args, **kwargs):
+            return self
+
+        def __getattr__(self, name):
+            return _StubClass()
+
+    class _PygameError(Exception):
+        """Stub for pygame.error so it can be caught."""
+        pass
+
+    class _PygameMixer:
+        """Stub for pygame.mixer module."""
+        @staticmethod
+        def init(*args, **kwargs):
+            raise _PygameError("stubbed")
+
+        @staticmethod
+        def get_init():
+            return None
+
+        @staticmethod
+        def set_num_channels(*args):
+            pass
+
+        Sound = _StubClass
+        Channel = _StubClass
+
+    class _PygameModule(types.ModuleType):
+        """Stub for pygame with working error exception."""
+        error = _PygameError
+        mixer = _PygameMixer
+
+        def __getattr__(self, name):
+            return _StubClass
+
+    class _StubModule(types.ModuleType):
+        """Module that returns a dummy class for any attribute lookup."""
+        def __getattr__(self, name):
+            return _StubClass
+
+    stub_modules = [
+        # textual
+        'textual', 'textual.widgets', 'textual.widget', 'textual.containers',
+        'textual.app', 'textual.events', 'textual.message', 'textual.strip',
+        'textual.reactive', 'textual.css', 'textual.css.query',
+        'textual.binding', 'textual.theme', 'textual.screen',
+        # rich
+        'rich', 'rich.segment', 'rich.style', 'rich.text', 'rich.highlighter',
+        # pygame
+        'pygame', 'pygame.mixer',
+    ]
+
+    for mod_name in stub_modules:
+        if mod_name not in sys.modules:
+            if mod_name == 'pygame':
+                sys.modules[mod_name] = _PygameModule(mod_name)
+            elif mod_name == 'pygame.mixer':
+                sys.modules[mod_name] = _PygameMixer
+            else:
+                sys.modules[mod_name] = _StubModule(mod_name)
+
+
 def _collect_all_actions() -> list:
     """Collect all demo actions from composition segments and fallback script."""
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -117,6 +196,7 @@ def extract_demo_phrases() -> list[str]:
     Evaluates the expression and converts to speakable text.
     """
     sys.path.insert(0, str(PROJECT_ROOT))
+    _stub_ui_modules()
 
     from purple_tui.demo.script import TypeText
     from purple_tui.modes.explore_mode import SimpleEvaluator

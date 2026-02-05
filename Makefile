@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo voice-clips voice-variants
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -19,6 +19,8 @@ help:
 	@echo ""
 	@echo "Recording:"
 	@echo "  make record-demo     - Record demo to recordings/demo.mp4 (VM only)"
+	@echo "  make voice-clips     - Generate TTS voice clips for demo"
+	@echo "  make voice-variants  - Generate 5 variants of each clip (for auditioning)"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build-packs     - Build content packs"
@@ -114,5 +116,15 @@ record-demo:
 	@.venv/bin/python scripts/generate_voice_clips.py
 	@echo "Recording demo..."
 	./recording-setup/record-demo.sh
+
+voice-clips:
+	@echo "Generating TTS voice clips for demo..."
+	@.venv/bin/python scripts/generate_voice_clips.py
+
+voice-variants:
+	@echo "Generating 5 variants of each voice clip..."
+	@.venv/bin/python scripts/generate_voice_clips.py --variants 5
+	@echo ""
+	@echo "Listen to variants and copy the best one over the original."
 
 .DEFAULT_GOAL := help

@@ -91,7 +91,12 @@ def _stub_ui_modules():
     """
     import types
 
-    class _StubClass:
+    class _StubMeta(type):
+        """Metaclass that allows _StubClass to return itself for class-level attribute access."""
+        def __getattr__(cls, name):
+            return cls
+
+    class _StubClass(metaclass=_StubMeta):
         """Dummy class that accepts any args and returns itself for chaining."""
         def __init__(self, *args, **kwargs):
             pass

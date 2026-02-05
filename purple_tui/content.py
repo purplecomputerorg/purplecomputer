@@ -109,6 +109,7 @@ class ContentManager:
             "piano": "🎹", "rocket": "🚀", "car": "🚗", "bus": "🚌",
             "train": "🚂", "airplane": "✈️", "boat": "⛵", "bike": "🚲",
             "house": "🏠", "castle": "🏰", "tent": "⛺",
+            "headphones": "🎧",
             "phone": "📱", "camera": "📷", "computer": "💻", "clock": "🕐",
             "lamp": "💡", "key": "🔑", "umbrella": "☂️", "glasses": "👓",
             "hat": "🎩", "shoe": "👟", "shirt": "👕", "dress": "👗",
@@ -158,6 +159,7 @@ class ContentManager:
             "haha": "😂", "lol": "😂",
             "good": "✅", "bad": "❌", "great": "👍",
             "yay": "👏", "hi": "👋", "hello": "👋", "bye": "👋",
+            "headphone": "🎧",
 
             # Emoticons
             ":)": "😊", ":-)": "😊",

@@ -6,6 +6,10 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Demo: expanded explore segment**: Demo now showcases emoji math, color mixing, speech, and a welcome message instead of a short 3-line greeting
+- **Demo: doodle intro text**: Doodle segment now types "This is Doodle mode. Write and paint!" with color swatches before drawing the palm tree
+- **Demo: play mode glissando**: Smiley face builds faster (quicker eyes/nose), then a rapid back-and-forth over the mouth creates a glissando finale
+- **Voice clip generation: scans composition segments**: generate_voice_clips.py now extracts phrases from demo.json segments (not just default_script.py); supports --variants N to generate multiple audition copies
 - **Color words in free text**: Typing "purple truck" now shows a purple color swatch alongside the truck emoji; previously color words were ignored without a `+` operator
 - **Vibrant color mixing**: Red + blue now produces a vibrant purple instead of a muddy dark one; switched from Kubelka-Munk K/S to Beer-Lambert spectral mixing
 - **Composable demo segments**: demos can now be composed from named segments via `demo.json`; `--save NAME` on play-ai and install-doodle-demo writes segments and auto-builds the composition; per-segment speed control via `SetSpeed` action

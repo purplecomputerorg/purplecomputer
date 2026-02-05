@@ -82,23 +82,49 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     return True
 
 
+def _collect_all_actions() -> list:
+    """Collect all demo actions from composition segments and fallback script."""
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+    from purple_tui.demo.script import TypeText
+    import importlib
+    import json
+
+    actions = []
+
+    # Try composition segments first (demo.json)
+    demo_json = PROJECT_ROOT / "purple_tui" / "demo" / "demo.json"
+    if demo_json.exists():
+        entries = json.loads(demo_json.read_text())
+        for entry in entries:
+            name = entry["segment"]
+            mod = importlib.import_module(
+                f"purple_tui.demo.segments.{name}"
+            )
+            actions.extend(mod.SEGMENT)
+
+    # Also scan the default script as fallback
+    from purple_tui.demo.default_script import DEMO_SCRIPT
+    actions.extend(DEMO_SCRIPT)
+
+    return actions
+
+
 def extract_demo_phrases() -> list[str]:
-    """Extract speakable phrases from the demo script.
+    """Extract speakable phrases from demo segments and default script.
 
     Looks for TypeText actions containing ! (speech trigger).
     Evaluates the expression and converts to speakable text.
     """
-    # Add project root to path for imports
     sys.path.insert(0, str(PROJECT_ROOT))
 
-    from purple_tui.demo.default_script import DEMO_SCRIPT
     from purple_tui.demo.script import TypeText
     from purple_tui.modes.explore_mode import SimpleEvaluator
 
     evaluator = SimpleEvaluator()
     phrases = []
 
-    for action in DEMO_SCRIPT:
+    for action in _collect_all_actions():
         if not isinstance(action, TypeText):
             continue
 
@@ -133,9 +159,11 @@ def main():
     parser = argparse.ArgumentParser(description="Generate pre-recorded voice clips")
     parser.add_argument("--force", "-f", action="store_true",
                         help="Regenerate all clips even if they exist")
+    parser.add_argument("--variants", type=int, default=0, metavar="N",
+                        help="Generate N variants of each new clip (for auditioning)")
     args = parser.parse_args()
 
-    print("Scanning demo script for speech phrases...")
+    print("Scanning demo segments for speech phrases...")
     demo_phrases = extract_demo_phrases()
 
     all_phrases = STATIC_PHRASES + demo_phrases
@@ -154,13 +182,9 @@ def main():
         if args.force or not output_path.exists():
             to_generate.append((phrase, output_path))
 
-    if not to_generate:
+    if not to_generate and args.variants <= 0:
         print("All voice clips already exist. Use --force to regenerate.")
         return 0
-
-    print()
-    print(f"Generating {len(to_generate)} voice clips...")
-    print()
 
     # Find voice model
     model_path = find_voice_model()
@@ -186,13 +210,37 @@ def main():
 
     voice = PiperVoice.load(str(model_path))
 
-    # Generate clips
-    print("Generating voice clips:")
-    for phrase, output_path in to_generate:
-        if generate_clip(voice, phrase, output_path):
-            print(f"  Created {output_path.name}")
-        else:
-            print(f"  FAILED: {output_path.name}")
+    # Generate standard clips
+    if to_generate:
+        print(f"Generating {len(to_generate)} voice clips...")
+        print()
+        for phrase, output_path in to_generate:
+            if generate_clip(voice, phrase, output_path):
+                print(f"  Created {output_path.name}")
+            else:
+                print(f"  FAILED: {output_path.name}")
+        print()
+
+    # Generate variants (for auditioning)
+    if args.variants > 0:
+        # Generate variants for new demo phrases only (not static UI phrases)
+        variant_phrases = demo_phrases if demo_phrases else all_phrases
+        print(f"Generating {args.variants} variants for {len(variant_phrases)} phrases...")
+        print()
+        for phrase in variant_phrases:
+            base = phrase_to_filename(phrase).removesuffix(".wav")
+            for i in range(1, args.variants + 1):
+                output_path = VOICE_DIR / f"{base}_v{i}.wav"
+                if generate_clip(voice, phrase, output_path):
+                    print(f"  Created {output_path.name}")
+                else:
+                    print(f"  FAILED: {output_path.name}")
+        print()
+        print("Listen to each variant and copy the best one:")
+        for phrase in variant_phrases:
+            final_name = phrase_to_filename(phrase)
+            base = final_name.removesuffix(".wav")
+            print(f"  cp {VOICE_DIR}/{base}_v?.wav {VOICE_DIR}/{final_name}")
 
     print()
     print(f"Done! Voice clips saved to {VOICE_DIR}")

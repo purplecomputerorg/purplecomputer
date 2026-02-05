@@ -1,15 +1,47 @@
-"""AI-generated drawing demo."""
+"""Doodle mode demo: intro text + palm tree drawing."""
 
 from ..script import (
     PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
+    SetSpeed, TypeText,
 )
 
 SEGMENT = [
-    Comment("=== AI GENERATED DRAWING ==="),
+    Comment("=== DOODLE MODE INTRO + PALM TREE ==="),
     SwitchMode("doodle"),
     Pause(0.3),
-    PressKey("tab"),  # Enter paint mode
 
+    SetSpeed(1.0),
+    Comment("Move to right side of canvas for intro text"),
+    MoveSequence(directions=['right'] * 50 + ['down'] * 18, delay_per_step=0.008),
+
+    Comment("Type intro in text mode"),
+    TypeText("This is Doodle mode. Write and paint!"),
+    PressKey("enter", pause_after=0.1),
+    MoveSequence(directions=['left'] * 37, delay_per_step=0.008),
+    TypeText("When you paint, every letter is a shade of "),
+
+    Comment("Switch to paint mode for color demonstration"),
+    PressKey("tab", pause_after=0.1),
+    Comment("3 red shades (light to dark)"),
+    PressKey('q', pause_after=0.08),
+    PressKey('y', pause_after=0.08),
+    PressKey('p', pause_after=0.08),
+    Comment("3 yellow shades (light to dark)"),
+    PressKey('a', pause_after=0.08),
+    PressKey('h', pause_after=0.08),
+    PressKey(';', pause_after=0.08),
+    Comment("3 blue shades (light to dark)"),
+    PressKey('z', pause_after=0.08),
+    PressKey('n', pause_after=0.08),
+    PressKey('/', pause_after=0.08),
+
+    Pause(2.5),
+
+    Comment("Move cursor back to origin for palm tree painting"),
+    MoveSequence(directions=['left'] * 102 + ['up'] * 19, delay_per_step=0.008),
+
+    SetSpeed(83.365),
+    Comment("=== PALM TREE PAINTING (AI GENERATED) ==="),
     MoveSequence(directions=['right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down'], delay_per_step=0.008),
     PressKey('f'),
     PressKey('f'),

@@ -1,20 +1,52 @@
-"""Short explore mode greeting to open the demo."""
+"""Explore mode demo: introduction and feature showcase."""
 
 from ..script import SwitchMode, TypeText, PressKey, Pause, Comment
 
+# Fast typing (0.03s/char) with brief final_pause, longer pauses on results
+_FAST = dict(delay_per_char=0.03, final_pause=0.1)
+
 SEGMENT = [
-    SwitchMode("explore"),
-    Comment("Say hello"),
-    TypeText("hello!"),
+    SwitchMode("explore", pause_after=0.3),
+
+    Comment("Greeting"),
+    TypeText("Hi :)", **_FAST),
+    PressKey("enter", pause_after=0.6),
+
+    Comment("Welcome"),
+    TypeText("Welcome to Purple Computer", **_FAST),
+    PressKey("enter", pause_after=0.8),
+
+    Comment("Tagline"),
+    TypeText("Turn any old laptop into a Purple Computer <3", **_FAST),
     PressKey("enter", pause_after=1.0),
 
-    Comment("Show color mixing"),
-    TypeText("red + blue"),
-    PressKey("enter", pause_after=1.5),
+    Comment("Philosophy"),
+    TypeText("Less is more. No internet. 3 modes. Explore, Play, Doodle.", **_FAST),
+    PressKey("enter", pause_after=1.3),
 
-    Comment("Show emoji math"),
-    TypeText("3 cats"),
-    PressKey("enter", pause_after=1.5),
+    Comment("Introduce explore mode"),
+    TypeText("This is Explore.", **_FAST),
+    PressKey("enter", pause_after=0.6),
 
-    Pause(0.5),
+    Comment("Math with emojis"),
+    TypeText("2 rabbits ate 3 + 7 carrots", **_FAST),
+    PressKey("enter", pause_after=1.0),
+
+    Comment("Color mixing"),
+    TypeText("red + blue + blue", **_FAST),
+    PressKey("enter", pause_after=1.0),
+
+    Comment("More colors"),
+    TypeText("3 periwinkles + violet", **_FAST),
+    PressKey("enter", pause_after=1.0),
+
+    Comment("Introduce speech"),
+    TypeText("and it talks, too...", **_FAST),
+    PressKey("enter", pause_after=0.6),
+
+    Comment("Math with speech (! triggers TTS)"),
+    TypeText("10 x 10 dinosaurs!", **_FAST),
+    PressKey("enter", pause_after=2.0),
+
+    Pause(0.3),
 ]

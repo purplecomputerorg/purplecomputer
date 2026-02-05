@@ -224,12 +224,11 @@ def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     # handles subtractive mixing without the extreme darkening that K/S
     # arithmetic mean produces.
     result_spectrum = []
-    squared_weights = [w * w for w in weights]
-    total_weight = sum(squared_weights)
+    total_weight = sum(weights)
     for i in range(SIZE):
         log_r = 0.0
-        for spectrum, sw in zip(spectra, squared_weights):
-            log_r += math.log(spectrum[i]) * sw
+        for spectrum, w in zip(spectra, weights):
+            log_r += math.log(spectrum[i]) * w
         result_spectrum.append(math.exp(log_r / total_weight))
 
     # Convert spectrum to sRGB
@@ -257,8 +256,9 @@ def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
 
 def mix_colors_paint(colors: list[str]) -> str:
     """
-    Mix multiple colors like paint using Kubelka-Munk spectral mixing.
-    Mixes pairwise, tracking accumulated weight so counts affect result.
+    Mix multiple colors like paint using Beer-Lambert spectral mixing.
+    Duplicate colors naturally increase that color's influence:
+    [red, red, red, blue] = 75% red, 25% blue.
 
     Args:
         colors: List of hex color strings (e.g., ["#FF0000", "#0000FF"])
@@ -272,19 +272,7 @@ def mix_colors_paint(colors: list[str]) -> str:
     if len(colors) == 1:
         return colors[0]
 
-    # Mix pairwise, tracking accumulated weight
-    result = colors[0]
-    result_weight = 1.0
-    for i in range(1, len(colors)):
-        if colors[i].upper() == result.upper():
-            # Same color: just increase weight
-            result_weight += 1.0
-        else:
-            # Different color: mix with weights
-            result = _mix_colors_internal([result, colors[i]], [result_weight, 1.0])
-            result_weight = 1.0  # Reset: mixed result is now a single "unit"
-
-    return result
+    return _mix_colors_internal(colors)
 
 
 def get_color_name_approximation(hex_color: str) -> str:

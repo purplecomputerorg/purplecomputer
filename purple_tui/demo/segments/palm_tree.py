@@ -12,7 +12,7 @@ SEGMENT = [
 
     SetSpeed(1.0),
     Comment("Move to right side of canvas for intro text"),
-    MoveSequence(directions=['right'] * 65 + ['down'] * 19, delay_per_step=0.008),
+    MoveSequence(directions=['right'] * 65 + ['down'] * 18, delay_per_step=0.008),
 
     Comment("Type intro in text mode (4 lines)"),
     TypeText("This is Doodle mode."),
@@ -48,10 +48,13 @@ SEGMENT = [
 
     Pause(2.5),
 
+    Comment("Switch to paint mode for palm tree"),
+    PressKey("tab", pause_after=0.1),
+
     SetSpeed(83.365),
     Comment("=== PALM TREE PAINTING (AI GENERATED) ==="),
-    Comment("Move from text end (91,22) to palm tree start (48,26)"),
-    MoveSequence(directions=['left'] * 43 + ['down'] * 4, delay_per_step=0.008),
+    Comment("Move from text end (91,21) to palm tree start (48,26)"),
+    MoveSequence(directions=['left'] * 43 + ['down'] * 5, delay_per_step=0.008),
     PressKey('f'),
     PressKey('f'),
     PressKey('f'),

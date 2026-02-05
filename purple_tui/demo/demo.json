@@ -1,4 +1,11 @@
 [
-  {"segment": "greeting"},
-  {"segment": "palm_tree"}
+  {
+    "segment": "greeting"
+  },
+  {
+    "segment": "palm_tree"
+  },
+  {
+    "segment": "tune"
+  }
 ]

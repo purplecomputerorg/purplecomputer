@@ -191,7 +191,12 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
 
 def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     """
-    Internal: Mix multiple colors at once using Kubelka-Munk spectral mixing.
+    Internal: Mix multiple colors using spectral reflectance with Beer-Lambert mixing.
+
+    Uses weighted geometric mean of spectral reflectance (equivalent to
+    Beer-Lambert absorption model). This preserves vibrancy better than
+    Kubelka-Munk K/S arithmetic mean, which over-darkens when mixing colors
+    that reflect in different wavelength regions (e.g. red + blue).
     """
     if not colors:
         return "#808080"
@@ -205,27 +210,25 @@ def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     if weights is None:
         weights = [1.0] * len(colors)
 
-    # Convert colors to spectra and compute luminances
+    # Convert colors to spectral reflectance curves
     spectra = []
-    luminances = []
     for hex_color in colors:
         rgb = hex_to_rgb(hex_color)
         lrgb = (_srgb_to_linear(rgb[0]), _srgb_to_linear(rgb[1]), _srgb_to_linear(rgb[2]))
-        spectrum = _linear_rgb_to_spectrum(lrgb)
-        spectra.append(spectrum)
-        xyz = _spectrum_to_xyz(spectrum)
-        luminances.append(max(1e-10, xyz[1]))
+        spectra.append(_linear_rgb_to_spectrum(lrgb))
 
-    # Mix using Kubelka-Munk
+    # Mix using weighted geometric mean of reflectance (Beer-Lambert model).
+    # In log-reflectance space this is a weighted average, which naturally
+    # handles subtractive mixing without the extreme darkening that K/S
+    # arithmetic mean produces.
     result_spectrum = []
+    squared_weights = [w * w for w in weights]
+    total_weight = sum(squared_weights)
     for i in range(SIZE):
-        ks_mix = 0
-        total_concentration = 0
-        for spectrum, weight, luminance in zip(spectra, weights, luminances):
-            concentration = weight * weight * luminance
-            total_concentration += concentration
-            ks_mix += _ks(spectrum[i]) * concentration
-        result_spectrum.append(_km(ks_mix / total_concentration))
+        log_r = 0.0
+        for spectrum, sw in zip(spectra, squared_weights):
+            log_r += math.log(spectrum[i]) * sw
+        result_spectrum.append(math.exp(log_r / total_weight))
 
     # Convert back to RGB
     xyz = _spectrum_to_xyz(result_spectrum)

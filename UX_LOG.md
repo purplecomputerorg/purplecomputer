@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Vibrant color mixing**: Red + blue now produces a vibrant purple instead of a muddy dark one; switched from Kubelka-Munk K/S to Beer-Lambert spectral mixing
 - **Composable demo segments**: demos can now be composed from named segments via `demo.json`; `--save NAME` on play-ai and install-doodle-demo writes segments and auto-builds the composition; per-segment speed control via `SetSpeed` action
 - **Doodle AI: draw_technique replaces shape examples**: planner now generates per-component `draw_technique` guidance instead of relying on 11 hardcoded shape examples; execution prompt condensed from ~160 lines to ~50 lines of 3 core techniques (horizontal fills, diagonal chains, layered depth)
 - **Doodle AI: human feedback option**: press `f` during judging (triage or per-component) to give free-text feedback that feeds into the next iteration's drawing prompt

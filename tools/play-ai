@@ -1,0 +1,17 @@
+#!/bin/bash
+# AI composition tool for Purple Computer Play Mode
+# Usage: ./tools/play-ai "smiley face that sounds happy"
+#        ./tools/play-ai "heart" --no-review
+#        ./tools/play-ai "rainstorm" --json
+#        ./tools/play-ai "happy birthday" --install
+
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+
+# Install tool dependencies if missing
+if ! python -c "import anthropic" 2>/dev/null; then
+    echo "Installing tool dependencies..."
+    pip install -q -r tools/requirements.txt
+fi
+
+exec python tools/play_ai.py "$@"

@@ -1454,7 +1454,8 @@ Plan compositions that are FUN TO WATCH being drawn:
         "y_range": [start, end],
         "final_color": "green (or red, blue, yellow, brown, etc.)",
         "mixing_recipe": "yellow base + blue overlay" or null for pure colors,
-        "description": "what this element is"
+        "description": "what this element is",
+        "shape_profile": "optional: describe the top/bottom edge shape, e.g. 'back arches up to y=10 at center, slopes to y=16 at sides' or 'round canopy, widest at y=8'"
       }}
     }},
     "style_notes": "Key points about the visual style - emphasize CURVED, ORGANIC shapes (e.g., 'round fluffy foliage, not rectangular')",
@@ -1478,7 +1479,7 @@ Each composition element will be independently evaluated, scored, and potentiall
 Good component breakdown for a tree: canopy, trunk, ground, shadows, highlights
 Bad: "left_leaf_1", "left_leaf_2" (too granular) or "tree" (too coarse)
 
-**CURVATURE TIP:** For animals or organic subjects with curved profiles (e.g., a dinosaur's arched back with plates), give decorative elements (plates, spines, fins) bounds that overlap significantly with the body. This lets the drawing AI place them at varying heights along the curve instead of in a flat row. For example, a stegosaurus's plates should share y_range with the body so they can follow the back's arc.
+**CURVATURE TIP:** For animals or organic subjects with curved profiles (e.g., a dinosaur's arched back), use `shape_profile` to describe the curvature explicitly with y-coordinates. For example: `"shape_profile": "back arches from y=18 at head (x=25) up to y=12 at hips (x=55), down to y=16 at tail (x=80)"`. Give decorative elements (plates, spines, fins) overlapping bounds with the body AND their own shape_profile describing the curve they follow. The execution AI will use these coordinates to place fills at the right heights instead of in a flat row.
 
 **COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-{CANVAS_WIDTH - 1}.
 
@@ -1690,7 +1691,28 @@ Lf34,18,66,18
 Lf38,19,62,19
 ```
 
+**Arched body (animal with curved back, e.g., dinosaur, cat, buffalo):**
+The top edge arches up (lower y = higher on screen) while the belly stays flat.
+```actions
+## Back arches up at center (y=12), belly flat at y=19
+Lf45,16,55,16
+Lf40,15,60,15
+Lf36,14,64,14
+Lf33,13,67,13
+Lf31,12,69,12
+Lf33,13,67,13
+Lf36,14,64,14
+## Now belly rows (flat bottom edge)
+Lf30,15,70,15
+Lf30,16,70,16
+Lf30,17,70,17
+Lf30,18,70,18
+Lf32,19,68,19
+```
+Note how the top rows narrow (arch shape) while bottom rows stay wide (flat belly). The body is NOT vertically symmetric. Use this for any animal whose back curves upward. If the plan includes a `shape_profile`, follow those y-coordinates for the top edge.
+
 **WRONG (rectangle body):** same x-range every row = boxy, unnatural shape. ALWAYS vary the width.
+**WRONG (symmetric oval for arched animals):** if the animal has a curved back, don't use a symmetric oval. The top edge should follow the arch described in the plan's shape_profile.
 
 **Tapered tail (progressively shorter fills):**
 ```actions
@@ -2286,9 +2308,12 @@ def call_vision_api(
                     y_range = part_info.get('y_range', '')
                     color = part_info.get('final_color', '')
                     recipe = part_info.get('mixing_recipe', '')
+                    shape_prof = part_info.get('shape_profile', '')
                     line = f"- **{part_name}**: {desc}, x={x_range}, y={y_range}, color={color}"
                     if recipe:
                         line += f", mix={recipe}"
+                    if shape_prof:
+                        line += f", SHAPE: {shape_prof}"
                     plan_section += line + "\n"
         if plan.get('style_notes'):
             plan_section += f"\nStyle: {plan['style_notes']}\n"
@@ -2354,7 +2379,11 @@ The canvas will be CLEARED and your new script executed from scratch."""
             comp_info = component_library.composition.get(name, {})
             x_range = comp_info.get('x_range', '?')
             y_range = comp_info.get('y_range', '?')
-            component_library_section += f"- **{name}** (x={x_range}, y={y_range}): "
+            shape_profile = comp_info.get('shape_profile', '')
+            bounds_desc = f"x={x_range}, y={y_range}"
+            if shape_profile:
+                bounds_desc += f", shape: {shape_profile}"
+            component_library_section += f"- **{name}** ({bounds_desc}): "
             if ver.scores:
                 total = sum(ver.scores.values())
                 component_library_section += f"score={total}"

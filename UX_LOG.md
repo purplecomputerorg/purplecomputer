@@ -8,7 +8,7 @@ Brief descriptions of user experience changes, newest first.
 
 - **Doodle AI: human feedback option**: press `f` during judging (triage or per-component) to give free-text feedback that feeds into the next iteration's drawing prompt
 - **Doodle AI: single context view per component**: per-component judging now shows only the full canvas with red highlight (no separate zoomed crop), reducing feh dismissals from two to one
-- **Doodle AI: better curvature for organic shapes**: composition prompt now encourages large overlapping bounds (5+ rows) for organic subjects so curved features like a dinosaur's arched back can span component boundaries
+- **Doodle AI: better curvature for organic shapes**: new `shape_profile` field in composition describes curvature with y-coordinates; execution prompt now has an "arched body" example; both plan and component-library sections pass shape profiles to the drawing AI
 - **Doodle AI: quit stops entire training loop**: pressing `q` during human judging now exits the full training loop, not just the current round
 - **Doodle AI: full-image context in component judging**: per-component judging shows the full canvas with the component region highlighted (red rectangle) for spatial context
 - **Doodle AI: auto-adjust bounds on disconnection**: after rendering a composite, coherence check detects disconnected components and automatically adjusts bounds

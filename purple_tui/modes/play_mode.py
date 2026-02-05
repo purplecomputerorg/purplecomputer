@@ -19,6 +19,7 @@ from pathlib import Path
 import os
 
 from ..keyboard import CharacterAction
+from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -74,20 +75,6 @@ try:
 except pygame.error:
     _MIXER_READY = False
 
-
-# 10x4 grid matching keyboard layout
-GRID_KEYS = [
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
-    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';'],
-    ['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/'],
-]
-
-# All keys in a flat list for indexing
-ALL_KEYS = [key for row in GRID_KEYS for key in row]
-
-# Simple color cycle: purple → blue → red → default
-COLORS = ["#da77f2", "#4dabf7", "#ff6b6b", None]
 
 # Default backgrounds (dark and light themes)
 DEFAULT_BG_DARK = "#2a1845"

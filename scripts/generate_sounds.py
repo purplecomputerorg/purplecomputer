@@ -7,6 +7,7 @@ Creates vibrant, kid-friendly sounds:
 - Numbers: Silly sounds (boing, drum, pop, giggle, etc.)
 """
 
+import sys
 import wave
 import math
 import random
@@ -16,18 +17,8 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
-# Musical frequencies (C major scale, balanced range)
-NOTE_FREQUENCIES = {
-    # Top row - bright but not shrill
-    'Q': 392.00, 'W': 440.00, 'E': 493.88, 'R': 523.25, 'T': 587.33,
-    'Y': 659.25, 'U': 739.99, 'I': 783.99, 'O': 880.00, 'P': 987.77,
-    # Middle row - warm middle
-    'A': 196.00, 'S': 220.00, 'D': 246.94, 'F': 261.63, 'G': 293.66,
-    'H': 329.63, 'J': 369.99, 'K': 392.00, 'L': 440.00, 'semicolon': 493.88,
-    # Bottom row - rich low end
-    'Z': 98.00, 'X': 110.00, 'C': 123.47, 'V': 130.81, 'B': 146.83,
-    'N': 164.81, 'M': 185.00, 'comma': 196.00, 'period': 220.00, 'slash': 246.94,
-}
+sys.path.insert(0, str(PROJECT_ROOT))
+from purple_tui.play_constants import NOTE_FREQUENCIES
 
 def write_wav(filename: str, samples: list[int], sample_rate: int = 44100):
     """Write samples to a WAV file"""

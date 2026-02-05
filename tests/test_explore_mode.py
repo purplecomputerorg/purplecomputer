@@ -887,6 +887,14 @@ class TestTextWithExpression:
         assert lines[0] == "I have 5 🍎"
         assert lines[1] == "I have 🍎🍎🍎🍎🍎"
 
+    def test_emoji_text_plus_math_emoji(self, evaluator):
+        # "2 rabbits ate 3 + 7 carrots" -> 2 rabbits, 10 carrots
+        result = evaluator.evaluate("2 rabbits ate 3 + 7 carrots")
+        # Should have 2 rabbit emojis and 10 carrot emojis
+        assert result.count("🐰") == 2 or result.count("🐇") == 2
+        assert result.count("🥕") == 10
+        assert "ate" in result
+
     def test_what_is_color_mixing(self, evaluator):
         # "what is red + blue" -> color mixing with prefix
         result = evaluator.evaluate("what is red + blue")

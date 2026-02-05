@@ -941,7 +941,22 @@ class SimpleEvaluator:
                 continue
 
             # Unknown: try emoji substitution, pass through
-            items.append(('text', self._substitute_emojis(part)))
+            # Extract leading "N word" emoji patterns (e.g., "2 rabbits ate 3" -> 2 rabbit emojis + "ate" + pending=3)
+            remaining = part
+            # Extract leading "N emoji-word" pattern
+            if m := re.match(r'^(\d+)\s+(\w+)\s+(.+)$', remaining):
+                num, word, rest = int(m.group(1)), m.group(2).lower(), m.group(3)
+                if emoji := self._get_emoji(word):
+                    items.append(('emoji', (emoji, num, word.rstrip('s') if word.endswith('s') else word)))
+                    remaining = rest
+            # Extract trailing number to add to pending (e.g., "ate 3" -> "ate" + pending=3)
+            if m := re.match(r'^(.+?)\s+(\d+)$', remaining):
+                text_part, num = m.group(1), int(m.group(2))
+                if text_part.strip():
+                    items.append(('text', self._substitute_emojis(text_part)))
+                pending += num
+            elif remaining.strip():
+                items.append(('text', self._substitute_emojis(remaining)))
 
         # Attach remaining pending to last emoji or color
         if pending:

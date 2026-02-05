@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -13,6 +13,7 @@ help:
 	@echo "Running:"
 	@echo "  make run             - Run Purple Computer locally"
 	@echo "  make run-demo        - Run with demo auto-start"
+	@echo "  make run-demo-segment SEGMENT=tune - Play one demo segment"
 	@echo "  make run-sleep-demo  - Test sleep/power states (accelerated timing)"
 	@echo "  make test            - Run tests"
 	@echo ""
@@ -46,6 +47,9 @@ run:
 run-demo:
 	@echo "Running Purple Computer with demo auto-start..."
 	PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
+
+run-demo-segment:
+	PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 PURPLE_DEMO_SEGMENT=$(SEGMENT) ./scripts/run_local.sh
 
 run-sleep-demo:
 	@echo "Running sleep/power demo mode..."

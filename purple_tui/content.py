@@ -158,6 +158,16 @@ class ContentManager:
             "haha": "😂", "lol": "😂",
             "good": "✅", "bad": "❌", "great": "👍",
             "yay": "👏", "hi": "👋", "hello": "👋", "bye": "👋",
+
+            # Emoticons
+            ":)": "😊", ":-)": "😊",
+            ":(": "😢", ":-(": "😢",
+            ":D": "😂", ":-D": "😂",
+            ";)": "😉", ";-)": "😉",
+            ":P": "😛", ":-P": "😛",
+            ":O": "😮", ":-O": "😮",
+            ">:(": "😠",
+            "<3": "💜",
         }
 
         # Default colors for paint mixing (RYB primary/secondary + common colors)

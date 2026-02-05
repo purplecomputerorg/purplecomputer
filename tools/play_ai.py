@@ -109,7 +109,7 @@ The grid center axis is between columns 4 and 5. For symmetric shapes, mirror ac
 - Use None (rest) in sequences for rhythmic pauses
 - Chords: use lists like ["q", "p"] to play simultaneous keys
 - Percussion (row 0) adds rhythm without affecting melodic flow
-- Lower tempo_bpm for dramatic moments, higher for energetic parts
+- Higher seconds_between for dramatic moments, lower for energetic parts
 
 ## Reference Patterns
 
@@ -147,7 +147,7 @@ Return a JSON object with:
 - "sections": array of sections, each with:
   - "comment": description of what this section does (e.g., "Eyes (purple)")
   - "keys": list of key presses. Each item is a lowercase key string, a list of keys for a chord, or null for a rest. IMPORTANT: for keys that need multiple presses for color, repeat the key (e.g., ["t", "t"] for blue T).
-  - "tempo_bpm": beats per minute for this section
+  - "seconds_between": seconds between each key press
   - "pause_after": seconds to pause after this section (0.2-1.0)
 
 Example for a smiley:
@@ -164,25 +164,25 @@ Example for a smiley:
     {{
       "comment": "Eyes (purple, 1 press each)",
       "keys": ["4", null, "6"],
-      "tempo_bpm": 90,
+      "seconds_between": 0.67,
       "pause_after": 0.4
     }},
     {{
       "comment": "Nose (blue, 2 presses)",
       "keys": ["t", "t"],
-      "tempo_bpm": 120,
+      "seconds_between": 0.5,
       "pause_after": 0.4
     }},
     {{
       "comment": "Smile corners (red, 3 presses each)",
       "keys": ["d", "d", "d", null, "j", "j", "j"],
-      "tempo_bpm": 180,
+      "seconds_between": 0.33,
       "pause_after": 0.3
     }},
     {{
       "comment": "Smile bottom (red, 3 presses each)",
       "keys": ["c", "c", "c", "v", "v", "v", "b", "b", "b", "n", "n", "n", "m", "m", "m"],
-      "tempo_bpm": 240,
+      "seconds_between": 0.25,
       "pause_after": 0.8
     }}
   ]
@@ -345,7 +345,7 @@ def sections_to_code(sections: list[dict]) -> str:
             code_lines.append(f'    Comment("=== {comment} ==="),')
 
         keys = section.get("keys", [])
-        tempo = section.get("tempo_bpm", 120)
+        secs = section.get("seconds_between", 0.5)
         pause = section.get("pause_after", 0.5)
 
         # Convert keys to PlayKeys sequence format
@@ -362,7 +362,7 @@ def sections_to_code(sections: list[dict]) -> str:
         sequence_str = ", ".join(sequence_items)
         code_lines.append(f"    PlayKeys(")
         code_lines.append(f"        sequence=[{sequence_str}],")
-        code_lines.append(f"        tempo_bpm={tempo},")
+        code_lines.append(f"        seconds_between={secs},")
         code_lines.append(f"        pause_after={pause},")
         code_lines.append(f"    ),")
         code_lines.append("")
@@ -397,7 +397,7 @@ def validate_sections(sections: list[dict]) -> list[dict]:
         cleaned.append({
             "comment": section.get("comment", ""),
             "keys": clean_keys,
-            "tempo_bpm": section.get("tempo_bpm", 120),
+            "seconds_between": section.get("seconds_between", 0.5),
             "pause_after": section.get("pause_after", 0.5),
         })
 

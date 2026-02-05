@@ -1261,8 +1261,18 @@ class SimpleEvaluator:
                     result.append(text[i:j])
                 i = j
             else:
-                result.append(text[i])
-                i += 1
+                # Try matching emoticons (e.g. :) :D <3) longest first
+                matched = False
+                for length in (3, 2):
+                    candidate = text[i:i + length]
+                    if len(candidate) == length and (emoji := self.content.get_emoji(candidate)):
+                        result.append(emoji)
+                        i += length
+                        matched = True
+                        break
+                if not matched:
+                    result.append(text[i])
+                    i += 1
         return ''.join(result)
 
     def _describe_emoji_result(self, text: str, result: str) -> str:

@@ -12,28 +12,28 @@ SEGMENT = [
     Comment("=== Eyes (purple, 1 press each) - cheerful high notes ==="),
     PlayKeys(
         sequence=['4', None, None, '7'],
-        tempo_bpm=120,
+        seconds_between=0.5,
         pause_after=0.5,
     ),
 
     Comment("=== Nose (blue, 2 presses each) - middle harmony ==="),
     PlayKeys(
         sequence=['t', 't', None, 'y', 'y'],
-        tempo_bpm=100,
+        seconds_between=0.6,
         pause_after=0.6,
     ),
 
     Comment("=== Smile corners (red, 3 presses each) - rhythmic foundation ==="),
     PlayKeys(
         sequence=['d', 'd', 'd', None, None, 'k', 'k', 'k'],
-        tempo_bpm=140,
+        seconds_between=0.43,
         pause_after=0.4,
     ),
 
     Comment("=== Smile bottom (red, 3 presses each) - ascending melody ==="),
     PlayKeys(
         sequence=['v', 'v', 'v', 'b', 'b', 'b', 'n', 'n', 'n', 'm', 'm', 'm'],
-        tempo_bpm=160,
+        seconds_between=0.375,
         pause_after=0.3,
     ),
 

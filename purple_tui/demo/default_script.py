@@ -74,28 +74,28 @@ DEMO_SCRIPT = [
     SwitchMode("play"),
     Pause(0.3),
 
-    # Forward QWERTY (10 keys in ~1s = 600 BPM)
+    # Forward QWERTY (10 keys in ~1s)
     PlayKeys(
         sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-        tempo_bpm=600,
+        seconds_between=0.1,
         pause_after=0.1,
     ),
     # Backward QWERTY
     PlayKeys(
         sequence=['p', 'o', 'i', 'u', 'y', 't', 'r', 'e', 'w', 'q'],
-        tempo_bpm=600,
+        seconds_between=0.1,
         pause_after=0.1,
     ),
     # Forward again
     PlayKeys(
         sequence=['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
-        tempo_bpm=600,
+        seconds_between=0.1,
         pause_after=0.1,
     ),
     # Backward again
     PlayKeys(
         sequence=['p', 'o', 'i', 'u', 'y', 't', 'r', 'e', 'w', 'q'],
-        tempo_bpm=600,
+        seconds_between=0.1,
         pause_after=0.5,
     ),
 
@@ -127,28 +127,28 @@ DEMO_SCRIPT = [
     # Eyes: 4 and 6 (1 press each = PURPLE)
     PlayKeys(
         sequence=['4', None, '6'],
-        tempo_bpm=90,
+        seconds_between=0.67,
         pause_after=0.4,
     ),
 
     # Nose: T pressed TWICE = BLUE
     PlayKeys(
         sequence=['t', 't'],
-        tempo_bpm=120,
+        seconds_between=0.5,
         pause_after=0.4,
     ),
 
     # Smile corners: D and J pressed 3x each = RED
     PlayKeys(
         sequence=['d', 'd', 'd', None, 'j', 'j', 'j'],
-        tempo_bpm=180,
+        seconds_between=0.33,
         pause_after=0.3,
     ),
 
     # Smile bottom: C V B N M pressed 3x each = RED
     PlayKeys(
         sequence=['c', 'c', 'c', 'v', 'v', 'v', 'b', 'b', 'b', 'n', 'n', 'n', 'm', 'm', 'm'],
-        tempo_bpm=240,
+        seconds_between=0.25,
         pause_after=0.8,
     ),
 
@@ -220,7 +220,7 @@ DEMO_SCRIPT = [
     # This adds color accents around the smiley
     PlayKeys(
         sequence=['5', '3', '2', '1', ['z', '/', 'm']],
-        tempo_bpm=160,
+        seconds_between=0.375,
         pause_after=0.5,
     ),
 
@@ -248,7 +248,7 @@ DEMO_SCRIPT_SHORT = [
     SwitchMode("play"),
     PlayKeys(
         sequence=['4', '6', 't', 'd', 'j', 'c', 'v', 'b', 'n', 'm'],
-        tempo_bpm=180,
+        seconds_between=0.33,
         pause_after=0.3,
     ),
 
@@ -270,15 +270,15 @@ DEMO_SCRIPT_SHORT = [
 # HELPERS FOR CUSTOM SCRIPTS
 # =============================================================================
 
-def make_melody(notes: str, tempo: int = 150) -> PlayKeys:
+def make_melody(notes: str, seconds_between: float = 0.4) -> PlayKeys:
     """Helper to create a melody from a string of keys.
 
     Usage:
-        make_melody("qwerty", tempo=180)
+        make_melody("qwerty", seconds_between=0.33)
     """
     return PlayKeys(
         sequence=list(notes),
-        tempo_bpm=tempo,
+        seconds_between=seconds_between,
     )
 
 
@@ -294,8 +294,8 @@ def make_smiley() -> list:
     The corners are ABOVE the bottom, creating an upward-curving smile!
     """
     return [
-        PlayKeys(sequence=['4', None, '6'], tempo_bpm=90),
-        PlayKeys(sequence=['t'], tempo_bpm=100),
-        PlayKeys(sequence=['d', None, 'j'], tempo_bpm=100),
-        PlayKeys(sequence=['c', 'v', 'b', 'n', 'm'], tempo_bpm=140),
+        PlayKeys(sequence=['4', None, '6'], seconds_between=0.67),
+        PlayKeys(sequence=['t'], seconds_between=0.6),
+        PlayKeys(sequence=['d', None, 'j'], seconds_between=0.6),
+        PlayKeys(sequence=['c', 'v', 'b', 'n', 'm'], seconds_between=0.43),
     ]

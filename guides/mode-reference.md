@@ -412,7 +412,7 @@ PressKey("up")       # Navigate/scroll
 ```python
 PlayKeys(
     sequence=['e', 'i', 'a', 'l', 'c', 'v', 'b', 'n'],
-    tempo_bpm=120,
+    seconds_between=0.5,
     pause_after=0.5,
 )
 ```
@@ -481,22 +481,23 @@ The most impressive demos:
 
 ### Timing
 
-- `tempo_bpm=120` = 0.5 seconds per note
-- `tempo_bpm=180` = 0.33 seconds per note
-- `tempo_bpm=90` = 0.67 seconds per note
+`seconds_between` controls the gap between each key press:
+- `seconds_between=0.5` = half a second per note
+- `seconds_between=0.33` = fast
+- `seconds_between=0.67` = slow, dramatic
 
 ### Multi-Color Play Mode Patterns
 
 To get different colors on different keys:
 ```python
 # First set of keys: press once (purple)
-PlayKeys(sequence=['e', 'i'], tempo_bpm=100)
+PlayKeys(sequence=['e', 'i'], seconds_between=0.6)
 
 # Second set: press twice (blue)
-PlayKeys(sequence=['a', 'a', 'l', 'l'], tempo_bpm=150)
+PlayKeys(sequence=['a', 'a', 'l', 'l'], seconds_between=0.4)
 
 # Third set: press three times (red)
-PlayKeys(sequence=['c', 'c', 'c', 'n', 'n', 'n'], tempo_bpm=200)
+PlayKeys(sequence=['c', 'c', 'c', 'n', 'n', 'n'], seconds_between=0.3)
 ```
 
 ### Doodle Color Mixing Demo

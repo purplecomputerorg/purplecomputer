@@ -6,6 +6,7 @@ To run the demo:
 
 import importlib
 import json
+import os
 from pathlib import Path
 
 from .script import (
@@ -20,6 +21,7 @@ from .script import (
     DrawPath,
     SetSpeed,
     Comment,
+    segment_duration,
 )
 from .player import DemoPlayer
 from .default_script import DEMO_SCRIPT, DEMO_SCRIPT_SHORT
@@ -30,15 +32,31 @@ def _load_composition(path: Path) -> list:
 
     Each entry names a segment module in purple_tui.demo.segments.
     A SetSpeed action is inserted before each segment.
+
+    Supports "duration" field: computes speed = natural_duration / target_duration.
+    "duration" takes priority over "speed" if both are present.
+
+    Set PURPLE_DEMO_SEGMENT env var to play only one segment.
     """
     entries = json.loads(path.read_text())
+
+    segment_filter = os.environ.get("PURPLE_DEMO_SEGMENT")
+    if segment_filter:
+        entries = [e for e in entries if e["segment"] == segment_filter]
+
     script: list[DemoAction] = [ClearAll()]
     for entry in entries:
         name = entry["segment"]
         mod = importlib.import_module(f".segments.{name}", package="purple_tui.demo")
-        speed = entry.get("speed")
-        if speed is None:
-            speed = getattr(mod, "SPEED_MULTIPLIER", 1.0)
+
+        if "duration" in entry:
+            natural = segment_duration(mod.SEGMENT)
+            speed = natural / entry["duration"] if entry["duration"] > 0 else 1.0
+        else:
+            speed = entry.get("speed")
+            if speed is None:
+                speed = getattr(mod, "SPEED_MULTIPLIER", 1.0)
+
         script.append(SetSpeed(multiplier=speed))
         script.extend(mod.SEGMENT)
     return script

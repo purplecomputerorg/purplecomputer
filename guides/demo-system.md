@@ -291,9 +291,9 @@ Z X C V B N M , . /   (low marimba)
 Strategy: plan which keys to press to form a picture. Each key should be pressed exactly the right number of times for its target color.
 
 ```python
-PlayKeys(sequence=['e', None, 'i'], tempo_bpm=90)       # Eyes (purple, 1 press)
-PlayKeys(sequence=['a', None, 'l'], tempo_bpm=100)      # Corners (purple)
-PlayKeys(sequence=['c', 'v', 'b', 'n'], tempo_bpm=140)  # Smile (purple)
+PlayKeys(sequence=['e', None, 'i'], seconds_between=0.67)       # Eyes (purple, 1 press)
+PlayKeys(sequence=['a', None, 'l'], seconds_between=0.6)       # Corners (purple)
+PlayKeys(sequence=['c', 'v', 'b', 'n'], seconds_between=0.43)  # Smile (purple)
 ```
 
 ### Doodle Mode
@@ -343,7 +343,7 @@ Keys: `enter`, `backspace`, `escape`, `tab`, `space`, `up`, `down`, `left`, `rig
 
 ### PlayKeys
 ```python
-PlayKeys(sequence=['a', 's', ['d', 'f'], None], tempo_bpm=120, pause_after=0.5)
+PlayKeys(sequence=['a', 's', ['d', 'f'], None], seconds_between=0.5, pause_after=0.5)
 ```
 - `'a'`: single key
 - `['d', 'f']`: chord (simultaneous)

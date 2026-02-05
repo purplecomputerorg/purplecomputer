@@ -108,11 +108,11 @@ class PlayKeys(DemoAction):
 
     Args:
         sequence: List of keys, chords, or rests
-        tempo_bpm: Beats per minute (each item = 1 beat)
+        seconds_between: Seconds between each key press
         pause_after: Pause after the sequence
     """
     sequence: list
-    tempo_bpm: float = 120.0
+    seconds_between: float = 0.5
     pause_after: float = 0.5
 
 
@@ -178,3 +178,28 @@ def type_and_enter(text: str, pause: float = 0.8) -> list[DemoAction]:
 def section_pause(duration: float = 1.5) -> DemoAction:
     """A longer pause between demo sections."""
     return Pause(duration)
+
+
+def segment_duration(actions: list[DemoAction]) -> float:
+    """Compute the natural (speed=1.0) duration of a list of actions in seconds."""
+    total = 0.0
+    for action in actions:
+        if isinstance(action, Pause):
+            total += action.duration
+        elif isinstance(action, SwitchMode):
+            total += action.pause_after
+        elif isinstance(action, TypeText):
+            total += len(action.text) * action.delay_per_char + action.final_pause
+        elif isinstance(action, PressKey):
+            total += action.hold_duration + action.pause_after
+        elif isinstance(action, PlayKeys):
+            total += len(action.sequence) * action.seconds_between + action.pause_after
+        elif isinstance(action, DrawPath):
+            total_steps = len(action.directions) * action.steps_per_direction
+            total += 0.1 + 0.1 + 0.05 + total_steps * action.delay_per_step + action.pause_after
+        elif isinstance(action, MoveSequence):
+            total += len(action.directions) * action.delay_per_step + action.pause_after
+        elif isinstance(action, (Clear, ClearAll)):
+            total += action.pause_after
+        # Comment, SetSpeed: 0 duration
+    return total

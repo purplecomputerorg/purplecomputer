@@ -227,24 +227,22 @@ class DemoPlayer:
         For example, pressing 'e', 'i', 'c', 'v', 'b', 'n' creates a smiley face
         (eyes + smile) that stays visible.
         """
-        beat_duration = 60.0 / action.tempo_bpm
-
         for item in action.sequence:
             if self._cancelled:
                 return
 
             if item is None:
                 # Rest (silence, no key press)
-                await self._sleep(beat_duration)
+                await self._sleep(action.seconds_between)
             elif isinstance(item, list):
                 # Chord: multiple keys pressed together
                 for key in item:
                     await self._dispatch(CharacterAction(char=key))
-                await self._sleep(beat_duration)
+                await self._sleep(action.seconds_between)
             else:
                 # Single key
                 await self._dispatch(CharacterAction(char=item))
-                await self._sleep(beat_duration)
+                await self._sleep(action.seconds_between)
 
         await self._sleep(action.pause_after)
 

@@ -12,13 +12,16 @@ SEGMENT = [
 
     SetSpeed(1.0),
     Comment("Move to right side of canvas for intro text"),
-    MoveSequence(directions=['right'] * 50 + ['down'] * 18, delay_per_step=0.008),
+    MoveSequence(directions=['right'] * 60 + ['down'] * 20, delay_per_step=0.008),
 
-    Comment("Type intro in text mode"),
-    TypeText("This is Doodle mode. Write and paint!"),
+    Comment("Type intro in text mode (3 lines)"),
+    TypeText("This is Doodle mode."),
     PressKey("enter", pause_after=0.1),
-    MoveSequence(directions=['left'] * 37, delay_per_step=0.008),
-    TypeText("When you paint, every letter is a shade of "),
+    MoveSequence(directions=['left'] * 20, delay_per_step=0.008),
+    TypeText("Write and paint!"),
+    PressKey("enter", pause_after=0.1),
+    MoveSequence(directions=['left'] * 16, delay_per_step=0.008),
+    TypeText("Every letter is a shade of "),
 
     Comment("Switch to paint mode for color demonstration"),
     PressKey("tab", pause_after=0.1),
@@ -37,12 +40,10 @@ SEGMENT = [
 
     Pause(2.5),
 
-    Comment("Move cursor back to origin for palm tree painting"),
-    MoveSequence(directions=['left'] * 102 + ['up'] * 19, delay_per_step=0.008),
-
     SetSpeed(83.365),
     Comment("=== PALM TREE PAINTING (AI GENERATED) ==="),
-    MoveSequence(directions=['right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down', 'down'], delay_per_step=0.008),
+    Comment("Move from text end (96,22) to palm tree start (48,26)"),
+    MoveSequence(directions=['left'] * 48 + ['down'] * 4, delay_per_step=0.008),
     PressKey('f'),
     PressKey('f'),
     PressKey('f'),
@@ -1399,7 +1400,7 @@ SEGMENT = [
     PressKey('c'),
     PressKey('c'),
 
-    Pause(1.0),
+    Pause(2.0),
     Comment("Drawing complete!"),
 ]
 

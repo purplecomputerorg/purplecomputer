@@ -46,7 +46,7 @@ SEGMENT = [
 
     Comment("Math with speech (! triggers TTS)"),
     TypeText("10 x 10 dinosaurs!", **_FAST),
-    PressKey("enter", pause_after=2.0),
+    PressKey("enter", pause_after=4.0),
 
     Pause(0.3),
 ]

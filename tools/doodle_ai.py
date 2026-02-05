@@ -3459,7 +3459,7 @@ def judge_components_human(
     library_full_image: str = None,
     api_key: str = None,
     judge_model: str = "claude-sonnet-4-20250514",
-) -> dict[str, dict]:
+) -> tuple[dict[str, dict], bool]:
     """Judge components using interactive human input, supporting multiple candidates.
 
     Shows full images first for quick triage, then optionally per-component judging.
@@ -3472,7 +3472,9 @@ def judge_components_human(
         library_full_image: Base64 PNG of the current library composite.
 
     Returns:
-        Dict mapping component name to result with winner, candidate_index, reasoning.
+        Tuple of (results_dict, quit_requested). results_dict maps component name to
+        result with winner, candidate_index, reasoning. quit_requested is True if the
+        user pressed 'q' to quit.
     """
     from PIL import Image
 
@@ -3490,6 +3492,7 @@ def judge_components_human(
         font = _ID.getfont()
 
     results = {}
+    quit_requested = False
     count_reviewed = 0
     count_auto_skipped = 0
     count_quit_remaining = 0
@@ -3523,7 +3526,7 @@ def judge_components_human(
 
     if not pairs:
         print("[Human Judge] No components to judge.")
-        return results
+        return results, quit_requested
 
     # === Step A: Full-image triage ===
     # Build full-image composite: [Library] [Candidate A] [Candidate B] ...
@@ -3655,6 +3658,7 @@ def judge_components_human(
                                 "scores_candidate": None,
                                 "scores_library": None,
                             }
+                    quit_requested = True
                     print("[Human Judge] Quitting. Keeping library for all components.")
                     break
                 else:
@@ -3673,8 +3677,6 @@ def judge_components_human(
 
     # === Step B: Per-component judging (only if user chose 'c') ===
     if go_to_components:
-        quit_requested = False
-
         for idx, name in enumerate(pairs):
             if name in results:
                 continue  # already decided
@@ -3715,6 +3717,27 @@ def judge_components_human(
                 print(f"[Human Judge] {name}: identical, keeping library version")
                 count_auto_skipped += 1
                 continue
+
+            # Show full-image context with component highlighted
+            context_tmp_path = None
+            if library_full_image:
+                context_images = []
+                lib_highlighted = _highlight_component_on_canvas(
+                    library_full_image, library.composition, name,
+                )
+                context_images.append((lib_highlighted, "Library"))
+                for c_idx, (clabel, _, full_b64) in enumerate(all_candidate_crops):
+                    if full_b64:
+                        cand_highlighted = _highlight_component_on_canvas(
+                            full_b64, library.composition, name,
+                        )
+                        cand_lbl = clabel if num_candidates == 1 else f"{clabel} ({c_idx + 1})"
+                        context_images.append((cand_highlighted, cand_lbl))
+                if context_images:
+                    context_composite = _build_side_by_side(context_images, font)
+                    context_tmp_path = _show_image_and_wait(
+                        context_composite, f"Context: {name}", has_feh,
+                    )
 
             # Build side-by-side: [Library] [Cand 1] [Cand 2] ...
             images_and_labels = [(lib_crop, "Library")]
@@ -3802,6 +3825,11 @@ def judge_components_human(
                     os.unlink(tmp_path)
                 except OSError:
                     pass
+                if context_tmp_path:
+                    try:
+                        os.unlink(context_tmp_path)
+                    except OSError:
+                        pass
 
             if quit_requested:
                 break
@@ -3820,7 +3848,7 @@ def judge_components_human(
     if parts:
         print(f"[Human Judge] Done: {', '.join(parts)}")
 
-    return results
+    return results, quit_requested
 
 
 def check_composite_coherence(
@@ -3829,16 +3857,20 @@ def check_composite_coherence(
     goal: str,
     api_key: str,
     judge_model: str = "claude-sonnet-4-20250514",
-) -> bool:
+) -> dict:
     """Check if a new composite image is coherent (parts work together).
 
     Compares the new composite against the old one. If the new one looks
-    broken or incoherent (parts don't connect properly), returns False.
+    broken or incoherent (parts don't connect properly), returns incoherent.
 
-    Returns True if the new composite is acceptable.
+    Returns dict with keys:
+        coherent (bool): True if the new composite is acceptable.
+        reason (str): Explanation of the coherence result.
+        disconnected_components (list[str]): Names of components that appear
+            disconnected or misaligned (empty if coherent).
     """
     if not old_composite_base64:
-        return True  # No previous composite to compare against
+        return {"coherent": True, "reason": "No previous composite to compare", "disconnected_components": []}
 
     import anthropic
 
@@ -3849,12 +3881,17 @@ def check_composite_coherence(
         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": old_composite_base64}},
         {"type": "text", "text": "**New composite (after updating some components):**"},
         {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": new_composite_base64}},
-        {"type": "text", "text": f'Goal: "{goal}". Does the new composite look coherent? Do the parts connect properly? Respond with JSON: {{"coherent": true/false, "reason": "brief explanation"}}'},
+        {"type": "text", "text": (
+            f'Goal: "{goal}". Does the new composite look coherent? Do the parts connect properly, '
+            f'or are there gaps/overlaps where components should meet? '
+            f'Respond with JSON: {{"coherent": true/false, "reason": "brief explanation of spatial issue if any", '
+            f'"disconnected_components": ["name1", "name2"]}}'
+        )},
     ]
 
     response = client.messages.create(
         model=judge_model,
-        max_tokens=200,
+        max_tokens=300,
         messages=[{"role": "user", "content": message_content}],
     )
 
@@ -3862,12 +3899,15 @@ def check_composite_coherence(
     data = parse_json_robust(text)
 
     if data and isinstance(data, dict):
-        coherent = data.get("coherent", True)
+        coherent = bool(data.get("coherent", True))
         reason = data.get("reason", "")
+        disconnected = data.get("disconnected_components", [])
+        if not isinstance(disconnected, list):
+            disconnected = []
         print(f"[Coherence] {'OK' if coherent else 'FAILED'}: {reason}")
-        return bool(coherent)
+        return {"coherent": coherent, "reason": reason, "disconnected_components": disconnected}
 
-    return True  # Default to accepting if we can't parse
+    return {"coherent": True, "reason": "Could not parse response", "disconnected_components": []}
 
 
 def load_env_file():
@@ -4247,6 +4287,11 @@ def run_visual_feedback_loop(
                 canvas_shows_attempt = attempt_label
                 iteration_scripts.append({"iteration": attempt_label, "actions": c_actions, "compact_actions_text": c_compact})
 
+                # Write after each success so partial runs are usable
+                scripts_path = os.path.join(output_dir, "iteration_scripts.json")
+                with open(scripts_path, 'w') as f:
+                    json.dump(iteration_scripts, f, indent=2)
+
                 # Extract component crops
                 component_crops = extract_all_components(c_png, library.composition)
                 print(f"[Crops] Extracted {len(component_crops)} component crops from {label}")
@@ -4299,7 +4344,7 @@ def run_visual_feedback_loop(
                 ]
                 if candidates_with_crops:
                     print(f"\n[Component Judge] Human judging {len(candidates_with_crops)} candidate(s) against library...")
-                    comp_results = judge_components_human(
+                    comp_results, quit_requested = judge_components_human(
                         all_candidate_crops=candidates_with_crops,
                         library=library,
                         goal=goal,
@@ -4339,6 +4384,10 @@ def run_visual_feedback_loop(
                                 library.best[name].scores = result["scores_library"]
                             component_staleness[name] = component_staleness.get(name, 0) + 1
                             print(f"[Library] ✗ '{name}' kept (staleness: {component_staleness[name]})")
+
+                    if quit_requested:
+                        print("[Training] Quit requested. Stopping training.")
+                        break
 
             else:
                 # AI judging: per-candidate loop (unchanged)
@@ -4395,23 +4444,32 @@ def run_visual_feedback_loop(
                     if new_composite_png:
                         canvas_shows_attempt = composite_label
 
-                        # Coherence check (skip for human judge)
-                        if not human_judge and old_composite:
-                            coherent = check_composite_coherence(
+                        # Coherence check
+                        if old_composite:
+                            coherence_result = check_composite_coherence(
                                 new_composite_base64=new_composite_png,
                                 old_composite_base64=old_composite,
                                 goal=goal,
                                 api_key=api_key,
                                 judge_model=judge_model,
                             )
-                            if not coherent:
-                                print("[Coherence] REVERTING: new composite is incoherent")
-                                # Revert: re-render old composite
-                                if old_composite:
-                                    composite_image_base64 = old_composite
-                                    # Don't revert library; just note it
-                            else:
-                                composite_image_base64 = new_composite_png
+                            if not coherence_result["coherent"]:
+                                print(f"[Auto-bounds] Detected disconnection: {coherence_result['reason']}")
+                                _adjust_bounds_with_ai(
+                                    feedback=coherence_result["reason"],
+                                    library=library,
+                                    goal=goal,
+                                    api_key=api_key,
+                                    model=judge_model,
+                                    full_image_b64=new_composite_png,
+                                )
+                                # Re-crop and re-render with adjusted bounds
+                                adjusted_crops = extract_all_components(new_composite_png, library.composition)
+                                for comp_name, crop_b64 in adjusted_crops.items():
+                                    if comp_name in library.best:
+                                        library.best[comp_name].image_base64 = crop_b64
+                                print("[Auto-bounds] Re-cropped components with adjusted bounds.")
+                            composite_image_base64 = new_composite_png
                         else:
                             composite_image_base64 = new_composite_png
 
@@ -4511,12 +4569,6 @@ def run_visual_feedback_loop(
                 with open(final_png_path, 'wb') as f:
                     f.write(base64.standard_b64decode(final_png_base64))
                 print(f"[Final Cropped PNG] {final_png_path}")
-
-        # Save iteration scripts
-        scripts_path = os.path.join(output_dir, "iteration_scripts.json")
-        with open(scripts_path, 'w') as f:
-            json.dump(iteration_scripts, f, indent=2)
-        print(f"\n[Saved] All scripts: {scripts_path}")
 
         # Save results
         if all_results:

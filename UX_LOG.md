@@ -6,6 +6,9 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Doodle AI: quit stops entire training loop**: pressing `q` during human judging now exits the full training loop, not just the current round
+- **Doodle AI: full-image context in component judging**: per-component judging now shows the full canvas with the component region highlighted before the zoomed crop comparison
+- **Doodle AI: auto-adjust bounds on disconnection**: after rendering a composite, coherence check detects disconnected components and automatically adjusts bounds
 - **Doodle AI: smarter human judging**: auto-skips identical components, allows quitting mid-session with `q`, shows summary of reviewed/skipped/remaining counts
 - **Doodle AI: human judging mode**: `--human` flag replaces AI judge with interactive side-by-side comparison, letting a human pick the better component version
 - **Doodle AI: multi-candidate iteration with focused mutation**: AI now generates multiple candidates per iteration (mutation, informed regen, fresh regen) to escape local maxima; judge provides per-criterion scores and specific improvement targets; contradictory learnings are automatically resolved

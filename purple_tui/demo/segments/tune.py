@@ -40,17 +40,33 @@ SEGMENT = [
     Comment("=== Pause to admire the smiley ==="),
     Pause(1.0),
 
-    Comment("=== Glissando: rapid back-and-forth over the mouth ==="),
+    Comment("=== Fast runs across all 4 keyboard rows ==="),
     PlayKeys(
         sequence=[
-            'v', 'b', 'n', 'm',
-            'n', 'b', 'v', 'b',
-            'n', 'm', 'n', 'b',
-            'v', 'b', 'n', 'm',
-            'n', 'b', 'v', 'b',
-            'n', 'm',
+            '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
         ],
-        seconds_between=0.06,
+        seconds_between=0.05,
+        pause_after=0.1,
+    ),
+    PlayKeys(
+        sequence=[
+            'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',
+        ],
+        seconds_between=0.05,
+        pause_after=0.1,
+    ),
+    PlayKeys(
+        sequence=[
+            'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
+        ],
+        seconds_between=0.05,
+        pause_after=0.1,
+    ),
+    PlayKeys(
+        sequence=[
+            'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',
+        ],
+        seconds_between=0.05,
         pause_after=0.5,
     ),
 

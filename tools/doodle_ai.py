@@ -1355,7 +1355,7 @@ Plan compositions that are FUN TO WATCH being drawn:
         "final_color": "green (or red, blue, yellow, brown, etc.)",
         "mixing_recipe": "yellow base + blue overlay" or null for pure colors,
         "description": "what this element is",
-        "shape_profile": "optional: describe the top/bottom edge shape, e.g. 'back arches up to y=10 at center, slopes to y=16 at sides' or 'round canopy, widest at y=8'"
+        "draw_technique": "HOW to draw: e.g., 'horizontal fills, vary width 20-40 for oval' or 'shifted fills, each row shifts x+2 for 20-degree tilt' or 'diagonal chain outline, 8 segments for ring'"
       }}
     }},
     "style_notes": "Key points about the visual style - emphasize CURVED, ORGANIC shapes (e.g., 'round fluffy foliage, not rectangular')",
@@ -1379,7 +1379,16 @@ Each composition element will be independently evaluated, scored, and potentiall
 Good component breakdown for a tree: canopy, trunk, ground, shadows, highlights
 Bad: "left_leaf_1", "left_leaf_2" (too granular) or "tree" (too coarse)
 
-**CURVATURE TIP:** For animals or organic subjects with curved profiles (e.g., a dinosaur's arched back), use `shape_profile` to describe the curvature explicitly with y-coordinates. For example: `"shape_profile": "back arches from y=18 at head (x=25) up to y=12 at hips (x=55), down to y=16 at tail (x=80)"`. Give decorative elements (plates, spines, fins) overlapping bounds with the body AND their own shape_profile describing the curve they follow. The execution AI will use these coordinates to place fills at the right heights instead of in a flat row.
+**DRAW TECHNIQUE FIELD (CRITICAL):** Each component MUST include a `draw_technique` that tells
+the drawing AI exactly HOW to render it. Be specific about the technique:
+- Solid shapes: "horizontal fills, rows Y1-Y2, width varies from W1 at top to W2 at widest"
+- Tilted shapes: "horizontal fills, each row shifts x by +N, creating M-degree tilt"
+- Thin features: "diagonal line chain, N segments following [path description]"
+- Wrap-around objects: split into separate back/front components with note in draw_technique
+
+**DEPTH/LAYERING:** When an object wraps around another (rings around a planet, a belt around
+a waist), split it into back and front components. Order them: back_part, main_body, front_part.
+The draw_technique for each should specify which portion to draw.
 
 **COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-{CANVAS_WIDTH - 1}.
 
@@ -1500,52 +1509,17 @@ Lc0,23,100,23
 
 Each component's actions should stay within its bounding box from the plan. Draw each component completely (base color + mixing overlay + shading) before moving to the next. Components are evaluated independently, so each must be self-contained.
 
-## CURVES AND ORGANIC SHAPES
+## DRAWING TECHNIQUES
 
-Chain short diagonal L commands to draw curves. Shorter segments = smoother curves.
+Three core techniques. The plan's `draw_technique` field tells you which to use per component.
 
-**Arc** (upward curve from left to right):
-```actions
-Lf10,20,15,17
-Lf15,17,20,15
-Lf20,15,30,14
-Lf30,14,40,15
-Lf40,15,45,17
-Lf45,17,50,20
-```
+### Technique 1: Horizontal fills (for solid shapes)
+Fill row by row with horizontal L lines. Vary x-range per row to create the silhouette.
+- Wider rows in the middle, narrower at top/bottom = circle/oval
+- Same width every row = rectangle (usually WRONG for organic shapes)
+- Shift x-range diagonally each row = tilted/angled shape
 
-**Circle outline** (for OUTLINES only, not fills; 8 segments, center ~50,12, radius ~8):
-```actions
-Lf50,4,56,6
-Lf56,6,58,12
-Lf58,12,56,18
-Lf56,18,50,20
-Lf50,20,44,18
-Lf44,18,42,12
-Lf42,12,44,6
-Lf44,6,50,4
-```
-
-**Wavy line** (alternating up/down slopes):
-```actions
-Lf0,12,10,8
-Lf10,8,20,12
-Lf20,12,30,8
-Lf30,8,40,12
-Lf40,12,50,8
-```
-
-Key principle: Each segment covers only 5-10 x-units. The shorter the segment, the smoother the curve.
-
-For filled shapes, vary the x-range per row to create curved edges. Don't use the same x-range for every row (that makes rectangles).
-
-## FILLING SHAPES (PRIMARY TECHNIQUE)
-
-For solid regions (canopies, trunks, bodies), use ROW-BY-ROW HORIZONTAL FILLS
-with varying width to create round/organic shapes. This is the MOST IMPORTANT technique.
-(For backgrounds like sky/ground, keep them minimal: 2-3 rows max, or skip entirely.)
-
-**Round canopy (filled circle):**
+**Filled circle** (center ~45, rows 5-14):
 ```actions
 Lf36,5,54,5
 Lf32,6,58,6
@@ -1559,107 +1533,35 @@ Lf32,13,58,13
 Lf36,14,54,14
 ```
 
-**Small filled circle (sun, ball, apple):**
-```actions
-Lf48,3,52,3
-Lf46,4,54,4
-Lf45,5,55,5
-Lf45,6,55,6
-Lf46,7,54,7
-Lf48,8,52,8
-```
-Use this for compact round objects. Do NOT draw suns as a small rectangle with long horizontal rays extending out. That creates a trophy/goblet shape. Instead, use a filled circle like this.
+For backgrounds like sky/ground, keep them minimal: 2-3 rows max, or skip entirely.
 
-**Thick trunk (filled rectangle with slight taper):**
+### Technique 2: Diagonal line chains (for outlines and thin features)
+Chain short diagonal L segments (5-10 x-units each) to trace curves.
+Shorter segments = smoother curves. Good for: ring outlines, arcs, edges, thin details.
+
+**Arc** (upward curve from left to right):
 ```actions
-Lf43,15,57,15
-Lf44,16,56,16
-Lf44,17,56,17
-Lf44,18,56,18
-Lf45,19,55,19
+Lf10,20,15,17
+Lf15,17,20,15
+Lf20,15,30,14
+Lf30,14,40,15
+Lf40,15,45,17
+Lf45,17,50,20
 ```
 
-**Oval body (animal, widest at center):**
-```actions
-Lf38,12,62,12
-Lf34,13,66,13
-Lf31,14,69,14
-Lf30,15,70,15
-Lf30,16,70,16
-Lf31,17,69,17
-Lf34,18,66,18
-Lf38,19,62,19
-```
+### Technique 3: Layered depth (for wrap-around objects)
+When something wraps around another object (rings around a planet, a scarf around a neck),
+split into back/front components drawn in order:
+1. Draw the BACK portion first
+2. Draw the main body ON TOP (hides the back portion behind it)
+3. Draw the FRONT portion last (paints over the body)
+The plan's component order defines this layering.
 
-**Arched body (animal with curved back, e.g., dinosaur, cat, buffalo):**
-The top edge arches up (lower y = higher on screen) while the belly stays flat.
-```actions
-## Back arches up at center (y=12), belly flat at y=19
-Lf45,16,55,16
-Lf40,15,60,15
-Lf36,14,64,14
-Lf33,13,67,13
-Lf31,12,69,12
-Lf33,13,67,13
-Lf36,14,64,14
-## Now belly rows (flat bottom edge)
-Lf30,15,70,15
-Lf30,16,70,16
-Lf30,17,70,17
-Lf30,18,70,18
-Lf32,19,68,19
-```
-Note how the top rows narrow (arch shape) while bottom rows stay wide (flat belly). The body is NOT vertically symmetric. Use this for any animal whose back curves upward. If the plan includes a `shape_profile`, follow those y-coordinates for the top edge.
-
-**WRONG (rectangle body):** same x-range every row = boxy, unnatural shape. ALWAYS vary the width.
-**WRONG (symmetric oval for arched animals):** if the animal has a curved back, don't use a symmetric oval. The top edge should follow the arch described in the plan's shape_profile.
-
-**Tapered tail (progressively shorter fills):**
-```actions
-Lf70,14,82,14
-Lf72,15,84,15
-Lf75,16,86,16
-Lf78,17,88,17
-```
-
-Vary the x start/end per row: wider in the middle, narrower at top and bottom.
-This creates smooth, solid shapes. Use this for ALL filled regions.
-
-Diagonal lines and arcs are for OUTLINES and DETAILS only, not for filling areas.
-Using diagonals to fill produces a stripy, sparse look. Always prefer horizontal fills.
-
-**Small triangle/plate (pointing up):**
-```actions
-Lf48,12,52,12
-Lf49,11,51,11
-Pf50,10
-```
-
-**Row of triangular plates along a spine (like stegosaurus):**
-```actions
-Lf30,12,34,12
-Lf31,11,33,11
-Pf32,10
-Lf37,12,41,12
-Lf38,11,40,11
-Pf39,10
-Lf44,12,48,12
-Lf45,11,47,11
-Pf46,10
-```
-
-For tapered shapes (legs, tails, spikes), use progressively shorter horizontal fills.
-
-## DRAWING MULTI-PART FIGURES (animals, people, vehicles)
-
-For complex objects, draw each body part as a SEPARATE filled shape at its planned position:
-1. Draw the largest part first (body: a wide oval of horizontal fills)
-2. Draw connected parts overlapping slightly (head, neck, tail)
-3. Draw appendages (legs, arms, wings)
-4. Draw details last (eyes, plates, patterns)
-
-Each part is its own group of horizontal fills at different x/y ranges.
-Do NOT try to draw the whole figure with one set of lines.
+### Key rules
+- Horizontal fills for ALL solid/filled areas. Never use diagonal lines to fill.
+- Vary width per row for organic shapes. Follow the plan's `draw_technique`.
+- For round shapes, keep width approximately equal to height in cells. Don't stretch to fill the bounding box.
+- **WRONG (rectangle body):** same x-range every row = boxy, unnatural shape. ALWAYS vary the width.
 
 **CONNECTION POINTS ARE CRITICAL:** Check WHERE each part attaches. Tree fronds start at the TOP of the trunk. Legs attach at the BOTTOM of a body. Arms attach at the SIDES of a torso, not the middle. Get connection points right BEFORE worrying about details. Wrong attachment points make the drawing look broken even if individual shapes are good.
 
@@ -2208,12 +2110,12 @@ def call_vision_api(
                     y_range = part_info.get('y_range', '')
                     color = part_info.get('final_color', '')
                     recipe = part_info.get('mixing_recipe', '')
-                    shape_prof = part_info.get('shape_profile', '')
+                    draw_tech = part_info.get('draw_technique', '')
                     line = f"- **{part_name}**: {desc}, x={x_range}, y={y_range}, color={color}"
                     if recipe:
                         line += f", mix={recipe}"
-                    if shape_prof:
-                        line += f", SHAPE: {shape_prof}"
+                    if draw_tech:
+                        line += f"\n  TECHNIQUE: {draw_tech}"
                     plan_section += line + "\n"
         if plan.get('style_notes'):
             plan_section += f"\nStyle: {plan['style_notes']}\n"
@@ -2279,10 +2181,10 @@ The canvas will be CLEARED and your new script executed from scratch."""
             comp_info = component_library.composition.get(name, {})
             x_range = comp_info.get('x_range', '?')
             y_range = comp_info.get('y_range', '?')
-            shape_profile = comp_info.get('shape_profile', '')
+            draw_tech = comp_info.get('draw_technique', '')
             bounds_desc = f"x={x_range}, y={y_range}"
-            if shape_profile:
-                bounds_desc += f", shape: {shape_profile}"
+            if draw_tech:
+                bounds_desc += f"\n  technique: {draw_tech}"
             component_library_section += f"- **{name}** ({bounds_desc}): "
             if ver.scores:
                 total = sum(ver.scores.values())

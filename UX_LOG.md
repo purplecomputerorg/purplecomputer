@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Doodle AI: draw_technique replaces shape examples**: planner now generates per-component `draw_technique` guidance instead of relying on 11 hardcoded shape examples; execution prompt condensed from ~160 lines to ~50 lines of 3 core techniques (horizontal fills, diagonal chains, layered depth)
 - **Doodle AI: human feedback option**: press `f` during judging (triage or per-component) to give free-text feedback that feeds into the next iteration's drawing prompt
 - **Doodle AI: single context view per component**: per-component judging now shows only the full canvas with red highlight (no separate zoomed crop), reducing feh dismissals from two to one
 - **Doodle AI: better curvature for organic shapes**: new `shape_profile` field in composition describes curvature with y-coordinates; execution prompt now has an "arched body" example; both plan and component-library sections pass shape profiles to the drawing AI

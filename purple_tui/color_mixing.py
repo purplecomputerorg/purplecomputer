@@ -4,13 +4,15 @@ Paint-like Color Mixing using Spectral Reflectance
 Based on spectral.js by Ronald van Wijnen (MIT License)
 https://github.com/rvanwijnen/spectral.js
 
-Uses Kubelka-Munk theory for realistic pigment mixing where:
+Uses Beer-Lambert spectral mixing with saturation correction for
+realistic pigment mixing where:
 - yellow + blue = green
 - red + blue = purple
 - red + yellow = orange
 """
 
 from typing import Tuple
+import colorsys
 import math
 
 SIZE = 38  # Number of spectral samples
@@ -191,12 +193,12 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
 
 def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
     """
-    Internal: Mix multiple colors using spectral reflectance with Beer-Lambert mixing.
+    Internal: Mix multiple colors using Beer-Lambert spectral mixing.
 
-    Uses weighted geometric mean of spectral reflectance (equivalent to
-    Beer-Lambert absorption model). This preserves vibrancy better than
-    Kubelka-Munk K/S arithmetic mean, which over-darkens when mixing colors
-    that reflect in different wavelength regions (e.g. red + blue).
+    Uses weighted geometric mean of spectral reflectance for subtractive
+    mixing (correct hues: red+blue=purple, yellow+blue=green), then applies
+    a saturation correction to compensate for the systematic desaturation
+    that log-averaging introduces vs real pigment scattering.
     """
     if not colors:
         return "#808080"
@@ -230,12 +232,27 @@ def _mix_colors_internal(colors: list[str], weights: list[float] = None) -> str:
             log_r += math.log(spectrum[i]) * sw
         result_spectrum.append(math.exp(log_r / total_weight))
 
-    # Convert back to RGB
+    # Convert spectrum to sRGB
     xyz = _spectrum_to_xyz(result_spectrum)
     lrgb = _xyz_to_linear_rgb(xyz)
-    rgb = (_linear_to_srgb(lrgb[0]), _linear_to_srgb(lrgb[1]), _linear_to_srgb(lrgb[2]))
+    r = _linear_to_srgb(lrgb[0]) / 255
+    g = _linear_to_srgb(lrgb[1]) / 255
+    b = _linear_to_srgb(lrgb[2]) / 255
 
-    return rgb_to_hex(*rgb)
+    # Beer-Lambert (geometric mean) gives correct subtractive hues but
+    # systematically desaturates because log-averaging compresses spectral
+    # contrast. Real paint pigments scatter light, which preserves saturation.
+    # A 2x saturation multiplier compensates for this, matching how opaque
+    # pigment layers behave vs the pure transparent-absorption model.
+    h, li, s = colorsys.rgb_to_hls(r, g, b)
+    s = min(1.0, s * 2.0)
+    r, g, b = colorsys.hls_to_rgb(h, li, s)
+
+    return rgb_to_hex(
+        max(0, min(255, round(r * 255))),
+        max(0, min(255, round(g * 255))),
+        max(0, min(255, round(b * 255))),
+    )
 
 
 def mix_colors_paint(colors: list[str]) -> str:

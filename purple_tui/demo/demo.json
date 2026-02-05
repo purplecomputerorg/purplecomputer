@@ -6,6 +6,7 @@
     "segment": "palm_tree"
   },
   {
-    "segment": "tune"
+    "segment": "tune",
+    "speed": 2.2
   }
 ]

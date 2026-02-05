@@ -3286,19 +3286,182 @@ def _images_are_similar(img_a, img_b, threshold=0.98):
     return similarity >= threshold
 
 
-def judge_components_human(
-    candidate_crops: dict[str, str],
+def _build_side_by_side(images_and_labels, font):
+    """Build a side-by-side composite image from a list of (PIL.Image, label_str) pairs.
+
+    Scales each image up with nearest-neighbor for pixel art visibility,
+    then arranges them horizontally with labeled headers.
+    """
+    from PIL import Image, ImageDraw
+
+    # Scale all images up to at least 800px wide
+    scaled = []
+    for img, label in images_and_labels:
+        if img.width < 800:
+            s = max(2, 800 // img.width)
+            img = img.resize((img.width * s, img.height * s), Image.NEAREST)
+        scaled.append((img, label))
+
+    gap = 10
+    label_h = 32
+    max_h = max(img.height for img, _ in scaled)
+    total_w = sum(img.width for img, _ in scaled) + gap * (len(scaled) - 1)
+    composite = Image.new("RGB", (total_w, max_h + label_h), (30, 30, 30))
+
+    draw = ImageDraw.Draw(composite)
+    x_offset = 0
+    for img, label in scaled:
+        composite.paste(img, (x_offset, label_h))
+        draw.text((x_offset + 4, 2), label, fill=(255, 255, 255), font=font)
+        x_offset += img.width + gap
+
+    return composite
+
+
+def _show_image_and_wait(img, title, has_feh):
+    """Save image to temp file, display with feh if available, return temp path for cleanup."""
+    tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix='judge_')
+    img.save(tmp.name)
+    tmp.close()
+
+    if has_feh:
+        print(f'\n[Human Judge] Showing {title}. Close feh (Esc or q) to choose.')
+        subprocess.run(
+            ['feh', '--fullscreen', '--scale-down', '--image-bg', 'black',
+             '--title', title, tmp.name],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    else:
+        print(f"[Human Judge] View: {tmp.name}")
+
+    return tmp.name
+
+
+def _adjust_bounds_with_ai(
+    feedback: str,
     library: 'ComponentLibrary',
     goal: str,
-    candidate_full_image: str = None,
-    library_full_image: str = None,
-) -> dict[str, dict]:
-    """Judge each component using interactive human input instead of AI.
+    api_key: str,
+    model: str,
+    full_image_b64: str = None,
+) -> dict:
+    """Ask the AI to adjust component bounds based on human feedback.
 
-    Shows full canvas images side-by-side with the component region highlighted,
-    then asks the human to pick a winner. Auto-skips components that are nearly
-    identical between candidate and library. Returns same format as
-    judge_components_batch().
+    Args:
+        feedback: Natural language description of what needs to change.
+        library: Current component library (has composition with bounds).
+        goal: What the doodle is supposed to depict.
+        api_key: Anthropic API key.
+        model: Model to use.
+        full_image_b64: Optional base64 PNG of the current composite.
+
+    Returns:
+        Updated composition dict (same structure, possibly adjusted bounds).
+    """
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # Build current composition summary
+    comp_lines = []
+    for name in library.component_order:
+        info = library.composition.get(name, {})
+        x = info.get("x_range", "?")
+        y = info.get("y_range", "?")
+        desc = info.get("description", name)
+        comp_lines.append(f'  "{name}": x_range={x}, y_range={y}, description="{desc}"')
+    comp_summary = "\n".join(comp_lines)
+
+    prompt = f"""You are adjusting component bounding boxes for a pixel art composition.
+
+Goal: {goal}
+Canvas size: {CANVAS_WIDTH}x{CANVAS_HEIGHT} cells
+
+Current component bounds:
+{comp_summary}
+
+Human feedback: {feedback}
+
+Based on this feedback, output ONLY a JSON object mapping component names to their new bounds.
+Only include components whose bounds need to change. Format:
+{{"component_name": {{"x_range": [start, end], "y_range": [start, end]}}, ...}}
+
+Rules:
+- All coordinates must be within 0-{CANVAS_WIDTH} (x) and 0-{CANVAS_HEIGHT} (y)
+- Components should not overlap significantly
+- Respect the human's intent about which components need more/less space
+- Keep bounds that weren't mentioned unchanged (don't include them in output)"""
+
+    messages_content = []
+    if full_image_b64:
+        messages_content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": full_image_b64},
+        })
+    messages_content.append({"type": "text", "text": prompt})
+
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": messages_content}],
+        )
+        text = response.content[0].text
+        # Parse JSON from response
+        adjustments = parse_json_robust(text)
+        if not isinstance(adjustments, dict):
+            print(f"[Bounds] AI returned unexpected format, no changes applied")
+            return library.composition
+
+        # Apply adjustments to composition
+        updated = False
+        for name, new_bounds in adjustments.items():
+            if name not in library.composition:
+                print(f"[Bounds] Unknown component '{name}', skipping")
+                continue
+            old_info = library.composition[name]
+            old_x = old_info.get("x_range", "?")
+            old_y = old_info.get("y_range", "?")
+            if "x_range" in new_bounds:
+                library.composition[name]["x_range"] = new_bounds["x_range"]
+            if "y_range" in new_bounds:
+                library.composition[name]["y_range"] = new_bounds["y_range"]
+            new_x = library.composition[name].get("x_range", "?")
+            new_y = library.composition[name].get("y_range", "?")
+            print(f"[Bounds] {name}: x={old_x}→{new_x}, y={old_y}→{new_y}")
+            updated = True
+
+        if not updated:
+            print("[Bounds] No changes applied")
+
+        return library.composition
+
+    except Exception as e:
+        print(f"[Bounds] Error calling AI: {e}")
+        return library.composition
+
+
+def judge_components_human(
+    all_candidate_crops: list[tuple[str, dict[str, str], str]],
+    library: 'ComponentLibrary',
+    goal: str,
+    library_full_image: str = None,
+    api_key: str = None,
+    judge_model: str = "claude-sonnet-4-20250514",
+) -> dict[str, dict]:
+    """Judge components using interactive human input, supporting multiple candidates.
+
+    Shows full images first for quick triage, then optionally per-component judging.
+    Library is always on the left, candidates to the right. No randomization.
+
+    Args:
+        all_candidate_crops: List of (label, crops_dict, full_image_b64) for each candidate.
+        library: The component library with current best versions.
+        goal: The doodle goal description.
+        library_full_image: Base64 PNG of the current library composite.
+
+    Returns:
+        Dict mapping component name to result with winner, candidate_index, reasoning.
     """
     from PIL import Image
 
@@ -3319,168 +3482,332 @@ def judge_components_human(
     count_reviewed = 0
     count_auto_skipped = 0
     count_quit_remaining = 0
+    num_candidates = len(all_candidate_crops)
 
-    # Build pairs (same logic as judge_components_batch)
+    # Build list of component names that can be judged
     pairs = []
     for name in library.component_order:
-        if name in candidate_crops and name in library.best and library.best[name].image_base64:
-            pairs.append(name)
+        if name in library.best and library.best[name].image_base64:
+            # Check that at least one candidate has this component
+            if any(name in crops for _, crops, _ in all_candidate_crops):
+                pairs.append(name)
 
-    quit_requested = False
+    # Components with no library version: first candidate with that component wins
+    all_candidate_component_names = set()
+    for _, crops, _ in all_candidate_crops:
+        all_candidate_component_names.update(crops.keys())
+    for name in all_candidate_component_names:
+        if name not in pairs:
+            # Find first candidate that has it
+            for c_idx, (label, crops, _) in enumerate(all_candidate_crops):
+                if name in crops:
+                    results[name] = {
+                        "winner": "candidate",
+                        "candidate_index": c_idx,
+                        "reasoning": "No library version to compare against",
+                        "scores_candidate": None,
+                        "scores_library": None,
+                    }
+                    break
 
-    for idx, name in enumerate(pairs):
-        # Load component crops for similarity check
-        cand_crop = Image.open(io.BytesIO(base64.standard_b64decode(candidate_crops[name])))
-        lib_crop = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
+    if not pairs:
+        print("[Human Judge] No components to judge.")
+        return results
 
-        # Auto-skip if the crops are nearly identical
-        if _images_are_similar(cand_crop, lib_crop):
-            results[name] = {
-                "winner": "library",
-                "reasoning": "Auto-skipped: identical to library version",
-                "scores_candidate": None,
-                "scores_library": None,
-            }
-            print(f"[Human Judge] {name}: identical, keeping library version")
-            count_auto_skipped += 1
-            continue
+    # === Step A: Full-image triage ===
+    # Build full-image composite: [Library] [Candidate A] [Candidate B] ...
+    full_images = []
+    if library_full_image:
+        lib_img = Image.open(io.BytesIO(base64.standard_b64decode(library_full_image)))
+        full_images.append((lib_img, "Library"))
+    for c_idx, (label, _, full_b64) in enumerate(all_candidate_crops):
+        if full_b64:
+            cand_img = Image.open(io.BytesIO(base64.standard_b64decode(full_b64)))
+            cand_label = label if num_candidates == 1 else f"{label} ({c_idx + 1})"
+            full_images.append((cand_img, cand_label))
 
-        # Randomize left/right to avoid positional bias
-        swapped = random.choice([True, False])
+    go_to_components = False
+    chosen_candidate_idx = None
 
-        # Build comparison image: full canvas with component highlighted
-        if candidate_full_image and library_full_image:
-            cand_ctx = _highlight_component_on_canvas(
-                candidate_full_image, library.composition, name)
-            lib_ctx = _highlight_component_on_canvas(
-                library_full_image, library.composition, name)
-        else:
-            # Fallback: use isolated crops if full images unavailable
-            cand_ctx = cand_crop
-            lib_ctx = lib_crop
-
-        if swapped:
-            left_img, right_img = lib_ctx, cand_ctx
-        else:
-            left_img, right_img = cand_ctx, lib_ctx
-
-        # Scale both images up to at least 800px wide (nearest neighbor for pixel art)
-        for_scale = [left_img, right_img]
-        scaled = []
-        for img in for_scale:
-            if img.width < 800:
-                s = max(2, 800 // img.width)
-                img = img.resize((img.width * s, img.height * s), Image.NEAREST)
-            scaled.append(img)
-        left_img, right_img = scaled
-
-        # Build side-by-side composite: [1: left] [gap] [2: right]
-        from PIL import ImageDraw
-        gap = 10
-        label_h = 32
-        max_h = max(left_img.height, right_img.height)
-        composite_w = left_img.width + gap + right_img.width
-        composite_h = max_h + label_h
-        composite = Image.new("RGB", (composite_w, composite_h), (30, 30, 30))
-        composite.paste(left_img, (0, label_h))
-        composite.paste(right_img, (left_img.width + gap, label_h))
-
-        # Draw labels: "1" over left, "2" over right, component name in center
-        draw = ImageDraw.Draw(composite)
-        draw.text((4, 2), "1", fill=(255, 255, 255), font=font)
-        draw.text((left_img.width + gap + 4, 2), "2", fill=(255, 255, 255), font=font)
-        draw.text((composite_w // 2 - 60, 2), name, fill=(255, 200, 100), font=font)
-
-        # Save to temp file and display
-        tmp = tempfile.NamedTemporaryFile(suffix='.png', delete=False, prefix=f'judge_{name}_')
-        composite.save(tmp.name)
-        tmp.close()
+    if full_images and library_full_image:
+        composite = _build_side_by_side(full_images, font)
+        tmp_path = _show_image_and_wait(composite, "Full image comparison", has_feh)
 
         try:
-            if has_feh:
-                print(f'\n[Human Judge] Showing "{name}". Close feh (Esc or q) to choose.')
-                # Blocking: feh runs fullscreen, user reviews then closes it
-                subprocess.run(
-                    ['feh', '--fullscreen', '--scale-down', '--image-bg', 'black',
-                     '--title', f'Component: {name}', tmp.name],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
+            # Build prompt
+            bounds_hint = ", b(ounds)" if api_key else ""
+            if num_candidates == 1:
+                prompt = f'Overall: (o)ld library, (n)ew candidate, (c)omponents{bounds_hint}, (q)uit? '
             else:
-                print(f"[Human Judge] View: {tmp.name}")
+                cand_options = ", ".join(f"n{c_idx + 1}" for c_idx in range(num_candidates))
+                prompt = f'Overall: (o)ld library, ({cand_options}) pick candidate, (c)omponents{bounds_hint}, (q)uit? '
 
-            # Prompt for choice (after feh closes)
             while True:
-                choice = input(f'Component "{name}": 1, 2, s(kip), q(uit): ').strip().lower()
-                if choice in ('1', '2', 's', 'q'):
+                choice = input(prompt).strip().lower()
+                if choice == 'o':
+                    # Keep library for all components
+                    for name in pairs:
+                        if name not in results:
+                            results[name] = {
+                                "winner": "library",
+                                "candidate_index": 0,
+                                "reasoning": "Human chose library (full-image triage)",
+                                "scores_candidate": None,
+                                "scores_library": None,
+                            }
+                    print("[Human Judge] Keeping library for all components.")
                     break
-                print("Please enter 1, 2, s, or q.")
-
-            if choice == 'q':
-                # Keep library versions for this and all remaining components
-                print("[Human Judge] Quitting. Keeping library versions for remaining components.")
-                for remaining_name in pairs[idx:]:
-                    if remaining_name not in results:
-                        results[remaining_name] = {
-                            "winner": "library",
-                            "reasoning": "Kept library version (human quit early)",
-                            "scores_candidate": None,
-                            "scores_library": None,
-                        }
-                        count_quit_remaining += 1
-                quit_requested = True
-                break
-
-            feedback = ""
-            if choice != 's':
-                feedback = input("Feedback (optional, Enter to skip): ").strip()
-
-            if choice == 's':
-                winner = "library"  # keep current on skip
-                reasoning = "Skipped by human judge"
-            else:
-                picked = int(choice)
-                # Map back through randomization
-                if swapped:
-                    # 1=library, 2=candidate
-                    winner = "library" if picked == 1 else "candidate"
+                elif choice == 'n' and num_candidates == 1:
+                    chosen_candidate_idx = 0
+                    for name in pairs:
+                        if name not in results and name in all_candidate_crops[0][1]:
+                            results[name] = {
+                                "winner": "candidate",
+                                "candidate_index": 0,
+                                "reasoning": "Human chose candidate (full-image triage)",
+                                "scores_candidate": None,
+                                "scores_library": None,
+                            }
+                        elif name not in results:
+                            results[name] = {
+                                "winner": "library",
+                                "candidate_index": 0,
+                                "reasoning": "Candidate missing this component, keeping library",
+                                "scores_candidate": None,
+                                "scores_library": None,
+                            }
+                    print(f"[Human Judge] Accepting all components from candidate.")
+                    break
+                elif choice.startswith('n') and len(choice) > 1 and num_candidates > 1:
+                    try:
+                        idx = int(choice[1:]) - 1
+                        if 0 <= idx < num_candidates:
+                            chosen_candidate_idx = idx
+                            label = all_candidate_crops[idx][0]
+                            crops = all_candidate_crops[idx][1]
+                            for name in pairs:
+                                if name not in results and name in crops:
+                                    results[name] = {
+                                        "winner": "candidate",
+                                        "candidate_index": idx,
+                                        "reasoning": f"Human chose candidate {label} (full-image triage)",
+                                        "scores_candidate": None,
+                                        "scores_library": None,
+                                    }
+                                elif name not in results:
+                                    results[name] = {
+                                        "winner": "library",
+                                        "candidate_index": 0,
+                                        "reasoning": "Candidate missing this component, keeping library",
+                                        "scores_candidate": None,
+                                        "scores_library": None,
+                                    }
+                            print(f"[Human Judge] Accepting all components from candidate {label}.")
+                            break
+                        else:
+                            print(f"Invalid candidate number. Choose 1-{num_candidates}.")
+                            continue
+                    except ValueError:
+                        pass
+                    print(f"Invalid choice. Enter o, n1-n{num_candidates}, c, or q.")
+                    continue
+                elif choice == 'b' and api_key:
+                    feedback = input("Describe the bounds issue: ").strip()
+                    if feedback:
+                        _adjust_bounds_with_ai(
+                            feedback=feedback,
+                            library=library,
+                            goal=goal,
+                            api_key=api_key,
+                            model=judge_model,
+                            full_image_b64=library_full_image,
+                        )
+                        # Re-crop component images from the composite with updated bounds
+                        if library_full_image:
+                            new_crops = extract_all_components(library_full_image, library.composition)
+                            for comp_name, crop_b64 in new_crops.items():
+                                if comp_name in library.best:
+                                    library.best[comp_name].image_base64 = crop_b64
+                            print("[Bounds] Re-cropped library components with new bounds.")
+                    # Loop back to the same prompt
+                    continue
+                elif choice == 'c':
+                    go_to_components = True
+                    break
+                elif choice == 'q':
+                    for name in pairs:
+                        if name not in results:
+                            results[name] = {
+                                "winner": "library",
+                                "candidate_index": 0,
+                                "reasoning": "Kept library version (human quit)",
+                                "scores_candidate": None,
+                                "scores_library": None,
+                            }
+                    print("[Human Judge] Quitting. Keeping library for all components.")
+                    break
                 else:
-                    # 1=candidate, 2=library
-                    winner = "candidate" if picked == 1 else "library"
-                reasoning = feedback if feedback else "Human judge preference"
-
-            results[name] = {
-                "winner": winner,
-                "reasoning": reasoning,
-                "scores_candidate": None,
-                "scores_library": None,
-            }
-            print(f"[Human Judge] {name}: {winner} wins ({reasoning[:60]})")
-            count_reviewed += 1
-
+                    if num_candidates == 1:
+                        print("Please enter o, n, c, or q.")
+                    else:
+                        print(f"Please enter o, n1-n{num_candidates}, c, or q.")
         finally:
             try:
-                os.unlink(tmp.name)
+                os.unlink(tmp_path)
             except OSError:
                 pass
+    else:
+        # No full images available, go straight to components
+        go_to_components = True
 
-        if quit_requested:
-            break
+    # === Step B: Per-component judging (only if user chose 'c') ===
+    if go_to_components:
+        quit_requested = False
 
-    # Components with no library version: candidate wins by default
-    for name in candidate_crops:
-        if name not in results:
-            results[name] = {
-                "winner": "candidate",
-                "reasoning": "No library version to compare against",
-                "scores_candidate": None,
-                "scores_library": None,
-            }
+        for idx, name in enumerate(pairs):
+            if name in results:
+                continue  # already decided
+
+            # Load library crop
+            lib_crop = Image.open(io.BytesIO(base64.standard_b64decode(library.best[name].image_base64)))
+
+            # Check which candidates have this component and load their crops
+            candidate_crop_images = []  # (candidate_index, label, crop_image)
+            for c_idx, (label, crops, _) in enumerate(all_candidate_crops):
+                if name in crops:
+                    cand_crop = Image.open(io.BytesIO(base64.standard_b64decode(crops[name])))
+                    candidate_crop_images.append((c_idx, label, cand_crop))
+
+            if not candidate_crop_images:
+                results[name] = {
+                    "winner": "library",
+                    "candidate_index": 0,
+                    "reasoning": "No candidate has this component",
+                    "scores_candidate": None,
+                    "scores_library": None,
+                }
+                continue
+
+            # Auto-skip if ALL candidate crops are identical to library
+            all_identical = all(
+                _images_are_similar(crop, lib_crop)
+                for _, _, crop in candidate_crop_images
+            )
+            if all_identical:
+                results[name] = {
+                    "winner": "library",
+                    "candidate_index": 0,
+                    "reasoning": "Auto-skipped: all candidates identical to library",
+                    "scores_candidate": None,
+                    "scores_library": None,
+                }
+                print(f"[Human Judge] {name}: identical, keeping library version")
+                count_auto_skipped += 1
+                continue
+
+            # Build side-by-side: [Library] [Cand 1] [Cand 2] ...
+            images_and_labels = [(lib_crop, "Library")]
+            for c_idx, label, crop in candidate_crop_images:
+                cand_label = str(c_idx + 1) if num_candidates > 1 else "1"
+                images_and_labels.append((crop, cand_label))
+
+            composite = _build_side_by_side(images_and_labels, font)
+            tmp_path = _show_image_and_wait(composite, f"Component: {name}", has_feh)
+
+            try:
+                # Build prompt
+                cand_nums = [str(c_idx + 1) for c_idx, _, _ in candidate_crop_images]
+                cand_options = ", ".join(cand_nums)
+                bounds_hint = ", b(ounds)" if api_key else ""
+                prompt = f'Component "{name}": L(ibrary), {cand_options}, s(kip){bounds_hint}, q(uit)? '
+
+                while True:
+                    choice = input(prompt).strip().lower()
+                    if choice in ('l', 's', 'q'):
+                        break
+                    if choice in cand_nums:
+                        break
+                    if choice == 'b' and api_key:
+                        feedback = input("Describe the bounds issue: ").strip()
+                        if feedback:
+                            _adjust_bounds_with_ai(
+                                feedback=feedback,
+                                library=library,
+                                goal=goal,
+                                api_key=api_key,
+                                model=judge_model,
+                                full_image_b64=library_full_image,
+                            )
+                            # Re-crop library components with updated bounds
+                            if library_full_image:
+                                new_crops = extract_all_components(library_full_image, library.composition)
+                                for comp_name, crop_b64 in new_crops.items():
+                                    if comp_name in library.best:
+                                        library.best[comp_name].image_base64 = crop_b64
+                                print("[Bounds] Re-cropped library components with new bounds.")
+                        # Loop back to same prompt
+                        continue
+                    print(f"Please enter L, {cand_options}, s, or q.")
+
+                if choice == 'q':
+                    print("[Human Judge] Quitting. Keeping library for remaining components.")
+                    for remaining_name in pairs[idx:]:
+                        if remaining_name not in results:
+                            results[remaining_name] = {
+                                "winner": "library",
+                                "candidate_index": 0,
+                                "reasoning": "Kept library version (human quit early)",
+                                "scores_candidate": None,
+                                "scores_library": None,
+                            }
+                            count_quit_remaining += 1
+                    quit_requested = True
+                elif choice == 'l' or choice == 's':
+                    results[name] = {
+                        "winner": "library",
+                        "candidate_index": 0,
+                        "reasoning": "Skipped by human judge" if choice == 's' else "Human chose library",
+                        "scores_candidate": None,
+                        "scores_library": None,
+                    }
+                    print(f'[Human Judge] {name}: library wins')
+                    count_reviewed += 1
+                else:
+                    # Picked a candidate number
+                    picked_num = int(choice)
+                    picked_c_idx = picked_num - 1
+                    picked_label = all_candidate_crops[picked_c_idx][0]
+                    results[name] = {
+                        "winner": "candidate",
+                        "candidate_index": picked_c_idx,
+                        "reasoning": f"Human chose candidate {picked_label}",
+                        "scores_candidate": None,
+                        "scores_library": None,
+                    }
+                    print(f'[Human Judge] {name}: candidate {picked_label} wins')
+                    count_reviewed += 1
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            if quit_requested:
+                break
 
     # Print summary
-    parts = [f"{count_reviewed} reviewed", f"{count_auto_skipped} auto-skipped (identical)"]
+    parts = []
+    if count_reviewed > 0:
+        parts.append(f"{count_reviewed} reviewed")
+    if count_auto_skipped > 0:
+        parts.append(f"{count_auto_skipped} auto-skipped (identical)")
     if count_quit_remaining > 0:
         parts.append(f"{count_quit_remaining} remaining (quit)")
-    print(f"[Human Judge] Done: {', '.join(parts)}")
+    decided_at_triage = sum(1 for r in results.values() if "triage" in r.get("reasoning", ""))
+    if decided_at_triage > 0:
+        parts.append(f"{decided_at_triage} decided at full-image triage")
+    if parts:
+        print(f"[Human Judge] Done: {', '.join(parts)}")
 
     return results
 
@@ -3923,28 +4250,23 @@ def run_visual_feedback_loop(
             any_component_updated = False
             old_composite = composite_image_base64
 
-            for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates:
-                if not component_crops:
-                    continue
-
-                if not library.best:
-                    # First iteration: all components from this candidate become the library
-                    # Extract per-component text from the response
+            # Check if library needs initialization (first iteration)
+            if not library.best:
+                # Use first candidate with crops to initialize
+                for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates:
+                    if not component_crops:
+                        continue
                     comp_texts = extract_component_texts(c_result.get("raw_response", ""))
-                    # Check if any actions have component tags at all
                     any_tagged = any(a.get("component") for a in c_result["actions"])
                     for name in library.component_order:
                         if name in component_crops:
-                            # Get component-specific actions
                             comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
                             comp_text = comp_texts.get(name, "")
                             if not comp_actions and not any_tagged:
-                                # No component tags at all: assign all actions to first component only
                                 if name == library.component_order[0]:
                                     comp_actions = c_result["actions"]
                                     comp_text = c_compact
                                 else:
-                                    # Other components get empty actions (image crop only)
                                     comp_actions = []
                             library.update_component(name, ComponentVersion(
                                 iteration=attempt_label,
@@ -3957,28 +4279,72 @@ def run_visual_feedback_loop(
                     print(f"[Library] Initialized all components from candidate {label}")
                     break  # Only use first candidate for initialization
 
-                else:
-                    # Normal case: per-component judging against library
-                    print(f"\n[Component Judge] Judging candidate {label} components against library...")
-                    if human_judge:
-                        comp_results = judge_components_human(
-                            candidate_crops=component_crops,
-                            library=library,
-                            goal=goal,
-                            candidate_full_image=c_png,
-                            library_full_image=composite_image_base64,
-                        )
-                    else:
-                        comp_results = judge_components_batch(
-                            candidate_crops=component_crops,
-                            library=library,
-                            goal=goal,
-                            api_key=api_key,
-                            judge_model=judge_model,
-                            visual_identity=visual_identity,
-                        )
+            elif human_judge:
+                # Human judging: pass ALL candidates at once
+                candidates_with_crops = [
+                    (label, component_crops, c_png)
+                    for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates
+                    if component_crops
+                ]
+                if candidates_with_crops:
+                    print(f"\n[Component Judge] Human judging {len(candidates_with_crops)} candidate(s) against library...")
+                    comp_results = judge_components_human(
+                        all_candidate_crops=candidates_with_crops,
+                        library=library,
+                        goal=goal,
+                        library_full_image=composite_image_base64,
+                        api_key=api_key,
+                        judge_model=judge_model,
+                    )
 
-                    # Extract per-component text from the response
+                    # Apply results: look up the winning candidate's actions/text
+                    for name, result in comp_results.items():
+                        if result["winner"] == "candidate":
+                            c_idx = result.get("candidate_index", 0)
+                            # Find the matching executed_candidate by label
+                            winning_label = candidates_with_crops[c_idx][0]
+                            for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates:
+                                if label == winning_label:
+                                    comp_texts = extract_component_texts(c_result.get("raw_response", ""))
+                                    comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
+                                    comp_text = comp_texts.get(name, "")
+                                    if not comp_actions:
+                                        print(f"[Library] ✗ '{name}' won judging but has no tagged actions, skipping")
+                                        component_staleness[name] = component_staleness.get(name, 0) + 1
+                                        break
+                                    library.update_component(name, ComponentVersion(
+                                        iteration=attempt_label,
+                                        actions_text=comp_text,
+                                        actions=comp_actions,
+                                        image_base64=component_crops.get(name),
+                                        scores=result.get("scores_candidate"),
+                                    ))
+                                    component_staleness[name] = 0
+                                    any_component_updated = True
+                                    print(f"[Library] ✓ '{name}' updated from candidate {label}")
+                                    break
+                        else:
+                            if result.get("scores_library") and name in library.best:
+                                library.best[name].scores = result["scores_library"]
+                            component_staleness[name] = component_staleness.get(name, 0) + 1
+                            print(f"[Library] ✗ '{name}' kept (staleness: {component_staleness[name]})")
+
+            else:
+                # AI judging: per-candidate loop (unchanged)
+                for label, attempt_label, c_result, c_compact, c_png, component_crops in executed_candidates:
+                    if not component_crops:
+                        continue
+
+                    print(f"\n[Component Judge] Judging candidate {label} components against library...")
+                    comp_results = judge_components_batch(
+                        candidate_crops=component_crops,
+                        library=library,
+                        goal=goal,
+                        api_key=api_key,
+                        judge_model=judge_model,
+                        visual_identity=visual_identity,
+                    )
+
                     comp_texts = extract_component_texts(c_result.get("raw_response", ""))
 
                     for name, result in comp_results.items():
@@ -3986,7 +4352,6 @@ def run_visual_feedback_loop(
                             comp_actions = [a for a in c_result["actions"] if a.get("component") == name]
                             comp_text = comp_texts.get(name, "")
                             if not comp_actions:
-                                # Can't isolate this component's actions, skip update
                                 print(f"[Library] ✗ '{name}' won judging but has no tagged actions, skipping")
                                 component_staleness[name] = component_staleness.get(name, 0) + 1
                                 continue
@@ -4001,7 +4366,6 @@ def run_visual_feedback_loop(
                             any_component_updated = True
                             print(f"[Library] ✓ '{name}' updated from candidate {label}")
                         else:
-                            # Update library scores if we got new ones
                             if result.get("scores_library") and name in library.best:
                                 library.best[name].scores = result["scores_library"]
                             component_staleness[name] = component_staleness.get(name, 0) + 1

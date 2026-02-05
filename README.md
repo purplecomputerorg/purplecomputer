@@ -229,6 +229,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 ## Documentation
 
 - **[MANUAL.md](MANUAL.md):** Complete build instructions, customization, and troubleshooting
+- **[guides/demo-system.md](guides/demo-system.md):** Creating, generating, and composing demo screencasts
 - **[guides/](guides/):** Technical deep-dives (architecture, installer, ask mode design, etc.)
 
 ---

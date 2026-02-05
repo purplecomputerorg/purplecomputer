@@ -18,6 +18,7 @@ from .script import (
     PlayKeys,
     DrawPath,
     MoveSequence,
+    SetSpeed,
     Comment,
 )
 from ..keyboard import (
@@ -118,6 +119,10 @@ class DemoPlayer:
         """Execute a single demo action."""
         if isinstance(action, Comment):
             # Comments do nothing
+            return
+
+        elif isinstance(action, SetSpeed):
+            self._speed = action.multiplier
             return
 
         elif isinstance(action, TypeText):

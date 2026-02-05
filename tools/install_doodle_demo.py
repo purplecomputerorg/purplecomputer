@@ -85,6 +85,8 @@ After installing, run:
                         help="Which iteration to use (default: best, or inferred from screenshot)")
     parser.add_argument("--duration", type=float, default=10.0,
                         help="Target playback duration in seconds (default: 10)")
+    parser.add_argument("--save", metavar="NAME",
+                        help="Save as a named demo segment (e.g., --save palm_tree)")
 
     args = parser.parse_args()
 
@@ -163,18 +165,39 @@ After installing, run:
     else:
         speed_multiplier = 1.0
 
-    # Build the output file content
-    output_content = demo_code + "\n\n"
-    output_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
+    if args.save:
+        # Save as a named segment
+        from tools.ai_utils import append_to_demo_json
+        segments_dir = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "segments")
+        os.makedirs(segments_dir, exist_ok=True)
 
-    # Write to purple_tui/demo/ai_generated_script.py
-    dest_path = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "ai_generated_script.py")
-    with open(dest_path, 'w') as f:
-        f.write(output_content)
+        # The generated demo_code defines AI_DRAWING. We need to transform it
+        # to export SEGMENT instead, and add SPEED_MULTIPLIER.
+        segment_code = demo_code.replace("AI_DRAWING = [", "SEGMENT = [")
+        segment_content = segment_code + "\n\n"
+        segment_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
 
-    print("\nInstalled demo script:")
-    print(f"  Source: {output_dir} (iteration {iteration})")
-    print(f"  Destination: {dest_path}")
+        segment_path = os.path.join(segments_dir, f"{args.save}.py")
+        with open(segment_path, 'w') as f:
+            f.write(segment_content)
+
+        speed_arg = speed_multiplier if speed_multiplier != 1.0 else None
+        append_to_demo_json(args.save, speed=speed_arg)
+
+        print(f"\nSaved segment: {segment_path}")
+        print(f"  Added to demo.json")
+    else:
+        # Legacy behavior: write to ai_generated_script.py
+        output_content = demo_code + "\n\n"
+        output_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
+
+        dest_path = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "ai_generated_script.py")
+        with open(dest_path, 'w') as f:
+            f.write(output_content)
+
+        print(f"\nInstalled demo script: {dest_path}")
+
+    print(f"\n  Source: {output_dir} (iteration {iteration})")
     print(f"  Actions: {len(actions)}")
     print(f"  Estimated duration: {estimated:.1f}s")
     print(f"  Target duration: {target:.1f}s")

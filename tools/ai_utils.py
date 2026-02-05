@@ -5,6 +5,9 @@ import os
 import re
 from pathlib import Path
 
+# Root of the purple_tui package (relative to this tools/ directory)
+_DEMO_DIR = Path(__file__).parent.parent / "purple_tui" / "demo"
+
 
 def load_env_file():
     """Load environment variables from tools/.env if it exists."""
@@ -111,3 +114,23 @@ def parse_json_robust(text: str) -> dict | list | None:
             print(f"[JSON Parse] Fallback also failed: {e}")
 
     return None
+
+
+def append_to_demo_json(name: str, speed: float | None = None):
+    """Add a segment to demo.json if not already listed.
+
+    Creates the file if it doesn't exist. Skips duplicate entries.
+    Only writes the speed field if it differs from 1.0.
+    """
+    demo_json = _DEMO_DIR / "demo.json"
+    if demo_json.exists():
+        entries = json.loads(demo_json.read_text())
+    else:
+        entries = []
+    if any(e["segment"] == name for e in entries):
+        return
+    entry = {"segment": name}
+    if speed is not None and speed != 1.0:
+        entry["speed"] = speed
+    entries.append(entry)
+    demo_json.write_text(json.dumps(entries, indent=2) + "\n")

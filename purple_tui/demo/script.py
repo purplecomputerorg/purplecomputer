@@ -151,6 +151,12 @@ class MoveSequence(DemoAction):
 
 
 @dataclass
+class SetSpeed(DemoAction):
+    """Change playback speed mid-demo. Inserted between segments."""
+    multiplier: float = 1.0
+
+
+@dataclass
 class Comment(DemoAction):
     """A comment in the script (does nothing, just for documentation).
 

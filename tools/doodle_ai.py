@@ -1471,12 +1471,14 @@ Each composition element will be independently evaluated, scored, and potentiall
 
 1. **Aim for 3-7 composition elements.** Too few (1-2) defeats the purpose. Too many (>10) makes judging noisy.
 2. **Each element needs a clear bounding box** (x_range and y_range). These define where the element can paint.
-3. **Elements can overlap slightly** (1-2 rows) at connection points (e.g., where trunk meets canopy). Later elements paint over earlier ones where they overlap.
+3. **Elements can overlap generously** at connection points. Later elements paint over earlier ones where they overlap. For organic/curved subjects (animals, plants), use large overlaps (5+ rows) so that features like a curved back, arched canopy, or sloped shoulders can span across component boundaries naturally. A flat 1-2 row overlap creates flat, blocky joints.
 4. **Each element should be self-contained.** Its color mixing recipe should be completable within its bounds.
 5. **Don't make elements too granular** (every leaf as a separate component) or too coarse (entire drawing as one component).
 
 Good component breakdown for a tree: canopy, trunk, ground, shadows, highlights
 Bad: "left_leaf_1", "left_leaf_2" (too granular) or "tree" (too coarse)
+
+**CURVATURE TIP:** For animals or organic subjects with curved profiles (e.g., a dinosaur's arched back with plates), give decorative elements (plates, spines, fins) bounds that overlap significantly with the body. This lets the drawing AI place them at varying heights along the curve instead of in a flat row. For example, a stegosaurus's plates should share y_range with the body so they can follow the back's arc.
 
 **COMPOSITION TIP:** The main subject should be naturally sized and centered, with space around it. For example, an apple tree trunk might span x=40-60, with a canopy from x=25-75, not the full 0-{CANVAS_WIDTH - 1}.
 
@@ -3459,7 +3461,7 @@ def judge_components_human(
     library_full_image: str = None,
     api_key: str = None,
     judge_model: str = "claude-sonnet-4-20250514",
-) -> tuple[dict[str, dict], bool]:
+) -> tuple[dict[str, dict], bool, str | None]:
     """Judge components using interactive human input, supporting multiple candidates.
 
     Shows full images first for quick triage, then optionally per-component judging.
@@ -3472,9 +3474,10 @@ def judge_components_human(
         library_full_image: Base64 PNG of the current library composite.
 
     Returns:
-        Tuple of (results_dict, quit_requested). results_dict maps component name to
-        result with winner, candidate_index, reasoning. quit_requested is True if the
-        user pressed 'q' to quit.
+        Tuple of (results_dict, quit_requested, human_feedback).
+        results_dict maps component name to result with winner, candidate_index, reasoning.
+        quit_requested is True if the user pressed 'q' to quit.
+        human_feedback is free-text feedback from the user (or None).
     """
     from PIL import Image
 
@@ -3493,6 +3496,7 @@ def judge_components_human(
 
     results = {}
     quit_requested = False
+    human_feedback_parts = []
     count_reviewed = 0
     count_auto_skipped = 0
     count_quit_remaining = 0
@@ -3526,7 +3530,7 @@ def judge_components_human(
 
     if not pairs:
         print("[Human Judge] No components to judge.")
-        return results, quit_requested
+        return results, quit_requested, None
 
     # === Step A: Full-image triage ===
     # Build full-image composite: [Library] [Candidate A] [Candidate B] ...
@@ -3551,10 +3555,10 @@ def judge_components_human(
             # Build prompt
             bounds_hint = ", b(ounds)" if api_key else ""
             if num_candidates == 1:
-                prompt = f'Overall: (o)ld library, (n)ew candidate, (c)omponents{bounds_hint}, (q)uit? '
+                prompt = f'Overall: (o)ld library, (n)ew candidate, (c)omponents, (f)eedback{bounds_hint}, (q)uit? '
             else:
                 cand_options = ", ".join(f"n{c_idx + 1}" for c_idx in range(num_candidates))
-                prompt = f'Overall: (o)ld library, ({cand_options}) pick candidate, (c)omponents{bounds_hint}, (q)uit? '
+                prompt = f'Overall: (o)ld library, ({cand_options}) pick candidate, (c)omponents, (f)eedback{bounds_hint}, (q)uit? '
 
             while True:
                 choice = input(prompt).strip().lower()
@@ -3645,6 +3649,12 @@ def judge_components_human(
                             print("[Bounds] Re-cropped library components with new bounds.")
                     # Loop back to the same prompt
                     continue
+                elif choice == 'f':
+                    fb = input("Feedback for next iteration: ").strip()
+                    if fb:
+                        human_feedback_parts.append(fb)
+                        print(f"[Feedback] Noted: {fb}")
+                    continue
                 elif choice == 'c':
                     go_to_components = True
                     break
@@ -3663,9 +3673,9 @@ def judge_components_human(
                     break
                 else:
                     if num_candidates == 1:
-                        print("Please enter o, n, c, or q.")
+                        print("Please enter o, n, c, f, or q.")
                     else:
-                        print(f"Please enter o, n1-n{num_candidates}, c, or q.")
+                        print(f"Please enter o, n1-n{num_candidates}, c, f, or q.")
         finally:
             try:
                 os.unlink(tmp_path)
@@ -3718,8 +3728,7 @@ def judge_components_human(
                 count_auto_skipped += 1
                 continue
 
-            # Show full-image context with component highlighted
-            context_tmp_path = None
+            # Show full-image context with component highlighted (red rectangle)
             if library_full_image:
                 context_images = []
                 lib_highlighted = _highlight_component_on_canvas(
@@ -3733,27 +3742,23 @@ def judge_components_human(
                         )
                         cand_lbl = clabel if num_candidates == 1 else f"{clabel} ({c_idx + 1})"
                         context_images.append((cand_highlighted, cand_lbl))
-                if context_images:
-                    context_composite = _build_side_by_side(context_images, font)
-                    context_tmp_path = _show_image_and_wait(
-                        context_composite, f"Context: {name}", has_feh,
-                    )
-
-            # Build side-by-side: [Library] [Cand 1] [Cand 2] ...
-            images_and_labels = [(lib_crop, "Library")]
-            for c_idx, label, crop in candidate_crop_images:
-                cand_label = str(c_idx + 1) if num_candidates > 1 else "1"
-                images_and_labels.append((crop, cand_label))
-
-            composite = _build_side_by_side(images_and_labels, font)
-            tmp_path = _show_image_and_wait(composite, f"Component: {name}", has_feh)
+                composite = _build_side_by_side(context_images, font)
+                tmp_path = _show_image_and_wait(composite, f"Component: {name}", has_feh)
+            else:
+                # Fallback: show cropped side-by-side if no full images
+                images_and_labels = [(lib_crop, "Library")]
+                for c_idx, label, crop in candidate_crop_images:
+                    cand_label = str(c_idx + 1) if num_candidates > 1 else "1"
+                    images_and_labels.append((crop, cand_label))
+                composite = _build_side_by_side(images_and_labels, font)
+                tmp_path = _show_image_and_wait(composite, f"Component: {name}", has_feh)
 
             try:
                 # Build prompt
                 cand_nums = [str(c_idx + 1) for c_idx, _, _ in candidate_crop_images]
                 cand_options = ", ".join(cand_nums)
                 bounds_hint = ", b(ounds)" if api_key else ""
-                prompt = f'Component "{name}": L(ibrary), {cand_options}, s(kip){bounds_hint}, q(uit)? '
+                prompt = f'Component "{name}": L(ibrary), {cand_options}, s(kip), (f)eedback{bounds_hint}, q(uit)? '
 
                 while True:
                     choice = input(prompt).strip().lower()
@@ -3761,6 +3766,12 @@ def judge_components_human(
                         break
                     if choice in cand_nums:
                         break
+                    if choice == 'f':
+                        fb = input(f"Feedback for '{name}': ").strip()
+                        if fb:
+                            human_feedback_parts.append(f"{name}: {fb}")
+                            print(f"[Feedback] Noted: {fb}")
+                        continue
                     if choice == 'b' and api_key:
                         feedback = input("Describe the bounds issue: ").strip()
                         if feedback:
@@ -3781,7 +3792,7 @@ def judge_components_human(
                                 print("[Bounds] Re-cropped library components with new bounds.")
                         # Loop back to same prompt
                         continue
-                    print(f"Please enter L, {cand_options}, s, or q.")
+                    print(f"Please enter L, {cand_options}, s, f, or q.")
 
                 if choice == 'q':
                     print("[Human Judge] Quitting. Keeping library for remaining components.")
@@ -3825,11 +3836,6 @@ def judge_components_human(
                     os.unlink(tmp_path)
                 except OSError:
                     pass
-                if context_tmp_path:
-                    try:
-                        os.unlink(context_tmp_path)
-                    except OSError:
-                        pass
 
             if quit_requested:
                 break
@@ -3848,7 +3854,8 @@ def judge_components_human(
     if parts:
         print(f"[Human Judge] Done: {', '.join(parts)}")
 
-    return results, quit_requested
+    human_feedback = "; ".join(human_feedback_parts) if human_feedback_parts else None
+    return results, quit_requested, human_feedback
 
 
 def check_composite_coherence(
@@ -4305,6 +4312,7 @@ def run_visual_feedback_loop(
             # === PHASE 2: Per-component judging ===
             any_component_updated = False
             old_composite = composite_image_base64
+            human_feedback = None
 
             # Check if library needs initialization (first iteration)
             if not library.best:
@@ -4344,7 +4352,7 @@ def run_visual_feedback_loop(
                 ]
                 if candidates_with_crops:
                     print(f"\n[Component Judge] Human judging {len(candidates_with_crops)} candidate(s) against library...")
-                    comp_results, quit_requested = judge_components_human(
+                    comp_results, quit_requested, human_feedback = judge_components_human(
                         all_candidate_crops=candidates_with_crops,
                         library=library,
                         goal=goal,
@@ -4524,6 +4532,22 @@ def run_visual_feedback_loop(
                         "weakest_criterion": weak_criteria[0][0] if weak_criteria else None,
                         "specific_improvement": f"Improve '{weak_name}' {weak_criteria[0][0]}" if weak_criteria else None,
                     }
+
+            # Merge human feedback into judge feedback
+            if human_judge and human_feedback:
+                if last_judge_feedback is None:
+                    last_judge_feedback = {
+                        "winner": "B" if any_component_updated else "A",
+                        "reasoning": human_feedback,
+                        "confidence": "high",
+                    }
+                else:
+                    existing = last_judge_feedback.get("specific_improvement", "")
+                    last_judge_feedback["specific_improvement"] = (
+                        f"{existing}; Human feedback: {human_feedback}" if existing
+                        else human_feedback
+                    )
+                print(f"[Feedback] Will pass to next iteration: {human_feedback}")
 
             judge_history.append({
                 "iteration": i + 1,

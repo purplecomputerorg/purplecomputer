@@ -405,6 +405,18 @@ if HAS_PYTEST:
         def test_mixed_emoji_and_text(self, evaluator):
             assert evaluator.evaluate("I love cat") == "I 😍 🐱"
 
+        def test_color_word_in_text(self, evaluator):
+            """Color words should show color swatch inline, not stay as plain text."""
+            result = evaluator.evaluate("purple truck")
+            assert "[on #7B2D8E]" in result  # purple color swatch
+            assert "🚚" in result              # truck emoji
+
+        def test_multiple_colors_in_text(self, evaluator):
+            """Multiple color words should each get a swatch."""
+            result = evaluator.evaluate("red blue truck")
+            assert "[on " in result  # at least one color swatch
+            assert "🚚" in result
+
         def test_no_substitution_for_math(self, evaluator):
             result = evaluator.evaluate("2 + 2")
             assert result.startswith("4")

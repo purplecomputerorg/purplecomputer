@@ -1245,7 +1245,7 @@ class SimpleEvaluator:
         return formatted
 
     def _substitute_emojis(self, text: str) -> str:
-        """Replace emoji words inline (e.g., 'I love cat' -> 'I 😍 🐱')."""
+        """Replace emoji and color words inline (e.g., 'I love cat' -> 'I 😍 🐱', 'purple truck' -> '[on #7B2D8E]  [/] 🚚')."""
         result, i = [], 0
         while i < len(text):
             if text[i].isalpha():
@@ -1253,7 +1253,12 @@ class SimpleEvaluator:
                 while j < len(text) and text[j].isalpha():
                     j += 1
                 word = text[i:j].lower()
-                result.append(self.content.get_emoji(word) or text[i:j])
+                if emoji := self.content.get_emoji(word):
+                    result.append(emoji)
+                elif color_hex := self._get_color(word):
+                    result.append(f"[on {color_hex}]  [/]")
+                else:
+                    result.append(text[i:j])
                 i = j
             else:
                 result.append(text[i])

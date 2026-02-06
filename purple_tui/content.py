@@ -133,7 +133,8 @@ class ContentManager:
 
             # Activities
             "run": "🏃", "swim": "🏊", "dance": "💃", "sing": "🎤",
-            "play": "🎮", "read": "📖", "write": "✍️", "paint": "🖌️",
+            "play": "🎸", "read": "📖", "write": "✍️", "paint": "🖌️",
+            "explore": "🔍", "doodle": "🖌️",
 
             # Misc
             "yes": "✅", "no": "❌", "thumbsup": "👍", "clap": "👏",

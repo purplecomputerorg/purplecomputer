@@ -22,11 +22,11 @@ SEGMENT = [
 
     Comment("Philosophy"),
     TypeText("Less is more. No videos. No internet. Explore, play, doodle.", **_FAST),
-    PressKey("enter", pause_after=1.3),
+    PressKey("enter", pause_after=2.0),
 
     Comment("Math with emojis"),
     TypeText("2 rabbits ate 3 + 7 carrots", **_FAST),
-    PressKey("enter", pause_after=1.0),
+    PressKey("enter", pause_after=1.5),
 
     Comment("Color mixing"),
     TypeText("red + blue", **_FAST),

@@ -8,5 +8,9 @@
   {
     "segment": "tune",
     "duration": 8
+  },
+  {
+    "segment": "heart",
+    "speed": 170.3309999999998
   }
 ]

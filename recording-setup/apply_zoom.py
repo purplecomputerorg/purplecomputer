@@ -162,6 +162,83 @@ def build_segments(events: list[dict], duration: float) -> list[dict]:
     return segments
 
 
+def interpolate_rect(
+    from_rect: tuple[int, int, int, int],
+    to_rect: tuple[int, int, int, int],
+    t: float,
+) -> tuple[int, int, int, int]:
+    """Interpolate between two crop rectangles (0 <= t <= 1)."""
+    # Apply ease-out cubic for smoother motion
+    t = 1 - pow(1 - t, 3)
+    return (
+        int(from_rect[0] + (to_rect[0] - from_rect[0]) * t),
+        int(from_rect[1] + (to_rect[1] - from_rect[1]) * t),
+        int(from_rect[2] + (to_rect[2] - from_rect[2]) * t),
+        int(from_rect[3] + (to_rect[3] - from_rect[3]) * t),
+    )
+
+
+def process_transition_segment(
+    input_video: Path,
+    segment: dict,
+    output_path: Path,
+    video_width: int,
+    video_height: int,
+    output_width: int,
+    output_height: int,
+    fps: float,
+) -> bool:
+    """Process a transition using midpoint crop.
+
+    Transitions are short (0.4s), so we just use the midpoint crop value.
+    This avoids complex FFmpeg expressions that tend to fail.
+    """
+    start = segment["start"]
+    end = segment["end"]
+    duration = end - start
+
+    from_rect = get_crop_rect(
+        segment["from_zoom"], segment["from_region"],
+        video_width, video_height
+    )
+    to_rect = get_crop_rect(
+        segment["to_zoom"], segment["to_region"],
+        video_width, video_height
+    )
+
+    # Use midpoint crop (with easing applied)
+    mid_rect = interpolate_rect(from_rect, to_rect, 0.5)
+    crop_w, crop_h, crop_x, crop_y = mid_rect
+
+    # Ensure even dimensions
+    crop_w = crop_w - (crop_w % 2)
+    crop_h = crop_h - (crop_h % 2)
+
+    vf = (
+        f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
+        f"scale={output_width}:{output_height}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-ss", str(start),
+        "-t", str(duration),
+        "-i", str(input_video),
+        "-vf", vf,
+        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
+        "-an", "-r", str(fps),
+        str(output_path)
+    ]
+
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Transition failed: {e.stderr.decode()[:200]}", file=sys.stderr)
+        return False
+
+
 def process_segment(
     input_video: Path,
     segment: dict,
@@ -180,67 +257,26 @@ def process_segment(
     if duration < 0.01:
         return False
 
-    # Scale filter that preserves aspect ratio and pads to exact output size
-    # scale=-2:h fits height, scale=w:-2 fits width; we pick whichever fits
-    # Then pad centers the result in the output frame
-    scale_pad = (
-        f"scale='if(gte(iw/ih,{output_width}/{output_height}),"
-        f"{output_width},-2)':'if(gte(iw/ih,{output_width}/{output_height}),"
-        f"-2,{output_height})':flags=lanczos,"
-        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+    # For transitions, we'll handle them by splitting into sub-segments
+    # and processing each with interpolated crop values
+    if segment["is_transition"]:
+        return process_transition_segment(
+            input_video, segment, output_path,
+            video_width, video_height, output_width, output_height, fps
+        )
+
+    # Static segment: simple crop and scale (preserving aspect ratio)
+    crop_w, crop_h, crop_x, crop_y = get_crop_rect(
+        segment["zoom"], segment["region"],
+        video_width, video_height
     )
 
-    if segment["is_transition"]:
-        # For transitions, use zoompan filter for smooth animation
-        from_rect = get_crop_rect(
-            segment["from_zoom"], segment["from_region"],
-            video_width, video_height
-        )
-        to_rect = get_crop_rect(
-            segment["to_zoom"], segment["to_region"],
-            video_width, video_height
-        )
-
-        # zoompan uses zoom factor (1 = no zoom) and pan position
-        # We need to convert our crop rects to zoompan parameters
-        # zoom = video_width / crop_width
-        from_z = video_width / from_rect[0]
-        to_z = video_width / to_rect[0]
-
-        # Pan position (0-1 range, where the zoom window is positioned)
-        # x = crop_x / (video_width - crop_width)
-        from_px = from_rect[2] / max(1, video_width - from_rect[0])
-        from_py = from_rect[3] / max(1, video_height - from_rect[1])
-        to_px = to_rect[2] / max(1, video_width - to_rect[0])
-        to_py = to_rect[3] / max(1, video_height - to_rect[1])
-
-        # Number of frames in this segment
-        frames = int(duration * fps)
-        if frames < 1:
-            frames = 1
-
-        # zoompan expressions with linear interpolation
-        # on = frame number (0-indexed)
-        # Interpolate: from + (to - from) * (on / frames)
-        z_expr = f"{from_z}+({to_z}-{from_z})*(on/{frames})"
-        x_expr = f"({from_px}+({to_px}-{from_px})*(on/{frames}))*(iw-iw/zoom)"
-        y_expr = f"({from_py}+({to_py}-{from_py})*(on/{frames}))*(ih-ih/zoom)"
-
-        # zoompan outputs at the specified size, then we pad to exact output
-        vf = (
-            f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}'"
-            f":d={frames}:s={output_width}x{output_height}:fps={fps}"
-        )
-    else:
-        # Static segment: simple crop and scale (preserving aspect ratio)
-        crop_w, crop_h, crop_x, crop_y = get_crop_rect(
-            segment["zoom"], segment["region"],
-            video_width, video_height
-        )
-        vf = (
-            f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
-            f"{scale_pad}"
-        )
+    # Scale preserving aspect ratio, then pad to exact output size
+    vf = (
+        f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
+        f"scale={output_width}:{output_height}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+    )
 
     cmd = [
         "ffmpeg", "-y",

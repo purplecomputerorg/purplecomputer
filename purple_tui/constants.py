@@ -117,12 +117,12 @@ ZOOM_REGIONS = {
     # Play mode keyboard area (lower portion where keys are displayed)
     "play-keys": (0.5, 0.7, 0.8, 0.5),
 
-    # Explore mode welcome area (upper-middle for seeing Welcome text + lines below)
-    "explore-welcome": (0.5, 0.45, 0.8, 0.5),
+    # Explore mode welcome area (upper-left where text history appears)
+    "explore-welcome": (0.35, 0.25, 0.7, 0.5),
 
-    # Doodle mode bottom-right (for "This is Doodle mode" intro text)
-    "doodle-bottom-right": (0.75, 0.55, 0.6, 0.6),
+    # Doodle mode lower-right (for "This is Doodle mode" intro text)
+    "doodle-text-right": (0.72, 0.72, 0.5, 0.4),
 
-    # Doodle mode bottom-left (for "Now let's go to Play mode" text)
-    "doodle-bottom-left": (0.25, 0.65, 0.6, 0.6),
+    # Doodle mode lower-left (for "Now let's go to Play mode" text)
+    "doodle-text-left": (0.18, 0.88, 0.4, 0.3),
 }

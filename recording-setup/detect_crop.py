@@ -20,14 +20,17 @@ def extract_frame(video_path: str, timestamp: float = 5.0) -> bytes:
     return result.stdout
 
 
-def get_video_dimensions(video_path: str) -> tuple[int, int]:
-    """Get video width and height."""
+def get_video_info(video_path: str) -> tuple[int, int, float]:
+    """Get video width, height, and duration."""
     result = subprocess.run([
         "ffprobe", "-v", "error", "-select_streams", "v:0",
-        "-show_entries", "stream=width,height", "-of", "csv=p=0", video_path
+        "-show_entries", "stream=width,height", "-show_entries", "format=duration",
+        "-of", "csv=p=0", video_path
     ], capture_output=True, text=True)
-    w, h = result.stdout.strip().split(",")
-    return int(w), int(h)
+    lines = result.stdout.strip().split("\n")
+    w, h = lines[0].split(",")
+    duration = float(lines[1]) if len(lines) > 1 else 5.0
+    return int(w), int(h), duration
 
 
 def color_matches(r: int, g: int, b: int) -> bool:
@@ -65,11 +68,11 @@ def main():
 
     video_path = sys.argv[1]
 
-    # Get video dimensions
-    width, height = get_video_dimensions(video_path)
+    # Get video info
+    width, height, duration = get_video_info(video_path)
 
-    # Extract a frame
-    frame_data = extract_frame(video_path)
+    # Extract a frame from the middle of the video
+    frame_data = extract_frame(video_path, timestamp=duration / 2)
     if len(frame_data) != width * height * 3:
         print(f"Error: frame size mismatch", file=sys.stderr)
         sys.exit(1)

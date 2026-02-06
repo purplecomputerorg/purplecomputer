@@ -21,28 +21,20 @@ SEGMENT = [
     PressKey("enter", pause_after=1.0),
 
     Comment("Philosophy"),
-    TypeText("Less is more. No internet. 3 modes. Explore, Play, Doodle.", **_FAST),
+    TypeText("Less is more. No videos. No internet. Explore, play, doodle.", **_FAST),
     PressKey("enter", pause_after=1.3),
-
-    Comment("Introduce explore mode"),
-    TypeText("This is Explore.", **_FAST),
-    PressKey("enter", pause_after=0.6),
 
     Comment("Math with emojis"),
     TypeText("2 rabbits ate 3 + 7 carrots", **_FAST),
     PressKey("enter", pause_after=1.0),
 
     Comment("Color mixing"),
-    TypeText("red + blue + blue", **_FAST),
+    TypeText("red + blue", **_FAST),
     PressKey("enter", pause_after=1.0),
 
     Comment("More colors"),
     TypeText("3 periwinkles + violet", **_FAST),
     PressKey("enter", pause_after=1.0),
-
-    Comment("Introduce speech"),
-    TypeText("and it talks, too...", **_FAST),
-    PressKey("enter", pause_after=0.6),
 
     Comment("Math with speech (! triggers TTS)"),
     TypeText("10 x 10 dinosaurs!", **_FAST),

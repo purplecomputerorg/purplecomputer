@@ -43,20 +43,52 @@ def color_matches(r: int, g: int, b: int) -> bool:
 
 
 def find_border_bounds(data: bytes, width: int, height: int) -> tuple[int, int, int, int]:
-    """Find the bounding box of pixels matching the border color."""
-    min_x, max_x = width, 0
-    min_y, max_y = height, 0
+    """Find the viewport rectangle by detecting its border edges.
 
+    Looks for horizontal lines of border-colored pixels (the top and bottom
+    edges of the viewport border) rather than individual pixels, to avoid
+    matching small UI elements like F-key buttons that may use the same color.
+    """
+    MIN_LINE_LENGTH = 100  # Viewport border is much wider than UI buttons
+
+    # Find rows that have long horizontal runs of border color
+    border_rows = []
     for y in range(height):
+        run_start = None
+        max_run = 0
         for x in range(width):
             idx = (y * width + x) * 3
             r, g, b = data[idx], data[idx + 1], data[idx + 2]
 
             if color_matches(r, g, b):
+                if run_start is None:
+                    run_start = x
+            else:
+                if run_start is not None:
+                    max_run = max(max_run, x - run_start)
+                    run_start = None
+        # Check final run
+        if run_start is not None:
+            max_run = max(max_run, width - run_start)
+
+        if max_run >= MIN_LINE_LENGTH:
+            border_rows.append(y)
+
+    if not border_rows:
+        return width, height, 0, 0  # No border found
+
+    min_y = border_rows[0]
+    max_y = border_rows[-1]
+
+    # Find x bounds from the border rows
+    min_x, max_x = width, 0
+    for y in border_rows:
+        for x in range(width):
+            idx = (y * width + x) * 3
+            r, g, b = data[idx], data[idx + 1], data[idx + 2]
+            if color_matches(r, g, b):
                 min_x = min(min_x, x)
                 max_x = max(max_x, x)
-                min_y = min(min_y, y)
-                max_y = max(max_y, y)
 
     return min_x, min_y, max_x, max_y
 

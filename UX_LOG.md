@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Demo: heart segment text**: Heart drawing now clears the canvas first, then after drawing adds centered text: "This is Purple Computer." and "Coming soon to your old laptop!"
 - **Demo: play mode intro text**: After the palm tree drawing completes, text appears at bottom right: "Now let's go to Play mode / Play with music and color"
 - **Demo: expanded explore segment**: Demo now showcases emoji math, color mixing, speech, and a welcome message instead of a short 3-line greeting
 - **Demo: doodle intro text**: Doodle segment now types "This is Doodle mode. Write and paint!" with color swatches before drawing the palm tree

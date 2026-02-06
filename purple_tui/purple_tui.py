@@ -1616,6 +1616,16 @@ class PurpleApp(App):
         except Exception:
             return False
 
+    def _clear_doodle(self) -> None:
+        """Clear only the doodle canvas and reset cursor to (0,0)."""
+        from .modes.doodle_mode import DoodleMode
+
+        try:
+            doodle = self.query_one(DoodleMode)
+            doodle.clear_canvas()
+        except Exception:
+            pass
+
     def start_demo(self) -> None:
         """Start demo playback (dev mode only).
 
@@ -1632,6 +1642,7 @@ class PurpleApp(App):
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=get_speed_multiplier(),
             clear_all=self.clear_all_state,
+            clear_doodle=self._clear_doodle,
             set_play_key_color=self._set_play_key_color,
             is_doodle_paint_mode=self._is_doodle_paint_mode,
         )

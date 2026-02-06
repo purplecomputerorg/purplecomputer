@@ -15,6 +15,7 @@ from .script import (
     Pause,
     Clear,
     ClearAll,
+    ClearDoodle,
     PlayKeys,
     DrawPath,
     MoveSequence,
@@ -62,6 +63,7 @@ class DemoPlayer:
         dispatch_action: Callable[[object], Awaitable[None]],
         speed_multiplier: float = 1.0,
         clear_all: Callable[[], None] | None = None,
+        clear_doodle: Callable[[], None] | None = None,
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
     ):
@@ -72,6 +74,7 @@ class DemoPlayer:
                 (typically app._dispatch_keyboard_action)
             speed_multiplier: Speed up (>1) or slow down (<1) the demo
             clear_all: Optional function to clear all state at demo start
+            clear_doodle: Optional function to clear doodle canvas and reset cursor
             set_play_key_color: Optional function to set a Play mode key's
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
             is_doodle_paint_mode: Optional function to check if Doodle mode
@@ -80,6 +83,7 @@ class DemoPlayer:
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
         self._clear_all = clear_all
+        self._clear_doodle = clear_doodle
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
         self._running = False
@@ -142,6 +146,9 @@ class DemoPlayer:
 
         elif isinstance(action, ClearAll):
             await self._clear_all_state(action)
+
+        elif isinstance(action, ClearDoodle):
+            await self._clear_doodle_canvas(action)
 
         elif isinstance(action, PlayKeys):
             await self._play_keys(action)
@@ -214,6 +221,12 @@ class DemoPlayer:
         """Clear all state across all modes."""
         if self._clear_all:
             self._clear_all()
+        await self._sleep(action.pause_after)
+
+    async def _clear_doodle_canvas(self, action: ClearDoodle) -> None:
+        """Clear the doodle canvas and reset cursor to (0,0)."""
+        if self._clear_doodle:
+            self._clear_doodle()
         await self._sleep(action.pause_after)
 
     async def _play_keys(self, action: PlayKeys) -> None:

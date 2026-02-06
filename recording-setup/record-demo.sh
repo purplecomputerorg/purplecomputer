@@ -49,35 +49,20 @@ if [ -z "$SCREEN_SIZE" ]; then
     SCREEN_SIZE="1920x1080"
 fi
 
-# Calculate tight crop dimensions using the font size calculator
-# This accounts for actual cell dimensions and constraining dimension
-# Output format: width:height:x:y
-CROP_PARAMS=$(cd "$PROJECT_DIR" && source .venv/bin/activate && python scripts/calc_font_size.py --crop 2>/dev/null || echo "")
-if [ -z "$CROP_PARAMS" ]; then
-    echo "Warning: Could not calculate crop dimensions, cropped version will be skipped"
-fi
-
 # Cropped output filename
 CROPPED_FILE="${OUTPUT_FILE%.mp4}_cropped.mp4"
 
 echo "=== Purple Computer Demo Recording ==="
 echo ""
 echo "Output:     $OUTPUT_FILE (full)"
-if [ -n "$CROP_PARAMS" ]; then
-    echo "            $CROPPED_FILE (cropped)"
-    echo "Screen:     $SCREEN_SIZE"
-    echo "Crop:       $CROP_PARAMS"
-else
-    echo "Screen:     $SCREEN_SIZE"
-fi
+echo "            $CROPPED_FILE (cropped, auto-detected)"
+echo "Screen:     $SCREEN_SIZE"
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
 
 # Remove old recordings if exist
 rm -f "$OUTPUT_FILE"
-if [ -n "$CROP_PARAMS" ]; then
-    rm -f "$CROPPED_FILE"
-fi
+rm -f "$CROPPED_FILE"
 
 # Get default audio sink for capturing system audio
 AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
@@ -216,8 +201,15 @@ cleanup() {
             echo "Output: $OUTPUT_FILE ($SIZE)"
 
             # Create cropped version (viewport only, no F-keys or empty space)
+            # Auto-detect content bounds using cropdetect filter
+            echo ""
+            echo "Detecting content bounds..."
+            # Sample middle of video, use low threshold to detect the viewport border
+            CROP_PARAMS=$(ffmpeg -ss 5 -i "$OUTPUT_FILE" -t 1 -vf "cropdetect=limit=24:round=2:reset=0" -f null - 2>&1 | \
+                grep -o 'crop=[0-9:]*' | tail -1 | cut -d= -f2)
+
             if [ -n "$CROP_PARAMS" ]; then
-                echo ""
+                echo "Crop detected: $CROP_PARAMS"
                 echo "Creating cropped version..."
                 rm -f "$CROPPED_FILE"
                 ffmpeg -y \
@@ -240,6 +232,7 @@ cleanup() {
                     echo "Full: $OUTPUT_FILE ($SIZE)"
                 fi
             else
+                echo "Warning: Could not detect crop bounds"
                 echo ""
                 echo "=== Recording Complete ==="
                 echo "Full: $OUTPUT_FILE ($SIZE)"

@@ -98,6 +98,15 @@ class ClearAll(DemoAction):
 
 
 @dataclass
+class ClearDoodle(DemoAction):
+    """Clear the doodle canvas and reset cursor to (0,0).
+
+    Use this to start fresh in doodle mode without affecting other modes.
+    """
+    pause_after: float = 0.2
+
+
+@dataclass
 class PlayKeys(DemoAction):
     """Play a sequence of keys in Play mode (for making music).
 
@@ -199,7 +208,7 @@ def segment_duration(actions: list[DemoAction]) -> float:
             total += 0.1 + 0.1 + 0.05 + total_steps * action.delay_per_step + action.pause_after
         elif isinstance(action, MoveSequence):
             total += len(action.directions) * action.delay_per_step + action.pause_after
-        elif isinstance(action, (Clear, ClearAll)):
+        elif isinstance(action, (Clear, ClearAll, ClearDoodle)):
             total += action.pause_after
         # Comment, SetSpeed: 0 duration
     return total

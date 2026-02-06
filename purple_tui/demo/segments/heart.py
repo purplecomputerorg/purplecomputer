@@ -1,15 +1,22 @@
 """AI-generated drawing demo."""
 
 from purple_tui.demo.script import (
-    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
+    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment, TypeText,
+    ClearDoodle,
 )
 
 SEGMENT = [
     Comment("=== AI GENERATED DRAWING ==="),
     SwitchMode("doodle"),
     Pause(0.3),
-    PressKey("tab"),  # Enter paint mode
 
+    # Clear the canvas and reset cursor to (0,0)
+    ClearDoodle(),
+
+    PressKey("tab"),  # Enter paint mode
+    Pause(0.1),
+
+    # Position and draw the heart (cursor starts at 0,0 after clear)
     MoveSequence(directions=['right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'down', 'down', 'down', 'down', 'down'], delay_per_step=0.008),
     PressKey('t'),
     PressKey('t'),
@@ -1701,7 +1708,31 @@ SEGMENT = [
     MoveSequence(directions=['left', 'left', 'down'], delay_per_step=0.008),
     PressKey('.'),
 
-    Pause(1.0),
+    Pause(0.5),
+
+    # Switch to text mode and write the message on top of the heart
+    PressKey("tab"),  # Exit paint mode, enter text mode
+    Pause(0.2),
+
+    # Move cursor to center of heart for first line of text
+    # Heart center is approximately x=57, y=12
+    # First line "This is Purple Computer." is 24 chars, so start at x=45
+    # Current position is near bottom of heart (~y=24, x~55)
+    # Move up about 12 rows and left about 10 columns to get to (45, 12)
+    MoveSequence(directions=['up'] * 12 + ['left'] * 10, delay_per_step=0.01),
+
+    # Type the first line
+    TypeText("This is Purple Computer.", delay_per_char=0.06),
+
+    # Move down one row and position for second line
+    # Second line "Coming soon to your old laptop!" is 31 chars, so start at x=41
+    # After typing 24 chars, cursor is at x=69. Move left to x=41 (28 left) and down 2
+    MoveSequence(directions=['down', 'down'] + ['left'] * 28, delay_per_step=0.01),
+
+    # Type the second line
+    TypeText("Coming soon to your old laptop!", delay_per_char=0.06),
+
+    Pause(2.0),
     Comment("Drawing complete!"),
 ]
 

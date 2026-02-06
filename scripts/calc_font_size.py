@@ -88,29 +88,6 @@ def calculate_font(screen_w, screen_h, cell_w, cell_h):
     return max(MIN_FONT, min(MAX_FONT, font))
 
 
-def calculate_ui_dimensions(screen_w, screen_h, cell_w, cell_h):
-    """Calculate the actual pixel dimensions of the UI on screen."""
-    available_w = screen_w * SCREEN_FILL
-    available_h = screen_h * SCREEN_FILL
-
-    # Grid size at probe font
-    grid_w = cell_w * REQUIRED_COLS
-    grid_h = cell_h * REQUIRED_ROWS
-
-    # Scale factor (use the more restrictive dimension)
-    scale = min(available_w / grid_w, available_h / grid_h)
-
-    # Actual UI dimensions (cell size scales with font)
-    ui_w = int(grid_w * scale)
-    ui_h = int(grid_h * scale)
-
-    # Center position on screen
-    ui_x = (screen_w - ui_w) // 2
-    ui_y = (screen_h - ui_h) // 2
-
-    return ui_w, ui_h, ui_x, ui_y
-
-
 def main():
     # Debug mode
     if len(sys.argv) > 1 and sys.argv[1] == '--info':
@@ -122,26 +99,6 @@ def main():
         print(f"Grid: {REQUIRED_COLS}x{REQUIRED_ROWS}")
         print(f"Fill: {SCREEN_FILL*100:.0f}%")
         print(f"Font: {font:.1f}pt")
-        return
-
-    # Crop mode: output ffmpeg crop parameters for tight viewport crop
-    # Crops to just the UI content, removing footer (bottom 3 rows)
-    if len(sys.argv) > 1 and sys.argv[1] == '--crop':
-        screen = get_resolution()
-        cell = probe_cell_size()
-        ui_w, ui_h, ui_x, ui_y = calculate_ui_dimensions(*screen, *cell)
-
-        # Cropped version: skip bottom 3 rows (F-key footer)
-        # Rows: title(2) + viewport(34) = 36, skip footer(3) = 39 total
-        cropped_rows = REQUIRED_ROWS - 3
-        crop_h = int(ui_h * cropped_rows / REQUIRED_ROWS)
-
-        # Make dimensions even (required for video encoding)
-        crop_w = ui_w // 2 * 2
-        crop_h = crop_h // 2 * 2
-
-        # Output: width:height:x:y (ffmpeg crop filter format)
-        print(f"{crop_w}:{crop_h}:{ui_x}:{ui_y}")
         return
 
     # Normal mode: output font size

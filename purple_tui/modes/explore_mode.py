@@ -29,6 +29,8 @@ from rich.highlighter import Highlighter
 from rich.text import Text
 import re
 
+from ..content import singularize
+
 from ..content import get_content
 from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import (
@@ -1142,33 +1144,25 @@ class SimpleEvaluator:
             if (e := self._get_emoji(word)) and int(m.group(1)) <= 100:
                 return (e, int(m.group(1)), word)
 
-        # Bare plural
-        if term.endswith('s') and len(term) > 2:
-            word = term[:-1]
-            if e := self.content.get_emoji(word):
-                return (e, 2, word)
+        # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)
+        if singular := singularize(term):
+            # It's a plural form
+            if e := self.content.get_emoji(singular):
+                return (e, 2, singular)
 
-        # Single word
+        # Single word (may still be a word that looks plural but isn't, e.g., "bus")
         if e := self._get_emoji(term):
-            return (e, 1, term.rstrip('s') if term.endswith('s') else term)
+            return (e, 1, term)
 
         return None
 
     def _get_emoji(self, word: str) -> str | None:
-        """Get emoji, handling plurals."""
-        if e := self.content.get_emoji(word):
-            return e
-        if word.endswith('s') and len(word) > 2:
-            return self.content.get_emoji(word[:-1])
-        return None
+        """Get emoji (content.get_emoji handles plurals via inflect)."""
+        return self.content.get_emoji(word)
 
     def _get_color(self, word: str) -> str | None:
-        """Get color hex, handling plurals."""
-        if h := self.content.get_color(word):
-            return h
-        if word.endswith('s') and len(word) > 2:
-            return self.content.get_color(word[:-1])
-        return None
+        """Get color hex (content.get_color handles plurals via inflect)."""
+        return self.content.get_color(word)
 
     def _lookup(self, word: str) -> str | None:
         """Look up word as emoji or color box."""
@@ -1260,15 +1254,50 @@ class SimpleEvaluator:
         return formatted
 
     def _substitute_emojis(self, text: str) -> str:
-        """Replace emoji and color words inline (e.g., 'I love cat' -> 'I 😍 🐱', 'purple truck' -> '[on #7B2D8E]  [/] 🚚')."""
+        """Replace emoji and color words inline, including 'N word' patterns.
+
+        Examples:
+            'I love cat' -> 'I 😍 🐱'
+            'purple truck' -> '[on #7B2D8E]  [/] 🚚'
+            '2 rabbits ate' -> '🐰🐰 ate'
+            'the tomatoes' -> 'the 🍅🍅'
+        """
         result, i = [], 0
         while i < len(text):
+            # Check for "N word" pattern (e.g., "2 rabbits", "3 cats")
+            if text[i].isdigit():
+                # Collect all digits
+                j = i
+                while j < len(text) and text[j].isdigit():
+                    j += 1
+                num_str = text[i:j]
+                num = int(num_str)
+                # Check if followed by optional space and a word
+                k = j
+                while k < len(text) and text[k] == ' ':
+                    k += 1
+                if k < len(text) and text[k].isalpha():
+                    # Collect the word
+                    word_start = k
+                    while k < len(text) and text[k].isalpha():
+                        k += 1
+                    word = text[word_start:k].lower()
+                    # Check if it's an emoji word
+                    if (emoji := self._get_emoji(word)) and num <= 100:
+                        result.append(emoji * num)
+                        i = k
+                        continue
+                # Not an "N emoji" pattern, just output the number
+                result.append(num_str)
+                i = j
+                continue
+
             if text[i].isalpha():
                 j = i
                 while j < len(text) and text[j].isalpha():
                     j += 1
                 word = text[i:j].lower()
-                if emoji := self.content.get_emoji(word):
+                if emoji := self._get_emoji(word):
                     result.append(emoji)
                 elif color_hex := self._get_color(word):
                     result.append(f"[on {color_hex}]  [/]")

@@ -13,6 +13,27 @@ import json
 from pathlib import Path
 from typing import Optional
 
+import inflect
+from typeguard import suppress_type_checks
+
+# Shared inflect engine for singular/plural conversion
+_inflect_engine = inflect.engine()
+
+
+def singularize(word: str) -> str | None:
+    """Convert a plural word to singular using inflect.
+
+    Returns the singular form as a plain str, or None if the word is not plural.
+    Handles irregular plurals like tomatoes->tomato, cherries->cherry, wolves->wolf.
+    """
+    # inflect's type annotations expect its Word type but accept str at runtime.
+    # Suppress typeguard's strict runtime checking for this call.
+    with suppress_type_checks():
+        result = _inflect_engine.singular_noun(word)
+    if result:
+        return str(result)
+    return None
+
 
 class ContentManager:
     """
@@ -344,9 +365,15 @@ class ContentManager:
     # Public API for modes
 
     def get_emoji(self, word: str) -> Optional[str]:
-        """Get emoji for a word"""
+        """Get emoji for a word, handling plurals (e.g., 'tomatoes' -> tomato emoji)."""
         word = word.lower().strip()
-        return self.emojis.get(word)
+        # Try exact match first
+        if emoji := self.emojis.get(word):
+            return emoji
+        # Try singular form (handles tomatoes->tomato, cherries->cherry, wolves->wolf, etc.)
+        if (singular := singularize(word)) and (emoji := self.emojis.get(singular)):
+            return emoji
+        return None
 
     def emoji_to_word(self, emoji: str) -> Optional[str]:
         """Reverse lookup: get word for an emoji character"""
@@ -375,9 +402,15 @@ class ContentManager:
         return sorted(results, key=lambda x: x[0])
 
     def get_color(self, word: str) -> Optional[str]:
-        """Get hex color code for a color name"""
+        """Get hex color code for a color name, handling plurals (e.g., 'reds' -> red)."""
         word = word.lower().strip()
-        return self.colors.get(word)
+        # Try exact match first
+        if color := self.colors.get(word):
+            return color
+        # Try singular form
+        if (singular := singularize(word)) and (color := self.colors.get(singular)):
+            return color
+        return None
 
     def search_colors(self, prefix: str) -> list[tuple[str, str]]:
         """Search for colors starting with prefix, returns [(name, hex), ...]"""

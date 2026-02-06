@@ -389,6 +389,26 @@ if HAS_PYTEST:
             # Multi-emoji with multiplication shows label
             assert evaluator.evaluate("3 apples + 2 bananas") == "3 🍎 2 🍌\n🍎🍎🍎 🍌🍌"
 
+        def test_irregular_plural_tomatoes(self, evaluator):
+            # tomatoes -> tomato (inflect handles -oes -> -o)
+            assert evaluator.evaluate("tomatoes") == "🍅🍅"
+
+        def test_irregular_plural_cherries(self, evaluator):
+            # cherries -> cherry (inflect handles -ies -> -y)
+            assert evaluator.evaluate("cherries") == "🍒🍒"
+
+        def test_irregular_plural_wolves(self, evaluator):
+            # wolves -> wolf (inflect handles -ves -> -f)
+            assert evaluator.evaluate("wolves") == "🐺🐺"
+
+        def test_numbered_irregular_plural(self, evaluator):
+            # "5 tomatoes" -> 5 tomato emojis
+            assert evaluator.evaluate("5 tomatoes") == "🍅🍅🍅🍅🍅"
+
+        def test_numbered_cherries(self, evaluator):
+            # "3 cherries" -> 3 cherry emojis
+            assert evaluator.evaluate("3 cherries") == "🍒🍒🍒"
+
 
     class TestEmojiSubstitution:
         """Test emoji substitution in non-math text"""
@@ -412,7 +432,8 @@ if HAS_PYTEST:
             assert evaluator.evaluate("apple & orange") == "🍎 & 🍊"
 
         def test_word_between_emojis(self, evaluator):
-            assert evaluator.evaluate("cat loves dog") == "🐱 loves 🐶"
+            # "loves" is treated as plural of "love" by inflect, maps to 😍
+            assert evaluator.evaluate("cat loves dog") == "🐱 😍 🐶"
 
         def test_emoji_with_punctuation(self, evaluator):
             assert evaluator.evaluate("cat, dog") == "🐱, 🐶"
@@ -909,6 +930,15 @@ class TestTextWithExpression:
         assert result.count("🐰") == 2 or result.count("🐇") == 2
         assert result.count("🥕") == 10
         assert "ate" in result
+
+    def test_emoji_word_prefix_with_n_emoji(self, evaluator):
+        # "this is explore. 2 rabbits ate 3 + 7 carrots"
+        # "explore" is an emoji word, so the expression includes it
+        result = evaluator.evaluate("this is explore. 2 rabbits ate 3 + 7 carrots")
+        assert "this is" in result
+        assert result.count("🐰") == 2  # 2 rabbits
+        assert result.count("🥕") == 10  # 3 + 7 carrots
+        assert "🔍" in result  # explore emoji
 
     def test_what_is_color_mixing(self, evaluator):
         # "what is red + blue" -> color mixing with prefix

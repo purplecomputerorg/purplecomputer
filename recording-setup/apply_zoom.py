@@ -180,6 +180,16 @@ def process_segment(
     if duration < 0.01:
         return False
 
+    # Scale filter that preserves aspect ratio and pads to exact output size
+    # scale=-2:h fits height, scale=w:-2 fits width; we pick whichever fits
+    # Then pad centers the result in the output frame
+    scale_pad = (
+        f"scale='if(gte(iw/ih,{output_width}/{output_height}),"
+        f"{output_width},-2)':'if(gte(iw/ih,{output_width}/{output_height}),"
+        f"-2,{output_height})':flags=lanczos,"
+        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+    )
+
     if segment["is_transition"]:
         # For transitions, use zoompan filter for smooth animation
         from_rect = get_crop_rect(
@@ -216,19 +226,20 @@ def process_segment(
         x_expr = f"({from_px}+({to_px}-{from_px})*(on/{frames}))*(iw-iw/zoom)"
         y_expr = f"({from_py}+({to_py}-{from_py})*(on/{frames}))*(ih-ih/zoom)"
 
+        # zoompan outputs at the specified size, then we pad to exact output
         vf = (
             f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}'"
             f":d={frames}:s={output_width}x{output_height}:fps={fps}"
         )
     else:
-        # Static segment: simple crop and scale
+        # Static segment: simple crop and scale (preserving aspect ratio)
         crop_w, crop_h, crop_x, crop_y = get_crop_rect(
             segment["zoom"], segment["region"],
             video_width, video_height
         )
         vf = (
             f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
-            f"scale={output_width}:{output_height}:flags=lanczos"
+            f"{scale_pad}"
         )
 
     cmd = [

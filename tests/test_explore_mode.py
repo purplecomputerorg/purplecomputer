@@ -410,6 +410,52 @@ if HAS_PYTEST:
             assert evaluator.evaluate("3 cherries") == "🍒🍒🍒"
 
 
+    class TestPluralAutocomplete:
+        """Test that plural forms work in autocomplete and underline detection."""
+
+        def test_is_valid_word_recognizes_irregular_plurals(self):
+            from purple_tui.content import get_content
+            c = get_content()
+            # Irregular plurals should be recognized as valid
+            assert c.is_valid_word("tomatoes")
+            assert c.is_valid_word("cherries")
+            assert c.is_valid_word("wolves")
+
+        def test_search_suggests_plural_when_typing_towards_it(self):
+            from purple_tui.content import get_content
+            c = get_content()
+            # "wolve" should suggest "wolves" (not "wolf")
+            results = c.search_emojis("wolve")
+            assert len(results) == 1
+            assert results[0][0] == "wolves"
+            assert results[0][1] == "🐺"
+
+        def test_search_suggests_singular_when_it_matches(self):
+            from purple_tui.content import get_content
+            c = get_content()
+            # "wol" should suggest "wolf" (singular preferred)
+            results = c.search_emojis("wol")
+            assert len(results) == 1
+            assert results[0][0] == "wolf"
+
+        def test_search_no_duplicate_emojis(self):
+            from purple_tui.content import get_content
+            c = get_content()
+            # "app" should not show both "apple" and "apples"
+            results = c.search_emojis("app")
+            emojis = [e for _, e in results]
+            assert len(emojis) == len(set(emojis)), "No duplicate emojis in results"
+
+        def test_search_tomatoe_suggests_tomatoes(self):
+            from purple_tui.content import get_content
+            c = get_content()
+            # "tomatoe" should suggest "tomatoes"
+            results = c.search_emojis("tomatoe")
+            assert len(results) == 1
+            assert results[0][0] == "tomatoes"
+            assert results[0][1] == "🍅"
+
+
     class TestEmojiSubstitution:
         """Test emoji substitution in non-math text"""
 

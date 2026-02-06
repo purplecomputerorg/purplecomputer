@@ -35,6 +35,16 @@ def singularize(word: str) -> str | None:
     return None
 
 
+def pluralize(word: str) -> str:
+    """Convert a singular word to plural using inflect.
+
+    Handles irregular plurals like wolf->wolves, tomato->tomatoes, cherry->cherries.
+    """
+    with suppress_type_checks():
+        result = _inflect_engine.plural(word)
+    return str(result)
+
+
 class ContentManager:
     """
     Manages loading and accessing content from purplepacks.
@@ -391,13 +401,30 @@ class ContentManager:
         return sorted(self.emojis.keys())
 
     def search_emojis(self, prefix: str) -> list[tuple[str, str]]:
-        """Search for emojis starting with prefix, returns [(word, emoji), ...]"""
+        """Search for emojis starting with prefix, returns [(word, emoji), ...].
+
+        Includes plural forms (e.g., 'wolv' matches 'wolves', 'tomatoe' matches 'tomatoes').
+        Avoids redundant suggestions (if 'apple' matches, don't also show 'apples').
+        """
         prefix = prefix.lower()
         results = []
+        seen_emojis = set()  # Track which emojis we've added to avoid duplicates
 
         for word, emoji in self.emojis.items():
-            if word.startswith(prefix):
-                results.append((word, emoji))
+            singular_matches = word.startswith(prefix)
+            plural = pluralize(word)
+            plural_matches = plural.startswith(prefix)
+
+            if singular_matches:
+                # Singular matches: prefer singular form
+                if emoji not in seen_emojis:
+                    results.append((word, emoji))
+                    seen_emojis.add(emoji)
+            elif plural_matches:
+                # Only plural matches (e.g., "tomatoe" -> "tomatoes", "wolv" -> "wolves")
+                if emoji not in seen_emojis:
+                    results.append((plural, emoji))
+                    seen_emojis.add(emoji)
 
         return sorted(results, key=lambda x: x[0])
 
@@ -413,13 +440,27 @@ class ContentManager:
         return None
 
     def search_colors(self, prefix: str) -> list[tuple[str, str]]:
-        """Search for colors starting with prefix, returns [(name, hex), ...]"""
+        """Search for colors starting with prefix, returns [(name, hex), ...].
+
+        Includes plural forms for consistency with emoji search.
+        """
         prefix = prefix.lower()
         results = []
+        seen_colors = set()
 
         for name, hex_code in self.colors.items():
-            if name.startswith(prefix):
-                results.append((name, hex_code))
+            singular_matches = name.startswith(prefix)
+            plural = pluralize(name)
+            plural_matches = plural.startswith(prefix)
+
+            if singular_matches:
+                if hex_code not in seen_colors:
+                    results.append((name, hex_code))
+                    seen_colors.add(hex_code)
+            elif plural_matches:
+                if hex_code not in seen_colors:
+                    results.append((plural, hex_code))
+                    seen_colors.add(hex_code)
 
         return sorted(results, key=lambda x: x[0])
 
@@ -431,29 +472,19 @@ class ContentManager:
         """Get emoji or color for a word, including plural forms.
 
         Returns (value, type) where type is 'emoji' or 'color', or None if not found.
-        For plurals like 'cats' or 'reds', returns the singular form.
+        For plurals like 'tomatoes', 'cherries', 'wolves', returns the emoji/color.
         """
         word = word.lower().strip()
 
-        # Check emoji first
-        emoji = self.emojis.get(word)
+        # Check emoji first (get_emoji handles plurals via singularize)
+        emoji = self.get_emoji(word)
         if emoji:
             return (emoji, "emoji")
 
-        # Check color
-        color = self.colors.get(word)
+        # Check color (get_color handles plurals via singularize)
+        color = self.get_color(word)
         if color:
             return (color, "color")
-
-        # Check singular form for plurals
-        if word.endswith('s') and len(word) > 2:
-            singular = word[:-1]
-            emoji = self.emojis.get(singular)
-            if emoji:
-                return (emoji, "emoji")
-            color = self.colors.get(singular)
-            if color:
-                return (color, "color")
 
         return None
 

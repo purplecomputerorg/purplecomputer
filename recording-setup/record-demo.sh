@@ -249,7 +249,7 @@ echo "(Press Ctrl+C to stop recording early)"
 echo ""
 
 cd "$PROJECT_DIR"
-PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh
+timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh || true
 
 echo ""
 echo "Purple exited, stopping recording..."

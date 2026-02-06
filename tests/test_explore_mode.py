@@ -393,6 +393,21 @@ if HAS_PYTEST:
     class TestEmojiSubstitution:
         """Test emoji substitution in non-math text"""
 
+        def test_space_preserved_before_emoticon(self, evaluator):
+            """Space before emoticon should not be eaten."""
+            result = evaluator.evaluate("hello :)")
+            assert result == "👋 😊"  # hello->👋, space preserved, :)->😊
+
+        def test_space_preserved_between_emoticons(self, evaluator):
+            """Space between emoticons should not be eaten."""
+            result = evaluator.evaluate(":) :)")
+            assert result == "😊 😊"  # space between emoticons preserved
+
+        def test_space_preserved_before_emoji_word(self, evaluator):
+            """Space before emoji word should not be eaten."""
+            result = evaluator.evaluate("banana no where")
+            assert result == "🍌 ❌ where"  # banana->🍌, space, no->❌, space, where
+
         def test_ampersand_join(self, evaluator):
             assert evaluator.evaluate("apple & orange") == "🍎 & 🍊"
 

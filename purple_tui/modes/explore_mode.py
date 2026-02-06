@@ -1278,12 +1278,13 @@ class SimpleEvaluator:
             else:
                 # Try matching emoticons (e.g. :) :D <3) longest first
                 # Only try if current char could start an emoticon (not spaces/letters)
+                # Use exact match (no strip) to avoid consuming adjacent spaces
                 matched = False
                 if text[i] in ':;<>':
                     for length in (3, 2):
                         candidate = text[i:i + length]
-                        if len(candidate) == length and (emoji := self.content.get_emoji(candidate)):
-                            result.append(emoji)
+                        if len(candidate) == length and candidate in self.content.emojis:
+                            result.append(self.content.emojis[candidate])
                             i += length
                             matched = True
                             break

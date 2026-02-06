@@ -201,12 +201,10 @@ cleanup() {
             echo "Output: $OUTPUT_FILE ($SIZE)"
 
             # Create cropped version (viewport only, no F-keys or empty space)
-            # Auto-detect content bounds using cropdetect filter
+            # Detect bounds by finding the viewport border color (#9b7bc4)
             echo ""
-            echo "Detecting content bounds..."
-            # Sample middle of video, use low threshold to detect the viewport border
-            CROP_PARAMS=$(ffmpeg -ss 5 -i "$OUTPUT_FILE" -t 1 -vf "cropdetect=limit=24:round=2:reset=0" -f null - 2>&1 | \
-                grep -o 'crop=[0-9:]*' | tail -1 | cut -d= -f2)
+            echo "Detecting viewport border..."
+            CROP_PARAMS=$(python3 "$SCRIPT_DIR/detect_crop.py" "$OUTPUT_FILE" 2>/dev/null)
 
             if [ -n "$CROP_PARAMS" ]; then
                 echo "Crop detected: $CROP_PARAMS"
@@ -232,7 +230,7 @@ cleanup() {
                     echo "Full: $OUTPUT_FILE ($SIZE)"
                 fi
             else
-                echo "Warning: Could not detect crop bounds"
+                echo "Warning: Could not detect viewport border"
                 echo ""
                 echo "=== Recording Complete ==="
                 echo "Full: $OUTPUT_FILE ($SIZE)"

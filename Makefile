@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo voice-clips voice-variants
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-test voice-clips voice-variants
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -117,6 +117,10 @@ record-demo:
 	@.venv/bin/python scripts/generate_voice_clips.py
 	@echo "Recording demo..."
 	./recording-setup/record-demo.sh
+
+record-demo-test:
+	@echo "Recording 5s test clip..."
+	./recording-setup/record-demo.sh recordings/demo-test.mp4 5
 
 voice-clips:
 	@echo "Generating TTS voice clips for demo..."

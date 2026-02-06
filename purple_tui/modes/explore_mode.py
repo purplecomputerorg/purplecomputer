@@ -1277,14 +1277,16 @@ class SimpleEvaluator:
                 i = j
             else:
                 # Try matching emoticons (e.g. :) :D <3) longest first
+                # Only try if current char could start an emoticon (not spaces/letters)
                 matched = False
-                for length in (3, 2):
-                    candidate = text[i:i + length]
-                    if len(candidate) == length and (emoji := self.content.get_emoji(candidate)):
-                        result.append(emoji)
-                        i += length
-                        matched = True
-                        break
+                if text[i] in ':;<>':
+                    for length in (3, 2):
+                        candidate = text[i:i + length]
+                        if len(candidate) == length and (emoji := self.content.get_emoji(candidate)):
+                            result.append(emoji)
+                            i += length
+                            matched = True
+                            break
                 if not matched:
                     result.append(text[i])
                     i += 1

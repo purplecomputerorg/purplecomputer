@@ -2,7 +2,6 @@
 
 from purple_tui.demo.script import (
     SwitchMode, Pause, MoveSequence, Comment, TypeText,
-    ClearDoodle,
 )
 
 SEGMENT = [
@@ -10,9 +9,7 @@ SEGMENT = [
     SwitchMode("doodle"),
     Pause(0.3),
 
-    # Clear the canvas and reset cursor to (0,0)
-    ClearDoodle(),
-
+    # Canvas already cleared at end of palm_tree segment
     # Position cursor to center for first line of text
     # First line "This is Purple Computer." is 24 chars
     # Center it at approximately x=45, y=12
@@ -31,7 +28,7 @@ SEGMENT = [
     # Type the second line
     TypeText("Coming soon to your old laptop!", delay_per_char=0.12),
 
-    Pause(2.0),
+    Pause(4.0),
     Comment("Closing complete!"),
 ]
 

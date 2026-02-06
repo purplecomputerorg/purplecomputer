@@ -2,7 +2,7 @@
 
 from ..script import (
     PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
-    SetSpeed, TypeText,
+    SetSpeed, TypeText, ClearDoodle,
 )
 
 # Typing speed (0.05s/char) with brief final_pause
@@ -1426,6 +1426,10 @@ SEGMENT = [
     TypeText("Play with music and color", **_TYPING),
 
     Pause(2.5),
+
+    # Clear canvas now so it doesn't flash when we return to doodle mode later
+    ClearDoodle(),
+
     Comment("Drawing complete!"),
 ]
 

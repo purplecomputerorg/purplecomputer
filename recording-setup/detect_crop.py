@@ -156,10 +156,11 @@ def main():
     viewport_w = max_x - min_x
 
     # Title row is ~2 rows out of 34 viewport rows (including border)
-    # So add ~6% of viewport height above
-    pad_top = int(viewport_h * 0.08)
-    pad_side = int(viewport_w * 0.01)
-    pad_bottom = int(viewport_h * 0.01)
+    # So add ~6% of viewport height above, plus extra fixed padding
+    extra_pad = 15  # Extra padding on all sides
+    pad_top = int(viewport_h * 0.08) + extra_pad
+    pad_side = int(viewport_w * 0.01) + extra_pad
+    pad_bottom = int(viewport_h * 0.01) + extra_pad
 
     crop_x = max(0, min_x - pad_side)
     crop_y = max(0, min_y - pad_top)

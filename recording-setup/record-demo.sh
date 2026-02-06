@@ -28,13 +28,6 @@ OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-120}"  # Default 2 minutes max
 MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
 
-# UI layout constants (from purple_tui/constants.py)
-# Total grid: 114 cols × 39 rows
-# Cropped: skip bottom 3 rows (footer with F-keys) = 36 rows
-FULL_ROWS=39
-CROPPED_ROWS=36
-SCREEN_FILL=0.80  # UI fills 80% of screen (from calc_font_size.py)
-
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
 
@@ -56,17 +49,13 @@ if [ -z "$SCREEN_SIZE" ]; then
     SCREEN_SIZE="1920x1080"
 fi
 
-# Parse screen dimensions
-SCREEN_W=$(echo "$SCREEN_SIZE" | cut -d'x' -f1)
-SCREEN_H=$(echo "$SCREEN_SIZE" | cut -d'x' -f2)
-
-# Calculate crop dimensions for cropped version
-# UI fills 80% of screen, centered. Cropped version removes footer (bottom 3 rows).
-# Crop dimensions (must be even for video encoding):
-CROP_W=$(awk "BEGIN {printf \"%d\", int($SCREEN_W * $SCREEN_FILL / 2) * 2}")
-CROP_H=$(awk "BEGIN {printf \"%d\", int($SCREEN_H * $SCREEN_FILL * $CROPPED_ROWS / $FULL_ROWS / 2) * 2}")
-CROP_X=$(awk "BEGIN {printf \"%d\", int(($SCREEN_W - $CROP_W) / 2)}")
-CROP_Y=$(awk "BEGIN {printf \"%d\", int(($SCREEN_H - $SCREEN_H * $SCREEN_FILL) / 2)}")
+# Calculate tight crop dimensions using the font size calculator
+# This accounts for actual cell dimensions and constraining dimension
+# Output format: width:height:x:y
+CROP_PARAMS=$(cd "$PROJECT_DIR" && source .venv/bin/activate && python scripts/calc_font_size.py --crop 2>/dev/null || echo "")
+if [ -z "$CROP_PARAMS" ]; then
+    echo "Warning: Could not calculate crop dimensions, cropped version will be skipped"
+fi
 
 # Cropped output filename
 CROPPED_FILE="${OUTPUT_FILE%.mp4}_cropped.mp4"
@@ -74,15 +63,21 @@ CROPPED_FILE="${OUTPUT_FILE%.mp4}_cropped.mp4"
 echo "=== Purple Computer Demo Recording ==="
 echo ""
 echo "Output:     $OUTPUT_FILE (full)"
-echo "            $CROPPED_FILE (cropped)"
-echo "Screen:     $SCREEN_SIZE"
-echo "Crop:       ${CROP_W}x${CROP_H} at ($CROP_X,$CROP_Y)"
+if [ -n "$CROP_PARAMS" ]; then
+    echo "            $CROPPED_FILE (cropped)"
+    echo "Screen:     $SCREEN_SIZE"
+    echo "Crop:       $CROP_PARAMS"
+else
+    echo "Screen:     $SCREEN_SIZE"
+fi
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
 
 # Remove old recordings if exist
 rm -f "$OUTPUT_FILE"
-rm -f "$CROPPED_FILE"
+if [ -n "$CROP_PARAMS" ]; then
+    rm -f "$CROPPED_FILE"
+fi
 
 # Get default audio sink for capturing system audio
 AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
@@ -221,24 +216,30 @@ cleanup() {
             echo "Output: $OUTPUT_FILE ($SIZE)"
 
             # Create cropped version (viewport only, no F-keys or empty space)
-            echo ""
-            echo "Creating cropped version..."
-            rm -f "$CROPPED_FILE"
-            ffmpeg -y \
-                -i "$OUTPUT_FILE" \
-                -vf "crop=$CROP_W:$CROP_H:$CROP_X:$CROP_Y" \
-                -c:v libx264 -preset ultrafast -crf 18 \
-                -c:a copy \
-                "$CROPPED_FILE" 2>/dev/null
-
-            if [ -f "$CROPPED_FILE" ]; then
-                CROPPED_SIZE=$(du -h "$CROPPED_FILE" | cut -f1)
+            if [ -n "$CROP_PARAMS" ]; then
                 echo ""
-                echo "=== Recording Complete ==="
-                echo "Full:    $OUTPUT_FILE ($SIZE)"
-                echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                echo "Creating cropped version..."
+                rm -f "$CROPPED_FILE"
+                ffmpeg -y \
+                    -i "$OUTPUT_FILE" \
+                    -vf "crop=$CROP_PARAMS" \
+                    -c:v libx264 -preset ultrafast -crf 18 \
+                    -c:a copy \
+                    "$CROPPED_FILE" 2>/dev/null
+
+                if [ -f "$CROPPED_FILE" ]; then
+                    CROPPED_SIZE=$(du -h "$CROPPED_FILE" | cut -f1)
+                    echo ""
+                    echo "=== Recording Complete ==="
+                    echo "Full:    $OUTPUT_FILE ($SIZE)"
+                    echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                else
+                    echo "Warning: Failed to create cropped version"
+                    echo ""
+                    echo "=== Recording Complete ==="
+                    echo "Full: $OUTPUT_FILE ($SIZE)"
+                fi
             else
-                echo "Warning: Failed to create cropped version"
                 echo ""
                 echo "=== Recording Complete ==="
                 echo "Full: $OUTPUT_FILE ($SIZE)"

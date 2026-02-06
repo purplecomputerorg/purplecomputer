@@ -3809,6 +3809,7 @@ def run_visual_feedback_loop(
     max_candidates: int = 3,
     initial_library: 'ComponentLibrary' = None,
     human_judge: bool = False,
+    max_demo_actions: int = None,
 ) -> None:
     """Run the AI drawing loop with component-based visual feedback.
 
@@ -4432,7 +4433,7 @@ def run_visual_feedback_loop(
         if library.best:
             composite_actions = library.get_composite_actions()
             if composite_actions:
-                demo_script = generate_demo_script(composite_actions)
+                demo_script = generate_demo_script(composite_actions, max_actions=max_demo_actions)
                 script_path = os.path.join(output_dir, "generated_demo.py")
                 with open(script_path, 'w') as f:
                     f.write(demo_script)
@@ -4452,7 +4453,7 @@ def run_visual_feedback_loop(
         elif iteration_scripts:
             # Fallback: use last script if no library populated
             best_script = iteration_scripts[-1]["actions"]
-            demo_script = generate_demo_script(best_script)
+            demo_script = generate_demo_script(best_script, max_actions=max_demo_actions)
             script_path = os.path.join(output_dir, "generated_demo.py")
             with open(script_path, 'w') as f:
                 f.write(demo_script)
@@ -4467,12 +4468,28 @@ def run_visual_feedback_loop(
     print("="*50)
 
 
-def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, canvas_height: int = CANVAS_HEIGHT) -> str:
+def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, canvas_height: int = CANVAS_HEIGHT, max_actions: int = None) -> str:
     """Convert actions to a Purple Computer demo script with interpolated cursor movement.
 
     The AI training uses fast direct paint_at commands, but the demo script
     shows the cursor moving between positions to look natural during playback.
+
+    If max_actions is set and the action count exceeds it, uniformly downsamples
+    to stay under the limit. This helps keep demo playback duration reasonable
+    (processing overhead is ~1-2ms per action regardless of speed multiplier).
     """
+    # Downsample if max_actions is set and exceeded
+    if max_actions and len(actions) > max_actions:
+        # Uniform downsampling: keep every Nth action
+        step = len(actions) / max_actions
+        downsampled = []
+        i = 0.0
+        while i < len(actions) and len(downsampled) < max_actions:
+            downsampled.append(actions[int(i)])
+            i += step
+        print(f"[Demo] Downsampled {len(actions)} actions to {len(downsampled)} (max_actions={max_actions})")
+        actions = downsampled
+
     lines = [
         '"""AI-generated drawing demo."""',
         '',
@@ -4654,6 +4671,9 @@ Output (auto-generated timestamped folder):
                         help="Max candidates per iteration: mutation, informed regen, fresh regen (default: 3, or 1 with --human)")
     parser.add_argument("--human", action="store_true", default=False,
                         help="Use human judging instead of AI (shows images side-by-side)")
+    parser.add_argument("--max-demo-actions", type=int, default=None, metavar="N",
+                        help="Limit demo script to N paint actions (downsamples if exceeded). "
+                             "Recommended: ~100 per target second of playback.")
 
     args = parser.parse_args()
 
@@ -4741,6 +4761,8 @@ Output (auto-generated timestamped folder):
     print(f"Max candidates per iteration: {args.max_candidates}")
     print(f"Execution model: {args.execution_model}")
     print(f"Judge: {'human' if args.human else args.judge_model}")
+    if args.max_demo_actions:
+        print(f"Max demo actions: {args.max_demo_actions}")
     print(f"Output: {output_dir}/")
     print("="*60)
     print()
@@ -4756,6 +4778,7 @@ Output (auto-generated timestamped folder):
         max_candidates=args.max_candidates,
         initial_library=initial_library,
         human_judge=args.human,
+        max_demo_actions=args.max_demo_actions,
     )
 
 

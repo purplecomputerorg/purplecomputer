@@ -1722,15 +1722,17 @@ SEGMENT = [
     MoveSequence(directions=['up'] * 12 + ['left'] * 10, delay_per_step=0.01),
 
     # Type the first line
-    TypeText("This is Purple Computer.", delay_per_char=0.06),
+    TypeText("This is Purple Computer.", delay_per_char=0.12),
 
     # Move down one row and position for second line
     # Second line "Coming soon to your old laptop!" is 31 chars, so start at x=41
     # After typing 24 chars, cursor is at x=69. Move left to x=41 (28 left) and down 2
     MoveSequence(directions=['down', 'down'] + ['left'] * 28, delay_per_step=0.01),
 
+    Pause(2.0),
+
     # Type the second line
-    TypeText("Coming soon to your old laptop!", delay_per_char=0.06),
+    TypeText("Coming soon to your old laptop!", delay_per_char=0.12),
 
     Pause(2.0),
     Comment("Drawing complete!"),

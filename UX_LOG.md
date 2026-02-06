@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Demo: dynamic zoom**: Demo scripts can now include ZoomIn/ZoomOut markers; post-processing applies smooth zoom effects for text readability
 - **Demo: heart segment text**: Heart drawing now clears the canvas first, then after drawing adds centered text: "This is Purple Computer." and "Coming soon to your old laptop!"
 - **Demo: play mode intro text**: After the palm tree drawing completes, text appears at bottom right: "Now let's go to Play mode / Play with music and color"
 - **Demo: expanded explore segment**: Demo now showcases emoji math, color mixing, speech, and a welcome message instead of a short 3-line greeting

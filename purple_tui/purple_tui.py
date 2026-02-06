@@ -1638,6 +1638,8 @@ class PurpleApp(App):
         self.cancel_demo()
 
         # Create player that dispatches actions through our normal handler
+        # If PURPLE_ZOOM_EVENTS env var is set, zoom events will be written there
+        zoom_events_file = os.environ.get("PURPLE_ZOOM_EVENTS")
         self._demo_player = DemoPlayer(
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=get_speed_multiplier(),
@@ -1645,6 +1647,7 @@ class PurpleApp(App):
             clear_doodle=self._clear_doodle,
             set_play_key_color=self._set_play_key_color,
             is_doodle_paint_mode=self._is_doodle_paint_mode,
+            zoom_events_file=zoom_events_file,
         )
 
         # Check if we should exit after demo (for recording)

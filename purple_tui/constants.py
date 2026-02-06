@@ -89,3 +89,31 @@ MODE_TITLES = {
     MODE_PLAY[0]: (ICON_MUSIC, MODE_PLAY[1]),
     MODE_DOODLE[0]: (ICON_PALETTE, MODE_DOODLE[1]),
 }
+
+# =============================================================================
+# ZOOM REGIONS FOR DEMO RECORDING
+# =============================================================================
+# Named regions for dynamic zoom during demo videos.
+# Coordinates are percentages of the viewport (0.0-1.0) for resolution independence.
+# Format: (x_center, y_center, width_fraction, height_fraction)
+# The post-processor calculates actual pixels based on recording resolution.
+#
+# Note: "input" focuses on the Explore mode input area (bottom portion of viewport).
+
+ZOOM_REGIONS = {
+    # Full viewport (no zoom, 100% of content visible)
+    "viewport": (0.5, 0.5, 1.0, 1.0),
+
+    # Explore mode input area (bottom 40% of viewport, horizontally centered)
+    # Shows the input line and a few lines of results above it
+    "input": (0.5, 0.75, 0.7, 0.4),
+
+    # Explore mode results area (middle portion, for showing computation results)
+    "results": (0.5, 0.5, 0.8, 0.5),
+
+    # Doodle mode center (center of canvas for drawing demos)
+    "doodle-center": (0.5, 0.5, 0.6, 0.6),
+
+    # Play mode keyboard area (lower portion where keys are displayed)
+    "play-keys": (0.5, 0.7, 0.8, 0.5),
+}

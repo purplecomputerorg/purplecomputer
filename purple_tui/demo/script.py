@@ -166,6 +166,36 @@ class SetSpeed(DemoAction):
 
 
 @dataclass
+class ZoomIn(DemoAction):
+    """Zoom in to a named region for readability.
+
+    Used during recording: markers are exported to a JSON sidecar file,
+    then post-processing applies the zoom via FFmpeg crop/scale.
+
+    Args:
+        region: Named region ("input", "viewport", "doodle-center") or
+                custom tuple (x, y, width, height) at recording resolution
+        zoom: Zoom level (1.5 = 150%, 2.0 = 200%)
+        duration: Transition time in seconds (ease-out for smooth arrival)
+    """
+    region: str = "input"
+    zoom: float = 1.5
+    duration: float = 0.4
+
+
+@dataclass
+class ZoomOut(DemoAction):
+    """Zoom out to full viewport.
+
+    Complements ZoomIn: returns to 1.0x zoom showing the full screen.
+
+    Args:
+        duration: Transition time in seconds (ease-in-out for smooth transition)
+    """
+    duration: float = 0.4
+
+
+@dataclass
 class Comment(DemoAction):
     """A comment in the script (does nothing, just for documentation).
 
@@ -210,5 +240,7 @@ def segment_duration(actions: list[DemoAction]) -> float:
             total += len(action.directions) * action.delay_per_step + action.pause_after
         elif isinstance(action, (Clear, ClearAll, ClearDoodle)):
             total += action.pause_after
+        elif isinstance(action, (ZoomIn, ZoomOut)):
+            total += action.duration
         # Comment, SetSpeed: 0 duration
     return total

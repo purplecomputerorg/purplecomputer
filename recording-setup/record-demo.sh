@@ -27,6 +27,7 @@ OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-120}"  # Default 2 minutes max
 MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
+ZOOM_EVENTS="$OUTPUT_DIR/zoom_events.json"
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
@@ -51,11 +52,13 @@ fi
 
 # Cropped output filename
 CROPPED_FILE="${OUTPUT_FILE%.mp4}_cropped.mp4"
+ZOOMED_FILE="${OUTPUT_FILE%.mp4}_zoomed.mp4"
 
 echo "=== Purple Computer Demo Recording ==="
 echo ""
 echo "Output:     $OUTPUT_FILE (full)"
 echo "            $CROPPED_FILE (cropped, auto-detected)"
+echo "            $ZOOMED_FILE (with dynamic zoom, if events present)"
 echo "Screen:     $SCREEN_SIZE"
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
@@ -219,10 +222,41 @@ cleanup() {
 
                 if [ -f "$CROPPED_FILE" ]; then
                     CROPPED_SIZE=$(du -h "$CROPPED_FILE" | cut -f1)
-                    echo ""
-                    echo "=== Recording Complete ==="
-                    echo "Full:    $OUTPUT_FILE ($SIZE)"
-                    echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+
+                    # Apply zoom effects if zoom events were recorded
+                    if [ -f "$ZOOM_EVENTS" ] && [ -s "$ZOOM_EVENTS" ]; then
+                        echo ""
+                        echo "Applying zoom effects..."
+                        if python3 "$SCRIPT_DIR/apply_zoom.py" \
+                            "$CROPPED_FILE" "$ZOOM_EVENTS" "$ZOOMED_FILE" 2>/dev/null; then
+                            if [ -f "$ZOOMED_FILE" ]; then
+                                ZOOMED_SIZE=$(du -h "$ZOOMED_FILE" | cut -f1)
+                                echo ""
+                                echo "=== Recording Complete ==="
+                                echo "Full:    $OUTPUT_FILE ($SIZE)"
+                                echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                                echo "Zoomed:  $ZOOMED_FILE ($ZOOMED_SIZE)"
+                            else
+                                echo "Warning: Failed to create zoomed version"
+                                echo ""
+                                echo "=== Recording Complete ==="
+                                echo "Full:    $OUTPUT_FILE ($SIZE)"
+                                echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                            fi
+                        else
+                            echo "Warning: Zoom post-processing failed"
+                            echo ""
+                            echo "=== Recording Complete ==="
+                            echo "Full:    $OUTPUT_FILE ($SIZE)"
+                            echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                        fi
+                    else
+                        echo ""
+                        echo "=== Recording Complete ==="
+                        echo "Full:    $OUTPUT_FILE ($SIZE)"
+                        echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+                        echo "(No zoom events recorded)"
+                    fi
                 else
                     echo "Warning: Failed to create cropped version"
                     echo ""
@@ -249,7 +283,7 @@ echo "(Press Ctrl+C to stop recording early)"
 echo ""
 
 cd "$PROJECT_DIR"
-timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh || true
+timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 PURPLE_ZOOM_EVENTS="$ZOOM_EVENTS" ./scripts/run_local.sh || true
 
 echo ""
 echo "Purple exited, stopping recording..."

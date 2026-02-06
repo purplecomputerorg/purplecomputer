@@ -5,6 +5,9 @@ and dispatches them to the app's keyboard handler at human-like pace.
 """
 
 import asyncio
+import json
+import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Awaitable
 
 from .script import (
@@ -21,6 +24,8 @@ from .script import (
     MoveSequence,
     SetSpeed,
     Comment,
+    ZoomIn,
+    ZoomOut,
 )
 from ..keyboard import (
     CharacterAction,
@@ -66,6 +71,7 @@ class DemoPlayer:
         clear_doodle: Callable[[], None] | None = None,
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
+        zoom_events_file: str | Path | None = None,
     ):
         """Initialize the demo player.
 
@@ -79,6 +85,9 @@ class DemoPlayer:
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
             is_doodle_paint_mode: Optional function to check if Doodle mode
                 is in paint mode (vs text mode)
+            zoom_events_file: Optional path to write zoom events JSON for
+                post-processing. If provided, zoom events are logged with
+                timestamps relative to demo start.
         """
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
@@ -86,8 +95,11 @@ class DemoPlayer:
         self._clear_doodle = clear_doodle
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
+        self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
         self._running = False
         self._cancelled = False
+        self._zoom_events: list[dict] = []
+        self._start_time: float = 0.0
 
     async def play(self, script: list[DemoAction]) -> None:
         """Play a demo script from start to finish.
@@ -97,6 +109,8 @@ class DemoPlayer:
         """
         self._running = True
         self._cancelled = False
+        self._zoom_events = []
+        self._start_time = time.monotonic()
 
         try:
             for action in script:
@@ -105,6 +119,7 @@ class DemoPlayer:
                 await self._execute_action(action)
         finally:
             self._running = False
+            self._write_zoom_events()
 
     def cancel(self) -> None:
         """Cancel the currently playing demo."""
@@ -158,6 +173,12 @@ class DemoPlayer:
 
         elif isinstance(action, MoveSequence):
             await self._move_sequence(action)
+
+        elif isinstance(action, ZoomIn):
+            await self._zoom_in(action)
+
+        elif isinstance(action, ZoomOut):
+            await self._zoom_out(action)
 
     async def _type_text(self, action: TypeText) -> None:
         """Type text character by character."""
@@ -323,3 +344,47 @@ class DemoPlayer:
             await self._sleep(action.delay_per_step)
 
         await self._sleep(action.pause_after)
+
+    async def _zoom_in(self, action: ZoomIn) -> None:
+        """Record a zoom-in event for post-processing.
+
+        The actual zoom is applied during video post-processing via FFmpeg.
+        During playback, we just record the event timestamp and parameters.
+        """
+        elapsed = time.monotonic() - self._start_time
+        self._zoom_events.append({
+            "time": round(elapsed, 3),
+            "action": "zoom_in",
+            "region": action.region,
+            "zoom": action.zoom,
+            "duration": action.duration,
+        })
+        # Wait for the transition duration (video will be zoomed here)
+        await self._sleep(action.duration)
+
+    async def _zoom_out(self, action: ZoomOut) -> None:
+        """Record a zoom-out event for post-processing.
+
+        Returns to full viewport (1.0x zoom).
+        """
+        elapsed = time.monotonic() - self._start_time
+        self._zoom_events.append({
+            "time": round(elapsed, 3),
+            "action": "zoom_out",
+            "duration": action.duration,
+        })
+        # Wait for the transition duration
+        await self._sleep(action.duration)
+
+    def _write_zoom_events(self) -> None:
+        """Write collected zoom events to JSON sidecar file."""
+        if not self._zoom_events_file:
+            return
+
+        try:
+            self._zoom_events_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._zoom_events_file, 'w') as f:
+                json.dump(self._zoom_events, f, indent=2)
+        except OSError:
+            # Silently ignore write failures (non-critical for demo playback)
+            pass

@@ -21,11 +21,15 @@ SEGMENT = [
     PressKey("enter", pause_after=1.0),
 
     Comment("Philosophy"),
-    TypeText("Less is more. No videos. No internet. Explore, play, doodle.", **_TYPING),
+    TypeText("Less is more. No videos. No internet.", **_TYPING),
+    Pause(1.0),
+    TypeText("Explore, play, doodle.", **_TYPING),
     PressKey("enter", pause_after=2.0),
 
     Comment("Math with emojis"),
-    TypeText("This is Explore mode. 2 rabbits ate 3 + 7 carrots", **_TYPING),
+    TypeText("This is Explore mode.", **_TYPING),
+    Pause(1.0),
+    TypeText("2 rabbits ate 3 + 7 carrots", **_TYPING),
     PressKey("enter", pause_after=2.0),
 
     Comment("Color mixing"),

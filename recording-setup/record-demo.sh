@@ -5,6 +5,7 @@
 # 1. Starts FFmpeg recording in background
 # 2. Launches Purple with demo auto-start
 # 3. Stops recording when Purple exits
+# 4. Produces both full and cropped versions
 #
 # Usage:
 #   ./recording-setup/record-demo.sh [output.mp4] [duration_seconds]
@@ -12,6 +13,10 @@
 # Examples:
 #   ./recording-setup/record-demo.sh                    # Default: recordings/demo.mp4, 120s
 #   ./recording-setup/record-demo.sh my-demo.mp4 90    # Custom output, 90 seconds
+#
+# Output files:
+#   demo.mp4         - Full screen recording
+#   demo_cropped.mp4 - Cropped to viewport (no F-keys or empty space)
 
 set -e
 
@@ -22,6 +27,13 @@ OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-120}"  # Default 2 minutes max
 MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
+
+# UI layout constants (from purple_tui/constants.py)
+# Total grid: 114 cols × 39 rows
+# Cropped: skip bottom 3 rows (footer with F-keys) = 36 rows
+FULL_ROWS=39
+CROPPED_ROWS=36
+SCREEN_FILL=0.80  # UI fills 80% of screen (from calc_font_size.py)
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
@@ -44,15 +56,33 @@ if [ -z "$SCREEN_SIZE" ]; then
     SCREEN_SIZE="1920x1080"
 fi
 
+# Parse screen dimensions
+SCREEN_W=$(echo "$SCREEN_SIZE" | cut -d'x' -f1)
+SCREEN_H=$(echo "$SCREEN_SIZE" | cut -d'x' -f2)
+
+# Calculate crop dimensions for cropped version
+# UI fills 80% of screen, centered. Cropped version removes footer (bottom 3 rows).
+# Crop dimensions (must be even for video encoding):
+CROP_W=$(awk "BEGIN {printf \"%d\", int($SCREEN_W * $SCREEN_FILL / 2) * 2}")
+CROP_H=$(awk "BEGIN {printf \"%d\", int($SCREEN_H * $SCREEN_FILL * $CROPPED_ROWS / $FULL_ROWS / 2) * 2}")
+CROP_X=$(awk "BEGIN {printf \"%d\", int(($SCREEN_W - $CROP_W) / 2)}")
+CROP_Y=$(awk "BEGIN {printf \"%d\", int(($SCREEN_H - $SCREEN_H * $SCREEN_FILL) / 2)}")
+
+# Cropped output filename
+CROPPED_FILE="${OUTPUT_FILE%.mp4}_cropped.mp4"
+
 echo "=== Purple Computer Demo Recording ==="
 echo ""
-echo "Output:     $OUTPUT_FILE"
+echo "Output:     $OUTPUT_FILE (full)"
+echo "            $CROPPED_FILE (cropped)"
 echo "Screen:     $SCREEN_SIZE"
+echo "Crop:       ${CROP_W}x${CROP_H} at ($CROP_X,$CROP_Y)"
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
 
-# Remove old recording if exists
+# Remove old recordings if exist
 rm -f "$OUTPUT_FILE"
+rm -f "$CROPPED_FILE"
 
 # Get default audio sink for capturing system audio
 AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
@@ -187,8 +217,32 @@ cleanup() {
         if [ -f "$OUTPUT_FILE" ]; then
             SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
             echo ""
-            echo "=== Recording Complete ==="
+            echo "=== Full Recording Complete ==="
             echo "Output: $OUTPUT_FILE ($SIZE)"
+
+            # Create cropped version (viewport only, no F-keys or empty space)
+            echo ""
+            echo "Creating cropped version..."
+            rm -f "$CROPPED_FILE"
+            ffmpeg -y \
+                -i "$OUTPUT_FILE" \
+                -vf "crop=$CROP_W:$CROP_H:$CROP_X:$CROP_Y" \
+                -c:v libx264 -preset ultrafast -crf 18 \
+                -c:a copy \
+                "$CROPPED_FILE" 2>/dev/null
+
+            if [ -f "$CROPPED_FILE" ]; then
+                CROPPED_SIZE=$(du -h "$CROPPED_FILE" | cut -f1)
+                echo ""
+                echo "=== Recording Complete ==="
+                echo "Full:    $OUTPUT_FILE ($SIZE)"
+                echo "Cropped: $CROPPED_FILE ($CROPPED_SIZE)"
+            else
+                echo "Warning: Failed to create cropped version"
+                echo ""
+                echo "=== Recording Complete ==="
+                echo "Full: $OUTPUT_FILE ($SIZE)"
+            fi
             echo ""
             echo "To compress further:"
             echo "  ffmpeg -i $OUTPUT_FILE -crf 23 -preset slow compressed.mp4"

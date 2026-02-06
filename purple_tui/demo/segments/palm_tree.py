@@ -5,6 +5,9 @@ from ..script import (
     SetSpeed, TypeText,
 )
 
+# Typing speed (0.05s/char) with brief final_pause
+_TYPING = dict(delay_per_char=0.05, final_pause=0.1)
+
 SEGMENT = [
     Comment("=== DOODLE MODE INTRO + PALM TREE ==="),
     SwitchMode("doodle"),
@@ -15,13 +18,13 @@ SEGMENT = [
     MoveSequence(directions=['right'] * 65 + ['down'] * 18, delay_per_step=0.008),
 
     Comment("Type intro in text mode (4 lines)"),
-    TypeText("This is Doodle mode."),
+    TypeText("This is Doodle mode.", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 20, delay_per_step=0.008),
-    TypeText("Write and paint!"),
+    TypeText("Write and paint!", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 16, delay_per_step=0.008),
-    TypeText("Every letter is a shade of "),
+    TypeText("Every letter is a shade of ", **_TYPING),
 
     Comment("Switch to paint mode for color demonstration"),
     PressKey("tab", pause_after=0.1),
@@ -44,7 +47,7 @@ SEGMENT = [
     PressKey("tab", pause_after=0.1),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 38, delay_per_step=0.008),
-    TypeText("Mix paint for more colors!"),
+    TypeText("Mix paint for more colors!", **_TYPING),
 
     Pause(2.5),
 
@@ -1416,11 +1419,11 @@ SEGMENT = [
     Comment("=== PLAY MODE INTRO TEXT ==="),
     SetSpeed(1.0),
     PressKey("tab", pause_after=0.1),  # Switch to text mode
-    MoveSequence(directions=['up'] * 3 + ['left'] * 27, delay_per_step=0.008),
-    TypeText("Now let's go to Play mode"),
+    MoveSequence(directions=['up'] * 3 + ['left'] * 107, delay_per_step=0.008),
+    TypeText("Now let's go to Play mode", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
-    TypeText("Play with music and color"),
+    TypeText("Play with music and color", **_TYPING),
 
     Pause(2.5),
     Comment("Drawing complete!"),

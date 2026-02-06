@@ -1412,6 +1412,17 @@ SEGMENT = [
     PressKey('c'),
 
     Pause(2.0),
+
+    Comment("=== PLAY MODE INTRO TEXT ==="),
+    SetSpeed(1.0),
+    PressKey("tab", pause_after=0.1),  # Switch to text mode
+    MoveSequence(directions=['up'] * 3 + ['left'] * 27, delay_per_step=0.008),
+    TypeText("Now let's go to Play mode"),
+    PressKey("enter", pause_after=0.1),
+    MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
+    TypeText("Play with music and color"),
+
+    Pause(2.5),
     Comment("Drawing complete!"),
 ]
 

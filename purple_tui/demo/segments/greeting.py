@@ -25,8 +25,8 @@ SEGMENT = [
     PressKey("enter", pause_after=2.0),
 
     Comment("Math with emojis"),
-    TypeText("2 rabbits ate 3 + 7 carrots", **_FAST),
-    PressKey("enter", pause_after=1.5),
+    TypeText("This is Explore mode. 2 rabbits ate 3 + 7 carrots", **_FAST),
+    PressKey("enter", pause_after=2.0),
 
     Comment("Color mixing"),
     TypeText("red + blue", **_FAST),

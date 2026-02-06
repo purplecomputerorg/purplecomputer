@@ -2,7 +2,7 @@
 
 from ..script import (
     PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
-    SetSpeed, TypeText, ClearDoodle,
+    SetSpeed, TypeText, ClearDoodle, ZoomIn, ZoomOut,
 )
 
 # Typing speed (0.05s/char) with brief final_pause
@@ -17,7 +17,8 @@ SEGMENT = [
     Comment("Move to right side of canvas for intro text"),
     MoveSequence(directions=['right'] * 65 + ['down'] * 18, delay_per_step=0.008),
 
-    Comment("Type intro in text mode (4 lines)"),
+    Comment("Type intro in text mode (4 lines): zoom in 3x to bottom right"),
+    ZoomIn(region="doodle-bottom-right", zoom=3.0),
     TypeText("This is Doodle mode.", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 20, delay_per_step=0.008),
@@ -48,6 +49,7 @@ SEGMENT = [
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 38, delay_per_step=0.008),
     TypeText("Mix paint for more colors!", **_TYPING),
+    ZoomOut(),
 
     Pause(2.5),
 
@@ -1420,10 +1422,13 @@ SEGMENT = [
     SetSpeed(1.0),
     PressKey("tab", pause_after=0.1),  # Switch to text mode
     MoveSequence(directions=['up'] * 3 + ['left'] * 107, delay_per_step=0.008),
+    Comment("Zoom in 3x to bottom left for play mode intro text"),
+    ZoomIn(region="doodle-bottom-left", zoom=3.0),
     TypeText("Now let's go to Play mode", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
     TypeText("Play with music and color", **_TYPING),
+    ZoomOut(),
 
     Pause(2.5),
 

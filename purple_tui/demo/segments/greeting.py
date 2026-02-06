@@ -12,7 +12,8 @@ SEGMENT = [
     TypeText("Hi :)", **_TYPING),
     PressKey("enter", pause_after=0.6),
 
-    Comment("Welcome"),
+    Comment("Welcome: zoom in 3x to see welcome text and lines written below"),
+    ZoomIn(region="explore-welcome", zoom=3.0),
     TypeText("Welcome to Purple Computer", **_TYPING),
     PressKey("enter", pause_after=0.8),
 
@@ -25,32 +26,25 @@ SEGMENT = [
     Pause(1.5),
     TypeText("Explore, play, doodle.", **_TYPING),
     PressKey("enter", pause_after=2.0),
+    ZoomOut(),
 
-    Comment("Math with emojis: zoom in to see the input clearly"),
-    ZoomIn(region="input", zoom=1.5),
+    Comment("Math with emojis"),
     TypeText("This is Explore mode. ", **_TYPING),
     Pause(1.5),
     TypeText("2 rabbits ate 3 + 7 carrots", **_TYPING),
     PressKey("enter", pause_after=2.0),
-    ZoomOut(),
 
     Comment("Color mixing"),
-    ZoomIn(region="input", zoom=1.5),
     TypeText("red + blue", **_TYPING),
     PressKey("enter", pause_after=1.0),
-    ZoomOut(),
 
     Comment("More colors"),
-    ZoomIn(region="input", zoom=1.5),
     TypeText("3 periwinkles + violet", **_TYPING),
     PressKey("enter", pause_after=1.0),
-    ZoomOut(),
 
     Comment("Math with speech (! triggers TTS)"),
-    ZoomIn(region="input", zoom=1.5),
     TypeText("10 x 10 dinosaurs!", **_TYPING),
     PressKey("enter", pause_after=4.0),
-    ZoomOut(),
 
     Pause(0.3),
 ]

@@ -209,7 +209,7 @@ cleanup() {
             # Detect bounds by finding the viewport border color (#9b7bc4)
             echo ""
             echo "Detecting viewport border..."
-            CROP_PARAMS=$(python3 "$SCRIPT_DIR/detect_crop.py" "$OUTPUT_FILE" 2>/dev/null)
+            CROP_PARAMS=$("$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/detect_crop.py" "$OUTPUT_FILE" 2>/dev/null)
 
             if [ -n "$CROP_PARAMS" ]; then
                 echo "Crop detected: $CROP_PARAMS"
@@ -229,7 +229,7 @@ cleanup() {
                     if [ -f "$ZOOM_EVENTS" ] && [ -s "$ZOOM_EVENTS" ]; then
                         echo ""
                         echo "Applying zoom effects..."
-                        if python3 "$SCRIPT_DIR/apply_zoom.py" \
+                        if "$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/apply_zoom.py" \
                             "$CROPPED_FILE" "$ZOOM_EVENTS" "$ZOOMED_FILE"; then
                             if [ -f "$ZOOMED_FILE" ]; then
                                 ZOOMED_SIZE=$(du -h "$ZOOMED_FILE" | cut -f1)

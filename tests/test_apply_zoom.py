@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "recording-setup"))
 
 from apply_zoom import (
+    auto_generate_pans,
     build_keyframes,
     build_crop_expr,
     build_zoompan_expr,
@@ -297,3 +298,34 @@ class TestBuildZoompanExpr:
         assert len(y_expr) > 0
         # Should have transitions (smoothstep)
         assert "3-2*" in z_expr
+
+
+class TestAutoGeneratePans:
+    def test_no_zoomed_periods(self):
+        """Events with no zoom_in return unchanged."""
+        events = [{"time": 1.0, "action": "pan_to", "y": 0.5, "duration": 0.3}]
+        result = auto_generate_pans(events, Path("/fake"), VW, VH)
+        assert result is events
+
+    def test_skips_periods_with_manual_pans(self):
+        """Periods that already have manual pan_to events are skipped."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 3.0, "action": "pan_to", "y": 0.3, "duration": 0.3},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        log_msgs = []
+        result = auto_generate_pans(events, Path("/fake"), VW, VH, log_fn=log_msgs.append)
+        assert result is events
+        assert any("manual pans" in m for m in log_msgs)
+
+    def test_no_activity_returns_unchanged(self):
+        """When video can't be opened, no pans are generated."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        log_msgs = []
+        result = auto_generate_pans(events, Path("/nonexistent.mp4"), VW, VH, log_fn=log_msgs.append)
+        # No pans generated (video can't be read), original events returned
+        assert len(result) == len(events)

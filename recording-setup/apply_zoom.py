@@ -24,6 +24,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 # Add parent to path to import constants
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from purple_tui.constants import ZOOM_REGIONS
@@ -327,6 +330,185 @@ def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
     return expr
 
 
+def detect_activity_centers(
+    video_path: Path,
+    start_time: float,
+    end_time: float,
+    sample_interval: float = 0.3,
+    change_threshold: int = 30,
+    min_changed_pixels: int = 50,
+) -> list[tuple[float, float, float]]:
+    """Detect where content is changing in the video via frame differencing.
+
+    Samples frames at regular intervals, computes absolute difference from the
+    previous frame, thresholds, and returns the centroid of changed pixels.
+
+    Returns list of (time, x_fraction, y_fraction), fractions 0.0-1.0.
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return []
+
+    frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    centers: list[tuple[float, float, float]] = []
+    prev_gray = None
+
+    t = start_time
+    while t <= end_time:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if prev_gray is not None:
+            diff = cv2.absdiff(gray, prev_gray)
+            _, thresh = cv2.threshold(diff, change_threshold, 255, cv2.THRESH_BINARY)
+
+            if cv2.countNonZero(thresh) >= min_changed_pixels:
+                m = cv2.moments(thresh)
+                if m["m00"] > 0:
+                    cx = m["m10"] / m["m00"]
+                    cy = m["m01"] / m["m00"]
+                    centers.append((t, cx / frame_w, cy / frame_h))
+
+        prev_gray = gray
+        t += sample_interval
+
+    cap.release()
+    return centers
+
+
+def auto_generate_pans(
+    events: list[dict],
+    video_path: Path,
+    video_width: int,
+    video_height: int,
+    log_fn=None,
+    sample_interval: float = 0.3,
+    pan_duration: float = 0.3,
+    edge_margin: float = 0.20,
+    min_pan_interval: float = 1.0,
+) -> list[dict]:
+    """Auto-generate pan_to events by detecting video activity with OpenCV.
+
+    For each zoomed-in period (between zoom_in and zoom_out), analyzes the
+    source video to find where pixels are changing and generates pan_to events
+    to keep the activity centered in the visible region.
+
+    Skips zoomed periods that already have manual pan_to events.
+    """
+    # Find zoomed-in periods
+    periods: list[dict] = []
+    zoom_start_time = None
+    zoom_level = 1.0
+    zoom_region = "viewport"
+
+    for ev in events:
+        if ev["action"] == "zoom_in":
+            d = ev.get("duration", 0.4)
+            zoom_start_time = ev["time"] + d
+            zoom_level = ev.get("zoom", 1.5)
+            zoom_region = ev.get("region", "viewport")
+        elif ev["action"] == "zoom_out" and zoom_start_time is not None:
+            periods.append({
+                "start": zoom_start_time,
+                "end": ev["time"],
+                "zoom": zoom_level,
+                "region": zoom_region,
+            })
+            zoom_start_time = None
+
+    if not periods:
+        if log_fn:
+            log_fn("Auto-pan: no zoomed-in periods found")
+        return events
+
+    # Existing manual pan_to times
+    manual_pan_times = [ev["time"] for ev in events if ev["action"] == "pan_to"]
+
+    if log_fn:
+        log_fn(f"\nAuto-pan: analyzing {len(periods)} zoomed period(s)...")
+
+    auto_events: list[dict] = []
+
+    for period in periods:
+        has_manual = any(
+            period["start"] <= pt <= period["end"]
+            for pt in manual_pan_times
+        )
+        if has_manual:
+            if log_fn:
+                log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: has manual pans, skipping")
+            continue
+
+        if log_fn:
+            log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: detecting activity...")
+
+        crop_w, crop_h, crop_x, crop_y = get_crop_rect(
+            period["zoom"], period["region"],
+            video_width, video_height,
+        )
+
+        centers = detect_activity_centers(
+            video_path, period["start"], period["end"], sample_interval,
+        )
+
+        if not centers:
+            if log_fn:
+                log_fn(f"    No activity detected")
+            continue
+
+        if log_fn:
+            log_fn(f"    {len(centers)} activity samples")
+
+        current_y = crop_y
+        last_pan_time = period["start"]
+        margin_px = int(crop_h * edge_margin)
+
+        for t, _ax_frac, ay_frac in centers:
+            if t - last_pan_time < min_pan_interval:
+                continue
+
+            activity_y = int(ay_frac * video_height)
+            visible_top = current_y
+            visible_bottom = current_y + crop_h
+
+            if activity_y < visible_top + margin_px or activity_y > visible_bottom - margin_px:
+                new_y = activity_y - crop_h // 2
+                new_y = max(0, min(new_y, video_height - crop_h))
+
+                if abs(new_y - current_y) > crop_h * 0.05:
+                    y_frac = round((new_y + crop_h // 2) / video_height, 3)
+
+                    auto_events.append({
+                        "time": round(t, 3),
+                        "action": "pan_to",
+                        "y": y_frac,
+                        "duration": pan_duration,
+                    })
+
+                    current_y = new_y
+                    last_pan_time = t
+
+                    if log_fn:
+                        log_fn(f"    Auto-pan at {t:.1f}s -> y={y_frac:.3f} (activity at y={ay_frac:.2f})")
+
+    if auto_events:
+        if log_fn:
+            log_fn(f"  Total: {len(auto_events)} auto-pan events generated")
+        merged = list(events) + auto_events
+        merged.sort(key=lambda e: e["time"])
+        return merged
+
+    if log_fn:
+        log_fn(f"  No auto-pans needed")
+    return events
+
+
 def apply_zoom(
     input_video: Path,
     events_file: Path,
@@ -406,6 +588,14 @@ def apply_zoom(
     log(f"Zoom events: {len(events)}")
     for i, ev in enumerate(events):
         log(f"  Event {i}: {ev}")
+
+    # Auto-generate pan events from video activity detection
+    events = auto_generate_pans(events, input_video, width, height, log_fn=log)
+
+    if len(events) > len([e for e in events if e["action"] != "pan_to"]):
+        log(f"Events after auto-pan: {len(events)}")
+        for i, ev in enumerate(events):
+            log(f"  Event {i}: {ev}")
 
     # Build crop keyframes, then convert to zoom keyframes
     keyframes = build_keyframes(events, width, height, duration)

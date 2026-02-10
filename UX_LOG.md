@@ -6,7 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
-- **Demo: zoom targets input area**: Greeting zoom now targets the input region (where typing is visible) instead of the top of viewport; pauses between pans and typing so camera settles before text appears
+- **Demo: auto-pan via OpenCV**: Camera automatically follows cursor activity during zoomed-in periods using frame differencing, replacing hardcoded pan coordinates
 - **Demo: smooth zoom transitions + camera panning**: Zoom transitions now animate smoothly per-frame (smoothstep easing) instead of jumping to a midpoint crop; camera pans follow text as it flows during typing via new ZoomTarget action
 - **Demo: dynamic zoom**: Demo scripts can now include ZoomIn/ZoomOut markers; post-processing applies smooth zoom effects for text readability
 - **Demo: heart segment text**: Heart drawing now clears the canvas first, then after drawing adds centered text: "This is Purple Computer." and "Coming soon to your old laptop!"

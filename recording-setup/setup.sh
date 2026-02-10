@@ -29,7 +29,18 @@ if [ -z "$DISPLAY" ]; then
 fi
 
 echo ""
-echo "[2/2] Testing FFmpeg..."
+echo "[2/3] Installing Python dependencies for recording pipeline..."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+if [ -f "$PROJECT_DIR/.venv/bin/pip" ]; then
+    "$PROJECT_DIR/.venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt"
+else
+    echo "Warning: .venv not found at $PROJECT_DIR/.venv"
+    echo "Install manually: pip install -r recording-setup/requirements.txt"
+fi
+
+echo ""
+echo "[3/3] Testing FFmpeg..."
 ffmpeg -version | head -1
 
 echo ""

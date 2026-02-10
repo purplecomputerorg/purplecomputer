@@ -152,15 +152,15 @@ class TestBuildCropExpr:
             (0.0, 1920, 1080, 0, 0),
             (1.0, 961, 541, 0, 0),
         ]
-        # Width (param 0) should use bitand for even enforcement
+        # Width (param 0) should use trunc(x/2)*2 for even enforcement
         w_expr = build_crop_expr(kf, 0)
-        assert "bitand" in w_expr
-        # Height (param 1) should also use bitand
+        assert "trunc(" in w_expr and "/2)*2" in w_expr
+        # Height (param 1) should also enforce even
         h_expr = build_crop_expr(kf, 1)
-        assert "bitand" in h_expr
-        # X (param 2) should NOT use bitand
+        assert "trunc(" in h_expr and "/2)*2" in h_expr
+        # X (param 2) should NOT enforce even
         x_expr = build_crop_expr(kf, 2)
-        assert "bitand" not in x_expr
+        assert "/2)*2" not in x_expr
 
     def test_empty_keyframes(self):
         expr = build_crop_expr([], 0)

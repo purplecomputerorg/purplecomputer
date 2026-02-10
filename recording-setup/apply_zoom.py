@@ -245,8 +245,9 @@ def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
             smooth_expr = f"({p_expr}*{p_expr}*(3-2*{p_expr}))"
             lerp_expr = f"({v_start}+{dv}*{smooth_expr})"
             # Ensure even values for w and h (param_index 0 and 1)
+            # Use trunc(x/2)*2 since FFmpeg's not() is logical, not bitwise
             if param_index <= 1:
-                lerp_expr = f"bitand(trunc({lerp_expr}),not(1))"
+                lerp_expr = f"trunc({lerp_expr}/2)*2"
             else:
                 lerp_expr = f"trunc({lerp_expr})"
             expr = f"if(lt(t,{t_end:.4f}),{lerp_expr},{expr})"
@@ -341,9 +342,10 @@ def apply_zoom(
     print("Applying zoom (single-pass)...")
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True)
+        result = subprocess.run(cmd, check=True, capture_output=True)
     except subprocess.CalledProcessError as e:
-        print(f"FFmpeg failed: {e.stderr.decode()[:500]}", file=sys.stderr)
+        stderr = e.stderr.decode() if e.stderr else ""
+        print(f"FFmpeg failed:\n{stderr[:1000]}", file=sys.stderr)
         return False
 
     print(f"Output: {output_video}")

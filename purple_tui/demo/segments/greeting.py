@@ -13,7 +13,7 @@ SEGMENT = [
     PressKey("enter", pause_after=0.6),
 
     Comment("Welcome: zoom in 3x to see welcome text and lines written below"),
-    ZoomIn(region="explore-welcome", zoom=3.0),
+    ZoomIn(region="explore-welcome", zoom=3.0, duration=0.2),
     TypeText("Welcome to Purple Computer", **_TYPING),
     PressKey("enter", pause_after=0.8),
 
@@ -26,7 +26,7 @@ SEGMENT = [
     Pause(1.5),
     TypeText("Explore, play, doodle.", **_TYPING),
     PressKey("enter", pause_after=2.0),
-    ZoomOut(),
+    ZoomOut(duration=0.2),
 
     Comment("Math with emojis"),
     TypeText("This is Explore mode. ", **_TYPING),

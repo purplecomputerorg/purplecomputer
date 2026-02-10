@@ -18,7 +18,7 @@ SEGMENT = [
     MoveSequence(directions=['right'] * 65 + ['down'] * 18, delay_per_step=0.008),
 
     Comment("Type intro in text mode (4 lines): zoom in 3x to lower right"),
-    ZoomIn(region="doodle-text-right", zoom=3.0),
+    ZoomIn(region="doodle-text-right", zoom=3.0, duration=0.2),
     TypeText("This is Doodle mode.", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 20, delay_per_step=0.008),
@@ -49,7 +49,7 @@ SEGMENT = [
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 38, delay_per_step=0.008),
     TypeText("Mix paint for more colors!", **_TYPING),
-    ZoomOut(),
+    ZoomOut(duration=0.2),
 
     Pause(2.5),
 
@@ -1423,12 +1423,12 @@ SEGMENT = [
     PressKey("tab", pause_after=0.1),  # Switch to text mode
     MoveSequence(directions=['up'] * 3 + ['left'] * 107, delay_per_step=0.008),
     Comment("Zoom in 3x to lower left for play mode intro text"),
-    ZoomIn(region="doodle-text-left", zoom=3.0),
+    ZoomIn(region="doodle-text-left", zoom=3.0, duration=0.2),
     TypeText("Now let's go to Play mode", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
     TypeText("Play with music and color", **_TYPING),
-    ZoomOut(),
+    ZoomOut(duration=0.2),
 
     Pause(2.5),
 

@@ -118,11 +118,13 @@ ZOOM_REGIONS = {
     "play-keys": (0.5, 0.7, 0.8, 0.5),
 
     # Explore mode welcome area (upper-left where text history appears)
-    "explore-welcome": (0.35, 0.25, 0.7, 0.5),
+    # With 3x zoom, center must be in range 0.17-0.83 to avoid clamping
+    "explore-welcome": (0.4, 0.28, 0.7, 0.5),
 
     # Doodle mode lower-right (for "This is Doodle mode" intro text)
-    "doodle-text-right": (0.72, 0.72, 0.5, 0.4),
+    "doodle-text-right": (0.7, 0.7, 0.5, 0.4),
 
     # Doodle mode lower-left (for "Now let's go to Play mode" text)
-    "doodle-text-left": (0.18, 0.88, 0.4, 0.3),
+    # Text is at very bottom-left, center at 0.83 vertical to show it
+    "doodle-text-left": (0.25, 0.82, 0.4, 0.3),
 }

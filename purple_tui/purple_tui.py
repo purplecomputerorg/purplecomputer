@@ -1605,6 +1605,43 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _get_cursor_position(self) -> tuple[float, float] | None:
+        """Get cursor position as viewport fractions (x_frac, y_frac).
+
+        Returns (x, y) where 0.0=top-left, 1.0=bottom-right of the viewport,
+        or None if cursor position cannot be determined.
+        """
+        try:
+            viewport = self.query_one("#viewport")
+            vp = viewport.region
+        except Exception:
+            return None
+
+        if self.active_mode == Mode.EXPLORE:
+            from .modes.explore_mode import InlineInput
+            try:
+                inp = self.query_one("#explore-input", InlineInput)
+                inp_region = inp.region
+                cursor_x = inp_region.x - vp.x + inp.cursor_position
+                cursor_y = inp_region.y - vp.y
+                return (cursor_x / vp.width, cursor_y / vp.height)
+            except Exception:
+                return None
+
+        elif self.active_mode == Mode.DOODLE:
+            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            try:
+                doodle = self.query_one(DoodleMode)
+                canvas = doodle.query_one(ArtCanvas)
+                canvas_region = canvas.region
+                cursor_x = canvas_region.x - vp.x + 1 + canvas._cursor_x
+                cursor_y = canvas_region.y - vp.y + 1 + canvas._cursor_y
+                return (cursor_x / vp.width, cursor_y / vp.height)
+            except Exception:
+                return None
+
+        return None
+
     def _is_doodle_paint_mode(self) -> bool:
         """Check if Doodle mode is in paint mode (vs text mode)."""
         from .modes.doodle_mode import DoodleMode, ArtCanvas
@@ -1647,6 +1684,7 @@ class PurpleApp(App):
             clear_doodle=self._clear_doodle,
             set_play_key_color=self._set_play_key_color,
             is_doodle_paint_mode=self._is_doodle_paint_mode,
+            get_cursor_position=self._get_cursor_position,
             zoom_events_file=zoom_events_file,
         )
 

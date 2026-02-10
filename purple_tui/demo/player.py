@@ -72,6 +72,7 @@ class DemoPlayer:
         clear_doodle: Callable[[], None] | None = None,
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
+        get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
         zoom_events_file: str | Path | None = None,
     ):
         """Initialize the demo player.
@@ -86,6 +87,9 @@ class DemoPlayer:
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
             is_doodle_paint_mode: Optional function to check if Doodle mode
                 is in paint mode (vs text mode)
+            get_cursor_position: Optional function returning (x_frac, y_frac)
+                viewport fractions for the current cursor position. Used to
+                emit cursor_at events for zoom post-processing.
             zoom_events_file: Optional path to write zoom events JSON for
                 post-processing. If provided, zoom events are logged with
                 timestamps relative to demo start.
@@ -96,11 +100,13 @@ class DemoPlayer:
         self._clear_doodle = clear_doodle
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
+        self._get_cursor_position = get_cursor_position
         self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
         self._running = False
         self._cancelled = False
         self._zoom_events: list[dict] = []
         self._start_time: float = 0.0
+        self._zoomed_in = False
 
     async def play(self, script: list[DemoAction]) -> None:
         """Play a demo script from start to finish.
@@ -200,6 +206,9 @@ class DemoPlayer:
                 shift_held=shifted,
             ))
 
+            # Emit cursor position for zoom tracking
+            self._emit_cursor_at()
+
             await self._sleep(action.delay_per_char)
 
         await self._sleep(action.final_pause)
@@ -224,6 +233,9 @@ class DemoPlayer:
         elif len(key) == 1:
             # Single character (e.g. paint color key in doodle mode)
             await self._dispatch(CharacterAction(char=key))
+
+        # Emit cursor position for zoom tracking
+        self._emit_cursor_at()
 
         await self._sleep(action.pause_after)
 
@@ -349,6 +361,22 @@ class DemoPlayer:
 
         await self._sleep(action.pause_after)
 
+    def _emit_cursor_at(self) -> None:
+        """Emit a cursor_at event if zoomed in and cursor position is available."""
+        if not self._zoomed_in or not self._get_cursor_position:
+            return
+        pos = self._get_cursor_position()
+        if pos is None:
+            return
+        x_frac, y_frac = pos
+        elapsed = time.monotonic() - self._start_time
+        self._zoom_events.append({
+            "time": round(elapsed, 3),
+            "action": "cursor_at",
+            "x": round(x_frac, 4),
+            "y": round(y_frac, 4),
+        })
+
     async def _zoom_in(self, action: ZoomIn) -> None:
         """Record a zoom-in event for post-processing.
 
@@ -363,6 +391,7 @@ class DemoPlayer:
             "zoom": action.zoom,
             "duration": action.duration,
         })
+        self._zoomed_in = True
         # Wait for the transition duration (video will be zoomed here)
         await self._sleep(action.duration)
 
@@ -371,6 +400,7 @@ class DemoPlayer:
 
         Returns to full viewport (1.0x zoom).
         """
+        self._zoomed_in = False
         elapsed = time.monotonic() - self._start_time
         self._zoom_events.append({
             "time": round(elapsed, 3),

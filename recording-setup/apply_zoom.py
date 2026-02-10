@@ -382,16 +382,154 @@ def detect_activity_centers(
     return centers
 
 
+def cursor_events_to_pans(
+    events: list[dict],
+    video_width: int,
+    video_height: int,
+    log_fn=None,
+    pan_duration: float = 0.3,
+    min_pan_interval: float = 0.5,
+    edge_margin: float = 0.15,
+) -> list[dict]:
+    """Convert cursor_at events into pan_to events to follow the cursor.
+
+    For each zoomed-in period, checks cursor_at events and generates pan_to
+    events when the cursor moves outside the visible region's safe zone.
+
+    Returns a new events list with cursor_at removed and pan_to added.
+    """
+    # Find zoomed-in periods and their crop rects
+    periods: list[dict] = []
+    zoom_start_time = None
+    zoom_level = 1.0
+    zoom_region = "viewport"
+
+    for ev in events:
+        if ev["action"] == "zoom_in":
+            d = ev.get("duration", 0.4)
+            zoom_start_time = ev["time"] + d
+            zoom_level = ev.get("zoom", 1.5)
+            zoom_region = ev.get("region", "viewport")
+        elif ev["action"] == "zoom_out" and zoom_start_time is not None:
+            periods.append({
+                "start": zoom_start_time,
+                "end": ev["time"],
+                "zoom": zoom_level,
+                "region": zoom_region,
+            })
+            zoom_start_time = None
+
+    # Collect cursor_at events
+    cursor_events = [ev for ev in events if ev["action"] == "cursor_at"]
+
+    if not cursor_events or not periods:
+        # No cursor data: return events without cursor_at
+        return [ev for ev in events if ev["action"] != "cursor_at"]
+
+    if log_fn:
+        log_fn(f"\nAuto-pan: {len(cursor_events)} cursor positions across {len(periods)} zoomed period(s)")
+
+    auto_pans: list[dict] = []
+
+    for period in periods:
+        crop_w, crop_h, crop_x, crop_y = get_crop_rect(
+            period["zoom"], period["region"],
+            video_width, video_height,
+        )
+
+        # Cursor events within this zoomed period
+        period_cursors = [
+            ev for ev in cursor_events
+            if period["start"] <= ev["time"] <= period["end"]
+        ]
+
+        if not period_cursors:
+            if log_fn:
+                log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: no cursor data")
+            continue
+
+        if log_fn:
+            log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: {len(period_cursors)} cursor samples")
+
+        current_x = crop_x
+        current_y = crop_y
+        last_pan_time = period["start"]
+        margin_x = int(crop_w * edge_margin)
+        margin_y = int(crop_h * edge_margin)
+
+        for cev in period_cursors:
+            if cev["time"] - last_pan_time < min_pan_interval:
+                continue
+
+            # Cursor position in video pixels
+            cursor_px = int(cev["x"] * video_width)
+            cursor_py = int(cev["y"] * video_height)
+
+            # Check if cursor is outside the safe zone of current view
+            visible_left = current_x + margin_x
+            visible_right = current_x + crop_w - margin_x
+            visible_top = current_y + margin_y
+            visible_bottom = current_y + crop_h - margin_y
+
+            need_pan_x = cursor_px < visible_left or cursor_px > visible_right
+            need_pan_y = cursor_py < visible_top or cursor_py > visible_bottom
+
+            if need_pan_x or need_pan_y:
+                new_x = current_x
+                new_y = current_y
+
+                if need_pan_x:
+                    new_x = cursor_px - crop_w // 2
+                    new_x = max(0, min(new_x, video_width - crop_w))
+
+                if need_pan_y:
+                    new_y = cursor_py - crop_h // 2
+                    new_y = max(0, min(new_y, video_height - crop_h))
+
+                pan_event: dict = {
+                    "time": round(cev["time"], 3),
+                    "action": "pan_to",
+                    "duration": pan_duration,
+                }
+
+                if new_x != current_x:
+                    x_frac = round((new_x + crop_w // 2) / video_width, 3)
+                    pan_event["x"] = x_frac
+
+                if new_y != current_y:
+                    y_frac = round((new_y + crop_h // 2) / video_height, 3)
+                    pan_event["y"] = y_frac
+
+                auto_pans.append(pan_event)
+                current_x = new_x
+                current_y = new_y
+                last_pan_time = cev["time"]
+
+                if log_fn:
+                    log_fn(f"    Auto-pan at {cev['time']:.1f}s -> x={pan_event.get('x', '-')}, y={pan_event.get('y', '-')} (cursor at {cev['x']:.2f},{cev['y']:.2f})")
+
+    # Build result: original events (minus cursor_at) plus auto pans
+    result = [ev for ev in events if ev["action"] != "cursor_at"]
+    if auto_pans:
+        if log_fn:
+            log_fn(f"  Total: {len(auto_pans)} auto-pan events generated")
+        result.extend(auto_pans)
+        result.sort(key=lambda e: e["time"])
+
+    return result
+
+
 def auto_generate_pans(
     events: list[dict],
     video_path: Path,
     video_width: int,
     video_height: int,
     log_fn=None,
-    sample_interval: float = 0.3,
+    sample_interval: float = 0.2,
     pan_duration: float = 0.3,
     edge_margin: float = 0.20,
-    min_pan_interval: float = 1.0,
+    min_pan_interval: float = 2.0,
+    avg_window: float = 2.0,
 ) -> list[dict]:
     """Auto-generate pan_to events by detecting video activity with OpenCV.
 
@@ -469,11 +607,22 @@ def auto_generate_pans(
         last_pan_time = period["start"]
         margin_px = int(crop_h * edge_margin)
 
+        # Use sliding window average to smooth out bouncing between
+        # typing (input line) and result flashes (above input).
+        all_y = [(t, ay) for t, _, ay in centers]
+
         for t, _ax_frac, ay_frac in centers:
             if t - last_pan_time < min_pan_interval:
                 continue
 
-            activity_y = int(ay_frac * video_height)
+            # Average y over recent window instead of using single sample
+            window_start = t - avg_window
+            window_ys = [sy for st, sy in all_y if window_start <= st <= t]
+            if not window_ys:
+                continue
+            avg_y_frac = sum(window_ys) / len(window_ys)
+            activity_y = int(avg_y_frac * video_height)
+
             visible_top = current_y
             visible_bottom = current_y + crop_h
 
@@ -495,7 +644,7 @@ def auto_generate_pans(
                     last_pan_time = t
 
                     if log_fn:
-                        log_fn(f"    Auto-pan at {t:.1f}s -> y={y_frac:.3f} (activity at y={ay_frac:.2f})")
+                        log_fn(f"    Auto-pan at {t:.1f}s -> y={y_frac:.3f} (avg_y={avg_y_frac:.2f}, window={len(window_ys)} samples)")
 
     if auto_events:
         if log_fn:
@@ -589,8 +738,13 @@ def apply_zoom(
     for i, ev in enumerate(events):
         log(f"  Event {i}: {ev}")
 
-    # Auto-generate pan events from video activity detection
-    events = auto_generate_pans(events, input_video, width, height, log_fn=log)
+    # Auto-generate pan events: prefer cursor_at data from the app,
+    # fall back to OpenCV frame differencing if no cursor data
+    has_cursor_data = any(ev["action"] == "cursor_at" for ev in events)
+    if has_cursor_data:
+        events = cursor_events_to_pans(events, width, height, log_fn=log)
+    else:
+        events = auto_generate_pans(events, input_video, width, height, log_fn=log)
 
     if len(events) > len([e for e in events if e["action"] != "pan_to"]):
         log(f"Events after auto-pan: {len(events)}")

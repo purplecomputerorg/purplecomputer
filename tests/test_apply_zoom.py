@@ -11,6 +11,7 @@ from apply_zoom import (
     build_keyframes,
     build_crop_expr,
     build_zoompan_expr,
+    cursor_events_to_pans,
     get_crop_rect,
     keyframes_to_zoom,
 )
@@ -298,6 +299,74 @@ class TestBuildZoompanExpr:
         assert len(y_expr) > 0
         # Should have transitions (smoothstep)
         assert "3-2*" in z_expr
+
+
+class TestCursorEventsToPans:
+    def test_no_cursor_events_strips_cursor_at(self):
+        """Events without cursor_at are returned with cursor_at removed."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = cursor_events_to_pans(events, VW, VH)
+        assert len(result) == 2
+        assert all(ev["action"] != "cursor_at" for ev in result)
+
+    def test_cursor_at_generates_pan(self):
+        """Cursor moving outside safe zone generates a pan_to event."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            # Cursor at far-right edge, outside default crop center
+            {"time": 2.0, "action": "cursor_at", "x": 0.9, "y": 0.5},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = cursor_events_to_pans(events, VW, VH)
+        pan_events = [ev for ev in result if ev["action"] == "pan_to"]
+        assert len(pan_events) >= 1
+
+    def test_cursor_at_no_pan_when_in_center(self):
+        """Cursor near center of crop region generates no pan."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            # Cursor at center (0.5, 0.5) matches viewport region center
+            {"time": 2.0, "action": "cursor_at", "x": 0.5, "y": 0.5},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = cursor_events_to_pans(events, VW, VH)
+        pan_events = [ev for ev in result if ev["action"] == "pan_to"]
+        assert len(pan_events) == 0
+
+    def test_cursor_at_stripped_from_output(self):
+        """cursor_at events are removed from the output."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 2.0, "action": "cursor_at", "x": 0.5, "y": 0.5},
+            {"time": 3.0, "action": "cursor_at", "x": 0.5, "y": 0.5},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = cursor_events_to_pans(events, VW, VH)
+        assert all(ev["action"] != "cursor_at" for ev in result)
+
+    def test_respects_min_pan_interval(self):
+        """Pans are throttled by min_pan_interval."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 1.5, "action": "cursor_at", "x": 0.1, "y": 0.1},
+            {"time": 1.6, "action": "cursor_at", "x": 0.9, "y": 0.9},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = cursor_events_to_pans(events, VW, VH, min_pan_interval=2.0)
+        pan_events = [ev for ev in result if ev["action"] == "pan_to"]
+        # Only first should generate pan, second is too soon
+        assert len(pan_events) <= 1
+
+    def test_no_zoomed_periods(self):
+        """No zoomed periods means just strip cursor_at events."""
+        events = [
+            {"time": 1.0, "action": "cursor_at", "x": 0.5, "y": 0.5},
+        ]
+        result = cursor_events_to_pans(events, VW, VH)
+        assert len(result) == 0
 
 
 class TestAutoGeneratePans:

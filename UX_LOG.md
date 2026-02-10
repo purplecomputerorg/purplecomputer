@@ -6,6 +6,9 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Demo: smart camera tracking**: Camera now uses dominant-region detection (top vs bottom half) instead of centroid averaging, so it correctly bounces between input area and rendered results; faster response (0.5s vs 2s intervals)
+- **Demo: closing screen zoom**: "This is Purple Computer" types zoomed in, then zooms out for "Coming soon" line
+- **Demo: doodle play-mode text shifted right**: "Now let's go to Play mode" text shifted right by 1 cell; no zoom-out transition before play mode
 - **Demo: auto-pan via OpenCV**: Camera automatically follows cursor activity during zoomed-in periods using frame differencing, replacing hardcoded pan coordinates
 - **Demo: smooth zoom transitions + camera panning**: Zoom transitions now animate smoothly per-frame (smoothstep easing) instead of jumping to a midpoint crop; camera pans follow text as it flows during typing via new ZoomTarget action
 - **Demo: dynamic zoom**: Demo scripts can now include ZoomIn/ZoomOut markers; post-processing applies smooth zoom effects for text readability

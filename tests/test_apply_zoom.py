@@ -14,6 +14,7 @@ from apply_zoom import (
     cursor_events_to_pans,
     get_crop_rect,
     keyframes_to_zoom,
+    smart_generate_pans,
 )
 
 
@@ -398,3 +399,43 @@ class TestAutoGeneratePans:
         result = auto_generate_pans(events, Path("/nonexistent.mp4"), VW, VH, log_fn=log_msgs.append)
         # No pans generated (video can't be read), original events returned
         assert len(result) == len(events)
+
+
+class TestSmartGeneratePans:
+    def test_no_zoomed_periods(self):
+        """Events with no zoom_in return unchanged."""
+        events = [{"time": 1.0, "action": "pan_to", "y": 0.5, "duration": 0.3}]
+        result = smart_generate_pans(events, Path("/fake"), VW, VH)
+        assert result is events
+
+    def test_skips_periods_with_manual_pans(self):
+        """Periods that already have manual pan_to events are skipped."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 3.0, "action": "pan_to", "y": 0.3, "duration": 0.3},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        log_msgs = []
+        result = smart_generate_pans(events, Path("/fake"), VW, VH, log_fn=log_msgs.append)
+        assert result is events
+        assert any("manual pans" in m for m in log_msgs)
+
+    def test_no_activity_returns_unchanged(self):
+        """When video can't be opened, no pans are generated."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        log_msgs = []
+        result = smart_generate_pans(events, Path("/nonexistent.mp4"), VW, VH, log_fn=log_msgs.append)
+        assert len(result) == len(events)
+
+    def test_preserves_non_pan_events(self):
+        """Zoom in/out events are preserved in output."""
+        events = [
+            {"time": 1.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        result = smart_generate_pans(events, Path("/nonexistent.mp4"), VW, VH)
+        zoom_events = [ev for ev in result if ev["action"] in ("zoom_in", "zoom_out")]
+        assert len(zoom_events) == 2

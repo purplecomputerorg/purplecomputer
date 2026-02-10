@@ -1,6 +1,6 @@
 """Explore mode demo: introduction and feature showcase."""
 
-from ..script import SwitchMode, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut, ZoomTarget
+from ..script import SwitchMode, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut
 
 # Typing speed (0.05s/char) with brief final_pause, longer pauses on results
 _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
@@ -11,23 +11,13 @@ SEGMENT = [
     Comment("Start zoomed in on input area (skip blank purple screen)"),
     ZoomIn(region="input", zoom=3.0, duration=0.0),
 
-    Comment("Greeting"),
+    Comment("Greeting: OpenCV auto-pan detects typing, then result rendering"),
     TypeText("Hi :)", **_TYPING),
-    PressKey("enter", pause_after=0.3),
+    PressKey("enter", pause_after=2.0),
 
-    Comment("Fly up to see rendered 'Hi :)' result"),
-    ZoomTarget(y=0.28, duration=0.4),
-    Pause(0.8),
-
-    Comment("Fly back down to input area for next line"),
-    ZoomTarget(y=0.75, x=0.3, duration=0.4),
-    Pause(0.2),
+    Comment("Welcome: OpenCV pans down for typing, up for rendered result"),
     TypeText("Welcome to Purple Computer", **_TYPING),
-    PressKey("enter", pause_after=0.3),
-
-    Comment("Stay on left side, fly up to see rendered 'Welcome to Purple Computer'"),
-    ZoomTarget(y=0.28, x=0.3, duration=0.4),
-    Pause(1.0),
+    PressKey("enter", pause_after=2.0),
 
     Comment("Zoom out to full view"),
     ZoomOut(duration=0.4),

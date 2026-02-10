@@ -382,6 +382,84 @@ def detect_activity_centers(
     return centers
 
 
+def detect_dominant_activity(
+    video_path: Path,
+    start_time: float,
+    end_time: float,
+    sample_interval: float = 0.1,
+    change_threshold: int = 30,
+    min_changed_pixels: int = 50,
+) -> list[tuple[float, float, float]]:
+    """Detect dominant activity region via frame differencing.
+
+    Unlike detect_activity_centers which uses the centroid of ALL changed
+    pixels, this splits the frame into top and bottom halves and returns
+    the centroid of whichever half has more activity. This prevents the
+    centroid from landing in the middle when activity is in two separate
+    areas (e.g., typing at the bottom AND a result rendering at the top).
+
+    Returns list of (time, x_fraction, y_fraction), fractions 0.0-1.0.
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        return []
+
+    frame_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    mid_y = frame_h // 2
+
+    centers: list[tuple[float, float, float]] = []
+    prev_gray = None
+
+    t = start_time
+    while t <= end_time:
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        if prev_gray is not None:
+            diff = cv2.absdiff(gray, prev_gray)
+            _, thresh = cv2.threshold(diff, change_threshold, 255, cv2.THRESH_BINARY)
+
+            total_changed = cv2.countNonZero(thresh)
+            if total_changed >= min_changed_pixels:
+                # Split into top and bottom halves
+                top_thresh = thresh[:mid_y, :]
+                bot_thresh = thresh[mid_y:, :]
+                top_count = cv2.countNonZero(top_thresh)
+                bot_count = cv2.countNonZero(bot_thresh)
+
+                # Use the half with more activity (dominant region)
+                if top_count >= bot_count and top_count >= min_changed_pixels:
+                    m = cv2.moments(top_thresh)
+                    if m["m00"] > 0:
+                        cx = m["m10"] / m["m00"]
+                        cy = m["m01"] / m["m00"]
+                        centers.append((t, cx / frame_w, cy / frame_h))
+                elif bot_count >= min_changed_pixels:
+                    m = cv2.moments(bot_thresh)
+                    if m["m00"] > 0:
+                        cx = m["m10"] / m["m00"]
+                        cy = (m["m01"] / m["m00"] + mid_y) / frame_h
+                        centers.append((t, cx / frame_w, cy))
+                else:
+                    # Neither half alone has enough; fall back to full centroid
+                    m = cv2.moments(thresh)
+                    if m["m00"] > 0:
+                        cx = m["m10"] / m["m00"]
+                        cy = m["m01"] / m["m00"]
+                        centers.append((t, cx / frame_w, cy / frame_h))
+
+        prev_gray = gray
+        t += sample_interval
+
+    cap.release()
+    return centers
+
+
 def cursor_events_to_pans(
     events: list[dict],
     video_width: int,
@@ -670,6 +748,163 @@ def auto_generate_pans(
     return events
 
 
+def smart_generate_pans(
+    events: list[dict],
+    video_path: Path,
+    video_width: int,
+    video_height: int,
+    log_fn=None,
+    sample_interval: float = 0.1,
+    pan_duration: float = 0.3,
+    edge_margin: float = 0.15,
+    min_pan_interval: float = 0.5,
+) -> list[dict]:
+    """Generate pan events by tracking dominant activity regions with OpenCV.
+
+    Smarter than auto_generate_pans: uses detect_dominant_activity to track
+    the most active region instead of averaging all changed pixels. Responds
+    quickly (0.5s interval, no window averaging) so the camera can bounce
+    between input and output areas (e.g., typing at bottom, result at top).
+
+    Tracks both X and Y axes.
+    """
+    # Find zoomed-in periods
+    periods: list[dict] = []
+    zoom_start_time = None
+    zoom_level = 1.0
+    zoom_region = "viewport"
+
+    for ev in events:
+        if ev["action"] == "zoom_in":
+            d = ev.get("duration", 0.4)
+            zoom_start_time = ev["time"] + d
+            zoom_level = ev.get("zoom", 1.5)
+            zoom_region = ev.get("region", "viewport")
+        elif ev["action"] == "zoom_out" and zoom_start_time is not None:
+            periods.append({
+                "start": zoom_start_time,
+                "end": ev["time"],
+                "zoom": zoom_level,
+                "region": zoom_region,
+            })
+            zoom_start_time = None
+
+    if not periods:
+        if log_fn:
+            log_fn("Smart pan: no zoomed-in periods found")
+        return events
+
+    # Skip periods that already have manual pan_to events
+    manual_pan_times = [ev["time"] for ev in events if ev["action"] == "pan_to"]
+
+    if log_fn:
+        log_fn(f"\nSmart pan: analyzing {len(periods)} zoomed period(s)...")
+
+    auto_events: list[dict] = []
+
+    for period in periods:
+        has_manual = any(
+            period["start"] <= pt <= period["end"]
+            for pt in manual_pan_times
+        )
+        if has_manual:
+            if log_fn:
+                log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: has manual pans, skipping")
+            continue
+
+        if log_fn:
+            log_fn(f"  {period['start']:.1f}-{period['end']:.1f}s: detecting dominant activity...")
+
+        crop_w, crop_h, crop_x, crop_y = get_crop_rect(
+            period["zoom"], period["region"],
+            video_width, video_height,
+        )
+
+        centers = detect_dominant_activity(
+            video_path, period["start"], period["end"], sample_interval,
+        )
+
+        if not centers:
+            if log_fn:
+                log_fn(f"    No activity detected")
+            continue
+
+        if log_fn:
+            log_fn(f"    {len(centers)} activity samples")
+
+        current_x = crop_x
+        current_y = crop_y
+        last_pan_time = period["start"]
+        margin_x = int(crop_w * edge_margin)
+        margin_y = int(crop_h * edge_margin)
+
+        for t, ax_frac, ay_frac in centers:
+            if t - last_pan_time < min_pan_interval:
+                continue
+
+            activity_x = int(ax_frac * video_width)
+            activity_y = int(ay_frac * video_height)
+
+            # Check if activity is outside the visible safe zone
+            visible_left = current_x + margin_x
+            visible_right = current_x + crop_w - margin_x
+            visible_top = current_y + margin_y
+            visible_bottom = current_y + crop_h - margin_y
+
+            need_pan_x = activity_x < visible_left or activity_x > visible_right
+            need_pan_y = activity_y < visible_top or activity_y > visible_bottom
+
+            if need_pan_x or need_pan_y:
+                new_x = current_x
+                new_y = current_y
+
+                if need_pan_x:
+                    new_x = activity_x - crop_w // 2
+                    new_x = max(0, min(new_x, video_width - crop_w))
+
+                if need_pan_y:
+                    new_y = activity_y - crop_h // 2
+                    new_y = max(0, min(new_y, video_height - crop_h))
+
+                # Skip tiny movements
+                if (abs(new_x - current_x) < crop_w * 0.05
+                        and abs(new_y - current_y) < crop_h * 0.05):
+                    continue
+
+                pan_event: dict = {
+                    "time": round(t, 3),
+                    "action": "pan_to",
+                    "duration": pan_duration,
+                }
+
+                if new_x != current_x:
+                    x_frac = round((new_x + crop_w // 2) / video_width, 3)
+                    pan_event["x"] = x_frac
+
+                if new_y != current_y:
+                    y_frac = round((new_y + crop_h // 2) / video_height, 3)
+                    pan_event["y"] = y_frac
+
+                auto_events.append(pan_event)
+                current_x = new_x
+                current_y = new_y
+                last_pan_time = t
+
+                if log_fn:
+                    log_fn(f"    Pan at {t:.1f}s -> x={pan_event.get('x', '-')}, y={pan_event.get('y', '-')} (activity at {ax_frac:.2f},{ay_frac:.2f})")
+
+    if auto_events:
+        if log_fn:
+            log_fn(f"  Total: {len(auto_events)} smart pan events generated")
+        merged = list(events) + auto_events
+        merged.sort(key=lambda e: e["time"])
+        return merged
+
+    if log_fn:
+        log_fn(f"  No smart pans needed")
+    return events
+
+
 def apply_zoom(
     input_video: Path,
     events_file: Path,
@@ -750,13 +985,13 @@ def apply_zoom(
     for i, ev in enumerate(events):
         log(f"  Event {i}: {ev}")
 
-    # Auto-generate pan events: prefer cursor_at data from the app,
-    # fall back to OpenCV frame differencing if no cursor data
-    has_cursor_data = any(ev["action"] == "cursor_at" for ev in events)
-    if has_cursor_data:
-        events = cursor_events_to_pans(events, width, height, log_fn=log)
-    else:
-        events = auto_generate_pans(events, input_video, width, height, log_fn=log)
+    # Auto-generate pan events using OpenCV dominant-activity tracking.
+    # This watches the video to detect where content appears (typing at
+    # bottom, results at top, etc.) and generates pans that follow the
+    # action. Cursor_at events are stripped since OpenCV is more
+    # comprehensive (it sees both input AND output areas).
+    events = [ev for ev in events if ev["action"] != "cursor_at"]
+    events = smart_generate_pans(events, input_video, width, height, log_fn=log)
 
     if len(events) > len([e for e in events if e["action"] != "pan_to"]):
         log(f"Events after auto-pan: {len(events)}")

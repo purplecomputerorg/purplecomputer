@@ -63,9 +63,11 @@ echo "Screen:     $SCREEN_SIZE"
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
 
-# Remove old recordings if exist
+# Remove old recordings and stale zoom data
 rm -f "$OUTPUT_FILE"
 rm -f "$CROPPED_FILE"
+rm -f "$ZOOMED_FILE"
+rm -f "$ZOOM_EVENTS"
 
 # Get default audio sink for capturing system audio
 AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")

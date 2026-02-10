@@ -261,11 +261,14 @@ def apply_zoom(
     input_video: Path,
     events_file: Path,
     output_video: Path,
-    output_width: int = 1920,
-    output_height: int = 1080,
+    output_width: int | None = None,
+    output_height: int | None = None,
     debug_keyframes: bool = False,
 ) -> bool:
-    """Apply zoom effects to video based on events file."""
+    """Apply zoom effects to video based on events file.
+
+    Output defaults to input video dimensions (preserving aspect ratio).
+    """
     # Load events
     try:
         with open(events_file) as f:
@@ -274,24 +277,29 @@ def apply_zoom(
         print(f"Error reading events file: {e}", file=sys.stderr)
         return False
 
-    if not events:
-        print("No zoom events found, just scaling video")
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", str(input_video),
-            "-vf", f"scale={output_width}:{output_height}:flags=lanczos",
-            "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-            "-c:a", "copy",
-            str(output_video)
-        ], check=True)
-        return True
-
-    # Get video info
+    # Get video info (needed for dimensions even with no events)
     try:
         width, height, duration, fps = get_video_info(input_video)
     except subprocess.CalledProcessError as e:
         print(f"Error getting video info: {e}", file=sys.stderr)
         return False
+
+    # Default output to input dimensions
+    if output_width is None:
+        output_width = width
+    if output_height is None:
+        output_height = height
+
+    if not events:
+        print("No zoom events found, copying video")
+        subprocess.run([
+            "ffmpeg", "-y",
+            "-i", str(input_video),
+            "-c:v", "copy",
+            "-c:a", "copy",
+            str(output_video)
+        ], check=True)
+        return True
 
     print(f"Input video: {width}x{height}, {duration:.1f}s, {fps:.2f}fps")
     print(f"Output: {output_width}x{output_height}")
@@ -350,12 +358,12 @@ def main():
     parser.add_argument("events", type=Path, help="Zoom events JSON file")
     parser.add_argument("output", type=Path, help="Output video file")
     parser.add_argument(
-        "--width", type=int, default=1920,
-        help="Output width (default: 1920)"
+        "--width", type=int, default=None,
+        help="Output width (default: same as input)"
     )
     parser.add_argument(
-        "--height", type=int, default=1080,
-        help="Output height (default: 1080)"
+        "--height", type=int, default=None,
+        help="Output height (default: same as input)"
     )
     parser.add_argument(
         "--debug-keyframes", action="store_true",

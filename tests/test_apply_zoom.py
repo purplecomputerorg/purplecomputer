@@ -6,7 +6,13 @@ from pathlib import Path
 # Add recording-setup to path so we can import apply_zoom
 sys.path.insert(0, str(Path(__file__).parent.parent / "recording-setup"))
 
-from apply_zoom import build_keyframes, build_crop_expr, get_crop_rect
+from apply_zoom import (
+    build_keyframes,
+    build_crop_expr,
+    build_zoompan_expr,
+    get_crop_rect,
+    keyframes_to_zoom,
+)
 
 
 # Test video dimensions (1920x1080 is standard)
@@ -175,3 +181,119 @@ class TestBuildCropExpr:
         expr = build_crop_expr(kf, 0)
         # No smoothstep needed for static values
         assert "3-2*" not in expr
+
+
+class TestKeyframesToZoom:
+    def test_full_frame_is_zoom_1(self):
+        kf = [(0.0, 1920, 1080, 0, 0), (10.0, 1920, 1080, 0, 0)]
+        zkf = keyframes_to_zoom(kf, 1920)
+        assert len(zkf) == 2
+        assert zkf[0] == (0.0, 1.0, 0, 0)
+        assert zkf[1] == (10.0, 1.0, 0, 0)
+
+    def test_half_frame_is_zoom_2(self):
+        kf = [(0.0, 1920, 1080, 0, 0), (2.0, 960, 540, 480, 270)]
+        zkf = keyframes_to_zoom(kf, 1920)
+        assert zkf[1][1] == 2.0
+        assert zkf[1][2] == 480
+        assert zkf[1][3] == 270
+
+    def test_zoom_3x(self):
+        kf = [(0.0, 640, 360, 100, 200)]
+        zkf = keyframes_to_zoom(kf, 1920)
+        assert zkf[0][1] == 3.0
+
+    def test_preserves_times(self):
+        kf = [(1.5, 1920, 1080, 0, 0), (3.7, 960, 540, 480, 270)]
+        zkf = keyframes_to_zoom(kf, 1920)
+        assert zkf[0][0] == 1.5
+        assert zkf[1][0] == 3.7
+
+    def test_zero_width_gives_zoom_1(self):
+        kf = [(0.0, 0, 0, 0, 0)]
+        zkf = keyframes_to_zoom(kf, 1920)
+        assert zkf[0][1] == 1.0
+
+
+class TestBuildZoompanExpr:
+    def test_empty_keyframes_z(self):
+        assert build_zoompan_expr([], "z") == "1"
+
+    def test_empty_keyframes_x(self):
+        assert build_zoompan_expr([], "x") == "0"
+
+    def test_single_keyframe_z(self):
+        zkf = [(0.0, 2.5, 100, 200)]
+        expr = build_zoompan_expr(zkf, "z")
+        assert "2.5" in expr
+
+    def test_single_keyframe_xy(self):
+        zkf = [(0.0, 1.0, 150, 300)]
+        assert build_zoompan_expr(zkf, "x") == "150"
+        assert build_zoompan_expr(zkf, "y") == "300"
+
+    def test_static_hold_no_smoothstep(self):
+        zkf = [
+            (0.0, 1.0, 0, 0),
+            (5.0, 1.0, 0, 0),
+            (10.0, 1.0, 0, 0),
+        ]
+        expr = build_zoompan_expr(zkf, "z")
+        assert "3-2*" not in expr
+
+    def test_transition_has_smoothstep(self):
+        zkf = [
+            (0.0, 1.0, 0, 0),
+            (2.0, 1.0, 0, 0),
+            (2.2, 3.0, 480, 270),
+            (10.0, 3.0, 480, 270),
+        ]
+        z_expr = build_zoompan_expr(zkf, "z")
+        assert "3-2*" in z_expr
+        assert "clip(" in z_expr
+
+    def test_uses_in_time(self):
+        zkf = [
+            (0.0, 1.0, 0, 0),
+            (2.0, 1.0, 0, 0),
+            (2.2, 2.0, 100, 100),
+            (10.0, 2.0, 100, 100),
+        ]
+        expr = build_zoompan_expr(zkf, "z")
+        assert "in_time" in expr
+
+    def test_x_transition_uses_trunc(self):
+        zkf = [
+            (0.0, 1.0, 0, 0),
+            (2.0, 2.0, 500, 300),
+        ]
+        x_expr = build_zoompan_expr(zkf, "x")
+        # x uses integer values, should trunc
+        assert "trunc" in x_expr
+
+    def test_z_transition_no_trunc(self):
+        zkf = [
+            (0.0, 1.0, 0, 0),
+            (2.0, 3.0, 500, 300),
+        ]
+        z_expr = build_zoompan_expr(zkf, "z")
+        # z is a float, should NOT trunc
+        assert "trunc" not in z_expr
+
+    def test_zoom_in_out_roundtrip(self):
+        """Full zoom in/out cycle produces correct expression structure."""
+        events = [
+            {"time": 2.0, "action": "zoom_in", "region": "viewport", "zoom": 2.0, "duration": 0.2},
+            {"time": 5.0, "action": "zoom_out", "duration": 0.2},
+        ]
+        kf = build_keyframes(events, VW, VH, DURATION)
+        zkf = keyframes_to_zoom(kf, VW)
+        z_expr = build_zoompan_expr(zkf, "z")
+        x_expr = build_zoompan_expr(zkf, "x")
+        y_expr = build_zoompan_expr(zkf, "y")
+        # All should be non-empty valid expressions
+        assert len(z_expr) > 0
+        assert len(x_expr) > 0
+        assert len(y_expr) > 0
+        # Should have transitions (smoothstep)
+        assert "3-2*" in z_expr

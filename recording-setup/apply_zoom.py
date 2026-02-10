@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Apply dynamic zoom effects to demo recordings.
 
-Reads zoom events from a JSON sidecar file and applies smooth crop/scale
-transitions via a single FFmpeg command. Uses time-based expressions in
-FFmpeg's crop filter for per-frame interpolation with smoothstep easing.
+Reads zoom events from a JSON sidecar file and applies smooth zoom/pan
+transitions via a single FFmpeg command. Uses the zoompan filter with
+per-frame expressions and smoothstep easing.
 
 Usage:
     python apply_zoom.py input.mp4 zoom_events.json output.mp4
@@ -101,6 +101,9 @@ def get_crop_rect(
 # Keyframe: (time, crop_w, crop_h, crop_x, crop_y)
 Keyframe = tuple[float, int, int, int, int]
 
+# ZoomKeyframe: (time, zoom_level, x, y)
+ZoomKeyframe = tuple[float, float, int, int]
+
 
 def build_keyframes(
     events: list[dict],
@@ -193,13 +196,98 @@ def build_keyframes(
     return keyframes
 
 
+def keyframes_to_zoom(
+    keyframes: list[Keyframe],
+    video_width: int,
+) -> list[ZoomKeyframe]:
+    """Convert crop keyframes to zoompan keyframes (zoom_level, x, y).
+
+    zoom_level = video_width / crop_w (1.0 = no zoom, 3.0 = 3x zoom)
+    x, y = top-left of visible region in input pixel coordinates
+    """
+    zoom_kf: list[ZoomKeyframe] = []
+    for t, w, h, x, y in keyframes:
+        z = video_width / w if w > 0 else 1.0
+        zoom_kf.append((t, z, x, y))
+    return zoom_kf
+
+
+def build_zoompan_expr(
+    zoom_keyframes: list[ZoomKeyframe],
+    param: str,
+) -> str:
+    """Generate a nested if() expression for a zoompan parameter.
+
+    param: 'z' (zoom level), 'x', or 'y'
+    Uses 'in_time' as the time variable (zoompan's input timestamp).
+    Uses smoothstep easing for transitions.
+    """
+    if not zoom_keyframes:
+        return "1" if param == "z" else "0"
+
+    if len(zoom_keyframes) == 1:
+        kf = zoom_keyframes[0]
+        if param == "z":
+            return f"{kf[1]:.6f}"
+        elif param == "x":
+            return str(kf[2])
+        else:
+            return str(kf[3])
+
+    # Map param to index in ZoomKeyframe
+    idx = {"z": 1, "x": 2, "y": 3}[param]
+    is_float = (param == "z")
+    time_var = "in_time"
+
+    # Build piecewise expression
+    parts = []
+    for i in range(len(zoom_keyframes) - 1):
+        t_start = zoom_keyframes[i][0]
+        t_end = zoom_keyframes[i + 1][0]
+        v_start = zoom_keyframes[i][idx]
+        v_end = zoom_keyframes[i + 1][idx]
+
+        # For floats, use approximate equality check
+        if is_float:
+            same = abs(v_start - v_end) < 0.001
+        else:
+            same = (v_start == v_end)
+
+        parts.append((t_start, t_end, v_start, v_end, not same))
+
+    # Build nested if expression from right to left
+    last_val = zoom_keyframes[-1][idx]
+    expr = f"{last_val:.6f}" if is_float else str(last_val)
+
+    for t_start, t_end, v_start, v_end, is_transition in reversed(parts):
+        if is_transition:
+            dt = t_end - t_start
+            if is_float:
+                dv = v_end - v_start
+                p = f"clip(({time_var}-{t_start:.4f})/{dt:.4f},0,1)"
+                smooth = f"({p}*{p}*(3-2*{p}))"
+                lerp = f"({v_start:.6f}+{dv:.6f}*{smooth})"
+            else:
+                dv = v_end - v_start
+                p = f"clip(({time_var}-{t_start:.4f})/{dt:.4f},0,1)"
+                smooth = f"({p}*{p}*(3-2*{p}))"
+                lerp = f"trunc({v_start}+{dv}*{smooth})"
+            expr = f"if(lt({time_var},{t_end:.4f}),{lerp},{expr})"
+        else:
+            val = f"{v_start:.6f}" if is_float else str(v_start)
+            expr = f"if(lt({time_var},{t_end:.4f}),{val},{expr})"
+
+    return expr
+
+
+# Keep old build_crop_expr for tests (it's still correct math, just not for crop w/h)
 def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
     """Generate a nested if(lt(t,...)) FFmpeg expression for one crop parameter.
 
     param_index: 0=w, 1=h, 2=x, 3=y (offset by 1 since keyframe[0] is time)
 
-    Uses smoothstep easing (t*t*(3-2*t)) for transitions between keyframes.
-    Static holds between transitions use constant values.
+    Note: FFmpeg's crop filter only evaluates x/y per frame, not w/h.
+    For actual zoom effects, use build_zoompan_expr() instead.
     """
     if not keyframes:
         return "0"
@@ -207,12 +295,6 @@ def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
     if len(keyframes) == 1:
         return str(keyframes[0][param_index + 1])
 
-    # Identify transition pairs: consecutive keyframes with different values
-    # and small time gaps are transitions. Consecutive keyframes with same
-    # values are static holds.
-    #
-    # We build a piecewise expression: for each time range, either hold a
-    # constant or interpolate.
     parts = []
     for i in range(len(keyframes) - 1):
         t_start = keyframes[i][0]
@@ -221,39 +303,25 @@ def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
         v_end = keyframes[i + 1][param_index + 1]
 
         if v_start == v_end:
-            # Static hold
             parts.append((t_start, t_end, v_start, v_end, False))
         else:
-            # Transition (animate)
             parts.append((t_start, t_end, v_start, v_end, True))
 
-    # Build nested if expression from right to left
-    # Final value (after last keyframe)
     expr = str(keyframes[-1][param_index + 1])
 
     for t_start, t_end, v_start, v_end, is_transition in reversed(parts):
         if is_transition:
-            # Smoothstep interpolation
-            # progress = (t - t_start) / (t_end - t_start), clamped 0-1
-            # smoothstep = p*p*(3-2*p)
-            # value = v_start + (v_end - v_start) * smoothstep
             dt = t_end - t_start
             dv = v_end - v_start
-            # p = clip((t-{t_start})/{dt}, 0, 1)
-            # smoothstep(p) = p*p*(3-2*p)
-            # result = {v_start} + {dv} * smoothstep(p)
             p_expr = f"clip((t-{t_start:.4f})/{dt:.4f},0,1)"
             smooth_expr = f"({p_expr}*{p_expr}*(3-2*{p_expr}))"
             lerp_expr = f"({v_start}+{dv}*{smooth_expr})"
-            # Ensure even values for w and h (param_index 0 and 1)
-            # Use trunc(x/2)*2 since FFmpeg's not() is logical, not bitwise
             if param_index <= 1:
                 lerp_expr = f"trunc({lerp_expr}/2)*2"
             else:
                 lerp_expr = f"trunc({lerp_expr})"
             expr = f"if(lt(t,{t_end:.4f}),{lerp_expr},{expr})"
         else:
-            # Static: just hold the value until the next segment
             expr = f"if(lt(t,{t_end:.4f}),{v_start},{expr})"
 
     return expr
@@ -267,7 +335,7 @@ def apply_zoom(
     output_height: int | None = None,
     debug_keyframes: bool = False,
 ) -> bool:
-    """Apply zoom effects to video based on events file.
+    """Apply zoom effects to video using zoompan filter.
 
     Output defaults to input video dimensions (preserving aspect ratio).
     Writes detailed debug info to apply_zoom_debug.log next to output.
@@ -339,38 +407,43 @@ def apply_zoom(
     for i, ev in enumerate(events):
         log(f"  Event {i}: {ev}")
 
-    # Build keyframes
+    # Build crop keyframes, then convert to zoom keyframes
     keyframes = build_keyframes(events, width, height, duration)
-    log(f"Keyframes: {len(keyframes)}")
+    zoom_keyframes = keyframes_to_zoom(keyframes, width)
+    log(f"Keyframes: {len(zoom_keyframes)}")
 
-    log(f"{'Time':>8s}  {'Width':>6s}  {'Height':>6s}  {'X':>6s}  {'Y':>6s}")
-    log(f"{'─'*8}  {'─'*6}  {'─'*6}  {'─'*6}  {'─'*6}")
-    for t, w, h, x, y in keyframes:
-        log(f"{t:8.3f}  {w:6d}  {h:6d}  {x:6d}  {y:6d}")
+    log(f"{'Time':>8s}  {'Zoom':>8s}  {'X':>6s}  {'Y':>6s}")
+    log(f"{'─'*8}  {'─'*8}  {'─'*6}  {'─'*6}")
+    for t, z, x, y in zoom_keyframes:
+        log(f"{t:8.3f}  {z:8.3f}  {x:6d}  {y:6d}")
 
-    # Build crop expressions
-    w_expr = build_crop_expr(keyframes, 0)
-    h_expr = build_crop_expr(keyframes, 1)
-    x_expr = build_crop_expr(keyframes, 2)
-    y_expr = build_crop_expr(keyframes, 3)
+    # Build zoompan expressions
+    z_expr = build_zoompan_expr(zoom_keyframes, "z")
+    x_expr = build_zoompan_expr(zoom_keyframes, "x")
+    y_expr = build_zoompan_expr(zoom_keyframes, "y")
 
-    log(f"\nCrop expressions:")
-    log(f"  w: {w_expr[:200]}{'...' if len(w_expr) > 200 else ''}")
-    log(f"  h: {h_expr[:200]}{'...' if len(h_expr) > 200 else ''}")
+    log(f"\nZoompan expressions:")
+    log(f"  z: {z_expr[:200]}{'...' if len(z_expr) > 200 else ''}")
     log(f"  x: {x_expr[:200]}{'...' if len(x_expr) > 200 else ''}")
     log(f"  y: {y_expr[:200]}{'...' if len(y_expr) > 200 else ''}")
-    log(f"  Total expression lengths: w={len(w_expr)} h={len(h_expr)} x={len(x_expr)} y={len(y_expr)}")
+    log(f"  Lengths: z={len(z_expr)} x={len(x_expr)} y={len(y_expr)}")
 
-    # Single FFmpeg command with expression-based crop
-    vf = (
-        f"crop=w='{w_expr}':h='{h_expr}':x='{x_expr}':y='{y_expr}',"
-        f"scale={output_width}:{output_height}:flags=lanczos"
+    # zoompan: d=1 means 1 output frame per input frame (video passthrough)
+    # s=WxH sets output resolution, fps matches input
+    fps_int = round(fps)
+    zoompan = (
+        f"zoompan=z='{z_expr}'"
+        f":x='{x_expr}'"
+        f":y='{y_expr}'"
+        f":d=1"
+        f":s={output_width}x{output_height}"
+        f":fps={fps_int}"
     )
 
     cmd = [
         "ffmpeg", "-y",
         "-i", str(input_video),
-        "-vf", vf,
+        "-vf", zoompan,
         "-c:v", "libx264", "-crf", "18", "-preset", "fast",
         "-c:a", "copy",
         str(output_video)
@@ -378,17 +451,17 @@ def apply_zoom(
 
     log(f"\nFFmpeg command (args):")
     for i, arg in enumerate(cmd):
-        if arg == vf:
-            log(f"  [{i}] -vf <{len(vf)} chars>")
+        if arg == zoompan:
+            log(f"  [{i}] <zoompan filter, {len(zoompan)} chars>")
         else:
             log(f"  [{i}] {arg}")
 
-    # Also write the full -vf string to a separate file for inspection
+    # Write the full filter string to a separate file for inspection
     vf_path = output_video.parent / "apply_zoom_vf.txt"
     try:
         with open(vf_path, "w") as f:
-            f.write(vf)
-        log(f"Full -vf filter written to: {vf_path}")
+            f.write(zoompan)
+        log(f"Full filter written to: {vf_path}")
     except OSError:
         pass
 
@@ -396,13 +469,11 @@ def apply_zoom(
     log(f"Video duration: {duration:.1f}s. Watch 'time=' in FFmpeg output for progress.")
 
     # Let FFmpeg print progress to terminal (stderr passthrough)
-    # Also tee stderr to a file for the debug log
     ffmpeg_log_path = output_video.parent / "apply_zoom_ffmpeg.log"
     try:
         with open(ffmpeg_log_path, "w") as ffmpeg_log_f:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stderr_data = b""
-            # Read stderr in chunks, write to both terminal and file
             while True:
                 chunk = proc.stderr.read(4096)
                 if not chunk:
@@ -432,7 +503,6 @@ def apply_zoom(
     if output_video.exists():
         size_mb = output_video.stat().st_size / (1024 * 1024)
         log(f"Output created: {output_video} ({size_mb:.1f} MB)")
-        # Verify output has different dimensions than input at zoom points
         try:
             ow, oh, od, ofps = get_video_info(output_video)
             log(f"Output video info: {ow}x{oh}, {od:.2f}s, {ofps:.2f}fps")

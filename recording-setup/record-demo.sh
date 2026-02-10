@@ -230,7 +230,7 @@ cleanup() {
                         echo ""
                         echo "Applying zoom effects..."
                         if python3 "$SCRIPT_DIR/apply_zoom.py" \
-                            "$CROPPED_FILE" "$ZOOM_EVENTS" "$ZOOMED_FILE" 2>/dev/null; then
+                            "$CROPPED_FILE" "$ZOOM_EVENTS" "$ZOOMED_FILE"; then
                             if [ -f "$ZOOMED_FILE" ]; then
                                 ZOOMED_SIZE=$(du -h "$ZOOMED_FILE" | cut -f1)
                                 echo ""

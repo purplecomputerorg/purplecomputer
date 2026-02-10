@@ -19,6 +19,7 @@ The zoom events JSON format:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -269,21 +270,50 @@ def apply_zoom(
     """Apply zoom effects to video based on events file.
 
     Output defaults to input video dimensions (preserving aspect ratio).
+    Writes detailed debug info to apply_zoom_debug.log next to output.
     """
+    # Set up debug log next to output file
+    log_path = output_video.parent / "apply_zoom_debug.log"
+    log_lines: list[str] = []
+
+    def log(msg: str) -> None:
+        print(msg)
+        log_lines.append(msg)
+
+    def write_log() -> None:
+        try:
+            with open(log_path, "w") as f:
+                f.write("\n".join(log_lines) + "\n")
+            print(f"Debug log: {log_path}")
+        except OSError:
+            pass
+
+    log(f"=== apply_zoom debug log ===")
+    log(f"Input video: {input_video}")
+    log(f"Events file: {events_file}")
+    log(f"Output video: {output_video}")
+
     # Load events
     try:
         with open(events_file) as f:
-            events = json.load(f)
+            raw = f.read()
+        events = json.loads(raw)
     except (OSError, json.JSONDecodeError) as e:
-        print(f"Error reading events file: {e}", file=sys.stderr)
+        log(f"ERROR reading events file: {e}")
+        write_log()
         return False
+
+    log(f"Events file contents:\n{raw.strip()}")
 
     # Get video info (needed for dimensions even with no events)
     try:
         width, height, duration, fps = get_video_info(input_video)
     except subprocess.CalledProcessError as e:
-        print(f"Error getting video info: {e}", file=sys.stderr)
+        log(f"ERROR getting video info: {e}")
+        write_log()
         return False
+
+    log(f"Video info: {width}x{height}, {duration:.2f}s, {fps:.2f}fps")
 
     # Default output to input dimensions
     if output_width is None:
@@ -291,8 +321,10 @@ def apply_zoom(
     if output_height is None:
         output_height = height
 
+    log(f"Output dimensions: {output_width}x{output_height}")
+
     if not events:
-        print("No zoom events found, copying video")
+        log("No zoom events found, copying video")
         subprocess.run([
             "ffmpeg", "-y",
             "-i", str(input_video),
@@ -300,29 +332,34 @@ def apply_zoom(
             "-c:a", "copy",
             str(output_video)
         ], check=True)
+        write_log()
         return True
 
-    print(f"Input video: {width}x{height}, {duration:.1f}s, {fps:.2f}fps")
-    print(f"Output: {output_width}x{output_height}")
-    print(f"Zoom events: {len(events)}")
+    log(f"Zoom events: {len(events)}")
+    for i, ev in enumerate(events):
+        log(f"  Event {i}: {ev}")
 
     # Build keyframes
     keyframes = build_keyframes(events, width, height, duration)
-    print(f"Keyframes: {len(keyframes)}")
+    log(f"Keyframes: {len(keyframes)}")
 
-    if debug_keyframes:
-        print()
-        print(f"{'Time':>8s}  {'Width':>6s}  {'Height':>6s}  {'X':>6s}  {'Y':>6s}")
-        print(f"{'─'*8}  {'─'*6}  {'─'*6}  {'─'*6}  {'─'*6}")
-        for t, w, h, x, y in keyframes:
-            print(f"{t:8.3f}  {w:6d}  {h:6d}  {x:6d}  {y:6d}")
-        print()
+    log(f"{'Time':>8s}  {'Width':>6s}  {'Height':>6s}  {'X':>6s}  {'Y':>6s}")
+    log(f"{'─'*8}  {'─'*6}  {'─'*6}  {'─'*6}  {'─'*6}")
+    for t, w, h, x, y in keyframes:
+        log(f"{t:8.3f}  {w:6d}  {h:6d}  {x:6d}  {y:6d}")
 
     # Build crop expressions
     w_expr = build_crop_expr(keyframes, 0)
     h_expr = build_crop_expr(keyframes, 1)
     x_expr = build_crop_expr(keyframes, 2)
     y_expr = build_crop_expr(keyframes, 3)
+
+    log(f"\nCrop expressions:")
+    log(f"  w: {w_expr[:200]}{'...' if len(w_expr) > 200 else ''}")
+    log(f"  h: {h_expr[:200]}{'...' if len(h_expr) > 200 else ''}")
+    log(f"  x: {x_expr[:200]}{'...' if len(x_expr) > 200 else ''}")
+    log(f"  y: {y_expr[:200]}{'...' if len(y_expr) > 200 else ''}")
+    log(f"  Total expression lengths: w={len(w_expr)} h={len(h_expr)} x={len(x_expr)} y={len(y_expr)}")
 
     # Single FFmpeg command with expression-based crop
     vf = (
@@ -339,16 +376,50 @@ def apply_zoom(
         str(output_video)
     ]
 
-    print("Applying zoom (single-pass)...")
+    log(f"\nFFmpeg command (args):")
+    for i, arg in enumerate(cmd):
+        if arg == vf:
+            log(f"  [{i}] -vf <{len(vf)} chars>")
+        else:
+            log(f"  [{i}] {arg}")
+
+    # Also write the full -vf string to a separate file for inspection
+    vf_path = output_video.parent / "apply_zoom_vf.txt"
+    try:
+        with open(vf_path, "w") as f:
+            f.write(vf)
+        log(f"Full -vf filter written to: {vf_path}")
+    except OSError:
+        pass
+
+    log(f"\nApplying zoom (single-pass)...")
 
     try:
         result = subprocess.run(cmd, check=True, capture_output=True)
+        stderr = result.stderr.decode() if result.stderr else ""
+        if stderr:
+            # FFmpeg writes progress to stderr even on success
+            log(f"FFmpeg stderr (last 500 chars):\n{stderr[-500:]}")
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode() if e.stderr else ""
-        print(f"FFmpeg failed:\n{stderr[:1000]}", file=sys.stderr)
+        log(f"FFmpeg FAILED (exit code {e.returncode}):\n{stderr[:2000]}")
+        write_log()
         return False
 
-    print(f"Output: {output_video}")
+    # Check output
+    if output_video.exists():
+        size_mb = output_video.stat().st_size / (1024 * 1024)
+        log(f"Output created: {output_video} ({size_mb:.1f} MB)")
+        # Verify output has different dimensions than input at zoom points
+        try:
+            ow, oh, od, ofps = get_video_info(output_video)
+            log(f"Output video info: {ow}x{oh}, {od:.2f}s, {ofps:.2f}fps")
+        except Exception as ex:
+            log(f"Could not probe output: {ex}")
+    else:
+        log(f"ERROR: output file was not created!")
+
+    write_log()
     return True
 
 

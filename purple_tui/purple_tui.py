@@ -1626,7 +1626,8 @@ class PurpleApp(App):
                 cursor_y = inp_region.y - vp.y
                 return (cursor_x / vp.width, cursor_y / vp.height)
             except Exception:
-                return None
+                # Fallback: left side of input line, near bottom of viewport
+                return (0.07, 0.9)
 
         elif self.active_mode == Mode.DOODLE:
             from .modes.doodle_mode import DoodleMode, ArtCanvas

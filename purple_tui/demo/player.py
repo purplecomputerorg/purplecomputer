@@ -394,6 +394,8 @@ class DemoPlayer:
         self._zoomed_in = True
         # Wait for the transition duration (video will be zoomed here)
         await self._sleep(action.duration)
+        # Emit cursor position immediately so the camera starts on the cursor
+        self._emit_cursor_at()
 
     async def _zoom_out(self, action: ZoomOut) -> None:
         """Record a zoom-out event for post-processing.

@@ -456,23 +456,31 @@ def cursor_events_to_pans(
         last_pan_time = period["start"]
         margin_x = int(crop_w * edge_margin)
         margin_y = int(crop_h * edge_margin)
+        first_in_period = True
 
         for cev in period_cursors:
-            if cev["time"] - last_pan_time < min_pan_interval:
+            # Always process the first cursor event in each period
+            # (sets initial camera position), then throttle the rest
+            if not first_in_period and cev["time"] - last_pan_time < min_pan_interval:
                 continue
 
             # Cursor position in video pixels
             cursor_px = int(cev["x"] * video_width)
             cursor_py = int(cev["y"] * video_height)
 
-            # Check if cursor is outside the safe zone of current view
-            visible_left = current_x + margin_x
-            visible_right = current_x + crop_w - margin_x
-            visible_top = current_y + margin_y
-            visible_bottom = current_y + crop_h - margin_y
-
-            need_pan_x = cursor_px < visible_left or cursor_px > visible_right
-            need_pan_y = cursor_py < visible_top or cursor_py > visible_bottom
+            # First event always pans to set initial camera position on cursor.
+            # Subsequent events only pan when cursor leaves the safe zone.
+            if first_in_period:
+                need_pan_x = True
+                need_pan_y = True
+                first_in_period = False
+            else:
+                visible_left = current_x + margin_x
+                visible_right = current_x + crop_w - margin_x
+                visible_top = current_y + margin_y
+                visible_bottom = current_y + crop_h - margin_y
+                need_pan_x = cursor_px < visible_left or cursor_px > visible_right
+                need_pan_y = cursor_py < visible_top or cursor_py > visible_bottom
 
             if need_pan_x or need_pan_y:
                 new_x = current_x
@@ -499,6 +507,10 @@ def cursor_events_to_pans(
                 if new_y != current_y:
                     y_frac = round((new_y + crop_h // 2) / video_height, 3)
                     pan_event["y"] = y_frac
+
+                # Skip if nothing actually moved (cursor already centered in view)
+                if new_x == current_x and new_y == current_y:
+                    continue
 
                 auto_pans.append(pan_event)
                 current_x = new_x

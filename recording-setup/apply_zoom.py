@@ -371,7 +371,7 @@ def apply_zoom(
         "ffmpeg", "-y",
         "-i", str(input_video),
         "-vf", vf,
-        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
         "-c:a", "copy",
         str(output_video)
     ]
@@ -393,16 +393,38 @@ def apply_zoom(
         pass
 
     log(f"\nApplying zoom (single-pass)...")
+    log(f"Video duration: {duration:.1f}s. Watch 'time=' in FFmpeg output for progress.")
 
+    # Let FFmpeg print progress to terminal (stderr passthrough)
+    # Also tee stderr to a file for the debug log
+    ffmpeg_log_path = output_video.parent / "apply_zoom_ffmpeg.log"
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True)
-        stderr = result.stderr.decode() if result.stderr else ""
-        if stderr:
-            # FFmpeg writes progress to stderr even on success
-            log(f"FFmpeg stderr (last 500 chars):\n{stderr[-500:]}")
-    except subprocess.CalledProcessError as e:
-        stderr = e.stderr.decode() if e.stderr else ""
-        log(f"FFmpeg FAILED (exit code {e.returncode}):\n{stderr[:2000]}")
+        with open(ffmpeg_log_path, "w") as ffmpeg_log_f:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stderr_data = b""
+            # Read stderr in chunks, write to both terminal and file
+            while True:
+                chunk = proc.stderr.read(4096)
+                if not chunk:
+                    break
+                stderr_data += chunk
+                sys.stderr.buffer.write(chunk)
+                sys.stderr.buffer.flush()
+                ffmpeg_log_f.write(chunk.decode(errors="replace"))
+            proc.wait()
+
+        stderr = stderr_data.decode(errors="replace")
+        if proc.returncode != 0:
+            log(f"FFmpeg FAILED (exit code {proc.returncode}):\n{stderr[:2000]}")
+            log(f"Full FFmpeg log: {ffmpeg_log_path}")
+            write_log()
+            return False
+        else:
+            log(f"FFmpeg completed successfully")
+            if stderr:
+                log(f"FFmpeg log: {ffmpeg_log_path}")
+    except OSError as e:
+        log(f"Failed to run FFmpeg: {e}")
         write_log()
         return False
 

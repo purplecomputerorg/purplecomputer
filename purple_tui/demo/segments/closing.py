@@ -1,7 +1,7 @@
 """Closing text segment for demo."""
 
 from purple_tui.demo.script import (
-    SwitchMode, Pause, MoveSequence, Comment, TypeText,
+    SwitchMode, Pause, MoveSequence, Comment, TypeText, ZoomIn, ZoomOut,
 )
 
 SEGMENT = [
@@ -15,6 +15,9 @@ SEGMENT = [
     # Center it at approximately x=45, y=12
     MoveSequence(directions=['right'] * 45 + ['down'] * 12, delay_per_step=0.008),
 
+    Comment("Zoom in for the title"),
+    ZoomIn(region="closing-title", zoom=2.5, duration=0.3),
+
     # Type the first line
     TypeText("This is Purple Computer.", delay_per_char=0.12),
 
@@ -23,7 +26,11 @@ SEGMENT = [
     # After typing 24 chars, cursor is at x=69. Move left to x=41 (28 left) and down 2
     MoveSequence(directions=['down', 'down'] + ['left'] * 28, delay_per_step=0.01),
 
-    Pause(2.0),
+    Pause(1.5),
+
+    Comment("Zoom out to show the full 'Coming soon' line"),
+    ZoomOut(duration=0.5),
+    Pause(0.3),
 
     # Type the second line
     TypeText("Coming soon to your old laptop!", delay_per_char=0.12),

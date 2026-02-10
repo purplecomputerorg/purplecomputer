@@ -1421,16 +1421,18 @@ SEGMENT = [
     Comment("=== PLAY MODE INTRO TEXT ==="),
     SetSpeed(1.0),
     PressKey("tab", pause_after=0.1),  # Switch to text mode
-    MoveSequence(directions=['up'] * 3 + ['left'] * 107, delay_per_step=0.008),
+    MoveSequence(directions=['up'] * 3 + ['left'] * 106, delay_per_step=0.008),
     Comment("Zoom in 3x to lower left for play mode intro text"),
     ZoomIn(region="doodle-text-left", zoom=3.0, duration=0.2),
     TypeText("Now let's go to Play mode", **_TYPING),
     PressKey("enter", pause_after=0.1),
-    MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
+    MoveSequence(directions=['left'] * 24, delay_per_step=0.008),
     TypeText("Play with music and color", **_TYPING),
-    ZoomOut(duration=0.2),
 
     Pause(2.5),
+
+    Comment("Instant zoom out so play mode starts fully zoomed out (no transition)"),
+    ZoomOut(duration=0.0),
 
     # Clear canvas now so it doesn't flash when we return to doodle mode later
     ClearDoodle(),

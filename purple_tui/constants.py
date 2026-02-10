@@ -127,4 +127,7 @@ ZOOM_REGIONS = {
     # Doodle mode lower-left (for "Now let's go to Play mode" text)
     # Text is at very bottom-left, center at 0.83 vertical to show it
     "doodle-text-left": (0.25, 0.82, 0.4, 0.3),
+
+    # Closing screen: "This is Purple Computer" centered text
+    "closing-title": (0.5, 0.38, 0.6, 0.4),
 }

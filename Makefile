@@ -133,6 +133,6 @@ voice-variants:
 	@echo "Listen to variants and copy the best one over the original."
 
 apply-zoom:
-	@.venv/bin/python recording-setup/apply_zoom.py recordings/demo.mp4 recording-setup/zoom_events.json recordings/demo-zoomed.mp4
+	@.venv/bin/python recording-setup/apply_zoom.py recordings/demo.mp4 recordings/zoom_events.json recordings/demo-zoomed.mp4
 
 .DEFAULT_GOAL := help

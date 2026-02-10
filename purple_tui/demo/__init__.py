@@ -21,6 +21,7 @@ from .script import (
     DrawPath,
     SetSpeed,
     Comment,
+    ZoomTarget,
     segment_duration,
 )
 from .player import DemoPlayer
@@ -109,6 +110,7 @@ __all__ = [
     "DrawPath",
     "SetSpeed",
     "Comment",
+    "ZoomTarget",
     "DemoPlayer",
     "DEMO_SCRIPT",
     "DEMO_SCRIPT_SHORT",

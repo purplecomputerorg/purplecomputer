@@ -196,6 +196,25 @@ class ZoomOut(DemoAction):
 
 
 @dataclass
+class ZoomTarget(DemoAction):
+    """Pan the camera to a new position while zoomed in.
+
+    Smoothly moves the crop region without changing the zoom level.
+    Use this to follow text as it flows down the screen during typing.
+
+    Args:
+        y: Vertical center of the crop as a fraction of video height (0.0=top, 1.0=bottom).
+            If None, keeps current y position.
+        x: Horizontal center of the crop as a fraction of video width (0.0=left, 1.0=right).
+            If None, keeps current x position.
+        duration: Transition time in seconds
+    """
+    y: float | None = None
+    x: float | None = None
+    duration: float = 0.3
+
+
+@dataclass
 class Comment(DemoAction):
     """A comment in the script (does nothing, just for documentation).
 
@@ -240,7 +259,7 @@ def segment_duration(actions: list[DemoAction]) -> float:
             total += len(action.directions) * action.delay_per_step + action.pause_after
         elif isinstance(action, (Clear, ClearAll, ClearDoodle)):
             total += action.pause_after
-        elif isinstance(action, (ZoomIn, ZoomOut)):
+        elif isinstance(action, (ZoomIn, ZoomOut, ZoomTarget)):
             total += action.duration
         # Comment, SetSpeed: 0 duration
     return total

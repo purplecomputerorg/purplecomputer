@@ -1,6 +1,6 @@
 """Explore mode demo: introduction and feature showcase."""
 
-from ..script import SwitchMode, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut
+from ..script import SwitchMode, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut, ZoomTarget
 
 # Typing speed (0.05s/char) with brief final_pause, longer pauses on results
 _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
@@ -17,11 +17,13 @@ SEGMENT = [
     TypeText("Welcome to Purple Computer", **_TYPING),
     PressKey("enter", pause_after=0.8),
 
-    Comment("Tagline"),
+    Comment("Tagline: pan down as new line appears"),
+    ZoomTarget(y=0.32, duration=0.3),
     TypeText("Turn any old laptop into a Purple Computer <3", **_TYPING),
     PressKey("enter", pause_after=1.0),
 
-    Comment("Philosophy"),
+    Comment("Philosophy: pan down further"),
+    ZoomTarget(y=0.36, duration=0.3),
     TypeText("Less is more. No videos. No internet. ", **_TYPING),
     Pause(1.5),
     TypeText("Explore, play, doodle.", **_TYPING),

@@ -26,6 +26,7 @@ from .script import (
     Comment,
     ZoomIn,
     ZoomOut,
+    ZoomTarget,
 )
 from ..keyboard import (
     CharacterAction,
@@ -179,6 +180,9 @@ class DemoPlayer:
 
         elif isinstance(action, ZoomOut):
             await self._zoom_out(action)
+
+        elif isinstance(action, ZoomTarget):
+            await self._zoom_target(action)
 
     async def _type_text(self, action: TypeText) -> None:
         """Type text character by character."""
@@ -374,6 +378,25 @@ class DemoPlayer:
             "duration": action.duration,
         })
         # Wait for the transition duration
+        await self._sleep(action.duration)
+
+    async def _zoom_target(self, action: ZoomTarget) -> None:
+        """Record a pan event for post-processing.
+
+        Moves the crop position without changing zoom level, allowing
+        the camera to follow content (e.g., text flowing down the screen).
+        """
+        elapsed = time.monotonic() - self._start_time
+        event: dict = {
+            "time": round(elapsed, 3),
+            "action": "pan_to",
+            "duration": action.duration,
+        }
+        if action.y is not None:
+            event["y"] = action.y
+        if action.x is not None:
+            event["x"] = action.x
+        self._zoom_events.append(event)
         await self._sleep(action.duration)
 
     def _write_zoom_events(self) -> None:

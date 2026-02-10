@@ -2,16 +2,18 @@
 """Apply dynamic zoom effects to demo recordings.
 
 Reads zoom events from a JSON sidecar file and applies smooth crop/scale
-transitions via FFmpeg. Uses a segment-based approach: splits video at
-zoom transitions, applies crops, then concatenates.
+transitions via a single FFmpeg command. Uses time-based expressions in
+FFmpeg's crop filter for per-frame interpolation with smoothstep easing.
 
 Usage:
     python apply_zoom.py input.mp4 zoom_events.json output.mp4
+    python apply_zoom.py input.mp4 zoom_events.json output.mp4 --debug-keyframes
 
 The zoom events JSON format:
     [
-        {"time": 2.5, "action": "zoom_in", "region": "input", "zoom": 1.5, "duration": 0.4},
-        {"time": 8.0, "action": "zoom_out", "duration": 0.4}
+        {"time": 2.5, "action": "zoom_in", "region": "input", "zoom": 1.5, "duration": 0.2},
+        {"time": 8.0, "action": "zoom_out", "duration": 0.2},
+        {"time": 5.0, "action": "pan_to", "y": 0.32, "duration": 0.3}
     ]
 """
 
@@ -19,7 +21,6 @@ import argparse
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # Add parent to path to import constants
@@ -66,7 +67,7 @@ def get_crop_rect(
 ) -> tuple[int, int, int, int]:
     """Get crop rectangle for a zoom level and region.
 
-    Returns: (crop_w, crop_h, crop_x, crop_y) - FFmpeg crop order
+    Returns: (crop_w, crop_h, crop_x, crop_y) in FFmpeg crop order
     """
     if zoom <= 1.0:
         return video_width, video_height, 0, 0
@@ -96,206 +97,164 @@ def get_crop_rect(
     return crop_w, crop_h, crop_x, crop_y
 
 
-def build_segments(events: list[dict], duration: float) -> list[dict]:
-    """Build list of segments with their zoom states.
+# Keyframe: (time, crop_w, crop_h, crop_x, crop_y)
+Keyframe = tuple[float, int, int, int, int]
 
-    Each segment has: start, end, zoom, region, is_transition
-    For transitions, also has: from_zoom, from_region, to_zoom, to_region
+
+def build_keyframes(
+    events: list[dict],
+    video_width: int,
+    video_height: int,
+    video_duration: float,
+) -> list[Keyframe]:
+    """Convert zoom events into a list of keyframes.
+
+    Each zoom_in/zoom_out produces two keyframes (transition start + end).
+    pan_to events also produce two keyframes (start + end of pan).
+
+    Returns sorted list of (time, crop_w, crop_h, crop_x, crop_y) tuples.
     """
-    segments = []
+    keyframes: list[Keyframe] = []
+
+    # Start at full frame
+    full_rect = (video_width, video_height, 0, 0)
+    current_rect = full_rect
     current_zoom = 1.0
     current_region = "viewport"
-    last_time = 0.0
 
     for event in events:
         t = event["time"]
         d = event.get("duration", 0.4)
 
-        # Static segment before this event
-        if t > last_time + 0.01:
-            segments.append({
-                "start": last_time,
-                "end": t,
-                "zoom": current_zoom,
-                "region": current_region,
-                "is_transition": False,
-            })
-
-        # Transition segment
         if event["action"] == "zoom_in":
-            segments.append({
-                "start": t,
-                "end": t + d,
-                "from_zoom": current_zoom,
-                "from_region": current_region,
-                "to_zoom": event["zoom"],
-                "to_region": event["region"],
-                "is_transition": True,
-            })
+            # Keyframe at transition start: current state
+            keyframes.append((t, *current_rect))
+
+            # Compute target rect
+            target_rect = get_crop_rect(
+                event["zoom"], event["region"],
+                video_width, video_height,
+            )
+
+            # Keyframe at transition end: zoomed state
+            keyframes.append((t + d, *target_rect))
+
+            current_rect = target_rect
             current_zoom = event["zoom"]
             current_region = event["region"]
-        else:  # zoom_out
-            segments.append({
-                "start": t,
-                "end": t + d,
-                "from_zoom": current_zoom,
-                "from_region": current_region,
-                "to_zoom": 1.0,
-                "to_region": "viewport",
-                "is_transition": True,
-            })
+
+        elif event["action"] == "zoom_out":
+            # Keyframe at transition start: current state
+            keyframes.append((t, *current_rect))
+
+            # Keyframe at transition end: full frame
+            keyframes.append((t + d, *full_rect))
+
+            current_rect = full_rect
             current_zoom = 1.0
             current_region = "viewport"
 
-        last_time = t + d
+        elif event["action"] == "pan_to":
+            # Pan changes x/y while keeping w/h (staying at current zoom)
+            keyframes.append((t, *current_rect))
 
-    # Final segment
-    if last_time < duration - 0.01:
-        segments.append({
-            "start": last_time,
-            "end": duration,
-            "zoom": current_zoom,
-            "region": current_region,
-            "is_transition": False,
-        })
+            # Compute new position from fractional coordinates
+            new_x = current_rect[2]  # default: keep current x
+            new_y = current_rect[3]  # default: keep current y
+            crop_w = current_rect[0]
+            crop_h = current_rect[1]
 
-    return segments
+            if "y" in event:
+                center_y = int(video_height * event["y"])
+                new_y = center_y - crop_h // 2
+                new_y = max(0, min(new_y, video_height - crop_h))
+
+            if "x" in event:
+                center_x = int(video_width * event["x"])
+                new_x = center_x - crop_w // 2
+                new_x = max(0, min(new_x, video_width - crop_w))
+
+            target_rect = (crop_w, crop_h, new_x, new_y)
+            keyframes.append((t + d, *target_rect))
+
+            current_rect = target_rect
+
+    # Ensure we have keyframes at t=0 and t=end
+    times = [kf[0] for kf in keyframes]
+    if not times or times[0] > 0.001:
+        keyframes.insert(0, (0.0, *full_rect))
+    if not times or times[-1] < video_duration - 0.001:
+        keyframes.append((video_duration, *current_rect))
+
+    # Sort by time (should already be sorted, but be safe)
+    keyframes.sort(key=lambda kf: kf[0])
+
+    return keyframes
 
 
-def interpolate_rect(
-    from_rect: tuple[int, int, int, int],
-    to_rect: tuple[int, int, int, int],
-    t: float,
-) -> tuple[int, int, int, int]:
-    """Interpolate between two crop rectangles (0 <= t <= 1)."""
-    # Apply ease-out cubic for smoother motion
-    t = 1 - pow(1 - t, 3)
-    return (
-        int(from_rect[0] + (to_rect[0] - from_rect[0]) * t),
-        int(from_rect[1] + (to_rect[1] - from_rect[1]) * t),
-        int(from_rect[2] + (to_rect[2] - from_rect[2]) * t),
-        int(from_rect[3] + (to_rect[3] - from_rect[3]) * t),
-    )
+def build_crop_expr(keyframes: list[Keyframe], param_index: int) -> str:
+    """Generate a nested if(lt(t,...)) FFmpeg expression for one crop parameter.
 
+    param_index: 0=w, 1=h, 2=x, 3=y (offset by 1 since keyframe[0] is time)
 
-def process_transition_segment(
-    input_video: Path,
-    segment: dict,
-    output_path: Path,
-    video_width: int,
-    video_height: int,
-    output_width: int,
-    output_height: int,
-    fps: float,
-) -> bool:
-    """Process a transition using midpoint crop.
-
-    Transitions are short (0.4s), so we just use the midpoint crop value.
-    This avoids complex FFmpeg expressions that tend to fail.
+    Uses smoothstep easing (t*t*(3-2*t)) for transitions between keyframes.
+    Static holds between transitions use constant values.
     """
-    start = segment["start"]
-    end = segment["end"]
-    duration = end - start
+    if not keyframes:
+        return "0"
 
-    from_rect = get_crop_rect(
-        segment["from_zoom"], segment["from_region"],
-        video_width, video_height
-    )
-    to_rect = get_crop_rect(
-        segment["to_zoom"], segment["to_region"],
-        video_width, video_height
-    )
+    if len(keyframes) == 1:
+        return str(keyframes[0][param_index + 1])
 
-    # Use midpoint crop (with easing applied)
-    mid_rect = interpolate_rect(from_rect, to_rect, 0.5)
-    crop_w, crop_h, crop_x, crop_y = mid_rect
+    # Identify transition pairs: consecutive keyframes with different values
+    # and small time gaps are transitions. Consecutive keyframes with same
+    # values are static holds.
+    #
+    # We build a piecewise expression: for each time range, either hold a
+    # constant or interpolate.
+    parts = []
+    for i in range(len(keyframes) - 1):
+        t_start = keyframes[i][0]
+        t_end = keyframes[i + 1][0]
+        v_start = keyframes[i][param_index + 1]
+        v_end = keyframes[i + 1][param_index + 1]
 
-    # Ensure even dimensions
-    crop_w = crop_w - (crop_w % 2)
-    crop_h = crop_h - (crop_h % 2)
+        if v_start == v_end:
+            # Static hold
+            parts.append((t_start, t_end, v_start, v_end, False))
+        else:
+            # Transition (animate)
+            parts.append((t_start, t_end, v_start, v_end, True))
 
-    vf = (
-        f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
-        f"scale={output_width}:{output_height}:force_original_aspect_ratio=decrease:flags=lanczos,"
-        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
-    )
+    # Build nested if expression from right to left
+    # Final value (after last keyframe)
+    expr = str(keyframes[-1][param_index + 1])
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-ss", str(start),
-        "-t", str(duration),
-        "-i", str(input_video),
-        "-vf", vf,
-        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-        "-an", "-r", str(fps),
-        str(output_path)
-    ]
+    for t_start, t_end, v_start, v_end, is_transition in reversed(parts):
+        if is_transition:
+            # Smoothstep interpolation
+            # progress = (t - t_start) / (t_end - t_start), clamped 0-1
+            # smoothstep = p*p*(3-2*p)
+            # value = v_start + (v_end - v_start) * smoothstep
+            dt = t_end - t_start
+            dv = v_end - v_start
+            # p = clip((t-{t_start})/{dt}, 0, 1)
+            # smoothstep(p) = p*p*(3-2*p)
+            # result = {v_start} + {dv} * smoothstep(p)
+            p_expr = f"clip((t-{t_start:.4f})/{dt:.4f},0,1)"
+            smooth_expr = f"({p_expr}*{p_expr}*(3-2*{p_expr}))"
+            lerp_expr = f"({v_start}+{dv}*{smooth_expr})"
+            # Ensure even values for w and h (param_index 0 and 1)
+            if param_index <= 1:
+                lerp_expr = f"bitand(trunc({lerp_expr}),not(1))"
+            else:
+                lerp_expr = f"trunc({lerp_expr})"
+            expr = f"if(lt(t,{t_end:.4f}),{lerp_expr},{expr})"
+        else:
+            # Static: just hold the value until the next segment
+            expr = f"if(lt(t,{t_end:.4f}),{v_start},{expr})"
 
-    try:
-        subprocess.run(cmd, check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Transition failed: {e.stderr.decode()[:200]}", file=sys.stderr)
-        return False
-
-
-def process_segment(
-    input_video: Path,
-    segment: dict,
-    output_path: Path,
-    video_width: int,
-    video_height: int,
-    output_width: int,
-    output_height: int,
-    fps: float,
-) -> bool:
-    """Process a single segment with appropriate zoom."""
-    start = segment["start"]
-    end = segment["end"]
-    duration = end - start
-
-    if duration < 0.01:
-        return False
-
-    # For transitions, we'll handle them by splitting into sub-segments
-    # and processing each with interpolated crop values
-    if segment["is_transition"]:
-        return process_transition_segment(
-            input_video, segment, output_path,
-            video_width, video_height, output_width, output_height, fps
-        )
-
-    # Static segment: simple crop and scale (preserving aspect ratio)
-    crop_w, crop_h, crop_x, crop_y = get_crop_rect(
-        segment["zoom"], segment["region"],
-        video_width, video_height
-    )
-
-    # Scale preserving aspect ratio, then pad to exact output size
-    vf = (
-        f"crop={crop_w}:{crop_h}:{crop_x}:{crop_y},"
-        f"scale={output_width}:{output_height}:force_original_aspect_ratio=decrease:flags=lanczos,"
-        f"pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-ss", str(start),
-        "-t", str(duration),
-        "-i", str(input_video),
-        "-vf", vf,
-        "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-        "-an",  # No audio for segments, we'll add it back at the end
-        "-r", str(fps),
-        str(output_path)
-    ]
-
-    try:
-        subprocess.run(cmd, check=True, capture_output=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"Segment processing failed: {e.stderr.decode()[:500]}", file=sys.stderr)
-        return False
+    return expr
 
 
 def apply_zoom(
@@ -304,6 +263,7 @@ def apply_zoom(
     output_video: Path,
     output_width: int = 1920,
     output_height: int = 1080,
+    debug_keyframes: bool = False,
 ) -> bool:
     """Apply zoom effects to video based on events file."""
     # Load events
@@ -337,66 +297,46 @@ def apply_zoom(
     print(f"Output: {output_width}x{output_height}")
     print(f"Zoom events: {len(events)}")
 
-    # Build segments
-    segments = build_segments(events, duration)
-    print(f"Processing {len(segments)} segments...")
+    # Build keyframes
+    keyframes = build_keyframes(events, width, height, duration)
+    print(f"Keyframes: {len(keyframes)}")
 
-    # Process each segment
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
-        segment_files = []
+    if debug_keyframes:
+        print()
+        print(f"{'Time':>8s}  {'Width':>6s}  {'Height':>6s}  {'X':>6s}  {'Y':>6s}")
+        print(f"{'─'*8}  {'─'*6}  {'─'*6}  {'─'*6}  {'─'*6}")
+        for t, w, h, x, y in keyframes:
+            print(f"{t:8.3f}  {w:6d}  {h:6d}  {x:6d}  {y:6d}")
+        print()
 
-        for i, seg in enumerate(segments):
-            seg_file = tmpdir / f"seg_{i:04d}.mp4"
-            print(f"  Segment {i+1}/{len(segments)}: {seg['start']:.2f}s - {seg['end']:.2f}s", end="")
+    # Build crop expressions
+    w_expr = build_crop_expr(keyframes, 0)
+    h_expr = build_crop_expr(keyframes, 1)
+    x_expr = build_crop_expr(keyframes, 2)
+    y_expr = build_crop_expr(keyframes, 3)
 
-            if seg["is_transition"]:
-                print(f" (transition)")
-            else:
-                print(f" (zoom {seg['zoom']}x)")
+    # Single FFmpeg command with expression-based crop
+    vf = (
+        f"crop=w='{w_expr}':h='{h_expr}':x='{x_expr}':y='{y_expr}',"
+        f"scale={output_width}:{output_height}:flags=lanczos"
+    )
 
-            if process_segment(
-                input_video, seg, seg_file,
-                width, height, output_width, output_height, fps
-            ):
-                segment_files.append(seg_file)
-            else:
-                print(f"    Warning: segment {i} failed, skipping")
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(input_video),
+        "-vf", vf,
+        "-c:v", "libx264", "-crf", "18", "-preset", "medium",
+        "-c:a", "copy",
+        str(output_video)
+    ]
 
-        if not segment_files:
-            print("No segments processed successfully", file=sys.stderr)
-            return False
+    print("Applying zoom (single-pass)...")
 
-        # Create concat list
-        concat_list = tmpdir / "concat.txt"
-        with open(concat_list, "w") as f:
-            for sf in segment_files:
-                f.write(f"file '{sf}'\n")
-
-        # Concatenate video segments
-        print("Concatenating segments...")
-        concat_video = tmpdir / "concat.mp4"
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", str(concat_list),
-            "-c:v", "libx264", "-crf", "18", "-preset", "medium",
-            str(concat_video)
-        ], check=True, capture_output=True)
-
-        # Add audio from original
-        print("Adding audio...")
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-i", str(concat_video),
-            "-i", str(input_video),
-            "-map", "0:v",
-            "-map", "1:a?",
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-shortest",
-            str(output_video)
-        ], check=True, capture_output=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        print(f"FFmpeg failed: {e.stderr.decode()[:500]}", file=sys.stderr)
+        return False
 
     print(f"Output: {output_video}")
     return True
@@ -417,6 +357,10 @@ def main():
         "--height", type=int, default=1080,
         help="Output height (default: 1080)"
     )
+    parser.add_argument(
+        "--debug-keyframes", action="store_true",
+        help="Print computed keyframes table"
+    )
 
     args = parser.parse_args()
 
@@ -430,7 +374,8 @@ def main():
 
     success = apply_zoom(
         args.input, args.events, args.output,
-        args.width, args.height
+        args.width, args.height,
+        debug_keyframes=args.debug_keyframes,
     )
 
     sys.exit(0 if success else 1)

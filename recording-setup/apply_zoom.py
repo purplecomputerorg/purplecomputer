@@ -68,16 +68,20 @@ def get_crop_rect(
     region: str,
     video_width: int,
     video_height: int,
+    x: float | None = None,
+    y: float | None = None,
 ) -> tuple[int, int, int, int]:
     """Get crop rectangle for a zoom level and region.
 
+    If x/y are provided (0.0-1.0 fractional), they override the region center.
     Returns: (crop_w, crop_h, crop_x, crop_y) in FFmpeg crop order
     """
     if zoom <= 1.0:
         return video_width, video_height, 0, 0
 
     region_data = ZOOM_REGIONS.get(region, ZOOM_REGIONS["viewport"])
-    cx_frac, cy_frac, _, _ = region_data
+    cx_frac = x if x is not None else region_data[0]
+    cy_frac = y if y is not None else region_data[1]
 
     # Calculate crop size (smaller = more zoom)
     crop_w = int(video_width / zoom)
@@ -137,10 +141,11 @@ def build_keyframes(
             # Keyframe at transition start: current state
             keyframes.append((t, *current_rect))
 
-            # Compute target rect
+            # Compute target rect (x/y override region center if provided)
             target_rect = get_crop_rect(
                 event["zoom"], event["region"],
                 video_width, video_height,
+                x=event.get("x"), y=event.get("y"),
             )
 
             # Keyframe at transition end: zoomed state

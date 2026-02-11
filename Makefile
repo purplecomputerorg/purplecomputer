@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-test voice-clips voice-variants apply-zoom
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-test voice-clips voice-variants apply-zoom zoom-editor
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -20,6 +20,7 @@ help:
 	@echo "Recording:"
 	@echo "  make record-demo      - Record demo to recordings/demo.mp4 (VM only)"
 	@echo "  make record-demo-test - Record 5s test clip (for testing recording pipeline)"
+	@echo "  make zoom-editor      - Open zoom keyframe editor in browser"
 	@echo "  make voice-clips     - Generate TTS voice clips for demo"
 	@echo "  make voice-variants  - Generate 5 variants of each clip (for auditioning)"
 	@echo ""
@@ -134,5 +135,8 @@ voice-variants:
 
 apply-zoom:
 	@.venv/bin/python recording-setup/apply_zoom.py recordings/demo_cropped.mp4 recordings/zoom_events.json recordings/demo_zoomed.mp4
+
+zoom-editor:
+	@python recording-setup/zoom_editor_server.py
 
 .DEFAULT_GOAL := help

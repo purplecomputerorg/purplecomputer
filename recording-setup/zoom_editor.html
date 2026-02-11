@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zoom Keyframe Editor</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #1a1a2e; color: #e0e0e0;
+  padding: 16px; max-width: 1100px; margin: 0 auto;
+  user-select: none;
+}
+h1 { font-size: 18px; margin-bottom: 12px; color: #b89cda; }
+
+.toolbar {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px; flex-wrap: wrap;
+}
+.toolbar select, .toolbar button {
+  padding: 6px 12px; border-radius: 4px; border: 1px solid #444;
+  background: #2a2a4a; color: #e0e0e0; font-size: 13px;
+}
+.toolbar button { cursor: pointer; }
+.toolbar button:hover { background: #3a3a6a; }
+.btn-save { background: #2e7d32 !important; border-color: #4caf50 !important; }
+.btn-save:hover { background: #388e3c !important; }
+.btn-add { background: #1565c0 !important; border-color: #42a5f5 !important; }
+.btn-add:hover { background: #1976d2 !important; }
+.spacer { flex: 1; }
+#status { font-size: 12px; color: #888; }
+
+/* Video + overlay */
+.video-wrap {
+  position: relative; display: inline-block;
+  background: #000; margin-bottom: 8px;
+}
+video { display: block; max-width: 100%; max-height: 500px; }
+#crop-overlay { position: absolute; top: 0; left: 0; }
+#coord-display {
+  position: absolute; bottom: 6px; left: 6px;
+  background: rgba(0,0,0,0.75); color: #fff; font-size: 12px;
+  font-family: monospace; padding: 3px 8px; border-radius: 3px;
+  pointer-events: none; display: none;
+}
+
+/* Transport */
+.transport {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px; font-size: 13px;
+}
+.transport button {
+  padding: 4px 10px; border-radius: 4px; border: 1px solid #444;
+  background: #2a2a4a; color: #e0e0e0; cursor: pointer; font-size: 13px;
+}
+.transport button:hover { background: #3a3a6a; }
+#time-display { font-family: monospace; min-width: 180px; }
+
+/* Timeline */
+#timeline-wrap { position: relative; margin-bottom: 12px; }
+#timeline { width: 100%; height: 32px; cursor: pointer; border-radius: 4px; }
+
+/* Event list */
+.event-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.event-list th {
+  text-align: left; padding: 6px 8px; border-bottom: 2px solid #444;
+  color: #b89cda; font-weight: 600;
+}
+.event-list td { padding: 4px 8px; border-bottom: 1px solid #333; }
+.event-list tr { cursor: pointer; }
+.event-list tr:hover { background: #2a2a4a; }
+.event-list input, .event-list select {
+  padding: 3px 6px; border-radius: 3px; border: 1px solid #444;
+  background: #222244; color: #e0e0e0; font-size: 12px; width: 70px;
+}
+.event-list select { width: 100px; }
+.event-list .btn-del {
+  background: #c62828; border: none; color: #fff;
+  padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;
+}
+.event-list .btn-del:hover { background: #e53935; }
+#no-events { color: #666; padding: 20px; text-align: center; }
+
+.hints { margin-top: 12px; font-size: 11px; color: #666; }
+.hints kbd {
+  background: #333; padding: 1px 5px; border-radius: 3px;
+  border: 1px solid #555; font-family: monospace;
+}
+</style>
+</head>
+<body>
+
+<h1>Zoom Keyframe Editor</h1>
+
+<div class="toolbar">
+  <label>Video:</label>
+  <select id="video-select"><option value="">Loading...</option></select>
+  <button id="btn-load">Load Events</button>
+  <button id="btn-save" class="btn-save">Save Events</button>
+  <div class="spacer"></div>
+  <button id="btn-add-zoomin" class="btn-add">+ Zoom In</button>
+  <button id="btn-add-panto" class="btn-add">+ Pan</button>
+  <button id="btn-add-zoomout" class="btn-add">+ Zoom Out</button>
+  <span id="status"></span>
+</div>
+
+<div class="video-wrap" id="video-wrap">
+  <video id="video" preload="auto"></video>
+  <canvas id="crop-overlay"></canvas>
+  <div id="coord-display"></div>
+</div>
+
+<div class="transport">
+  <button id="btn-play" title="Play/Pause (Space)">&#9654;</button>
+  <button id="btn-step-back" title="Step back (Left)">&laquo;</button>
+  <button id="btn-step-fwd" title="Step forward (Right)">&raquo;</button>
+  <span id="time-display">0:00.000 / 0:00.000</span>
+</div>
+
+<div id="timeline-wrap">
+  <canvas id="timeline" height="32"></canvas>
+</div>
+
+<div class="event-list">
+  <table>
+    <thead>
+      <tr><th>Time</th><th>Action</th><th>Details</th><th>Duration</th><th></th></tr>
+    </thead>
+    <tbody id="event-tbody"></tbody>
+  </table>
+  <div id="no-events">No events yet. Use the buttons above to add zoom events.</div>
+</div>
+
+<div class="hints">
+  <kbd>Space</kbd> play/pause &nbsp;
+  <kbd>&#8592;</kbd><kbd>&#8594;</kbd> step frame &nbsp;
+  <kbd>1</kbd> zoom in &nbsp; <kbd>2</kbd> pan &nbsp; <kbd>3</kbd> zoom out &nbsp;
+  <kbd>S</kbd> save &nbsp;
+  | Drag the red rectangle to reposition the zoom window
+</div>
+
+<script>
+// --- Constants (from purple_tui/constants.py) ---
+const ZOOM_REGIONS = {
+  "viewport":         [0.5,  0.5,  1.0, 1.0],
+  "input":            [0.5,  0.75, 0.7, 0.4],
+  "results":          [0.5,  0.5,  0.8, 0.5],
+  "doodle-center":    [0.5,  0.5,  0.6, 0.6],
+  "play-keys":        [0.5,  0.7,  0.8, 0.5],
+  "explore-welcome":  [0.4,  0.28, 0.7, 0.5],
+  "doodle-text-right":[0.7,  0.7,  0.5, 0.4],
+  "doodle-text-left": [0.25, 0.82, 0.4, 0.3],
+  "closing-title":    [0.5,  0.38, 0.6, 0.4],
+};
+const REGION_NAMES = Object.keys(ZOOM_REGIONS);
+
+// --- State ---
+let events = [];
+let videoWidth = 0, videoHeight = 0;
+
+// Drag state: while dragging, we override the crop rect position
+let drag = null; // { startMouseX, startMouseY, startCropX, startCropY, cropW, cropH, targetEvent }
+
+// --- DOM ---
+const videoEl = document.getElementById("video");
+const videoSelect = document.getElementById("video-select");
+const cropCanvas = document.getElementById("crop-overlay");
+const cropCtx = cropCanvas.getContext("2d");
+const tlCanvas = document.getElementById("timeline");
+const tlCtx = tlCanvas.getContext("2d");
+const eventTbody = document.getElementById("event-tbody");
+const noEvents = document.getElementById("no-events");
+const timeDisplay = document.getElementById("time-display");
+const statusEl = document.getElementById("status");
+const coordDisplay = document.getElementById("coord-display");
+
+// --- Helpers ---
+function fmt(s) {
+  const m = Math.floor(s / 60);
+  return `${m}:${(s - m * 60).toFixed(3).padStart(6, "0")}`;
+}
+function setStatus(msg) {
+  statusEl.textContent = msg;
+  setTimeout(() => { if (statusEl.textContent === msg) statusEl.textContent = ""; }, 3000);
+}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function round2(v) { return Math.round(v * 100) / 100; }
+
+// --- Crop rect (mirrors apply_zoom.py) ---
+// ox/oy: optional x/y overrides (0-1 fractional), take priority over the named region center
+function getCropRect(zoom, region, ox, oy) {
+  if (zoom <= 1.0) return { x: 0, y: 0, w: videoWidth, h: videoHeight };
+  const rd = ZOOM_REGIONS[region] || ZOOM_REGIONS["viewport"];
+  const cxFrac = (ox != null && ox !== "") ? parseFloat(ox) : rd[0];
+  const cyFrac = (oy != null && oy !== "") ? parseFloat(oy) : rd[1];
+  let cw = Math.floor(videoWidth / zoom);
+  let ch = Math.floor(videoHeight / zoom);
+  cw -= cw % 2; ch -= ch % 2;
+  let cx = Math.floor(videoWidth * cxFrac) - Math.floor(cw / 2);
+  let cy = Math.floor(videoHeight * cyFrac) - Math.floor(ch / 2);
+  cx = clamp(cx, 0, videoWidth - cw);
+  cy = clamp(cy, 0, videoHeight - ch);
+  return { x: cx, y: cy, w: cw, h: ch };
+}
+
+function smoothstep(t) { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+function lerpRect(a, b, p) {
+  return {
+    x: Math.round(a.x + (b.x - a.x) * p), y: Math.round(a.y + (b.y - a.y) * p),
+    w: Math.round(a.w + (b.w - a.w) * p), h: Math.round(a.h + (b.h - a.h) * p),
+  };
+}
+
+// Walk events to compute the crop rect at time t
+function getCropAtTime(t) {
+  if (!videoWidth) return null;
+  const full = { x: 0, y: 0, w: videoWidth, h: videoHeight };
+  let cur = { ...full };
+  const sorted = [...events].sort((a, b) => a.time - b.time);
+
+  for (const ev of sorted) {
+    const dur = ev.duration || 0.4;
+    const te = ev.time + dur;
+    if (ev.action === "zoom_in") {
+      const tgt = getCropRect(ev.zoom || 3, ev.region || "viewport", ev.x, ev.y);
+      if (t < ev.time) break;
+      cur = t >= te ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
+    } else if (ev.action === "zoom_out") {
+      if (t < ev.time) break;
+      cur = t >= te ? { ...full } : lerpRect(cur, full, smoothstep((t - ev.time) / dur));
+    } else if (ev.action === "pan_to") {
+      if (t < ev.time) break;
+      let nx = cur.x, ny = cur.y;
+      if (ev.y != null && ev.y !== "") {
+        const cy = Math.floor(videoHeight * parseFloat(ev.y));
+        ny = clamp(cy - Math.floor(cur.h / 2), 0, videoHeight - cur.h);
+      }
+      if (ev.x != null && ev.x !== "") {
+        const cx = Math.floor(videoWidth * parseFloat(ev.x));
+        nx = clamp(cx - Math.floor(cur.w / 2), 0, videoWidth - cur.w);
+      }
+      const tgt = { x: nx, y: ny, w: cur.w, h: cur.h };
+      cur = t >= te ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
+    }
+  }
+  return cur;
+}
+
+// Find the event controlling the crop position at time t.
+// Returns the most recent zoom_in or pan_to (whichever came last) in the current
+// zoom session. Returns null if not zoomed in.
+function findActivePositionEvent(t) {
+  const sorted = [...events].sort((a, b) => a.time - b.time);
+  let active = null;
+  for (const ev of sorted) {
+    if (ev.time > t + 0.5) break;
+    if (ev.action === "zoom_in") active = ev;
+    if (ev.action === "pan_to" && active) active = ev; // only if we're in a zoom session
+    if (ev.action === "zoom_out" && ev.time <= t) active = null;
+  }
+  return active;
+}
+
+// --- Drawing ---
+
+// Returns the crop rect to display, accounting for drag override
+function getDisplayCrop() {
+  if (drag) {
+    return { x: drag.currentCropX, y: drag.currentCropY, w: drag.cropW, h: drag.cropH };
+  }
+  return getCropAtTime(videoEl.currentTime);
+}
+
+function drawCropOverlay() {
+  const vr = videoEl.getBoundingClientRect();
+  const dw = vr.width, dh = vr.height;
+  cropCanvas.width = dw; cropCanvas.height = dh;
+  cropCanvas.style.width = dw + "px"; cropCanvas.style.height = dh + "px";
+  cropCtx.clearRect(0, 0, dw, dh);
+
+  const crop = getDisplayCrop();
+  if (!crop || !videoWidth) return;
+  if (crop.w >= videoWidth - 2 && crop.h >= videoHeight - 2) {
+    cropCanvas.style.cursor = "default";
+    return;
+  }
+
+  const sx = dw / videoWidth, sy = dh / videoHeight;
+  const cx = crop.x * sx, cy = crop.y * sy;
+  const cw = crop.w * sx, ch = crop.h * sy;
+
+  // Dim outside
+  cropCtx.fillStyle = "rgba(0,0,0,0.5)";
+  cropCtx.fillRect(0, 0, dw, dh);
+  cropCtx.clearRect(cx, cy, cw, ch);
+
+  // Border
+  cropCtx.strokeStyle = drag ? "#ffaa00" : "#ff4444";
+  cropCtx.lineWidth = 2;
+  cropCtx.strokeRect(cx, cy, cw, ch);
+
+  // Crosshair
+  cropCtx.strokeStyle = drag ? "rgba(255,170,0,0.4)" : "rgba(255,68,68,0.4)";
+  cropCtx.lineWidth = 1;
+  cropCtx.setLineDash([4, 4]);
+  const mx = cx + cw / 2, my = cy + ch / 2;
+  cropCtx.beginPath();
+  cropCtx.moveTo(mx, cy); cropCtx.lineTo(mx, cy + ch);
+  cropCtx.moveTo(cx, my); cropCtx.lineTo(cx + cw, my);
+  cropCtx.stroke();
+  cropCtx.setLineDash([]);
+
+  // Set cursor: grab when hovering the rect
+  cropCanvas.style.cursor = drag ? "grabbing" : "grab";
+}
+
+function drawTimeline() {
+  const w = tlCanvas.parentElement.clientWidth;
+  tlCanvas.width = w;
+  const h = 32, dur = videoEl.duration || 1;
+  tlCtx.fillStyle = "#2a2a4a"; tlCtx.fillRect(0, 0, w, h);
+  tlCtx.fillStyle = "#444"; tlCtx.fillRect(0, 12, w, 8);
+
+  const colors = { zoom_in: "#42a5f5", pan_to: "#ffb74d", zoom_out: "#66bb6a" };
+  for (const ev of events) {
+    const x = (ev.time / dur) * w;
+    tlCtx.fillStyle = colors[ev.action] || "#aaa";
+    tlCtx.beginPath(); tlCtx.arc(x, 16, 5, 0, Math.PI * 2); tlCtx.fill();
+  }
+
+  const px = (videoEl.currentTime / dur) * w;
+  tlCtx.strokeStyle = "#ff4444"; tlCtx.lineWidth = 2;
+  tlCtx.beginPath(); tlCtx.moveTo(px, 0); tlCtx.lineTo(px, h); tlCtx.stroke();
+}
+
+// --- Event list ---
+
+function renderEvents() {
+  events.sort((a, b) => a.time - b.time);
+  noEvents.style.display = events.length ? "none" : "block";
+  eventTbody.innerHTML = "";
+
+  events.forEach((ev, i) => {
+    const tr = document.createElement("tr");
+
+    // Click row: seek to the END of the event so you see its result
+    tr.addEventListener("click", () => {
+      const showTime = ev.time + (ev.duration || 0.4) + 0.01;
+      videoEl.currentTime = Math.min(showTime, videoEl.duration || 0);
+    });
+
+    // Time
+    tr.appendChild(td(numInput(ev.time, 65, v => { ev.time = v; onChange(); }, 0.01)));
+
+    // Action label
+    const acTd = document.createElement("td");
+    const sp = document.createElement("span");
+    sp.textContent = ev.action;
+    sp.style.fontWeight = "600";
+    sp.style.color = { zoom_in: "#42a5f5", pan_to: "#ffb74d", zoom_out: "#66bb6a" }[ev.action] || "#e0e0e0";
+    acTd.appendChild(sp);
+    tr.appendChild(acTd);
+
+    // Details (varies by action type)
+    const detTd = document.createElement("td");
+    if (ev.action === "zoom_in") {
+      detTd.appendChild(makeSelect(REGION_NAMES, ev.region || "viewport", v => { ev.region = v; onChange(); }));
+      detTd.appendChild(document.createTextNode(" "));
+      const zoomIn = numInput(ev.zoom || 3, 50, v => { ev.zoom = v; onChange(); }, 0.1);
+      zoomIn.title = "Zoom level";
+      detTd.appendChild(zoomIn);
+      detTd.appendChild(document.createTextNode("x  "));
+      // x/y override the region center (drag to set, or type)
+      detTd.appendChild(numInput(ev.x != null ? ev.x : "", 45, v => { ev.x = v || undefined; onChange(); }, 0.01));
+      detTd.appendChild(document.createTextNode(","));
+      detTd.appendChild(numInput(ev.y != null ? ev.y : "", 45, v => { ev.y = v || undefined; onChange(); }, 0.01));
+    } else if (ev.action === "pan_to") {
+      detTd.appendChild(document.createTextNode("x "));
+      detTd.appendChild(numInput(ev.x != null ? ev.x : "", 50, v => { ev.x = v || undefined; onChange(); }, 0.01));
+      detTd.appendChild(document.createTextNode(" y "));
+      detTd.appendChild(numInput(ev.y != null ? ev.y : "", 50, v => { ev.y = v || undefined; onChange(); }, 0.01));
+    } else {
+      detTd.textContent = "";
+    }
+    tr.appendChild(detTd);
+
+    // Duration
+    tr.appendChild(td(numInput(ev.duration || 0.4, 55, v => { ev.duration = v; onChange(); }, 0.05)));
+
+    // Delete
+    const delTd = document.createElement("td");
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn-del";
+    delBtn.textContent = "\u00d7";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      events.splice(events.indexOf(ev), 1);
+      onChange();
+    });
+    delTd.appendChild(delBtn);
+    tr.appendChild(delTd);
+
+    eventTbody.appendChild(tr);
+  });
+}
+
+function td(el) { const t = document.createElement("td"); t.appendChild(el); return t; }
+
+function numInput(value, width, onchange, step) {
+  const inp = document.createElement("input");
+  inp.type = "number"; inp.value = value; inp.step = step;
+  inp.style.width = width + "px";
+  inp.addEventListener("change", () => onchange(parseFloat(inp.value) || 0));
+  inp.addEventListener("click", e => e.stopPropagation());
+  return inp;
+}
+
+function makeSelect(options, value, onchange) {
+  const sel = document.createElement("select");
+  options.forEach(o => {
+    const opt = document.createElement("option");
+    opt.value = o; opt.textContent = o;
+    if (o === value) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener("change", () => onchange(sel.value));
+  sel.addEventListener("click", e => e.stopPropagation());
+  return sel;
+}
+
+function onChange() { renderEvents(); drawTimeline(); drawCropOverlay(); }
+
+// --- Add event ---
+function addEvent(action) {
+  const t = Math.round(videoEl.currentTime * 1000) / 1000;
+  const ev = { time: t, action, duration: 0.4 };
+  if (action === "zoom_in") { ev.region = "input"; ev.zoom = 3.0; ev.duration = 0.2; }
+  if (action === "pan_to") { ev.duration = 0.3; }
+  events.push(ev);
+  onChange();
+}
+
+// --- Drag to reposition crop rect ---
+
+function mouseToVideo(e) {
+  const r = videoEl.getBoundingClientRect();
+  return { px: (e.clientX - r.left) / r.width * videoWidth,
+           py: (e.clientY - r.top) / r.height * videoHeight };
+}
+
+cropCanvas.addEventListener("mousedown", (e) => {
+  const crop = getCropAtTime(videoEl.currentTime);
+  if (!crop || !videoWidth || crop.w >= videoWidth - 2) return;
+
+  const m = mouseToVideo(e);
+  // Must click inside (or near) the crop rect
+  const pad = 20;
+  if (m.px < crop.x - pad || m.px > crop.x + crop.w + pad ||
+      m.py < crop.y - pad || m.py > crop.y + crop.h + pad) return;
+
+  e.preventDefault();
+
+  // Find whichever event (zoom_in or pan_to) is controlling position right now.
+  // If it's a zoom_in with no subsequent pan_to, we update the zoom_in's x/y directly.
+  // If it's a pan_to, we update that. If nothing found, create a pan_to.
+  const t = Math.round(videoEl.currentTime * 1000) / 1000;
+  let targetEv = findActivePositionEvent(t);
+  if (!targetEv) {
+    targetEv = { time: t, action: "pan_to", duration: 0.3 };
+    events.push(targetEv);
+  }
+
+  drag = {
+    startMouseX: m.px, startMouseY: m.py,
+    startCropX: crop.x, startCropY: crop.y,
+    cropW: crop.w, cropH: crop.h,
+    currentCropX: crop.x, currentCropY: crop.y,
+    targetEvent: targetEv,
+  };
+
+  drawCropOverlay();
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!drag) {
+    // Show coords on hover when crop rect is visible
+    const crop = getDisplayCrop();
+    if (crop && videoWidth && crop.w < videoWidth - 2) {
+      const m = mouseToVideo(e);
+      const fx = round2(m.px / videoWidth), fy = round2(m.py / videoHeight);
+      if (fx >= 0 && fx <= 1 && fy >= 0 && fy <= 1) {
+        coordDisplay.style.display = "block";
+        coordDisplay.textContent = `${fx}, ${fy}`;
+      } else {
+        coordDisplay.style.display = "none";
+      }
+    }
+    return;
+  }
+
+  const m = mouseToVideo(e);
+  const dx = m.px - drag.startMouseX;
+  const dy = m.py - drag.startMouseY;
+  drag.currentCropX = clamp(drag.startCropX + dx, 0, videoWidth - drag.cropW);
+  drag.currentCropY = clamp(drag.startCropY + dy, 0, videoHeight - drag.cropH);
+
+  // Show center coords while dragging
+  const cx = round2((drag.currentCropX + drag.cropW / 2) / videoWidth);
+  const cy = round2((drag.currentCropY + drag.cropH / 2) / videoHeight);
+  coordDisplay.style.display = "block";
+  coordDisplay.textContent = `center: ${cx}, ${cy}`;
+
+  drawCropOverlay();
+});
+
+window.addEventListener("mouseup", () => {
+  if (!drag) return;
+
+  // Write final center position into the event (works for both zoom_in and pan_to)
+  const cx = round2((drag.currentCropX + drag.cropW / 2) / videoWidth);
+  const cy = round2((drag.currentCropY + drag.cropH / 2) / videoHeight);
+  drag.targetEvent.x = cx;
+  drag.targetEvent.y = cy;
+
+  // Seek past the event's transition so the crop rect stays where the user put it.
+  const ev = drag.targetEvent;
+  const showTime = ev.time + (ev.duration || 0.3) + 0.01;
+  videoEl.currentTime = Math.min(showTime, videoEl.duration || 0);
+
+  const label = ev.action === "zoom_in" ? "Zoom target" : "Pan target";
+  drag = null;
+  coordDisplay.style.display = "none";
+  onChange();
+  setStatus(`${label} set: ${cx}, ${cy}`);
+});
+
+cropCanvas.addEventListener("mouseleave", () => {
+  if (!drag) coordDisplay.style.display = "none";
+});
+
+// --- API ---
+async function loadVideos() {
+  const res = await fetch("/api/videos");
+  const videos = await res.json();
+  videoSelect.innerHTML = "";
+  if (!videos.length) {
+    videoSelect.innerHTML = '<option>No .mp4 files in recordings/</option>';
+    return;
+  }
+  videos.forEach(name => {
+    const o = document.createElement("option");
+    o.value = name; o.textContent = name;
+    videoSelect.appendChild(o);
+  });
+  const preferred = videos.find(v => v.startsWith("demo_cropped")) || videos[0];
+  videoSelect.value = preferred;
+  selectVideo(preferred);
+}
+
+function selectVideo(name) { if (name) videoEl.src = "/recordings/" + name; }
+
+async function loadEvents() {
+  const res = await fetch("/api/events");
+  events = (await res.json()).filter(e => e.action !== "cursor_at");
+  onChange();
+  setStatus("Loaded " + events.length + " events");
+}
+
+async function saveEvents() {
+  const sorted = [...events].sort((a, b) => a.time - b.time);
+  const clean = sorted.map(ev => {
+    const out = { time: ev.time, action: ev.action };
+    if (ev.action === "zoom_in") {
+      out.region = ev.region || "viewport"; out.zoom = ev.zoom || 3;
+      if (ev.x != null && ev.x !== "") out.x = parseFloat(ev.x);
+      if (ev.y != null && ev.y !== "") out.y = parseFloat(ev.y);
+    }
+    if (ev.action === "pan_to") {
+      if (ev.x != null && ev.x !== "") out.x = parseFloat(ev.x);
+      if (ev.y != null && ev.y !== "") out.y = parseFloat(ev.y);
+    }
+    out.duration = ev.duration || 0.4;
+    return out;
+  });
+  const res = await fetch("/api/events", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(clean),
+  });
+  setStatus(res.ok ? `Saved ${clean.length} events` : "Save failed!");
+}
+
+// --- Video events ---
+videoEl.addEventListener("loadedmetadata", () => {
+  videoWidth = videoEl.videoWidth; videoHeight = videoEl.videoHeight;
+  drawCropOverlay(); drawTimeline(); updateTime();
+});
+videoEl.addEventListener("timeupdate", () => { drawCropOverlay(); drawTimeline(); updateTime(); });
+videoEl.addEventListener("play", () => { document.getElementById("btn-play").innerHTML = "&#9646;&#9646;"; });
+videoEl.addEventListener("pause", () => { document.getElementById("btn-play").innerHTML = "&#9654;"; });
+
+function updateTime() {
+  timeDisplay.textContent = `${fmt(videoEl.currentTime || 0)} / ${fmt(videoEl.duration || 0)}`;
+}
+
+// --- Controls ---
+document.getElementById("btn-play").addEventListener("click", () => {
+  if (videoEl.paused) videoEl.play(); else videoEl.pause();
+});
+document.getElementById("btn-step-back").addEventListener("click", () => {
+  videoEl.currentTime = Math.max(0, videoEl.currentTime - 1/30);
+});
+document.getElementById("btn-step-fwd").addEventListener("click", () => {
+  videoEl.currentTime = Math.min(videoEl.duration, videoEl.currentTime + 1/30);
+});
+document.getElementById("btn-add-zoomin").addEventListener("click", () => addEvent("zoom_in"));
+document.getElementById("btn-add-panto").addEventListener("click", () => addEvent("pan_to"));
+document.getElementById("btn-add-zoomout").addEventListener("click", () => addEvent("zoom_out"));
+document.getElementById("btn-load").addEventListener("click", loadEvents);
+document.getElementById("btn-save").addEventListener("click", saveEvents);
+
+videoSelect.addEventListener("change", () => { selectVideo(videoSelect.value); loadEvents(); });
+
+tlCanvas.addEventListener("click", (e) => {
+  const r = tlCanvas.getBoundingClientRect();
+  videoEl.currentTime = ((e.clientX - r.left) / r.width) * (videoEl.duration || 0);
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.code === "Space") { e.preventDefault(); if (videoEl.paused) videoEl.play(); else videoEl.pause(); }
+  else if (e.code === "ArrowLeft") { e.preventDefault(); videoEl.currentTime = Math.max(0, videoEl.currentTime - 1/30); }
+  else if (e.code === "ArrowRight") { e.preventDefault(); videoEl.currentTime = Math.min(videoEl.duration, videoEl.currentTime + 1/30); }
+  else if (e.key === "1") addEvent("zoom_in");
+  else if (e.key === "2") addEvent("pan_to");
+  else if (e.key === "3") addEvent("zoom_out");
+  else if (e.key === "s" || e.key === "S") { e.preventDefault(); saveEvents(); }
+});
+
+window.addEventListener("resize", () => { drawCropOverlay(); drawTimeline(); });
+
+// --- Init ---
+loadVideos().then(() => loadEvents());
+</script>
+</body>
+</html>

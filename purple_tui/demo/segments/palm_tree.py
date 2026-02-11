@@ -1426,7 +1426,7 @@ SEGMENT = [
     ZoomIn(region="doodle-text-left", zoom=3.0, duration=0.2),
     TypeText("Now let's go to Play mode", **_TYPING),
     PressKey("enter", pause_after=0.1),
-    MoveSequence(directions=['left'] * 24, delay_per_step=0.008),
+    MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
     TypeText("Play with music and color", **_TYPING),
 
     Pause(2.5),

@@ -5,7 +5,7 @@ Simple approach:
 1. Get screen resolution
 2. Get cell dimensions (probe or estimate)
 3. Calculate font to fill 80% of screen
-4. Clamp to 12-32pt
+4. Clamp to 12-48pt
 
 No physical size detection (EDID is unreliable).
 No validation loops (calculation should just work).
@@ -27,7 +27,7 @@ SCREEN_FILL = 0.80
 
 # Font size limits (always reasonable)
 MIN_FONT = 12
-MAX_FONT = 24  # Cap prevents huge viewport on large screens
+MAX_FONT = 48  # Cap for very high resolution displays
 PROBE_FONT = 18
 
 # Fallbacks

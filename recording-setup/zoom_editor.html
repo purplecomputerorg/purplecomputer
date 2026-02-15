@@ -219,15 +219,15 @@ function getCropAtTime(t) {
   const sorted = [...events].sort((a, b) => a.time - b.time);
 
   for (const ev of sorted) {
-    const dur = ev.duration || 0.4;
+    const dur = ev.duration != null ? ev.duration : 0.4;
     const te = ev.time + dur;
     if (ev.action === "zoom_in") {
       const tgt = getCropRect(ev.zoom || 3, ev.region || "viewport", ev.x, ev.y);
       if (t < ev.time) break;
-      cur = t >= te ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
+      cur = (dur === 0 || t >= te) ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
     } else if (ev.action === "zoom_out") {
       if (t < ev.time) break;
-      cur = t >= te ? { ...full } : lerpRect(cur, full, smoothstep((t - ev.time) / dur));
+      cur = (dur === 0 || t >= te) ? { ...full } : lerpRect(cur, full, smoothstep((t - ev.time) / dur));
     } else if (ev.action === "pan_to") {
       if (t < ev.time) break;
       let nx = cur.x, ny = cur.y;
@@ -240,7 +240,7 @@ function getCropAtTime(t) {
         nx = clamp(cx - Math.floor(cur.w / 2), 0, videoWidth - cur.w);
       }
       const tgt = { x: nx, y: ny, w: cur.w, h: cur.h };
-      cur = t >= te ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
+      cur = (dur === 0 || t >= te) ? tgt : lerpRect(cur, tgt, smoothstep((t - ev.time) / dur));
     }
   }
   return cur;
@@ -345,7 +345,7 @@ function renderEvents() {
 
     // Click row: seek to the END of the event so you see its result
     tr.addEventListener("click", () => {
-      const showTime = ev.time + (ev.duration || 0.4) + 0.01;
+      const showTime = ev.time + (ev.duration != null ? ev.duration : 0.4) + 0.01;
       videoEl.currentTime = Math.min(showTime, videoEl.duration || 0);
     });
 
@@ -385,7 +385,7 @@ function renderEvents() {
     tr.appendChild(detTd);
 
     // Duration
-    tr.appendChild(td(numInput(ev.duration || 0.4, 55, v => { ev.duration = v; onChange(); }, 0.05)));
+    tr.appendChild(td(numInput(ev.duration != null ? ev.duration : 0.4, 55, v => { ev.duration = v; onChange(); }, 0.05)));
 
     // Delete
     const delTd = document.createElement("td");
@@ -524,7 +524,7 @@ window.addEventListener("mouseup", () => {
 
   // Seek past the event's transition so the crop rect stays where the user put it.
   const ev = drag.targetEvent;
-  const showTime = ev.time + (ev.duration || 0.3) + 0.01;
+  const showTime = ev.time + (ev.duration != null ? ev.duration : 0.3) + 0.01;
   videoEl.currentTime = Math.min(showTime, videoEl.duration || 0);
 
   const label = ev.action === "zoom_in" ? "Zoom target" : "Pan target";
@@ -579,7 +579,7 @@ async function saveEvents() {
       if (ev.x != null && ev.x !== "") out.x = parseFloat(ev.x);
       if (ev.y != null && ev.y !== "") out.y = parseFloat(ev.y);
     }
-    out.duration = ev.duration || 0.4;
+    out.duration = ev.duration != null ? ev.duration : 0.4;
     return out;
   });
   const res = await fetch("/api/events", {

@@ -122,6 +122,7 @@ def build_keyframes(
 
     Each zoom_in/zoom_out produces two keyframes (transition start + end).
     pan_to events also produce two keyframes (start + end of pan).
+    Duration 0 creates an instant cut (no transition).
 
     Returns sorted list of (time, crop_w, crop_h, crop_x, crop_y) tuples.
     """
@@ -138,9 +139,6 @@ def build_keyframes(
         d = event.get("duration", 0.4)
 
         if event["action"] == "zoom_in":
-            # Keyframe at transition start: current state
-            keyframes.append((t, *current_rect))
-
             # Compute target rect (x/y override region center if provided)
             target_rect = get_crop_rect(
                 event["zoom"], event["region"],
@@ -148,28 +146,36 @@ def build_keyframes(
                 x=event.get("x"), y=event.get("y"),
             )
 
-            # Keyframe at transition end: zoomed state
-            keyframes.append((t + d, *target_rect))
+            if d == 0:
+                # Instant cut: hold previous state until just before, then snap
+                if t > 0:
+                    keyframes.append((t - 0.001, *current_rect))
+                keyframes.append((t, *target_rect))
+            else:
+                # Smooth transition
+                keyframes.append((t, *current_rect))
+                keyframes.append((t + d, *target_rect))
 
             current_rect = target_rect
             current_zoom = event["zoom"]
             current_region = event["region"]
 
         elif event["action"] == "zoom_out":
-            # Keyframe at transition start: current state
-            keyframes.append((t, *current_rect))
-
-            # Keyframe at transition end: full frame
-            keyframes.append((t + d, *full_rect))
+            if d == 0:
+                # Instant cut back to full frame
+                if t > 0:
+                    keyframes.append((t - 0.001, *current_rect))
+                keyframes.append((t, *full_rect))
+            else:
+                # Smooth transition
+                keyframes.append((t, *current_rect))
+                keyframes.append((t + d, *full_rect))
 
             current_rect = full_rect
             current_zoom = 1.0
             current_region = "viewport"
 
         elif event["action"] == "pan_to":
-            # Pan changes x/y while keeping w/h (staying at current zoom)
-            keyframes.append((t, *current_rect))
-
             # Compute new position from fractional coordinates
             new_x = current_rect[2]  # default: keep current x
             new_y = current_rect[3]  # default: keep current y
@@ -187,7 +193,16 @@ def build_keyframes(
                 new_x = max(0, min(new_x, video_width - crop_w))
 
             target_rect = (crop_w, crop_h, new_x, new_y)
-            keyframes.append((t + d, *target_rect))
+
+            if d == 0:
+                # Instant pan
+                if t > 0:
+                    keyframes.append((t - 0.001, *current_rect))
+                keyframes.append((t, *target_rect))
+            else:
+                # Smooth pan
+                keyframes.append((t, *current_rect))
+                keyframes.append((t + d, *target_rect))
 
             current_rect = target_rect
 

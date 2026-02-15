@@ -80,3 +80,5 @@ tools/.env
 
 # Recording artifacts (generated, not hand-edited)
 recording-setup/apply_zoom_vf.txt
+
+recordings/*.mp4

@@ -79,7 +79,30 @@ video { display: block; max-width: 100%; max-height: 500px; }
   padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;
 }
 .event-list .btn-del:hover { background: #e53935; }
+.event-list input[type="checkbox"] {
+  width: auto; cursor: pointer; accent-color: #b89cda;
+}
+.event-list tr.selected { background: #2a2a5a; }
 #no-events { color: #666; padding: 20px; text-align: center; }
+
+/* Time shift toolbar */
+.shift-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; flex-wrap: wrap; font-size: 13px;
+}
+.shift-bar input {
+  padding: 5px 8px; border-radius: 4px; border: 1px solid #444;
+  background: #222244; color: #e0e0e0; font-size: 13px; width: 90px;
+}
+.shift-bar button {
+  padding: 5px 12px; border-radius: 4px; border: 1px solid #444;
+  background: #2a2a4a; color: #e0e0e0; font-size: 13px; cursor: pointer;
+}
+.shift-bar button:hover { background: #3a3a6a; }
+.shift-bar .btn-shift { background: #6a1b9a !important; border-color: #ab47bc !important; }
+.shift-bar .btn-shift:hover { background: #7b1fa2 !important; }
+.shift-bar .btn-shift:disabled { opacity: 0.4; cursor: default; }
+#selected-count { color: #b89cda; font-size: 12px; min-width: 100px; }
 
 .hints { margin-top: 12px; font-size: 11px; color: #666; }
 .hints kbd {
@@ -122,10 +145,22 @@ video { display: block; max-width: 100%; max-height: 500px; }
   <canvas id="timeline" height="32"></canvas>
 </div>
 
+<div class="shift-bar">
+  <button id="btn-select-from" title="Select all events at or after the playhead">Select from playhead</button>
+  <button id="btn-select-all">Select all</button>
+  <button id="btn-select-none">Deselect</button>
+  <span id="selected-count"></span>
+  <div class="spacer"></div>
+  <label>Shift by:</label>
+  <input type="number" id="shift-seconds" value="0" step="0.1" placeholder="seconds" title="Positive = later, negative = earlier">
+  <label>s</label>
+  <button id="btn-shift" class="btn-shift" disabled title="Shift selected events by the specified number of seconds">Shift selected</button>
+</div>
+
 <div class="event-list">
   <table>
     <thead>
-      <tr><th>Time</th><th>Action</th><th>Details</th><th>Duration</th><th></th></tr>
+      <tr><th style="width:30px"></th><th>Time</th><th>Action</th><th>Details</th><th>Duration</th><th></th></tr>
     </thead>
     <tbody id="event-tbody"></tbody>
   </table>
@@ -138,7 +173,9 @@ video { display: block; max-width: 100%; max-height: 500px; }
   <kbd>Home</kbd> go to start &nbsp;
   <kbd>1</kbd> zoom in &nbsp; <kbd>2</kbd> pan &nbsp; <kbd>3</kbd> zoom out &nbsp;
   <kbd>S</kbd> save &nbsp;
+  <kbd>A</kbd> select from playhead &nbsp;
   | Drag the red rectangle to reposition the zoom window
+  | Check events, enter shift seconds, click Shift to move them in time
 </div>
 
 <script>
@@ -159,6 +196,7 @@ const REGION_NAMES = Object.keys(ZOOM_REGIONS);
 // --- State ---
 let events = [];
 let videoWidth = 0, videoHeight = 0;
+let selectedSet = new Set(); // Set of event objects that are selected
 
 // Drag state: while dragging, we override the crop rect position
 let drag = null; // { startMouseX, startMouseY, startCropX, startCropY, cropW, cropH, targetEvent }
@@ -344,12 +382,26 @@ function renderEvents() {
 
   events.forEach((ev, i) => {
     const tr = document.createElement("tr");
+    if (selectedSet.has(ev)) tr.classList.add("selected");
 
     // Click row: seek to the END of the event so you see its result
     tr.addEventListener("click", () => {
       const showTime = ev.time + (ev.duration != null ? ev.duration : 0.4) + 0.01;
       videoEl.currentTime = Math.min(showTime, videoEl.duration || 0);
     });
+
+    // Checkbox
+    const cbTd = document.createElement("td");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = selectedSet.has(ev);
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    cb.addEventListener("change", () => {
+      if (cb.checked) selectedSet.add(ev); else selectedSet.delete(ev);
+      updateSelectionUI();
+    });
+    cbTd.appendChild(cb);
+    tr.appendChild(cbTd);
 
     // Time
     tr.appendChild(td(numInput(ev.time, 65, v => { ev.time = v; onChange(); }, 0.01)));
@@ -430,7 +482,56 @@ function makeSelect(options, value, onchange) {
   return sel;
 }
 
-function onChange() { renderEvents(); drawTimeline(); drawCropOverlay(); }
+function onChange() { renderEvents(); drawTimeline(); drawCropOverlay(); updateSelectionUI(); }
+
+// --- Selection & time shift ---
+
+function updateSelectionUI() {
+  // Clean out any events that were deleted
+  for (const ev of selectedSet) {
+    if (!events.includes(ev)) selectedSet.delete(ev);
+  }
+  const count = selectedSet.size;
+  document.getElementById("selected-count").textContent = count ? `${count} selected` : "";
+  document.getElementById("btn-shift").disabled = count === 0;
+  // Update row highlights
+  const rows = eventTbody.querySelectorAll("tr");
+  const sorted = [...events].sort((a, b) => a.time - b.time);
+  rows.forEach((tr, i) => {
+    if (sorted[i] && selectedSet.has(sorted[i])) tr.classList.add("selected");
+    else tr.classList.remove("selected");
+  });
+}
+
+function selectFromPlayhead() {
+  const t = videoEl.currentTime;
+  selectedSet.clear();
+  for (const ev of events) {
+    if (ev.time >= t - 0.001) selectedSet.add(ev);
+  }
+  onChange();
+}
+
+function selectAll() {
+  selectedSet.clear();
+  for (const ev of events) selectedSet.add(ev);
+  onChange();
+}
+
+function selectNone() {
+  selectedSet.clear();
+  onChange();
+}
+
+function shiftSelected() {
+  const delta = parseFloat(document.getElementById("shift-seconds").value) || 0;
+  if (delta === 0 || selectedSet.size === 0) return;
+  for (const ev of selectedSet) {
+    ev.time = Math.round(Math.max(0, ev.time + delta) * 1000) / 1000;
+  }
+  onChange();
+  setStatus(`Shifted ${selectedSet.size} events by ${delta > 0 ? "+" : ""}${delta}s`);
+}
 
 // --- Add event ---
 function addEvent(action) {
@@ -622,6 +723,10 @@ document.getElementById("btn-load").addEventListener("click", loadEvents);
 document.getElementById("btn-save").addEventListener("click", saveEvents);
 
 videoSelect.addEventListener("change", () => { selectVideo(videoSelect.value); loadEvents(); });
+document.getElementById("btn-select-from").addEventListener("click", selectFromPlayhead);
+document.getElementById("btn-select-all").addEventListener("click", selectAll);
+document.getElementById("btn-select-none").addEventListener("click", selectNone);
+document.getElementById("btn-shift").addEventListener("click", shiftSelected);
 
 tlCanvas.addEventListener("click", (e) => {
   const r = tlCanvas.getBoundingClientRect();
@@ -638,6 +743,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "3") addEvent("zoom_out");
   else if (e.code === "Home") { e.preventDefault(); videoEl.currentTime = 0; }
   else if (e.key === "s" || e.key === "S") { e.preventDefault(); saveEvents(); }
+  else if (e.key === "a" || e.key === "A") { e.preventDefault(); selectFromPlayhead(); }
 });
 
 window.addEventListener("resize", () => { drawCropOverlay(); drawTimeline(); });

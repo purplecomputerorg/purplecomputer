@@ -27,25 +27,9 @@ SEGMENT = [
 
     Comment("Tagline"),
     TypeText("Turn any old laptop into a Purple Computer <3", **_TYPING),
-    PressKey("enter", pause_after=1.0),
-
-    Comment("Philosophy"),
-    TypeText("Less is more. No videos. No internet. ", **_TYPING),
-    Pause(1.5),
-    TypeText("Explore, play, doodle.", **_TYPING),
-    PressKey("enter", pause_after=2.0),
-
-    Comment("Math with emojis"),
-    TypeText("This is Explore mode. ", **_TYPING),
-    Pause(1.5),
-    TypeText("2 rabbits ate 3 + 7 carrots", **_TYPING),
     PressKey("enter", pause_after=2.0),
 
     Comment("Color mixing"),
-    TypeText("red + blue", **_TYPING),
-    PressKey("enter", pause_after=1.0),
-
-    Comment("More colors"),
     TypeText("3 periwinkles + violet", **_TYPING),
     PressKey("enter", pause_after=1.0),
 

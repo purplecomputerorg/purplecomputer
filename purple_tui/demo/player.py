@@ -6,6 +6,7 @@ and dispatches them to the app's keyboard handler at human-like pace.
 
 import asyncio
 import json
+import os
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Awaitable
@@ -118,6 +119,14 @@ class DemoPlayer:
         self._cancelled = False
         self._zoom_events = []
         self._start_time = time.monotonic()
+
+        # Write wall-clock start time for recording sync
+        sync_file = os.environ.get("PURPLE_DEMO_SYNC_FILE")
+        if sync_file:
+            try:
+                Path(sync_file).write_text(str(time.time()))
+            except OSError:
+                pass
 
         try:
             for action in script:

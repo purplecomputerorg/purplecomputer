@@ -63,11 +63,10 @@ echo "Screen:     $SCREEN_SIZE"
 echo "Max time:   ${MAX_DURATION}s"
 echo ""
 
-# Remove old recordings and stale zoom data
+# Remove old recordings (but keep zoom_events.json if hand-edited)
 rm -f "$OUTPUT_FILE"
 rm -f "$CROPPED_FILE"
 rm -f "$ZOOMED_FILE"
-rm -f "$ZOOM_EVENTS"
 
 # Get default audio sink for capturing system audio
 AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
@@ -87,6 +86,9 @@ AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
 # -t: max duration
 echo "Starting recording..."
 TEMP_FILE="${OUTPUT_FILE%.mp4}_raw.mp4"
+
+# Record FFmpeg start time for sync with demo player
+date +%s.%N > "$OUTPUT_DIR/.rec_start_epoch"
 
 if [ -n "$AUDIO_SINK" ]; then
     echo "Audio:      $AUDIO_SINK (system audio)"
@@ -147,8 +149,20 @@ cleanup() {
         # Get duration and calculate trim points
         DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
         if [ -n "$DURATION" ]; then
-            # Calculate trimmed duration (remove 2s from start + 2s from end = 4s total)
-            TRIM_DURATION=$(awk "BEGIN {printf \"%.2f\", $DURATION - 4}")
+            # Compute dynamic trim: how far into the recording the demo actually started
+            TRIM_START=2  # fallback if sync files are missing
+            if [ -f "$OUTPUT_DIR/.rec_start_epoch" ] && [ -f "$OUTPUT_DIR/.demo_start_epoch" ]; then
+                TRIM_START=$("$PROJECT_DIR/.venv/bin/python" -c "
+rec = float(open('$OUTPUT_DIR/.rec_start_epoch').read())
+demo = float(open('$OUTPUT_DIR/.demo_start_epoch').read())
+print(f'{demo - rec:.2f}')
+")
+                echo "Demo started ${TRIM_START}s into recording (dynamic trim)"
+            else
+                echo "Sync files missing, using fallback trim of ${TRIM_START}s"
+            fi
+            END_TRIM=2
+            TRIM_DURATION=$(awk "BEGIN {printf \"%.2f\", $DURATION - $TRIM_START - $END_TRIM}")
 
             # Check if temp file has audio
             HAS_AUDIO=$(ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 "$TEMP_FILE" 2>/dev/null)
@@ -165,7 +179,7 @@ cleanup() {
                 # - Music at 30% volume normally, app audio at full volume
                 # - amix combines them (duration=first keeps video length)
                 ffmpeg -y \
-                    -ss 2 -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
                     -stream_loop -1 -i "$MUSIC_FILE" \
                     -filter_complex "
                         [0:a]aformat=fltp:44100:stereo,asplit=2[app][sidechain];
@@ -181,7 +195,7 @@ cleanup() {
                 echo "Adding background music (no app audio to duck)..."
                 # No app audio, just add music at lower volume
                 ffmpeg -y \
-                    -ss 2 -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
                     -stream_loop -1 -i "$MUSIC_FILE" \
                     -filter_complex "[1:a]volume=0.25[music]" \
                     -map 0:v -map "[music]" \
@@ -191,7 +205,7 @@ cleanup() {
                     "$OUTPUT_FILE" 2>/dev/null
             else
                 echo "No music file found, trimming only..."
-                ffmpeg -y -i "$TEMP_FILE" -ss 2 -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
+                ffmpeg -y -i "$TEMP_FILE" -ss "$TRIM_START" -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
             fi
             rm -f "$TEMP_FILE"
         else
@@ -285,7 +299,18 @@ echo "(Press Ctrl+C to stop recording early)"
 echo ""
 
 cd "$PROJECT_DIR"
-timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 PURPLE_ZOOM_EVENTS="$ZOOM_EVENTS" ./scripts/run_local.sh || true
+
+# Only write zoom events if file doesn't already exist (preserve hand-edited events)
+ZOOM_ENV=""
+if [ ! -f "$ZOOM_EVENTS" ]; then
+    ZOOM_ENV="PURPLE_ZOOM_EVENTS=$ZOOM_EVENTS"
+else
+    echo "Using existing zoom_events.json (delete it to regenerate)"
+fi
+
+SYNC_FILE="$OUTPUT_DIR/.demo_start_epoch"
+timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 \
+    $ZOOM_ENV PURPLE_DEMO_SYNC_FILE="$SYNC_FILE" ./scripts/run_local.sh || true
 
 echo ""
 echo "Purple exited, stopping recording..."

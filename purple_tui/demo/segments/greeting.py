@@ -30,11 +30,11 @@ SEGMENT = [
     PressKey("enter", pause_after=2.0),
 
     Comment("Color mixing"),
-    TypeText("3 periwinkles + violet", **_TYPING),
+    TypeText("3 blues + violet", **_TYPING),
     PressKey("enter", pause_after=1.0),
 
     Comment("Math with speech (! triggers TTS)"),
-    TypeText("10 x 10 dinosaurs!", **_TYPING),
+    TypeText("10 x 10 dinos!", **_TYPING),
     PressKey("enter", pause_after=4.0),
 
     Pause(0.3),

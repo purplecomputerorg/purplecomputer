@@ -21,7 +21,7 @@ y = 10
 history = 100
 
 [font]
-size = 30.0
+size = 26.0
 
 [font.normal]
 family = "JetBrainsMono Nerd Font"

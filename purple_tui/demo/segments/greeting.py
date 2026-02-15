@@ -13,10 +13,12 @@ SEGMENT = [
 
     Comment("Greeting: OpenCV auto-pan detects typing, then result rendering"),
     TypeText("Hi :)", **_TYPING),
+    Pause(1.5),
     PressKey("enter", pause_after=2.0),
 
     Comment("Welcome: OpenCV pans down for typing, up for rendered result"),
     TypeText("Welcome to Purple Computer", **_TYPING),
+    Pause(1.5),
     PressKey("enter", pause_after=2.0),
 
     Comment("Zoom out to full view"),

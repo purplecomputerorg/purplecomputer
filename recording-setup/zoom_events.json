@@ -28,7 +28,21 @@
     "duration": 0.4
   },
   {
-    "time": 25.973,
+    "time": 18.5,
+    "action": "zoom_in",
+    "region": "input",
+    "zoom": 3,
+    "x": 0.5,
+    "y": 0.43,
+    "duration": 0.2
+  },
+  {
+    "time": 20,
+    "action": "zoom_out",
+    "duration": 0.4
+  },
+  {
+    "time": 26,
     "action": "zoom_in",
     "region": "input",
     "zoom": 1.9,
@@ -48,7 +62,7 @@
     "zoom": 2.5,
     "x": 0.73,
     "y": 0.8,
-    "duration": 0
+    "duration": 0.2
   },
   {
     "time": 46.825,

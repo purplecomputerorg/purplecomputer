@@ -1052,8 +1052,8 @@ def apply_zoom(
         else:
             log(f"  [{i}] {arg}")
 
-    # Write the full filter string to a separate file for inspection
-    vf_path = output_video.parent / "apply_zoom_vf.txt"
+    # Write the full filter string to a debug file next to the script
+    vf_path = Path(__file__).parent / "apply_zoom_vf.txt"
     try:
         with open(vf_path, "w") as f:
             f.write(zoompan)

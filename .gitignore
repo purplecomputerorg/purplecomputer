@@ -77,3 +77,6 @@ purple-computer-*.iso
 # USB flash drive whitelist (contains user-specific drive serials)
 .flash-drives.conf
 tools/.env
+
+# Recording artifacts (generated, not hand-edited)
+recording-setup/apply_zoom_vf.txt

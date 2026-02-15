@@ -27,7 +27,7 @@ OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-120}"  # Default 2 minutes max
 MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
-ZOOM_EVENTS="$OUTPUT_DIR/zoom_events.json"
+ZOOM_EVENTS="$SCRIPT_DIR/zoom_events.json"
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"

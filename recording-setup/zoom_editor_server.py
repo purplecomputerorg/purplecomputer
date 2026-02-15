@@ -20,7 +20,7 @@ from pathlib import Path
 PORT = 8000
 BASE_DIR = Path(__file__).parent
 RECORDINGS_DIR = BASE_DIR.parent / "recordings"
-EVENTS_FILE = RECORDINGS_DIR / "zoom_events.json"
+EVENTS_FILE = BASE_DIR / "zoom_events.json"
 
 
 class ZoomEditorHandler(SimpleHTTPRequestHandler):

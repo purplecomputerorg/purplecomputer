@@ -21,6 +21,11 @@ VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
+# Pronunciation overrides (same as tts.py)
+PRONUNCIATION_MAP = {
+    "dinos": "dyenoze",
+}
+
 # Static phrases (UI feedback, etc.)
 STATIC_PHRASES = [
     "talking on",
@@ -60,14 +65,25 @@ def phrase_to_filename(phrase: str) -> str:
     return phrase.replace(" ", "_") + ".wav"
 
 
+def _fix_pronunciation(text: str) -> str:
+    """Replace words Piper mispronounces with phonetic respellings."""
+    import re
+    for word, replacement in PRONUNCIATION_MAP.items():
+        text = re.sub(rf'\b{word}\b', replacement, text, flags=re.IGNORECASE)
+    return text
+
+
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     """Generate a single voice clip."""
     from piper.config import SynthesisConfig
 
     config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
 
+    # Fix pronunciation before synthesis
+    synth_text = _fix_pronunciation(phrase)
+
     # Pad with pauses to prevent clipping (same as tts.py)
-    audio_chunks = list(voice.synthesize(f"... {phrase} ...", config))
+    audio_chunks = list(voice.synthesize(f"... {synth_text} ...", config))
     if not audio_chunks:
         return False
 

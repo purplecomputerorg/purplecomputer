@@ -30,7 +30,7 @@ SEGMENT = [
     PressKey("enter", pause_after=2.0),
 
     Comment("Color mixing"),
-    TypeText("3 blues + violet", **_TYPING),
+    TypeText("blue + 2 pinks", **_TYPING),
     PressKey("enter", pause_after=1.0),
 
     Comment("Math with speech (! triggers TTS)"),

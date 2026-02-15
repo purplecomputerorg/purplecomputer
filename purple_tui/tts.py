@@ -40,6 +40,19 @@ def _suppress_stderr():
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
+# Pronunciation overrides: words Piper mispronounces → phonetic respelling
+PRONUNCIATION_MAP = {
+    "dinos": "dyenoze",
+}
+
+
+def _fix_pronunciation(text: str) -> str:
+    """Replace words Piper mispronounces with phonetic respellings."""
+    import re
+    for word, replacement in PRONUNCIATION_MAP.items():
+        text = re.sub(rf'\b{word}\b', replacement, text, flags=re.IGNORECASE)
+    return text
+
 # Pre-generated voice clips directory
 VOICE_CLIPS_DIR = Path(__file__).parent.parent / "packs" / "core-sounds" / "content" / "voice"
 
@@ -268,9 +281,12 @@ def _speak_sync(text: str, speech_id: int) -> bool:
         from piper.config import SynthesisConfig
         config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
 
+        # Fix pronunciation before synthesis
+        synth_text = _fix_pronunciation(text)
+
         # Collect audio chunks from generator (suppress ONNX warnings during inference)
         with _suppress_stderr():
-            audio_chunks = list(voice.synthesize(f"... {text} ...", config))
+            audio_chunks = list(voice.synthesize(f"... {synth_text} ...", config))
         if not audio_chunks:
             Path(wav_path).unlink(missing_ok=True)
             return False

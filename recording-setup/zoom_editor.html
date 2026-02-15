@@ -111,6 +111,7 @@ video { display: block; max-width: 100%; max-height: 500px; }
 </div>
 
 <div class="transport">
+  <button id="btn-start" title="Go to start (Home)">&#9198;</button>
   <button id="btn-play" title="Play/Pause (Space)">&#9654;</button>
   <button id="btn-step-back" title="Step back (Left)">&laquo;</button>
   <button id="btn-step-fwd" title="Step forward (Right)">&raquo;</button>
@@ -134,6 +135,7 @@ video { display: block; max-width: 100%; max-height: 500px; }
 <div class="hints">
   <kbd>Space</kbd> play/pause &nbsp;
   <kbd>&#8592;</kbd><kbd>&#8594;</kbd> step frame &nbsp;
+  <kbd>Home</kbd> go to start &nbsp;
   <kbd>1</kbd> zoom in &nbsp; <kbd>2</kbd> pan &nbsp; <kbd>3</kbd> zoom out &nbsp;
   <kbd>S</kbd> save &nbsp;
   | Drag the red rectangle to reposition the zoom window
@@ -603,6 +605,7 @@ function updateTime() {
 }
 
 // --- Controls ---
+document.getElementById("btn-start").addEventListener("click", () => { videoEl.currentTime = 0; });
 document.getElementById("btn-play").addEventListener("click", () => {
   if (videoEl.paused) videoEl.play(); else videoEl.pause();
 });
@@ -633,6 +636,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "1") addEvent("zoom_in");
   else if (e.key === "2") addEvent("pan_to");
   else if (e.key === "3") addEvent("zoom_out");
+  else if (e.code === "Home") { e.preventDefault(); videoEl.currentTime = 0; }
   else if (e.key === "s" || e.key === "S") { e.preventDefault(); saveEvents(); }
 });
 

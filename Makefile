@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-test voice-clips voice-variants apply-zoom zoom-editor
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-no-music record-demo-test voice-clips voice-variants apply-zoom zoom-editor
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -18,8 +18,9 @@ help:
 	@echo "  make test            - Run tests"
 	@echo ""
 	@echo "Recording:"
-	@echo "  make record-demo      - Record demo to recordings/demo.mp4 (VM only)"
-	@echo "  make record-demo-test - Record 5s test clip (for testing recording pipeline)"
+	@echo "  make record-demo          - Record demo with background music (VM only)"
+	@echo "  make record-demo-no-music - Record demo without background music"
+	@echo "  make record-demo-test     - Record 5s test clip (for testing recording pipeline)"
 	@echo "  make zoom-editor      - Open zoom keyframe editor in browser"
 	@echo "  make voice-clips     - Generate TTS voice clips for demo"
 	@echo "  make voice-variants  - Generate 5 variants of each clip (for auditioning)"
@@ -116,8 +117,14 @@ recording-setup:
 record-demo:
 	@echo "Generating voice clips (if needed)..."
 	@.venv/bin/python scripts/generate_voice_clips.py
-	@echo "Recording demo..."
+	@echo "Recording demo (with background music)..."
 	./recording-setup/record-demo.sh
+
+record-demo-no-music:
+	@echo "Generating voice clips (if needed)..."
+	@.venv/bin/python scripts/generate_voice_clips.py
+	@echo "Recording demo (no background music)..."
+	PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh
 
 record-demo-test:
 	@echo "Recording 5s test clip..."

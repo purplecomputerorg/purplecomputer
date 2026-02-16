@@ -13,6 +13,7 @@
 # Examples:
 #   ./recording-setup/record-demo.sh                    # Default: recordings/demo.mp4, 120s
 #   ./recording-setup/record-demo.sh my-demo.mp4 90    # Custom output, 90 seconds
+#   PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh  # Record without background music
 #
 # Output files:
 #   demo.mp4         - Full screen recording
@@ -26,7 +27,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 MAX_DURATION="${2:-180}"  # Default 3 minutes max (palm tree painting has 1300+ tiny sleeps)
-MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
+if [ "$(printenv PURPLE_NO_MUSIC)" = "1" ]; then
+    MUSIC_FILE=""
+else
+    MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
+fi
 ZOOM_EVENTS="$SCRIPT_DIR/zoom_events.json"
 
 # Ensure output directory exists

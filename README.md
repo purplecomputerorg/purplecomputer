@@ -22,6 +22,8 @@ Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
 
 **Tech for screen-skeptical parents.** Screen time that feels like quiet time.
 
+**Learn more at [purplecomputer.org](https://purplecomputer.org).**
+
 ---
 
 ## Quick Start
@@ -45,7 +47,8 @@ cat * 5                # Five cats
 dog + cat              # Emoji addition (🐶 🐱)
 3 + 4 + 2 bananas      # Numbers attach to emoji (= 9 bananas)
 red + blue             # Color mixing (= purple)
-apple + red + green    # Mixed: emoji + colors
+purple truck           # Color swatch + emoji in free text
+I love cat!            # Speaks "I love cat" aloud (! triggers speech)
 ```
 
 ### For Installation (Old Laptop)
@@ -99,11 +102,14 @@ Purple has three core modes:
 **Controls:**
 - **Escape (tap):** Mode picker (Explore, Play, Doodle)
 - **F1-F3:** Switch modes directly
-- **F12:** Toggle dark/light mode
+- **F9:** Toggle dark/light theme
+- **F10:** Mute/unmute, **F11:** Volume down, **F12:** Volume up
+- **Caps Lock:** Toggle big/small letters
 - **Ctrl+V:** Cycle views (Screen → Line → Ears)
-- **Tab** (in Explore mode): Toggle speech on/off
 - **Tab** (in Doodle): Toggle write/paint mode
 - **Hold Escape (1s):** Parent mode (admin menu)
+
+**Speech** (in Explore mode): Add `!` anywhere (e.g., `cat!`) or use `say`/`talk` prefix to hear results spoken aloud.
 
 ---
 
@@ -119,7 +125,7 @@ Purple includes a hardware keyboard normalizer that makes typing easier for kids
 Kids can type capital letters without holding two keys at once!
 
 ### Parent Mode
-- **Hold Escape for 1 second** — Opens parent shell
+- **Hold Escape for 1 second** — Opens parent menu (display settings, volume, updates)
 
 ### F-Key Setup
 
@@ -146,7 +152,7 @@ See `guides/keyboard-architecture.md` for technical details.
 
 ## Screen Size
 
-Purple Computer displays a **100×28 character viewport** (plus header and footer) that fills **80% of the screen**. Font size is automatically calculated to fit, clamped to 12-24pt. On typical donated laptops (11-15"), this fills most of the screen with a visible purple border. On larger displays (17"+), the 24pt cap creates more border space.
+Purple Computer displays a **112×32 character viewport** (plus header and footer) that fills **80% of the screen**. Font size is automatically calculated to fit, clamped to 12-48pt. On typical donated laptops (11-15"), this fills most of the screen with a visible purple border.
 
 **Minimum supported resolution:** 1024×768
 
@@ -158,7 +164,10 @@ Purple Computer displays a **100×28 character viewport** (plus header and foote
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
 │   ├── modes/            # Explore, Play, Doodle modes
+│   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
+│   ├── keyboard.py       # Keyboard state machine
+│   ├── input.py          # Direct evdev keyboard input
 │   └── tts.py            # Piper TTS integration
 │
 ├── packs/                # Built-in content (emoji, sounds)
@@ -166,14 +175,28 @@ purplecomputer/
 ├── build-scripts/        # Ubuntu ISO remaster build pipeline
 │   ├── 00-build-golden-image.sh    # Pre-built Ubuntu system image
 │   ├── 01-remaster-iso.sh          # Remaster Ubuntu Server ISO (initramfs injection)
-│   ├── build-all.sh                # Orchestrate build steps
 │   ├── build-in-docker.sh          # Docker wrapper (NixOS-friendly)
 │   ├── validate-build.sh           # Pre-build validation
 │   ├── flash-to-usb.sh             # Write ISO to USB with verification
 │   └── install.sh                  # Installation script (runs in initramfs)
 │
+├── recording-setup/      # Demo video recording and post-processing
+│   ├── record-demo.sh             # Full recording workflow
+│   ├── apply_zoom.py              # FFmpeg zoom/crop/pan post-processing
+│   └── zoom_editor_server.py      # Web UI for zoom keyframe editing
+│
+├── scripts/              # Development utilities
+│   ├── calc_font_size.py           # Auto font sizing calculator
+│   ├── generate_sounds.py          # Procedural sound synthesis
+│   └── generate_voice_clips.py     # TTS narration generation
+│
+├── tools/                # AI-assisted content creation
+│   ├── doodle_ai.py               # AI doodle drawing generation
+│   └── play_ai.py                 # AI play mode content
+│
+├── config/               # System configs (Alacritty, X11, fonts)
+├── tests/                # Test suite
 └── guides/               # Technical references
-    └── ubuntu-live-installer.md
 ```
 
 **Stack:**
@@ -230,7 +253,13 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 - **[MANUAL.md](MANUAL.md):** Complete build instructions, customization, and troubleshooting
 - **[guides/demo-system.md](guides/demo-system.md):** Creating, generating, and composing demo screencasts
-- **[guides/](guides/):** Technical deep-dives (architecture, installer, ask mode design, etc.)
+- **[guides/architecture-overview.md](guides/architecture-overview.md):** Why the installer works the way it does
+- **[guides/keyboard-architecture.md](guides/keyboard-architecture.md):** evdev input, state machine, F-key calibration
+- **[guides/explore-mode-design.md](guides/explore-mode-design.md):** How Explore mode parses and evaluates input
+- **[guides/sound-synthesis.md](guides/sound-synthesis.md):** Procedural sound generation
+- **[guides/mode-reference.md](guides/mode-reference.md):** Reference for all modes and controls
+- **[guides/kid-proofing.md](guides/kid-proofing.md):** Kiosk lockdown and safety measures
+- **[guides/production-checklist.md](guides/production-checklist.md):** Pre-ship checklist
 
 ---
 
@@ -249,7 +278,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 Purple Computer includes code from the following open-source projects:
 
-- **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Paint-like color mixing using Kubelka-Munk theory, ported to Python for realistic pigment blending (yellow + blue = green)
+- **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
 
 ---
 

@@ -1,8 +1,9 @@
 # Purple Computer
 
-**The calm computer for kids.**
+**Give them a first computer you can feel good about.**
 
-Purple isn't a screen your kid stares at. Purple is a calm place your kid *does* things.
+Transform your old laptop into a calm space for open-ended play. Ages 4-7.
+They explore, create, and put it down on their own.
 
 > **SOURCE-AVAILABLE LICENSE**
 > You may view and run this code for personal use only.
@@ -13,14 +14,12 @@ Purple isn't a screen your kid stares at. Purple is a calm place your kid *does*
 
 ## What Is Purple?
 
-Purple Computer turns old laptops into calm, creative tools for kids ages 3-8.
+Purple Computer turns your old laptop into a calm, creative computer for kids. When you turn it on, it starts straight into Purple. There's no desktop and no other apps.
 
-- **Distraction-free by design.** No videos. No ads. No app store. No infinite feeds.
-- **A creativity device, not an entertainment device.** Kids write, draw, explore, type, imagine. Slowly and calmly.
-- **Safe by default.** No accounts. No tracking. No social media. No algorithm.
-- **Eco-friendly & kid-ready.** Every Purple Laptop saves a device from the landfill.
-
-**Tech for screen-skeptical parents.** Screen time that feels like quiet time.
+- **Building, not consuming.** Words, colors, sounds, and numbers to play with.
+- **Nothing to break.** The whole laptop is Purple. No apps, no internet, nothing to mess up.
+- **A screen they walk away from.** No tantrums, no parental controls needed.
+- **Pay once, use on every laptop.** Works on every laptop you own, now or later.
 
 **Learn more at [purplecomputer.org](https://purplecomputer.org).**
 
@@ -95,9 +94,9 @@ Purple has three core modes:
 
 | Key | Mode | What It Does |
 |-----|------|--------------|
-| **F1** | **Explore** | Math, emoji, and colors. Maximally permissive: always tries to do something meaningful. See [guides/explore-mode-design.md](guides/explore-mode-design.md) |
-| **F2** | **Play** | Music and art grid. Press any key to play a sound and paint a color. |
-| **F3** | **Doodle** | Simple drawing canvas. Just type and paint. |
+| **F1** | **Explore** | Type a word, see an emoji, hear it spoken, mix colors, do math. See [guides/explore-mode-design.md](guides/explore-mode-design.md) |
+| **F2** | **Play** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. |
+| **F3** | **Doodle** | Write and paint with colors that mix like real paint. |
 
 **Controls:**
 - **Escape (tap):** Mode picker (Explore, Play, Doodle)
@@ -152,7 +151,7 @@ See `guides/keyboard-architecture.md` for technical details.
 
 ## Screen Size
 
-Purple Computer displays a **112×32 character viewport** (plus header and footer) that fills **80% of the screen**. Font size is automatically calculated to fit, clamped to 12-48pt. On typical donated laptops (11-15"), this fills most of the screen with a visible purple border.
+Purple Computer displays a **112×32 character viewport** (plus header and footer) that fills **80% of the screen**. Font size is automatically calculated to fit, clamped to 12-48pt. On typical old laptops (11-15"), this fills most of the screen with a visible purple border.
 
 **Minimum supported resolution:** 1024×768
 
@@ -265,12 +264,12 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 ## Philosophy
 
-**A calm computer parents don't have to fight with.**
+**Computers are a big part of their future.** Purple lets them start the way we did: open-ended play, making things, figuring it out.
 
-- Simple, text-based interface: easy for kids, calming for parents
-- Your kid's first computer that isn't trying to control their attention
-- A tool, not a toy. Runs on any old laptop you have lying around
-- Offline and private: no internet required, no tracking, no data collection
+- Their own computer, a real computer they use and put away on their own
+- Building and creating, not watching and swiping
+- No Wi-Fi, no browser, no way to connect to the internet
+- Your old laptop still works. To your kid, it's a hand-me-down from a legend
 
 ---
 

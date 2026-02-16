@@ -32,8 +32,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from purple_tui.constants import ZOOM_REGIONS
 
 
-def get_video_info(video_path: Path) -> tuple[int, int, float, float]:
-    """Get video dimensions, duration, and framerate."""
+def get_video_info(video_path: Path) -> tuple[int, int, float, float, str]:
+    """Get video dimensions, duration, framerate, and raw fps string."""
     result = subprocess.run(
         [
             "ffprobe", "-v", "error",
@@ -60,7 +60,7 @@ def get_video_info(video_path: Path) -> tuple[int, int, float, float]:
 
     duration = float(stream.get("duration") or data["format"]["duration"])
 
-    return width, height, duration, fps
+    return width, height, duration, fps, fps_str
 
 
 def get_crop_rect(
@@ -547,7 +547,7 @@ def apply_zoom(
 
     # Get video info (needed for dimensions even with no events)
     try:
-        width, height, duration, fps = get_video_info(input_video)
+        width, height, duration, fps, fps_str = get_video_info(input_video)
     except subprocess.CalledProcessError as e:
         log(f"ERROR getting video info: {e}")
         write_log()
@@ -604,15 +604,14 @@ def apply_zoom(
     log(f"  Lengths: z={len(z_expr)} x={len(x_expr)} y={len(y_expr)}")
 
     # zoompan: d=1 means 1 output frame per input frame (video passthrough)
-    # s=WxH sets output resolution, fps matches input
-    fps_int = round(fps)
+    # s=WxH sets output resolution, fps uses exact fraction to avoid audio drift
     zoompan = (
         f"zoompan=z='{z_expr}'"
         f":x='{x_expr}'"
         f":y='{y_expr}'"
         f":d=1"
         f":s={output_width}x{output_height}"
-        f":fps={fps_int}"
+        f":fps={fps_str}"
     )
 
     cmd = [
@@ -620,7 +619,8 @@ def apply_zoom(
         "-i", str(input_video),
         "-vf", zoompan,
         "-c:v", "libx264", "-crf", "18", "-preset", "fast",
-        "-c:a", "copy",
+        "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart",
         str(output_video)
     ]
 
@@ -679,7 +679,7 @@ def apply_zoom(
         size_mb = output_video.stat().st_size / (1024 * 1024)
         log(f"Output created: {output_video} ({size_mb:.1f} MB)")
         try:
-            ow, oh, od, ofps = get_video_info(output_video)
+            ow, oh, od, ofps, _ = get_video_info(output_video)
             log(f"Output video info: {ow}x{oh}, {od:.2f}s, {ofps:.2f}fps")
         except Exception as ex:
             log(f"Could not probe output: {ex}")

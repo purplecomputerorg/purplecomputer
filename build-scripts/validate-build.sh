@@ -24,7 +24,7 @@ banner() {
     echo
     echo "=========================================="
     echo "  Purple Computer Build Validation"
-    echo "  Architecture: Initramfs Injection"
+    echo "  Architecture: Live Boot + Optional Install"
     echo "=========================================="
     echo
 }
@@ -97,6 +97,7 @@ check_dockerfile() {
         "xorriso"
         "isolinux"
         "initramfs-tools-core"
+        "squashfs-tools"
         "wget"
         "rsync"
         "cpio"
@@ -135,6 +136,32 @@ check_golden_image() {
         ((WARNINGS++))
     else
         ok "Golden image size: ${SIZE_MB}MB"
+    fi
+}
+
+check_live_squashfs() {
+    info "Checking live squashfs (if exists)..."
+
+    local SQUASHFS="$BUILD_DIR/filesystem.squashfs"
+
+    if [ ! -f "$SQUASHFS" ]; then
+        warn "Live squashfs not built yet: $SQUASHFS"
+        warn "Run: ./build-in-docker.sh 0"
+        ((WARNINGS++))
+        return
+    fi
+
+    local SIZE=$(stat -c%s "$SQUASHFS" 2>/dev/null || stat -f%z "$SQUASHFS" 2>/dev/null || echo "0")
+    local SIZE_MB=$((SIZE / 1048576))
+
+    if [ "$SIZE_MB" -lt 500 ]; then
+        error "Squashfs too small: ${SIZE_MB}MB (expected 1500-3000MB)"
+        ((ERRORS++))
+    elif [ "$SIZE_MB" -gt 4000 ]; then
+        warn "Squashfs very large: ${SIZE_MB}MB"
+        ((WARNINGS++))
+    else
+        ok "Live squashfs size: ${SIZE_MB}MB"
     fi
 }
 
@@ -190,6 +217,28 @@ check_final_iso() {
         warn "SHA256 checksum missing"
         ((WARNINGS++))
     fi
+
+    # Check squashfs inside the ISO (mount and inspect)
+    local TEMP_MNT=$(mktemp -d)
+    if mount -o loop,ro "$ISO" "$TEMP_MNT" 2>/dev/null; then
+        if [ -f "$TEMP_MNT/casper/filesystem.squashfs" ]; then
+            local SQ_SIZE=$(stat -c%s "$TEMP_MNT/casper/filesystem.squashfs" 2>/dev/null || stat -f%z "$TEMP_MNT/casper/filesystem.squashfs" 2>/dev/null || echo "0")
+            local SQ_SIZE_MB=$((SQ_SIZE / 1048576))
+            if [ "$SQ_SIZE_MB" -lt 500 ]; then
+                error "ISO squashfs too small: ${SQ_SIZE_MB}MB (expected Purple Computer squashfs)"
+                ((ERRORS++))
+            else
+                ok "ISO contains Purple squashfs: ${SQ_SIZE_MB}MB"
+            fi
+        else
+            warn "ISO missing casper/filesystem.squashfs"
+            ((WARNINGS++))
+        fi
+        umount "$TEMP_MNT" 2>/dev/null || true
+        rmdir "$TEMP_MNT" 2>/dev/null || true
+    else
+        rmdir "$TEMP_MNT" 2>/dev/null || true
+    fi
 }
 
 summary() {
@@ -225,6 +274,7 @@ main() {
 
     if [ -d "$BUILD_DIR" ]; then
         check_golden_image
+        check_live_squashfs
         check_ubuntu_iso
         check_final_iso
     fi

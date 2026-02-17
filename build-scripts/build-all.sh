@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
-# Build complete Purple Computer installer ISO
+# Build complete Purple Computer ISO
 #
-# Architecture: Initramfs Injection
-# - Step 0: Build golden image (the installed system)
-# - Step 1: Remaster Ubuntu Server ISO (inject hook into initramfs)
-#
-# We modify only the initramfs to add an early hook script.
-# The squashfs and boot stack remain untouched.
+# Architecture: Live Boot + Optional Install
+# - Step 0: Build root filesystem, squashfs, and golden image
+# - Step 1: Remaster Ubuntu Server ISO (replace squashfs, inject install hook)
 
 set -e
 
@@ -23,8 +20,8 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 print_banner() {
     echo
     echo "=========================================="
-    echo "  Purple Computer Installer Build"
-    echo "  Architecture: Initramfs Injection"
+    echo "  Purple Computer Build"
+    echo "  Architecture: Live Boot + Optional Install"
     echo "=========================================="
     echo
 }
@@ -44,13 +41,13 @@ main() {
     echo
 
     if [ "$START_STEP" -le 0 ]; then
-        log_step "0/1: Building golden image (the installed system)..."
+        log_step "0/1: Building root filesystem, squashfs, and golden image..."
         ./00-build-golden-image.sh
         echo
     fi
 
     if [ "$START_STEP" -le 1 ]; then
-        log_step "1/1: Remastering Ubuntu Server ISO..."
+        log_step "1/1: Remastering ISO (replace squashfs, inject install hook)..."
         ./01-remaster-iso.sh
         echo
     fi

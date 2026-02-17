@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Automated boot testing with QEMU
-# Boots the remastered Ubuntu ISO, captures output, analyzes for errors
+# Boots the Purple Computer ISO, captures output, analyzes for errors
 #
-# Architecture: Initramfs Injection
-# - Uses Ubuntu's unmodified boot stack (shim, GRUB, kernel)
-# - Our hook runs in initramfs before casper
-# - Squashfs is never mounted when installer runs
+# Architecture: Live Boot + Optional Install
+# - Default: live boot into Purple Computer (no install)
+# - Optional: install to internal disk via --mode install
 
 set -e
 
@@ -28,9 +27,10 @@ info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 usage() {
     echo "Usage: $0 [OPTIONS]"
     echo
-    echo "Automated boot testing for PurpleOS installer"
+    echo "Automated boot testing for Purple Computer"
     echo
     echo "Options:"
+    echo "  --mode MODE          Boot mode: 'live' (default) or 'install'"
     echo "  --timeout SECONDS    Boot timeout in seconds (default: 60)"
     echo "  --iso PATH           Path to ISO file (default: auto-detect latest)"
     echo "  --memory MB          QEMU memory in MB (default: 2048)"
@@ -48,9 +48,11 @@ MEMORY=2048
 DEBUG=0
 INTERACTIVE=0
 KEEP_LOGS=0
+BOOT_MODE="live"
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --mode) BOOT_MODE="$2"; shift 2 ;;
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --iso) ISO_PATH="$2"; shift 2 ;;
         --memory) MEMORY="$2"; shift 2 ;;
@@ -61,6 +63,11 @@ while [ $# -gt 0 ]; do
         *) error "Unknown option: $1"; usage ;;
     esac
 done
+
+if [ "$BOOT_MODE" != "live" ] && [ "$BOOT_MODE" != "install" ]; then
+    error "Invalid mode: $BOOT_MODE (must be 'live' or 'install')"
+    exit 1
+fi
 
 check_sudo() {
     if [ "$EUID" -ne 0 ]; then
@@ -115,7 +122,7 @@ setup_test_env() {
 }
 
 boot_test() {
-    info "Starting QEMU boot test (timeout: ${TIMEOUT}s)..."
+    info "Starting QEMU boot test (mode: $BOOT_MODE, timeout: ${TIMEOUT}s)..."
 
     # Create temporary target disk for installation testing
     TARGET_DISK=$(mktemp -u).qcow2
@@ -136,6 +143,12 @@ boot_test() {
         -boot c
         -no-reboot
     )
+
+    # For install mode, pass kernel cmdline with purple.install=1
+    # to simulate selecting "Install Purple Computer" from GRUB menu
+    if [ "$BOOT_MODE" = "install" ]; then
+        QEMU_CMD+=(-append "boot=casper console=ttyS0,115200 cloud-init=disabled purple.install=1")
+    fi
 
     if [ "$INTERACTIVE" -eq 0 ]; then
         QEMU_CMD+=(-nographic)
@@ -164,9 +177,17 @@ boot_test() {
         fi
 
         # Check for success markers in serial log
+        # Live boot: systemd reaches multi-user target, login prompt appears
+        # Install: Purple installer hook output
         if grep -q "Purple Computer Installer" "$SERIAL_LOG" 2>/dev/null || \
-           grep -q "\[PURPLE\]" "$SERIAL_LOG" 2>/dev/null; then
-            ok "Installer started successfully!"
+           grep -q "\[PURPLE\]" "$SERIAL_LOG" 2>/dev/null || \
+           grep -q "login:" "$SERIAL_LOG" 2>/dev/null || \
+           grep -q "purple-computer login:" "$SERIAL_LOG" 2>/dev/null; then
+            if [ "$BOOT_MODE" = "live" ]; then
+                ok "Live boot started successfully!"
+            else
+                ok "Installer started successfully!"
+            fi
             sleep 2  # Let it run a bit more
             kill $QEMU_PID 2>/dev/null || true
             wait $QEMU_PID 2>/dev/null || true
@@ -212,7 +233,8 @@ analyze_logs() {
 
     {
         echo "=========================================="
-        echo "  PurpleOS Boot Test Analysis"
+        echo "  Purple Computer Boot Test Analysis"
+        echo "  Mode: $BOOT_MODE"
         echo "  $(date)"
         echo "=========================================="
         echo
@@ -222,9 +244,15 @@ analyze_logs() {
 
         case $EXIT_CODE in
             0)
-                echo "RESULT: SUCCESS - Installer started normally"
-                echo
-                echo "The boot process succeeded. The installer environment loaded correctly."
+                if [ "$BOOT_MODE" = "live" ]; then
+                    echo "RESULT: SUCCESS - Live boot started normally"
+                    echo
+                    echo "The boot process succeeded. Purple Computer loaded from USB."
+                else
+                    echo "RESULT: SUCCESS - Installer started normally"
+                    echo
+                    echo "The boot process succeeded. The installer environment loaded correctly."
+                fi
                 ;;
             1)
                 echo "RESULT: KERNEL PANIC DETECTED"
@@ -447,7 +475,8 @@ cleanup() {
 main() {
     echo
     echo "=========================================="
-    echo "  PurpleOS Automated Boot Test"
+    echo "  Purple Computer Automated Boot Test"
+    echo "  Mode: $BOOT_MODE"
     echo "=========================================="
     echo
 

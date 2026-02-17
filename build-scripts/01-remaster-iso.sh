@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# Remaster Ubuntu Server ISO for Purple Computer installer
+# Remaster Ubuntu Server ISO for Purple Computer
 #
-# ARCHITECTURE: Initramfs Injection
+# ARCHITECTURE: Live Boot + Optional Install
 # - Download official Ubuntu Server 24.04 ISO
-# - Extract and modify initramfs only (add early hook script)
-# - Leave squashfs completely untouched
-# - Add payload files to ISO root
+# - Replace squashfs with Purple Computer root filesystem
+# - Modify initramfs (add install hook for optional install path)
+# - Add golden image payload (for optional install)
+# - Update GRUB: live boot default, install as menu option
 # - Rebuild ISO
-#
-# The hook script runs before casper, checks for our payload,
-# and either runs our installer or falls through to normal boot.
 
 set -e
 
@@ -28,7 +26,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # GRUB timeout in seconds
-GRUB_TIMEOUT="${GRUB_TIMEOUT:-30}"
+GRUB_TIMEOUT="${GRUB_TIMEOUT:-5}"
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
@@ -260,8 +258,8 @@ create_install_script() {
 }
 
 main() {
-    log_step "Purple Computer ISO Remaster (Two-Gate Safety Model)"
-    log_info "Architecture: Initramfs marker (Gate 1) + Runtime /run service (Gate 2)"
+    log_step "Purple Computer ISO Remaster (Live Boot + Optional Install)"
+    log_info "Architecture: Live boot default, install via GRUB menu option"
 
     if [ "$EUID" -ne 0 ]; then
         echo "This script must be run as root"
@@ -275,12 +273,22 @@ main() {
         exit 1
     fi
 
+    # Check for live squashfs
+    LIVE_SQUASHFS="${BUILD_DIR}/filesystem.squashfs"
+    LIVE_SIZE="${BUILD_DIR}/filesystem.size"
+
+    if [ ! -f "$LIVE_SQUASHFS" ]; then
+        echo "ERROR: Live squashfs not found: $LIVE_SQUASHFS"
+        echo "Run step 0 first: ./build-all.sh 0"
+        exit 1
+    fi
+
     # Setup directories
     mkdir -p "$WORK_DIR"
     mkdir -p /opt/purple-installer/output
 
     # Step 1: Download Ubuntu Server ISO if needed
-    log_step "1/7: Checking Ubuntu Server ISO..."
+    log_step "1/8: Checking Ubuntu Server ISO..."
     if [ -f "$UBUNTU_ISO" ]; then
         log_info "Using cached ISO: $UBUNTU_ISO"
     else
@@ -290,19 +298,25 @@ main() {
     log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
 
     # Step 2: Setup working directories
-    log_step "2/7: Setting up working directories..."
+    log_step "2/8: Setting up working directories..."
     rm -rf "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
     mkdir -p "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
 
     # Step 3: Mount and copy ISO contents
-    log_step "3/7: Extracting ISO contents..."
+    log_step "3/8: Extracting ISO contents..."
     mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
 
     # Copy everything from ISO
     rsync -a --info=progress2 "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
 
-    # Step 4: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
-    log_step "4/7: Modifying initramfs..."
+    # Step 4: Replace squashfs with Purple Computer
+    log_step "4/8: Replacing squashfs with Purple Computer..."
+    cp "$LIVE_SQUASHFS" "$WORK_DIR/iso-new/casper/filesystem.squashfs"
+    cp "$LIVE_SIZE" "$WORK_DIR/iso-new/casper/filesystem.size"
+    log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
+
+    # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
+    log_step "5/8: Modifying initramfs..."
 
     # Find the initrd (might be named differently)
     INITRD_PATH=""
@@ -396,8 +410,8 @@ main() {
     cp "$NEW_INITRD" "$INITRD_PATH"
     log_info "Initramfs modified successfully"
 
-    # Step 5: Add payload to ISO
-    log_step "5/7: Adding payload to ISO..."
+    # Step 6: Add payload to ISO
+    log_step "6/8: Adding payload to ISO..."
 
     PAYLOAD_DIR="$WORK_DIR/iso-new/purple"
     mkdir -p "$PAYLOAD_DIR"
@@ -417,25 +431,22 @@ main() {
     # Unmount source ISO
     umount "$WORK_DIR/iso-mount"
 
-    # NOTE: We do NOT modify squashfs. Gate 2 is implemented via runtime
-    # systemd units written to /run by the initramfs hook. This keeps the
-    # live root filesystem identical to the official Ubuntu ISO.
-
-    # Step 6: Replace GRUB config with clean Purple installer menu
-    log_step "6/7: Configuring GRUB boot menu..."
+    # Step 7: Replace GRUB config with live boot default + optional install
+    log_step "7/8: Configuring GRUB boot menu..."
 
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     if [ -f "$GRUB_CFG" ]; then
-        log_info "Replacing GRUB config with Purple installer menu..."
+        log_info "Replacing GRUB config with Purple boot menu..."
 
         # Backup original
         cp "$GRUB_CFG" "${GRUB_CFG}.orig"
 
-        # Replace with clean, parent-friendly GRUB config
+        # Replace with live-boot-default GRUB config
         # Note: Using unquoted heredoc to allow $GRUB_TIMEOUT expansion
         cat > "$GRUB_CFG" << GRUB_PURPLE
-# Purple Computer Installer - GRUB Configuration
-# Simple, clean menu for non-technical users
+# Purple Computer - GRUB Configuration
+# Default: live boot (no install, no disk writes)
+# Optional: install to internal disk
 
 set timeout=${GRUB_TIMEOUT}
 set default=0
@@ -443,6 +454,12 @@ set default=0
 # Clean purple theme
 set menu_color_normal=white/magenta
 set menu_color_highlight=white/dark-gray
+
+menuentry "Purple Computer" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper quiet console=tty1 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service systemd.mask=udisks2.service ---
+    initrd /casper/initrd
+}
 
 menuentry "Install Purple Computer" {
     set gfxpayload=keep
@@ -457,15 +474,9 @@ menuentry "Boot from next volume" {
 menuentry "UEFI Firmware Settings" {
     fwsetup
 }
-
-menuentry "Purple Computer - Debug Mode (no install)" {
-    set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper console=tty1 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service ---
-    initrd /casper/initrd
-}
 GRUB_PURPLE
 
-        log_info "GRUB config replaced with clean Purple menu"
+        log_info "GRUB config replaced (live boot default, install as option)"
     else
         log_info "WARNING: GRUB config not found at expected location"
         ls -la "$WORK_DIR/iso-new/boot/grub/" 2>/dev/null || true
@@ -474,8 +485,8 @@ GRUB_PURPLE
     # NOTE: Ubuntu Server 24.04 uses GRUB for both BIOS and UEFI boot (not isolinux).
     # Boot configuration is preserved via xorriso's -boot_image any replay.
 
-    # Step 7: Rebuild ISO
-    log_step "7/7: Building final ISO..."
+    # Step 8: Rebuild ISO
+    log_step "8/8: Building final ISO..."
 
     OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).iso"
 

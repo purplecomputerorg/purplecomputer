@@ -1,5 +1,5 @@
-# Build environment for Purple Computer installer
-# Architecture: Initramfs injection into Ubuntu Server ISO
+# Build environment for Purple Computer
+# Architecture: Live boot + optional install
 FROM ubuntu:24.04
 
 RUN apt-get update && \
@@ -23,6 +23,7 @@ RUN apt-get update && \
     parted \
     dosfstools \
     e2fsprogs \
+    squashfs-tools \
     # Loop device support
     kpartx \
     # Download tools

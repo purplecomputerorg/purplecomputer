@@ -438,6 +438,22 @@ EOF
 
     rm -f /tmp/grub-standalone.cfg
 
+    # Create squashfs for live boot (same root filesystem, different packaging)
+    log_info "Creating live boot squashfs..."
+    SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
+    rm -f "$SQUASHFS_OUT"
+    mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
+        -comp zstd \
+        -Xcompression-level 19 \
+        -noappend \
+        -e boot/efi
+
+    # Record uncompressed size (required by casper)
+    du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
+
+    log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
+    log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
+
     # Cleanup
     log_info "Cleaning up..."
     sync

@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Live boot default**: USB now boots directly into Purple Computer with no installation needed; internal disk is untouched; "Install Purple Computer" available as GRUB menu option
 - **Demo: smart camera tracking**: Camera now uses dominant-region detection (top vs bottom half) instead of centroid averaging, so it correctly bounces between input area and rendered results; faster response (0.5s vs 2s intervals)
 - **Demo: closing screen zoom**: "This is Purple Computer" types zoomed in, then zooms out for "Coming soon" line
 - **Demo: doodle play-mode text shifted right**: "Now let's go to Play mode" text shifted right by 1 cell; no zoom-out transition before play mode

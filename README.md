@@ -291,15 +291,11 @@ Purple Computer includes code from the following open-source projects:
 
 Purple Computer is a paid product. Purchase at [purplecomputer.org](https://purplecomputer.org) or contact tavi@purplecomputer.org.
 
-The source code is public so you can see exactly what runs on your kid's computer.
+The source code is public so you can see exactly what runs on your kid's computer. You're welcome to browse the code and try it out, but please purchase a license before regular use.
 
-Source-Available License 1.0 — see [LICENSE](LICENSE)
+See [LICENSE](LICENSE) for the full Source-Available License 1.0.
 
-**You may:**
-- View the source code
-- Run for personal, private use
-
-**You may NOT (without written permission):**
+**Without written permission, you may not:**
 - Fork, modify, or create derivatives
 - Redistribute or republish
 - Use commercially

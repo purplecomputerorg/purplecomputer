@@ -5,6 +5,9 @@
 Transform your old laptop into a calm space for open-ended play. Ages 4-7.
 They explore, create, and put it down on their own.
 
+> **🚧 WORK IN PROGRESS**
+> Purple Computer is still in active development and testing. The installer ISO is not ready for use yet. We'll announce when it's ready.
+
 > **SOURCE-AVAILABLE LICENSE**
 > You may view and run this code for personal use only.
 > Forking, modifications, redistribution, and commercial use are prohibited without written permission.

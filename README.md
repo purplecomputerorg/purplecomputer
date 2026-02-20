@@ -8,9 +8,12 @@ They explore, create, and put it down on their own.
 > **🚧 WORK IN PROGRESS**
 > Purple Computer is still in active development and testing. The installer ISO is not ready for use yet. We'll announce when it's ready.
 
-> **SOURCE-AVAILABLE LICENSE**
-> You may view and run this code for personal use only.
-> Forking, modifications, redistribution, and commercial use are prohibited without written permission.
+> **Purple Computer is a paid product.**
+> The source code is public so you can see how it works, but Purple Computer
+> is not free software. To use it, purchase at [purplecomputer.org](https://purplecomputer.org)
+> or contact us at tavi@purplecomputer.org.
+>
+> You're welcome to look around and try things out.
 > See [LICENSE](LICENSE) for details.
 
 ---
@@ -286,7 +289,11 @@ Purple Computer includes code from the following open-source projects:
 
 ## License
 
-Purple Computer Source-Available License 1.0 — see [LICENSE](LICENSE)
+Purple Computer is a paid product. Purchase at [purplecomputer.org](https://purplecomputer.org) or contact tavi@purplecomputer.org.
+
+The source code is public so you can see exactly what runs on your kid's computer.
+
+Source-Available License 1.0 — see [LICENSE](LICENSE)
 
 **You may:**
 - View the source code

@@ -1,6 +1,6 @@
 # Kid-Proofing Purple Computer
 
-Purple Computer must be resilient to kids (ages 3-8) mashing random key combinations. This document explains the hardening measures and how they work together.
+Purple Computer must be resilient to kids (ages 2-8+) mashing random key combinations. This document explains the hardening measures and how they work together.
 
 ---
 

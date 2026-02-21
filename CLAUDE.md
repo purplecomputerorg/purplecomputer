@@ -11,7 +11,7 @@ Never read or access these files:
 
 ## Target Audience
 
-Purple Computer is for **kids ages 3-8** and their **non-technical parents**.
+Purple Computer is for **kids ages 2-8+** and their **non-technical parents**.
 
 When writing user-facing messages (error messages, setup prompts, UI text):
 - Use simple, friendly language

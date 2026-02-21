@@ -116,7 +116,7 @@ With keyboard input bypassing the terminal:
 |---------|--------|
 | Character echo | None. Textual controls all display in raw mode. |
 | Window resize | Still works. Alacritty notifies Textual via SIGWINCH. |
-| Copy/paste | Alacritty shortcuts won't work. Not needed for kids 3-8. |
+| Copy/paste | Alacritty shortcuts won't work. Not needed for kids 2-8+. |
 | Mouse input | Purple disables trackpad anyway. |
 | Focus | In kiosk mode, only Purple runs. No focus issues. |
 

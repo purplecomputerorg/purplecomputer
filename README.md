@@ -2,7 +2,7 @@
 
 **Give them a first computer you can feel good about.**
 
-Transform your old laptop into a calm space for open-ended play. Ages 4-7.
+Transform your old laptop into a calm space for open-ended play. No internet, no apps. Ages 2-8+.
 They explore, create, and put it down on their own.
 
 > **🚧 WORK IN PROGRESS**
@@ -100,9 +100,9 @@ Purple has three core modes:
 
 | Key | Mode | What It Does |
 |-----|------|--------------|
-| **F1** | **Explore** | Type a word, see an emoji, hear it spoken, mix colors, do math. See [guides/explore-mode-design.md](guides/explore-mode-design.md) |
-| **F2** | **Play** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. |
-| **F3** | **Doodle** | Write and paint with colors that mix like real paint. |
+| **F1** | **Explore** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/explore-mode-design.md](guides/explore-mode-design.md) |
+| **F2** | **Play** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
+| **F3** | **Doodle** | Write and paint with colors that mix like real paint. Great around 3-4+. |
 
 **Controls:**
 - **Escape (tap):** Mode picker (Explore, Play, Doodle)

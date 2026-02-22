@@ -6,7 +6,7 @@ A Textual TUI application providing:
 - Play Mode: Music and art grid
 - Write Mode: Simple text editor
 
-Designed for ages 3-8. Safe, calm, distraction-free.
+Designed for ages 2-8+. Safe, calm, distraction-free.
 """
 
 # Suppress ONNX runtime warnings BEFORE any imports that might load it

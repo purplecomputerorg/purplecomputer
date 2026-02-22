@@ -44,7 +44,6 @@ REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 7  # Full UI height (+ border + title
 
 # Timing
 TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapid toggles)
-DOUBLE_TAP_TIME = 0.5        # Threshold for double-tap to get shifted characters
 STICKY_SHIFT_GRACE = 1.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
@@ -74,6 +73,7 @@ ICON_CAPS_LOCK = "󰬈"        # nf-md-caps_lock
 ICON_MENU = "󰀻"             # nf-md-apps (grid icon for mode picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
+ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

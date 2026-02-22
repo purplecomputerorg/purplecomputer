@@ -2,7 +2,7 @@
 """
 Purple Computer: Main Textual TUI Application
 
-The calm computer for kids ages 3-8.
+The calm computer for kids ages 2-8+.
 A creativity device, not an entertainment device.
 
 IMPORTANT: Requires Linux with evdev for keyboard input.
@@ -15,9 +15,9 @@ Keyboard controls:
 - F9: Toggle dark/light theme
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent mode
-- Caps Lock: Toggle big/small letters
-- Sticky shift: Shift key toggles, stays active for 1 second
-- Double-tap: Same symbol twice quickly = shifted version
+- Shift (tap): Sticky shift for one character
+- Shift (double-tap): Toggle caps lock
+- Caps Lock key: Remapped to Shift
 """
 
 # Suppress ONNX runtime warnings early (before any imports that might load it)
@@ -37,11 +37,11 @@ from enum import Enum
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
     ICON_MOON, ICON_SUN, MODE_TITLES,
-    DOUBLE_TAP_TIME, STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
+    STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK,
+    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     MODE_EXPLORE, MODE_PLAY, MODE_DOODLE,
@@ -449,6 +449,18 @@ class PurpleApp(App):
         text-align: center;
     }
 
+    #shift-indicator {
+        width: auto;
+        height: 1;
+        margin-right: 1;
+        color: $accent;
+        display: none;
+    }
+
+    #shift-indicator.active {
+        display: block;
+    }
+
     #caps-indicator {
         width: auto;
         height: 1;
@@ -558,7 +570,6 @@ class PurpleApp(App):
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
             sticky_grace_period=STICKY_SHIFT_GRACE,
-            double_tap_threshold=DOUBLE_TAP_TIME,
             escape_hold_threshold=ESCAPE_HOLD_THRESHOLD,
         )
         self.keyboard.mode = detect_keyboard_mode()
@@ -568,6 +579,8 @@ class PurpleApp(App):
 
         # Direct evdev keyboard input (replaces terminal on_key)
         self._keyboard_state_machine = KeyboardStateMachine()
+        self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
+        self._sticky_shift_timer = None
         self._evdev_reader: EvdevReader | None = None
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
@@ -617,6 +630,7 @@ class PurpleApp(App):
                 with Horizontal(id="title-row"):
                     yield Static("", id="title-spacer-left")  # Balance for right elements
                     yield ModeTitle(id="mode-title")
+                    yield Static(ICON_SHIFT, id="shift-indicator")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
                 with Horizontal(id="viewport-row"):
@@ -701,9 +715,6 @@ class PurpleApp(App):
             legend.set_active_color(event.last_color)
         except NoMatches:
             pass
-
-        # Disable double-tap shift in paint mode (just paint twice instead of caps)
-        self._keyboard_state_machine.set_double_tap_enabled(not event.is_painting)
 
     def suspend_with_terminal_input(self):
         """
@@ -1555,6 +1566,32 @@ class PurpleApp(App):
             else:
                 indicator.update(f"{ICON_CAPS_LOCK} abc")
                 indicator.remove_class("active")
+        except NoMatches:
+            pass
+
+    def _on_sticky_shift_change(self, active: bool) -> None:
+        """Called when sticky shift state changes."""
+        if self._sticky_shift_timer:
+            self._sticky_shift_timer.stop()
+            self._sticky_shift_timer = None
+        try:
+            indicator = self.query_one("#shift-indicator", Static)
+            if active:
+                indicator.add_class("active")
+                self._sticky_shift_timer = self.set_timer(
+                    STICKY_SHIFT_GRACE, self._expire_sticky_shift_indicator
+                )
+            else:
+                indicator.remove_class("active")
+        except NoMatches:
+            pass
+
+    def _expire_sticky_shift_indicator(self) -> None:
+        """Hide sticky shift indicator after grace period."""
+        self._sticky_shift_timer = None
+        try:
+            indicator = self.query_one("#shift-indicator", Static)
+            indicator.remove_class("active")
         except NoMatches:
             pass
 

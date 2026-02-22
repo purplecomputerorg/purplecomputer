@@ -32,9 +32,8 @@ import re
 from ..content import singularize
 
 from ..content import get_content
-from ..constants import DOUBLE_TAP_TIME
 from ..keyboard import (
-    SHIFT_MAP, DoubleTapDetector, KeyRepeatSuppressor,
+    SHIFT_MAP, KeyRepeatSuppressor,
     CharacterAction, NavigationAction, ControlAction,
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
@@ -241,10 +240,6 @@ class InlineInput(Input):
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
         self.autocomplete_type: str = "emoji"  # "emoji" or "color"
         self.autocomplete_index: int = 0
-        self._double_tap = DoubleTapDetector(
-            threshold=DOUBLE_TAP_TIME,
-            allowed_keys=set(SHIFT_MAP.keys()),
-        )
         self._repeat_suppressor = KeyRepeatSuppressor()
 
     def action_scroll_up(self) -> None:
@@ -537,7 +532,6 @@ class ExploreMode(Vertical):
                         explore_input.cursor_position = len(explore_input.value)
                     explore_input.autocomplete_matches = []
                     explore_input.autocomplete_index = 0
-                    explore_input._double_tap.reset()
                 else:
                     # Type a space (always at end)
                     explore_input.value += " "
@@ -555,7 +549,6 @@ class ExploreMode(Vertical):
                         self._speak(self._last_eval_text, self._last_result)
                 explore_input.autocomplete_matches = []
                 explore_input.autocomplete_index = 0
-                explore_input._double_tap.reset()
                 return
 
             if action.action == 'backspace' and action.is_down:
@@ -574,7 +567,6 @@ class ExploreMode(Vertical):
                     explore_input.cursor_position = 0
                     explore_input.autocomplete_matches = []
                     explore_input.autocomplete_index = 0
-                    explore_input._double_tap.reset()
                     explore_input._check_autocomplete()
                 return
 
@@ -587,7 +579,6 @@ class ExploreMode(Vertical):
                 return
 
             char = action.char
-            # Double-tap is handled by keyboard.py (sends backspace + shifted char)
 
             # Math operators: auto-space for readability and substitute display chars
             if char in explore_input.MATH_OPERATORS:

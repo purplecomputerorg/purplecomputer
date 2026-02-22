@@ -5,8 +5,8 @@ Requires Linux with evdev for direct keyboard access.
 Reads raw key events via EvdevReader, processes through KeyboardStateMachine.
 
 Features:
-- Shift strategies: sticky shift (grace period), double-tap, physical shift
-- Caps lock toggle (direct from hardware)
+- Shift strategies: sticky shift (grace period), physical shift
+- Caps lock toggle (double-tap Shift key)
 - Long-hold detection for parent mode (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
 - F-key mode switching (F1-F3) and toggles (F9 theme, F10-F12 volume)
@@ -23,10 +23,10 @@ from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE
 
 
 # ============================================================================
-# Double-Tap Detection
+# Shift Maps and Double-Tap Detection
 # ============================================================================
 
-# Characters that can be shifted via double-tap (same as physical shift)
+# Characters that can be shifted (same as physical shift)
 SHIFT_MAP = {
     # Letters
     'a': 'A', 'b': 'B', 'c': 'C', 'd': 'D', 'e': 'E', 'f': 'F', 'g': 'G',
@@ -212,38 +212,20 @@ class ShiftState:
 
     Supports multiple shift strategies that can be used together:
     1. Sticky shift: Toggle on, stays on for grace period or until used
-    2. Double-tap: Same key twice quickly = shifted version
-    3. Regular shift: Physical shift key held (from hardware layer)
+    2. Regular shift: Physical shift key held (from hardware layer)
     """
 
     def __init__(
         self,
         sticky_grace_period: float = 1.0,
-        double_tap_threshold: float = 0.5,
     ):
         # Sticky shift state
         self.sticky_active: bool = False
         self.sticky_activated_at: float = 0.0
         self.sticky_grace_period: float = sticky_grace_period
 
-        # Double-tap detector (uses SHIFT_MAP keys as allowed set)
-        self._double_tap = DoubleTapDetector(
-            threshold=double_tap_threshold,
-            allowed_keys=set(SHIFT_MAP.keys()),
-        )
-
         # Physical shift (from hardware layer)
         self.physical_shift_held: bool = False
-
-    @property
-    def double_tap_threshold(self) -> float:
-        """Get double-tap threshold."""
-        return self._double_tap.threshold
-
-    @double_tap_threshold.setter
-    def double_tap_threshold(self, value: float) -> None:
-        """Set double-tap threshold."""
-        self._double_tap.threshold = value
 
     def should_shift(self) -> bool:
         """Check if next character should be shifted."""
@@ -273,21 +255,10 @@ class ShiftState:
         """Consume sticky shift after using it for one character."""
         self.sticky_active = False
 
-    def check_double_tap(self, char: str, timestamp: float = None) -> Optional[str]:
-        """
-        Check if this character completes a double-tap.
-
-        Returns the shifted character if double-tap detected, None otherwise.
-        """
-        if self._double_tap.check(char, timestamp):
-            return SHIFT_MAP.get(char)
-        return None
-
     def reset(self) -> None:
         """Reset all shift state."""
         self.sticky_active = False
         self.sticky_activated_at = 0.0
-        self._double_tap.reset()
         self.physical_shift_held = False
 
 
@@ -413,11 +384,6 @@ class KeyboardState:
         if not apply_shift or not char:
             return char
 
-        # Check double-tap first (highest priority)
-        shifted = self.shift.check_double_tap(char)
-        if shifted:
-            return shifted
-
         # Check if we should shift this character
         if self.shift.should_shift() and char in SHIFT_MAP:
             self.shift.consume_sticky()  # Use up sticky shift
@@ -460,7 +426,6 @@ class KeyboardState:
 
 def create_keyboard_state(
     sticky_grace_period: float = 1.0,
-    double_tap_threshold: float = 0.5,
     escape_hold_threshold: float = 1.0,
 ) -> KeyboardState:
     """
@@ -468,12 +433,10 @@ def create_keyboard_state(
 
     Args:
         sticky_grace_period: How long sticky shift stays active (seconds)
-        double_tap_threshold: Max time between taps for double-tap (seconds)
         escape_hold_threshold: How long to hold Escape for parent mode (seconds)
     """
     state = KeyboardState()
     state.shift.sticky_grace_period = sticky_grace_period
-    state.shift.double_tap_threshold = double_tap_threshold
     state.escape_hold.threshold = escape_hold_threshold
     return state
 
@@ -592,9 +555,10 @@ class KeyboardStateMachine:
     Handles:
     - Key state tracking (pressed/released)
     - Modifier state (shift, caps lock)
+    - Sticky shift (quick-tap Shift key)
+    - Double-tap Shift for caps lock toggle
     - Long-hold detection (Escape for parent mode)
     - Space-hold detection (for paint mode drawing)
-    - Double-tap detection (only after pause or space, to allow repeated letters)
     - Character translation (keycode to character)
 
     Usage:
@@ -610,8 +574,6 @@ class KeyboardStateMachine:
 
     # Timing thresholds
     ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
-    DOUBLE_TAP_THRESHOLD = 0.4   # seconds between taps
-    DOUBLE_TAP_PAUSE = 0.35      # seconds of pause before first tap for eligibility
     STICKY_SHIFT_GRACE = 1.0     # seconds sticky shift stays active
 
     def __init__(self):
@@ -628,18 +590,20 @@ class KeyboardStateMachine:
         self._sticky_shift_time = 0.0
         self._shift_used_for_char = False  # Track if physical shift was used for a character
 
-        # Double-tap detection
-        self._double_tap = DoubleTapDetector(
-            threshold=self.DOUBLE_TAP_THRESHOLD,
-            allowed_keys=set(SHIFT_MAP.keys()),
+        # Double-tap Shift key for caps lock
+        self._shift_double_tap = DoubleTapDetector(
+            threshold=0.4,
+            allowed_keys={'shift'},
         )
-        self._double_tap_enabled = True  # Can be disabled for paint mode
-        self._last_char_time: float = 0.0  # When last printable char was typed
-        self._prev_was_space: bool = False  # Was previous key a space?
+        self._on_sticky_shift_change: Callable[[bool], None] | None = None
 
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
         self._escape_press_time: float | None = None  # time.time() when escape pressed
+
+    def on_sticky_shift_change(self, callback: Callable[[bool], None]) -> None:
+        """Register callback for sticky shift state changes."""
+        self._on_sticky_shift_change = callback
 
     def process(self, event: RawKeyEvent) -> List[KeyAction]:
         """
@@ -670,14 +634,9 @@ class KeyboardStateMachine:
 
         # Handle modifiers (only on fresh press)
         if not is_repeat:
-            if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
+            if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):
                 self._shift_held = True
                 actions.append(ShiftAction(is_down=True))
-                return actions
-
-            if keycode == KeyCode.KEY_CAPSLOCK:
-                self._caps_lock_on = not self._caps_lock_on
-                actions.append(CapsLockAction())
                 return actions
 
         # Handle Escape (only on fresh press for long-hold tracking)
@@ -692,8 +651,6 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_SPACE:
             if not is_repeat:
                 self._space_held = True
-                self._prev_was_space = True  # Next char is eligible for double-tap
-                self._last_char_time = timestamp  # Track timing
             actions.append(ControlAction(
                 action='space',
                 is_down=True,
@@ -758,23 +715,6 @@ class KeyboardStateMachine:
         # Handle printable characters
         char = event.char
         if char:
-            # Check for double-tap (only on fresh press, and only if enabled)
-            if not is_repeat and self._double_tap_enabled:
-                # Double-tap only works after a pause or space (to allow repeated letters like "pp" in "apple")
-                time_since_last = timestamp - self._last_char_time if self._last_char_time else float('inf')
-                eligible = self._prev_was_space or (time_since_last >= self.DOUBLE_TAP_PAUSE)
-
-                shifted_char = self._double_tap.check(char, timestamp, eligible=eligible)
-                if shifted_char:
-                    # Delete the first character (will be replaced)
-                    actions.append(ControlAction(action='backspace', is_down=True))
-                    # Double-tap acts like shift but shift_held=False (not physical shift)
-                    actions.append(CharacterAction(char=SHIFT_MAP.get(char, char), shifted=True, shift_held=False))
-                    # Update timing state
-                    self._last_char_time = timestamp
-                    self._prev_was_space = False
-                    return actions
-
             # Apply shift/caps
             final_char = self._apply_shift(char)
             actions.append(CharacterAction(
@@ -792,11 +732,8 @@ class KeyboardStateMachine:
             # Consume sticky shift (only on fresh press)
             if not is_repeat and self._sticky_shift_active:
                 self._sticky_shift_active = False
-
-            # Update timing state for double-tap eligibility
-            if not is_repeat:
-                self._last_char_time = timestamp
-                self._prev_was_space = False
+                if self._on_sticky_shift_change:
+                    self._on_sticky_shift_change(False)
 
         return actions
 
@@ -808,14 +745,25 @@ class KeyboardStateMachine:
         # Remove from pressed state
         press_time = self._pressed.pop(keycode, None)
 
-        # Handle modifier releases
-        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
-            # Check for sticky shift (quick tap, only if shift wasn't used for a character)
+        # Handle modifier releases (Shift keys and Caps Lock, which is remapped to Shift)
+        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):
+            # Check for sticky shift or double-tap caps lock (quick tap, only if shift wasn't used for a character)
             if press_time and not self._shift_used_for_char:
                 hold_duration = event.timestamp - press_time
                 if hold_duration < 0.3:  # Quick tap
-                    self._sticky_shift_active = True
-                    self._sticky_shift_time = event.timestamp
+                    if self._shift_double_tap.check('shift', event.timestamp):
+                        # Double-tap shift: toggle caps lock
+                        self._sticky_shift_active = False
+                        if self._on_sticky_shift_change:
+                            self._on_sticky_shift_change(False)
+                        self._caps_lock_on = not self._caps_lock_on
+                        actions.append(CapsLockAction())
+                    else:
+                        # Single tap: activate sticky shift
+                        self._sticky_shift_active = True
+                        self._sticky_shift_time = event.timestamp
+                        if self._on_sticky_shift_change:
+                            self._on_sticky_shift_change(True)
             self._shift_held = False
             self._shift_used_for_char = False  # Reset for next shift press
             actions.append(ShiftAction(is_down=False))
@@ -860,6 +808,8 @@ class KeyboardStateMachine:
                 should_shift = True
             else:
                 self._sticky_shift_active = False
+                if self._on_sticky_shift_change:
+                    self._on_sticky_shift_change(False)
 
         if should_shift and char in SHIFT_MAP:
             return SHIFT_MAP[char]
@@ -917,17 +867,6 @@ class KeyboardStateMachine:
         return self._caps_lock_on
 
     @property
-    def double_tap_enabled(self) -> bool:
-        """Check if double-tap shift is enabled."""
-        return self._double_tap_enabled
-
-    def set_double_tap_enabled(self, enabled: bool) -> None:
-        """Enable or disable double-tap shift (disable for paint mode)."""
-        self._double_tap_enabled = enabled
-        if not enabled:
-            self._double_tap.reset()  # Clear any pending first-tap state
-
-    @property
     def held_arrow_direction(self) -> str | None:
         """Get the currently held arrow direction, if any."""
         arrow_keys = [
@@ -962,9 +901,6 @@ class KeyboardStateMachine:
         self._caps_lock_on = False
         self._space_held = False
         self._sticky_shift_active = False
-        self._double_tap.reset()
-        self._double_tap_enabled = True
-        self._last_char_time = 0.0
-        self._prev_was_space = False
+        self._shift_double_tap.reset()
         self._escape_hold_triggered = False
         self._escape_press_time = None

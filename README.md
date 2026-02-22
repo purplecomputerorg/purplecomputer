@@ -2,7 +2,7 @@
 
 **Give them a first computer you can feel good about.**
 
-Transform your old laptop into a calm space for open-ended play. No internet, no apps. Ages 2-8+.
+Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for 4–7 and fun for 2–8+.
 They explore, create, and put it down on their own.
 
 > **🚧 WORK IN PROGRESS**

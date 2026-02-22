@@ -2,7 +2,7 @@
 """
 Purple Computer: Main Textual TUI Application
 
-The calm computer for kids ages 2-8+.
+The calm computer for kids. Designed for 4–7 and fun for 2–8+.
 A creativity device, not an entertainment device.
 
 IMPORTANT: Requires Linux with evdev for keyboard input.

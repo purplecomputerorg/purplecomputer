@@ -393,6 +393,7 @@ class PlayMode(Container, can_focus=True):
         self._header: PlayModeHeader | None = None
         self.session = PlaySession()
         self._replay_task: asyncio.Task | None = None
+        self._last_replay: list[tuple[str, str, float]] | None = None
         self._letters_mode = False
 
     def compose(self) -> ComposeResult:
@@ -418,6 +419,7 @@ class PlayMode(Container, can_focus=True):
             self._replay_task.cancel()
             self._replay_task = None
         self.session.clear()
+        self._last_replay = None
         if self.grid:
             self.grid.reset_colors()
 
@@ -478,13 +480,17 @@ class PlayMode(Container, can_focus=True):
             return
 
     async def _start_replay(self) -> None:
-        """Start replaying the current session."""
+        """Start replaying the current session, or re-replay the last one."""
         replay_data = self.session.get_replay()
-        if not replay_data:
+        if replay_data:
+            # New session to replay: save it and clear for fresh recording
+            self._last_replay = replay_data
+            self.session.clear()
+        elif self._last_replay:
+            # No new input: replay the same thing again
+            replay_data = self._last_replay
+        else:
             return
-
-        # End current session and start fresh (new keys record to new session)
-        self.session.clear()
 
         # Cancel any existing replay
         if self._replay_task and not self._replay_task.done():

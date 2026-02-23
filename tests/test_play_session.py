@@ -156,9 +156,9 @@ class TestSessionTimeout:
         """Multiple timeout resets in sequence."""
         s = PlaySession()
         s.record('A', now=0.0)
-        s.record('B', now=50.0)   # timeout, reset
-        s.record('C', now=100.0)  # timeout again
-        s.record('D', now=100.5)  # within timeout of C
+        s.record('B', now=5.0)   # timeout, reset
+        s.record('C', now=10.0)  # timeout again
+        s.record('D', now=10.5)  # within timeout of C
         assert s.get_replay() == [
             ('C', SUBMODE_MUSIC, 0.0),
             ('D', SUBMODE_MUSIC, 0.5),
@@ -168,7 +168,7 @@ class TestSessionTimeout:
         """Many keys over a long time, but each within timeout of the previous."""
         s = PlaySession()
         for i in range(100):
-            s.record('A', now=i * 10.0)  # every 10 seconds
+            s.record('A', now=i * 1.0)  # every 1 second (within 2s timeout)
         assert len(s.get_replay()) == 100
 
 

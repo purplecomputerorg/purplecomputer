@@ -20,6 +20,7 @@ from rich.style import Style
 from pathlib import Path
 import asyncio
 import os
+import time
 
 from ..keyboard import CharacterAction, ControlAction
 from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
@@ -90,6 +91,8 @@ LIGHT_COLORS = {"#da77f2", "#4dabf7", "#ff6b6b"}
 # Letters that get spoken in Letters mode (A-Z only, not numbers or punctuation)
 _LETTER_KEYS = {k for k in ALL_KEYS if k.isalpha()}
 
+REPLAY_MAX_DURATION = 10.0  # hard cap on replay length (seconds)
+
 
 class PlayModeHeader(Static):
     """Shows current sub-mode with both options visible, current highlighted.
@@ -147,6 +150,8 @@ class PlayGrid(Widget):
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._sounds: dict[str, pygame.mixer.Sound] = {}
         self._sounds_loaded = False
+        self._letter_sounds: dict[str, pygame.mixer.Sound] = {}
+        self._letter_sounds_loaded = False
 
     def _ensure_sounds_loaded(self) -> None:
         """Load sounds if not already loaded."""
@@ -182,7 +187,7 @@ class PlayGrid(Widget):
                     pass
 
     def play_sound(self, key: str) -> None:
-        """Play sound for a key (respects app volume setting)."""
+        """Play instrument sound for a key (respects app volume setting)."""
         # Check if volume is muted at app level
         if hasattr(self.app, 'volume_on') and not self.app.volume_on:
             return
@@ -190,12 +195,45 @@ class PlayGrid(Widget):
         if key in self._sounds:
             self._sounds[key].play()
 
+    def _ensure_letter_sounds_loaded(self) -> None:
+        """Load letter sounds if not already loaded."""
+        if self._letter_sounds_loaded or not _MIXER_READY:
+            return
+        self._load_letter_sounds()
+        self._letter_sounds_loaded = True
+
+    def _load_letter_sounds(self) -> None:
+        """Load pregenerated letter name clips from the letters/ subdirectory."""
+        sounds_path = self._get_sounds_path()
+        letters_path = sounds_path / "letters"
+        if not letters_path.exists():
+            return
+        for key in _LETTER_KEYS:
+            path = letters_path / f"{key.lower()}.wav"
+            if path.exists():
+                try:
+                    sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.5)
+                    self._letter_sounds[key] = sound
+                except pygame.error:
+                    pass
+
+    def play_letter(self, key: str) -> None:
+        """Play the letter name clip for a key (respects app volume setting)."""
+        if hasattr(self.app, 'volume_on') and not self.app.volume_on:
+            return
+        self._ensure_letter_sounds_loaded()
+        if key in self._letter_sounds:
+            self._letter_sounds[key].play()
+
     def cleanup_sounds(self) -> None:
         """Stop all currently playing sounds and clear loaded sounds."""
         if _MIXER_READY:
             pygame.mixer.stop()
         self._sounds.clear()
         self._sounds_loaded = False
+        self._letter_sounds.clear()
+        self._letter_sounds_loaded = False
 
     def reset_colors(self) -> None:
         """Reset all key colors to default state."""
@@ -390,12 +428,11 @@ class PlayMode(Container, can_focus=True):
         """Play audio for a key in the given sub-mode.
 
         In music mode, all keys play instrument sounds.
-        In letters mode, letter keys (A-Z) are spoken aloud,
-        other keys (numbers, punctuation) still play sounds.
+        In letters mode, letter keys (A-Z) play their letter name clip,
+        other keys (numbers, punctuation) still play instrument sounds.
         """
         if submode == SUBMODE_LETTERS and key in _LETTER_KEYS:
-            from ..tts import speak
-            speak(key)
+            self.grid.play_letter(key)
         else:
             self.grid.play_sound(key)
 
@@ -409,9 +446,13 @@ class PlayMode(Container, can_focus=True):
         Keys pressed during replay are recorded in the new session.
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space triggers replay
+            # Space: stop replay if playing, otherwise start replay
             if action.action == 'space':
-                await self._start_replay()
+                if self._replay_task and not self._replay_task.done():
+                    self._replay_task.cancel()
+                    self._replay_task = None
+                else:
+                    await self._start_replay()
                 return
 
             # Tab switches sub-mode
@@ -452,11 +493,18 @@ class PlayMode(Container, can_focus=True):
         self._replay_task = asyncio.create_task(self._do_replay(replay_data))
 
     async def _do_replay(self, replay_data: list[tuple[str, str, float]]) -> None:
-        """Play back recorded key sequence with original timing and sub-modes."""
+        """Play back recorded key sequence with original timing and sub-modes.
+
+        Stops silently after REPLAY_MAX_DURATION seconds.
+        Can also be cancelled by pressing space.
+        """
         try:
+            start = time.monotonic()
             for key, submode, delay in replay_data:
                 if delay > 0:
                     await asyncio.sleep(delay)
+                if time.monotonic() - start >= REPLAY_MAX_DURATION:
+                    break
                 self.grid.next_color(key)
                 self._play_key(key, submode)
         except asyncio.CancelledError:

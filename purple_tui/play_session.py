@@ -10,7 +10,7 @@ and a new session begins. Starting a replay ends the current session.
 
 import time
 
-SESSION_TIMEOUT = 30.0  # seconds of inactivity before session resets
+SESSION_TIMEOUT = 2.0  # seconds of inactivity before session resets
 
 # Sub-mode constants
 SUBMODE_MUSIC = 'music'

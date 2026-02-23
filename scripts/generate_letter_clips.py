@@ -12,7 +12,9 @@ Usage:
     python scripts/generate_letter_clips.py --force   # regenerate all
 """
 
+import array
 import string
+import struct
 import sys
 import wave
 from pathlib import Path
@@ -53,24 +55,59 @@ def find_voice_model() -> Path | None:
     return None
 
 
+def _trim_silence(samples: array.array, sample_rate: int, threshold: int = 500) -> array.array:
+    """Trim leading and trailing silence from 16-bit audio samples.
+
+    Args:
+        samples: array of signed 16-bit samples
+        sample_rate: samples per second
+        threshold: amplitude below which audio is considered silence
+    """
+    # Find first sample above threshold
+    start = 0
+    for i, s in enumerate(samples):
+        if abs(s) > threshold:
+            # Back up a tiny bit so we don't clip the attack
+            start = max(0, i - int(sample_rate * 0.01))
+            break
+
+    # Find last sample above threshold
+    end = len(samples)
+    for i in range(len(samples) - 1, -1, -1):
+        if abs(samples[i]) > threshold:
+            # Keep a short tail so it doesn't sound chopped
+            end = min(len(samples), i + int(sample_rate * 0.05))
+            break
+
+    return samples[start:end]
+
+
 def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:
-    """Generate a single letter name clip."""
+    """Generate a single letter name clip, trimmed tight."""
     from piper.config import SynthesisConfig
 
     config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
 
-    # Pad with pauses to prevent clipping (same as tts.py)
-    audio_chunks = list(voice.synthesize(f"... {letter} ...", config))
+    # No padding: synthesize just the letter for minimal latency
+    audio_chunks = list(voice.synthesize(letter, config))
     if not audio_chunks:
         return False
 
     first_chunk = audio_chunks[0]
+
+    # Collect all raw samples
+    raw = b''.join(chunk.audio_int16_bytes for chunk in audio_chunks)
+    samples = array.array('h')
+    samples.frombytes(raw)
+
+    # Trim leading/trailing silence
+    trimmed = _trim_silence(samples, first_chunk.sample_rate)
+
     with wave.open(str(output_path), 'wb') as wav_file:
         wav_file.setnchannels(first_chunk.sample_channels)
         wav_file.setsampwidth(first_chunk.sample_width)
         wav_file.setframerate(first_chunk.sample_rate)
-        for chunk in audio_chunks:
-            wav_file.writeframes(chunk.audio_int16_bytes)
+        wav_file.writeframes(trimmed.tobytes())
 
     return True
 

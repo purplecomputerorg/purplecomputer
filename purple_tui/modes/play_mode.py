@@ -430,13 +430,12 @@ class PlayMode(Container, can_focus=True):
         """Play audio for a key in the given sub-mode.
 
         In music mode, all keys play instrument sounds.
-        In letters mode, letter keys (A-Z) play their letter name clip,
-        other keys (numbers, punctuation) still play instrument sounds.
+        In letters mode, letter keys (A-Z) play their letter name clip
+        layered with the instrument sound. Other keys just play sounds.
         """
+        self.grid.play_sound(key)
         if submode == SUBMODE_LETTERS and key in _LETTER_KEYS:
             self.grid.play_letter(key)
-        else:
-            self.grid.play_sound(key)
 
     async def handle_keyboard_action(self, action) -> None:
         """

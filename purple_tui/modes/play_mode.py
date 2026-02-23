@@ -3,6 +3,8 @@ Play Mode: Music and Art Grid
 
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
+Tab switches between Music and Letters sub-modes.
+Space replays the current session.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -21,7 +23,7 @@ import os
 
 from ..keyboard import CharacterAction, ControlAction
 from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
-from ..play_session import PlaySession
+from ..play_session import PlaySession, SUBMODE_MUSIC, SUBMODE_LETTERS
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -84,6 +86,49 @@ DEFAULT_BG_LIGHT = "#e8daf0"
 
 # Light colors need dark text
 LIGHT_COLORS = {"#da77f2", "#4dabf7", "#ff6b6b"}
+
+# Letters that get spoken in Letters mode (A-Z only, not numbers or punctuation)
+_LETTER_KEYS = {k for k in ALL_KEYS if k.isalpha()}
+
+
+class PlayModeHeader(Static):
+    """Shows current sub-mode with both options visible, current highlighted.
+
+    Follows the same pattern as DoodleMode's CanvasHeader.
+    """
+
+    DEFAULT_CSS = """
+    PlayModeHeader {
+        height: 1;
+        dock: top;
+        text-align: center;
+        color: $text-muted;
+        background: $surface;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._letters_mode = False
+        self.add_class("caps-sensitive")
+
+    def update_mode(self, letters_mode: bool) -> None:
+        self._letters_mode = letters_mode
+        self.refresh()
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        music_label = caps("Music")
+        letters_label = caps("Letters")
+
+        if self._letters_mode:
+            music_part = f"[dim]♪ {music_label}[/]"
+            letters_part = f"[bold]{letters_label}[/]"
+        else:
+            music_part = f"[bold]♪ {music_label}[/]"
+            letters_part = f"[dim]{letters_label}[/]"
+
+        return f"{music_part}  [dim]{caps('Tab')}[/]  {letters_part}"
 
 
 class PlayGrid(Widget):
@@ -273,12 +318,22 @@ class PlayExampleHint(Static):
 
 
 class PlayMode(Container, can_focus=True):
-    """Play Mode: press keys to make sounds and colors."""
+    """Play Mode: press keys to make sounds and colors.
+
+    Sub-modes (switched with Tab):
+      Music: all keys play instrument sounds
+      Letters: letter keys (A-Z) are spoken aloud, other keys play sounds
+    """
 
     DEFAULT_CSS = """
     PlayMode {
         width: 100%;
         height: 100%;
+    }
+
+    PlayModeHeader {
+        height: 1;
+        dock: top;
     }
 
     PlayGrid {
@@ -297,10 +352,14 @@ class PlayMode(Container, can_focus=True):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
+        self._header: PlayModeHeader | None = None
         self.session = PlaySession()
         self._replay_task: asyncio.Task | None = None
+        self._letters_mode = False
 
     def compose(self) -> ComposeResult:
+        self._header = PlayModeHeader(id="play-header")
+        yield self._header
         self.grid = PlayGrid()
         yield self.grid
         yield PlayExampleHint(id="example-hint")
@@ -324,20 +383,45 @@ class PlayMode(Container, can_focus=True):
         if self.grid:
             self.grid.reset_colors()
 
+    def _current_submode(self) -> str:
+        return SUBMODE_LETTERS if self._letters_mode else SUBMODE_MUSIC
+
+    def _play_key(self, key: str, submode: str) -> None:
+        """Play audio for a key in the given sub-mode.
+
+        In music mode, all keys play instrument sounds.
+        In letters mode, letter keys (A-Z) are spoken aloud,
+        other keys (numbers, punctuation) still play sounds.
+        """
+        if submode == SUBMODE_LETTERS and key in _LETTER_KEYS:
+            from ..tts import speak
+            speak(key)
+        else:
+            self.grid.play_sound(key)
+
     async def handle_keyboard_action(self, action) -> None:
         """
         Handle keyboard actions from the main app's KeyboardStateMachine.
 
-        Character keys cycle colors, play sounds, and are recorded.
+        Tab switches between Music and Letters sub-modes.
+        Character keys cycle colors, play sounds or speak, and are recorded.
         Space triggers replay of the current session, then starts a new one.
         Keys pressed during replay are recorded in the new session.
         """
-        # Space triggers replay
-        if isinstance(action, ControlAction) and action.action == 'space' and action.is_down:
-            await self._start_replay()
-            return
+        if isinstance(action, ControlAction) and action.is_down:
+            # Space triggers replay
+            if action.action == 'space':
+                await self._start_replay()
+                return
 
-        # Character keys cycle colors, play sounds, and record
+            # Tab switches sub-mode
+            if action.action == 'tab':
+                self._letters_mode = not self._letters_mode
+                if self._header:
+                    self._header.update_mode(self._letters_mode)
+                return
+
+        # Character keys cycle colors, play/speak, and record
         if isinstance(action, CharacterAction):
             char = action.char
             if not char:
@@ -346,9 +430,10 @@ class PlayMode(Container, can_focus=True):
             lookup = char.upper() if char.isalpha() else char
 
             if lookup in ALL_KEYS:
-                self.session.record(lookup)
+                submode = self._current_submode()
+                self.session.record(lookup, submode)
                 self.grid.next_color(lookup)
-                self.grid.play_sound(lookup)
+                self._play_key(lookup, submode)
             return
 
     async def _start_replay(self) -> None:
@@ -366,13 +451,13 @@ class PlayMode(Container, can_focus=True):
 
         self._replay_task = asyncio.create_task(self._do_replay(replay_data))
 
-    async def _do_replay(self, replay_data: list[tuple[str, float]]) -> None:
-        """Play back recorded key sequence with original timing."""
+    async def _do_replay(self, replay_data: list[tuple[str, str, float]]) -> None:
+        """Play back recorded key sequence with original timing and sub-modes."""
         try:
-            for key, delay in replay_data:
+            for key, submode, delay in replay_data:
                 if delay > 0:
                     await asyncio.sleep(delay)
                 self.grid.next_color(key)
-                self.grid.play_sound(key)
+                self._play_key(key, submode)
         except asyncio.CancelledError:
             pass

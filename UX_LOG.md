@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Play mode sub-modes**: Tab switches between Music (instrument sounds) and Letters (speaks letter names aloud via TTS); header indicator shows current sub-mode; sessions record which sub-mode each key was pressed in, so replay preserves the mix
 - **Play mode replay**: Press space to replay your recent key sequence with original timing; sessions auto-reset after 30 seconds of inactivity; pressing keys during replay starts a new session
 - **Sticky shift replaces double-tap shift**: Removed double-tap character shift (caused accidental capitals). Shift key tap activates sticky shift for one character. Double-tap Shift toggles caps lock. Caps Lock key remapped to Shift. Added shift indicator (⇧) in title bar.
 - **Live boot default**: USB now boots directly into Purple Computer with no installation needed; internal disk is untouched; "Install Purple Computer" available as GRUB menu option

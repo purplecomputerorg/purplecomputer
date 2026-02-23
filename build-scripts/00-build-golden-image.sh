@@ -127,7 +127,9 @@ SOURCES
         fontconfig \
         fonts-noto-color-emoji \
         spice-vdagent \
-        xkbset
+        xkbset \
+        x11-utils \
+        xdotool
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji
@@ -153,6 +155,7 @@ SOURCES
     cp /purple-src/keyboard_normalizer.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
 
     # Install Python dependencies (python-xlib for font size calculation fallback, evdev for keyboard normalizer)
     chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev

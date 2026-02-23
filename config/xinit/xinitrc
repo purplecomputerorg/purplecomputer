@@ -39,17 +39,51 @@ sleep 0.5
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
 
-# Calculate font size (simple: 80% of screen, clamped to 12-32pt)
+DEBUG_FLAG=/opt/purple/debug
+
+# Debug mode: extra diagnostics at boot
+if [ -f "$DEBUG_FLAG" ]; then
+    echo "--- Display diagnostics (debug mode) ---"
+    echo "xrandr:"
+    xrandr 2>&1 | head -20
+    echo "Xft.dpi:"
+    xrdb -query 2>&1 | grep -i dpi || echo "  (none set)"
+    echo "GDK_SCALE=$GDK_SCALE QT_SCALE_FACTOR=$QT_SCALE_FACTOR"
+    echo "WINIT_X11_SCALE_FACTOR=$WINIT_X11_SCALE_FACTOR"
+    python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "calc_font_size.py --info failed"
+    echo "--- End display diagnostics ---"
+fi
+
+# Calculate font size (80% of screen, clamped to 12-48pt)
 FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "16")
 echo "Font size: $FONT_SIZE"
 
-# Launch Purple Computer
+# Debug mode: log terminal size after launch
+if [ -f "$DEBUG_FLAG" ]; then
+    (
+        sleep 3
+        echo "--- Terminal size check (3s after launch) ---"
+        if command -v xdotool &>/dev/null; then
+            WID=$(xdotool search --name "Alacritty" 2>/dev/null | head -1)
+            [ -n "$WID" ] && xdotool getwindowgeometry "$WID" 2>&1
+        fi
+        echo "--- End terminal size check ---"
+    ) >> /tmp/xinitrc.log 2>&1 &
+fi
+
 alacritty --config-file /etc/purple/alacritty.toml \
     -o "font.size=${FONT_SIZE}" \
     -e /usr/local/bin/purple
 
-# If it exits, show debug info
-echo "Exited, showing debug shell"
-exec alacritty --config-file /etc/purple/alacritty.toml \
-    -o "font.size=16" \
-    -e bash -c "echo 'Purple exited. Debug:'; python3 /opt/purple/calc_font_size.py --info; echo; cat /tmp/xinitrc.log; read"
+# After Purple exits
+if [ -f "$DEBUG_FLAG" ]; then
+    # Debug: drop to interactive debug shell
+    echo "Exited, opening debug shell"
+    exec alacritty --config-file /etc/purple/alacritty.toml \
+        -o "font.size=16" \
+        -e bash --rcfile /opt/purple/debug-shell.sh
+else
+    # Production: restart Purple
+    echo "Exited, restarting"
+    exec "$0"
+fi

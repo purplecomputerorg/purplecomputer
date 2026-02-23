@@ -88,17 +88,53 @@ def calculate_font(screen_w, screen_h, cell_w, cell_h):
     return max(MIN_FONT, min(MAX_FONT, font))
 
 
+def get_x11_dpi():
+    """Get the DPI that X11/fontconfig is using. Returns (dpi, source) or (None, reason)."""
+    # Check Xft.dpi from X resources (this is what fontconfig/freetype uses)
+    try:
+        out = subprocess.check_output(
+            ["xrdb", "-query"], text=True, timeout=5, stderr=subprocess.DEVNULL
+        )
+        m = re.search(r'Xft\.dpi:\s*(\d+)', out)
+        if m:
+            return int(m.group(1)), "Xft.dpi"
+    except Exception:
+        pass
+
+    # Check xdpyinfo for server DPI
+    try:
+        out = subprocess.check_output(
+            ["xdpyinfo"], text=True, timeout=5, stderr=subprocess.DEVNULL
+        )
+        m = re.search(r'resolution:\s*(\d+)x(\d+)', out)
+        if m:
+            return int(m.group(1)), "xdpyinfo"
+    except Exception:
+        pass
+
+    return None, "unknown"
+
+
 def main():
     # Debug mode
     if len(sys.argv) > 1 and sys.argv[1] == '--info':
         screen = get_resolution()
         cell = probe_cell_size()
         font = calculate_font(*screen, *cell)
+        dpi, dpi_source = get_x11_dpi()
         print(f"Screen: {screen[0]}x{screen[1]}")
         print(f"Cell: {cell[0]}x{cell[1]} (at {PROBE_FONT}pt)")
         print(f"Grid: {REQUIRED_COLS}x{REQUIRED_ROWS}")
         print(f"Fill: {SCREEN_FILL*100:.0f}%")
         print(f"Font: {font:.1f}pt")
+        if dpi:
+            print(f"X11 DPI: {dpi} (from {dpi_source})")
+            if dpi != 96:
+                expected_scale = dpi / 96
+                print(f"  WARNING: DPI is not 96. Fonts may render {expected_scale:.1f}x larger than expected.")
+                print(f"  Effective grid at this DPI: ~{int(screen[0] / (cell[0] * expected_scale))}x{int(screen[1] / (cell[1] * expected_scale))} cells")
+        else:
+            print(f"X11 DPI: could not detect ({dpi_source})")
         return
 
     # Normal mode: output font size

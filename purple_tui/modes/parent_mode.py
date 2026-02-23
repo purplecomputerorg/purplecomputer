@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 
 from ..keyboard import NavigationAction, ControlAction
+from ..constants import is_debug
 
 
 # =============================================================================
@@ -397,6 +398,8 @@ def _get_menu_items() -> list:
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-update", "Git Pull & Exit"))
+    if is_debug():
+        items.append(("menu-system", "Exit to System"))
     items.append(("menu-exit", "Exit"))
     return items
 
@@ -552,6 +555,8 @@ class ParentMenu(ModalScreen):
             self._start_demo()
         elif item_id == "menu-update":
             self._update_and_restart()
+        elif item_id == "menu-system":
+            self._exit_to_system()
         elif item_id == "menu-exit":
             self.dismiss()
 
@@ -652,6 +657,17 @@ class ParentMenu(ModalScreen):
 
         # Force redraw after returning from suspend
         self.app.refresh(repaint=True)
+
+    def _exit_to_system(self) -> None:
+        """Exit Purple Computer entirely, dropping to the debug shell."""
+        self.dismiss()
+        self.app.call_later(self._run_exit_to_system)
+
+    def _run_exit_to_system(self) -> None:
+        """Actually exit the app. xinitrc will launch the debug shell."""
+        _flush_terminal_input()
+        os.system('stty sane')
+        self.app.exit()
 
     def _start_demo(self) -> None:
         """Start the demo playback (dev mode only)."""

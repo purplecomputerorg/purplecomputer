@@ -16,10 +16,12 @@ from textual.strip import Strip
 from rich.segment import Segment
 from rich.style import Style
 from pathlib import Path
+import asyncio
 import os
 
-from ..keyboard import CharacterAction
+from ..keyboard import CharacterAction, ControlAction
 from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
+from ..play_session import PlaySession
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -295,6 +297,8 @@ class PlayMode(Container, can_focus=True):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
+        self.session = PlaySession()
+        self._replay_task: asyncio.Task | None = None
 
     def compose(self) -> ComposeResult:
         self.grid = PlayGrid()
@@ -305,11 +309,18 @@ class PlayMode(Container, can_focus=True):
         self.focus()
 
     def on_unmount(self) -> None:
+        if self._replay_task and not self._replay_task.done():
+            self._replay_task.cancel()
+            self._replay_task = None
         if self.grid:
             self.grid.cleanup_sounds()
 
     def reset_state(self) -> None:
-        """Reset play mode state (colors). Called when leaving mode."""
+        """Reset play mode state (colors, session, replay). Called when leaving mode."""
+        if self._replay_task and not self._replay_task.done():
+            self._replay_task.cancel()
+            self._replay_task = None
+        self.session.clear()
         if self.grid:
             self.grid.reset_colors()
 
@@ -317,9 +328,16 @@ class PlayMode(Container, can_focus=True):
         """
         Handle keyboard actions from the main app's KeyboardStateMachine.
 
-        Play mode is simple: character keys cycle colors and play sounds.
+        Character keys cycle colors, play sounds, and are recorded.
+        Space triggers replay of the current session, then starts a new one.
+        Keys pressed during replay are recorded in the new session.
         """
-        # Character keys cycle colors and play sounds
+        # Space triggers replay
+        if isinstance(action, ControlAction) and action.action == 'space' and action.is_down:
+            await self._start_replay()
+            return
+
+        # Character keys cycle colors, play sounds, and record
         if isinstance(action, CharacterAction):
             char = action.char
             if not char:
@@ -328,6 +346,33 @@ class PlayMode(Container, can_focus=True):
             lookup = char.upper() if char.isalpha() else char
 
             if lookup in ALL_KEYS:
+                self.session.record(lookup)
                 self.grid.next_color(lookup)
                 self.grid.play_sound(lookup)
             return
+
+    async def _start_replay(self) -> None:
+        """Start replaying the current session."""
+        replay_data = self.session.get_replay()
+        if not replay_data:
+            return
+
+        # End current session and start fresh (new keys record to new session)
+        self.session.clear()
+
+        # Cancel any existing replay
+        if self._replay_task and not self._replay_task.done():
+            self._replay_task.cancel()
+
+        self._replay_task = asyncio.create_task(self._do_replay(replay_data))
+
+    async def _do_replay(self, replay_data: list[tuple[str, float]]) -> None:
+        """Play back recorded key sequence with original timing."""
+        try:
+            for key, delay in replay_data:
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                self.grid.next_color(key)
+                self.grid.play_sound(key)
+        except asyncio.CancelledError:
+            pass

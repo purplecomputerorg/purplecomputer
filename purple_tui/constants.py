@@ -10,6 +10,15 @@ Central location for constants used across the app.
 
 SUPPORT_EMAIL = "support@purplecomputer.org"
 
+# Debug mode: touch /opt/purple/debug to enable debug features on any install.
+# Controls: "Exit to System" in parent menu, debug shell on exit, extra diagnostics.
+DEBUG_FLAG_PATH = "/opt/purple/debug"
+
+def is_debug() -> bool:
+    """Check if this install has debug mode enabled."""
+    from pathlib import Path
+    return Path(DEBUG_FLAG_PATH).exists()
+
 # =============================================================================
 # MODE NAMES
 # =============================================================================

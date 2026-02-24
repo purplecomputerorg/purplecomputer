@@ -16,7 +16,8 @@ GRID_KEYS = [
 ALL_KEYS = [key for row in GRID_KEYS for key in row]
 
 # Color cycle: purple -> blue -> red -> default (off)
-COLORS = ["#da77f2", "#4dabf7", "#ff6b6b", None]
+# Tinted variants: subtle color over dark background (less eye strain)
+COLORS = ["#3d2650", "#1e3348", "#3d1e1e", None]
 
 # Musical frequencies (C major scale, balanced range)
 NOTE_FREQUENCIES = {

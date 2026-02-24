@@ -86,11 +86,11 @@ except pygame.error:
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
-# Light colors need dark text
-LIGHT_COLORS = {"#da77f2", "#4dabf7", "#ff6b6b"}
+# Light colors need dark text (tinted palette is all dark, so none listed)
+LIGHT_COLORS: set[str] = set()
 
-# Letters that get spoken in Letters mode (A-Z only, not numbers or punctuation)
-_LETTER_KEYS = {k for k in ALL_KEYS if k.isalpha()}
+# Keys that get spoken in Letters mode (A-Z and 0-9)
+_SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 
 REPLAY_MAX_DURATION = 10.0  # hard cap on replay length (seconds)
 
@@ -204,12 +204,12 @@ class PlayGrid(Widget):
         self._letter_sounds_loaded = True
 
     def _load_letter_sounds(self) -> None:
-        """Load pregenerated letter name clips from the letters/ subdirectory."""
+        """Load pregenerated letter and number name clips from the letters/ subdirectory."""
         sounds_path = self._get_sounds_path()
         letters_path = sounds_path / "letters"
         if not letters_path.exists():
             return
-        for key in _LETTER_KEYS:
+        for key in _SPEAKABLE_KEYS:
             path = letters_path / f"{key.lower()}.wav"
             if path.exists():
                 try:
@@ -435,7 +435,7 @@ class PlayMode(Container, can_focus=True):
         layered with the instrument sound. Other keys just play sounds.
         """
         self.grid.play_sound(key)
-        if submode == SUBMODE_LETTERS and key in _LETTER_KEYS:
+        if submode == SUBMODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
 
     async def handle_keyboard_action(self, action) -> None:

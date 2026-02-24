@@ -35,14 +35,16 @@ _SYNTH_PARAMS = {
     "length_scale": 1.0,
 }
 
-# Same letter pronunciation map as tts.py
+# Same pronunciation map as tts.py
 LETTER_PRONUNCIATION = {
     "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee",
-    "F": "eff", "G": "gee", "H": "aitch", "I": "eye", "J": "jay",
-    "K": "kay", "L": "ell", "M": "em", "N": "en", "O": "oh",
-    "P": "pee", "Q": "cue", "R": "ar", "S": "ess", "T": "tee",
+    "F": "ef", "G": "jee", "H": "aitch", "I": "eye", "J": "jay",
+    "K": "kay", "L": "el", "M": "em", "N": "en", "O": "oh",
+    "P": "pee", "Q": "cue", "R": "ar", "S": "es", "T": "tee",
     "U": "you", "V": "vee", "W": "double you", "X": "ex",
     "Y": "why", "Z": "zee",
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
 }
 
 
@@ -177,22 +179,23 @@ def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:
 
 
 def main():
-    """Generate letter name clips for A-Z."""
+    """Generate letter (A-Z) and number (0-9) name clips."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate letter name clips for Play Mode")
+    parser = argparse.ArgumentParser(description="Generate letter and number name clips for Play Mode")
     parser.add_argument("--force", "-f", action="store_true",
                         help="Regenerate all clips even if they exist")
     args = parser.parse_args()
 
     LETTERS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Find which letters need generating
+    # Find which clips need generating (letters A-Z + digits 0-9)
+    all_keys = list(string.ascii_uppercase) + list(string.digits)
     to_generate = []
-    for letter in string.ascii_uppercase:
-        output_path = LETTERS_DIR / f"{letter.lower()}.wav"
+    for key in all_keys:
+        output_path = LETTERS_DIR / f"{key.lower()}.wav"
         if args.force or not output_path.exists():
-            to_generate.append((letter, output_path))
+            to_generate.append((key, output_path))
 
     if not to_generate:
         print("All letter clips already exist. Use --force to regenerate.")
@@ -222,7 +225,7 @@ def main():
 
     voice = PiperVoice.load(str(model_path))
 
-    print(f"Generating {len(to_generate)} letter clips...")
+    print(f"Generating {len(to_generate)} clips...")
     print()
     for letter, output_path in to_generate:
         if generate_letter_clip(voice, letter, output_path):

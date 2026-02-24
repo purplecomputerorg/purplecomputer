@@ -32,11 +32,13 @@ _SYNTH_PARAMS = {
 
 LETTER_PRONUNCIATION = {
     "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee",
-    "F": "eff", "G": "gee", "H": "aitch", "I": "eye", "J": "jay",
-    "K": "kay", "L": "ell", "M": "em", "N": "en", "O": "oh",
-    "P": "pee", "Q": "cue", "R": "ar", "S": "ess", "T": "tee",
+    "F": "ef", "G": "jee", "H": "aitch", "I": "eye", "J": "jay",
+    "K": "kay", "L": "el", "M": "em", "N": "en", "O": "oh",
+    "P": "pee", "Q": "cue", "R": "ar", "S": "es", "T": "tee",
     "U": "you", "V": "vee", "W": "double you", "X": "ex",
     "Y": "why", "Z": "zee",
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
 }
 
 # Test phrases

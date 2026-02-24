@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-02
 
+- **Play mode numbers speak in Letters mode**: Number keys (0-9) now say their name aloud in Letters sub-mode, just like letter keys do
 - **Deterministic TTS**: Speech synthesis now produces identical output for identical input; single letters use phonetic pronunciation (A -> "ay"); short utterances padded for prosody stability; WAV output trimmed and normalized; aggressive caching avoids re-synthesis; common words pre-generated at startup
 - **Play mode word recognition**: In Letters mode, if typed letters spell a known word (cat, dog, sun, etc.), the word is spoken aloud after replay finishes
 - **Play mode sub-modes**: Tab switches between Music (instrument sounds) and Letters (speaks letter names aloud via TTS); header indicator shows current sub-mode; sessions record which sub-mode each key was pressed in, so replay preserves the mix

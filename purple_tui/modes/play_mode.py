@@ -25,6 +25,7 @@ import time
 from ..keyboard import CharacterAction, ControlAction
 from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
 from ..play_session import PlaySession, SUBMODE_MUSIC, SUBMODE_LETTERS
+from ..play_words import extract_word
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -491,17 +492,21 @@ class PlayMode(Container, can_focus=True):
         else:
             return
 
+        # Check if the letters spell a known word
+        word = extract_word(replay_data, SUBMODE_LETTERS)
+
         # Cancel any existing replay
         if self._replay_task and not self._replay_task.done():
             self._replay_task.cancel()
 
-        self._replay_task = asyncio.create_task(self._do_replay(replay_data))
+        self._replay_task = asyncio.create_task(self._do_replay(replay_data, word))
 
-    async def _do_replay(self, replay_data: list[tuple[str, str, float]]) -> None:
+    async def _do_replay(self, replay_data: list[tuple[str, str, float]], word: str | None = None) -> None:
         """Play back recorded key sequence with original timing and sub-modes.
 
         Stops silently after REPLAY_MAX_DURATION seconds.
         Can also be cancelled by pressing space.
+        If the letters spell a known word, speaks it after replay finishes.
         """
         try:
             start = time.monotonic()
@@ -512,5 +517,10 @@ class PlayMode(Container, can_focus=True):
                     break
                 self.grid.next_color(key)
                 self._play_key(key, submode)
+            # Speak the word after replay completes (small pause for last sound)
+            if word:
+                await asyncio.sleep(0.3)
+                from ..tts import speak
+                speak(word)
         except asyncio.CancelledError:
             pass

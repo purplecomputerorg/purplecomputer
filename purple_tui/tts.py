@@ -113,31 +113,73 @@ def _prepare_text(text: str) -> str:
 def _trim_silence(samples: array.array, sample_rate: int, threshold_db: float = -40.0) -> array.array:
     """Trim leading and trailing silence below threshold_db.
 
+    Uses windowed RMS (5ms windows) to avoid being fooled by single-sample
+    spikes or brief static bursts from synthesis padding artifacts.
+
     Args:
         samples: array of signed 16-bit samples
         sample_rate: samples per second
         threshold_db: amplitude threshold in dB (relative to 16-bit full scale)
     """
-    # Convert dB threshold to linear amplitude (16-bit full scale = 32767)
-    threshold = int(32767 * (10 ** (threshold_db / 20.0)))
+    if not samples:
+        return samples
 
-    # Find first sample above threshold
+    # Convert dB threshold to linear amplitude (16-bit full scale = 32767)
+    threshold = 32767 * (10 ** (threshold_db / 20.0))
+    threshold_sq = threshold * threshold
+
+    # 5ms RMS window
+    window = max(1, int(sample_rate * 0.005))
+
+    def _rms_above(start_idx: int) -> bool:
+        """Check if RMS of window starting at start_idx exceeds threshold."""
+        end_idx = min(start_idx + window, len(samples))
+        if end_idx <= start_idx:
+            return False
+        sum_sq = sum(s * s for s in samples[start_idx:end_idx])
+        return (sum_sq / (end_idx - start_idx)) > threshold_sq
+
+    # Find first window with RMS above threshold
     start = 0
-    for i, s in enumerate(samples):
-        if abs(s) > threshold:
-            # Keep a tiny attack buffer
+    for i in range(0, len(samples) - window, window):
+        if _rms_above(i):
+            # Back up a tiny bit so we don't clip the attack
             start = max(0, i - int(sample_rate * 0.01))
             break
 
-    # Find last sample above threshold
+    # Find last window with RMS above threshold
     end = len(samples)
-    for i in range(len(samples) - 1, -1, -1):
-        if abs(samples[i]) > threshold:
+    for i in range(len(samples) - window, -1, -window):
+        if _rms_above(i):
             # Keep a short tail
-            end = min(len(samples), i + int(sample_rate * 0.02))
+            end = min(len(samples), i + window + int(sample_rate * 0.02))
             break
 
     return samples[start:end]
+
+
+def _apply_fade(samples: array.array, sample_rate: int, fade_ms: float = 10.0) -> array.array:
+    """Apply fade-in and fade-out to eliminate clicks at audio boundaries."""
+    if not samples:
+        return samples
+
+    fade_len = min(int(sample_rate * fade_ms / 1000.0), len(samples) // 2)
+    if fade_len < 1:
+        return samples
+
+    result = array.array('h', samples)
+
+    # Fade in
+    for i in range(fade_len):
+        scale = i / fade_len
+        result[i] = int(result[i] * scale)
+
+    # Fade out
+    for i in range(fade_len):
+        scale = i / fade_len
+        result[-(i + 1)] = int(result[-(i + 1)] * scale)
+
+    return result
 
 
 def _normalize_peak(samples: array.array, target_db: float = -3.0) -> array.array:
@@ -164,7 +206,7 @@ def _normalize_peak(samples: array.array, target_db: float = -3.0) -> array.arra
 
 
 def _postprocess_wav(wav_path: str) -> None:
-    """Trim silence and normalize a WAV file in place."""
+    """Trim silence, fade edges, and normalize a WAV file in place."""
     with wave.open(wav_path, 'rb') as wf:
         n_channels = wf.getnchannels()
         sample_width = wf.getsampwidth()
@@ -174,8 +216,11 @@ def _postprocess_wav(wav_path: str) -> None:
     samples = array.array('h')
     samples.frombytes(raw)
 
-    # Trim leading/trailing silence at -40 dB
+    # Trim leading/trailing silence at -40 dB (windowed RMS)
     samples = _trim_silence(samples, sample_rate, threshold_db=-40.0)
+
+    # Fade edges to eliminate clicks/pops
+    samples = _apply_fade(samples, sample_rate, fade_ms=10.0)
 
     # Normalize peak to -3 dB
     samples = _normalize_peak(samples, target_db=-3.0)
@@ -408,7 +453,7 @@ def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
 
     with _synthesis_lock:
         with _suppress_stderr():
-            audio_chunks = list(voice.synthesize(f"... {prepared_text} ...", config))
+            audio_chunks = list(voice.synthesize(prepared_text, config))
 
     if not audio_chunks:
         return False

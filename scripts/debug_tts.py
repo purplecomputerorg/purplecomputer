@@ -85,18 +85,43 @@ def prepare_text(text: str) -> str:
 
 
 def trim_silence(samples: array.array, sample_rate: int) -> array.array:
-    threshold = int(32767 * (10 ** (-40.0 / 20.0)))
+    if not samples:
+        return samples
+    threshold = 32767 * (10 ** (-40.0 / 20.0))
+    threshold_sq = threshold * threshold
+    window = max(1, int(sample_rate * 0.005))
+
+    def _rms_above(idx):
+        end = min(idx + window, len(samples))
+        if end <= idx:
+            return False
+        return (sum(s * s for s in samples[idx:end]) / (end - idx)) > threshold_sq
+
     start = 0
-    for i, s in enumerate(samples):
-        if abs(s) > threshold:
+    for i in range(0, len(samples) - window, window):
+        if _rms_above(i):
             start = max(0, i - int(sample_rate * 0.01))
             break
     end = len(samples)
-    for i in range(len(samples) - 1, -1, -1):
-        if abs(samples[i]) > threshold:
-            end = min(len(samples), i + int(sample_rate * 0.02))
+    for i in range(len(samples) - window, -1, -window):
+        if _rms_above(i):
+            end = min(len(samples), i + window + int(sample_rate * 0.02))
             break
     return samples[start:end]
+
+
+def apply_fade(samples: array.array, sample_rate: int, fade_ms: float = 10.0) -> array.array:
+    if not samples:
+        return samples
+    fade_len = min(int(sample_rate * fade_ms / 1000.0), len(samples) // 2)
+    if fade_len < 1:
+        return samples
+    result = array.array('h', samples)
+    for i in range(fade_len):
+        scale = i / fade_len
+        result[i] = int(result[i] * scale)
+        result[-(i + 1)] = int(result[-(i + 1)] * scale)
+    return result
 
 
 def normalize_peak(samples: array.array) -> array.array:
@@ -127,7 +152,7 @@ def synthesize(voice, text: str, output_path: Path) -> bool:
     config = _make_synth_config()
 
     prepared = prepare_text(text)
-    audio_chunks = list(voice.synthesize(f"... {prepared} ...", config))
+    audio_chunks = list(voice.synthesize(prepared, config))
     if not audio_chunks:
         return False
 
@@ -137,6 +162,7 @@ def synthesize(voice, text: str, output_path: Path) -> bool:
     samples.frombytes(raw)
 
     samples = trim_silence(samples, first_chunk.sample_rate)
+    samples = apply_fade(samples, first_chunk.sample_rate)
     samples = normalize_peak(samples)
 
     with wave.open(str(output_path), 'wb') as wav_file:

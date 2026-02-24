@@ -23,8 +23,10 @@ help:
 	@echo "  make record-demo-test     - Record 5s test clip (for testing recording pipeline)"
 	@echo "  make zoom-editor      - Open zoom keyframe editor in browser"
 	@echo "  make voice-clips     - Generate TTS voice clips for demo"
+	@echo "  make voice-clips -- --force  - Regenerate all voice clips"
 	@echo "  make voice-variants  - Generate 5 variants of each clip (for auditioning)"
-	@echo "  make letter-clips    - Generate letter name clips for Play Mode"
+	@echo "  make letter-clips    - Generate letter/number name clips for Play Mode"
+	@echo "  make letter-clips -- --force - Regenerate all letter/number clips"
 	@echo "  make debug-tts       - Verify deterministic TTS output"
 	@echo "  make clear-tts-cache - Clear cached TTS audio files"
 	@echo ""
@@ -135,7 +137,7 @@ record-demo-test:
 
 voice-clips:
 	@echo "Generating TTS voice clips for demo..."
-	@.venv/bin/python scripts/generate_voice_clips.py
+	@.venv/bin/python scripts/generate_voice_clips.py $(filter-out $@,$(MAKECMDGOALS))
 
 voice-variants:
 	@echo "Generating 5 variants of each voice clip..."
@@ -145,7 +147,7 @@ voice-variants:
 
 letter-clips:
 	@echo "Generating letter name clips for Play Mode..."
-	@.venv/bin/python scripts/generate_letter_clips.py
+	@.venv/bin/python scripts/generate_letter_clips.py $(filter-out $@,$(MAKECMDGOALS))
 
 debug-tts:
 	@echo "Verifying deterministic TTS output..."
@@ -159,5 +161,10 @@ apply-zoom:
 
 zoom-editor:
 	@python recording-setup/zoom_editor_server.py
+
+# Swallow unknown targets so flags can be passed after --
+# e.g. make letter-clips -- --force
+%:
+	@:
 
 .DEFAULT_GOAL := help

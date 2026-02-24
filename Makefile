@@ -1,7 +1,7 @@
 # Purple Computer Makefile
 # Convenient shortcuts for development and testing
 
-.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-no-music record-demo-test voice-clips voice-variants letter-clips debug-tts apply-zoom zoom-editor
+.PHONY: help setup run run-sleep-demo run-demo run-demo-segment test lint build-packs build-iso clean clean-iso clean-all recording-setup record-demo record-demo-no-music record-demo-test voice-clips voice-variants letter-clips debug-tts clear-tts-cache apply-zoom zoom-editor
 
 help:
 	@echo "Purple Computer - Development Commands"
@@ -26,6 +26,7 @@ help:
 	@echo "  make voice-variants  - Generate 5 variants of each clip (for auditioning)"
 	@echo "  make letter-clips    - Generate letter name clips for Play Mode"
 	@echo "  make debug-tts       - Verify deterministic TTS output"
+	@echo "  make clear-tts-cache - Clear cached TTS audio files"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build-packs     - Build content packs"
@@ -149,6 +150,9 @@ letter-clips:
 debug-tts:
 	@echo "Verifying deterministic TTS output..."
 	@.venv/bin/python scripts/debug_tts.py
+
+clear-tts-cache:
+	@.venv/bin/python -c "from purple_tui.tts import clear_cache; n = clear_cache(); print(f'Cleared {n} cached TTS files')"
 
 apply-zoom:
 	@.venv/bin/python recording-setup/apply_zoom.py recordings/demo_cropped.mp4 recording-setup/zoom_events.json recordings/demo_zoomed.mp4

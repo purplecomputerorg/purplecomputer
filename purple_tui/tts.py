@@ -238,7 +238,7 @@ def _postprocess_wav(wav_path: str) -> None:
 
 # --- Caching ---
 
-_CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE", "")) if os.environ.get("PURPLE_TTS_CACHE") else Path.home() / ".cache" / "purple-tts"
+_CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE")) if os.environ.get("PURPLE_TTS_CACHE") else Path.home() / ".purple" / "cache" / "tts"
 
 
 def _cache_key(text: str) -> str:
@@ -263,6 +263,17 @@ def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
         return cache_path
     except Exception:
         return None
+
+
+def clear_cache() -> int:
+    """Delete all cached TTS files. Returns number of files removed."""
+    if not _CACHE_DIR.exists():
+        return 0
+    count = 0
+    for f in _CACHE_DIR.glob("*.wav"):
+        f.unlink()
+        count += 1
+    return count
 
 
 # Pre-generated voice clips directory

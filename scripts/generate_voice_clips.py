@@ -20,6 +20,9 @@ VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 # Voice model configuration (same as tts.py)
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
+NOISE_SCALE = 0.3
+NOISE_W = 0.3
+LENGTH_SCALE = 1.0
 
 # Pronunciation overrides (same as tts.py)
 PRONUNCIATION_MAP = {
@@ -74,10 +77,16 @@ def _fix_pronunciation(text: str) -> str:
 
 
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
-    """Generate a single voice clip."""
+    """Generate a single voice clip with deterministic parameters."""
+    import array
     from piper.config import SynthesisConfig
 
-    config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
+    config = SynthesisConfig(
+        speaker_id=VOICE_SPEAKER,
+        noise_scale=NOISE_SCALE,
+        noise_w=NOISE_W,
+        length_scale=LENGTH_SCALE,
+    )
 
     # Fix pronunciation before synthesis
     synth_text = _fix_pronunciation(phrase)
@@ -88,12 +97,42 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
         return False
 
     first_chunk = audio_chunks[0]
+
+    # Collect all raw samples for post-processing
+    raw = b''.join(chunk.audio_int16_bytes for chunk in audio_chunks)
+    samples = array.array('h')
+    samples.frombytes(raw)
+
+    # Trim silence at -40 dB
+    threshold = int(32767 * (10 ** (-40.0 / 20.0)))
+    start = 0
+    for i, s in enumerate(samples):
+        if abs(s) > threshold:
+            start = max(0, i - int(first_chunk.sample_rate * 0.01))
+            break
+    end = len(samples)
+    for i in range(len(samples) - 1, -1, -1):
+        if abs(samples[i]) > threshold:
+            end = min(len(samples), i + int(first_chunk.sample_rate * 0.02))
+            break
+    samples = samples[start:end]
+
+    # Normalize peak to -3 dB
+    if samples:
+        peak = max(abs(s) for s in samples)
+        if peak > 0:
+            target = 32767 * (10 ** (-3.0 / 20.0))
+            scale = target / peak
+            normalized = array.array('h')
+            for s in samples:
+                normalized.append(max(-32768, min(32767, int(s * scale))))
+            samples = normalized
+
     with wave.open(str(output_path), 'wb') as wav_file:
         wav_file.setnchannels(first_chunk.sample_channels)
         wav_file.setsampwidth(first_chunk.sample_width)
         wav_file.setframerate(first_chunk.sample_rate)
-        for chunk in audio_chunks:
-            wav_file.writeframes(chunk.audio_int16_bytes)
+        wav_file.writeframes(samples.tobytes())
 
     return True
 

@@ -5,6 +5,9 @@ Generate pre-recorded letter name clips for Play Mode's Letters sub-mode.
 Uses Piper TTS to generate a spoken clip of each letter (A-Z).
 These are loaded at runtime by PlayGrid instead of using live TTS.
 
+Deterministic: noise_scale=0.3, noise_w=0.3, length_scale=1.0
+Uses phonetic letter pronunciation for clarity.
+
 Output directory: packs/core-sounds/content/letters/
 
 Usage:
@@ -14,7 +17,6 @@ Usage:
 
 import array
 import string
-import struct
 import sys
 import wave
 from pathlib import Path
@@ -23,9 +25,22 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 LETTERS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "letters"
 
-# Reuse voice config from generate_voice_clips.py
+# Reuse voice config from tts.py
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
+NOISE_SCALE = 0.3
+NOISE_W = 0.3
+LENGTH_SCALE = 1.0
+
+# Same letter pronunciation map as tts.py
+LETTER_PRONUNCIATION = {
+    "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee",
+    "F": "eff", "G": "gee", "H": "aitch", "I": "eye", "J": "jay",
+    "K": "kay", "L": "ell", "M": "em", "N": "en", "O": "oh",
+    "P": "pee", "Q": "cue", "R": "ar", "S": "ess", "T": "tee",
+    "U": "you", "V": "vee", "W": "double you", "X": "ex",
+    "Y": "why", "Z": "zee",
+}
 
 
 def get_voice_search_paths() -> list[Path]:
@@ -55,19 +70,20 @@ def find_voice_model() -> Path | None:
     return None
 
 
-def _trim_silence(samples: array.array, sample_rate: int, threshold: int = 500) -> array.array:
-    """Trim leading and trailing silence from 16-bit audio samples.
+def _trim_silence(samples: array.array, sample_rate: int, threshold_db: float = -40.0) -> array.array:
+    """Trim leading and trailing silence below threshold_db.
 
     Args:
         samples: array of signed 16-bit samples
         sample_rate: samples per second
-        threshold: amplitude below which audio is considered silence
+        threshold_db: amplitude threshold in dB (relative to 16-bit full scale)
     """
+    threshold = int(32767 * (10 ** (threshold_db / 20.0)))
+
     # Find first sample above threshold
     start = 0
     for i, s in enumerate(samples):
         if abs(s) > threshold:
-            # Back up a tiny bit so we don't clip the attack
             start = max(0, i - int(sample_rate * 0.01))
             break
 
@@ -75,21 +91,46 @@ def _trim_silence(samples: array.array, sample_rate: int, threshold: int = 500) 
     end = len(samples)
     for i in range(len(samples) - 1, -1, -1):
         if abs(samples[i]) > threshold:
-            # Keep a short tail so it doesn't sound chopped
             end = min(len(samples), i + int(sample_rate * 0.05))
             break
 
     return samples[start:end]
 
 
+def _normalize_peak(samples: array.array, target_db: float = -3.0) -> array.array:
+    """Normalize peak amplitude to target_db."""
+    if not samples:
+        return samples
+    peak = max(abs(s) for s in samples)
+    if peak == 0:
+        return samples
+    target_linear = 32767 * (10 ** (target_db / 20.0))
+    scale = target_linear / peak
+    result = array.array('h')
+    for s in samples:
+        result.append(max(-32768, min(32767, int(s * scale))))
+    return result
+
+
 def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:
-    """Generate a single letter name clip, trimmed tight."""
+    """Generate a single letter name clip, trimmed and normalized."""
     from piper.config import SynthesisConfig
 
-    config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
+    config = SynthesisConfig(
+        speaker_id=VOICE_SPEAKER,
+        noise_scale=NOISE_SCALE,
+        noise_w=NOISE_W,
+        length_scale=LENGTH_SCALE,
+    )
 
-    # No padding: synthesize just the letter for minimal latency
-    audio_chunks = list(voice.synthesize(letter, config))
+    # Use phonetic pronunciation for the letter
+    pronunciation = LETTER_PRONUNCIATION.get(letter.upper(), letter)
+
+    # Micro-context padding for short utterances
+    if len(pronunciation) < 4:
+        pronunciation = pronunciation + "."
+
+    audio_chunks = list(voice.synthesize(pronunciation, config))
     if not audio_chunks:
         return False
 
@@ -100,14 +141,15 @@ def generate_letter_clip(voice, letter: str, output_path: Path) -> bool:
     samples = array.array('h')
     samples.frombytes(raw)
 
-    # Trim leading/trailing silence
-    trimmed = _trim_silence(samples, first_chunk.sample_rate)
+    # Post-process: trim silence, normalize
+    samples = _trim_silence(samples, first_chunk.sample_rate)
+    samples = _normalize_peak(samples)
 
     with wave.open(str(output_path), 'wb') as wav_file:
         wav_file.setnchannels(first_chunk.sample_channels)
         wav_file.setsampwidth(first_chunk.sample_width)
         wav_file.setframerate(first_chunk.sample_rate)
-        wav_file.writeframes(trimmed.tobytes())
+        wav_file.writeframes(samples.tobytes())
 
     return True
 

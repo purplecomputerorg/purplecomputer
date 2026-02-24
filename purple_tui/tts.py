@@ -3,8 +3,13 @@ Text-to-Speech module using Piper TTS
 
 Piper is a fast, local, neural TTS system.
 https://github.com/rhasspy/piper
+
+Deterministic synthesis: noise_scale=0.3, noise_w=0.3, length_scale=1.0
+ensures identical input always produces identical WAV output.
 """
 
+import array
+import hashlib
 import sys
 import tempfile
 import threading
@@ -40,10 +45,31 @@ def _suppress_stderr():
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
-# Pronunciation overrides: words Piper mispronounces → phonetic respelling
+# Deterministic synthesis parameters (no randomness between runs)
+NOISE_SCALE = 0.3
+NOISE_W = 0.3
+LENGTH_SCALE = 1.0
+
+# Pronunciation overrides: words Piper mispronounces -> phonetic respelling
 PRONUNCIATION_MAP = {
     "dinos": "dyenoze",
 }
+
+# Single-letter pronunciation map (A-Z -> phonetic English spelling)
+LETTER_PRONUNCIATION = {
+    "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee",
+    "F": "eff", "G": "gee", "H": "aitch", "I": "eye", "J": "jay",
+    "K": "kay", "L": "ell", "M": "em", "N": "en", "O": "oh",
+    "P": "pee", "Q": "cue", "R": "ar", "S": "ess", "T": "tee",
+    "U": "you", "V": "vee", "W": "double you", "X": "ex",
+    "Y": "why", "Z": "zee",
+}
+
+# Color words used in the system (for pre-generation)
+SYSTEM_COLORS = [
+    "red", "yellow", "blue", "orange", "green", "purple", "pink",
+    "brown", "black", "white", "gray", "cyan", "magenta", "gold",
+]
 
 
 def _fix_pronunciation(text: str) -> str:
@@ -52,6 +78,136 @@ def _fix_pronunciation(text: str) -> str:
     for word, replacement in PRONUNCIATION_MAP.items():
         text = re.sub(rf'\b{word}\b', replacement, text, flags=re.IGNORECASE)
     return text
+
+
+def _prepare_text(text: str) -> str:
+    """Prepare text for synthesis: letter expansion, pronunciation fixes, padding.
+
+    1. If input is exactly one letter A-Z (upper or lower), replace with phonetic spelling.
+    2. Apply pronunciation overrides.
+    3. If result is < 4 characters, append a period for prosody stability.
+    """
+    stripped = text.strip()
+
+    # Single letter -> phonetic spelling
+    if len(stripped) == 1 and stripped.upper() in LETTER_PRONUNCIATION:
+        stripped = LETTER_PRONUNCIATION[stripped.upper()]
+
+    # Pronunciation fixes
+    stripped = _fix_pronunciation(stripped)
+
+    # Micro-context padding for very short utterances
+    if len(stripped) < 4:
+        stripped = stripped + "."
+
+    return stripped
+
+
+# --- WAV post-processing ---
+
+def _trim_silence(samples: array.array, sample_rate: int, threshold_db: float = -40.0) -> array.array:
+    """Trim leading and trailing silence below threshold_db.
+
+    Args:
+        samples: array of signed 16-bit samples
+        sample_rate: samples per second
+        threshold_db: amplitude threshold in dB (relative to 16-bit full scale)
+    """
+    # Convert dB threshold to linear amplitude (16-bit full scale = 32767)
+    threshold = int(32767 * (10 ** (threshold_db / 20.0)))
+
+    # Find first sample above threshold
+    start = 0
+    for i, s in enumerate(samples):
+        if abs(s) > threshold:
+            # Keep a tiny attack buffer
+            start = max(0, i - int(sample_rate * 0.01))
+            break
+
+    # Find last sample above threshold
+    end = len(samples)
+    for i in range(len(samples) - 1, -1, -1):
+        if abs(samples[i]) > threshold:
+            # Keep a short tail
+            end = min(len(samples), i + int(sample_rate * 0.02))
+            break
+
+    return samples[start:end]
+
+
+def _normalize_peak(samples: array.array, target_db: float = -3.0) -> array.array:
+    """Normalize peak amplitude to target_db.
+
+    Args:
+        samples: array of signed 16-bit samples
+        target_db: target peak level in dB (relative to 16-bit full scale)
+    """
+    if not samples:
+        return samples
+
+    peak = max(abs(s) for s in samples)
+    if peak == 0:
+        return samples
+
+    target_linear = 32767 * (10 ** (target_db / 20.0))
+    scale = target_linear / peak
+
+    result = array.array('h')
+    for s in samples:
+        result.append(max(-32768, min(32767, int(s * scale))))
+    return result
+
+
+def _postprocess_wav(wav_path: str) -> None:
+    """Trim silence and normalize a WAV file in place."""
+    with wave.open(wav_path, 'rb') as wf:
+        n_channels = wf.getnchannels()
+        sample_width = wf.getsampwidth()
+        sample_rate = wf.getframerate()
+        raw = wf.readframes(wf.getnframes())
+
+    samples = array.array('h')
+    samples.frombytes(raw)
+
+    # Trim leading/trailing silence at -40 dB
+    samples = _trim_silence(samples, sample_rate, threshold_db=-40.0)
+
+    # Normalize peak to -3 dB
+    samples = _normalize_peak(samples, target_db=-3.0)
+
+    with wave.open(wav_path, 'wb') as wf:
+        wf.setnchannels(n_channels)
+        wf.setsampwidth(sample_width)
+        wf.setframerate(sample_rate)
+        wf.writeframes(samples.tobytes())
+
+
+# --- Caching ---
+
+_CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE", "")) if os.environ.get("PURPLE_TTS_CACHE") else Path.home() / ".cache" / "purple-tts"
+
+
+def _cache_key(text: str) -> str:
+    """Hash the prepared text to create a cache filename."""
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+
+
+def _get_cached(prepared_text: str) -> Path | None:
+    """Return cached WAV path if it exists."""
+    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
+    if cache_path.exists():
+        return cache_path
+    return None
+
+
+def _store_cache(prepared_text: str, wav_path: str) -> Path:
+    """Copy a WAV file into the cache. Returns the cache path."""
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
+    import shutil
+    shutil.copy2(wav_path, cache_path)
+    return cache_path
+
 
 # Pre-generated voice clips directory
 VOICE_CLIPS_DIR = Path(__file__).parent.parent / "packs" / "core-sounds" / "content" / "voice"
@@ -149,7 +305,7 @@ _mixer_initialized = False
 
 
 def _ensure_mixer() -> bool:
-    """Check if pygame mixer is available (don't initialize - let play mode do it)"""
+    """Check if pygame mixer is available (don't initialize, let play mode do it)"""
     global _mixer_initialized
     if _mixer_initialized:
         return True
@@ -182,9 +338,88 @@ def init() -> None:
 
 
 def _init_sync() -> None:
-    """Initialize in background thread"""
+    """Initialize in background thread, then pre-generate common phrases."""
     _get_piper_voice()
     _ensure_mixer()
+    _pregenerate_cache()
+
+
+def _pregenerate_cache() -> None:
+    """Pre-generate cached WAV files for common utterances (letters, digits, etc.)."""
+    voice = _get_piper_voice()
+    if voice is None:
+        return
+
+    phrases = []
+
+    # All 26 letters
+    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        phrases.append(letter)
+
+    # Digits 0-20
+    number_words = [
+        "zero", "one", "two", "three", "four", "five", "six", "seven",
+        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
+    ]
+    phrases.extend(number_words)
+
+    # Math words
+    phrases.extend(["plus", "equals"])
+
+    # System color words
+    phrases.extend(SYSTEM_COLORS)
+
+    for phrase in phrases:
+        prepared = _prepare_text(phrase)
+        if _get_cached(prepared) is None:
+            _synthesize_to_cache(voice, prepared)
+
+
+def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
+    """Synthesize prepared text and store in cache. Returns cache path or None."""
+    wav_path = None
+    try:
+        from piper.config import SynthesisConfig
+        config = SynthesisConfig(
+            speaker_id=VOICE_SPEAKER,
+            noise_scale=NOISE_SCALE,
+            noise_w=NOISE_W,
+            length_scale=LENGTH_SCALE,
+        )
+
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            wav_path = f.name
+
+        with _suppress_stderr():
+            audio_chunks = list(voice.synthesize(f"... {prepared_text} ...", config))
+        if not audio_chunks:
+            Path(wav_path).unlink(missing_ok=True)
+            return None
+
+        first_chunk = audio_chunks[0]
+        with wave.open(wav_path, 'wb') as wav_file:
+            wav_file.setnchannels(first_chunk.sample_channels)
+            wav_file.setsampwidth(first_chunk.sample_width)
+            wav_file.setframerate(first_chunk.sample_rate)
+            for chunk in audio_chunks:
+                wav_file.writeframes(chunk.audio_int16_bytes)
+
+        # Post-process: trim silence, normalize
+        _postprocess_wav(wav_path)
+
+        # Store in cache
+        cache_path = _store_cache(prepared_text, wav_path)
+        Path(wav_path).unlink(missing_ok=True)
+        return cache_path
+
+    except Exception:
+        if wav_path:
+            try:
+                Path(wav_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+        return None
 
 
 _current_channel = None
@@ -242,7 +477,7 @@ def speak(text: str) -> bool:
 
 
 def _speak_sync(text: str, speech_id: int) -> bool:
-    """Synchronous speech - called from background thread"""
+    """Synchronous speech, called from background thread"""
     global _current_channel, _speech_id
 
     # Check cancellation first
@@ -252,10 +487,18 @@ def _speak_sync(text: str, speech_id: int) -> bool:
     if not _ensure_mixer():
         return False
 
-    # Check for pre-generated voice clip first
+    # Check for pre-generated voice clip first (hand-curated clips take priority)
     clip_path = _get_voice_clip(text)
     if clip_path:
         return _play_clip(clip_path, speech_id)
+
+    # Prepare text (letter expansion, pronunciation, padding)
+    prepared = _prepare_text(text)
+
+    # Check cache
+    cached_path = _get_cached(prepared)
+    if cached_path:
+        return _play_clip(cached_path, speech_id)
 
     # Fall back to Piper TTS for dynamic content
     voice = _get_piper_voice()
@@ -266,79 +509,20 @@ def _speak_sync(text: str, speech_id: int) -> bool:
     if speech_id != _speech_id:
         return False
 
-    wav_path = None
-    try:
-        # Check if we've been cancelled before generating
-        if speech_id != _speech_id:
-            return False
-
-        # Create a temporary WAV file
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-            wav_path = f.name
-
-        # Generate audio with Piper
-        # Pad with pauses before and after to prevent clipping on short words
-        from piper.config import SynthesisConfig
-        config = SynthesisConfig(speaker_id=VOICE_SPEAKER)
-
-        # Fix pronunciation before synthesis
-        synth_text = _fix_pronunciation(text)
-
-        # Collect audio chunks from generator (suppress ONNX warnings during inference)
-        with _suppress_stderr():
-            audio_chunks = list(voice.synthesize(f"... {synth_text} ...", config))
-        if not audio_chunks:
-            Path(wav_path).unlink(missing_ok=True)
-            return False
-
-        # Write WAV file from chunks
-        first_chunk = audio_chunks[0]
-        with wave.open(wav_path, 'wb') as wav_file:
-            wav_file.setnchannels(first_chunk.sample_channels)
-            wav_file.setsampwidth(first_chunk.sample_width)
-            wav_file.setframerate(first_chunk.sample_rate)
-            for chunk in audio_chunks:
-                wav_file.writeframes(chunk.audio_int16_bytes)
-
-        # Check if we've been cancelled after generating
-        if speech_id != _speech_id:
-            Path(wav_path).unlink(missing_ok=True)
-            return False
-
-        # Play the audio
-        sound = pygame.mixer.Sound(wav_path)
-        channel = sound.play()
-        _current_channel = channel
-
-        # Wait for playback to finish (non-blocking check loop)
-        if channel:
-            while channel.get_busy():
-                # Check for cancellation during playback
-                if speech_id != _speech_id:
-                    try:
-                        channel.stop()
-                    except Exception:
-                        pass
-                    break
-                pygame.time.wait(50)
-
-        # Clean up
-        _current_channel = None
-        if wav_path:
-            Path(wav_path).unlink(missing_ok=True)
-        return True
-
-    except Exception:
-        if wav_path:
-            try:
-                Path(wav_path).unlink(missing_ok=True)
-            except Exception:
-                pass
+    # Synthesize, post-process, and cache
+    cache_path = _synthesize_to_cache(voice, prepared)
+    if cache_path is None:
         return False
+
+    # Check if we've been cancelled after generating
+    if speech_id != _speech_id:
+        return False
+
+    return _play_clip(cache_path, speech_id)
 
 
 def _play_clip(clip_path: Path, speech_id: int) -> bool:
-    """Play a pre-generated voice clip."""
+    """Play a pre-generated or cached voice clip."""
     global _current_channel, _speech_id
 
     try:

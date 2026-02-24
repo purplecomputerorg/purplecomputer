@@ -10,6 +10,7 @@ ensures identical input always produces identical WAV output.
 
 import array
 import hashlib
+import shutil
 import sys
 import tempfile
 import threading
@@ -200,13 +201,15 @@ def _get_cached(prepared_text: str) -> Path | None:
     return None
 
 
-def _store_cache(prepared_text: str, wav_path: str) -> Path:
-    """Copy a WAV file into the cache. Returns the cache path."""
-    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
-    import shutil
-    shutil.copy2(wav_path, cache_path)
-    return cache_path
+def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
+    """Copy a WAV file into the cache. Returns cache path, or None on failure."""
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
+        shutil.copy2(wav_path, cache_path)
+        return cache_path
+    except Exception:
+        return None
 
 
 # Pre-generated voice clips directory
@@ -242,6 +245,9 @@ def _get_voice_search_paths() -> list[Path]:
 # Piper voice instance (lazy loaded)
 _piper_voice = None
 _piper_available = None
+
+# Serialize all Piper synthesis calls (espeak phonemizer is not thread-safe)
+_synthesis_lock = threading.Lock()
 
 
 def _get_piper_voice():
@@ -341,7 +347,9 @@ def _init_sync() -> None:
     """Initialize in background thread, then pre-generate common phrases."""
     _get_piper_voice()
     _ensure_mixer()
-    _pregenerate_cache()
+    # Pre-generate in a separate thread so init completes quickly
+    thread = threading.Thread(target=_pregenerate_cache, daemon=True)
+    thread.start()
 
 
 def _pregenerate_cache() -> None:
@@ -376,42 +384,62 @@ def _pregenerate_cache() -> None:
             _synthesize_to_cache(voice, prepared)
 
 
+def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
+    """Synthesize prepared text to a WAV file. Returns True on success.
+
+    Acquires _synthesis_lock to prevent concurrent Piper calls
+    (espeak phonemizer is not thread-safe).
+    """
+    from piper.config import SynthesisConfig
+    config = SynthesisConfig(
+        speaker_id=VOICE_SPEAKER,
+        noise_scale=NOISE_SCALE,
+        noise_w=NOISE_W,
+        length_scale=LENGTH_SCALE,
+    )
+
+    with _synthesis_lock:
+        with _suppress_stderr():
+            audio_chunks = list(voice.synthesize(f"... {prepared_text} ...", config))
+
+    if not audio_chunks:
+        return False
+
+    first_chunk = audio_chunks[0]
+    with wave.open(wav_path, 'wb') as wav_file:
+        wav_file.setnchannels(first_chunk.sample_channels)
+        wav_file.setsampwidth(first_chunk.sample_width)
+        wav_file.setframerate(first_chunk.sample_rate)
+        for chunk in audio_chunks:
+            wav_file.writeframes(chunk.audio_int16_bytes)
+
+    # Post-process: trim silence, normalize
+    _postprocess_wav(wav_path)
+    return True
+
+
 def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
-    """Synthesize prepared text and store in cache. Returns cache path or None."""
+    """Synthesize prepared text, post-process, and store in cache.
+
+    Returns the path to play (cache path or temp file), or None on failure.
+    """
     wav_path = None
     try:
-        from piper.config import SynthesisConfig
-        config = SynthesisConfig(
-            speaker_id=VOICE_SPEAKER,
-            noise_scale=NOISE_SCALE,
-            noise_w=NOISE_W,
-            length_scale=LENGTH_SCALE,
-        )
-
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
-        with _suppress_stderr():
-            audio_chunks = list(voice.synthesize(f"... {prepared_text} ...", config))
-        if not audio_chunks:
+        if not _synthesize_to_file(voice, prepared_text, wav_path):
             Path(wav_path).unlink(missing_ok=True)
             return None
 
-        first_chunk = audio_chunks[0]
-        with wave.open(wav_path, 'wb') as wav_file:
-            wav_file.setnchannels(first_chunk.sample_channels)
-            wav_file.setsampwidth(first_chunk.sample_width)
-            wav_file.setframerate(first_chunk.sample_rate)
-            for chunk in audio_chunks:
-                wav_file.writeframes(chunk.audio_int16_bytes)
-
-        # Post-process: trim silence, normalize
-        _postprocess_wav(wav_path)
-
-        # Store in cache
+        # Try to cache (best effort, don't lose audio if caching fails)
         cache_path = _store_cache(prepared_text, wav_path)
-        Path(wav_path).unlink(missing_ok=True)
-        return cache_path
+        if cache_path:
+            Path(wav_path).unlink(missing_ok=True)
+            return cache_path
+
+        # Caching failed, return temp file (caller must clean up)
+        return Path(wav_path)
 
     except Exception:
         if wav_path:
@@ -510,15 +538,21 @@ def _speak_sync(text: str, speech_id: int) -> bool:
         return False
 
     # Synthesize, post-process, and cache
-    cache_path = _synthesize_to_cache(voice, prepared)
-    if cache_path is None:
+    result_path = _synthesize_to_cache(voice, prepared)
+    if result_path is None:
         return False
 
     # Check if we've been cancelled after generating
     if speech_id != _speech_id:
         return False
 
-    return _play_clip(cache_path, speech_id)
+    is_temp = not str(result_path).startswith(str(_CACHE_DIR))
+    try:
+        return _play_clip(result_path, speech_id)
+    finally:
+        # Clean up temp files (uncached results)
+        if is_temp:
+            result_path.unlink(missing_ok=True)
 
 
 def _play_clip(clip_path: Path, speech_id: int) -> bool:

@@ -20,9 +20,12 @@ VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 # Voice model configuration (same as tts.py)
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
-NOISE_SCALE = 0.3
-NOISE_W = 0.3
-LENGTH_SCALE = 1.0
+_SYNTH_PARAMS = {
+    "noise_scale": 0.3,
+    "noise_w": 0.3,
+    "noise_w_scale": 0.3,
+    "length_scale": 1.0,
+}
 
 # Pronunciation overrides (same as tts.py)
 PRONUNCIATION_MAP = {
@@ -76,17 +79,21 @@ def _fix_pronunciation(text: str) -> str:
     return text
 
 
+def _make_synth_config():
+    """Build a SynthesisConfig using only parameters the installed version accepts."""
+    from piper.config import SynthesisConfig
+    import dataclasses
+    valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
+    kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
+    kwargs["speaker_id"] = VOICE_SPEAKER
+    return SynthesisConfig(**kwargs)
+
+
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     """Generate a single voice clip with deterministic parameters."""
     import array
-    from piper.config import SynthesisConfig
 
-    config = SynthesisConfig(
-        speaker_id=VOICE_SPEAKER,
-        noise_scale=NOISE_SCALE,
-        noise_w=NOISE_W,
-        length_scale=LENGTH_SCALE,
-    )
+    config = _make_synth_config()
 
     # Fix pronunciation before synthesis
     synth_text = _fix_pronunciation(phrase)

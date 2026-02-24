@@ -23,9 +23,12 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 # Voice config (same as tts.py)
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166
-NOISE_SCALE = 0.3
-NOISE_W = 0.3
-LENGTH_SCALE = 1.0
+_SYNTH_PARAMS = {
+    "noise_scale": 0.3,
+    "noise_w": 0.3,
+    "noise_w_scale": 0.3,
+    "length_scale": 1.0,
+}
 
 LETTER_PRONUNCIATION = {
     "A": "ay", "B": "bee", "C": "see", "D": "dee", "E": "ee",
@@ -110,16 +113,18 @@ def normalize_peak(samples: array.array) -> array.array:
     return result
 
 
+def _make_synth_config():
+    from piper.config import SynthesisConfig
+    import dataclasses
+    valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
+    kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
+    kwargs["speaker_id"] = VOICE_SPEAKER
+    return SynthesisConfig(**kwargs)
+
+
 def synthesize(voice, text: str, output_path: Path) -> bool:
     """Synthesize text to WAV with deterministic parameters and post-processing."""
-    from piper.config import SynthesisConfig
-
-    config = SynthesisConfig(
-        speaker_id=VOICE_SPEAKER,
-        noise_scale=NOISE_SCALE,
-        noise_w=NOISE_W,
-        length_scale=LENGTH_SCALE,
-    )
+    config = _make_synth_config()
 
     prepared = prepare_text(text)
     audio_chunks = list(voice.synthesize(f"... {prepared} ...", config))

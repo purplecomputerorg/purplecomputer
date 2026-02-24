@@ -47,9 +47,13 @@ VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
 
 # Deterministic synthesis parameters (no randomness between runs)
-NOISE_SCALE = 0.3
-NOISE_W = 0.3
-LENGTH_SCALE = 1.0
+# Parameter names vary across piper-tts versions, so we try all known variants.
+_SYNTH_PARAMS = {
+    "noise_scale": 0.3,
+    "noise_w": 0.3,         # some piper builds
+    "noise_w_scale": 0.3,   # other piper builds
+    "length_scale": 1.0,
+}
 
 # Pronunciation overrides: words Piper mispronounces -> phonetic respelling
 PRONUNCIATION_MAP = {
@@ -384,19 +388,23 @@ def _pregenerate_cache() -> None:
             _synthesize_to_cache(voice, prepared)
 
 
+def _make_synth_config():
+    """Build a SynthesisConfig using only parameters the installed version accepts."""
+    from piper.config import SynthesisConfig
+    import dataclasses
+    valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
+    kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
+    kwargs["speaker_id"] = VOICE_SPEAKER
+    return SynthesisConfig(**kwargs)
+
+
 def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     """Synthesize prepared text to a WAV file. Returns True on success.
 
     Acquires _synthesis_lock to prevent concurrent Piper calls
     (espeak phonemizer is not thread-safe).
     """
-    from piper.config import SynthesisConfig
-    config = SynthesisConfig(
-        speaker_id=VOICE_SPEAKER,
-        noise_scale=NOISE_SCALE,
-        noise_w=NOISE_W,
-        length_scale=LENGTH_SCALE,
-    )
+    config = _make_synth_config()
 
     with _synthesis_lock:
         with _suppress_stderr():

@@ -72,7 +72,7 @@ pytest tests/ -v
 docker compose run app pytest tests/ -v
 ```
 
-Or use the Makefile shortcuts: `make test`, `make run`, `make setup`.
+Or use the justfile shortcuts: `just test`, `just run`, `just setup`.
 
 ---
 

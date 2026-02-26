@@ -90,9 +90,10 @@ tmpfs              /tmp      tmpfs defaults,nosuid,nodev       0 0
 FSTAB
 
     # Create purple user (input group for keyboard access via evdev)
+    # No password: this is an offline appliance for kids, not a multi-user system
     chroot "$MOUNT_DIR" useradd -m -s /bin/bash purple
     chroot "$MOUNT_DIR" usermod -aG sudo,input purple
-    echo "purple:purple" | chroot "$MOUNT_DIR" chpasswd
+    chroot "$MOUNT_DIR" passwd -l purple
 
     # Install Purple Computer application
     log_info "Installing Purple Computer application..."
@@ -222,14 +223,11 @@ HandleHibernateKey=poweroff
 PolicyKitBypassUsers=purple
 LOGIND
 
-    # Allow purple user to shut down without sudo password
-    cat > "$MOUNT_DIR/etc/sudoers.d/purple-power" <<'SUDOERS'
-# Allow purple user to shut down without password
-purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl poweroff
-purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl halt
-purple ALL=(ALL) NOPASSWD: /usr/bin/systemctl reboot
+    # Passwordless sudo: offline appliance, no security boundary needed
+    cat > "$MOUNT_DIR/etc/sudoers.d/purple-nopasswd" <<'SUDOERS'
+purple ALL=(ALL) NOPASSWD: ALL
 SUDOERS
-    chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-power"
+    chmod 440 "$MOUNT_DIR/etc/sudoers.d/purple-nopasswd"
 
     # Disable SysRq magic keys (Alt+PrintScreen combos can force reboot, kill processes, etc.)
     # Kids mashing keys could accidentally trigger these. Value 0 = completely disabled.

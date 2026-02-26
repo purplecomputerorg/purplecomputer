@@ -88,7 +88,7 @@ echo 'YOUR_DRIVE_SERIAL' >> .flash-drives.conf
 2. Installation runs automatically (10-20 minutes)
 3. System reboots into Purple Computer
 
-**Default credentials:** `purple` / `purple` (change immediately!)
+The system logs in automatically as the `purple` user (no password needed).
 
 See [MANUAL.md](MANUAL.md) for complete build/customization details.
 

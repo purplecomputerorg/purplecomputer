@@ -534,14 +534,7 @@ Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
 
 ### First Boot
 
-**Default credentials:**
-- Username: `purple`
-- Password: `purple`
-
-**IMPORTANT:** Change password immediately:
-```bash
-passwd
-```
+The system logs in automatically as the `purple` user. No password is needed. Purple Computer is an offline appliance, so there is no login screen or password prompt.
 
 ---
 

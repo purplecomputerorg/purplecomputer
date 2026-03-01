@@ -28,6 +28,7 @@ def is_debug() -> bool:
 MODE_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
 MODE_PLAY = ("play", "Play")           # F2: Music and art grid
 MODE_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
+MODE_BUILD = ("build", "Build")        # F4: Visual block programming
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS
@@ -83,6 +84,7 @@ ICON_MENU = "󰀻"             # nf-md-apps (grid icon for mode picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
+ICON_BUILD = "󰙬"             # nf-md-toy_brick (block programming)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)
@@ -97,6 +99,7 @@ MODE_TITLES = {
     MODE_EXPLORE[0]: (ICON_CHAT, MODE_EXPLORE[1]),
     MODE_PLAY[0]: (ICON_MUSIC, MODE_PLAY[1]),
     MODE_DOODLE[0]: (ICON_PALETTE, MODE_DOODLE[1]),
+    MODE_BUILD[0]: (ICON_BUILD, MODE_BUILD[1]),
 }
 
 # =============================================================================

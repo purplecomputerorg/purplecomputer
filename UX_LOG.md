@@ -4,6 +4,12 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+## 2026-03
+
+- **Build Mode (F4)**: New visual block programming mode where kids build turtle graphics programs using colored blocks; arrow keys navigate and cycle block types, number keys set parameters, Space animates the drawing step by step
+
+---
+
 ## 2026-02
 
 - **Passwordless system**: Removed default password; system auto-logs in with no password prompt, passwordless sudo for all commands

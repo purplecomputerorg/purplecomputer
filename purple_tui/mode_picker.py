@@ -1,7 +1,7 @@
 """
 Mode Picker Screen: A kid-friendly modal for switching modes.
 
-Shows 3 options: Explore, Play, Doodle
+Shows 4 options: Explore, Play, Doodle, Build
 Arrow keys navigate, Enter selects, Escape cancels.
 """
 
@@ -10,7 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Static
 from textual.app import ComposeResult
 
-from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE
+from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_BUILD
 from .keyboard import NavigationAction, ControlAction
 
 
@@ -20,6 +20,7 @@ MODE_OPTIONS = [
     ("explore", ICON_CHAT, "Explore", {"mode": "explore"}),
     ("play", ICON_MUSIC, "Play", {"mode": "play"}),
     ("doodle", ICON_PALETTE, "Doodle", {"mode": "doodle"}),
+    ("build", ICON_BUILD, "Build", {"mode": "build"}),
 ]
 
 
@@ -69,7 +70,7 @@ class ModePickerScreen(ModalScreen):
     }
 
     #picker-dialog {
-        width: 58;
+        width: 74;
         height: auto;
         padding: 2 3;
         background: $surface;
@@ -111,6 +112,8 @@ class ModePickerScreen(ModalScreen):
             return 1
         elif self._current_mode == "doodle":
             return 2
+        elif self._current_mode == "build":
+            return 3
         return 0
 
     def compose(self) -> ComposeResult:

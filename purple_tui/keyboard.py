@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE
+from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE, MODE_BUILD
 
 
 # ============================================================================
@@ -518,7 +518,7 @@ class NavigationAction(KeyAction):
 @dataclass
 class ModeAction(KeyAction):
     """Mode switch requested."""
-    mode: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'parent' (long Escape)
+    mode: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'build' (F4), 'parent' (long Escape)
 
 
 @dataclass
@@ -698,6 +698,9 @@ class KeyboardStateMachine:
                 return actions
             if keycode == KeyCode.KEY_F3:
                 actions.append(ModeAction(mode=MODE_DOODLE[0]))
+                return actions
+            if keycode == KeyCode.KEY_F4:
+                actions.append(ModeAction(mode=MODE_BUILD[0]))
                 return actions
             if keycode == KeyCode.KEY_F9:
                 actions.append(ControlAction(action='theme_toggle', is_down=True))

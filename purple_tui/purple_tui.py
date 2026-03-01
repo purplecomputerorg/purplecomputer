@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F3: Switch modes (Explore, Play, Doodle)
+- F1-F4: Switch modes (Explore, Play, Doodle, Build)
 - F9: Toggle dark/light theme
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent mode
@@ -35,7 +35,7 @@ from textual import events
 from enum import Enum
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_BUILD, ICON_MENU,
     ICON_MOON, ICON_SUN, MODE_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -44,7 +44,7 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    MODE_EXPLORE, MODE_PLAY, MODE_DOODLE,
+    MODE_EXPLORE, MODE_PLAY, MODE_DOODLE, MODE_BUILD,
 )
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -60,10 +60,11 @@ from .mode_picker import ModePickerScreen
 
 
 class Mode(Enum):
-    """The 3 core modes of Purple Computer"""
+    """The 4 core modes of Purple Computer"""
     EXPLORE = 1  # F1: Math and emoji REPL
     PLAY = 2     # F2: Music and art grid
     DOODLE = 3   # F3: Simple drawing canvas
+    BUILD = 4    # F4: Visual block programming
 
 
 class View(Enum):
@@ -78,6 +79,7 @@ MODE_INFO = {
     Mode.EXPLORE: {"key": "F1", "label": MODE_EXPLORE[1], "emoji": ICON_CHAT},
     Mode.PLAY: {"key": "F2", "label": MODE_PLAY[1], "emoji": ICON_MUSIC},
     Mode.DOODLE: {"key": "F3", "label": MODE_DOODLE[1], "emoji": ICON_PALETTE},
+    Mode.BUILD: {"key": "F4", "label": MODE_BUILD[1], "emoji": ICON_BUILD},
 }
 
 
@@ -784,6 +786,8 @@ class PurpleApp(App):
                 self.action_switch_mode(MODE_PLAY[0])
             elif action.mode == MODE_DOODLE[0]:
                 self.action_switch_mode(MODE_DOODLE[0])
+            elif action.mode == MODE_BUILD[0]:
+                self.action_switch_mode(MODE_BUILD[0])
             elif action.mode == 'parent':
                 self.action_parent_mode()
             return
@@ -895,6 +899,8 @@ class PurpleApp(App):
             self.action_switch_mode(MODE_PLAY[0])
         elif mode_name == "doodle":
             self.action_switch_mode(MODE_DOODLE[0])
+        elif mode_name == "build":
+            self.action_switch_mode(MODE_BUILD[0])
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
@@ -1054,6 +1060,9 @@ class PurpleApp(App):
         elif mode == Mode.DOODLE:
             from .modes.doodle_mode import DoodleMode
             return DoodleMode(classes="mode-content")
+        elif mode == Mode.BUILD:
+            from .modes.build_mode import BuildMode
+            return BuildMode(classes="mode-content")
         return None
 
     def _load_mode_content(self) -> None:
@@ -1096,6 +1105,8 @@ class PurpleApp(App):
                 widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
+        elif self.active_mode == Mode.BUILD:
+            widget.focus()
         else:
             widget.focus()
 
@@ -1126,6 +1137,7 @@ class PurpleApp(App):
             MODE_EXPLORE[0]: Mode.EXPLORE,
             MODE_PLAY[0]: Mode.PLAY,
             MODE_DOODLE[0]: Mode.DOODLE,
+            MODE_BUILD[0]: Mode.BUILD,
         }
         new_mode = mode_map.get(mode_name, Mode.EXPLORE)
 
@@ -1176,7 +1188,7 @@ class PurpleApp(App):
         self._load_mode_content()
 
         # Update title
-        mode_names = {Mode.EXPLORE: MODE_EXPLORE[0], Mode.PLAY: MODE_PLAY[0], Mode.DOODLE: MODE_DOODLE[0]}
+        mode_names = {Mode.EXPLORE: MODE_EXPLORE[0], Mode.PLAY: MODE_PLAY[0], Mode.DOODLE: MODE_DOODLE[0], Mode.BUILD: MODE_BUILD[0]}
         try:
             title = self.query_one("#mode-title", ModeTitle)
             title.set_mode(mode_names.get(new_mode, MODE_EXPLORE[0]))

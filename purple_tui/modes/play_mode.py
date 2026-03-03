@@ -388,7 +388,7 @@ class PlayMode(Container, can_focus=True):
     }
     """
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, recording_manager=None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: PlayGrid | None = None
         self._header: PlayModeHeader | None = None
@@ -396,6 +396,12 @@ class PlayMode(Container, can_focus=True):
         self._replay_task: asyncio.Task | None = None
         self._last_replay: list[tuple[str, str, float]] | None = None
         self._letters_mode = False
+        self._recording_manager = recording_manager
+
+    @property
+    def is_letters_mode(self) -> bool:
+        """Whether Play mode is in Letters sub-mode (for DemoPlayer callback)."""
+        return self._letters_mode
 
     def compose(self) -> ComposeResult:
         self._header = PlayModeHeader(id="play-header")
@@ -444,17 +450,23 @@ class PlayMode(Container, can_focus=True):
 
         Tab switches between Music and Letters sub-modes.
         Character keys cycle colors, play sounds or speak, and are recorded.
-        Space triggers replay of the current session, then starts a new one.
-        Keys pressed during replay are recorded in the new session.
+        Space plays the last F5 recording (if one exists).
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space: stop replay if playing, otherwise start replay
+            # Space: play F5 recording if available
             if action.action == 'space':
                 if self._replay_task and not self._replay_task.done():
                     self._replay_task.cancel()
                     self._replay_task = None
-                else:
-                    await self._start_replay()
+                elif self._recording_manager and self._recording_manager.has_recording():
+                    # Trigger F5 playback via the recording manager
+                    from ..recording import RecordingState
+                    if self._recording_manager.state == RecordingState.IDLE:
+                        self._recording_manager.toggle()  # IDLE → PLAYING
+                        # Playback is handled by the app's _handle_record_toggle
+                        # which is called via F5, so we need to trigger it directly
+                        if hasattr(self.app, '_play_recording'):
+                            asyncio.create_task(self.app._play_recording())
                 return
 
             # Tab switches sub-mode
@@ -478,28 +490,6 @@ class PlayMode(Container, can_focus=True):
                 self.grid.next_color(lookup)
                 self._play_key(lookup, submode)
             return
-
-    async def _start_replay(self) -> None:
-        """Start replaying the current session, or re-replay the last one."""
-        replay_data = self.session.get_replay()
-        if replay_data:
-            # New session to replay: save it and clear for fresh recording
-            self._last_replay = replay_data
-            self.session.clear()
-        elif self._last_replay:
-            # No new input: replay the same thing again
-            replay_data = self._last_replay
-        else:
-            return
-
-        # Check if the letters spell a known word
-        word = extract_word(replay_data, SUBMODE_LETTERS)
-
-        # Cancel any existing replay
-        if self._replay_task and not self._replay_task.done():
-            self._replay_task.cancel()
-
-        self._replay_task = asyncio.create_task(self._do_replay(replay_data, word))
 
     async def _do_replay(self, replay_data: list[tuple[str, str, float]], word: str | None = None) -> None:
         """Play back recorded key sequence with original timing and sub-modes.

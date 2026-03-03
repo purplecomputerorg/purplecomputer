@@ -28,6 +28,7 @@ from .demo.script import (
     TypeText,
     PressKey,
     SwitchMode,
+    SwitchTarget,
     Pause,
 )
 
@@ -78,11 +79,12 @@ def gap_duration(level: int) -> float:
 # =============================================================================
 
 class ProgramBlockType(Enum):
-    KEY = "key"           # CharacterAction: a typed character
-    ARROW = "arrow"       # NavigationAction: an arrow key
-    CONTROL = "control"   # ControlAction: enter, backspace, space, tab
-    EMOJI = "emoji"       # Emoji placed via Code mode (future)
-    REPEAT = "repeat"     # Repeat preceding section N times
+    KEY = "key"               # CharacterAction: a typed character
+    ARROW = "arrow"           # NavigationAction: an arrow key
+    CONTROL = "control"       # ControlAction: enter, backspace, space, tab
+    EMOJI = "emoji"           # Emoji placed via Code mode (future)
+    REPEAT = "repeat"         # Repeat preceding section N times
+    MODE_SWITCH = "mode_switch"  # Switch to a specific mode/sub-mode
 
 
 # Row-based colors for KEY blocks (matching Doodle mode's keyboard rows)
@@ -103,6 +105,45 @@ SPACE_COLOR = "#606060"
 TAB_COLOR = "#606060"
 EMOJI_COLOR = "#9b7bc4"
 REPEAT_COLOR = "#2d9e8a"  # teal
+
+# MODE_SWITCH target constants
+TARGET_PLAY_MUSIC = "play.music"
+TARGET_PLAY_LETTERS = "play.letters"
+TARGET_DOODLE_TEXT = "doodle.text"
+TARGET_DOODLE_PAINT = "doodle.paint"
+TARGET_EXPLORE = "explore"
+
+ALL_TARGETS = [
+    TARGET_PLAY_MUSIC,
+    TARGET_PLAY_LETTERS,
+    TARGET_DOODLE_TEXT,
+    TARGET_DOODLE_PAINT,
+    TARGET_EXPLORE,
+]
+
+TARGET_ICONS = {
+    TARGET_PLAY_MUSIC: "♫",
+    TARGET_PLAY_LETTERS: "Ab",
+    TARGET_DOODLE_TEXT: "✎",
+    TARGET_DOODLE_PAINT: "🖌",
+    TARGET_EXPLORE: "?=",
+}
+
+TARGET_COLORS = {
+    TARGET_PLAY_MUSIC: "#4a9e2d",
+    TARGET_PLAY_LETTERS: "#2d9e6a",
+    TARGET_DOODLE_TEXT: "#9e6a2d",
+    TARGET_DOODLE_PAINT: "#9e2d6a",
+    TARGET_EXPLORE: "#2d6a9e",
+}
+
+TARGET_LABELS = {
+    TARGET_PLAY_MUSIC: "Play (music)",
+    TARGET_PLAY_LETTERS: "Play (letters)",
+    TARGET_DOODLE_TEXT: "Doodle (text)",
+    TARGET_DOODLE_PAINT: "Doodle (paint)",
+    TARGET_EXPLORE: "Explore",
+}
 
 # Icons for control actions
 CONTROL_ICONS = {
@@ -152,9 +193,10 @@ class ProgramBlock:
     char: str = ""           # KEY: the character, EMOJI: the emoji
     direction: str = ""      # ARROW: up/down/left/right
     control: str = ""        # CONTROL: enter/backspace/space/tab
-    repeat_count: int = 2    # REPEAT: how many times to play the section (2-9)
+    repeat_count: int = 2    # REPEAT: how many times to play the section (2-99)
     gap_level: int = 1       # 0-4, index into PAUSE_LEVELS
     source_mode: str = ""    # "play" or "doodle"
+    target: str = ""         # MODE_SWITCH: "play.music", "doodle.paint", etc.
 
     @property
     def icon(self) -> str:
@@ -168,6 +210,8 @@ class ProgramBlock:
             return self.char
         elif self.type == ProgramBlockType.REPEAT:
             return f"×{self.repeat_count}"
+        elif self.type == ProgramBlockType.MODE_SWITCH:
+            return TARGET_ICONS.get(self.target, "?")
         return "?"
 
     @property
@@ -182,6 +226,8 @@ class ProgramBlock:
             return EMOJI_COLOR
         elif self.type == ProgramBlockType.REPEAT:
             return REPEAT_COLOR
+        elif self.type == ProgramBlockType.MODE_SWITCH:
+            return TARGET_COLORS.get(self.target, KEY_COLOR_GRAY)
         return KEY_COLOR_GRAY
 
     @property
@@ -195,121 +241,20 @@ class ProgramBlock:
                                      self.gap_level + direction))
 
     def cycle_repeat_count(self, direction: int) -> None:
-        """Cycle repeat count up or down, clamping to 2-9."""
-        self.repeat_count = max(2, min(9, self.repeat_count + direction))
+        """Cycle repeat count up or down, clamping to 2-99."""
+        self.repeat_count = max(2, min(99, self.repeat_count + direction))
 
-
-# =============================================================================
-# ACTION RECORDER
-# =============================================================================
-
-SESSION_TIMEOUT = 5.0    # seconds of inactivity before session resets
-MAX_RECORDING_TIME = 30.0  # max recording duration in seconds
-
-# Modes we record from (not Code mode itself)
-RECORDABLE_MODES = {"play", "doodle"}
-
-
-class ActionRecorder:
-    """Records keyboard actions from Play and Doodle modes.
-
-    Stores (action, mode, timestamp) tuples. Automatically resets
-    after SESSION_TIMEOUT seconds of inactivity. Trims recordings
-    older than MAX_RECORDING_TIME.
-
-    Usage:
-        recorder = ActionRecorder()
-        recorder.record(action, "play")   # called from dispatch
-        blocks = recorder.get_blocks()    # get editable blocks
-        recorder.clear()                  # start fresh
-    """
-
-    def __init__(self, time_fn: Callable[[], float] | None = None):
-        self._events: list[tuple[KeyAction, str, float]] = []
-        self._time_fn = time_fn or time.monotonic
-
-    def record(self, action: KeyAction, mode: str) -> None:
-        """Record a keyboard action if it's from a recordable mode."""
-        if mode not in RECORDABLE_MODES:
+    def cycle_target(self, direction: int) -> None:
+        """Cycle MODE_SWITCH target through available targets."""
+        if self.target not in ALL_TARGETS:
+            self.target = ALL_TARGETS[0]
             return
-
-        # Only record meaningful actions (not mode switches, shifts, etc.)
-        if not isinstance(action, (CharacterAction, NavigationAction, ControlAction)):
-            return
-
-        # Skip key-up events for ControlAction (only record presses)
-        if isinstance(action, ControlAction) and not action.is_down:
-            return
-
-        # Skip key repeats
-        if isinstance(action, CharacterAction) and action.is_repeat:
-            return
-        if isinstance(action, NavigationAction) and action.is_repeat:
-            return
-        if isinstance(action, ControlAction) and action.is_repeat:
-            return
-
-        # Skip certain control actions that aren't useful to record
-        if isinstance(action, ControlAction):
-            if action.action not in ("enter", "backspace", "space", "tab"):
-                return
-
-        now = self._time_fn()
-
-        # Session timeout: clear old events
-        if self._events and (now - self._events[-1][2]) > SESSION_TIMEOUT:
-            self._events.clear()
-
-        self._events.append((action, mode, now))
-
-        # Trim events older than MAX_RECORDING_TIME from the end
-        if self._events:
-            cutoff = now - MAX_RECORDING_TIME
-            while self._events and self._events[0][2] < cutoff:
-                self._events.pop(0)
-
-    def get_blocks(self) -> list[ProgramBlock]:
-        """Convert recorded events to ProgramBlock list."""
-        if not self._events:
-            return []
-
-        blocks = []
-        for i, (action, mode, ts) in enumerate(self._events):
-            block = _action_to_block(action, mode)
-            if block is None:
-                continue
-
-            # Calculate gap from previous event
-            if i < len(self._events) - 1:
-                next_ts = self._events[i + 1][2]
-                pause = next_ts - ts
-                block.gap_level = quantize_pause(pause)
-            else:
-                block.gap_level = 0  # last block has no trailing gap
-
-            blocks.append(block)
-
-        return blocks
-
-    def has_events(self) -> bool:
-        return bool(self._events)
-
-    def clear(self) -> None:
-        self._events.clear()
-
-    @property
-    def source_mode(self) -> str:
-        """The mode most events were recorded in."""
-        if not self._events:
-            return "play"
-        modes = [m for _, m, _ in self._events]
-        # Return the most common mode
-        play_count = modes.count("play")
-        doodle_count = modes.count("doodle")
-        return "doodle" if doodle_count > play_count else "play"
+        idx = ALL_TARGETS.index(self.target)
+        idx = (idx + direction) % len(ALL_TARGETS)
+        self.target = ALL_TARGETS[idx]
 
 
-def _action_to_block(action: KeyAction, mode: str) -> ProgramBlock | None:
+def action_to_block(action: KeyAction, mode: str) -> ProgramBlock | None:
     """Convert a single KeyAction to a ProgramBlock."""
     if isinstance(action, CharacterAction):
         return ProgramBlock(
@@ -350,9 +295,12 @@ def _block_to_demo_action(block: ProgramBlock) -> DemoAction | None:
     return None
 
 
-def blocks_to_demo_actions(blocks: list[ProgramBlock],
-                           target_mode: str = "play") -> list[DemoAction]:
+def blocks_to_demo_actions(blocks: list[ProgramBlock]) -> list[DemoAction]:
     """Convert program blocks to DemoAction list for playback via DemoPlayer.
+
+    MODE_SWITCH blocks emit SwitchTarget actions. If no MODE_SWITCH block
+    is at position 0, a default SwitchTarget is emitted based on the
+    first block's source_mode.
 
     Handles REPEAT blocks: a repeat block repeats all blocks since the
     previous repeat block (or from the start) N times total.
@@ -364,8 +312,12 @@ def blocks_to_demo_actions(blocks: list[ProgramBlock],
 
     actions: list[DemoAction] = []
 
-    # Switch to target mode first
-    actions.append(SwitchMode(mode=target_mode, pause_after=0.3))
+    # Determine initial target from first block
+    first_target = _default_target_for_blocks(blocks)
+
+    # If blocks don't start with MODE_SWITCH, emit initial SwitchTarget
+    if blocks[0].type != ProgramBlockType.MODE_SWITCH:
+        actions.append(SwitchTarget(target=first_target, pause_after=0.3))
 
     # Split blocks into sections delimited by REPEAT blocks
     # Then expand each section according to its repeat count
@@ -383,6 +335,11 @@ def blocks_to_demo_actions(blocks: list[ProgramBlock],
             if pause > 0:
                 actions.append(Pause(duration=pause))
             section = []
+        elif block.type == ProgramBlockType.MODE_SWITCH:
+            # Flush current section, then emit SwitchTarget
+            actions.extend(_section_to_actions(section))
+            section = []
+            actions.append(SwitchTarget(target=block.target, pause_after=0.3))
         else:
             section.append(block)
 
@@ -390,6 +347,20 @@ def blocks_to_demo_actions(blocks: list[ProgramBlock],
     actions.extend(_section_to_actions(section))
 
     return actions
+
+
+def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
+    """Determine the default target for a program based on its blocks."""
+    for block in blocks:
+        if block.type == ProgramBlockType.MODE_SWITCH:
+            return block.target
+        if block.source_mode == "doodle":
+            return TARGET_DOODLE_TEXT
+        if block.source_mode == "play":
+            return TARGET_PLAY_MUSIC
+        if block.source_mode == "explore":
+            return TARGET_EXPLORE
+    return TARGET_PLAY_MUSIC
 
 
 def _section_to_actions(section: list[ProgramBlock]) -> list[DemoAction]:
@@ -483,6 +454,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["char"] = block.char
     elif block.type == ProgramBlockType.REPEAT:
         d["count"] = block.repeat_count
+    elif block.type == ProgramBlockType.MODE_SWITCH:
+        d["target"] = block.target
     if block.source_mode:
         d["mode"] = block.source_mode
     return d
@@ -498,4 +471,5 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         repeat_count=d.get("count", 2),
         gap_level=d.get("gap", 1),
         source_mode=d.get("mode", ""),
+        target=d.get("target", ""),
     )

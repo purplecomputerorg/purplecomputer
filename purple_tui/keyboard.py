@@ -702,6 +702,9 @@ class KeyboardStateMachine:
             if keycode == KeyCode.KEY_F4:
                 actions.append(ModeAction(mode=MODE_BUILD[0]))
                 return actions
+            if keycode == KeyCode.KEY_F5:
+                actions.append(ControlAction(action='record_toggle', is_down=True))
+                return actions
             if keycode == KeyCode.KEY_F9:
                 actions.append(ControlAction(action='theme_toggle', is_down=True))
                 return actions

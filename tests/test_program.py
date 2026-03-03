@@ -1,5 +1,5 @@
 """
-Tests for Code Mode: program recording, editing, and playback.
+Tests for Code Mode: program blocks, playback, and serialization.
 
 Pure logic tests with no Textual app dependency.
 """
@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from purple_tui.program import (
     ProgramBlock,
     ProgramBlockType,
-    ActionRecorder,
     quantize_pause,
     gap_width,
     gap_duration,
@@ -22,6 +21,7 @@ from purple_tui.program import (
     blocks_from_json,
     key_color,
     control_color,
+    action_to_block,
     PAUSE_LEVELS,
     NUM_PAUSE_LEVELS,
     KEY_COLOR_RED,
@@ -33,6 +33,12 @@ from purple_tui.program import (
     BACKSPACE_COLOR,
     SPACE_COLOR,
     REPEAT_COLOR,
+    TARGET_PLAY_MUSIC,
+    TARGET_DOODLE_PAINT,
+    TARGET_EXPLORE,
+    TARGET_ICONS,
+    TARGET_COLORS,
+    ALL_TARGETS,
 )
 from purple_tui.keyboard import (
     CharacterAction,
@@ -41,7 +47,7 @@ from purple_tui.keyboard import (
     ModeAction,
     ShiftAction,
 )
-from purple_tui.demo.script import TypeText, PressKey, SwitchMode, Pause
+from purple_tui.demo.script import TypeText, PressKey, SwitchMode, SwitchTarget, Pause
 
 
 # =============================================================================
@@ -200,10 +206,17 @@ class TestRepeatBlock:
         b.cycle_repeat_count(-1)
         assert b.repeat_count == 2
 
-    def test_cycle_repeat_count_clamps_at_9(self):
-        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=9)
+    def test_cycle_repeat_count_clamps_at_99(self):
+        """Repeat max is now 99 (up from 9)."""
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=99)
         b.cycle_repeat_count(1)
-        assert b.repeat_count == 9
+        assert b.repeat_count == 99
+
+    def test_cycle_repeat_count_can_reach_99(self):
+        """Can increment all the way up to 99."""
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=50)
+        b.cycle_repeat_count(1)
+        assert b.repeat_count == 51
 
     def test_repeat_total_width(self):
         b = ProgramBlock(type=ProgramBlockType.REPEAT, gap_level=0)
@@ -215,135 +228,45 @@ class TestRepeatBlock:
 
 
 # =============================================================================
-# ACTION RECORDER TESTS
+# MODE_SWITCH BLOCK TESTS
 # =============================================================================
 
-class TestActionRecorder:
-    def test_empty_recorder(self):
-        r = ActionRecorder()
-        assert not r.has_events()
-        assert r.get_blocks() == []
+class TestModeSwitchBlock:
+    def test_mode_switch_icon(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
+        assert b.icon == TARGET_ICONS[TARGET_PLAY_MUSIC]
 
-    def test_record_character(self):
-        t = 0.0
-        r = ActionRecorder(time_fn=lambda: t)
-        r.record(CharacterAction(char="a"), "play")
-        assert r.has_events()
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].type == ProgramBlockType.KEY
-        assert blocks[0].char == "a"
+    def test_mode_switch_color(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
+        assert b.bg_color == TARGET_COLORS[TARGET_PLAY_MUSIC]
 
-    def test_record_navigation(self):
-        t = 0.0
-        r = ActionRecorder(time_fn=lambda: t)
-        r.record(NavigationAction(direction="up"), "doodle")
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].type == ProgramBlockType.ARROW
-        assert blocks[0].direction == "up"
+    def test_mode_switch_explore(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE)
+        assert b.icon == TARGET_ICONS[TARGET_EXPLORE]
+        assert b.bg_color == TARGET_COLORS[TARGET_EXPLORE]
 
-    def test_record_control(self):
-        t = 0.0
-        r = ActionRecorder(time_fn=lambda: t)
-        r.record(ControlAction(action="enter", is_down=True), "play")
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].type == ProgramBlockType.CONTROL
-        assert blocks[0].control == "enter"
+    def test_mode_switch_doodle_paint(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_DOODLE_PAINT)
+        assert b.bg_color == TARGET_COLORS[TARGET_DOODLE_PAINT]
 
-    def test_ignores_non_recordable_mode(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a"), "build")
-        assert not r.has_events()
+    def test_cycle_target(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=ALL_TARGETS[0])
+        b.cycle_target(1)
+        assert b.target == ALL_TARGETS[1]
 
-    def test_ignores_explore_mode(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a"), "explore")
-        assert not r.has_events()
+    def test_cycle_target_wraps(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=ALL_TARGETS[-1])
+        b.cycle_target(1)
+        assert b.target == ALL_TARGETS[0]
 
-    def test_ignores_key_up(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(ControlAction(action="space", is_down=False), "play")
-        assert not r.has_events()
+    def test_cycle_target_backwards(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=ALL_TARGETS[0])
+        b.cycle_target(-1)
+        assert b.target == ALL_TARGETS[-1]
 
-    def test_ignores_key_repeat(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a", is_repeat=True), "play")
-        assert not r.has_events()
-
-    def test_ignores_mode_action(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(ModeAction(mode="explore"), "play")
-        assert not r.has_events()
-
-    def test_ignores_escape(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(ControlAction(action="escape", is_down=True), "play")
-        assert not r.has_events()
-
-    def test_session_timeout(self):
-        times = iter([0.0, 6.0])
-        r = ActionRecorder(time_fn=lambda: next(times))
-        r.record(CharacterAction(char="a"), "play")
-        r.record(CharacterAction(char="b"), "play")
-        # First event should be cleared due to 6s gap (> 5s timeout)
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].char == "b"
-
-    def test_timing_quantization(self):
-        times = iter([0.0, 0.1, 0.5])
-        r = ActionRecorder(time_fn=lambda: next(times))
-        r.record(CharacterAction(char="a"), "play")
-        r.record(CharacterAction(char="b"), "play")
-        r.record(CharacterAction(char="c"), "play")
-        blocks = r.get_blocks()
-        assert len(blocks) == 3
-        # a->b gap is 0.1s (level 1: tiny)
-        assert blocks[0].gap_level == 1
-        # b->c gap is 0.4s (level 2-3 range)
-        assert blocks[1].gap_level in (2, 3)
-        # last block has no gap
-        assert blocks[2].gap_level == 0
-
-    def test_max_recording_trim(self):
-        """Events older than 30s from the latest are trimmed."""
-        times = iter([0.0, 31.0])
-        r = ActionRecorder(time_fn=lambda: next(times))
-        r.record(CharacterAction(char="a"), "play")
-        r.record(CharacterAction(char="b"), "play")
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].char == "b"
-
-    def test_clear(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a"), "play")
-        r.clear()
-        assert not r.has_events()
-
-    def test_source_mode_play(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a"), "play")
-        assert r.source_mode == "play"
-
-    def test_source_mode_doodle(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="a"), "doodle")
-        assert r.source_mode == "doodle"
-
-    def test_source_mode_majority(self):
-        t = 0.0
-        def tick():
-            nonlocal t
-            t += 0.1
-            return t
-        r = ActionRecorder(time_fn=tick)
-        r.record(CharacterAction(char="a"), "play")
-        r.record(CharacterAction(char="b"), "doodle")
-        r.record(CharacterAction(char="c"), "doodle")
-        assert r.source_mode == "doodle"
+    def test_mode_switch_unknown_target(self):
+        b = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target="unknown")
+        assert b.icon == "?"
 
 
 # =============================================================================
@@ -356,20 +279,22 @@ class TestBlocksToDemoActions:
         assert actions == []
 
     def test_single_key_block(self):
-        blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0)]
-        actions = blocks_to_demo_actions(blocks, "play")
-        # Should have: SwitchMode + TypeText
+        blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a",
+                               gap_level=0, source_mode="play")]
+        actions = blocks_to_demo_actions(blocks)
+        # Should have: SwitchTarget + TypeText
         assert len(actions) == 2
-        assert isinstance(actions[0], SwitchMode)
-        assert actions[0].mode == "play"
+        assert isinstance(actions[0], SwitchTarget)
+        assert actions[0].target == TARGET_PLAY_MUSIC
         assert isinstance(actions[1], TypeText)
         assert actions[1].text == "a"
 
     def test_arrow_block(self):
-        blocks = [ProgramBlock(type=ProgramBlockType.ARROW, direction="up", gap_level=0)]
-        actions = blocks_to_demo_actions(blocks, "doodle")
-        assert isinstance(actions[0], SwitchMode)
-        assert actions[0].mode == "doodle"
+        blocks = [ProgramBlock(type=ProgramBlockType.ARROW, direction="up",
+                               gap_level=0, source_mode="doodle")]
+        actions = blocks_to_demo_actions(blocks)
+        assert isinstance(actions[0], SwitchTarget)
+        assert actions[0].target == "doodle.text"
         assert isinstance(actions[1], PressKey)
         assert actions[1].key == "up"
 
@@ -385,7 +310,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
         actions = blocks_to_demo_actions(blocks)
-        # SwitchMode, TypeText(a), Pause, TypeText(b)
+        # SwitchTarget, TypeText(a), Pause, TypeText(b)
         assert len(actions) == 4
         assert isinstance(actions[2], Pause)
         assert actions[2].duration > 0
@@ -396,7 +321,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
         actions = blocks_to_demo_actions(blocks)
-        # SwitchMode, TypeText(a), TypeText(b) - no Pause
+        # SwitchTarget, TypeText(a), TypeText(b)
         assert len(actions) == 3
         assert not any(isinstance(a, Pause) for a in actions)
 
@@ -408,7 +333,6 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
         ]
         actions = blocks_to_demo_actions(blocks)
-        # SwitchMode, then A B A B (2 repetitions)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         chars = [a.text for a in type_actions]
         assert chars == ["a", "b", "a", "b"]
@@ -468,9 +392,43 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
         actions = blocks_to_demo_actions(blocks)
-        # There should be a pause between the repeated section and B
         pause_actions = [a for a in actions if isinstance(a, Pause)]
         assert len(pause_actions) >= 1
+
+    def test_mode_switch_emits_switch_target(self):
+        """MODE_SWITCH blocks emit SwitchTarget actions."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_DOODLE_PAINT),
+            ProgramBlock(type=ProgramBlockType.ARROW, direction="right", gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        switch_actions = [a for a in actions if isinstance(a, SwitchTarget)]
+        assert len(switch_actions) == 2
+        assert switch_actions[0].target == TARGET_PLAY_MUSIC
+        assert switch_actions[1].target == TARGET_DOODLE_PAINT
+
+    def test_no_leading_switch_when_first_block_is_mode_switch(self):
+        """No extra SwitchTarget at start if blocks begin with MODE_SWITCH."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.KEY, char="2", gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        switch_actions = [a for a in actions if isinstance(a, SwitchTarget)]
+        assert len(switch_actions) == 1
+        assert switch_actions[0].target == TARGET_EXPLORE
+
+    def test_default_target_from_source_mode(self):
+        """Default target inferred from source_mode when no MODE_SWITCH at start."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0,
+                         source_mode="doodle"),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        assert isinstance(actions[0], SwitchTarget)
+        assert actions[0].target == "doodle.text"
 
 
 # =============================================================================
@@ -562,18 +520,52 @@ class TestSerialization:
         restored, _ = blocks_from_json(json_str)
         assert restored == []
 
+    def test_round_trip_mode_switch(self):
+        blocks = [ProgramBlock(type=ProgramBlockType.MODE_SWITCH,
+                               target=TARGET_PLAY_MUSIC, gap_level=0)]
+        json_str = blocks_to_json(blocks)
+        restored, _ = blocks_from_json(json_str)
+        assert len(restored) == 1
+        assert restored[0].type == ProgramBlockType.MODE_SWITCH
+        assert restored[0].target == TARGET_PLAY_MUSIC
+
+    def test_round_trip_mode_switch_with_blocks(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=1),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_DOODLE_PAINT),
+            ProgramBlock(type=ProgramBlockType.ARROW, direction="right", gap_level=0),
+        ]
+        json_str = blocks_to_json(blocks, "play")
+        restored, _ = blocks_from_json(json_str)
+        assert len(restored) == 4
+        assert restored[0].target == TARGET_PLAY_MUSIC
+        assert restored[2].target == TARGET_DOODLE_PAINT
+
 
 # =============================================================================
 # EDGE CASES
 # =============================================================================
 
 class TestEdgeCases:
-    def test_single_action_recording(self):
-        r = ActionRecorder(time_fn=lambda: 0.0)
-        r.record(CharacterAction(char="x"), "play")
-        blocks = r.get_blocks()
-        assert len(blocks) == 1
-        assert blocks[0].gap_level == 0  # last block, no trailing gap
+    def test_action_to_block_character(self):
+        block = action_to_block(CharacterAction(char="x"), "play")
+        assert block.type == ProgramBlockType.KEY
+        assert block.char == "x"
+
+    def test_action_to_block_navigation(self):
+        block = action_to_block(NavigationAction(direction="left"), "doodle")
+        assert block.type == ProgramBlockType.ARROW
+        assert block.direction == "left"
+
+    def test_action_to_block_control(self):
+        block = action_to_block(ControlAction(action="enter", is_down=True), "play")
+        assert block.type == ProgramBlockType.CONTROL
+        assert block.control == "enter"
+
+    def test_action_to_block_ignores_escape(self):
+        block = action_to_block(ControlAction(action="escape", is_down=True), "play")
+        assert block is None
 
     def test_key_color_uppercase(self):
         """Uppercase characters should still map to the right row."""
@@ -586,8 +578,5 @@ class TestEdgeCases:
         assert control_color("unknown") == SPACE_COLOR
 
     def test_block_source_mode_preserved(self):
-        t = 0.0
-        r = ActionRecorder(time_fn=lambda: t)
-        r.record(CharacterAction(char="a"), "doodle")
-        blocks = r.get_blocks()
-        assert blocks[0].source_mode == "doodle"
+        block = action_to_block(CharacterAction(char="a"), "doodle")
+        assert block.source_mode == "doodle"

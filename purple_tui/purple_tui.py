@@ -25,6 +25,8 @@ import os
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
+import asyncio
+
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal
 from textual.widgets import Static
@@ -54,7 +56,7 @@ from .keyboard import (
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
-from .program import ActionRecorder
+from .recording import RecordingManager, RecordingState
 from .modes.doodle_mode import ColorLegend, PaintModeChanged
 from .modes.parent_mode import apply_saved_display_settings
 from .mode_picker import ModePickerScreen
@@ -100,16 +102,24 @@ class ModeTitle(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mode = MODE_EXPLORE[0]
+        self._recording_indicator = ""
         self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
         self.refresh()
 
+    def set_recording_indicator(self, indicator: str) -> None:
+        self._recording_indicator = indicator
+        self.refresh()
+
     def render(self) -> str:
         icon, label = MODE_TITLES.get(self.mode, ("", self.mode.title()))
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"{icon}  {caps(label)}"
+        title = f"{icon}  {caps(label)}"
+        if self._recording_indicator:
+            title = f"{self._recording_indicator} {title}"
+        return title
 
 
 class KeyBadge(Static):
@@ -589,8 +599,9 @@ class PurpleApp(App):
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
-        # Action recorder for Code mode (records Play/Doodle actions)
-        self._action_recorder = ActionRecorder()
+        # Recording manager for F5 record/play/stop cycle
+        self._recording_manager = RecordingManager()
+        self._f5_play_task: asyncio.Task | None = None
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -780,9 +791,21 @@ class PurpleApp(App):
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
-        # Record actions for Code mode (only from Play/Doodle, not during demo)
-        if not (self._demo_player and self._demo_player.is_running):
-            self._action_recorder.record(action, self.active_mode.name.lower())
+        # Handle F5 record_toggle globally (before mode dispatch)
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'record_toggle':
+            # F5 does nothing in Code mode
+            if self.active_mode == Mode.BUILD:
+                return
+            await self._handle_record_toggle()
+            return
+
+        # Record events when recording (not during demo playback)
+        if self._recording_manager.state == RecordingState.RECORDING:
+            if not (self._demo_player and self._demo_player.is_running):
+                sub_mode = self._get_current_sub_mode()
+                self._recording_manager.record_event(
+                    action, self.active_mode.name.lower(), sub_mode
+                )
 
         if isinstance(action, ModeAction):
             # Dismiss any open modal (like mode picker) when F-key is pressed
@@ -795,6 +818,10 @@ class PurpleApp(App):
             elif action.mode == MODE_DOODLE[0]:
                 self.action_switch_mode(MODE_DOODLE[0])
             elif action.mode == MODE_BUILD[0]:
+                # F4 during recording: stop recording and switch to Code mode
+                if self._recording_manager.state == RecordingState.RECORDING:
+                    self._recording_manager.stop_recording()
+                    self._update_recording_indicator()
                 self.action_switch_mode(MODE_BUILD[0])
             elif action.mode == 'parent':
                 self.action_parent_mode()
@@ -909,6 +936,122 @@ class PurpleApp(App):
             self.action_switch_mode(MODE_DOODLE[0])
         elif mode_name == "build":
             self.action_switch_mode(MODE_BUILD[0])
+
+    # ── F5 Recording ─────────────────────────────────────────────────
+
+    async def _handle_record_toggle(self) -> None:
+        """Handle F5 press: toggle recording state."""
+        old_state = self._recording_manager.state
+
+        if old_state == RecordingState.PLAYING:
+            # Stop playback
+            self._recording_manager.toggle()
+            self._update_recording_indicator()
+            return
+
+        new_state = self._recording_manager.toggle()
+        self._update_recording_indicator()
+
+        if new_state == RecordingState.PLAYING:
+            # Start playback of the recording
+            await self._play_recording()
+
+    async def _play_recording(self) -> None:
+        """Play the current F5 recording via DemoPlayer."""
+        if not self._recording_manager.has_recording():
+            self._recording_manager.state = RecordingState.IDLE
+            self._update_recording_indicator()
+            return
+
+        from .demo.player import DemoPlayer
+        from .program import blocks_to_demo_actions
+
+        blocks = self._recording_manager.to_blocks()
+        demo_actions = blocks_to_demo_actions(blocks)
+        if not demo_actions:
+            self._recording_manager.state = RecordingState.IDLE
+            self._update_recording_indicator()
+            return
+
+        is_doodle_paint = self._get_doodle_paint_mode_callback()
+        is_play_letters = self._get_play_letters_mode_callback()
+
+        player = DemoPlayer(
+            dispatch_action=self._dispatch_keyboard_action,
+            speed_multiplier=1.0,
+            is_doodle_paint_mode=is_doodle_paint,
+            is_play_letters_mode=is_play_letters,
+        )
+
+        def stop_playback():
+            if self._f5_play_task and not self._f5_play_task.done():
+                self._f5_play_task.cancel()
+
+        self._recording_manager.set_stop_playback_fn(stop_playback)
+
+        async def _run():
+            try:
+                await player.play(demo_actions)
+            finally:
+                self._recording_manager.state = RecordingState.IDLE
+                self._update_recording_indicator()
+
+        self._f5_play_task = asyncio.create_task(_run())
+
+    def _get_current_sub_mode(self) -> str:
+        """Get the current sub-mode string for the active mode."""
+        mode_name = self.active_mode.name.lower()
+        try:
+            content_area = self.query_one("#content-area")
+            if mode_name == "play":
+                play_widget = content_area.query_one("#mode-play")
+                if hasattr(play_widget, '_letters_mode') and play_widget._letters_mode:
+                    return "letters"
+                return "music"
+            elif mode_name == "doodle":
+                doodle_widget = content_area.query_one("#mode-doodle")
+                canvas = doodle_widget.query_one("#art-canvas")
+                if hasattr(canvas, 'is_painting') and canvas.is_painting:
+                    return "paint"
+                return "text"
+        except Exception:
+            pass
+        return ""
+
+    def _get_doodle_paint_mode_callback(self):
+        """Get a callback for checking doodle paint mode."""
+        def check():
+            try:
+                content_area = self.query_one("#content-area")
+                doodle = content_area.query_one("#mode-doodle")
+                canvas = doodle.query_one("#art-canvas")
+                return hasattr(canvas, 'is_painting') and canvas.is_painting
+            except Exception:
+                return False
+        return check
+
+    def _get_play_letters_mode_callback(self):
+        """Get a callback for checking play letters mode."""
+        def check():
+            try:
+                content_area = self.query_one("#content-area")
+                play = content_area.query_one("#mode-play")
+                return hasattr(play, '_letters_mode') and play._letters_mode
+            except Exception:
+                return False
+        return check
+
+    def _update_recording_indicator(self) -> None:
+        """Update the title bar with recording/playback indicator."""
+        indicator = self._recording_manager.indicator
+        try:
+            title = self.query_one("#mode-title", ModeTitle)
+            if indicator:
+                title.set_recording_indicator(indicator)
+            else:
+                title.set_recording_indicator("")
+        except Exception:
+            pass
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
@@ -1064,14 +1207,17 @@ class PurpleApp(App):
             return ExploreMode(classes="mode-content")
         elif mode == Mode.PLAY:
             from .modes.play_mode import PlayMode
-            return PlayMode(classes="mode-content")
+            return PlayMode(
+                recording_manager=self._recording_manager,
+                classes="mode-content",
+            )
         elif mode == Mode.DOODLE:
             from .modes.doodle_mode import DoodleMode
             return DoodleMode(classes="mode-content")
         elif mode == Mode.BUILD:
             from .modes.build_mode import BuildMode
             return BuildMode(
-                recorder=self._action_recorder,
+                recording_manager=self._recording_manager,
                 dispatch_action=self._dispatch_keyboard_action,
                 classes="mode-content",
             )

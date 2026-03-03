@@ -6,6 +6,12 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Code Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
+- **Code Mode v2: Tab menu**: Tab opens a vertical menu modal in Code mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter command mode
+- **Code Mode v2: multi-line blocks**: Blocks display across multiple lines with mode icons (♫ 🔤 ✎ 🖌 🔍) in a left gutter; MODE_SWITCH blocks start new lines; long sections wrap with indented continuation
+- **Code Mode v2: Enter inserts ↵**: Enter key now inserts a ↵ control block (useful in Explore and Doodle) instead of entering command mode
+- **Code Mode v2: repeat max 99**: Repeat block maximum increased from 9 to 99
+- **Play mode Space**: Space now plays the last F5 recording instead of heuristic-based replay
 - **Code Mode (F4)**: Replaced turtle-graphics Build mode with cross-mode visual programming; automatically records Play and Doodle actions as colored blocks with timing gaps; Space plays the program back live in the real mode; up/down adjusts timing between blocks; 9 save slots (hold number to save, tap to load)
 
 ---

@@ -66,6 +66,21 @@ class SwitchMode(DemoAction):
 
 
 @dataclass
+class SwitchTarget(DemoAction):
+    """Switch to a specific mode and sub-mode.
+
+    Used by Code mode playback to switch to the exact mode/sub-mode
+    recorded during F5 recording.
+
+    Args:
+        target: Target string like "play.music", "doodle.paint", "explore"
+        pause_after: Pause after switching
+    """
+    target: str
+    pause_after: float = 0.3
+
+
+@dataclass
 class Pause(DemoAction):
     """Pause for a duration (let viewer absorb what happened).
 
@@ -245,6 +260,8 @@ def segment_duration(actions: list[DemoAction]) -> float:
         if isinstance(action, Pause):
             total += action.duration
         elif isinstance(action, SwitchMode):
+            total += action.pause_after
+        elif isinstance(action, SwitchTarget):
             total += action.pause_after
         elif isinstance(action, TypeText):
             total += len(action.text) * action.delay_per_char + action.final_pause

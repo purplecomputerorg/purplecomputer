@@ -1,13 +1,9 @@
 """
 Code Mode (F4): Cross-Mode Visual Programming
 
-Records what kids do in Play and Doodle modes, shows it as colored blocks
-with timing gaps, and plays it back live. A 4-year-old never sees this.
-A 7-year-old discovers F4 and sees their music as colored blocks.
-
-Blocks have a fixed icon section (4 chars) and a variable-width trailing
-gap (0-12 chars) representing the pause before the next action. Up/down
-arrows adjust gap length. Space plays the program back in the real mode.
+Shows recorded blocks in a multi-line layout with mode icons in a left gutter.
+MODE_SWITCH blocks start new lines. Long sections wrap. Tab opens a menu modal.
+Space plays the program. F5 (handled globally) records across modes.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -29,15 +25,17 @@ from ..keyboard import CharacterAction, NavigationAction, ControlAction
 from ..program import (
     ProgramBlock,
     ProgramBlockType,
-    ActionRecorder,
     gap_width,
     blocks_to_demo_actions,
     save_program,
     load_program,
     slot_occupied,
-    PAUSE_LEVELS,
-    NUM_PAUSE_LEVELS,
+    TARGET_ICONS,
+    TARGET_COLORS,
+    TARGET_PLAY_MUSIC,
+    ALL_TARGETS,
 )
+from ..recording import RecordingManager
 
 
 # =============================================================================
@@ -53,6 +51,7 @@ FG_LIGHT = "#3a2a50"
 # Block rendering
 ICON_WIDTH = 4           # fixed character width for the icon section
 BLOCK_SELECTED_COLOR = "#FFD700"  # gold highlight for cursor
+GUTTER_WIDTH = 3         # left gutter for mode icons
 
 # Save bar
 SAVE_BAR_HEIGHT = 2
@@ -61,9 +60,70 @@ SLOT_FILLED_COLOR = "#9b7bc4"
 SLOT_EMPTY_COLOR = "#3a2a50"
 SLOT_ACTIVE_COLOR = "#FFD700"
 
-# Command mode sub-states
-CMD_LOAD = "load"    # Enter → 1-9 loads slot
-CMD_SAVE = "save"    # Enter → ↓ → 1-9 saves to slot
+# Block strip layout rows (relative to each display line)
+BLOCK_HEIGHT = 4  # border_top + body1 + body2 + border_bottom
+
+
+# =============================================================================
+# LINE LAYOUT
+# =============================================================================
+
+def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[str, list[tuple[int, ProgramBlock]]]]:
+    """Pre-process blocks into display lines.
+
+    Returns list of (icon, [(block_index, block), ...]) tuples.
+    MODE_SWITCH blocks start a new line with their icon in the gutter.
+    If a section overflows content_width, it wraps (continuation lines
+    have empty gutter icon "").
+
+    Each block in the result includes its original index in the flat blocks list.
+    """
+    if not blocks:
+        return []
+
+    lines: list[tuple[str, list[tuple[int, ProgramBlock]]]] = []
+    current_icon = ""
+    current_line: list[tuple[int, ProgramBlock]] = []
+    current_width = 0
+
+    for i, block in enumerate(blocks):
+        if block.type == ProgramBlockType.MODE_SWITCH:
+            # Flush current line
+            if current_line:
+                lines.append((current_icon, current_line))
+            # Start new line with this block's icon
+            current_icon = TARGET_ICONS.get(block.target, "?")
+            current_line = [(i, block)]
+            current_width = block.total_width
+            continue
+
+        block_w = block.total_width
+
+        # Check if this block would overflow
+        if current_width + block_w > content_width and current_line:
+            # Wrap: flush current line, start continuation
+            lines.append((current_icon, current_line))
+            current_icon = ""  # continuation line: blank gutter
+            current_line = [(i, block)]
+            current_width = block_w
+        else:
+            current_line.append((i, block))
+            current_width += block_w
+
+    # Flush last line
+    if current_line:
+        lines.append((current_icon, current_line))
+
+    return lines
+
+
+def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]]]], cursor: int) -> tuple[int, int]:
+    """Convert flat cursor index to (line_index, position_in_line)."""
+    for line_idx, (_, line_blocks) in enumerate(lines):
+        for pos, (block_idx, _) in enumerate(line_blocks):
+            if block_idx == cursor:
+                return line_idx, pos
+    return 0, 0
 
 
 # =============================================================================
@@ -129,9 +189,9 @@ class SaveBar(Widget):
                 style = Style(color=color, bgcolor=bg, bold=(slot == self._active_slot))
                 # Show filled slots as solid, empty as outline
                 if slot in self._filled:
-                    segments.append(Segment(f" {slot}■ ", style))
+                    segments.append(Segment(f" {slot}\u25a0 ", style))
                 else:
-                    segments.append(Segment(f" {slot}□ ", style))
+                    segments.append(Segment(f" {slot}\u25a1 ", style))
                 chars_used += slot_width
 
             remaining = width - chars_used
@@ -146,66 +206,51 @@ class SaveBar(Widget):
 
 
 # =============================================================================
-# CODE CANVAS (BLOCK STRIP)
+# CODE CANVAS (MULTI-LINE BLOCK DISPLAY)
 # =============================================================================
 
 class CodeCanvas(Widget):
-    """Shows the program as a horizontal strip of colored blocks.
+    """Shows the program as multi-line colored blocks with mode gutter icons.
 
-    Each block has a fixed icon section (4 chars) and a variable trailing
-    gap rendered as dots in a dimmer shade of the block color.
-
-    Layout:
-      Row 0-1: save bar (rendered separately above)
-      Row 2: block top borders
-      Row 3-4: block bodies (icon centered)
-      Row 5: block bottom borders / cursor
-      Row 6: gap adjustment hints
-      Rest: empty / hints
+    MODE_SWITCH blocks start new lines with their target icon in a 3-char
+    left gutter. Long sections wrap with blank gutter. Vertical scrolling
+    when content exceeds viewport.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
-        self._scroll_offset: int = 0
-        self._command_mode: bool = False
-        self._command_sub: str = CMD_LOAD  # CMD_LOAD or CMD_SAVE
+        self._scroll_y: int = 0  # vertical scroll offset in display rows
+        self._lines: list[tuple[str, list[tuple[int, ProgramBlock]]]] = []
 
     def set_blocks(self, blocks: list[ProgramBlock], cursor: int) -> None:
         self._blocks = blocks
         self._cursor = cursor
-        self._update_scroll()
+        self._rebuild_lines()
+        self._ensure_cursor_visible()
         self.refresh()
 
-    def set_command_mode(self, active: bool, sub: str = CMD_LOAD) -> None:
-        self._command_mode = active
-        self._command_sub = sub
-        self.refresh()
+    def _rebuild_lines(self) -> None:
+        """Rebuild the line layout from blocks."""
+        content_width = max(1, (self.size.width or 112) - GUTTER_WIDTH)
+        self._lines = _layout_lines(self._blocks, content_width)
 
-    def _update_scroll(self) -> None:
-        """Ensure the cursor block is visible."""
-        if not self._blocks:
-            self._scroll_offset = 0
+    def _ensure_cursor_visible(self) -> None:
+        """Scroll to make the cursor line visible."""
+        if not self._lines:
+            self._scroll_y = 0
             return
+        line_idx, _ = _cursor_to_line_pos(self._lines, self._cursor)
+        # Each line occupies BLOCK_HEIGHT rows
+        cursor_row_start = line_idx * BLOCK_HEIGHT
+        cursor_row_end = cursor_row_start + BLOCK_HEIGHT
+        visible_height = max(1, (self.size.height or 28) - 1)  # -1 for hint row
 
-        width = self.size.width or 112
-
-        # Calculate cumulative positions
-        pos = 0
-        cursor_start = 0
-        cursor_end = 0
-        for i, block in enumerate(self._blocks):
-            if i == self._cursor:
-                cursor_start = pos
-                cursor_end = pos + block.total_width
-            pos += block.total_width
-
-        # Adjust scroll so cursor is visible
-        if cursor_start < self._scroll_offset:
-            self._scroll_offset = cursor_start
-        elif cursor_end > self._scroll_offset + width:
-            self._scroll_offset = cursor_end - width
+        if cursor_row_start < self._scroll_y:
+            self._scroll_y = cursor_row_start
+        elif cursor_row_end > self._scroll_y + visible_height:
+            self._scroll_y = cursor_row_end - visible_height
 
     def _get_bg(self) -> str:
         try:
@@ -220,154 +265,147 @@ class CodeCanvas(Widget):
         bg_style = Style(bgcolor=bg)
 
         if not self._blocks:
-            return self._render_empty_line(y, width, bg, bg_style)
+            return self._render_empty_line(y, width, bg, bg_style, height)
 
-        # Block strip layout rows (relative to widget)
-        border_top = 1
-        body_row_1 = 2
-        body_row_2 = 3
-        border_bottom = 4
         hint_row = height - 1
-
         if y == hint_row:
             return self._render_hint_line(width, bg, bg_style)
 
-        if y < border_top or y > border_bottom:
+        # Map display y to content y (with vertical scrolling)
+        content_y = y + self._scroll_y
+
+        # Which line and sub-row?
+        line_idx = content_y // BLOCK_HEIGHT
+        sub_row = content_y % BLOCK_HEIGHT
+
+        if line_idx < 0 or line_idx >= len(self._lines):
             return Strip([Segment(" " * width, bg_style)])
 
-        # Render blocks horizontally
-        segments = []
-        x_pos = -self._scroll_offset  # current x position
+        icon, line_blocks = self._lines[line_idx]
+        content_width = width - GUTTER_WIDTH
 
-        for i, block in enumerate(self._blocks):
-            is_selected = (i == self._cursor)
+        # Render gutter
+        gutter_segments = self._render_gutter(icon, sub_row, bg, bg_style, line_idx)
+
+        # Render block strip for this line
+        block_segments = self._render_block_strip(
+            line_blocks, sub_row, content_width, bg, bg_style
+        )
+
+        return Strip(gutter_segments + block_segments)
+
+    def _render_gutter(self, icon: str, sub_row: int, bg: str,
+                       bg_style: Style, line_idx: int) -> list[Segment]:
+        """Render the 3-char left gutter with mode icon."""
+        if sub_row == 1 and icon:  # body row 1 (icon centered vertically)
+            # Find the target color for this icon
+            target_color = bg
+            for target, t_icon in TARGET_ICONS.items():
+                if t_icon == icon:
+                    target_color = TARGET_COLORS[target]
+                    break
+            icon_style = Style(color=target_color, bgcolor=bg, bold=True)
+            # Pad icon to GUTTER_WIDTH
+            display = icon[:GUTTER_WIDTH].ljust(GUTTER_WIDTH)
+            return [Segment(display, icon_style)]
+        else:
+            return [Segment(" " * GUTTER_WIDTH, bg_style)]
+
+    def _render_block_strip(self, line_blocks: list[tuple[int, ProgramBlock]],
+                            sub_row: int, content_width: int,
+                            bg: str, bg_style: Style) -> list[Segment]:
+        """Render a horizontal strip of blocks for one sub-row."""
+        segments: list[Segment] = []
+        x_pos = 0
+
+        # sub_row mapping: 0=border_top, 1=body1(icon), 2=body2, 3=border_bottom
+        for block_idx, block in line_blocks:
+            is_selected = (block_idx == self._cursor)
             icon_w = ICON_WIDTH
             gap_w = gap_width(block.gap_level)
             total_w = icon_w + gap_w
 
-            # Skip if entirely off-screen left
-            if x_pos + total_w <= 0:
-                x_pos += total_w
+            # Skip MODE_SWITCH blocks in the strip (they're in the gutter)
+            if block.type == ProgramBlockType.MODE_SWITCH:
                 continue
 
-            # Stop if past right edge
-            if x_pos >= width:
+            if x_pos >= content_width:
                 break
 
-            # Calculate visible portion
-            vis_start = max(0, -x_pos)
-            vis_end = min(total_w, width - x_pos)
+            # Clip to content width
+            visible_w = min(total_w, content_width - x_pos)
 
             block_bg = block.bg_color
             text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
-
-            # Dim gap color (mix block color toward background)
             gap_bg = _dim_color(block_bg)
 
-            if y == border_top:
+            if sub_row == 0:
                 # Top border
                 if is_selected:
                     border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
-                    line = "▾" * icon_w + " " * gap_w
+                    line = "\u25be" * min(icon_w, visible_w) + " " * max(0, visible_w - icon_w)
+                    segments.append(Segment(line, border_style))
                 else:
-                    line = " " * total_w
-                    border_style = bg_style
-                visible = line[vis_start:vis_end]
-                segments.append(Segment(visible, border_style if is_selected else bg_style))
+                    segments.append(Segment(" " * visible_w, bg_style))
 
-            elif y in (body_row_1, body_row_2):
+            elif sub_row in (1, 2):
                 # Block body
-                if y == body_row_1:
-                    # Icon row
+                if sub_row == 1:
                     icon = block.icon
                     icon_text = _center_text(icon, icon_w)
                 else:
-                    # Empty second row (or could show type label)
                     icon_text = " " * icon_w
 
                 body_style = Style(color=text_color, bgcolor=block_bg,
                                    bold=is_selected)
                 gap_style = Style(color="#606060", bgcolor=gap_bg)
 
-                full_line = icon_text + ("·" * gap_w if gap_w > 0 else "")
-
-                # Render character by character for the visible portion
-                for cx in range(vis_start, vis_end):
+                for cx in range(visible_w):
                     if cx < icon_w:
                         char = icon_text[cx] if cx < len(icon_text) else " "
                         segments.append(Segment(char, body_style))
                     else:
-                        segments.append(Segment("·", gap_style))
+                        segments.append(Segment("\u00b7", gap_style))
 
-            elif y == border_bottom:
-                # Cursor indicator
+            elif sub_row == 3:
+                # Bottom border / cursor
                 if is_selected:
                     cursor_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
-                    line = _center_text("▴", icon_w) + " " * gap_w
+                    line = _center_text("\u25b4", min(icon_w, visible_w)) + " " * max(0, visible_w - icon_w)
+                    segments.append(Segment(line[:visible_w], cursor_style))
                 else:
-                    line = " " * total_w
-                    cursor_style = bg_style
-                visible = line[vis_start:vis_end]
-                segments.append(Segment(visible, cursor_style if is_selected else bg_style))
+                    segments.append(Segment(" " * visible_w, bg_style))
 
             x_pos += total_w
 
-        # Fill remaining width
+        # Fill remaining content width
         chars_used = sum(len(s.text) for s in segments)
-        remaining = width - chars_used
+        remaining = content_width - chars_used
         if remaining > 0:
             segments.append(Segment(" " * remaining, bg_style))
 
-        return Strip(segments)
+        return segments
 
     def _render_empty_line(self, y: int, width: int, bg: str,
-                           bg_style: Style) -> Strip:
+                           bg_style: Style, height: int) -> Strip:
         """Render a line when no blocks are present."""
-        if self._command_mode:
-            return self._render_command_hint(y, width, bg, bg_style)
-        mid = self.size.height // 2
+        mid = height // 2
         if y == mid - 1:
             hint = "Type keys to add blocks"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid:
-            hint = "or play in another mode, then come back!"
+            hint = "or press F5 to record in another mode!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
-            hint = "← → navigate   ↑↓ timing   Space play   Enter menu"
+            hint = "\u2190 \u2192 navigate   \u2191\u2193 timing   Space play   Tab menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        if self._command_mode:
-            return self._render_command_hint_bottom(width, bg, bg_style)
-        hint = "Type to add   ← → move   ↑↓ timing   Bksp delete   Space play   Enter menu"
+        hint = "Type to add   \u2190 \u2192 move   \u2191\u2193 timing   Bksp delete   Space play   Tab menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
-
-    def _render_command_hint(self, y: int, width: int, bg: str,
-                             bg_style: Style) -> Strip:
-        """Render command mode hints in the empty area."""
-        mid = self.size.height // 2
-        if self._command_sub == CMD_SAVE:
-            if y == mid:
-                return self._centered_dim_text(
-                    "Press 1-9 to save", width, bg, bg_style)
-        else:
-            if y == mid - 1:
-                return self._centered_dim_text(
-                    "1-9 load   Enter repeat   ↓ save", width, bg, bg_style)
-        return Strip([Segment(" " * width, bg_style)])
-
-    def _render_command_hint_bottom(self, width: int, bg: str,
-                                    bg_style: Style) -> Strip:
-        """Render command mode hint at bottom."""
-        if self._command_sub == CMD_SAVE:
-            hint = "1-9 save to slot   any other key: cancel"
-        else:
-            hint = "1-9 load   Enter repeat   ↓ save   any other key: cancel"
-        highlight = Style(color="#FFD700", bgcolor=bg)
-        return self._centered_text(hint, width, bg_style, highlight)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
                            bg_style: Style) -> Strip:
@@ -376,15 +414,6 @@ class CodeCanvas(Widget):
         return Strip([
             Segment(" " * pad, bg_style),
             Segment(text[:width], dim_style),
-            Segment(" " * max(0, width - pad - len(text)), bg_style),
-        ])
-
-    def _centered_text(self, text: str, width: int,
-                       bg_style: Style, text_style: Style) -> Strip:
-        pad = max(0, (width - len(text)) // 2)
-        return Strip([
-            Segment(" " * pad, bg_style),
-            Segment(text[:width], text_style),
             Segment(" " * max(0, width - pad - len(text)), bg_style),
         ])
 
@@ -400,8 +429,9 @@ class CodeCanvas(Widget):
 class BuildMode(Container, can_focus=True):
     """Code Mode: cross-mode visual programming.
 
-    Records Play/Doodle actions as colored blocks with timing gaps.
-    Space plays the program back in the real mode via DemoPlayer.
+    Tab opens menu modal. Space plays program. F5 recording handled globally.
+    Enter inserts newline control block. Up/down adjusts gaps, repeat count,
+    or MODE_SWITCH target.
     """
 
     DEFAULT_CSS = """
@@ -428,10 +458,10 @@ class BuildMode(Container, can_focus=True):
     }
     """
 
-    def __init__(self, recorder: ActionRecorder | None = None,
+    def __init__(self, recording_manager: RecordingManager | None = None,
                  dispatch_action: Callable | None = None, **kwargs):
         super().__init__(**kwargs)
-        self._recorder = recorder
+        self._recording_manager = recording_manager
         self._dispatch_action = dispatch_action
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
@@ -439,36 +469,28 @@ class BuildMode(Container, can_focus=True):
         self._playing: bool = False
         self._play_task: asyncio.Task | None = None
 
-        # Command mode: Enter opens, next key acts, then exits
-        self._command_mode: bool = False
-        self._command_sub: str = CMD_LOAD  # CMD_LOAD or CMD_SAVE
-
     def compose(self) -> ComposeResult:
         yield SaveBar(id="save-bar")
-        yield Static("─" * 80, id="code-separator")
+        yield Static("\u2500" * 80, id="code-separator")
         yield CodeCanvas(id="code-canvas")
 
     def on_mount(self) -> None:
-        self._import_from_recorder()
+        self._import_from_recording()
         self._refresh_all()
 
     def on_show(self) -> None:
         """Refresh every time Code mode becomes visible.
 
-        Auto-imports from recorder if we have no blocks yet.
-        If we already have blocks (from manual entry or a previous import),
-        we keep them. Delete all blocks to start fresh and re-import.
+        Auto-imports from recording manager if we have no blocks yet.
         """
         if not self._blocks:
-            self._import_from_recorder()
-        self._command_mode = False
-        self._command_sub = CMD_LOAD
+            self._import_from_recording()
         self._refresh_all()
 
-    def _import_from_recorder(self) -> None:
-        """Import blocks from the action recorder."""
-        if self._recorder and self._recorder.has_events():
-            self._blocks = self._recorder.get_blocks()
+    def _import_from_recording(self) -> None:
+        """Import blocks from the recording manager."""
+        if self._recording_manager and self._recording_manager.has_recording():
+            self._blocks = self._recording_manager.to_blocks()
             self._cursor = max(0, len(self._blocks) - 1)
 
     def _refresh_all(self) -> None:
@@ -482,29 +504,21 @@ class BuildMode(Container, can_focus=True):
         try:
             canvas = self.query_one("#code-canvas", CodeCanvas)
             canvas.set_blocks(self._blocks, self._cursor)
-            canvas.set_command_mode(self._command_mode, self._command_sub)
         except Exception:
             pass
 
     # ── Keyboard handling ──────────────────────────────────────────────
 
     async def handle_keyboard_action(self, action) -> None:
-        """Route keyboard actions to the appropriate handler.
+        """Route keyboard actions.
 
-        Two input states:
-        1. Normal: characters insert blocks, arrows navigate/adjust,
-           Space plays, Backspace deletes, Enter enters command mode.
-        2. Command mode (after Enter): 1-9 loads/saves slots,
-           Enter again inserts repeat block, any other key cancels.
+        Characters insert blocks, arrows navigate/adjust, Space plays,
+        Backspace deletes, Tab opens menu, Enter inserts newline block.
         """
         if self._playing:
             if isinstance(action, ControlAction) and action.is_down:
                 if action.action == 'space':
                     self._stop_playback()
-            return
-
-        if self._command_mode:
-            await self._handle_command_mode(action)
             return
 
         if isinstance(action, NavigationAction):
@@ -539,13 +553,12 @@ class BuildMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
-            self._command_mode = True
-            self._command_sub = CMD_LOAD
-            self._refresh_all()
-        elif action.action == 'tab':
+            # Insert newline control block
             self._insert_block(ProgramBlock(
-                type=ProgramBlockType.CONTROL, control="tab",
+                type=ProgramBlockType.CONTROL, control="enter",
             ))
+        elif action.action == 'tab':
+            await self._open_menu()
 
     async def _handle_character(self, action: CharacterAction) -> None:
         if action.is_repeat:
@@ -554,82 +567,111 @@ class BuildMode(Container, can_focus=True):
             type=ProgramBlockType.KEY, char=action.char,
         ))
 
-    # ── Command mode ──────────────────────────────────────────────────
+    # ── Tab menu ─────────────────────────────────────────────────────
 
-    async def _handle_command_mode(self, action) -> None:
-        """Handle keys while in command mode (after pressing Enter).
+    async def _open_menu(self) -> None:
+        """Open the Code menu modal."""
+        from ..code_menu import CodeMenuScreen
+        menu = CodeMenuScreen()
+        self.app.push_screen(menu, self._on_menu_result)
 
-        Two sub-states:
-        - Load (default): 1-9 loads slot, Enter inserts repeat, ↓ switches to save
-        - Save (after ↓): 1-9 saves to slot
-        Any other key cancels command mode.
-        """
-        # Ignore key-up events
-        if isinstance(action, ControlAction) and not action.is_down:
+    def _on_menu_result(self, result: dict | None) -> None:
+        """Handle menu modal result."""
+        if result is None:
             return
 
-        # Navigation: ↓ switches to save sub-state
-        if isinstance(action, NavigationAction):
-            if action.direction == 'down' and self._command_sub == CMD_LOAD:
-                self._command_sub = CMD_SAVE
-                self._refresh_all()
-                return
-            # Any other navigation cancels
-            self._exit_command_mode()
+        action = result.get("action")
+
+        if action == "record":
+            # Start recording in the specified mode/sub-mode
+            target = result.get("target", TARGET_PLAY_MUSIC)
+            self._start_record_in(target)
+
+        elif action == "insert_mode_switch":
+            target = result.get("target", TARGET_PLAY_MUSIC)
+            self._insert_block(ProgramBlock(
+                type=ProgramBlockType.MODE_SWITCH,
+                target=target,
+            ))
+
+        elif action == "insert_repeat":
+            self._insert_block(ProgramBlock(type=ProgramBlockType.REPEAT))
+
+        elif action == "load":
+            slot = result.get("slot", 1)
+            self._load_from_slot(slot)
+
+        elif action == "save":
+            slot = result.get("slot", 1)
+            self._save_to_slot(slot)
+
+        elif action == "clear":
+            self._blocks.clear()
+            self._cursor = 0
+            self._active_slot = 0
+            self._refresh_all()
+
+    def _start_record_in(self, target: str) -> None:
+        """Start recording and switch to the target mode/sub-mode."""
+        if not self._recording_manager or not self._dispatch_action:
             return
 
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter' and self._command_sub == CMD_LOAD:
-                # Enter again: insert repeat block
-                self._insert_block(ProgramBlock(type=ProgramBlockType.REPEAT))
-                self._exit_command_mode()
-                return
-            # Any other control key (escape, space, etc.) cancels
-            self._exit_command_mode()
+        self._recording_manager.start_recording()
+
+        # Parse target to get mode and sub-mode
+        parts = target.split(".", 1)
+        main_mode = parts[0]
+
+        # Switch to the target mode (this will exit Code mode)
+        from ..keyboard import ModeAction
+        asyncio.create_task(self._dispatch_action(ModeAction(mode=main_mode)))
+
+        # Sub-mode toggle will be handled after mode switch via a small delay
+        if len(parts) > 1:
+            sub_mode = parts[1]
+            asyncio.create_task(self._toggle_sub_mode_after_switch(main_mode, sub_mode))
+
+    async def _toggle_sub_mode_after_switch(self, mode: str, sub_mode: str) -> None:
+        """Toggle sub-mode after a mode switch (needs short delay for mount)."""
+        await asyncio.sleep(0.2)
+        if not self._dispatch_action:
             return
 
-        if isinstance(action, CharacterAction) and not action.is_repeat:
-            char = action.char
-            if char.isdigit() and char != '0':
-                slot = int(char)
-                if self._command_sub == CMD_SAVE:
-                    self._save_to_slot(slot)
-                else:
-                    self._load_from_slot(slot)
-                self._exit_command_mode()
-                return
-            # Non-digit character cancels
-            self._exit_command_mode()
-            return
+        needs_tab = False
+        if mode == "play" and sub_mode == "letters":
+            # Play mode starts in music, need tab for letters
+            needs_tab = True
+        elif mode == "doodle" and sub_mode == "paint":
+            # Doodle mode starts in text, need tab for paint
+            needs_tab = True
 
-        # Anything else cancels
-        self._exit_command_mode()
-
-    def _exit_command_mode(self) -> None:
-        self._command_mode = False
-        self._command_sub = CMD_LOAD
-        self._refresh_all()
+        if needs_tab:
+            await self._dispatch_action(ControlAction(action='tab', is_down=True))
 
     # ── Block operations ───────────────────────────────────────────────
 
     def _adjust_up(self) -> None:
-        """Up arrow: increase gap, or increase repeat count on repeat blocks."""
+        """Up arrow: increase gap, repeat count, or cycle target."""
         if not self._blocks:
             return
         block = self._blocks[self._cursor]
         if block.type == ProgramBlockType.REPEAT:
             block.cycle_repeat_count(1)
+        elif block.type == ProgramBlockType.MODE_SWITCH:
+            block.cycle_target(1)
         else:
             block.cycle_gap(1)
         self._refresh_all()
 
     def _adjust_down(self) -> None:
-        """Down arrow: decrease gap, or decrease repeat count on repeat blocks."""
+        """Down arrow: decrease gap, repeat count, or cycle target."""
         if not self._blocks:
             return
         block = self._blocks[self._cursor]
         if block.type == ProgramBlockType.REPEAT:
             block.cycle_repeat_count(-1)
+        elif block.type == ProgramBlockType.MODE_SWITCH:
+            block.cycle_target(-1)
         else:
             block.cycle_gap(-1)
         self._refresh_all()
@@ -656,18 +698,11 @@ class BuildMode(Container, can_focus=True):
     # ── Playback ───────────────────────────────────────────────────────
 
     async def _start_playback(self) -> None:
-        """Play the program in the real mode via DemoPlayer."""
+        """Play the program via DemoPlayer."""
         if not self._blocks or not self._dispatch_action:
             return
 
-        # Determine target mode from blocks (only play/doodle are valid)
-        target_mode = "play"
-        for block in self._blocks:
-            if block.source_mode in ("play", "doodle"):
-                target_mode = block.source_mode
-                break
-
-        demo_actions = blocks_to_demo_actions(self._blocks, target_mode)
+        demo_actions = blocks_to_demo_actions(self._blocks)
         if not demo_actions:
             return
 
@@ -675,9 +710,19 @@ class BuildMode(Container, can_focus=True):
 
         from ..demo.player import DemoPlayer
 
+        # Get sub-mode callbacks from app if available
+        is_doodle_paint = None
+        is_play_letters = None
+        if hasattr(self.app, '_get_doodle_paint_mode_callback'):
+            is_doodle_paint = self.app._get_doodle_paint_mode_callback()
+        if hasattr(self.app, '_get_play_letters_mode_callback'):
+            is_play_letters = self.app._get_play_letters_mode_callback()
+
         player = DemoPlayer(
             dispatch_action=self._dispatch_action,
             speed_multiplier=1.0,
+            is_doodle_paint_mode=is_doodle_paint,
+            is_play_letters_mode=is_play_letters,
         )
 
         async def _run_playback():
@@ -705,7 +750,7 @@ class BuildMode(Container, can_focus=True):
             return
         source_mode = "play"
         for block in self._blocks:
-            if block.source_mode in ("play", "doodle"):
+            if block.source_mode in ("play", "doodle", "explore"):
                 source_mode = block.source_mode
                 break
         save_program(self._blocks, slot, source_mode)

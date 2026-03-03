@@ -16,6 +16,7 @@ from .script import (
     TypeText,
     PressKey,
     SwitchMode,
+    SwitchTarget,
     Pause,
     Clear,
     ClearAll,
@@ -73,6 +74,7 @@ class DemoPlayer:
         clear_doodle: Callable[[], None] | None = None,
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
+        is_play_letters_mode: Callable[[], bool] | None = None,
         get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
         zoom_events_file: str | Path | None = None,
     ):
@@ -88,6 +90,8 @@ class DemoPlayer:
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
             is_doodle_paint_mode: Optional function to check if Doodle mode
                 is in paint mode (vs text mode)
+            is_play_letters_mode: Optional function to check if Play mode
+                is in letters mode (vs music mode)
             get_cursor_position: Optional function returning (x_frac, y_frac)
                 viewport fractions for the current cursor position. Used to
                 emit cursor_at events for zoom post-processing.
@@ -101,6 +105,7 @@ class DemoPlayer:
         self._clear_doodle = clear_doodle
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
+        self._is_play_letters_mode = is_play_letters_mode
         self._get_cursor_position = get_cursor_position
         self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
         self._running = False
@@ -168,6 +173,9 @@ class DemoPlayer:
 
         elif isinstance(action, SwitchMode):
             await self._switch_mode(action)
+
+        elif isinstance(action, SwitchTarget):
+            await self._switch_target(action)
 
         elif isinstance(action, Pause):
             await self._sleep(action.duration)
@@ -251,6 +259,56 @@ class DemoPlayer:
     async def _switch_mode(self, action: SwitchMode) -> None:
         """Switch to a different mode."""
         await self._dispatch(ModeAction(mode=action.mode))
+        await self._sleep(action.pause_after)
+
+    async def _switch_target(self, action: SwitchTarget) -> None:
+        """Switch to a specific mode and sub-mode.
+
+        Parses target like "play.music" or "doodle.paint" into:
+        1. Main mode switch (via ModeAction)
+        2. Sub-mode toggle (via Tab) if needed
+        """
+        target = action.target
+        parts = target.split(".", 1)
+        main_mode = parts[0]
+        sub_mode = parts[1] if len(parts) > 1 else ""
+
+        # Switch to the main mode
+        await self._dispatch(ModeAction(mode=main_mode))
+        await self._sleep(0.1)
+
+        # Toggle sub-mode if needed
+        if main_mode == "play" and sub_mode == "letters":
+            # Check if already in letters mode
+            in_letters = (
+                self._is_play_letters_mode and self._is_play_letters_mode()
+            )
+            if not in_letters:
+                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._sleep(0.05)
+        elif main_mode == "play" and sub_mode == "music":
+            # Check if in letters mode, toggle back to music
+            in_letters = (
+                self._is_play_letters_mode and self._is_play_letters_mode()
+            )
+            if in_letters:
+                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._sleep(0.05)
+        elif main_mode == "doodle" and sub_mode == "paint":
+            in_paint = (
+                self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+            )
+            if not in_paint:
+                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._sleep(0.05)
+        elif main_mode == "doodle" and sub_mode == "text":
+            in_paint = (
+                self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+            )
+            if in_paint:
+                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._sleep(0.05)
+
         await self._sleep(action.pause_after)
 
     async def _clear(self, action: Clear) -> None:

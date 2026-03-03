@@ -398,6 +398,7 @@ def _get_menu_items() -> list:
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-update", "Git Pull & Exit"))
+        items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
     items.append(("menu-exit", "Exit"))
@@ -555,6 +556,8 @@ class ParentMenu(ModalScreen):
             self._start_demo()
         elif item_id == "menu-update":
             self._update_and_restart()
+        elif item_id == "menu-bash":
+            self._exit_to_bash()
         elif item_id == "menu-system":
             self._exit_to_system()
         elif item_id == "menu-exit":
@@ -665,6 +668,17 @@ class ParentMenu(ModalScreen):
 
     def _run_exit_to_system(self) -> None:
         """Actually exit the app. xinitrc will launch the debug shell."""
+        _flush_terminal_input()
+        os.system('stty sane')
+        self.app.exit()
+
+    def _exit_to_bash(self) -> None:
+        """Exit Purple Computer cleanly, dropping to bash (dev mode only)."""
+        self.dismiss()
+        self.app.call_later(self._run_exit_to_bash)
+
+    def _run_exit_to_bash(self) -> None:
+        """Actually exit the app back to bash."""
         _flush_terminal_input()
         os.system('stty sane')
         self.app.exit()

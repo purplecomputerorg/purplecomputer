@@ -1,13 +1,20 @@
 """
-Build Mode: Visual Block Programming
+Code Mode (F4): Cross-Mode Visual Programming
 
-A turtle-graphics builder where kids create programs by navigating
-colored blocks with arrow keys. No reading required: icons and colors
-convey meaning. Every combination of blocks produces a valid drawing.
+Records what kids do in Play and Doodle modes, shows it as colored blocks
+with timing gaps, and plays it back live. A 4-year-old never sees this.
+A 7-year-old discovers F4 and sees their music as colored blocks.
+
+Blocks have a fixed icon section (4 chars) and a variable-width trailing
+gap (0-12 chars) representing the pause before the next action. Up/down
+arrows adjust gap length. Space plays the program back in the real mode.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
 """
+
+import asyncio
+from typing import Callable, Awaitable
 
 from textual.widgets import Static
 from textual.containers import Container
@@ -19,20 +26,23 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..keyboard import CharacterAction, NavigationAction, ControlAction
-from ..blocks import (
-    Block, BlockType, BLOCK_CYCLE, PEN_COLORS, BLOCK_INFO,
-    make_block, cycle_block_type, default_program,
+from ..program import (
+    ProgramBlock,
+    ProgramBlockType,
+    ActionRecorder,
+    gap_width,
+    blocks_to_demo_actions,
+    save_program,
+    load_program,
+    slot_occupied,
+    PAUSE_LEVELS,
+    NUM_PAUSE_LEVELS,
 )
-from ..turtle import execute_blocks, heading_to_arrow
 
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
-
-# Canvas dimensions (characters)
-CANVAS_HEIGHT = 22
-# Block strip takes remaining space below the canvas
 
 # Theme colors (matching doodle mode)
 BG_DARK = "#2a1845"
@@ -41,39 +51,38 @@ FG_DARK = "#d4c4e8"
 FG_LIGHT = "#3a2a50"
 
 # Block rendering
-BLOCK_WIDTH = 8       # characters per block in the strip
+ICON_WIDTH = 4           # fixed character width for the icon section
 BLOCK_SELECTED_COLOR = "#FFD700"  # gold highlight for cursor
 
-# Animation
-ANIMATE_STEP_MS = 150  # milliseconds between steps during animation
+# Save bar
+SAVE_BAR_HEIGHT = 2
+NUM_SLOTS = 9
+SLOT_FILLED_COLOR = "#9b7bc4"
+SLOT_EMPTY_COLOR = "#3a2a50"
+SLOT_ACTIVE_COLOR = "#FFD700"
+
+# Hold-to-save timing
+SAVE_HOLD_MS = 600  # milliseconds to hold number key for save
 
 
 # =============================================================================
-# CANVAS WIDGET
+# SAVE BAR WIDGET
 # =============================================================================
 
-class BuildCanvas(Widget):
-    """Canvas that shows the turtle drawing.
+class SaveBar(Widget):
+    """Shows 9 save slots at the top of Code mode.
 
-    Uses render_line() with Strip/Segment for full control over every cell,
-    following the same pattern as ArtCanvas in Doodle mode.
+    Filled slots are bright, empty are dim. Active slot is highlighted.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._grid: dict[tuple[int, int], tuple[str, str]] = {}
-        self._turtle_x: float = 0
-        self._turtle_y: float = 0
-        self._turtle_heading: float = 0
-        self._turtle_visible: bool = True
+        self._active_slot: int = 0  # 0 = none active
+        self._filled: set[int] = set()
 
-    def update_drawing(self, grid: dict, turtle_x: float, turtle_y: float,
-                       turtle_heading: float) -> None:
-        """Update the canvas with new drawing data."""
-        self._grid = grid
-        self._turtle_x = turtle_x
-        self._turtle_y = turtle_y
-        self._turtle_heading = turtle_heading
+    def update_slots(self, active: int = 0) -> None:
+        self._active_slot = active
+        self._filled = {i for i in range(1, NUM_SLOTS + 1) if slot_occupied(i)}
         self.refresh()
 
     def _get_bg(self) -> str:
@@ -82,36 +91,51 @@ class BuildCanvas(Widget):
         except Exception:
             return BG_DARK
 
-    def _get_fg(self) -> str:
-        try:
-            return FG_DARK if "dark" in self.app.theme else FG_LIGHT
-        except Exception:
-            return FG_DARK
-
     def render_line(self, y: int) -> Strip:
         width = self.size.width
         bg = self._get_bg()
         bg_style = Style(bgcolor=bg)
 
-        if y < 0 or y >= self.size.height:
+        if y >= SAVE_BAR_HEIGHT:
             return Strip([Segment(" " * width, bg_style)])
 
         segments = []
-        turtle_col = round(self._turtle_x)
-        turtle_row = round(self._turtle_y)
+        # Center the slots
+        slot_width = 4  # "·N· " per slot
+        total_slots_width = slot_width * NUM_SLOTS
+        pad = max(0, (width - total_slots_width) // 2)
 
-        for col in range(width):
-            if col == turtle_col and y == turtle_row and self._turtle_visible:
-                # Draw turtle cursor
-                arrow = heading_to_arrow(self._turtle_heading)
-                style = Style(color="#00FF00", bgcolor=bg, bold=True)
-                segments.append(Segment(arrow, style))
-            elif (col, y) in self._grid:
-                char, fg_color = self._grid[(col, y)]
-                style = Style(color=fg_color, bgcolor=bg)
-                segments.append(Segment(char, style))
-            else:
-                segments.append(Segment(" ", bg_style))
+        if y == 0:
+            # Label row
+            label = "Programs"
+            label_pad = max(0, (width - len(label)) // 2)
+            dim_style = Style(color="#808080", bgcolor=bg)
+            segments.append(Segment(" " * label_pad, bg_style))
+            segments.append(Segment(label, dim_style))
+            segments.append(Segment(" " * max(0, width - label_pad - len(label)), bg_style))
+        else:
+            # Slot indicators
+            segments.append(Segment(" " * pad, bg_style))
+            chars_used = pad
+            for slot in range(1, NUM_SLOTS + 1):
+                if slot == self._active_slot:
+                    color = SLOT_ACTIVE_COLOR
+                elif slot in self._filled:
+                    color = SLOT_FILLED_COLOR
+                else:
+                    color = SLOT_EMPTY_COLOR
+
+                style = Style(color=color, bgcolor=bg, bold=(slot == self._active_slot))
+                # Show filled slots as solid, empty as outline
+                if slot in self._filled:
+                    segments.append(Segment(f" {slot}■ ", style))
+                else:
+                    segments.append(Segment(f" {slot}□ ", style))
+                chars_used += slot_width
+
+            remaining = width - chars_used
+            if remaining > 0:
+                segments.append(Segment(" " * remaining, bg_style))
 
         return Strip(segments)
 
@@ -121,23 +145,31 @@ class BuildCanvas(Widget):
 
 
 # =============================================================================
-# BLOCK STRIP WIDGET
+# CODE CANVAS (BLOCK STRIP)
 # =============================================================================
 
-class BlockStrip(Widget):
-    """Horizontal strip of colored blocks representing the program.
+class CodeCanvas(Widget):
+    """Shows the program as a horizontal strip of colored blocks.
 
-    Each block is a colored rectangle with an icon and parameter.
-    The cursor block has a gold highlight.
+    Each block has a fixed icon section (4 chars) and a variable trailing
+    gap rendered as dots in a dimmer shade of the block color.
+
+    Layout:
+      Row 0-1: save bar (rendered separately above)
+      Row 2: block top borders
+      Row 3-4: block bodies (icon centered)
+      Row 5: block bottom borders / cursor
+      Row 6: gap adjustment hints
+      Rest: empty / hints
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._blocks: list[Block] = []
+        self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
-        self._scroll_offset: int = 0  # horizontal scroll
+        self._scroll_offset: int = 0
 
-    def set_blocks(self, blocks: list[Block], cursor: int) -> None:
+    def set_blocks(self, blocks: list[ProgramBlock], cursor: int) -> None:
         self._blocks = blocks
         self._cursor = cursor
         self._update_scroll()
@@ -148,12 +180,24 @@ class BlockStrip(Widget):
         if not self._blocks:
             self._scroll_offset = 0
             return
-        visible_blocks = max(1, self.size.width // BLOCK_WIDTH)
-        # Scroll so cursor is visible
-        if self._cursor < self._scroll_offset:
-            self._scroll_offset = self._cursor
-        elif self._cursor >= self._scroll_offset + visible_blocks:
-            self._scroll_offset = self._cursor - visible_blocks + 1
+
+        width = self.size.width or 112
+
+        # Calculate cumulative positions
+        pos = 0
+        cursor_start = 0
+        cursor_end = 0
+        for i, block in enumerate(self._blocks):
+            if i == self._cursor:
+                cursor_start = pos
+                cursor_end = pos + block.total_width
+            pos += block.total_width
+
+        # Adjust scroll so cursor is visible
+        if cursor_start < self._scroll_offset:
+            self._scroll_offset = cursor_start
+        elif cursor_end > self._scroll_offset + width:
+            self._scroll_offset = cursor_end - width
 
     def _get_bg(self) -> str:
         try:
@@ -168,111 +212,136 @@ class BlockStrip(Widget):
         bg_style = Style(bgcolor=bg)
 
         if not self._blocks:
-            # Empty program: show hint
-            if y == height // 2:
-                hint = "Press Enter to add a block"
-                pad = max(0, (width - len(hint)) // 2)
-                dim_style = Style(color="#808080", bgcolor=bg)
-                return Strip([
-                    Segment(" " * pad, bg_style),
-                    Segment(hint, dim_style),
-                    Segment(" " * max(0, width - pad - len(hint)), bg_style),
-                ])
-            return Strip([Segment(" " * width, bg_style)])
+            return self._render_empty_line(y, width, bg, bg_style)
 
-        # Block strip has 3 zones vertically:
-        #   Row 0: top border / play indicator
-        #   Row 1-2: block content (icon + param)
-        #   Row 3: cursor indicator (▲ under selected)
-        #   Row 4+: hints
-
-        segments = []
-        visible_blocks = max(1, width // BLOCK_WIDTH)
-        left_pad = max(0, (width - visible_blocks * BLOCK_WIDTH) // 2)
-
-        if left_pad > 0:
-            segments.append(Segment(" " * left_pad, bg_style))
-
-        chars_used = left_pad
-
-        # Content row within the block
-        block_content_top = 1
-        block_content_bot = 3
-        cursor_row = 4
+        # Block strip layout rows (relative to widget)
+        border_top = 1
+        body_row_1 = 2
+        body_row_2 = 3
+        border_bottom = 4
         hint_row = height - 1
 
-        for i in range(self._scroll_offset, min(self._scroll_offset + visible_blocks, len(self._blocks))):
-            block = self._blocks[i]
+        if y == hint_row:
+            return self._render_hint_line(width, bg, bg_style)
+
+        if y < border_top or y > border_bottom:
+            return Strip([Segment(" " * width, bg_style)])
+
+        # Render blocks horizontally
+        segments = []
+        x_pos = -self._scroll_offset  # current x position
+
+        for i, block in enumerate(self._blocks):
             is_selected = (i == self._cursor)
+            icon_w = ICON_WIDTH
+            gap_w = gap_width(block.gap_level)
+            total_w = icon_w + gap_w
+
+            # Skip if entirely off-screen left
+            if x_pos + total_w <= 0:
+                x_pos += total_w
+                continue
+
+            # Stop if past right edge
+            if x_pos >= width:
+                break
+
+            # Calculate visible portion
+            vis_start = max(0, -x_pos)
+            vis_end = min(total_w, width - x_pos)
 
             block_bg = block.bg_color
-            if is_selected:
-                border_color = BLOCK_SELECTED_COLOR
-            else:
-                border_color = None
+            text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
 
-            # Determine text for this block
-            icon = block.icon
-            param_text = block.display_text
+            # Dim gap color (mix block color toward background)
+            gap_bg = _dim_color(block_bg)
 
-            if y == 0:
-                # Top border row
+            if y == border_top:
+                # Top border
                 if is_selected:
-                    style = Style(color=border_color, bgcolor=bg)
-                    segments.append(Segment("▾" * BLOCK_WIDTH, style))
+                    border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    line = "▾" * icon_w + " " * gap_w
                 else:
-                    segments.append(Segment(" " * BLOCK_WIDTH, bg_style))
-            elif block_content_top <= y <= block_content_bot:
-                # Block body
-                inner_y = y - block_content_top
-                text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
-                body_style = Style(color=text_color, bgcolor=block_bg, bold=is_selected)
+                    line = " " * total_w
+                    border_style = bg_style
+                visible = line[vis_start:vis_end]
+                segments.append(Segment(visible, border_style if is_selected else bg_style))
 
-                if inner_y == 0:
-                    # Icon row (centered)
-                    # Icons like ⬆ can be wide, but we treat them as taking display width
-                    cell = _center_text(icon, BLOCK_WIDTH)
-                    segments.append(Segment(cell, body_style))
-                elif inner_y == 1:
-                    # Parameter row (centered)
-                    cell = _center_text(param_text, BLOCK_WIDTH)
-                    segments.append(Segment(cell, body_style))
+            elif y in (body_row_1, body_row_2):
+                # Block body
+                if y == body_row_1:
+                    # Icon row
+                    icon = block.icon
+                    icon_text = _center_text(icon, icon_w)
                 else:
-                    segments.append(Segment(" " * BLOCK_WIDTH, body_style))
-            elif y == cursor_row:
+                    # Empty second row (or could show type label)
+                    icon_text = " " * icon_w
+
+                body_style = Style(color=text_color, bgcolor=block_bg,
+                                   bold=is_selected)
+                gap_style = Style(color="#606060", bgcolor=gap_bg)
+
+                full_line = icon_text + ("·" * gap_w if gap_w > 0 else "")
+
+                # Render character by character for the visible portion
+                for cx in range(vis_start, vis_end):
+                    if cx < icon_w:
+                        char = icon_text[cx] if cx < len(icon_text) else " "
+                        segments.append(Segment(char, body_style))
+                    else:
+                        segments.append(Segment("·", gap_style))
+
+            elif y == border_bottom:
                 # Cursor indicator
                 if is_selected:
-                    style = Style(color=border_color, bgcolor=bg)
-                    indicator = _center_text("▴", BLOCK_WIDTH)
-                    segments.append(Segment(indicator, style))
+                    cursor_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    line = _center_text("▴", icon_w) + " " * gap_w
                 else:
-                    segments.append(Segment(" " * BLOCK_WIDTH, bg_style))
-            elif y == hint_row:
-                # Hints (only render once, not per-block)
-                if i == self._scroll_offset:
-                    hint = "← → move   ↑↓ change   0-9 number   Enter add   Bksp delete   Space play"
-                    # Trim to fit
-                    total_strip_width = visible_blocks * BLOCK_WIDTH
-                    hint = hint[:total_strip_width]
-                    dim_style = Style(color="#808080", bgcolor=bg)
-                    segments.append(Segment(hint, dim_style))
-                    remaining = total_strip_width - len(hint)
-                    if remaining > 0:
-                        segments.append(Segment(" " * remaining, bg_style))
-                    # Skip remaining blocks for this row
-                    chars_used += total_strip_width
-                    break
-            else:
-                segments.append(Segment(" " * BLOCK_WIDTH, bg_style))
+                    line = " " * total_w
+                    cursor_style = bg_style
+                visible = line[vis_start:vis_end]
+                segments.append(Segment(visible, cursor_style if is_selected else bg_style))
 
-            chars_used += BLOCK_WIDTH
+            x_pos += total_w
 
         # Fill remaining width
+        chars_used = sum(len(s.text) for s in segments)
         remaining = width - chars_used
         if remaining > 0:
             segments.append(Segment(" " * remaining, bg_style))
 
         return Strip(segments)
+
+    def _render_empty_line(self, y: int, width: int, bg: str,
+                           bg_style: Style) -> Strip:
+        """Render a line when no blocks are present."""
+        mid = self.size.height // 2
+        if y == mid - 1:
+            hint = "Play some music or draw something"
+            return self._centered_dim_text(hint, width, bg, bg_style)
+        elif y == mid:
+            hint = "then press F4 to see it as blocks!"
+            return self._centered_dim_text(hint, width, bg, bg_style)
+        elif y == mid + 2:
+            hint = "← → navigate   ↑↓ adjust timing   Space play"
+            return self._centered_dim_text(hint, width, bg, bg_style)
+        return Strip([Segment(" " * width, bg_style)])
+
+    def _render_hint_line(self, width: int, bg: str,
+                          bg_style: Style) -> Strip:
+        """Render the bottom hint line."""
+        hint = "← → move   ↑↓ timing   Bksp delete   Space play   1-9 load/save"
+        return self._centered_dim_text(hint, width, bg, bg_style)
+
+    def _centered_dim_text(self, text: str, width: int, bg: str,
+                           bg_style: Style) -> Strip:
+        pad = max(0, (width - len(text)) // 2)
+        dim_style = Style(color="#808080", bgcolor=bg)
+        return Strip([
+            Segment(" " * pad, bg_style),
+            Segment(text[:width], dim_style),
+            Segment(" " * max(0, width - pad - len(text)), bg_style),
+        ])
 
     async def _on_key(self, event: events.Key) -> None:
         event.stop()
@@ -280,14 +349,14 @@ class BlockStrip(Widget):
 
 
 # =============================================================================
-# BUILD MODE CONTAINER
+# BUILD MODE CONTAINER (CODE MODE)
 # =============================================================================
 
 class BuildMode(Container, can_focus=True):
-    """Build Mode: visual block programming with turtle graphics.
+    """Code Mode: cross-mode visual programming.
 
-    Kids build programs by adding and editing colored blocks.
-    The canvas shows a live preview of what the program draws.
+    Records Play/Doodle actions as colored blocks with timing gaps.
+    Space plays the program back in the real mode via DemoPlayer.
     """
 
     DEFAULT_CSS = """
@@ -296,67 +365,78 @@ class BuildMode(Container, can_focus=True):
         height: 100%;
     }
 
-    BuildCanvas {
+    SaveBar {
         width: 100%;
-        height: 22;
+        height: 2;
     }
 
-    #strip-separator {
+    #code-separator {
         width: 100%;
         height: 1;
         color: $primary;
         text-align: center;
     }
 
-    BlockStrip {
+    CodeCanvas {
         width: 100%;
         height: 1fr;
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, recorder: ActionRecorder | None = None,
+                 dispatch_action: Callable | None = None, **kwargs):
         super().__init__(**kwargs)
-        self._blocks: list[Block] = default_program()
+        self._recorder = recorder
+        self._dispatch_action = dispatch_action
+        self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
-        self._animating: bool = False
-        self._animate_step: int = 0
-        self._animate_timer = None
-        self._digit_buffer: str = ""  # accumulates multi-digit number input
+        self._active_slot: int = 0
+        self._playing: bool = False
+        self._play_task: asyncio.Task | None = None
+
+        # Hold-to-save state
+        self._held_digit: str | None = None
+        self._hold_timer = None
 
     def compose(self) -> ComposeResult:
-        yield BuildCanvas(id="build-canvas")
-        yield Static("─" * 80, id="strip-separator")
-        yield BlockStrip(id="block-strip")
+        yield SaveBar(id="save-bar")
+        yield Static("─" * 80, id="code-separator")
+        yield CodeCanvas(id="code-canvas")
 
     def on_mount(self) -> None:
+        self._load_from_recorder()
         self._refresh_all()
 
+    def _load_from_recorder(self) -> None:
+        """Load blocks from the action recorder."""
+        if self._recorder and self._recorder.has_events():
+            self._blocks = self._recorder.get_blocks()
+            self._cursor = max(0, len(self._blocks) - 1)
+        # If recorder is empty and we have no blocks, that's fine (empty state)
+
     def _refresh_all(self) -> None:
-        """Re-execute the program and update both canvas and strip."""
-        canvas = self.query_one("#build-canvas", BuildCanvas)
-        strip = self.query_one("#block-strip", BlockStrip)
+        """Update both save bar and code canvas."""
+        try:
+            save_bar = self.query_one("#save-bar", SaveBar)
+            save_bar.update_slots(self._active_slot)
+        except Exception:
+            pass
 
-        width = canvas.size.width or 112
-        height = canvas.size.height or CANVAS_HEIGHT
-
-        if self._animating:
-            grid, turtle = execute_blocks(self._blocks, width, height,
-                                          stop_after=self._animate_step)
-        else:
-            grid, turtle = execute_blocks(self._blocks, width, height)
-
-        canvas.update_drawing(grid, turtle.x, turtle.y, turtle.heading)
-        strip.set_blocks(self._blocks, self._cursor)
+        try:
+            canvas = self.query_one("#code-canvas", CodeCanvas)
+            canvas.set_blocks(self._blocks, self._cursor)
+        except Exception:
+            pass
 
     # ── Keyboard handling ──────────────────────────────────────────────
 
     async def handle_keyboard_action(self, action) -> None:
         """Route keyboard actions to the appropriate handler."""
-        if self._animating:
-            # During animation, only Space stops it
+        if self._playing:
+            # During playback, only Space stops it
             if isinstance(action, ControlAction) and action.is_down:
                 if action.action == 'space':
-                    self._stop_animation()
+                    self._stop_playback()
             return
 
         if isinstance(action, NavigationAction):
@@ -367,6 +447,11 @@ class BuildMode(Container, can_focus=True):
             await self._handle_control(action)
             return
 
+        if isinstance(action, ControlAction) and not action.is_down:
+            # Key release: check for hold-to-save cancel
+            self._cancel_hold()
+            return
+
         if isinstance(action, CharacterAction):
             await self._handle_character(action)
             return
@@ -374,137 +459,139 @@ class BuildMode(Container, can_focus=True):
     async def _handle_navigation(self, action: NavigationAction) -> None:
         if action.direction == 'left':
             if self._blocks and self._cursor > 0:
-                self._flush_digits()
                 self._cursor -= 1
                 self._refresh_all()
         elif action.direction == 'right':
             if self._blocks and self._cursor < len(self._blocks) - 1:
-                self._flush_digits()
                 self._cursor += 1
                 self._refresh_all()
         elif action.direction == 'up':
-            self._cycle_block(-1)
+            self._adjust_gap(1)
         elif action.direction == 'down':
-            self._cycle_block(1)
+            self._adjust_gap(-1)
 
     async def _handle_control(self, action: ControlAction) -> None:
-        if action.action == 'enter':
-            self._insert_block()
-        elif action.action == 'backspace':
+        if action.action == 'backspace':
             self._delete_block()
         elif action.action == 'space':
-            self._start_animation()
+            await self._start_playback()
+        elif action.action == 'enter':
+            # Reload from recorder (refresh current recording)
+            self._load_from_recorder()
+            self._refresh_all()
 
     async def _handle_character(self, action: CharacterAction) -> None:
         char = action.char
-        if char.isdigit():
-            self._type_digit(char)
+        if char.isdigit() and char != '0':
+            slot = int(char)
+            # Start hold timer for save; if released quickly, it's a load
+            self._held_digit = char
+            self._cancel_hold()
+            self._hold_timer = self.set_timer(
+                SAVE_HOLD_MS / 1000.0,
+                lambda: self._save_to_slot(slot),
+            )
+            # Immediate load on tap (will be cancelled if hold completes)
+            self._load_from_slot(slot)
 
     # ── Block operations ───────────────────────────────────────────────
 
-    def _cycle_block(self, direction: int) -> None:
-        """Cycle the block type at cursor position."""
+    def _adjust_gap(self, direction: int) -> None:
+        """Adjust the trailing gap of the block at cursor."""
         if not self._blocks:
             return
-
-        block = self._blocks[self._cursor]
-        if block.type == BlockType.COLOR:
-            # For color blocks, cycle through colors instead of types
-            block.color_index = (block.color_index + direction) % len(PEN_COLORS)
-        else:
-            new_type = cycle_block_type(block.type, direction)
-            new_block = make_block(new_type)
-            # Preserve parameter if the new type also has one
-            if new_block.has_param and block.has_param:
-                new_block.param = block.param
-            self._blocks[self._cursor] = new_block
-
-        self._digit_buffer = ""
-        self._refresh_all()
-
-    def _insert_block(self) -> None:
-        """Insert a new Forward block after the cursor."""
-        self._flush_digits()
-        new_block = make_block(BlockType.FORWARD)
-        if self._blocks:
-            self._blocks.insert(self._cursor + 1, new_block)
-            self._cursor += 1
-        else:
-            self._blocks.append(new_block)
-            self._cursor = 0
+        self._blocks[self._cursor].cycle_gap(direction)
         self._refresh_all()
 
     def _delete_block(self) -> None:
         """Delete the block at cursor."""
         if not self._blocks:
             return
-        self._digit_buffer = ""
         self._blocks.pop(self._cursor)
         if self._cursor >= len(self._blocks) and self._cursor > 0:
             self._cursor -= 1
         self._refresh_all()
 
-    def _type_digit(self, digit: str) -> None:
-        """Handle a digit keypress for setting block parameters."""
-        if not self._blocks:
+    # ── Playback ───────────────────────────────────────────────────────
+
+    async def _start_playback(self) -> None:
+        """Play the program in the real mode via DemoPlayer."""
+        if not self._blocks or not self._dispatch_action:
             return
-        block = self._blocks[self._cursor]
-        if not block.has_param:
+
+        # Determine target mode from blocks
+        target_mode = "play"
+        for block in self._blocks:
+            if block.source_mode:
+                target_mode = block.source_mode
+                break
+
+        demo_actions = blocks_to_demo_actions(self._blocks, target_mode)
+        if not demo_actions:
             return
 
-        self._digit_buffer += digit
-        # Parse the accumulated digits
-        value = int(self._digit_buffer)
+        self._playing = True
 
-        # Clamp based on block type
-        if block.type in (BlockType.FORWARD, BlockType.BACK):
-            value = max(1, min(99, value))
-        elif block.type in (BlockType.RIGHT, BlockType.LEFT):
-            value = max(1, min(360, value))
+        # Import DemoPlayer here to avoid circular imports
+        from ..demo.player import DemoPlayer
 
-        block.param = value
-
-        # If buffer is getting long enough, auto-flush
-        if block.type in (BlockType.FORWARD, BlockType.BACK) and len(self._digit_buffer) >= 2:
-            self._digit_buffer = ""
-        elif block.type in (BlockType.RIGHT, BlockType.LEFT) and len(self._digit_buffer) >= 3:
-            self._digit_buffer = ""
-
-        self._refresh_all()
-
-    def _flush_digits(self) -> None:
-        """Clear the digit buffer when moving away from a block."""
-        self._digit_buffer = ""
-
-    # ── Animation ──────────────────────────────────────────────────────
-
-    def _start_animation(self) -> None:
-        """Animate the program step by step."""
-        if not self._blocks:
-            return
-        self._animating = True
-        self._animate_step = 0
-        self._refresh_all()
-        self._animate_timer = self.set_interval(
-            ANIMATE_STEP_MS / 1000.0, self._animation_tick
+        player = DemoPlayer(
+            dispatch_action=self._dispatch_action,
+            speed_multiplier=1.0,
         )
 
-    def _animation_tick(self) -> None:
-        """Advance animation by one block."""
-        self._animate_step += 1
-        if self._animate_step > len(self._blocks):
-            self._stop_animation()
+        async def _run_playback():
+            try:
+                await player.play(demo_actions)
+            finally:
+                self._playing = False
+                # Switch back to Code mode
+                from ..keyboard import ModeAction
+                from ..constants import MODE_BUILD
+                await self._dispatch_action(ModeAction(mode=MODE_BUILD[0]))
+
+        self._play_task = asyncio.create_task(_run_playback())
+
+    def _stop_playback(self) -> None:
+        """Stop current playback."""
+        if self._play_task and not self._play_task.done():
+            self._play_task.cancel()
+        self._playing = False
+
+    # ── Save/Load ──────────────────────────────────────────────────────
+
+    def _save_to_slot(self, slot: int) -> None:
+        """Save the current program to a slot."""
+        if not self._blocks:
             return
+        source_mode = "play"
+        for block in self._blocks:
+            if block.source_mode:
+                source_mode = block.source_mode
+                break
+        save_program(self._blocks, slot, source_mode)
+        self._active_slot = slot
         self._refresh_all()
 
-    def _stop_animation(self) -> None:
-        """Stop animation and show the full drawing."""
-        self._animating = False
-        self._animate_step = 0
-        if self._animate_timer:
-            self._animate_timer.stop()
-            self._animate_timer = None
-        self._refresh_all()
+    def _load_from_slot(self, slot: int) -> None:
+        """Load a program from a slot."""
+        result = load_program(slot)
+        if result is not None:
+            self._blocks, source_mode = result
+            # Restore source_mode on all blocks
+            for block in self._blocks:
+                if not block.source_mode:
+                    block.source_mode = source_mode
+            self._cursor = 0
+            self._active_slot = slot
+            self._refresh_all()
+
+    def _cancel_hold(self) -> None:
+        """Cancel the hold-to-save timer."""
+        if self._hold_timer:
+            self._hold_timer.stop()
+            self._hold_timer = None
+        self._held_digit = None
 
     async def _on_key(self, event: events.Key) -> None:
         """Suppress terminal key events. All input comes via evdev."""
@@ -531,6 +618,17 @@ def _is_dark_color(hex_color: str) -> bool:
     if len(hex_color) != 6:
         return True
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-    # Perceived luminance
     luminance = 0.299 * r + 0.587 * g + 0.114 * b
     return luminance < 128
+
+
+def _dim_color(hex_color: str, factor: float = 0.5) -> str:
+    """Darken a hex color by blending toward black."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return "#1a1a1a"
+    r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"

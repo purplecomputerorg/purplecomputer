@@ -6,7 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
-- **Build Mode (F4)**: New visual block programming mode where kids build turtle graphics programs using colored blocks; arrow keys navigate and cycle block types, number keys set parameters, Space animates the drawing step by step
+- **Code Mode (F4)**: Replaced turtle-graphics Build mode with cross-mode visual programming; automatically records Play and Doodle actions as colored blocks with timing gaps; Space plays the program back live in the real mode; up/down adjusts timing between blocks; 9 save slots (hold number to save, tap to load)
 
 ---
 

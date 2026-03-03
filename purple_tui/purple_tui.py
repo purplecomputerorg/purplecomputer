@@ -54,6 +54,7 @@ from .keyboard import (
 from .input import EvdevReader, RawKeyEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
+from .program import ActionRecorder
 from .modes.doodle_mode import ColorLegend, PaintModeChanged
 from .modes.parent_mode import apply_saved_display_settings
 from .mode_picker import ModePickerScreen
@@ -588,6 +589,9 @@ class PurpleApp(App):
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
+        # Action recorder for Code mode (records Play/Doodle actions)
+        self._action_recorder = ActionRecorder()
+
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
         self._demo_task = None
@@ -776,6 +780,10 @@ class PurpleApp(App):
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
+        # Record actions for Code mode (only from Play/Doodle, not during demo)
+        if not (self._demo_player and self._demo_player.is_running):
+            self._action_recorder.record(action, self.active_mode.name.lower())
+
         if isinstance(action, ModeAction):
             # Dismiss any open modal (like mode picker) when F-key is pressed
             if len(self.screen_stack) > 1:
@@ -1062,7 +1070,11 @@ class PurpleApp(App):
             return DoodleMode(classes="mode-content")
         elif mode == Mode.BUILD:
             from .modes.build_mode import BuildMode
-            return BuildMode(classes="mode-content")
+            return BuildMode(
+                recorder=self._action_recorder,
+                dispatch_action=self._dispatch_keyboard_action,
+                classes="mode-content",
+            )
         return None
 
     def _load_mode_content(self) -> None:

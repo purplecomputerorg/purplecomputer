@@ -32,6 +32,7 @@ from purple_tui.program import (
     ENTER_COLOR,
     BACKSPACE_COLOR,
     SPACE_COLOR,
+    REPEAT_COLOR,
 )
 from purple_tui.keyboard import (
     CharacterAction,
@@ -165,6 +166,52 @@ class TestProgramBlock:
                          gap_level=NUM_PAUSE_LEVELS - 1)
         b.cycle_gap(1)
         assert b.gap_level == NUM_PAUSE_LEVELS - 1
+
+
+# =============================================================================
+# REPEAT BLOCK TESTS
+# =============================================================================
+
+class TestRepeatBlock:
+    def test_repeat_icon_default(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT)
+        assert b.icon == "×2"
+
+    def test_repeat_icon_custom_count(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=5)
+        assert b.icon == "×5"
+
+    def test_repeat_color(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT)
+        assert b.bg_color == REPEAT_COLOR
+
+    def test_cycle_repeat_count_up(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3)
+        b.cycle_repeat_count(1)
+        assert b.repeat_count == 4
+
+    def test_cycle_repeat_count_down(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=5)
+        b.cycle_repeat_count(-1)
+        assert b.repeat_count == 4
+
+    def test_cycle_repeat_count_clamps_at_2(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2)
+        b.cycle_repeat_count(-1)
+        assert b.repeat_count == 2
+
+    def test_cycle_repeat_count_clamps_at_9(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=9)
+        b.cycle_repeat_count(1)
+        assert b.repeat_count == 9
+
+    def test_repeat_total_width(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, gap_level=0)
+        assert b.total_width == 4  # icon only, no gap
+
+    def test_repeat_total_width_with_gap(self):
+        b = ProgramBlock(type=ProgramBlockType.REPEAT, gap_level=2)
+        assert b.total_width == 4 + 4
 
 
 # =============================================================================
@@ -353,6 +400,78 @@ class TestBlocksToDemoActions:
         assert len(actions) == 3
         assert not any(isinstance(a, Pause) for a in actions)
 
+    def test_repeat_block_doubles_section(self):
+        """[A][B][×2] should produce A B A B."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        # SwitchMode, then A B A B (2 repetitions)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        chars = [a.text for a in type_actions]
+        assert chars == ["a", "b", "a", "b"]
+
+    def test_repeat_block_triples_section(self):
+        """[A][×3] should produce A A A."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        assert len(type_actions) == 3
+        assert all(a.text == "a" for a in type_actions)
+
+    def test_repeat_with_trailing_blocks(self):
+        """[A][×2][B] should produce A A B."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        chars = [a.text for a in type_actions]
+        assert chars == ["a", "a", "b"]
+
+    def test_multiple_repeat_blocks(self):
+        """[A][×2][B][×3] should produce A A B B B."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        chars = [a.text for a in type_actions]
+        assert chars == ["a", "a", "b", "b", "b"]
+
+    def test_repeat_preserves_pauses(self):
+        """Pauses within repeated sections should be preserved."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=2),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        pause_actions = [a for a in actions if isinstance(a, Pause)]
+        # Each repetition of A has a pause after it (gap_level=2)
+        assert len(pause_actions) == 2
+
+    def test_repeat_block_with_own_gap(self):
+        """Repeat block's own gap adds a pause between sections."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=3),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        actions = blocks_to_demo_actions(blocks)
+        # There should be a pause between the repeated section and B
+        pause_actions = [a for a in actions if isinstance(a, Pause)]
+        assert len(pause_actions) >= 1
+
 
 # =============================================================================
 # SERIALIZATION TESTS
@@ -412,6 +531,31 @@ class TestSerialization:
         json_str = blocks_to_json(blocks)
         data = json.loads(json_str)
         assert "saved_at" in data
+
+    def test_round_trip_repeat(self):
+        blocks = [ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=5,
+                               gap_level=2)]
+        json_str = blocks_to_json(blocks)
+        restored, _ = blocks_from_json(json_str)
+        assert len(restored) == 1
+        assert restored[0].type == ProgramBlockType.REPEAT
+        assert restored[0].repeat_count == 5
+        assert restored[0].gap_level == 2
+
+    def test_round_trip_mixed_with_repeat(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=1),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        json_str = blocks_to_json(blocks, "play")
+        restored, mode = blocks_from_json(json_str)
+        assert mode == "play"
+        assert len(restored) == 3
+        assert restored[0].type == ProgramBlockType.KEY
+        assert restored[1].type == ProgramBlockType.REPEAT
+        assert restored[1].repeat_count == 3
+        assert restored[2].type == ProgramBlockType.KEY
 
     def test_empty_blocks_round_trip(self):
         json_str = blocks_to_json([])

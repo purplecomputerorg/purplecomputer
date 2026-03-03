@@ -82,6 +82,7 @@ class ProgramBlockType(Enum):
     ARROW = "arrow"       # NavigationAction: an arrow key
     CONTROL = "control"   # ControlAction: enter, backspace, space, tab
     EMOJI = "emoji"       # Emoji placed via Code mode (future)
+    REPEAT = "repeat"     # Repeat preceding section N times
 
 
 # Row-based colors for KEY blocks (matching Doodle mode's keyboard rows)
@@ -101,6 +102,7 @@ BACKSPACE_COLOR = "#c46b7b"
 SPACE_COLOR = "#606060"
 TAB_COLOR = "#606060"
 EMOJI_COLOR = "#9b7bc4"
+REPEAT_COLOR = "#2d9e8a"  # teal
 
 # Icons for control actions
 CONTROL_ICONS = {
@@ -150,6 +152,7 @@ class ProgramBlock:
     char: str = ""           # KEY: the character, EMOJI: the emoji
     direction: str = ""      # ARROW: up/down/left/right
     control: str = ""        # CONTROL: enter/backspace/space/tab
+    repeat_count: int = 2    # REPEAT: how many times to play the section (2-9)
     gap_level: int = 1       # 0-4, index into PAUSE_LEVELS
     source_mode: str = ""    # "play" or "doodle"
 
@@ -163,6 +166,8 @@ class ProgramBlock:
             return CONTROL_ICONS.get(self.control, "?")
         elif self.type == ProgramBlockType.EMOJI:
             return self.char
+        elif self.type == ProgramBlockType.REPEAT:
+            return f"×{self.repeat_count}"
         return "?"
 
     @property
@@ -175,6 +180,8 @@ class ProgramBlock:
             return control_color(self.control)
         elif self.type == ProgramBlockType.EMOJI:
             return EMOJI_COLOR
+        elif self.type == ProgramBlockType.REPEAT:
+            return REPEAT_COLOR
         return KEY_COLOR_GRAY
 
     @property
@@ -186,6 +193,10 @@ class ProgramBlock:
         """Cycle gap level up (+1) or down (-1), clamping to valid range."""
         self.gap_level = max(0, min(NUM_PAUSE_LEVELS - 1,
                                      self.gap_level + direction))
+
+    def cycle_repeat_count(self, direction: int) -> None:
+        """Cycle repeat count up or down, clamping to 2-9."""
+        self.repeat_count = max(2, min(9, self.repeat_count + direction))
 
 
 # =============================================================================
@@ -326,13 +337,27 @@ def _action_to_block(action: KeyAction, mode: str) -> ProgramBlock | None:
 # PLAYBACK: BLOCKS -> DEMO ACTIONS
 # =============================================================================
 
+def _block_to_demo_action(block: ProgramBlock) -> DemoAction | None:
+    """Convert a single block to a DemoAction (without pause)."""
+    if block.type == ProgramBlockType.KEY:
+        return TypeText(text=block.char, delay_per_char=0.0, final_pause=0.0)
+    elif block.type == ProgramBlockType.ARROW:
+        return PressKey(key=block.direction, pause_after=0.0)
+    elif block.type == ProgramBlockType.CONTROL:
+        return PressKey(key=block.control, pause_after=0.0)
+    elif block.type == ProgramBlockType.EMOJI:
+        return TypeText(text=block.char, delay_per_char=0.0, final_pause=0.0)
+    return None
+
+
 def blocks_to_demo_actions(blocks: list[ProgramBlock],
                            target_mode: str = "play") -> list[DemoAction]:
     """Convert program blocks to DemoAction list for playback via DemoPlayer.
 
-    Produces a sequence that:
-    1. Switches to the target mode
-    2. Dispatches each block's action with appropriate pauses
+    Handles REPEAT blocks: a repeat block repeats all blocks since the
+    previous repeat block (or from the start) N times total.
+
+    Example: [A][B][×3] produces A B A B A B (3 iterations).
     """
     if not blocks:
         return []
@@ -342,37 +367,41 @@ def blocks_to_demo_actions(blocks: list[ProgramBlock],
     # Switch to target mode first
     actions.append(SwitchMode(mode=target_mode, pause_after=0.3))
 
-    for block in blocks:
-        # Add the action
-        if block.type == ProgramBlockType.KEY:
-            actions.append(TypeText(
-                text=block.char,
-                delay_per_char=0.0,
-                final_pause=0.0,
-            ))
-        elif block.type == ProgramBlockType.ARROW:
-            actions.append(PressKey(
-                key=block.direction,
-                pause_after=0.0,
-            ))
-        elif block.type == ProgramBlockType.CONTROL:
-            actions.append(PressKey(
-                key=block.control,
-                pause_after=0.0,
-            ))
-        elif block.type == ProgramBlockType.EMOJI:
-            # Emoji dispatches as a character
-            actions.append(TypeText(
-                text=block.char,
-                delay_per_char=0.0,
-                final_pause=0.0,
-            ))
+    # Split blocks into sections delimited by REPEAT blocks
+    # Then expand each section according to its repeat count
+    section: list[ProgramBlock] = []
 
-        # Add pause for the trailing gap
+    for block in blocks:
+        if block.type == ProgramBlockType.REPEAT:
+            # Expand the current section repeat_count times
+            count = block.repeat_count
+            section_actions = _section_to_actions(section)
+            for _ in range(count):
+                actions.extend(section_actions)
+            # Add the repeat block's own trailing gap
+            pause = gap_duration(block.gap_level)
+            if pause > 0:
+                actions.append(Pause(duration=pause))
+            section = []
+        else:
+            section.append(block)
+
+    # Remaining blocks after last repeat (or all blocks if no repeat)
+    actions.extend(_section_to_actions(section))
+
+    return actions
+
+
+def _section_to_actions(section: list[ProgramBlock]) -> list[DemoAction]:
+    """Convert a section of blocks to demo actions (with pauses)."""
+    actions = []
+    for block in section:
+        action = _block_to_demo_action(block)
+        if action:
+            actions.append(action)
         pause = gap_duration(block.gap_level)
         if pause > 0:
             actions.append(Pause(duration=pause))
-
     return actions
 
 
@@ -452,6 +481,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["control"] = block.control
     elif block.type == ProgramBlockType.EMOJI:
         d["char"] = block.char
+    elif block.type == ProgramBlockType.REPEAT:
+        d["count"] = block.repeat_count
     if block.source_mode:
         d["mode"] = block.source_mode
     return d
@@ -464,6 +495,7 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         char=d.get("char", ""),
         direction=d.get("direction", ""),
         control=d.get("control", ""),
+        repeat_count=d.get("count", 2),
         gap_level=d.get("gap", 1),
         source_mode=d.get("mode", ""),
     )

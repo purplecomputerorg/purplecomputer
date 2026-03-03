@@ -14,7 +14,7 @@ which reads directly from evdev.
 """
 
 import asyncio
-from typing import Callable, Awaitable
+from typing import Callable
 
 from textual.widgets import Static
 from textual.containers import Container
@@ -61,8 +61,9 @@ SLOT_FILLED_COLOR = "#9b7bc4"
 SLOT_EMPTY_COLOR = "#3a2a50"
 SLOT_ACTIVE_COLOR = "#FFD700"
 
-# Hold-to-save timing
-SAVE_HOLD_MS = 600  # milliseconds to hold number key for save
+# Command mode sub-states
+CMD_LOAD = "load"    # Enter → 1-9 loads slot
+CMD_SAVE = "save"    # Enter → ↓ → 1-9 saves to slot
 
 
 # =============================================================================
@@ -168,11 +169,18 @@ class CodeCanvas(Widget):
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
         self._scroll_offset: int = 0
+        self._command_mode: bool = False
+        self._command_sub: str = CMD_LOAD  # CMD_LOAD or CMD_SAVE
 
     def set_blocks(self, blocks: list[ProgramBlock], cursor: int) -> None:
         self._blocks = blocks
         self._cursor = cursor
         self._update_scroll()
+        self.refresh()
+
+    def set_command_mode(self, active: bool, sub: str = CMD_LOAD) -> None:
+        self._command_mode = active
+        self._command_sub = sub
         self.refresh()
 
     def _update_scroll(self) -> None:
@@ -315,6 +323,8 @@ class CodeCanvas(Widget):
     def _render_empty_line(self, y: int, width: int, bg: str,
                            bg_style: Style) -> Strip:
         """Render a line when no blocks are present."""
+        if self._command_mode:
+            return self._render_command_hint(y, width, bg, bg_style)
         mid = self.size.height // 2
         if y == mid - 1:
             hint = "Type keys to add blocks"
@@ -323,15 +333,41 @@ class CodeCanvas(Widget):
             hint = "or play in another mode, then come back!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
-            hint = "← → navigate   ↑↓ adjust timing   Space play"
+            hint = "← → navigate   ↑↓ timing   Space play   Enter menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        hint = "Type to add   ← → move   ↑↓ timing   Bksp delete   Space play   1-9 load/save"
+        if self._command_mode:
+            return self._render_command_hint_bottom(width, bg, bg_style)
+        hint = "Type to add   ← → move   ↑↓ timing   Bksp delete   Space play   Enter menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
+
+    def _render_command_hint(self, y: int, width: int, bg: str,
+                             bg_style: Style) -> Strip:
+        """Render command mode hints in the empty area."""
+        mid = self.size.height // 2
+        if self._command_sub == CMD_SAVE:
+            if y == mid:
+                return self._centered_dim_text(
+                    "Press 1-9 to save", width, bg, bg_style)
+        else:
+            if y == mid - 1:
+                return self._centered_dim_text(
+                    "1-9 load   Enter repeat   ↓ save", width, bg, bg_style)
+        return Strip([Segment(" " * width, bg_style)])
+
+    def _render_command_hint_bottom(self, width: int, bg: str,
+                                    bg_style: Style) -> Strip:
+        """Render command mode hint at bottom."""
+        if self._command_sub == CMD_SAVE:
+            hint = "1-9 save to slot   any other key: cancel"
+        else:
+            hint = "1-9 load   Enter repeat   ↓ save   any other key: cancel"
+        highlight = Style(color="#FFD700", bgcolor=bg)
+        return self._centered_text(hint, width, bg_style, highlight)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
                            bg_style: Style) -> Strip:
@@ -340,6 +376,15 @@ class CodeCanvas(Widget):
         return Strip([
             Segment(" " * pad, bg_style),
             Segment(text[:width], dim_style),
+            Segment(" " * max(0, width - pad - len(text)), bg_style),
+        ])
+
+    def _centered_text(self, text: str, width: int,
+                       bg_style: Style, text_style: Style) -> Strip:
+        pad = max(0, (width - len(text)) // 2)
+        return Strip([
+            Segment(" " * pad, bg_style),
+            Segment(text[:width], text_style),
             Segment(" " * max(0, width - pad - len(text)), bg_style),
         ])
 
@@ -394,9 +439,9 @@ class BuildMode(Container, can_focus=True):
         self._playing: bool = False
         self._play_task: asyncio.Task | None = None
 
-        # Hold-to-save state
-        self._held_digit: str | None = None
-        self._hold_timer = None
+        # Command mode: Enter opens, next key acts, then exits
+        self._command_mode: bool = False
+        self._command_sub: str = CMD_LOAD  # CMD_LOAD or CMD_SAVE
 
     def compose(self) -> ComposeResult:
         yield SaveBar(id="save-bar")
@@ -412,10 +457,12 @@ class BuildMode(Container, can_focus=True):
 
         Auto-imports from recorder if we have no blocks yet.
         If we already have blocks (from manual entry or a previous import),
-        we keep them. Press Enter to re-import from recorder.
+        we keep them. Delete all blocks to start fresh and re-import.
         """
         if not self._blocks:
             self._import_from_recorder()
+        self._command_mode = False
+        self._command_sub = CMD_LOAD
         self._refresh_all()
 
     def _import_from_recorder(self) -> None:
@@ -435,18 +482,29 @@ class BuildMode(Container, can_focus=True):
         try:
             canvas = self.query_one("#code-canvas", CodeCanvas)
             canvas.set_blocks(self._blocks, self._cursor)
+            canvas.set_command_mode(self._command_mode, self._command_sub)
         except Exception:
             pass
 
     # ── Keyboard handling ──────────────────────────────────────────────
 
     async def handle_keyboard_action(self, action) -> None:
-        """Route keyboard actions to the appropriate handler."""
+        """Route keyboard actions to the appropriate handler.
+
+        Two input states:
+        1. Normal: characters insert blocks, arrows navigate/adjust,
+           Space plays, Backspace deletes, Enter enters command mode.
+        2. Command mode (after Enter): 1-9 loads/saves slots,
+           Enter again inserts repeat block, any other key cancels.
+        """
         if self._playing:
-            # During playback, only Space stops it
             if isinstance(action, ControlAction) and action.is_down:
                 if action.action == 'space':
                     self._stop_playback()
+            return
+
+        if self._command_mode:
+            await self._handle_command_mode(action)
             return
 
         if isinstance(action, NavigationAction):
@@ -455,11 +513,6 @@ class BuildMode(Container, can_focus=True):
 
         if isinstance(action, ControlAction) and action.is_down:
             await self._handle_control(action)
-            return
-
-        if isinstance(action, ControlAction) and not action.is_down:
-            # Key release: check for hold-to-save cancel
-            self._cancel_hold()
             return
 
         if isinstance(action, CharacterAction):
@@ -476,9 +529,9 @@ class BuildMode(Container, can_focus=True):
                 self._cursor += 1
                 self._refresh_all()
         elif action.direction == 'up':
-            self._adjust_gap(1)
+            self._adjust_up()
         elif action.direction == 'down':
-            self._adjust_gap(-1)
+            self._adjust_down()
 
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'backspace':
@@ -486,44 +539,99 @@ class BuildMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
-            # Re-import from recorder (replaces current blocks with fresh recording)
-            self._import_from_recorder()
+            self._command_mode = True
+            self._command_sub = CMD_LOAD
             self._refresh_all()
         elif action.action == 'tab':
-            # Insert a tab block
             self._insert_block(ProgramBlock(
-                type=ProgramBlockType.CONTROL, control="tab", source_mode="build",
+                type=ProgramBlockType.CONTROL, control="tab",
             ))
 
     async def _handle_character(self, action: CharacterAction) -> None:
-        char = action.char
         if action.is_repeat:
             return
+        self._insert_block(ProgramBlock(
+            type=ProgramBlockType.KEY, char=action.char,
+        ))
 
-        if char.isdigit() and char != '0':
-            slot = int(char)
-            # Start hold timer for save; if released quickly, it's a load
-            self._held_digit = char
-            self._cancel_hold()
-            self._hold_timer = self.set_timer(
-                SAVE_HOLD_MS / 1000.0,
-                lambda: self._save_to_slot(slot),
-            )
-            # Immediate load on tap (will be cancelled if hold completes)
-            self._load_from_slot(slot)
-        else:
-            # Any other character: insert a KEY block directly
-            self._insert_block(ProgramBlock(
-                type=ProgramBlockType.KEY, char=char, source_mode="build",
-            ))
+    # ── Command mode ──────────────────────────────────────────────────
+
+    async def _handle_command_mode(self, action) -> None:
+        """Handle keys while in command mode (after pressing Enter).
+
+        Two sub-states:
+        - Load (default): 1-9 loads slot, Enter inserts repeat, ↓ switches to save
+        - Save (after ↓): 1-9 saves to slot
+        Any other key cancels command mode.
+        """
+        # Ignore key-up events
+        if isinstance(action, ControlAction) and not action.is_down:
+            return
+
+        # Navigation: ↓ switches to save sub-state
+        if isinstance(action, NavigationAction):
+            if action.direction == 'down' and self._command_sub == CMD_LOAD:
+                self._command_sub = CMD_SAVE
+                self._refresh_all()
+                return
+            # Any other navigation cancels
+            self._exit_command_mode()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter' and self._command_sub == CMD_LOAD:
+                # Enter again: insert repeat block
+                self._insert_block(ProgramBlock(type=ProgramBlockType.REPEAT))
+                self._exit_command_mode()
+                return
+            # Any other control key (escape, space, etc.) cancels
+            self._exit_command_mode()
+            return
+
+        if isinstance(action, CharacterAction) and not action.is_repeat:
+            char = action.char
+            if char.isdigit() and char != '0':
+                slot = int(char)
+                if self._command_sub == CMD_SAVE:
+                    self._save_to_slot(slot)
+                else:
+                    self._load_from_slot(slot)
+                self._exit_command_mode()
+                return
+            # Non-digit character cancels
+            self._exit_command_mode()
+            return
+
+        # Anything else cancels
+        self._exit_command_mode()
+
+    def _exit_command_mode(self) -> None:
+        self._command_mode = False
+        self._command_sub = CMD_LOAD
+        self._refresh_all()
 
     # ── Block operations ───────────────────────────────────────────────
 
-    def _adjust_gap(self, direction: int) -> None:
-        """Adjust the trailing gap of the block at cursor."""
+    def _adjust_up(self) -> None:
+        """Up arrow: increase gap, or increase repeat count on repeat blocks."""
         if not self._blocks:
             return
-        self._blocks[self._cursor].cycle_gap(direction)
+        block = self._blocks[self._cursor]
+        if block.type == ProgramBlockType.REPEAT:
+            block.cycle_repeat_count(1)
+        else:
+            block.cycle_gap(1)
+        self._refresh_all()
+
+    def _adjust_down(self) -> None:
+        """Down arrow: decrease gap, or decrease repeat count on repeat blocks."""
+        if not self._blocks:
+            return
+        block = self._blocks[self._cursor]
+        if block.type == ProgramBlockType.REPEAT:
+            block.cycle_repeat_count(-1)
+        else:
+            block.cycle_gap(-1)
         self._refresh_all()
 
     def _insert_block(self, block: ProgramBlock) -> None:
@@ -552,10 +660,10 @@ class BuildMode(Container, can_focus=True):
         if not self._blocks or not self._dispatch_action:
             return
 
-        # Determine target mode from blocks
+        # Determine target mode from blocks (only play/doodle are valid)
         target_mode = "play"
         for block in self._blocks:
-            if block.source_mode:
+            if block.source_mode in ("play", "doodle"):
                 target_mode = block.source_mode
                 break
 
@@ -565,7 +673,6 @@ class BuildMode(Container, can_focus=True):
 
         self._playing = True
 
-        # Import DemoPlayer here to avoid circular imports
         from ..demo.player import DemoPlayer
 
         player = DemoPlayer(
@@ -578,7 +685,6 @@ class BuildMode(Container, can_focus=True):
                 await player.play(demo_actions)
             finally:
                 self._playing = False
-                # Switch back to Code mode
                 from ..keyboard import ModeAction
                 from ..constants import MODE_BUILD
                 await self._dispatch_action(ModeAction(mode=MODE_BUILD[0]))
@@ -599,7 +705,7 @@ class BuildMode(Container, can_focus=True):
             return
         source_mode = "play"
         for block in self._blocks:
-            if block.source_mode:
+            if block.source_mode in ("play", "doodle"):
                 source_mode = block.source_mode
                 break
         save_program(self._blocks, slot, source_mode)
@@ -611,20 +717,12 @@ class BuildMode(Container, can_focus=True):
         result = load_program(slot)
         if result is not None:
             self._blocks, source_mode = result
-            # Restore source_mode on all blocks
             for block in self._blocks:
                 if not block.source_mode:
                     block.source_mode = source_mode
             self._cursor = 0
             self._active_slot = slot
             self._refresh_all()
-
-    def _cancel_hold(self) -> None:
-        """Cancel the hold-to-save timer."""
-        if self._hold_timer:
-            self._hold_timer.stop()
-            self._hold_timer = None
-        self._held_digit = None
 
     async def _on_key(self, event: events.Key) -> None:
         """Suppress terminal key events. All input comes via evdev."""

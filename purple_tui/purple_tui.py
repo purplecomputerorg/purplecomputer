@@ -1119,6 +1119,11 @@ class PurpleApp(App):
                 widget.focus()
         elif self.active_mode == Mode.BUILD:
             widget.focus()
+            # Refresh blocks when re-entering Code mode
+            if hasattr(widget, 'on_show'):
+                widget.on_show()
+        elif self.active_mode == Mode.BUILD:
+            widget.focus()
         else:
             widget.focus()
 

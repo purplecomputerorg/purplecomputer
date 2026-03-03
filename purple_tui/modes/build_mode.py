@@ -317,10 +317,10 @@ class CodeCanvas(Widget):
         """Render a line when no blocks are present."""
         mid = self.size.height // 2
         if y == mid - 1:
-            hint = "Play some music or draw something"
+            hint = "Type keys to add blocks"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid:
-            hint = "then press F4 to see it as blocks!"
+            hint = "or play in another mode, then come back!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
             hint = "← → navigate   ↑↓ adjust timing   Space play"
@@ -330,7 +330,7 @@ class CodeCanvas(Widget):
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        hint = "← → move   ↑↓ timing   Bksp delete   Space play   1-9 load/save"
+        hint = "Type to add   ← → move   ↑↓ timing   Bksp delete   Space play   1-9 load/save"
         return self._centered_dim_text(hint, width, bg, bg_style)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
@@ -404,15 +404,25 @@ class BuildMode(Container, can_focus=True):
         yield CodeCanvas(id="code-canvas")
 
     def on_mount(self) -> None:
-        self._load_from_recorder()
+        self._import_from_recorder()
         self._refresh_all()
 
-    def _load_from_recorder(self) -> None:
-        """Load blocks from the action recorder."""
+    def on_show(self) -> None:
+        """Refresh every time Code mode becomes visible.
+
+        Auto-imports from recorder if we have no blocks yet.
+        If we already have blocks (from manual entry or a previous import),
+        we keep them. Press Enter to re-import from recorder.
+        """
+        if not self._blocks:
+            self._import_from_recorder()
+        self._refresh_all()
+
+    def _import_from_recorder(self) -> None:
+        """Import blocks from the action recorder."""
         if self._recorder and self._recorder.has_events():
             self._blocks = self._recorder.get_blocks()
             self._cursor = max(0, len(self._blocks) - 1)
-        # If recorder is empty and we have no blocks, that's fine (empty state)
 
     def _refresh_all(self) -> None:
         """Update both save bar and code canvas."""
@@ -476,12 +486,20 @@ class BuildMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
-            # Reload from recorder (refresh current recording)
-            self._load_from_recorder()
+            # Re-import from recorder (replaces current blocks with fresh recording)
+            self._import_from_recorder()
             self._refresh_all()
+        elif action.action == 'tab':
+            # Insert a tab block
+            self._insert_block(ProgramBlock(
+                type=ProgramBlockType.CONTROL, control="tab", source_mode="build",
+            ))
 
     async def _handle_character(self, action: CharacterAction) -> None:
         char = action.char
+        if action.is_repeat:
+            return
+
         if char.isdigit() and char != '0':
             slot = int(char)
             # Start hold timer for save; if released quickly, it's a load
@@ -493,6 +511,11 @@ class BuildMode(Container, can_focus=True):
             )
             # Immediate load on tap (will be cancelled if hold completes)
             self._load_from_slot(slot)
+        else:
+            # Any other character: insert a KEY block directly
+            self._insert_block(ProgramBlock(
+                type=ProgramBlockType.KEY, char=char, source_mode="build",
+            ))
 
     # ── Block operations ───────────────────────────────────────────────
 
@@ -501,6 +524,16 @@ class BuildMode(Container, can_focus=True):
         if not self._blocks:
             return
         self._blocks[self._cursor].cycle_gap(direction)
+        self._refresh_all()
+
+    def _insert_block(self, block: ProgramBlock) -> None:
+        """Insert a block after the cursor."""
+        if self._blocks:
+            self._blocks.insert(self._cursor + 1, block)
+            self._cursor += 1
+        else:
+            self._blocks.append(block)
+            self._cursor = 0
         self._refresh_all()
 
     def _delete_block(self) -> None:

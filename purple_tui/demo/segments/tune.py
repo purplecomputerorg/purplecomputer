@@ -3,10 +3,10 @@
 Based on: python tools/play_ai.py "make a smiley face pattern with all the colors" --save tune
 """
 
-from ..script import PlayKeys, Comment, Pause, SwitchMode
+from ..script import PlayKeys, Comment, Pause, SwitchRoom
 
 SEGMENT = [
-    SwitchMode("play"),
+    SwitchRoom("play"),
     Pause(0.3),
 
     Comment("=== Eyes (purple, 1 press each) - quick cheerful high notes ==="),

@@ -1,9 +1,9 @@
 """
-Code Mode (F4): Cross-Mode Visual Programming
+Build Room (F4): Cross-Room Visual Programming
 
-Shows recorded blocks in a multi-line layout with mode icons in a left gutter.
+Shows recorded blocks in a multi-line layout with room icons in a left gutter.
 MODE_SWITCH blocks start new lines. Long sections wrap. Tab opens a menu modal.
-Space plays the program. F5 (handled globally) records across modes.
+Space plays the program. F5 (handled globally) records across rooms.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -702,9 +702,9 @@ class BuildMode(Container, can_focus=True):
         parts = target.split(".", 1)
         main_mode = parts[0]
 
-        # Switch to the target mode (this will exit Code mode)
-        from ..keyboard import ModeAction
-        asyncio.create_task(self._dispatch_action(ModeAction(mode=main_mode)))
+        # Switch to the target room (this will exit Code room)
+        from ..keyboard import RoomAction
+        asyncio.create_task(self._dispatch_action(RoomAction(room=main_mode)))
 
         # Sub-mode toggle will be handled after mode switch via a small delay
         if len(parts) > 1:
@@ -832,9 +832,9 @@ class BuildMode(Container, can_focus=True):
                 await player.play(playback_actions)
             finally:
                 self._playing = False
-                from ..keyboard import ModeAction
-                from ..constants import MODE_BUILD
-                await self._dispatch_action(ModeAction(mode=MODE_BUILD[0]))
+                from ..keyboard import RoomAction
+                from ..constants import ROOM_BUILD
+                await self._dispatch_action(RoomAction(room=ROOM_BUILD[0]))
 
         self._play_task = asyncio.create_task(_run_playback())
 
@@ -850,12 +850,12 @@ class BuildMode(Container, can_focus=True):
         """Save the current program to a slot."""
         if not self._blocks:
             return
-        source_mode = "play"
+        source_room = "play"
         for block in self._blocks:
-            if block.source_mode in ("play", "doodle", "explore"):
-                source_mode = block.source_mode
+            if block.source_room in ("play", "doodle", "explore"):
+                source_room = block.source_room
                 break
-        save_program(self._blocks, slot, source_mode)
+        save_program(self._blocks, slot, source_room)
         self._active_slot = slot
         self._refresh_all()
 
@@ -863,10 +863,10 @@ class BuildMode(Container, can_focus=True):
         """Load a program from a slot."""
         result = load_program(slot)
         if result is not None:
-            self._blocks, source_mode = result
+            self._blocks, source_room = result
             for block in self._blocks:
-                if not block.source_mode:
-                    block.source_mode = source_mode
+                if not block.source_room:
+                    block.source_room = source_room
             self._cursor = 0
             self._active_slot = slot
             self._refresh_all()

@@ -21,13 +21,13 @@ from .keyboard import (
     NavigationAction,
     ControlAction,
     KeyAction,
-    ModeAction,
+    RoomAction,
 )
 from .playback.script import (
     PlaybackAction,
     TypeText,
     PressKey,
-    SwitchMode,
+    SwitchRoom,
     SwitchTarget,
     Pause,
 )
@@ -197,7 +197,7 @@ class ProgramBlock:
     control: str = ""        # CONTROL: enter/backspace/space/tab
     repeat_count: int = 2    # REPEAT: how many times to play the section (2-99)
     gap_level: int = 1       # 0-4, index into PAUSE_LEVELS
-    source_mode: str = ""    # "play" or "doodle"
+    source_room: str = ""    # "play" or "doodle"
     target: str = ""         # MODE_SWITCH: "play.music", "doodle.paint", etc.
     count: int = 1           # Auto-collapse count: how many consecutive identical actions
 
@@ -282,26 +282,26 @@ class ProgramBlock:
         self.target = ALL_TARGETS[idx]
 
 
-def action_to_block(action: KeyAction, mode: str) -> ProgramBlock | None:
+def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:
     """Convert a single KeyAction to a ProgramBlock."""
     if isinstance(action, CharacterAction):
         return ProgramBlock(
             type=ProgramBlockType.KEY,
             char=action.char,
-            source_mode=mode,
+            source_room=room,
         )
     elif isinstance(action, NavigationAction):
         return ProgramBlock(
             type=ProgramBlockType.ARROW,
             direction=action.direction,
-            source_mode=mode,
+            source_room=room,
         )
     elif isinstance(action, ControlAction):
         if action.action in ("enter", "backspace", "space", "tab"):
             return ProgramBlock(
                 type=ProgramBlockType.CONTROL,
                 control=action.action,
-                source_mode=mode,
+                source_room=room,
             )
     return None
 
@@ -328,7 +328,7 @@ def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackActio
 
     MODE_SWITCH blocks emit SwitchTarget actions. If no MODE_SWITCH block
     is at position 0, a default SwitchTarget is emitted based on the
-    first block's source_mode.
+    first block's source_room.
 
     Handles REPEAT blocks: a repeat block repeats all blocks since the
     previous repeat block (or from the start) N times total.
@@ -382,11 +382,11 @@ def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
     for block in blocks:
         if block.type == ProgramBlockType.MODE_SWITCH:
             return block.target
-        if block.source_mode == "doodle":
+        if block.source_room == "doodle":
             return TARGET_DOODLE_TEXT
-        if block.source_mode == "play":
+        if block.source_room == "play":
             return TARGET_PLAY_MUSIC
-        if block.source_mode == "explore":
+        if block.source_room == "explore":
             return TARGET_EXPLORE
     return TARGET_PLAY_MUSIC
 
@@ -420,12 +420,12 @@ def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
 PROGRAMS_DIR = Path.home() / ".purple" / "programs"
 
 
-def blocks_to_json(blocks: list[ProgramBlock], source_mode: str = "play") -> str:
+def blocks_to_json(blocks: list[ProgramBlock], source_room: str = "play") -> str:
     """Serialize program blocks to JSON string."""
     import datetime
     data = {
         "blocks": [_block_to_dict(b) for b in blocks],
-        "source_mode": source_mode,
+        "source_room": source_room,
         "saved_at": datetime.datetime.now().isoformat(),
     }
     return json.dumps(data, indent=2)
@@ -434,23 +434,23 @@ def blocks_to_json(blocks: list[ProgramBlock], source_mode: str = "play") -> str
 def blocks_from_json(s: str) -> tuple[list[ProgramBlock], str]:
     """Deserialize program blocks from JSON string.
 
-    Returns (blocks, source_mode).
+    Returns (blocks, source_room).
     """
     data = json.loads(s)
     blocks = [_dict_to_block(d) for d in data.get("blocks", [])]
-    source_mode = data.get("source_mode", "play")
-    return blocks, source_mode
+    source_room = data.get("source_room", "play")
+    return blocks, source_room
 
 
 def save_program(blocks: list[ProgramBlock], slot: int,
-                 source_mode: str = "play") -> bool:
+                 source_room: str = "play") -> bool:
     """Save a program to a numbered slot (1-9). Returns True on success."""
     if not 1 <= slot <= 9:
         return False
     try:
         PROGRAMS_DIR.mkdir(parents=True, exist_ok=True)
         path = PROGRAMS_DIR / f"slot-{slot}.json"
-        path.write_text(blocks_to_json(blocks, source_mode))
+        path.write_text(blocks_to_json(blocks, source_room))
         return True
     except OSError:
         return False
@@ -459,7 +459,7 @@ def save_program(blocks: list[ProgramBlock], slot: int,
 def load_program(slot: int) -> tuple[list[ProgramBlock], str] | None:
     """Load a program from a numbered slot (1-9).
 
-    Returns (blocks, source_mode) or None if slot is empty.
+    Returns (blocks, source_room) or None if slot is empty.
     """
     if not 1 <= slot <= 9:
         return None
@@ -493,8 +493,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["repeat_count"] = block.repeat_count
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
-    if block.source_mode:
-        d["mode"] = block.source_mode
+    if block.source_room:
+        d["room"] = block.source_room
     if block.count > 1:
         d["count"] = block.count
     return d
@@ -517,7 +517,7 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         control=d.get("control", ""),
         repeat_count=repeat_count,
         gap_level=d.get("gap", 1),
-        source_mode=d.get("mode", ""),
+        source_room=d.get("room", d.get("mode", "")),
         target=d.get("target", ""),
         count=collapse_count,
     )

@@ -42,15 +42,15 @@ from purple_tui.program import (
     TARGET_COLORS,
     ALL_TARGETS,
 )
-from purple_tui.modes.build_mode import _layout_lines, _cursor_to_line_pos
+from purple_tui.rooms.build_room import _layout_lines, _cursor_to_line_pos
 from purple_tui.keyboard import (
     CharacterAction,
     NavigationAction,
     ControlAction,
-    ModeAction,
+    RoomAction,
     ShiftAction,
 )
-from purple_tui.playback.script import TypeText, PressKey, SwitchMode, SwitchTarget, Pause
+from purple_tui.playback.script import TypeText, PressKey, SwitchRoom, SwitchTarget, Pause
 
 
 # =============================================================================
@@ -283,7 +283,7 @@ class TestBlocksToDemoActions:
 
     def test_single_key_block(self):
         blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a",
-                               gap_level=0, source_mode="play")]
+                               gap_level=0, source_room="play")]
         actions = blocks_to_playback_actions(blocks)
         # Should have: SwitchTarget + TypeText
         assert len(actions) == 2
@@ -294,7 +294,7 @@ class TestBlocksToDemoActions:
 
     def test_arrow_block(self):
         blocks = [ProgramBlock(type=ProgramBlockType.ARROW, direction="up",
-                               gap_level=0, source_mode="doodle")]
+                               gap_level=0, source_room="doodle")]
         actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[0], SwitchTarget)
         assert actions[0].target == "doodle.text"
@@ -423,11 +423,11 @@ class TestBlocksToDemoActions:
         assert len(switch_actions) == 1
         assert switch_actions[0].target == TARGET_EXPLORE
 
-    def test_default_target_from_source_mode(self):
-        """Default target inferred from source_mode when no MODE_SWITCH at start."""
+    def test_default_target_from_source_room(self):
+        """Default target inferred from source_room when no MODE_SWITCH at start."""
         blocks = [
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0,
-                         source_mode="doodle"),
+                         source_room="doodle"),
         ]
         actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[0], SwitchTarget)
@@ -441,7 +441,7 @@ class TestBlocksToDemoActions:
 class TestSerialization:
     def test_round_trip_key(self):
         blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="q", gap_level=2,
-                               source_mode="play")]
+                               source_room="play")]
         json_str = blocks_to_json(blocks, "play")
         restored, mode = blocks_from_json(json_str)
         assert mode == "play"
@@ -580,9 +580,9 @@ class TestEdgeCases:
         """Unknown control actions get default gray."""
         assert control_color("unknown") == SPACE_COLOR
 
-    def test_block_source_mode_preserved(self):
+    def test_block_source_room_preserved(self):
         block = action_to_block(CharacterAction(char="a"), "doodle")
-        assert block.source_mode == "doodle"
+        assert block.source_room == "doodle"
 
 
 # =============================================================================
@@ -819,13 +819,13 @@ class TestBlockCount:
         """Old format: REPEAT blocks stored repeat_count as 'count'.
         New format: uses 'repeat_count'. Both should deserialize correctly."""
         # Old format
-        old_json = '{"blocks": [{"type": "repeat", "gap": 0, "count": 5}], "source_mode": "play", "saved_at": "2025-01-01"}'
+        old_json = '{"blocks": [{"type": "repeat", "gap": 0, "count": 5}], "source_room": "play", "saved_at": "2025-01-01"}'
         restored, _ = blocks_from_json(old_json)
         assert restored[0].repeat_count == 5
         assert restored[0].count == 1  # collapse count defaults to 1
 
         # New format
-        new_json = '{"blocks": [{"type": "repeat", "gap": 0, "repeat_count": 5}], "source_mode": "play", "saved_at": "2025-01-01"}'
+        new_json = '{"blocks": [{"type": "repeat", "gap": 0, "repeat_count": 5}], "source_room": "play", "saved_at": "2025-01-01"}'
         restored2, _ = blocks_from_json(new_json)
         assert restored2[0].repeat_count == 5
 
@@ -843,7 +843,7 @@ class TestAutoCollapse:
         for i in range(5):
             rec.add_event(
                 action=CharacterAction(char="a"),
-                mode_name="play",
+                room_name="play",
                 timestamp=float(i) * 0.01,
             )
 
@@ -859,8 +859,8 @@ class TestAutoCollapse:
         from purple_tui.recording import Recording
 
         rec = Recording()
-        rec.add_event(action=CharacterAction(char="a"), mode_name="play", timestamp=0.0)
-        rec.add_event(action=CharacterAction(char="b"), mode_name="play", timestamp=0.01)
+        rec.add_event(action=CharacterAction(char="a"), room_name="play", timestamp=0.0)
+        rec.add_event(action=CharacterAction(char="b"), room_name="play", timestamp=0.01)
 
         blocks = rec.to_blocks()
         key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
@@ -876,7 +876,7 @@ class TestAutoCollapse:
         for i in range(3):
             rec.add_event(
                 action=NavigationAction(direction="right"),
-                mode_name="doodle",
+                room_name="doodle",
                 timestamp=float(i) * 0.01,
             )
 
@@ -894,7 +894,7 @@ class TestAutoCollapse:
         for i in range(4):
             rec.add_event(
                 action=ControlAction(action="enter", is_down=True),
-                mode_name="play",
+                room_name="play",
                 timestamp=float(i) * 0.01,
             )
 

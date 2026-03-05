@@ -1,5 +1,5 @@
 """
-Explore Mode: Math and Emoji REPL for Kids
+Explore Room: Math and Emoji REPL for Kids
 
 IPython-style interface:
 - Ask ▶ user types input

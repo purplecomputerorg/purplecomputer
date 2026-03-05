@@ -1,5 +1,5 @@
 """
-Doodle Mode: Drawing Canvas with Playful Painting
+Doodle Room: Drawing Canvas with Playful Painting
 
 A text-focused canvas with paint-by-key features:
 - Normal typing draws readable text (left-to-right, wrapping at edges)
@@ -1064,7 +1064,7 @@ class ToolOverlay(Static):
             current = caps("Paint")
         else:
             current = caps("Write")
-        return f"  {current} mode. Press Tab to switch tools.  "
+        return f"  {current}. Press Tab to switch tools.  "
 
 
 # =============================================================================

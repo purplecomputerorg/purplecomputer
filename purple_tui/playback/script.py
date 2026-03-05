@@ -3,12 +3,12 @@
 This module provides a simple, readable format for defining playback scripts.
 Each action is a dataclass that describes what should happen.
 
-Used by Code mode for program playback, and by the demo system for
+Used by Code room for program playback, and by the demo system for
 advertising screencasts.
 
 Example script:
     SCRIPT = [
-        SwitchMode("explore"),
+        SwitchRoom("explore"),
         TypeText("Hello World!"),
         PressKey("enter"),
         Pause(1.0),
@@ -57,22 +57,22 @@ class PressKey(PlaybackAction):
 
 
 @dataclass
-class SwitchMode(PlaybackAction):
-    """Switch to a different mode.
+class SwitchRoom(PlaybackAction):
+    """Switch to a different room.
 
     Args:
-        mode: 'explore' (F1), 'play' (F2), or 'doodle' (F3)
-        pause_after: Pause after switching to let the mode render
+        room: 'explore' (F1), 'play' (F2), or 'doodle' (F3)
+        pause_after: Pause after switching to let the room render
     """
-    mode: Literal["explore", "play", "doodle"]
+    room: Literal["explore", "play", "doodle"]
     pause_after: float = 0.5
 
 
 @dataclass
 class SwitchTarget(PlaybackAction):
-    """Switch to a specific mode and sub-mode.
+    """Switch to a specific room and mode.
 
-    Used by Code mode playback to switch to the exact mode/sub-mode
+    Used by Code room playback to switch to the exact room/mode
     recorded during F5 recording.
 
     Args:
@@ -95,10 +95,10 @@ class Pause(PlaybackAction):
 
 @dataclass
 class Clear(PlaybackAction):
-    """Clear the current mode's content.
+    """Clear the current room's content.
 
-    In Ask mode: clears history
-    In Write mode: clears canvas
+    In Ask room: clears history
+    In Write room: clears canvas
     """
     pause_after: float = 0.3
 
@@ -108,9 +108,9 @@ class ClearAll(PlaybackAction):
     """Clear all state across all modes. Use at start of demo.
 
     Clears:
-    - Explore mode history and last result
-    - Play mode colors (reset to defaults)
-    - Doodle mode canvas
+    - Explore room history and last result
+    - Play room colors (reset to defaults)
+    - Doodle room canvas
     """
     pause_after: float = 0.1
 
@@ -119,14 +119,14 @@ class ClearAll(PlaybackAction):
 class ClearDoodle(PlaybackAction):
     """Clear the doodle canvas and reset cursor to (0,0).
 
-    Use this to start fresh in doodle mode without affecting other modes.
+    Use this to start fresh in doodle room without affecting other rooms.
     """
     pause_after: float = 0.2
 
 
 @dataclass
 class PlayKeys(PlaybackAction):
-    """Play a sequence of keys in Play mode (for making music).
+    """Play a sequence of keys in Play room (for making music).
 
     This types keys with musical timing. Each item can be:
     - A single key: 'q'
@@ -145,7 +145,7 @@ class PlayKeys(PlaybackAction):
 
 @dataclass
 class DrawPath(PlaybackAction):
-    """Draw a path in Write mode (hold space + arrows).
+    """Draw a path in Write room (hold space + arrows).
 
     Args:
         directions: List of arrow directions: 'up', 'down', 'left', 'right'
@@ -262,7 +262,7 @@ def segment_duration(actions: list[PlaybackAction]) -> float:
     for action in actions:
         if isinstance(action, Pause):
             total += action.duration
-        elif isinstance(action, SwitchMode):
+        elif isinstance(action, SwitchRoom):
             total += action.pause_after
         elif isinstance(action, SwitchTarget):
             total += action.pause_after

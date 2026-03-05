@@ -1,13 +1,13 @@
 """AI-generated drawing demo."""
 
 from purple_tui.demo.script import (
-    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment, TypeText,
+    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment, TypeText,
     ClearDoodle,
 )
 
 SEGMENT = [
     Comment("=== AI GENERATED DRAWING ==="),
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     Pause(0.3),
 
     # Clear the canvas and reset cursor to (0,0)

@@ -1,12 +1,12 @@
 """Explore mode demo: introduction and feature showcase."""
 
-from ..script import SwitchMode, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut
+from ..script import SwitchRoom, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut
 
 # Typing speed (0.05s/char) with brief final_pause, longer pauses on results
 _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
 
 SEGMENT = [
-    SwitchMode("explore", pause_after=0.0),
+    SwitchRoom("explore", pause_after=0.0),
 
     Comment("Start zoomed in on input area (skip blank purple screen)"),
     ZoomIn(region="input", zoom=3.0, duration=0.0),

@@ -15,7 +15,7 @@ from .script import (
     PlaybackAction,
     TypeText,
     PressKey,
-    SwitchMode,
+    SwitchRoom,
     SwitchTarget,
     Pause,
     Clear,
@@ -33,7 +33,7 @@ from .script import (
 from ..keyboard import (
     CharacterAction,
     NavigationAction,
-    ModeAction,
+    RoomAction,
     ControlAction,
 )
 
@@ -51,7 +51,7 @@ class PlaybackPlayer:
     The player injects actions directly into the app's action dispatcher,
     bypassing evdev entirely. This works both on Linux and for testing.
 
-    IMPORTANT: Understanding mode behaviors for scripts:
+    IMPORTANT: Understanding room behaviors for scripts:
 
     Play Mode:
         - Keys CYCLE through colors on each press (purple -> blue -> red -> off)
@@ -86,11 +86,11 @@ class PlaybackPlayer:
             speed_multiplier: Speed up (>1) or slow down (<1) the playback
             clear_all: Optional function to clear all state at start
             clear_doodle: Optional function to clear doodle canvas and reset cursor
-            set_play_key_color: Optional function to set a Play mode key's
+            set_play_key_color: Optional function to set a Play room key's
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
-            is_doodle_paint_mode: Optional function to check if Doodle mode
+            is_doodle_paint_mode: Optional function to check if Doodle room
                 is in paint mode (vs text mode)
-            is_play_letters_mode: Optional function to check if Play mode
+            is_play_letters_mode: Optional function to check if Play room
                 is in letters mode (vs music mode)
             get_cursor_position: Optional function returning (x_frac, y_frac)
                 viewport fractions for the current cursor position. Used to
@@ -170,8 +170,8 @@ class PlaybackPlayer:
         elif isinstance(action, PressKey):
             await self._press_key(action)
 
-        elif isinstance(action, SwitchMode):
-            await self._switch_mode(action)
+        elif isinstance(action, SwitchRoom):
+            await self._switch_room(action)
 
         elif isinstance(action, SwitchTarget):
             await self._switch_target(action)
@@ -247,48 +247,48 @@ class PlaybackPlayer:
 
         await self._sleep(action.pause_after)
 
-    async def _switch_mode(self, action: SwitchMode) -> None:
-        """Switch to a different mode."""
-        await self._dispatch(ModeAction(mode=action.mode))
+    async def _switch_room(self, action: SwitchRoom) -> None:
+        """Switch to a different room."""
+        await self._dispatch(RoomAction(room=action.room))
         await self._sleep(action.pause_after)
 
     async def _switch_target(self, action: SwitchTarget) -> None:
-        """Switch to a specific mode and sub-mode.
+        """Switch to a specific room and mode.
 
         Parses target like "play.music" or "doodle.paint" into:
-        1. Main mode switch (via ModeAction)
-        2. Sub-mode toggle (via Tab) if needed
+        1. Main room switch (via RoomAction)
+        2. Sub-room toggle (via Tab) if needed
         """
         target = action.target
         parts = target.split(".", 1)
-        main_mode = parts[0]
-        sub_mode = parts[1] if len(parts) > 1 else ""
+        main_room = parts[0]
+        mode = parts[1] if len(parts) > 1 else ""
 
-        await self._dispatch(ModeAction(mode=main_mode))
+        await self._dispatch(RoomAction(room=main_room))
         await self._sleep(0.1)
 
-        if main_mode == "play" and sub_mode == "letters":
+        if main_room == "play" and mode == "letters":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if not in_letters:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_mode == "play" and sub_mode == "music":
+        elif main_room == "play" and mode == "music":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if in_letters:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_mode == "doodle" and sub_mode == "paint":
+        elif main_room == "doodle" and mode == "paint":
             in_paint = (
                 self._is_doodle_paint_mode and self._is_doodle_paint_mode()
             )
             if not in_paint:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_mode == "doodle" and sub_mode == "text":
+        elif main_room == "doodle" and mode == "text":
             in_paint = (
                 self._is_doodle_paint_mode and self._is_doodle_paint_mode()
             )
@@ -299,7 +299,7 @@ class PlaybackPlayer:
         await self._sleep(action.pause_after)
 
     async def _clear(self, action: Clear) -> None:
-        """Clear the current mode's content."""
+        """Clear the current room's content."""
         await self._dispatch(ControlAction(action='escape', is_down=True))
         await self._sleep(action.pause_after)
 
@@ -338,7 +338,7 @@ class PlaybackPlayer:
         await self._sleep(action.pause_after)
 
     async def _draw_path(self, action: DrawPath) -> None:
-        """Draw a path in Doodle mode's paint mode.
+        """Draw a path in Doodle room's paint mode.
 
         Automatically switches to PAINT mode (via Tab) before drawing.
         """

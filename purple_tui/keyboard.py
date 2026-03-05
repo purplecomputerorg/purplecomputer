@@ -7,9 +7,9 @@ Reads raw key events via EvdevReader, processes through KeyboardStateMachine.
 Features:
 - Shift strategies: sticky shift (grace period), physical shift
 - Caps lock toggle (double-tap Shift key)
-- Long-hold detection for parent mode (Escape held > 1s)
+- Long-hold detection for parent menu (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key mode switching (F1-F3) and toggles (F10-F12 volume)
+- F-key room switching (F1-F4) and toggles (F10-F12 volume)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE, MODE_BUILD
+from .constants import SUPPORT_EMAIL, ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_BUILD
 
 
 # ============================================================================
@@ -516,9 +516,9 @@ class NavigationAction(KeyAction):
 
 
 @dataclass
-class ModeAction(KeyAction):
-    """Mode switch requested."""
-    mode: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'build' (F4), 'parent' (long Escape)
+class RoomAction(KeyAction):
+    """Room switch requested."""
+    room: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'build' (F4), 'parent' (long Escape)
 
 
 @dataclass
@@ -691,16 +691,16 @@ class KeyboardStateMachine:
         # Handle F-keys for mode switching and volume (no repeats)
         if not is_repeat:
             if keycode == KeyCode.KEY_F1:
-                actions.append(ModeAction(mode=MODE_EXPLORE[0]))
+                actions.append(RoomAction(room=ROOM_EXPLORE[0]))
                 return actions
             if keycode == KeyCode.KEY_F2:
-                actions.append(ModeAction(mode=MODE_PLAY[0]))
+                actions.append(RoomAction(room=ROOM_PLAY[0]))
                 return actions
             if keycode == KeyCode.KEY_F3:
-                actions.append(ModeAction(mode=MODE_DOODLE[0]))
+                actions.append(RoomAction(room=ROOM_DOODLE[0]))
                 return actions
             if keycode == KeyCode.KEY_F4:
-                actions.append(ModeAction(mode=MODE_BUILD[0]))
+                actions.append(RoomAction(room=ROOM_BUILD[0]))
                 return actions
             if keycode == KeyCode.KEY_F5:
                 actions.append(ControlAction(action='record_toggle', is_down=True))
@@ -782,7 +782,7 @@ class KeyboardStateMachine:
                 if hold_duration >= self.ESCAPE_HOLD_THRESHOLD and not self._escape_hold_triggered:
                     self._escape_hold_triggered = True
                     actions.append(LongHoldAction(key='escape'))
-                    actions.append(ModeAction(mode='parent'))
+                    actions.append(RoomAction(room='parent'))
                 self._escape_press_time = None  # Clear on release
             actions.append(ControlAction(action='escape', is_down=False))
             return actions

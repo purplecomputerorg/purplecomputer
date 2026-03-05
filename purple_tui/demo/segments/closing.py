@@ -1,12 +1,12 @@
 """Closing text segment for demo."""
 
 from purple_tui.demo.script import (
-    SwitchMode, Pause, MoveSequence, Comment, TypeText, ZoomIn, ZoomOut,
+    SwitchRoom, Pause, MoveSequence, Comment, TypeText, ZoomIn, ZoomOut,
 )
 
 SEGMENT = [
     Comment("=== CLOSING TEXT ==="),
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     Pause(0.3),
 
     # Canvas already cleared at end of palm_tree segment

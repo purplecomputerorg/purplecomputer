@@ -55,7 +55,7 @@ def estimate_duration(actions: list[dict]) -> float:
             total += length * 0.02 + 0.3
         elif t == 'wait':
             total += action.get('seconds', 0.3)
-    # Add fixed overhead: SwitchMode(0.3+0.5), PressKey tab(0.2), final Pause(1.0)
+    # Add fixed overhead: SwitchRoom(0.3+0.5), PressKey tab(0.2), final Pause(1.0)
     total += 0.3 + 0.5 + 0.2 + 1.0
     return total
 

@@ -1,12 +1,12 @@
 """AI-generated drawing demo."""
 
 from purple_tui.demo.script import (
-    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
+    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment,
 )
 
 AI_DRAWING = [
     Comment("=== AI GENERATED DRAWING ==="),
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     Pause(0.3),
     PressKey("tab"),  # Enter paint mode
 

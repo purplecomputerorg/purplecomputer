@@ -38,17 +38,17 @@ class RecordingState(Enum):
     PLAYING = "playing"
 
 
-def _mode_to_target(mode_name: str, sub_mode: str = "") -> str:
-    """Convert a mode name and optional sub-mode to a target string."""
-    if mode_name == "play":
-        if sub_mode == "letters":
+def _room_to_target(room_name: str, mode: str = "") -> str:
+    """Convert a mode name and optional mode to a target string."""
+    if room_name == "play":
+        if mode == "letters":
             return TARGET_PLAY_LETTERS
         return TARGET_PLAY_MUSIC
-    elif mode_name == "doodle":
-        if sub_mode == "paint":
+    elif room_name == "doodle":
+        if mode == "paint":
             return TARGET_DOODLE_PAINT
         return TARGET_DOODLE_TEXT
-    elif mode_name == "explore":
+    elif room_name == "explore":
         return TARGET_EXPLORE
     return TARGET_PLAY_MUSIC
 
@@ -57,8 +57,8 @@ def _mode_to_target(mode_name: str, sub_mode: str = "") -> str:
 class RecordedEvent:
     """A single recorded event with context."""
     action: KeyAction
-    mode_name: str
-    sub_mode: str
+    room_name: str
+    mode: str
     timestamp: float
 
 
@@ -68,19 +68,19 @@ class Recording:
     def __init__(self):
         self.events: list[RecordedEvent] = []
 
-    def add_event(self, action: KeyAction, mode_name: str,
-                  sub_mode: str = "", timestamp: float = 0.0) -> None:
+    def add_event(self, action: KeyAction, room_name: str,
+                  mode: str = "", timestamp: float = 0.0) -> None:
         self.events.append(RecordedEvent(
             action=action,
-            mode_name=mode_name,
-            sub_mode=sub_mode,
+            room_name=room_name,
+            mode=mode,
             timestamp=timestamp,
         ))
 
     def to_blocks(self) -> list[ProgramBlock]:
         """Convert recorded events to ProgramBlock list.
 
-        Inserts MODE_SWITCH blocks when the mode/sub-mode changes between
+        Inserts MODE_SWITCH blocks when the mode/mode changes between
         consecutive events. The first event's mode also gets a MODE_SWITCH
         block at the start.
         """
@@ -91,7 +91,7 @@ class Recording:
         prev_target = ""
 
         for i, event in enumerate(self.events):
-            current_target = _mode_to_target(event.mode_name, event.sub_mode)
+            current_target = _room_to_target(event.room_name, event.mode)
 
             # Insert MODE_SWITCH when target changes
             if current_target != prev_target:
@@ -103,7 +103,7 @@ class Recording:
                 prev_target = current_target
 
             # Convert action to block
-            block = action_to_block(event.action, event.mode_name)
+            block = action_to_block(event.action, event.room_name)
             if block is None:
                 continue
 
@@ -187,8 +187,8 @@ class RecordingManager:
             if self.current and self.current.is_empty():
                 self.current = None
 
-    def record_event(self, action: KeyAction, mode_name: str,
-                     sub_mode: str = "") -> None:
+    def record_event(self, action: KeyAction, room_name: str,
+                     mode: str = "") -> None:
         """Record a keyboard action if currently recording.
 
         Only records meaningful actions (characters, arrows, controls).
@@ -222,8 +222,8 @@ class RecordingManager:
 
         self.current.add_event(
             action=action,
-            mode_name=mode_name,
-            sub_mode=sub_mode,
+            room_name=room_name,
+            mode=mode,
             timestamp=self._time_fn(),
         )
 

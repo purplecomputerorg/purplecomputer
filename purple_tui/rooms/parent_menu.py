@@ -1,5 +1,5 @@
 """
-Parent Mode - Admin menu for parents/guardians
+Parent Menu: Admin menu for parents/guardians
 
 Accessed by holding Escape for ~1 second.
 Provides access to system settings, bash shell, etc.

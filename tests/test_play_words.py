@@ -1,24 +1,24 @@
 """Tests for play_words: word recognition from replay data."""
 
 from purple_tui.play_words import WORDS, extract_word
-from purple_tui.play_session import SUBMODE_LETTERS, SUBMODE_MUSIC
+from purple_tui.play_session import MODE_LETTERS, MODE_MUSIC
 
 
 def test_recognized_word():
     """Letters spelling a known word are recognized."""
     replay = [
-        ("D", SUBMODE_LETTERS, 0.0),
-        ("O", SUBMODE_LETTERS, 0.3),
-        ("G", SUBMODE_LETTERS, 0.3),
+        ("D", MODE_LETTERS, 0.0),
+        ("O", MODE_LETTERS, 0.3),
+        ("G", MODE_LETTERS, 0.3),
     ]
     assert extract_word(replay) == "dog"
 
 
 def test_recognized_word_cat():
     replay = [
-        ("C", SUBMODE_LETTERS, 0.0),
-        ("A", SUBMODE_LETTERS, 0.2),
-        ("T", SUBMODE_LETTERS, 0.2),
+        ("C", MODE_LETTERS, 0.0),
+        ("A", MODE_LETTERS, 0.2),
+        ("T", MODE_LETTERS, 0.2),
     ]
     assert extract_word(replay) == "cat"
 
@@ -26,9 +26,9 @@ def test_recognized_word_cat():
 def test_unknown_word_returns_none():
     """Letters not forming a known word return None."""
     replay = [
-        ("X", SUBMODE_LETTERS, 0.0),
-        ("Y", SUBMODE_LETTERS, 0.3),
-        ("Z", SUBMODE_LETTERS, 0.3),
+        ("X", MODE_LETTERS, 0.0),
+        ("Y", MODE_LETTERS, 0.3),
+        ("Z", MODE_LETTERS, 0.3),
     ]
     assert extract_word(replay) is None
 
@@ -36,9 +36,9 @@ def test_unknown_word_returns_none():
 def test_music_mode_events_ignored():
     """Events in music mode are filtered out."""
     replay = [
-        ("D", SUBMODE_MUSIC, 0.0),
-        ("O", SUBMODE_MUSIC, 0.3),
-        ("G", SUBMODE_MUSIC, 0.3),
+        ("D", MODE_MUSIC, 0.0),
+        ("O", MODE_MUSIC, 0.3),
+        ("G", MODE_MUSIC, 0.3),
     ]
     assert extract_word(replay) is None
 
@@ -46,10 +46,10 @@ def test_music_mode_events_ignored():
 def test_mixed_modes_only_letters():
     """Only letters-mode alphabetic keys contribute to the word."""
     replay = [
-        ("D", SUBMODE_LETTERS, 0.0),
-        ("X", SUBMODE_MUSIC, 0.2),    # music mode, ignored
-        ("O", SUBMODE_LETTERS, 0.3),
-        ("G", SUBMODE_LETTERS, 0.3),
+        ("D", MODE_LETTERS, 0.0),
+        ("X", MODE_MUSIC, 0.2),    # music mode, ignored
+        ("O", MODE_LETTERS, 0.3),
+        ("G", MODE_LETTERS, 0.3),
     ]
     assert extract_word(replay) == "dog"
 
@@ -57,9 +57,9 @@ def test_mixed_modes_only_letters():
 def test_non_alpha_keys_ignored():
     """Number keys in letters mode are filtered out."""
     replay = [
-        ("5", SUBMODE_LETTERS, 0.0),
-        ("G", SUBMODE_LETTERS, 0.2),
-        ("O", SUBMODE_LETTERS, 0.3),
+        ("5", MODE_LETTERS, 0.0),
+        ("G", MODE_LETTERS, 0.2),
+        ("O", MODE_LETTERS, 0.3),
     ]
     assert extract_word(replay) == "go"
 
@@ -71,15 +71,15 @@ def test_empty_replay():
 
 def test_single_letter_not_a_word():
     """A single letter isn't in the word list."""
-    replay = [("A", SUBMODE_LETTERS, 0.0)]
+    replay = [("A", MODE_LETTERS, 0.0)]
     assert extract_word(replay) is None
 
 
 def test_two_letter_word():
     """Short words like 'go' are recognized."""
     replay = [
-        ("G", SUBMODE_LETTERS, 0.0),
-        ("O", SUBMODE_LETTERS, 0.3),
+        ("G", MODE_LETTERS, 0.0),
+        ("O", MODE_LETTERS, 0.3),
     ]
     assert extract_word(replay) == "go"
 

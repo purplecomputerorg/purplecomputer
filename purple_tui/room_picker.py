@@ -1,5 +1,5 @@
 """
-Mode Picker Screen: A kid-friendly modal for switching modes.
+Room Picker Screen: A kid-friendly modal for switching rooms.
 
 Shows 4 options: Explore, Play, Doodle, Build
 Arrow keys navigate, Enter selects, Escape cancels.
@@ -14,21 +14,21 @@ from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_BUILD
 from .keyboard import NavigationAction, ControlAction
 
 
-# Mode options: (id, icon, label, result)
+# Room options: (id, icon, label, result)
 # result is what gets returned when selected
-MODE_OPTIONS = [
-    ("explore", ICON_CHAT, "Explore", {"mode": "explore"}),
-    ("play", ICON_MUSIC, "Play", {"mode": "play"}),
-    ("doodle", ICON_PALETTE, "Doodle", {"mode": "doodle"}),
-    ("build", ICON_BUILD, "Build", {"mode": "build"}),
+ROOM_OPTIONS = [
+    ("explore", ICON_CHAT, "Explore", {"room": "explore"}),
+    ("play", ICON_MUSIC, "Play", {"room": "play"}),
+    ("doodle", ICON_PALETTE, "Doodle", {"room": "doodle"}),
+    ("build", ICON_BUILD, "Build", {"room": "build"}),
 ]
 
 
-class ModeOption(Static):
-    """A single selectable mode option with icon and label."""
+class RoomOption(Static):
+    """A single selectable room option with icon and label."""
 
     DEFAULT_CSS = """
-    ModeOption {
+    RoomOption {
         width: 14;
         height: 5;
         content-align: center middle;
@@ -38,7 +38,7 @@ class ModeOption(Static):
         padding: 0 1;
     }
 
-    ModeOption.selected {
+    RoomOption.selected {
         border: heavy $accent;
         background: $primary;
         color: $background;
@@ -56,16 +56,16 @@ class ModeOption(Static):
         return f"{self.icon}\n{self.label}"
 
 
-class ModePickerScreen(ModalScreen):
+class RoomPickerScreen(ModalScreen):
     """
-    Modal screen for selecting modes with arrow key navigation.
+    Modal screen for selecting rooms with arrow key navigation.
 
-    Shows Explore, Play, and Doodle (Write/Paint) options.
-    Returns the selected mode info or None if cancelled.
+    Shows Explore, Play, Doodle, and Build options.
+    Returns the selected room info or None if cancelled.
     """
 
     CSS = """
-    ModePickerScreen {
+    RoomPickerScreen {
         align: center middle;
     }
 
@@ -99,32 +99,32 @@ class ModePickerScreen(ModalScreen):
     }
     """
 
-    def __init__(self, current_mode: str = "explore", **kwargs):
+    def __init__(self, current_room: str = "explore", **kwargs):
         super().__init__(**kwargs)
-        self._current_mode = current_mode
+        self._current_room = current_room
         self._selected_index = self._get_initial_index()
 
     def _get_initial_index(self) -> int:
-        """Get initial selection based on current mode."""
-        if self._current_mode == "explore":
+        """Get initial selection based on current room."""
+        if self._current_room == "explore":
             return 0
-        elif self._current_mode == "play":
+        elif self._current_room == "play":
             return 1
-        elif self._current_mode == "doodle":
+        elif self._current_room == "doodle":
             return 2
-        elif self._current_mode == "build":
+        elif self._current_room == "build":
             return 3
         return 0
 
     def compose(self) -> ComposeResult:
         with Container(id="picker-dialog"):
-            yield Static("Pick a Mode", id="picker-title")
+            yield Static("Pick a Room", id="picker-title")
 
             with Horizontal(id="picker-options"):
-                for opt_id, icon, label, _ in MODE_OPTIONS:
-                    yield ModeOption(opt_id, icon, label, id=f"opt-{opt_id}")
+                for opt_id, icon, label, _ in ROOM_OPTIONS:
+                    yield RoomOption(opt_id, icon, label, id=f"opt-{opt_id}")
 
-            yield Static("◀ ▶", id="picker-hint")
+            yield Static("\u25c0 \u25b6", id="picker-hint")
 
     def on_mount(self) -> None:
         """Highlight the initially selected option."""
@@ -132,9 +132,9 @@ class ModePickerScreen(ModalScreen):
 
     def _update_selection(self) -> None:
         """Update visual selection state."""
-        for i, (opt_id, _, _, _) in enumerate(MODE_OPTIONS):
+        for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
             try:
-                option = self.query_one(f"#opt-{opt_id}", ModeOption)
+                option = self.query_one(f"#opt-{opt_id}", RoomOption)
                 if i == self._selected_index:
                     option.add_class("selected")
                 else:
@@ -149,14 +149,14 @@ class ModePickerScreen(ModalScreen):
                 self._selected_index = max(0, self._selected_index - 1)
                 self._update_selection()
             elif action.direction == 'right':
-                self._selected_index = min(len(MODE_OPTIONS) - 1, self._selected_index + 1)
+                self._selected_index = min(len(ROOM_OPTIONS) - 1, self._selected_index + 1)
                 self._update_selection()
             return
 
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
-                # Return the selected mode info
-                _, _, _, result = MODE_OPTIONS[self._selected_index]
+                # Return the selected room info
+                _, _, _, result = ROOM_OPTIONS[self._selected_index]
                 self.dismiss(result)
             elif action.action == 'escape':
                 # Cancel, return None

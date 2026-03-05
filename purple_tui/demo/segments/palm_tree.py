@@ -1,7 +1,7 @@
 """Doodle mode demo: intro text + palm tree drawing."""
 
 from ..script import (
-    PressKey, SwitchMode, Pause, DrawPath, MoveSequence, Comment,
+    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment,
     SetSpeed, TypeText, ClearDoodle, ZoomIn, ZoomOut,
 )
 
@@ -10,7 +10,7 @@ _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
 
 SEGMENT = [
     Comment("=== DOODLE MODE INTRO + PALM TREE ==="),
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     Pause(0.3),
 
     SetSpeed(1.0),

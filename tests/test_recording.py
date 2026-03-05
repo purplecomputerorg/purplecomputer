@@ -28,7 +28,7 @@ from purple_tui.keyboard import (
     CharacterAction,
     NavigationAction,
     ControlAction,
-    ModeAction,
+    RoomAction,
     ShiftAction,
 )
 
@@ -139,10 +139,10 @@ class TestEventRecording:
         rm.record_event(CharacterAction(char="a", is_repeat=True), "play")
         assert rm.current.is_empty()
 
-    def test_ignores_mode_action(self):
+    def test_ignores_room_action(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
         rm.start_recording()
-        rm.record_event(ModeAction(mode="explore"), "play")
+        rm.record_event(RoomAction(room="explore"), "play")
         assert rm.current.is_empty()
 
     def test_ignores_escape(self):
@@ -151,11 +151,11 @@ class TestEventRecording:
         rm.record_event(ControlAction(action="escape", is_down=True), "play")
         assert rm.current.is_empty()
 
-    def test_records_sub_mode(self):
+    def test_records_mode(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
         rm.start_recording()
         rm.record_event(CharacterAction(char="a"), "play", "letters")
-        assert rm.current.events[0].sub_mode == "letters"
+        assert rm.current.events[0].mode == "letters"
 
 
 # =============================================================================

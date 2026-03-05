@@ -46,6 +46,7 @@ from .constants import (
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     MODE_EXPLORE, MODE_PLAY, MODE_DOODLE, MODE_BUILD,
+    USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -682,6 +683,9 @@ class PurpleApp(App):
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
+        # Poll for USB update signal file (written by systemd usb_updater service)
+        self._usb_update_timer = self.set_interval(2.0, self._check_usb_update_signal)
+
         # Show breaking update prompt if available
         if self._pending_update:
             self._show_update_prompt()
@@ -1089,6 +1093,50 @@ class PurpleApp(App):
                     os.execv(sys.executable, [sys.executable] + sys.argv)
 
         self.push_screen(UpdateScreen(), handle_update_result)
+
+    def _check_usb_update_signal(self) -> None:
+        """Poll for USB update signal file. Written by the systemd usb_updater service."""
+        if not os.path.exists(USB_UPDATE_SIGNAL_FILE):
+            return
+
+        # Remove signal file so we don't prompt again
+        try:
+            os.unlink(USB_UPDATE_SIGNAL_FILE)
+        except OSError:
+            pass
+
+        # Stop polling
+        if self._usb_update_timer:
+            self._usb_update_timer.stop()
+
+        self._show_usb_update_restart()
+
+    def _show_usb_update_restart(self) -> None:
+        """Show a friendly modal prompting for restart after USB update."""
+        from textual.widgets import Label
+        from textual.screen import ModalScreen
+
+        class UsbUpdateScreen(ModalScreen):
+            """Modal screen for USB update restart prompt."""
+
+            def compose(self):
+                with Container(id="update-dialog"):
+                    yield Label("New update ready!")
+                    yield Label("")
+                    yield Label("Press Enter to restart.")
+
+            async def handle_keyboard_action(self, action) -> None:
+                """Handle keyboard actions from evdev."""
+                if isinstance(action, ControlAction) and action.is_down:
+                    if action.action == 'enter':
+                        self.dismiss(True)
+
+        def handle_restart(should_restart: bool) -> None:
+            if should_restart:
+                import sys
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        self.push_screen(UsbUpdateScreen(), handle_restart)
 
     def _apply_theme(self) -> None:
         """Apply the current color theme"""

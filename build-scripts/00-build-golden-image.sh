@@ -158,8 +158,21 @@ SOURCES
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
 
+    # Copy USB update config (udev rule + systemd service)
+    cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
+    cp /purple-src/config/systemd/purple-usb-update@.service "$MOUNT_DIR/etc/systemd/system/"
+
+    # Copy USB update public key (if it exists, for signature verification)
+    if [ -f /purple-src/update-key.pub ]; then
+        cp /purple-src/update-key.pub "$MOUNT_DIR/opt/purple/"
+        log_info "  USB update public key installed"
+    else
+        log_info "  Warning: update-key.pub not found. USB updates will not work."
+        log_info "  Run 'just keygen' to generate a key pair."
+    fi
+
     # Install Python dependencies (python-xlib for font size calculation fallback, evdev for keyboard normalizer)
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev pynacl
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."

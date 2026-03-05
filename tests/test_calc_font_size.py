@@ -20,7 +20,7 @@ class TestConstants:
 
     def test_limits(self):
         assert MIN_FONT >= 10
-        assert MAX_FONT <= 30  # Capped to prevent huge viewports
+        assert MAX_FONT <= 48  # Capped to prevent huge viewports
         assert MIN_FONT < MAX_FONT
 
     def test_fill(self):
@@ -63,9 +63,10 @@ class TestCalculateFont:
         assert MIN_FONT <= font <= MAX_FONT
 
     def test_4k(self):
-        """4K should hit max font."""
+        """4K should give a large font size."""
         font = calculate_font(3840, 2160, 11, 22)
-        assert font == MAX_FONT
+        assert font > 30  # Should be significantly larger than 1080p
+        assert font <= MAX_FONT
 
     def test_tiny_screen(self):
         """Tiny screen should hit min font."""

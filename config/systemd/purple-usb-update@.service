@@ -1,0 +1,23 @@
+[Unit]
+Description=Purple Computer USB Update (%i)
+After=local-fs.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=120
+
+# Mount USB read-only, run updater, unmount
+ExecStartPre=/bin/mkdir -p /mnt/purple-update
+ExecStartPre=/bin/mount -o ro /dev/%i /mnt/purple-update
+ExecStart=/usr/bin/python3 -m purple_tui.usb_updater /mnt/purple-update
+ExecStopPost=/bin/umount /mnt/purple-update
+ExecStopPost=/bin/rmdir /mnt/purple-update
+
+# Run as root (needed to write to /opt/purple/)
+User=root
+
+# Set PYTHONPATH so the module can be found
+Environment=PYTHONPATH=/opt/purple
+
+# Clean up mount on failure
+SuccessExitStatus=0

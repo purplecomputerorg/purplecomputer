@@ -138,3 +138,11 @@ apply-zoom:
 # Open zoom keyframe editor in browser
 zoom-editor:
     python recording-setup/zoom_editor_server.py
+
+# Generate Ed25519 key pair for USB update signing
+keygen:
+    .venv/bin/python tools/usb_update_keygen.py
+
+# Create signed USB update package
+create-update version output *args:
+    .venv/bin/python tools/create_usb_update.py --version {{version}} --output {{output}} {{args}}

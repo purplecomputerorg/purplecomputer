@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **USB update restart prompt**: When a USB update is applied, a simple modal appears saying "New update ready! Press Enter to restart."
 - **Removed F9 theme toggle**: Dark mode is now always active; F9 key and theme badge removed from the function bar
 - **Code Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
 - **Code Mode v2: Tab menu**: Tab opens a vertical menu modal in Code mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter command mode

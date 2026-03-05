@@ -112,6 +112,15 @@ MODE_TITLES = {
 #
 # Note: "input" focuses on the Explore mode input area (bottom portion of viewport).
 
+# =============================================================================
+# USB UPDATE
+# =============================================================================
+
+USB_UPDATE_SIGNAL_FILE = "/tmp/purple-update-applied"
+
+# =============================================================================
+# ZOOM REGIONS FOR DEMO RECORDING
+# =============================================================================
 ZOOM_REGIONS = {
     # Full viewport (no zoom, 100% of content visible)
     "viewport": (0.5, 0.5, 1.0, 1.0),

@@ -115,7 +115,13 @@ class Recording:
             else:
                 block.gap_level = 0  # last block has no trailing gap
 
-            blocks.append(block)
+            # Auto-collapse consecutive identical blocks
+            if blocks and blocks[-1].matches(block):
+                blocks[-1].count += 1
+                # Use the latest gap (from this block to the next event)
+                blocks[-1].gap_level = block.gap_level
+            else:
+                blocks.append(block)
 
         return blocks
 

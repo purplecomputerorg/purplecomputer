@@ -197,6 +197,7 @@ class ProgramBlock:
     gap_level: int = 1       # 0-4, index into PAUSE_LEVELS
     source_mode: str = ""    # "play" or "doodle"
     target: str = ""         # MODE_SWITCH: "play.music", "doodle.paint", etc.
+    count: int = 1           # Auto-collapse count: how many consecutive identical actions
 
     @property
     def icon(self) -> str:
@@ -243,6 +244,25 @@ class ProgramBlock:
     def cycle_repeat_count(self, direction: int) -> None:
         """Cycle repeat count up or down, clamping to 2-99."""
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
+
+    def matches(self, other: 'ProgramBlock') -> bool:
+        """Check if this block can auto-collapse with another (same type + value).
+
+        MODE_SWITCH and EMOJI blocks never auto-collapse. REPEAT blocks never auto-collapse.
+        """
+        if self.type != other.type:
+            return False
+        if self.type == ProgramBlockType.KEY:
+            return self.char == other.char
+        if self.type == ProgramBlockType.ARROW:
+            return self.direction == other.direction
+        if self.type == ProgramBlockType.CONTROL:
+            return self.control == other.control
+        return False
+
+    def cycle_count(self, direction: int) -> None:
+        """Cycle auto-collapse count up (+1) or down (-1), clamping to 1-99."""
+        self.count = max(1, min(99, self.count + direction))
 
     def cycle_target(self, direction: int) -> None:
         """Cycle MODE_SWITCH target through available targets."""
@@ -364,15 +384,24 @@ def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
 
 
 def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
-    """Convert a section of blocks to playback actions (with pauses)."""
+    """Convert a section of blocks to playback actions (with pauses).
+
+    Blocks with count > 1 expand to N repeated actions. The gap is
+    applied after each repetition.
+    """
     actions = []
     for block in section:
         action = _block_to_playback_action(block)
         if action:
-            actions.append(action)
-        pause = gap_duration(block.gap_level)
-        if pause > 0:
-            actions.append(Pause(duration=pause))
+            for _ in range(block.count):
+                actions.append(action)
+                pause = gap_duration(block.gap_level)
+                if pause > 0:
+                    actions.append(Pause(duration=pause))
+        else:
+            pause = gap_duration(block.gap_level)
+            if pause > 0:
+                actions.append(Pause(duration=pause))
     return actions
 
 
@@ -453,23 +482,34 @@ def _block_to_dict(block: ProgramBlock) -> dict:
     elif block.type == ProgramBlockType.EMOJI:
         d["char"] = block.char
     elif block.type == ProgramBlockType.REPEAT:
-        d["count"] = block.repeat_count
+        d["repeat_count"] = block.repeat_count
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
     if block.source_mode:
         d["mode"] = block.source_mode
+    if block.count > 1:
+        d["count"] = block.count
     return d
 
 
 def _dict_to_block(d: dict) -> ProgramBlock:
     block_type = ProgramBlockType(d["type"])
+    # Backward compat: old REPEAT blocks stored repeat_count as "count".
+    # New format uses "repeat_count" for repeat and "count" for auto-collapse.
+    if block_type == ProgramBlockType.REPEAT:
+        repeat_count = d.get("repeat_count", d.get("count", 2))
+        collapse_count = 1
+    else:
+        repeat_count = 2
+        collapse_count = d.get("count", 1)
     return ProgramBlock(
         type=block_type,
         char=d.get("char", ""),
         direction=d.get("direction", ""),
         control=d.get("control", ""),
-        repeat_count=d.get("count", 2),
+        repeat_count=repeat_count,
         gap_level=d.get("gap", 1),
         source_mode=d.get("mode", ""),
         target=d.get("target", ""),
+        count=collapse_count,
     )

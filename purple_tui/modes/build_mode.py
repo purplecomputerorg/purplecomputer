@@ -53,6 +53,9 @@ ICON_WIDTH = 4           # fixed character width for the icon section
 BLOCK_SELECTED_COLOR = "#FFD700"  # gold highlight for cursor
 GUTTER_WIDTH = 3         # left gutter for mode icons
 
+# Repeat badge in gutter
+REPEAT_BADGE_COLOR = "#2d9e8a"
+
 # Save bar
 SAVE_BAR_HEIGHT = 2
 NUM_SLOTS = 9
@@ -68,11 +71,13 @@ BLOCK_HEIGHT = 4  # border_top + body1 + body2 + border_bottom
 # LINE LAYOUT
 # =============================================================================
 
-def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[str, list[tuple[int, ProgramBlock]]]]:
+def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[str, list[tuple[int, ProgramBlock]], int]]:
     """Pre-process blocks into display lines.
 
-    Returns list of (icon, [(block_index, block), ...]) tuples.
+    Returns list of (icon, [(block_index, block), ...], line_repeat) tuples.
     MODE_SWITCH blocks start a new line with their icon in the gutter.
+    REPEAT blocks at the end of a line are extracted as line metadata
+    (line_repeat count) and not rendered in the strip.
     If a section overflows content_width, it wraps (continuation lines
     have empty gutter icon "").
 
@@ -81,7 +86,7 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
     if not blocks:
         return []
 
-    lines: list[tuple[str, list[tuple[int, ProgramBlock]]]] = []
+    lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]] = []
     current_icon = ""
     current_line: list[tuple[int, ProgramBlock]] = []
     current_width = 0
@@ -90,7 +95,7 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
         if block.type == ProgramBlockType.MODE_SWITCH:
             # Flush current line
             if current_line:
-                lines.append((current_icon, current_line))
+                lines.append(_finalize_line(current_icon, current_line))
             # Start new line with this block's icon
             current_icon = TARGET_ICONS.get(block.target, "?")
             current_line = [(i, block)]
@@ -102,7 +107,7 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
         # Check if this block would overflow
         if current_width + block_w > content_width and current_line:
             # Wrap: flush current line, start continuation
-            lines.append((current_icon, current_line))
+            lines.append(_finalize_line(current_icon, current_line))
             current_icon = ""  # continuation line: blank gutter
             current_line = [(i, block)]
             current_width = block_w
@@ -112,14 +117,22 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
 
     # Flush last line
     if current_line:
-        lines.append((current_icon, current_line))
+        lines.append(_finalize_line(current_icon, current_line))
 
     return lines
 
 
-def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]]]], cursor: int) -> tuple[int, int]:
+def _finalize_line(icon: str, line_blocks: list[tuple[int, ProgramBlock]]) -> tuple[str, list[tuple[int, ProgramBlock]], int]:
+    """Extract REPEAT block at end of line as line_repeat metadata."""
+    line_repeat = 0
+    if line_blocks and line_blocks[-1][1].type == ProgramBlockType.REPEAT:
+        line_repeat = line_blocks[-1][1].repeat_count
+    return (icon, line_blocks, line_repeat)
+
+
+def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]], cursor: int) -> tuple[int, int]:
     """Convert flat cursor index to (line_index, position_in_line)."""
-    for line_idx, (_, line_blocks) in enumerate(lines):
+    for line_idx, (_, line_blocks, _) in enumerate(lines):
         for pos, (block_idx, _) in enumerate(line_blocks):
             if block_idx == cursor:
                 return line_idx, pos
@@ -222,7 +235,7 @@ class CodeCanvas(Widget):
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
         self._scroll_y: int = 0  # vertical scroll offset in display rows
-        self._lines: list[tuple[str, list[tuple[int, ProgramBlock]]]] = []
+        self._lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]] = []
 
     def set_blocks(self, blocks: list[ProgramBlock], cursor: int) -> None:
         self._blocks = blocks
@@ -281,11 +294,11 @@ class CodeCanvas(Widget):
         if line_idx < 0 or line_idx >= len(self._lines):
             return Strip([Segment(" " * width, bg_style)])
 
-        icon, line_blocks = self._lines[line_idx]
+        icon, line_blocks, line_repeat = self._lines[line_idx]
         content_width = width - GUTTER_WIDTH
 
         # Render gutter
-        gutter_segments = self._render_gutter(icon, sub_row, bg, bg_style, line_idx)
+        gutter_segments = self._render_gutter(icon, sub_row, bg, bg_style, line_idx, line_repeat)
 
         # Render block strip for this line
         block_segments = self._render_block_strip(
@@ -295,9 +308,20 @@ class CodeCanvas(Widget):
         return Strip(gutter_segments + block_segments)
 
     def _render_gutter(self, icon: str, sub_row: int, bg: str,
-                       bg_style: Style, line_idx: int) -> list[Segment]:
-        """Render the 3-char left gutter as a solid colored block with icon."""
+                       bg_style: Style, line_idx: int,
+                       line_repeat: int = 0) -> list[Segment]:
+        """Render the 3-char left gutter as a solid colored block with icon.
+
+        Shows line_repeat count (e.g. "x3") on row 2 when a REPEAT block
+        is attached to this line.
+        """
         if not icon:
+            # No mode icon, but still show repeat badge if present
+            if line_repeat > 0 and sub_row == 2:
+                badge = f"x{line_repeat}"
+                badge_style = Style(color=REPEAT_BADGE_COLOR, bgcolor=bg, bold=True)
+                display = badge[:GUTTER_WIDTH].center(GUTTER_WIDTH)
+                return [Segment(display, badge_style)]
             return [Segment(" " * GUTTER_WIDTH, bg_style)]
 
         # Find the target color for this icon
@@ -318,6 +342,13 @@ class CodeCanvas(Widget):
             icon_style = Style(color=text_color, bgcolor=target_color, bold=True)
             display = icon[:GUTTER_WIDTH].center(GUTTER_WIDTH)
             return [Segment(display, icon_style)]
+        elif sub_row == 2 and line_repeat > 0:
+            # Show repeat badge below icon
+            badge = f"x{line_repeat}"
+            text_color = "#FFFFFF" if _is_dark_color(target_color) else "#1A1A1A"
+            badge_style = Style(color=text_color, bgcolor=target_color)
+            display = badge[:GUTTER_WIDTH].center(GUTTER_WIDTH)
+            return [Segment(display, badge_style)]
         else:
             # Other rows: solid colored block
             return [Segment(" " * GUTTER_WIDTH, block_style)]
@@ -360,10 +391,13 @@ class CodeCanvas(Widget):
                     segments.append(Segment(" " * visible_w, bg_style))
 
             elif sub_row in (1, 2):
-                # Block body
+                # Block body: row 1 = icon, row 2 = count badge (if count > 1)
                 if sub_row == 1:
                     icon = block.icon
                     icon_text = _center_text(icon, icon_w)
+                elif block.count > 1:
+                    badge = f"x{block.count}"
+                    icon_text = _center_text(badge, icon_w)
                 else:
                     icon_text = " " * icon_w
 
@@ -408,14 +442,14 @@ class CodeCanvas(Widget):
             hint = "or press F5 to record in another mode!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
-            hint = "\u2190\u2192 navigate   \u2191\u2193 lines   Space play   Tab menu"
+            hint = "\u2190\u2192 navigate   \u2191\u2193 adjust   Space play   Tab menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        hint = "Type to add   \u2190\u2192 move   \u2191\u2193 lines   Bksp delete   Space play   Tab menu"
+        hint = "Type to add   \u2190\u2192 move   \u2191\u2193 adjust   Bksp delete   Space play   Tab menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
@@ -554,9 +588,9 @@ class BuildMode(Container, can_focus=True):
                 self._cursor += 1
                 self._refresh_all()
         elif action.direction == 'up':
-            self._jump_line(-1)
+            self._adjust_block(1)
         elif action.direction == 'down':
-            self._jump_line(1)
+            self._adjust_block(-1)
 
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'backspace':
@@ -564,19 +598,22 @@ class BuildMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
-            # Insert newline control block
-            self._insert_block(ProgramBlock(
+            new_block = ProgramBlock(
                 type=ProgramBlockType.CONTROL, control="enter",
-            ))
+            )
+            if not self._try_auto_collapse(new_block):
+                self._insert_block(new_block)
         elif action.action == 'tab':
             await self._open_menu()
 
     async def _handle_character(self, action: CharacterAction) -> None:
         if action.is_repeat:
             return
-        self._insert_block(ProgramBlock(
+        new_block = ProgramBlock(
             type=ProgramBlockType.KEY, char=action.char,
-        ))
+        )
+        if not self._try_auto_collapse(new_block):
+            self._insert_block(new_block)
 
     # ── Tab menu ─────────────────────────────────────────────────────
 
@@ -665,6 +702,21 @@ class BuildMode(Container, can_focus=True):
 
     # ── Block operations ───────────────────────────────────────────────
 
+    def _try_auto_collapse(self, new_block: ProgramBlock) -> bool:
+        """Try to auto-collapse new_block into the current block.
+
+        If the current block matches, increment its count and return True.
+        Otherwise return False (caller should insert normally).
+        """
+        if not self._blocks:
+            return False
+        current = self._blocks[self._cursor]
+        if current.matches(new_block):
+            current.count += 1
+            self._refresh_all()
+            return True
+        return False
+
     def _jump_line(self, direction: int) -> None:
         """Jump cursor to the previous (-1) or next (+1) line."""
         if not self._blocks:
@@ -695,7 +747,12 @@ class BuildMode(Container, can_focus=True):
         self._refresh_all()
 
     def _adjust_block(self, direction: int) -> None:
-        """Adjust the current block: gap, repeat count, or cycle target."""
+        """Adjust the current block: count, gap, repeat count, or cycle target.
+
+        For blocks with count > 1, up/down adjusts the count. When count
+        reaches 1 via down, further down adjusts gap. For single blocks
+        (count=1), up/down adjusts gap as before.
+        """
         if not self._blocks:
             return
         block = self._blocks[self._cursor]
@@ -703,6 +760,8 @@ class BuildMode(Container, can_focus=True):
             block.cycle_repeat_count(direction)
         elif block.type == ProgramBlockType.MODE_SWITCH:
             block.cycle_target(direction)
+        elif block.count > 1:
+            block.cycle_count(direction)
         else:
             block.cycle_gap(direction)
         self._refresh_all()

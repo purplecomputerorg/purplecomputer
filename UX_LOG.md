@@ -4,6 +4,11 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Code mode: consecutive identical blocks auto-collapse into one block with "xN" count badge
+- Code mode: up/down arrows now adjust block count (when count > 1) or gap timing (when count is 1)
+- Code mode: REPEAT blocks at end of a line show repeat count in the gutter
+- Recordings auto-collapse consecutive identical actions into counted blocks
+
 ## 2026-03
 
 - **Code mode: Play clears state first**: Pressing Play in Code mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate

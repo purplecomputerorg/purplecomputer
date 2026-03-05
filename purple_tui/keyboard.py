@@ -9,7 +9,7 @@ Features:
 - Caps lock toggle (double-tap Shift key)
 - Long-hold detection for parent mode (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key mode switching (F1-F3) and toggles (F9 theme, F10-F12 volume)
+- F-key mode switching (F1-F3) and toggles (F10-F12 volume)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -704,9 +704,6 @@ class KeyboardStateMachine:
                 return actions
             if keycode == KeyCode.KEY_F5:
                 actions.append(ControlAction(action='record_toggle', is_down=True))
-                return actions
-            if keycode == KeyCode.KEY_F9:
-                actions.append(ControlAction(action='theme_toggle', is_down=True))
                 return actions
             if keycode == KeyCode.KEY_F10:
                 actions.append(ControlAction(action='volume_mute', is_down=True))

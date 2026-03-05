@@ -12,7 +12,6 @@ directly from evdev, bypassing the terminal. See:
 
 Keyboard controls:
 - F1-F4: Switch modes (Explore, Play, Doodle, Build)
-- F9: Toggle dark/light theme
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent mode
 - Shift (tap): Sticky shift for one character
@@ -38,7 +37,7 @@ from enum import Enum
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_BUILD, ICON_MENU,
-    ICON_MOON, ICON_SUN, MODE_TITLES,
+    MODE_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
@@ -210,14 +209,8 @@ class ModeIndicator(Horizontal):
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
 
-        # Theme (F9) and Volume (F10 mute, F11 down, F12 up) on the right
+        # Volume (F10 mute, F11 down, F12 up) on the right
         with Horizontal(id="keys-right"):
-            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            theme_icon = ICON_MOON if is_dark else ICON_SUN
-            theme_badge = KeyBadge(f"F9 {theme_icon}", id="key-theme")
-            theme_badge.add_class("dim")
-            yield theme_badge
-
             # Volume controls: F10 mute (shows current level icon), F11 down, F12 up
             volume_badge = KeyBadge(f"F10 {ICON_VOLUME_HIGH}", id="key-volume")
             volume_badge.add_class("dim")
@@ -243,16 +236,6 @@ class ModeIndicator(Horizontal):
                     badge.add_class("dim")
             except NoMatches:
                 pass
-
-    def update_theme_icon(self) -> None:
-        """Update the theme badge icon (F9)"""
-        try:
-            badge = self.query_one("#key-theme", KeyBadge)
-            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            badge.text = f"F9 {ICON_MOON if is_dark else ICON_SUN}"
-            badge.refresh()
-        except NoMatches:
-            pass
 
     def update_volume_indicator(self, volume_level: int) -> None:
         """Update volume indicator badge with level icon (F10)"""
@@ -411,7 +394,6 @@ class PurpleApp(App):
     Purple Computer: The calm computer for kids.
 
     F1-F3: Switch between modes (Explore, Play, Doodle)
-    F9: Toggle dark/light theme
     F10: Mute/unmute, F11: Volume down, F12: Volume up
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
@@ -559,7 +541,6 @@ class PurpleApp(App):
         Binding("f2", f"switch_mode('{MODE_PLAY[0]}')", MODE_PLAY[1], show=False, priority=True),
         Binding("f3", f"switch_mode('{MODE_DOODLE[0]}')", MODE_DOODLE[1], show=False, priority=True),
         Binding("f8", "take_screenshot", "Screenshot", show=False, priority=True),
-        Binding("f9", "toggle_theme", "Theme", show=False, priority=True),
         Binding("f10", "volume_mute", "Mute", show=False, priority=True),
         Binding("f11", "volume_down", "Vol-", show=False, priority=True),
         Binding("f12", "volume_up", "Vol+", show=False, priority=True),
@@ -856,11 +837,8 @@ class PurpleApp(App):
                         return
             # Don't return - let escape events propagate to modes for other uses
 
-        # Handle global toggles (F9 theme, F10-F12 volume)
+        # Handle global toggles (F10-F12 volume)
         if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'theme_toggle':
-                self.action_toggle_theme()
-                return
             if action.action == 'volume_mute':
                 self.action_volume_mute()
                 return
@@ -1389,17 +1367,6 @@ class PurpleApp(App):
                     pass
 
         self.push_screen(DoodlePromptScreen(), handle_prompt_result)
-
-    def action_toggle_theme(self) -> None:
-        """Toggle between dark and light mode (F9)"""
-        self.active_theme = "purple-light" if self.active_theme == "purple-dark" else "purple-dark"
-        self._apply_theme()
-        # Update theme icon in mode indicator
-        try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.update_theme_icon()
-        except NoMatches:
-            pass
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off (F10)"""

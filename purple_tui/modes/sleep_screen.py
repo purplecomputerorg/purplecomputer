@@ -1,8 +1,8 @@
 """
-Purple Computer - Sleep Screen
+Purple Computer - Sleep Screen and Bye Screen
 
-Kid-friendly sleep screen shown after idle timeout.
-Features a cute sleeping face and clear instructions.
+Kid-friendly screens for sleep (idle timeout, power button tap) and
+shutdown (power button hold, lid close timeout).
 """
 
 from textual.app import ComposeResult
@@ -76,7 +76,7 @@ class SleepStatus(Static):
 
 class SleepScreen(Screen):
     """
-    Sleep screen shown when computer is idle.
+    Sleep screen shown when computer is idle or power button is tapped.
 
     Press any key to wake up and return to normal operation.
     Shows countdown warnings before screen off and shutdown.
@@ -150,11 +150,16 @@ class SleepScreen(Screen):
         lid_open = pm.get_lid_state()
         if lid_open is not None:
             if not lid_open and self._last_lid_state:
-                # Lid just closed
+                # Lid just closed: turn screen off immediately to save power
                 self._lid_close_time = time.time()
+                pm.set_screen_brightness("off")
+                self._screen_off = True
             elif lid_open and not self._last_lid_state:
-                # Lid just opened
+                # Lid just opened: cancel shutdown, turn screen back on
                 self._lid_close_time = None
+                if self._screen_off:
+                    pm.set_screen_brightness("on")
+                    self._screen_off = False
             self._last_lid_state = lid_open
 
         # Handle lid close countdown
@@ -169,7 +174,12 @@ class SleepScreen(Screen):
                 self.call_later(self._do_shutdown)
                 return
             else:
-                lid_warning.update(f"Lid closed ({remaining}s)")
+                mins = remaining // 60
+                secs = remaining % 60
+                if mins > 0:
+                    lid_warning.update(f"Lid closed, turning off in {mins}m {secs}s")
+                else:
+                    lid_warning.update(f"Lid closed ({remaining}s)")
                 lid_warning.add_class("visible")
         else:
             lid_warning.remove_class("visible")
@@ -241,3 +251,66 @@ class SleepScreen(Screen):
     async def handle_keyboard_action(self, action) -> None:
         """Any key action wakes up the computer (evdev)"""
         self._wake_up()
+
+
+class ByeScreen(Screen):
+    """
+    Friendly shutdown screen shown when power button is held for 3 seconds.
+
+    Shows a brief goodbye message, then powers off. No cancel option
+    since the 3-second hold was already a deliberate action.
+    """
+
+    DEFAULT_CSS = """
+    ByeScreen {
+        align: center middle;
+        background: $background;
+    }
+
+    #bye-face {
+        content-align: center middle;
+        color: $primary;
+    }
+
+    #bye-text {
+        content-align: center middle;
+        color: $text-muted;
+        margin-top: 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            "\n".join([
+                "---     ---",
+                "           ",
+                "   \\___/   ",
+                "           ",
+                "    Bye!   ",
+            ]),
+            id="bye-face",
+        )
+        yield Static("Turning off...", id="bye-text")
+
+    def on_mount(self) -> None:
+        """Show goodbye briefly, then shut down."""
+        self.set_timer(2.0, self._do_shutdown)
+
+    def _do_shutdown(self) -> None:
+        """Execute shutdown"""
+        pm = get_power_manager()
+        pm.set_screen_brightness("on")
+        if not pm.shutdown():
+            try:
+                self.query_one("#bye-text", Static).update("Please turn off")
+            except Exception:
+                pass
+
+    def on_key(self, event: events.Key) -> None:
+        """Suppress all keys during shutdown."""
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Suppress all keys during shutdown."""
+        pass

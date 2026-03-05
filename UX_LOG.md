@@ -11,6 +11,8 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Kid-proof power button**: Tap shows sleep screen (cute, not scary, any key wakes); hold 3s shows "Bye!" and shuts down (phone-like); logind set to ignore so TUI controls all power UX
+- **Lid close delayed shutdown**: Lid close now turns screen off immediately but waits 2 minutes before shutting down (was 5 seconds); opening lid cancels shutdown; prevents accidental shutdowns when kid briefly closes lid
 - **Code mode: Play clears state first**: Pressing Play in Code mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate
 - **Code mode: bright gutter blocks**: Mode icons in the left gutter are now solid bright colored blocks instead of dim text icons
 - **Code mode: Up/Down navigates lines**: Arrow keys now jump between lines (like a text editor) instead of adjusting timing

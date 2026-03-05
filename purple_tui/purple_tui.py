@@ -53,7 +53,7 @@ from .keyboard import (
     KeyboardStateMachine, CharacterAction, NavigationAction,
     ModeAction, ControlAction, CapsLockAction, LongHoldAction,
 )
-from .input import EvdevReader, RawKeyEvent, check_evdev_available
+from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .recording import RecordingManager, RecordingState
@@ -561,6 +561,10 @@ class PurpleApp(App):
         # Power management
         self._idle_timer = None
         self._sleep_screen_active = False
+        self._power_button_reader: PowerButtonReader | None = None
+        self._power_button_down_time: float | None = None
+        self._power_hold_timer = None
+        self._bye_screen_active = False
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -662,6 +666,16 @@ class PurpleApp(App):
         else:
             self._evdev_reader = None
 
+        # Start power button reader (separate device from keyboard)
+        if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            self._power_button_reader = PowerButtonReader(
+                callback=self._handle_power_button_event,
+            )
+            try:
+                await self._power_button_reader.start()
+            except Exception:
+                self._power_button_reader = None
+
         # Start idle detection timer (disabled in dev mode for AI training)
         # In demo mode, check every second for responsiveness
         # In normal mode, check every 5 seconds to save resources
@@ -708,6 +722,11 @@ class PurpleApp(App):
         if self._evdev_reader:
             await self._evdev_reader.stop()
             self._evdev_reader = None
+
+        # Clean up power button reader
+        if self._power_button_reader:
+            await self._power_button_reader.stop()
+            self._power_button_reader = None
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Show/hide paint legend and update active row when paint mode changes."""
@@ -1206,6 +1225,54 @@ class PurpleApp(App):
             pm.record_activity()
         except Exception:
             pass
+
+    # ── Power Button ──────────────────────────────────────────────────
+
+    async def _handle_power_button_event(self, event: PowerButtonEvent) -> None:
+        """Handle power button press/release from evdev.
+
+        Tap (< 3s): show sleep screen (cute, not scary)
+        Hold (3s): show bye screen and shut down
+        """
+        if self._bye_screen_active:
+            return
+
+        if event.is_down:
+            self._power_button_down_time = event.timestamp
+            # Start a timer for the hold threshold
+            from .power_manager import POWER_HOLD_SHUTDOWN
+            self._cancel_power_hold_timer()
+            self._power_hold_timer = self.set_timer(
+                POWER_HOLD_SHUTDOWN, self._power_hold_triggered
+            )
+        else:
+            # Released before hold threshold: show sleep screen (tap)
+            self._cancel_power_hold_timer()
+            if self._power_button_down_time is not None:
+                self._power_button_down_time = None
+                self._show_sleep_screen()
+
+    def _cancel_power_hold_timer(self) -> None:
+        """Cancel the power button hold timer."""
+        if self._power_hold_timer:
+            self._power_hold_timer.stop()
+            self._power_hold_timer = None
+
+    def _power_hold_triggered(self) -> None:
+        """Power button held for 3 seconds: initiate shutdown."""
+        self._cancel_power_hold_timer()
+        self._power_button_down_time = None
+        self._show_bye_screen()
+
+    def _show_bye_screen(self) -> None:
+        """Show the goodbye screen and shut down."""
+        if self._bye_screen_active:
+            return
+
+        from .modes.sleep_screen import ByeScreen
+
+        self._bye_screen_active = True
+        self.push_screen(ByeScreen())
 
     async def on_event(self, event: events.Event) -> None:
         """Record activity for any key press. Runs before widgets can stop it.

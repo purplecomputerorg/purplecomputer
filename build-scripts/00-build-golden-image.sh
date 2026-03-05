@@ -215,23 +215,26 @@ ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
 AUTOLOGIN
 
     # Configure systemd-logind for power management
-    # This is a fallback - the Purple TUI handles lid close with a warning,
-    # but if the TUI isn't running, logind will shut down on lid close
+    # The Purple TUI handles power button and lid close with kid-friendly UX:
+    #   Power tap = sleep screen, power hold 3s = shutdown, lid close = shutdown after 2 min
+    # logind is set to ignore so the TUI has full control.
+    # If the TUI isn't running, idle shutdown (30 min) and hardware power-off (10s hold) still work.
     mkdir -p "$MOUNT_DIR/etc/systemd/logind.conf.d"
     cat > "$MOUNT_DIR/etc/systemd/logind.conf.d/purple-power.conf" <<'LOGIND'
 # Purple Computer power management
-# Kid-friendly: any power action = shutdown (no suspend/hibernate complexity)
+# TUI handles all power UX. logind ignores buttons so TUI has full control.
+# Hardware 10-second power hold always works as emergency off (ACPI).
 [Login]
-# Power button: single press = shutdown (no 10-second hold needed)
-HandlePowerKey=poweroff
-HandlePowerKeyLongPress=poweroff
-# Lid close triggers shutdown (fallback if Purple TUI isn't handling it)
-HandleLidSwitch=poweroff
-HandleLidSwitchExternalPower=poweroff
+# Power button: TUI handles tap (sleep) and hold (shutdown)
+HandlePowerKey=ignore
+HandlePowerKeyLongPress=ignore
+# Lid: TUI handles with 2-minute delayed shutdown
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore
-# Don't suspend/sleep - we use shutdown for reliability across old laptops
-HandleSuspendKey=poweroff
-HandleHibernateKey=poweroff
+# No suspend/hibernate: on/off only for reliability across old laptops
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
 # Allow purple user to shut down without password
 PolicyKitBypassUsers=purple
 LOGIND

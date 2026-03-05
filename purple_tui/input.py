@@ -115,6 +115,9 @@ class KeyCode:
     KEY_RIGHT = 106
     KEY_DOWN = 108
 
+    # Power/system keys
+    KEY_POWER = 116
+
 
 # Keycode to character mapping (printable keys only)
 KEYCODE_TO_CHAR: dict[int, str] = {
@@ -432,6 +435,128 @@ class EvdevReader:
                 # Check for letter keys (indicates a real keyboard)
                 caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
                 if set(caps) & keyboard_keys:
+                    return dev
+            except (PermissionError, OSError):
+                continue
+
+        return None
+
+
+# =============================================================================
+# PowerButtonReader
+# =============================================================================
+
+
+@dataclass
+class PowerButtonEvent:
+    """A power button event.
+
+    Attributes:
+        is_down: True for press, False for release
+        timestamp: Monotonic timestamp in seconds
+    """
+    is_down: bool
+    timestamp: float
+
+
+class PowerButtonReader:
+    """
+    Reads power button events from evdev.
+
+    The power button is a separate input device from the keyboard
+    (typically an ACPI device). This reader finds it and monitors
+    press/release events.
+
+    Usage:
+        async def handle_power(event: PowerButtonEvent):
+            print(f"Power {'pressed' if event.is_down else 'released'}")
+
+        reader = PowerButtonReader(handle_power)
+        await reader.start()
+    """
+
+    def __init__(self, callback: Callable[[PowerButtonEvent], Awaitable[None]]):
+        self._callback = callback
+        self._device = None
+        self._running = False
+        self._task: Optional[asyncio.Task] = None
+
+    async def start(self) -> None:
+        """Start reading power button events in background."""
+        self._device = self._find_power_button()
+
+        if self._device is None:
+            logger.info("PowerButtonReader: no power button device found (OK on desktops)")
+            return
+
+        logger.info(f"PowerButtonReader: using {self._device.path} ({self._device.name})")
+
+        self._running = True
+        self._task = asyncio.create_task(self._read_loop())
+
+    async def stop(self) -> None:
+        """Stop reading and release the device."""
+        self._running = False
+
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+
+        if self._device:
+            self._device.close()
+            self._device = None
+
+        logger.info("PowerButtonReader: stopped")
+
+    async def _read_loop(self) -> None:
+        """Main event reading loop."""
+        try:
+            async for event in self._device.async_read_loop():
+                if not self._running:
+                    break
+
+                # Only care about KEY_POWER press (1) and release (0)
+                if event.type == EV_KEY and event.code == KeyCode.KEY_POWER and event.value in (0, 1):
+                    power_event = PowerButtonEvent(
+                        is_down=(event.value == 1),
+                        timestamp=event.timestamp(),
+                    )
+                    await self._callback(power_event)
+
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"PowerButtonReader error: {e}")
+
+    def _find_power_button(self):
+        """Find the power button input device."""
+        import evdev
+        from evdev import InputDevice
+
+        # Scan all devices for one with KEY_POWER capability
+        # Power button devices typically have very few keys (just KEY_POWER)
+        for dev_path in sorted(evdev.list_devices()):
+            try:
+                dev = InputDevice(dev_path)
+                caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
+                if evdev.ecodes.KEY_POWER in caps:
+                    # Prefer devices with few keys (dedicated power button)
+                    # over keyboards that also report KEY_POWER
+                    if len(caps) < 20:
+                        return dev
+            except (PermissionError, OSError):
+                continue
+
+        # Fallback: any device with KEY_POWER
+        for dev_path in sorted(evdev.list_devices()):
+            try:
+                dev = InputDevice(dev_path)
+                caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
+                if evdev.ecodes.KEY_POWER in caps:
                     return dev
             except (PermissionError, OSError):
                 continue

@@ -102,6 +102,15 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
             current_width = block.total_width
             continue
 
+        if block.type == ProgramBlockType.LINE_BREAK:
+            # Flush current line; next blocks start a new line
+            # carrying forward the same mode icon
+            if current_line:
+                lines.append(_finalize_line(current_icon, current_line))
+            current_line = [(i, block)]
+            current_width = 0
+            continue
+
         block_w = block.total_width
 
         # Check if this block would overflow
@@ -367,7 +376,14 @@ class CodeCanvas(Widget):
             gap_w = gap_width(block.gap_level)
             total_w = icon_w + gap_w
 
-            # Skip MODE_SWITCH blocks in the strip (they're in the gutter)
+            # Skip structural blocks in the strip (not rendered as visible blocks)
+            # LINE_BREAK: show a small cursor indicator when selected
+            if block.type == ProgramBlockType.LINE_BREAK:
+                if is_selected and sub_row == 1:
+                    cursor_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    segments.append(Segment("\u2508", cursor_style))  # dashed line
+                    x_pos += 1
+                continue
             if block.type == ProgramBlockType.MODE_SWITCH:
                 continue
 
@@ -442,14 +458,14 @@ class CodeCanvas(Widget):
             hint = "or press F5 to record in another mode!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
-            hint = "\u2190\u2192 navigate   \u2191\u2193 adjust   Space play   Tab menu"
+            hint = "\u2190\u2192 navigate   \u2191\u2193 lines   Enter new line   Tab menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        hint = "Type to add   \u2190\u2192 move   \u2191\u2193 adjust   Bksp delete   Space play   Tab menu"
+        hint = "Type to add   \u2190\u2192 move   \u2191\u2193 lines   Enter new line   Bksp delete   Space play   Tab menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
@@ -475,8 +491,7 @@ class BuildMode(Container, can_focus=True):
     """Code Mode: cross-mode visual programming.
 
     Tab opens menu modal. Space plays program. F5 recording handled globally.
-    Enter inserts newline control block. Up/down adjusts gaps, repeat count,
-    or MODE_SWITCH target.
+    Enter inserts a line break. Up/down navigates between lines.
     """
 
     DEFAULT_CSS = """
@@ -588,9 +603,9 @@ class BuildMode(Container, can_focus=True):
                 self._cursor += 1
                 self._refresh_all()
         elif action.direction == 'up':
-            self._adjust_block(1)
+            self._jump_line(-1)
         elif action.direction == 'down':
-            self._adjust_block(-1)
+            self._jump_line(1)
 
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'backspace':
@@ -598,11 +613,7 @@ class BuildMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
-            new_block = ProgramBlock(
-                type=ProgramBlockType.CONTROL, control="enter",
-            )
-            if not self._try_auto_collapse(new_block):
-                self._insert_block(new_block)
+            self._insert_block(ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0))
         elif action.action == 'tab':
             await self._open_menu()
 
@@ -645,6 +656,11 @@ class BuildMode(Container, can_focus=True):
         elif action == "insert_repeat":
             self._insert_block(ProgramBlock(type=ProgramBlockType.REPEAT))
 
+        elif action == "insert_enter":
+            new_block = ProgramBlock(type=ProgramBlockType.CONTROL, control="enter")
+            if not self._try_auto_collapse(new_block):
+                self._insert_block(new_block)
+
         elif action == "load":
             slot = result.get("slot", 1)
             self._load_from_slot(slot)
@@ -653,9 +669,21 @@ class BuildMode(Container, can_focus=True):
             slot = result.get("slot", 1)
             self._save_to_slot(slot)
 
-        elif action == "adjust":
+        elif action == "adjust_gap":
             direction = result.get("direction", 1)
-            self._adjust_block(direction)
+            if self._blocks:
+                self._blocks[self._cursor].cycle_gap(direction)
+                self._refresh_all()
+
+        elif action == "adjust_count":
+            direction = result.get("direction", 1)
+            if self._blocks:
+                block = self._blocks[self._cursor]
+                if block.type == ProgramBlockType.REPEAT:
+                    block.cycle_repeat_count(direction)
+                else:
+                    block.cycle_count(direction)
+                self._refresh_all()
 
         elif action == "clear":
             self._blocks.clear()
@@ -744,26 +772,6 @@ class BuildMode(Container, can_focus=True):
             pos = min(cur_pos, len(target_blocks) - 1)
             self._cursor = target_blocks[pos][0]
 
-        self._refresh_all()
-
-    def _adjust_block(self, direction: int) -> None:
-        """Adjust the current block: count, gap, repeat count, or cycle target.
-
-        For blocks with count > 1, up/down adjusts the count. When count
-        reaches 1 via down, further down adjusts gap. For single blocks
-        (count=1), up/down adjusts gap as before.
-        """
-        if not self._blocks:
-            return
-        block = self._blocks[self._cursor]
-        if block.type == ProgramBlockType.REPEAT:
-            block.cycle_repeat_count(direction)
-        elif block.type == ProgramBlockType.MODE_SWITCH:
-            block.cycle_target(direction)
-        elif block.count > 1:
-            block.cycle_count(direction)
-        else:
-            block.cycle_gap(direction)
         self._refresh_all()
 
     def _insert_block(self, block: ProgramBlock) -> None:

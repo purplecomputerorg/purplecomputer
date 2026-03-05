@@ -85,6 +85,7 @@ class ProgramBlockType(Enum):
     EMOJI = "emoji"           # Emoji placed via Code mode (future)
     REPEAT = "repeat"         # Repeat preceding section N times
     MODE_SWITCH = "mode_switch"  # Switch to a specific mode/sub-mode
+    LINE_BREAK = "line_break"    # Visual line break in editor (no playback action)
 
 
 # Row-based colors for KEY blocks (matching Doodle mode's keyboard rows)
@@ -105,6 +106,7 @@ SPACE_COLOR = "#606060"
 TAB_COLOR = "#606060"
 EMOJI_COLOR = "#9b7bc4"
 REPEAT_COLOR = "#2d9e8a"  # teal
+LINE_BREAK_COLOR = "#4a4a6a"  # muted purple-gray
 
 # MODE_SWITCH target constants
 TARGET_PLAY_MUSIC = "play.music"
@@ -213,6 +215,8 @@ class ProgramBlock:
             return f"×{self.repeat_count}"
         elif self.type == ProgramBlockType.MODE_SWITCH:
             return TARGET_ICONS.get(self.target, "?")
+        elif self.type == ProgramBlockType.LINE_BREAK:
+            return "—"
         return "?"
 
     @property
@@ -229,11 +233,15 @@ class ProgramBlock:
             return REPEAT_COLOR
         elif self.type == ProgramBlockType.MODE_SWITCH:
             return TARGET_COLORS.get(self.target, KEY_COLOR_GRAY)
+        elif self.type == ProgramBlockType.LINE_BREAK:
+            return LINE_BREAK_COLOR
         return KEY_COLOR_GRAY
 
     @property
     def total_width(self) -> int:
         """Total display width: icon section + gap section."""
+        if self.type == ProgramBlockType.LINE_BREAK:
+            return 0  # structural, not rendered
         return 4 + gap_width(self.gap_level)
 
     def cycle_gap(self, direction: int) -> None:

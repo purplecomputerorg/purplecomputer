@@ -38,11 +38,13 @@ MENU_ITEMS = [
     ("record_explore", f"{TARGET_ICONS['explore']}  Record in Explore", "record"),
     # Insert section
     ("insert_mode_switch", "   Mode switch...", "insert"),
-    ("insert_repeat", "   Repeat ×2", "insert"),
+    ("insert_repeat", "   Repeat line ×2", "insert"),
+    ("insert_enter", "   Enter key ↵", "insert"),
     # Adjust section
     ("timing_up", "   Longer pause ↑", "adjust"),
     ("timing_down", "   Shorter pause ↓", "adjust"),
-    ("cycle_up", "   Cycle value ↑", "adjust"),
+    ("count_up", "   More repeats ↑", "adjust"),
+    ("count_down", "   Fewer repeats ↓", "adjust"),
     # Program section
     ("load", "   Load...", "program"),
     ("save", "   Save...", "program"),
@@ -198,6 +200,9 @@ class CodeMenuScreen(ModalScreen):
         elif item_id == "insert_repeat":
             self.dismiss({"action": "insert_repeat"})
 
+        elif item_id == "insert_enter":
+            self.dismiss({"action": "insert_enter"})
+
         elif item_id == "load":
             self._sub_view = "slot_picker"
             self._sub_action = "load"
@@ -211,13 +216,16 @@ class CodeMenuScreen(ModalScreen):
             self._show_sub_picker_slots()
 
         elif item_id == "timing_up":
-            self.dismiss({"action": "adjust", "direction": 1})
+            self.dismiss({"action": "adjust_gap", "direction": 1})
 
         elif item_id == "timing_down":
-            self.dismiss({"action": "adjust", "direction": -1})
+            self.dismiss({"action": "adjust_gap", "direction": -1})
 
-        elif item_id == "cycle_up":
-            self.dismiss({"action": "adjust", "direction": 1})
+        elif item_id == "count_up":
+            self.dismiss({"action": "adjust_count", "direction": 1})
+
+        elif item_id == "count_down":
+            self.dismiss({"action": "adjust_count", "direction": -1})
 
         elif item_id == "clear":
             self.dismiss({"action": "clear"})

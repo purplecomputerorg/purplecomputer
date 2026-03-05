@@ -6,6 +6,10 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Code mode: Play clears state first**: Pressing Play in Code mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate
+- **Code mode: bright gutter blocks**: Mode icons in the left gutter are now solid bright colored blocks instead of dim text icons
+- **Code mode: Up/Down navigates lines**: Arrow keys now jump between lines (like a text editor) instead of adjusting timing
+- **Code mode: timing adjust moved to Tab menu**: Gap timing, repeat count, and target cycling are now in the Tab menu under "Adjust"
 - **USB update restart prompt**: When a USB update is applied, a simple modal appears saying "New update ready! Press Enter to restart."
 - **Removed F9 theme toggle**: Dark mode is now always active; F9 key and theme badge removed from the function bar
 - **Code Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing

@@ -939,26 +939,29 @@ class PurpleApp(App):
             await self._play_recording()
 
     async def _play_recording(self) -> None:
-        """Play the current F5 recording via DemoPlayer."""
+        """Play the current F5 recording: clear state, then replay."""
         if not self._recording_manager.has_recording():
             self._recording_manager.state = RecordingState.IDLE
             self._update_recording_indicator()
             return
 
-        from .demo.player import DemoPlayer
-        from .program import blocks_to_demo_actions
+        from .playback.player import PlaybackPlayer
+        from .program import blocks_to_playback_actions
 
         blocks = self._recording_manager.to_blocks()
-        demo_actions = blocks_to_demo_actions(blocks)
-        if not demo_actions:
+        playback_actions = blocks_to_playback_actions(blocks)
+        if not playback_actions:
             self._recording_manager.state = RecordingState.IDLE
             self._update_recording_indicator()
             return
 
+        # Clear target mode state so playback starts fresh
+        self.clear_all_state()
+
         is_doodle_paint = self._get_doodle_paint_mode_callback()
         is_play_letters = self._get_play_letters_mode_callback()
 
-        player = DemoPlayer(
+        player = PlaybackPlayer(
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=1.0,
             is_doodle_paint_mode=is_doodle_paint,
@@ -973,7 +976,7 @@ class PurpleApp(App):
 
         async def _run():
             try:
-                await player.play(demo_actions)
+                await player.play(playback_actions)
             finally:
                 self._recording_manager.state = RecordingState.IDLE
                 self._update_recording_indicator()

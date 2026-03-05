@@ -39,6 +39,10 @@ MENU_ITEMS = [
     # Insert section
     ("insert_mode_switch", "   Mode switch...", "insert"),
     ("insert_repeat", "   Repeat ×2", "insert"),
+    # Adjust section
+    ("timing_up", "   Longer pause ↑", "adjust"),
+    ("timing_down", "   Shorter pause ↓", "adjust"),
+    ("cycle_up", "   Cycle value ↑", "adjust"),
     # Program section
     ("load", "   Load...", "program"),
     ("save", "   Save...", "program"),
@@ -205,6 +209,15 @@ class CodeMenuScreen(ModalScreen):
             self._sub_action = "save"
             self._sub_selected = 0
             self._show_sub_picker_slots()
+
+        elif item_id == "timing_up":
+            self.dismiss({"action": "adjust", "direction": 1})
+
+        elif item_id == "timing_down":
+            self.dismiss({"action": "adjust", "direction": -1})
+
+        elif item_id == "cycle_up":
+            self.dismiss({"action": "adjust", "direction": 1})
 
         elif item_id == "clear":
             self.dismiss({"action": "clear"})

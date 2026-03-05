@@ -1,12 +1,12 @@
-"""Backward-compatible re-exports from purple_tui.playback.script.
+"""Playback system for Code mode programs and demo scripts.
 
-All action types now live in purple_tui.playback.script. This module
-re-exports them so existing demo code continues to work unchanged.
-DemoAction is an alias for PlaybackAction.
+Core action types and player for executing scripted keyboard sequences.
+Used by Code mode (build_mode.py) for program playback, and by the
+advertising demo system (demo/) for screencast recordings.
 """
 
-from ..playback.script import (
-    PlaybackAction as DemoAction,
+from .script import (
+    PlaybackAction,
     TypeText,
     PressKey,
     SwitchMode,
@@ -19,17 +19,18 @@ from ..playback.script import (
     DrawPath,
     MoveSequence,
     SetSpeed,
+    Comment,
     ZoomIn,
     ZoomOut,
     ZoomTarget,
-    Comment,
     type_and_enter,
     section_pause,
     segment_duration,
 )
+from .player import PlaybackPlayer
 
 __all__ = [
-    "DemoAction",
+    "PlaybackAction",
     "TypeText",
     "PressKey",
     "SwitchMode",
@@ -42,10 +43,11 @@ __all__ = [
     "DrawPath",
     "MoveSequence",
     "SetSpeed",
+    "Comment",
     "ZoomIn",
     "ZoomOut",
     "ZoomTarget",
-    "Comment",
+    "PlaybackPlayer",
     "type_and_enter",
     "section_pause",
     "segment_duration",

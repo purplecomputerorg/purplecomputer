@@ -23,8 +23,8 @@ from .keyboard import (
     KeyAction,
     ModeAction,
 )
-from .demo.script import (
-    DemoAction,
+from .playback.script import (
+    PlaybackAction,
     TypeText,
     PressKey,
     SwitchMode,
@@ -130,11 +130,11 @@ TARGET_ICONS = {
 }
 
 TARGET_COLORS = {
-    TARGET_PLAY_MUSIC: "#4a9e2d",
-    TARGET_PLAY_LETTERS: "#2d9e6a",
-    TARGET_DOODLE_TEXT: "#9e6a2d",
-    TARGET_DOODLE_PAINT: "#9e2d6a",
-    TARGET_EXPLORE: "#2d6a9e",
+    TARGET_PLAY_MUSIC: "#44DD44",
+    TARGET_PLAY_LETTERS: "#44DDAA",
+    TARGET_DOODLE_TEXT: "#DDAA44",
+    TARGET_DOODLE_PAINT: "#DD44AA",
+    TARGET_EXPLORE: "#44AADD",
 }
 
 TARGET_LABELS = {
@@ -282,8 +282,8 @@ def action_to_block(action: KeyAction, mode: str) -> ProgramBlock | None:
 # PLAYBACK: BLOCKS -> DEMO ACTIONS
 # =============================================================================
 
-def _block_to_demo_action(block: ProgramBlock) -> DemoAction | None:
-    """Convert a single block to a DemoAction (without pause)."""
+def _block_to_playback_action(block: ProgramBlock) -> PlaybackAction | None:
+    """Convert a single block to a PlaybackAction (without pause)."""
     if block.type == ProgramBlockType.KEY:
         return TypeText(text=block.char, delay_per_char=0.0, final_pause=0.0)
     elif block.type == ProgramBlockType.ARROW:
@@ -295,8 +295,8 @@ def _block_to_demo_action(block: ProgramBlock) -> DemoAction | None:
     return None
 
 
-def blocks_to_demo_actions(blocks: list[ProgramBlock]) -> list[DemoAction]:
-    """Convert program blocks to DemoAction list for playback via DemoPlayer.
+def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackAction]:
+    """Convert program blocks to PlaybackAction list for playback.
 
     MODE_SWITCH blocks emit SwitchTarget actions. If no MODE_SWITCH block
     is at position 0, a default SwitchTarget is emitted based on the
@@ -310,7 +310,7 @@ def blocks_to_demo_actions(blocks: list[ProgramBlock]) -> list[DemoAction]:
     if not blocks:
         return []
 
-    actions: list[DemoAction] = []
+    actions: list[PlaybackAction] = []
 
     # Determine initial target from first block
     first_target = _default_target_for_blocks(blocks)
@@ -363,11 +363,11 @@ def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
     return TARGET_PLAY_MUSIC
 
 
-def _section_to_actions(section: list[ProgramBlock]) -> list[DemoAction]:
-    """Convert a section of blocks to demo actions (with pauses)."""
+def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
+    """Convert a section of blocks to playback actions (with pauses)."""
     actions = []
     for block in section:
-        action = _block_to_demo_action(block)
+        action = _block_to_playback_action(block)
         if action:
             actions.append(action)
         pause = gap_duration(block.gap_level)

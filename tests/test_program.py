@@ -16,7 +16,7 @@ from purple_tui.program import (
     quantize_pause,
     gap_width,
     gap_duration,
-    blocks_to_demo_actions,
+    blocks_to_playback_actions,
     blocks_to_json,
     blocks_from_json,
     key_color,
@@ -34,12 +34,15 @@ from purple_tui.program import (
     SPACE_COLOR,
     REPEAT_COLOR,
     TARGET_PLAY_MUSIC,
+    TARGET_PLAY_LETTERS,
     TARGET_DOODLE_PAINT,
+    TARGET_DOODLE_TEXT,
     TARGET_EXPLORE,
     TARGET_ICONS,
     TARGET_COLORS,
     ALL_TARGETS,
 )
+from purple_tui.modes.build_mode import _layout_lines, _cursor_to_line_pos
 from purple_tui.keyboard import (
     CharacterAction,
     NavigationAction,
@@ -47,7 +50,7 @@ from purple_tui.keyboard import (
     ModeAction,
     ShiftAction,
 )
-from purple_tui.demo.script import TypeText, PressKey, SwitchMode, SwitchTarget, Pause
+from purple_tui.playback.script import TypeText, PressKey, SwitchMode, SwitchTarget, Pause
 
 
 # =============================================================================
@@ -275,13 +278,13 @@ class TestModeSwitchBlock:
 
 class TestBlocksToDemoActions:
     def test_empty_blocks(self):
-        actions = blocks_to_demo_actions([])
+        actions = blocks_to_playback_actions([])
         assert actions == []
 
     def test_single_key_block(self):
         blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a",
                                gap_level=0, source_mode="play")]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         # Should have: SwitchTarget + TypeText
         assert len(actions) == 2
         assert isinstance(actions[0], SwitchTarget)
@@ -292,7 +295,7 @@ class TestBlocksToDemoActions:
     def test_arrow_block(self):
         blocks = [ProgramBlock(type=ProgramBlockType.ARROW, direction="up",
                                gap_level=0, source_mode="doodle")]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[0], SwitchTarget)
         assert actions[0].target == "doodle.text"
         assert isinstance(actions[1], PressKey)
@@ -300,7 +303,7 @@ class TestBlocksToDemoActions:
 
     def test_control_block(self):
         blocks = [ProgramBlock(type=ProgramBlockType.CONTROL, control="enter", gap_level=0)]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[1], PressKey)
         assert actions[1].key == "enter"
 
@@ -309,7 +312,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=2),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         # SwitchTarget, TypeText(a), Pause, TypeText(b)
         assert len(actions) == 4
         assert isinstance(actions[2], Pause)
@@ -320,7 +323,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         # SwitchTarget, TypeText(a), TypeText(b)
         assert len(actions) == 3
         assert not any(isinstance(a, Pause) for a in actions)
@@ -332,7 +335,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         chars = [a.text for a in type_actions]
         assert chars == ["a", "b", "a", "b"]
@@ -343,7 +346,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         assert len(type_actions) == 3
         assert all(a.text == "a" for a in type_actions)
@@ -355,7 +358,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         chars = [a.text for a in type_actions]
         assert chars == ["a", "a", "b"]
@@ -368,7 +371,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         chars = [a.text for a in type_actions]
         assert chars == ["a", "a", "b", "b", "b"]
@@ -379,7 +382,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=2),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         pause_actions = [a for a in actions if isinstance(a, Pause)]
         # Each repetition of A has a pause after it (gap_level=2)
         assert len(pause_actions) == 2
@@ -391,7 +394,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=2, gap_level=3),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         pause_actions = [a for a in actions if isinstance(a, Pause)]
         assert len(pause_actions) >= 1
 
@@ -403,7 +406,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_DOODLE_PAINT),
             ProgramBlock(type=ProgramBlockType.ARROW, direction="right", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         switch_actions = [a for a in actions if isinstance(a, SwitchTarget)]
         assert len(switch_actions) == 2
         assert switch_actions[0].target == TARGET_PLAY_MUSIC
@@ -415,7 +418,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
             ProgramBlock(type=ProgramBlockType.KEY, char="2", gap_level=0),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         switch_actions = [a for a in actions if isinstance(a, SwitchTarget)]
         assert len(switch_actions) == 1
         assert switch_actions[0].target == TARGET_EXPLORE
@@ -426,7 +429,7 @@ class TestBlocksToDemoActions:
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0,
                          source_mode="doodle"),
         ]
-        actions = blocks_to_demo_actions(blocks)
+        actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[0], SwitchTarget)
         assert actions[0].target == "doodle.text"
 
@@ -580,3 +583,121 @@ class TestEdgeCases:
     def test_block_source_mode_preserved(self):
         block = action_to_block(CharacterAction(char="a"), "doodle")
         assert block.source_mode == "doodle"
+
+
+# =============================================================================
+# LINE LAYOUT TESTS
+# =============================================================================
+
+class TestLayoutLines:
+    """Tests for _layout_lines and _cursor_to_line_pos from build_mode."""
+
+    def test_empty_blocks(self):
+        lines = _layout_lines([], 100)
+        assert lines == []
+
+    def test_single_key_block(self):
+        blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0)]
+        lines = _layout_lines(blocks, 100)
+        assert len(lines) == 1
+        icon, line_blocks = lines[0]
+        assert icon == ""  # no mode switch, so no icon
+        assert len(line_blocks) == 1
+        assert line_blocks[0][0] == 0  # block index
+
+    def test_mode_switch_starts_new_line(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        assert len(lines) == 1
+        icon, line_blocks = lines[0]
+        assert icon == TARGET_ICONS[TARGET_PLAY_MUSIC]
+        # MODE_SWITCH + 2 key blocks on same line
+        assert len(line_blocks) == 3
+
+    def test_two_mode_switches_create_two_lines(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        assert len(lines) == 2
+        assert lines[0][0] == TARGET_ICONS[TARGET_PLAY_MUSIC]
+        assert lines[1][0] == TARGET_ICONS[TARGET_EXPLORE]
+
+    def test_line_wraps_on_overflow(self):
+        # Each key block with gap_level=0 is 4 chars wide
+        # With content_width=10, we can fit 2 blocks (8 chars), 3rd wraps
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="c", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 10)
+        assert len(lines) == 2
+        assert len(lines[0][1]) == 2  # a, b
+        assert len(lines[1][1]) == 1  # c (wrapped)
+
+    def test_continuation_line_has_empty_icon(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="c", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 10)
+        assert lines[0][0] == ""  # first line: no icon (no mode switch)
+        assert lines[1][0] == ""  # continuation: also no icon
+
+
+class TestCursorToLinePos:
+    """Tests for _cursor_to_line_pos from build_mode."""
+
+    def test_cursor_on_first_block(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        line_idx, pos = _cursor_to_line_pos(lines, 0)
+        assert line_idx == 0
+        assert pos == 0
+
+    def test_cursor_on_second_block(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        line_idx, pos = _cursor_to_line_pos(lines, 1)
+        assert line_idx == 0
+        assert pos == 1
+
+    def test_cursor_on_second_line(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        # Cursor on block index 3 (second "b" key)
+        line_idx, pos = _cursor_to_line_pos(lines, 3)
+        assert line_idx == 1
+        assert pos == 1
+
+    def test_cursor_on_wrapped_line(self):
+        # 3 blocks, width=10 => first 2 on line 0, third on line 1
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="c", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 10)
+        line_idx, pos = _cursor_to_line_pos(lines, 2)
+        assert line_idx == 1
+        assert pos == 0

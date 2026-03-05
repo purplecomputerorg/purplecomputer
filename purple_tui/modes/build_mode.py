@@ -26,7 +26,7 @@ from ..program import (
     ProgramBlock,
     ProgramBlockType,
     gap_width,
-    blocks_to_demo_actions,
+    blocks_to_playback_actions,
     save_program,
     load_program,
     slot_occupied,
@@ -296,20 +296,31 @@ class CodeCanvas(Widget):
 
     def _render_gutter(self, icon: str, sub_row: int, bg: str,
                        bg_style: Style, line_idx: int) -> list[Segment]:
-        """Render the 3-char left gutter with mode icon."""
-        if sub_row == 1 and icon:  # body row 1 (icon centered vertically)
-            # Find the target color for this icon
-            target_color = bg
-            for target, t_icon in TARGET_ICONS.items():
-                if t_icon == icon:
-                    target_color = TARGET_COLORS[target]
-                    break
-            icon_style = Style(color=target_color, bgcolor=bg, bold=True)
-            # Pad icon to GUTTER_WIDTH
-            display = icon[:GUTTER_WIDTH].ljust(GUTTER_WIDTH)
+        """Render the 3-char left gutter as a solid colored block with icon."""
+        if not icon:
+            return [Segment(" " * GUTTER_WIDTH, bg_style)]
+
+        # Find the target color for this icon
+        target_color = None
+        for target, t_icon in TARGET_ICONS.items():
+            if t_icon == icon:
+                target_color = TARGET_COLORS[target]
+                break
+
+        if not target_color:
+            return [Segment(" " * GUTTER_WIDTH, bg_style)]
+
+        # Render all rows as a solid colored block
+        block_style = Style(bgcolor=target_color)
+        if sub_row == 1:
+            # Icon row: show icon text on the colored block
+            text_color = "#FFFFFF" if _is_dark_color(target_color) else "#1A1A1A"
+            icon_style = Style(color=text_color, bgcolor=target_color, bold=True)
+            display = icon[:GUTTER_WIDTH].center(GUTTER_WIDTH)
             return [Segment(display, icon_style)]
         else:
-            return [Segment(" " * GUTTER_WIDTH, bg_style)]
+            # Other rows: solid colored block
+            return [Segment(" " * GUTTER_WIDTH, block_style)]
 
     def _render_block_strip(self, line_blocks: list[tuple[int, ProgramBlock]],
                             sub_row: int, content_width: int,
@@ -397,14 +408,14 @@ class CodeCanvas(Widget):
             hint = "or press F5 to record in another mode!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 2:
-            hint = "\u2190 \u2192 navigate   \u2191\u2193 timing   Space play   Tab menu"
+            hint = "\u2190\u2192 navigate   \u2191\u2193 lines   Space play   Tab menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
         """Render the bottom hint line."""
-        hint = "Type to add   \u2190 \u2192 move   \u2191\u2193 timing   Bksp delete   Space play   Tab menu"
+        hint = "Type to add   \u2190\u2192 move   \u2191\u2193 lines   Bksp delete   Space play   Tab menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
@@ -543,9 +554,9 @@ class BuildMode(Container, can_focus=True):
                 self._cursor += 1
                 self._refresh_all()
         elif action.direction == 'up':
-            self._adjust_up()
+            self._jump_line(-1)
         elif action.direction == 'down':
-            self._adjust_down()
+            self._jump_line(1)
 
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'backspace':
@@ -605,6 +616,10 @@ class BuildMode(Container, can_focus=True):
             slot = result.get("slot", 1)
             self._save_to_slot(slot)
 
+        elif action == "adjust":
+            direction = result.get("direction", 1)
+            self._adjust_block(direction)
+
         elif action == "clear":
             self._blocks.clear()
             self._cursor = 0
@@ -650,30 +665,46 @@ class BuildMode(Container, can_focus=True):
 
     # ── Block operations ───────────────────────────────────────────────
 
-    def _adjust_up(self) -> None:
-        """Up arrow: increase gap, repeat count, or cycle target."""
+    def _jump_line(self, direction: int) -> None:
+        """Jump cursor to the previous (-1) or next (+1) line."""
         if not self._blocks:
             return
-        block = self._blocks[self._cursor]
-        if block.type == ProgramBlockType.REPEAT:
-            block.cycle_repeat_count(1)
-        elif block.type == ProgramBlockType.MODE_SWITCH:
-            block.cycle_target(1)
+        try:
+            canvas = self.query_one("#code-canvas", CodeCanvas)
+        except Exception:
+            return
+        lines = canvas._lines
+        if not lines:
+            return
+
+        cur_line, cur_pos = _cursor_to_line_pos(lines, self._cursor)
+        target_line = cur_line + direction
+
+        if target_line < 0:
+            # Already on first line: jump to first block
+            self._cursor = 0
+        elif target_line >= len(lines):
+            # Already on last line: jump to last block
+            self._cursor = len(self._blocks) - 1
         else:
-            block.cycle_gap(1)
+            # Jump to same position on target line (or last block if shorter)
+            target_blocks = lines[target_line][1]
+            pos = min(cur_pos, len(target_blocks) - 1)
+            self._cursor = target_blocks[pos][0]
+
         self._refresh_all()
 
-    def _adjust_down(self) -> None:
-        """Down arrow: decrease gap, repeat count, or cycle target."""
+    def _adjust_block(self, direction: int) -> None:
+        """Adjust the current block: gap, repeat count, or cycle target."""
         if not self._blocks:
             return
         block = self._blocks[self._cursor]
         if block.type == ProgramBlockType.REPEAT:
-            block.cycle_repeat_count(-1)
+            block.cycle_repeat_count(direction)
         elif block.type == ProgramBlockType.MODE_SWITCH:
-            block.cycle_target(-1)
+            block.cycle_target(direction)
         else:
-            block.cycle_gap(-1)
+            block.cycle_gap(direction)
         self._refresh_all()
 
     def _insert_block(self, block: ProgramBlock) -> None:
@@ -698,17 +729,21 @@ class BuildMode(Container, can_focus=True):
     # ── Playback ───────────────────────────────────────────────────────
 
     async def _start_playback(self) -> None:
-        """Play the program via DemoPlayer."""
+        """Play the program: clear target mode state, then replay actions."""
         if not self._blocks or not self._dispatch_action:
             return
 
-        demo_actions = blocks_to_demo_actions(self._blocks)
-        if not demo_actions:
+        playback_actions = blocks_to_playback_actions(self._blocks)
+        if not playback_actions:
             return
+
+        # Clear target mode state so playback starts fresh
+        if hasattr(self.app, 'clear_all_state'):
+            self.app.clear_all_state()
 
         self._playing = True
 
-        from ..demo.player import DemoPlayer
+        from ..playback.player import PlaybackPlayer
 
         # Get sub-mode callbacks from app if available
         is_doodle_paint = None
@@ -718,7 +753,7 @@ class BuildMode(Container, can_focus=True):
         if hasattr(self.app, '_get_play_letters_mode_callback'):
             is_play_letters = self.app._get_play_letters_mode_callback()
 
-        player = DemoPlayer(
+        player = PlaybackPlayer(
             dispatch_action=self._dispatch_action,
             speed_multiplier=1.0,
             is_doodle_paint_mode=is_doodle_paint,
@@ -727,7 +762,7 @@ class BuildMode(Container, can_focus=True):
 
         async def _run_playback():
             try:
-                await player.play(demo_actions)
+                await player.play(playback_actions)
             finally:
                 self._playing = False
                 from ..keyboard import ModeAction

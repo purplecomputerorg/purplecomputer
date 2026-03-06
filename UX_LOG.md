@@ -2,8 +2,17 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Explore: color+emoji results (e.g. "blue cat") now display inline on one line when compact enough, instead of separate lines
+- Explore: replaced ▶ triangle with → arrow throughout (Ask prompt, answer lines, color swatches) for a cleaner look
+- Explore: keyboard color map (4-row legend) now shows in the bottom right, same as doodle paint mode. Updates active row indicator as you type.
+- Explore: Tab now accepts autocomplete suggestions (in addition to right arrow). Hint shows "→ Tab".
+
 ---
 
+- Explore: number digits in colored blocks now use the full grayscale gradient (1=white to 0=black) matching doodle mode, instead of flat gray
+- Explore: when math typos are auto-corrected (e.g. "=" treated as "+"), a "→" line shows the corrected expression above the answer
+- Explore: abacus now starts at 11 instead of 10; 10 shows as dots with 5+5 grouping so it's countable
+- Explore: color adjectives (bright, dark, light, pale, deep, vivid, dull, muted, neon, soft, rich, warm, cool) modify colors, showing base swatch and result (e.g. "bright green", "dark light blue")
 - Explore: emoji consolidated into single pack file (packs/core-emoji); added ~80 new emoji (shapes, body parts, household items, space, animal sounds); removed common-word synonyms (good/bad/great/sweet) that made text substitution weird; "love" now maps to ❤️ instead of 😍
 - Explore: color swatch mixing arrow changed from → to ▶ to match the triangle used everywhere else
 - Explore: default colors updated to Crayola-style values (red, blue, green) so they match what kids expect

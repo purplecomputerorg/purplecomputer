@@ -71,14 +71,14 @@ if HAS_PYTEST:
         def test_accidental_equals_cleaned(self, evaluator):
             """Accidental = in long math expression should be replaced with +."""
             result = evaluator.evaluate("2+3+4-5+5+3-2=3+4+6")
-            # = replaced with +: 2+3+4-5+5+3-2+3+4+6 = 23
-            assert result.startswith("= 23\n")
+            # = replaced with +, corrected expression shown first
+            assert result.startswith("→ 2+3+4-5+5+3-2+3+4+6\n= 23\n")
 
         def test_accidental_equals_middle(self, evaluator):
             """Equals in middle of expression."""
             result = evaluator.evaluate("1+2+3=4+5+6")
-            # = replaced with +: 1+2+3+4+5+6 = 21
-            assert result.startswith("= 21\n")
+            # = replaced with +, corrected expression shown first
+            assert result.startswith("→ 1+2+3+4+5+6\n= 21\n")
 
         def test_too_few_operators_not_cleaned(self, evaluator):
             """With only 2 operators, don't clean (might be intentional)."""
@@ -97,15 +97,15 @@ if HAS_PYTEST:
             """Cleaning should preserve spaces and replace invalid punct with +."""
             # 4 math ops (+,+,+,+), 1 non-math (=), ratio = 4/5 = 80% >= 60%
             result = evaluator.evaluate("2 + 3 + 4 = 5 + 6")
-            # = replaced with +: 2 + 3 + 4 + 5 + 6 = 20
-            assert result.startswith("= 20\n")
+            # = replaced with +, corrected expression shown first
+            assert result.startswith("→ 2 + 3 + 4 + 5 + 6\n= 20\n")
 
         def test_borderline_ratio_passes(self, evaluator):
             """At 60% threshold, 3 math / 5 total (60%) should pass."""
             # 3 math ops (+,+,+), 2 non-math (=,=), ratio = 3/5 = 60%
             result = evaluator.evaluate("1+2+3+4=5=6")
-            # Both = replaced with +: 1+2+3+4+5+6 = 21
-            assert result.startswith("= 21\n")
+            # Both = replaced with +, corrected expression shown first
+            assert result.startswith("→ 1+2+3+4+5+6\n= 21\n")
 
 
     class TestWordOperators:
@@ -1350,6 +1350,54 @@ def run_standalone_tests():
 
     print(f"\n=== Results: {passed} passed, {failed} failed ===")
     return failed == 0
+
+
+class TestColorMappingConsistency:
+    """Verify explore mode uses the exact same color mapping as doodle mode."""
+
+    def test_letters_use_same_colors_as_doodle(self):
+        """Every letter a-z should produce the same color in explore and doodle."""
+        from purple_tui.rooms.doodle_room import get_key_color, KEY_COLORS
+        from purple_tui.rooms.explore_room import SimpleEvaluator
+
+        evaluator = SimpleEvaluator()
+        for char in "abcdefghijklmnopqrstuvwxyz":
+            # Explore uses get_key_color (imported from doodle_room) in _format_text_as_color_blocks
+            explore_color = get_key_color(char)
+            doodle_color = KEY_COLORS.get(char)
+            assert doodle_color is not None, f"Letter '{char}' missing from doodle KEY_COLORS"
+            assert explore_color == doodle_color, (
+                f"Color mismatch for '{char}': explore={explore_color}, doodle={doodle_color}"
+            )
+
+    def test_digits_use_same_colors_as_doodle(self):
+        """Every digit 0-9 should produce the same color in explore and doodle."""
+        from purple_tui.rooms.doodle_room import get_key_color, KEY_COLORS, GRAYSCALE
+
+        for char in "0123456789":
+            explore_color = get_key_color(char)
+            doodle_color = KEY_COLORS.get(char)
+            assert doodle_color is not None, f"Digit '{char}' missing from doodle KEY_COLORS"
+            assert explore_color == doodle_color, (
+                f"Color mismatch for '{char}': explore={explore_color}, doodle={doodle_color}"
+            )
+            # Also verify it matches the GRAYSCALE dict directly
+            assert doodle_color == GRAYSCALE[char], (
+                f"Digit '{char}' KEY_COLORS doesn't match GRAYSCALE"
+            )
+
+    def test_explore_format_uses_doodle_colors(self):
+        """The colored block output in explore should use the doodle color for each char."""
+        from purple_tui.rooms.doodle_room import get_key_color
+
+        evaluator = SimpleEvaluator()
+        # Test a word: each letter's background should be get_key_color(letter)
+        result = evaluator._format_text_as_color_blocks("cat")
+        for char in "cat":
+            expected_color = get_key_color(char)
+            assert expected_color in result, (
+                f"Expected color {expected_color} for '{char}' not found in formatted output"
+            )
 
 
 if __name__ == "__main__":

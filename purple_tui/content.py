@@ -97,7 +97,7 @@ class ContentManager:
 
             # Secondary colors (what you get from mixing primaries)
             "orange": "#FF6600",   # Red + Yellow
-            "green": "#1CAC78",    # Crayola green (bright, friendly green)
+            "green": "#48D370",    # What you get from mixing yellow + blue
             "purple": "#7B2D8E",   # Red + Blue
             "violet": "#7B2D8E",   # Same as purple
 
@@ -183,27 +183,15 @@ class ContentManager:
             "blush": "#DE5D83",
             "flamingo": "#FC8EAC",
             "hotpink": "#FF69B4",
-            "cotton": "#FFBCD9",
             "carnation": "#FFA6C9",
-            "seafoam": "#93E9BE",
             "spearmint": "#45B08C",
             "jade": "#00A86B",
-            "clover": "#009B4D",
-            "shamrock": "#009E60",
-            "forest": "#228B22",
             "moss": "#8A9A5B",
             "sage": "#9DC183",
             "pistachio": "#93C572",
-            "pickle": "#597D35",
-            "seaweed": "#35654D",
-            "ocean": "#006994",
-            "denim": "#1560BD",
             "blueberry": "#4F86F7",
             "cornflower": "#6495ED",
-            "steel": "#4682B4",
             "slate": "#708090",
-            "storm": "#4F666A",
-            "midnight": "#191970",
             "eggplant": "#614051",
             "amethyst": "#9966CC",
             "iris": "#5A4FCF",
@@ -334,6 +322,43 @@ class ContentManager:
         if (singular := singularize(word)) and (color := self.colors.get(singular)):
             return color
         return None
+
+    def get_modified_color(self, text: str) -> tuple[str, str, list[str], str] | None:
+        """Parse adjective(s) + color name, e.g. 'bright green', 'dark light blue'.
+
+        Returns (modified_hex, base_hex, adjectives, color_name) or None.
+        Adjectives are applied left to right.
+        """
+        from .color_mixing import COLOR_ADJECTIVES, modify_color
+
+        words = text.lower().strip().split()
+        if len(words) < 2:
+            return None
+
+        # Collect leading adjectives, rest is the color name
+        adjectives = []
+        for i, w in enumerate(words):
+            if w in COLOR_ADJECTIVES:
+                adjectives.append(w)
+            else:
+                break
+        else:
+            return None  # All words were adjectives, no color
+
+        if not adjectives:
+            return None
+
+        color_name = " ".join(words[len(adjectives):])
+        base_hex = self.get_color(color_name)
+        if not base_hex:
+            return None
+
+        # Apply adjectives left to right
+        modified = base_hex
+        for adj in adjectives:
+            modified = modify_color(modified, adj)
+
+        return (modified, base_hex, adjectives, color_name)
 
     def search_colors(self, prefix: str) -> list[tuple[str, str]]:
         """Search for colors starting with prefix, returns [(name, hex), ...].

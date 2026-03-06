@@ -649,10 +649,14 @@ class PurpleApp(App):
         apply_saved_display_settings()
         self._load_room_content()
 
-        # Initialize paint legend as hidden
+        # Initialize color legend (visible in explore mode, hidden otherwise)
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
-            legend.set_visible(False)
+            if self.active_room == Room.EXPLORE:
+                legend.set_visible(True)
+                legend.set_active_row(-1)
+            else:
+                legend.set_visible(False)
         except NoMatches:
             pass
 
@@ -1469,8 +1473,16 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Hide paint legend when not in doodle mode
-        if new_room != Room.DOODLE:
+        # Show color legend in explore mode (always visible, no active row)
+        # Hide it when leaving both doodle and explore modes
+        if new_room == Room.EXPLORE:
+            try:
+                legend = self.query_one("#paint-legend", ColorLegend)
+                legend.set_visible(True)
+                legend.set_active_row(-1)  # No active row initially
+            except NoMatches:
+                pass
+        elif new_room != Room.DOODLE:
             try:
                 legend = self.query_one("#paint-legend", ColorLegend)
                 legend.set_visible(False)

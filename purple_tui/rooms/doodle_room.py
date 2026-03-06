@@ -166,6 +166,7 @@ def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
 
 # Build key-to-color mapping (primary colors by row)
 KEY_COLORS: dict[str, str] = {}
+KEY_COLORS.update(GRAYSCALE)                                 # Grayscale (number row)
 KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top letter row)
 KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
 KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
@@ -793,6 +794,25 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Handle navigation actions (arrow keys)
         if isinstance(action, NavigationAction):
+            # When a character key is held while arrowing in paint mode,
+            # paint at the current position BEFORE moving. This avoids a
+            # one-cell gap: the CharacterAction already painted and advanced
+            # the cursor, so we fill the current cell then step forward.
+            if self._paint_mode and action.char_held:
+                char = action.char_held
+                if char in GRAYSCALE:
+                    self._last_key_char = char
+                    self._last_key_color = GRAYSCALE[char]
+                    self.post_message(PaintModeChanged(True, self._last_key_color))
+                elif char.isalpha() or char in KEY_COLORS:
+                    lower = char.lower()
+                    color = get_key_color(lower)
+                    if color != "#AAAAAA":
+                        self._last_key_char = lower
+                        self._last_key_color = color
+                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                self._paint_at_cursor()
+
             # Collect all directions to move (primary + any other held arrows)
             directions_to_move = [action.direction]
             if action.other_arrows_held:
@@ -807,27 +827,10 @@ class ArtCanvas(Widget, can_focus=True):
             if not any_moved:
                 self._on_edge_hit()
 
-            # In paint mode: draw when space held or character key held
-            # action.space_held comes from KeyboardStateMachine
+            # Space held: paint after moving (space doesn't auto-advance)
             if self._paint_mode:
                 if self._space_down or action.space_held:
                     self._paint_at_cursor()
-                elif action.char_held:
-                    # Character key held while navigating: select its color and paint
-                    char = action.char_held
-                    if char in GRAYSCALE:
-                        self._last_key_char = char
-                        self._last_key_color = GRAYSCALE[char]
-                        self._paint_at_cursor()
-                        self.post_message(PaintModeChanged(True, self._last_key_color))
-                    elif char.isalpha() or char in KEY_COLORS:
-                        lower = char.lower()
-                        color = get_key_color(lower)
-                        if color != "#AAAAAA":
-                            self._last_key_char = lower
-                            self._last_key_color = color
-                            self._paint_at_cursor()
-                            self.post_message(PaintModeChanged(True, self._last_key_color))
 
             self.refresh()
             return
@@ -910,6 +913,11 @@ class ColorLegend(Widget):
     def set_active_color(self, color: str) -> None:
         """Set the active row based on the current brush color."""
         self._active_row = get_legend_row_from_color(color)
+        self.refresh()
+
+    def set_active_row(self, row: int) -> None:
+        """Set the active row directly. Use -1 for no active row."""
+        self._active_row = row
         self.refresh()
 
     def _get_app_bg(self) -> str:

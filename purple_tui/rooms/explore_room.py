@@ -2,7 +2,7 @@
 Explore Room: Math and Emoji REPL for Kids
 
 IPython-style interface:
-- Ask ▶ user types input
+- Ask → user types input
 - Answer: shows result
 
 Features:
@@ -38,7 +38,7 @@ from ..keyboard import (
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget
-from .doodle_room import get_key_color
+from .doodle_room import get_key_color, PaintModeChanged
 
 
 def _contrast_color(hex_color: str) -> str:
@@ -90,15 +90,15 @@ class HistoryLine(Static):
         dark = self._is_dark()
         if self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
-            return f"[bold {ask_color}]Ask ▶[/] {caps(self.text)}"
+            return f"[bold {ask_color}]Ask →[/] {caps(self.text)}"
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')
             speaker = " 🔊" if self.speaking else "   "
-            result = [f"{speaker} [{answer_color}]▶[/] {caps(lines[0])}"]
+            result = [f"{speaker} [{answer_color}]→[/] {caps(lines[0])}"]
             for line in lines[1:]:
                 if line.strip():
-                    result.append(f"    [{answer_color}]▶[/] {caps(line)}")
+                    result.append(f"    [{answer_color}]→[/] {caps(line)}")
                 else:
                     result.append("")
             return '\n'.join(result)
@@ -169,15 +169,19 @@ class ColorResultLine(Widget):
         arrow_color = self.ARROW_DARK if is_dark else self.ARROW_LIGHT
         triangle_style = Style(color=arrow_color, bgcolor=surface)
 
+        # Show component color boxes (multiple components, or single that differs from result)
+        show_components = (len(self._component_colors) > 1 or
+            (len(self._component_colors) == 1 and
+             self._component_colors[0].upper() != self._hex_color.upper()))
+
         # Line 0: Show component colors and arrow to result
         if y == 0:
             if self._speaking:
-                segments = [Segment(" 🔊 ", surface_style), Segment("▶ ", triangle_style)]
+                segments = [Segment(" 🔊 ", surface_style), Segment("→ ", triangle_style)]
             else:
-                segments = [Segment("    ", surface_style), Segment("▶ ", triangle_style)]
+                segments = [Segment("    ", surface_style), Segment("→ ", triangle_style)]
 
-            # Show component color boxes (only if multiple components)
-            if len(self._component_colors) > 1:
+            if show_components:
                 for i, comp_hex in enumerate(self._component_colors):
                     # Add small colored box for each component
                     comp_style = Style(bgcolor=comp_hex)
@@ -186,7 +190,7 @@ class ColorResultLine(Widget):
                         segments.append(Segment(" ", surface_style))  # space between
 
                 # Arrow to result
-                segments.append(Segment(" ▶ ", Style(color=arrow_color, bgcolor=surface)))
+                segments.append(Segment(" → ", Style(color=arrow_color, bgcolor=surface)))
 
             # Start of result swatch (top row). No name label
             result_style = Style(bgcolor=self._hex_color)
@@ -196,10 +200,10 @@ class ColorResultLine(Widget):
 
         # Lines 1-2: Continue the result swatch
         elif y < self.SWATCH_HEIGHT:
-            segments = [Segment("      ", surface_style)]  # 6 chars to align with "    ▶ "
+            segments = [Segment("      ", surface_style)]  # 6 chars to align with "    → "
 
             # Add spacing for component boxes if present
-            if len(self._component_colors) > 1:
+            if show_components:
                 # Each component is 2 chars + 1 space between
                 comp_width = len(self._component_colors) * 2 + (len(self._component_colors) - 1)
                 segments.append(Segment(" " * comp_width, surface_style))
@@ -393,11 +397,11 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return f"{hint}   [dim]→[/]"
+        return f"{hint}   [dim]→ Tab[/]"
 
 
 class InputPrompt(Static):
-    """Shows 'Ask ▶' prompt with input area"""
+    """Shows 'Ask →' prompt with input area"""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -405,7 +409,7 @@ class InputPrompt(Static):
 
     def render(self) -> str:
         text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
-        return f"[bold #c4a0e8]{text} ▶[/]"
+        return f"[bold #c4a0e8]{text} →[/]"
 
 
 class AutocompleteHint(Static):
@@ -572,6 +576,20 @@ class ExploreMode(Vertical):
 
         # Handle control actions
         if isinstance(action, ControlAction):
+            if action.action == 'tab' and action.is_down and explore_input.autocomplete_matches:
+                # Tab: accept autocomplete suggestion (same as right arrow)
+                selected_word = explore_input.autocomplete_matches[explore_input.autocomplete_index][0]
+                words = explore_input.value.split()
+                if words:
+                    words[-1] = selected_word
+                    explore_input.value = " ".join(words) + " "
+                    explore_input.cursor_position = len(explore_input.value)
+                explore_input.autocomplete_matches = []
+                explore_input.autocomplete_index = 0
+                explore_input.exact_match_display = ""
+                explore_input._check_autocomplete()
+                return
+
             if action.action == 'space' and action.is_down:
                 # Space always types a space (autocomplete is accepted with right arrow)
                 explore_input.value += " "
@@ -644,6 +662,8 @@ class ExploreMode(Vertical):
             explore_input.value += char
             explore_input.cursor_position = len(explore_input.value)
             explore_input._check_autocomplete()
+            # Update color legend to show active row
+            self.post_message(PaintModeChanged(True, get_key_color(char)))
             return
 
     def on_input_changed(self, event: Input.Changed) -> None:
@@ -680,7 +700,7 @@ class ExploreMode(Vertical):
         # Clean up whitespace after stripping
         eval_text = eval_text.strip()
 
-        # Add the "Ask ▶" line to history (without speech markers)
+        # Add the "Ask →" line to history (without speech markers)
         if eval_text:
             scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
@@ -705,26 +725,32 @@ class ExploreMode(Vertical):
                 if color_data:
                     hex_color, color_name, components = color_data
                     other_part = " ".join(filter(None, [before_part, after_part]))
-                    # Single color: inline box; multiple: swatch
-                    if len(components) <= 1:
+                    # Modified color (1 component that differs): show base → result swatch
+                    is_modified = (len(components) == 1 and
+                        components[0].upper() != hex_color.upper())
+                    # Bare single color: inline box; modified or multi-color: swatch
+                    if len(components) <= 1 and not is_modified:
                         color_box = f"[on {hex_color}]  [/]"
                         parts = [before_part, color_box, after_part]
                         display = " ".join(filter(None, parts))
                         scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
+                    elif is_modified and not other_part:
+                        scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
                     else:
-                        # For multi-color with emoji, show two lines:
-                        # Line 1: inputs in order (emoji + component boxes)
-                        # Line 2: result (emoji + mixed color)
+                        # Multi-color with emoji: show inputs → result
                         if other_part:
                             comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
                             result_box = f"[on {hex_color}]  [/]"
-                            # Line 1: inputs in order
                             input_parts = [before_part, comp_boxes, after_part]
                             input_line = " ".join(filter(None, input_parts))
-                            # Line 2: result
                             result_parts = [before_part, result_box, after_part]
                             result_line = " ".join(filter(None, result_parts))
-                            display = f"{input_line}\n\n{result_line}"
+                            # Prefer inline when compact enough
+                            combined = f"{input_line} → {result_line}"
+                            if self.evaluator._estimate_visual_width(combined) <= 80:
+                                display = combined
+                            else:
+                                display = f"{input_line}\n\n{result_line}"
                             scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
                         else:
                             scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
@@ -798,7 +824,9 @@ class SimpleEvaluator:
             return ""
 
         # Clean typos in mostly-math expressions (e.g., accidental '=' key)
+        original_text = text
         text = self._clean_mostly_math(text)
+        was_corrected = (text != original_text)
 
         # Track if original had parens (implies computation)
         had_parens = '(' in text
@@ -806,18 +834,24 @@ class SimpleEvaluator:
         # Handle parentheses first
         text = self._eval_parens(text)
 
+        # Try adjective + color (e.g., "bright green", "dark light blue")
+        if modified := self._eval_modified_color(text):
+            return modified
+
         # Try text with embedded expression (e.g., "what is 2 + 3", "I have 5 apples")
         if result := self._eval_text_with_expr(text, had_parens):
-            return result
+            return self._prepend_corrected(result, text, was_corrected)
 
         # Check if it's a + expression
         if re.search(self.PLUS_PATTERN, text.lower()):
             if result := self._eval_plus_expr(text):
-                return self._maybe_add_label(result, had_parens)
+                result = self._maybe_add_label(result, had_parens)
+                return self._prepend_corrected(result, text, was_corrected)
 
         # Try multiplication: "3 * cat", "cat times 5", etc.
         if mult := self._eval_mult(text):
-            return self._maybe_add_label(mult, had_parens)
+            result = self._maybe_add_label(mult, had_parens)
+            return self._prepend_corrected(result, text, was_corrected)
 
         # Try pure math
         normalized = self._normalize_math(text)
@@ -827,7 +861,7 @@ class SimpleEvaluator:
             result = self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
             if not is_bare_number:
                 result = f"= {result}"
-            return result
+            return self._prepend_corrected(result, text, was_corrected)
 
         # Try single word lookup (emoji or color)
         if single := self._lookup(text.lower().strip()):
@@ -851,6 +885,12 @@ class SimpleEvaluator:
             chars = [c for c in result if ord(c) > 127]
             if len(chars) > 1 and all(c == chars[0] for c in chars):
                 return f"{len(chars)} {chars[0]}\n{result}"
+        return result
+
+    def _prepend_corrected(self, result: str, corrected_text: str, was_corrected: bool) -> str:
+        """If the input was auto-corrected, prepend a line showing what was actually calculated."""
+        if was_corrected:
+            return f"→ {corrected_text}\n{result}"
         return result
 
     def _eval_text_with_expr(self, text: str, had_parens: bool = False) -> str | None:
@@ -880,6 +920,11 @@ class SimpleEvaluator:
         # Verify the prefix is actual English text (not emoji, numbers, or operators)
         prefix_words = words[:expr_start]
         if not all(self._is_plain_text(w) for w in prefix_words):
+            return None
+
+        # Skip if prefix is all color adjectives (let color adjective handler deal with it)
+        from ..color_mixing import COLOR_ADJECTIVES
+        if all(w.lower() in COLOR_ADJECTIVES for w in prefix_words):
             return None
 
         prefix = ' '.join(prefix_words)
@@ -1129,6 +1174,21 @@ class SimpleEvaluator:
             return result
         return None
 
+    def _estimate_visual_width(self, markup: str) -> int:
+        """Estimate visual width of Rich markup text.
+
+        Strips markup tags, counts emoji as 2 chars wide, ASCII as 1.
+        """
+        # Remove Rich markup tags like [on #hex], [/], [bold], etc.
+        plain = re.sub(r'\[[^\]]*\]', '', markup)
+        width = 0
+        for ch in plain:
+            if ord(ch) > 127:
+                width += 2  # emoji and wide chars
+            else:
+                width += 1
+        return width
+
     def _eval_auto_mix(self, text: str) -> str | None:
         """Auto-mix colors with emojis, other colors, or text without requiring +.
 
@@ -1139,13 +1199,44 @@ class SimpleEvaluator:
         if len(words) < 2:
             return None
 
+        # Merge adjective+color groups before categorizing
+        # e.g. ["bright", "green", "blue"] -> [("bright green", modified_hex), ("blue", blue_hex)]
+        from ..color_mixing import COLOR_ADJECTIVES
+        merged_words = []
+        i = 0
+        while i < len(words):
+            lower = words[i].lower()
+            if lower in COLOR_ADJECTIVES:
+                # Collect consecutive adjectives
+                adj_start = i
+                while i < len(words) and words[i].lower() in COLOR_ADJECTIVES:
+                    i += 1
+                if i < len(words):
+                    # Try adjectives + remaining word as modified color
+                    adj_phrase = " ".join(w.lower() for w in words[adj_start:i+1])
+                    if mod := self.content.get_modified_color(adj_phrase):
+                        merged_words.append(("__modified_color__", mod[0]))
+                        i += 1
+                        continue
+                # Not a valid adjective+color, put words back as-is
+                for j in range(adj_start, min(i, len(words))):
+                    merged_words.append(words[j])
+            else:
+                merged_words.append(words[i])
+                i += 1
+
         # Categorize each word
         word_info = []  # list of ('color', hex) | ('emoji', e, count) | ('text', word)
         colors = []
         has_emoji = False
         has_text = False
 
-        for word in words:
+        for word in merged_words:
+            # Handle pre-merged modified colors
+            if isinstance(word, tuple) and word[0] == "__modified_color__":
+                word_info.append(('color', word[1]))
+                colors.append(word[1])
+                continue
             lower = word.lower()
             if h := self._get_color(lower):
                 word_info.append(('color', h))
@@ -1165,6 +1256,9 @@ class SimpleEvaluator:
         if not has_emoji and len(colors) < 2 and not has_text:
             return None
         mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+
+        # Max visual width for inline display (accounts for "    → " prefix = 6 chars)
+        MAX_INLINE_WIDTH = 80
 
         # Colors + emojis (and optionally text): paint emojis on color bg, text as colored letters
         if has_emoji:
@@ -1186,8 +1280,13 @@ class SimpleEvaluator:
                 result_parts.append(f"[on {mixed}] {''.join(emoji_strs)} [/]")
             if text_words:
                 result_parts.append(self._format_text_on_color(" ".join(text_words), mixed))
+            input_str = " ".join(input_parts)
             result = " ".join(result_parts)
-            return f"{' '.join(input_parts)}\n{result}"
+            # Prefer inline when compact enough
+            combined = f"{input_str} → {result}"
+            if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
+                return combined
+            return f"{input_str}\n{result}"
 
         # Colors only (2+): mix and show components + result
         if len(colors) >= 2 and not has_text:
@@ -1204,9 +1303,14 @@ class SimpleEvaluator:
                 elif info[0] == 'text':
                     input_parts.append(self._format_text_as_color_blocks(info[1]))
                     text_words.append(info[1])
+            input_str = " ".join(input_parts)
             text_str = " ".join(text_words)
             result = self._format_text_on_color(text_str, mixed)
-            return f"{' '.join(input_parts)}\n{result}"
+            # Prefer inline when compact enough
+            combined = f"{input_str} → {result}"
+            if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
+                return combined
+            return f"{input_str}\n{result}"
 
         return None
 
@@ -1301,6 +1405,10 @@ class SimpleEvaluator:
         if h := self._get_color(term):
             return [h]
 
+        # Adjective + color (e.g., "bright green")
+        if mod := self.content.get_modified_color(term):
+            return [mod[0]]  # modified hex
+
         return None
 
     def _parse_emoji(self, term: str) -> tuple[str, int, str] | None:
@@ -1332,8 +1440,8 @@ class SimpleEvaluator:
 
         # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)
         if singular := singularize(term):
-            # It's a plural form
-            if e := self.content.get_emoji(singular):
+            # Skip uncountable nouns where singular == original (sheep, fish, deer, etc.)
+            if singular != term.lower() and (e := self.content.get_emoji(singular)):
                 return (e, 2, singular)
 
         # Single word (may still be a word that looks plural but isn't, e.g., "bus")
@@ -1357,6 +1465,15 @@ class SimpleEvaluator:
         if h := self._get_color(word):
             return f"[on {h}]  [/]"
         return None
+
+    def _eval_modified_color(self, text: str) -> str | None:
+        """Evaluate adjective + color, e.g. 'bright green' -> show base and modified swatch."""
+        result = self.content.get_modified_color(text)
+        if not result:
+            return None
+        modified_hex, base_hex, adjectives, color_name = result
+        full_name = "_".join(adjectives) + "_" + color_name.replace(' ', '_')
+        return f"COLOR_RESULT:{modified_hex}:{full_name}:{base_hex}"
 
     def _is_emoji_str(self, text: str) -> bool:
         """Check if text is emoji characters only."""
@@ -1443,15 +1560,15 @@ class SimpleEvaluator:
     ]
 
     def _format_number_with_dots(self, num: int | float, show_label: bool = True, expression: str = "") -> str:
-        """Format number as dots (≤9) or abacus (>9), with grouping for simple math."""
+        """Format number as dots (≤10) or abacus (>10), with grouping for simple math."""
         formatted = self._format_number(num)
         label = formatted if show_label else None
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if n >= 1:
                 color = self.ABACUS_COLORS[0]
-                # ≤ 9: plain dots (with grouping for simple math)
-                if n <= 9:
+                # ≤ 10: plain dots (with grouping for simple math)
+                if n <= 10:
                     grouped = self._format_grouped_dots(n, expression, color)
                     if grouped:
                         if label:
@@ -1501,6 +1618,9 @@ class SimpleEvaluator:
     def _format_grouped_dots(self, result: int, expression: str, color: str) -> str | None:
         """Format dots with grouping for simple addition/multiplication. Returns None if not applicable."""
         if not expression:
+            # Default 5+5 grouping for 10 (makes it countable)
+            if result == 10:
+                return " ".join("●" * 5) + "   " + " ".join("●" * 5)
             return None
         # Match simple "a + b"
         m = re.match(r'^\s*(\d+)\s*\+\s*(\d+)\s*$', expression)
@@ -1526,7 +1646,7 @@ class SimpleEvaluator:
             elif char.isalnum():
                 bg = get_key_color(char)
                 fg = _contrast_color(bg)
-                blocks.append(f"[{fg} on {bg}] {char.upper()} [/]")
+                blocks.append(f"[{fg} on {bg}] {char} [/]")
             else:
                 blocks.append(char)
         return "".join(blocks)
@@ -1539,7 +1659,7 @@ class SimpleEvaluator:
             if char.isspace():
                 blocks.append(" ")
             elif char.isalnum():
-                blocks.append(f"[{fg} on {bg_color}] {char.upper()} [/]")
+                blocks.append(f"[{fg} on {bg_color}] {char} [/]")
             else:
                 blocks.append(char)
         return "".join(blocks)

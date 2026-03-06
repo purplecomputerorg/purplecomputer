@@ -4,6 +4,11 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Explore: "green potato peanut" now shows potato emoji on green bg + "peanut" letters in green (colors + emojis + text mix together)
+
+- Explore mode: answers show a 🔊 speaker icon when TTS is active (triggered by "say", "talk", or "!")
+- Explore mode: autocomplete now accepted with right arrow instead of space. Space always types a space, so you can type partial words without forced completion.
+- Explore mode: typing a complete word (like "apple") shows its emoji/color in the hint area as confirmation, instead of the hint disappearing.
 - Explore mode: numbers display as a colored abacus with place-value rows (ones on top, bigger places below), spaced dots, and a different color per row
 - Explore mode: colors auto-mix with emojis, other colors, and text without needing + ("red apple" → 🍎 on red, "red blue" → mixed purple, "tavi red" → mixed letter blocks)
 - Explore mode: + operator still works the same way but is now optional for mixing

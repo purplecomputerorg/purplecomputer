@@ -68,10 +68,11 @@ class HistoryLine(Static):
     ARROW_DARK = "#a888d0"
     ARROW_LIGHT = "#7a5a9e"
 
-    def __init__(self, text: str, line_type: str = "ask", **kwargs):
+    def __init__(self, text: str, line_type: str = "ask", speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.text = text
         self.line_type = line_type  # "ask" or "answer"
+        self.speaking = speaking
         self.add_class("caps-sensitive")
         if line_type == "ask":
             self.add_class("ask")
@@ -92,7 +93,11 @@ class HistoryLine(Static):
             # Add arrow to each line for multi-line results
             arrow_color = self._get_arrow_color()
             lines = self.text.split('\n')
-            return '\n'.join(f"[{arrow_color}]  →[/] {caps(line)}" for line in lines)
+            prefix = "🔊" if self.speaking else "  "
+            result = [f"[{arrow_color}]{prefix}→[/] {caps(lines[0])}"]
+            for line in lines[1:]:
+                result.append(f"[{arrow_color}]  →[/] {caps(line)}")
+            return '\n'.join(result)
 
 
 class ColorResultLine(Widget):
@@ -123,11 +128,12 @@ class ColorResultLine(Widget):
     SURFACE_DARK = "#2a1845"
     SURFACE_LIGHT = "#e8daf0"
 
-    def __init__(self, hex_color: str, color_name: str, component_colors: list[str] = None, **kwargs):
+    def __init__(self, hex_color: str, color_name: str, component_colors: list[str] = None, speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._hex_color = hex_color
         self._color_name = color_name
         self._component_colors = component_colors or []
+        self._speaking = speaking
 
     def _get_surface_color(self) -> str:
         """Get surface color based on current theme."""
@@ -156,7 +162,7 @@ class ColorResultLine(Widget):
         # Arrow color: light purple on dark, darker purple on light for visibility
         arrow_color = "#a888d0" if self._is_dark_theme() else "#7a5a9e"
 
-        prefix = "  →  "
+        prefix = "🔊→  " if self._speaking else "  →  "
         prefix_style = Style(color=arrow_color, bgcolor=surface)
 
         # Line 0: Show component colors and arrow to result
@@ -249,6 +255,7 @@ class InlineInput(Input):
         self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
         self.autocomplete_type: str = "emoji"  # "emoji" or "color"
         self.autocomplete_index: int = 0
+        self.exact_match_display: str = ""  # emoji/color hint for exact word matches
         self._repeat_suppressor = KeyRepeatSuppressor()
 
     def action_scroll_up(self) -> None:
@@ -294,14 +301,24 @@ class InlineInput(Input):
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
+            self.exact_match_display = ""
             return
 
-        # If exact match exists (color, emoji, or plural), don't show autocomplete
+        # If exact match exists, show its emoji/color as confirmation (no arrow hint)
         if content.is_valid_word(last_word):
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
+            emoji = content.get_emoji(last_word)
+            color = content.get_color(last_word)
+            parts = []
+            if emoji:
+                parts.append(emoji)
+            if color:
+                parts.append(f"[{color}]██[/]")
+            self.exact_match_display = " ".join(parts)
             return
+        self.exact_match_display = ""
 
         # Search both colors and emojis
         color_matches = {w: h for w, h in content.search_colors(last_word) if w != last_word}
@@ -323,6 +340,7 @@ class InlineInput(Input):
             self.autocomplete_matches = []
             self.autocomplete_type = "emoji"
             self.autocomplete_index = 0
+            self.exact_match_display = ""
             return
 
         # Store matches as (word, color_hex, emoji) tuples
@@ -343,7 +361,12 @@ class InlineInput(Input):
 
         Handles colors (shown as colored blocks) and emojis.
         Overlapping words (both color and emoji) show as: word [color] emoji
+        When an exact match is typed, shows just the emoji/color as confirmation.
         """
+        # Exact match: show emoji/color confirmation (no arrow hint)
+        if self.exact_match_display:
+            return self.exact_match_display
+
         if not self.autocomplete_matches:
             return ""
 
@@ -363,7 +386,7 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return f"{hint}   [dim]{caps('← space')}[/]"
+        return f"{hint}   [dim]→[/]"
 
 
 class InputPrompt(Static):
@@ -527,27 +550,28 @@ class ExploreMode(Vertical):
                 explore_input.action_scroll_up()
             elif action.direction == 'down':
                 explore_input.action_scroll_down()
-            # Left/right arrows are ignored (no cursor movement for kids)
+            elif action.direction == 'right' and explore_input.autocomplete_matches:
+                # Right arrow: accept autocomplete suggestion
+                selected_word = explore_input.autocomplete_matches[explore_input.autocomplete_index][0]
+                words = explore_input.value.split()
+                if words:
+                    words[-1] = selected_word
+                    explore_input.value = " ".join(words) + " "
+                    explore_input.cursor_position = len(explore_input.value)
+                explore_input.autocomplete_matches = []
+                explore_input.autocomplete_index = 0
+                explore_input.exact_match_display = ""
+                explore_input._check_autocomplete()
+            # Left arrow is ignored (no cursor movement for kids)
             return
 
         # Handle control actions
         if isinstance(action, ControlAction):
             if action.action == 'space' and action.is_down:
-                # Space: accept autocomplete if there's a suggestion
-                if explore_input.autocomplete_matches:
-                    selected_word = explore_input.autocomplete_matches[explore_input.autocomplete_index][0]
-                    words = explore_input.value.split()
-                    if words:
-                        words[-1] = selected_word
-                        explore_input.value = " ".join(words) + " "
-                        explore_input.cursor_position = len(explore_input.value)
-                    explore_input.autocomplete_matches = []
-                    explore_input.autocomplete_index = 0
-                else:
-                    # Type a space (always at end)
-                    explore_input.value += " "
-                    explore_input.cursor_position = len(explore_input.value)
-                    explore_input._check_autocomplete()
+                # Space always types a space (autocomplete is accepted with right arrow)
+                explore_input.value += " "
+                explore_input.cursor_position = len(explore_input.value)
+                explore_input._check_autocomplete()
                 return
 
             if action.action == 'enter' and action.is_down:
@@ -560,6 +584,7 @@ class ExploreMode(Vertical):
                         self._speak(self._last_eval_text, self._last_result)
                 explore_input.autocomplete_matches = []
                 explore_input.autocomplete_index = 0
+                explore_input.exact_match_display = ""
                 return
 
             if action.action == 'backspace' and action.is_down:
@@ -578,6 +603,7 @@ class ExploreMode(Vertical):
                     explore_input.cursor_position = 0
                     explore_input.autocomplete_matches = []
                     explore_input.autocomplete_index = 0
+                    explore_input.exact_match_display = ""
                     explore_input._check_autocomplete()
                 return
 
@@ -679,7 +705,7 @@ class ExploreMode(Vertical):
                         color_box = f"[on {hex_color}]  [/]"
                         parts = [before_part, color_box, after_part]
                         display = " ".join(filter(None, parts))
-                        scroll.mount(HistoryLine(display, line_type="answer"))
+                        scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
                     else:
                         # For multi-color with emoji, show two lines:
                         # Line 1: inputs in order (emoji + component boxes)
@@ -694,11 +720,11 @@ class ExploreMode(Vertical):
                             result_parts = [before_part, result_box, after_part]
                             result_line = " ".join(filter(None, result_parts))
                             display = f"{input_line}\n{result_line}"
-                            scroll.mount(HistoryLine(display, line_type="answer"))
+                            scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
                         else:
-                            scroll.mount(ColorResultLine(hex_color, color_name, components))
+                            scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
             else:
-                scroll.mount(HistoryLine(result, line_type="answer"))
+                scroll.mount(HistoryLine(result, line_type="answer", speaking=force_speak))
 
         # Scroll to bottom
         scroll.scroll_end(animate=False)
@@ -1098,8 +1124,7 @@ class SimpleEvaluator:
         """Auto-mix colors with emojis, other colors, or text without requiring +.
 
         Triggers when all words are colors, emojis, or plain text, with at least
-        one color and something to mix with. Falls through for ambiguous cases
-        (e.g., emojis mixed with plain text, or unknown word types).
+        one color and something to mix with. Falls through for unknown word types.
         """
         words = text.split()
         if len(words) < 2:
@@ -1130,16 +1155,13 @@ class SimpleEvaluator:
             return None
         if not has_emoji and len(colors) < 2 and not has_text:
             return None
-        # Don't handle emojis + plain text together (too ambiguous)
-        if has_emoji and has_text:
-            return None
-
         mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
 
-        # Colors + emojis: paint emojis on mixed color background
+        # Colors + emojis (and optionally text): paint emojis on color bg, text as colored letters
         if has_emoji:
             input_parts = []
             emoji_strs = []
+            text_words = []
             for info in word_info:
                 if info[0] == 'color':
                     input_parts.append(f"[on {info[1]}]  [/]")
@@ -1147,7 +1169,15 @@ class SimpleEvaluator:
                     s = info[1] * info[2]
                     emoji_strs.append(s)
                     input_parts.append(s)
-            result = f"[on {mixed}] {''.join(emoji_strs)} [/]"
+                elif info[0] == 'text':
+                    input_parts.append(self._format_text_as_color_blocks(info[1]))
+                    text_words.append(info[1])
+            result_parts = []
+            if emoji_strs:
+                result_parts.append(f"[on {mixed}] {''.join(emoji_strs)} [/]")
+            if text_words:
+                result_parts.append(self._format_text_on_color(" ".join(text_words), mixed))
+            result = " ".join(result_parts)
             return f"{' '.join(input_parts)}\n{result}"
 
         # Colors only (2+): mix and show components + result

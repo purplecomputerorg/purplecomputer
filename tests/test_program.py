@@ -656,9 +656,14 @@ class TestLayoutLines:
 
 
 class TestCursorToLinePos:
-    """Tests for _cursor_to_line_pos from build_mode."""
+    """Tests for _cursor_to_line_pos with insertion-point cursor model.
 
-    def test_cursor_on_first_block(self):
+    Cursor is an insertion point (0 to len(blocks)). Position N means
+    "between block N-1 and block N".
+    """
+
+    def test_cursor_at_start(self):
+        """Cursor 0 = before first block."""
         blocks = [
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
@@ -668,7 +673,8 @@ class TestCursorToLinePos:
         assert line_idx == 0
         assert pos == 0
 
-    def test_cursor_on_second_block(self):
+    def test_cursor_between_blocks(self):
+        """Cursor 1 = between block 0 and block 1."""
         blocks = [
             ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
@@ -678,6 +684,17 @@ class TestCursorToLinePos:
         assert line_idx == 0
         assert pos == 1
 
+    def test_cursor_at_end(self):
+        """Cursor len(blocks) = after all blocks."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        line_idx, pos = _cursor_to_line_pos(lines, 2)
+        assert line_idx == 0
+        assert pos == 2  # end of line
+
     def test_cursor_on_second_line(self):
         blocks = [
             ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
@@ -686,10 +703,23 @@ class TestCursorToLinePos:
             ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
         ]
         lines = _layout_lines(blocks, 100)
-        # Cursor on block index 3 (second "b" key)
+        # Cursor 3 = before block 3 (the "b" key) on second line
         line_idx, pos = _cursor_to_line_pos(lines, 3)
         assert line_idx == 1
         assert pos == 1
+
+    def test_cursor_at_end_of_second_line(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        # Cursor 4 = after all blocks, end of second line
+        line_idx, pos = _cursor_to_line_pos(lines, 4)
+        assert line_idx == 1
+        assert pos == 2  # end of second line
 
     def test_cursor_on_wrapped_line(self):
         # 3 blocks, width=10 => first 2 on line 0, third on line 1
@@ -699,8 +729,16 @@ class TestCursorToLinePos:
             ProgramBlock(type=ProgramBlockType.KEY, char="c", gap_level=0),
         ]
         lines = _layout_lines(blocks, 10)
+        # Cursor 2 = before block 2 ("c"), which is on wrapped line 1
         line_idx, pos = _cursor_to_line_pos(lines, 2)
         assert line_idx == 1
+        assert pos == 0
+
+    def test_cursor_empty_lines(self):
+        """Empty blocks: cursor 0 returns (0, 0)."""
+        lines = _layout_lines([], 100)
+        line_idx, pos = _cursor_to_line_pos(lines, 0)
+        assert line_idx == 0
         assert pos == 0
 
 
@@ -954,3 +992,90 @@ class TestLineRepeat:
         type_actions = [a for a in actions if isinstance(a, TypeText)]
         chars = [a.text for a in type_actions]
         assert chars == ["a", "b", "a", "b", "a", "b"]
+
+
+# =============================================================================
+# LINE_BREAK TESTS
+# =============================================================================
+
+class TestLineBreak:
+    def test_line_break_zero_width(self):
+        """LINE_BREAK has 0 total width (structural, not rendered)."""
+        b = ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0)
+        assert b.total_width == 0
+
+    def test_line_break_icon(self):
+        b = ProgramBlock(type=ProgramBlockType.LINE_BREAK)
+        assert b.icon == "\u2014"  # em dash
+
+    def test_line_break_creates_new_line_in_layout(self):
+        """LINE_BREAK splits blocks into separate lines."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        assert len(lines) == 2
+        # First line has "a" + LINE_BREAK
+        key_blocks_line0 = [b for _, b in lines[0][1] if b.type == ProgramBlockType.KEY]
+        assert len(key_blocks_line0) == 1
+        assert key_blocks_line0[0].char == "a"
+        # Second line has LINE_BREAK + "b"
+        key_blocks_line1 = [b for _, b in lines[1][1] if b.type == ProgramBlockType.KEY]
+        assert len(key_blocks_line1) == 1
+        assert key_blocks_line1[0].char == "b"
+
+    def test_line_break_serialization_round_trip(self):
+        """LINE_BREAK serializes and deserializes correctly."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        json_str = blocks_to_json(blocks, "play")
+        restored, _ = blocks_from_json(json_str)
+        assert len(restored) == 3
+        assert restored[1].type == ProgramBlockType.LINE_BREAK
+
+    def test_line_break_ignored_in_playback(self):
+        """LINE_BREAK produces no playback actions."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        actions = blocks_to_playback_actions(blocks)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        chars = [a.text for a in type_actions]
+        assert chars == ["a", "b"]
+        # No extra pauses from LINE_BREAK
+        pause_actions = [a for a in actions if isinstance(a, Pause)]
+        assert len(pause_actions) == 0
+
+    def test_multiple_line_breaks(self):
+        """Multiple LINE_BREAKs create multiple lines."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="c", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        assert len(lines) == 3
+
+    def test_cursor_across_line_break(self):
+        """Insertion-point cursor works across LINE_BREAK boundaries."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.KEY, char="a", gap_level=0),
+            ProgramBlock(type=ProgramBlockType.LINE_BREAK, gap_level=0),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b", gap_level=0),
+        ]
+        lines = _layout_lines(blocks, 100)
+        # Cursor 0: before "a" on line 0
+        line_idx, pos = _cursor_to_line_pos(lines, 0)
+        assert line_idx == 0
+        # Cursor 2: before "b" on line 1 (skipping LINE_BREAK at index 1)
+        line_idx, pos = _cursor_to_line_pos(lines, 2)
+        assert line_idx == 1

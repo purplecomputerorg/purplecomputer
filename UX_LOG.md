@@ -4,6 +4,8 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Code mode: cursor is now a blinking insertion point between blocks (like a text cursor); Enter inserts visual line breaks; backspace deletes the block before the cursor
+- Doodle mode: gutter is now a purple checkerboard pattern instead of solid black, visually distinct but not jarring
 - Code mode: consecutive identical blocks auto-collapse into one block with "xN" count badge
 - Code mode: up/down arrows now adjust block count (when count > 1) or gap timing (when count is 1)
 - Code mode: REPEAT blocks at end of a line show repeat count in the gutter
@@ -11,6 +13,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Doodle paint: hold letter then arrow paints continuously**: Holding a character key and then pressing an arrow now paints that character's color while moving, same as holding arrow first then letter
 - **Kid-proof power button**: Tap shows sleep screen (cute, not scary, any key wakes); hold 3s shows "Bye!" and shuts down (phone-like); logind set to ignore so TUI controls all power UX
 - **Lid close delayed shutdown**: Lid close now turns screen off immediately but waits 2 minutes before shutting down (was 5 seconds); opening lid cancels shutdown; prevents accidental shutdowns when kid briefly closes lid
 - **Code mode: Play clears state first**: Pressing Play in Code mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate

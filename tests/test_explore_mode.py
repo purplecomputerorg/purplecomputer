@@ -177,8 +177,11 @@ if HAS_PYTEST:
         def test_emoji_case_insensitive(self, evaluator):
             assert evaluator.evaluate("CAT") == "🐱"
 
-        def test_unknown_word(self, evaluator):
-            assert evaluator.evaluate("xyz123") == "xyz123"
+        def test_unknown_word_shows_color_blocks(self, evaluator):
+            result = evaluator.evaluate("xyz123")
+            # Plain text fallback shows colored blocks, not an echo
+            assert "[on " in result
+            assert result != "xyz123"
 
 
     class TestEmojiMath:

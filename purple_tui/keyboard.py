@@ -513,6 +513,7 @@ class NavigationAction(KeyAction):
     space_held: bool = False  # True when painting (space down)
     is_repeat: bool = False  # Is this a key repeat?
     other_arrows_held: set = field(default_factory=set)  # Other arrow directions currently held
+    char_held: str | None = None  # Character key held when this action fired
 
 
 @dataclass
@@ -597,6 +598,10 @@ class KeyboardStateMachine:
         )
         self._on_sticky_shift_change: Callable[[bool], None] | None = None
 
+        # Held character tracking (for painting while navigating)
+        self._held_char: str | None = None
+        self._held_char_keycode: int | None = None
+
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
         self._escape_press_time: float | None = None  # time.time() when escape pressed
@@ -674,6 +679,7 @@ class KeyboardStateMachine:
                 space_held=self._space_held,
                 is_repeat=is_repeat,
                 other_arrows_held=other_arrows,
+                char_held=self._held_char,
             ))
             return actions
 
@@ -720,6 +726,10 @@ class KeyboardStateMachine:
         if char:
             # Apply shift/caps
             final_char = self._apply_shift(char)
+            # Track held character (so NavigationAction can carry it)
+            if not is_repeat:
+                self._held_char = final_char
+                self._held_char_keycode = keycode
             actions.append(CharacterAction(
                 char=final_char,
                 shifted=(final_char != char),
@@ -747,6 +757,11 @@ class KeyboardStateMachine:
 
         # Remove from pressed state
         press_time = self._pressed.pop(keycode, None)
+
+        # Clear held character if this keycode was the held one
+        if keycode == self._held_char_keycode:
+            self._held_char = None
+            self._held_char_keycode = None
 
         # Handle modifier releases (Shift keys and Caps Lock, which is remapped to Shift)
         if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):

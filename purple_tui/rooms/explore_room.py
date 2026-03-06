@@ -38,6 +38,7 @@ from ..keyboard import (
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
 from ..scrolling import scroll_widget
+from .doodle_room import get_key_color
 
 
 class KeyboardOnlyScroll(ScrollableContainer):
@@ -788,9 +789,11 @@ class SimpleEvaluator:
 
         # Try emoji substitution in text (e.g., "I love cat")
         subbed = self._substitute_emojis(text)
-        result = subbed if subbed != text else text
+        if subbed != text:
+            return self._maybe_add_label(subbed, had_parens)
 
-        return self._maybe_add_label(result, had_parens)
+        # Plain text fallback: show as colored blocks (one per letter)
+        return self._format_text_as_color_blocks(text)
 
     def _maybe_add_label(self, result: str, had_parens: bool) -> str:
         """Add emoji label if result is unlabeled emojis from a paren expression."""
@@ -1243,6 +1246,17 @@ class SimpleEvaluator:
                 lines = [dots[i:i+90] for i in range(0, len(dots), 90)]
                 return f"{formatted}\n" + "\n".join(lines)
         return formatted
+
+    def _format_text_as_color_blocks(self, text: str) -> str:
+        """Format plain text as colored blocks using doodle mode's letter-to-color mapping."""
+        blocks = []
+        for char in text:
+            if char.isspace():
+                blocks.append("  ")
+            else:
+                color = get_key_color(char)
+                blocks.append(f"[on {color}]  [/]")
+        return "".join(blocks)
 
     def _substitute_emojis(self, text: str) -> str:
         """Replace emoji and color words inline, including 'N word' patterns.

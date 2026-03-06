@@ -127,9 +127,11 @@ BACKSPACE_HOLD_CLEAR_TIME = 1.0
 # Gutter size (cells around content where cursor ring can extend)
 GUTTER = 1
 
-# Gutter background colors (visually distinct non-drawable border)
-GUTTER_BG_DARK = "#000000"   # Black for dark mode
-GUTTER_BG_LIGHT = "#FFFFFF"  # White for light mode
+# Gutter background colors (checkerboard pattern, slightly lighter than canvas)
+GUTTER_BG_DARK_A = "#2F1D4C"   # Lighter purple A
+GUTTER_BG_DARK_B = "#382358"   # Lighter purple B
+GUTTER_BG_LIGHT_A = "#DFD0E8"  # Darker purple A
+GUTTER_BG_LIGHT_B = "#D8C8E2"  # Darker purple B
 
 
 # =============================================================================
@@ -320,9 +322,12 @@ class ArtCanvas(Widget, can_focus=True):
         """Get text foreground color based on current theme."""
         return TEXT_FG_DARK if self._is_dark_theme() else TEXT_FG_LIGHT
 
-    def _get_gutter_bg(self) -> str:
-        """Get gutter background color based on current theme."""
-        return GUTTER_BG_DARK if self._is_dark_theme() else GUTTER_BG_LIGHT
+    def _get_gutter_bg(self, x: int, y: int) -> str:
+        """Get gutter background color (checkerboard pattern based on position)."""
+        even = (x + y) % 2 == 0
+        if self._is_dark_theme():
+            return GUTTER_BG_DARK_A if even else GUTTER_BG_DARK_B
+        return GUTTER_BG_LIGHT_A if even else GUTTER_BG_LIGHT_B
 
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
@@ -403,7 +408,6 @@ class ArtCanvas(Widget, can_focus=True):
 
         segments = []
         default_bg = self._get_default_bg()
-        gutter_bg = self._get_gutter_bg()
 
         # Cursor position in screen coordinates
         cursor_screen_x = self._cursor_x + GUTTER
@@ -485,7 +489,7 @@ class ArtCanvas(Widget, can_focus=True):
                             segments.append(Segment(box_char, ring_style))
                     else:
                         # Empty cell or gutter: show box char on appropriate bg
-                        bg = gutter_bg if in_gutter else default_bg
+                        bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
                         ring_style = Style(color=ring_fg, bgcolor=bg)
                         segments.append(Segment(box_char, ring_style))
                 else:
@@ -500,7 +504,7 @@ class ArtCanvas(Widget, can_focus=True):
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         # Empty: use gutter bg if in gutter, else default bg
-                        bg = gutter_bg if in_gutter else default_bg
+                        bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
                         segments.append(Segment(" ", Style(bgcolor=bg)))
             elif cell:
                 char, fg_color, bg_color = cell
@@ -520,7 +524,7 @@ class ArtCanvas(Widget, can_focus=True):
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell or gutter: use gutter bg if in gutter
-                bg = gutter_bg if in_gutter else default_bg
+                bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
                 segments.append(Segment(" ", Style(bgcolor=bg)))
 
         return Strip(segments)
@@ -803,10 +807,27 @@ class ArtCanvas(Widget, can_focus=True):
             if not any_moved:
                 self._on_edge_hit()
 
-            # In paint mode with pen down: draw line
+            # In paint mode: draw when space held or character key held
             # action.space_held comes from KeyboardStateMachine
-            if self._paint_mode and (self._space_down or action.space_held):
-                self._paint_at_cursor()
+            if self._paint_mode:
+                if self._space_down or action.space_held:
+                    self._paint_at_cursor()
+                elif action.char_held:
+                    # Character key held while navigating: select its color and paint
+                    char = action.char_held
+                    if char in GRAYSCALE:
+                        self._last_key_char = char
+                        self._last_key_color = GRAYSCALE[char]
+                        self._paint_at_cursor()
+                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                    elif char.isalpha() or char in KEY_COLORS:
+                        lower = char.lower()
+                        color = get_key_color(lower)
+                        if color != "#AAAAAA":
+                            self._last_key_char = lower
+                            self._last_key_color = color
+                            self._paint_at_cursor()
+                            self.post_message(PaintModeChanged(True, self._last_key_color))
 
             self.refresh()
             return

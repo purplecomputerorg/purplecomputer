@@ -1002,14 +1002,21 @@ class SimpleEvaluator:
         # Emojis on colored background (e.g., "red + apple", "blue + yellow + 3 cats")
         if mixed_color and emoji_items and only_colors_and_emojis:
             emoji_strs = []
+            input_parts = []
             for t, v in items:
                 if t == 'emoji':
                     e, c, w = v
                     emoji_strs.append(e * c)
+                    input_parts.append(e * c)
+                elif t == 'color':
+                    input_parts.append(
+                        " ".join(f"[on {c}]  [/]" for c in colors)
+                    )
             result = f"[on {mixed_color}] {''.join(emoji_strs)} [/]"
             if pending:
                 result += " " + self._format_number_with_dots(pending)
-            return result
+            input_line = "  ".join(input_parts)
+            return f"{input_line}\n{result}"
 
         # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
         if mixed_color and has_mixable_text:
@@ -1305,7 +1312,7 @@ class SimpleEvaluator:
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if 1 <= n < 1000:
-                dots = "⬤" * n
+                dots = "●" * n
                 lines = [dots[i:i+90] for i in range(0, len(dots), 90)]
                 if show_label:
                     return f"{formatted}\n" + "\n".join(lines)

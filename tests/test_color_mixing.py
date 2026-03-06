@@ -240,9 +240,9 @@ class TestMixColorsPaint:
     """Test paint-style color mixing using app's actual colors."""
 
     # App's paint-like colors (from content.py)
-    RED = "#E52B50"      # Cadmium red
+    RED = "#ED1C24"      # Crayola red
     YELLOW = "#FFEB00"   # Primary yellow
-    BLUE = "#0047AB"     # Cobalt blue
+    BLUE = "#1F75FE"     # Crayola blue
 
     def test_red_plus_blue_makes_purple(self):
         result = mix_colors_paint([self.RED, self.BLUE])

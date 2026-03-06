@@ -66,10 +66,17 @@ class ContentManager:
         if self._loaded:
             return
 
-        # Load built-in defaults first
+        # Load built-in defaults (colors only, emoji come from packs)
         self._load_defaults()
 
-        # Then load from installed packs
+        # Load from source-relative packs dir (works in dev and production)
+        source_packs = Path(__file__).parent.parent / "packs"
+        if source_packs.exists():
+            for pack_dir in source_packs.iterdir():
+                if pack_dir.is_dir():
+                    self._load_pack(pack_dir)
+
+        # Then load from user-installed packs (can override/extend)
         if self.packs_dir.exists():
             for pack_dir in self.packs_dir.iterdir():
                 if pack_dir.is_dir():
@@ -78,142 +85,19 @@ class ContentManager:
         self._loaded = True
 
     def _load_defaults(self) -> None:
-        """Load default emojis and definitions"""
-        # Default emojis - kid-friendly options
-        self.emojis = {
-            # Animals - common
-            "cat": "🐱", "dog": "🐶", "elephant": "🐘", "lion": "🦁",
-            "tiger": "🐯", "bear": "🐻", "panda": "🐼", "koala": "🐨",
-            "pig": "🐷", "cow": "🐮", "horse": "🐴", "unicorn": "🦄",
-            "rabbit": "🐰", "mouse": "🐭", "hamster": "🐹", "fox": "🦊",
-            "monkey": "🐵", "chicken": "🐔", "penguin": "🐧", "bird": "🐦",
-            "duck": "🦆", "owl": "🦉", "frog": "🐸", "turtle": "🐢",
-            "snake": "🐍", "dinosaur": "🦕", "trex": "🦖", "whale": "🐋",
-            "dolphin": "🐬", "fish": "🐟", "octopus": "🐙", "butterfly": "🦋",
-            "bee": "🐝", "ladybug": "🐞", "snail": "🐌", "crab": "🦀",
-
-            # Animals - more
-            "zebra": "🦓", "giraffe": "🦒", "hippo": "🦛", "gorilla": "🦍",
-            "wolf": "🐺", "deer": "🦌", "sheep": "🐑", "goat": "🐐",
-            "camel": "🐪", "kangaroo": "🦘", "sloth": "🦥", "hedgehog": "🦔",
-            "raccoon": "🦝", "squirrel": "🐿️", "bat": "🦇", "seal": "🦭",
-            "shark": "🦈", "jellyfish": "🪼", "starfish": "⭐", "shrimp": "🦐",
-            "lobster": "🦞", "squid": "🦑", "ant": "🐜", "spider": "🕷️",
-            "scorpion": "🦂", "mosquito": "🦟", "cricket": "🦗", "worm": "🪱",
-            "parrot": "🦜", "flamingo": "🦩", "peacock": "🦚", "swan": "🦢",
-            "rooster": "🐓", "turkey": "🦃", "eagle": "🦅", "dove": "🕊️",
-            "crocodile": "🐊", "lizard": "🦎", "dragon": "🐉",
-
-            # Fantasy/magical
-            "fairy": "🧚", "mermaid": "🧜", "wizard": "🧙", "genie": "🧞",
-            "ghost": "👻", "alien": "👽", "robot": "🤖", "monster": "👾",
-            "vampire": "🧛", "zombie": "🧟", "ogre": "👹", "troll": "🧌",
-
-            # Nature
-            "sun": "☀️", "moon": "🌙", "star": "⭐", "rainbow": "🌈",
-            "cloud": "☁️", "rain": "🌧️", "snow": "❄️", "flower": "🌸",
-            "tree": "🌲", "plant": "🌱", "leaf": "🍃", "mushroom": "🍄",
-            "rose": "🌹", "sunflower": "🌻", "tulip": "🌷", "blossom": "🌼",
-            "mountain": "⛰️", "volcano": "🌋", "beach": "🏖️", "island": "🏝️",
-            "ocean": "🌊", "desert": "🏜️", "forest": "🌳", "cactus": "🌵",
-
-            # Food - fruits
-            "apple": "🍎", "banana": "🍌", "orange": "🍊", "grape": "🍇",
-            "strawberry": "🍓", "watermelon": "🍉", "peach": "🍑",
-            "cherry": "🍒", "lemon": "🍋", "pineapple": "🍍", "coconut": "🥥",
-            "mango": "🥭", "kiwi": "🥝", "blueberry": "🫐", "pear": "🍐",
-
-            # Food - other
-            "pizza": "🍕", "burger": "🍔", "hotdog": "🌭", "taco": "🌮",
-            "fries": "🍟", "popcorn": "🍿", "pretzel": "🥨", "egg": "🥚",
-            "bread": "🍞", "cheese": "🧀", "bacon": "🥓", "pancake": "🥞",
-            "icecream": "🍦", "cake": "🎂", "cookie": "🍪", "candy": "🍬",
-            "chocolate": "🍫", "donut": "🍩", "cupcake": "🧁", "pie": "🥧",
-            "tomato": "🍅", "carrot": "🥕", "corn": "🌽", "broccoli": "🥦",
-            "avocado": "🥑", "potato": "🥔", "onion": "🧅", "garlic": "🧄",
-            "milk": "🥛", "juice": "🧃", "coffee": "☕", "tea": "🍵",
-
-            # Objects
-            "heart": "❤️", "ball": "⚽", "balloon": "🎈",
-            "gift": "🎁", "book": "📚", "pencil": "✏️", "crayon": "🖍️",
-            "art": "🎨", "music": "🎵", "drum": "🥁", "guitar": "🎸",
-            "piano": "🎹", "rocket": "🚀", "car": "🚗", "bus": "🚌",
-            "train": "🚂", "airplane": "✈️", "boat": "⛵", "bike": "🚲",
-            "house": "🏠", "castle": "🏰", "tent": "⛺",
-            "headphones": "🎧",
-            "phone": "📱", "camera": "📷", "computer": "💻", "clock": "🕐",
-            "lamp": "💡", "key": "🔑", "umbrella": "☂️", "glasses": "👓",
-            "hat": "🎩", "shoe": "👟", "shirt": "👕", "dress": "👗",
-            "backpack": "🎒", "scissors": "✂️", "hammer": "🔨", "wrench": "🔧",
-
-            # Vehicles
-            "helicopter": "🚁", "tractor": "🚜", "ambulance": "🚑",
-            "firetruck": "🚒", "police": "🚓", "taxi": "🚕", "truck": "🚚",
-            "scooter": "🛴", "motorcycle": "🏍️", "ship": "🚢", "canoe": "🛶",
-
-            # Sports
-            "soccer": "⚽", "basketball": "🏀", "football": "🏈",
-            "baseball": "⚾", "tennis": "🎾", "bowling": "🎳", "golf": "⛳",
-            "skating": "⛸️", "skiing": "⛷️", "surfing": "🏄", "fishing": "🎣",
-
-            # Faces/expressions
-            "happy": "😊", "sad": "😢", "laugh": "😂", "love": "😍",
-            "cool": "😎", "silly": "🤪", "sleepy": "😴", "surprised": "😮",
-            "think": "🤔", "wow": "🤩", "angry": "😠", "scared": "😨",
-            "sick": "🤒", "dizzy": "😵", "nerd": "🤓", "party": "🥳",
-
-            # Activities
-            "run": "🏃", "swim": "🏊", "dance": "💃", "sing": "🎤",
-            "play": "🎸", "read": "📖", "write": "✍️", "paint": "🖌️",
-            "explore": "🔍", "doodle": "🖌️",
-
-            # Misc
-            "yes": "✅", "no": "❌", "thumbsup": "👍", "clap": "👏",
-            "wave": "👋", "hug": "🤗", "fire": "🔥", "sparkle": "✨",
-            "magic": "🪄", "crown": "👑", "gem": "💎", "medal": "🏅",
-            "trophy": "🏆", "flag": "🚩", "bomb": "💣", "lightning": "⚡",
-            "poop": "💩", "skull": "💀", "eye": "👁️", "brain": "🧠",
-
-            # Holidays
-            "pumpkin": "🎃", "snowman": "☃️", "santa": "🎅",
-            "present": "🎁", "firework": "🎆", "bunny": "🐰",
-
-            # Synonyms (same emoji, different words)
-            "kitty": "🐱", "kitten": "🐱", "meow": "🐱",
-            "puppy": "🐶", "doggy": "🐶", "woof": "🐶",
-            "horsie": "🐴", "lamb": "🐑",
-            "dino": "🦕", "tyrannosaurus": "🦖",
-            "birdie": "🐦", "fishy": "🐟",
-            "sunny": "☀️", "moony": "🌙", "starry": "⭐",
-            "rainy": "🌧️", "snowy": "❄️", "cloudy": "☁️",
-            "yummy": "🍦", "treat": "🍬",
-            "smile": "😊", "cry": "😢", "giggle": "😂",
-            "haha": "😂", "lol": "😂",
-            "good": "✅", "bad": "❌", "great": "👍",
-            "yay": "👏", "hi": "👋", "hello": "👋", "bye": "👋",
-            "headphone": "🎧",
-
-            # Emoticons
-            ":)": "😊", ":-)": "😊",
-            ":(": "😢", ":-(": "😢",
-            ":D": "😂", ":-D": "😂",
-            ";)": "😉", ";-)": "😉",
-            ":P": "😛", ":-P": "😛",
-            ":O": "😮", ":-O": "😮",
-            ">:(": "😠",
-            "<3": "💜",
-        }
+        """Load default colors. Emoji come from the core-emoji pack."""
+        self.emojis = {}
 
         # Default colors for paint mixing (RYB primary/secondary + common colors)
         self.colors = {
             # Primary colors (paint)
-            "red": "#E52B50",      # A true paint red (like cadmium red)
+            "red": "#ED1C24",      # Crayola red (classic fire-engine red)
             "yellow": "#FFEB00",   # Primary yellow
-            "blue": "#0047AB",     # Cobalt blue (paint blue)
+            "blue": "#1F75FE",     # Crayola blue (bright, clearly blue)
 
             # Secondary colors (what you get from mixing primaries)
             "orange": "#FF6600",   # Red + Yellow
-            "green": "#228B22",    # Yellow + Blue
+            "green": "#1CAC78",    # Crayola green (bright, friendly green)
             "purple": "#7B2D8E",   # Red + Blue
             "violet": "#7B2D8E",   # Same as purple
 
@@ -348,13 +232,25 @@ class ContentManager:
             self._load_sounds_pack(content_dir, pack_dir)
 
     def _load_emoji_pack(self, content_dir: Path) -> None:
-        """Load emoji pack - simple word -> emoji mapping"""
+        """Load emoji pack: primary emoji and synonyms"""
         emoji_file = content_dir / "emoji.json"
         if emoji_file.exists():
             try:
                 with open(emoji_file) as f:
                     data = json.load(f)
                     self.emojis.update(data)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        # Load synonyms (alias -> primary word, resolved to emoji)
+        synonyms_file = content_dir / "synonyms.json"
+        if synonyms_file.exists():
+            try:
+                with open(synonyms_file) as f:
+                    synonyms = json.load(f)
+                    for alias, target in synonyms.items():
+                        if target in self.emojis:
+                            self.emojis[alias] = self.emojis[target]
             except (json.JSONDecodeError, OSError):
                 pass
 

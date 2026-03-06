@@ -25,6 +25,7 @@ os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 import asyncio
+import time
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal
@@ -784,6 +785,13 @@ class PurpleApp(App):
 
         # Record user activity for idle detection
         self._record_user_activity()
+
+        # Flush stale TTS audio after long gaps (e.g., VM suspend/resume)
+        now = time.monotonic()
+        if now - getattr(self, '_last_evdev_time', now) > 5.0:
+            from . import tts
+            tts.stop()
+        self._last_evdev_time = now
 
         # Process through state machine
         actions = self._keyboard_state_machine.process(event)

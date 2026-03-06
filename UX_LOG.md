@@ -4,13 +4,16 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Explore: emoji consolidated into single pack file (packs/core-emoji); added ~80 new emoji (shapes, body parts, household items, space, animal sounds); removed common-word synonyms (good/bad/great/sweet) that made text substitution weird; "love" now maps to ❤️ instead of 😍
+- Explore: color swatch mixing arrow changed from → to ▶ to match the triangle used everywhere else
+- Explore: default colors updated to Crayola-style values (red, blue, green) so they match what kids expect
 - Explore: abacus rows now show ones at bottom and largest place value at top, matching standard abacus layout
 - Explore: "green potato peanut" now shows potato emoji on green bg + "peanut" letters in green (colors + emojis + text mix together)
 
 - Explore: both ask and answer lines use ▶ triangle, aligned. Ask is purple, answer is white. 🔊 icon appears before the triangle when TTS is active
 - Explore mode: autocomplete now accepted with right arrow instead of space. Space always types a space, so you can type partial words without forced completion.
 - Explore mode: typing a complete word (like "apple") shows its emoji/color in the hint area as confirmation, instead of the hint disappearing.
-- Explore mode: numbers ≤9 show plain spaced dots; numbers >9 show a colored abacus with "1s", "10s", "100s" labels
+- Explore mode: numbers ≤9 show plain spaced dots; 10 to ~9 billion show a colored abacus (10 colors); beyond that show colored number blocks
 - Explore mode: simple addition shows grouped dots (● ●   ● ● ●); simple multiplication shows repeated groups (● ●   ● ●   ● ●)
 - Explore mode: colors auto-mix with emojis, other colors, and text without needing + ("red apple" → 🍎 on red, "red blue" → mixed purple, "tavi red" → mixed letter blocks)
 - Explore mode: + operator still works the same way but is now optional for mixing

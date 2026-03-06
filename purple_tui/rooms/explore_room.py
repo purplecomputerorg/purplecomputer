@@ -186,7 +186,7 @@ class ColorResultLine(Widget):
                         segments.append(Segment(" ", surface_style))  # space between
 
                 # Arrow to result
-                segments.append(Segment(" → ", Style(color=arrow_color, bgcolor=surface)))
+                segments.append(Segment(" ▶ ", Style(color=arrow_color, bgcolor=surface)))
 
             # Start of result swatch (top row). No name label
             result_style = Style(bgcolor=self._hex_color)
@@ -824,7 +824,10 @@ class SimpleEvaluator:
         if (math_result := self._eval_math(normalized)) is not None:
             # If input is just a bare number, skip the label (Ask line already shows it)
             is_bare_number = re.match(r'^\d+$', text.strip())
-            return self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
+            result = self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
+            if not is_bare_number:
+                result = f"= {result}"
+            return result
 
         # Try single word lookup (emoji or color)
         if single := self._lookup(text.lower().strip()):
@@ -927,6 +930,9 @@ class SimpleEvaluator:
             result = self.evaluate(match.group(1))
             # Strip label/dot visualization for use in outer expressions
             result = result.split('\n')[0]
+            # Strip "= " prefix from math results
+            if result.startswith("= "):
+                result = result[2:]
             # If result is "N emoji", extract just the emojis for outer expression
             if m := re.match(r'^(\d+)\s+(.+)$', result):
                 count, emoji_str = int(m.group(1)), m.group(2).strip()
@@ -960,10 +966,12 @@ class SimpleEvaluator:
                     items.append(('color', None))
                 continue
 
-            # Emoji term (pending attaches here)
+            # Emoji term (pending becomes a separate group for visual grouping)
             if emoji_data := self._parse_emoji(part):
                 emoji, count, word = emoji_data
-                items.append(('emoji', (emoji, count + pending, word)))
+                if pending:
+                    items.append(('emoji', (emoji, pending, word)))
+                items.append(('emoji', (emoji, count, word)))
                 pending = 0
                 continue
 
@@ -1095,13 +1103,9 @@ class SimpleEvaluator:
             elif item_type == 'emoji':
                 e, c, w = value
                 emoji_str = e * c
-                # Merge with previous if same emoji type, space if different
+                # Separate emoji groups with a wider gap for visual grouping
                 if result_parts and self._is_emoji_str(result_parts[-1]):
-                    last_emoji = [ch for ch in result_parts[-1] if ord(ch) > 127][-1] if result_parts[-1] else None
-                    if last_emoji == e:
-                        result_parts[-1] += emoji_str  # Same type, no space
-                    else:
-                        result_parts[-1] += ' ' + emoji_str  # Different type, add space
+                    result_parts[-1] += '  ' + emoji_str
                 else:
                     result_parts.append(emoji_str)
             elif item_type == 'text':
@@ -1424,7 +1428,7 @@ class SimpleEvaluator:
             return str(int(num))
         return str(round(num, 3)).rstrip('0').rstrip('.')
 
-    # Colors for abacus rows, from ones up
+    # Colors for abacus rows, from ones up (supports up to 1 billion)
     ABACUS_COLORS = [
         "#c4a0e8",  # ones: purple
         "#7eb8e0",  # tens: blue
@@ -1432,11 +1436,16 @@ class SimpleEvaluator:
         "#e8d470",  # thousands: gold
         "#e8a07e",  # ten-thousands: orange
         "#e07eb8",  # hundred-thousands: pink
+        "#e07e7e",  # millions: red
+        "#7ee0c8",  # ten-millions: teal
+        "#b8e07e",  # hundred-millions: lime
+        "#e0c87e",  # billions: amber
     ]
 
     def _format_number_with_dots(self, num: int | float, show_label: bool = True, expression: str = "") -> str:
         """Format number as dots (≤9) or abacus (>9), with grouping for simple math."""
         formatted = self._format_number(num)
+        label = formatted if show_label else None
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if n >= 1:
@@ -1445,40 +1454,48 @@ class SimpleEvaluator:
                 if n <= 9:
                     grouped = self._format_grouped_dots(n, expression, color)
                     if grouped:
-                        if show_label:
-                            return f"{formatted}\n[{color}]{grouped}[/]"
+                        if label:
+                            return f"{label}\n[{color}]{grouped}[/]"
                         return f"[{color}]{grouped}[/]"
-                    # Plain dots, no abacus label
                     spaced_dots = " ".join("●" * n)
-                    if show_label:
-                        return f"{formatted}\n[{color}]{spaced_dots}[/]"
+                    if label:
+                        return f"{label}\n[{color}]{spaced_dots}[/]"
                     return f"[{color}]{spaced_dots}[/]"
 
-                # > 9: abacus with place-value rows
-                rows = []
-                place = 1
-                remaining = n
-                while remaining > 0:
-                    digit = remaining % 10
-                    remaining //= 10
-                    if digit > 0:
-                        rows.append((place, digit))
-                    place *= 10
+                # > 9 but within abacus range
+                num_digits = len(str(n))
+                if num_digits <= len(self.ABACUS_COLORS):
+                    rows = []
+                    place = 1
+                    remaining = n
+                    while remaining > 0:
+                        digit = remaining % 10
+                        remaining //= 10
+                        if digit > 0:
+                            rows.append((place, digit))
+                        place *= 10
 
-                # Reverse so largest place value is on top (standard abacus)
-                rows.reverse()
-                max_label_width = max(len(f"{place}s") for place, _ in rows)
-                lines = []
-                for i, (place, digit) in enumerate(rows):
-                    color_idx = len(rows) - 1 - i  # ones=0, tens=1, etc.
-                    c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
-                    label = f"{place}s".rjust(max_label_width)
-                    spaced_dots = " ".join("●" * digit)
-                    lines.append(f"[{c}]{label}  {spaced_dots}[/]")
+                    rows.reverse()
+                    max_label_width = max(len(f"{place}s") for place, _ in rows)
+                    lines = []
+                    for i, (place, digit) in enumerate(rows):
+                        color_idx = len(rows) - 1 - i
+                        c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
+                        place_label = f"{place}s".rjust(max_label_width)
+                        spaced_dots = " ".join("●" * digit)
+                        lines.append(f"[{c}]{place_label}  {spaced_dots}[/]")
 
-                if show_label:
-                    return f"{formatted}\n" + "\n".join(lines)
-                return "\n".join(lines)
+                    if label:
+                        return f"{label}\n" + "\n".join(lines)
+                    return "\n".join(lines)
+
+                # Beyond abacus range: colored number blocks
+                colored = self._format_text_as_color_blocks(formatted)
+                if label:
+                    return f"{label}\n{colored}"
+                return colored
+        if label:
+            return label
         return formatted
 
     def _format_grouped_dots(self, result: int, expression: str, color: str) -> str | None:
@@ -1676,6 +1693,10 @@ class SimpleEvaluator:
             if not res:
                 return ""
             first_line = res.split('\n')[0]
+
+            # Strip "= " prefix from pure math results
+            if first_line.startswith("= "):
+                first_line = first_line[2:]
 
             # Strip input prefix from result if present (avoid "what is ... equals what is ...")
             if input_prefix and first_line.lower().startswith(input_prefix.lower()):

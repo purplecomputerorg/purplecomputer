@@ -1019,7 +1019,7 @@ class SimpleEvaluator:
             result = f"[on {mixed_color}] {''.join(emoji_strs)} [/]"
             if pending:
                 result += " " + self._format_number_with_dots(pending)
-            input_line = " ".join(input_parts)
+            input_line = " + ".join(input_parts)
             return f"{input_line}\n{result}"
 
         # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
@@ -1039,7 +1039,7 @@ class SimpleEvaluator:
                 elif t == 'text':
                     if all(ch.isalnum() or ch.isspace() for ch in v):
                         result_parts.append(
-                            self._format_text_mixed_with_color(v, mixed_color)
+                            self._format_text_on_color(v, mixed_color)
                         )
                         input_parts.append(self._format_text_as_color_blocks(v))
                     else:
@@ -1164,7 +1164,7 @@ class SimpleEvaluator:
                     input_parts.append(self._format_text_as_color_blocks(info[1]))
                     text_words.append(info[1])
             text_str = " ".join(text_words)
-            result = self._format_text_mixed_with_color(text_str, mixed)
+            result = self._format_text_on_color(text_str, mixed)
             return f"{' '.join(input_parts)}\n{result}"
 
         return None
@@ -1387,14 +1387,41 @@ class SimpleEvaluator:
             return str(int(num))
         return str(round(num, 3)).rstrip('0').rstrip('.')
 
+    # Colors for abacus rows, from ones up
+    ABACUS_COLORS = [
+        "#c4a0e8",  # ones: purple
+        "#7eb8e0",  # tens: blue
+        "#6ecfa0",  # hundreds: green
+        "#e8d470",  # thousands: gold
+        "#e8a07e",  # ten-thousands: orange
+        "#e07eb8",  # hundred-thousands: pink
+    ]
+
     def _format_number_with_dots(self, num: int | float, show_label: bool = True) -> str:
-        """Format number with dot visualization."""
+        """Format number as an abacus with colored place-value rows."""
         formatted = self._format_number(num)
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
-            if 1 <= n < 1000:
-                dots = "●" * n
-                lines = [dots[i:i+90] for i in range(0, len(dots), 90)]
+            if n >= 1:
+                rows = []
+                place = 1
+                remaining = n
+                while remaining > 0:
+                    digit = remaining % 10
+                    remaining //= 10
+                    if digit > 0:
+                        rows.append((place, digit))
+                    place *= 10
+
+                # rows is ones-first (top)
+                max_label_width = max(len(str(place)) for place, _ in rows)
+                lines = []
+                for i, (place, digit) in enumerate(rows):
+                    color = self.ABACUS_COLORS[i % len(self.ABACUS_COLORS)]
+                    label = str(place).rjust(max_label_width)
+                    spaced_dots = " ".join("●" * digit)
+                    lines.append(f"[{color}]{label}  {spaced_dots}[/]")
+
                 if show_label:
                     return f"{formatted}\n" + "\n".join(lines)
                 return "\n".join(lines)
@@ -1405,28 +1432,26 @@ class SimpleEvaluator:
         blocks = []
         for char in text:
             if char.isspace():
-                blocks.append("  ")
+                blocks.append(" ")
             elif char.isalnum():
                 bg = get_key_color(char)
                 fg = _contrast_color(bg)
                 blocks.append(f"[{fg} on {bg}] {char.upper()} [/]")
             else:
-                blocks.append(f" {char} ")
+                blocks.append(char)
         return "".join(blocks)
 
-    def _format_text_mixed_with_color(self, text: str, mix_color: str) -> str:
-        """Format text as colored blocks with each letter's color mixed with the given color."""
+    def _format_text_on_color(self, text: str, bg_color: str) -> str:
+        """Format text as letter blocks on a solid color background."""
+        fg = _contrast_color(bg_color)
         blocks = []
         for char in text:
             if char.isspace():
-                blocks.append("  ")
+                blocks.append(" ")
             elif char.isalnum():
-                base = get_key_color(char)
-                mixed = mix_colors_paint([base, mix_color])
-                fg = _contrast_color(mixed)
-                blocks.append(f"[{fg} on {mixed}] {char.upper()} [/]")
+                blocks.append(f"[{fg} on {bg_color}] {char.upper()} [/]")
             else:
-                blocks.append(f" {char} ")
+                blocks.append(char)
         return "".join(blocks)
 
     def _substitute_emojis(self, text: str) -> str:

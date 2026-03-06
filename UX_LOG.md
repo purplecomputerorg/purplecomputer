@@ -4,6 +4,7 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Explore mode: numbers display as a colored abacus with place-value rows (ones on top, bigger places below), spaced dots, and a different color per row
 - Explore mode: colors auto-mix with emojis, other colors, and text without needing + ("red apple" → 🍎 on red, "red blue" → mixed purple, "tavi red" → mixed letter blocks)
 - Explore mode: + operator still works the same way but is now optional for mixing
 - Explore mode: only letters and numbers become colored blocks (symbols like + stay as plain text)

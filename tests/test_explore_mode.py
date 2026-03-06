@@ -36,19 +36,19 @@ if HAS_PYTEST:
 
         def test_addition(self, evaluator):
             result = evaluator.evaluate("2 + 3")
-            assert result.startswith("5\n") and "●●●●●" in result
+            assert result.startswith("5\n") and result.count("●") == 5
 
         def test_subtraction(self, evaluator):
             result = evaluator.evaluate("10 - 4")
-            assert result.startswith("6\n") and "●●●●●●" in result
+            assert result.startswith("6\n") and result.count("●") == 6
 
         def test_multiplication(self, evaluator):
             result = evaluator.evaluate("3 * 4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
         def test_division(self, evaluator):
             result = evaluator.evaluate("8 / 2")
-            assert result.startswith("4\n") and "●●●●" in result
+            assert result.startswith("4\n") and result.count("●") == 4
 
         def test_division_decimal(self, evaluator):
             assert evaluator.evaluate("2 / 3") == "0.667"
@@ -58,11 +58,11 @@ if HAS_PYTEST:
 
         def test_complex_expression(self, evaluator):
             result = evaluator.evaluate("2 + 3 * 4")
-            assert result.startswith("14\n") and result.count("●") == 14
+            assert result.startswith("14\n") and result.count("●") == 5  # 1+4 abacus dots
 
         def test_parentheses(self, evaluator):
             result = evaluator.evaluate("(2 + 3) * 4")
-            assert result.startswith("20\n") and result.count("●") == 20
+            assert result.startswith("20\n") and result.count("●") == 2  # 2+0 abacus dots
 
 
     class TestMostlyMathCleaning:
@@ -113,11 +113,11 @@ if HAS_PYTEST:
 
         def test_times(self, evaluator):
             result = evaluator.evaluate("3 times 4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
         def test_times_no_spaces(self, evaluator):
             result = evaluator.evaluate("3times4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
         def test_plus(self, evaluator):
             result = evaluator.evaluate("2 plus 3")
@@ -141,11 +141,11 @@ if HAS_PYTEST:
 
         def test_x_as_times(self, evaluator):
             result = evaluator.evaluate("3 x 4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
         def test_x_no_spaces(self, evaluator):
             result = evaluator.evaluate("3x4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
 
     class TestUnicodeOperators:
@@ -153,7 +153,7 @@ if HAS_PYTEST:
 
         def test_multiplication_sign(self, evaluator):
             result = evaluator.evaluate("3 × 4")
-            assert result.startswith("12\n") and result.count("●") == 12
+            assert result.startswith("12\n") and result.count("●") == 3  # 1+2 abacus dots
 
         def test_division_sign(self, evaluator):
             result = evaluator.evaluate("8 ÷ 2")
@@ -319,7 +319,7 @@ if HAS_PYTEST:
 
         def test_nested_parens(self, evaluator):
             result = evaluator.evaluate("((2 + 3) * 2)")
-            assert result.count("●") == 10
+            assert result.count("●") == 1  # 10 → 1+0 abacus dots
 
         def test_multiple_parens(self, evaluator):
             result = evaluator.evaluate("(2 + 3) * (1 + 1)")
@@ -357,7 +357,7 @@ if HAS_PYTEST:
 
         def test_deeply_nested_math(self, evaluator):
             result = evaluator.evaluate("((1 + 2) + (3 + 4))")
-            assert result.count("●") == 10
+            assert result.count("●") == 1  # 10 → 1+0 abacus dots
 
         def test_single_emoji_in_parens(self, evaluator):
             assert "🐱" in evaluator.evaluate("(cat)")
@@ -512,19 +512,22 @@ if HAS_PYTEST:
 
         def test_small_number_has_dots(self, evaluator):
             result = evaluator.evaluate("5")
-            # Bare numbers show just dots (no label)
-            assert "●●●●●" in result
+            # Bare numbers show just abacus (no label)
+            assert result.count("●") == 5
 
         def test_math_result_has_dots(self, evaluator):
             result = evaluator.evaluate("2 + 2")
-            assert "●●●●" in result and result.startswith("4")
+            assert result.count("●") == 4 and result.startswith("4")
 
-        def test_large_number_no_dots(self, evaluator):
+        def test_large_number_abacus(self, evaluator):
             result = evaluator.evaluate("1000")
-            assert "●" not in result and result == "1000"
+            # 1000 = 1 dot on the thousands row
+            assert result.count("●") == 1 and "1000" in result
 
-        def test_very_large_number_no_dots(self, evaluator):
-            assert "●" not in evaluator.evaluate("9999")
+        def test_very_large_number_abacus(self, evaluator):
+            result = evaluator.evaluate("9999")
+            # 9+9+9+9 = 36 dots across 4 rows
+            assert evaluator.evaluate("9999").count("●") == 36
 
         def test_decimal_no_dots(self, evaluator):
             assert "●" not in evaluator.evaluate("2.5")
@@ -535,10 +538,14 @@ if HAS_PYTEST:
         def test_negative_no_dots(self, evaluator):
             assert "●" not in evaluator.evaluate("0 - 5")
 
-        def test_hundred_dots_wrapped(self, evaluator):
-            result = evaluator.evaluate("100")
-            # Bare numbers show just dots (no label)
-            assert result.count("●") == 100
+        def test_abacus_place_values(self, evaluator):
+            result = evaluator.evaluate("345")
+            # 3+4+5 = 12 abacus dots
+            assert result.count("●") == 12
+            # Bare number: no label line, ones row is first
+            assert "1  ● ● ● ● ●" in result  # 5 ones
+            assert "10  ● ● ● ●" in result    # 4 tens
+            assert "100  ● ● ●" in result      # 3 hundreds
 
 
 # =============================================================================
@@ -946,13 +953,13 @@ class TestTextWithExpression:
         # "what is 2 + 3" -> "what is 5" with dots
         result = evaluator.evaluate("what is 2 + 3")
         assert result.startswith("what is 5\n")
-        assert "●●●●●" in result
+        assert result.count("●") == 5
 
     def test_what_is_multiplication(self, evaluator):
         # "tell me 3 * 4" -> "tell me 12" with dots
         result = evaluator.evaluate("tell me 3 * 4")
         assert result.startswith("tell me 12\n")
-        assert result.count("●") == 12
+        assert result.count("●") == 3  # 1+2 abacus dots
 
     def test_i_have_apples(self, evaluator):
         # "I have 5 apples" -> "I have" + emojis
@@ -994,7 +1001,7 @@ class TestTextWithExpression:
         # "2 + 2" without prefix still works normally
         result = evaluator.evaluate("2 + 2")
         assert result.startswith("4\n")
-        assert "●●●●" in result
+        assert result.count("●") == 4
 
     def test_single_word_prefix_with_emoji(self, evaluator):
         # "show cat" -> "show" + cat emoji

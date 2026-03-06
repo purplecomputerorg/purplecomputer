@@ -425,11 +425,13 @@ class ExploreMode(Vertical):
         height: auto;
         padding: 0 0;
         margin: 0;
+        margin-bottom: 1;
         background: $surface;
     }
 
     HistoryLine.ask {
         margin-top: 1;
+        margin-bottom: 0;
     }
 
     #bottom-area {

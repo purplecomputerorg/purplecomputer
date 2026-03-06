@@ -1,5 +1,11 @@
 # Claude Code Notes for Purple Computer
 
+## Screenshots
+
+Screenshots are stored in `/tmp/screenshots/`. When the user references "the latest screenshot" or visual issues, check this directory for recent files (sorted by date in filename, e.g. `SCR-20260306-*.png`).
+
+---
+
 ## Sensitive Files (DO NOT READ)
 
 Never read or access these files:

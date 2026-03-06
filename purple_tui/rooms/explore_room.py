@@ -41,6 +41,14 @@ from ..scrolling import scroll_widget
 from .doodle_room import get_key_color
 
 
+def _contrast_color(hex_color: str) -> str:
+    """Return black or white for readable text on the given background."""
+    h = hex_color.lstrip('#')
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#000000" if luminance > 0.5 else "#FFFFFF"
+
+
 class KeyboardOnlyScroll(ScrollableContainer):
     """ScrollableContainer that ignores mouse/trackpad scroll events"""
 
@@ -781,7 +789,9 @@ class SimpleEvaluator:
         # Try pure math
         normalized = self._normalize_math(text)
         if (math_result := self._eval_math(normalized)) is not None:
-            return self._format_number_with_dots(math_result)
+            # If input is just a bare number, skip the label (Ask line already shows it)
+            is_bare_number = re.match(r'^\d+$', text.strip())
+            return self._format_number_with_dots(math_result, show_label=not is_bare_number)
 
         # Try single word lookup (emoji or color)
         if single := self._lookup(text.lower().strip()):
@@ -977,6 +987,59 @@ class SimpleEvaluator:
         )
         show_label = (has_computation
                       and not colors and not any(t == 'text' for t, _ in items))
+
+        # Compute mixed color for combining with emojis or text
+        mixed_color = None
+        if colors:
+            mixed_color = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+
+        only_colors_and_emojis = all(t in ('color', 'emoji') for t, _ in items)
+        has_mixable_text = any(
+            t == 'text' and all(ch.isalnum() or ch.isspace() for ch in v)
+            for t, v in items
+        )
+
+        # Emojis on colored background (e.g., "red + apple", "blue + yellow + 3 cats")
+        if mixed_color and emoji_items and only_colors_and_emojis:
+            emoji_strs = []
+            for t, v in items:
+                if t == 'emoji':
+                    e, c, w = v
+                    emoji_strs.append(e * c)
+            result = f"[on {mixed_color}] {''.join(emoji_strs)} [/]"
+            if pending:
+                result += " " + self._format_number_with_dots(pending)
+            return result
+
+        # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
+        if mixed_color and has_mixable_text:
+            result_parts = []
+            input_parts = []
+            for t, v in items:
+                if t == 'color':
+                    input_parts.append(
+                        " ".join(f"[on {c}]  [/]" for c in colors)
+                    )
+                elif t == 'emoji':
+                    e, c, w = v
+                    emoji_str = e * c
+                    result_parts.append(f"[on {mixed_color}] {emoji_str} [/]")
+                    input_parts.append(emoji_str)
+                elif t == 'text':
+                    if all(ch.isalnum() or ch.isspace() for ch in v):
+                        result_parts.append(
+                            self._format_text_mixed_with_color(v, mixed_color)
+                        )
+                        input_parts.append(self._format_text_as_color_blocks(v))
+                    else:
+                        result_parts.append(v)
+                        input_parts.append(v)
+            if pending:
+                result_parts.append(self._format_number_with_dots(pending))
+            result = " ".join(result_parts) if result_parts else None
+            if result and input_parts:
+                result = f"{'  '.join(input_parts)}\n{result}"
+            return result
 
         # Build result in order, merging adjacent emojis
         result_parts = []
@@ -1236,26 +1299,46 @@ class SimpleEvaluator:
             return str(int(num))
         return str(round(num, 3)).rstrip('0').rstrip('.')
 
-    def _format_number_with_dots(self, num: int | float) -> str:
+    def _format_number_with_dots(self, num: int | float, show_label: bool = True) -> str:
         """Format number with dot visualization."""
         formatted = self._format_number(num)
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if 1 <= n < 1000:
-                dots = "•" * n
+                dots = "⬤" * n
                 lines = [dots[i:i+90] for i in range(0, len(dots), 90)]
-                return f"{formatted}\n" + "\n".join(lines)
+                if show_label:
+                    return f"{formatted}\n" + "\n".join(lines)
+                return "\n".join(lines)
         return formatted
 
     def _format_text_as_color_blocks(self, text: str) -> str:
-        """Format plain text as colored blocks using doodle mode's letter-to-color mapping."""
+        """Format plain text as colored blocks with letters on top."""
         blocks = []
         for char in text:
             if char.isspace():
                 blocks.append("  ")
+            elif char.isalnum():
+                bg = get_key_color(char)
+                fg = _contrast_color(bg)
+                blocks.append(f"[{fg} on {bg}] {char.upper()} [/]")
             else:
-                color = get_key_color(char)
-                blocks.append(f"[on {color}]  [/]")
+                blocks.append(f" {char} ")
+        return "".join(blocks)
+
+    def _format_text_mixed_with_color(self, text: str, mix_color: str) -> str:
+        """Format text as colored blocks with each letter's color mixed with the given color."""
+        blocks = []
+        for char in text:
+            if char.isspace():
+                blocks.append("  ")
+            elif char.isalnum():
+                base = get_key_color(char)
+                mixed = mix_colors_paint([base, mix_color])
+                fg = _contrast_color(mixed)
+                blocks.append(f"[{fg} on {mixed}] {char.upper()} [/]")
+            else:
+                blocks.append(f" {char} ")
         return "".join(blocks)
 
     def _substitute_emojis(self, text: str) -> str:

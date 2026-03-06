@@ -4,6 +4,11 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Explore mode: emojis + colors mix visually ("red + apple" shows 🍎 on red background, "blue + yellow + apple" shows 🍎 on green)
+- Explore mode: text + colors mix ("tavi + red" shows original letter blocks, then each letter's color mixed with red)
+- Explore mode: only letters and numbers become colored blocks (symbols like + stay as plain text)
+- Explore mode: unrecognized text now shows colored blocks with letters visible on top (instead of blank colored blocks)
+- Explore mode: number dot visualization uses larger dots (⬤ instead of •); bare number input (e.g. "67") shows only dots without repeating the number
 - Code mode: cursor is now a blinking insertion point between blocks (like a text cursor); Enter inserts visual line breaks; backspace deletes the block before the cursor
 - Doodle mode: gutter is now a purple checkerboard pattern instead of solid black, visually distinct but not jarring
 - Code mode: consecutive identical blocks auto-collapse into one block with "xN" count badge

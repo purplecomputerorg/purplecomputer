@@ -819,7 +819,7 @@ class SimpleEvaluator:
         if (math_result := self._eval_math(normalized)) is not None:
             # If input is just a bare number, skip the label (Ask line already shows it)
             is_bare_number = re.match(r'^\d+$', text.strip())
-            return self._format_number_with_dots(math_result, show_label=not is_bare_number)
+            return self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
 
         # Try single word lookup (emoji or color)
         if single := self._lookup(text.lower().strip()):
@@ -906,7 +906,7 @@ class SimpleEvaluator:
         # Try pure math (returns with dots visualization)
         normalized = self._normalize_math(text)
         if (math_result := self._eval_math(normalized)) is not None:
-            return self._format_number_with_dots(math_result)
+            return self._format_number_with_dots(math_result, expression=normalized)
 
         # Try single word lookup
         if single := self._lookup(text.lower().strip()):
@@ -1429,12 +1429,27 @@ class SimpleEvaluator:
         "#e07eb8",  # hundred-thousands: pink
     ]
 
-    def _format_number_with_dots(self, num: int | float, show_label: bool = True) -> str:
-        """Format number as an abacus with colored place-value rows."""
+    def _format_number_with_dots(self, num: int | float, show_label: bool = True, expression: str = "") -> str:
+        """Format number as dots (≤9) or abacus (>9), with grouping for simple math."""
         formatted = self._format_number(num)
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if n >= 1:
+                color = self.ABACUS_COLORS[0]
+                # ≤ 9: plain dots (with grouping for simple math)
+                if n <= 9:
+                    grouped = self._format_grouped_dots(n, expression, color)
+                    if grouped:
+                        if show_label:
+                            return f"{formatted}\n[{color}]{grouped}[/]"
+                        return f"[{color}]{grouped}[/]"
+                    # Plain dots, no abacus label
+                    spaced_dots = " ".join("●" * n)
+                    if show_label:
+                        return f"{formatted}\n[{color}]{spaced_dots}[/]"
+                    return f"[{color}]{spaced_dots}[/]"
+
+                # > 9: abacus with place-value rows
                 rows = []
                 place = 1
                 remaining = n
@@ -1445,19 +1460,37 @@ class SimpleEvaluator:
                         rows.append((place, digit))
                     place *= 10
 
-                # rows is ones-first (top)
-                max_label_width = max(len(str(place)) for place, _ in rows)
+                max_label_width = max(len(f"{place}s") for place, _ in rows)
                 lines = []
                 for i, (place, digit) in enumerate(rows):
-                    color = self.ABACUS_COLORS[i % len(self.ABACUS_COLORS)]
-                    label = str(place).rjust(max_label_width)
+                    c = self.ABACUS_COLORS[i % len(self.ABACUS_COLORS)]
+                    label = f"{place}s".rjust(max_label_width)
                     spaced_dots = " ".join("●" * digit)
-                    lines.append(f"[{color}]{label}  {spaced_dots}[/]")
+                    lines.append(f"[{c}]{label}  {spaced_dots}[/]")
 
                 if show_label:
                     return f"{formatted}\n" + "\n".join(lines)
                 return "\n".join(lines)
         return formatted
+
+    def _format_grouped_dots(self, result: int, expression: str, color: str) -> str | None:
+        """Format dots with grouping for simple addition/multiplication. Returns None if not applicable."""
+        if not expression:
+            return None
+        # Match simple "a + b"
+        m = re.match(r'^\s*(\d+)\s*\+\s*(\d+)\s*$', expression)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            if a + b == result and a >= 1 and b >= 1:
+                return " ".join("●" * a) + "   " + " ".join("●" * b)
+        # Match simple "a * b"
+        m = re.match(r'^\s*(\d+)\s*\*\s*(\d+)\s*$', expression)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            if a * b == result and a >= 1 and b >= 1:
+                groups = "   ".join(" ".join("●" * a) for _ in range(b))
+                return groups
+        return None
 
     def _format_text_as_color_blocks(self, text: str) -> str:
         """Format plain text as colored blocks with letters on top."""

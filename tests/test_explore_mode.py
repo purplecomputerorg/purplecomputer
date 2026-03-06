@@ -543,9 +543,9 @@ if HAS_PYTEST:
             # 3+4+5 = 12 abacus dots
             assert result.count("●") == 12
             # Bare number: no label line, ones row is first
-            assert "1  ● ● ● ● ●" in result  # 5 ones
-            assert "10  ● ● ● ●" in result    # 4 tens
-            assert "100  ● ● ●" in result      # 3 hundreds
+            assert "1s  ● ● ● ● ●" in result   # 5 ones
+            assert "10s  ● ● ● ●" in result     # 4 tens
+            assert "100s  ● ● ●" in result      # 3 hundreds
 
 
 # =============================================================================

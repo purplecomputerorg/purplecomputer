@@ -4,9 +4,10 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
+- Explore: abacus rows now show ones at bottom and largest place value at top, matching standard abacus layout
 - Explore: "green potato peanut" now shows potato emoji on green bg + "peanut" letters in green (colors + emojis + text mix together)
 
-- Explore mode: answers show a 🔊 speaker icon when TTS is active (triggered by "say", "talk", or "!")
+- Explore: both ask and answer lines use ▶ triangle, aligned. Ask is purple, answer is white. 🔊 icon appears before the triangle when TTS is active
 - Explore mode: autocomplete now accepted with right arrow instead of space. Space always types a space, so you can type partial words without forced completion.
 - Explore mode: typing a complete word (like "apple") shows its emoji/color in the hint area as confirmation, instead of the hint disappearing.
 - Explore mode: numbers ≤9 show plain spaced dots; numbers >9 show a colored abacus with "1s", "10s", "100s" labels

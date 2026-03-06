@@ -542,7 +542,7 @@ if HAS_PYTEST:
             result = evaluator.evaluate("345")
             # 3+4+5 = 12 abacus dots
             assert result.count("●") == 12
-            # Bare number: no label line, ones row is first
+            # Bare number: no label line, ones row is at bottom
             assert "1s  ● ● ● ● ●" in result   # 5 ones
             assert "10s  ● ● ● ●" in result     # 4 tens
             assert "100s  ● ● ●" in result      # 3 hundreds
@@ -1303,8 +1303,10 @@ class TestThemeConstants:
         """Arrow color constants should be defined for both themes."""
         from purple_tui.rooms.explore_room import HistoryLine
 
-        assert HistoryLine.ARROW_DARK == "#a888d0"
-        assert HistoryLine.ARROW_LIGHT == "#7a5a9e"
+        assert HistoryLine.ASK_ARROW_DARK == "#c4a0e8"
+        assert HistoryLine.ASK_ARROW_LIGHT == "#7a5a9e"
+        assert HistoryLine.ANSWER_ARROW_DARK == "#ffffff"
+        assert HistoryLine.ANSWER_ARROW_LIGHT == "#3a2a50"
 
 
 # =============================================================================

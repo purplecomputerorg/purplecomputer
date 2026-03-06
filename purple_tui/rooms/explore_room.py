@@ -64,9 +64,11 @@ class KeyboardOnlyScroll(ScrollableContainer):
 class HistoryLine(Static):
     """A line in the REPL history (either Ask or Answer)"""
 
-    # Arrow colors for dark and light themes
-    ARROW_DARK = "#a888d0"
-    ARROW_LIGHT = "#7a5a9e"
+    # Theme colors for ask/answer arrows
+    ASK_ARROW_DARK = "#c4a0e8"
+    ASK_ARROW_LIGHT = "#7a5a9e"
+    ANSWER_ARROW_DARK = "#ffffff"
+    ANSWER_ARROW_LIGHT = "#3a2a50"
 
     def __init__(self, text: str, line_type: str = "ask", speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -77,26 +79,28 @@ class HistoryLine(Static):
         if line_type == "ask":
             self.add_class("ask")
 
-    def _get_arrow_color(self) -> str:
-        """Get arrow color based on current theme."""
+    def _is_dark(self) -> bool:
         try:
-            is_dark = "dark" in self.app.theme
-            return self.ARROW_DARK if is_dark else self.ARROW_LIGHT
+            return "dark" in self.app.theme
         except Exception:
-            return self.ARROW_DARK
+            return True
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
+        dark = self._is_dark()
         if self.line_type == "ask":
-            return f"[bold #c4a0e8]{caps('Ask')} ▶[/] {caps(self.text)}"
+            ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
+            return f"[bold {ask_color}]Ask ▶[/] {caps(self.text)}"
         else:
-            # Add arrow to each line for multi-line results
-            arrow_color = self._get_arrow_color()
+            answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')
-            prefix = "🔊" if self.speaking else "  "
-            result = [f"[{arrow_color}]{prefix}→[/] {caps(lines[0])}"]
+            speaker = " 🔊" if self.speaking else "   "
+            result = [f"{speaker} [{answer_color}]▶[/] {caps(lines[0])}"]
             for line in lines[1:]:
-                result.append(f"[{arrow_color}]  →[/] {caps(line)}")
+                if line.strip():
+                    result.append(f"    [{answer_color}]▶[/] {caps(line)}")
+                else:
+                    result.append("")
             return '\n'.join(result)
 
 
@@ -127,6 +131,8 @@ class ColorResultLine(Widget):
     # Surface colors for dark and light themes
     SURFACE_DARK = "#2a1845"
     SURFACE_LIGHT = "#e8daf0"
+    ARROW_DARK = "#ffffff"
+    ARROW_LIGHT = "#3a2a50"
 
     def __init__(self, hex_color: str, color_name: str, component_colors: list[str] = None, speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -159,15 +165,16 @@ class ColorResultLine(Widget):
         # Get theme-aware colors
         surface = self._get_surface_color()
         surface_style = Style(bgcolor=surface)
-        # Arrow color: light purple on dark, darker purple on light for visibility
-        arrow_color = "#a888d0" if self._is_dark_theme() else "#7a5a9e"
-
-        prefix = "🔊→  " if self._speaking else "  →  "
-        prefix_style = Style(color=arrow_color, bgcolor=surface)
+        is_dark = self._is_dark_theme()
+        arrow_color = self.ARROW_DARK if is_dark else self.ARROW_LIGHT
+        triangle_style = Style(color=arrow_color, bgcolor=surface)
 
         # Line 0: Show component colors and arrow to result
         if y == 0:
-            segments = [Segment(prefix, prefix_style)]
+            if self._speaking:
+                segments = [Segment(" 🔊 ", surface_style), Segment("▶ ", triangle_style)]
+            else:
+                segments = [Segment("    ", surface_style), Segment("▶ ", triangle_style)]
 
             # Show component color boxes (only if multiple components)
             if len(self._component_colors) > 1:
@@ -189,7 +196,7 @@ class ColorResultLine(Widget):
 
         # Lines 1-2: Continue the result swatch
         elif y < self.SWATCH_HEIGHT:
-            segments = [Segment("     ", surface_style)]  # Spacing for alignment (no arrow)
+            segments = [Segment("      ", surface_style)]  # 6 chars to align with "    ▶ "
 
             # Add spacing for component boxes if present
             if len(self._component_colors) > 1:
@@ -448,13 +455,11 @@ class ExploreMode(Vertical):
         height: auto;
         padding: 0 0;
         margin: 0;
-        margin-bottom: 1;
         background: $surface;
     }
 
     HistoryLine.ask {
         margin-top: 1;
-        margin-bottom: 0;
     }
 
     #bottom-area {
@@ -719,7 +724,7 @@ class ExploreMode(Vertical):
                             # Line 2: result
                             result_parts = [before_part, result_box, after_part]
                             result_line = " ".join(filter(None, result_parts))
-                            display = f"{input_line}\n{result_line}"
+                            display = f"{input_line}\n\n{result_line}"
                             scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
                         else:
                             scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
@@ -1460,10 +1465,13 @@ class SimpleEvaluator:
                         rows.append((place, digit))
                     place *= 10
 
+                # Reverse so largest place value is on top (standard abacus)
+                rows.reverse()
                 max_label_width = max(len(f"{place}s") for place, _ in rows)
                 lines = []
                 for i, (place, digit) in enumerate(rows):
-                    c = self.ABACUS_COLORS[i % len(self.ABACUS_COLORS)]
+                    color_idx = len(rows) - 1 - i  # ones=0, tens=1, etc.
+                    c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
                     label = f"{place}s".rjust(max_label_width)
                     spaced_dots = " ".join("●" * digit)
                     lines.append(f"[{c}]{label}  {spaced_dots}[/]")

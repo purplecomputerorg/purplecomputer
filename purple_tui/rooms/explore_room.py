@@ -797,6 +797,10 @@ class SimpleEvaluator:
         if single := self._lookup(text.lower().strip()):
             return single
 
+        # Try auto-mixing colors with emojis or text (e.g., "red apple", "red blue")
+        if auto_mix := self._eval_auto_mix(text):
+            return auto_mix
+
         # Try emoji substitution in text (e.g., "I love cat")
         subbed = self._substitute_emojis(text)
         if subbed != text:
@@ -1015,7 +1019,7 @@ class SimpleEvaluator:
             result = f"[on {mixed_color}] {''.join(emoji_strs)} [/]"
             if pending:
                 result += " " + self._format_number_with_dots(pending)
-            input_line = "  ".join(input_parts)
+            input_line = " ".join(input_parts)
             return f"{input_line}\n{result}"
 
         # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
@@ -1045,7 +1049,7 @@ class SimpleEvaluator:
                 result_parts.append(self._format_number_with_dots(pending))
             result = " ".join(result_parts) if result_parts else None
             if result and input_parts:
-                result = f"{'  '.join(input_parts)}\n{result}"
+                result = f"{' '.join(input_parts)}\n{result}"
             return result
 
         # Build result in order, merging adjacent emojis
@@ -1086,6 +1090,83 @@ class SimpleEvaluator:
                 label = ' '.join(label_parts)
                 result = f"{label}\n{result}"
             return result
+        return None
+
+    def _eval_auto_mix(self, text: str) -> str | None:
+        """Auto-mix colors with emojis, other colors, or text without requiring +.
+
+        Triggers when all words are colors, emojis, or plain text, with at least
+        one color and something to mix with. Falls through for ambiguous cases
+        (e.g., emojis mixed with plain text, or unknown word types).
+        """
+        words = text.split()
+        if len(words) < 2:
+            return None
+
+        # Categorize each word
+        word_info = []  # list of ('color', hex) | ('emoji', e, count) | ('text', word)
+        colors = []
+        has_emoji = False
+        has_text = False
+
+        for word in words:
+            lower = word.lower()
+            if h := self._get_color(lower):
+                word_info.append(('color', h))
+                colors.append(h)
+            elif emoji_data := self._parse_emoji(lower):
+                e, c, w = emoji_data
+                word_info.append(('emoji', e, c))
+                has_emoji = True
+            elif self._is_plain_text(lower):
+                word_info.append(('text', word))
+                has_text = True
+            else:
+                return None  # Unknown word type, fall through
+
+        if not colors:
+            return None
+        if not has_emoji and len(colors) < 2 and not has_text:
+            return None
+        # Don't handle emojis + plain text together (too ambiguous)
+        if has_emoji and has_text:
+            return None
+
+        mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+
+        # Colors + emojis: paint emojis on mixed color background
+        if has_emoji:
+            input_parts = []
+            emoji_strs = []
+            for info in word_info:
+                if info[0] == 'color':
+                    input_parts.append(f"[on {info[1]}]  [/]")
+                elif info[0] == 'emoji':
+                    s = info[1] * info[2]
+                    emoji_strs.append(s)
+                    input_parts.append(s)
+            result = f"[on {mixed}] {''.join(emoji_strs)} [/]"
+            return f"{' '.join(input_parts)}\n{result}"
+
+        # Colors only (2+): mix and show components + result
+        if len(colors) >= 2 and not has_text:
+            name = get_color_name_approximation(mixed)
+            return f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(colors)}"
+
+        # Colors + plain text: mix text blocks with color
+        if has_text:
+            input_parts = []
+            text_words = []
+            for info in word_info:
+                if info[0] == 'color':
+                    input_parts.append(f"[on {info[1]}]  [/]")
+                elif info[0] == 'text':
+                    input_parts.append(self._format_text_as_color_blocks(info[1]))
+                    text_words.append(info[1])
+            text_str = " ".join(text_words)
+            result = self._format_text_mixed_with_color(text_str, mixed)
+            return f"{' '.join(input_parts)}\n{result}"
+
         return None
 
     def _normalize_mult(self, text: str) -> str:

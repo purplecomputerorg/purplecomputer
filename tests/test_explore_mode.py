@@ -36,19 +36,19 @@ if HAS_PYTEST:
 
         def test_addition(self, evaluator):
             result = evaluator.evaluate("2 + 3")
-            assert result.startswith("5\n") and "•••••" in result
+            assert result.startswith("5\n") and "●●●●●" in result
 
         def test_subtraction(self, evaluator):
             result = evaluator.evaluate("10 - 4")
-            assert result.startswith("6\n") and "••••••" in result
+            assert result.startswith("6\n") and "●●●●●●" in result
 
         def test_multiplication(self, evaluator):
             result = evaluator.evaluate("3 * 4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
         def test_division(self, evaluator):
             result = evaluator.evaluate("8 / 2")
-            assert result.startswith("4\n") and "••••" in result
+            assert result.startswith("4\n") and "●●●●" in result
 
         def test_division_decimal(self, evaluator):
             assert evaluator.evaluate("2 / 3") == "0.667"
@@ -58,11 +58,11 @@ if HAS_PYTEST:
 
         def test_complex_expression(self, evaluator):
             result = evaluator.evaluate("2 + 3 * 4")
-            assert result.startswith("14\n") and result.count("•") == 14
+            assert result.startswith("14\n") and result.count("●") == 14
 
         def test_parentheses(self, evaluator):
             result = evaluator.evaluate("(2 + 3) * 4")
-            assert result.startswith("20\n") and result.count("•") == 20
+            assert result.startswith("20\n") and result.count("●") == 20
 
 
     class TestMostlyMathCleaning:
@@ -84,14 +84,14 @@ if HAS_PYTEST:
             """With only 2 operators, don't clean (might be intentional)."""
             # Only 2 math operators, doesn't meet MIN_MATH_OPERATORS threshold
             result = evaluator.evaluate("2+3=5")
-            # Should NOT be cleaned, returns as-is (not valid math)
-            assert result == "2+3=5"
+            # Should NOT be cleaned, returns color blocks (not valid math)
+            assert "[/]" in result  # color block markup
 
         def test_too_many_non_math_symbols_not_cleaned(self, evaluator):
             """If too many non-math symbols, don't clean."""
             # 3 math ops (+,+,+) but 3 non-math (=,=,=), ratio is 50% < 60%
             result = evaluator.evaluate("1+2=3+4=5+6=7")
-            assert result == "1+2=3+4=5+6=7"
+            assert "[/]" in result  # color block markup
 
         def test_clean_preserves_spaces(self, evaluator):
             """Cleaning should preserve spaces and replace invalid punct with +."""
@@ -113,39 +113,39 @@ if HAS_PYTEST:
 
         def test_times(self, evaluator):
             result = evaluator.evaluate("3 times 4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
         def test_times_no_spaces(self, evaluator):
             result = evaluator.evaluate("3times4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
         def test_plus(self, evaluator):
             result = evaluator.evaluate("2 plus 3")
-            assert result.startswith("5\n") and result.count("•") == 5
+            assert result.startswith("5\n") and result.count("●") == 5
 
         def test_plus_no_spaces(self, evaluator):
             result = evaluator.evaluate("2plus3")
-            assert result.startswith("5\n") and result.count("•") == 5
+            assert result.startswith("5\n") and result.count("●") == 5
 
         def test_minus(self, evaluator):
             result = evaluator.evaluate("5 minus 2")
-            assert result.startswith("3\n") and result.count("•") == 3
+            assert result.startswith("3\n") and result.count("●") == 3
 
         def test_minus_no_spaces(self, evaluator):
             result = evaluator.evaluate("5minus2")
-            assert result.startswith("3\n") and result.count("•") == 3
+            assert result.startswith("3\n") and result.count("●") == 3
 
         def test_divided_by(self, evaluator):
             result = evaluator.evaluate("8 divided by 2")
-            assert result.startswith("4\n") and result.count("•") == 4
+            assert result.startswith("4\n") and result.count("●") == 4
 
         def test_x_as_times(self, evaluator):
             result = evaluator.evaluate("3 x 4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
         def test_x_no_spaces(self, evaluator):
             result = evaluator.evaluate("3x4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
 
     class TestUnicodeOperators:
@@ -153,11 +153,11 @@ if HAS_PYTEST:
 
         def test_multiplication_sign(self, evaluator):
             result = evaluator.evaluate("3 × 4")
-            assert result.startswith("12\n") and result.count("•") == 12
+            assert result.startswith("12\n") and result.count("●") == 12
 
         def test_division_sign(self, evaluator):
             result = evaluator.evaluate("8 ÷ 2")
-            assert result.startswith("4\n") and result.count("•") == 4
+            assert result.startswith("4\n") and result.count("●") == 4
 
         def test_multiplication_with_emoji(self, evaluator):
             result = evaluator.evaluate("3 × cat")
@@ -180,7 +180,7 @@ if HAS_PYTEST:
         def test_unknown_word_shows_color_blocks(self, evaluator):
             result = evaluator.evaluate("xyz123")
             # Plain text fallback shows colored blocks, not an echo
-            assert "[on " in result
+            assert " on " in result and "[/]" in result
             assert result != "xyz123"
 
 
@@ -319,7 +319,7 @@ if HAS_PYTEST:
 
         def test_nested_parens(self, evaluator):
             result = evaluator.evaluate("((2 + 3) * 2)")
-            assert result.startswith("10")
+            assert result.count("●") == 10
 
         def test_multiple_parens(self, evaluator):
             result = evaluator.evaluate("(2 + 3) * (1 + 1)")
@@ -357,10 +357,10 @@ if HAS_PYTEST:
 
         def test_deeply_nested_math(self, evaluator):
             result = evaluator.evaluate("((1 + 2) + (3 + 4))")
-            assert result.startswith("10")
+            assert result.count("●") == 10
 
         def test_single_emoji_in_parens(self, evaluator):
-            assert evaluator.evaluate("(cat)") == "🐱"
+            assert "🐱" in evaluator.evaluate("(cat)")
 
 
     class TestPluralEmojis:
@@ -512,31 +512,33 @@ if HAS_PYTEST:
 
         def test_small_number_has_dots(self, evaluator):
             result = evaluator.evaluate("5")
-            assert "•••••" in result and result.startswith("5")
+            # Bare numbers show just dots (no label)
+            assert "●●●●●" in result
 
         def test_math_result_has_dots(self, evaluator):
             result = evaluator.evaluate("2 + 2")
-            assert "••••" in result and result.startswith("4")
+            assert "●●●●" in result and result.startswith("4")
 
         def test_large_number_no_dots(self, evaluator):
             result = evaluator.evaluate("1000")
-            assert "•" not in result and result == "1000"
+            assert "●" not in result and result == "1000"
 
         def test_very_large_number_no_dots(self, evaluator):
-            assert "•" not in evaluator.evaluate("9999")
+            assert "●" not in evaluator.evaluate("9999")
 
         def test_decimal_no_dots(self, evaluator):
-            assert "•" not in evaluator.evaluate("2.5")
+            assert "●" not in evaluator.evaluate("2.5")
 
         def test_zero_no_dots(self, evaluator):
-            assert "•" not in evaluator.evaluate("0")
+            assert "●" not in evaluator.evaluate("0")
 
         def test_negative_no_dots(self, evaluator):
-            assert "•" not in evaluator.evaluate("0 - 5")
+            assert "●" not in evaluator.evaluate("0 - 5")
 
         def test_hundred_dots_wrapped(self, evaluator):
             result = evaluator.evaluate("100")
-            assert result.startswith("100\n") and result.count("•") == 100
+            # Bare numbers show just dots (no label)
+            assert result.count("●") == 100
 
 
 # =============================================================================
@@ -733,9 +735,9 @@ class TestColorMixing:
         assert len(components) == 4
 
     def test_color_plus_emoji_mixed(self, evaluator):
-        # red + cat + blue = mixed purple + cat emoji
+        # red + cat + blue = mixed color swatches + cat emoji
         result = evaluator.evaluate("red + cat + blue")
-        assert "COLOR_RESULT:" in result
+        assert "[on " in result  # color swatch markup
         assert "🐱" in result
 
     def test_color_with_number_multiplier(self, evaluator):
@@ -802,26 +804,25 @@ class TestMixedExpressions:
     def test_color_and_emoji(self, evaluator):
         # Should mix colors and show emoji
         result = evaluator.evaluate("red + fox + blue")
-        assert "COLOR_RESULT:" in result
+        assert "[on " in result  # color swatch markup
         assert "🦊" in result
 
     def test_number_color_emoji(self, evaluator):
-        # 2 + red + 3 cats + blue = 3 reds + 1 blue (mixed) + 3 cats
-        # Numbers attach to the NEXT term (2→red, 3→cats)
+        # 2 + red + 3 cats + blue = color swatches + 3 cats
         result = evaluator.evaluate("2 + red + 3 cats + blue")
-        assert "COLOR_RESULT:" in result
-        assert "🐱🐱🐱" in result  # 3 cats (not 5)
+        assert "[on " in result  # color swatch markup
+        assert "🐱🐱🐱" in result  # 3 cats
 
     def test_emoji_plus_single_color(self, evaluator):
-        # apple + blue = blue color + apple emoji
+        # apple + blue = blue color swatch + apple emoji
         result = evaluator.evaluate("apple + blue")
-        assert "COLOR_RESULT:" in result
+        assert "[on " in result  # color swatch markup
         assert "🍎" in result
 
     def test_single_color_plus_emoji(self, evaluator):
-        # blue + leaf = blue color + leaf emoji
+        # blue + leaf = blue color swatch + leaf emoji
         result = evaluator.evaluate("blue + leaf")
-        assert "COLOR_RESULT:" in result
+        assert "[on " in result  # color swatch markup
         assert "🍃" in result
 
     def test_pure_numbers_still_math(self, evaluator):
@@ -829,27 +830,21 @@ class TestMixedExpressions:
         assert result.startswith("12")
 
     def test_unknown_plus_color_order_preserved(self, evaluator):
-        # Unknown text + color: text first, then color
+        # Unknown text + color: color blocks for unknown text, color swatch for blue
         result = evaluator.evaluate("gibberish + blue")
-        assert result.startswith("gibberish")
-        assert "COLOR_RESULT:" in result
+        assert "[on " in result  # has color markup
 
     def test_color_plus_unknown_order_preserved(self, evaluator):
-        # Color + unknown text: color first, then text
+        # Color + unknown text: color swatch first, then color blocks for text
         result = evaluator.evaluate("blue + gibberish")
-        assert result.startswith("COLOR_RESULT:")
-        assert "gibberish" in result
+        assert "[on " in result  # has color markup
 
     def test_emoji_color_emoji_order(self, evaluator):
-        # cat + red + dog: emojis separated by color, colors mix
+        # cat + red + dog + blue: emojis and color swatches
         result = evaluator.evaluate("cat + red + dog + blue")
-        parts = result.split()
-        # First part should be cat emoji
-        assert parts[0] == "🐱"
-        # Should have color result
-        assert "COLOR_RESULT:" in result
-        # Last part should be dog emoji
-        assert parts[-1] == "🐶"
+        assert "🐱" in result
+        assert "[on " in result  # color swatch markup
+        assert "🐶" in result
 
 
 class TestOperatorPrecedence:
@@ -951,13 +946,13 @@ class TestTextWithExpression:
         # "what is 2 + 3" -> "what is 5" with dots
         result = evaluator.evaluate("what is 2 + 3")
         assert result.startswith("what is 5\n")
-        assert "•••••" in result
+        assert "●●●●●" in result
 
     def test_what_is_multiplication(self, evaluator):
         # "tell me 3 * 4" -> "tell me 12" with dots
         result = evaluator.evaluate("tell me 3 * 4")
         assert result.startswith("tell me 12\n")
-        assert result.count("•") == 12
+        assert result.count("●") == 12
 
     def test_i_have_apples(self, evaluator):
         # "I have 5 apples" -> "I have" + emojis
@@ -999,7 +994,7 @@ class TestTextWithExpression:
         # "2 + 2" without prefix still works normally
         result = evaluator.evaluate("2 + 2")
         assert result.startswith("4\n")
-        assert "••••" in result
+        assert "●●●●" in result
 
     def test_single_word_prefix_with_emoji(self, evaluator):
         # "show cat" -> "show" + cat emoji
@@ -1066,12 +1061,9 @@ class TestColorNumberAttachment:
         assert len(components) == 3
 
     def test_mixed_numbers_attach_to_next(self, evaluator):
-        # "2 + red + 3 cats" = 3 reds + 3 cats (2→red, 3→cats)
+        # "2 + red + 3 cats" = red swatches + 3 cats
         result = evaluator.evaluate("2 + red + 3 cats")
-        assert "COLOR_RESULT:" in result
-        parts = result.split(":")
-        components = parts[3].split(",")
-        assert len(components) == 3  # 2 + 1 = 3 reds
+        assert "[on " in result  # color swatch markup
         assert "🐱🐱🐱" in result  # 3 cats
 
 

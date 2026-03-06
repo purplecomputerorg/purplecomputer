@@ -4,8 +4,8 @@ Brief descriptions of user experience changes, newest first.
 
 ---
 
-- Explore mode: emojis + colors mix visually ("red + apple" shows 🍎 on red background, "blue + yellow + apple" shows 🍎 on green)
-- Explore mode: text + colors mix ("tavi + red" shows original letter blocks, then each letter's color mixed with red)
+- Explore mode: colors auto-mix with emojis, other colors, and text without needing + ("red apple" → 🍎 on red, "red blue" → mixed purple, "tavi red" → mixed letter blocks)
+- Explore mode: + operator still works the same way but is now optional for mixing
 - Explore mode: only letters and numbers become colored blocks (symbols like + stay as plain text)
 - Explore mode: unrecognized text now shows colored blocks with letters visible on top (instead of blank colored blocks)
 - Explore mode: number dot visualization uses larger dots (⬤ instead of •); bare number input (e.g. "67") shows only dots without repeating the number

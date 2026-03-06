@@ -23,8 +23,11 @@ from pathlib import Path
 try:
     from nacl.signing import SigningKey
 except ImportError:
-    print("PyNaCl is required. Install it with: pip install pynacl")
-    sys.exit(1)
+    SigningKey = None
+    # Only exit if running as main script, not when imported by tests
+    if __name__ == "__main__":
+        print("PyNaCl is required. Install it with: pip install pynacl")
+        sys.exit(1)
 
 # Files and directories to skip when collecting payload
 SKIP_PATTERNS = {

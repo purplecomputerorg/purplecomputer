@@ -1,13 +1,13 @@
-"""Word recognition for Play Mode Letters sub-mode.
+"""Word recognition for Play Mode Letters mode.
 
 After a replay finishes, if the typed letters form a known word, the word
 is spoken aloud via TTS. This connects individual letter sounds to whole words.
 
 Pure logic with no UI, audio, or pygame dependencies. Kept separate from
-play_mode.py so it's easy to test.
+play_room.py so it's easy to test.
 """
 
-from .play_session import SUBMODE_LETTERS
+from .play_session import MODE_LETTERS
 
 # Basic words for kids 4-7. All lowercase, 2-5 letters.
 WORDS = frozenset({
@@ -52,22 +52,22 @@ WORDS = frozenset({
 })
 
 
-def extract_word(replay_data: list[tuple[str, str, float]], letters_submode: str = SUBMODE_LETTERS) -> str | None:
+def extract_word(replay_data: list[tuple[str, str, float]], letters_mode: str = MODE_LETTERS) -> str | None:
     """Extract a recognized word from replay data.
 
     Filters to letter-mode alphabetic keys, joins them, and checks
     against the known word list.
 
     Args:
-        replay_data: List of (key, submode, delay) triples from PlaySession.
-        letters_submode: The submode string for letters (default SUBMODE_LETTERS).
+        replay_data: List of (key, mode, delay) triples from PlaySession.
+        letters_mode: The mode string for letters (default MODE_LETTERS).
 
     Returns:
         The recognized word (lowercase) if found, else None.
     """
     letters = []
-    for key, submode, _delay in replay_data:
-        if submode == letters_submode and key.isalpha():
+    for key, mode, _delay in replay_data:
+        if mode == letters_mode and key.isalpha():
             letters.append(key.lower())
 
     if not letters:

@@ -11,10 +11,9 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F3: Switch modes (Explore, Play, Doodle)
-- F9: Toggle dark/light theme
+- F1-F4: Switch rooms (Explore, Play, Doodle, Command)
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
-- Escape (long hold): Parent mode
+- Escape (long hold): Parent menu
 - Shift (tap): Sticky shift for one character
 - Shift (double-tap): Toggle caps lock
 - Caps Lock key: Remapped to Shift
@@ -24,6 +23,9 @@ Keyboard controls:
 import os
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
+
+import asyncio
+import time
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal
@@ -35,8 +37,8 @@ from textual import events
 from enum import Enum
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
-    ICON_MOON, ICON_SUN, MODE_TITLES,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND, ICON_MENU,
+    ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
@@ -44,26 +46,29 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    MODE_EXPLORE, MODE_PLAY, MODE_DOODLE,
+    ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_COMMAND,
+    USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
-    ModeAction, ControlAction, CapsLockAction, LongHoldAction,
+    RoomAction, ControlAction, CapsLockAction, LongHoldAction,
 )
-from .input import EvdevReader, RawKeyEvent, check_evdev_available
+from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
-from .modes.doodle_mode import ColorLegend, PaintModeChanged
-from .modes.parent_mode import apply_saved_display_settings
-from .mode_picker import ModePickerScreen
+from .recording import RecordingManager, RecordingState
+from .rooms.doodle_room import ColorLegend, PaintModeChanged
+from .rooms.parent_menu import apply_saved_display_settings
+from .room_picker import RoomPickerScreen
 
 
-class Mode(Enum):
-    """The 3 core modes of Purple Computer"""
+class Room(Enum):
+    """The 4 core rooms of Purple Computer"""
     EXPLORE = 1  # F1: Math and emoji REPL
     PLAY = 2     # F2: Music and art grid
     DOODLE = 3   # F3: Simple drawing canvas
+    COMMAND = 4  # F4: Visual block programming
 
 
 class View(Enum):
@@ -73,19 +78,20 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-# Mode display info: F-keys for mode switching (uses mode name constants)
-MODE_INFO = {
-    Mode.EXPLORE: {"key": "F1", "label": MODE_EXPLORE[1], "emoji": ICON_CHAT},
-    Mode.PLAY: {"key": "F2", "label": MODE_PLAY[1], "emoji": ICON_MUSIC},
-    Mode.DOODLE: {"key": "F3", "label": MODE_DOODLE[1], "emoji": ICON_PALETTE},
+# Room display info: F-keys for room switching (uses room name constants)
+ROOM_INFO = {
+    Room.EXPLORE: {"key": "F1", "label": ROOM_EXPLORE[1], "emoji": ICON_CHAT},
+    Room.PLAY: {"key": "F2", "label": ROOM_PLAY[1], "emoji": ICON_MUSIC},
+    Room.DOODLE: {"key": "F3", "label": ROOM_DOODLE[1], "emoji": ICON_PALETTE},
+    Room.COMMAND: {"key": "F4", "label": ROOM_COMMAND[1], "emoji": ICON_COMMAND},
 }
 
 
-class ModeTitle(Static):
+class RoomTitle(Static):
     """Shows current mode title above the viewport"""
 
     DEFAULT_CSS = """
-    ModeTitle {
+    RoomTitle {
         width: 100%;
         height: 1;
         text-align: center;
@@ -96,17 +102,25 @@ class ModeTitle(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mode = MODE_EXPLORE[0]
+        self.mode = ROOM_EXPLORE[0]
+        self._recording_indicator = ""
         self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
         self.refresh()
 
+    def set_recording_indicator(self, indicator: str) -> None:
+        self._recording_indicator = indicator
+        self.refresh()
+
     def render(self) -> str:
-        icon, label = MODE_TITLES.get(self.mode, ("", self.mode.title()))
+        icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"{icon}  {caps(label)}"
+        title = f"{icon}  {caps(label)}"
+        if self._recording_indicator:
+            title = f"{self._recording_indicator} {title}"
+        return title
 
 
 class KeyBadge(Static):
@@ -144,11 +158,11 @@ class KeyBadge(Static):
         return self.text
 
 
-class ModeIndicator(Horizontal):
+class RoomIndicator(Horizontal):
     """Shows mode indicators with F-keys"""
 
     DEFAULT_CSS = """
-    ModeIndicator {
+    RoomIndicator {
         width: 100%;
         height: 3;
         background: $background;
@@ -172,9 +186,9 @@ class ModeIndicator(Horizontal):
     }
     """
 
-    def __init__(self, current_mode: Mode, **kwargs):
+    def __init__(self, current_room: Room, **kwargs):
         super().__init__(**kwargs)
-        self.current_mode = current_mode
+        self.current_room = current_room
 
     def compose(self) -> ComposeResult:
         # Mode badges with F-keys (Esc for mode picker, then F1-F3)
@@ -185,10 +199,10 @@ class ModeIndicator(Horizontal):
             yield esc_badge
 
             # F1-F3 mode badges
-            for mode in Mode:
-                info = MODE_INFO[mode]
-                badge = KeyBadge(f"{info['key']} {info['emoji']}", id=f"key-{mode.name.lower()}")
-                if mode == self.current_mode:
+            for room in Room:
+                info = ROOM_INFO[room]
+                badge = KeyBadge(f"{info['key']} {info['emoji']}", id=f"key-{room.name.lower()}")
+                if room == self.current_room:
                     badge.add_class("active")
                 else:
                     badge.add_class("dim")
@@ -197,14 +211,8 @@ class ModeIndicator(Horizontal):
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
 
-        # Theme (F9) and Volume (F10 mute, F11 down, F12 up) on the right
+        # Volume (F10 mute, F11 down, F12 up) on the right
         with Horizontal(id="keys-right"):
-            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            theme_icon = ICON_MOON if is_dark else ICON_SUN
-            theme_badge = KeyBadge(f"F9 {theme_icon}", id="key-theme")
-            theme_badge.add_class("dim")
-            yield theme_badge
-
             # Volume controls: F10 mute (shows current level icon), F11 down, F12 up
             volume_badge = KeyBadge(f"F10 {ICON_VOLUME_HIGH}", id="key-volume")
             volume_badge.add_class("dim")
@@ -218,28 +226,18 @@ class ModeIndicator(Horizontal):
             vol_up_badge.add_class("dim")
             yield vol_up_badge
 
-    def update_mode(self, mode: Mode) -> None:
-        self.current_mode = mode
-        for m in Mode:
+    def update_room(self, room: Room) -> None:
+        self.current_room = room
+        for m in Room:
             try:
                 badge = self.query_one(f"#key-{m.name.lower()}", KeyBadge)
                 badge.remove_class("active", "dim")
-                if m == mode:
+                if m == room:
                     badge.add_class("active")
                 else:
                     badge.add_class("dim")
             except NoMatches:
                 pass
-
-    def update_theme_icon(self) -> None:
-        """Update the theme badge icon (F9)"""
-        try:
-            badge = self.query_one("#key-theme", KeyBadge)
-            is_dark = "dark" in getattr(self.app, 'active_theme', 'dark')
-            badge.text = f"F9 {ICON_MOON if is_dark else ICON_SUN}"
-            badge.refresh()
-        except NoMatches:
-            pass
 
     def update_volume_indicator(self, volume_level: int) -> None:
         """Update volume indicator badge with level icon (F10)"""
@@ -398,7 +396,6 @@ class PurpleApp(App):
     Purple Computer: The calm computer for kids.
 
     F1-F3: Switch between modes (Explore, Play, Doodle)
-    F9: Toggle dark/light theme
     F10: Mute/unmute, F11: Volume down, F12: Volume up
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
@@ -444,7 +441,7 @@ class PurpleApp(App):
         width: 12;  /* Balance right side: caps (~8) + battery (~3) + margin */
     }
 
-    #mode-title {
+    #room-title {
         width: 1fr;
         text-align: center;
     }
@@ -483,7 +480,7 @@ class PurpleApp(App):
         background: $surface;
     }
 
-    #mode-indicator {
+    #room-indicator {
         dock: bottom;
         height: 3;
         background: $background;
@@ -494,7 +491,7 @@ class PurpleApp(App):
         height: 100%;
     }
 
-    .mode-content {
+    .room-content {
         width: 100%;
         height: 100%;
     }
@@ -508,7 +505,7 @@ class PurpleApp(App):
         display: none;
     }
 
-    .view-ears #mode-indicator {
+    .view-ears #room-indicator {
         display: none;
     }
 
@@ -542,11 +539,10 @@ class PurpleApp(App):
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
-        Binding("f1", f"switch_mode('{MODE_EXPLORE[0]}')", MODE_EXPLORE[1], show=False, priority=True),
-        Binding("f2", f"switch_mode('{MODE_PLAY[0]}')", MODE_PLAY[1], show=False, priority=True),
-        Binding("f3", f"switch_mode('{MODE_DOODLE[0]}')", MODE_DOODLE[1], show=False, priority=True),
+        Binding("f1", f"switch_room('{ROOM_EXPLORE[0]}')", ROOM_EXPLORE[1], show=False, priority=True),
+        Binding("f2", f"switch_room('{ROOM_PLAY[0]}')", ROOM_PLAY[1], show=False, priority=True),
+        Binding("f3", f"switch_room('{ROOM_DOODLE[0]}')", ROOM_DOODLE[1], show=False, priority=True),
         Binding("f8", "take_screenshot", "Screenshot", show=False, priority=True),
-        Binding("f9", "toggle_theme", "Theme", show=False, priority=True),
         Binding("f10", "volume_mute", "Mute", show=False, priority=True),
         Binding("f11", "volume_down", "Vol-", show=False, priority=True),
         Binding("f12", "volume_up", "Vol+", show=False, priority=True),
@@ -555,7 +551,7 @@ class PurpleApp(App):
 
     def __init__(self):
         super().__init__()
-        self.active_mode = Mode.EXPLORE
+        self.active_room = Room.EXPLORE
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
@@ -566,6 +562,10 @@ class PurpleApp(App):
         # Power management
         self._idle_timer = None
         self._sleep_screen_active = False
+        self._power_button_reader: PowerButtonReader | None = None
+        self._power_button_down_time: float | None = None
+        self._power_hold_timer = None
+        self._bye_screen_active = False
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -585,6 +585,10 @@ class PurpleApp(App):
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
+
+        # Recording manager for F5 record/play/stop cycle
+        self._recording_manager = RecordingManager()
+        self._f5_play_task: asyncio.Task | None = None
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -629,7 +633,7 @@ class PurpleApp(App):
             with Vertical(id="viewport-wrapper"):
                 with Horizontal(id="title-row"):
                     yield Static("", id="title-spacer-left")  # Balance for right elements
-                    yield ModeTitle(id="mode-title")
+                    yield RoomTitle(id="room-title")
                     yield Static(ICON_SHIFT, id="shift-indicator")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
@@ -637,18 +641,22 @@ class PurpleApp(App):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
-            yield ModeIndicator(self.active_mode, id="mode-indicator")
+            yield RoomIndicator(self.active_room, id="room-indicator")
 
     async def on_mount(self) -> None:
         """Called when app starts"""
         self._apply_theme()
         apply_saved_display_settings()
-        self._load_mode_content()
+        self._load_room_content()
 
-        # Initialize paint legend as hidden
+        # Initialize color legend (visible in explore mode, hidden otherwise)
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
-            legend.set_visible(False)
+            if self.active_room == Room.EXPLORE:
+                legend.set_visible(True)
+                legend.set_active_row(-1)
+            else:
+                legend.set_visible(False)
         except NoMatches:
             pass
 
@@ -662,6 +670,16 @@ class PurpleApp(App):
             await self._evdev_reader.start()
         else:
             self._evdev_reader = None
+
+        # Start power button reader (separate device from keyboard)
+        if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            self._power_button_reader = PowerButtonReader(
+                callback=self._handle_power_button_event,
+            )
+            try:
+                await self._power_button_reader.start()
+            except Exception:
+                self._power_button_reader = None
 
         # Start idle detection timer (disabled in dev mode for AI training)
         # In demo mode, check every second for responsiveness
@@ -683,6 +701,9 @@ class PurpleApp(App):
                 check_interval = 5.0
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
+
+        # Poll for USB update signal file (written by systemd usb_updater service)
+        self._usb_update_timer = self.set_interval(2.0, self._check_usb_update_signal)
 
         # Show breaking update prompt if available
         if self._pending_update:
@@ -706,6 +727,11 @@ class PurpleApp(App):
         if self._evdev_reader:
             await self._evdev_reader.stop()
             self._evdev_reader = None
+
+        # Clean up power button reader
+        if self._power_button_reader:
+            await self._power_button_reader.stop()
+            self._power_button_reader = None
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Show/hide paint legend and update active row when paint mode changes."""
@@ -764,28 +790,57 @@ class PurpleApp(App):
         # Record user activity for idle detection
         self._record_user_activity()
 
+        # Flush stale TTS audio after long gaps (e.g., VM suspend/resume)
+        now = time.monotonic()
+        if now - getattr(self, '_last_evdev_time', now) > 5.0:
+            from . import tts
+            tts.stop()
+        self._last_evdev_time = now
+
         # Process through state machine
         actions = self._keyboard_state_machine.process(event)
 
         for action in actions:
             if os.environ.get("PURPLE_DEV_MODE") == "1":
-                self._dev_log(f"[Evdev] action={action} (current_mode={self.active_mode.name})")
+                self._dev_log(f"[Evdev] action={action} (current_room={self.active_room.name})")
             await self._dispatch_keyboard_action(action)
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
-        if isinstance(action, ModeAction):
+        # Handle F5 record_toggle globally (before mode dispatch)
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'record_toggle':
+            # F5 does nothing in Command mode
+            if self.active_room == Room.COMMAND:
+                return
+            await self._handle_record_toggle()
+            return
+
+        # Record events when recording (not during demo playback)
+        if self._recording_manager.state == RecordingState.RECORDING:
+            if not (self._demo_player and self._demo_player.is_running):
+                mode = self._get_current_mode()
+                self._recording_manager.record_event(
+                    action, self.active_room.name.lower(), mode
+                )
+
+        if isinstance(action, RoomAction):
             # Dismiss any open modal (like mode picker) when F-key is pressed
             if len(self.screen_stack) > 1:
                 self.screen.dismiss(None)
-            if action.mode == MODE_EXPLORE[0]:
-                self.action_switch_mode(MODE_EXPLORE[0])
-            elif action.mode == MODE_PLAY[0]:
-                self.action_switch_mode(MODE_PLAY[0])
-            elif action.mode == MODE_DOODLE[0]:
-                self.action_switch_mode(MODE_DOODLE[0])
-            elif action.mode == 'parent':
-                self.action_parent_mode()
+            if action.room == ROOM_EXPLORE[0]:
+                self.action_switch_room(ROOM_EXPLORE[0])
+            elif action.room == ROOM_PLAY[0]:
+                self.action_switch_room(ROOM_PLAY[0])
+            elif action.room == ROOM_DOODLE[0]:
+                self.action_switch_room(ROOM_DOODLE[0])
+            elif action.room == ROOM_COMMAND[0]:
+                # F4 during recording: stop recording and switch to Command mode
+                if self._recording_manager.state == RecordingState.RECORDING:
+                    self._recording_manager.stop_recording()
+                    self._update_recording_indicator()
+                self.action_switch_room(ROOM_COMMAND[0])
+            elif action.room == 'parent':
+                self.action_parent_menu()
             return
 
         if isinstance(action, CapsLockAction):
@@ -794,7 +849,7 @@ class PurpleApp(App):
 
         if isinstance(action, LongHoldAction):
             if action.key == 'escape':
-                # Long-hold escape handled via ModeAction('parent')
+                # Long-hold escape handled via RoomAction('parent')
                 pass
             return
 
@@ -813,15 +868,12 @@ class PurpleApp(App):
                 # If modal was open, it handles its own ESC (closes itself)
                 if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press:
                     if len(self.screen_stack) == 1:
-                        self._show_mode_picker()
+                        self._show_room_picker()
                         return
             # Don't return - let escape events propagate to modes for other uses
 
-        # Handle global toggles (F9 theme, F10-F12 volume)
+        # Handle global toggles (F10-F12 volume)
         if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'theme_toggle':
-                self.action_toggle_theme()
-                return
             if action.action == 'volume_mute':
                 self.action_volume_mute()
                 return
@@ -841,14 +893,14 @@ class PurpleApp(App):
             return
 
         # Dispatch to the current mode widget
-        mode_id = f"mode-{self.active_mode.name.lower()}"
+        room_id = f"room-{self.active_room.name.lower()}"
         try:
             content_area = self.query_one("#content-area")
-            mode_widget = content_area.query_one(f"#{mode_id}")
+            room_widget = content_area.query_one(f"#{room_id}")
 
             # Call the mode's action handler if it exists
-            if hasattr(mode_widget, 'handle_keyboard_action'):
-                await mode_widget.handle_keyboard_action(action)
+            if hasattr(room_widget, 'handle_keyboard_action'):
+                await room_widget.handle_keyboard_action(action)
         except NoMatches:
             pass
 
@@ -872,29 +924,146 @@ class PurpleApp(App):
         if self._keyboard_state_machine.check_escape_hold():
             self._escape_triggered_long_hold = True  # Prevent picker on release
             self._cancel_escape_hold_timer()
-            self.action_parent_mode()
+            self.action_parent_menu()
 
-    def _show_mode_picker(self) -> None:
+    def _show_room_picker(self) -> None:
         """Show the mode picker modal."""
-        current_mode = self.active_mode.name.lower()
-        picker = ModePickerScreen(current_mode=current_mode)
-        self.push_screen(picker, self._on_mode_picked)
+        current_room = self.active_room.name.lower()
+        picker = RoomPickerScreen(current_room=current_room)
+        self.push_screen(picker, self._on_room_picked)
 
-    def _on_mode_picked(self, result: dict | None) -> None:
+    def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker result."""
         if result is None:
             # Cancelled, do nothing
             return
 
-        mode_name = result.get("mode")
+        room_name = result.get("room")
 
         # Switch to the selected mode
-        if mode_name == "explore":
-            self.action_switch_mode(MODE_EXPLORE[0])
-        elif mode_name == "play":
-            self.action_switch_mode(MODE_PLAY[0])
-        elif mode_name == "doodle":
-            self.action_switch_mode(MODE_DOODLE[0])
+        if room_name == "explore":
+            self.action_switch_room(ROOM_EXPLORE[0])
+        elif room_name == "play":
+            self.action_switch_room(ROOM_PLAY[0])
+        elif room_name == "doodle":
+            self.action_switch_room(ROOM_DOODLE[0])
+        elif room_name == "command":
+            self.action_switch_room(ROOM_COMMAND[0])
+
+    # ── F5 Recording ─────────────────────────────────────────────────
+
+    async def _handle_record_toggle(self) -> None:
+        """Handle F5 press: toggle recording on/off."""
+        old_state = self._recording_manager.state
+        new_state = self._recording_manager.toggle()
+        self._update_recording_indicator()
+
+        if new_state == RecordingState.RECORDING:
+            self.clear_notifications()
+            self.notify("Recording", timeout=1.5)
+        elif new_state == RecordingState.IDLE and old_state == RecordingState.RECORDING:
+            self.clear_notifications()
+            self.notify("Saved", timeout=1.5)
+
+    async def _play_recording(self) -> None:
+        """Play the current F5 recording: clear state, then replay."""
+        if not self._recording_manager.has_recording():
+            self._recording_manager.state = RecordingState.IDLE
+            self._update_recording_indicator()
+            return
+
+        from .playback.player import PlaybackPlayer
+        from .program import blocks_to_playback_actions
+
+        blocks = self._recording_manager.to_blocks()
+        playback_actions = blocks_to_playback_actions(blocks)
+        if not playback_actions:
+            self._recording_manager.state = RecordingState.IDLE
+            self._update_recording_indicator()
+            return
+
+        # Clear target mode state so playback starts fresh
+        self.clear_all_state()
+
+        is_doodle_paint = self._get_doodle_paint_mode_callback()
+        is_play_letters = self._get_play_letters_mode_callback()
+
+        player = PlaybackPlayer(
+            dispatch_action=self._dispatch_keyboard_action,
+            speed_multiplier=1.0,
+            is_doodle_paint_mode=is_doodle_paint,
+            is_play_letters_mode=is_play_letters,
+        )
+
+        def stop_playback():
+            if self._f5_play_task and not self._f5_play_task.done():
+                self._f5_play_task.cancel()
+
+        self._recording_manager.set_stop_playback_fn(stop_playback)
+
+        async def _run():
+            try:
+                await player.play(playback_actions)
+            finally:
+                self._recording_manager.state = RecordingState.IDLE
+                self._update_recording_indicator()
+
+        self._f5_play_task = asyncio.create_task(_run())
+
+    def _get_current_mode(self) -> str:
+        """Get the current sub-mode string for the active mode."""
+        room_name = self.active_room.name.lower()
+        try:
+            content_area = self.query_one("#content-area")
+            if room_name == "play":
+                play_widget = content_area.query_one("#room-play")
+                if hasattr(play_widget, '_letters_mode') and play_widget._letters_mode:
+                    return "letters"
+                return "music"
+            elif room_name == "doodle":
+                doodle_widget = content_area.query_one("#room-doodle")
+                canvas = doodle_widget.query_one("#art-canvas")
+                if hasattr(canvas, 'is_painting') and canvas.is_painting:
+                    return "paint"
+                return "text"
+        except Exception:
+            pass
+        return ""
+
+    def _get_doodle_paint_mode_callback(self):
+        """Get a callback for checking doodle paint mode."""
+        def check():
+            try:
+                content_area = self.query_one("#content-area")
+                doodle = content_area.query_one("#room-doodle")
+                canvas = doodle.query_one("#art-canvas")
+                return hasattr(canvas, 'is_painting') and canvas.is_painting
+            except Exception:
+                return False
+        return check
+
+    def _get_play_letters_mode_callback(self):
+        """Get a callback for checking play letters mode."""
+        def check():
+            try:
+                content_area = self.query_one("#content-area")
+                play = content_area.query_one("#room-play")
+                return hasattr(play, '_letters_mode') and play._letters_mode
+            except Exception:
+                return False
+        return check
+
+    def _update_recording_indicator(self) -> None:
+        """Update the title bar with recording/playback indicator."""
+        indicator = self._recording_manager.indicator
+        try:
+            title = self.query_one("#room-title", RoomTitle)
+            if indicator:
+                title.set_recording_indicator(indicator)
+            else:
+                title.set_recording_indicator("")
+        except Exception:
+            pass
 
     def _reset_viewport_border(self) -> None:
         """Reset viewport border to default purple."""
@@ -955,12 +1124,56 @@ class PurpleApp(App):
 
         self.push_screen(UpdateScreen(), handle_update_result)
 
+    def _check_usb_update_signal(self) -> None:
+        """Poll for USB update signal file. Written by the systemd usb_updater service."""
+        if not os.path.exists(USB_UPDATE_SIGNAL_FILE):
+            return
+
+        # Remove signal file so we don't prompt again
+        try:
+            os.unlink(USB_UPDATE_SIGNAL_FILE)
+        except OSError:
+            pass
+
+        # Stop polling
+        if self._usb_update_timer:
+            self._usb_update_timer.stop()
+
+        self._show_usb_update_restart()
+
+    def _show_usb_update_restart(self) -> None:
+        """Show a friendly modal prompting for restart after USB update."""
+        from textual.widgets import Label
+        from textual.screen import ModalScreen
+
+        class UsbUpdateScreen(ModalScreen):
+            """Modal screen for USB update restart prompt."""
+
+            def compose(self):
+                with Container(id="update-dialog"):
+                    yield Label("New update ready!")
+                    yield Label("")
+                    yield Label("Press Enter to restart.")
+
+            async def handle_keyboard_action(self, action) -> None:
+                """Handle keyboard actions from evdev."""
+                if isinstance(action, ControlAction) and action.is_down:
+                    if action.action == 'enter':
+                        self.dismiss(True)
+
+        def handle_restart(should_restart: bool) -> None:
+            if should_restart:
+                import sys
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        self.push_screen(UsbUpdateScreen(), handle_restart)
+
     def _apply_theme(self) -> None:
         """Apply the current color theme"""
         self.theme = self.active_theme
         # Update mode indicator to show current theme
         try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.refresh()
         except NoMatches:
             pass
@@ -992,7 +1205,7 @@ class PurpleApp(App):
             return
 
         try:
-            from .modes.sleep_screen import SleepScreen
+            from .rooms.sleep_screen import SleepScreen
 
             self._sleep_screen_active = True
 
@@ -1021,6 +1234,54 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    # ── Power Button ──────────────────────────────────────────────────
+
+    async def _handle_power_button_event(self, event: PowerButtonEvent) -> None:
+        """Handle power button press/release from evdev.
+
+        Tap (< 3s): show sleep screen (cute, not scary)
+        Hold (3s): show bye screen and shut down
+        """
+        if self._bye_screen_active:
+            return
+
+        if event.is_down:
+            self._power_button_down_time = event.timestamp
+            # Start a timer for the hold threshold
+            from .power_manager import POWER_HOLD_SHUTDOWN
+            self._cancel_power_hold_timer()
+            self._power_hold_timer = self.set_timer(
+                POWER_HOLD_SHUTDOWN, self._power_hold_triggered
+            )
+        else:
+            # Released before hold threshold: show sleep screen (tap)
+            self._cancel_power_hold_timer()
+            if self._power_button_down_time is not None:
+                self._power_button_down_time = None
+                self._show_sleep_screen()
+
+    def _cancel_power_hold_timer(self) -> None:
+        """Cancel the power button hold timer."""
+        if self._power_hold_timer:
+            self._power_hold_timer.stop()
+            self._power_hold_timer = None
+
+    def _power_hold_triggered(self) -> None:
+        """Power button held for 3 seconds: initiate shutdown."""
+        self._cancel_power_hold_timer()
+        self._power_button_down_time = None
+        self._show_bye_screen()
+
+    def _show_bye_screen(self) -> None:
+        """Show the goodbye screen and shut down."""
+        if self._bye_screen_active:
+            return
+
+        from .rooms.sleep_screen import ByeScreen
+
+        self._bye_screen_active = True
+        self.push_screen(ByeScreen())
+
     async def on_event(self, event: events.Event) -> None:
         """Record activity for any key press. Runs before widgets can stop it.
 
@@ -1035,28 +1296,38 @@ class PurpleApp(App):
     def on_screen_resume(self, event: events.ScreenResume) -> None:
         """Restore focus when returning from overlay screens (sleep, parent menu)."""
         # Find the current mode widget and restore focus
-        mode_id = f"mode-{self.active_mode.name.lower()}"
+        room_id = f"room-{self.active_room.name.lower()}"
         try:
             content_area = self.query_one("#content-area")
-            mode_widget = content_area.query_one(f"#{mode_id}")
-            self._focus_mode(mode_widget)
+            room_widget = content_area.query_one(f"#{room_id}")
+            self._focus_room(room_widget)
         except NoMatches:
             pass
 
-    def _create_mode_widget(self, mode: Mode):
-        """Create a new mode widget"""
-        if mode == Mode.EXPLORE:
-            from .modes.explore_mode import ExploreMode
-            return ExploreMode(classes="mode-content")
-        elif mode == Mode.PLAY:
-            from .modes.play_mode import PlayMode
-            return PlayMode(classes="mode-content")
-        elif mode == Mode.DOODLE:
-            from .modes.doodle_mode import DoodleMode
-            return DoodleMode(classes="mode-content")
+    def _create_room_widget(self, room: Room):
+        """Create a new room widget"""
+        if room == Room.EXPLORE:
+            from .rooms.explore_room import ExploreMode
+            return ExploreMode(classes="room-content")
+        elif room == Room.PLAY:
+            from .rooms.play_room import PlayMode
+            return PlayMode(
+                recording_manager=self._recording_manager,
+                classes="room-content",
+            )
+        elif room == Room.DOODLE:
+            from .rooms.doodle_room import DoodleMode
+            return DoodleMode(classes="room-content")
+        elif room == Room.COMMAND:
+            from .rooms.command_room import CommandMode
+            return CommandMode(
+                recording_manager=self._recording_manager,
+                dispatch_action=self._dispatch_keyboard_action,
+                classes="room-content",
+            )
         return None
 
-    def _load_mode_content(self) -> None:
+    def _load_room_content(self) -> None:
         """Load the content widget for the current mode"""
         content_area = self.query_one("#content-area")
 
@@ -1065,37 +1336,44 @@ class PurpleApp(App):
             child.display = False
 
         # Check if we already have this mode mounted
-        mode_id = f"mode-{self.active_mode.name.lower()}"
+        room_id = f"room-{self.active_room.name.lower()}"
         try:
-            existing = content_area.query_one(f"#{mode_id}")
+            existing = content_area.query_one(f"#{room_id}")
             existing.display = True
-            self._focus_mode(existing)
+            self._focus_room(existing)
             return
         except NoMatches:
             pass
 
         # Create and mount new widget
-        widget = self._create_mode_widget(self.active_mode)
+        widget = self._create_room_widget(self.active_room)
         if widget:
-            widget.id = mode_id
+            widget.id = room_id
             content_area.mount(widget)
             # Focus will happen in on_mount of the widget
 
-    def _focus_mode(self, widget) -> None:
+    def _focus_room(self, widget) -> None:
         """Focus the appropriate element in a mode widget"""
         # Each mode has a primary focusable element
-        if self.active_mode == Mode.EXPLORE:
+        if self.active_room == Room.EXPLORE:
             try:
                 widget.query_one("#explore-input").focus()
             except Exception:
                 pass
-        elif self.active_mode == Mode.PLAY:
+        elif self.active_room == Room.PLAY:
             widget.focus()
-        elif self.active_mode == Mode.DOODLE:
+        elif self.active_room == Room.DOODLE:
             try:
                 widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
+        elif self.active_room == Room.COMMAND:
+            widget.focus()
+            # Refresh blocks when re-entering Command mode
+            if hasattr(widget, 'on_show'):
+                widget.on_show()
+        elif self.active_room == Room.COMMAND:
+            widget.focus()
         else:
             widget.focus()
 
@@ -1111,23 +1389,24 @@ class PurpleApp(App):
         elif self.active_view == View.EARS:
             container.add_class("view-ears")
 
-    def action_switch_mode(self, mode_name: str) -> None:
+    def action_switch_room(self, room_name: str) -> None:
         """Switch to a different mode (F1-F3)"""
-        from .modes.doodle_mode import DoodlePromptScreen
+        from .rooms.doodle_room import DoodlePromptScreen
 
         # Debug: log who is calling mode switch
         if os.environ.get("PURPLE_DEV_MODE") == "1":
             import traceback
-            self._dev_log(f"[ModeSwitch] action_switch_mode({mode_name}) called from:")
+            self._dev_log(f"[ModeSwitch] action_switch_room({room_name}) called from:")
             for line in traceback.format_stack()[-5:-1]:
                 self._dev_log(line.strip())
 
-        mode_map = {
-            MODE_EXPLORE[0]: Mode.EXPLORE,
-            MODE_PLAY[0]: Mode.PLAY,
-            MODE_DOODLE[0]: Mode.DOODLE,
+        room_map = {
+            ROOM_EXPLORE[0]: Room.EXPLORE,
+            ROOM_PLAY[0]: Room.PLAY,
+            ROOM_DOODLE[0]: Room.DOODLE,
+            ROOM_COMMAND[0]: Room.COMMAND,
         }
-        new_mode = mode_map.get(mode_name, Mode.EXPLORE)
+        new_room = room_map.get(room_name, Room.EXPLORE)
 
         # If DoodlePromptScreen is showing and we're switching to a different mode,
         # dismiss it (keeping the drawing) and proceed with the switch
@@ -1137,61 +1416,69 @@ class PurpleApp(App):
                 # Dismiss without callback action (we're switching modes anyway)
                 self.pop_screen()
                 # If switching back to doodle, we're already there, just return
-                if new_mode == Mode.DOODLE:
+                if new_room == Room.DOODLE:
                     return
 
-        if new_mode != self.active_mode:
+        if new_room != self.active_room:
             # Reset viewport border when leaving doodle mode
-            if self.active_mode == Mode.DOODLE:
+            if self.active_room == Room.DOODLE:
                 self._reset_viewport_border()
 
             # Auto-clear play mode when leaving (ephemeral mode)
-            if self.active_mode == Mode.PLAY:
+            if self.active_room == Room.PLAY:
                 try:
                     content_area = self.query_one("#content-area")
-                    play_widget = content_area.query_one(f"#mode-{MODE_PLAY[0]}")
+                    play_widget = content_area.query_one(f"#room-{ROOM_PLAY[0]}")
                     if hasattr(play_widget, 'reset_state'):
                         play_widget.reset_state()
                 except NoMatches:
                     pass
 
             # Check if entering doodle mode with existing content
-            if new_mode == Mode.DOODLE:
+            if new_room == Room.DOODLE:
                 try:
                     content_area = self.query_one("#content-area")
-                    doodle_widget = content_area.query_one(f"#mode-{MODE_DOODLE[0]}")
+                    doodle_widget = content_area.query_one(f"#room-{ROOM_DOODLE[0]}")
                     if hasattr(doodle_widget, 'has_content') and doodle_widget.has_content() and not self.demo_running:
                         # Switch first (shows drawing), then prompt on top
-                        self._complete_mode_switch(new_mode)
+                        self._complete_room_switch(new_room)
                         self._show_doodle_prompt()
                         return
                 except NoMatches:
                     pass  # First time entering, no content yet
 
-            self._complete_mode_switch(new_mode)
+            self._complete_room_switch(new_room)
 
-    def _complete_mode_switch(self, new_mode: Mode) -> None:
+    def _complete_room_switch(self, new_room: Room) -> None:
         """Complete the mode switch (updates UI, loads content)."""
-        self.active_mode = new_mode
-        self._load_mode_content()
+        self.active_room = new_room
+        self._load_room_content()
 
         # Update title
-        mode_names = {Mode.EXPLORE: MODE_EXPLORE[0], Mode.PLAY: MODE_PLAY[0], Mode.DOODLE: MODE_DOODLE[0]}
+        room_names = {Room.EXPLORE: ROOM_EXPLORE[0], Room.PLAY: ROOM_PLAY[0], Room.DOODLE: ROOM_DOODLE[0], Room.COMMAND: ROOM_COMMAND[0]}
         try:
-            title = self.query_one("#mode-title", ModeTitle)
-            title.set_mode(mode_names.get(new_mode, MODE_EXPLORE[0]))
+            title = self.query_one("#room-title", RoomTitle)
+            title.set_mode(room_names.get(new_room, ROOM_EXPLORE[0]))
         except NoMatches:
             pass
 
         # Update mode indicator
         try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.update_mode(new_mode)
+            indicator = self.query_one("#room-indicator", RoomIndicator)
+            indicator.update_room(new_room)
         except NoMatches:
             pass
 
-        # Hide paint legend when not in doodle mode
-        if new_mode != Mode.DOODLE:
+        # Show color legend in explore mode (always visible, no active row)
+        # Hide it when leaving both doodle and explore modes
+        if new_room == Room.EXPLORE:
+            try:
+                legend = self.query_one("#paint-legend", ColorLegend)
+                legend.set_visible(True)
+                legend.set_active_row(-1)  # No active row initially
+            except NoMatches:
+                pass
+        elif new_room != Room.DOODLE:
             try:
                 legend = self.query_one("#paint-legend", ColorLegend)
                 legend.set_visible(False)
@@ -1200,31 +1487,20 @@ class PurpleApp(App):
 
     def _show_doodle_prompt(self) -> None:
         """Show prompt when entering Doodle mode with existing content."""
-        from .modes.doodle_mode import DoodlePromptScreen
+        from .rooms.doodle_room import DoodlePromptScreen
 
         def handle_prompt_result(should_clear: bool) -> None:
             # Clear canvas if user chose "New drawing"
             if should_clear:
                 try:
                     content_area = self.query_one("#content-area")
-                    doodle_widget = content_area.query_one(f"#mode-{MODE_DOODLE[0]}")
+                    doodle_widget = content_area.query_one(f"#room-{ROOM_DOODLE[0]}")
                     if hasattr(doodle_widget, 'clear_canvas'):
                         doodle_widget.clear_canvas()
                 except NoMatches:
                     pass
 
         self.push_screen(DoodlePromptScreen(), handle_prompt_result)
-
-    def action_toggle_theme(self) -> None:
-        """Toggle between dark and light mode (F9)"""
-        self.active_theme = "purple-light" if self.active_theme == "purple-dark" else "purple-dark"
-        self._apply_theme()
-        # Update theme icon in mode indicator
-        try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
-            indicator.update_theme_icon()
-        except NoMatches:
-            pass
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off (F10)"""
@@ -1382,20 +1658,20 @@ class PurpleApp(App):
         action = cmd.get("action")
         value = cmd.get("value", "")
 
-        self._dev_log(f"[DevCmd] action={action} value={value} (current_mode={self.active_mode.name})")
+        self._dev_log(f"[DevCmd] action={action} value={value} (current_room={self.active_room.name})")
 
         if action == "mode":
             # Switch mode: explore, play, doodle
-            mode_map = {
-                "explore": MODE_EXPLORE[0],
-                "play": MODE_PLAY[0],
-                "doodle": MODE_DOODLE[0],
+            room_map = {
+                "explore": ROOM_EXPLORE[0],
+                "play": ROOM_PLAY[0],
+                "doodle": ROOM_DOODLE[0],
             }
-            mode_name = mode_map.get(value.lower())
-            self._dev_log(f"[DevCmd] mode_name={mode_name} (from {value.lower()})")
-            if mode_name:
-                self.action_switch_mode(mode_name)
-                self._dev_log(f"[DevCmd] Switched to {mode_name}")
+            room_name = room_map.get(value.lower())
+            self._dev_log(f"[DevCmd] room_name={room_name} (from {value.lower()})")
+            if room_name:
+                self.action_switch_room(room_name)
+                self._dev_log(f"[DevCmd] Switched to {room_name}")
 
         elif action == "key":
             # Send a keypress through the keyboard state machine
@@ -1405,7 +1681,7 @@ class PurpleApp(App):
                 if key_action:
                     # Await the dispatch to ensure it completes before next command
                     await self._dispatch_keyboard_action(key_action)
-                    self._dev_log(f"[DevCmd] key={value} dispatched, mode now={self.active_mode.name}")
+                    self._dev_log(f"[DevCmd] key={value} dispatched, mode now={self.active_room.name}")
 
                     # For control keys (especially space), also send key-up event
                     # Without this, _space_down stays True and arrow movements paint
@@ -1421,7 +1697,7 @@ class PurpleApp(App):
 
         elif action == "clear":
             # Clear the doodle canvas
-            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            from .rooms.doodle_room import DoodleMode, ArtCanvas
             try:
                 # Query by type, not ID (DoodleMode has no ID)
                 doodle = self.query_one(DoodleMode)
@@ -1440,7 +1716,7 @@ class PurpleApp(App):
 
         elif action == "set_position":
             # Set cursor position directly (fast alternative to arrow keys)
-            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            from .rooms.doodle_room import DoodleMode, ArtCanvas
             try:
                 x = int(cmd.get("x", 0))
                 y = int(cmd.get("y", 0))
@@ -1453,7 +1729,7 @@ class PurpleApp(App):
 
         elif action == "paint_at":
             # Paint a color at specific position (combines move + select + stamp)
-            from .modes.doodle_mode import DoodleMode, ArtCanvas
+            from .rooms.doodle_room import DoodleMode, ArtCanvas
             try:
                 x = int(cmd.get("x", 0))
                 y = int(cmd.get("y", 0))
@@ -1507,7 +1783,7 @@ class PurpleApp(App):
 
         # Update volume indicator badge
         try:
-            indicator = self.query_one("#mode-indicator", ModeIndicator)
+            indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.update_volume_indicator(self.volume_level)
         except NoMatches:
             pass
@@ -1595,9 +1871,9 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def action_parent_mode(self) -> None:
+    def action_parent_menu(self) -> None:
         """Enter parent mode. Shows admin menu for parents."""
-        from .modes.parent_mode import ParentMenu
+        from .rooms.parent_menu import ParentMenu
         # Cancel escape hold timer and reset state
         self._cancel_escape_hold_timer()
         self.keyboard.escape_hold.reset()
@@ -1606,9 +1882,9 @@ class PurpleApp(App):
 
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""
-        from .modes.explore_mode import ExploreMode
-        from .modes.play_mode import PlayMode
-        from .modes.doodle_mode import DoodleMode
+        from .rooms.explore_room import ExploreMode
+        from .rooms.play_room import PlayMode
+        from .rooms.doodle_room import DoodleMode
 
         # Clear explore mode history
         try:
@@ -1633,7 +1909,7 @@ class PurpleApp(App):
 
     def _set_play_key_color(self, key: str, color_index: int) -> None:
         """Set a Play mode key's color directly. Used by demo player for flash effects."""
-        from .modes.play_mode import PlayMode, PlayGrid
+        from .rooms.play_room import PlayMode, PlayGrid
 
         try:
             play = self.query_one(PlayMode)
@@ -1654,8 +1930,8 @@ class PurpleApp(App):
         except Exception:
             return None
 
-        if self.active_mode == Mode.EXPLORE:
-            from .modes.explore_mode import InlineInput
+        if self.active_room == Room.EXPLORE:
+            from .rooms.explore_room import InlineInput
             try:
                 inp = self.query_one("#explore-input", InlineInput)
                 inp_region = inp.region
@@ -1666,8 +1942,8 @@ class PurpleApp(App):
                 # Fallback: left side of input line, near bottom of viewport
                 return (0.07, 0.9)
 
-        elif self.active_mode == Mode.DOODLE:
-            from .modes.doodle_mode import DoodleMode, ArtCanvas
+        elif self.active_room == Room.DOODLE:
+            from .rooms.doodle_room import DoodleMode, ArtCanvas
             try:
                 doodle = self.query_one(DoodleMode)
                 canvas = doodle.query_one(ArtCanvas)
@@ -1682,7 +1958,7 @@ class PurpleApp(App):
 
     def _is_doodle_paint_mode(self) -> bool:
         """Check if Doodle mode is in paint mode (vs text mode)."""
-        from .modes.doodle_mode import DoodleMode, ArtCanvas
+        from .rooms.doodle_room import DoodleMode, ArtCanvas
 
         try:
             doodle = self.query_one(DoodleMode)
@@ -1693,7 +1969,7 @@ class PurpleApp(App):
 
     def _clear_doodle(self) -> None:
         """Clear only the doodle canvas and reset cursor to (0,0)."""
-        from .modes.doodle_mode import DoodleMode
+        from .rooms.doodle_room import DoodleMode
 
         try:
             doodle = self.query_one(DoodleMode)

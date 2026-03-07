@@ -20,14 +20,15 @@ def is_debug() -> bool:
     return Path(DEBUG_FLAG_PATH).exists()
 
 # =============================================================================
-# MODE NAMES
+# ROOM NAMES
 # =============================================================================
-# Central location for mode names to keep them DRY across the codebase.
+# Central location for room names to keep them DRY across the codebase.
 # Format: (id, label) where id is lowercase for internal use, label is display text.
 
-MODE_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
-MODE_PLAY = ("play", "Play")           # F2: Music and art grid
-MODE_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
+ROOM_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
+ROOM_PLAY = ("play", "Play")           # F2: Music and art grid
+ROOM_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
+ROOM_COMMAND = ("command", "Command")   # F4: Visual block programming
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS
@@ -79,10 +80,11 @@ ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
 ICON_CAPS_LOCK = "󰬈"        # nf-md-caps_lock
-ICON_MENU = "󰀻"             # nf-md-apps (grid icon for mode picker)
+ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
+ICON_COMMAND = "󰘳"            # nf-md-console (command room)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)
@@ -92,11 +94,12 @@ ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
 ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
 ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
-# Mode titles with icons (uses mode name constants)
-MODE_TITLES = {
-    MODE_EXPLORE[0]: (ICON_CHAT, MODE_EXPLORE[1]),
-    MODE_PLAY[0]: (ICON_MUSIC, MODE_PLAY[1]),
-    MODE_DOODLE[0]: (ICON_PALETTE, MODE_DOODLE[1]),
+# Room titles with icons (uses room name constants)
+ROOM_TITLES = {
+    ROOM_EXPLORE[0]: (ICON_CHAT, ROOM_EXPLORE[1]),
+    ROOM_PLAY[0]: (ICON_MUSIC, ROOM_PLAY[1]),
+    ROOM_DOODLE[0]: (ICON_PALETTE, ROOM_DOODLE[1]),
+    ROOM_COMMAND[0]: (ICON_COMMAND, ROOM_COMMAND[1]),
 }
 
 # =============================================================================
@@ -109,6 +112,15 @@ MODE_TITLES = {
 #
 # Note: "input" focuses on the Explore mode input area (bottom portion of viewport).
 
+# =============================================================================
+# USB UPDATE
+# =============================================================================
+
+USB_UPDATE_SIGNAL_FILE = "/tmp/purple-update-applied"
+
+# =============================================================================
+# ZOOM REGIONS FOR DEMO RECORDING
+# =============================================================================
 ZOOM_REGIONS = {
     # Full viewport (no zoom, 100% of content visible)
     "viewport": (0.5, 0.5, 1.0, 1.0),

@@ -13,8 +13,8 @@ import pytest
 from purple_tui.play_session import (
     PlaySession,
     SESSION_TIMEOUT,
-    SUBMODE_MUSIC,
-    SUBMODE_LETTERS,
+    MODE_MUSIC,
+    MODE_LETTERS,
 )
 
 
@@ -38,7 +38,7 @@ class TestRecording:
     def test_single_event_replay(self):
         s = PlaySession()
         s.record('A', now=1.0)
-        assert s.get_replay() == [('A', SUBMODE_MUSIC, 0.0)]
+        assert s.get_replay() == [('A', MODE_MUSIC, 0.0)]
 
     def test_multiple_events_timing(self):
         s = PlaySession()
@@ -46,9 +46,9 @@ class TestRecording:
         s.record('B', now=1.5)
         s.record('C', now=2.0)
         assert s.get_replay() == [
-            ('A', SUBMODE_MUSIC, 0.0),
-            ('B', SUBMODE_MUSIC, 0.5),
-            ('C', SUBMODE_MUSIC, 0.5),
+            ('A', MODE_MUSIC, 0.0),
+            ('B', MODE_MUSIC, 0.5),
+            ('C', MODE_MUSIC, 0.5),
         ]
 
     def test_preserves_event_order(self):
@@ -74,16 +74,16 @@ class TestRecording:
         s.record('A', now=0.5)
         s.record('A', now=1.0)
         assert s.get_replay() == [
-            ('A', SUBMODE_MUSIC, 0.0),
-            ('A', SUBMODE_MUSIC, 0.5),
-            ('A', SUBMODE_MUSIC, 0.5),
+            ('A', MODE_MUSIC, 0.0),
+            ('A', MODE_MUSIC, 0.5),
+            ('A', MODE_MUSIC, 0.5),
         ]
 
     def test_default_submode_is_music(self):
         s = PlaySession()
         s.record('A', now=1.0)
         _, submode, _ = s.get_replay()[0]
-        assert submode == SUBMODE_MUSIC
+        assert submode == MODE_MUSIC
 
 
 # =============================================================================
@@ -95,33 +95,33 @@ class TestSubmodeRecording:
 
     def test_record_with_letters_submode(self):
         s = PlaySession()
-        s.record('A', SUBMODE_LETTERS, now=1.0)
-        assert s.get_replay() == [('A', SUBMODE_LETTERS, 0.0)]
+        s.record('A', MODE_LETTERS, now=1.0)
+        assert s.get_replay() == [('A', MODE_LETTERS, 0.0)]
 
     def test_mixed_submodes(self):
         """Session can contain events from both sub-modes."""
         s = PlaySession()
-        s.record('A', SUBMODE_MUSIC, now=1.0)
-        s.record('B', SUBMODE_LETTERS, now=1.5)
-        s.record('C', SUBMODE_MUSIC, now=2.0)
+        s.record('A', MODE_MUSIC, now=1.0)
+        s.record('B', MODE_LETTERS, now=1.5)
+        s.record('C', MODE_MUSIC, now=2.0)
         replay = s.get_replay()
-        assert replay[0] == ('A', SUBMODE_MUSIC, 0.0)
-        assert replay[1] == ('B', SUBMODE_LETTERS, 0.5)
-        assert replay[2] == ('C', SUBMODE_MUSIC, 0.5)
+        assert replay[0] == ('A', MODE_MUSIC, 0.0)
+        assert replay[1] == ('B', MODE_LETTERS, 0.5)
+        assert replay[2] == ('C', MODE_MUSIC, 0.5)
 
     def test_submode_preserved_across_timeout_boundary(self):
         """After timeout reset, submode of new events is still recorded."""
         s = PlaySession()
-        s.record('A', SUBMODE_MUSIC, now=0.0)
-        s.record('B', SUBMODE_LETTERS, now=SESSION_TIMEOUT + 1)
+        s.record('A', MODE_MUSIC, now=0.0)
+        s.record('B', MODE_LETTERS, now=SESSION_TIMEOUT + 1)
         replay = s.get_replay()
-        assert replay == [('B', SUBMODE_LETTERS, 0.0)]
+        assert replay == [('B', MODE_LETTERS, 0.0)]
 
     def test_numbers_in_letters_mode(self):
         """Non-letter keys in letters mode still record as letters submode."""
         s = PlaySession()
-        s.record('5', SUBMODE_LETTERS, now=1.0)
-        assert s.get_replay() == [('5', SUBMODE_LETTERS, 0.0)]
+        s.record('5', MODE_LETTERS, now=1.0)
+        assert s.get_replay() == [('5', MODE_LETTERS, 0.0)]
 
 
 # =============================================================================
@@ -137,7 +137,7 @@ class TestSessionTimeout:
         s.record('B', now=1.5)
         # More than SESSION_TIMEOUT later
         s.record('C', now=1.5 + SESSION_TIMEOUT + 1)
-        assert s.get_replay() == [('C', SUBMODE_MUSIC, 0.0)]
+        assert s.get_replay() == [('C', MODE_MUSIC, 0.0)]
 
     def test_within_timeout_preserves(self):
         s = PlaySession()
@@ -150,7 +150,7 @@ class TestSessionTimeout:
         s = PlaySession()
         s.record('A', now=1.0)
         s.record('B', now=1.0 + SESSION_TIMEOUT + 0.001)
-        assert s.get_replay() == [('B', SUBMODE_MUSIC, 0.0)]
+        assert s.get_replay() == [('B', MODE_MUSIC, 0.0)]
 
     def test_multiple_timeouts(self):
         """Multiple timeout resets in sequence."""
@@ -160,8 +160,8 @@ class TestSessionTimeout:
         s.record('C', now=10.0)  # timeout again
         s.record('D', now=10.5)  # within timeout of C
         assert s.get_replay() == [
-            ('C', SUBMODE_MUSIC, 0.0),
-            ('D', SUBMODE_MUSIC, 0.5),
+            ('C', MODE_MUSIC, 0.0),
+            ('D', MODE_MUSIC, 0.5),
         ]
 
     def test_long_session_no_timeout(self):
@@ -192,7 +192,7 @@ class TestClear:
         s.record('A', now=1.0)
         s.clear()
         s.record('B', now=2.0)
-        assert s.get_replay() == [('B', SUBMODE_MUSIC, 0.0)]
+        assert s.get_replay() == [('B', MODE_MUSIC, 0.0)]
 
 
 # =============================================================================
@@ -211,8 +211,8 @@ class TestReplayWorkflow:
         # Get replay data (what would be played back)
         replay = s.get_replay()
         assert len(replay) == 2
-        assert replay[0] == ('A', SUBMODE_MUSIC, 0.0)
-        assert replay[1] == ('B', SUBMODE_MUSIC, 0.5)
+        assert replay[0] == ('A', MODE_MUSIC, 0.0)
+        assert replay[1] == ('B', MODE_MUSIC, 0.5)
 
         # Clear for new session (replay started)
         s.clear()
@@ -223,8 +223,8 @@ class TestReplayWorkflow:
 
         new_replay = s.get_replay()
         assert new_replay == [
-            ('C', SUBMODE_MUSIC, 0.0),
-            ('D', SUBMODE_MUSIC, 0.5),
+            ('C', MODE_MUSIC, 0.0),
+            ('D', MODE_MUSIC, 0.5),
         ]
 
     def test_replay_with_no_new_input(self):
@@ -249,7 +249,7 @@ class TestReplayWorkflow:
         # Second session (during/after first replay)
         s.record('C', now=1.0)
         replay2 = s.get_replay()
-        assert replay2 == [('C', SUBMODE_MUSIC, 0.0)]
+        assert replay2 == [('C', MODE_MUSIC, 0.0)]
         s.clear()
 
         # Third session
@@ -257,8 +257,8 @@ class TestReplayWorkflow:
         s.record('E', now=2.1)
         replay3 = s.get_replay()
         assert replay3 == [
-            ('D', SUBMODE_MUSIC, 0.0),
-            ('E', SUBMODE_MUSIC, pytest.approx(0.1)),
+            ('D', MODE_MUSIC, 0.0),
+            ('E', MODE_MUSIC, pytest.approx(0.1)),
         ]
 
     def test_empty_replay_does_nothing(self):
@@ -272,17 +272,17 @@ class TestReplayWorkflow:
     def test_mixed_submode_replay(self):
         """Replay preserves sub-modes from a mixed session."""
         s = PlaySession()
-        s.record('A', SUBMODE_MUSIC, now=0.0)
-        s.record('B', SUBMODE_LETTERS, now=0.5)
-        s.record('1', SUBMODE_LETTERS, now=1.0)
-        s.record('C', SUBMODE_MUSIC, now=1.5)
+        s.record('A', MODE_MUSIC, now=0.0)
+        s.record('B', MODE_LETTERS, now=0.5)
+        s.record('1', MODE_LETTERS, now=1.0)
+        s.record('C', MODE_MUSIC, now=1.5)
 
         replay = s.get_replay()
         assert replay == [
-            ('A', SUBMODE_MUSIC, 0.0),
-            ('B', SUBMODE_LETTERS, 0.5),
-            ('1', SUBMODE_LETTERS, 0.5),
-            ('C', SUBMODE_MUSIC, 0.5),
+            ('A', MODE_MUSIC, 0.0),
+            ('B', MODE_LETTERS, 0.5),
+            ('1', MODE_LETTERS, 0.5),
+            ('C', MODE_MUSIC, 0.5),
         ]
 
 
@@ -305,8 +305,8 @@ class TestTimeFn:
         s.record('A')
         s.record('B')
         assert s.get_replay() == [
-            ('A', SUBMODE_MUSIC, 0.0),
-            ('B', SUBMODE_MUSIC, 1.0),
+            ('A', MODE_MUSIC, 0.0),
+            ('B', MODE_MUSIC, 1.0),
         ]
 
     def test_explicit_overrides_time_fn(self):
@@ -315,6 +315,6 @@ class TestTimeFn:
         s.record('A', now=1.0)
         s.record('B', now=2.0)
         assert s.get_replay() == [
-            ('A', SUBMODE_MUSIC, 0.0),
-            ('B', SUBMODE_MUSIC, 1.0),
+            ('A', MODE_MUSIC, 0.0),
+            ('B', MODE_MUSIC, 1.0),
         ]

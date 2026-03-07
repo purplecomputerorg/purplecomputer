@@ -591,6 +591,22 @@ parted -s "$GOLDEN_IMAGE" mkpart primary ext4 4GiB 100%
 
 Purple Computer includes automatic power management to save energy and protect the screen on unattended laptops.
 
+### Power Button
+
+The power button is kid-proofed to prevent accidental shutdowns:
+
+| Gesture | What Happens |
+|---------|-------------|
+| Tap (< 3s) | Shows sleep screen (cute sleeping face). Any key wakes. |
+| Hold (3s) | Shows "Bye!" and shuts down. Like a phone. |
+| Hold (10s) | Hardware forced off (ACPI, always available). |
+
+logind is configured to ignore the power button (`HandlePowerKey=ignore`). The TUI reads the power button via a separate evdev device (`PowerButtonReader`) and handles all the UX.
+
+### Lid Close
+
+Closing the lid turns the screen off immediately (saves power) and starts a 2-minute countdown to shutdown. Opening the lid within 2 minutes cancels the shutdown and turns the screen back on. This prevents accidental shutdowns when a kid briefly closes the lid, while still shutting down if the laptop is put away.
+
 ### Idle Detection
 
 The system tracks keyboard activity and progresses through idle states:
@@ -599,21 +615,19 @@ The system tracks keyboard activity and progresses through idle states:
 |-----------|-------|--------------|
 | 0-3 min | Active | Normal operation |
 | 3 min | Sleep UI | Show sleeping face, "press any key to wake" |
-| 10 min | Dim | (reserved for future use) |
 | 15 min | Screen Off | DPMS turns off display |
 | 25 min | Shutdown Warning | "Turning off in X minutes" |
 | 30 min | Shutdown | System powers off |
-
-**Lid close** triggers a 5-second countdown to shutdown (shown on screen).
 
 ### Implementation
 
 Activity is tracked via `on_event()` in the Textual app, which catches all keyboard events before they can be consumed by child widgets. This ensures activity is always recorded regardless of which mode is active.
 
 **Key files:**
-- `purple_tui/power_manager.py`: Idle tracking, screen control, shutdown
-- `purple_tui/modes/sleep_screen.py`: Sleep UI and wake handling
-- `purple_tui/purple_tui.py`: Activity recording in `on_event()`
+- `purple_tui/power_manager.py`: Idle tracking, screen control, shutdown timings
+- `purple_tui/modes/sleep_screen.py`: Sleep UI (`SleepScreen`), shutdown UI (`ByeScreen`)
+- `purple_tui/input.py`: `PowerButtonReader` for power button evdev monitoring
+- `purple_tui/purple_tui.py`: Activity recording, power button integration
 
 ### Testing Sleep Mode
 

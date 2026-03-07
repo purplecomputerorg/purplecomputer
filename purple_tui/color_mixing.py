@@ -275,6 +275,58 @@ def mix_colors_paint(colors: list[str]) -> str:
     return _mix_colors_internal(colors)
 
 
+COLOR_ADJECTIVES = {
+    # adjective: (saturation_mult, lightness_func)
+    # lightness_func takes current L and returns new L
+    "bright":  (1.3, lambda l: min(1.0, l * 1.15)),
+    "dark":    (1.0, lambda l: l * 0.55),
+    "light":   (0.7, lambda l: l + (1 - l) * 0.45),
+    "pale":    (0.4, lambda l: l + (1 - l) * 0.4),
+    "deep":    (1.3, lambda l: l * 0.65),
+    "vivid":   (1.6, lambda l: l),
+    "dull":    (0.4, lambda l: l),
+    "muted":   (0.4, lambda l: l + (1 - l) * 0.1),
+    "neon":    (2.0, lambda l: l + (1 - l) * 0.25),
+    "soft":    (0.5, lambda l: l + (1 - l) * 0.3),
+    "rich":    (1.4, lambda l: l * 0.8),
+    "warm":    (1.1, lambda l: min(1.0, l * 1.05)),  # slight shift handled below
+    "cool":    (1.1, lambda l: min(1.0, l * 1.05)),  # slight shift handled below
+}
+
+
+def modify_color(hex_color: str, adjective: str) -> str:
+    """Modify a color by an adjective (bright, dark, light, etc.) in HSL space."""
+    adj = adjective.lower()
+    if adj not in COLOR_ADJECTIVES:
+        return hex_color
+
+    s_mult, l_func = COLOR_ADJECTIVES[adj]
+    r, g, b = hex_to_rgb(hex_color)
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+
+    # Apply saturation and lightness modifications
+    s = min(1.0, s * s_mult)
+    l = l_func(l)
+
+    # Warm/cool: nudge hue slightly
+    if adj == "warm":
+        # Nudge toward orange (reduce blue, boost red/yellow)
+        if 0.33 < h < 0.83:  # greens/blues/purples
+            h = h - 0.03
+    elif adj == "cool":
+        # Nudge toward blue
+        if h < 0.33 or h > 0.83:  # reds/oranges/yellows
+            h = h + 0.03
+
+    h = h % 1.0
+    r2, g2, b2 = colorsys.hls_to_rgb(h, l, s)
+    return rgb_to_hex(
+        max(0, min(255, round(r2 * 255))),
+        max(0, min(255, round(g2 * 255))),
+        max(0, min(255, round(b2 * 255))),
+    )
+
+
 def get_color_name_approximation(hex_color: str) -> str:
     """
     Get an approximate name for a color.

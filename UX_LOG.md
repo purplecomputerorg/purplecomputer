@@ -2,6 +2,85 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play mode: Enter now changes instrument in Letters mode too (previously only worked in Music mode).
+- Explore mode: number words (one, two, three) and comma-separated lists now work. "one, two, three dinos" shows a dino abacus. Multiplication with emojis shows grouping ("2 x 3 cats" shows 3 groups of 2 cats).
+- Explore mode: type "..." to continue patterns. Number sequences (5 4 3 ...), emoji pyramids (5 cats ...), ranges (2 4 6 ... 20), and growing sequences (cats ... 5) all work.
+- Explore mode: Enter on empty input recalls last command into the input field (instead of replaying speech). Hint below input shows "Enter to recall: ..." after first command.
+- Explore mode: colors now act as adjectives, modifying the next item. "red apple green banana" shows a red apple and green banana instead of mixing all colors together.
+- Play mode: note/percussion labels now properly centered in cells. Added "Enter: change instrument" hint at the bottom.
+- Recording: F5 now always starts/stops recording (no more F5 playback). New recording overwrites previous. Space in Play mode plays back the recording.
+- Play mode: note/percussion labels now show with ♪ on either side (e.g. "♪ G ♪") near the upper-right of the cell, in a muted color to avoid confusion with the main key letter
+- Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Play, Doodle, Explore) with default sub-modes
+- Doodle: default mode changed from Write to Paint; Paint now appears on left side of Tab header
+- Command mode: MODE_SWITCH blocks now show room icon (same as title bar); non-default sub-modes show a hint suffix; cycling targets now cycles rooms instead of all 5 sub-modes
+- Command mode: direct coding UX, auto-inserts default mode on empty canvas, Up/Down inline adjusts adjustable blocks (MODE_SWITCH/PAUSE/STROKE/REPEAT), Tab menu trimmed to 7 flat items (removed Record/Adjust/Enter), context-sensitive hint bar shows what Up/Down does
+- Command mode: Scratch-inspired block redesign with 6 block types (KEY, QUERY, STROKE, PAUSE, REPEAT, MODE_SWITCH); uniform 5-char grid; explicit PAUSE blocks replace invisible timing gaps; no auto-collapse; mode-aware editing (Explore uses compose mode for QUERY blocks, Doodle paint uses STROKE blocks); v1 save format auto-migrated to v2
+- Doodle: text on painted backgrounds now uses black or white for contrast (was always white/dark); grayscale paint backgrounds no longer disappear when typing over them
+- Explore: narrow emoji (heart, snow, etc.) always get a padding space to prevent visual overlap in terminal
+- Explore: plus expressions now show + between items (e.g. apple + banana shows 🍎 + 🍌)
+- Explore: "red clue" and "red + clue" now produce the same inline format with arrow
+- Explore: unknown words now render as per-letter colored blocks instead of plaintext
+- Explore: auto-mix results (e.g. "red apple") now show + between items in the input display
+- Explore: emoji on colored backgrounds now have spaces between them for readability
+- Explore: long lines now wrap at colored block boundaries with arrow-indented continuation lines, fixing clipped padding on wrapped colored letters
+- Explore: bare negative numbers (e.g. "-5") now show as colored text blocks instead of a plain "= -5" math result
+- Explore: color+emoji results (e.g. "blue cat") now display inline on one line when compact enough, instead of separate lines
+- Explore: replaced ▶ triangle with → arrow throughout (Ask prompt, answer lines, color swatches) for a cleaner look
+- Explore: keyboard color map (4-row legend) now shows in the bottom right, same as doodle paint mode. Updates active row indicator as you type.
+- Explore: Tab now accepts autocomplete suggestions (in addition to right arrow). Hint shows "→ Tab".
+
+---
+
+- Explore: number digits in colored blocks now use the full grayscale gradient (1=white to 0=black) matching doodle mode, instead of flat gray
+- Explore: when math typos are auto-corrected (e.g. "=" treated as "+"), a "→" line shows the corrected expression above the answer
+- Explore: abacus now starts at 11 instead of 10; 10 shows as dots with 5+5 grouping so it's countable
+- Explore: color adjectives (bright, dark, light, pale, deep, vivid, dull, muted, neon, soft, rich, warm, cool) modify colors, showing base swatch and result (e.g. "bright green", "dark light blue")
+- Explore: emoji consolidated into single pack file (packs/core-emoji); added ~80 new emoji (shapes, body parts, household items, space, animal sounds); removed common-word synonyms (good/bad/great/sweet) that made text substitution weird; "love" now maps to ❤️ instead of 😍
+- Explore: color swatch mixing arrow changed from → to ▶ to match the triangle used everywhere else
+- Explore: default colors updated to Crayola-style values (red, blue, green) so they match what kids expect
+- Explore: abacus rows now show ones at bottom and largest place value at top, matching standard abacus layout
+- Explore: "green potato peanut" now shows potato emoji on green bg + "peanut" letters in green (colors + emojis + text mix together)
+
+- Explore: both ask and answer lines use ▶ triangle, aligned. Ask is purple, answer is white. 🔊 icon appears before the triangle when TTS is active
+- Explore mode: autocomplete now accepted with right arrow instead of space. Space always types a space, so you can type partial words without forced completion.
+- Explore mode: typing a complete word (like "apple") shows its emoji/color in the hint area as confirmation, instead of the hint disappearing.
+- Explore mode: numbers ≤9 show plain spaced dots; 10 to ~9 billion show a colored abacus (10 colors); beyond that show colored number blocks
+- Explore mode: simple addition shows grouped dots (● ●   ● ● ●); simple multiplication shows repeated groups (● ●   ● ●   ● ●)
+- Explore mode: colors auto-mix with emojis, other colors, and text without needing + ("red apple" → 🍎 on red, "red blue" → mixed purple, "tavi red" → mixed letter blocks)
+- Explore mode: + operator still works the same way but is now optional for mixing
+- Explore mode: only letters and numbers become colored blocks (symbols like + stay as plain text)
+- Explore mode: unrecognized text now shows colored blocks with letters visible on top (instead of blank colored blocks)
+- Explore mode: number dot visualization uses larger dots (⬤ instead of •); bare number input (e.g. "67") shows only dots without repeating the number
+- Command mode: cursor is now a blinking insertion point between blocks (like a text cursor); Enter inserts visual line breaks; backspace deletes the block before the cursor
+- Doodle mode: gutter is now a purple checkerboard pattern instead of solid black, visually distinct but not jarring
+- Command mode: consecutive identical blocks auto-collapse into one block with "xN" count badge
+- Command mode: up/down arrows now adjust block count (when count > 1) or gap timing (when count is 1)
+- Command mode: REPEAT blocks at end of a line show repeat count in the gutter
+- Recordings auto-collapse consecutive identical actions into counted blocks
+
+## 2026-03
+
+- **Play mode: Enter cycles instruments** (Marimba, Steel Drum, Kalimba, Music Box) in Music mode; header shows current instrument name
+- **Play mode: note name flashes on keypress** in Music mode, dim text appears below key letter for ~1 second then fades (e.g. "G", "F#", "kick")
+- **Toast notifications for mode switches**: Play mode Tab (Music/Letters), Play mode Enter (instrument name), Doodle mode Tab (Paint/Write), and F5 recording start/stop all show a brief toast
+- **Install from Parent Menu**: In live boot mode, Parent Menu now shows "Install on this computer" option with a confirmation dialog; GRUB menu is hidden (boots straight to live mode); parents never need to interact with GRUB
+- **Doodle paint: hold letter then arrow paints continuously**: Holding a character key and then pressing an arrow now paints that character's color while moving, same as holding arrow first then letter
+- **Kid-proof power button**: Tap shows sleep screen (cute, not scary, any key wakes); hold 3s shows "Bye!" and shuts down (phone-like); logind set to ignore so TUI controls all power UX
+- **Lid close delayed shutdown**: Lid close now turns screen off immediately but waits 2 minutes before shutting down (was 5 seconds); opening lid cancels shutdown; prevents accidental shutdowns when kid briefly closes lid
+- **Command mode: Play clears state first**: Pressing Play in Command mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate
+- **Command mode: bright gutter blocks**: Mode icons in the left gutter are now solid bright colored blocks instead of dim text icons
+- **Command mode: Up/Down navigates lines**: Arrow keys now jump between lines (like a text editor) instead of adjusting timing
+- **Command mode: timing adjust moved to Tab menu**: Gap timing, repeat count, and target cycling are now in the Tab menu under "Adjust"
+- **USB update restart prompt**: When a USB update is applied, a simple modal appears saying "New update ready! Press Enter to restart."
+- **Removed F9 theme toggle**: Dark mode is now always active; F9 key and theme badge removed from the function bar
+- **Command Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
+- **Command Mode v2: Tab menu**: Tab opens a vertical menu modal in Command mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter command mode
+- **Command Mode v2: multi-line blocks**: Blocks display across multiple lines with mode icons (♫ 🔤 ✎ 🖌 🔍) in a left gutter; MODE_SWITCH blocks start new lines; long sections wrap with indented continuation
+- **Command Mode v2: Enter inserts ↵**: Enter key now inserts a ↵ control block (useful in Explore and Doodle) instead of entering command mode
+- **Command Mode v2: repeat max 99**: Repeat block maximum increased from 9 to 99
+- **Play mode Space**: Space now plays the last F5 recording instead of heuristic-based replay
+- **Command Mode (F4)**: Replaced turtle-graphics Command mode with cross-mode visual programming; automatically records Play and Doodle actions as colored blocks with timing gaps; Space plays the program back live in the real mode; up/down adjusts timing between blocks; 9 save slots (hold number to save, tap to load)
+
 ---
 
 ## 2026-02

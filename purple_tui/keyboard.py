@@ -7,9 +7,9 @@ Reads raw key events via EvdevReader, processes through KeyboardStateMachine.
 Features:
 - Shift strategies: sticky shift (grace period), physical shift
 - Caps lock toggle (double-tap Shift key)
-- Long-hold detection for parent mode (Escape held > 1s)
+- Long-hold detection for parent menu (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key mode switching (F1-F3) and toggles (F9 theme, F10-F12 volume)
+- F-key room switching (F1-F4) and toggles (F10-F12 volume)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, MODE_EXPLORE, MODE_PLAY, MODE_DOODLE
+from .constants import SUPPORT_EMAIL, ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_COMMAND
 
 
 # ============================================================================
@@ -513,12 +513,13 @@ class NavigationAction(KeyAction):
     space_held: bool = False  # True when painting (space down)
     is_repeat: bool = False  # Is this a key repeat?
     other_arrows_held: set = field(default_factory=set)  # Other arrow directions currently held
+    char_held: str | None = None  # Character key held when this action fired
 
 
 @dataclass
-class ModeAction(KeyAction):
-    """Mode switch requested."""
-    mode: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'parent' (long Escape)
+class RoomAction(KeyAction):
+    """Room switch requested."""
+    room: str  # 'explore' (F1), 'play' (F2), 'doodle' (F3), 'command' (F4), 'parent' (long Escape)
 
 
 @dataclass
@@ -597,6 +598,10 @@ class KeyboardStateMachine:
         )
         self._on_sticky_shift_change: Callable[[bool], None] | None = None
 
+        # Held character tracking (for painting while navigating)
+        self._held_char: str | None = None
+        self._held_char_keycode: int | None = None
+
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
         self._escape_press_time: float | None = None  # time.time() when escape pressed
@@ -674,6 +679,7 @@ class KeyboardStateMachine:
                 space_held=self._space_held,
                 is_repeat=is_repeat,
                 other_arrows_held=other_arrows,
+                char_held=self._held_char,
             ))
             return actions
 
@@ -691,16 +697,19 @@ class KeyboardStateMachine:
         # Handle F-keys for mode switching and volume (no repeats)
         if not is_repeat:
             if keycode == KeyCode.KEY_F1:
-                actions.append(ModeAction(mode=MODE_EXPLORE[0]))
+                actions.append(RoomAction(room=ROOM_EXPLORE[0]))
                 return actions
             if keycode == KeyCode.KEY_F2:
-                actions.append(ModeAction(mode=MODE_PLAY[0]))
+                actions.append(RoomAction(room=ROOM_PLAY[0]))
                 return actions
             if keycode == KeyCode.KEY_F3:
-                actions.append(ModeAction(mode=MODE_DOODLE[0]))
+                actions.append(RoomAction(room=ROOM_DOODLE[0]))
                 return actions
-            if keycode == KeyCode.KEY_F9:
-                actions.append(ControlAction(action='theme_toggle', is_down=True))
+            if keycode == KeyCode.KEY_F4:
+                actions.append(RoomAction(room=ROOM_COMMAND[0]))
+                return actions
+            if keycode == KeyCode.KEY_F5:
+                actions.append(ControlAction(action='record_toggle', is_down=True))
                 return actions
             if keycode == KeyCode.KEY_F10:
                 actions.append(ControlAction(action='volume_mute', is_down=True))
@@ -717,6 +726,10 @@ class KeyboardStateMachine:
         if char:
             # Apply shift/caps
             final_char = self._apply_shift(char)
+            # Track held character (so NavigationAction can carry it)
+            if not is_repeat:
+                self._held_char = final_char
+                self._held_char_keycode = keycode
             actions.append(CharacterAction(
                 char=final_char,
                 shifted=(final_char != char),
@@ -744,6 +757,11 @@ class KeyboardStateMachine:
 
         # Remove from pressed state
         press_time = self._pressed.pop(keycode, None)
+
+        # Clear held character if this keycode was the held one
+        if keycode == self._held_char_keycode:
+            self._held_char = None
+            self._held_char_keycode = None
 
         # Handle modifier releases (Shift keys and Caps Lock, which is remapped to Shift)
         if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):
@@ -779,7 +797,7 @@ class KeyboardStateMachine:
                 if hold_duration >= self.ESCAPE_HOLD_THRESHOLD and not self._escape_hold_triggered:
                     self._escape_hold_triggered = True
                     actions.append(LongHoldAction(key='escape'))
-                    actions.append(ModeAction(mode='parent'))
+                    actions.append(RoomAction(room='parent'))
                 self._escape_press_time = None  # Clear on release
             actions.append(ControlAction(action='escape', is_down=False))
             return actions

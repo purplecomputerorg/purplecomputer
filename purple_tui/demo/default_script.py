@@ -29,7 +29,7 @@ cycle to the next color instead of staying the same.
 from .script import (
     TypeText,
     PressKey,
-    SwitchMode,
+    SwitchRoom,
     Pause,
     ClearAll,
     PlayKeys,
@@ -71,7 +71,7 @@ DEMO_SCRIPT = [
     # Like running your hand across piano keys!
     # -------------------------------------------------------------------------
     Comment("=== PIANO GLISSANDO ==="),
-    SwitchMode("play"),
+    SwitchRoom("play"),
     Pause(0.3),
 
     # Forward QWERTY (10 keys in ~1s)
@@ -104,7 +104,7 @@ DEMO_SCRIPT = [
     # Quick emoji math
     # -------------------------------------------------------------------------
     Comment("=== EMOJI FUN ==="),
-    SwitchMode("explore"),
+    SwitchRoom("explore"),
     Pause(0.2),
     TypeText("3 + 2 cats"),
     PressKey("enter", pause_after=1.5),
@@ -121,7 +121,7 @@ DEMO_SCRIPT = [
     #     Row 3: Z X C V B N M , . /    <- C V B N M is bottom (RED = 3 presses)
     # -------------------------------------------------------------------------
     Comment("=== COLORFUL SMILEY ==="),
-    SwitchMode("play"),
+    SwitchRoom("play"),
     Pause(0.3),
 
     # Eyes: 4 and 6 (1 press each = PURPLE)
@@ -157,7 +157,7 @@ DEMO_SCRIPT = [
     # Show paint mode: color mixing, drawing, and text together
     # -------------------------------------------------------------------------
     Comment("=== CREATIVE DRAWING ==="),
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     Pause(0.3),
 
     # First draw a sun (yellow circle-ish) in top left
@@ -213,7 +213,7 @@ DEMO_SCRIPT = [
     # End with a musical flourish, then hold on the smiley!
     # -------------------------------------------------------------------------
     Comment("=== FINALE ==="),
-    SwitchMode("play"),
+    SwitchRoom("play"),
     Pause(0.2),
 
     # Play a descending scale on keys we haven't used
@@ -245,7 +245,7 @@ DEMO_SCRIPT_SHORT = [
     PressKey("enter", pause_after=1.0),
 
     # Draw a quick smiley: eyes (4 6), nose (T), corners UP (D J), bottom DOWN (CVBNM)
-    SwitchMode("play"),
+    SwitchRoom("play"),
     PlayKeys(
         sequence=['4', '6', 't', 'd', 'j', 'c', 'v', 'b', 'n', 'm'],
         seconds_between=0.33,
@@ -253,12 +253,12 @@ DEMO_SCRIPT_SHORT = [
     ),
 
     # Color mix
-    SwitchMode("explore"),
+    SwitchRoom("explore"),
     TypeText("pink+indigo"),
     PressKey("enter", pause_after=1.2),
 
     # Quick doodle
-    SwitchMode("doodle"),
+    SwitchRoom("doodle"),
     DrawPath(directions=['right', 'right', 'down', 'down'], color_key='f', delay_per_step=0.06),
     PressKey("tab"),
     TypeText("Fun!"),

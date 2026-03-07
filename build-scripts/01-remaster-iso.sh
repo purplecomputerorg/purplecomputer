@@ -25,8 +25,9 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# GRUB timeout in seconds
-GRUB_TIMEOUT="${GRUB_TIMEOUT:-5}"
+# GRUB timeout: hidden by default, parents never see the menu.
+# During this window, pressing any key reveals the menu (for technical users).
+GRUB_TIMEOUT="${GRUB_TIMEOUT:-3}"
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
@@ -96,8 +97,46 @@ purple_log "=== Purple Computer Installer Hook (casper-bottom) ==="
 # GATE 1: EXPLICIT ARMING CHECK
 # =============================================================================
 if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
-    purple_log "NOT ARMED: purple.install=1 not in cmdline"
-    purple_log "Gate 1 CLOSED - Normal Ubuntu boot"
+    purple_log "Live boot mode - configuring Purple Computer..."
+
+    # Restore dotfiles that casper's adduser overwrites with skeleton copies.
+    # Canonical versions are stored in /etc/purple/ (which casper doesn't touch).
+    mkdir -p /root/home/purple
+    cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
+    chmod +x /root/home/purple/.xinitrc
+    chown 1000:1000 /root/home/purple/.xinitrc
+    cat /root/etc/purple/bash-autostart.sh >> /root/home/purple/.bashrc
+    chown 1000:1000 /root/home/purple/.bashrc
+    purple_log "Restored dotfiles from /etc/purple/"
+
+    # Write our own getty service (casper doesn't enable getty@tty1 on Ubuntu Server).
+    mkdir -p /root/etc/systemd/system
+    cat > /root/etc/systemd/system/purple-live.service << 'SERVICE_EOF'
+[Unit]
+Description=Purple Computer
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Before=getty.target
+ConditionKernelCommandLine=!purple.install=1
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=-/sbin/agetty --autologin purple --noclear tty1 linux
+Type=idle
+Restart=always
+RestartSec=0
+UtmpIdentifier=tty1
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+SERVICE_EOF
+
+    mkdir -p /root/etc/systemd/system/multi-user.target.wants
+    ln -sf ../purple-live.service /root/etc/systemd/system/multi-user.target.wants/purple-live.service
+    purple_log "Created purple-live.service (autologin on tty1)"
+
     log_end_msg
     exit 0
 fi
@@ -311,8 +350,27 @@ main() {
 
     # Step 4: Replace squashfs with Purple Computer
     log_step "4/8: Replacing squashfs with Purple Computer..."
+    # Remove ALL Ubuntu Server squashfs files and replace with ours.
+    # Casper reads install-sources.yaml to know which layers to mount.
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs.gpg
+    rm -f "$WORK_DIR/iso-new/casper/"*.manifest
+    rm -f "$WORK_DIR/iso-new/casper/"*.size
     cp "$LIVE_SQUASHFS" "$WORK_DIR/iso-new/casper/filesystem.squashfs"
     cp "$LIVE_SIZE" "$WORK_DIR/iso-new/casper/filesystem.size"
+
+    # Rewrite install-sources.yaml to point at our single squashfs
+    SQUASHFS_SIZE=$(stat -c%s "$LIVE_SQUASHFS")
+    cat > "$WORK_DIR/iso-new/casper/install-sources.yaml" << SOURCES_EOF
+- default: true
+  id: purple-computer
+  name:
+    en: Purple Computer
+  path: filesystem.squashfs
+  size: ${SQUASHFS_SIZE}
+  type: fsimage
+  variant: server
+SOURCES_EOF
     log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
 
     # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
@@ -383,6 +441,14 @@ main() {
         log_info "WARNING: ORDER file not found, script may not run"
     fi
 
+    # Remove Ubuntu Server's layered squashfs config.
+    # Without this, casper looks for ubuntu-server-minimal.ubuntu-server.*.squashfs
+    # layers instead of mounting our single filesystem.squashfs.
+    if [ -f "$MAIN_DIR/conf/conf.d/default-layer.conf" ]; then
+        log_info "Removing default-layer.conf (disabling multi-layer squashfs)..."
+        rm "$MAIN_DIR/conf/conf.d/default-layer.conf"
+    fi
+
     # Repack initramfs
     log_info "Repacking initramfs..."
 
@@ -449,6 +515,7 @@ main() {
 # Optional: install to internal disk
 
 set timeout=${GRUB_TIMEOUT}
+set timeout_style=hidden
 set default=0
 
 # Clean purple theme
@@ -457,7 +524,7 @@ set menu_color_highlight=white/dark-gray
 
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet console=tty1 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service systemd.mask=udisks2.service ---
+    linux /casper/vmlinuz boot=casper console=tty1 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service ---
     initrd /casper/initrd
 }
 

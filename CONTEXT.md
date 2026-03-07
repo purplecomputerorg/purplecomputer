@@ -67,7 +67,7 @@ Purple Computer is a custom Linux-based operating system built on Ubuntu 24.04 L
 - Large, kid-appropriate text sizing (auto-calculated to fill 80% of screen)
 - Text-to-speech for typed content (Piper TTS, works offline)
 - Custom keyboard handling for young typists (sticky shift, double-tap capitals, F-key calibration)
-- Lid close triggers safe shutdown
+- Kid-proof power: button tap shows sleep screen, hold 3s shuts down; lid close shuts down after 2 min
 - Trackpad/mouse disabled (keyboard only)
 
 The entire experience fits in a 100×28 character viewport, filling most of the screen on typical 11-15" donated laptops.

@@ -158,8 +158,21 @@ SOURCES
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
 
-    # Install Python dependencies (python-xlib for font size calculation fallback, evdev for keyboard normalizer)
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev
+    # Copy USB update config (udev rule + systemd service)
+    cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
+    cp /purple-src/config/systemd/purple-usb-update@.service "$MOUNT_DIR/etc/systemd/system/"
+
+    # Copy USB update public key (if it exists, for signature verification)
+    if [ -f /purple-src/update-key.pub ]; then
+        cp /purple-src/update-key.pub "$MOUNT_DIR/opt/purple/"
+        log_info "  USB update public key installed"
+    else
+        log_info "  Warning: update-key.pub not found. USB updates will not work."
+        log_info "  Run 'just keygen' to generate a key pair."
+    fi
+
+    # Install Python dependencies from requirements.txt
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages -r /opt/purple/requirements.txt
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."
@@ -202,23 +215,26 @@ ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
 AUTOLOGIN
 
     # Configure systemd-logind for power management
-    # This is a fallback - the Purple TUI handles lid close with a warning,
-    # but if the TUI isn't running, logind will shut down on lid close
+    # The Purple TUI handles power button and lid close with kid-friendly UX:
+    #   Power tap = sleep screen, power hold 3s = shutdown, lid close = shutdown after 2 min
+    # logind is set to ignore so the TUI has full control.
+    # If the TUI isn't running, idle shutdown (30 min) and hardware power-off (10s hold) still work.
     mkdir -p "$MOUNT_DIR/etc/systemd/logind.conf.d"
     cat > "$MOUNT_DIR/etc/systemd/logind.conf.d/purple-power.conf" <<'LOGIND'
 # Purple Computer power management
-# Kid-friendly: any power action = shutdown (no suspend/hibernate complexity)
+# TUI handles all power UX. logind ignores buttons so TUI has full control.
+# Hardware 10-second power hold always works as emergency off (ACPI).
 [Login]
-# Power button: single press = shutdown (no 10-second hold needed)
-HandlePowerKey=poweroff
-HandlePowerKeyLongPress=poweroff
-# Lid close triggers shutdown (fallback if Purple TUI isn't handling it)
-HandleLidSwitch=poweroff
-HandleLidSwitchExternalPower=poweroff
+# Power button: TUI handles tap (sleep) and hold (shutdown)
+HandlePowerKey=ignore
+HandlePowerKeyLongPress=ignore
+# Lid: TUI handles with 2-minute delayed shutdown
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore
-# Don't suspend/sleep - we use shutdown for reliability across old laptops
-HandleSuspendKey=poweroff
-HandleHibernateKey=poweroff
+# No suspend/hibernate: on/off only for reliability across old laptops
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
 # Allow purple user to shut down without password
 PolicyKitBypassUsers=purple
 LOGIND
@@ -259,6 +275,11 @@ SYSCTL
     # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
+
+    # Store canonical copies of dotfiles in /etc/purple/ (casper can't shadow these).
+    # The casper live boot hook copies them back to /home/purple/ after casper's
+    # adduser overwrites the home directory with skeleton files.
+    cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/etc/purple/xinitrc"
 
     # Configure auto-start X11 on login (via .bashrc)
     cat >> "$MOUNT_DIR/home/purple/.bashrc" <<'AUTOSTART'
@@ -312,6 +333,10 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
 fi
 AUTOSTART
     chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"
+
+    # Store the autostart snippet in /etc/purple/ for the live boot hook
+    # (Everything between the AUTOSTART markers above)
+    sed -n '/^# Auto-start X11/,/^fi$/p' "$MOUNT_DIR/home/purple/.bashrc" > "$MOUNT_DIR/etc/purple/bash-autostart.sh"
 
     # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
@@ -439,6 +464,20 @@ EOF
 
     rm -f /tmp/grub-standalone.cfg
 
+    # Unmount virtual filesystems BEFORE creating squashfs
+    # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)
+    log_info "Unmounting virtual filesystems..."
+    sync
+    umount "$MOUNT_DIR/dev/pts" 2>/dev/null || true
+    umount "$MOUNT_DIR/dev" 2>/dev/null || true
+    umount "$MOUNT_DIR/sys" 2>/dev/null || true
+    umount "$MOUNT_DIR/proc" 2>/dev/null || true
+
+    # Ensure empty mountpoint directories exist (kernel needs them at boot).
+    # mksquashfs -e excludes entire directory trees, so we exclude contents
+    # via -wildcards instead, preserving the empty directories.
+    mkdir -p "$MOUNT_DIR/dev" "$MOUNT_DIR/proc" "$MOUNT_DIR/sys"
+
     # Create squashfs for live boot (same root filesystem, different packaging)
     log_info "Creating live boot squashfs..."
     SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
@@ -447,7 +486,8 @@ EOF
         -comp zstd \
         -Xcompression-level 19 \
         -noappend \
-        -e boot/efi
+        -wildcards \
+        -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
 
     # Record uncompressed size (required by casper)
     du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
@@ -457,13 +497,6 @@ EOF
 
     # Cleanup
     log_info "Cleaning up..."
-    sync
-
-    # Unmount virtual filesystems (reverse order)
-    umount "$MOUNT_DIR/dev/pts" 2>/dev/null || true
-    umount "$MOUNT_DIR/dev" 2>/dev/null || true
-    umount "$MOUNT_DIR/sys" 2>/dev/null || true
-    umount "$MOUNT_DIR/proc" 2>/dev/null || true
 
     umount "$MOUNT_DIR/boot/efi"
     umount "$MOUNT_DIR"

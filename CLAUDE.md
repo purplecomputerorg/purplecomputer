@@ -1,11 +1,23 @@
 # Claude Code Notes for Purple Computer
 
+## Screenshots
+
+Screenshots are stored in `/tmp/screenshots/`. When the user references "the latest screenshot" or visual issues, check this directory for recent files (sorted by date in filename, e.g. `SCR-20260306-*.png`).
+
+---
+
 ## Sensitive Files (DO NOT READ)
 
 Never read or access these files:
 - `tools/.env` (API keys)
 - Any `.env` files
 - `credentials.json`, `secrets.yaml`, or similar
+
+---
+
+## Hardware Safety (CRITICAL)
+
+Never make changes that could cause issues on real laptop hardware for the sake of testing, debugging, or VM compatibility. Purple Computer runs on kids' laptops. Real hardware stability always takes priority over UTM/QEMU/VM convenience. Any VM-specific workarounds must be safe no-ops on real devices.
 
 ---
 
@@ -63,16 +75,25 @@ This applies to docs, comments, and UI strings.
 
 Always use `.venv` or Docker to access Python dependencies. The system Python won't have the required libraries.
 
-```bash
-# Local development
-source .venv/bin/activate
-pytest tests/ -v
+**Prefer `just` commands** over raw shell commands. The justfile handles venv activation and environment setup automatically:
 
-# Or via Docker (on some machines)
-docker compose run app pytest tests/ -v
+```bash
+just test          # Run tests
+just run           # Run locally
+just lint          # Run linter
+just setup         # Install dependencies
+just python foo.py       # Run Python script with venv
+just python -c '...'     # Run Python one-liner with venv
+just               # List all available commands
 ```
 
-Or use the justfile shortcuts: `just test`, `just run`, `just setup`.
+All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command. **Always use `just python` or `just pyc` instead of `.venv/bin/python` or `source .venv/bin/activate && python`.**
+
+---
+
+## Scripts Over Ad Hoc Commands
+
+If a shell command or Python snippet might be useful more than once, save it as a script in `scripts/` rather than running it ad hoc. One-off commands are fine inline, but anything reusable should be a script so it can be run again easily and improved over time.
 
 ---
 

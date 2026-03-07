@@ -11,6 +11,7 @@ ensures identical input always produces identical WAV output.
 import array
 import hashlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -240,6 +241,20 @@ def _postprocess_wav(wav_path: str) -> None:
 
 _CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE")) if os.environ.get("PURPLE_TTS_CACHE") else Path.home() / ".purple" / "cache" / "tts"
 
+# Don't cache text longer than this (unlikely to be retyped exactly)
+_MAX_CACHE_TEXT_LEN = 60
+
+# Cache size limit (bytes). Oldest-accessed files evicted when exceeded.
+_MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
+
+def _wav_to_ogg(wav_path: str, ogg_path: str) -> None:
+    """Convert WAV to OGG Vorbis using ffmpeg."""
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error",
+         "-i", wav_path, "-c:a", "libvorbis", "-q:a", "2", ogg_path],
+        check=True, capture_output=True,
+    )
+
 
 def _cache_key(text: str) -> str:
     """Hash the prepared text to create a cache filename."""
@@ -247,22 +262,54 @@ def _cache_key(text: str) -> str:
 
 
 def _get_cached(prepared_text: str) -> Path | None:
-    """Return cached WAV path if it exists."""
-    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
+    """Return cached OGG path if it exists."""
+    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.ogg"
     if cache_path.exists():
+        try:
+            cache_path.touch()
+        except OSError:
+            pass
         return cache_path
     return None
 
 
 def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
-    """Copy a WAV file into the cache. Returns cache path, or None on failure."""
+    """Store audio in cache as OGG (or WAV fallback). Returns cache path, or None on failure."""
+    if len(prepared_text) > _MAX_CACHE_TEXT_LEN:
+        return None
+
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.wav"
-        shutil.copy2(wav_path, cache_path)
-        return cache_path
+        key = _cache_key(prepared_text)
+        ogg_path = _CACHE_DIR / f"{key}.ogg"
+        _wav_to_ogg(wav_path, str(ogg_path))
+        _enforce_cache_limit()
+        return ogg_path
     except Exception:
         return None
+
+
+def _enforce_cache_limit() -> None:
+    """Evict oldest-accessed cache files if total size exceeds the limit."""
+    try:
+        files = list(_CACHE_DIR.glob("*.*"))
+        if not files:
+            return
+
+        total = sum(f.stat().st_size for f in files)
+        if total <= _MAX_CACHE_BYTES:
+            return
+
+        # Sort by modification time (oldest first), evict until under limit
+        files.sort(key=lambda f: f.stat().st_mtime)
+        for f in files:
+            if total <= _MAX_CACHE_BYTES:
+                break
+            size = f.stat().st_size
+            f.unlink(missing_ok=True)
+            total -= size
+    except Exception:
+        pass
 
 
 def clear_cache() -> int:
@@ -270,9 +317,10 @@ def clear_cache() -> int:
     if not _CACHE_DIR.exists():
         return 0
     count = 0
-    for f in _CACHE_DIR.glob("*.wav"):
-        f.unlink()
-        count += 1
+    for f in _CACHE_DIR.iterdir():
+        if f.suffix == ".ogg":
+            f.unlink()
+            count += 1
     return count
 
 
@@ -417,7 +465,11 @@ def _init_sync() -> None:
 
 
 def _pregenerate_cache() -> None:
-    """Pre-generate cached WAV files for common utterances (letters, digits, etc.)."""
+    """Pre-generate cached audio for common utterances in the background.
+
+    Covers letters, numbers, colors, all emoji words, and play mode words.
+    Runs at low priority so it doesn't block normal usage.
+    """
     voice = _get_piper_voice()
     if voice is None:
         return
@@ -437,12 +489,39 @@ def _pregenerate_cache() -> None:
     phrases.extend(number_words)
 
     # Math words
-    phrases.extend(["plus", "equals"])
+    phrases.extend(["plus", "equals", "times", "minus"])
 
     # System color words
     phrases.extend(SYSTEM_COLORS)
 
+    # All emoji words (cat, dog, rocket, etc.)
+    try:
+        from .content import get_content
+        content = get_content()
+        for word in content.emojis:
+            # Skip emoticon-style entries like ":)" or "<3"
+            if word.isalpha() or " " in word:
+                phrases.append(word)
+    except Exception:
+        pass
+
+    # Play mode recognized words (cat, dog, mom, dad, etc.)
+    try:
+        from .play_words import WORDS
+        phrases.extend(WORDS)
+    except Exception:
+        pass
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
     for phrase in phrases:
+        key = phrase.lower()
+        if key not in seen:
+            seen.add(key)
+            unique.append(phrase)
+
+    for phrase in unique:
         prepared = _prepare_text(phrase)
         if _get_cached(prepared) is None:
             _synthesize_to_cache(voice, prepared)
@@ -605,7 +684,7 @@ def _speak_sync(text: str, speech_id: int) -> bool:
     if speech_id != _speech_id:
         return False
 
-    # Synthesize, post-process, and cache
+    # Synthesize, post-process, and cache (if short enough to be worth caching)
     result_path = _synthesize_to_cache(voice, prepared)
     if result_path is None:
         return False

@@ -1,7 +1,7 @@
 """Play session recorder for replay functionality.
 
 Pure logic with no UI or audio dependencies. Records key presses with timing
-and sub-mode info, and produces replay sequences.
+and mode info, and produces replay sequences.
 
 A "session" is a sequence of key presses. If there's a gap of more than
 SESSION_TIMEOUT seconds between presses, the old events are discarded
@@ -12,22 +12,22 @@ import time
 
 SESSION_TIMEOUT = 2.0  # seconds of inactivity before session resets
 
-# Sub-mode constants
-SUBMODE_MUSIC = 'music'
-SUBMODE_LETTERS = 'letters'
+# Mode constants
+MODE_MUSIC = 'music'
+MODE_LETTERS = 'letters'
 
 
 class PlaySession:
     """Records key presses with timing for replay in Play Mode.
 
-    Each event records the key, which sub-mode it was pressed in (music
-    or letters), and the timestamp. Replay preserves sub-mode so letter
+    Each event records the key, which mode it was pressed in (music
+    or letters), and the timestamp. Replay preserves mode so letter
     keys are spoken and music keys play sounds.
 
     Usage:
         session = PlaySession()
 
-        # Record keys with their sub-mode
+        # Record keys with their mode
         session.record('A', 'music')
         session.record('B', 'letters')
 
@@ -42,7 +42,7 @@ class PlaySession:
         self._events: list[tuple[str, str, float]] = []  # (key, submode, timestamp)
         self._time_fn = time_fn or time.monotonic
 
-    def record(self, key: str, submode: str = SUBMODE_MUSIC, now: float | None = None) -> None:
+    def record(self, key: str, submode: str = MODE_MUSIC, now: float | None = None) -> None:
         """Record a key press. Starts new session if timed out."""
         if now is None:
             now = self._time_fn()

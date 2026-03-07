@@ -28,7 +28,10 @@ IDLE_SCREEN_OFF = _get_timing(15 * 60, 10)    # 15 min / 10 sec: screen off
 IDLE_SHUTDOWN_WARN = _get_timing(25 * 60, 15) # 25 min / 15 sec: shutdown warning
 IDLE_SHUTDOWN = _get_timing(30 * 60, 20)      # 30 min / 20 sec: shutdown
 
-LID_SHUTDOWN_DELAY = _get_timing(5, 3)        # 5 sec / 3 sec: lid close warning
+LID_SHUTDOWN_DELAY = _get_timing(120, 5)      # 2 min / 5 sec: lid close to shutdown
+
+# Power button timing
+POWER_HOLD_SHUTDOWN = _get_timing(3, 2)       # 3 sec / 2 sec: hold power to shut down
 
 
 class PowerManager:

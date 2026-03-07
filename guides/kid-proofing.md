@@ -119,20 +119,37 @@ This is the deepest layer of protection. Even if other layers fail, the terminal
 
 ---
 
-## Power Management: Clean Shutdown
+## Power Management: Kid-Friendly Power Button and Lid
 
-**File:** `/etc/systemd/logind.conf.d/purple-power.conf`
+**Files:**
+- `/etc/systemd/logind.conf.d/purple-power.conf` (logind ignores all buttons)
+- `purple_tui/input.py`: `PowerButtonReader` monitors power button via evdev
+- `purple_tui/modes/sleep_screen.py`: `SleepScreen` and `ByeScreen`
+- `purple_tui/power_manager.py`: idle tracking and shutdown
 
 ```ini
 [Login]
-HandlePowerKey=poweroff
-HandlePowerKeyLongPress=poweroff
-HandleLidSwitch=poweroff
-HandleSuspendKey=poweroff
-HandleHibernateKey=poweroff
+HandlePowerKey=ignore
+HandlePowerKeyLongPress=ignore
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
 ```
 
-All power actions trigger clean shutdown. No suspend/hibernate (unreliable on old laptops).
+logind ignores all power actions so the TUI has full control over the UX.
+
+| Action | What happens |
+|--------|-------------|
+| Power button tap | Shows sleep screen (cute sleeping face). Any key wakes. |
+| Power button hold (3s) | Shows "Bye!" screen, then shuts down after 2s. |
+| Power button hold (10s) | Hardware forced off (ACPI, cannot be changed). |
+| Lid close | Screen off immediately. Shuts down after 2 minutes. Lid reopen cancels. |
+| Idle 3 min | Sleep screen |
+| Idle 15 min | Screen off (DPMS) |
+| Idle 30 min | Shutdown |
+
+**Why this design:** A 3-year-old mashing the power button sees a cute sleeping face (not scary) and can press any key to get back. A parent who wants to turn it off holds power for 3 seconds (phone-like, intuitive). No suspend/hibernate (unreliable on old laptops).
 
 The 10-second forced power-off is a **hardware feature** (ACPI) that bypasses the OS. This cannot be changed and serves as the ultimate escape hatch.
 
@@ -146,8 +163,8 @@ These are deliberately allowed:
 |--------|-------------|
 | Fn+Brightness | Annoying but harmless |
 | Fn+Volume | Annoying but harmless |
-| Power button | Clean shutdown (configured above) |
-| Lid close | Clean shutdown (configured above) |
+| Power button tap | Shows sleep screen (harmless, any key wakes) |
+| Lid close | Delayed shutdown with 2-minute grace period |
 
 ---
 
@@ -171,10 +188,17 @@ sudo sysctl -p /etc/sysctl.d/99-purple-sysrq.conf
 # 3. Mask Ctrl+Alt+Del
 sudo systemctl mask ctrl-alt-del.target
 
-# 4. Power button (add to existing file)
-sudo tee -a /etc/systemd/logind.conf.d/purple-power.conf << 'EOF'
-HandlePowerKey=poweroff
-HandlePowerKeyLongPress=poweroff
+# 4. Power button and lid: TUI handles everything
+sudo mkdir -p /etc/systemd/logind.conf.d
+sudo tee /etc/systemd/logind.conf.d/purple-power.conf << 'EOF'
+[Login]
+HandlePowerKey=ignore
+HandlePowerKeyLongPress=ignore
+HandleLidSwitch=ignore
+HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
+HandleSuspendKey=ignore
+HandleHibernateKey=ignore
 EOF
 sudo systemctl restart systemd-logind
 
@@ -216,6 +240,6 @@ Purple Computer uses defense in depth:
 3. **Systemd** blocks Ctrl+Alt+Del reboot
 4. **XKB** blocks accessibility toggles
 5. **Evdev** grabs keyboard so terminal never sees signals
-6. **Logind** makes power button do clean shutdown
+6. **Logind** ignores power/lid so TUI controls the UX (tap=sleep, hold=shutdown, lid=delayed shutdown)
 
 No single layer is sufficient. Together, they make the system resilient to any key combination a kid can produce.

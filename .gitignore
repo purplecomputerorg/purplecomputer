@@ -82,3 +82,9 @@ tools/.env
 recording-setup/apply_zoom_vf.txt
 
 recordings/*.mp4
+
+# USB update signing keys
+tools/update-key.priv
+update-key.pub
+
+.claude/worktrees

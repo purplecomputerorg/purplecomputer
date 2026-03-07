@@ -3,14 +3,19 @@
 Generate fun sounds for Purple Computer Play Mode
 
 Creates vibrant, kid-friendly sounds:
-- Letters: Bright piano-like tones (fun and exhilarating)
-- Numbers: Silly sounds (boing, drum, pop, giggle, etc.)
+- Marimba: warm, woody, percussive (default)
+- Steel Drum: bright, tropical, shimmery
+- Kalimba: crystalline, plucky, intimate
+- Music Box: sparkly, bell-like, magical
+- Percussion: kick, snare, hi-hat, etc. (shared across instruments)
 """
 
 import sys
 import wave
 import math
 import random
+import subprocess
+import tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
@@ -20,18 +25,44 @@ SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 sys.path.insert(0, str(PROJECT_ROOT))
 from purple_tui.play_constants import NOTE_FREQUENCIES
 
-def write_wav(filename: str, samples: list[int], sample_rate: int = 44100):
-    """Write samples to a WAV file"""
-    filepath = SOUNDS_DIR / filename
-    with wave.open(str(filepath), 'w') as wav_file:
-        wav_file.setnchannels(1)
-        wav_file.setsampwidth(2)
-        wav_file.setframerate(sample_rate)
-        for sample in samples:
-            # Clamp to valid range
-            sample = max(-32767, min(32767, sample))
-            wav_file.writeframes(sample.to_bytes(2, byteorder='little', signed=True))
-    print(f"  Created {filename}")
+
+def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,
+                subdir: str | None = None):
+    """Write samples as an OGG file (via WAV temp file + ffmpeg)."""
+    if subdir:
+        target = SOUNDS_DIR / subdir
+        target.mkdir(parents=True, exist_ok=True)
+    else:
+        target = SOUNDS_DIR
+    ogg_name = filename.replace('.wav', '.ogg')
+    ogg_path = target / ogg_name
+
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+        tmp_path = tmp.name
+        with wave.open(tmp_path, 'w') as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            for sample in samples:
+                sample = max(-32767, min(32767, sample))
+                wav_file.writeframes(sample.to_bytes(2, byteorder='little', signed=True))
+
+    subprocess.run(
+        ['ffmpeg', '-y', '-i', tmp_path, '-c:a', 'libvorbis', '-q:a', '3',
+         str(ogg_path)],
+        capture_output=True, check=True,
+    )
+    Path(tmp_path).unlink()
+
+    label = f"{subdir}/{ogg_name}" if subdir else ogg_name
+    print(f"  Created {label}")
+
+
+def finalize_samples(samples: list[float], peak_level: float = 0.75) -> list[int]:
+    """Normalize and convert to int16."""
+    peak = max(abs(s) for s in samples) or 1
+    return [int(s / peak * peak_level * 32767) for s in samples]
+
 
 def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
     """
@@ -45,19 +76,16 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
     for i in range(num_samples):
         t = i / sample_rate
 
-        # Rich harmonic series (piano-like)
-        sample = math.sin(2 * math.pi * frequency * t)  # Fundamental
-        sample += 0.5 * math.sin(2 * math.pi * frequency * 2 * t)  # 2nd harmonic
-        sample += 0.35 * math.sin(2 * math.pi * frequency * 3 * t)  # 3rd harmonic
-        sample += 0.2 * math.sin(2 * math.pi * frequency * 4 * t)  # 4th harmonic
-        sample += 0.1 * math.sin(2 * math.pi * frequency * 5 * t)  # 5th harmonic
+        sample = math.sin(2 * math.pi * frequency * t)
+        sample += 0.5 * math.sin(2 * math.pi * frequency * 2 * t)
+        sample += 0.35 * math.sin(2 * math.pi * frequency * 3 * t)
+        sample += 0.2 * math.sin(2 * math.pi * frequency * 4 * t)
+        sample += 0.1 * math.sin(2 * math.pi * frequency * 5 * t)
 
-        # Add a bit of sparkle (high frequency shimmer)
         shimmer = 0.05 * math.sin(2 * math.pi * frequency * 8 * t)
-        shimmer *= math.exp(-t * 8)  # Quick decay on shimmer
+        shimmer *= math.exp(-t * 8)
         sample += shimmer
 
-        # ADSR envelope - quick attack, nice sustain, gentle release
         attack_time = 0.02
         decay_time = 0.1
         sustain_level = 0.7
@@ -88,62 +116,191 @@ def generate_marimba(frequency: float, duration: float = 0.65) -> list[int]:
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
 
-    # Marimba bar partials (wooden bar physics)
     bar_partials = [
-        (1.0, 1.0, 2.5),      # fundamental - moderate decay
-        (3.9, 0.15, 6.0),     # first overtone
-        (9.2, 0.05, 12.0),    # second overtone
+        (1.0, 1.0, 2.5),
+        (3.9, 0.15, 6.0),
+        (9.2, 0.05, 12.0),
     ]
 
-    # Resonator tube modes - this is what makes it FULL
-    # Multiple resonances for richer sound
     tube_modes = [
-        (1.0, 0.9, 1.5),      # main tube resonance - strong, natural decay
-        (2.0, 0.35, 2.5),     # second harmonic
-        (3.0, 0.15, 3.5),     # third harmonic - adds presence
+        (1.0, 0.9, 1.5),
+        (2.0, 0.35, 2.5),
+        (3.0, 0.15, 3.5),
     ]
 
     samples = []
-    fade_out_duration = 0.18  # smooth fade
+    fade_out_duration = 0.18
     fade_out_start = duration - fade_out_duration
 
     for i in range(num_samples):
         t = i / sample_rate
         sample = 0
 
-        # Soft mallet attack with bloom
         if t < 0.012:
             attack = t / 0.012
         elif t < 0.06:
-            # Bloom as resonator builds up
             attack = 1.0 + 0.2 * math.sin(math.pi * (t - 0.012) / 0.048)
         else:
             attack = 1.0
 
-        # Bar vibration
         for ratio, amp, decay_rate in bar_partials:
             partial_decay = math.exp(-t * decay_rate)
             sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
 
-        # Resonator tube - builds up then sustains
         for ratio, amp, decay_rate in tube_modes:
             tube_env = (1 - math.exp(-t * 25)) * math.exp(-t * decay_rate)
             sample += amp * tube_env * math.sin(2 * math.pi * frequency * ratio * t)
 
-        # Sub-bass warmth
         sub_bass = 0.3 * math.exp(-t * 2.0) * math.sin(2 * math.pi * frequency * 0.5 * t)
         sample += sub_bass
 
         sample *= attack
 
-        # Smooth fade out (cosine curve for natural sound)
         if t > fade_out_start:
             fade_progress = (t - fade_out_start) / fade_out_duration
             sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.5)  # lower peak to prevent mix clipping
+    return finalize_samples(samples, peak_level=0.5)
+
+
+def generate_steel_drum(frequency: float, duration: float = 0.7) -> list[int]:
+    """
+    Bright, tropical steel drum. Detuned harmonic pairs create metallic shimmer.
+    Slow amplitude wobble for the characteristic "singing" sustain.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+    samples = []
+    fade_out_duration = 0.15
+    fade_out_start = duration - fade_out_duration
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        sample = 0
+
+        # Quick mallet attack
+        if t < 0.008:
+            attack = t / 0.008
+        elif t < 0.03:
+            attack = 1.0 + 0.15 * math.sin(math.pi * (t - 0.008) / 0.022)
+        else:
+            attack = 1.0
+
+        # Detuned harmonic pairs for metallic shimmer
+        sample += 1.0 * math.sin(2 * math.pi * frequency * 1.0 * t)
+        sample += 0.8 * math.sin(2 * math.pi * frequency * 2.01 * t)
+        sample += 0.5 * math.sin(2 * math.pi * frequency * 3.03 * t)
+        sample += 0.25 * math.sin(2 * math.pi * frequency * 4.05 * t)
+
+        # Slow amplitude wobble for "singing" sustain
+        wobble = 1.0 + 0.12 * math.sin(2 * math.pi * 4.5 * t)
+        sample *= wobble
+
+        # Decay: sustains longer than marimba
+        envelope = math.exp(-t * 2.0)
+        sample *= envelope * attack
+
+        if t > fade_out_start:
+            fade_progress = (t - fade_out_start) / fade_out_duration
+            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+
+        samples.append(sample)
+
+    return finalize_samples(samples, peak_level=0.5)
+
+
+def generate_kalimba(frequency: float, duration: float = 0.5) -> list[int]:
+    """
+    Crystalline, plucky kalimba (thumb piano). Strong fundamental, weak even
+    harmonics, strong odd harmonics. Slight AM buzz from tine vibration.
+    Short decay for the "plink" quality.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+    samples = []
+    fade_out_duration = 0.1
+    fade_out_start = duration - fade_out_duration
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        sample = 0
+
+        # Very fast pluck attack
+        if t < 0.003:
+            attack = t / 0.003
+        else:
+            attack = 1.0
+
+        # Strong fundamental, weak even, strong odd harmonics
+        sample += 1.0 * math.sin(2 * math.pi * frequency * t)
+        sample += 0.08 * math.sin(2 * math.pi * frequency * 2 * t)   # weak even
+        sample += 0.35 * math.sin(2 * math.pi * frequency * 3 * t)   # strong odd
+        sample += 0.05 * math.sin(2 * math.pi * frequency * 4 * t)   # weak even
+        sample += 0.15 * math.sin(2 * math.pi * frequency * 5 * t)   # strong odd
+
+        # Tine buzz: slight amplitude modulation at ~80 Hz
+        buzz = 1.0 + 0.06 * math.sin(2 * math.pi * 80 * t) * math.exp(-t * 8)
+        sample *= buzz
+
+        # Quick decay for plucky quality
+        envelope = math.exp(-t * 5.0)
+        sample *= envelope * attack
+
+        if t > fade_out_start:
+            fade_progress = (t - fade_out_start) / fade_out_duration
+            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+
+        samples.append(sample)
+
+    return finalize_samples(samples, peak_level=0.5)
+
+
+def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
+    """
+    Sparkly, bell-like music box. Inharmonic partials from metal comb physics.
+    Bright "ping" attack, clear and punchy.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+    samples = []
+    fade_out_duration = 0.12
+    fade_out_start = duration - fade_out_duration
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        sample = 0
+
+        # Snappy ping attack
+        if t < 0.002:
+            attack = t / 0.002
+        elif t < 0.01:
+            attack = 1.0 + 0.3 * math.exp(-(t - 0.002) * 200)
+        else:
+            attack = 1.0
+
+        # Inharmonic partials (metal comb physics)
+        sample += 1.0 * math.sin(2 * math.pi * frequency * 1.0 * t)
+        sample += 0.4 * math.sin(2 * math.pi * frequency * 2.76 * t)
+        sample += 0.2 * math.sin(2 * math.pi * frequency * 5.4 * t)
+        sample += 0.1 * math.sin(2 * math.pi * frequency * 8.93 * t)
+
+        # High sparkle partial that decays fast
+        sparkle = 0.15 * math.sin(2 * math.pi * frequency * 12.1 * t) * math.exp(-t * 20)
+        sample += sparkle
+
+        # Moderate decay, not too long
+        envelope = math.exp(-t * 3.5)
+        sample *= envelope * attack
+
+        if t > fade_out_start:
+            fade_progress = (t - fade_out_start) / fade_out_duration
+            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+
+        samples.append(sample)
+
+    return finalize_samples(samples, peak_level=0.5)
 
 
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
@@ -160,26 +317,21 @@ def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
     for i in range(num_samples):
         t = i / sample_rate
 
-        # Punchy attack with slight "bonk"
         if t < 0.005:
-            attack = (t / 0.005) * 1.3  # overshoot
+            attack = (t / 0.005) * 1.3
         elif t < 0.03:
-            attack = 1.3 - 0.3 * ((t - 0.005) / 0.025)  # settle
+            attack = 1.3 - 0.3 * ((t - 0.005) / 0.025)
         else:
             attack = 1.0
 
-        # Clear, bright harmonics (xylophone-like)
-        sample = math.sin(2 * math.pi * frequency * t)            # fundamental
-        sample += 0.5 * math.sin(2 * math.pi * frequency * 2 * t)  # 2nd - body
-        sample += 0.4 * math.sin(2 * math.pi * frequency * 4 * t)  # 4th - brightness
-        sample += 0.15 * math.sin(2 * math.pi * frequency * 6 * t) # 6th - sparkle
+        sample = math.sin(2 * math.pi * frequency * t)
+        sample += 0.5 * math.sin(2 * math.pi * frequency * 2 * t)
+        sample += 0.4 * math.sin(2 * math.pi * frequency * 4 * t)
+        sample += 0.15 * math.sin(2 * math.pi * frequency * 6 * t)
 
-        # Decay - snappy but not too short
         envelope = math.exp(-t * 4)
-
         sample = sample * attack * envelope
 
-        # Fade out
         if t > fade_out_start:
             sample *= 1 - (t - fade_out_start) / 0.04
 
@@ -188,11 +340,6 @@ def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
     return finalize_samples(samples)
 
 
-def finalize_samples(samples: list[float], peak_level: float = 0.75) -> list[int]:
-    """Normalize and convert to int16."""
-    peak = max(abs(s) for s in samples) or 1
-    return [int(s / peak * peak_level * 32767) for s in samples]
-
 def generate_kick_drum() -> list[int]:
     """Punchy kick drum - tuned for laptop speakers"""
     sample_rate = 44100
@@ -200,22 +347,17 @@ def generate_kick_drum() -> list[int]:
     num_samples = int(sample_rate * duration)
     samples = []
 
-    # Short fade-in to prevent click (2ms)
     fade_in_samples = int(sample_rate * 0.002)
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Higher min freq (60 Hz vs 40 Hz) for better laptop speaker reproduction
         freq = 180 * math.exp(-t * 20) + 60
         sample = math.sin(2 * math.pi * freq * t)
-        # Second harmonic helps laptop speakers reproduce the low end
         sample += 0.3 * math.sin(2 * math.pi * freq * 2 * t)
-        # Softer click at the start
         click = math.exp(-t * 80) * 0.25
         sample += click
         envelope = math.exp(-t * 7)
 
-        # Apply fade-in
         if i < fade_in_samples:
             fade = i / fade_in_samples
         else:
@@ -235,9 +377,7 @@ def generate_snare() -> list[int]:
     random.seed(42)
     for i in range(num_samples):
         t = i / sample_rate
-        # Body tone
         tone = math.sin(2 * math.pi * 200 * t) * math.exp(-t * 20)
-        # Snare rattle (filtered noise)
         noise = (random.random() * 2 - 1) * math.exp(-t * 15)
         sample = tone * 0.4 + noise * 0.6
         envelope = math.exp(-t * 10)
@@ -255,9 +395,7 @@ def generate_hihat() -> list[int]:
     random.seed(123)
     for i in range(num_samples):
         t = i / sample_rate
-        # High frequency noise for metallic sound
         noise = random.random() * 2 - 1
-        # Add some high tones
         tone = math.sin(2 * math.pi * 8000 * t) * 0.3
         tone += math.sin(2 * math.pi * 10000 * t) * 0.2
         sample = noise * 0.7 + tone
@@ -275,13 +413,11 @@ def generate_gong() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Low fundamental with beating harmonics
         freq = 120
         sample = math.sin(2 * math.pi * freq * t)
-        sample += 0.6 * math.sin(2 * math.pi * freq * 2.01 * t)  # Slight detune for shimmer
+        sample += 0.6 * math.sin(2 * math.pi * freq * 2.01 * t)
         sample += 0.4 * math.sin(2 * math.pi * freq * 3.02 * t)
         sample += 0.2 * math.sin(2 * math.pi * freq * 4.5 * t)
-        # Slow amplitude wobble
         wobble = 1 + 0.1 * math.sin(2 * math.pi * 3 * t)
         sample *= wobble
         envelope = math.exp(-t * 2)
@@ -298,12 +434,10 @@ def generate_cowbell() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Two slightly detuned tones for metallic character
         freq1 = 800
         freq2 = 540
         sample = math.sin(2 * math.pi * freq1 * t)
         sample += 0.7 * math.sin(2 * math.pi * freq2 * t)
-        # Add harmonics
         sample += 0.3 * math.sin(2 * math.pi * freq1 * 2 * t)
         envelope = math.exp(-t * 8)
         samples.append(int(sample * envelope * 0.4 * 32767))
@@ -320,7 +454,6 @@ def generate_clap() -> list[int]:
     random.seed(321)
     for i in range(num_samples):
         t = i / sample_rate
-        # Multiple short bursts for realistic clap
         burst1 = math.exp(-((t - 0.005) ** 2) * 50000)
         burst2 = math.exp(-((t - 0.015) ** 2) * 40000)
         burst3 = math.exp(-((t - 0.025) ** 2) * 30000)
@@ -340,7 +473,6 @@ def generate_woodblock() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Hollow resonant tone
         freq = 800
         sample = math.sin(2 * math.pi * freq * t)
         sample += 0.5 * math.sin(2 * math.pi * freq * 2.3 * t)
@@ -359,12 +491,10 @@ def generate_triangle() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # High pure tone with slight shimmer
         freq = 1500
         sample = math.sin(2 * math.pi * freq * t)
         sample += 0.3 * math.sin(2 * math.pi * freq * 2 * t)
         sample += 0.15 * math.sin(2 * math.pi * freq * 3 * t)
-        # Subtle vibrato
         vibrato = 1 + 0.002 * math.sin(2 * math.pi * 6 * t)
         sample *= vibrato
         envelope = math.exp(-t * 4)
@@ -382,9 +512,7 @@ def generate_tambourine() -> list[int]:
     random.seed(654)
     for i in range(num_samples):
         t = i / sample_rate
-        # Jingles - high metallic noise
         noise = (random.random() * 2 - 1)
-        # Add some high pitched tones for jingles
         jingle = math.sin(2 * math.pi * 6000 * t) * 0.3
         jingle += math.sin(2 * math.pi * 8500 * t) * 0.2
         jingle += math.sin(2 * math.pi * 11000 * t) * 0.1
@@ -403,7 +531,6 @@ def generate_bongo() -> list[int]:
 
     for i in range(num_samples):
         t = i / sample_rate
-        # Higher pitched than kick, with quick pitch drop
         freq = 400 * math.exp(-t * 30) + 180
         sample = math.sin(2 * math.pi * freq * t)
         sample += 0.4 * math.sin(2 * math.pi * freq * 1.5 * t)
@@ -419,16 +546,23 @@ def main():
 
     SOUNDS_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Generate marimba tones for letters
-    print("Marimba tones (A-Z):")
-    for letter, freq in NOTE_FREQUENCIES.items():
-        samples = generate_marimba(freq)
-        write_wav(f"{letter.lower()}.wav", samples)
+    # Instrument generators: (directory_name, generator_function)
+    instruments = [
+        ("marimba", generate_marimba),
+        ("steeldrum", generate_steel_drum),
+        ("kalimba", generate_kalimba),
+        ("musicbox", generate_music_box),
+    ]
 
-    print()
-    print("Silly sounds (0-9):")
+    for inst_dir, generator in instruments:
+        print(f"{inst_dir} tones:")
+        for letter, freq in NOTE_FREQUENCIES.items():
+            samples = generator(freq)
+            write_sound(f"{letter.lower()}.wav", samples, subdir=inst_dir)
+        print()
 
-    # Number sounds - percussion kit
+    print("Percussion (0-9):")
+
     silly_sounds = [
         ("0", generate_gong, "gong"),
         ("1", generate_kick_drum, "kick"),
@@ -444,7 +578,7 @@ def main():
 
     for num, generator, name in silly_sounds:
         samples = generator()
-        write_wav(f"{num}.wav", samples)
+        write_sound(f"{num}.wav", samples)
         print(f"    {num} = {name}")
 
     print()

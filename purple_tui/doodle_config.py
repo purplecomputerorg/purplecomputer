@@ -10,7 +10,7 @@ Used by:
 """
 
 from purple_tui.constants import VIEWPORT_WIDTH, VIEWPORT_HEIGHT
-from purple_tui.modes.doodle_mode import (
+from purple_tui.rooms.doodle_room import (
     GUTTER, GRAYSCALE,
     QWERTY_ROW, ASDF_ROW, ZXCV_ROW,
 )

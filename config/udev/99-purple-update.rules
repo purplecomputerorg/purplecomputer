@@ -1,0 +1,3 @@
+# Purple Computer: auto-detect USB update drives
+# When a USB drive labeled PURPLE_UPDATE is inserted, trigger the update service.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="PURPLE_UPDATE", TAG+="systemd", ENV{SYSTEMD_WANTS}="purple-usb-update@%k.service"

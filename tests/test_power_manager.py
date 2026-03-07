@@ -21,6 +21,8 @@ except ImportError:
 from purple_tui.power_manager import (
     PowerManager,
     IDLE_SLEEP_UI,
+    LID_SHUTDOWN_DELAY,
+    POWER_HOLD_SHUTDOWN,
 )
 
 
@@ -117,6 +119,17 @@ if HAS_PYTEST:
             power_manager.record_activity()
 
             callback.assert_not_called()
+
+    class TestPowerTimings:
+        """Test power button and lid delay timings."""
+
+        def test_lid_shutdown_delay_is_two_minutes(self):
+            """Lid close should wait 2 minutes before shutdown."""
+            assert LID_SHUTDOWN_DELAY == 120
+
+        def test_power_hold_shutdown_is_three_seconds(self):
+            """Power button hold should trigger shutdown after 3 seconds."""
+            assert POWER_HOLD_SHUTDOWN == 3
 
     class TestDemoMode:
         """Test demo mode timing values."""

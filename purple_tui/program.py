@@ -1,5 +1,5 @@
 """
-Code Mode: program recording, editing, and playback.
+Command Mode: program recording, editing, and playback.
 
 Records keyboard actions from Play, Doodle, and Explore modes as editable blocks.
 Six block types following a Scratch-inspired model: KEY, QUERY, STROKE, PAUSE,
@@ -8,7 +8,7 @@ REPEAT, MODE_SWITCH.
 Every block renders as a uniform 5-char-wide, 3-row-tall cell. Timing is stored
 as hidden metadata (recorded_gap_ms) with only explicit PAUSE blocks visible.
 
-Pure logic with no UI dependencies. Used by build_room.py (Code mode UI)
+Pure logic with no UI dependencies. Used by command_room.py (Command mode UI)
 and purple_tui.py (recording tap).
 """
 
@@ -43,7 +43,7 @@ from .playback.script import (
 BLOCK_WIDTH = 5   # every block is exactly 5 chars wide
 BLOCK_ROWS = 3    # every block is exactly 3 rows tall
 
-# Default tempo for blocks with no recorded timing (typed in code mode)
+# Default tempo for blocks with no recorded timing (typed in command mode)
 DEFAULT_TEMPO_MS = 150
 
 # Threshold for inserting explicit PAUSE blocks during recording conversion

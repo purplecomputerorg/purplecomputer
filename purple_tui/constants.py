@@ -28,7 +28,7 @@ def is_debug() -> bool:
 ROOM_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
 ROOM_PLAY = ("play", "Play")           # F2: Music and art grid
 ROOM_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
-ROOM_BUILD = ("build", "Build")        # F4: Visual block programming
+ROOM_COMMAND = ("command", "Command")   # F4: Visual block programming
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS
@@ -84,7 +84,7 @@ ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
-ICON_BUILD = "󰙬"             # nf-md-toy_brick (block programming)
+ICON_COMMAND = "󰙬"            # nf-md-toy_brick (block programming)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)
@@ -99,7 +99,7 @@ ROOM_TITLES = {
     ROOM_EXPLORE[0]: (ICON_CHAT, ROOM_EXPLORE[1]),
     ROOM_PLAY[0]: (ICON_MUSIC, ROOM_PLAY[1]),
     ROOM_DOODLE[0]: (ICON_PALETTE, ROOM_DOODLE[1]),
-    ROOM_BUILD[0]: (ICON_BUILD, ROOM_BUILD[1]),
+    ROOM_COMMAND[0]: (ICON_COMMAND, ROOM_COMMAND[1]),
 }
 
 # =============================================================================

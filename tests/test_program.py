@@ -1,5 +1,5 @@
 """
-Tests for Code Mode: program blocks, playback, serialization, and v1 migration.
+Tests for Command Mode: program blocks, playback, serialization, and v1 migration.
 
 Pure logic tests with no Textual app dependency.
 """
@@ -45,7 +45,7 @@ from purple_tui.program import (
     _migrate_v1_blocks,
     _v1_gap_to_ms,
 )
-from purple_tui.rooms.build_room import _layout_lines, _cursor_to_line_pos, _get_mode_context
+from purple_tui.rooms.command_room import _layout_lines, _cursor_to_line_pos, _get_mode_context
 from purple_tui.keyboard import (
     CharacterAction,
     NavigationAction,

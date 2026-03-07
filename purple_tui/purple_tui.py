@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F4: Switch rooms (Explore, Play, Doodle, Build)
+- F1-F4: Switch rooms (Explore, Play, Doodle, Command)
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent menu
 - Shift (tap): Sticky shift for one character
@@ -37,7 +37,7 @@ from textual import events
 from enum import Enum
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_BUILD, ICON_MENU,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND, ICON_MENU,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -46,7 +46,7 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_BUILD,
+    ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_COMMAND,
     USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
@@ -68,7 +68,7 @@ class Room(Enum):
     EXPLORE = 1  # F1: Math and emoji REPL
     PLAY = 2     # F2: Music and art grid
     DOODLE = 3   # F3: Simple drawing canvas
-    BUILD = 4    # F4: Visual block programming
+    COMMAND = 4  # F4: Visual block programming
 
 
 class View(Enum):
@@ -83,7 +83,7 @@ ROOM_INFO = {
     Room.EXPLORE: {"key": "F1", "label": ROOM_EXPLORE[1], "emoji": ICON_CHAT},
     Room.PLAY: {"key": "F2", "label": ROOM_PLAY[1], "emoji": ICON_MUSIC},
     Room.DOODLE: {"key": "F3", "label": ROOM_DOODLE[1], "emoji": ICON_PALETTE},
-    Room.BUILD: {"key": "F4", "label": ROOM_BUILD[1], "emoji": ICON_BUILD},
+    Room.COMMAND: {"key": "F4", "label": ROOM_COMMAND[1], "emoji": ICON_COMMAND},
 }
 
 
@@ -809,8 +809,8 @@ class PurpleApp(App):
         """Dispatch a keyboard action to the appropriate handler."""
         # Handle F5 record_toggle globally (before mode dispatch)
         if isinstance(action, ControlAction) and action.is_down and action.action == 'record_toggle':
-            # F5 does nothing in Code mode
-            if self.active_room == Room.BUILD:
+            # F5 does nothing in Command mode
+            if self.active_room == Room.COMMAND:
                 return
             await self._handle_record_toggle()
             return
@@ -833,12 +833,12 @@ class PurpleApp(App):
                 self.action_switch_room(ROOM_PLAY[0])
             elif action.room == ROOM_DOODLE[0]:
                 self.action_switch_room(ROOM_DOODLE[0])
-            elif action.room == ROOM_BUILD[0]:
-                # F4 during recording: stop recording and switch to Code mode
+            elif action.room == ROOM_COMMAND[0]:
+                # F4 during recording: stop recording and switch to Command mode
                 if self._recording_manager.state == RecordingState.RECORDING:
                     self._recording_manager.stop_recording()
                     self._update_recording_indicator()
-                self.action_switch_room(ROOM_BUILD[0])
+                self.action_switch_room(ROOM_COMMAND[0])
             elif action.room == 'parent':
                 self.action_parent_menu()
             return
@@ -947,8 +947,8 @@ class PurpleApp(App):
             self.action_switch_room(ROOM_PLAY[0])
         elif room_name == "doodle":
             self.action_switch_room(ROOM_DOODLE[0])
-        elif room_name == "build":
-            self.action_switch_room(ROOM_BUILD[0])
+        elif room_name == "command":
+            self.action_switch_room(ROOM_COMMAND[0])
 
     # ── F5 Recording ─────────────────────────────────────────────────
 
@@ -1322,9 +1322,9 @@ class PurpleApp(App):
         elif room == Room.DOODLE:
             from .rooms.doodle_room import DoodleMode
             return DoodleMode(classes="room-content")
-        elif room == Room.BUILD:
-            from .rooms.build_room import BuildMode
-            return BuildMode(
+        elif room == Room.COMMAND:
+            from .rooms.command_room import CommandMode
+            return CommandMode(
                 recording_manager=self._recording_manager,
                 dispatch_action=self._dispatch_keyboard_action,
                 classes="room-content",
@@ -1371,12 +1371,12 @@ class PurpleApp(App):
                 widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
-        elif self.active_room == Room.BUILD:
+        elif self.active_room == Room.COMMAND:
             widget.focus()
-            # Refresh blocks when re-entering Code mode
+            # Refresh blocks when re-entering Command mode
             if hasattr(widget, 'on_show'):
                 widget.on_show()
-        elif self.active_room == Room.BUILD:
+        elif self.active_room == Room.COMMAND:
             widget.focus()
         else:
             widget.focus()
@@ -1408,7 +1408,7 @@ class PurpleApp(App):
             ROOM_EXPLORE[0]: Room.EXPLORE,
             ROOM_PLAY[0]: Room.PLAY,
             ROOM_DOODLE[0]: Room.DOODLE,
-            ROOM_BUILD[0]: Room.BUILD,
+            ROOM_COMMAND[0]: Room.COMMAND,
         }
         new_room = room_map.get(room_name, Room.EXPLORE)
 
@@ -1459,7 +1459,7 @@ class PurpleApp(App):
         self._load_room_content()
 
         # Update title
-        room_names = {Room.EXPLORE: ROOM_EXPLORE[0], Room.PLAY: ROOM_PLAY[0], Room.DOODLE: ROOM_DOODLE[0], Room.BUILD: ROOM_BUILD[0]}
+        room_names = {Room.EXPLORE: ROOM_EXPLORE[0], Room.PLAY: ROOM_PLAY[0], Room.DOODLE: ROOM_DOODLE[0], Room.COMMAND: ROOM_COMMAND[0]}
         try:
             title = self.query_one("#room-title", RoomTitle)
             title.set_mode(room_names.get(new_room, ROOM_EXPLORE[0]))

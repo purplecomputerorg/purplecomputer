@@ -3,7 +3,7 @@ F5 Recording: intentional cross-mode recording and playback.
 
 Kids press F5 to start recording, play in any mode (Play, Doodle, Explore),
 press F5 again to stop. The recording can be played back via F5 or Space
-in Code mode, and viewed/edited as blocks in Code mode (F4).
+in Command mode, and viewed/edited as blocks in Command mode (F4).
 
 Mode-aware conversion: Explore events buffer into QUERY blocks, Doodle paint
 arrows merge into STROKE blocks, and gaps > 300ms become explicit PAUSE blocks.

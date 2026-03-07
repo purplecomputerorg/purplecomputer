@@ -1,5 +1,5 @@
 """
-Build Room (F4): Cross-Room Visual Programming
+Command Room (F4): Cross-Room Visual Programming
 
 Shows recorded blocks in a uniform grid layout. Every block is 5 chars wide,
 3 rows tall. MODE_SWITCH blocks start new lines with gutter icons.
@@ -176,7 +176,7 @@ def _get_mode_context(blocks: list[ProgramBlock], cursor: int) -> str:
 # =============================================================================
 
 class SaveBar(Widget):
-    """Shows 9 save slots at the top of Code mode."""
+    """Shows 9 save slots at the top of Command mode."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -544,18 +544,18 @@ class CodeCanvas(Widget):
 
 
 # =============================================================================
-# BUILD MODE CONTAINER (CODE MODE)
+# COMMAND MODE CONTAINER
 # =============================================================================
 
-class BuildMode(Container, can_focus=True):
-    """Code Mode: cross-mode visual programming.
+class CommandMode(Container, can_focus=True):
+    """Command Mode: cross-mode visual programming.
 
     Tab opens menu modal. Space plays program. F5 recording handled globally.
     Mode-context aware: typing behaves differently based on MODE_SWITCH context.
     """
 
     DEFAULT_CSS = """
-    BuildMode {
+    CommandMode {
         width: 100%;
         height: 100%;
     }
@@ -917,8 +917,8 @@ class BuildMode(Container, can_focus=True):
             finally:
                 self._playing = False
                 from ..keyboard import RoomAction
-                from ..constants import ROOM_BUILD
-                await self._dispatch_action(RoomAction(room=ROOM_BUILD[0]))
+                from ..constants import ROOM_COMMAND
+                await self._dispatch_action(RoomAction(room=ROOM_COMMAND[0]))
 
         self._play_task = asyncio.create_task(_run_playback())
 

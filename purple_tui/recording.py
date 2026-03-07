@@ -229,66 +229,88 @@ class Recording:
 class RecordingManager:
     """Manages F5 recording and Space playback.
 
-    F5 toggles recording (IDLE↔RECORDING). Starting a new recording
-    overwrites any previous one. Playback is triggered separately
-    (Space in Play mode, or from Code mode).
+    Recording and playback are independent: you can record while playing
+    back a previous recording (overdub). F5 toggles recording, Space
+    triggers playback.
     """
 
     def __init__(self, time_fn: Callable[[], float] | None = None):
-        self.state = RecordingState.IDLE
+        self._is_recording = False
+        self._is_playing = False
         self.current: Recording | None = None
+        self._previous: Recording | None = None  # kept for playback during new recording
         self._time_fn = time_fn or time.monotonic
         self._stop_playback_fn: Callable | None = None
 
+    @property
+    def is_recording(self) -> bool:
+        return self._is_recording
+
+    @property
+    def is_playing(self) -> bool:
+        return self._is_playing
+
+    @property
+    def state(self) -> RecordingState:
+        """Primary state for indicator display. Recording takes priority."""
+        if self._is_recording:
+            return RecordingState.RECORDING
+        if self._is_playing:
+            return RecordingState.PLAYING
+        return RecordingState.IDLE
+
     def toggle(self) -> RecordingState:
-        """Toggle recording on/off. Returns the new state."""
-        if self.state == RecordingState.RECORDING:
-            self.state = RecordingState.IDLE
+        """Toggle recording on/off. Playback continues independently."""
+        if self._is_recording:
+            self._is_recording = False
             if self.current and self.current.is_empty():
-                self.current = None
+                self.current = self._previous
+            self._previous = None
         else:
-            # IDLE or PLAYING: start a new recording (overwrites previous)
-            if self.state == RecordingState.PLAYING:
-                self.stop_playback()
-            self.state = RecordingState.RECORDING
+            self._is_recording = True
+            # Preserve previous recording so playback can continue
+            if self.current and not self.current.is_empty():
+                self._previous = self.current
             self.current = Recording()
 
         return self.state
 
     def start_recording(self) -> None:
         """Explicitly start recording (used by Tab menu "Record in..." action)."""
-        if self.state == RecordingState.PLAYING:
-            self.stop_playback()
-        self.state = RecordingState.RECORDING
+        self._is_recording = True
+        if self.current and not self.current.is_empty():
+            self._previous = self.current
         self.current = Recording()
 
     def stop_recording(self) -> None:
         """Explicitly stop recording."""
-        if self.state == RecordingState.RECORDING:
-            self.state = RecordingState.IDLE
+        if self._is_recording:
+            self._is_recording = False
             if self.current and self.current.is_empty():
                 self.current = None
 
     def start_playback(self) -> bool:
-        """Start playback if a recording exists. Returns True if started."""
+        """Start playback if a recording exists. Works during recording too."""
         if not self.has_recording():
             return False
-        if self.state == RecordingState.RECORDING:
-            return False
-        self.state = RecordingState.PLAYING
+        self._is_playing = True
         return True
 
     def stop_playback(self) -> None:
         """Stop playback if currently playing."""
-        if self.state == RecordingState.PLAYING:
+        if self._is_playing:
             if self._stop_playback_fn:
                 self._stop_playback_fn()
-            self.state = RecordingState.IDLE
+            self._is_playing = False
+
+    def finish_playback(self) -> None:
+        """Mark playback as finished (natural completion, no cancel callback)."""
+        self._is_playing = False
 
     def record_event(self, action: KeyAction, room_name: str,
                      mode: str = "") -> None:
         """Record a keyboard action if currently recording."""
-        if self.state != RecordingState.RECORDING:
+        if not self._is_recording:
             return
         if self.current is None:
             return
@@ -322,25 +344,31 @@ class RecordingManager:
         )
 
     def to_blocks(self) -> list[ProgramBlock]:
-        """Convert the current recording to blocks."""
-        if self.current is None:
+        """Convert the best available recording to blocks."""
+        rec = self.current
+        if rec is None or rec.is_empty():
+            rec = self._previous
+        if rec is None:
             return []
-        return self.current.to_blocks()
+        return rec.to_blocks()
 
     def has_recording(self) -> bool:
-        """Check if there's a non-empty recording available."""
-        return self.current is not None and not self.current.is_empty()
+        """Check if there's a non-empty recording available for playback."""
+        if self.current is not None and not self.current.is_empty():
+            return True
+        return self._previous is not None and not self._previous.is_empty()
 
     def clear(self) -> None:
-        """Clear the current recording."""
+        """Clear all recordings."""
         self.current = None
+        self._previous = None
 
     @property
     def indicator(self) -> str:
         """Title bar indicator string for current state."""
-        if self.state == RecordingState.RECORDING:
-            return "\u23fa"
-        elif self.state == RecordingState.PLAYING:
+        if self._is_recording:
+            return "\u23fa Capturing keys"
+        if self._is_playing:
             return "\u25b6"
         return ""
 

@@ -38,6 +38,7 @@ from enum import Enum
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND, ICON_MENU,
+    ICON_KEYBOARD,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -119,7 +120,7 @@ class RoomTitle(Static):
         caps = getattr(self.app, 'caps_text', lambda x: x)
         title = f"{icon}  {caps(label)}"
         if self._recording_indicator:
-            title = f"{self._recording_indicator} {title}"
+            title = f"{self._recording_indicator}   {title}"
         return title
 
 
@@ -191,7 +192,7 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        # Mode badges with F-keys (Esc for mode picker, then F1-F3)
+        # Mode badges with F-keys (Esc for mode picker, then F1-F3, F5 record)
         with Horizontal(id="keys-left"):
             # Esc badge for mode picker
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
@@ -207,6 +208,11 @@ class RoomIndicator(Horizontal):
                 else:
                     badge.add_class("dim")
                 yield badge
+
+            # F5 capture badge
+            f5_badge = KeyBadge(f"F5 {ICON_KEYBOARD}", id="key-record")
+            f5_badge.add_class("dim")
+            yield f5_badge
 
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
@@ -238,6 +244,15 @@ class RoomIndicator(Horizontal):
                     badge.add_class("dim")
             except NoMatches:
                 pass
+
+    def update_record_indicator(self, is_recording: bool) -> None:
+        """Update F5 record badge to show active/dim state."""
+        try:
+            badge = self.query_one("#key-record", KeyBadge)
+            badge.remove_class("active", "dim")
+            badge.add_class("active" if is_recording else "dim")
+        except NoMatches:
+            pass
 
     def update_volume_indicator(self, volume_level: int) -> None:
         """Update volume indicator badge with level icon (F10)"""
@@ -816,7 +831,7 @@ class PurpleApp(App):
             return
 
         # Record events when recording (not during demo playback)
-        if self._recording_manager.state == RecordingState.RECORDING:
+        if self._recording_manager.is_recording:
             if not (self._demo_player and self._demo_player.is_running):
                 mode = self._get_current_mode()
                 self._recording_manager.record_event(
@@ -835,7 +850,7 @@ class PurpleApp(App):
                 self.action_switch_room(ROOM_DOODLE[0])
             elif action.room == ROOM_COMMAND[0]:
                 # F4 during recording: stop recording and switch to Command mode
-                if self._recording_manager.state == RecordingState.RECORDING:
+                if self._recording_manager.is_recording:
                     self._recording_manager.stop_recording()
                     self._update_recording_indicator()
                 self.action_switch_room(ROOM_COMMAND[0])
@@ -960,15 +975,15 @@ class PurpleApp(App):
 
         if new_state == RecordingState.RECORDING:
             self.clear_notifications()
-            self.notify("Recording", timeout=1.5)
-        elif new_state == RecordingState.IDLE and old_state == RecordingState.RECORDING:
+            self.notify("Capturing key presses", timeout=1.5)
+        elif new_state != RecordingState.RECORDING and old_state == RecordingState.RECORDING:
             self.clear_notifications()
-            self.notify("Saved", timeout=1.5)
+            self.notify("Key presses saved!", timeout=1.5)
 
     async def _play_recording(self) -> None:
         """Play the current F5 recording: clear state, then replay."""
         if not self._recording_manager.has_recording():
-            self._recording_manager.state = RecordingState.IDLE
+            self._recording_manager.finish_playback()
             self._update_recording_indicator()
             return
 
@@ -978,7 +993,7 @@ class PurpleApp(App):
         blocks = self._recording_manager.to_blocks()
         playback_actions = blocks_to_playback_actions(blocks)
         if not playback_actions:
-            self._recording_manager.state = RecordingState.IDLE
+            self._recording_manager.finish_playback()
             self._update_recording_indicator()
             return
 
@@ -1005,7 +1020,7 @@ class PurpleApp(App):
             try:
                 await player.play(playback_actions)
             finally:
-                self._recording_manager.state = RecordingState.IDLE
+                self._recording_manager.finish_playback()
                 self._update_recording_indicator()
 
         self._f5_play_task = asyncio.create_task(_run())
@@ -1054,14 +1069,16 @@ class PurpleApp(App):
         return check
 
     def _update_recording_indicator(self) -> None:
-        """Update the title bar with recording/playback indicator."""
+        """Update the title bar and F5 badge with recording/playback state."""
         indicator = self._recording_manager.indicator
         try:
             title = self.query_one("#room-title", RoomTitle)
-            if indicator:
-                title.set_recording_indicator(indicator)
-            else:
-                title.set_recording_indicator("")
+            title.set_recording_indicator(indicator if indicator else "")
+        except Exception:
+            pass
+        try:
+            room_indicator = self.query_one("#room-indicator", RoomIndicator)
+            room_indicator.update_record_indicator(self._recording_manager.is_recording)
         except Exception:
             pass
 

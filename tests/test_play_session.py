@@ -13,6 +13,7 @@ import pytest
 from purple_tui.play_session import (
     PlaySession,
     SESSION_TIMEOUT,
+    LONG_PAUSE_THRESHOLD,
     MODE_MUSIC,
     MODE_LETTERS,
 )
@@ -318,3 +319,90 @@ class TestTimeFn:
             ('A', MODE_MUSIC, 0.0),
             ('B', MODE_MUSIC, 1.0),
         ]
+
+
+# =============================================================================
+# Recent replay (smart Space behavior)
+# =============================================================================
+
+class TestRecentReplay:
+    """Test get_recent_replay() for smart Space key behavior."""
+
+    def test_empty_session(self):
+        s = PlaySession()
+        assert s.get_recent_replay() == []
+
+    def test_short_session_returns_all(self):
+        """A short session returns everything."""
+        s = PlaySession()
+        s.record('A', now=0.0)
+        s.record('B', now=0.5)
+        s.record('C', now=1.0)
+        replay = s.get_recent_replay()
+        assert len(replay) == 3
+        assert [k for k, _, _ in replay] == ['A', 'B', 'C']
+
+    def test_caps_at_10_seconds(self):
+        """Events older than 10 seconds are excluded."""
+        s = PlaySession()
+        # 30 events at 0.5s intervals (total 15s, no long pauses)
+        for i in range(31):
+            s.record('A', now=i * 0.5)
+        replay = s.get_recent_replay(max_seconds=10.0)
+        # Last 10 seconds = events from t=5.0 to t=15.0 = 21 events
+        assert len(replay) == 21
+
+    def test_long_pause_cuts_replay(self):
+        """A long pause within the session limits what gets replayed."""
+        s = PlaySession()
+        s.record('A', now=0.0)
+        s.record('B', now=0.5)
+        # Long pause (>= LONG_PAUSE_THRESHOLD)
+        s.record('C', now=0.5 + LONG_PAUSE_THRESHOLD + 0.1)
+        s.record('D', now=0.5 + LONG_PAUSE_THRESHOLD + 0.6)
+        replay = s.get_recent_replay()
+        # Should only get C and D (after the long pause)
+        keys = [k for k, _, _ in replay]
+        assert keys == ['C', 'D']
+
+    def test_no_long_pause_uses_time_cap(self):
+        """Without a long pause, all events within max_seconds are returned."""
+        s = PlaySession()
+        s.record('A', now=0.0)
+        s.record('B', now=0.3)
+        s.record('C', now=0.6)
+        replay = s.get_recent_replay(max_seconds=10.0)
+        assert len(replay) == 3
+
+    def test_preserves_timing(self):
+        """Recent replay preserves timing between events."""
+        s = PlaySession()
+        s.record('A', now=5.0)
+        s.record('B', now=5.3)
+        s.record('C', now=5.8)
+        replay = s.get_recent_replay()
+        assert replay[0] == ('A', MODE_MUSIC, 0.0)
+        assert replay[1][2] == pytest.approx(0.3)
+        assert replay[2][2] == pytest.approx(0.5)
+
+    def test_preserves_submodes(self):
+        """Recent replay preserves sub-modes."""
+        s = PlaySession()
+        s.record('A', MODE_MUSIC, now=0.0)
+        s.record('B', MODE_LETTERS, now=0.5)
+        replay = s.get_recent_replay()
+        assert replay[0][1] == MODE_MUSIC
+        assert replay[1][1] == MODE_LETTERS
+
+    def test_long_pause_preferred_over_time_cap(self):
+        """When a long pause is more recent than the time cap, use the pause."""
+        s = PlaySession()
+        # 8 seconds of events, then a 1.5s pause, then 2 more events
+        for i in range(9):
+            s.record('A', now=i * 1.0)
+        s.record('B', now=9.0 + LONG_PAUSE_THRESHOLD + 0.1)
+        s.record('C', now=9.0 + LONG_PAUSE_THRESHOLD + 0.5)
+        replay = s.get_recent_replay(max_seconds=10.0)
+        # The long pause is within the 10s window, so we get just B, C
+        keys = [k for k, _, _ in replay]
+        assert keys == ['B', 'C']

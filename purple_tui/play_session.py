@@ -11,6 +11,7 @@ and a new session begins. Starting a replay ends the current session.
 import time
 
 SESSION_TIMEOUT = 2.0  # seconds of inactivity before session resets
+LONG_PAUSE_THRESHOLD = 1.0  # seconds: a "long pause" within a session
 
 # Mode constants
 MODE_MUSIC = 'music'
@@ -61,6 +62,47 @@ class PlaySession:
         result = []
         for i, (key, submode, ts) in enumerate(self._events):
             if i == 0:
+                delay = 0.0
+            else:
+                delay = ts - self._events[i - 1][2]
+            result.append((key, submode, delay))
+        return result
+
+    def get_recent_replay(self, max_seconds: float = 10.0) -> list[tuple[str, str, float]]:
+        """Get the most recent events, capped by time or the last long pause.
+
+        Returns events from whichever boundary is more recent:
+        the last LONG_PAUSE_THRESHOLD gap, or max_seconds from the end.
+        This gives the user the most natural-feeling "replay recent stuff".
+        """
+        if not self._events:
+            return []
+
+        end_time = self._events[-1][2]
+        time_cutoff = end_time - max_seconds
+
+        # Find the last long pause, scanning backward
+        pause_idx = 0
+        for i in range(len(self._events) - 1, 0, -1):
+            gap = self._events[i][2] - self._events[i - 1][2]
+            if gap >= LONG_PAUSE_THRESHOLD:
+                pause_idx = i
+                break
+
+        # Find the time-based cutoff index
+        time_idx = 0
+        for i, (_, _, ts) in enumerate(self._events):
+            if ts >= time_cutoff:
+                time_idx = i
+                break
+
+        # Use whichever is more recent (fewer events)
+        start_idx = max(pause_idx, time_idx)
+
+        result = []
+        for i in range(start_idx, len(self._events)):
+            key, submode, ts = self._events[i]
+            if i == start_idx:
                 delay = 0.0
             else:
                 delay = ts - self._events[i - 1][2]

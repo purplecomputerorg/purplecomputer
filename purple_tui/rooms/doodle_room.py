@@ -605,7 +605,11 @@ class ArtCanvas(Widget, can_focus=True):
             # First paint stroke: use pure key color (no background blending)
             new_color = self._last_key_color
 
-        self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
+        # If cell has a text character, keep it and just paint the background
+        if cell and cell[0] not in ("", " ", BRUSH_CHAR):
+            self._set_cell(pos, cell[0], cell[1], new_color)
+        else:
+            self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
     def type_char(self, char: str) -> None:
         """Type a character at cursor with row-based background tint."""

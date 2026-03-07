@@ -42,15 +42,13 @@ from .doodle_room import get_key_color, PaintModeChanged
 
 
 def _pad_narrow_emoji(text: str) -> str:
-    """Add a space after narrow+FE0F emoji when followed by a non-space character.
+    """Always add a space after narrow+FE0F emoji to compensate for terminal width.
 
     Alacritty (and most terminals) only advance the cursor 1 cell for emoji like
-    ❤️ (U+2764+FE0F) even though the glyph renders across 2 cells. This causes
-    the next character to visually overlap the emoji. Adding a space absorbs the
-    glyph bleed so subsequent characters render in the right place.
-
-    Only adds a space when needed (emoji immediately followed by non-space).
-    Skips inside Rich markup tags like [on #hex].
+    ❤️ (U+2764+FE0F) even though the glyph renders across 2 cells. The first
+    space after a narrow emoji gets visually consumed by the glyph overflow, so
+    we always insert one. If there's already a space, the double-space ensures
+    one is visible. Skips inside Rich markup tags like [on #hex].
     """
     if '\ufe0f' not in text:
         return text
@@ -65,8 +63,8 @@ def _pad_narrow_emoji(text: str) -> str:
                 i = end + 1
                 continue
         result.append(text[i])
-        # After FE0F, if next char exists and isn't a space, insert a space
-        if text[i] == '\ufe0f' and i + 1 < len(text) and text[i + 1] != ' ':
+        # Always insert a space after FE0F to absorb glyph overflow
+        if text[i] == '\ufe0f':
             result.append(' ')
         i += 1
     return ''.join(result)
@@ -116,20 +114,83 @@ class HistoryLine(Static):
         except Exception:
             return True
 
+    @staticmethod
+    def _tokenize_markup(text: str) -> list[tuple[str, int]]:
+        """Split Rich markup into (token, visual_width) pairs.
+
+        Each token is either a complete markup block like '[#000 on #FFF] x [/]'
+        or a single plain character.
+        """
+        tokens = []
+        i = 0
+        while i < len(text):
+            # Check for Rich markup block: [tag]content[/]
+            if text[i] == '[':
+                # Find the closing [/] for this block
+                end = text.find('[/]', i)
+                if end != -1:
+                    token = text[i:end + 3]
+                    # Visual width = length of content between tags
+                    inner = re.sub(r'\[[^\]]*\]', '', token)
+                    width = sum(2 if ord(c) > 127 else 1 for c in inner)
+                    tokens.append((token, width))
+                    i = end + 3
+                    continue
+            # Plain character
+            ch = text[i]
+            width = 2 if ord(ch) > 127 else 1
+            tokens.append((ch, width))
+            i += 1
+        return tokens
+
+    def _wrap_with_arrows(self, text: str, prefix: str, arrow_color: str) -> str:
+        """Wrap text with arrow-indented continuation lines.
+
+        Breaks at token boundaries so colored blocks don't get split.
+        """
+        width = self.size.width
+        if width <= 0:
+            width = 108  # fallback
+
+        prefix_len = sum(2 if ord(c) > 127 else 1 for c in re.sub(r'\[[^\]]*\]', '', prefix))
+        cont_prefix = f"     [{arrow_color}]→[/] "
+        cont_len = sum(2 if ord(c) > 127 else 1 for c in re.sub(r'\[[^\]]*\]', '', cont_prefix))
+
+        tokens = self._tokenize_markup(text)
+        lines = []
+        current_line = prefix
+        current_width = prefix_len
+
+        for token, tw in tokens:
+            if current_width + tw > width and current_width > (prefix_len if not lines else cont_len):
+                lines.append(current_line)
+                current_line = cont_prefix
+                current_width = cont_len
+            current_line += token
+            current_width += tw
+
+        if current_line:
+            lines.append(current_line)
+
+        return '\n'.join(lines)
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         dark = self._is_dark()
         if self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
-            return f"[bold {ask_color}]Ask →[/] {caps(self.text)}"
+            prefix = f"[bold {ask_color}]Ask →[/] "
+            return self._wrap_with_arrows(caps(self.text), prefix, ask_color)
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')
             speaker = " 🔊" if self.speaking else "   "
-            result = [f"{speaker} [{answer_color}]→[/] {caps(lines[0])}"]
+            first_prefix = f"{speaker} [{answer_color}]→[/] "
+            result = [self._wrap_with_arrows(caps(lines[0]), first_prefix, answer_color)]
             for line in lines[1:]:
                 if line.strip():
-                    result.append(f"    [{answer_color}]→[/] {caps(line)}")
+                    cont_prefix = f"    [{answer_color}]→[/] "
+                    result.append(self._wrap_with_arrows(caps(line), cont_prefix, answer_color))
                 else:
                     result.append("")
             return '\n'.join(result)
@@ -889,6 +950,10 @@ class SimpleEvaluator:
         if (math_result := self._eval_math(normalized)) is not None:
             # If input is just a bare number, skip the label (Ask line already shows it)
             is_bare_number = re.match(r'^\d+$', text.strip())
+            # Bare negative numbers (e.g. "-5") aren't useful as math, show as colored text
+            is_bare_negative = re.match(r'^-\d+$', text.strip())
+            if is_bare_negative:
+                return self._format_text_as_color_blocks(text.strip())
             result = self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
             if not is_bare_number:
                 result = f"= {result}"
@@ -903,7 +968,7 @@ class SimpleEvaluator:
             return auto_mix
 
         # Try emoji substitution in text (e.g., "I love cat")
-        subbed = self._substitute_emojis(text)
+        subbed = self._substitute_emojis(text, colorize_unknown=True)
         if subbed != text:
             return self._maybe_add_label(subbed, had_parens)
 
@@ -1014,6 +1079,10 @@ class SimpleEvaluator:
                 count, emoji_str = int(m.group(1)), m.group(2).strip()
                 if self._is_emoji_str(emoji_str):
                     result = emoji_str * count
+            # Collapse "emoji + emoji" back to plain emoji string for reuse
+            collapsed = result.replace(' + ', '')
+            if collapsed != result and self._is_emoji_str(collapsed):
+                result = collapsed
             text = text[:match.start()] + result + text[match.end():]
         return text
 
@@ -1131,12 +1200,15 @@ class SimpleEvaluator:
                     input_parts.append(e * c)
                 elif t == 'color':
                     input_parts.append(
-                        " ".join(f"[on {c}]  [/]" for c in colors)
+                        " + ".join(f"[on {c}]  [/]" for c in colors)
                     )
-            result = f"[on {mixed_color}] {''.join(emoji_strs)} [/]"
+            result = f"[on {mixed_color}] {' '.join(emoji_strs)} [/]"
             if pending:
                 result += " " + self._format_number_with_dots(pending)
             input_line = " + ".join(input_parts)
+            combined = f"{input_line} → {result}"
+            if self._estimate_visual_width(combined) <= 80:
+                return combined
             return f"{input_line}\n{result}"
 
         # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
@@ -1146,7 +1218,7 @@ class SimpleEvaluator:
             for t, v in items:
                 if t == 'color':
                     input_parts.append(
-                        " ".join(f"[on {c}]  [/]" for c in colors)
+                        " + ".join(f"[on {c}]  [/]" for c in colors)
                     )
                 elif t == 'emoji':
                     e, c, w = v
@@ -1166,10 +1238,14 @@ class SimpleEvaluator:
                 result_parts.append(self._format_number_with_dots(pending))
             result = " ".join(result_parts) if result_parts else None
             if result and input_parts:
-                result = f"{' '.join(input_parts)}\n{result}"
+                input_str = " + ".join(input_parts)
+                combined = f"{input_str} → {result}"
+                if self._estimate_visual_width(combined) <= 80:
+                    return combined
+                return f"{input_str}\n{result}"
             return result
 
-        # Build result in order, merging adjacent emojis
+        # Build result in order, showing + between items
         result_parts = []
         for item_type, value in items:
             if item_type == 'color' and colors:
@@ -1178,12 +1254,7 @@ class SimpleEvaluator:
                 result_parts.append(f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(colors)}")
             elif item_type == 'emoji':
                 e, c, w = value
-                emoji_str = e * c
-                # Separate emoji groups with a wider gap for visual grouping
-                if result_parts and self._is_emoji_str(result_parts[-1]):
-                    result_parts[-1] += '  ' + emoji_str
-                else:
-                    result_parts.append(emoji_str)
+                result_parts.append(e * c)
             elif item_type == 'text':
                 result_parts.append(value)
 
@@ -1192,7 +1263,7 @@ class SimpleEvaluator:
 
         # Only return if we have colors or emojis (not just text/numbers which pure math can handle)
         if colors or any(t == 'emoji' for t, _ in items):
-            result = ' '.join(result_parts) if result_parts else None
+            result = ' + '.join(result_parts) if result_parts else None
             # Add label line for emoji computation
             if show_label and result:
                 # Combine same emoji types: "1 dog + 3 dogs" → "4 🐶"
@@ -1308,10 +1379,10 @@ class SimpleEvaluator:
                     text_words.append(info[1])
             result_parts = []
             if emoji_strs:
-                result_parts.append(f"[on {mixed}] {''.join(emoji_strs)} [/]")
+                result_parts.append(f"[on {mixed}] {' '.join(emoji_strs)} [/]")
             if text_words:
                 result_parts.append(self._format_text_on_color(" ".join(text_words), mixed))
-            input_str = " ".join(input_parts)
+            input_str = " + ".join(input_parts)
             result = " ".join(result_parts)
             # Prefer inline when compact enough
             combined = f"{input_str} → {result}"
@@ -1334,7 +1405,7 @@ class SimpleEvaluator:
                 elif info[0] == 'text':
                     input_parts.append(self._format_text_as_color_blocks(info[1]))
                     text_words.append(info[1])
-            input_str = " ".join(input_parts)
+            input_str = " + ".join(input_parts)
             text_str = " ".join(text_words)
             result = self._format_text_on_color(text_str, mixed)
             # Prefer inline when compact enough
@@ -1695,8 +1766,11 @@ class SimpleEvaluator:
                 blocks.append(char)
         return "".join(blocks)
 
-    def _substitute_emojis(self, text: str) -> str:
+    def _substitute_emojis(self, text: str, colorize_unknown: bool = False) -> str:
         """Replace emoji and color words inline, including 'N word' patterns.
+
+        When colorize_unknown=True, unknown words are rendered as per-letter
+        colored blocks instead of plaintext.
 
         Examples:
             'I love cat' -> 'I 😍 🐱'
@@ -1743,6 +1817,8 @@ class SimpleEvaluator:
                     result.append(emoji)
                 elif color_hex := self._get_color(word):
                     result.append(f"[on {color_hex}]  [/]")
+                elif colorize_unknown:
+                    result.append(self._format_text_as_color_blocks(text[i:j]))
                 else:
                     result.append(text[i:j])
                 i = j

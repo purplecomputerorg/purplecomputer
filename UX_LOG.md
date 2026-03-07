@@ -2,6 +2,14 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Explore: narrow emoji (heart, snow, etc.) always get a padding space to prevent visual overlap in terminal
+- Explore: plus expressions now show + between items (e.g. apple + banana shows 🍎 + 🍌)
+- Explore: "red clue" and "red + clue" now produce the same inline format with arrow
+- Explore: unknown words now render as per-letter colored blocks instead of plaintext
+- Explore: auto-mix results (e.g. "red apple") now show + between items in the input display
+- Explore: emoji on colored backgrounds now have spaces between them for readability
+- Explore: long lines now wrap at colored block boundaries with arrow-indented continuation lines, fixing clipped padding on wrapped colored letters
+- Explore: bare negative numbers (e.g. "-5") now show as colored text blocks instead of a plain "= -5" math result
 - Explore: color+emoji results (e.g. "blue cat") now display inline on one line when compact enough, instead of separate lines
 - Explore: replaced ▶ triangle with → arrow throughout (Ask prompt, answer lines, color swatches) for a cleaner look
 - Explore: keyboard color map (4-row legend) now shows in the bottom right, same as doodle paint mode. Updates active row indicator as you type.

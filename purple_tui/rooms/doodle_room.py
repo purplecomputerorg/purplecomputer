@@ -443,10 +443,7 @@ class ArtCanvas(Widget, can_focus=True):
                     # Text mode cursor (blinks)
                     if self._cursor_visible:
                         cursor_style = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
-                        if cell and cell[0] not in (" ", BRUSH_CHAR, ""):
-                            segments.append(Segment(self._caps_char(cell[0]), cursor_style))
-                        else:
-                            segments.append(Segment("▌", cursor_style))
+                        segments.append(Segment("▌", cursor_style))
                     else:
                         # Blink off: show underlying cell
                         if cell:
@@ -480,8 +477,9 @@ class ArtCanvas(Widget, can_focus=True):
                             bg_color = default_bg
                         # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
-                            # Text cell: keep the character, tint it with ring color
-                            ring_style = Style(color=ring_fg, bgcolor=bg_color)
+                            # Text cell: keep the character, use contrast color for readability
+                            text_fg = self._contrast_text_color(bg_color)
+                            ring_style = Style(color=text_fg, bgcolor=bg_color)
                             segments.append(Segment(self._caps_char(char), ring_style))
                         else:
                             # Painted/empty cell: show box char with underlying bg

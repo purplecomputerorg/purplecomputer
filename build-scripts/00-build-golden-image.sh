@@ -286,6 +286,12 @@ SYSCTL
 
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    # Hide console text: set foreground to dark purple (matches background),
+    # clear screen, and hide cursor so nothing is visible before X starts
+    printf '\e]P02d1b4e' 2>/dev/null  # redefine black (default fg) to purple
+    printf '\e]P72d1b4e' 2>/dev/null  # redefine white (bold fg) to purple
+    setterm --cursor off 2>/dev/null
+    clear
     # Fail-fast: don't loop forever if X keeps crashing
     X_FAIL_COUNT_FILE="/tmp/.x-fail-count"
     X_FAIL_MAX=3

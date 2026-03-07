@@ -473,6 +473,11 @@ EOF
     umount "$MOUNT_DIR/sys" 2>/dev/null || true
     umount "$MOUNT_DIR/proc" 2>/dev/null || true
 
+    # Ensure empty mountpoint directories exist (kernel needs them at boot).
+    # mksquashfs -e excludes entire directory trees, so we exclude contents
+    # via -wildcards instead, preserving the empty directories.
+    mkdir -p "$MOUNT_DIR/dev" "$MOUNT_DIR/proc" "$MOUNT_DIR/sys"
+
     # Create squashfs for live boot (same root filesystem, different packaging)
     log_info "Creating live boot squashfs..."
     SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
@@ -481,7 +486,8 @@ EOF
         -comp zstd \
         -Xcompression-level 19 \
         -noappend \
-        -e boot/efi proc sys dev
+        -wildcards \
+        -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
 
     # Record uncompressed size (required by casper)
     du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"

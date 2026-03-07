@@ -350,8 +350,27 @@ main() {
 
     # Step 4: Replace squashfs with Purple Computer
     log_step "4/8: Replacing squashfs with Purple Computer..."
+    # Remove ALL Ubuntu Server squashfs files and replace with ours.
+    # Casper reads install-sources.yaml to know which layers to mount.
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs.gpg
+    rm -f "$WORK_DIR/iso-new/casper/"*.manifest
+    rm -f "$WORK_DIR/iso-new/casper/"*.size
     cp "$LIVE_SQUASHFS" "$WORK_DIR/iso-new/casper/filesystem.squashfs"
     cp "$LIVE_SIZE" "$WORK_DIR/iso-new/casper/filesystem.size"
+
+    # Rewrite install-sources.yaml to point at our single squashfs
+    SQUASHFS_SIZE=$(stat -c%s "$LIVE_SQUASHFS")
+    cat > "$WORK_DIR/iso-new/casper/install-sources.yaml" << SOURCES_EOF
+- default: true
+  id: purple-computer
+  name:
+    en: Purple Computer
+  path: filesystem.squashfs
+  size: ${SQUASHFS_SIZE}
+  type: fsimage
+  variant: server
+SOURCES_EOF
     log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
 
     # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
@@ -420,6 +439,14 @@ main() {
         sed -i '/99casperboot/i /scripts/casper-bottom/80_purple_installer "$@"\n[ -e /conf/param.conf ] && . /conf/param.conf' "$ORDER_FILE"
     else
         log_info "WARNING: ORDER file not found, script may not run"
+    fi
+
+    # Remove Ubuntu Server's layered squashfs config.
+    # Without this, casper looks for ubuntu-server-minimal.ubuntu-server.*.squashfs
+    # layers instead of mounting our single filesystem.squashfs.
+    if [ -f "$MAIN_DIR/conf/conf.d/default-layer.conf" ]; then
+        log_info "Removing default-layer.conf (disabling multi-layer squashfs)..."
+        rm "$MAIN_DIR/conf/conf.d/default-layer.conf"
     fi
 
     # Repack initramfs

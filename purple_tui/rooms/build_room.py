@@ -37,6 +37,7 @@ from ..program import (
     slot_occupied,
     TARGET_ICONS,
     TARGET_COLORS,
+    TARGET_LABELS,
     TARGET_PLAY_MUSIC,
     TARGET_EXPLORE,
     TARGET_DOODLE_PAINT,
@@ -264,6 +265,7 @@ class CodeCanvas(Widget):
         # Compose mode for QUERY blocks
         self._composing: bool = False
         self._compose_text: str = ""
+        self._playing: bool = False
 
     def on_mount(self) -> None:
         self._start_blink()
@@ -496,11 +498,34 @@ class CodeCanvas(Widget):
 
     def _render_hint_line(self, width: int, bg: str,
                           bg_style: Style) -> Strip:
-        """Render the bottom hint line."""
+        """Render context-sensitive bottom hint line."""
         if self._composing:
-            hint = f"Composing query: \"{self._compose_text}\"   Enter to confirm   Bksp to edit   Esc to cancel"
-        else:
-            hint = "Type to add   \u2190\u2192 move   \u2191\u2193 lines   Bksp delete   Space play   Tab menu"
+            hint = f'Composing: "{self._compose_text}"  Enter confirm  Bksp edit  Esc cancel'
+            return self._centered_dim_text(hint, width, bg, bg_style)
+
+        if self._playing:
+            hint = "Playing...  Space to stop"
+            return self._centered_dim_text(hint, width, bg, bg_style)
+
+        # Check block before cursor for context
+        if self._cursor > 0 and self._cursor <= len(self._blocks):
+            block = self._blocks[self._cursor - 1]
+            if block.type == ProgramBlockType.MODE_SWITCH:
+                label = TARGET_LABELS.get(block.target, block.target)
+                hint = f"{label}  \u2191\u2193 change mode  Type to add blocks"
+                return self._centered_dim_text(hint, width, bg, bg_style)
+            elif block.type == ProgramBlockType.PAUSE:
+                hint = f"Pause {block.duration}s  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                return self._centered_dim_text(hint, width, bg, bg_style)
+            elif block.type == ProgramBlockType.STROKE:
+                arrow = DIRECTION_ICONS.get(block.direction, "?")
+                hint = f"Stroke {block.direction} x{block.distance}  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                return self._centered_dim_text(hint, width, bg, bg_style)
+            elif block.type == ProgramBlockType.REPEAT:
+                hint = f"Repeat x{block.repeat_count}  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                return self._centered_dim_text(hint, width, bg, bg_style)
+
+        hint = "\u2190\u2192 move  \u2191\u2193 lines  Bksp delete  Space play  Tab menu"
         return self._centered_dim_text(hint, width, bg, bg_style)
 
     def _centered_dim_text(self, text: str, width: int, bg: str,
@@ -574,11 +599,13 @@ class BuildMode(Container, can_focus=True):
 
     def on_mount(self) -> None:
         self._import_from_recording()
+        self._ensure_default_mode()
         self._refresh_all()
 
     def on_show(self) -> None:
         if not self._blocks:
             self._import_from_recording()
+        self._ensure_default_mode()
         self._refresh_all()
 
     def _import_from_recording(self) -> None:
@@ -597,6 +624,7 @@ class BuildMode(Container, can_focus=True):
             canvas = self.query_one("#code-canvas", CodeCanvas)
             canvas._composing = self._composing
             canvas._compose_text = self._compose_text
+            canvas._playing = self._playing
             canvas.set_blocks(self._blocks, self._cursor)
             canvas._reset_blink()
         except Exception:
@@ -605,6 +633,19 @@ class BuildMode(Container, can_focus=True):
     def _mode_context(self) -> str:
         """Get the current MODE_SWITCH context at cursor position."""
         return _get_mode_context(self._blocks, self._cursor)
+
+    def _ensure_default_mode(self) -> None:
+        """Auto-insert a default MODE_SWITCH when canvas is empty.
+
+        Called on mount, show, and after clear. Skipped when loading a saved
+        program (it already has a MODE_SWITCH).
+        """
+        if not self._blocks:
+            self._blocks.append(ProgramBlock(
+                type=ProgramBlockType.MODE_SWITCH,
+                target=TARGET_PLAY_MUSIC,
+            ))
+            self._cursor = 1
 
     # ── Keyboard handling ──────────────────────────────────────────────
 
@@ -633,7 +674,7 @@ class BuildMode(Container, can_focus=True):
             return
 
     async def _handle_navigation(self, action: NavigationAction) -> None:
-        """Arrows always navigate in Code mode."""
+        """Left/Right navigate. Up/Down adjust block before cursor or jump lines."""
         if action.direction == 'left':
             if self._cursor > 0:
                 self._cursor -= 1
@@ -642,10 +683,28 @@ class BuildMode(Container, can_focus=True):
             if self._cursor < len(self._blocks):
                 self._cursor += 1
                 self._refresh_all()
-        elif action.direction == 'up':
-            self._jump_line(-1)
-        elif action.direction == 'down':
-            self._jump_line(1)
+        elif action.direction in ('up', 'down'):
+            direction = 1 if action.direction == 'up' else -1
+            if self._cursor > 0 and self._blocks:
+                block = self._blocks[self._cursor - 1]
+                if block.type == ProgramBlockType.MODE_SWITCH:
+                    block.cycle_target(direction)
+                    self._refresh_all()
+                    return
+                elif block.type == ProgramBlockType.PAUSE:
+                    block.cycle_pause_duration(direction)
+                    self._refresh_all()
+                    return
+                elif block.type == ProgramBlockType.STROKE:
+                    block.cycle_stroke_distance(direction)
+                    self._refresh_all()
+                    return
+                elif block.type == ProgramBlockType.REPEAT:
+                    block.cycle_repeat_count(direction)
+                    self._refresh_all()
+                    return
+            # Fall through to line navigation
+            self._jump_line(1 if action.direction == 'down' else -1)
 
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'backspace':
@@ -682,11 +741,7 @@ class BuildMode(Container, can_focus=True):
             self._refresh_all()
             return
 
-        if not context:
-            # No context: show mode picker via menu
-            await self._open_menu()
-            return
-
+        # No context: default to KEY insert (should not happen with _ensure_default_mode)
         # Play / Doodle text / Doodle paint: insert KEY block
         self._insert_block(ProgramBlock(
             type=ProgramBlockType.KEY,
@@ -742,11 +797,7 @@ class BuildMode(Container, can_focus=True):
 
         action = result.get("action")
 
-        if action == "record":
-            target = result.get("target", TARGET_PLAY_MUSIC)
-            self._start_record_in(target)
-
-        elif action == "insert_mode_switch":
+        if action == "insert_mode_switch":
             target = result.get("target", TARGET_PLAY_MUSIC)
             self._insert_block(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
@@ -769,19 +820,6 @@ class BuildMode(Container, can_focus=True):
                 distance=1,
             ))
 
-        elif action == "insert_enter":
-            self._insert_block(ProgramBlock(
-                type=ProgramBlockType.KEY,
-                char="enter",
-                is_control=True,
-            ))
-
-        elif action == "adjust_up":
-            self._adjust_block(1)
-
-        elif action == "adjust_down":
-            self._adjust_block(-1)
-
         elif action == "load":
             slot = result.get("slot", 1)
             self._load_from_slot(slot)
@@ -796,50 +834,8 @@ class BuildMode(Container, can_focus=True):
             self._active_slot = 0
             self._composing = False
             self._compose_text = ""
+            self._ensure_default_mode()
             self._refresh_all()
-
-    def _adjust_block(self, direction: int) -> None:
-        """Adjust the block before cursor based on its type."""
-        if self._cursor <= 0 or not self._blocks:
-            return
-        block = self._blocks[self._cursor - 1]
-        if block.type == ProgramBlockType.PAUSE:
-            block.cycle_pause_duration(direction)
-        elif block.type == ProgramBlockType.STROKE:
-            block.cycle_stroke_distance(direction)
-        elif block.type == ProgramBlockType.REPEAT:
-            block.cycle_repeat_count(direction)
-        self._refresh_all()
-
-    def _start_record_in(self, target: str) -> None:
-        if not self._recording_manager or not self._dispatch_action:
-            return
-
-        self._recording_manager.start_recording()
-
-        parts = target.split(".", 1)
-        main_mode = parts[0]
-
-        from ..keyboard import RoomAction
-        asyncio.create_task(self._dispatch_action(RoomAction(room=main_mode)))
-
-        if len(parts) > 1:
-            sub_mode = parts[1]
-            asyncio.create_task(self._toggle_sub_mode_after_switch(main_mode, sub_mode))
-
-    async def _toggle_sub_mode_after_switch(self, mode: str, sub_mode: str) -> None:
-        await asyncio.sleep(0.2)
-        if not self._dispatch_action:
-            return
-
-        needs_tab = False
-        if mode == "play" and sub_mode == "letters":
-            needs_tab = True
-        elif mode == "doodle" and sub_mode == "paint":
-            needs_tab = True
-
-        if needs_tab:
-            await self._dispatch_action(ControlAction(action='tab', is_down=True))
 
     # ── Block operations ───────────────────────────────────────────────
 

@@ -41,6 +41,11 @@ from ..scrolling import scroll_widget
 from .doodle_room import get_key_color, PaintModeChanged
 
 
+def _strip_markup(text: str) -> str:
+    """Strip Rich markup tags like [#FFF on #000] and [/] from text."""
+    return re.sub(r'\[[^\]]*\]', '', text)
+
+
 def _pad_narrow_emoji(text: str) -> str:
     """Always add a space after narrow+FE0F emoji to compensate for terminal width.
 
@@ -1034,9 +1039,10 @@ class SimpleEvaluator:
         # Add label if parens implied computation
         result = self._maybe_add_label(result, had_parens)
 
-        # Prepend prefix to each line of the result
+        # Prepend prefix (as colored blocks) to each line of the result
+        colored_prefix = self._format_text_as_color_blocks(prefix)
         lines = result.split('\n')
-        return '\n'.join(f"{prefix} {line}" for line in lines)
+        return '\n'.join(f"{colored_prefix} {line}" for line in lines)
 
     def _eval_expr_part(self, text: str) -> str | None:
         """Evaluate an expression (without text prefix). Returns multi-line if appropriate."""
@@ -1424,8 +1430,42 @@ class SimpleEvaluator:
         return result
 
     def _format_emoji_label(self, emoji: str, count: int) -> str:
-        """Format emoji with label: 'N 🐱' then full visualization."""
-        return f"{count} {emoji}\n{emoji * count}"
+        """Format emoji with label and visualization.
+
+        ≤ 10: '= N 🐱' then emojis in a row.
+        > 10: '= N 🐱' then emoji abacus (emojis replace dots).
+        """
+        if count <= 10:
+            return f"= {count} {emoji}\n{emoji * count}"
+        # > 10: use emoji abacus
+        return f"= {self._format_emoji_abacus(emoji, count)}"
+
+    def _format_emoji_abacus(self, emoji: str, count: int) -> str:
+        """Format number as an abacus using emoji beads instead of dots."""
+        num_digits = len(str(count))
+        if num_digits > len(self.ABACUS_COLORS):
+            return f"{count} {emoji}\n{emoji * count}"
+
+        # Build all rows from highest place down to ones
+        all_rows = []
+        place = 10 ** (num_digits - 1)
+        remaining = count
+        while place >= 1:
+            digit = remaining // place
+            remaining %= place
+            all_rows.append((place, digit))
+            place //= 10
+
+        max_label_width = max(len(self.PLACE_NAMES.get(place, f"{place}s")) for place, _ in all_rows)
+        lines = [f"{count} {emoji}"]
+        for i, (place, digit) in enumerate(all_rows):
+            color_idx = len(all_rows) - 1 - i
+            c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
+            place_label = self.PLACE_NAMES.get(place, f"{place}s").rjust(max_label_width)
+            beads = f" {emoji}" * digit if digit > 0 else ""
+            lines.append(f"[{c}]{place_label}[/] {beads}")
+
+        return "\n".join(lines)
 
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""
@@ -1661,48 +1701,63 @@ class SimpleEvaluator:
         "#e0c87e",  # billions: amber
     ]
 
-    def _format_number_with_dots(self, num: int | float, show_label: bool = True, expression: str = "") -> str:
-        """Format number as dots (≤10) or abacus (>10), with grouping for simple math."""
+    PLACE_NAMES = {
+        1: "ones",
+        10: "tens",
+        100: "hundreds",
+        1000: "thousands",
+        10_000: "ten thousands",
+        100_000: "hundred thousands",
+        1_000_000: "millions",
+        10_000_000: "ten millions",
+        100_000_000: "hundred millions",
+        1_000_000_000: "billions",
+    }
+
+    def _format_number_with_dots(self, num: int | float, show_label: bool = True, expression: str = "", bead: str = "●") -> str:
+        """Format number as dots (≤10) or abacus (>10), with grouping for simple math.
+
+        bead: character to use for abacus beads (default ●, can be an emoji).
+        """
         formatted = self._format_number(num)
         label = formatted if show_label else None
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if n >= 1:
                 color = self.ABACUS_COLORS[0]
-                # ≤ 10: plain dots (with grouping for simple math)
+                # ≤ 10: plain dots/beads (with grouping for simple math)
                 if n <= 10:
-                    grouped = self._format_grouped_dots(n, expression, color)
+                    grouped = self._format_grouped_dots(n, expression, color, bead=bead)
                     if grouped:
                         if label:
                             return f"{label}\n[{color}]{grouped}[/]"
                         return f"[{color}]{grouped}[/]"
-                    spaced_dots = " ".join("●" * n)
+                    spaced = " ".join(bead * n)
                     if label:
-                        return f"{label}\n[{color}]{spaced_dots}[/]"
-                    return f"[{color}]{spaced_dots}[/]"
+                        return f"{label}\n[{color}]{spaced}[/]"
+                    return f"[{color}]{spaced}[/]"
 
-                # > 9 but within abacus range
+                # > 10 but within abacus range
                 num_digits = len(str(n))
                 if num_digits <= len(self.ABACUS_COLORS):
-                    rows = []
-                    place = 1
+                    # Build all rows from highest place down to ones
+                    all_rows = []
+                    place = 10 ** (num_digits - 1)
                     remaining = n
-                    while remaining > 0:
-                        digit = remaining % 10
-                        remaining //= 10
-                        if digit > 0:
-                            rows.append((place, digit))
-                        place *= 10
+                    while place >= 1:
+                        digit = remaining // place
+                        remaining %= place
+                        all_rows.append((place, digit))
+                        place //= 10
 
-                    rows.reverse()
-                    max_label_width = max(len(f"{place}s") for place, _ in rows)
+                    max_label_width = max(len(self.PLACE_NAMES.get(place, f"{place}s")) for place, _ in all_rows)
                     lines = []
-                    for i, (place, digit) in enumerate(rows):
-                        color_idx = len(rows) - 1 - i
+                    for i, (place, digit) in enumerate(all_rows):
+                        color_idx = len(all_rows) - 1 - i
                         c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
-                        place_label = f"{place}s".rjust(max_label_width)
-                        spaced_dots = " ".join("●" * digit)
-                        lines.append(f"[{c}]{place_label}  {spaced_dots}[/]")
+                        place_label = self.PLACE_NAMES.get(place, f"{place}s").rjust(max_label_width)
+                        spaced = " ".join(bead * digit) if digit > 0 else ""
+                        lines.append(f"[{c}]{place_label}  {spaced}[/]")
 
                     if label:
                         return f"{label}\n" + "\n".join(lines)
@@ -1717,25 +1772,25 @@ class SimpleEvaluator:
             return label
         return formatted
 
-    def _format_grouped_dots(self, result: int, expression: str, color: str) -> str | None:
+    def _format_grouped_dots(self, result: int, expression: str, color: str, bead: str = "●") -> str | None:
         """Format dots with grouping for simple addition/multiplication. Returns None if not applicable."""
         if not expression:
             # Default 5+5 grouping for 10 (makes it countable)
             if result == 10:
-                return " ".join("●" * 5) + "   " + " ".join("●" * 5)
+                return " ".join(bead * 5) + "   " + " ".join(bead * 5)
             return None
         # Match simple "a + b"
         m = re.match(r'^\s*(\d+)\s*\+\s*(\d+)\s*$', expression)
         if m:
             a, b = int(m.group(1)), int(m.group(2))
             if a + b == result and a >= 1 and b >= 1:
-                return " ".join("●" * a) + "   " + " ".join("●" * b)
+                return " ".join(bead * a) + "   " + " ".join(bead * b)
         # Match simple "a * b"
         m = re.match(r'^\s*(\d+)\s*\*\s*(\d+)\s*$', expression)
         if m:
             a, b = int(m.group(1)), int(m.group(2))
             if a * b == result and a >= 1 and b >= 1:
-                groups = "   ".join(" ".join("●" * a) for _ in range(b))
+                groups = "   ".join(" ".join(bead * a) for _ in range(b))
                 return groups
         return None
 
@@ -1919,15 +1974,31 @@ class SimpleEvaluator:
         def speakable_result(res: str, input_prefix: str = "") -> str:
             if not res:
                 return ""
-            first_line = res.split('\n')[0]
+            # Strip Rich markup and collapse spaces from colored blocks
+            first_line = ' '.join(_strip_markup(res.split('\n')[0]).split())
 
             # Strip "= " prefix from pure math results
             if first_line.startswith("= "):
                 first_line = first_line[2:]
 
             # Strip input prefix from result if present (avoid "what is ... equals what is ...")
-            if input_prefix and first_line.lower().startswith(input_prefix.lower()):
-                first_line = first_line[len(input_prefix):].strip()
+            # Compare without spaces since colored blocks add padding around letters
+            if input_prefix:
+                fl_nospace = first_line.lower().replace(' ', '')
+                ip_nospace = input_prefix.lower().replace(' ', '')
+                if fl_nospace.startswith(ip_nospace):
+                    # Walk first_line to find where prefix letters end
+                    matched = 0
+                    pos = 0
+                    for i, ch in enumerate(first_line):
+                        if matched >= len(ip_nospace):
+                            pos = i
+                            break
+                        if ch != ' ' and ch.lower() == ip_nospace[matched]:
+                            matched += 1
+                    else:
+                        pos = len(first_line)
+                    first_line = first_line[pos:].strip()
 
             # Handle COLOR_RESULT
             if "COLOR_RESULT:" in first_line:

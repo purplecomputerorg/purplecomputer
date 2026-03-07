@@ -97,8 +97,46 @@ purple_log "=== Purple Computer Installer Hook (casper-bottom) ==="
 # GATE 1: EXPLICIT ARMING CHECK
 # =============================================================================
 if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
-    purple_log "NOT ARMED: purple.install=1 not in cmdline"
-    purple_log "Gate 1 CLOSED - Normal Ubuntu boot"
+    purple_log "Live boot mode - configuring Purple Computer..."
+
+    # Restore dotfiles that casper's adduser overwrites with skeleton copies.
+    # Canonical versions are stored in /etc/purple/ (which casper doesn't touch).
+    mkdir -p /root/home/purple
+    cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
+    chmod +x /root/home/purple/.xinitrc
+    chown 1000:1000 /root/home/purple/.xinitrc
+    cat /root/etc/purple/bash-autostart.sh >> /root/home/purple/.bashrc
+    chown 1000:1000 /root/home/purple/.bashrc
+    purple_log "Restored dotfiles from /etc/purple/"
+
+    # Write our own getty service (casper doesn't enable getty@tty1 on Ubuntu Server).
+    mkdir -p /root/etc/systemd/system
+    cat > /root/etc/systemd/system/purple-live.service << 'SERVICE_EOF'
+[Unit]
+Description=Purple Computer
+After=systemd-user-sessions.service plymouth-quit-wait.service
+Before=getty.target
+ConditionKernelCommandLine=!purple.install=1
+Conflicts=getty@tty1.service
+
+[Service]
+ExecStart=-/sbin/agetty --autologin purple --noclear tty1 linux
+Type=idle
+Restart=always
+RestartSec=0
+UtmpIdentifier=tty1
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=no
+SERVICE_EOF
+
+    mkdir -p /root/etc/systemd/system/multi-user.target.wants
+    ln -sf ../purple-live.service /root/etc/systemd/system/multi-user.target.wants/purple-live.service
+    purple_log "Created purple-live.service (autologin on tty1)"
+
     log_end_msg
     exit 0
 fi
@@ -459,7 +497,7 @@ set menu_color_highlight=white/dark-gray
 
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet console=tty1 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service systemd.mask=udisks2.service ---
+    linux /casper/vmlinuz boot=casper console=tty1 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service ---
     initrd /casper/initrd
 }
 

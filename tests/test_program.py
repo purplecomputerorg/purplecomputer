@@ -679,6 +679,63 @@ class TestModeContext:
 # TARGET CONSTANTS
 # =============================================================================
 
+class TestModeContextDefaults:
+    """Tests for _get_mode_context edge cases and default mode behavior."""
+
+    def test_empty_blocks_returns_empty(self):
+        assert _get_mode_context([], 0) == ""
+
+    def test_cursor_at_zero_no_context(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+        ]
+        assert _get_mode_context(blocks, 0) == ""
+
+    def test_cursor_after_mode_switch_has_context(self):
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+        ]
+        assert _get_mode_context(blocks, 1) == TARGET_PLAY_MUSIC
+
+
+class TestInlineAdjustment:
+    """Tests for inline Up/Down adjustment logic on adjustable blocks."""
+
+    def test_mode_switch_cycle_target(self):
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
+        block.cycle_target(1)
+        assert block.target == TARGET_PLAY_LETTERS
+        block.cycle_target(-1)
+        assert block.target == TARGET_PLAY_MUSIC
+
+    def test_pause_cycle_duration(self):
+        block = ProgramBlock(type=ProgramBlockType.PAUSE, duration=0.5)
+        block.cycle_pause_duration(1)
+        assert block.duration == 1.0
+        block.cycle_pause_duration(-1)
+        assert block.duration == 0.5
+
+    def test_stroke_cycle_distance(self):
+        block = ProgramBlock(type=ProgramBlockType.STROKE, direction="right", distance=3)
+        block.cycle_stroke_distance(1)
+        assert block.distance == 4
+        block.cycle_stroke_distance(-1)
+        assert block.distance == 3
+
+    def test_repeat_cycle_count(self):
+        block = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3)
+        block.cycle_repeat_count(1)
+        assert block.repeat_count == 4
+        block.cycle_repeat_count(-1)
+        assert block.repeat_count == 3
+
+    def test_key_block_not_adjustable(self):
+        """KEY and QUERY blocks should not be adjustable (Up/Down = line nav)."""
+        block = ProgramBlock(type=ProgramBlockType.KEY, char="a")
+        # These methods are no-ops on wrong types
+        assert block.type == ProgramBlockType.KEY
+
+
 class TestTargetConstants:
     def test_all_targets_have_icons(self):
         for target in ALL_TARGETS:

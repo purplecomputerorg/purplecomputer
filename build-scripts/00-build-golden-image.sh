@@ -276,6 +276,11 @@ SYSCTL
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
 
+    # Store canonical copies of dotfiles in /etc/purple/ (casper can't shadow these).
+    # The casper live boot hook copies them back to /home/purple/ after casper's
+    # adduser overwrites the home directory with skeleton files.
+    cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/etc/purple/xinitrc"
+
     # Configure auto-start X11 on login (via .bashrc)
     cat >> "$MOUNT_DIR/home/purple/.bashrc" <<'AUTOSTART'
 
@@ -328,6 +333,10 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
 fi
 AUTOSTART
     chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"
+
+    # Store the autostart snippet in /etc/purple/ for the live boot hook
+    # (Everything between the AUTOSTART markers above)
+    sed -n '/^# Auto-start X11/,/^fi$/p' "$MOUNT_DIR/home/purple/.bashrc" > "$MOUNT_DIR/etc/purple/bash-autostart.sh"
 
     # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"

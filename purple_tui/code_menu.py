@@ -1,18 +1,17 @@
 """
 Code Menu: Tab-activated modal menu for Code mode (F4).
 
-Provides:
-  Record: "Record in Play (music)", "Record in Play (letters)", etc.
-  Insert: "Mode switch...", "Repeat x2", "Pause", "Stroke", "Enter key"
-  Adjust: "Increase/Decrease" (context-sensitive: pause duration, stroke distance, repeat count)
-  Program: "Load...", "Save...", "Clear all blocks"
+Flat 7-item menu:
+  Pause, Stroke, Repeat, Mode... (insert items)
+  ---------
+  Load..., Save..., Clear (program items)
 
 Navigation via arrow keys, Enter to select, Tab/Esc to close.
 Follows the ModePickerScreen pattern for evdev-based input.
 """
 
 from textual.screen import ModalScreen
-from textual.containers import Container, Vertical
+from textual.containers import Container
 from textual.widgets import Static
 from textual.app import ComposeResult
 from textual import events
@@ -22,42 +21,24 @@ from .program import (
     ALL_TARGETS,
     TARGET_ICONS,
     TARGET_LABELS,
-    TARGET_COLORS,
     slot_occupied,
 )
 
 
-# Menu item definitions: (id, label, section)
+# Menu item definitions: (id, label, selectable)
 MENU_ITEMS = [
-    # Record section
-    ("record_play_music", f"{TARGET_ICONS['play.music']}  Record in Play (music)", "record"),
-    ("record_play_letters", f"{TARGET_ICONS['play.letters']}  Record in Play (letters)", "record"),
-    ("record_doodle_text", f"{TARGET_ICONS['doodle.text']}  Record in Doodle (text)", "record"),
-    ("record_doodle_paint", f"{TARGET_ICONS['doodle.paint']}  Record in Doodle (paint)", "record"),
-    ("record_explore", f"{TARGET_ICONS['explore']}  Record in Explore", "record"),
-    # Insert section
-    ("insert_mode_switch", "   Mode switch...", "insert"),
-    ("insert_repeat", "   Repeat line x2", "insert"),
-    ("insert_pause", "   Insert pause \u23f8", "insert"),
-    ("insert_stroke", "   Insert stroke \u25b6", "insert"),
-    ("insert_enter", "   Enter key \u21b5", "insert"),
-    # Adjust section
-    ("adjust_up", "   Increase \u2191", "adjust"),
-    ("adjust_down", "   Decrease \u2193", "adjust"),
-    # Program section
-    ("load", "   Load...", "program"),
-    ("save", "   Save...", "program"),
-    ("clear", "   Clear all blocks", "program"),
+    ("insert_pause", "  Pause \u23f8", True),
+    ("insert_stroke", "  Stroke \u25b6", True),
+    ("insert_repeat", "  Repeat x2", True),
+    ("insert_mode_switch", "  Mode...", True),
+    ("separator", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", False),
+    ("load", "  Load...", True),
+    ("save", "  Save...", True),
+    ("clear", "  Clear", True),
 ]
 
-# Target map for record items
-RECORD_TARGETS = {
-    "record_play_music": "play.music",
-    "record_play_letters": "play.letters",
-    "record_doodle_text": "doodle.text",
-    "record_doodle_paint": "doodle.paint",
-    "record_explore": "explore",
-}
+# Indices of selectable items for navigation
+_SELECTABLE_INDICES = [i for i, (_, _, sel) in enumerate(MENU_ITEMS) if sel]
 
 
 class CodeMenuScreen(ModalScreen):
@@ -72,9 +53,9 @@ class CodeMenuScreen(ModalScreen):
     }
 
     #code-menu-dialog {
-        width: 42;
+        width: 32;
         height: auto;
-        max-height: 24;
+        max-height: 18;
         padding: 1 2;
         background: $surface;
         border: heavy $primary;
@@ -87,16 +68,17 @@ class CodeMenuScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    .menu-section-header {
-        width: 100%;
-        color: $text-muted;
-        margin-top: 1;
-    }
-
     .menu-item {
         width: 100%;
         height: 1;
         padding: 0 1;
+    }
+
+    .menu-separator {
+        width: 100%;
+        height: 1;
+        color: $text-muted;
+        text-align: center;
     }
 
     .menu-item.selected {
@@ -115,7 +97,7 @@ class CodeMenuScreen(ModalScreen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._selected_index = 0
+        self._sel_pos = 0  # position within _SELECTABLE_INDICES
         self._sub_view: str | None = None  # "target_picker" or "slot_picker"
         self._sub_action: str = ""
         self._sub_selected: int = 0
@@ -124,13 +106,11 @@ class CodeMenuScreen(ModalScreen):
         with Container(id="code-menu-dialog"):
             yield Static("Code Menu", id="code-menu-title")
 
-            current_section = ""
-            for i, (item_id, label, section) in enumerate(MENU_ITEMS):
-                if section != current_section:
-                    header_text = section.title()
-                    yield Static(f"  {header_text}", classes="menu-section-header")
-                    current_section = section
-                yield Static(label, id=f"menu-{item_id}", classes="menu-item")
+            for i, (item_id, label, selectable) in enumerate(MENU_ITEMS):
+                if not selectable:
+                    yield Static(label, classes="menu-separator")
+                else:
+                    yield Static(label, id=f"menu-{item_id}", classes="menu-item")
 
             yield Static("\u2191\u2193 select  Enter confirm  Tab/Esc close", id="code-menu-hint")
 
@@ -138,10 +118,13 @@ class CodeMenuScreen(ModalScreen):
         self._update_selection()
 
     def _update_selection(self) -> None:
-        for i, (item_id, _, _) in enumerate(MENU_ITEMS):
+        selected_idx = _SELECTABLE_INDICES[self._sel_pos]
+        for i, (item_id, _, selectable) in enumerate(MENU_ITEMS):
+            if not selectable:
+                continue
             try:
                 item = self.query_one(f"#menu-{item_id}", Static)
-                if i == self._selected_index:
+                if i == selected_idx:
                     item.add_class("selected")
                 else:
                     item.remove_class("selected")
@@ -158,10 +141,10 @@ class CodeMenuScreen(ModalScreen):
 
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
-                self._selected_index = max(0, self._selected_index - 1)
+                self._sel_pos = max(0, self._sel_pos - 1)
                 self._update_selection()
             elif action.direction == 'down':
-                self._selected_index = min(len(MENU_ITEMS) - 1, self._selected_index + 1)
+                self._sel_pos = min(len(_SELECTABLE_INDICES) - 1, self._sel_pos + 1)
                 self._update_selection()
             return
 
@@ -173,13 +156,10 @@ class CodeMenuScreen(ModalScreen):
             return
 
     def _activate_item(self) -> None:
-        item_id = MENU_ITEMS[self._selected_index][0]
+        menu_idx = _SELECTABLE_INDICES[self._sel_pos]
+        item_id = MENU_ITEMS[menu_idx][0]
 
-        if item_id in RECORD_TARGETS:
-            target = RECORD_TARGETS[item_id]
-            self.dismiss({"action": "record", "target": target})
-
-        elif item_id == "insert_mode_switch":
+        if item_id == "insert_mode_switch":
             self._sub_view = "target_picker"
             self._sub_selected = 0
             self._show_sub_picker_targets()
@@ -192,15 +172,6 @@ class CodeMenuScreen(ModalScreen):
 
         elif item_id == "insert_stroke":
             self.dismiss({"action": "insert_stroke"})
-
-        elif item_id == "insert_enter":
-            self.dismiss({"action": "insert_enter"})
-
-        elif item_id == "adjust_up":
-            self.dismiss({"action": "adjust_up"})
-
-        elif item_id == "adjust_down":
-            self.dismiss({"action": "adjust_down"})
 
         elif item_id == "load":
             self._sub_view = "slot_picker"
@@ -226,7 +197,7 @@ class CodeMenuScreen(ModalScreen):
             title.update("Pick target mode")
 
             for child in dialog.children:
-                if child.has_class("menu-item") or child.has_class("menu-section-header"):
+                if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = False
 
             hint = self.query_one("#code-menu-hint", Static)
@@ -281,7 +252,7 @@ class CodeMenuScreen(ModalScreen):
             title.update(f"{action_label} slot")
 
             for child in dialog.children:
-                if child.has_class("menu-item") or child.has_class("menu-section-header"):
+                if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = False
 
             hint = self.query_one("#code-menu-hint", Static)
@@ -348,7 +319,7 @@ class CodeMenuScreen(ModalScreen):
                     child.remove()
 
             for child in dialog.children:
-                if child.has_class("menu-item") or child.has_class("menu-section-header"):
+                if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = True
 
             hint = self.query_one("#code-menu-hint", Static)

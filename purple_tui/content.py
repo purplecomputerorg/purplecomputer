@@ -138,7 +138,6 @@ class ContentManager:
             "periwinkle": "#CCCCFF",
             "lilac": "#C8A2C8",
             "plum": "#8E4585",
-            "grape": "#6F2DA8",
             "orchid": "#DA70D6",
             "fuchsia": "#FF00FF",
             "mauve": "#E0B0FF",

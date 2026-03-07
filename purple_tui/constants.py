@@ -85,6 +85,7 @@ ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
 ICON_COMMAND = "󰘳"            # nf-md-console (command room)
+ICON_KEYBOARD = "󰌌"          # nf-md-keyboard (key capture indicator)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

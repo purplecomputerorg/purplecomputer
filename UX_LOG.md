@@ -2,6 +2,11 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play mode: Space with no F5 recording replays recent key presses (last 10 seconds or since last pause)
+- Play mode: F5 recording and playback can now happen simultaneously (overdub, play over yourself)
+- F5 badge added to bottom menu bar with keyboard icon
+- Recording indicator changed from generic record symbol to "Capturing keys" text with better spacing
+- All recording-related text clarified to say "key presses" (toasts, hints) to avoid confusion with voice recording
 - Live boot: silent boot. No kernel messages, systemd status lines, or blinking cursor visible before Purple Computer starts.
 - Play mode: Enter now changes instrument in Letters mode too (previously only worked in Music mode).
 - Explore mode: number words (one, two, three) and comma-separated lists now work. "one, two, three dinos" shows a dino abacus. Multiplication with emojis shows grouping ("2 x 3 cats" shows 3 groups of 2 cats).

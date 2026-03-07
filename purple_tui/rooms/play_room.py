@@ -490,6 +490,7 @@ class PlayMode(Container, can_focus=True):
         self._letters_mode = False
         self._instrument_index = 0
         self._recording_manager = recording_manager
+        self._session_replay_task: asyncio.Task | None = None
 
     @property
     def is_letters_mode(self) -> bool:
@@ -539,20 +540,25 @@ class PlayMode(Container, can_focus=True):
         Space plays/stops the recording.
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space: play/stop recording
+            # Space: play/stop recording, or replay recent session
             if action.action == 'space':
-                from ..recording import RecordingState
                 if self._recording_manager:
-                    if self._recording_manager.state == RecordingState.PLAYING:
+                    if self._recording_manager.is_playing:
                         # Stop playback
                         self._recording_manager.stop_playback()
                         if hasattr(self.app, '_update_recording_indicator'):
                             self.app._update_recording_indicator()
-                    elif self._recording_manager.start_playback():
-                        if hasattr(self.app, '_update_recording_indicator'):
-                            self.app._update_recording_indicator()
-                        if hasattr(self.app, '_play_recording'):
-                            asyncio.create_task(self.app._play_recording())
+                        return
+                    if self._recording_manager.has_recording():
+                        if self._recording_manager.start_playback():
+                            if hasattr(self.app, '_update_recording_indicator'):
+                                self.app._update_recording_indicator()
+                            if hasattr(self.app, '_play_recording'):
+                                asyncio.create_task(self.app._play_recording())
+                        return
+                # No F5 recording: replay recent session keys
+                if self.session.has_events():
+                    self._start_session_replay()
                 return
 
             # Tab switches mode
@@ -593,4 +599,27 @@ class PlayMode(Container, can_focus=True):
                 if mode == MODE_MUSIC:
                     self.grid.flash_note(lookup)
             return
+
+    def _start_session_replay(self) -> None:
+        """Replay recent session keys with original timing."""
+        if self._session_replay_task and not self._session_replay_task.done():
+            self._session_replay_task.cancel()
+        replay = self.session.get_recent_replay()
+        if replay:
+            self._session_replay_task = asyncio.create_task(
+                self._do_session_replay(replay)
+            )
+
+    async def _do_session_replay(self, replay: list) -> None:
+        """Play back a list of (key, submode, delay) triples."""
+        try:
+            for key, submode, delay in replay:
+                if delay > 0:
+                    await asyncio.sleep(delay)
+                self.grid.next_color(key)
+                self._play_key(key, submode)
+                if submode == MODE_MUSIC:
+                    self.grid.flash_note(key)
+        except asyncio.CancelledError:
+            pass
 

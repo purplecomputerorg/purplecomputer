@@ -352,7 +352,8 @@ class TestRecordingManagerHelpers:
     def test_indicator_recording(self):
         rm = RecordingManager()
         rm.toggle()
-        assert rm.indicator == "\u23fa"
+        assert "\u23fa" in rm.indicator
+        assert "keys" in rm.indicator.lower()
 
     def test_indicator_playing(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
@@ -389,3 +390,68 @@ class TestRecordingManagerHelpers:
         rm.record_event(CharacterAction(char="a"), "play")
         rm.stop_recording()
         assert rm.has_recording()
+
+
+# =============================================================================
+# CONCURRENT RECORDING AND PLAYBACK
+# =============================================================================
+
+class TestConcurrentRecordingPlayback:
+    def test_can_record_during_playback(self):
+        """Starting recording while playing doesn't stop playback."""
+        rm = RecordingManager(time_fn=lambda: 1.0)
+        rm.toggle()  # start recording
+        rm.record_event(CharacterAction(char="a"), "play")
+        rm.toggle()  # stop recording
+        rm.start_playback()
+        assert rm.is_playing
+        rm.toggle()  # start new recording
+        assert rm.is_recording
+        assert rm.is_playing  # playback continues
+
+    def test_can_start_playback_during_recording(self):
+        """Starting playback while recording doesn't stop recording."""
+        rm = RecordingManager(time_fn=lambda: 1.0)
+        rm.toggle()  # start recording
+        rm.record_event(CharacterAction(char="a"), "play")
+        rm.toggle()  # stop recording (has a recording now)
+        rm.toggle()  # start new recording
+        assert rm.is_recording
+        rm.start_playback()
+        assert rm.is_playing
+        assert rm.is_recording  # recording continues
+
+    def test_finish_playback_preserves_recording(self):
+        """finish_playback() only clears playing, not recording."""
+        rm = RecordingManager(time_fn=lambda: 1.0)
+        rm.toggle()  # start recording
+        rm.record_event(CharacterAction(char="a"), "play")
+        rm.toggle()  # stop recording
+        rm.start_playback()
+        rm.toggle()  # start new recording
+        assert rm.is_recording and rm.is_playing
+        rm.finish_playback()
+        assert not rm.is_playing
+        assert rm.is_recording  # still recording
+
+    def test_state_priority_recording_over_playing(self):
+        """state property returns RECORDING when both are active."""
+        rm = RecordingManager(time_fn=lambda: 1.0)
+        rm.toggle()
+        rm.record_event(CharacterAction(char="a"), "play")
+        rm.toggle()
+        rm.start_playback()
+        rm.toggle()  # start recording again
+        assert rm.state == RecordingState.RECORDING
+
+    def test_is_recording_and_is_playing_properties(self):
+        rm = RecordingManager(time_fn=lambda: 1.0)
+        assert not rm.is_recording
+        assert not rm.is_playing
+        rm.toggle()
+        assert rm.is_recording
+        rm.record_event(CharacterAction(char="a"), "play")
+        rm.toggle()
+        assert not rm.is_recording
+        rm.start_playback()
+        assert rm.is_playing

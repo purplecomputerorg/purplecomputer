@@ -496,7 +496,7 @@ class CodeCanvas(Widget):
             hint = "Type keys to add blocks"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 1:
-            hint = "or press F5 to record in another mode!"
+            hint = "or press F5 to capture key presses in another mode!"
             return self._centered_dim_text(hint, width, bg, bg_style)
         elif y == mid + 3:
             hint = "\u2190\u2192 navigate   \u2191\u2193 lines   Tab menu"

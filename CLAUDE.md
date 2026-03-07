@@ -15,6 +15,12 @@ Never read or access these files:
 
 ---
 
+## Hardware Safety (CRITICAL)
+
+Never make changes that could cause issues on real laptop hardware for the sake of testing, debugging, or VM compatibility. Purple Computer runs on kids' laptops. Real hardware stability always takes priority over UTM/QEMU/VM convenience. Any VM-specific workarounds must be safe no-ops on real devices.
+
+---
+
 ## Target Audience
 
 Purple Computer is for **kids 4–7** (and fun for 2–8+) and their **non-technical parents**.

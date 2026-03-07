@@ -376,7 +376,7 @@ def _is_dev_environment() -> bool:
     """Check if running in a development environment.
 
     Returns True if:
-    - PURPLE_TEST_BATTERY env var is set (set by `make run`), OR
+    - PURPLE_TEST_BATTERY env var is set (set by `just run`), OR
     - .git directory exists in project root (git checkout, not installed)
 
     In production, Purple is installed to /opt/purple without .git,
@@ -735,7 +735,7 @@ class ParentMenu(ModalScreen):
 
             print()
             print("Update complete!")
-            print("Press Enter to exit. Then run 'make run' to restart.")
+            print("Press Enter to exit. Then run 'just run' to restart.")
             print()
 
             input()
@@ -749,6 +749,6 @@ class ParentMenu(ModalScreen):
             _flush_terminal_input()
             os.system('stty sane')
             os.system('clear')
-            print("Run 'make run' to start Purple Computer.")
+            print("Run 'just run' to start Purple Computer.")
             print()
             os._exit(0)

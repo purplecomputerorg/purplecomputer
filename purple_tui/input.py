@@ -14,6 +14,7 @@ See guides/keyboard-architecture.md for details.
 import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Awaitable
@@ -307,13 +308,22 @@ class EvdevReader:
 
         if self._task:
             self._task.cancel()
+            # Close device first to unblock async_read_loop() immediately.
+            # Virtual devices (UTM, QEMU) may not wake up on cancel alone.
+            if self._device:
+                if self._grab:
+                    try:
+                        self._device.ungrab()
+                    except (IOError, OSError):
+                        pass
+                self._device.close()
+                self._device = None
             try:
-                await self._task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             self._task = None
-
-        if self._device:
+        elif self._device:
             if self._grab:
                 try:
                     self._device.ungrab()
@@ -354,7 +364,8 @@ class EvdevReader:
                 # (prevents stale keypresses from terminal session)
                 # Use select() with timeout to avoid blocking forever
                 try:
-                    while True:
+                    flush_deadline = time.monotonic() + 1.0
+                    while time.monotonic() < flush_deadline:
                         # Check if there's data to read (0 timeout = non-blocking)
                         readable, _, _ = select.select([self._device.fd], [], [], 0)
                         if not readable:
@@ -401,6 +412,9 @@ class EvdevReader:
                     await self._callback(raw_event)
 
         except asyncio.CancelledError:
+            pass
+        except OSError:
+            # Device was closed (normal during shutdown)
             pass
         except Exception as e:
             logger.error(f"EvdevReader error: {e}")
@@ -500,13 +514,16 @@ class PowerButtonReader:
 
         if self._task:
             self._task.cancel()
+            # Close device first to unblock async_read_loop()
+            if self._device:
+                self._device.close()
+                self._device = None
             try:
-                await self._task
-            except asyncio.CancelledError:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
             self._task = None
-
-        if self._device:
+        elif self._device:
             self._device.close()
             self._device = None
 
@@ -528,6 +545,9 @@ class PowerButtonReader:
                     await self._callback(power_event)
 
         except asyncio.CancelledError:
+            pass
+        except OSError:
+            # Device was closed (normal during shutdown)
             pass
         except Exception as e:
             logger.error(f"PowerButtonReader error: {e}")

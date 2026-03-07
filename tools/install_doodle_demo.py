@@ -76,7 +76,7 @@ Examples:
     ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 12
 
 After installing, run:
-    make run-demo
+    just run-demo
         """,
     )
     parser.add_argument("--from", dest="from_path", required=True, metavar="PATH",
@@ -203,7 +203,7 @@ After installing, run:
     print(f"  Target duration: {target:.1f}s")
     print(f"  Speed multiplier: {speed_multiplier:.4f}")
     print("\nTo run:")
-    print("  make run-demo")
+    print("  just run-demo")
 
 
 if __name__ == "__main__":

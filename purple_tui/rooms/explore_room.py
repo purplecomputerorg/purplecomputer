@@ -11,7 +11,8 @@ Features:
 - Emoji display: typing "cat" shows 🐱
 - Emoji math: 3 * cat produces 🐱🐱🐱
 - Typo tolerance: long math expressions forgive accidental keystrokes
-- Speech: add ! anywhere (e.g., "cat!") or Enter on empty to repeat
+- Speech: add ! anywhere (e.g., "cat!") or prefix with "say"/"talk"
+- Command recall: Enter on empty populates input with last command
 - History (up/down arrows)
 - Emoji autocomplete (Space to accept)
 """
@@ -518,15 +519,29 @@ class AutocompleteHint(Static):
 
 
 class ExampleHint(Static):
-    """Shows example hint with caps support"""
+    """Shows example hint or last command for recall"""
+
+    DEFAULT_HINT = "Try: cat  •  2 + 2  •  red + blue  •  cat times 3"
+    MAX_RECALL_LEN = 40
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
+        self._last_command: str = ""
+
+    def set_last_command(self, command: str) -> None:
+        self._last_command = command
+        self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        text = caps("Try: cat  •  2 + 2  •  red + blue  •  cat times 3")
+        if self._last_command:
+            display = self._last_command
+            if len(display) > self.MAX_RECALL_LEN:
+                display = display[:self.MAX_RECALL_LEN - 1] + "…"
+            text = caps(f"Enter to recall: {display}")
+        else:
+            text = caps(self.DEFAULT_HINT)
         return f"[dim]{text}[/]"
 
 
@@ -614,9 +629,8 @@ class ExploreMode(Vertical):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.evaluator = SimpleEvaluator()
-        # Track last input/result for "speak again" (Enter on empty)
-        self._last_eval_text: str = ""
-        self._last_result: str = ""
+        # Track last command for recall (Enter on empty)
+        self._last_input_text: str = ""
 
     def compose(self) -> ComposeResult:
         yield KeyboardOnlyScroll(id="history-scroll")
@@ -631,13 +645,21 @@ class ExploreMode(Vertical):
         """Focus the input when mode loads"""
         self.query_one("#explore-input").focus()
 
+    def _update_example_hint(self) -> None:
+        """Update the example hint to show last command for recall."""
+        try:
+            hint = self.query_one("#explore-example-hint", ExampleHint)
+            hint.set_last_command(self._last_input_text)
+        except Exception:
+            pass
+
     def clear_history(self) -> None:
         """Clear the history scroll and reset last result."""
         try:
             scroll = self.query_one("#history-scroll")
             scroll.remove_children()
-            self._last_eval_text = ""
-            self._last_result = ""
+            self._last_input_text = ""
+            self._update_example_hint()
         except Exception:
             pass
 
@@ -699,9 +721,11 @@ class ExploreMode(Vertical):
                     explore_input.post_message(InlineInput.Submitted(explore_input.value))
                     explore_input.value = ""
                 else:
-                    # Enter on empty: speak last result ("say it again")
-                    if self._last_eval_text or self._last_result:
-                        self._speak(self._last_eval_text, self._last_result)
+                    # Enter on empty: recall last command into input
+                    if self._last_input_text:
+                        explore_input.value = self._last_input_text
+                        explore_input.cursor_position = len(explore_input.value)
+                        explore_input._check_autocomplete()
                 explore_input.autocomplete_matches = []
                 explore_input.autocomplete_index = 0
                 explore_input.exact_match_display = ""
@@ -857,9 +881,9 @@ class ExploreMode(Vertical):
         # Scroll to bottom
         scroll.scroll_end(animate=False)
 
-        # Store for "speak again" (Enter on empty)
-        self._last_eval_text = eval_text
-        self._last_result = result or ""
+        # Store raw input for recall (Enter on empty)
+        self._last_input_text = input_text
+        self._update_example_hint()
 
         # Handle speech (if ! or say/talk was used)
         if force_speak:
@@ -905,6 +929,21 @@ class SimpleEvaluator:
     PLUS_PATTERN = r'\+|(?<!\w)plus(?!\w)'
     # Regex for valid math expression characters
     MATH_CHARS_PATTERN = r'^[\d\s\+\-\*\/\(\)\.]+$'
+
+    # Number words to digits (for kids: zero through twenty, decades, hundred)
+    NUMBER_WORDS = {
+        'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+        'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+        'ten': '10', 'eleven': '11', 'twelve': '12', 'thirteen': '13',
+        'fourteen': '14', 'fifteen': '15', 'sixteen': '16', 'seventeen': '17',
+        'eighteen': '18', 'nineteen': '19', 'twenty': '20',
+        'thirty': '30', 'forty': '40', 'fifty': '50', 'sixty': '60',
+        'seventy': '70', 'eighty': '80', 'ninety': '90', 'hundred': '100',
+    }
+    _NUMBER_WORDS_PATTERN = re.compile(
+        r'\b(' + '|'.join(sorted(NUMBER_WORDS.keys(), key=len, reverse=True)) + r')\b',
+        re.IGNORECASE,
+    )
     # Valid math punctuation (operators, parens, decimal) for "mostly math" detection
     MATH_PUNCTUATION = set('+-*/(). ')
     # Thresholds for "mostly math" detection (filters typos like accidental '=')
@@ -920,10 +959,19 @@ class SimpleEvaluator:
         if not text:
             return ""
 
+        # Normalize number words and commas early (before any evaluation)
+        text = self._normalize_number_words(text)
+        text = self._normalize_commas(text)
+
         # Clean typos in mostly-math expressions (e.g., accidental '=' key)
         original_text = text
         text = self._clean_mostly_math(text)
         was_corrected = (text != original_text)
+
+        # Patterns: "5 4 3 ..." or "2 cats ... 5" (check before any other eval)
+        if '..' in text:
+            if pattern := self._eval_pattern(text):
+                return pattern
 
         # Track if original had parens (implies computation)
         had_parens = '(' in text
@@ -1097,7 +1145,7 @@ class SimpleEvaluator:
         parts = re.split(r'\s*(?:' + self.PLUS_PATTERN + r')\s*', text.lower())
 
         items = []   # (type, value) in original order
-        pending = 0
+        pending_nums = []  # individual numbers preserved for emoji grouping
 
         for part in parts:
             part = part.strip()
@@ -1107,36 +1155,40 @@ class SimpleEvaluator:
             # Color term: emit individual color items (adjective model)
             # Pending numbers add extra copies of this color
             if hexes := self._parse_color(part):
-                if pending > 0:
-                    hexes = [hexes[0]] * pending + hexes
-                    pending = 0
+                if pending_nums:
+                    hexes = [hexes[0]] * int(sum(pending_nums)) + hexes
+                    pending_nums = []
                 for h in hexes:
                     items.append(('color', h))
                 continue
 
-            # Emoji term (pending becomes a separate group for visual grouping)
+            # Emoji term (each pending number becomes a separate group)
             if emoji_data := self._parse_emoji(part):
                 emoji, count, word = emoji_data
-                if pending:
-                    items.append(('emoji', (emoji, pending, word)))
+                for p in pending_nums:
+                    items.append(('emoji', (emoji, int(p), word)))
                 items.append(('emoji', (emoji, count, word)))
-                pending = 0
+                pending_nums = []
                 continue
 
             # Bare number or math expression (e.g., "3 * 4")
             normalized = self._normalize_math(part)
             if (math_result := self._eval_math(normalized)) is not None:
-                pending += int(math_result) if float(math_result).is_integer() else math_result
+                val = int(math_result) if isinstance(math_result, float) and math_result.is_integer() else math_result
+                pending_nums.append(val)
                 continue
 
             # Emoji string (from parens)
             if self._is_emoji_str(part):
                 chars = [c for c in part if ord(c) > 127]
+                pending_sum = int(sum(pending_nums)) if pending_nums else 0
                 if chars and all(c == chars[0] for c in chars):
-                    items.append(('emoji', (chars[0], len(chars) + pending, None)))
+                    for p in pending_nums:
+                        items.append(('emoji', (chars[0], int(p), None)))
+                    items.append(('emoji', (chars[0], len(chars), None)))
                 else:
-                    items.append(('emoji', (part, 1 + pending, None)))
-                pending = 0
+                    items.append(('emoji', (part, 1 + pending_sum, None)))
+                pending_nums = []
                 continue
 
             # Unknown: try emoji substitution, pass through
@@ -1150,26 +1202,27 @@ class SimpleEvaluator:
                 text_part, num = m.group(1), int(m.group(2))
                 if text_part.strip():
                     items.append(('text', self._substitute_emojis(text_part)))
-                pending += num
+                pending_nums.append(num)
             elif remaining.strip():
                 items.append(('text', self._substitute_emojis(remaining)))
 
         # Attach remaining pending to last emoji or color
-        if pending:
+        if pending_nums:
+            pending = int(sum(pending_nums))
+            attached = False
             for i in range(len(items) - 1, -1, -1):
                 if items[i][0] == 'emoji':
                     e, c, w = items[i][1]
                     items[i] = ('emoji', (e, c + pending, w))
-                    pending = 0
+                    attached = True
                     break
-            if pending:
+            if not attached:
                 for i in range(len(items) - 1, -1, -1):
                     if items[i][0] == 'color':
-                        # Duplicate this color pending times
                         h = items[i][1]
-                        for _ in range(int(pending)):
+                        for _ in range(pending):
                             items.insert(i + 1, ('color', h))
-                        pending = 0
+                        attached = True
                         break
 
         has_colors = any(t == 'color' for t, _ in items)
@@ -1203,9 +1256,6 @@ class SimpleEvaluator:
             if result is None:
                 return None
 
-            if pending:
-                result += " " + self._format_number_with_dots(pending)
-
             return result
 
         # No colors: build result in order, showing + between items
@@ -1216,9 +1266,6 @@ class SimpleEvaluator:
                 result_parts.append(e * c)
             elif item_type == 'text':
                 result_parts.append(value)
-
-        if pending:
-            result_parts.append(self._format_number_with_dots(pending))
 
         result = ' + '.join(result_parts) if result_parts else None
         if show_label and result:
@@ -1409,43 +1456,159 @@ class SimpleEvaluator:
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
-    def _format_emoji_label(self, emoji: str, count: int) -> str:
+    def _format_emoji_label(self, emoji: str, count: int, expression: str = "") -> str:
         """Format emoji with label and visualization.
 
-        ≤ 10: '= N 🐱' then emojis in a row.
-        > 10: '= N 🐱' then emoji abacus (emojis replace dots).
+        Uses _format_number_with_dots with emoji as bead for consistent
+        grouping and abacus rendering.
         """
-        if count <= 10:
-            return f"= {count} {emoji}\n{emoji * count}"
-        # > 10: use emoji abacus
-        return f"= {self._format_emoji_abacus(emoji, count)}"
+        viz = self._format_number_with_dots(count, show_label=False, expression=expression, bead=emoji)
+        return f"= {count} {emoji}\n{viz}"
 
-    def _format_emoji_abacus(self, emoji: str, count: int) -> str:
-        """Format number as an abacus using emoji beads instead of dots."""
-        num_digits = len(str(count))
-        if num_digits > len(self.ABACUS_COLORS):
-            return f"{count} {emoji}\n{emoji * count}"
+    # -- Pattern sequences ("5 4 3 ...", "2 cats ... 10") --
 
-        # Build all rows from highest place down to ones
-        all_rows = []
-        place = 10 ** (num_digits - 1)
-        remaining = count
-        while place >= 1:
-            digit = remaining // place
-            remaining %= place
-            all_rows.append((place, digit))
-            place //= 10
+    MAX_PATTERN_TERMS = 20
 
-        max_label_width = max(len(self.PLACE_NAMES.get(place, f"{place}s")) for place, _ in all_rows)
-        lines = [f"{count} {emoji}"]
-        for i, (place, digit) in enumerate(all_rows):
-            color_idx = len(all_rows) - 1 - i
-            c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
-            place_label = self.PLACE_NAMES.get(place, f"{place}s").rjust(max_label_width)
-            beads = f" {emoji}" * digit if digit > 0 else ""
-            lines.append(f"[{c}]{place_label}[/] {beads}")
+    def _eval_pattern(self, text: str) -> str | None:
+        """Evaluate '...' patterns: detect arithmetic sequences and continue them.
 
+        Supports:
+        - Pure numbers: "5 4 3 ..." "2 4 6 ... 20"
+        - Emoji sequences: "5 cats ..." "cats ... 5" "1 cat 2 cats 3 cats ..."
+        """
+        m = re.match(r'^(.+?)\s*\.{2,}\s*(.*)$', text)
+        if not m:
+            return None
+
+        left = m.group(1).strip()
+        right = m.group(2).strip()
+
+        # Parse target from right side (optional number)
+        target = None
+        if right:
+            target_m = re.match(r'^(\d+)', right)
+            if target_m:
+                target = int(target_m.group(1))
+
+        emoji = None
+        values = []
+
+        # Pattern: "N word N word ..." (e.g., "1 cat 2 cats 3 cats")
+        pairs = re.findall(r'(\d+)\s*([a-zA-Z]+)', left)
+        if pairs:
+            emojis_found = set()
+            for _, word in pairs:
+                e = self._get_emoji(word.lower())
+                if e:
+                    emojis_found.add(e)
+            if len(emojis_found) == 1:
+                emoji = emojis_found.pop()
+                values = [int(n) for n, _ in pairs]
+
+        # Pattern: "N word" (single, e.g., "5 cats")
+        if not values:
+            single_m = re.match(r'^(\d+)\s*([a-zA-Z]+)$', left)
+            if single_m:
+                n, word = int(single_m.group(1)), single_m.group(2).lower()
+                e = self._get_emoji(word)
+                if e:
+                    emoji = e
+                    values = [n]
+
+        # Pattern: "word" only on left, target on right (e.g., "cats ... 5")
+        if not values and not emoji:
+            word_m = re.match(r'^([a-zA-Z]+)$', left)
+            if word_m:
+                e = self._get_emoji(word_m.group(1).lower())
+                if e and target is not None:
+                    emoji = e
+                    values = []
+
+        # Pattern: pure numbers (e.g., "5 4 3", "2 4 6")
+        if not values and not emoji:
+            nums = re.findall(r'-?\d+', left)
+            if len(nums) >= 2:
+                values = [int(n) for n in nums]
+
+        if not values and not emoji:
+            return None
+
+        # Detect arithmetic step from examples
+        if len(values) >= 2:
+            diffs = [values[i + 1] - values[i] for i in range(len(values) - 1)]
+            if len(set(diffs)) == 1:
+                step = diffs[0]
+            else:
+                return None  # not an arithmetic sequence
+        elif len(values) == 1 and emoji:
+            # Single value + emoji: countdown by default, count up if target > start
+            if target is not None and target > values[0]:
+                step = 1
+            else:
+                step = -1
+        elif not values and emoji and target is not None:
+            # "cats ... 5": count from 1 up to target
+            values = [1]
+            step = 1
+        else:
+            return None
+
+        if step == 0:
+            return None
+
+        # Generate the sequence
+        sequence = list(values)
+        last = values[-1]
+        for _ in range(self.MAX_PATTERN_TERMS):
+            nxt = last + step
+            if target is not None:
+                if step > 0 and nxt > target:
+                    break
+                if step < 0 and nxt < target:
+                    break
+            else:
+                # Emoji patterns stop at 1 (0 emoji is nothing), numbers stop at 0
+                min_val = 1 if emoji else 0
+                if step < 0 and nxt < min_val:
+                    break
+                if step > 0 and len(sequence) >= 10:
+                    break
+            if nxt < 0:
+                break
+            sequence.append(nxt)
+            last = nxt
+
+        # Include target if step lands exactly on it
+        if target is not None and sequence and sequence[-1] != target:
+            if step > 0 and target > sequence[-1]:
+                sequence.append(target)
+            elif step < 0 and target < sequence[-1]:
+                sequence.append(target)
+
+        if len(sequence) <= 1:
+            return None
+
+        if emoji:
+            return self._format_emoji_pattern(sequence, emoji)
+        else:
+            return self._format_number_pattern(sequence)
+
+    def _format_emoji_pattern(self, sequence: list[int], emoji: str) -> str:
+        """Render emoji sequence as rows (one per count)."""
+        lines = []
+        for n in sequence:
+            if n > 0:
+                lines.append(emoji * n)
+            elif n == 0:
+                lines.append(" ")
         return "\n".join(lines)
+
+    def _format_number_pattern(self, sequence: list[int]) -> str:
+        """Render number sequence with dot visualization for the final value."""
+        seq_str = "  ".join(str(n) for n in sequence)
+        last = sequence[-1]
+        dots = self._format_number_with_dots(last, show_label=False)
+        return f"{seq_str}\n{dots}"
 
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""
@@ -1471,7 +1634,11 @@ class SimpleEvaluator:
             if c <= 100:
                 # Show label if there's explicit operator (*, x, times)
                 if has_operator and c > 1:
-                    return self._format_emoji_label(e, c)
+                    # Extract numeric expression for grouping (e.g., "2*3" from "2 * 3 cats")
+                    expr = ""
+                    if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+', t_lower):
+                        expr = f"{m.group(1)}*{m.group(2)}"
+                    return self._format_emoji_label(e, c, expression=expr)
                 return e * c
 
         # "N * word" for colors (no label for colors)
@@ -1605,6 +1772,22 @@ class SimpleEvaluator:
         """Check if word is plain English text (not emoji, number, operator, or expression)."""
         return bool(word) and word.isalpha() and all(ord(c) < 128 for c in word)
 
+    def _normalize_number_words(self, text: str) -> str:
+        """Convert number words to digits: 'three cats' → '3 cats'."""
+        return self._NUMBER_WORDS_PATTERN.sub(
+            lambda m: self.NUMBER_WORDS[m.group(1).lower()], text
+        )
+
+    def _normalize_commas(self, text: str) -> str:
+        """Convert commas to plus when separating numbers: '1, 2, 3' → '1 + 2 + 3'.
+
+        Only triggers when there's at least one digit-comma-digit pattern,
+        so 'cat, dog' is left unchanged.
+        """
+        if re.search(r'\d\s*,\s*\d', text):
+            return re.sub(r',\s+', ' + ', text)
+        return text
+
     def _normalize_math(self, text: str) -> str:
         """Normalize text for math evaluation."""
         result = text.lower()
@@ -1701,6 +1884,7 @@ class SimpleEvaluator:
         """
         formatted = self._format_number(num)
         label = formatted if show_label else None
+        is_emoji_bead = bead != "●"
         if isinstance(num, (int, float)) and (isinstance(num, int) or num.is_integer()):
             n = int(num)
             if n >= 1:
@@ -1709,13 +1893,15 @@ class SimpleEvaluator:
                 if n <= 10:
                     grouped = self._format_grouped_dots(n, expression, color, bead=bead)
                     if grouped:
+                        content = grouped if is_emoji_bead else f"[{color}]{grouped}[/]"
                         if label:
-                            return f"{label}\n[{color}]{grouped}[/]"
-                        return f"[{color}]{grouped}[/]"
-                    spaced = " ".join(bead * n)
+                            return f"{label}\n{content}"
+                        return content
+                    spaced = " ".join([bead] * n)
+                    content = spaced if is_emoji_bead else f"[{color}]{spaced}[/]"
                     if label:
-                        return f"{label}\n[{color}]{spaced}[/]"
-                    return f"[{color}]{spaced}[/]"
+                        return f"{label}\n{content}"
+                    return content
 
                 # > 10 but within abacus range
                 num_digits = len(str(n))
@@ -1736,8 +1922,11 @@ class SimpleEvaluator:
                         color_idx = len(all_rows) - 1 - i
                         c = self.ABACUS_COLORS[color_idx % len(self.ABACUS_COLORS)]
                         place_label = self.PLACE_NAMES.get(place, f"{place}s").rjust(max_label_width)
-                        spaced = " ".join(bead * digit) if digit > 0 else ""
-                        lines.append(f"[{c}]{place_label}  {spaced}[/]")
+                        spaced = " ".join([bead] * digit) if digit > 0 else ""
+                        if is_emoji_bead:
+                            lines.append(f"[{c}]{place_label}[/]  {spaced}")
+                        else:
+                            lines.append(f"[{c}]{place_label}  {spaced}[/]")
 
                     if label:
                         return f"{label}\n" + "\n".join(lines)
@@ -1757,20 +1946,20 @@ class SimpleEvaluator:
         if not expression:
             # Default 5+5 grouping for 10 (makes it countable)
             if result == 10:
-                return " ".join(bead * 5) + "   " + " ".join(bead * 5)
+                return " ".join([bead] * 5) + "   " + " ".join([bead] * 5)
             return None
-        # Match simple "a + b"
-        m = re.match(r'^\s*(\d+)\s*\+\s*(\d+)\s*$', expression)
-        if m:
-            a, b = int(m.group(1)), int(m.group(2))
-            if a + b == result and a >= 1 and b >= 1:
-                return " ".join(bead * a) + "   " + " ".join(bead * b)
+        # Match simple "a + b" (or "a + b + c + ...")
+        terms = re.findall(r'\d+', expression)
+        if '+' in expression and not re.search(r'[*/]', expression):
+            values = [int(t) for t in terms]
+            if sum(values) == result and all(v >= 1 for v in values):
+                return "   ".join(" ".join([bead] * v) for v in values)
         # Match simple "a * b"
         m = re.match(r'^\s*(\d+)\s*\*\s*(\d+)\s*$', expression)
         if m:
             a, b = int(m.group(1)), int(m.group(2))
             if a * b == result and a >= 1 and b >= 1:
-                groups = "   ".join(" ".join(bead * a) for _ in range(b))
+                groups = "   ".join(" ".join([bead] * a) for _ in range(b))
                 return groups
         return None
 

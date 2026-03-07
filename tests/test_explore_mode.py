@@ -166,7 +166,7 @@ if HAS_PYTEST:
 
         def test_multiplication_with_emoji(self, evaluator):
             result = evaluator.evaluate("3 × cat")
-            assert "🐱🐱🐱" in result
+            assert result == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_division_decimal(self, evaluator):
             result = evaluator.evaluate("7 ÷ 2")
@@ -193,16 +193,16 @@ if HAS_PYTEST:
         """Test emoji multiplication and addition"""
 
         def test_emoji_times_number(self, evaluator):
-            assert evaluator.evaluate("cat * 3") == "= 3 🐱\n🐱🐱🐱"
+            assert evaluator.evaluate("cat * 3") == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_number_times_emoji(self, evaluator):
-            assert evaluator.evaluate("3 * cat") == "= 3 🐱\n🐱🐱🐱"
+            assert evaluator.evaluate("3 * cat") == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_emoji_x_number(self, evaluator):
-            assert evaluator.evaluate("cat x 2") == "= 2 🐱\n🐱🐱"
+            assert evaluator.evaluate("cat x 2") == "= 2 🐱\n🐱 🐱"
 
         def test_emoji_no_spaces(self, evaluator):
-            assert evaluator.evaluate("cat*3") == "= 3 🐱\n🐱🐱🐱"
+            assert evaluator.evaluate("cat*3") == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_emoji_addition(self, evaluator):
             assert evaluator.evaluate("cat + dog") == "🐱 + 🐶"
@@ -216,10 +216,10 @@ if HAS_PYTEST:
             assert evaluator.evaluate("apple * 3 + banana * 2") == "3 🍎 2 🍌\n🍎🍎🍎 + 🍌🍌"
 
         def test_emoji_times_word(self, evaluator):
-            assert evaluator.evaluate("cat times 3") == "= 3 🐱\n🐱🐱🐱"
+            assert evaluator.evaluate("cat times 3") == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_number_times_word_emoji(self, evaluator):
-            assert evaluator.evaluate("3 times cat") == "= 3 🐱\n🐱🐱🐱"
+            assert evaluator.evaluate("3 times cat") == "= 3 🐱\n🐱 🐱 🐱"
 
         def test_emoji_plus_word(self, evaluator):
             assert evaluator.evaluate("cat plus dog") == "🐱 + 🐶"
@@ -233,8 +233,8 @@ if HAS_PYTEST:
             assert evaluator.evaluate("3 + cat") == "4 🐱\n🐱🐱🐱 + 🐱"
 
         def test_multiple_numbers_attach_to_next_emoji(self, evaluator):
-            # 3 + 4 + 2 bananas: pending 3+4=7 becomes separate group
-            assert evaluator.evaluate("3 + 4 + 2 bananas") == "9 🍌\n🍌🍌🍌🍌🍌🍌🍌 + 🍌🍌"
+            # 3 + 4 + 2 bananas: each number becomes a separate group
+            assert evaluator.evaluate("3 + 4 + 2 bananas") == "9 🍌\n🍌🍌🍌 + 🍌🍌🍌🍌 + 🍌🍌"
 
         def test_number_attaches_per_emoji_group(self, evaluator):
             # 5 + 2 cats + 3 dogs: pending 5 becomes separate cat group
@@ -249,12 +249,17 @@ if HAS_PYTEST:
             assert evaluator.evaluate("2 cats + 5 + 3 dogs") == "2 🐱 8 🐶\n🐱🐱 + 🐶🐶🐶🐶🐶 + 🐶🐶🐶"
 
         def test_n_times_m_word(self, evaluator):
-            # 5 x 2 cats = 10 cats (with label, ≤10 shows flat emojis)
-            assert evaluator.evaluate("5 x 2 cats") == "= 10 🐱\n" + "🐱" * 10
+            # 5 x 2 cats = 10 cats (with label, grouped: 2 groups of 5)
+            result = evaluator.evaluate("5 x 2 cats")
+            assert result.startswith("= 10 🐱\n")
+            assert result.count("🐱") == 10 + 1  # 10 in viz + 1 in label
+            assert "   " in result  # grouping separator
 
         def test_n_times_m_word_singular(self, evaluator):
-            # 5 x 2 cat = 10 cats (with label, ≤10 shows flat emojis)
-            assert evaluator.evaluate("5 x 2 cat") == "= 10 🐱\n" + "🐱" * 10
+            # 5 x 2 cat = 10 cats (with label, grouped: 2 groups of 5)
+            result = evaluator.evaluate("5 x 2 cat")
+            assert result.startswith("= 10 🐱\n")
+            assert result.count("🐱") == 10 + 1  # 10 in viz + 1 in label
 
         def test_n_star_m_word(self, evaluator):
             # 3 * 4 dogs = 12 dogs (with label, >10 shows emoji abacus)
@@ -264,8 +269,10 @@ if HAS_PYTEST:
             assert "ones" in result
 
         def test_n_times_word_m(self, evaluator):
-            # 2 times 5 cats = 10 cats (with label, ≤10 shows flat emojis)
-            assert evaluator.evaluate("2 times 5 cats") == "= 10 🐱\n" + "🐱" * 10
+            # 2 times 5 cats = 10 cats (with label, grouped)
+            result = evaluator.evaluate("2 times 5 cats")
+            assert result.startswith("= 10 🐱\n")
+            assert result.count("🐱") == 10 + 1  # 10 in viz + 1 in label
 
 
     class TestEmojiDescription:
@@ -334,7 +341,7 @@ if HAS_PYTEST:
             assert result.startswith("= 10")
 
         def test_parens_with_emoji_multiply(self, evaluator):
-            assert evaluator.evaluate("(2 + 3) * cat") == "= 5 🐱\n🐱🐱🐱🐱🐱"
+            assert evaluator.evaluate("(2 + 3) * cat") == "= 5 🐱\n🐱 🐱 🐱 🐱 🐱"
 
         def test_emoji_in_parens_multiply(self, evaluator):
             assert evaluator.evaluate("(cat + dog) * 2") == "🐱🐶🐱🐶"
@@ -361,7 +368,7 @@ if HAS_PYTEST:
             assert evaluator.evaluate("(2 * cat) + (3 * dog)") == "2 🐱 3 🐶\n🐱🐱 + 🐶🐶🐶"
 
         def test_parens_with_word_operators(self, evaluator):
-            assert evaluator.evaluate("(2 plus 3) times cat") == "= 5 🐱\n🐱🐱🐱🐱🐱"
+            assert evaluator.evaluate("(2 plus 3) times cat") == "= 5 🐱\n🐱 🐱 🐱 🐱 🐱"
 
         def test_deeply_nested_math(self, evaluator):
             result = evaluator.evaluate("((1 + 2) + (3 + 4))")
@@ -1139,12 +1146,74 @@ class TestXOperator:
     def test_x_with_emoji(self, evaluator):
         # "cat x 3" = 3 cats
         result = evaluator.evaluate("cat x 3")
-        assert result == "= 3 🐱\n🐱🐱🐱"
+        assert result == "= 3 🐱\n🐱 🐱 🐱"
+
+    def test_mult_grouping_with_emoji(self, evaluator):
+        # "2 x 3 cats" shows 3 groups of 2 cats
+        result = evaluator.evaluate("2 x 3 cats")
+        assert result.startswith("= 6 🐱\n")
+        # 3 groups separated by triple-space
+        viz = result.split("\n", 1)[1]
+        groups = viz.split("   ")
+        assert len(groups) == 3
+        assert all(g == "🐱 🐱" for g in groups)
+
+    def test_mult_grouping_with_emoji_large(self, evaluator):
+        # "3 * 4 dogs" > 10, uses emoji abacus
+        result = evaluator.evaluate("3 * 4 dogs")
+        assert result.startswith("= 12 🐶\n")
+        assert "tens" in result
+        assert "ones" in result
 
     def test_x_doesnt_replace_in_words(self, evaluator):
         # "fox" should stay as fox emoji, not "fo*"
         result = evaluator.evaluate("fox")
         assert "🦊" in result
+
+
+class TestNumberWordsAndCommas:
+    """Test number word conversion and comma-separated counting."""
+
+    def test_number_word_simple(self, evaluator):
+        # "three cats" = 3 cats
+        assert evaluator.evaluate("three cats") == "🐱🐱🐱"
+
+    def test_number_word_math(self, evaluator):
+        # "two + three" = 5
+        result = evaluator.evaluate("two + three")
+        assert result.startswith("= 5")
+
+    def test_comma_separated_numbers_with_emoji(self, evaluator):
+        # "one, two, three dinos" = 6 dinos in groups of 1, 2, 3
+        result = evaluator.evaluate("one, two, three dinos")
+        lines = result.split("\n")
+        assert lines[0] == "6 🦕"
+        assert lines[1] == "🦕 + 🦕🦕 + 🦕🦕🦕"
+
+    def test_comma_separated_digits_with_emoji(self, evaluator):
+        # "1, 2, 3 cats" = 6 cats in groups of 1, 2, 3
+        result = evaluator.evaluate("1, 2, 3 cats")
+        lines = result.split("\n")
+        assert lines[0] == "6 🐱"
+        assert lines[1] == "🐱 + 🐱🐱 + 🐱🐱🐱"
+
+    def test_comma_no_numbers_unchanged(self, evaluator):
+        # "cat, dog" should NOT become "cat + dog"
+        result = evaluator.evaluate("cat, dog")
+        assert result == "🐱, 🐶"
+
+    def test_number_word_multiplication(self, evaluator):
+        # "three times four" = 12
+        result = evaluator.evaluate("three times four")
+        assert result.startswith("= 12")
+
+    def test_number_word_with_emoji_mult(self, evaluator):
+        # "two x three cats" = 6 cats with grouping
+        result = evaluator.evaluate("two x three cats")
+        assert result.startswith("= 6 🐱\n")
+        viz = result.split("\n", 1)[1]
+        groups = viz.split("   ")
+        assert len(groups) == 3  # 3 groups of 2
 
 
 class TestColorNumberAttachment:
@@ -1579,6 +1648,74 @@ class TestColorMappingConsistency:
             """apple + banana + heart + apple shows + between all."""
             result = evaluator.evaluate("apple + banana + heart + apple")
             assert result == "🍎 + 🍌 + ❤️ + 🍎"
+
+
+    class TestPatterns:
+        """Test ... pattern sequences"""
+
+        def test_countdown_numbers(self, evaluator):
+            result = evaluator.evaluate("5 4 3 ...")
+            # Should contain the full countdown sequence
+            assert "5  4  3  2  1" in result
+
+        def test_countup_numbers(self, evaluator):
+            result = evaluator.evaluate("2 4 6 ... 20")
+            assert "2  4  6  8  10  12  14  16  18  20" in result
+
+        def test_countup_by_tens(self, evaluator):
+            result = evaluator.evaluate("10 20 30 ...")
+            assert "10  20  30  40" in result
+
+        def test_countdown_emoji(self, evaluator):
+            result = evaluator.evaluate("5 cats ...")
+            lines = result.split("\n")
+            # First line should have 5 cat emoji, last should have 1
+            assert len(lines) == 5
+
+        def test_countup_emoji_with_target(self, evaluator):
+            result = evaluator.evaluate("cats ... 4")
+            lines = result.split("\n")
+            assert len(lines) == 4
+
+        def test_emoji_word_target(self, evaluator):
+            result = evaluator.evaluate("3 dogs ... 7")
+            lines = result.split("\n")
+            assert len(lines) == 5  # 3, 4, 5, 6, 7
+
+        def test_multi_example_emoji(self, evaluator):
+            result = evaluator.evaluate("1 cat 2 cats 3 cats ...")
+            lines = result.split("\n")
+            # Should continue the 1,2,3 pattern upward
+            assert len(lines) >= 3
+
+        def test_no_pattern_without_dots(self, evaluator):
+            # "5 4 3" without ... should NOT trigger pattern
+            result = evaluator.evaluate("5 4 3")
+            assert "5  4  3  2  1" not in result
+
+        def test_two_dots_also_works(self, evaluator):
+            result = evaluator.evaluate("5 4 3 ..")
+            assert "5  4  3  2  1" in result
+
+        def test_odd_numbers(self, evaluator):
+            result = evaluator.evaluate("1 3 5 ... 15")
+            assert "1  3  5  7  9  11  13  15" in result
+
+        def test_non_arithmetic_returns_none(self, evaluator):
+            # 1, 2, 4 is not arithmetic (diffs: 1, 2)
+            result = evaluator.evaluate("1 2 4 ...")
+            # Should fall through to normal eval, not crash
+            assert "1  2  4  8" not in result
+
+        def test_no_space_before_dots(self, evaluator):
+            result = evaluator.evaluate("5cats...10")
+            lines = result.split("\n")
+            assert len(lines) == 6  # 5, 6, 7, 8, 9, 10
+
+        def test_no_space_countdown(self, evaluator):
+            result = evaluator.evaluate("5cats...")
+            lines = result.split("\n")
+            assert len(lines) == 5  # 5, 4, 3, 2, 1
 
 
 if __name__ == "__main__":

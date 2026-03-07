@@ -171,8 +171,8 @@ SOURCES
         log_info "  Run 'just keygen' to generate a key pair."
     fi
 
-    # Install Python dependencies (python-xlib for font size calculation fallback, evdev for keyboard normalizer)
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages textual rich wcwidth pygame python-xlib piper-tts evdev pynacl
+    # Install Python dependencies from requirements.txt
+    chroot "$MOUNT_DIR" pip3 install --break-system-packages -r /opt/purple/requirements.txt
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."

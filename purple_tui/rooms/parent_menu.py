@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 from ..keyboard import NavigationAction, ControlAction
-from ..constants import is_debug
+from ..constants import is_debug, SUPPORT_EMAIL
 
 
 # =============================================================================
@@ -372,6 +372,17 @@ def _flush_terminal_input() -> None:
         pass  # Not a TTY or other error, ignore
 
 
+def _is_live_boot() -> bool:
+    """Check if running from a live USB with install payload available."""
+    try:
+        cmdline = Path("/proc/cmdline").read_text()
+        if "boot=casper" not in cmdline:
+            return False
+    except Exception:
+        return False
+    return Path("/cdrom/purple/install.sh").exists()
+
+
 def _is_dev_environment() -> bool:
     """Check if running in a development environment.
 
@@ -392,9 +403,13 @@ def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
     items = [
         ("menu-display", "Adjust Display"),
+    ]
+    if _is_live_boot():
+        items.append(("menu-install", "Install on this computer"))
+    items.extend([
         ("menu-shell", "Open Terminal"),
         ("menu-keyboard", "Recalibrate Keyboard"),
-    ]
+    ])
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-update", "Git Pull & Exit"))
@@ -403,6 +418,106 @@ def _get_menu_items() -> list:
         items.append(("menu-system", "Exit to System"))
     items.append(("menu-exit", "Exit"))
     return items
+
+
+class InstallConfirmScreen(ModalScreen):
+    """Confirmation dialog before installing Purple Computer to the internal disk."""
+
+    CSS = """
+    InstallConfirmScreen {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    #install-dialog {
+        width: 50;
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: round $primary;
+    }
+
+    #install-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        color: $primary;
+        margin-bottom: 1;
+    }
+
+    #install-warning {
+        width: 100%;
+        text-align: center;
+        margin: 1 0;
+    }
+
+    #install-buttons {
+        width: 100%;
+        height: 3;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #install-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._selected_button = 1  # Default to Cancel (safer)
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="install-dialog"):
+            yield Static("Install Purple Computer", id="install-title")
+            yield Static(
+                "This will set up Purple Computer\n"
+                "on this laptop.\n"
+                "\n"
+                "[bold red]Everything on this computer\n"
+                "will be erased.[/]",
+                id="install-warning"
+            )
+            with Horizontal(id="install-buttons"):
+                yield Static(" Install ", id="btn-install")
+                yield Static(" Cancel ", id="btn-cancel-install")
+            yield Static(
+                "\u2190 \u2192 choose   Enter confirm",
+                id="install-hint"
+            )
+
+    def on_mount(self):
+        self._update_buttons()
+
+    def _update_buttons(self):
+        install_btn = self.query_one("#btn-install", Static)
+        cancel_btn = self.query_one("#btn-cancel-install", Static)
+        if self._selected_button == 0:
+            install_btn.update("[bold reverse] Install [/]")
+            cancel_btn.update(" Cancel ")
+        else:
+            install_btn.update(" Install ")
+            cancel_btn.update("[bold reverse] Cancel [/]")
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction in ('left', 'right'):
+                self._selected_button = 1 - self._selected_button
+                self._update_buttons()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                self.dismiss(self._selected_button == 0)  # True = Install
+            elif action.action == 'escape':
+                self.dismiss(False)
 
 
 class ParentMenuItem(Static):
@@ -548,6 +663,8 @@ class ParentMenu(ModalScreen):
         item_id = self._menu_items[self._selected_index][0]
         if item_id == "menu-display":
             self._open_display_settings()
+        elif item_id == "menu-install":
+            self._install_to_disk()
         elif item_id == "menu-shell":
             self._open_shell()
         elif item_id == "menu-keyboard":
@@ -566,6 +683,57 @@ class ParentMenu(ModalScreen):
     def _open_display_settings(self) -> None:
         """Open the display settings modal."""
         self.app.push_screen(DisplaySettingsScreen())
+
+    def _install_to_disk(self) -> None:
+        """Show install confirmation, then run the installer."""
+        def on_confirm(confirmed: bool) -> None:
+            if confirmed:
+                self.dismiss()  # Close parent menu
+                self.app.call_later(self._run_install)
+
+        self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
+
+    def _run_install(self) -> None:
+        """Run the installer, suspending the TUI."""
+        with self.app.suspend_with_terminal_input():
+            os.system('stty sane')
+            os.system('clear')
+
+            print()
+            print("  Setting up Purple Computer...")
+            print("  This will take about 10-15 minutes.")
+            print()
+            print("  Please wait...")
+            print()
+            sys.stdout.flush()
+
+            result = subprocess.run(
+                ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
+                env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"}
+            )
+
+            os.system('clear')
+            if result.returncode == 0:
+                print()
+                print("  All done!")
+                print()
+                print("  Remove the USB drive, then")
+                print("  press Enter to restart.")
+                print()
+            else:
+                print()
+                print("  Something went wrong during setup.")
+                print()
+                print(f"  If this keeps happening, contact us at")
+                print(f"  {SUPPORT_EMAIL}")
+                print()
+                print("  Press Enter to restart and try again.")
+                print()
+
+            input()
+            _flush_terminal_input()
+            os.system('stty sane')
+            os.system('sudo reboot')
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

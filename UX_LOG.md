@@ -47,6 +47,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Install from Parent Menu**: In live boot mode, Parent Menu now shows "Install on this computer" option with a confirmation dialog; GRUB menu is hidden (boots straight to live mode); parents never need to interact with GRUB
 - **Doodle paint: hold letter then arrow paints continuously**: Holding a character key and then pressing an arrow now paints that character's color while moving, same as holding arrow first then letter
 - **Kid-proof power button**: Tap shows sleep screen (cute, not scary, any key wakes); hold 3s shows "Bye!" and shuts down (phone-like); logind set to ignore so TUI controls all power UX
 - **Lid close delayed shutdown**: Lid close now turns screen off immediately but waits 2 minutes before shutting down (was 5 seconds); opening lid cancels shutdown; prevents accidental shutdowns when kid briefly closes lid

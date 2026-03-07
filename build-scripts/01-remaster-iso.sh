@@ -25,8 +25,9 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# GRUB timeout in seconds
-GRUB_TIMEOUT="${GRUB_TIMEOUT:-5}"
+# GRUB timeout: hidden by default, parents never see the menu.
+# During this window, pressing any key reveals the menu (for technical users).
+GRUB_TIMEOUT="${GRUB_TIMEOUT:-3}"
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
@@ -449,6 +450,7 @@ main() {
 # Optional: install to internal disk
 
 set timeout=${GRUB_TIMEOUT}
+set timeout_style=hidden
 set default=0
 
 # Clean purple theme

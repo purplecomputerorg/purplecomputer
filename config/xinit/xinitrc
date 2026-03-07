@@ -9,6 +9,9 @@ echo "=== $(date) ==="
 # Wait for X to initialize
 sleep 1
 
+# Start PulseAudio (may not auto-start in live boot)
+pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
+
 # Disable screen blanking
 xset s off -dpms s noblank b off
 

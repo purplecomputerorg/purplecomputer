@@ -455,6 +455,15 @@ EOF
 
     rm -f /tmp/grub-standalone.cfg
 
+    # Unmount virtual filesystems BEFORE creating squashfs
+    # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)
+    log_info "Unmounting virtual filesystems..."
+    sync
+    umount "$MOUNT_DIR/dev/pts" 2>/dev/null || true
+    umount "$MOUNT_DIR/dev" 2>/dev/null || true
+    umount "$MOUNT_DIR/sys" 2>/dev/null || true
+    umount "$MOUNT_DIR/proc" 2>/dev/null || true
+
     # Create squashfs for live boot (same root filesystem, different packaging)
     log_info "Creating live boot squashfs..."
     SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
@@ -463,7 +472,7 @@ EOF
         -comp zstd \
         -Xcompression-level 19 \
         -noappend \
-        -e boot/efi
+        -e boot/efi proc sys dev
 
     # Record uncompressed size (required by casper)
     du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
@@ -473,13 +482,6 @@ EOF
 
     # Cleanup
     log_info "Cleaning up..."
-    sync
-
-    # Unmount virtual filesystems (reverse order)
-    umount "$MOUNT_DIR/dev/pts" 2>/dev/null || true
-    umount "$MOUNT_DIR/dev" 2>/dev/null || true
-    umount "$MOUNT_DIR/sys" 2>/dev/null || true
-    umount "$MOUNT_DIR/proc" 2>/dev/null || true
 
     umount "$MOUNT_DIR/boot/efi"
     umount "$MOUNT_DIR"

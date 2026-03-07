@@ -566,7 +566,7 @@ class PlayMode(Container, can_focus=True):
                 return
 
             # Enter cycles instruments
-            if action.action == 'enter' and not self._letters_mode:
+            if action.action == 'enter':
                 self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
                 inst_id, inst_name = INSTRUMENTS[self._instrument_index]
                 if self.grid:

@@ -965,6 +965,13 @@ class PurpleApp(App):
         new_state = self._recording_manager.toggle()
         self._update_recording_indicator()
 
+        if new_state == RecordingState.RECORDING:
+            self.clear_notifications()
+            self.notify("Recording", timeout=1.5)
+        elif new_state == RecordingState.IDLE and old_state == RecordingState.RECORDING:
+            self.clear_notifications()
+            self.notify("Saved", timeout=1.5)
+
         if new_state == RecordingState.PLAYING:
             # Start playback of the recording
             await self._play_recording()

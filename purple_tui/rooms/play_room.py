@@ -157,7 +157,6 @@ class PlayGrid(Widget):
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._instrument_index: int = 0
-        self._letters_mode: bool = False
         # Per-instrument sound cache: instrument_id -> {key -> Sound}
         self._instrument_sounds: dict[str, dict[str, pygame.mixer.Sound]] = {}
         # Percussion sounds (shared across instruments)
@@ -165,6 +164,9 @@ class PlayGrid(Widget):
         self._percussion_loaded = False
         self._letter_sounds: dict[str, pygame.mixer.Sound] = {}
         self._letter_sounds_loaded = False
+        # Keys currently showing a note/percussion label (brief flash on press)
+        self._note_labels: set[str] = set()
+        self._note_timers: dict[str, asyncio.TimerHandle] = {}
 
     def _get_sounds_path(self) -> Path:
         """Find the sounds directory."""
@@ -246,10 +248,24 @@ class PlayGrid(Widget):
         """Set the current instrument index."""
         self._instrument_index = index
 
-    def set_letters_mode(self, letters_mode: bool) -> None:
-        """Update letters mode for note name display."""
-        self._letters_mode = letters_mode
+    def flash_note(self, key: str) -> None:
+        """Briefly show the note/percussion name below a key for ~1 second."""
+        # Cancel existing timer for this key
+        if key in self._note_timers:
+            self._note_timers[key].cancel()
+        self._note_labels.add(key)
         self.refresh()
+
+        def _clear(k: str = key) -> None:
+            self._note_labels.discard(k)
+            self._note_timers.pop(k, None)
+            self.refresh()
+
+        try:
+            loop = asyncio.get_running_loop()
+            self._note_timers[key] = loop.call_later(1.0, _clear)
+        except RuntimeError:
+            pass
 
     def _ensure_letter_sounds_loaded(self) -> None:
         """Load letter sounds if not already loaded."""
@@ -291,6 +307,10 @@ class PlayGrid(Widget):
         self._percussion_loaded = False
         self._letter_sounds.clear()
         self._letter_sounds_loaded = False
+        for timer in self._note_timers.values():
+            timer.cancel()
+        self._note_timers.clear()
+        self._note_labels.clear()
 
     def reset_colors(self) -> None:
         """Reset all key colors to default state."""
@@ -388,8 +408,8 @@ class PlayGrid(Widget):
                 segments.append(Segment(" " * pad_left, cell_bg_style))
                 segments.append(Segment(key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
-            elif line_in_cell == mid_line + 1 and not self._letters_mode:
-                # Show note name (music mode) or percussion name (number row)
+            elif line_in_cell == mid_line + 1 and key in self._note_labels:
+                # Flash note/percussion name briefly after keypress
                 if key.isdigit():
                     label = PERCUSSION_NAMES.get(key, "")
                 else:
@@ -543,8 +563,9 @@ class PlayMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
-                if self.grid:
-                    self.grid.set_letters_mode(self._letters_mode)
+                label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                self.app.clear_notifications()
+                self.app.notify(f"♪ {label}" if not self._letters_mode else label, timeout=1.5)
                 return
 
             # Enter cycles instruments
@@ -555,6 +576,8 @@ class PlayMode(Container, can_focus=True):
                     self.grid.set_instrument(self._instrument_index)
                 if self._header:
                     self._header.update_instrument(inst_name)
+                self.app.clear_notifications()
+                self.app.notify(f"♪ {inst_name}", timeout=1.5)
                 return
 
         # Character keys cycle colors, play/speak, and record
@@ -570,6 +593,8 @@ class PlayMode(Container, can_focus=True):
                 self.session.record(lookup, mode)
                 self.grid.next_color(lookup)
                 self._play_key(lookup, mode)
+                if mode == MODE_MUSIC:
+                    self.grid.flash_note(lookup)
             return
 
     async def _do_replay(self, replay_data: list[tuple[str, str, float]], word: str | None = None) -> None:

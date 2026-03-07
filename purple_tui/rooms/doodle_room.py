@@ -1166,6 +1166,9 @@ class DoodleMode(Container):
             overlay.dismiss()  # Tab press is a meaningful action
         except Exception:
             pass
+        label = "Paint" if event.is_painting else "Write"
+        self.app.clear_notifications()
+        self.app.notify(label, timeout=1.5)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""

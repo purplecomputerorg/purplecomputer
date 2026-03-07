@@ -41,6 +41,37 @@ from ..scrolling import scroll_widget
 from .doodle_room import get_key_color, PaintModeChanged
 
 
+def _pad_narrow_emoji(text: str) -> str:
+    """Add a space after narrow+FE0F emoji when followed by a non-space character.
+
+    Alacritty (and most terminals) only advance the cursor 1 cell for emoji like
+    ❤️ (U+2764+FE0F) even though the glyph renders across 2 cells. This causes
+    the next character to visually overlap the emoji. Adding a space absorbs the
+    glyph bleed so subsequent characters render in the right place.
+
+    Only adds a space when needed (emoji immediately followed by non-space).
+    Skips inside Rich markup tags like [on #hex].
+    """
+    if '\ufe0f' not in text:
+        return text
+    result = []
+    i = 0
+    while i < len(text):
+        # Skip Rich markup tags
+        if text[i] == '[':
+            end = text.find(']', i)
+            if end != -1:
+                result.append(text[i:end + 1])
+                i = end + 1
+                continue
+        result.append(text[i])
+        # After FE0F, if next char exists and isn't a space, insert a space
+        if text[i] == '\ufe0f' and i + 1 < len(text) and text[i + 1] != ' ':
+            result.append(' ')
+        i += 1
+    return ''.join(result)
+
+
 def _contrast_color(hex_color: str) -> str:
     """Return black or white for readable text on the given background."""
     h = hex_color.lstrip('#')
@@ -72,7 +103,7 @@ class HistoryLine(Static):
 
     def __init__(self, text: str, line_type: str = "ask", speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
-        self.text = text
+        self.text = _pad_narrow_emoji(text)
         self.line_type = line_type  # "ask" or "answer"
         self.speaking = speaking
         self.add_class("caps-sensitive")

@@ -32,14 +32,6 @@ RUN apt-get update && \
     unzip \
     # File sync
     rsync \
-    # Alacritty build deps (0.16.1 built from source for emoji width fix)
-    cmake \
-    g++ \
-    pkg-config \
-    libfontconfig1-dev \
-    libxcb-xfixes0-dev \
-    libxkbcommon-dev \
-    python3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build

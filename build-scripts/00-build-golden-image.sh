@@ -121,6 +121,7 @@ SOURCES
         xserver-xorg-input-all \
         libgl1-mesa-dri \
         matchbox-window-manager \
+        alacritty \
         ncurses-term \
         libxkbcommon-x11-0 \
         unclutter \
@@ -130,18 +131,6 @@ SOURCES
         xkbset \
         x11-utils \
         xdotool
-
-    # Build and install Alacritty 0.16.1 from source
-    # Ubuntu 24.04 ships 0.12.2 which has broken emoji width (unicode-width 0.1).
-    # Alacritty 0.16.0+ uses unicode-width 0.2.0 which correctly handles emoji
-    # presentation sequences (base char + U+FE0F) as 2 cells wide.
-    log_info "Building Alacritty 0.16.1 from source..."
-
-    # Install Alacritty's runtime deps in the chroot
-    chroot "$MOUNT_DIR" apt-get install -y libfontconfig1 libxcb-xfixes0 libxkbcommon0 libxkbcommon-x11-0
-
-    # Build in the Docker container (has curl, build tools) then copy binary into chroot
-    /purple-src/build-scripts/build-alacritty.sh "$MOUNT_DIR/usr/local/bin"
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji

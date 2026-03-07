@@ -44,50 +44,36 @@ install_if_needed() {
 }
 
 # Update package lists (always, so install_if_needed can find new packages)
-echo "[1/8] Updating package lists..."
+echo "[1/7] Updating package lists..."
 sudo apt update -qq
 
 # Install base packages
-echo "[2/8] Base packages..."
+echo "[2/7] Base packages..."
 install_if_needed \
     git make unzip curl fontconfig \
     python3 python3-venv python3-pip \
     build-essential gcc python3-dev
 
 # Install X11 stack
-echo "[3/8] X11 and terminal..."
+echo "[3/7] X11 and terminal..."
 install_if_needed \
     xorg xinit xauth x11-xserver-utils \
     xserver-xorg-core xserver-xorg-input-all \
     libgl1-mesa-dri \
     matchbox-window-manager feh \
-    xterm \
+    alacritty xterm \
     libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
     ncurses-term unclutter xkbset evtest
 
 # Install audio (pygame/sound)
-echo "[4/8] Audio and SDL libraries..."
+echo "[4/7] Audio and SDL libraries..."
 install_if_needed \
     pulseaudio alsa-utils \
     libsdl2-2.0-0 libsdl2-mixer-2.0-0 \
     libsdl2-image-2.0-0 libsdl2-ttf-2.0-0
 
-# Build Alacritty 0.16.1 from source (Ubuntu 24.04 ships 0.12.2 with broken emoji width)
-echo "[5/8] Building Alacritty 0.16.1..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-if [ -f "$REPO_ROOT/build-scripts/build-alacritty.sh" ]; then
-    KEEP_RUST=0 "$REPO_ROOT/build-scripts/build-alacritty.sh"
-elif [ -f "/mnt/share/purplecomputer/build-scripts/build-alacritty.sh" ]; then
-    KEEP_RUST=0 "/mnt/share/purplecomputer/build-scripts/build-alacritty.sh"
-else
-    echo "  Warning: build-alacritty.sh not found. Install Alacritty manually."
-    echo "  Falling back to apt version (emoji width will be broken)."
-    install_if_needed alacritty
-fi
-
 # Install fonts
-echo "[6/8] Fonts..."
+echo "[5/7] Fonts..."
 install_if_needed fontconfig fonts-noto-color-emoji
 
 FONT_DIR="/usr/share/fonts/truetype/jetbrains-mono-nerd"
@@ -103,7 +89,7 @@ else
 fi
 
 # --- System configuration ---
-echo "[7/8] System configuration..."
+echo "[6/7] System configuration..."
 
 # VirtioFS support (Apple Virtualization file sharing)
 if ! grep -q "^virtiofs" /etc/initramfs-tools/modules 2>/dev/null; then
@@ -140,7 +126,7 @@ needs_root_rights=yes
 XWRAP
 
 # --- X11 startup ---
-echo "[8/8] Creating X11 startup files..."
+echo "[7/7] Creating X11 startup files..."
 
 # .xinitrc
 cat > ~/.xinitrc << 'XINITRC'

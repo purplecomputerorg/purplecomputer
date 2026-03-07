@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code mode: Scratch-inspired block redesign with 6 block types (KEY, QUERY, STROKE, PAUSE, REPEAT, MODE_SWITCH); uniform 5-char grid; explicit PAUSE blocks replace invisible timing gaps; no auto-collapse; mode-aware editing (Explore uses compose mode for QUERY blocks, Doodle paint uses STROKE blocks); v1 save format auto-migrated to v2
 - Doodle: text on painted backgrounds now uses black or white for contrast (was always white/dark); grayscale paint backgrounds no longer disappear when typing over them
 - Explore: narrow emoji (heart, snow, etc.) always get a padding space to prevent visual overlap in terminal
 - Explore: plus expressions now show + between items (e.g. apple + banana shows 🍎 + 🍌)

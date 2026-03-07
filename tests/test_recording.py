@@ -1,5 +1,6 @@
 """
-Tests for F5 Recording: RecordingManager state machine, event capture, block conversion.
+Tests for F5 Recording: RecordingManager state machine, event capture,
+mode-aware block conversion.
 
 Pure logic tests with no Textual app dependency.
 """
@@ -50,36 +51,34 @@ class TestRecordingManagerStates:
 
     def test_toggle_recording_to_idle(self):
         rm = RecordingManager()
-        rm.toggle()  # IDLE → RECORDING
-        # Add an event so recording isn't empty
+        rm.toggle()  # IDLE -> RECORDING
         rm.record_event(CharacterAction(char="a"), "play")
-        new_state = rm.toggle()  # RECORDING → IDLE
+        new_state = rm.toggle()  # RECORDING -> IDLE
         assert new_state == RecordingState.IDLE
-        assert rm.current is not None  # recording preserved
+        assert rm.current is not None
 
     def test_toggle_idle_with_recording_to_playing(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # IDLE → RECORDING
+        rm.toggle()  # IDLE -> RECORDING
         rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # RECORDING → IDLE
-        new_state = rm.toggle()  # IDLE (has recording) → PLAYING
+        rm.toggle()  # RECORDING -> IDLE
+        new_state = rm.toggle()  # IDLE (has recording) -> PLAYING
         assert new_state == RecordingState.PLAYING
 
     def test_toggle_playing_to_idle(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # IDLE → RECORDING
+        rm.toggle()  # IDLE -> RECORDING
         rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # RECORDING → IDLE
-        rm.toggle()  # IDLE → PLAYING
-        new_state = rm.toggle()  # PLAYING → IDLE
+        rm.toggle()  # RECORDING -> IDLE
+        rm.toggle()  # IDLE -> PLAYING
+        new_state = rm.toggle()  # PLAYING -> IDLE
         assert new_state == RecordingState.IDLE
 
     def test_empty_recording_discarded(self):
         rm = RecordingManager()
-        rm.toggle()  # IDLE → RECORDING
-        rm.toggle()  # RECORDING → IDLE (empty recording)
-        assert rm.current is None  # discarded
-        # Next toggle should start new recording, not play
+        rm.toggle()  # IDLE -> RECORDING
+        rm.toggle()  # RECORDING -> IDLE (empty recording)
+        assert rm.current is None
         new_state = rm.toggle()
         assert new_state == RecordingState.RECORDING
 
@@ -159,10 +158,10 @@ class TestEventRecording:
 
 
 # =============================================================================
-# RECORDING TO BLOCKS
+# RECORDING TO BLOCKS: PLAY/DOODLE TEXT (SIMPLE)
 # =============================================================================
 
-class TestRecordingToBlocks:
+class TestRecordingToBlocksSimple:
     def test_empty_recording(self):
         r = Recording()
         assert r.to_blocks() == []
@@ -178,73 +177,166 @@ class TestRecordingToBlocks:
         assert blocks[1].type == ProgramBlockType.KEY
         assert blocks[1].char == "a"
 
-    def test_mode_switch_on_mode_change(self):
+    def test_mode_switch_on_room_change(self):
         r = Recording()
         r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
         r.add_event(CharacterAction(char="b"), "doodle", "text", 0.5)
         blocks = r.to_blocks()
-        # play.music MODE_SWITCH, KEY(a), doodle.text MODE_SWITCH, KEY(b)
-        assert len(blocks) == 4
-        assert blocks[0].type == ProgramBlockType.MODE_SWITCH
-        assert blocks[0].target == TARGET_PLAY_MUSIC
-        assert blocks[1].type == ProgramBlockType.KEY
-        assert blocks[2].type == ProgramBlockType.MODE_SWITCH
-        assert blocks[2].target == TARGET_DOODLE_TEXT
-        assert blocks[3].type == ProgramBlockType.KEY
-
-    def test_sub_mode_change_inserts_switch(self):
-        r = Recording()
-        r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
-        r.add_event(CharacterAction(char="b"), "play", "letters", 0.1)
-        blocks = r.to_blocks()
-        # play.music MODE_SWITCH, KEY(a), play.letters MODE_SWITCH, KEY(b)
-        assert len(blocks) == 4
-        assert blocks[0].target == TARGET_PLAY_MUSIC
-        assert blocks[2].target == TARGET_PLAY_LETTERS
+        mode_switches = [b for b in blocks if b.type == ProgramBlockType.MODE_SWITCH]
+        assert len(mode_switches) == 2
+        assert mode_switches[0].target == TARGET_PLAY_MUSIC
+        assert mode_switches[1].target == TARGET_DOODLE_TEXT
 
     def test_no_switch_when_same_mode(self):
         r = Recording()
         r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
         r.add_event(CharacterAction(char="b"), "play", "music", 0.1)
         blocks = r.to_blocks()
-        # play.music MODE_SWITCH, KEY(a), KEY(b)
-        assert len(blocks) == 3
+        mode_switches = [b for b in blocks if b.type == ProgramBlockType.MODE_SWITCH]
+        assert len(mode_switches) == 1
 
-    def test_timing_quantization(self):
+    def test_no_auto_collapse(self):
+        """Repeated keys stay as separate blocks (no auto-collapse in v2)."""
         r = Recording()
         r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
-        r.add_event(CharacterAction(char="b"), "play", "music", 0.1)
-        r.add_event(CharacterAction(char="c"), "play", "music", 0.6)
+        r.add_event(CharacterAction(char="a"), "play", "music", 0.1)
+        r.add_event(CharacterAction(char="a"), "play", "music", 0.2)
         blocks = r.to_blocks()
-        # MODE_SWITCH, KEY(a), KEY(b), KEY(c)
         key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
-        # a->b gap is 0.1s (level 1)
-        assert key_blocks[0].gap_level == 1
-        # b->c gap is 0.5s (level 2 or 3)
-        assert key_blocks[1].gap_level in (2, 3)
-        # last block has no gap
-        assert key_blocks[2].gap_level == 0
+        assert len(key_blocks) == 3
 
-    def test_cross_mode_recording(self):
-        """Recording that spans play and doodle modes."""
+    def test_navigation_not_recorded_in_play(self):
+        """Arrow keys in Play mode are not recorded (navigation only)."""
         r = Recording()
         r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
-        r.add_event(CharacterAction(char="b"), "play", "music", 0.1)
-        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.5)
-        r.add_event(NavigationAction(direction="down"), "doodle", "paint", 0.6)
+        r.add_event(NavigationAction(direction="right"), "play", "music", 0.1)
+        r.add_event(CharacterAction(char="b"), "play", "music", 0.2)
         blocks = r.to_blocks()
+        key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
+        assert len(key_blocks) == 2
+        stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
+        assert len(stroke_blocks) == 0
 
-        # play.music SWITCH, KEY(a), KEY(b), doodle.paint SWITCH, ARROW(right), ARROW(down)
-        assert len(blocks) == 6
-        assert blocks[0].target == TARGET_PLAY_MUSIC
-        assert blocks[3].target == TARGET_DOODLE_PAINT
 
-    def test_explore_mode(self):
+# =============================================================================
+# RECORDING TO BLOCKS: EXPLORE (QUERY BUFFERING)
+# =============================================================================
+
+class TestRecordingToBlocksExplore:
+    def test_query_block_from_typing(self):
+        """Characters followed by Enter become a single QUERY block."""
         r = Recording()
-        r.add_event(CharacterAction(char="2"), "explore", "", 0.0)
+        r.add_event(CharacterAction(char="h"), "explore", "", 0.0)
+        r.add_event(CharacterAction(char="i"), "explore", "", 0.05)
+        r.add_event(ControlAction(action="enter", is_down=True), "explore", "", 0.1)
         blocks = r.to_blocks()
-        assert blocks[0].type == ProgramBlockType.MODE_SWITCH
-        assert blocks[0].target == TARGET_EXPLORE
+        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
+        assert len(query_blocks) == 1
+        assert query_blocks[0].query_text == "hi"
+
+    def test_backspace_edits_query(self):
+        """Backspace removes the last character from the query buffer."""
+        r = Recording()
+        r.add_event(CharacterAction(char="h"), "explore", "", 0.0)
+        r.add_event(CharacterAction(char="x"), "explore", "", 0.05)
+        r.add_event(ControlAction(action="backspace", is_down=True), "explore", "", 0.1)
+        r.add_event(CharacterAction(char="i"), "explore", "", 0.15)
+        r.add_event(ControlAction(action="enter", is_down=True), "explore", "", 0.2)
+        blocks = r.to_blocks()
+        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
+        assert len(query_blocks) == 1
+        assert query_blocks[0].query_text == "hi"
+
+    def test_space_in_query(self):
+        """Space adds a space to the query text."""
+        r = Recording()
+        r.add_event(CharacterAction(char="a"), "explore", "", 0.0)
+        r.add_event(ControlAction(action="space", is_down=True), "explore", "", 0.05)
+        r.add_event(CharacterAction(char="b"), "explore", "", 0.1)
+        r.add_event(ControlAction(action="enter", is_down=True), "explore", "", 0.15)
+        blocks = r.to_blocks()
+        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
+        assert query_blocks[0].query_text == "a b"
+
+    def test_unflushed_query_at_end(self):
+        """Query buffer is flushed at end even without Enter."""
+        r = Recording()
+        r.add_event(CharacterAction(char="h"), "explore", "", 0.0)
+        r.add_event(CharacterAction(char="i"), "explore", "", 0.05)
+        blocks = r.to_blocks()
+        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
+        assert len(query_blocks) == 1
+        assert query_blocks[0].query_text == "hi"
+
+    def test_query_flushed_on_mode_change(self):
+        """Query buffer is flushed when switching away from Explore."""
+        r = Recording()
+        r.add_event(CharacterAction(char="a"), "explore", "", 0.0)
+        r.add_event(CharacterAction(char="b"), "play", "music", 0.5)
+        blocks = r.to_blocks()
+        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
+        assert len(query_blocks) == 1
+        assert query_blocks[0].query_text == "a"
+
+
+# =============================================================================
+# RECORDING TO BLOCKS: DOODLE PAINT (STROKE MERGING)
+# =============================================================================
+
+class TestRecordingToBlocksPaint:
+    def test_arrows_merge_into_stroke(self):
+        """Consecutive same-direction arrows merge into one STROKE block."""
+        r = Recording()
+        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.0)
+        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.05)
+        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.1)
+        blocks = r.to_blocks()
+        stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
+        assert len(stroke_blocks) == 1
+        assert stroke_blocks[0].direction == "right"
+        assert stroke_blocks[0].distance == 3
+
+    def test_different_directions_separate_strokes(self):
+        r = Recording()
+        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.0)
+        r.add_event(NavigationAction(direction="down"), "doodle", "paint", 0.05)
+        blocks = r.to_blocks()
+        stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
+        assert len(stroke_blocks) == 2
+
+    def test_char_keys_are_key_blocks(self):
+        """In paint mode, character keys are KEY blocks (color selection)."""
+        r = Recording()
+        r.add_event(CharacterAction(char="r"), "doodle", "paint", 0.0)
+        r.add_event(NavigationAction(direction="right"), "doodle", "paint", 0.05)
+        blocks = r.to_blocks()
+        key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
+        assert len(key_blocks) == 1
+        assert key_blocks[0].char == "r"
+
+
+# =============================================================================
+# PAUSE INSERTION
+# =============================================================================
+
+class TestPauseInsertion:
+    def test_large_gap_inserts_pause(self):
+        """Gaps >= 300ms between events should produce PAUSE blocks."""
+        r = Recording()
+        r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
+        r.add_event(CharacterAction(char="b"), "play", "music", 1.0)  # 1000ms gap
+        blocks = r.to_blocks()
+        pause_blocks = [b for b in blocks if b.type == ProgramBlockType.PAUSE]
+        assert len(pause_blocks) >= 1
+
+    def test_small_gap_no_pause(self):
+        """Gaps < 300ms should NOT produce PAUSE blocks."""
+        r = Recording()
+        r.add_event(CharacterAction(char="a"), "play", "music", 0.0)
+        r.add_event(CharacterAction(char="b"), "play", "music", 0.1)  # 100ms gap
+        blocks = r.to_blocks()
+        pause_blocks = [b for b in blocks if b.type == ProgramBlockType.PAUSE]
+        assert len(pause_blocks) == 0
 
 
 # =============================================================================
@@ -258,16 +350,16 @@ class TestRecordingManagerHelpers:
 
     def test_indicator_recording(self):
         rm = RecordingManager()
-        rm.toggle()  # IDLE → RECORDING
-        assert rm.indicator == "⏺"
+        rm.toggle()
+        assert rm.indicator == "\u23fa"
 
     def test_indicator_playing(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # IDLE → RECORDING
+        rm.toggle()
         rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # RECORDING → IDLE
-        rm.toggle()  # IDLE → PLAYING
-        assert rm.indicator == "▶"
+        rm.toggle()
+        rm.toggle()
+        assert rm.indicator == "\u25b6"
 
     def test_to_blocks_delegation(self):
         rm = RecordingManager(time_fn=lambda: 0.0)

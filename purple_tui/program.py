@@ -1,11 +1,14 @@
 """
 Code Mode: program recording, editing, and playback.
 
-Records keyboard actions from Play and Doodle modes as editable blocks.
-Each block represents a single action (key press, arrow, control) with a
-trailing gap that encodes the pause before the next action.
+Records keyboard actions from Play, Doodle, and Explore modes as editable blocks.
+Six block types following a Scratch-inspired model: KEY, QUERY, STROKE, PAUSE,
+REPEAT, MODE_SWITCH.
 
-Pure logic with no UI dependencies. Used by build_mode.py (Code mode UI)
+Every block renders as a uniform 5-char-wide, 3-row-tall cell. Timing is stored
+as hidden metadata (recorded_gap_ms) with only explicit PAUSE blocks visible.
+
+Pure logic with no UI dependencies. Used by build_room.py (Code mode UI)
 and purple_tui.py (recording tap).
 """
 
@@ -34,59 +37,20 @@ from .playback.script import (
 
 
 # =============================================================================
-# PAUSE LEVELS
+# CONSTANTS
 # =============================================================================
 
-# (max_seconds, gap_width_chars) - used for quantizing recorded timing
-# and for up/down cycling in the editor
-PAUSE_LEVELS = [
-    (0.05, 0),    # simultaneous
-    (0.2, 2),     # rapid rhythm ("tiny")
-    (0.4, 4),     # natural typing ("short")
-    (1.0, 8),     # deliberate pause ("medium")
-    (2.0, 12),    # dramatic pause ("long")
-]
+BLOCK_WIDTH = 5   # every block is exactly 5 chars wide
+BLOCK_ROWS = 3    # every block is exactly 3 rows tall
 
-NUM_PAUSE_LEVELS = len(PAUSE_LEVELS)
+# Default tempo for blocks with no recorded timing (typed in code mode)
+DEFAULT_TEMPO_MS = 150
 
+# Threshold for inserting explicit PAUSE blocks during recording conversion
+PAUSE_THRESHOLD_MS = 300
 
-def quantize_pause(seconds: float) -> int:
-    """Convert a pause duration to a gap level (0-4)."""
-    for level, (threshold, _) in enumerate(PAUSE_LEVELS):
-        if seconds < threshold:
-            return level
-    return NUM_PAUSE_LEVELS - 1
-
-
-def gap_width(level: int) -> int:
-    """Get the character width for a given gap level."""
-    level = max(0, min(level, NUM_PAUSE_LEVELS - 1))
-    return PAUSE_LEVELS[level][1]
-
-
-def gap_duration(level: int) -> float:
-    """Get the pause duration (midpoint of range) for a given gap level."""
-    level = max(0, min(level, NUM_PAUSE_LEVELS - 1))
-    if level == 0:
-        return 0.0
-    low = PAUSE_LEVELS[level - 1][0]
-    high = PAUSE_LEVELS[level][0]
-    return (low + high) / 2
-
-
-# =============================================================================
-# BLOCK TYPES AND DATA
-# =============================================================================
-
-class ProgramBlockType(Enum):
-    KEY = "key"               # CharacterAction: a typed character
-    ARROW = "arrow"           # NavigationAction: an arrow key
-    CONTROL = "control"       # ControlAction: enter, backspace, space, tab
-    EMOJI = "emoji"           # Emoji placed via Code mode (future)
-    REPEAT = "repeat"         # Repeat preceding section N times
-    MODE_SWITCH = "mode_switch"  # Switch to a specific mode/sub-mode
-    LINE_BREAK = "line_break"    # Visual line break in editor (no playback action)
-
+# Preset PAUSE durations (seconds), cycled with up/down
+PAUSE_PRESETS = [0.25, 0.5, 1.0, 2.0]
 
 # Row-based colors for KEY blocks (matching Doodle mode's keyboard rows)
 QWERTY_ROW = set("qwertyuiop[]\\")
@@ -99,14 +63,11 @@ KEY_COLOR_YELLOW = "#BFA040"
 KEY_COLOR_BLUE = "#4060BF"
 KEY_COLOR_GRAY = "#808080"
 
-ARROW_COLOR = "#2d6a9e"
-ENTER_COLOR = "#2d8a4e"
-BACKSPACE_COLOR = "#c46b7b"
-SPACE_COLOR = "#606060"
-TAB_COLOR = "#606060"
-EMOJI_COLOR = "#9b7bc4"
-REPEAT_COLOR = "#2d9e8a"  # teal
-LINE_BREAK_COLOR = "#4a4a6a"  # muted purple-gray
+CONTROL_COLOR = "#2d6a9e"
+QUERY_COLOR = "#44AADD"
+STROKE_COLOR = "#2d6a9e"
+PAUSE_COLOR = "#606060"
+REPEAT_COLOR = "#2d9e8a"
 
 # MODE_SWITCH target constants
 TARGET_PLAY_MUSIC = "play.music"
@@ -147,21 +108,34 @@ TARGET_LABELS = {
     TARGET_EXPLORE: "Explore",
 }
 
-# Icons for control actions
+# Icons for control keys (KEY blocks with is_control=True)
 CONTROL_ICONS = {
-    "enter": "↵",
-    "backspace": "⌫",
-    "space": "␣",
-    "tab": "⇥",
+    "enter": "\u21b5",
+    "backspace": "\u232b",
+    "space": "\u2423",
+    "tab": "\u21e5",
 }
 
-# Icons for arrow directions
-ARROW_ICONS = {
-    "up": "▲",
-    "down": "▼",
-    "left": "◀",
-    "right": "▶",
+# Icons for stroke directions
+DIRECTION_ICONS = {
+    "up": "\u25b2",
+    "down": "\u25bc",
+    "left": "\u25c0",
+    "right": "\u25b6",
 }
+
+
+# =============================================================================
+# BLOCK TYPES AND DATA
+# =============================================================================
+
+class ProgramBlockType(Enum):
+    KEY = "key"               # Single key press (char or control key)
+    QUERY = "query"           # Complete Explore query
+    STROKE = "stroke"         # Doodle paint direction + distance
+    PAUSE = "pause"           # Explicit visible wait
+    REPEAT = "repeat"         # Repeat preceding line N times
+    MODE_SWITCH = "mode_switch"  # Switch target mode
 
 
 def key_color(char: str) -> str:
@@ -178,99 +152,98 @@ def key_color(char: str) -> str:
     return KEY_COLOR_GRAY
 
 
-def control_color(action_name: str) -> str:
-    """Get the block color for a control action."""
-    if action_name == "enter":
-        return ENTER_COLOR
-    elif action_name == "backspace":
-        return BACKSPACE_COLOR
-    return SPACE_COLOR
-
-
 @dataclass
 class ProgramBlock:
-    """A single block in a recorded program."""
+    """A single block in a recorded program.
+
+    Every block renders as a uniform 5-char-wide, 3-row-tall cell.
+    """
     type: ProgramBlockType
-    # Exactly one of these is set, depending on type:
-    char: str = ""           # KEY: the character, EMOJI: the emoji
-    direction: str = ""      # ARROW: up/down/left/right
-    control: str = ""        # CONTROL: enter/backspace/space/tab
-    repeat_count: int = 2    # REPEAT: how many times to play the section (2-99)
-    gap_level: int = 1       # 0-4, index into PAUSE_LEVELS
-    source_room: str = ""    # "play" or "doodle"
-    target: str = ""         # MODE_SWITCH: "play.music", "doodle.paint", etc.
-    count: int = 1           # Auto-collapse count: how many consecutive identical actions
+
+    # KEY fields
+    char: str = ""              # the character, or control key name ("enter", etc.)
+    is_control: bool = False    # True for enter/backspace/space/tab
+
+    # QUERY fields
+    query_text: str = ""        # full query string
+
+    # STROKE fields
+    direction: str = ""         # up/down/left/right
+    distance: int = 1           # number of steps
+
+    # PAUSE fields
+    duration: float = 0.5       # seconds (one of PAUSE_PRESETS)
+
+    # REPEAT fields
+    repeat_count: int = 2       # 2-99
+
+    # MODE_SWITCH fields
+    target: str = ""            # "play.music", "doodle.paint", etc.
+
+    # Hidden timing metadata (not displayed, used for playback)
+    recorded_gap_ms: int = 0    # exact milliseconds from F5 recording
 
     @property
     def icon(self) -> str:
+        """3-char icon text for the center of the block."""
         if self.type == ProgramBlockType.KEY:
+            if self.is_control:
+                return CONTROL_ICONS.get(self.char, "?")
             return self.char.upper() if len(self.char) == 1 else self.char
-        elif self.type == ProgramBlockType.ARROW:
-            return ARROW_ICONS.get(self.direction, "?")
-        elif self.type == ProgramBlockType.CONTROL:
-            return CONTROL_ICONS.get(self.control, "?")
-        elif self.type == ProgramBlockType.EMOJI:
-            return self.char
+        elif self.type == ProgramBlockType.QUERY:
+            # Abbreviate to 3 chars
+            if len(self.query_text) <= 3:
+                return self.query_text
+            return self.query_text[:3]
+        elif self.type == ProgramBlockType.STROKE:
+            arrow = DIRECTION_ICONS.get(self.direction, "?")
+            return f"{arrow}{self.distance}"
+        elif self.type == ProgramBlockType.PAUSE:
+            return "\u23f8"
         elif self.type == ProgramBlockType.REPEAT:
-            return f"×{self.repeat_count}"
+            return f"x{self.repeat_count}"
         elif self.type == ProgramBlockType.MODE_SWITCH:
             return TARGET_ICONS.get(self.target, "?")
-        elif self.type == ProgramBlockType.LINE_BREAK:
-            return "—"
         return "?"
 
     @property
     def bg_color(self) -> str:
         if self.type == ProgramBlockType.KEY:
+            if self.is_control:
+                return CONTROL_COLOR
             return key_color(self.char)
-        elif self.type == ProgramBlockType.ARROW:
-            return ARROW_COLOR
-        elif self.type == ProgramBlockType.CONTROL:
-            return control_color(self.control)
-        elif self.type == ProgramBlockType.EMOJI:
-            return EMOJI_COLOR
+        elif self.type == ProgramBlockType.QUERY:
+            return QUERY_COLOR
+        elif self.type == ProgramBlockType.STROKE:
+            return STROKE_COLOR
+        elif self.type == ProgramBlockType.PAUSE:
+            return PAUSE_COLOR
         elif self.type == ProgramBlockType.REPEAT:
             return REPEAT_COLOR
         elif self.type == ProgramBlockType.MODE_SWITCH:
             return TARGET_COLORS.get(self.target, KEY_COLOR_GRAY)
-        elif self.type == ProgramBlockType.LINE_BREAK:
-            return LINE_BREAK_COLOR
         return KEY_COLOR_GRAY
 
-    @property
-    def total_width(self) -> int:
-        """Total display width: icon section + gap section."""
-        if self.type == ProgramBlockType.LINE_BREAK:
-            return 0  # structural, not rendered
-        return 4 + gap_width(self.gap_level)
+    def cycle_pause_duration(self, direction: int) -> None:
+        """Cycle PAUSE duration through presets."""
+        if self.type != ProgramBlockType.PAUSE:
+            return
+        try:
+            idx = PAUSE_PRESETS.index(self.duration)
+        except ValueError:
+            idx = 1  # default to 0.5
+        idx = max(0, min(len(PAUSE_PRESETS) - 1, idx + direction))
+        self.duration = PAUSE_PRESETS[idx]
 
-    def cycle_gap(self, direction: int) -> None:
-        """Cycle gap level up (+1) or down (-1), clamping to valid range."""
-        self.gap_level = max(0, min(NUM_PAUSE_LEVELS - 1,
-                                     self.gap_level + direction))
+    def cycle_stroke_distance(self, direction: int) -> None:
+        """Cycle STROKE distance up or down, clamping to 1-99."""
+        if self.type != ProgramBlockType.STROKE:
+            return
+        self.distance = max(1, min(99, self.distance + direction))
 
     def cycle_repeat_count(self, direction: int) -> None:
         """Cycle repeat count up or down, clamping to 2-99."""
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
-
-    def matches(self, other: 'ProgramBlock') -> bool:
-        """Check if this block can auto-collapse with another (same type + value).
-
-        MODE_SWITCH and EMOJI blocks never auto-collapse. REPEAT blocks never auto-collapse.
-        """
-        if self.type != other.type:
-            return False
-        if self.type == ProgramBlockType.KEY:
-            return self.char == other.char
-        if self.type == ProgramBlockType.ARROW:
-            return self.direction == other.direction
-        if self.type == ProgramBlockType.CONTROL:
-            return self.control == other.control
-        return False
-
-    def cycle_count(self, direction: int) -> None:
-        """Cycle auto-collapse count up (+1) or down (-1), clamping to 1-99."""
-        self.count = max(1, min(99, self.count + direction))
 
     def cycle_target(self, direction: int) -> None:
         """Cycle MODE_SWITCH target through available targets."""
@@ -283,25 +256,24 @@ class ProgramBlock:
 
 
 def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:
-    """Convert a single KeyAction to a ProgramBlock."""
+    """Convert a single KeyAction to a ProgramBlock (simple, non-mode-aware)."""
     if isinstance(action, CharacterAction):
         return ProgramBlock(
             type=ProgramBlockType.KEY,
             char=action.char,
-            source_room=room,
         )
     elif isinstance(action, NavigationAction):
         return ProgramBlock(
-            type=ProgramBlockType.ARROW,
+            type=ProgramBlockType.STROKE,
             direction=action.direction,
-            source_room=room,
+            distance=1,
         )
     elif isinstance(action, ControlAction):
         if action.action in ("enter", "backspace", "space", "tab"):
             return ProgramBlock(
-                type=ProgramBlockType.CONTROL,
-                control=action.action,
-                source_room=room,
+                type=ProgramBlockType.KEY,
+                char=action.action,
+                is_control=True,
             )
     return None
 
@@ -313,27 +285,31 @@ def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:
 def _block_to_playback_action(block: ProgramBlock) -> PlaybackAction | None:
     """Convert a single block to a PlaybackAction (without pause)."""
     if block.type == ProgramBlockType.KEY:
+        if block.is_control:
+            return PressKey(key=block.char, pause_after=0.0)
         return TypeText(text=block.char, delay_per_char=0.0, final_pause=0.0)
-    elif block.type == ProgramBlockType.ARROW:
-        return PressKey(key=block.direction, pause_after=0.0)
-    elif block.type == ProgramBlockType.CONTROL:
-        return PressKey(key=block.control, pause_after=0.0)
-    elif block.type == ProgramBlockType.EMOJI:
-        return TypeText(text=block.char, delay_per_char=0.0, final_pause=0.0)
+    elif block.type == ProgramBlockType.QUERY:
+        return TypeText(text=block.query_text, delay_per_char=0.05, final_pause=0.0)
+    elif block.type == ProgramBlockType.STROKE:
+        # Expanded during section conversion
+        return None
+    elif block.type == ProgramBlockType.PAUSE:
+        return Pause(duration=block.duration)
     return None
+
+
+def _gap_pause(block: ProgramBlock) -> float:
+    """Get the inter-block pause duration from recorded_gap_ms."""
+    if block.recorded_gap_ms > 0:
+        return block.recorded_gap_ms / 1000.0
+    return DEFAULT_TEMPO_MS / 1000.0
 
 
 def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackAction]:
     """Convert program blocks to PlaybackAction list for playback.
 
-    MODE_SWITCH blocks emit SwitchTarget actions. If no MODE_SWITCH block
-    is at position 0, a default SwitchTarget is emitted based on the
-    first block's source_room.
-
-    Handles REPEAT blocks: a repeat block repeats all blocks since the
-    previous repeat block (or from the start) N times total.
-
-    Example: [A][B][×3] produces A B A B A B (3 iterations).
+    MODE_SWITCH blocks emit SwitchTarget actions. REPEAT blocks repeat all
+    blocks since the previous repeat block N times total.
     """
     if not blocks:
         return []
@@ -347,31 +323,26 @@ def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackActio
     if blocks[0].type != ProgramBlockType.MODE_SWITCH:
         actions.append(SwitchTarget(target=first_target, pause_after=0.3))
 
-    # Split blocks into sections delimited by REPEAT blocks
-    # Then expand each section according to its repeat count
     section: list[ProgramBlock] = []
 
     for block in blocks:
         if block.type == ProgramBlockType.REPEAT:
-            # Expand the current section repeat_count times
             count = block.repeat_count
             section_actions = _section_to_actions(section)
             for _ in range(count):
                 actions.extend(section_actions)
-            # Add the repeat block's own trailing gap
-            pause = gap_duration(block.gap_level)
-            if pause > 0:
-                actions.append(Pause(duration=pause))
+            gap = _gap_pause(block)
+            if gap > 0:
+                actions.append(Pause(duration=gap))
             section = []
         elif block.type == ProgramBlockType.MODE_SWITCH:
-            # Flush current section, then emit SwitchTarget
             actions.extend(_section_to_actions(section))
             section = []
             actions.append(SwitchTarget(target=block.target, pause_after=0.3))
         else:
             section.append(block)
 
-    # Remaining blocks after last repeat (or all blocks if no repeat)
+    # Remaining blocks after last repeat
     actions.extend(_section_to_actions(section))
 
     return actions
@@ -382,34 +353,46 @@ def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
     for block in blocks:
         if block.type == ProgramBlockType.MODE_SWITCH:
             return block.target
-        if block.source_room == "doodle":
-            return TARGET_DOODLE_TEXT
-        if block.source_room == "play":
-            return TARGET_PLAY_MUSIC
-        if block.source_room == "explore":
-            return TARGET_EXPLORE
     return TARGET_PLAY_MUSIC
 
 
 def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
-    """Convert a section of blocks to playback actions (with pauses).
-
-    Blocks with count > 1 expand to N repeated actions. The gap is
-    applied after each repetition.
-    """
+    """Convert a section of blocks to playback actions (with pauses)."""
     actions = []
     for block in section:
+        if block.type == ProgramBlockType.PAUSE:
+            actions.append(Pause(duration=block.duration))
+            continue
+
+        if block.type == ProgramBlockType.STROKE:
+            # Expand stroke into N arrow presses
+            for _ in range(block.distance):
+                actions.append(PressKey(key=block.direction, pause_after=0.05))
+            gap = _gap_pause(block)
+            if gap > 0:
+                actions.append(Pause(duration=gap))
+            continue
+
+        if block.type == ProgramBlockType.QUERY:
+            # Type the query text then press enter
+            actions.append(TypeText(
+                text=block.query_text,
+                delay_per_char=0.05,
+                final_pause=0.0,
+            ))
+            actions.append(PressKey(key="enter", pause_after=0.0))
+            gap = _gap_pause(block)
+            if gap > 0:
+                actions.append(Pause(duration=gap))
+            continue
+
         action = _block_to_playback_action(block)
         if action:
-            for _ in range(block.count):
-                actions.append(action)
-                pause = gap_duration(block.gap_level)
-                if pause > 0:
-                    actions.append(Pause(duration=pause))
-        else:
-            pause = gap_duration(block.gap_level)
-            if pause > 0:
-                actions.append(Pause(duration=pause))
+            actions.append(action)
+            gap = _gap_pause(block)
+            if gap > 0:
+                actions.append(Pause(duration=gap))
+
     return actions
 
 
@@ -421,9 +404,10 @@ PROGRAMS_DIR = Path.home() / ".purple" / "programs"
 
 
 def blocks_to_json(blocks: list[ProgramBlock], source_room: str = "play") -> str:
-    """Serialize program blocks to JSON string."""
+    """Serialize program blocks to JSON string (version 2 format)."""
     import datetime
     data = {
+        "version": 2,
         "blocks": [_block_to_dict(b) for b in blocks],
         "source_room": source_room,
         "saved_at": datetime.datetime.now().isoformat(),
@@ -434,11 +418,17 @@ def blocks_to_json(blocks: list[ProgramBlock], source_room: str = "play") -> str
 def blocks_from_json(s: str) -> tuple[list[ProgramBlock], str]:
     """Deserialize program blocks from JSON string.
 
-    Returns (blocks, source_room).
+    Handles both v1 and v2 formats. Returns (blocks, source_room).
     """
     data = json.loads(s)
-    blocks = [_dict_to_block(d) for d in data.get("blocks", [])]
+    version = data.get("version", 1)
     source_room = data.get("source_room", "play")
+
+    if version == 1:
+        blocks = _migrate_v1_blocks(data.get("blocks", []))
+    else:
+        blocks = [_dict_to_block(d) for d in data.get("blocks", [])]
+
     return blocks, source_room
 
 
@@ -480,44 +470,193 @@ def slot_occupied(slot: int) -> bool:
 
 
 def _block_to_dict(block: ProgramBlock) -> dict:
-    d = {"type": block.type.value, "gap": block.gap_level}
+    """Serialize a v2 ProgramBlock to dict."""
+    d = {"type": block.type.value}
     if block.type == ProgramBlockType.KEY:
         d["char"] = block.char
-    elif block.type == ProgramBlockType.ARROW:
+        if block.is_control:
+            d["is_control"] = True
+    elif block.type == ProgramBlockType.QUERY:
+        d["query_text"] = block.query_text
+    elif block.type == ProgramBlockType.STROKE:
         d["direction"] = block.direction
-    elif block.type == ProgramBlockType.CONTROL:
-        d["control"] = block.control
-    elif block.type == ProgramBlockType.EMOJI:
-        d["char"] = block.char
+        d["distance"] = block.distance
+    elif block.type == ProgramBlockType.PAUSE:
+        d["duration"] = block.duration
     elif block.type == ProgramBlockType.REPEAT:
         d["repeat_count"] = block.repeat_count
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
-    if block.source_room:
-        d["room"] = block.source_room
-    if block.count > 1:
-        d["count"] = block.count
+    if block.recorded_gap_ms > 0:
+        d["gap_ms"] = block.recorded_gap_ms
     return d
 
 
 def _dict_to_block(d: dict) -> ProgramBlock:
+    """Deserialize a v2 dict to ProgramBlock."""
     block_type = ProgramBlockType(d["type"])
-    # Backward compat: old REPEAT blocks stored repeat_count as "count".
-    # New format uses "repeat_count" for repeat and "count" for auto-collapse.
-    if block_type == ProgramBlockType.REPEAT:
-        repeat_count = d.get("repeat_count", d.get("count", 2))
-        collapse_count = 1
-    else:
-        repeat_count = 2
-        collapse_count = d.get("count", 1)
     return ProgramBlock(
         type=block_type,
         char=d.get("char", ""),
+        is_control=d.get("is_control", False),
+        query_text=d.get("query_text", ""),
         direction=d.get("direction", ""),
-        control=d.get("control", ""),
-        repeat_count=repeat_count,
-        gap_level=d.get("gap", 1),
-        source_room=d.get("room", d.get("mode", "")),
+        distance=d.get("distance", 1),
+        duration=d.get("duration", 0.5),
+        repeat_count=d.get("repeat_count", 2),
         target=d.get("target", ""),
-        count=collapse_count,
+        recorded_gap_ms=d.get("gap_ms", 0),
     )
+
+
+# =============================================================================
+# V1 MIGRATION
+# =============================================================================
+
+# Old v1 pause levels: (max_seconds, gap_width_chars)
+_V1_PAUSE_LEVELS = [
+    (0.05, 0),    # simultaneous
+    (0.2, 2),     # rapid
+    (0.4, 4),     # natural
+    (1.0, 8),     # deliberate
+    (2.0, 12),    # dramatic
+]
+
+
+def _v1_gap_to_ms(gap_level: int) -> int:
+    """Convert v1 gap_level to recorded_gap_ms using midpoint durations."""
+    gap_level = max(0, min(len(_V1_PAUSE_LEVELS) - 1, gap_level))
+    if gap_level == 0:
+        return 0
+    low = _V1_PAUSE_LEVELS[gap_level - 1][0]
+    high = _V1_PAUSE_LEVELS[gap_level][0]
+    return int(((low + high) / 2) * 1000)
+
+
+def _migrate_v1_blocks(v1_blocks: list[dict]) -> list[ProgramBlock]:
+    """Migrate v1 block dicts to v2 ProgramBlock list.
+
+    Conversions:
+    - ARROW blocks in paint context become STROKE blocks
+    - CONTROL blocks become KEY with is_control=True
+    - EMOJI blocks become KEY blocks
+    - LINE_BREAK blocks are dropped
+    - gap_level becomes recorded_gap_ms
+    - Auto-collapsed blocks (count > 1) are expanded into N blocks
+    - Large gaps (> 300ms) insert explicit PAUSE blocks
+    """
+    result = []
+    current_target = ""
+
+    for d in v1_blocks:
+        v1_type = d.get("type", "")
+        gap_level = d.get("gap", 1)
+        gap_ms = _v1_gap_to_ms(gap_level)
+        count = d.get("count", 1)
+        room = d.get("room", d.get("mode", ""))
+
+        if v1_type == "mode_switch":
+            target = d.get("target", "")
+            current_target = target
+            result.append(ProgramBlock(
+                type=ProgramBlockType.MODE_SWITCH,
+                target=target,
+                recorded_gap_ms=gap_ms,
+            ))
+            continue
+
+        if v1_type == "line_break":
+            # Dropped in v2
+            continue
+
+        if v1_type == "key":
+            char = d.get("char", "")
+            block = ProgramBlock(
+                type=ProgramBlockType.KEY,
+                char=char,
+                recorded_gap_ms=gap_ms,
+            )
+            # Expand auto-collapsed blocks
+            for _ in range(count):
+                result.append(ProgramBlock(
+                    type=block.type, char=block.char,
+                    recorded_gap_ms=block.recorded_gap_ms,
+                ))
+            _maybe_insert_pause(result, gap_ms)
+            continue
+
+        if v1_type == "arrow":
+            direction = d.get("direction", "")
+            if current_target == TARGET_DOODLE_PAINT:
+                # Merge consecutive same-direction arrows into STROKE
+                # For migration, each arrow becomes distance 1; merging happens in recording
+                block = ProgramBlock(
+                    type=ProgramBlockType.STROKE,
+                    direction=direction,
+                    distance=count,
+                    recorded_gap_ms=gap_ms,
+                )
+                result.append(block)
+            else:
+                # Non-paint arrows: not recorded in v2 (navigation only)
+                # But preserve them as STROKEs for compatibility
+                block = ProgramBlock(
+                    type=ProgramBlockType.STROKE,
+                    direction=direction,
+                    distance=count,
+                    recorded_gap_ms=gap_ms,
+                )
+                result.append(block)
+            _maybe_insert_pause(result, gap_ms)
+            continue
+
+        if v1_type == "control":
+            control_name = d.get("control", "")
+            block = ProgramBlock(
+                type=ProgramBlockType.KEY,
+                char=control_name,
+                is_control=True,
+                recorded_gap_ms=gap_ms,
+            )
+            for _ in range(count):
+                result.append(ProgramBlock(
+                    type=block.type, char=block.char,
+                    is_control=block.is_control,
+                    recorded_gap_ms=block.recorded_gap_ms,
+                ))
+            _maybe_insert_pause(result, gap_ms)
+            continue
+
+        if v1_type == "emoji":
+            char = d.get("char", "")
+            block = ProgramBlock(
+                type=ProgramBlockType.KEY,
+                char=char,
+                recorded_gap_ms=gap_ms,
+            )
+            result.append(block)
+            _maybe_insert_pause(result, gap_ms)
+            continue
+
+        if v1_type == "repeat":
+            repeat_count = d.get("repeat_count", d.get("count", 2))
+            result.append(ProgramBlock(
+                type=ProgramBlockType.REPEAT,
+                repeat_count=repeat_count,
+                recorded_gap_ms=gap_ms,
+            ))
+            continue
+
+    return result
+
+
+def _maybe_insert_pause(blocks: list[ProgramBlock], gap_ms: int) -> None:
+    """Insert an explicit PAUSE block if the gap is large enough."""
+    if gap_ms >= PAUSE_THRESHOLD_MS and blocks:
+        # Find the closest preset
+        gap_sec = gap_ms / 1000.0
+        closest = min(PAUSE_PRESETS, key=lambda p: abs(p - gap_sec))
+        blocks.append(ProgramBlock(
+            type=ProgramBlockType.PAUSE,
+            duration=closest,
+        ))

@@ -3,7 +3,8 @@ Code Menu: Tab-activated modal menu for Code mode (F4).
 
 Provides:
   Record: "Record in Play (music)", "Record in Play (letters)", etc.
-  Insert: "Mode switch...", "Repeat ×2"
+  Insert: "Mode switch...", "Repeat x2", "Pause", "Stroke", "Enter key"
+  Adjust: "Increase/Decrease" (context-sensitive: pause duration, stroke distance, repeat count)
   Program: "Load...", "Save...", "Clear all blocks"
 
 Navigation via arrow keys, Enter to select, Tab/Esc to close.
@@ -23,12 +24,10 @@ from .program import (
     TARGET_LABELS,
     TARGET_COLORS,
     slot_occupied,
-    NUM_PAUSE_LEVELS,
 )
 
 
 # Menu item definitions: (id, label, section)
-# Section headers are rendered but not selectable
 MENU_ITEMS = [
     # Record section
     ("record_play_music", f"{TARGET_ICONS['play.music']}  Record in Play (music)", "record"),
@@ -38,13 +37,13 @@ MENU_ITEMS = [
     ("record_explore", f"{TARGET_ICONS['explore']}  Record in Explore", "record"),
     # Insert section
     ("insert_mode_switch", "   Mode switch...", "insert"),
-    ("insert_repeat", "   Repeat line ×2", "insert"),
-    ("insert_enter", "   Enter key ↵", "insert"),
+    ("insert_repeat", "   Repeat line x2", "insert"),
+    ("insert_pause", "   Insert pause \u23f8", "insert"),
+    ("insert_stroke", "   Insert stroke \u25b6", "insert"),
+    ("insert_enter", "   Enter key \u21b5", "insert"),
     # Adjust section
-    ("timing_up", "   Longer pause ↑", "adjust"),
-    ("timing_down", "   Shorter pause ↓", "adjust"),
-    ("count_up", "   More repeats ↑", "adjust"),
-    ("count_down", "   Fewer repeats ↓", "adjust"),
+    ("adjust_up", "   Increase \u2191", "adjust"),
+    ("adjust_down", "   Decrease \u2193", "adjust"),
     # Program section
     ("load", "   Load...", "program"),
     ("save", "   Save...", "program"),
@@ -64,14 +63,7 @@ RECORD_TARGETS = {
 class CodeMenuScreen(ModalScreen):
     """Modal menu for Code mode, opened with Tab.
 
-    Returns a result dict on selection:
-      {"action": "record", "target": "play.music"}
-      {"action": "insert_mode_switch"}
-      {"action": "insert_repeat"}
-      {"action": "load"}
-      {"action": "save"}
-      {"action": "clear"}
-    Or None if cancelled.
+    Returns a result dict on selection, or None if cancelled.
     """
 
     CSS = """
@@ -125,14 +117,13 @@ class CodeMenuScreen(ModalScreen):
         super().__init__(**kwargs)
         self._selected_index = 0
         self._sub_view: str | None = None  # "target_picker" or "slot_picker"
-        self._sub_action: str = ""  # "load" or "save" (for slot picker)
-        self._sub_selected: int = 0  # index in sub-view
+        self._sub_action: str = ""
+        self._sub_selected: int = 0
 
     def compose(self) -> ComposeResult:
         with Container(id="code-menu-dialog"):
             yield Static("Code Menu", id="code-menu-title")
 
-            # Section headers and items
             current_section = ""
             for i, (item_id, label, section) in enumerate(MENU_ITEMS):
                 if section != current_section:
@@ -141,13 +132,12 @@ class CodeMenuScreen(ModalScreen):
                     current_section = section
                 yield Static(label, id=f"menu-{item_id}", classes="menu-item")
 
-            yield Static("↑↓ select  Enter confirm  Tab/Esc close", id="code-menu-hint")
+            yield Static("\u2191\u2193 select  Enter confirm  Tab/Esc close", id="code-menu-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
 
     def _update_selection(self) -> None:
-        """Highlight the selected item."""
         for i, (item_id, _, _) in enumerate(MENU_ITEMS):
             try:
                 item = self.query_one(f"#menu-{item_id}", Static)
@@ -159,7 +149,6 @@ class CodeMenuScreen(ModalScreen):
                 pass
 
     async def handle_keyboard_action(self, action) -> None:
-        """Handle evdev keyboard input."""
         if self._sub_view == "target_picker":
             await self._handle_target_picker(action)
             return
@@ -184,7 +173,6 @@ class CodeMenuScreen(ModalScreen):
             return
 
     def _activate_item(self) -> None:
-        """Handle Enter on the selected item."""
         item_id = MENU_ITEMS[self._selected_index][0]
 
         if item_id in RECORD_TARGETS:
@@ -192,7 +180,6 @@ class CodeMenuScreen(ModalScreen):
             self.dismiss({"action": "record", "target": target})
 
         elif item_id == "insert_mode_switch":
-            # Show target sub-picker
             self._sub_view = "target_picker"
             self._sub_selected = 0
             self._show_sub_picker_targets()
@@ -200,8 +187,20 @@ class CodeMenuScreen(ModalScreen):
         elif item_id == "insert_repeat":
             self.dismiss({"action": "insert_repeat"})
 
+        elif item_id == "insert_pause":
+            self.dismiss({"action": "insert_pause"})
+
+        elif item_id == "insert_stroke":
+            self.dismiss({"action": "insert_stroke"})
+
         elif item_id == "insert_enter":
             self.dismiss({"action": "insert_enter"})
+
+        elif item_id == "adjust_up":
+            self.dismiss({"action": "adjust_up"})
+
+        elif item_id == "adjust_down":
+            self.dismiss({"action": "adjust_down"})
 
         elif item_id == "load":
             self._sub_view = "slot_picker"
@@ -215,40 +214,24 @@ class CodeMenuScreen(ModalScreen):
             self._sub_selected = 0
             self._show_sub_picker_slots()
 
-        elif item_id == "timing_up":
-            self.dismiss({"action": "adjust_gap", "direction": 1})
-
-        elif item_id == "timing_down":
-            self.dismiss({"action": "adjust_gap", "direction": -1})
-
-        elif item_id == "count_up":
-            self.dismiss({"action": "adjust_count", "direction": 1})
-
-        elif item_id == "count_down":
-            self.dismiss({"action": "adjust_count", "direction": -1})
-
         elif item_id == "clear":
             self.dismiss({"action": "clear"})
 
     # ── Target sub-picker ─────────────────────────────────────────────
 
     def _show_sub_picker_targets(self) -> None:
-        """Replace menu content with target picker."""
         try:
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
             title.update("Pick target mode")
 
-            # Hide menu items and section headers, show target list
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-section-header"):
                     child.display = False
 
-            # Update hint
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("↑↓ select  Enter confirm  Esc back")
+            hint.update("\u2191\u2193 select  Enter confirm  Esc back")
 
-            # Mount target items
             for i, target in enumerate(ALL_TARGETS):
                 icon = TARGET_ICONS[target]
                 label = TARGET_LABELS[target]
@@ -260,7 +243,6 @@ class CodeMenuScreen(ModalScreen):
             pass
 
     def _update_target_selection(self) -> None:
-        """Highlight selected target."""
         for i in range(len(ALL_TARGETS)):
             try:
                 item = self.query_one(f"#target-{i}", Static)
@@ -292,26 +274,22 @@ class CodeMenuScreen(ModalScreen):
     # ── Slot sub-picker ───────────────────────────────────────────────
 
     def _show_sub_picker_slots(self) -> None:
-        """Replace menu content with slot picker."""
         try:
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
             action_label = "Load from" if self._sub_action == "load" else "Save to"
             title.update(f"{action_label} slot")
 
-            # Hide menu items and section headers
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-section-header"):
                     child.display = False
 
-            # Update hint
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("↑↓ select  Enter confirm  Esc back")
+            hint.update("\u2191\u2193 select  Enter confirm  Esc back")
 
-            # Mount slot items
             for slot in range(1, 10):
                 filled = slot_occupied(slot)
-                marker = "■" if filled else "□"
+                marker = "\u25a0" if filled else "\u25a1"
                 label = f"  {slot} {marker}"
                 item = Static(label, id=f"slot-{slot}", classes="menu-item")
                 dialog.mount(item, before=hint)
@@ -321,7 +299,6 @@ class CodeMenuScreen(ModalScreen):
             pass
 
     def _update_slot_selection(self) -> None:
-        """Highlight selected slot."""
         for slot in range(1, 10):
             try:
                 item = self.query_one(f"#slot-{slot}", Static)
@@ -350,7 +327,6 @@ class CodeMenuScreen(ModalScreen):
                 self._exit_sub_view()
             return
 
-        # Allow direct number key presses for quick slot selection
         if isinstance(action, CharacterAction) and not action.is_repeat:
             if action.char.isdigit() and action.char != '0':
                 slot = int(action.char)
@@ -358,7 +334,6 @@ class CodeMenuScreen(ModalScreen):
             return
 
     def _exit_sub_view(self) -> None:
-        """Return from sub-picker to main menu."""
         self._sub_view = None
         self._sub_selected = 0
 
@@ -367,26 +342,22 @@ class CodeMenuScreen(ModalScreen):
             title = self.query_one("#code-menu-title", Static)
             title.update("Code Menu")
 
-            # Remove sub-picker items
             for child in list(dialog.children):
                 child_id = child.id or ""
                 if child_id.startswith("target-") or child_id.startswith("slot-"):
                     child.remove()
 
-            # Show main menu items and section headers
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-section-header"):
                     child.display = True
 
-            # Reset hint
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("↑↓ select  Enter confirm  Tab/Esc close")
+            hint.update("\u2191\u2193 select  Enter confirm  Tab/Esc close")
         except Exception:
             pass
 
         self._update_selection()
 
     async def _on_key(self, event) -> None:
-        """Suppress terminal key events. All input comes via evdev."""
         event.stop()
         event.prevent_default()

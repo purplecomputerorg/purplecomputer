@@ -443,7 +443,10 @@ class ArtCanvas(Widget, can_focus=True):
                     # Text mode cursor (blinks)
                     if self._cursor_visible:
                         cursor_style = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
-                        segments.append(Segment("▌", cursor_style))
+                        if cell and cell[0] not in (" ", BRUSH_CHAR, ""):
+                            segments.append(Segment(self._caps_char(cell[0]), cursor_style))
+                        else:
+                            segments.append(Segment("▌", cursor_style))
                     else:
                         # Blink off: show underlying cell
                         if cell:

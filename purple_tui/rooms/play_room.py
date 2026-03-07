@@ -408,18 +408,31 @@ class PlayGrid(Widget):
                 segments.append(Segment(" " * pad_left, cell_bg_style))
                 segments.append(Segment(key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
-            elif line_in_cell == mid_line + 1 and key in self._note_labels:
-                # Flash note/percussion name briefly after keypress
+            elif line_in_cell == 1 and key in self._note_labels:
+                # Flash note/percussion name with music emojis near upper-right
                 if key.isdigit():
                     label = PERCUSSION_NAMES.get(key, "")
                 else:
                     label = NOTE_NAMES.get(key, "")
-                dim_style = Style(bgcolor=bg_color, color=text_color, dim=True)
-                pad_left = (cell_width - len(label)) // 2
-                pad_right = cell_width - pad_left - len(label)
-                segments.append(Segment(" " * pad_left, cell_bg_style))
-                segments.append(Segment(label, dim_style))
-                segments.append(Segment(" " * pad_right, cell_bg_style))
+                if label:
+                    decorated = f"♪ {label} ♪"
+                    decorated_width = len(label) + 4
+                    # Use a muted color so the note label doesn't compete with the key letter
+                    muted_color = "#6a5a7a" if bg_color in light_backgrounds else "#887799"
+                    dim_style = Style(bgcolor=bg_color, color=muted_color)
+                    pad_right = 1
+                    pad_left = cell_width - decorated_width - pad_right
+                    if pad_left < 0:
+                        pad_left = 0
+                        pad_right = max(0, cell_width - decorated_width)
+                    segments.append(Segment(" " * pad_left, cell_bg_style))
+                    segments.append(Segment(decorated, dim_style))
+                    if pad_right > 0:
+                        segments.append(Segment(" " * pad_right, cell_bg_style))
+                    else:
+                        pass
+                else:
+                    segments.append(Segment(" " * cell_width, cell_bg_style))
             else:
                 segments.append(Segment(" " * cell_width, cell_bg_style))
 

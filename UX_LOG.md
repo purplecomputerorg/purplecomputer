@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play mode: note/percussion labels now show with ♪ on either side (e.g. "♪ G ♪") near the upper-right of the cell, in a muted color to avoid confusion with the main key letter
 - Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Play, Doodle, Explore) with default sub-modes
 - Doodle: default mode changed from Write to Paint; Paint now appears on left side of Tab header
 - Command mode: MODE_SWITCH blocks now show room icon (same as title bar); non-default sub-modes show a hint suffix; cycling targets now cycles rooms instead of all 5 sub-modes

@@ -14,7 +14,7 @@
 # 4. Sets up UEFI boot with multi-layer fallback strategy
 # 5. Returns to caller (which handles reboot)
 
-set -e
+set -eo pipefail
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
@@ -190,11 +190,31 @@ main() {
     # Force kernel to re-read partition table from the new image
     log "Reloading partition table..."
     sync
-    blockdev --rereadpt /dev/$TARGET || true
-    sleep 2
 
-    log "Verifying partitions..."
-    ls -la /dev/${TARGET}* 2>/dev/null || warn "Partition devices not visible yet"
+    # Retry partition re-read: the kernel sometimes needs a moment after dd
+    for attempt in 1 2 3 4 5; do
+        blockdev --rereadpt /dev/$TARGET 2>/dev/null && break
+        log "  Partition re-read attempt $attempt/5, retrying..."
+        sleep 2
+    done
+
+    # Wait for partition devices to appear
+    log "Waiting for partition devices..."
+    for attempt in 1 2 3 4 5 6; do
+        case "$TARGET" in
+            nvme*|mmcblk*) PROBE_PART="/dev/${TARGET}p1" ;;
+            *)             PROBE_PART="/dev/${TARGET}1" ;;
+        esac
+        [ -b "$PROBE_PART" ] && break
+        log "  Waiting for $PROBE_PART (attempt $attempt/6)..."
+        sleep 2
+    done
+
+    if [ ! -b "$PROBE_PART" ]; then
+        error "Partition devices did not appear after writing disk image. The install may have failed."
+    fi
+
+    log "Partitions ready."
 
     # ==========================================================================
     # UEFI BOOT SETUP - See CLAUDE.md "UEFI Boot and Hardware Compatibility"
@@ -231,7 +251,7 @@ main() {
 
     if [ -b "$EFI_PART" ]; then
         mkdir -p /mnt/efi /mnt/root
-        if mount "$EFI_PART" /mnt/efi 2>/dev/null; then
+        if mount "$EFI_PART" /mnt/efi; then
 
             # Layer 1: Standard fallback path (already in golden image)
             if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
@@ -305,7 +325,7 @@ main() {
         rmdir /mnt/efi /mnt/root 2>/dev/null || true
         log "UEFI boot setup complete"
     else
-        warn "EFI partition not found"
+        error "EFI partition not found at $EFI_PART. Cannot set up boot."
     fi
 
     log ""

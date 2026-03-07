@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Explore mode: colors now act as adjectives, modifying the next item. "red apple green banana" shows a red apple and green banana instead of mixing all colors together.
+- Play mode: note/percussion labels now properly centered in cells. Added "Enter: change instrument" hint at the bottom.
+- Recording: F5 now always starts/stops recording (no more F5 playback). New recording overwrites previous. Space in Play mode plays back the recording.
 - Play mode: note/percussion labels now show with ♪ on either side (e.g. "♪ G ♪") near the upper-right of the cell, in a muted color to avoid confusion with the main key letter
 - Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Play, Doodle, Explore) with default sub-modes
 - Doodle: default mode changed from Write to Paint; Paint now appears on left side of Tab header

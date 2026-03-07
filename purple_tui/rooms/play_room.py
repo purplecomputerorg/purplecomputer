@@ -4,7 +4,7 @@ Play Room: Music and Art Grid
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
 Tab switches between Music and Letters modes.
-Space replays the current session.
+Space plays back the F5 recording.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -20,14 +20,11 @@ from rich.style import Style
 from pathlib import Path
 import asyncio
 import os
-import time
-
 from ..keyboard import CharacterAction, ControlAction
 from ..play_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
 )
 from ..play_session import PlaySession, MODE_MUSIC, MODE_LETTERS
-from ..play_words import extract_word
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -93,9 +90,6 @@ LIGHT_COLORS: set[str] = set()
 
 # Keys that get spoken in Letters mode (A-Z and 0-9)
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
-
-REPLAY_MAX_DURATION = 10.0  # hard cap on replay length (seconds)
-
 
 class PlayRoomHeader(Static):
     """Shows current mode with both options visible, current highlighted.
@@ -249,7 +243,7 @@ class PlayGrid(Widget):
         self._instrument_index = index
 
     def flash_note(self, key: str) -> None:
-        """Briefly show the note/percussion name below a key for ~1 second."""
+        """Briefly show the note/percussion name in a key's cell for ~1 second."""
         # Cancel existing timer for this key
         if key in self._note_timers:
             self._note_timers[key].cancel()
@@ -409,28 +403,26 @@ class PlayGrid(Widget):
                 segments.append(Segment(key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
             elif line_in_cell == 1 and key in self._note_labels:
-                # Flash note/percussion name with music emojis near upper-right
+                # Flash note/percussion name, centered in cell
                 if key.isdigit():
                     label = PERCUSSION_NAMES.get(key, "")
                 else:
                     label = NOTE_NAMES.get(key, "")
                 if label:
                     decorated = f"♪ {label} ♪"
-                    decorated_width = len(label) + 4
-                    # Use a muted color so the note label doesn't compete with the key letter
+                    decorated_width = len(decorated)
                     muted_color = "#6a5a7a" if bg_color in light_backgrounds else "#887799"
                     dim_style = Style(bgcolor=bg_color, color=muted_color)
-                    pad_right = 1
-                    pad_left = cell_width - decorated_width - pad_right
+                    pad_left = (cell_width - decorated_width) // 2
                     if pad_left < 0:
                         pad_left = 0
-                        pad_right = max(0, cell_width - decorated_width)
+                    pad_right = cell_width - pad_left - decorated_width
+                    if pad_right < 0:
+                        pad_right = 0
                     segments.append(Segment(" " * pad_left, cell_bg_style))
-                    segments.append(Segment(decorated, dim_style))
+                    segments.append(Segment(decorated[:cell_width], dim_style))
                     if pad_right > 0:
                         segments.append(Segment(" " * pad_right, cell_bg_style))
-                    else:
-                        pass
                 else:
                     segments.append(Segment(" " * cell_width, cell_bg_style))
             else:
@@ -454,7 +446,8 @@ class PlayExampleHint(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         text = caps("Try pressing letters and numbers!")
-        return f"[dim]{text}[/]"
+        enter_hint = caps("Enter: change instrument")
+        return f"[dim]{text}    {enter_hint}[/]"
 
 
 class PlayMode(Container, can_focus=True):
@@ -494,8 +487,6 @@ class PlayMode(Container, can_focus=True):
         self.grid: PlayGrid | None = None
         self._header: PlayRoomHeader | None = None
         self.session = PlaySession()
-        self._replay_task: asyncio.Task | None = None
-        self._last_replay: list[tuple[str, str, float]] | None = None
         self._letters_mode = False
         self._instrument_index = 0
         self._recording_manager = recording_manager
@@ -516,19 +507,12 @@ class PlayMode(Container, can_focus=True):
         self.focus()
 
     def on_unmount(self) -> None:
-        if self._replay_task and not self._replay_task.done():
-            self._replay_task.cancel()
-            self._replay_task = None
         if self.grid:
             self.grid.cleanup_sounds()
 
     def reset_state(self) -> None:
-        """Reset play mode state (colors, session, replay). Called when leaving mode."""
-        if self._replay_task and not self._replay_task.done():
-            self._replay_task.cancel()
-            self._replay_task = None
+        """Reset play mode state (colors, session). Called when leaving mode."""
         self.session.clear()
-        self._last_replay = None
         if self.grid:
             self.grid.reset_colors()
 
@@ -552,21 +536,21 @@ class PlayMode(Container, can_focus=True):
 
         Tab switches between Music and Letters modes.
         Character keys cycle colors, play sounds or speak, and are recorded.
-        Space plays the last F5 recording (if one exists).
+        Space plays/stops the recording.
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space: play F5 recording if available
+            # Space: play/stop recording
             if action.action == 'space':
-                if self._replay_task and not self._replay_task.done():
-                    self._replay_task.cancel()
-                    self._replay_task = None
-                elif self._recording_manager and self._recording_manager.has_recording():
-                    # Trigger F5 playback via the recording manager
-                    from ..recording import RecordingState
-                    if self._recording_manager.state == RecordingState.IDLE:
-                        self._recording_manager.toggle()  # IDLE → PLAYING
-                        # Playback is handled by the app's _handle_record_toggle
-                        # which is called via F5, so we need to trigger it directly
+                from ..recording import RecordingState
+                if self._recording_manager:
+                    if self._recording_manager.state == RecordingState.PLAYING:
+                        # Stop playback
+                        self._recording_manager.stop_playback()
+                        if hasattr(self.app, '_update_recording_indicator'):
+                            self.app._update_recording_indicator()
+                    elif self._recording_manager.start_playback():
+                        if hasattr(self.app, '_update_recording_indicator'):
+                            self.app._update_recording_indicator()
                         if hasattr(self.app, '_play_recording'):
                             asyncio.create_task(self.app._play_recording())
                 return
@@ -610,26 +594,3 @@ class PlayMode(Container, can_focus=True):
                     self.grid.flash_note(lookup)
             return
 
-    async def _do_replay(self, replay_data: list[tuple[str, str, float]], word: str | None = None) -> None:
-        """Play back recorded key sequence with original timing and modes.
-
-        Stops silently after REPLAY_MAX_DURATION seconds.
-        Can also be cancelled by pressing space.
-        If the letters spell a known word, speaks it after replay finishes.
-        """
-        try:
-            start = time.monotonic()
-            for key, mode, delay in replay_data:
-                if delay > 0:
-                    await asyncio.sleep(delay)
-                if time.monotonic() - start >= REPLAY_MAX_DURATION:
-                    break
-                self.grid.next_color(key)
-                self._play_key(key, mode)
-            # Speak the word after replay completes (small pause for last sound)
-            if word:
-                await asyncio.sleep(0.3)
-                from ..tts import speak
-                speak(word)
-        except asyncio.CancelledError:
-            pass

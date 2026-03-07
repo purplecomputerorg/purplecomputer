@@ -1093,11 +1093,10 @@ class SimpleEvaluator:
         return text
 
     def _eval_plus_expr(self, text: str) -> str | None:
-        """Evaluate + expression. Preserves order. Numbers attach to next term (color or emoji). Colors mix."""
+        """Evaluate + expression. Colors act as adjectives for the next item."""
         parts = re.split(r'\s*(?:' + self.PLUS_PATTERN + r')\s*', text.lower())
 
-        colors = []  # Collect for mixing
-        items = []   # (type, value) in original order: value is (emoji, count, word) for emoji
+        items = []   # (type, value) in original order
         pending = 0
 
         for part in parts:
@@ -1105,16 +1104,14 @@ class SimpleEvaluator:
             if not part:
                 continue
 
-            # Color term (collect for mixing, placeholder at first position)
+            # Color term: emit individual color items (adjective model)
             # Pending numbers add extra copies of this color
             if hexes := self._parse_color(part):
                 if pending > 0:
-                    # Add pending copies of first color in this term
                     hexes = [hexes[0]] * pending + hexes
                     pending = 0
-                colors.extend(hexes)
-                if not any(t == 'color' for t, _ in items):
-                    items.append(('color', None))
+                for h in hexes:
+                    items.append(('color', h))
                 continue
 
             # Emoji term (pending becomes a separate group for visual grouping)
@@ -1143,15 +1140,12 @@ class SimpleEvaluator:
                 continue
 
             # Unknown: try emoji substitution, pass through
-            # Extract leading "N word" emoji patterns (e.g., "2 rabbits ate 3" -> 2 rabbit emojis + "ate" + pending=3)
             remaining = part
-            # Extract leading "N emoji-word" pattern
             if m := re.match(r'^(\d+)\s+(\w+)\s+(.+)$', remaining):
                 num, word, rest = int(m.group(1)), m.group(2).lower(), m.group(3)
                 if emoji := self._get_emoji(word):
                     items.append(('emoji', (emoji, num, word.rstrip('s') if word.endswith('s') else word)))
                     remaining = rest
-            # Extract trailing number to add to pending (e.g., "ate 3" -> "ate" + pending=3)
             if m := re.match(r'^(.+?)\s+(\d+)$', remaining):
                 text_part, num = m.group(1), int(m.group(2))
                 if text_part.strip():
@@ -1168,97 +1162,56 @@ class SimpleEvaluator:
                     items[i] = ('emoji', (e, c + pending, w))
                     pending = 0
                     break
-            # If still pending and have colors, attach to colors
-            if pending and colors:
-                colors.extend([colors[-1]] * int(pending))
-                pending = 0
+            if pending:
+                for i in range(len(items) - 1, -1, -1):
+                    if items[i][0] == 'color':
+                        # Duplicate this color pending times
+                        h = items[i][1]
+                        for _ in range(int(pending)):
+                            items.insert(i + 1, ('color', h))
+                        pending = 0
+                        break
+
+        has_colors = any(t == 'color' for t, _ in items)
+        has_emojis = any(t == 'emoji' for t, _ in items)
+
+        if not has_colors and not has_emojis:
+            return None
 
         # Collect emoji info for label formatting
         emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
-        # Show label if any computation happened (counts > 1 or multiple types with total > types)
-        # e.g., "3 cats" (single type, count > 1) or "2 * 3 banana + lions" (multiple, total > 2)
         total_count = sum(c for _, c, _ in emoji_items)
-        has_computation = (
-            total_count > len(emoji_items)  # More emojis than unique types means multiplication happened
-        )
+        has_computation = total_count > len(emoji_items)
         show_label = (has_computation
-                      and not colors and not any(t == 'text' for t, _ in items))
+                      and not has_colors and not any(t == 'text' for t, _ in items))
 
-        # Compute mixed color for combining with emojis or text
-        mixed_color = None
-        if colors:
-            mixed_color = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
-
-        only_colors_and_emojis = all(t in ('color', 'emoji') for t, _ in items)
-        has_mixable_text = any(
-            t == 'text' and all(ch.isalnum() or ch.isspace() for ch in v)
-            for t, v in items
-        )
-
-        # Emojis on colored background (e.g., "red + apple", "blue + yellow + 3 cats")
-        if mixed_color and emoji_items and only_colors_and_emojis:
-            emoji_strs = []
-            input_parts = []
-            for t, v in items:
-                if t == 'emoji':
-                    e, c, w = v
-                    emoji_strs.append(e * c)
-                    input_parts.append(e * c)
-                elif t == 'color':
-                    input_parts.append(
-                        " + ".join(f"[on {c}]  [/]" for c in colors)
-                    )
-            result = f"[on {mixed_color}] {' '.join(emoji_strs)} [/]"
-            if pending:
-                result += " " + self._format_number_with_dots(pending)
-            input_line = " + ".join(input_parts)
-            combined = f"{input_line} → {result}"
-            if self._estimate_visual_width(combined) <= 80:
-                return combined
-            return f"{input_line}\n{result}"
-
-        # Text blocks mixed with color (e.g., "tavi + red", "hello + blue + yellow")
-        if mixed_color and has_mixable_text:
-            result_parts = []
-            input_parts = []
+        # If colors present, use adjective grouping
+        if has_colors:
+            word_info = []
             for t, v in items:
                 if t == 'color':
-                    input_parts.append(
-                        " + ".join(f"[on {c}]  [/]" for c in colors)
-                    )
+                    word_info.append(('color', v))
                 elif t == 'emoji':
                     e, c, w = v
-                    emoji_str = e * c
-                    result_parts.append(f"[on {mixed_color}] {emoji_str} [/]")
-                    input_parts.append(emoji_str)
+                    word_info.append(('emoji', e, c))
                 elif t == 'text':
-                    if all(ch.isalnum() or ch.isspace() for ch in v):
-                        result_parts.append(
-                            self._format_text_on_color(v, mixed_color)
-                        )
-                        input_parts.append(self._format_text_as_color_blocks(v))
-                    else:
-                        result_parts.append(v)
-                        input_parts.append(v)
+                    word_info.append(('text', v))
+
+            groups = self._build_adjective_groups(word_info)
+            result = self._render_adjective_groups(groups)
+
+            if result is None:
+                return None
+
             if pending:
-                result_parts.append(self._format_number_with_dots(pending))
-            result = " ".join(result_parts) if result_parts else None
-            if result and input_parts:
-                input_str = " + ".join(input_parts)
-                combined = f"{input_str} → {result}"
-                if self._estimate_visual_width(combined) <= 80:
-                    return combined
-                return f"{input_str}\n{result}"
+                result += " " + self._format_number_with_dots(pending)
+
             return result
 
-        # Build result in order, showing + between items
+        # No colors: build result in order, showing + between items
         result_parts = []
         for item_type, value in items:
-            if item_type == 'color' and colors:
-                mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
-                name = get_color_name_approximation(mixed)
-                result_parts.append(f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(colors)}")
-            elif item_type == 'emoji':
+            if item_type == 'emoji':
                 e, c, w = value
                 result_parts.append(e * c)
             elif item_type == 'text':
@@ -1267,20 +1220,15 @@ class SimpleEvaluator:
         if pending:
             result_parts.append(self._format_number_with_dots(pending))
 
-        # Only return if we have colors or emojis (not just text/numbers which pure math can handle)
-        if colors or any(t == 'emoji' for t, _ in items):
-            result = ' + '.join(result_parts) if result_parts else None
-            # Add label line for emoji computation
-            if show_label and result:
-                # Combine same emoji types: "1 dog + 3 dogs" → "4 🐶"
-                combined = {}
-                for e, c, w in emoji_items:
-                    combined[e] = combined.get(e, 0) + c
-                label_parts = [f"{c} {e}" for e, c in combined.items()]
-                label = ' '.join(label_parts)
-                result = f"{label}\n{result}"
-            return result
-        return None
+        result = ' + '.join(result_parts) if result_parts else None
+        if show_label and result:
+            combined = {}
+            for e, c, w in emoji_items:
+                combined[e] = combined.get(e, 0) + c
+            label_parts = [f"{c} {e}" for e, c in combined.items()]
+            label = ' '.join(label_parts)
+            result = f"{label}\n{result}"
+        return result
 
     def _estimate_visual_width(self, markup: str) -> int:
         """Estimate visual width of Rich markup text.
@@ -1297,11 +1245,99 @@ class SimpleEvaluator:
                 width += 1
         return width
 
+    def _build_adjective_groups(self, word_info: list) -> list[dict]:
+        """Group word_info items by color-as-adjective model.
+
+        Colors attach to the next non-color item. Consecutive colors before
+        the same item mix together. Trailing colors with no item after them
+        form a group with item=None.
+
+        Input: list of ('color', hex) | ('emoji', emoji, count) | ('text', word)
+        Output: list of {'colors': [hex...], 'item': info_tuple_or_None}
+        """
+        groups = []
+        current_colors = []
+        for info in word_info:
+            if info[0] == 'color':
+                current_colors.append(info[1])
+            else:
+                groups.append({'colors': list(current_colors), 'item': info})
+                current_colors = []
+        if current_colors:
+            groups.append({'colors': current_colors, 'item': None})
+        return groups
+
+    def _render_adjective_groups(self, groups: list[dict]) -> str | None:
+        """Render adjective groups into markup.
+
+        Handles all-color groups (COLOR_RESULT mixing), colored items,
+        plain items, and trailing color swatches.
+        """
+        # Check if ALL groups are color-only (no items): pure color mixing
+        if all(g['item'] is None for g in groups):
+            all_colors = []
+            for g in groups:
+                all_colors.extend(g['colors'])
+            if len(all_colors) >= 2:
+                mixed = mix_colors_paint(all_colors)
+                name = get_color_name_approximation(mixed)
+                return f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(all_colors)}"
+            elif len(all_colors) == 1:
+                return None  # Single color, fall through
+            return None
+
+        MAX_INLINE_WIDTH = 80
+        input_parts = []
+        result_parts = []
+
+        for g in groups:
+            colors = g['colors']
+            item = g['item']
+
+            if item is None:
+                # Trailing colors: render as swatches
+                for c in colors:
+                    input_parts.append(f"[on {c}]  [/]")
+                    result_parts.append(f"[on {c}]  [/]")
+                continue
+
+            mixed = mix_colors_paint(colors) if len(colors) > 1 else (colors[0] if colors else None)
+
+            # Build input representation for colors
+            for c in colors:
+                input_parts.append(f"[on {c}]  [/]")
+
+            if item[0] == 'emoji':
+                e, count = item[1], item[2]
+                emoji_str = e * count
+                input_parts.append(emoji_str)
+                if mixed:
+                    result_parts.append(f"[on {mixed}] {emoji_str} [/]")
+                else:
+                    result_parts.append(emoji_str)
+            elif item[0] == 'text':
+                word = item[1]
+                input_parts.append(self._format_text_as_color_blocks(word))
+                if mixed and all(ch.isalnum() or ch.isspace() for ch in word):
+                    result_parts.append(self._format_text_on_color(word, mixed))
+                elif mixed:
+                    result_parts.append(f"[on {mixed}] {word} [/]")
+                else:
+                    result_parts.append(self._format_text_as_color_blocks(word))
+
+        input_str = " + ".join(input_parts)
+        result = " ".join(result_parts)
+        combined = f"{input_str} → {result}"
+        if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
+            return combined
+        return f"{input_str}\n{result}"
+
     def _eval_auto_mix(self, text: str) -> str | None:
         """Auto-mix colors with emojis, other colors, or text without requiring +.
 
-        Triggers when all words are colors, emojis, or plain text, with at least
-        one color and something to mix with. Falls through for unknown word types.
+        Colors act as adjectives: each color modifies the next non-color item.
+        Consecutive colors before the same item mix together.
+        Trailing colors with no item after them show as swatches (or mix if all colors).
         """
         words = text.split()
         if len(words) < 2:
@@ -1335,92 +1371,36 @@ class SimpleEvaluator:
 
         # Categorize each word
         word_info = []  # list of ('color', hex) | ('emoji', e, count) | ('text', word)
-        colors = []
-        has_emoji = False
-        has_text = False
+        has_color = False
+        has_non_color = False
 
         for word in merged_words:
             # Handle pre-merged modified colors
             if isinstance(word, tuple) and word[0] == "__modified_color__":
                 word_info.append(('color', word[1]))
-                colors.append(word[1])
+                has_color = True
                 continue
             lower = word.lower()
             if h := self._get_color(lower):
                 word_info.append(('color', h))
-                colors.append(h)
+                has_color = True
             elif emoji_data := self._parse_emoji(lower):
                 e, c, w = emoji_data
                 word_info.append(('emoji', e, c))
-                has_emoji = True
+                has_non_color = True
             elif self._is_plain_text(lower):
                 word_info.append(('text', word))
-                has_text = True
+                has_non_color = True
             else:
                 return None  # Unknown word type, fall through
 
-        if not colors:
+        if not has_color:
             return None
-        if not has_emoji and len(colors) < 2 and not has_text:
+        if not has_non_color and sum(1 for w in word_info if w[0] == 'color') < 2:
             return None
-        mixed = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
 
-        # Max visual width for inline display (accounts for "    → " prefix = 6 chars)
-        MAX_INLINE_WIDTH = 80
-
-        # Colors + emojis (and optionally text): paint emojis on color bg, text as colored letters
-        if has_emoji:
-            input_parts = []
-            emoji_strs = []
-            text_words = []
-            for info in word_info:
-                if info[0] == 'color':
-                    input_parts.append(f"[on {info[1]}]  [/]")
-                elif info[0] == 'emoji':
-                    s = info[1] * info[2]
-                    emoji_strs.append(s)
-                    input_parts.append(s)
-                elif info[0] == 'text':
-                    input_parts.append(self._format_text_as_color_blocks(info[1]))
-                    text_words.append(info[1])
-            result_parts = []
-            if emoji_strs:
-                result_parts.append(f"[on {mixed}] {' '.join(emoji_strs)} [/]")
-            if text_words:
-                result_parts.append(self._format_text_on_color(" ".join(text_words), mixed))
-            input_str = " + ".join(input_parts)
-            result = " ".join(result_parts)
-            # Prefer inline when compact enough
-            combined = f"{input_str} → {result}"
-            if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
-                return combined
-            return f"{input_str}\n{result}"
-
-        # Colors only (2+): mix and show components + result
-        if len(colors) >= 2 and not has_text:
-            name = get_color_name_approximation(mixed)
-            return f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(colors)}"
-
-        # Colors + plain text: mix text blocks with color
-        if has_text:
-            input_parts = []
-            text_words = []
-            for info in word_info:
-                if info[0] == 'color':
-                    input_parts.append(f"[on {info[1]}]  [/]")
-                elif info[0] == 'text':
-                    input_parts.append(self._format_text_as_color_blocks(info[1]))
-                    text_words.append(info[1])
-            input_str = " + ".join(input_parts)
-            text_str = " ".join(text_words)
-            result = self._format_text_on_color(text_str, mixed)
-            # Prefer inline when compact enough
-            combined = f"{input_str} → {result}"
-            if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
-                return combined
-            return f"{input_str}\n{result}"
-
-        return None
+        groups = self._build_adjective_groups(word_info)
+        return self._render_adjective_groups(groups)
 
     def _normalize_mult(self, text: str) -> str:
         """Normalize multiplication operators (x, times, ×) to *."""

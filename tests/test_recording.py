@@ -57,22 +57,23 @@ class TestRecordingManagerStates:
         assert new_state == RecordingState.IDLE
         assert rm.current is not None
 
-    def test_toggle_idle_with_recording_to_playing(self):
+    def test_toggle_idle_with_recording_starts_new_recording(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
         rm.toggle()  # IDLE -> RECORDING
         rm.record_event(CharacterAction(char="a"), "play")
         rm.toggle()  # RECORDING -> IDLE
-        new_state = rm.toggle()  # IDLE (has recording) -> PLAYING
-        assert new_state == RecordingState.PLAYING
+        new_state = rm.toggle()  # IDLE -> RECORDING (overwrites previous)
+        assert new_state == RecordingState.RECORDING
+        assert rm.current.is_empty()  # new recording, no events yet
 
-    def test_toggle_playing_to_idle(self):
+    def test_toggle_during_playback_starts_recording(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
         rm.toggle()  # IDLE -> RECORDING
         rm.record_event(CharacterAction(char="a"), "play")
         rm.toggle()  # RECORDING -> IDLE
-        rm.toggle()  # IDLE -> PLAYING
-        new_state = rm.toggle()  # PLAYING -> IDLE
-        assert new_state == RecordingState.IDLE
+        rm.start_playback()  # IDLE -> PLAYING
+        new_state = rm.toggle()  # PLAYING -> RECORDING
+        assert new_state == RecordingState.RECORDING
 
     def test_empty_recording_discarded(self):
         rm = RecordingManager()
@@ -358,7 +359,7 @@ class TestRecordingManagerHelpers:
         rm.toggle()
         rm.record_event(CharacterAction(char="a"), "play")
         rm.toggle()
-        rm.toggle()
+        rm.start_playback()
         assert rm.indicator == "\u25b6"
 
     def test_to_blocks_delegation(self):

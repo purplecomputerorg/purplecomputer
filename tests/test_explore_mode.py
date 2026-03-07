@@ -761,7 +761,7 @@ class TestColorMixing:
         assert len(components) == 4
 
     def test_color_plus_emoji_mixed(self, evaluator):
-        # red + cat + blue = mixed color swatches + cat emoji
+        # red + cat + blue = cat on red, blue swatch (adjective model)
         result = evaluator.evaluate("red + cat + blue")
         assert "[on " in result  # color swatch markup
         assert "🐱" in result
@@ -828,19 +828,19 @@ class TestMixedExpressions:
     """Test expressions mixing colors, emojis, and numbers."""
 
     def test_color_and_emoji(self, evaluator):
-        # Should mix colors and show emoji
+        # red + fox + blue = fox on red, blue swatch (adjective model)
         result = evaluator.evaluate("red + fox + blue")
         assert "[on " in result  # color swatch markup
         assert "🦊" in result
 
     def test_number_color_emoji(self, evaluator):
-        # 2 + red + 3 cats + blue = color swatches + 3 cats
+        # 2 + red + 3 cats + blue = cats on red (2+1=3 red swatches), blue swatch
         result = evaluator.evaluate("2 + red + 3 cats + blue")
         assert "[on " in result  # color swatch markup
         assert "🐱🐱🐱" in result  # 3 cats
 
     def test_emoji_plus_single_color(self, evaluator):
-        # apple + blue = blue color swatch + apple emoji
+        # apple + blue = plain apple + blue swatch (adjective model: color after emoji is trailing)
         result = evaluator.evaluate("apple + blue")
         assert "[on " in result  # color swatch markup
         assert "🍎" in result
@@ -866,11 +866,75 @@ class TestMixedExpressions:
         assert "[on " in result  # has color markup
 
     def test_emoji_color_emoji_order(self, evaluator):
-        # cat + red + dog + blue: emojis and color swatches
+        # cat + red + dog + blue: plain cat, dog on red, blue swatch (adjective model)
         result = evaluator.evaluate("cat + red + dog + blue")
         assert "🐱" in result
         assert "[on " in result  # color swatch markup
         assert "🐶" in result
+
+
+class TestColorAdjectiveModel:
+    """Test color-as-adjective model: colors modify the next non-color item."""
+
+    def test_red_apple_green_banana(self, evaluator):
+        """red apple green banana: apple on red, banana on green."""
+        result = evaluator.evaluate("red apple green banana")
+        assert "🍎" in result
+        assert "🍌" in result
+        # Both should have colored backgrounds
+        assert result.count("[on ") >= 2
+
+    def test_consecutive_colors_mix_before_emoji(self, evaluator):
+        """red blue apple: apple on mixed(red, blue)."""
+        result = evaluator.evaluate("red blue apple")
+        assert "🍎" in result
+        assert "[on " in result
+        # The result part (after →) should use the mixed color, not pure red or blue
+        result_part = result.split("→")[-1] if "→" in result else result.split("\n")[-1]
+        assert "[on #ED1C24]" not in result_part  # not pure red
+        assert "[on #1F75FE]" not in result_part  # not pure blue
+
+    def test_color_only_applies_forward(self, evaluator):
+        """red apple banana: apple on red, plain banana."""
+        result = evaluator.evaluate("red apple banana")
+        assert "🍎" in result
+        assert "🍌" in result
+
+    def test_color_after_emoji_applies_forward(self, evaluator):
+        """apple red banana: plain apple, banana on red."""
+        result = evaluator.evaluate("apple red banana")
+        assert "🍎" in result
+        assert "🍌" in result
+        assert "[on " in result
+
+    def test_trailing_color_is_swatch(self, evaluator):
+        """red apple green: apple on red + green swatch."""
+        result = evaluator.evaluate("red apple green")
+        assert "🍎" in result
+        assert "[on " in result
+
+    def test_pure_colors_still_mix(self, evaluator):
+        """red green: COLOR_RESULT (pure color mixing preserved)."""
+        result = evaluator.evaluate("red green")
+        assert result.startswith("COLOR_RESULT:")
+
+    def test_light_red_apple(self, evaluator):
+        """light red apple: apple on light-red (adjective merging)."""
+        result = evaluator.evaluate("light red apple")
+        assert "🍎" in result
+        assert "[on " in result
+
+    def test_plus_red_apple_green_banana(self, evaluator):
+        """red + apple + green + banana: apple on red, banana on green."""
+        result = evaluator.evaluate("red + apple + green + banana")
+        assert "🍎" in result
+        assert "🍌" in result
+        assert result.count("[on ") >= 2
+
+    def test_pure_colors_three_still_mix(self, evaluator):
+        """red green blue: COLOR_RESULT (all colors, no items)."""
+        result = evaluator.evaluate("red green blue")
+        assert result.startswith("COLOR_RESULT:")
 
 
 class TestOperatorPrecedence:

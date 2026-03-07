@@ -227,11 +227,11 @@ class Recording:
 
 
 class RecordingManager:
-    """Manages the F5 record/play/stop cycle.
+    """Manages F5 recording and Space playback.
 
-    State machine:
-        IDLE -> RECORDING -> IDLE (has recording)
-        IDLE (has recording) -> PLAYING -> IDLE
+    F5 toggles recording (IDLE↔RECORDING). Starting a new recording
+    overwrites any previous one. Playback is triggered separately
+    (Space in Play mode, or from Code mode).
     """
 
     def __init__(self, time_fn: Callable[[], float] | None = None):
@@ -241,26 +241,24 @@ class RecordingManager:
         self._stop_playback_fn: Callable | None = None
 
     def toggle(self) -> RecordingState:
-        """Advance the state machine. Returns the new state."""
-        if self.state == RecordingState.IDLE:
-            if self.current is not None and not self.current.is_empty():
-                self.state = RecordingState.PLAYING
-            else:
-                self.state = RecordingState.RECORDING
-                self.current = Recording()
-        elif self.state == RecordingState.RECORDING:
+        """Toggle recording on/off. Returns the new state."""
+        if self.state == RecordingState.RECORDING:
             self.state = RecordingState.IDLE
             if self.current and self.current.is_empty():
                 self.current = None
-        elif self.state == RecordingState.PLAYING:
-            self.state = RecordingState.IDLE
-            if self._stop_playback_fn:
-                self._stop_playback_fn()
+        else:
+            # IDLE or PLAYING: start a new recording (overwrites previous)
+            if self.state == RecordingState.PLAYING:
+                self.stop_playback()
+            self.state = RecordingState.RECORDING
+            self.current = Recording()
 
         return self.state
 
     def start_recording(self) -> None:
         """Explicitly start recording (used by Tab menu "Record in..." action)."""
+        if self.state == RecordingState.PLAYING:
+            self.stop_playback()
         self.state = RecordingState.RECORDING
         self.current = Recording()
 
@@ -270,6 +268,22 @@ class RecordingManager:
             self.state = RecordingState.IDLE
             if self.current and self.current.is_empty():
                 self.current = None
+
+    def start_playback(self) -> bool:
+        """Start playback if a recording exists. Returns True if started."""
+        if not self.has_recording():
+            return False
+        if self.state == RecordingState.RECORDING:
+            return False
+        self.state = RecordingState.PLAYING
+        return True
+
+    def stop_playback(self) -> None:
+        """Stop playback if currently playing."""
+        if self.state == RecordingState.PLAYING:
+            if self._stop_playback_fn:
+                self._stop_playback_fn()
+            self.state = RecordingState.IDLE
 
     def record_event(self, action: KeyAction, room_name: str,
                      mode: str = "") -> None:

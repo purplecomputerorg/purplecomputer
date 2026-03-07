@@ -953,15 +953,8 @@ class PurpleApp(App):
     # ── F5 Recording ─────────────────────────────────────────────────
 
     async def _handle_record_toggle(self) -> None:
-        """Handle F5 press: toggle recording state."""
+        """Handle F5 press: toggle recording on/off."""
         old_state = self._recording_manager.state
-
-        if old_state == RecordingState.PLAYING:
-            # Stop playback
-            self._recording_manager.toggle()
-            self._update_recording_indicator()
-            return
-
         new_state = self._recording_manager.toggle()
         self._update_recording_indicator()
 
@@ -971,10 +964,6 @@ class PurpleApp(App):
         elif new_state == RecordingState.IDLE and old_state == RecordingState.RECORDING:
             self.clear_notifications()
             self.notify("Saved", timeout=1.5)
-
-        if new_state == RecordingState.PLAYING:
-            # Start playback of the recording
-            await self._play_recording()
 
     async def _play_recording(self) -> None:
         """Play the current F5 recording: clear state, then replay."""

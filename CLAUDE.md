@@ -82,16 +82,18 @@ just test          # Run tests
 just run           # Run locally
 just lint          # Run linter
 just setup         # Install dependencies
+just python foo.py       # Run Python script with venv
+just python -c '...'     # Run Python one-liner with venv
 just               # List all available commands
 ```
 
-All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command.
+All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command. **Always use `just python` or `just pyc` instead of `.venv/bin/python` or `source .venv/bin/activate && python`.**
 
-For commands not covered by the justfile:
-```bash
-source .venv/bin/activate
-# then run your command
-```
+---
+
+## Scripts Over Ad Hoc Commands
+
+If a shell command or Python snippet might be useful more than once, save it as a script in `scripts/` rather than running it ad hoc. One-off commands are fine inline, but anything reusable should be a script so it can be run again easily and improved over time.
 
 ---
 

@@ -146,3 +146,12 @@ keygen:
 # Create signed USB update package
 create-update version output *args:
     .venv/bin/python tools/create_usb_update.py --version {{version}} --output {{output}} {{args}}
+
+# Run Python with venv (e.g., just python script.py, just python -c 'print(1)')
+[positional-arguments]
+python *args:
+    @.venv/bin/python "$@"
+
+# Run Python from stdin (e.g., echo 'print("hi")' | just pystdin)
+pystdin:
+    @.venv/bin/python -

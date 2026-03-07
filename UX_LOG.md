@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Doodle: text on painted backgrounds now uses black or white for contrast (was always white/dark); grayscale paint backgrounds no longer disappear when typing over them
 - Explore: narrow emoji (heart, snow, etc.) always get a padding space to prevent visual overlap in terminal
 - Explore: plus expressions now show + between items (e.g. apple + banana shows 🍎 + 🍌)
 - Explore: "red clue" and "red + clue" now produce the same inline format with arrow

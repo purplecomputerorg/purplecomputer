@@ -319,7 +319,7 @@ if HAS_PYTEST:
 
         def test_nested_parens(self, evaluator):
             result = evaluator.evaluate("((2 + 3) * 2)")
-            assert result.count("●") == 1  # 10 → 1+0 abacus dots
+            assert result.count("●") == 10  # 10 ≤ 10, plain dots
 
         def test_multiple_parens(self, evaluator):
             result = evaluator.evaluate("(2 + 3) * (1 + 1)")
@@ -357,7 +357,7 @@ if HAS_PYTEST:
 
         def test_deeply_nested_math(self, evaluator):
             result = evaluator.evaluate("((1 + 2) + (3 + 4))")
-            assert result.count("●") == 1  # 10 → 1+0 abacus dots
+            assert result.count("●") == 10  # 10 ≤ 10, plain dots
 
         def test_single_emoji_in_parens(self, evaluator):
             assert "🐱" in evaluator.evaluate("(cat)")

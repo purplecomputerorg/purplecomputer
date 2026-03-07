@@ -222,26 +222,6 @@ def get_legend_row_from_color(color: str) -> int:
     return 0  # Default
 
 
-def is_text_tint_bg(color: str) -> bool:
-    """Check if a color is a text tint (close to default bg) vs a paint color.
-
-    Text tints are subtle blends with the default background.
-    Paint colors are more saturated/vibrant.
-    """
-    r, g, b = hex_to_rgb(color)
-
-    # Check distance from dark default bg
-    dr, dg, db = hex_to_rgb(DEFAULT_BG_DARK)
-    dark_dist = abs(r - dr) + abs(g - dg) + abs(b - db)
-
-    # Check distance from light default bg
-    lr, lg, lb = hex_to_rgb(DEFAULT_BG_LIGHT)
-    light_dist = abs(r - lr) + abs(g - lg) + abs(b - lb)
-
-    # If close to either default, it's a text tint
-    # Threshold of ~100 covers the 15% tint strength
-    return dark_dist < 100 or light_dist < 100
-
 
 # =============================================================================
 # MESSAGES
@@ -280,6 +260,8 @@ class ArtCanvas(Widget, can_focus=True):
         self.add_class("caps-sensitive")
         # Grid: dict[(x, y)] = (char, fg_color, bg_color)
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
+        # Positions that have been deliberately painted (vs text tint bg)
+        self._painted_positions: set[tuple[int, int]] = set()
         self._cursor_x = 0
         self._cursor_y = 0
 
@@ -322,6 +304,12 @@ class ArtCanvas(Widget, can_focus=True):
     def _get_text_fg(self) -> str:
         """Get text foreground color based on current theme."""
         return TEXT_FG_DARK if self._is_dark_theme() else TEXT_FG_LIGHT
+
+    def _contrast_text_color(self, bg_color: str) -> str:
+        """Get black or white text for readability on the given background."""
+        r, g, b = hex_to_rgb(bg_color)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return "#000000" if luminance > 0.5 else "#FFFFFF"
 
     def _get_gutter_bg(self, x: int, y: int) -> str:
         """Get gutter background color (checkerboard pattern based on position)."""
@@ -432,6 +420,10 @@ class ArtCanvas(Widget, can_focus=True):
             content_y = y - GUTTER
             cell = None if in_gutter else self._grid.get((content_x, content_y))
 
+            # Is this cell on a painted background?
+            content_pos = (content_x, content_y)
+            is_painted = content_pos in self._painted_positions
+
             if is_cursor_center and not in_gutter:
                 if self._paint_mode:
                     # Paint mode: center always shows underlying (the "hole")
@@ -439,8 +431,10 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         # Apply theme to text cells
                         if char != BRUSH_CHAR:
-                            fg_color = self._get_text_fg()
-                            if is_text_tint_bg(bg_color):
+                            if is_painted:
+                                fg_color = self._contrast_text_color(bg_color)
+                            else:
+                                fg_color = self._get_text_fg()
                                 bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
@@ -455,8 +449,10 @@ class ArtCanvas(Widget, can_focus=True):
                         if cell:
                             char, fg_color, bg_color = cell
                             if char != BRUSH_CHAR:
-                                fg_color = self._get_text_fg()
-                                if is_text_tint_bg(bg_color):
+                                if is_painted:
+                                    fg_color = self._contrast_text_color(bg_color)
+                                else:
+                                    fg_color = self._get_text_fg()
                                     bg_color = default_bg
                             segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                         else:
@@ -476,8 +472,8 @@ class ArtCanvas(Widget, can_focus=True):
 
                     if cell:
                         char, fg_color, bg_color = cell
-                        # Apply theme to text cell backgrounds
-                        if char != BRUSH_CHAR and is_text_tint_bg(bg_color):
+                        # Text cells on non-painted bg use default bg
+                        if char != BRUSH_CHAR and not is_painted:
                             bg_color = default_bg
                         # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
@@ -499,8 +495,10 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         # Apply theme to text cells
                         if char != BRUSH_CHAR:
-                            fg_color = self._get_text_fg()
-                            if is_text_tint_bg(bg_color):
+                            if is_painted:
+                                fg_color = self._contrast_text_color(bg_color)
+                            else:
+                                fg_color = self._get_text_fg()
                                 bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
@@ -513,15 +511,14 @@ class ArtCanvas(Widget, can_focus=True):
                 # Text cells: adapt to theme
                 if char == BRUSH_CHAR:
                     char_style = Style(color=fg_color, bgcolor=bg_color)
+                elif is_painted:
+                    # Text over painted bg: use contrast color for readability
+                    text_fg = self._contrast_text_color(bg_color)
+                    char_style = Style(color=text_fg, bgcolor=bg_color)
                 else:
-                    # Text cell: use theme-appropriate fg
-                    # If bg is a text tint, use theme's default_bg
-                    # If bg is a paint color (text typed over paint), keep it
+                    # Text with tint bg: use theme fg on default bg
                     text_fg = self._get_text_fg()
-                    if is_text_tint_bg(bg_color):
-                        char_style = Style(color=text_fg, bgcolor=default_bg)
-                    else:
-                        char_style = Style(color=text_fg, bgcolor=bg_color)
+                    char_style = Style(color=text_fg, bgcolor=default_bg)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell or gutter: use gutter bg if in gutter
@@ -605,9 +602,11 @@ class ArtCanvas(Widget, can_focus=True):
             # First paint stroke: use pure key color (no background blending)
             new_color = self._last_key_color
 
+        self._painted_positions.add(pos)
+
         # If cell has a text character, keep it and just paint the background
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
-            self._set_cell(pos, cell[0], cell[1], new_color)
+            self._set_cell(pos, cell[0], self._contrast_text_color(new_color), new_color)
         else:
             self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
@@ -635,8 +634,12 @@ class ArtCanvas(Widget, can_focus=True):
             # Blend new tint into existing
             new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
 
-        # Text always uses readable foreground
-        self._set_cell(pos, char, self._get_text_fg(), new_bg)
+        # Use contrast color on painted backgrounds, theme color otherwise
+        if pos in self._painted_positions:
+            text_fg = self._contrast_text_color(new_bg)
+        else:
+            text_fg = self._get_text_fg()
+        self._set_cell(pos, char, text_fg, new_bg)
 
         # Move cursor right (with wrapping to next line)
         if not self._move_cursor_right():
@@ -669,6 +672,7 @@ class ArtCanvas(Widget, can_focus=True):
             else:
                 # Fully faded, remove cell entirely
                 del self._grid[pos]
+                self._painted_positions.discard(pos)
         # If cell was empty, nothing to do
 
         self.refresh()
@@ -679,6 +683,7 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Simple clear (animation could be added via set_interval)
         self._grid.clear()
+        self._painted_positions.clear()
         self._cursor_x = 0
         self._cursor_y = 0
 

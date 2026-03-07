@@ -23,7 +23,9 @@ import os
 import time
 
 from ..keyboard import CharacterAction, ControlAction
-from ..play_constants import GRID_KEYS, ALL_KEYS, COLORS
+from ..play_constants import (
+    GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
+)
 from ..play_session import PlaySession, MODE_MUSIC, MODE_LETTERS
 from ..play_words import extract_word
 
@@ -114,22 +116,27 @@ class PlayRoomHeader(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._letters_mode = False
+        self._instrument_name = INSTRUMENTS[0][1]
         self.add_class("caps-sensitive")
 
     def update_mode(self, letters_mode: bool) -> None:
         self._letters_mode = letters_mode
         self.refresh()
 
+    def update_instrument(self, name: str) -> None:
+        self._instrument_name = name
+        self.refresh()
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        music_label = caps("Music")
+        instrument_label = caps(self._instrument_name)
         letters_label = caps("Letters")
 
         if self._letters_mode:
-            music_part = f"[dim]♪ {music_label}[/]"
+            music_part = f"[dim]♪ {instrument_label}[/]"
             letters_part = f"[bold]{letters_label}[/]"
         else:
-            music_part = f"[bold]♪ {music_label}[/]"
+            music_part = f"[bold]♪ {instrument_label}[/]"
             letters_part = f"[dim]{letters_label}[/]"
 
         return f"{music_part}  [dim]{caps('Tab')}[/]  {letters_part}"
@@ -149,17 +156,15 @@ class PlayGrid(Widget):
         super().__init__()
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
-        self._sounds: dict[str, pygame.mixer.Sound] = {}
-        self._sounds_loaded = False
+        self._instrument_index: int = 0
+        self._letters_mode: bool = False
+        # Per-instrument sound cache: instrument_id -> {key -> Sound}
+        self._instrument_sounds: dict[str, dict[str, pygame.mixer.Sound]] = {}
+        # Percussion sounds (shared across instruments)
+        self._percussion_sounds: dict[str, pygame.mixer.Sound] = {}
+        self._percussion_loaded = False
         self._letter_sounds: dict[str, pygame.mixer.Sound] = {}
         self._letter_sounds_loaded = False
-
-    def _ensure_sounds_loaded(self) -> None:
-        """Load sounds if not already loaded."""
-        if self._sounds_loaded or not _MIXER_READY:
-            return
-        self._load_sounds()
-        self._sounds_loaded = True
 
     def _get_sounds_path(self) -> Path:
         """Find the sounds directory."""
@@ -172,29 +177,79 @@ class PlayGrid(Widget):
                 return p
         return paths[0]
 
-    def _load_sounds(self) -> None:
-        """Load all sounds into memory."""
+    @staticmethod
+    def _find_sound(base: Path, name: str) -> Path | None:
+        """Find a sound file, preferring .ogg over .wav."""
+        for ext in ('.ogg', '.wav'):
+            p = base / f"{name}{ext}"
+            if p.exists():
+                return p
+        return None
+
+    def _ensure_instrument_loaded(self, instrument_id: str) -> None:
+        """Load instrument sounds if not already cached."""
+        if instrument_id in self._instrument_sounds or not _MIXER_READY:
+            return
         sounds_path = self._get_sounds_path()
+        inst_path = sounds_path / instrument_id
         names = {';': 'semicolon', ',': 'comma', '.': 'period', '/': 'slash'}
+        cache: dict[str, pygame.mixer.Sound] = {}
         for key in ALL_KEYS:
+            if key.isdigit():
+                continue
             name = names.get(key, key.lower())
-            path = sounds_path / f"{name}.wav"
-            if path.exists():
+            # Try subdirectory first, fall back to flat files
+            path = self._find_sound(inst_path, name) or self._find_sound(sounds_path, name)
+            if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.3)  # Lower volume prevents clipping with many simultaneous sounds
-                    self._sounds[key] = sound
+                    sound.set_volume(0.3)
+                    cache[key] = sound
                 except pygame.error:
                     pass
+        self._instrument_sounds[instrument_id] = cache
+
+    def _ensure_percussion_loaded(self) -> None:
+        """Load percussion sounds (shared across all instruments)."""
+        if self._percussion_loaded or not _MIXER_READY:
+            return
+        sounds_path = self._get_sounds_path()
+        for key in ALL_KEYS:
+            if not key.isdigit():
+                continue
+            path = self._find_sound(sounds_path, key)
+            if path:
+                try:
+                    sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.3)
+                    self._percussion_sounds[key] = sound
+                except pygame.error:
+                    pass
+        self._percussion_loaded = True
 
     def play_sound(self, key: str) -> None:
-        """Play instrument sound for a key (respects app volume setting)."""
-        # Check if volume is muted at app level
+        """Play instrument or percussion sound for a key."""
         if hasattr(self.app, 'volume_on') and not self.app.volume_on:
             return
-        self._ensure_sounds_loaded()
-        if key in self._sounds:
-            self._sounds[key].play()
+        if key.isdigit():
+            self._ensure_percussion_loaded()
+            if key in self._percussion_sounds:
+                self._percussion_sounds[key].play()
+        else:
+            inst_id = INSTRUMENTS[self._instrument_index][0]
+            self._ensure_instrument_loaded(inst_id)
+            sounds = self._instrument_sounds.get(inst_id, {})
+            if key in sounds:
+                sounds[key].play()
+
+    def set_instrument(self, index: int) -> None:
+        """Set the current instrument index."""
+        self._instrument_index = index
+
+    def set_letters_mode(self, letters_mode: bool) -> None:
+        """Update letters mode for note name display."""
+        self._letters_mode = letters_mode
+        self.refresh()
 
     def _ensure_letter_sounds_loaded(self) -> None:
         """Load letter sounds if not already loaded."""
@@ -210,8 +265,8 @@ class PlayGrid(Widget):
         if not letters_path.exists():
             return
         for key in _SPEAKABLE_KEYS:
-            path = letters_path / f"{key.lower()}.wav"
-            if path.exists():
+            path = self._find_sound(letters_path, key.lower())
+            if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
                     sound.set_volume(0.5)
@@ -231,8 +286,9 @@ class PlayGrid(Widget):
         """Stop all currently playing sounds and clear loaded sounds."""
         if _MIXER_READY:
             pygame.mixer.stop()
-        self._sounds.clear()
-        self._sounds_loaded = False
+        self._instrument_sounds.clear()
+        self._percussion_sounds.clear()
+        self._percussion_loaded = False
         self._letter_sounds.clear()
         self._letter_sounds_loaded = False
 
@@ -332,6 +388,18 @@ class PlayGrid(Widget):
                 segments.append(Segment(" " * pad_left, cell_bg_style))
                 segments.append(Segment(key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
+            elif line_in_cell == mid_line + 1 and not self._letters_mode:
+                # Show note name (music mode) or percussion name (number row)
+                if key.isdigit():
+                    label = PERCUSSION_NAMES.get(key, "")
+                else:
+                    label = NOTE_NAMES.get(key, "")
+                dim_style = Style(bgcolor=bg_color, color=text_color, dim=True)
+                pad_left = (cell_width - len(label)) // 2
+                pad_right = cell_width - pad_left - len(label)
+                segments.append(Segment(" " * pad_left, cell_bg_style))
+                segments.append(Segment(label, dim_style))
+                segments.append(Segment(" " * pad_right, cell_bg_style))
             else:
                 segments.append(Segment(" " * cell_width, cell_bg_style))
 
@@ -396,6 +464,7 @@ class PlayMode(Container, can_focus=True):
         self._replay_task: asyncio.Task | None = None
         self._last_replay: list[tuple[str, str, float]] | None = None
         self._letters_mode = False
+        self._instrument_index = 0
         self._recording_manager = recording_manager
 
     @property
@@ -474,6 +543,18 @@ class PlayMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
+                if self.grid:
+                    self.grid.set_letters_mode(self._letters_mode)
+                return
+
+            # Enter cycles instruments
+            if action.action == 'enter' and not self._letters_mode:
+                self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
+                inst_id, inst_name = INSTRUMENTS[self._instrument_index]
+                if self.grid:
+                    self.grid.set_instrument(self._instrument_index)
+                if self._header:
+                    self._header.update_instrument(inst_name)
                 return
 
         # Character keys cycle colors, play/speak, and record

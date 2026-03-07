@@ -46,9 +46,9 @@ def _room_to_target(room_name: str, mode: str = "") -> str:
             return TARGET_PLAY_LETTERS
         return TARGET_PLAY_MUSIC
     elif room_name == "doodle":
-        if mode == "paint":
-            return TARGET_DOODLE_PAINT
-        return TARGET_DOODLE_TEXT
+        if mode == "text":
+            return TARGET_DOODLE_TEXT
+        return TARGET_DOODLE_PAINT
     elif room_name == "explore":
         return TARGET_EXPLORE
     return TARGET_PLAY_MUSIC

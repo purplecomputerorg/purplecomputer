@@ -2,7 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
-- Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes
+- Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Play, Doodle, Explore) with default sub-modes
+- Doodle: default mode changed from Write to Paint; Paint now appears on left side of Tab header
+- Command mode: MODE_SWITCH blocks now show room icon (same as title bar); non-default sub-modes show a hint suffix; cycling targets now cycles rooms instead of all 5 sub-modes
 - Command mode: direct coding UX, auto-inserts default mode on empty canvas, Up/Down inline adjusts adjustable blocks (MODE_SWITCH/PAUSE/STROKE/REPEAT), Tab menu trimmed to 7 flat items (removed Record/Adjust/Enter), context-sensitive hint bar shows what Up/Down does
 - Command mode: Scratch-inspired block redesign with 6 block types (KEY, QUERY, STROKE, PAUSE, REPEAT, MODE_SWITCH); uniform 5-char grid; explicit PAUSE blocks replace invisible timing gaps; no auto-collapse; mode-aware editing (Explore uses compose mode for QUERY blocks, Doodle paint uses STROKE blocks); v1 save format auto-migrated to v2
 - Doodle: text on painted backgrounds now uses black or white for contrast (was always white/dark); grayscale paint backgrounds no longer disappear when typing over them

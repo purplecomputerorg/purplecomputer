@@ -246,12 +246,12 @@ class TestModeSwitchBlock:
     def test_cycle_target(self):
         block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
         block.cycle_target(1)
-        assert block.target == ALL_TARGETS[1]
+        assert block.target == TARGET_DOODLE_PAINT  # play -> doodle (default: paint)
 
     def test_cycle_target_wraps(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=ALL_TARGETS[-1])
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE)
         block.cycle_target(1)
-        assert block.target == ALL_TARGETS[0]
+        assert block.target == TARGET_PLAY_MUSIC  # explore -> play (wraps)
 
 
 # =============================================================================
@@ -704,9 +704,9 @@ class TestInlineAdjustment:
     def test_mode_switch_cycle_target(self):
         block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
         block.cycle_target(1)
-        assert block.target == TARGET_PLAY_LETTERS
+        assert block.target == TARGET_DOODLE_PAINT  # play -> doodle
         block.cycle_target(-1)
-        assert block.target == TARGET_PLAY_MUSIC
+        assert block.target == TARGET_PLAY_MUSIC  # doodle -> play
 
     def test_pause_cycle_duration(self):
         block = ProgramBlock(type=ProgramBlockType.PAUSE, duration=0.5)

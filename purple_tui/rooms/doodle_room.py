@@ -266,7 +266,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_y = 0
 
         # Paint mode toggle
-        self._paint_mode = False
+        self._paint_mode = True
         self._last_key_color = "#FFFFFF"  # Color from last key in paint mode
         self._last_key_char = ""  # Last key pressed
 
@@ -995,7 +995,7 @@ class CanvasHeader(Static):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._is_painting = False
+        self._is_painting = True
         self._last_color = "#FFFFFF"
         self.add_class("caps-sensitive")
 
@@ -1024,14 +1024,14 @@ class CanvasHeader(Static):
         if self._is_painting:
             # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
-            write_part = f"[dim]{write_icon}[/]"
             paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
+            write_part = f"[dim]{write_icon}[/]"
         else:
             # Write mode: WRITE highlighted, Paint dim
-            write_part = f"[bold]{write_icon}[/]"
             paint_part = f"[dim]{paint_icon}[/]"
+            write_part = f"[bold]{write_icon}[/]"
 
-        return f"{write_part}  [dim]Tab[/]  {paint_part}"
+        return f"{paint_part}  [dim]Tab[/]  {write_part}"
 
 
 # =============================================================================
@@ -1067,7 +1067,7 @@ class ToolOverlay(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._hide_timer = None
-        self._is_painting = False
+        self._is_painting = True
         self.add_class("caps-sensitive")
 
     def on_mount(self) -> None:

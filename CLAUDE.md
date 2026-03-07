@@ -75,16 +75,23 @@ This applies to docs, comments, and UI strings.
 
 Always use `.venv` or Docker to access Python dependencies. The system Python won't have the required libraries.
 
-```bash
-# Local development
-source .venv/bin/activate
-pytest tests/ -v
+**Prefer `just` commands** over raw shell commands. The justfile handles venv activation and environment setup automatically:
 
-# Or via Docker (on some machines)
-docker compose run app pytest tests/ -v
+```bash
+just test          # Run tests
+just run           # Run locally
+just lint          # Run linter
+just setup         # Install dependencies
+just               # List all available commands
 ```
 
-Or use the justfile shortcuts: `just test`, `just run`, `just setup`.
+All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command.
+
+For commands not covered by the justfile:
+```bash
+source .venv/bin/activate
+# then run your command
+```
 
 ---
 

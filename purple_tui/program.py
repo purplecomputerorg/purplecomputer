@@ -84,27 +84,82 @@ ALL_TARGETS = [
     TARGET_EXPLORE,
 ]
 
+# Room-level grouping: each room has a default target and list of all targets
+ROOMS = {
+    "play": {
+        "default": TARGET_PLAY_MUSIC,
+        "targets": [TARGET_PLAY_MUSIC, TARGET_PLAY_LETTERS],
+        "label": "Play",
+    },
+    "doodle": {
+        "default": TARGET_DOODLE_PAINT,
+        "targets": [TARGET_DOODLE_PAINT, TARGET_DOODLE_TEXT],
+        "label": "Doodle",
+    },
+    "explore": {
+        "default": TARGET_EXPLORE,
+        "targets": [TARGET_EXPLORE],
+        "label": "Explore",
+    },
+}
+
+ROOM_ORDER = ["play", "doodle", "explore"]
+
+def target_room(target: str) -> str:
+    """Get the room name for a target (e.g., 'play.music' -> 'play')."""
+    return target.split(".")[0]
+
+def default_target_for_room(room: str) -> str:
+    """Get the default target for a room."""
+    return ROOMS.get(room, {}).get("default", TARGET_PLAY_MUSIC)
+
+# Room-level icons (matching the title bar Nerd Font icons)
+from .constants import ICON_MUSIC, ICON_PALETTE, ICON_CHAT
+
+ROOM_ICONS = {
+    "play": ICON_MUSIC,
+    "doodle": ICON_PALETTE,
+    "explore": ICON_CHAT,
+}
+
+# Per-target icons (shown inside MODE_SWITCH blocks)
 TARGET_ICONS = {
-    TARGET_PLAY_MUSIC: "♫",
-    TARGET_PLAY_LETTERS: "Ab",
-    TARGET_DOODLE_TEXT: "✎",
-    TARGET_DOODLE_PAINT: "🖌",
-    TARGET_EXPLORE: "?=",
+    TARGET_PLAY_MUSIC: ICON_MUSIC,
+    TARGET_PLAY_LETTERS: ICON_MUSIC,
+    TARGET_DOODLE_TEXT: ICON_PALETTE,
+    TARGET_DOODLE_PAINT: ICON_PALETTE,
+    TARGET_EXPLORE: ICON_CHAT,
+}
+
+# Room-level colors (one color per room)
+ROOM_COLORS = {
+    "play": "#44DD44",
+    "doodle": "#DD8844",
+    "explore": "#44AADD",
 }
 
 TARGET_COLORS = {
     TARGET_PLAY_MUSIC: "#44DD44",
-    TARGET_PLAY_LETTERS: "#44DDAA",
-    TARGET_DOODLE_TEXT: "#DDAA44",
-    TARGET_DOODLE_PAINT: "#DD44AA",
+    TARGET_PLAY_LETTERS: "#44DD44",
+    TARGET_DOODLE_TEXT: "#DD8844",
+    TARGET_DOODLE_PAINT: "#DD8844",
     TARGET_EXPLORE: "#44AADD",
 }
 
+# Sub-mode labels (shown when non-default mode is selected)
+MODE_LABELS = {
+    TARGET_PLAY_MUSIC: "Music",
+    TARGET_PLAY_LETTERS: "Letters",
+    TARGET_DOODLE_TEXT: "Text",
+    TARGET_DOODLE_PAINT: "Paint",
+    TARGET_EXPLORE: "",
+}
+
 TARGET_LABELS = {
-    TARGET_PLAY_MUSIC: "Play (music)",
+    TARGET_PLAY_MUSIC: "Play",
     TARGET_PLAY_LETTERS: "Play (letters)",
     TARGET_DOODLE_TEXT: "Doodle (text)",
-    TARGET_DOODLE_PAINT: "Doodle (paint)",
+    TARGET_DOODLE_PAINT: "Doodle",
     TARGET_EXPLORE: "Explore",
 }
 
@@ -203,7 +258,15 @@ class ProgramBlock:
         elif self.type == ProgramBlockType.REPEAT:
             return f"x{self.repeat_count}"
         elif self.type == ProgramBlockType.MODE_SWITCH:
-            return TARGET_ICONS.get(self.target, "?")
+            room = target_room(self.target)
+            room_info = ROOMS.get(room, {})
+            icon = ROOM_ICONS.get(room, "?")
+            # Show sub-mode hint for non-default modes
+            if self.target != room_info.get("default"):
+                label = MODE_LABELS.get(self.target, "")
+                if label:
+                    return f"{icon}{label[:2]}"
+            return icon
         return "?"
 
     @property
@@ -246,13 +309,15 @@ class ProgramBlock:
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
 
     def cycle_target(self, direction: int) -> None:
-        """Cycle MODE_SWITCH target through available targets."""
-        if self.target not in ALL_TARGETS:
-            self.target = ALL_TARGETS[0]
-            return
-        idx = ALL_TARGETS.index(self.target)
-        idx = (idx + direction) % len(ALL_TARGETS)
-        self.target = ALL_TARGETS[idx]
+        """Cycle MODE_SWITCH target through rooms (using default targets)."""
+        room_defaults = [ROOMS[r]["default"] for r in ROOM_ORDER]
+        current_room = target_room(self.target)
+        if current_room in ROOM_ORDER:
+            idx = ROOM_ORDER.index(current_room)
+        else:
+            idx = 0
+        idx = (idx + direction) % len(ROOM_ORDER)
+        self.target = room_defaults[idx]
 
 
 def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:

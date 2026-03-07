@@ -44,6 +44,12 @@ from ..program import (
     ALL_TARGETS,
     PAUSE_PRESETS,
     DIRECTION_ICONS,
+    ROOM_ICONS,
+    ROOM_COLORS,
+    ROOM_ORDER,
+    ROOMS,
+    target_room,
+    default_target_for_room,
 )
 from ..recording import RecordingManager
 
@@ -99,7 +105,7 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
         if block.type == ProgramBlockType.MODE_SWITCH:
             if current_line:
                 lines.append(_finalize_line(current_icon, current_line))
-            current_icon = TARGET_ICONS.get(block.target, "?")
+            current_icon = ROOM_ICONS.get(target_room(block.target), "?")
             current_line = [(i, block)]
             current_width = 0  # MODE_SWITCH doesn't take content space
             continue
@@ -361,10 +367,11 @@ class CodeCanvas(Widget):
                 return [Segment(display, badge_style)]
             return [Segment(" " * GUTTER_WIDTH, bg_style)]
 
+        # Look up room color from icon
         target_color = None
-        for target, t_icon in TARGET_ICONS.items():
-            if t_icon == icon:
-                target_color = TARGET_COLORS[target]
+        for room, r_icon in ROOM_ICONS.items():
+            if r_icon == icon:
+                target_color = ROOM_COLORS[room]
                 break
 
         if not target_color:

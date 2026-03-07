@@ -1,5 +1,5 @@
 """
-Code Menu: Tab-activated modal menu for Command mode (F4).
+Command Menu: Tab-activated modal menu for Command mode (F4).
 
 Flat 7-item menu:
   Pause, Stroke, Repeat, Mode... (insert items)
@@ -18,9 +18,9 @@ from textual import events
 
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .program import (
-    ALL_TARGETS,
-    TARGET_ICONS,
-    TARGET_LABELS,
+    ROOM_ORDER,
+    ROOMS,
+    ROOM_ICONS,
     slot_occupied,
 )
 
@@ -30,7 +30,7 @@ MENU_ITEMS = [
     ("insert_pause", "  Pause \u23f8", True),
     ("insert_stroke", "  Stroke \u25b6", True),
     ("insert_repeat", "  Repeat x2", True),
-    ("insert_mode_switch", "  Mode...", True),
+    ("insert_room_switch", "  Room...", True),
     ("separator", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", False),
     ("load", "  Load...", True),
     ("save", "  Save...", True),
@@ -104,7 +104,7 @@ class CodeMenuScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Container(id="code-menu-dialog"):
-            yield Static("Code Menu", id="code-menu-title")
+            yield Static("Command Menu", id="code-menu-title")
 
             for i, (item_id, label, selectable) in enumerate(MENU_ITEMS):
                 if not selectable:
@@ -132,8 +132,8 @@ class CodeMenuScreen(ModalScreen):
                 pass
 
     async def handle_keyboard_action(self, action) -> None:
-        if self._sub_view == "target_picker":
-            await self._handle_target_picker(action)
+        if self._sub_view == "room_picker":
+            await self._handle_room_picker(action)
             return
         if self._sub_view == "slot_picker":
             await self._handle_slot_picker(action)
@@ -159,10 +159,10 @@ class CodeMenuScreen(ModalScreen):
         menu_idx = _SELECTABLE_INDICES[self._sel_pos]
         item_id = MENU_ITEMS[menu_idx][0]
 
-        if item_id == "insert_mode_switch":
-            self._sub_view = "target_picker"
+        if item_id == "insert_room_switch":
+            self._sub_view = "room_picker"
             self._sub_selected = 0
-            self._show_sub_picker_targets()
+            self._show_sub_picker_rooms()
 
         elif item_id == "insert_repeat":
             self.dismiss({"action": "insert_repeat"})
@@ -188,13 +188,13 @@ class CodeMenuScreen(ModalScreen):
         elif item_id == "clear":
             self.dismiss({"action": "clear"})
 
-    # ── Target sub-picker ─────────────────────────────────────────────
+    # ── Room sub-picker ──────────────────────────────────────────────
 
-    def _show_sub_picker_targets(self) -> None:
+    def _show_sub_picker_rooms(self) -> None:
         try:
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
-            title.update("Pick target mode")
+            title.update("Pick a room")
 
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-separator"):
@@ -203,20 +203,20 @@ class CodeMenuScreen(ModalScreen):
             hint = self.query_one("#code-menu-hint", Static)
             hint.update("\u2191\u2193 select  Enter confirm  Esc back")
 
-            for i, target in enumerate(ALL_TARGETS):
-                icon = TARGET_ICONS[target]
-                label = TARGET_LABELS[target]
-                item = Static(f"  {icon}  {label}", id=f"target-{i}", classes="menu-item")
+            for i, room in enumerate(ROOM_ORDER):
+                icon = ROOM_ICONS[room]
+                label = ROOMS[room]["label"]
+                item = Static(f"  {icon}  {label}", id=f"room-{i}", classes="menu-item")
                 dialog.mount(item, before=hint)
 
-            self._update_target_selection()
+            self._update_room_selection()
         except Exception:
             pass
 
-    def _update_target_selection(self) -> None:
-        for i in range(len(ALL_TARGETS)):
+    def _update_room_selection(self) -> None:
+        for i in range(len(ROOM_ORDER)):
             try:
-                item = self.query_one(f"#target-{i}", Static)
+                item = self.query_one(f"#room-{i}", Static)
                 if i == self._sub_selected:
                     item.add_class("selected")
                 else:
@@ -224,19 +224,20 @@ class CodeMenuScreen(ModalScreen):
             except Exception:
                 pass
 
-    async def _handle_target_picker(self, action) -> None:
+    async def _handle_room_picker(self, action) -> None:
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
                 self._sub_selected = max(0, self._sub_selected - 1)
-                self._update_target_selection()
+                self._update_room_selection()
             elif action.direction == 'down':
-                self._sub_selected = min(len(ALL_TARGETS) - 1, self._sub_selected + 1)
-                self._update_target_selection()
+                self._sub_selected = min(len(ROOM_ORDER) - 1, self._sub_selected + 1)
+                self._update_room_selection()
             return
 
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
-                target = ALL_TARGETS[self._sub_selected]
+                room = ROOM_ORDER[self._sub_selected]
+                target = ROOMS[room]["default"]
                 self.dismiss({"action": "insert_mode_switch", "target": target})
             elif action.action in ('escape', 'tab'):
                 self._exit_sub_view()
@@ -311,11 +312,11 @@ class CodeMenuScreen(ModalScreen):
         try:
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
-            title.update("Code Menu")
+            title.update("Command Menu")
 
             for child in list(dialog.children):
                 child_id = child.id or ""
-                if child_id.startswith("target-") or child_id.startswith("slot-"):
+                if child_id.startswith("room-") or child_id.startswith("slot-"):
                     child.remove()
 
             for child in dialog.children:

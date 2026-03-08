@@ -425,7 +425,7 @@ class PurpleApp(App):
 
     #viewport-row {
         width: auto;
-        height: auto;
+        height: __VIEWPORT_ROW_HEIGHT__;
     }
 
     #paint-legend {
@@ -539,7 +539,7 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__VIEWPORT_ROW_HEIGHT__", str(VIEWPORT_HEIGHT + 2)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [

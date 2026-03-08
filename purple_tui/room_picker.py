@@ -57,10 +57,12 @@ class RoomOption(Static):
         self.icon = icon
         self.label = label
         self.number = number
+        self.add_class("caps-sensitive")
 
     def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         enter_hint = "\nor Enter" if self.has_class("selected") else ""
-        return f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n"
+        return caps(f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n")
 
 
 class RoomPickerScreen(ModalScreen):
@@ -126,14 +128,15 @@ class RoomPickerScreen(ModalScreen):
         return 0
 
     def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         with Container(id="picker-dialog"):
-            yield Static("Pick a Room", id="picker-title")
+            yield Static(caps("Pick a Room"), id="picker-title")
 
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            yield Static("\u25c0 \u25b6  to browse       \u25b2 \u25bc volume", id="picker-hint")
+            yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc volume"), id="picker-hint")
 
     def on_mount(self) -> None:
         """Highlight the initially selected option."""

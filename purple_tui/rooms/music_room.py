@@ -25,7 +25,7 @@ from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
 )
 from ..music_session import MusicSession, MODE_MUSIC, MODE_LETTERS
-from ..constants import ICON_MUSIC
+from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -412,7 +412,7 @@ class MusicGrid(Widget):
                 else:
                     label = caps(NOTE_NAMES.get(key, ""))
                 if label:
-                    decorated = f"{ICON_MUSIC} {label} {ICON_MUSIC}"
+                    decorated = f"{ICON_MUSIC_NOTE} {label} {ICON_MUSIC_NOTE}"
                     decorated_width = len(decorated)
                     muted_color = "#6a5a7a" if bg_color in light_backgrounds else "#887799"
                     dim_style = Style(bgcolor=bg_color, color=muted_color)

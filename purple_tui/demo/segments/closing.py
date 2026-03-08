@@ -6,7 +6,7 @@ from purple_tui.demo.script import (
 
 SEGMENT = [
     Comment("=== CLOSING TEXT ==="),
-    SwitchRoom("doodle"),
+    SwitchRoom("art"),
     Pause(0.3),
 
     # Canvas already cleared at end of palm_tree segment

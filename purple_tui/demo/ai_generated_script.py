@@ -6,7 +6,7 @@ from purple_tui.demo.script import (
 
 AI_DRAWING = [
     Comment("=== AI GENERATED DRAWING ==="),
-    SwitchRoom("doodle"),
+    SwitchRoom("art"),
     Pause(0.3),
     PressKey("tab"),  # Enter paint mode
 

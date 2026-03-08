@@ -1151,24 +1151,28 @@ class ArtMode(Container):
         """Focus the canvas when mode loads."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas.focus()
-        # Initialize header
+        # Initialize header (canvas starts in paint mode)
+        self._was_painting = True
         header = self.query_one("#canvas-header", CanvasHeader)
-        header.update_state(False, "#FFFFFF")
+        header.update_state(True, "#FFFFFF")
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Update header and overlay when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
-        # Update and dismiss overlay on Tab press (mode change is a meaningful action)
-        try:
-            overlay = self.query_one("#tool-overlay", ToolOverlay)
-            overlay.set_paint_mode(event.is_painting)
-            overlay.dismiss()  # Tab press is a meaningful action
-        except Exception:
-            pass
-        label = "Paint" if event.is_painting else "Write"
-        self.app.clear_notifications()
-        self.app.notify(label, timeout=1.5)
+        # Only show toast and update overlay when mode actually toggles
+        prev = getattr(self, '_was_painting', False)
+        if event.is_painting != prev:
+            self._was_painting = event.is_painting
+            try:
+                overlay = self.query_one("#tool-overlay", ToolOverlay)
+                overlay.set_paint_mode(event.is_painting)
+                overlay.dismiss()
+            except Exception:
+                pass
+            label = "Paint" if event.is_painting else "Write"
+            self.app.clear_notifications()
+            self.app.notify(label, timeout=1.5)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""

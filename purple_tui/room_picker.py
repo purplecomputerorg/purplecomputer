@@ -59,7 +59,7 @@ class RoomOption(Static):
         self.number = number
 
     def render(self) -> str:
-        return f"{self.icon}\n{self.number} {self.label}"
+        return f"{self.icon}\n{self.label}\nPress {self.number}"
 
 
 class RoomPickerScreen(ModalScreen):
@@ -132,7 +132,7 @@ class RoomPickerScreen(ModalScreen):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            yield Static("\u25c0 \u25b6  or press 1\u20134       \u25b2 \u25bc volume", id="picker-hint")
+            yield Static("\u25c0 \u25b6  to browse       \u25b2 \u25bc volume", id="picker-hint")
 
     def on_mount(self) -> None:
         """Highlight the initially selected option."""

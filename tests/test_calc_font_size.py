@@ -14,9 +14,9 @@ from calc_font_size import (
 
 class TestConstants:
     def test_grid_size(self):
-        """Grid must match purple_tui.constants (114x40 for current viewport)."""
+        """Grid must match purple_tui.constants (114x38 for current viewport)."""
         assert REQUIRED_COLS == 114
-        assert REQUIRED_ROWS == 40
+        assert REQUIRED_ROWS == 38
 
     def test_limits(self):
         assert MIN_FONT >= 10

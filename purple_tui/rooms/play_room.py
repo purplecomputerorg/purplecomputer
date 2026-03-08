@@ -498,7 +498,7 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return f"{hint}   [dim]→ Tab[/]"
+        return caps(f"{hint}   [dim]→ Tab[/]")
 
 
 class InputPrompt(Static):
@@ -2023,7 +2023,10 @@ class SimpleEvaluator:
                         i = k
                         continue
                 # Not an "N emoji" pattern, just output the number
-                result.append(num_str)
+                if colorize_unknown:
+                    result.append(self._format_text_as_color_blocks(num_str))
+                else:
+                    result.append(num_str)
                 i = j
                 continue
 

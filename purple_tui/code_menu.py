@@ -25,6 +25,14 @@ from .program import (
 )
 
 
+def _caps(app, text: str) -> str:
+    """Apply caps mode if active."""
+    try:
+        return app.caps_text(text)
+    except Exception:
+        return text
+
+
 # Menu item definitions: (id, label, selectable)
 MENU_ITEMS = [
     ("watch_me", "  Watch me!", True),
@@ -104,16 +112,17 @@ class CodeMenuScreen(ModalScreen):
         self._sub_selected: int = 0
 
     def compose(self) -> ComposeResult:
+        caps = lambda t: _caps(self.app, t)
         with Container(id="code-menu-dialog"):
-            yield Static("Command Menu", id="code-menu-title")
+            yield Static(caps("Command Menu"), id="code-menu-title")
 
             for i, (item_id, label, selectable) in enumerate(MENU_ITEMS):
                 if not selectable:
                     yield Static(label, classes="menu-separator")
                 else:
-                    yield Static(label, id=f"menu-{item_id}", classes="menu-item")
+                    yield Static(caps(label), id=f"menu-{item_id}", classes="menu-item")
 
-            yield Static("\u2191\u2193 select  Enter confirm  Tab/Esc close", id="code-menu-hint")
+            yield Static(caps("\u2191\u2193 select  Enter confirm  Tab/Esc close"), id="code-menu-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -198,21 +207,22 @@ class CodeMenuScreen(ModalScreen):
 
     def _show_sub_picker_rooms(self, title: str = "Pick a room") -> None:
         try:
+            caps = lambda t: _caps(self.app, t)
             dialog = self.query_one("#code-menu-dialog", Container)
             title_widget = self.query_one("#code-menu-title", Static)
-            title_widget.update(title)
+            title_widget.update(caps(title))
 
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = False
 
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("\u2191\u2193 select  Enter confirm  Esc back")
+            hint.update(caps("\u2191\u2193 select  Enter confirm  Esc back"))
 
             for i, room in enumerate(ROOM_ORDER):
                 icon = ROOM_ICONS[room]
                 label = ROOMS[room]["label"]
-                item = Static(f"  {icon}  {label}", id=f"room-{i}", classes="menu-item")
+                item = Static(caps(f"  {icon}  {label}"), id=f"room-{i}", classes="menu-item")
                 dialog.mount(item, before=hint)
 
             self._update_room_selection()
@@ -256,23 +266,24 @@ class CodeMenuScreen(ModalScreen):
 
     def _show_sub_picker_slots(self) -> None:
         try:
+            caps = lambda t: _caps(self.app, t)
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
             action_label = "Load from" if self._sub_action == "load" else "Save to"
-            title.update(f"{action_label} slot")
+            title.update(caps(f"{action_label} slot"))
 
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = False
 
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("\u2191\u2193 select  Enter confirm  Esc back")
+            hint.update(caps("\u2191\u2193 select  Enter confirm  Esc back"))
 
             for slot in range(1, 10):
                 filled = slot_occupied(slot)
                 marker = "\u25a0" if filled else "\u25a1"
                 label = f"  {slot} {marker}"
-                item = Static(label, id=f"slot-{slot}", classes="menu-item")
+                item = Static(caps(label), id=f"slot-{slot}", classes="menu-item")
                 dialog.mount(item, before=hint)
 
             self._update_slot_selection()
@@ -319,9 +330,10 @@ class CodeMenuScreen(ModalScreen):
         self._sub_selected = 0
 
         try:
+            caps = lambda t: _caps(self.app, t)
             dialog = self.query_one("#code-menu-dialog", Container)
             title = self.query_one("#code-menu-title", Static)
-            title.update("Command Menu")
+            title.update(caps("Command Menu"))
 
             for child in list(dialog.children):
                 child_id = child.id or ""
@@ -332,8 +344,17 @@ class CodeMenuScreen(ModalScreen):
                 if child.has_class("menu-item") or child.has_class("menu-separator"):
                     child.display = True
 
+            # Re-apply caps to menu items
+            for item_id, label, selectable in MENU_ITEMS:
+                if selectable:
+                    try:
+                        item = self.query_one(f"#menu-{item_id}", Static)
+                        item.update(caps(label))
+                    except Exception:
+                        pass
+
             hint = self.query_one("#code-menu-hint", Static)
-            hint.update("\u2191\u2193 select  Enter confirm  Tab/Esc close")
+            hint.update(caps("\u2191\u2193 select  Enter confirm  Tab/Esc close"))
         except Exception:
             pass
 

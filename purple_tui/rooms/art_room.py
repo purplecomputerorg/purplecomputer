@@ -1102,7 +1102,7 @@ class CanvasHeader(Static):
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Symbols: ABC for Write, colored squares for Paint
-        write_icon = caps("ABC")
+        write_icon = "ABC"
         paint_icon = "[#DF7070]■[/][#DFC070]■[/][#7090DF]■[/]"
 
         if self._is_painting:
@@ -1115,7 +1115,7 @@ class CanvasHeader(Static):
             paint_part = f"[dim]{paint_icon}[/]"
             write_part = f"[bold]{write_icon}[/]"
 
-        return f"{paint_part}  [dim]Tab[/]  {write_part}"
+        return caps(f"{paint_part}  [dim]Tab[/]  {write_part}")
 
 
 # =============================================================================
@@ -1184,10 +1184,10 @@ class ToolOverlay(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         if self._is_painting:
-            current = caps("Paint")
+            current = "Paint"
         else:
-            current = caps("Write")
-        return f"  {current}. Press Tab to switch tools.  "
+            current = "Write"
+        return caps(f"  {current}. Press Tab to switch tools.  ")
 
 
 # =============================================================================

@@ -27,6 +27,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..keyboard import CharacterAction, NavigationAction, ControlAction
+from ..caps import caps_strip
 from ..program import (
     ProgramBlock,
     ProgramBlockType,
@@ -188,6 +189,7 @@ class SaveBar(Widget):
         super().__init__(**kwargs)
         self._active_slot: int = 0
         self._filled: set[int] = set()
+        self.add_class("caps-sensitive")
 
     def update_slots(self, active: int = 0) -> None:
         self._active_slot = active
@@ -242,7 +244,7 @@ class SaveBar(Widget):
             if remaining > 0:
                 segments.append(Segment(" " * remaining, bg_style))
 
-        return Strip(segments)
+        return caps_strip(Strip(segments), self.app)
 
     async def _on_key(self, event: events.Key) -> None:
         event.stop()
@@ -268,6 +270,7 @@ class CodeCanvas(Widget):
         self._lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]] = []
         self._cursor_visible = True
         self._blink_timer = None
+        self.add_class("caps-sensitive")
         # Compose mode for QUERY blocks
         self._composing: bool = False
         self._compose_text: str = ""
@@ -327,6 +330,9 @@ class CodeCanvas(Widget):
             return BG_DARK
 
     def render_line(self, y: int) -> Strip:
+        return caps_strip(self._render_line_impl(y), self.app)
+
+    def _render_line_impl(self, y: int) -> Strip:
         width = self.size.width
         height = self.size.height
         bg = self._get_bg()

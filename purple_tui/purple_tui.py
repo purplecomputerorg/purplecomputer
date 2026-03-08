@@ -2093,8 +2093,26 @@ class PurpleApp(App):
         return self.keyboard.caps.caps_lock_on
 
     def caps_text(self, text: str) -> str:
-        """Return text in caps if caps mode is on"""
-        return text.upper() if self.caps_mode else text
+        """Return text in caps if caps mode is on.
+
+        Only uppercases text outside Rich markup tags (e.g. [bold], [on #hex]),
+        since Rich tags are case-sensitive and .upper() breaks them.
+        """
+        if not self.caps_mode:
+            return text
+        result = []
+        i = 0
+        while i < len(text):
+            if text[i] == '[':
+                # Find closing bracket, preserve tag as-is
+                end = text.find(']', i)
+                if end != -1:
+                    result.append(text[i:end + 1])
+                    i = end + 1
+                    continue
+            result.append(text[i].upper())
+            i += 1
+        return ''.join(result)
 
 
 def main():

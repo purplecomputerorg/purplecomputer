@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Caps mode now applies to all text in Code room (canvas, save bar, hints) and Code menu (titles, items, hints). Also fixed "Tab" label in Art mode and Play mode autocomplete hints.
 - Room picker options are now 4-high: blank row, icon + room name + icon, "Press N", blank row. Wider boxes to fit the new layout.
 - Replaced trumpet instrument with ukulele: warm plucked-string sound that sits better on laptop speakers.
 - Unified background color: removed darker outer border, everything is now one consistent purple. Added spacing between viewport and room indicators for breathing room.

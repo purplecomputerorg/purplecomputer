@@ -94,27 +94,27 @@ See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
 ---
 
-## The Three Modes
+## The Three Rooms
 
-Purple has three core modes:
+Purple has three rooms:
 
-| Key | Mode | What It Does |
+| Key | Room | What It Does |
 |-----|------|--------------|
-| **F1** | **Explore** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/explore-mode-design.md](guides/explore-mode-design.md) |
-| **F2** | **Play** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
-| **F3** | **Doodle** | Write and paint with colors that mix like real paint. Great around 3-4+. |
+| **F1** | **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
+| **F2** | **Music** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
+| **F3** | **Art** | Write and paint with colors that mix like real paint. Great around 3-4+. |
 
 **Controls:**
-- **Escape (tap):** Mode picker (Explore, Play, Doodle)
-- **F1-F3:** Switch modes directly
+- **Escape (tap):** Room picker (Play, Music, Art)
+- **F1-F3:** Switch rooms directly
 - **F9:** Toggle dark/light theme
 - **F10:** Mute/unmute, **F11:** Volume down, **F12:** Volume up
 - **Caps Lock:** Toggle big/small letters
 - **Ctrl+V:** Cycle views (Screen → Line → Ears)
-- **Tab** (in Doodle): Toggle write/paint mode
+- **Tab** (in Art): Toggle write/paint mode
 - **Hold Escape (1s):** Parent mode (admin menu)
 
-**Speech** (in Explore mode): Add `!` anywhere (e.g., `cat!`) or use `say`/`talk` prefix to hear results spoken aloud.
+**Speech** (in Play room): Add `!` anywhere (e.g., `cat!`) or use `say`/`talk` prefix to hear results spoken aloud.
 
 ---
 
@@ -168,7 +168,7 @@ Purple Computer displays a **112×32 character viewport** (plus header and foote
 ```
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
-│   ├── modes/            # Explore, Play, Doodle modes
+│   ├── modes/            # Play, Music, Art rooms
 │   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine
@@ -196,8 +196,8 @@ purplecomputer/
 │   └── generate_voice_clips.py     # TTS narration generation
 │
 ├── tools/                # AI-assisted content creation
-│   ├── doodle_ai.py               # AI doodle drawing generation
-│   └── play_ai.py                 # AI play mode content
+│   ├── doodle_ai.py               # AI art room drawing generation
+│   └── play_ai.py                 # AI music room content
 │
 ├── config/               # System configs (Alacritty, X11, fonts)
 ├── tests/                # Test suite
@@ -260,9 +260,9 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - **[guides/demo-system.md](guides/demo-system.md):** Creating, generating, and composing demo screencasts
 - **[guides/architecture-overview.md](guides/architecture-overview.md):** Why the installer works the way it does
 - **[guides/keyboard-architecture.md](guides/keyboard-architecture.md):** evdev input, state machine, F-key calibration
-- **[guides/explore-mode-design.md](guides/explore-mode-design.md):** How Explore mode parses and evaluates input
+- **[guides/play-room-design.md](guides/play-room-design.md):** How the Play room parses and evaluates input
 - **[guides/sound-synthesis.md](guides/sound-synthesis.md):** Procedural sound generation
-- **[guides/mode-reference.md](guides/mode-reference.md):** Reference for all modes and controls
+- **[guides/mode-reference.md](guides/mode-reference.md):** Reference for all rooms and controls
 - **[guides/kid-proofing.md](guides/kid-proofing.md):** Kiosk lockdown and safety measures
 - **[guides/production-checklist.md](guides/production-checklist.md):** Pre-ship checklist
 

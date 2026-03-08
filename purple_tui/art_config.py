@@ -1,16 +1,16 @@
 """
-Doodle Mode Configuration: shared source of truth for canvas layout and color system.
+Art Mode Configuration: shared source of truth for canvas layout and color system.
 
-This module imports pure-data constants from doodle_mode.py and constants.py,
+This module imports pure-data constants from art_mode.py and constants.py,
 computes derived values (canvas dimensions), and provides functions that generate
 English prompt text for the AI training from those constants.
 
 Used by:
-- tools/doodle_ai.py (AI training prompts and demo script generation)
+- tools/art_ai.py (AI training prompts and demo script generation)
 """
 
 from purple_tui.constants import VIEWPORT_WIDTH, VIEWPORT_HEIGHT
-from purple_tui.rooms.doodle_room import (
+from purple_tui.rooms.art_room import (
     GUTTER, GRAYSCALE,
     QWERTY_ROW, ASDF_ROW, ZXCV_ROW,
 )
@@ -20,12 +20,12 @@ from purple_tui.rooms.doodle_room import (
 # CANVAS DIMENSIONS (computed from viewport and layout constants)
 # =============================================================================
 
-DOODLE_HEADER_ROWS = 1  # CanvasHeader (docked top, height: 1)
+ART_HEADER_ROWS = 1  # CanvasHeader (docked top, height: 1)
 
 # Canvas = viewport content minus header minus gutter on all sides
 # Note: ToolOverlay auto-hides (display:none) before AI training starts
 CANVAS_WIDTH = VIEWPORT_WIDTH - 2 * GUTTER
-CANVAS_HEIGHT = VIEWPORT_HEIGHT - DOODLE_HEADER_ROWS - 2 * GUTTER
+CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - 2 * GUTTER
 
 
 # =============================================================================

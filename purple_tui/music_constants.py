@@ -1,4 +1,4 @@
-"""Play mode constants: grid layout, colors, frequencies, percussion.
+"""Music mode constants: grid layout, colors, frequencies, percussion.
 
 Pure data with no side effects. Importable from anywhere without triggering
 pygame initialization or ALSA setup.

@@ -8,7 +8,7 @@ advertising screencasts.
 
 Example script:
     SCRIPT = [
-        SwitchRoom("explore"),
+        SwitchRoom("play"),
         TypeText("Hello World!"),
         PressKey("enter"),
         Pause(1.0),
@@ -61,10 +61,10 @@ class SwitchRoom(PlaybackAction):
     """Switch to a different room.
 
     Args:
-        room: 'explore' (F1), 'play' (F2), or 'doodle' (F3)
+        room: 'play' (F1), 'music' (F2), or 'art' (F3)
         pause_after: Pause after switching to let the room render
     """
-    room: Literal["explore", "play", "doodle"]
+    room: Literal["play", "music", "art"]
     pause_after: float = 0.5
 
 
@@ -76,7 +76,7 @@ class SwitchTarget(PlaybackAction):
     recorded during F5 recording.
 
     Args:
-        target: Target string like "play.music", "doodle.paint", "explore"
+        target: Target string like "music.music", "art.paint", "play"
         pause_after: Pause after switching
     """
     target: str
@@ -97,8 +97,8 @@ class Pause(PlaybackAction):
 class Clear(PlaybackAction):
     """Clear the current room's content.
 
-    In Ask room: clears history
-    In Write room: clears canvas
+    In Play room: clears history
+    In Art room: clears canvas
     """
     pause_after: float = 0.3
 
@@ -108,25 +108,25 @@ class ClearAll(PlaybackAction):
     """Clear all state across all modes. Use at start of demo.
 
     Clears:
-    - Explore room history and last result
-    - Play room colors (reset to defaults)
-    - Doodle room canvas
+    - Play room history and last result
+    - Music room colors (reset to defaults)
+    - Art room canvas
     """
     pause_after: float = 0.1
 
 
 @dataclass
-class ClearDoodle(PlaybackAction):
-    """Clear the doodle canvas and reset cursor to (0,0).
+class ClearArt(PlaybackAction):
+    """Clear the art canvas and reset cursor to (0,0).
 
-    Use this to start fresh in doodle room without affecting other rooms.
+    Use this to start fresh in art room without affecting other rooms.
     """
     pause_after: float = 0.2
 
 
 @dataclass
 class PlayKeys(PlaybackAction):
-    """Play a sequence of keys in Play room (for making music).
+    """Play a sequence of keys in Music room (for making music).
 
     This types keys with musical timing. Each item can be:
     - A single key: 'q'
@@ -145,7 +145,7 @@ class PlayKeys(PlaybackAction):
 
 @dataclass
 class DrawPath(PlaybackAction):
-    """Draw a path in Write room (hold space + arrows).
+    """Draw a path in Art room (hold space + arrows).
 
     Args:
         directions: List of arrow directions: 'up', 'down', 'left', 'right'
@@ -191,7 +191,7 @@ class ZoomIn(PlaybackAction):
     then post-processing applies the zoom via FFmpeg crop/scale.
 
     Args:
-        region: Named region ("input", "viewport", "doodle-center") or
+        region: Named region ("input", "viewport", "art-center") or
                 custom tuple (x, y, width, height) at recording resolution
         zoom: Zoom level (1.5 = 150%, 2.0 = 200%)
         duration: Transition time in seconds (ease-out for smooth arrival)
@@ -277,7 +277,7 @@ def segment_duration(actions: list[PlaybackAction]) -> float:
             total += 0.1 + 0.1 + 0.05 + total_steps * action.delay_per_step + action.pause_after
         elif isinstance(action, MoveSequence):
             total += len(action.directions) * action.delay_per_step + action.pause_after
-        elif isinstance(action, (Clear, ClearAll, ClearDoodle)):
+        elif isinstance(action, (Clear, ClearAll, ClearArt)):
             total += action.pause_after
         elif isinstance(action, (ZoomIn, ZoomOut, ZoomTarget)):
             total += action.duration

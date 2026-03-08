@@ -423,11 +423,11 @@ _mixer_initialized = False
 
 
 def _ensure_mixer() -> bool:
-    """Check if pygame mixer is available (don't initialize, let play mode do it)"""
+    """Check if pygame mixer is available (don't initialize, let music mode do it)"""
     global _mixer_initialized
     if _mixer_initialized:
         return True
-    # Check if mixer is already initialized (by play mode)
+    # Check if mixer is already initialized (by music mode)
     if pygame.mixer.get_init():
         _mixer_initialized = True
         return True
@@ -505,9 +505,9 @@ def _pregenerate_cache() -> None:
     except Exception:
         pass
 
-    # Play mode recognized words (cat, dog, mom, dad, etc.)
+    # Music mode recognized words (cat, dog, mom, dad, etc.)
     try:
-        from .play_words import WORDS
+        from .music_words import WORDS
         phrases.extend(WORDS)
     except Exception:
         pass

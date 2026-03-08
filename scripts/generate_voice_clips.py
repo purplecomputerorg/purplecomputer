@@ -6,7 +6,7 @@ Uses Piper TTS to generate commonly spoken phrases as WAV files.
 These are loaded at runtime instead of generating speech on the fly.
 
 Automatically extracts phrases from the demo script by looking for
-text with ! (which triggers speech in Explore mode).
+text with ! (which triggers speech in Play mode).
 """
 
 import sys
@@ -180,7 +180,7 @@ def _stub_ui_modules():
     """Stub out textual/rich/pygame so we can import SimpleEvaluator without UI deps.
 
     SimpleEvaluator is pure computation (no textual dependency), but it lives
-    in explore_mode.py which imports textual at module level for the UI classes.
+    in play_room.py which imports textual at module level for the UI classes.
     The modes/__init__.py also imports all modes, pulling in their dependencies.
     """
     import types
@@ -298,7 +298,7 @@ def extract_demo_phrases() -> list[str]:
     _stub_ui_modules()
 
     from purple_tui.demo.script import TypeText
-    from purple_tui.modes.explore_mode import SimpleEvaluator
+    from purple_tui.rooms.play_room import SimpleEvaluator
 
     evaluator = SimpleEvaluator()
     phrases = []

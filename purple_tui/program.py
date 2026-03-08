@@ -1,7 +1,7 @@
 """
 Command Mode: program recording, editing, and playback.
 
-Records keyboard actions from Play, Doodle, and Explore modes as editable blocks.
+Records keyboard actions from Music, Art, and Play modes as editable blocks.
 Six block types following a Scratch-inspired model: KEY, QUERY, STROKE, PAUSE,
 REPEAT, MODE_SWITCH.
 
@@ -52,7 +52,7 @@ PAUSE_THRESHOLD_MS = 300
 # Preset PAUSE durations (seconds), cycled with up/down
 PAUSE_PRESETS = [0.25, 0.5, 1.0, 2.0]
 
-# Row-based colors for KEY blocks (matching Doodle mode's keyboard rows)
+# Row-based colors for KEY blocks (matching Art mode's keyboard rows)
 QWERTY_ROW = set("qwertyuiop[]\\")
 ASDF_ROW = set("asdfghjkl;'")
 ZXCV_ROW = set("zxcvbnm,./")
@@ -70,97 +70,97 @@ PAUSE_COLOR = "#606060"
 REPEAT_COLOR = "#2d9e8a"
 
 # MODE_SWITCH target constants
-TARGET_PLAY_MUSIC = "play.music"
-TARGET_PLAY_LETTERS = "play.letters"
-TARGET_DOODLE_TEXT = "doodle.text"
-TARGET_DOODLE_PAINT = "doodle.paint"
-TARGET_EXPLORE = "explore"
+TARGET_MUSIC_MUSIC = "music.music"
+TARGET_MUSIC_LETTERS = "music.letters"
+TARGET_ART_TEXT = "art.text"
+TARGET_ART_PAINT = "art.paint"
+TARGET_PLAY = "play"
 
 ALL_TARGETS = [
-    TARGET_PLAY_MUSIC,
-    TARGET_PLAY_LETTERS,
-    TARGET_DOODLE_TEXT,
-    TARGET_DOODLE_PAINT,
-    TARGET_EXPLORE,
+    TARGET_MUSIC_MUSIC,
+    TARGET_MUSIC_LETTERS,
+    TARGET_ART_TEXT,
+    TARGET_ART_PAINT,
+    TARGET_PLAY,
 ]
 
 # Room-level grouping: each room has a default target and list of all targets
 ROOMS = {
+    "music": {
+        "default": TARGET_MUSIC_MUSIC,
+        "targets": [TARGET_MUSIC_MUSIC, TARGET_MUSIC_LETTERS],
+        "label": "Music",
+    },
+    "art": {
+        "default": TARGET_ART_PAINT,
+        "targets": [TARGET_ART_PAINT, TARGET_ART_TEXT],
+        "label": "Art",
+    },
     "play": {
-        "default": TARGET_PLAY_MUSIC,
-        "targets": [TARGET_PLAY_MUSIC, TARGET_PLAY_LETTERS],
+        "default": TARGET_PLAY,
+        "targets": [TARGET_PLAY],
         "label": "Play",
-    },
-    "doodle": {
-        "default": TARGET_DOODLE_PAINT,
-        "targets": [TARGET_DOODLE_PAINT, TARGET_DOODLE_TEXT],
-        "label": "Doodle",
-    },
-    "explore": {
-        "default": TARGET_EXPLORE,
-        "targets": [TARGET_EXPLORE],
-        "label": "Explore",
     },
 }
 
-ROOM_ORDER = ["play", "doodle", "explore"]
+ROOM_ORDER = ["music", "art", "play"]
 
 def target_room(target: str) -> str:
-    """Get the room name for a target (e.g., 'play.music' -> 'play')."""
+    """Get the room name for a target (e.g., 'music.music' -> 'music')."""
     return target.split(".")[0]
 
 def default_target_for_room(room: str) -> str:
     """Get the default target for a room."""
-    return ROOMS.get(room, {}).get("default", TARGET_PLAY_MUSIC)
+    return ROOMS.get(room, {}).get("default", TARGET_MUSIC_MUSIC)
 
 # Room-level icons (matching the title bar Nerd Font icons)
 from .constants import ICON_MUSIC, ICON_PALETTE, ICON_CHAT
 
 ROOM_ICONS = {
-    "play": ICON_MUSIC,
-    "doodle": ICON_PALETTE,
-    "explore": ICON_CHAT,
+    "music": ICON_MUSIC,
+    "art": ICON_PALETTE,
+    "play": ICON_CHAT,
 }
 
 # Per-target icons (shown inside MODE_SWITCH blocks)
 TARGET_ICONS = {
-    TARGET_PLAY_MUSIC: ICON_MUSIC,
-    TARGET_PLAY_LETTERS: ICON_MUSIC,
-    TARGET_DOODLE_TEXT: ICON_PALETTE,
-    TARGET_DOODLE_PAINT: ICON_PALETTE,
-    TARGET_EXPLORE: ICON_CHAT,
+    TARGET_MUSIC_MUSIC: ICON_MUSIC,
+    TARGET_MUSIC_LETTERS: ICON_MUSIC,
+    TARGET_ART_TEXT: ICON_PALETTE,
+    TARGET_ART_PAINT: ICON_PALETTE,
+    TARGET_PLAY: ICON_CHAT,
 }
 
 # Room-level colors (one color per room)
 ROOM_COLORS = {
-    "play": "#44DD44",
-    "doodle": "#DD8844",
-    "explore": "#44AADD",
+    "music": "#44DD44",
+    "art": "#DD8844",
+    "play": "#44AADD",
 }
 
 TARGET_COLORS = {
-    TARGET_PLAY_MUSIC: "#44DD44",
-    TARGET_PLAY_LETTERS: "#44DD44",
-    TARGET_DOODLE_TEXT: "#DD8844",
-    TARGET_DOODLE_PAINT: "#DD8844",
-    TARGET_EXPLORE: "#44AADD",
+    TARGET_MUSIC_MUSIC: "#44DD44",
+    TARGET_MUSIC_LETTERS: "#44DD44",
+    TARGET_ART_TEXT: "#DD8844",
+    TARGET_ART_PAINT: "#DD8844",
+    TARGET_PLAY: "#44AADD",
 }
 
 # Sub-mode labels (shown when non-default mode is selected)
 MODE_LABELS = {
-    TARGET_PLAY_MUSIC: "Music",
-    TARGET_PLAY_LETTERS: "Letters",
-    TARGET_DOODLE_TEXT: "Text",
-    TARGET_DOODLE_PAINT: "Paint",
-    TARGET_EXPLORE: "",
+    TARGET_MUSIC_MUSIC: "Music",
+    TARGET_MUSIC_LETTERS: "Letters",
+    TARGET_ART_TEXT: "Text",
+    TARGET_ART_PAINT: "Paint",
+    TARGET_PLAY: "",
 }
 
 TARGET_LABELS = {
-    TARGET_PLAY_MUSIC: "Play",
-    TARGET_PLAY_LETTERS: "Play (letters)",
-    TARGET_DOODLE_TEXT: "Doodle (text)",
-    TARGET_DOODLE_PAINT: "Doodle",
-    TARGET_EXPLORE: "Explore",
+    TARGET_MUSIC_MUSIC: "Music",
+    TARGET_MUSIC_LETTERS: "Music (letters)",
+    TARGET_ART_TEXT: "Art (text)",
+    TARGET_ART_PAINT: "Art",
+    TARGET_PLAY: "Play",
 }
 
 # Icons for control keys (KEY blocks with is_control=True)
@@ -186,8 +186,8 @@ DIRECTION_ICONS = {
 
 class ProgramBlockType(Enum):
     KEY = "key"               # Single key press (char or control key)
-    QUERY = "query"           # Complete Explore query
-    STROKE = "stroke"         # Doodle paint direction + distance
+    QUERY = "query"           # Complete Play query
+    STROKE = "stroke"         # Art paint direction + distance
     PAUSE = "pause"           # Explicit visible wait
     REPEAT = "repeat"         # Repeat preceding line N times
     MODE_SWITCH = "mode_switch"  # Switch target mode
@@ -233,7 +233,7 @@ class ProgramBlock:
     repeat_count: int = 2       # 2-99
 
     # MODE_SWITCH fields
-    target: str = ""            # "play.music", "doodle.paint", etc.
+    target: str = ""            # "music.music", "art.paint", etc.
 
     # Hidden timing metadata (not displayed, used for playback)
     recorded_gap_ms: int = 0    # exact milliseconds from F5 recording
@@ -418,7 +418,7 @@ def _default_target_for_blocks(blocks: list[ProgramBlock]) -> str:
     for block in blocks:
         if block.type == ProgramBlockType.MODE_SWITCH:
             return block.target
-    return TARGET_PLAY_MUSIC
+    return TARGET_MUSIC_MUSIC
 
 
 def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
@@ -468,7 +468,7 @@ def _section_to_actions(section: list[ProgramBlock]) -> list[PlaybackAction]:
 PROGRAMS_DIR = Path.home() / ".purple" / "programs"
 
 
-def blocks_to_json(blocks: list[ProgramBlock], source_room: str = "play") -> str:
+def blocks_to_json(blocks: list[ProgramBlock], source_room: str = "music") -> str:
     """Serialize program blocks to JSON string (version 2 format)."""
     import datetime
     data = {
@@ -487,7 +487,7 @@ def blocks_from_json(s: str) -> tuple[list[ProgramBlock], str]:
     """
     data = json.loads(s)
     version = data.get("version", 1)
-    source_room = data.get("source_room", "play")
+    source_room = data.get("source_room", "music")
 
     if version == 1:
         blocks = _migrate_v1_blocks(data.get("blocks", []))
@@ -498,7 +498,7 @@ def blocks_from_json(s: str) -> tuple[list[ProgramBlock], str]:
 
 
 def save_program(blocks: list[ProgramBlock], slot: int,
-                 source_room: str = "play") -> bool:
+                 source_room: str = "music") -> bool:
     """Save a program to a numbered slot (1-9). Returns True on success."""
     if not 1 <= slot <= 9:
         return False
@@ -652,7 +652,7 @@ def _migrate_v1_blocks(v1_blocks: list[dict]) -> list[ProgramBlock]:
 
         if v1_type == "arrow":
             direction = d.get("direction", "")
-            if current_target == TARGET_DOODLE_PAINT:
+            if current_target == TARGET_ART_PAINT:
                 # Merge consecutive same-direction arrows into STROKE
                 # For migration, each arrow becomes distance 1; merging happens in recording
                 block = ProgramBlock(

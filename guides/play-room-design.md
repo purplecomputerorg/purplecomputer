@@ -1,6 +1,6 @@
-# Explore Mode Design Philosophy
+# Play Room Design Philosophy
 
-Explore mode is designed around **maximal permissiveness**: always try to do something meaningful with whatever the child types. This document explains how the evaluator thinks about expressions.
+Play room is designed around **maximal permissiveness**: always try to do something meaningful with whatever the child types. This document explains how the evaluator thinks about expressions.
 
 ---
 

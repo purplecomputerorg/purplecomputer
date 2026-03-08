@@ -354,9 +354,9 @@ Before considering Apple Silicon supported, verify each item on actual hardware:
 
 ### Phase 2: Does everything work?
 
-- [ ] Explore mode: type characters, verify visual output
-- [ ] Play mode: verify sound output through speakers
-- [ ] Doodle mode: verify painting works
+- [ ] Play room: type characters, verify visual output
+- [ ] Music room: verify sound output through speakers
+- [ ] Art room: verify painting works
 - [ ] TTS: verify text-to-speech audio output (Piper or espeak-ng)
 - [ ] Audio quality: are marimba/percussion sounds acceptable through the built-in speakers?
 - [ ] Lid close: verify full shutdown (not suspend)

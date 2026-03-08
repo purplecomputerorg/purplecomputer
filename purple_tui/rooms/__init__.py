@@ -8,8 +8,8 @@ Content (emojis, definitions, sounds) comes from purplepacks, which are
 content-only and safe for parents to install.
 """
 
-from .explore_room import ExploreMode
 from .play_room import PlayMode
-from .doodle_room import DoodleMode
+from .music_room import MusicMode
+from .art_room import ArtMode
 
-__all__ = ["ExploreMode", "PlayMode", "DoodleMode"]
+__all__ = ["PlayMode", "MusicMode", "ArtMode"]

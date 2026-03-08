@@ -1,13 +1,13 @@
-"""Word recognition for Play Mode Letters mode.
+"""Word recognition for Music Mode Letters mode.
 
 After a replay finishes, if the typed letters form a known word, the word
 is spoken aloud via TTS. This connects individual letter sounds to whole words.
 
 Pure logic with no UI, audio, or pygame dependencies. Kept separate from
-play_room.py so it's easy to test.
+music_room.py so it's easy to test.
 """
 
-from .play_session import MODE_LETTERS
+from .music_session import MODE_LETTERS
 
 # Basic words for kids 4-7. All lowercase, 2-5 letters.
 WORDS = frozenset({
@@ -59,7 +59,7 @@ def extract_word(replay_data: list[tuple[str, str, float]], letters_mode: str = 
     against the known word list.
 
     Args:
-        replay_data: List of (key, mode, delay) triples from PlaySession.
+        replay_data: List of (key, mode, delay) triples from MusicSession.
         letters_mode: The mode string for letters (default MODE_LETTERS).
 
     Returns:

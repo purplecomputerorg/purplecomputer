@@ -1,18 +1,18 @@
-# Purple Computer Mode Reference
+# Purple Computer Room Reference
 
-A comprehensive guide to how each mode works, including all the mechanics, tricks, and techniques for creating engaging demos.
+A comprehensive guide to how each room works, including all the mechanics, tricks, and techniques for creating engaging demos.
 
 ---
 
 ## Table of Contents
-1. [Play Mode (F2)](#play-mode-f2)
-2. [Doodle Mode (F3)](#doodle-mode-f3)
-3. [Explore Mode (F1)](#explore-mode-f1)
+1. [Music Room (F2)](#music-room-f2)
+2. [Art Room (F3)](#art-room-f3)
+3. [Play Room (F1)](#play-room-f1)
 4. [Demo Scripting Reference](#demo-scripting-reference)
 
 ---
 
-# Play Mode (F2)
+# Music Room (F2)
 
 ## The Grid
 
@@ -82,7 +82,7 @@ Within each row, left keys are lower pitch, right keys are higher:
 | 8   | Tambourine| Jingly              |
 | 9   | Bongo     | Mid-range drum      |
 
-## Demo Tricks for Play Mode
+## Demo Tricks for Music Room
 
 ### Drawing Shapes
 
@@ -134,11 +134,11 @@ To make alternating colors:
 
 ### Clearing the Grid
 
-Switch away from Play mode and back, or use `ClearAll()` in demo script to reset all colors to off.
+Switch away from the Music room and back, or use `ClearAll()` in demo script to reset all colors to off.
 
 ---
 
-# Doodle Mode (F3)
+# Art Room (F3)
 
 ## Two Sub-Modes
 
@@ -288,7 +288,7 @@ The 3×3 blinking ring shows:
 
 ---
 
-# Explore Mode (F1)
+# Play Room (F1)
 
 ## Input Types
 
@@ -345,7 +345,7 @@ what is 2 + 3   → "what is 5" (text preserved)
 
 ## Color Mixing Details
 
-Same Kubelka-Munk algorithm as Doodle mode:
+Same Kubelka-Munk algorithm as the Art room:
 
 | Mix               | Result  |
 |-------------------|---------|
@@ -363,7 +363,7 @@ Same Kubelka-Munk algorithm as Doodle mode:
 - Press **Space** to accept suggestion
 - Shows both emoji icon and color swatch for words like "orange" (both 🍊 and color)
 
-## Demo Tricks for Explore Mode
+## Demo Tricks for Play Room
 
 ### Quick Impressive Queries
 ```
@@ -403,7 +403,7 @@ Types characters one at a time. Works in any mode.
 ### PressKey
 ```python
 PressKey("enter", pause_after=0.5)
-PressKey("space", count=2)  # Toggle paint mode in Doodle
+PressKey("space", count=2)  # Toggle paint mode in Art
 PressKey("space")    # Accept autocomplete or type space
 PressKey("up")       # Navigate/scroll
 ```
@@ -434,9 +434,9 @@ Automatically enters paint mode if needed.
 
 ### SwitchMode
 ```python
-SwitchMode("play")    # F2
-SwitchMode("explore") # F1
-SwitchMode("doodle")  # F3
+SwitchMode("music")   # F2
+SwitchMode("play")    # F1
+SwitchMode("art")     # F3
 ```
 
 ### Pause
@@ -451,7 +451,7 @@ ClearAll()  # Reset all modes to clean state
 
 ## Demo Design Tips
 
-### Play Mode Pictures
+### Music Room Pictures
 
 Plan your key sequence on paper first:
 ```
@@ -465,14 +465,14 @@ Mark which keys to press for your shape.
 Assign colors by press count.
 ```
 
-### Doodle Mode Art
+### Art Room Drawings
 
 1. **Position first**: Use multiple PressKey("down")/("right") to get to starting position
 2. **Draw shapes**: Use DrawPath with directions
 3. **Mix colors**: Draw overlapping paths with different color_keys
 4. **Add text**: Press Tab to exit paint mode, then TypeText
 
-### Explore Mode Wow Moments
+### Play Room Wow Moments
 
 The most impressive demos:
 1. Color mixing (`red + blue` → purple)
@@ -486,7 +486,7 @@ The most impressive demos:
 - `seconds_between=0.33` = fast
 - `seconds_between=0.67` = slow, dramatic
 
-### Multi-Color Play Mode Patterns
+### Multi-Color Music Room Patterns
 
 To get different colors on different keys:
 ```python
@@ -500,7 +500,7 @@ PlayKeys(sequence=['a', 'a', 'l', 'l'], seconds_between=0.4)
 PlayKeys(sequence=['c', 'c', 'c', 'n', 'n', 'n'], seconds_between=0.3)
 ```
 
-### Doodle Color Mixing Demo
+### Art Room Color Mixing Demo
 
 ```python
 # Draw yellow square
@@ -521,7 +521,7 @@ DrawPath(directions=['right', 'right', 'right', 'right'], color_key='c')
 
 ## Quick Reference Tables
 
-### Play Mode Grid
+### Music Room Grid
 ```
 1 2 3 4 5 6 7 8 9 0   ← Percussion sounds
 Q W E R T Y U I O P   ← High marimba (392-988 Hz)
@@ -529,7 +529,7 @@ A S D F G H J K L ;   ← Mid marimba (196-494 Hz)
 Z X C V B N M , . /   ← Low marimba (98-247 Hz)
 ```
 
-### Doodle Color Keys
+### Art Room Color Keys
 ```
 1-0: Grayscale (white to black)
 QWERTY: Red family (light to dark)
@@ -544,12 +544,12 @@ Red + Yellow = Orange
 Blue + Yellow = Green
 ```
 
-### Mode Shortcuts
+### Room Shortcuts
 ```
-Esc (tap): Open mode picker (Explore, Play, Write, Paint)
+Esc (tap): Open room picker (Play, Music, Art)
 Esc (hold 1s): Parent mode
-F1: Explore mode
-F2: Play mode
-F3: Doodle mode
-Tab (in Doodle): Toggle text/paint mode
+F1: Play room
+F2: Music room
+F3: Art room
+Tab (in Art): Toggle text/paint mode
 ```

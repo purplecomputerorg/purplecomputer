@@ -1,4 +1,4 @@
-"""Play session recorder for replay functionality.
+"""Music session recorder for replay functionality.
 
 Pure logic with no UI or audio dependencies. Records key presses with timing
 and mode info, and produces replay sequences.
@@ -18,15 +18,15 @@ MODE_MUSIC = 'music'
 MODE_LETTERS = 'letters'
 
 
-class PlaySession:
-    """Records key presses with timing for replay in Play Mode.
+class MusicSession:
+    """Records key presses with timing for replay in Music Mode.
 
     Each event records the key, which mode it was pressed in (music
     or letters), and the timestamp. Replay preserves mode so letter
     keys are spoken and music keys play sounds.
 
     Usage:
-        session = PlaySession()
+        session = MusicSession()
 
         # Record keys with their mode
         session.record('A', 'music')

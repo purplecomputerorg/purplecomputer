@@ -38,9 +38,9 @@ from ..program import (
     TARGET_ICONS,
     TARGET_COLORS,
     TARGET_LABELS,
-    TARGET_PLAY_MUSIC,
-    TARGET_EXPLORE,
-    TARGET_DOODLE_PAINT,
+    TARGET_MUSIC_MUSIC,
+    TARGET_PLAY,
+    TARGET_ART_PAINT,
     ALL_TARGETS,
     PAUSE_PRESETS,
     DIRECTION_ICONS,
@@ -650,7 +650,7 @@ class CommandMode(Container, can_focus=True):
         if not self._blocks:
             self._blocks.append(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
-                target=TARGET_PLAY_MUSIC,
+                target=TARGET_MUSIC_MUSIC,
             ))
             self._cursor = 1
 
@@ -720,7 +720,7 @@ class CommandMode(Container, can_focus=True):
             await self._start_playback()
         elif action.action == 'enter':
             context = self._mode_context()
-            if context == TARGET_EXPLORE:
+            if context == TARGET_PLAY:
                 # Start compose mode for QUERY block
                 self._composing = True
                 self._compose_text = ""
@@ -741,7 +741,7 @@ class CommandMode(Container, can_focus=True):
 
         context = self._mode_context()
 
-        if context == TARGET_EXPLORE:
+        if context == TARGET_PLAY:
             # Start compose mode with this character
             self._composing = True
             self._compose_text = action.char
@@ -805,7 +805,7 @@ class CommandMode(Container, can_focus=True):
         action = result.get("action")
 
         if action == "insert_mode_switch":
-            target = result.get("target", TARGET_PLAY_MUSIC)
+            target = result.get("target", TARGET_MUSIC_MUSIC)
             self._insert_block(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
                 target=target,

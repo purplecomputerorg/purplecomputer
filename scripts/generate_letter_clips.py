@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate pre-recorded letter name clips for Play Mode's Letters sub-mode.
+Generate pre-recorded letter name clips for Music Mode's Letters sub-mode.
 
 Uses Piper TTS to generate a spoken clip of each letter (A-Z).
-These are loaded at runtime by PlayGrid instead of using live TTS.
+These are loaded at runtime by MusicGrid instead of using live TTS.
 
 Deterministic: noise_scale=0.3, noise_w=0.3, length_scale=1.0
 Uses phonetic letter pronunciation for clarity.
@@ -182,7 +182,7 @@ def main():
     """Generate letter (A-Z) and number (0-9) name clips."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate letter and number name clips for Play Mode")
+    parser = argparse.ArgumentParser(description="Generate letter and number name clips for Music Mode")
     parser.add_argument("--force", "-f", action="store_true",
                         help="Regenerate all clips even if they exist")
     args = parser.parse_args()

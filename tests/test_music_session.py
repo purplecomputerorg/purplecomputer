@@ -1,6 +1,6 @@
-"""Tests for Play Mode session recording and replay.
+"""Tests for Music session recording and replay.
 
-Run with: pytest tests/test_play_session.py -v
+Run with: pytest tests/test_music_session.py -v
 """
 
 import sys
@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
 
-from purple_tui.play_session import (
-    PlaySession,
+from purple_tui.music_session import (
+    MusicSession,
     SESSION_TIMEOUT,
     LONG_PAUSE_THRESHOLD,
     MODE_MUSIC,
@@ -27,22 +27,22 @@ class TestRecording:
     """Test basic event recording."""
 
     def test_record_single_event(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         assert s.has_events()
 
     def test_empty_session(self):
-        s = PlaySession()
+        s = MusicSession()
         assert not s.has_events()
         assert s.get_replay() == []
 
     def test_single_event_replay(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         assert s.get_replay() == [('A', MODE_MUSIC, 0.0)]
 
     def test_multiple_events_timing(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.record('B', now=1.5)
         s.record('C', now=2.0)
@@ -53,7 +53,7 @@ class TestRecording:
         ]
 
     def test_preserves_event_order(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('Z', now=0.0)
         s.record('A', now=0.1)
         s.record('M', now=0.2)
@@ -61,7 +61,7 @@ class TestRecording:
         assert keys == ['Z', 'A', 'M']
 
     def test_rapid_keypresses(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('B', now=0.01)
         s.record('C', now=0.02)
@@ -70,7 +70,7 @@ class TestRecording:
         assert replay[2][2] == pytest.approx(0.01)
 
     def test_same_key_repeated(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('A', now=0.5)
         s.record('A', now=1.0)
@@ -81,7 +81,7 @@ class TestRecording:
         ]
 
     def test_default_submode_is_music(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         _, submode, _ = s.get_replay()[0]
         assert submode == MODE_MUSIC
@@ -95,13 +95,13 @@ class TestSubmodeRecording:
     """Test that sub-mode is preserved per event."""
 
     def test_record_with_letters_submode(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', MODE_LETTERS, now=1.0)
         assert s.get_replay() == [('A', MODE_LETTERS, 0.0)]
 
     def test_mixed_submodes(self):
         """Session can contain events from both sub-modes."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', MODE_MUSIC, now=1.0)
         s.record('B', MODE_LETTERS, now=1.5)
         s.record('C', MODE_MUSIC, now=2.0)
@@ -112,7 +112,7 @@ class TestSubmodeRecording:
 
     def test_submode_preserved_across_timeout_boundary(self):
         """After timeout reset, submode of new events is still recorded."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', MODE_MUSIC, now=0.0)
         s.record('B', MODE_LETTERS, now=SESSION_TIMEOUT + 1)
         replay = s.get_replay()
@@ -120,7 +120,7 @@ class TestSubmodeRecording:
 
     def test_numbers_in_letters_mode(self):
         """Non-letter keys in letters mode still record as letters submode."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('5', MODE_LETTERS, now=1.0)
         assert s.get_replay() == [('5', MODE_LETTERS, 0.0)]
 
@@ -133,7 +133,7 @@ class TestSessionTimeout:
     """Test the 30-second session timeout."""
 
     def test_timeout_clears_old_events(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.record('B', now=1.5)
         # More than SESSION_TIMEOUT later
@@ -141,21 +141,21 @@ class TestSessionTimeout:
         assert s.get_replay() == [('C', MODE_MUSIC, 0.0)]
 
     def test_within_timeout_preserves(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         # Exactly at boundary (gap == 30.0, not > 30.0)
         s.record('B', now=1.0 + SESSION_TIMEOUT)
         assert len(s.get_replay()) == 2
 
     def test_just_over_timeout(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.record('B', now=1.0 + SESSION_TIMEOUT + 0.001)
         assert s.get_replay() == [('B', MODE_MUSIC, 0.0)]
 
     def test_multiple_timeouts(self):
         """Multiple timeout resets in sequence."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('B', now=5.0)   # timeout, reset
         s.record('C', now=10.0)  # timeout again
@@ -167,7 +167,7 @@ class TestSessionTimeout:
 
     def test_long_session_no_timeout(self):
         """Many keys over a long time, but each within timeout of the previous."""
-        s = PlaySession()
+        s = MusicSession()
         for i in range(100):
             s.record('A', now=i * 1.0)  # every 1 second (within 2s timeout)
         assert len(s.get_replay()) == 100
@@ -181,7 +181,7 @@ class TestClear:
     """Test session clear (used when replay starts)."""
 
     def test_clear_empties_session(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.record('B', now=1.5)
         s.clear()
@@ -189,7 +189,7 @@ class TestClear:
         assert s.get_replay() == []
 
     def test_record_after_clear(self):
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.clear()
         s.record('B', now=2.0)
@@ -205,7 +205,7 @@ class TestReplayWorkflow:
 
     def test_get_replay_then_clear_then_new_session(self):
         """Simulates: press keys, get replay data, clear, press new keys."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.record('B', now=1.5)
 
@@ -230,7 +230,7 @@ class TestReplayWorkflow:
 
     def test_replay_with_no_new_input(self):
         """Replay with no new keys pressed afterwards."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=1.0)
         s.get_replay()
         s.clear()
@@ -238,7 +238,7 @@ class TestReplayWorkflow:
 
     def test_multiple_replay_cycles(self):
         """Multiple record-replay cycles."""
-        s = PlaySession()
+        s = MusicSession()
 
         # First session
         s.record('A', now=0.0)
@@ -264,7 +264,7 @@ class TestReplayWorkflow:
 
     def test_empty_replay_does_nothing(self):
         """Getting replay from empty session returns empty list."""
-        s = PlaySession()
+        s = MusicSession()
         assert s.get_replay() == []
         # Clear on empty session is fine
         s.clear()
@@ -272,7 +272,7 @@ class TestReplayWorkflow:
 
     def test_mixed_submode_replay(self):
         """Replay preserves sub-modes from a mixed session."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', MODE_MUSIC, now=0.0)
         s.record('B', MODE_LETTERS, now=0.5)
         s.record('1', MODE_LETTERS, now=1.0)
@@ -302,7 +302,7 @@ class TestTimeFn:
             clock[0] += 1.0
             return clock[0]
 
-        s = PlaySession(time_fn=fake_time)
+        s = MusicSession(time_fn=fake_time)
         s.record('A')
         s.record('B')
         assert s.get_replay() == [
@@ -312,7 +312,7 @@ class TestTimeFn:
 
     def test_explicit_overrides_time_fn(self):
         """Explicit now= parameter overrides time_fn."""
-        s = PlaySession(time_fn=lambda: 999.0)
+        s = MusicSession(time_fn=lambda: 999.0)
         s.record('A', now=1.0)
         s.record('B', now=2.0)
         assert s.get_replay() == [
@@ -329,12 +329,12 @@ class TestRecentReplay:
     """Test get_recent_replay() for smart Space key behavior."""
 
     def test_empty_session(self):
-        s = PlaySession()
+        s = MusicSession()
         assert s.get_recent_replay() == []
 
     def test_short_session_returns_all(self):
         """A short session returns everything."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('B', now=0.5)
         s.record('C', now=1.0)
@@ -344,7 +344,7 @@ class TestRecentReplay:
 
     def test_caps_at_10_seconds(self):
         """Events older than 10 seconds are excluded."""
-        s = PlaySession()
+        s = MusicSession()
         # 30 events at 0.5s intervals (total 15s, no long pauses)
         for i in range(31):
             s.record('A', now=i * 0.5)
@@ -354,7 +354,7 @@ class TestRecentReplay:
 
     def test_long_pause_cuts_replay(self):
         """A long pause within the session limits what gets replayed."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('B', now=0.5)
         # Long pause (>= LONG_PAUSE_THRESHOLD)
@@ -367,7 +367,7 @@ class TestRecentReplay:
 
     def test_no_long_pause_uses_time_cap(self):
         """Without a long pause, all events within max_seconds are returned."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=0.0)
         s.record('B', now=0.3)
         s.record('C', now=0.6)
@@ -376,7 +376,7 @@ class TestRecentReplay:
 
     def test_preserves_timing(self):
         """Recent replay preserves timing between events."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', now=5.0)
         s.record('B', now=5.3)
         s.record('C', now=5.8)
@@ -387,7 +387,7 @@ class TestRecentReplay:
 
     def test_preserves_submodes(self):
         """Recent replay preserves sub-modes."""
-        s = PlaySession()
+        s = MusicSession()
         s.record('A', MODE_MUSIC, now=0.0)
         s.record('B', MODE_LETTERS, now=0.5)
         replay = s.get_recent_replay()
@@ -396,7 +396,7 @@ class TestRecentReplay:
 
     def test_long_pause_preferred_over_time_cap(self):
         """When a long pause is more recent than the time cap, use the pause."""
-        s = PlaySession()
+        s = MusicSession()
         # 8 seconds of events, then a 1.5s pause, then 2 more events
         for i in range(9):
             s.record('A', now=i * 1.0)

@@ -2,16 +2,16 @@
 
 from purple_tui.demo.script import (
     PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment, TypeText,
-    ClearDoodle,
+    ClearArt,
 )
 
 SEGMENT = [
     Comment("=== AI GENERATED DRAWING ==="),
-    SwitchRoom("doodle"),
+    SwitchRoom("art"),
     Pause(0.3),
 
     # Clear the canvas and reset cursor to (0,0)
-    ClearDoodle(),
+    ClearArt(),
 
     PressKey("tab"),  # Enter paint mode
     Pause(0.1),

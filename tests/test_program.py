@@ -32,11 +32,11 @@ from purple_tui.program import (
     STROKE_COLOR,
     PAUSE_COLOR,
     REPEAT_COLOR,
-    TARGET_PLAY_MUSIC,
-    TARGET_PLAY_LETTERS,
-    TARGET_DOODLE_PAINT,
-    TARGET_DOODLE_TEXT,
-    TARGET_EXPLORE,
+    TARGET_MUSIC_MUSIC,
+    TARGET_MUSIC_LETTERS,
+    TARGET_ART_PAINT,
+    TARGET_ART_TEXT,
+    TARGET_PLAY,
     TARGET_ICONS,
     TARGET_COLORS,
     ALL_TARGETS,
@@ -236,22 +236,22 @@ class TestRepeatBlock:
 
 class TestModeSwitchBlock:
     def test_icon(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
-        assert block.icon == TARGET_ICONS[TARGET_PLAY_MUSIC]
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC)
+        assert block.icon == TARGET_ICONS[TARGET_MUSIC_MUSIC]
 
     def test_bg_color(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE)
-        assert block.bg_color == TARGET_COLORS[TARGET_EXPLORE]
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY)
+        assert block.bg_color == TARGET_COLORS[TARGET_PLAY]
 
     def test_cycle_target(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC)
         block.cycle_target(1)
-        assert block.target == TARGET_DOODLE_PAINT  # play -> doodle (default: paint)
+        assert block.target == TARGET_ART_PAINT  # music -> art (default: paint)
 
     def test_cycle_target_wraps(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE)
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY)
         block.cycle_target(1)
-        assert block.target == TARGET_PLAY_MUSIC  # explore -> play (wraps)
+        assert block.target == TARGET_MUSIC_MUSIC  # play -> music (wraps)
 
 
 # =============================================================================
@@ -260,28 +260,28 @@ class TestModeSwitchBlock:
 
 class TestActionToBlock:
     def test_character_to_key(self):
-        block = action_to_block(CharacterAction(char="a"), "play")
+        block = action_to_block(CharacterAction(char="a"), "music")
         assert block is not None
         assert block.type == ProgramBlockType.KEY
         assert block.char == "a"
         assert not block.is_control
 
     def test_control_to_key(self):
-        block = action_to_block(ControlAction(action="enter", is_down=True), "play")
+        block = action_to_block(ControlAction(action="enter", is_down=True), "music")
         assert block is not None
         assert block.type == ProgramBlockType.KEY
         assert block.char == "enter"
         assert block.is_control
 
     def test_navigation_to_stroke(self):
-        block = action_to_block(NavigationAction(direction="right"), "doodle")
+        block = action_to_block(NavigationAction(direction="right"), "art")
         assert block is not None
         assert block.type == ProgramBlockType.STROKE
         assert block.direction == "right"
         assert block.distance == 1
 
     def test_unsupported_control_returns_none(self):
-        block = action_to_block(ControlAction(action="escape", is_down=True), "play")
+        block = action_to_block(ControlAction(action="escape", is_down=True), "music")
         assert block is None
 
 
@@ -295,18 +295,18 @@ class TestPlayback:
 
     def test_key_block_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
         actions = blocks_to_playback_actions(blocks)
         assert isinstance(actions[0], SwitchTarget)
-        assert actions[0].target == TARGET_PLAY_MUSIC
+        assert actions[0].target == TARGET_MUSIC_MUSIC
         assert isinstance(actions[1], TypeText)
         assert actions[1].text == "a"
 
     def test_control_key_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY),
             ProgramBlock(type=ProgramBlockType.KEY, char="enter", is_control=True),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -317,7 +317,7 @@ class TestPlayback:
 
     def test_query_block_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY),
             ProgramBlock(type=ProgramBlockType.QUERY, query_text="hello"),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -330,7 +330,7 @@ class TestPlayback:
 
     def test_stroke_block_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_DOODLE_PAINT),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_ART_PAINT),
             ProgramBlock(type=ProgramBlockType.STROKE, direction="right", distance=3),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -339,7 +339,7 @@ class TestPlayback:
 
     def test_pause_block_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.PAUSE, duration=1.0),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -348,7 +348,7 @@ class TestPlayback:
 
     def test_repeat_block_playback(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
             ProgramBlock(type=ProgramBlockType.KEY, char="b"),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3),
@@ -363,13 +363,13 @@ class TestPlayback:
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
         actions = blocks_to_playback_actions(blocks)
-        # Should get default SwitchTarget (play.music)
+        # Should get default SwitchTarget (music.music)
         assert isinstance(actions[0], SwitchTarget)
-        assert actions[0].target == TARGET_PLAY_MUSIC
+        assert actions[0].target == TARGET_MUSIC_MUSIC
 
     def test_recorded_gap_ms_timing(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a", recorded_gap_ms=200),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -378,7 +378,7 @@ class TestPlayback:
 
     def test_default_tempo_when_no_gap(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a", recorded_gap_ms=0),
         ]
         actions = blocks_to_playback_actions(blocks)
@@ -436,10 +436,10 @@ class TestSerializationV2:
         assert loaded[0].repeat_count == 5
 
     def test_roundtrip_mode_switch(self):
-        blocks = [ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE)]
+        blocks = [ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY)]
         json_str = blocks_to_json(blocks)
         loaded, _ = blocks_from_json(json_str)
-        assert loaded[0].target == TARGET_EXPLORE
+        assert loaded[0].target == TARGET_PLAY
 
     def test_roundtrip_recorded_gap_ms(self):
         blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a", recorded_gap_ms=150)]
@@ -455,9 +455,9 @@ class TestSerializationV2:
 
     def test_source_room_roundtrip(self):
         blocks = [ProgramBlock(type=ProgramBlockType.KEY, char="a")]
-        json_str = blocks_to_json(blocks, source_room="doodle")
+        json_str = blocks_to_json(blocks, source_room="art")
         _, room = blocks_from_json(json_str)
-        assert room == "doodle"
+        assert room == "art"
 
 
 # =============================================================================
@@ -557,7 +557,7 @@ class TestV1Migration:
         assert len(stroke_blocks) >= 1
 
     def test_v1_arrow_in_paint_context_becomes_stroke(self):
-        """Arrow blocks after a doodle.paint MODE_SWITCH should become STROKE."""
+        """Arrow blocks after an art.paint MODE_SWITCH should become STROKE."""
         v1 = [
             {"type": "mode_switch", "target": "doodle.paint", "gap": 0},
             {"type": "arrow", "direction": "right", "gap": 0, "count": 5},
@@ -578,20 +578,20 @@ class TestLayout:
 
     def test_single_key_block(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
         lines = _layout_lines(blocks, 100)
         assert len(lines) == 1
         # Line should contain both blocks
         icon, line_blocks, _ = lines[0]
-        assert icon == TARGET_ICONS[TARGET_PLAY_MUSIC]
+        assert icon == TARGET_ICONS[TARGET_MUSIC_MUSIC]
 
     def test_mode_switch_starts_new_line(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY),
             ProgramBlock(type=ProgramBlockType.KEY, char="b"),
         ]
         lines = _layout_lines(blocks, 100)
@@ -600,7 +600,7 @@ class TestLayout:
     def test_wrapping_at_content_width(self):
         """Many blocks should wrap to multiple lines."""
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
         ]
         # Add enough blocks to require wrapping (each block is 5 chars)
         for i in range(25):
@@ -611,7 +611,7 @@ class TestLayout:
 
     def test_repeat_as_line_metadata(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3),
         ]
@@ -623,7 +623,7 @@ class TestLayout:
 class TestCursorToLinePos:
     def test_cursor_at_start(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
         lines = _layout_lines(blocks, 100)
@@ -633,7 +633,7 @@ class TestCursorToLinePos:
 
     def test_cursor_at_end(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
         lines = _layout_lines(blocks, 100)
@@ -657,22 +657,22 @@ class TestModeContext:
 
     def test_context_after_mode_switch(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
         ]
-        assert _get_mode_context(blocks, 2) == TARGET_EXPLORE
+        assert _get_mode_context(blocks, 2) == TARGET_PLAY
 
     def test_context_between_mode_switches(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_EXPLORE),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY),
             ProgramBlock(type=ProgramBlockType.KEY, char="b"),
         ]
         # Cursor at position 2 (between first KEY and second MODE_SWITCH)
-        assert _get_mode_context(blocks, 2) == TARGET_PLAY_MUSIC
+        assert _get_mode_context(blocks, 2) == TARGET_MUSIC_MUSIC
         # Cursor at position 4 (after second KEY)
-        assert _get_mode_context(blocks, 4) == TARGET_EXPLORE
+        assert _get_mode_context(blocks, 4) == TARGET_PLAY
 
 
 # =============================================================================
@@ -687,26 +687,26 @@ class TestModeContextDefaults:
 
     def test_cursor_at_zero_no_context(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
         ]
         assert _get_mode_context(blocks, 0) == ""
 
     def test_cursor_after_mode_switch_has_context(self):
         blocks = [
-            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC),
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
         ]
-        assert _get_mode_context(blocks, 1) == TARGET_PLAY_MUSIC
+        assert _get_mode_context(blocks, 1) == TARGET_MUSIC_MUSIC
 
 
 class TestInlineAdjustment:
     """Tests for inline Up/Down adjustment logic on adjustable blocks."""
 
     def test_mode_switch_cycle_target(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY_MUSIC)
+        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC)
         block.cycle_target(1)
-        assert block.target == TARGET_DOODLE_PAINT  # play -> doodle
+        assert block.target == TARGET_ART_PAINT  # music -> art
         block.cycle_target(-1)
-        assert block.target == TARGET_PLAY_MUSIC  # doodle -> play
+        assert block.target == TARGET_MUSIC_MUSIC  # art -> music
 
     def test_pause_cycle_duration(self):
         block = ProgramBlock(type=ProgramBlockType.PAUSE, duration=0.5)

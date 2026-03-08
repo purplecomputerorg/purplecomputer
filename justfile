@@ -118,9 +118,9 @@ voice-variants:
     @echo ""
     @echo "Listen to variants and copy the best one over the original."
 
-# Generate letter/number name clips for Play Mode
+# Generate letter/number name clips for Music Room
 letter-clips *args:
-    @echo "Generating letter/number name clips for Play Mode..."
+    @echo "Generating letter/number name clips for Music Room..."
     .venv/bin/python scripts/generate_letter_clips.py {{args}}
 
 # Verify deterministic TTS output

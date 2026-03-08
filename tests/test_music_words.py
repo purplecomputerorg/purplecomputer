@@ -1,7 +1,7 @@
-"""Tests for play_words: word recognition from replay data."""
+"""Tests for music_words: word recognition from replay data."""
 
-from purple_tui.play_words import WORDS, extract_word
-from purple_tui.play_session import MODE_LETTERS, MODE_MUSIC
+from purple_tui.music_words import WORDS, extract_word
+from purple_tui.music_session import MODE_LETTERS, MODE_MUSIC
 
 
 def test_recognized_word():

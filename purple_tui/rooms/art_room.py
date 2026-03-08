@@ -1,5 +1,5 @@
 """
-Doodle Room: Drawing Canvas with Playful Painting
+Art Room: Drawing Canvas with Playful Painting
 
 A text-focused canvas with paint-by-key features:
 - Normal typing draws readable text (left-to-right, wrapping at edges)
@@ -1042,7 +1042,7 @@ class ToolOverlay(Static):
     """
     Non-blocking overlay that introduces tool switching.
 
-    Shows on entering Doodle mode, auto-dismisses after 1.2s or on first action.
+    Shows on entering Art room, auto-dismisses after 1.2s or on first action.
     Does NOT block input: kid can immediately type/draw.
     """
 
@@ -1107,12 +1107,12 @@ class ToolOverlay(Static):
 
 
 # =============================================================================
-# DOODLE MODE CONTAINER
+# ART MODE CONTAINER
 # =============================================================================
 
-class DoodleMode(Container):
+class ArtMode(Container):
     """
-    Doodle Mode: Drawing canvas with playful painting.
+    Art Room: Drawing canvas with playful painting.
 
     Normal typing draws readable text with subtle background tinting.
     Holding Space while pressing arrows paints colorful trails.
@@ -1120,7 +1120,7 @@ class DoodleMode(Container):
     """
 
     DEFAULT_CSS = """
-    DoodleMode {
+    ArtMode {
         width: 100%;
         height: 100%;
         padding: 0;
@@ -1211,23 +1211,23 @@ class DoodleMode(Container):
 
 
 # =============================================================================
-# DOODLE PROMPT SCREEN
+# ART PROMPT SCREEN
 # =============================================================================
 
-class DoodlePromptScreen(ModalScreen):
+class ArtPromptScreen(ModalScreen):
     """
-    Modal screen shown when entering Doodle mode with existing content.
+    Modal screen shown when entering Art room with existing content.
 
     Presents two big buttons: "Keep drawing" and "New drawing".
     Kid-friendly: no text to read, just two clear choices.
     """
 
     CSS = """
-    DoodlePromptScreen {
+    ArtPromptScreen {
         align: center middle;
     }
 
-    #doodle-prompt-dialog {
+    #art-prompt-dialog {
         width: 60;
         height: auto;
         padding: 2 4;
@@ -1235,20 +1235,20 @@ class DoodlePromptScreen(ModalScreen):
         border: heavy $primary;
     }
 
-    #doodle-prompt-title {
+    #art-prompt-title {
         width: 100%;
         text-align: center;
         text-style: bold;
         margin-bottom: 2;
     }
 
-    #doodle-prompt-buttons {
+    #art-prompt-buttons {
         width: 100%;
         height: auto;
         align: center middle;
     }
 
-    #doodle-prompt-buttons Button {
+    #art-prompt-buttons Button {
         width: 20;
         margin: 1 2;
     }
@@ -1269,9 +1269,9 @@ class DoodlePromptScreen(ModalScreen):
         self._selected_index = 0  # 0 = Keep, 1 = New
 
     def compose(self) -> ComposeResult:
-        with Container(id="doodle-prompt-dialog"):
-            yield Static("Your drawing is still here!", id="doodle-prompt-title")
-            with Horizontal(id="doodle-prompt-buttons"):
+        with Container(id="art-prompt-dialog"):
+            yield Static("Your drawing is still here!", id="art-prompt-title")
+            with Horizontal(id="art-prompt-buttons"):
                 yield Button("Keep drawing", id="btn-keep", variant="success")
                 yield Button("New drawing", id="btn-new", variant="primary")
 

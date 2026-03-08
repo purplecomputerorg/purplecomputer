@@ -1,16 +1,16 @@
-"""Doodle mode demo: intro text + palm tree drawing."""
+"""Art room demo: intro text + palm tree drawing."""
 
 from ..script import (
     PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment,
-    SetSpeed, TypeText, ClearDoodle, ZoomIn, ZoomOut,
+    SetSpeed, TypeText, ClearArt, ZoomIn, ZoomOut,
 )
 
 # Typing speed (0.05s/char) with brief final_pause
 _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
 
 SEGMENT = [
-    Comment("=== DOODLE MODE INTRO + PALM TREE ==="),
-    SwitchRoom("doodle"),
+    Comment("=== ART ROOM INTRO + PALM TREE ==="),
+    SwitchRoom("art"),
     Pause(0.3),
 
     SetSpeed(1.0),
@@ -18,8 +18,8 @@ SEGMENT = [
     MoveSequence(directions=['right'] * 65 + ['down'] * 18, delay_per_step=0.008),
 
     Comment("Type intro in text mode (4 lines): zoom in 3x to lower right"),
-    ZoomIn(region="doodle-text-right", zoom=3.0, duration=0.2),
-    TypeText("This is Doodle mode.", **_TYPING),
+    ZoomIn(region="art-text-right", zoom=3.0, duration=0.2),
+    TypeText("This is the Art room.", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 20, delay_per_step=0.008),
     TypeText("Write and paint!", **_TYPING),
@@ -1418,24 +1418,24 @@ SEGMENT = [
 
     Pause(2.0),
 
-    Comment("=== PLAY MODE INTRO TEXT ==="),
+    Comment("=== MUSIC ROOM INTRO TEXT ==="),
     SetSpeed(1.0),
     PressKey("tab", pause_after=0.1),  # Switch to text mode
     MoveSequence(directions=['up'] * 3 + ['left'] * 106, delay_per_step=0.008),
-    Comment("Zoom in 3x to lower left for play mode intro text"),
-    ZoomIn(region="doodle-text-left", zoom=3.0, duration=0.2),
-    TypeText("Now let's go to Play mode", **_TYPING),
+    Comment("Zoom in 3x to lower left for music room intro text"),
+    ZoomIn(region="art-text-left", zoom=3.0, duration=0.2),
+    TypeText("Now let's go to the Music room", **_TYPING),
     PressKey("enter", pause_after=0.1),
     MoveSequence(directions=['left'] * 25, delay_per_step=0.008),
     TypeText("Play with music and color", **_TYPING),
 
     Pause(2.5),
 
-    Comment("Instant zoom out so play mode starts fully zoomed out (no transition)"),
+    Comment("Instant zoom out so music room starts fully zoomed out (no transition)"),
     ZoomOut(duration=0.0),
 
-    # Clear canvas now so it doesn't flash when we return to doodle mode later
-    ClearDoodle(),
+    # Clear canvas now so it doesn't flash when we return to art room later
+    ClearArt(),
 
     Comment("Drawing complete!"),
 ]

@@ -25,10 +25,10 @@ def is_debug() -> bool:
 # Central location for room names to keep them DRY across the codebase.
 # Format: (id, label) where id is lowercase for internal use, label is display text.
 
-ROOM_EXPLORE = ("explore", "Explore")  # F1: Math and emoji REPL
-ROOM_PLAY = ("play", "Play")           # F2: Music and art grid
-ROOM_DOODLE = ("doodle", "Doodle")     # F3: Simple drawing canvas
-ROOM_COMMAND = ("command", "Command")   # F4: Visual block programming
+ROOM_PLAY = ("play", "Play")           # F1: Math and emoji REPL
+ROOM_MUSIC = ("music", "Music")        # F2: Music and art grid
+ROOM_ART = ("art", "Art")              # F3: Drawing canvas
+ROOM_COMMAND = ("command", "Command")  # F4: Visual block programming
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS
@@ -97,9 +97,9 @@ ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
 # Room titles with icons (uses room name constants)
 ROOM_TITLES = {
-    ROOM_EXPLORE[0]: (ICON_CHAT, ROOM_EXPLORE[1]),
-    ROOM_PLAY[0]: (ICON_MUSIC, ROOM_PLAY[1]),
-    ROOM_DOODLE[0]: (ICON_PALETTE, ROOM_DOODLE[1]),
+    ROOM_PLAY[0]: (ICON_CHAT, ROOM_PLAY[1]),
+    ROOM_MUSIC[0]: (ICON_MUSIC, ROOM_MUSIC[1]),
+    ROOM_ART[0]: (ICON_PALETTE, ROOM_ART[1]),
     ROOM_COMMAND[0]: (ICON_COMMAND, ROOM_COMMAND[1]),
 }
 
@@ -111,7 +111,7 @@ ROOM_TITLES = {
 # Format: (x_center, y_center, width_fraction, height_fraction)
 # The post-processor calculates actual pixels based on recording resolution.
 #
-# Note: "input" focuses on the Explore mode input area (bottom portion of viewport).
+# Note: "input" focuses on the Play room input area (bottom portion of viewport).
 
 # =============================================================================
 # USB UPDATE
@@ -126,29 +126,29 @@ ZOOM_REGIONS = {
     # Full viewport (no zoom, 100% of content visible)
     "viewport": (0.5, 0.5, 1.0, 1.0),
 
-    # Explore mode input area (bottom 40% of viewport, horizontally centered)
+    # Play room input area (bottom 40% of viewport, horizontally centered)
     # Shows the input line and a few lines of results above it
     "input": (0.5, 0.75, 0.7, 0.4),
 
-    # Explore mode results area (middle portion, for showing computation results)
+    # Play room results area (middle portion, for showing computation results)
     "results": (0.5, 0.5, 0.8, 0.5),
 
-    # Doodle mode center (center of canvas for drawing demos)
-    "doodle-center": (0.5, 0.5, 0.6, 0.6),
+    # Art room center (center of canvas for drawing demos)
+    "art-center": (0.5, 0.5, 0.6, 0.6),
 
-    # Play mode keyboard area (lower portion where keys are displayed)
-    "play-keys": (0.5, 0.7, 0.8, 0.5),
+    # Music room keyboard area (lower portion where keys are displayed)
+    "music-keys": (0.5, 0.7, 0.8, 0.5),
 
-    # Explore mode welcome area (upper-left where text history appears)
+    # Play room welcome area (upper-left where text history appears)
     # With 3x zoom, center must be in range 0.17-0.83 to avoid clamping
-    "explore-welcome": (0.4, 0.28, 0.7, 0.5),
+    "play-welcome": (0.4, 0.28, 0.7, 0.5),
 
-    # Doodle mode lower-right (for "This is Doodle mode" intro text)
-    "doodle-text-right": (0.7, 0.7, 0.5, 0.4),
+    # Art room lower-right (for "This is Art room" intro text)
+    "art-text-right": (0.7, 0.7, 0.5, 0.4),
 
-    # Doodle mode lower-left (for "Now let's go to Play mode" text)
+    # Art room lower-left (for "Now let's go to Music room" text)
     # Text is at very bottom-left, center at 0.83 vertical to show it
-    "doodle-text-left": (0.25, 0.82, 0.4, 0.3),
+    "art-text-left": (0.25, 0.82, 0.4, 0.3),
 
     # Closing screen: "This is Purple Computer" centered text
     "closing-title": (0.5, 0.38, 0.6, 0.4),

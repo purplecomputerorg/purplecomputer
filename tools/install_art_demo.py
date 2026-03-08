@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Install an AI-generated doodle demo into Purple Computer.
+"""Install an AI-generated art demo into Purple Computer.
 
-Reads training output from doodle_ai.py and generates a demo script
+Reads training output from art_ai.py and generates a demo script
 that can be played back with PURPLE_DEMO_AUTOSTART=1.
 
 Usage:
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 12
+    ./tools/install-art-demo --from art_ai_output/20260202_143022
+    ./tools/install-art-demo --from art_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
+    ./tools/install-art-demo --from art_ai_output/20260202_143022 --iteration 3 --duration 12
 """
 
 import argparse
@@ -62,18 +62,18 @@ def estimate_duration(actions: list[dict]) -> float:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Install an AI-generated doodle demo into Purple Computer",
+        description="Install an AI-generated art demo into Purple Computer",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
     # From output directory (picks best iteration)
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022
+    ./tools/install-art-demo --from art_ai_output/20260202_143022
 
     # From a specific screenshot (uses that iteration)
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
+    ./tools/install-art-demo --from art_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png
 
     # Pick specific iteration, target 12s
-    ./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 12
+    ./tools/install-art-demo --from art_ai_output/20260202_143022 --iteration 3 --duration 12
 
 After installing, run:
     just run-demo
@@ -95,7 +95,7 @@ After installing, run:
 
     # Resolve --from to an output directory (and optionally an iteration)
     if os.path.isfile(from_path) and from_path.lower().endswith(('.png', '.svg')):
-        from tools.doodle_ai import resolve_screenshot_to_output_dir, extract_iteration_label
+        from tools.art_ai import resolve_screenshot_to_output_dir, extract_iteration_label
 
         # For SVG, look for the corresponding _cropped.png
         if from_path.lower().endswith('.svg'):
@@ -154,7 +154,7 @@ After installing, run:
         sys.exit(1)
 
     # Generate demo script
-    from tools.doodle_ai import generate_demo_script
+    from tools.art_ai import generate_demo_script
     demo_code = generate_demo_script(actions)
 
     # Estimate duration and calculate speed multiplier

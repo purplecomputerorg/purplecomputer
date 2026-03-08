@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Tests for Explore Mode - evaluator, autocomplete, color mixing, and hint rendering.
+"""Tests for Play Mode: evaluator, autocomplete, color mixing, and hint rendering.
 
-Run with: pytest tests/test_explore_mode.py -v
-Or standalone: python tests/test_explore_mode.py
+Run with: pytest tests/test_play_mode.py -v
+Or standalone: python tests/test_play_mode.py
 """
 
 import re
@@ -18,7 +18,7 @@ try:
 except ImportError:
     HAS_PYTEST = False
 
-from purple_tui.rooms.explore_room import SimpleEvaluator, _pad_narrow_emoji
+from purple_tui.rooms.play_room import SimpleEvaluator, _pad_narrow_emoji
 
 
 def strip_markup(text: str) -> str:
@@ -1461,7 +1461,7 @@ class TestThemeConstants:
 
     def test_surface_constants_match_app_theme(self):
         """Surface color constants should match the app's theme values."""
-        from purple_tui.rooms.explore_room import ColorResultLine
+        from purple_tui.rooms.play_room import ColorResultLine
 
         # These should match the values in purple_tui.py register_theme calls
         assert ColorResultLine.SURFACE_DARK == "#2a1845"
@@ -1469,7 +1469,7 @@ class TestThemeConstants:
 
     def test_arrow_constants_exist(self):
         """Arrow color constants should be defined for both themes."""
-        from purple_tui.rooms.explore_room import HistoryLine
+        from purple_tui.rooms.play_room import HistoryLine
 
         assert HistoryLine.ASK_ARROW_DARK == "#c4a0e8"
         assert HistoryLine.ASK_ARROW_LIGHT == "#7a5a9e"
@@ -1511,42 +1511,42 @@ def run_standalone_tests():
 
 
 class TestColorMappingConsistency:
-    """Verify explore mode uses the exact same color mapping as doodle mode."""
+    """Verify play mode uses the exact same color mapping as art mode."""
 
-    def test_letters_use_same_colors_as_doodle(self):
-        """Every letter a-z should produce the same color in explore and doodle."""
-        from purple_tui.rooms.doodle_room import get_key_color, KEY_COLORS
-        from purple_tui.rooms.explore_room import SimpleEvaluator
+    def test_letters_use_same_colors_as_art(self):
+        """Every letter a-z should produce the same color in play and art."""
+        from purple_tui.rooms.art_room import get_key_color, KEY_COLORS
+        from purple_tui.rooms.play_room import SimpleEvaluator
 
         evaluator = SimpleEvaluator()
         for char in "abcdefghijklmnopqrstuvwxyz":
-            # Explore uses get_key_color (imported from doodle_room) in _format_text_as_color_blocks
-            explore_color = get_key_color(char)
-            doodle_color = KEY_COLORS.get(char)
-            assert doodle_color is not None, f"Letter '{char}' missing from doodle KEY_COLORS"
-            assert explore_color == doodle_color, (
-                f"Color mismatch for '{char}': explore={explore_color}, doodle={doodle_color}"
+            # Play uses get_key_color (imported from art_room) in _format_text_as_color_blocks
+            play_color = get_key_color(char)
+            art_color = KEY_COLORS.get(char)
+            assert art_color is not None, f"Letter '{char}' missing from art KEY_COLORS"
+            assert play_color == art_color, (
+                f"Color mismatch for '{char}': play={play_color}, art={art_color}"
             )
 
-    def test_digits_use_same_colors_as_doodle(self):
-        """Every digit 0-9 should produce the same color in explore and doodle."""
-        from purple_tui.rooms.doodle_room import get_key_color, KEY_COLORS, GRAYSCALE
+    def test_digits_use_same_colors_as_art(self):
+        """Every digit 0-9 should produce the same color in play and art."""
+        from purple_tui.rooms.art_room import get_key_color, KEY_COLORS, GRAYSCALE
 
         for char in "0123456789":
-            explore_color = get_key_color(char)
-            doodle_color = KEY_COLORS.get(char)
-            assert doodle_color is not None, f"Digit '{char}' missing from doodle KEY_COLORS"
-            assert explore_color == doodle_color, (
-                f"Color mismatch for '{char}': explore={explore_color}, doodle={doodle_color}"
+            play_color = get_key_color(char)
+            art_color = KEY_COLORS.get(char)
+            assert art_color is not None, f"Digit '{char}' missing from art KEY_COLORS"
+            assert play_color == art_color, (
+                f"Color mismatch for '{char}': play={play_color}, art={art_color}"
             )
             # Also verify it matches the GRAYSCALE dict directly
-            assert doodle_color == GRAYSCALE[char], (
+            assert art_color == GRAYSCALE[char], (
                 f"Digit '{char}' KEY_COLORS doesn't match GRAYSCALE"
             )
 
-    def test_explore_format_uses_doodle_colors(self):
-        """The colored block output in explore should use the doodle color for each char."""
-        from purple_tui.rooms.doodle_room import get_key_color
+    def test_play_format_uses_art_colors(self):
+        """The colored block output in play should use the art color for each char."""
+        from purple_tui.rooms.art_room import get_key_color
 
         evaluator = SimpleEvaluator()
         # Test a word: each letter's background should be get_key_color(letter)

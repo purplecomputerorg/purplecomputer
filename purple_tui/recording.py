@@ -1,11 +1,11 @@
 """
 F5 Recording: intentional cross-mode recording and playback.
 
-Kids press F5 to start recording, play in any mode (Play, Doodle, Explore),
+Kids press F5 to start recording, play in any mode (Music, Art, Play),
 press F5 again to stop. The recording can be played back via F5 or Space
 in Command mode, and viewed/edited as blocks in Command mode (F4).
 
-Mode-aware conversion: Explore events buffer into QUERY blocks, Doodle paint
+Mode-aware conversion: Play events buffer into QUERY blocks, Art paint
 arrows merge into STROKE blocks, and gaps > 300ms become explicit PAUSE blocks.
 """
 
@@ -25,11 +25,11 @@ from .program import (
     ProgramBlockType,
     PAUSE_THRESHOLD_MS,
     PAUSE_PRESETS,
-    TARGET_PLAY_MUSIC,
-    TARGET_PLAY_LETTERS,
-    TARGET_DOODLE_TEXT,
-    TARGET_DOODLE_PAINT,
-    TARGET_EXPLORE,
+    TARGET_MUSIC_MUSIC,
+    TARGET_MUSIC_LETTERS,
+    TARGET_ART_TEXT,
+    TARGET_ART_PAINT,
+    TARGET_PLAY,
 )
 
 
@@ -41,17 +41,17 @@ class RecordingState(Enum):
 
 def _room_to_target(room_name: str, mode: str = "") -> str:
     """Convert a mode name and optional mode to a target string."""
-    if room_name == "play":
+    if room_name == "music":
         if mode == "letters":
-            return TARGET_PLAY_LETTERS
-        return TARGET_PLAY_MUSIC
-    elif room_name == "doodle":
+            return TARGET_MUSIC_LETTERS
+        return TARGET_MUSIC_MUSIC
+    elif room_name == "art":
         if mode == "text":
-            return TARGET_DOODLE_TEXT
-        return TARGET_DOODLE_PAINT
-    elif room_name == "explore":
-        return TARGET_EXPLORE
-    return TARGET_PLAY_MUSIC
+            return TARGET_ART_TEXT
+        return TARGET_ART_PAINT
+    elif room_name == "play":
+        return TARGET_PLAY
+    return TARGET_MUSIC_MUSIC
 
 
 @dataclass
@@ -82,10 +82,10 @@ class Recording:
         """Convert recorded events to ProgramBlock list.
 
         Mode-aware conversion:
-        - Play/Doodle text: each action becomes a KEY block
-        - Explore: characters buffer into QUERY blocks, Enter finalizes.
+        - Music/Art text: each action becomes a KEY block
+        - Play: characters buffer into QUERY blocks, Enter finalizes.
           Backspace edits the buffer. Net result is captured, not editing journey.
-        - Doodle paint: consecutive same-direction arrows merge into STROKE blocks.
+        - Art paint: consecutive same-direction arrows merge into STROKE blocks.
           Character keys become KEY blocks (color selection).
         - Post-pass: inserts PAUSE blocks for gaps > 300ms
         """
@@ -99,9 +99,9 @@ class Recording:
         for i, event in enumerate(self.events):
             current_target = _room_to_target(event.room_name, event.mode)
 
-            # On target change, flush explore buffer and emit MODE_SWITCH
+            # On target change, flush play buffer and emit MODE_SWITCH
             if current_target != prev_target:
-                if query_buf and prev_target == TARGET_EXPLORE:
+                if query_buf and prev_target == TARGET_PLAY:
                     blocks.append(ProgramBlock(
                         type=ProgramBlockType.QUERY,
                         query_text=query_buf,
@@ -121,8 +121,8 @@ class Recording:
 
             action = event.action
 
-            # Explore mode: buffer characters into QUERY blocks
-            if current_target == TARGET_EXPLORE:
+            # Play room: buffer characters into QUERY blocks
+            if current_target == TARGET_PLAY:
                 if isinstance(action, CharacterAction):
                     query_buf += action.char
                 elif isinstance(action, ControlAction):
@@ -140,8 +140,8 @@ class Recording:
                         query_buf += " "
                 continue
 
-            # Doodle paint mode: arrows merge into STROKE, chars are KEY
-            if current_target == TARGET_DOODLE_PAINT:
+            # Art paint mode: arrows merge into STROKE, chars are KEY
+            if current_target == TARGET_ART_PAINT:
                 if isinstance(action, NavigationAction):
                     if (blocks and blocks[-1].type == ProgramBlockType.STROKE
                             and blocks[-1].direction == action.direction):
@@ -172,7 +172,7 @@ class Recording:
                         ))
                     continue
 
-            # Play music/letters, Doodle text: simple KEY blocks
+            # Music music/letters, Art text: simple KEY blocks
             if isinstance(action, CharacterAction):
                 blocks.append(ProgramBlock(
                     type=ProgramBlockType.KEY,
@@ -189,7 +189,7 @@ class Recording:
                     ))
             # NavigationAction in non-paint modes: not recorded
 
-        # Flush remaining explore buffer
+        # Flush remaining play buffer
         if query_buf:
             blocks.append(ProgramBlock(
                 type=ProgramBlockType.QUERY,

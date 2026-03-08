@@ -1,0 +1,17 @@
+#!/bin/bash
+# AI composition tool for Purple Computer Music Mode
+# Usage: ./tools/music-ai "smiley face that sounds happy"
+#        ./tools/music-ai "heart" --no-review
+#        ./tools/music-ai "rainstorm" --json
+#        ./tools/music-ai "happy birthday" --install
+
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+
+# Install tool dependencies if missing
+if ! python -c "import anthropic" 2>/dev/null; then
+    echo "Installing tool dependencies..."
+    pip install -q -r tools/requirements.txt
+fi
+
+exec python tools/music_ai.py "$@"

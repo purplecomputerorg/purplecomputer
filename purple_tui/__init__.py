@@ -3,7 +3,7 @@ Purple Computer - The Calm Computer for Kids
 
 A Textual TUI application providing:
 - Ask Mode: Math and emoji REPL
-- Play Mode: Music and art grid
+- Music Room: Music and art grid
 - Write Mode: Simple text editor
 
 Designed for 4–7 and fun for 2–8+. Safe, calm, distraction-free.

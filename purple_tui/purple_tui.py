@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F4: Switch rooms (Explore, Play, Doodle, Command)
+- F1-F4: Switch rooms (Play, Music, Art, Command)
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent menu
 - Shift (tap): Sticky shift for one character
@@ -47,7 +47,7 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    ROOM_EXPLORE, ROOM_PLAY, ROOM_DOODLE, ROOM_COMMAND,
+    ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_COMMAND,
     USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
@@ -59,16 +59,16 @@ from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .recording import RecordingManager, RecordingState
-from .rooms.doodle_room import ColorLegend, PaintModeChanged
+from .rooms.art_room import ColorLegend, PaintModeChanged
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
 
 
 class Room(Enum):
     """The 4 core rooms of Purple Computer"""
-    EXPLORE = 1  # F1: Math and emoji REPL
-    PLAY = 2     # F2: Music and art grid
-    DOODLE = 3   # F3: Simple drawing canvas
+    PLAY = 1     # F1: Math and emoji REPL
+    MUSIC = 2    # F2: Music and art grid
+    ART = 3      # F3: Simple drawing canvas
     COMMAND = 4  # F4: Visual block programming
 
 
@@ -81,9 +81,9 @@ class View(Enum):
 
 # Room display info: F-keys for room switching (uses room name constants)
 ROOM_INFO = {
-    Room.EXPLORE: {"key": "F1", "label": ROOM_EXPLORE[1], "emoji": ICON_CHAT},
-    Room.PLAY: {"key": "F2", "label": ROOM_PLAY[1], "emoji": ICON_MUSIC},
-    Room.DOODLE: {"key": "F3", "label": ROOM_DOODLE[1], "emoji": ICON_PALETTE},
+    Room.PLAY: {"key": "F1", "label": ROOM_PLAY[1], "emoji": ICON_CHAT},
+    Room.MUSIC: {"key": "F2", "label": ROOM_MUSIC[1], "emoji": ICON_MUSIC},
+    Room.ART: {"key": "F3", "label": ROOM_ART[1], "emoji": ICON_PALETTE},
     Room.COMMAND: {"key": "F4", "label": ROOM_COMMAND[1], "emoji": ICON_COMMAND},
 }
 
@@ -103,7 +103,7 @@ class RoomTitle(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.mode = ROOM_EXPLORE[0]
+        self.mode = ROOM_PLAY[0]
         self._recording_indicator = ""
         self.add_class("caps-sensitive")
 
@@ -410,7 +410,7 @@ class PurpleApp(App):
     """
     Purple Computer: The calm computer for kids.
 
-    F1-F3: Switch between modes (Explore, Play, Doodle)
+    F1-F3: Switch between modes (Play, Music, Art)
     F10: Mute/unmute, F11: Volume down, F12: Volume up
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
@@ -554,9 +554,9 @@ class PurpleApp(App):
     # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
-        Binding("f1", f"switch_room('{ROOM_EXPLORE[0]}')", ROOM_EXPLORE[1], show=False, priority=True),
-        Binding("f2", f"switch_room('{ROOM_PLAY[0]}')", ROOM_PLAY[1], show=False, priority=True),
-        Binding("f3", f"switch_room('{ROOM_DOODLE[0]}')", ROOM_DOODLE[1], show=False, priority=True),
+        Binding("f1", f"switch_room('{ROOM_PLAY[0]}')", ROOM_PLAY[1], show=False, priority=True),
+        Binding("f2", f"switch_room('{ROOM_MUSIC[0]}')", ROOM_MUSIC[1], show=False, priority=True),
+        Binding("f3", f"switch_room('{ROOM_ART[0]}')", ROOM_ART[1], show=False, priority=True),
         Binding("f8", "take_screenshot", "Screenshot", show=False, priority=True),
         Binding("f10", "volume_mute", "Mute", show=False, priority=True),
         Binding("f11", "volume_down", "Vol-", show=False, priority=True),
@@ -566,7 +566,7 @@ class PurpleApp(App):
 
     def __init__(self):
         super().__init__()
-        self.active_room = Room.EXPLORE
+        self.active_room = Room.PLAY
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
@@ -664,10 +664,10 @@ class PurpleApp(App):
         apply_saved_display_settings()
         self._load_room_content()
 
-        # Initialize color legend (visible in explore mode, hidden otherwise)
+        # Initialize color legend (visible in play mode, hidden otherwise)
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
-            if self.active_room == Room.EXPLORE:
+            if self.active_room == Room.PLAY:
                 legend.set_visible(True)
                 legend.set_active_row(-1)
             else:
@@ -842,12 +842,12 @@ class PurpleApp(App):
             # Dismiss any open modal (like mode picker) when F-key is pressed
             if len(self.screen_stack) > 1:
                 self.screen.dismiss(None)
-            if action.room == ROOM_EXPLORE[0]:
-                self.action_switch_room(ROOM_EXPLORE[0])
-            elif action.room == ROOM_PLAY[0]:
+            if action.room == ROOM_PLAY[0]:
                 self.action_switch_room(ROOM_PLAY[0])
-            elif action.room == ROOM_DOODLE[0]:
-                self.action_switch_room(ROOM_DOODLE[0])
+            elif action.room == ROOM_MUSIC[0]:
+                self.action_switch_room(ROOM_MUSIC[0])
+            elif action.room == ROOM_ART[0]:
+                self.action_switch_room(ROOM_ART[0])
             elif action.room == ROOM_COMMAND[0]:
                 # F4 during recording: stop recording and switch to Command mode
                 if self._recording_manager.is_recording:
@@ -956,12 +956,12 @@ class PurpleApp(App):
         room_name = result.get("room")
 
         # Switch to the selected mode
-        if room_name == "explore":
-            self.action_switch_room(ROOM_EXPLORE[0])
-        elif room_name == "play":
+        if room_name == "play":
             self.action_switch_room(ROOM_PLAY[0])
-        elif room_name == "doodle":
-            self.action_switch_room(ROOM_DOODLE[0])
+        elif room_name == "music":
+            self.action_switch_room(ROOM_MUSIC[0])
+        elif room_name == "art":
+            self.action_switch_room(ROOM_ART[0])
         elif room_name == "command":
             self.action_switch_room(ROOM_COMMAND[0])
 
@@ -1000,14 +1000,14 @@ class PurpleApp(App):
         # Clear target mode state so playback starts fresh
         self.clear_all_state()
 
-        is_doodle_paint = self._get_doodle_paint_mode_callback()
-        is_play_letters = self._get_play_letters_mode_callback()
+        is_art_paint = self._get_art_paint_mode_callback()
+        is_music_letters = self._get_music_letters_mode_callback()
 
         player = PlaybackPlayer(
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=1.0,
-            is_doodle_paint_mode=is_doodle_paint,
-            is_play_letters_mode=is_play_letters,
+            is_art_paint_mode=is_art_paint,
+            is_music_letters_mode=is_music_letters,
         )
 
         def stop_playback():
@@ -1030,14 +1030,14 @@ class PurpleApp(App):
         room_name = self.active_room.name.lower()
         try:
             content_area = self.query_one("#content-area")
-            if room_name == "play":
-                play_widget = content_area.query_one("#room-play")
-                if hasattr(play_widget, '_letters_mode') and play_widget._letters_mode:
+            if room_name == "music":
+                music_widget = content_area.query_one("#room-music")
+                if hasattr(music_widget, '_letters_mode') and music_widget._letters_mode:
                     return "letters"
                 return "music"
-            elif room_name == "doodle":
-                doodle_widget = content_area.query_one("#room-doodle")
-                canvas = doodle_widget.query_one("#art-canvas")
+            elif room_name == "art":
+                art_widget = content_area.query_one("#room-art")
+                canvas = art_widget.query_one("#art-canvas")
                 if hasattr(canvas, 'is_painting') and canvas.is_painting:
                     return "paint"
                 return "text"
@@ -1045,25 +1045,25 @@ class PurpleApp(App):
             pass
         return ""
 
-    def _get_doodle_paint_mode_callback(self):
-        """Get a callback for checking doodle paint mode."""
+    def _get_art_paint_mode_callback(self):
+        """Get a callback for checking art paint mode."""
         def check():
             try:
                 content_area = self.query_one("#content-area")
-                doodle = content_area.query_one("#room-doodle")
-                canvas = doodle.query_one("#art-canvas")
+                art = content_area.query_one("#room-art")
+                canvas = art.query_one("#art-canvas")
                 return hasattr(canvas, 'is_painting') and canvas.is_painting
             except Exception:
                 return False
         return check
 
-    def _get_play_letters_mode_callback(self):
-        """Get a callback for checking play letters mode."""
+    def _get_music_letters_mode_callback(self):
+        """Get a callback for checking music letters mode."""
         def check():
             try:
                 content_area = self.query_one("#content-area")
-                play = content_area.query_one("#room-play")
-                return hasattr(play, '_letters_mode') and play._letters_mode
+                music = content_area.query_one("#room-music")
+                return hasattr(music, '_letters_mode') and music._letters_mode
             except Exception:
                 return False
         return check
@@ -1323,18 +1323,18 @@ class PurpleApp(App):
 
     def _create_room_widget(self, room: Room):
         """Create a new room widget"""
-        if room == Room.EXPLORE:
-            from .rooms.explore_room import ExploreMode
-            return ExploreMode(classes="room-content")
-        elif room == Room.PLAY:
+        if room == Room.PLAY:
             from .rooms.play_room import PlayMode
-            return PlayMode(
+            return PlayMode(classes="room-content")
+        elif room == Room.MUSIC:
+            from .rooms.music_room import MusicMode
+            return MusicMode(
                 recording_manager=self._recording_manager,
                 classes="room-content",
             )
-        elif room == Room.DOODLE:
-            from .rooms.doodle_room import DoodleMode
-            return DoodleMode(classes="room-content")
+        elif room == Room.ART:
+            from .rooms.art_room import ArtMode
+            return ArtMode(classes="room-content")
         elif room == Room.COMMAND:
             from .rooms.command_room import CommandMode
             return CommandMode(
@@ -1372,14 +1372,14 @@ class PurpleApp(App):
     def _focus_room(self, widget) -> None:
         """Focus the appropriate element in a mode widget"""
         # Each mode has a primary focusable element
-        if self.active_room == Room.EXPLORE:
+        if self.active_room == Room.PLAY:
             try:
-                widget.query_one("#explore-input").focus()
+                widget.query_one("#play-input").focus()
             except Exception:
                 pass
-        elif self.active_room == Room.PLAY:
+        elif self.active_room == Room.MUSIC:
             widget.focus()
-        elif self.active_room == Room.DOODLE:
+        elif self.active_room == Room.ART:
             try:
                 widget.query_one("#art-canvas").focus()
             except Exception:
@@ -1408,7 +1408,7 @@ class PurpleApp(App):
 
     def action_switch_room(self, room_name: str) -> None:
         """Switch to a different mode (F1-F3)"""
-        from .rooms.doodle_room import DoodlePromptScreen
+        from .rooms.art_room import ArtPromptScreen
 
         # Debug: log who is calling mode switch
         if os.environ.get("PURPLE_DEV_MODE") == "1":
@@ -1418,48 +1418,48 @@ class PurpleApp(App):
                 self._dev_log(line.strip())
 
         room_map = {
-            ROOM_EXPLORE[0]: Room.EXPLORE,
             ROOM_PLAY[0]: Room.PLAY,
-            ROOM_DOODLE[0]: Room.DOODLE,
+            ROOM_MUSIC[0]: Room.MUSIC,
+            ROOM_ART[0]: Room.ART,
             ROOM_COMMAND[0]: Room.COMMAND,
         }
-        new_room = room_map.get(room_name, Room.EXPLORE)
+        new_room = room_map.get(room_name, Room.PLAY)
 
-        # If DoodlePromptScreen is showing and we're switching to a different mode,
+        # If ArtPromptScreen is showing and we're switching to a different mode,
         # dismiss it (keeping the drawing) and proceed with the switch
         if len(self.screen_stack) > 1:
             active_screen = self.screen
-            if isinstance(active_screen, DoodlePromptScreen):
+            if isinstance(active_screen, ArtPromptScreen):
                 # Dismiss without callback action (we're switching modes anyway)
                 self.pop_screen()
-                # If switching back to doodle, we're already there, just return
-                if new_room == Room.DOODLE:
+                # If switching back to art, we're already there, just return
+                if new_room == Room.ART:
                     return
 
         if new_room != self.active_room:
-            # Reset viewport border when leaving doodle mode
-            if self.active_room == Room.DOODLE:
+            # Reset viewport border when leaving art mode
+            if self.active_room == Room.ART:
                 self._reset_viewport_border()
 
-            # Auto-clear play mode when leaving (ephemeral mode)
-            if self.active_room == Room.PLAY:
+            # Auto-clear music mode when leaving (ephemeral mode)
+            if self.active_room == Room.MUSIC:
                 try:
                     content_area = self.query_one("#content-area")
-                    play_widget = content_area.query_one(f"#room-{ROOM_PLAY[0]}")
-                    if hasattr(play_widget, 'reset_state'):
-                        play_widget.reset_state()
+                    music_widget = content_area.query_one(f"#room-{ROOM_MUSIC[0]}")
+                    if hasattr(music_widget, 'reset_state'):
+                        music_widget.reset_state()
                 except NoMatches:
                     pass
 
-            # Check if entering doodle mode with existing content
-            if new_room == Room.DOODLE:
+            # Check if entering art mode with existing content
+            if new_room == Room.ART:
                 try:
                     content_area = self.query_one("#content-area")
-                    doodle_widget = content_area.query_one(f"#room-{ROOM_DOODLE[0]}")
-                    if hasattr(doodle_widget, 'has_content') and doodle_widget.has_content() and not self.demo_running:
+                    art_widget = content_area.query_one(f"#room-{ROOM_ART[0]}")
+                    if hasattr(art_widget, 'has_content') and art_widget.has_content() and not self.demo_running:
                         # Switch first (shows drawing), then prompt on top
                         self._complete_room_switch(new_room)
-                        self._show_doodle_prompt()
+                        self._show_art_prompt()
                         return
                 except NoMatches:
                     pass  # First time entering, no content yet
@@ -1472,10 +1472,10 @@ class PurpleApp(App):
         self._load_room_content()
 
         # Update title
-        room_names = {Room.EXPLORE: ROOM_EXPLORE[0], Room.PLAY: ROOM_PLAY[0], Room.DOODLE: ROOM_DOODLE[0], Room.COMMAND: ROOM_COMMAND[0]}
+        room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0], Room.COMMAND: ROOM_COMMAND[0]}
         try:
             title = self.query_one("#room-title", RoomTitle)
-            title.set_mode(room_names.get(new_room, ROOM_EXPLORE[0]))
+            title.set_mode(room_names.get(new_room, ROOM_PLAY[0]))
         except NoMatches:
             pass
 
@@ -1486,38 +1486,38 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Show color legend in explore mode (always visible, no active row)
-        # Hide it when leaving both doodle and explore modes
-        if new_room == Room.EXPLORE:
+        # Show color legend in play mode (always visible, no active row)
+        # Hide it when leaving both art and play modes
+        if new_room == Room.PLAY:
             try:
                 legend = self.query_one("#paint-legend", ColorLegend)
                 legend.set_visible(True)
                 legend.set_active_row(-1)  # No active row initially
             except NoMatches:
                 pass
-        elif new_room != Room.DOODLE:
+        elif new_room != Room.ART:
             try:
                 legend = self.query_one("#paint-legend", ColorLegend)
                 legend.set_visible(False)
             except NoMatches:
                 pass
 
-    def _show_doodle_prompt(self) -> None:
-        """Show prompt when entering Doodle mode with existing content."""
-        from .rooms.doodle_room import DoodlePromptScreen
+    def _show_art_prompt(self) -> None:
+        """Show prompt when entering Art mode with existing content."""
+        from .rooms.art_room import ArtPromptScreen
 
         def handle_prompt_result(should_clear: bool) -> None:
             # Clear canvas if user chose "New drawing"
             if should_clear:
                 try:
                     content_area = self.query_one("#content-area")
-                    doodle_widget = content_area.query_one(f"#room-{ROOM_DOODLE[0]}")
-                    if hasattr(doodle_widget, 'clear_canvas'):
-                        doodle_widget.clear_canvas()
+                    art_widget = content_area.query_one(f"#room-{ROOM_ART[0]}")
+                    if hasattr(art_widget, 'clear_canvas'):
+                        art_widget.clear_canvas()
                 except NoMatches:
                     pass
 
-        self.push_screen(DoodlePromptScreen(), handle_prompt_result)
+        self.push_screen(ArtPromptScreen(), handle_prompt_result)
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off (F10)"""
@@ -1616,13 +1616,13 @@ class PurpleApp(App):
         This works around evdev keyboard input not coming through PTY.
 
         Command file format (JSON, one command per line):
-            {"action": "mode", "value": "doodle"}
+            {"action": "mode", "value": "art"}
             {"action": "key", "value": "a"}
             {"action": "key", "value": "up"}
             {"action": "key", "value": "enter"}
 
         Supported actions:
-            - mode: Switch to a mode (explore, play, doodle)
+            - mode: Switch to a mode (play, music, art)
             - key: Send a keypress (letters, arrows, enter, escape, space, backspace)
         """
         import asyncio
@@ -1678,11 +1678,11 @@ class PurpleApp(App):
         self._dev_log(f"[DevCmd] action={action} value={value} (current_room={self.active_room.name})")
 
         if action == "mode":
-            # Switch mode: explore, play, doodle
+            # Switch mode: play, music, art
             room_map = {
-                "explore": ROOM_EXPLORE[0],
                 "play": ROOM_PLAY[0],
-                "doodle": ROOM_DOODLE[0],
+                "music": ROOM_MUSIC[0],
+                "art": ROOM_ART[0],
             }
             room_name = room_map.get(value.lower())
             self._dev_log(f"[DevCmd] room_name={room_name} (from {value.lower()})")
@@ -1713,15 +1713,15 @@ class PurpleApp(App):
                 self._dev_log(f"[DevCmd] ERROR: key={value} exception={e}\n{traceback.format_exc()}")
 
         elif action == "clear":
-            # Clear the doodle canvas
-            from .rooms.doodle_room import DoodleMode, ArtCanvas
+            # Clear the art canvas
+            from .rooms.art_room import ArtMode, ArtCanvas
             try:
-                # Query by type, not ID (DoodleMode has no ID)
-                doodle = self.query_one(DoodleMode)
-                doodle.clear_canvas()
+                # Query by type, not ID (ArtMode has no ID)
+                art = self.query_one(ArtMode)
+                art.clear_canvas()
                 # Also directly access and refresh the canvas to ensure clear takes effect
                 try:
-                    canvas = doodle.query_one(ArtCanvas)
+                    canvas = art.query_one(ArtCanvas)
                     canvas.refresh()
                     self._dev_log(f"[DevCmd] Canvas cleared, grid size={len(canvas._grid)}")
                 except Exception:
@@ -1733,12 +1733,12 @@ class PurpleApp(App):
 
         elif action == "set_position":
             # Set cursor position directly (fast alternative to arrow keys)
-            from .rooms.doodle_room import DoodleMode, ArtCanvas
+            from .rooms.art_room import ArtMode, ArtCanvas
             try:
                 x = int(cmd.get("x", 0))
                 y = int(cmd.get("y", 0))
-                doodle = self.query_one(DoodleMode)
-                canvas = doodle.query_one(ArtCanvas)
+                art = self.query_one(ArtMode)
+                canvas = art.query_one(ArtCanvas)
                 canvas.set_cursor_position(x, y)
                 self._dev_log(f"[DevCmd] set_position x={x} y={y}")
             except Exception as e:
@@ -1746,13 +1746,13 @@ class PurpleApp(App):
 
         elif action == "paint_at":
             # Paint a color at specific position (combines move + select + stamp)
-            from .rooms.doodle_room import DoodleMode, ArtCanvas
+            from .rooms.art_room import ArtMode, ArtCanvas
             try:
                 x = int(cmd.get("x", 0))
                 y = int(cmd.get("y", 0))
                 color_key = cmd.get("color", "f")
-                doodle = self.query_one(DoodleMode)
-                canvas = doodle.query_one(ArtCanvas)
+                art = self.query_one(ArtMode)
+                canvas = art.query_one(ArtCanvas)
                 canvas.paint_at(x, y, color_key)
                 self._dev_log(f"[DevCmd] paint_at x={x} y={y} color={color_key}")
             except Exception as e:
@@ -1899,38 +1899,38 @@ class PurpleApp(App):
 
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""
-        from .rooms.explore_room import ExploreMode
         from .rooms.play_room import PlayMode
-        from .rooms.doodle_room import DoodleMode
+        from .rooms.music_room import MusicMode
+        from .rooms.art_room import ArtMode
 
-        # Clear explore mode history
-        try:
-            explore = self.query_one(ExploreMode)
-            explore.clear_history()
-        except Exception:
-            pass
-
-        # Reset play mode colors
+        # Clear play mode history
         try:
             play = self.query_one(PlayMode)
-            play.reset_state()
+            play.clear_history()
         except Exception:
             pass
 
-        # Clear doodle mode canvas
+        # Reset music mode colors
         try:
-            doodle = self.query_one(DoodleMode)
-            doodle.clear_canvas()
+            music = self.query_one(MusicMode)
+            music.reset_state()
         except Exception:
             pass
 
-    def _set_play_key_color(self, key: str, color_index: int) -> None:
-        """Set a Play mode key's color directly. Used by demo player for flash effects."""
-        from .rooms.play_room import PlayMode, PlayGrid
+        # Clear art mode canvas
+        try:
+            art = self.query_one(ArtMode)
+            art.clear_canvas()
+        except Exception:
+            pass
+
+    def _set_music_key_color(self, key: str, color_index: int) -> None:
+        """Set a Music mode key's color directly. Used by demo player for flash effects."""
+        from .rooms.music_room import MusicMode, MusicGrid
 
         try:
-            play = self.query_one(PlayMode)
-            grid = play.query_one(PlayGrid)
+            music = self.query_one(MusicMode)
+            grid = music.query_one(MusicGrid)
             grid.set_color_index(key, color_index)
         except Exception:
             pass
@@ -1947,10 +1947,10 @@ class PurpleApp(App):
         except Exception:
             return None
 
-        if self.active_room == Room.EXPLORE:
-            from .rooms.explore_room import InlineInput
+        if self.active_room == Room.PLAY:
+            from .rooms.play_room import InlineInput
             try:
-                inp = self.query_one("#explore-input", InlineInput)
+                inp = self.query_one("#play-input", InlineInput)
                 inp_region = inp.region
                 cursor_x = inp_region.x - vp.x + inp.cursor_position
                 cursor_y = inp_region.y - vp.y
@@ -1959,11 +1959,11 @@ class PurpleApp(App):
                 # Fallback: left side of input line, near bottom of viewport
                 return (0.07, 0.9)
 
-        elif self.active_room == Room.DOODLE:
-            from .rooms.doodle_room import DoodleMode, ArtCanvas
+        elif self.active_room == Room.ART:
+            from .rooms.art_room import ArtMode, ArtCanvas
             try:
-                doodle = self.query_one(DoodleMode)
-                canvas = doodle.query_one(ArtCanvas)
+                art = self.query_one(ArtMode)
+                canvas = art.query_one(ArtCanvas)
                 canvas_region = canvas.region
                 cursor_x = canvas_region.x - vp.x + 1 + canvas._cursor_x
                 cursor_y = canvas_region.y - vp.y + 1 + canvas._cursor_y
@@ -1973,24 +1973,24 @@ class PurpleApp(App):
 
         return None
 
-    def _is_doodle_paint_mode(self) -> bool:
-        """Check if Doodle mode is in paint mode (vs text mode)."""
-        from .rooms.doodle_room import DoodleMode, ArtCanvas
+    def _is_art_paint_mode(self) -> bool:
+        """Check if Art mode is in paint mode (vs text mode)."""
+        from .rooms.art_room import ArtMode, ArtCanvas
 
         try:
-            doodle = self.query_one(DoodleMode)
-            canvas = doodle.query_one(ArtCanvas)
+            art = self.query_one(ArtMode)
+            canvas = art.query_one(ArtCanvas)
             return canvas.is_painting
         except Exception:
             return False
 
-    def _clear_doodle(self) -> None:
-        """Clear only the doodle canvas and reset cursor to (0,0)."""
-        from .rooms.doodle_room import DoodleMode
+    def _clear_art(self) -> None:
+        """Clear only the art canvas and reset cursor to (0,0)."""
+        from .rooms.art_room import ArtMode
 
         try:
-            doodle = self.query_one(DoodleMode)
-            doodle.clear_canvas()
+            art = self.query_one(ArtMode)
+            art.clear_canvas()
         except Exception:
             pass
 
@@ -2012,9 +2012,9 @@ class PurpleApp(App):
             dispatch_action=self._dispatch_keyboard_action,
             speed_multiplier=get_speed_multiplier(),
             clear_all=self.clear_all_state,
-            clear_doodle=self._clear_doodle,
-            set_play_key_color=self._set_play_key_color,
-            is_doodle_paint_mode=self._is_doodle_paint_mode,
+            clear_art=self._clear_art,
+            set_music_key_color=self._set_music_key_color,
+            is_art_paint_mode=self._is_art_paint_mode,
             get_cursor_position=self._get_cursor_position,
             zoom_events_file=zoom_events_file,
         )

@@ -1,6 +1,6 @@
-# Sound Synthesis for Purple Computer Play Mode
+# Sound Synthesis for Purple Computer Music Room
 
-This document captures learnings from developing the musical tones for Play Mode (F2).
+This document captures learnings from developing the musical tones for the Music Room (F2).
 
 ## Design Goals
 

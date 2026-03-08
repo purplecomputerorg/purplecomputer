@@ -5,9 +5,9 @@ Designed to be ~45 seconds.
 
 Edit this file to customize the demo for your screencast!
 
-IMPORTANT: Understanding Play mode behavior
--------------------------------------------
-Play mode has a 10x4 grid matching the keyboard:
+IMPORTANT: Understanding Music room behavior
+---------------------------------------------
+Music room has a 10x4 grid matching the keyboard:
 
     1 2 3 4 5 6 7 8 9 0
     Q W E R T Y U I O P
@@ -42,19 +42,19 @@ from .script import (
 # THE DEMO SCRIPT
 # =============================================================================
 #
-# Flow: Explore (greeting + color mixing) → Play (glissando) → Explore (emoji) →
-#       Play (colorful smiley) → Doodle (art + text) → Play (finale)
+# Flow: Play (greeting + color mixing) → Music (glissando) → Play (emoji) →
+#       Music (colorful smiley) → Art (art + text) → Music (finale)
 #
 
 DEMO_SCRIPT = [
     ClearAll(),
 
     # -------------------------------------------------------------------------
-    # 1. GREETING + COLOR MIXING (Explore) - 8s
+    # 1. GREETING + COLOR MIXING (Play) - 8s
     # Introduce the app and show off color mixing
     # -------------------------------------------------------------------------
     Comment("=== GREETING ==="),
-    # Already in Explore mode by default
+    # Already in Play room by default
     Pause(0.3),
     TypeText("Hello! Let's mix colors", delay_per_char=0.08),
     PressKey("enter", pause_after=1.5),
@@ -66,12 +66,12 @@ DEMO_SCRIPT = [
     PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------
-    # 2. PIANO GLISSANDO (Play) - 5s
+    # 2. PIANO GLISSANDO (Music) - 5s
     # Rapidly drag finger across QWERTY row back and forth
     # Like running your hand across piano keys!
     # -------------------------------------------------------------------------
     Comment("=== PIANO GLISSANDO ==="),
-    SwitchRoom("play"),
+    SwitchRoom("music"),
     Pause(0.3),
 
     # Forward QWERTY (10 keys in ~1s)
@@ -100,17 +100,17 @@ DEMO_SCRIPT = [
     ),
 
     # -------------------------------------------------------------------------
-    # 3. EMOJI FUN (Explore) - 4s
+    # 3. EMOJI FUN (Play) - 4s
     # Quick emoji math
     # -------------------------------------------------------------------------
     Comment("=== EMOJI FUN ==="),
-    SwitchRoom("explore"),
+    SwitchRoom("play"),
     Pause(0.2),
     TypeText("3 + 2 cats"),
     PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------
-    # 4. COLORFUL SMILEY (Play) - 8s
+    # 4. COLORFUL SMILEY (Music) - 8s
     # Draw a smiley with different colors for each part!
     # Colors cycle: 1 press = purple, 2 = blue, 3 = red
     #
@@ -121,7 +121,7 @@ DEMO_SCRIPT = [
     #     Row 3: Z X C V B N M , . /    <- C V B N M is bottom (RED = 3 presses)
     # -------------------------------------------------------------------------
     Comment("=== COLORFUL SMILEY ==="),
-    SwitchRoom("play"),
+    SwitchRoom("music"),
     Pause(0.3),
 
     # Eyes: 4 and 6 (1 press each = PURPLE)
@@ -153,11 +153,11 @@ DEMO_SCRIPT = [
     ),
 
     # -------------------------------------------------------------------------
-    # 5. CREATIVE DRAWING (Doodle) - 15s
+    # 5. CREATIVE DRAWING (Art) - 15s
     # Show paint mode: color mixing, drawing, and text together
     # -------------------------------------------------------------------------
     Comment("=== CREATIVE DRAWING ==="),
-    SwitchRoom("doodle"),
+    SwitchRoom("art"),
     Pause(0.3),
 
     # First draw a sun (yellow circle-ish) in top left
@@ -209,11 +209,11 @@ DEMO_SCRIPT = [
     Pause(0.6),
 
     # -------------------------------------------------------------------------
-    # 6. MUSICAL FINALE (Play) - 6s
+    # 6. MUSICAL FINALE (Music) - 6s
     # End with a musical flourish, then hold on the smiley!
     # -------------------------------------------------------------------------
     Comment("=== FINALE ==="),
-    SwitchRoom("play"),
+    SwitchRoom("music"),
     Pause(0.2),
 
     # Play a descending scale on keys we haven't used
@@ -245,7 +245,7 @@ DEMO_SCRIPT_SHORT = [
     PressKey("enter", pause_after=1.0),
 
     # Draw a quick smiley: eyes (4 6), nose (T), corners UP (D J), bottom DOWN (CVBNM)
-    SwitchRoom("play"),
+    SwitchRoom("music"),
     PlayKeys(
         sequence=['4', '6', 't', 'd', 'j', 'c', 'v', 'b', 'n', 'm'],
         seconds_between=0.33,
@@ -253,12 +253,12 @@ DEMO_SCRIPT_SHORT = [
     ),
 
     # Color mix
-    SwitchRoom("explore"),
+    SwitchRoom("play"),
     TypeText("pink+indigo"),
     PressKey("enter", pause_after=1.2),
 
-    # Quick doodle
-    SwitchRoom("doodle"),
+    # Quick art
+    SwitchRoom("art"),
     DrawPath(directions=['right', 'right', 'down', 'down'], color_key='f', delay_per_step=0.06),
     PressKey("tab"),
     TypeText("Fun!"),
@@ -283,7 +283,7 @@ def make_melody(notes: str, seconds_between: float = 0.4) -> PlayKeys:
 
 
 def make_smiley() -> list:
-    """Create a smiley face in Play mode.
+    """Create a smiley face in Music room.
 
     Returns a list of actions that draw:
     - Eyes at 4 and 6 (row 0)

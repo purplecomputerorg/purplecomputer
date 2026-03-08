@@ -1,7 +1,7 @@
-"""Tests for play_constants: verify note names match frequencies."""
+"""Tests for music_constants: verify note names match frequencies."""
 
 import math
-from purple_tui.play_constants import (
+from purple_tui.music_constants import (
     NOTE_FREQUENCIES, NOTE_NAMES, INSTRUMENTS, PERCUSSION_NAMES, GRID_KEYS,
 )
 

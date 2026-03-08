@@ -1,16 +1,16 @@
-# Play Mode: Musical Depth Ideas
+# Music Room: Musical Depth Ideas
 
-Current thinking on extending Play Mode to stay fun and interesting across a wide age range, from toddlers banging on keys to older kids who are genuinely into music.
+Current thinking on extending Music Room to stay fun and interesting across a wide age range, from toddlers banging on keys to older kids who are genuinely into music.
 
 ## What Works Now
 
-Play Mode maps every letter key to a marimba note (C major scale across 3 octaves) and every number key to a percussion instrument. Any random combination of keys sounds pleasant. Colors cycle on each press. Space replays what you just played.
+Music Room maps every letter key to a marimba note (C major scale across 3 octaves) and every number key to a percussion instrument. Any random combination of keys sounds pleasant. Colors cycle on each press. Space replays what you just played.
 
 For young kids, this is great. Press a key, get a sound and a color. Immediate, predictable, satisfying. The core principle: **every key always makes the same sound.** This predictability is what makes it fun for toddlers and must not change.
 
 ## The Gap
 
-Older kids figure out the key map pretty quickly (low on the left, high on the right, numbers are drums). Once they've explored that space, they've found everything there is to find. Play Mode starts feeling thin. Not because it's bad, but because the interesting space is small.
+Older kids figure out the key map pretty quickly (low on the left, high on the right, numbers are drums). Once they've explored that space, they've found everything there is to find. Music Room starts feeling thin. Not because it's bad, but because the interesting space is small.
 
 ## Design Principles for Adding Depth
 
@@ -50,13 +50,13 @@ The current replay (Space) plays back what you just did, once. A looping version
 - Play more on top. Press Space again. Now both layers loop.
 - Some way to clear and start over (Escape, or just stop interacting).
 
-This transforms Play Mode from a toy piano into something closer to a loop station, where you can build up a piece by layering parts.
+This transforms Music Room from a toy piano into something closer to a loop station, where you can build up a piece by layering parts.
 
 **On not annoying parents:** the answer probably isn't limiting how long loops play, but making sure the sounds are pleasant enough that ambient looping in the other room isn't grating. The marimba and warm percussion already lean this way. That said, an inactivity timeout is smart: if nobody has pressed a key for 60 seconds or so, loops should fade out and stop. The kid walked away, the music shouldn't keep going.
 
 ### Progressive Hint Text
 
-Play Mode already shows hint text at the bottom ("Try pressing letters and numbers!"). This could evolve based on what the kid has done:
+Music Room already shows hint text at the bottom ("Try pressing letters and numbers!"). This could evolve based on what the kid has done:
 
 - After playing for a bit: "Try pressing two keys at once"
 - After discovering chords: "Try holding a number key"

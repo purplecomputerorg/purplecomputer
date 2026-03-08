@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from purple_tui.play_constants import NOTE_FREQUENCIES, NOTE_NAMES
+from purple_tui.music_constants import NOTE_FREQUENCIES, NOTE_NAMES
 
 # Standard A440 tuning reference frequencies across octaves
 STANDARD = {

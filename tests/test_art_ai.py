@@ -1,4 +1,4 @@
-"""Sanity tests for doodle_ai.py
+"""Sanity tests for art_ai.py
 
 Basic checks to catch syntax errors and import issues before deployment.
 Also tests for the compact action parser and other utilities.
@@ -14,29 +14,29 @@ from pathlib import Path
 TOOLS_DIR = Path(__file__).parent.parent / "tools"
 sys.path.insert(0, str(TOOLS_DIR.parent))
 
-DOODLE_AI = TOOLS_DIR / "doodle_ai.py"
+ART_AI = TOOLS_DIR / "art_ai.py"
 
 
-class TestDoodleAiSyntax:
+class TestArtAiSyntax:
     """Catch syntax errors before they hit production."""
 
     def test_file_exists(self):
-        """doodle_ai.py exists."""
-        assert DOODLE_AI.exists(), f"Missing: {DOODLE_AI}"
+        """art_ai.py exists."""
+        assert ART_AI.exists(), f"Missing: {ART_AI}"
 
     def test_valid_python_syntax(self):
         """File has valid Python syntax (catches IndentationError, SyntaxError)."""
-        source = DOODLE_AI.read_text()
+        source = ART_AI.read_text()
         # ast.parse raises SyntaxError on invalid Python
-        ast.parse(source, filename=str(DOODLE_AI))
+        ast.parse(source, filename=str(ART_AI))
 
     def test_compiles(self):
         """File compiles without errors."""
-        source = DOODLE_AI.read_text()
-        compile(source, str(DOODLE_AI), "exec")
+        source = ART_AI.read_text()
+        compile(source, str(ART_AI), "exec")
 
 
-class TestDoodleAiImports:
+class TestArtAiImports:
     """Check that imports work (catches missing dependencies, typos)."""
 
     def test_module_imports(self):
@@ -45,7 +45,7 @@ class TestDoodleAiImports:
         env["PYTHONPATH"] = str(TOOLS_DIR.parent) + ":" + env.get("PYTHONPATH", "")
 
         result = subprocess.run(
-            [sys.executable, "-c", f"import sys; sys.path.insert(0, '{TOOLS_DIR.parent}'); exec(open('{DOODLE_AI}').read().split('if __name__')[0])"],
+            [sys.executable, "-c", f"import sys; sys.path.insert(0, '{TOOLS_DIR.parent}'); exec(open('{ART_AI}').read().split('if __name__')[0])"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -58,7 +58,7 @@ class TestDoodleAiImports:
             assert "IndentationError" not in result.stderr, f"Indentation error:\n{result.stderr}"
 
 
-class TestDoodleAiHelp:
+class TestArtAiHelp:
     """Check that --help works (basic CLI sanity)."""
 
     def test_help_runs(self):
@@ -67,7 +67,7 @@ class TestDoodleAiHelp:
         env["PYTHONPATH"] = str(TOOLS_DIR.parent) + ":" + env.get("PYTHONPATH", "")
 
         result = subprocess.run(
-            [sys.executable, str(DOODLE_AI), "--help"],
+            [sys.executable, str(ART_AI), "--help"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -79,7 +79,7 @@ class TestDoodleAiHelp:
 
 # Import the module for unit tests (may fail if anthropic not installed, that's ok)
 try:
-    from tools.doodle_ai import (
+    from tools.art_ai import (
         parse_compact_actions,
         parse_json_robust,
         get_complexity_guidance,
@@ -333,7 +333,7 @@ class TestCliArgs:
         env = os.environ.copy()
         env["PYTHONPATH"] = str(TOOLS_DIR.parent) + ":" + env.get("PYTHONPATH", "")
         return subprocess.run(
-            [sys.executable, str(DOODLE_AI)] + list(args),
+            [sys.executable, str(ART_AI)] + list(args),
             capture_output=True, text=True, timeout=10, env=env,
         )
 

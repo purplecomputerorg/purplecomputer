@@ -1,4 +1,4 @@
-"""Explore mode demo: introduction and feature showcase."""
+"""Play room demo: introduction and feature showcase."""
 
 from ..script import SwitchRoom, TypeText, PressKey, Pause, Comment, ZoomIn, ZoomOut
 
@@ -6,7 +6,7 @@ from ..script import SwitchRoom, TypeText, PressKey, Pause, Comment, ZoomIn, Zoo
 _TYPING = dict(delay_per_char=0.05, final_pause=0.1)
 
 SEGMENT = [
-    SwitchRoom("explore", pause_after=0.0),
+    SwitchRoom("play", pause_after=0.0),
 
     Comment("Start zoomed in on input area (skip blank purple screen)"),
     ZoomIn(region="input", zoom=3.0, duration=0.0),

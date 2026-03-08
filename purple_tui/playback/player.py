@@ -20,7 +20,7 @@ from .script import (
     Pause,
     Clear,
     ClearAll,
-    ClearDoodle,
+    ClearArt,
     PlayKeys,
     DrawPath,
     MoveSequence,
@@ -53,13 +53,13 @@ class PlaybackPlayer:
 
     IMPORTANT: Understanding room behaviors for scripts:
 
-    Play Mode:
+    Music Mode:
         - Keys CYCLE through colors on each press (purple -> blue -> red -> off)
         - Colors PERSIST until cycled again
         - For demo "flash" effects, use set_play_key_color callback to
           explicitly turn keys on/off
 
-    Doodle Mode:
+    Art Mode:
         - Starts in TEXT MODE (typing letters)
         - Press Tab to enter PAINT MODE
         - In paint mode: letter keys select brush color and stamp
@@ -71,7 +71,7 @@ class PlaybackPlayer:
         dispatch_action: Callable[[object], Awaitable[None]],
         speed_multiplier: float = 1.0,
         clear_all: Callable[[], None] | None = None,
-        clear_doodle: Callable[[], None] | None = None,
+        clear_art: Callable[[], None] | None = None,
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
         is_play_letters_mode: Callable[[], bool] | None = None,
@@ -85,12 +85,12 @@ class PlaybackPlayer:
                 (typically app._dispatch_keyboard_action)
             speed_multiplier: Speed up (>1) or slow down (<1) the playback
             clear_all: Optional function to clear all state at start
-            clear_doodle: Optional function to clear doodle canvas and reset cursor
-            set_play_key_color: Optional function to set a Play room key's
+            clear_art: Optional function to clear doodle canvas and reset cursor
+            set_play_key_color: Optional function to set a Music room key's
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
-            is_doodle_paint_mode: Optional function to check if Doodle room
+            is_doodle_paint_mode: Optional function to check if Art room
                 is in paint mode (vs text mode)
-            is_play_letters_mode: Optional function to check if Play room
+            is_play_letters_mode: Optional function to check if Music room
                 is in letters mode (vs music mode)
             get_cursor_position: Optional function returning (x_frac, y_frac)
                 viewport fractions for the current cursor position. Used to
@@ -102,7 +102,7 @@ class PlaybackPlayer:
         self._dispatch = dispatch_action
         self._speed = speed_multiplier
         self._clear_all = clear_all
-        self._clear_doodle = clear_doodle
+        self._clear_art = clear_art
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
         self._is_play_letters_mode = is_play_letters_mode
@@ -185,8 +185,8 @@ class PlaybackPlayer:
         elif isinstance(action, ClearAll):
             await self._clear_all_state(action)
 
-        elif isinstance(action, ClearDoodle):
-            await self._clear_doodle_canvas(action)
+        elif isinstance(action, ClearArt):
+            await self._clear_art_canvas(action)
 
         elif isinstance(action, PlayKeys):
             await self._play_keys(action)
@@ -255,7 +255,7 @@ class PlaybackPlayer:
     async def _switch_target(self, action: SwitchTarget) -> None:
         """Switch to a specific room and mode.
 
-        Parses target like "play.music" or "doodle.paint" into:
+        Parses target like "music.music" or "art.paint" into:
         1. Main room switch (via RoomAction)
         2. Sub-room toggle (via Tab) if needed
         """
@@ -267,28 +267,28 @@ class PlaybackPlayer:
         await self._dispatch(RoomAction(room=main_room))
         await self._sleep(0.1)
 
-        if main_room == "play" and mode == "letters":
+        if main_room == "music" and mode == "letters":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if not in_letters:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_room == "play" and mode == "music":
+        elif main_room == "music" and mode == "music":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if in_letters:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_room == "doodle" and mode == "paint":
+        elif main_room == "art" and mode == "paint":
             in_paint = (
                 self._is_doodle_paint_mode and self._is_doodle_paint_mode()
             )
             if not in_paint:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
-        elif main_room == "doodle" and mode == "text":
+        elif main_room == "art" and mode == "text":
             in_paint = (
                 self._is_doodle_paint_mode and self._is_doodle_paint_mode()
             )
@@ -309,14 +309,14 @@ class PlaybackPlayer:
             self._clear_all()
         await self._sleep(action.pause_after)
 
-    async def _clear_doodle_canvas(self, action: ClearDoodle) -> None:
-        """Clear the doodle canvas and reset cursor to (0,0)."""
-        if self._clear_doodle:
-            self._clear_doodle()
+    async def _clear_art_canvas(self, action: ClearArt) -> None:
+        """Clear the art canvas and reset cursor to (0,0)."""
+        if self._clear_art:
+            self._clear_art()
         await self._sleep(action.pause_after)
 
     async def _play_keys(self, action: PlayKeys) -> None:
-        """Play a sequence of keys with musical timing.
+        """Play a sequence of keys in Music room with musical timing.
 
         Each key press cycles the key's color (purple -> blue -> red -> off).
         Colors PERSIST after being set.
@@ -338,7 +338,7 @@ class PlaybackPlayer:
         await self._sleep(action.pause_after)
 
     async def _draw_path(self, action: DrawPath) -> None:
-        """Draw a path in Doodle room's paint mode.
+        """Draw a path in Art room's paint mode.
 
         Automatically switches to PAINT mode (via Tab) before drawing.
         """

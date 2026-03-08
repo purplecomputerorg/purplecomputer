@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI-assisted Doodle Mode drawing generator.
+AI-assisted Art Mode drawing generator.
 
 Uses the REAL Purple Computer app with visual feedback:
 1. Run the real app in a PTY with PURPLE_DEV_MODE=1
@@ -13,15 +13,15 @@ Uses the REAL Purple Computer app with visual feedback:
 This ensures the AI learns from the ACTUAL app behavior.
 
 Usage:
-    python tools/doodle_ai.py --goal "a tree with green leaves"
-    python tools/doodle_ai.py --goal "sunset landscape" --iterations 10
+    python tools/art_ai.py --goal "a tree with green leaves"
+    python tools/art_ai.py --goal "sunset landscape" --iterations 10
 
     # Use a reference image
-    python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
+    python tools/art_ai.py --goal "a palm tree" --reference photo.png
 
     # Resume from a previous run
-    python tools/doodle_ai.py --from doodle_ai_output/20260203_143022/screenshots/iteration_2b_refinement_cropped.png
-    python tools/doodle_ai.py --from doodle_ai_output/20260203_143022 --instruction "add a bird"
+    python tools/art_ai.py --from art_ai_output/20260203_143022/screenshots/iteration_2b_refinement_cropped.png
+    python tools/art_ai.py --from art_ai_output/20260203_143022 --instruction "add a bird"
 """
 
 import argparse
@@ -47,7 +47,7 @@ from pathlib import Path
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.doodle_config import (
+from purple_tui.art_config import (
     CANVAS_WIDTH, CANVAS_HEIGHT,
     describe_canvas, describe_colors, describe_colors_brief,
 )
@@ -665,7 +665,7 @@ def svg_to_png_base64(svg_path: str, crop_to_canvas: bool = True) -> str:
 
     Args:
         svg_path: Path to SVG file
-        crop_to_canvas: If True, crop to just the doodle canvas area
+        crop_to_canvas: If True, crop to just the art canvas area
     """
     try:
         from cairosvg import svg2png
@@ -824,17 +824,17 @@ def crop_to_canvas_area(png_data: bytes) -> bytes:
         left, top, right, bottom = _find_drawable_bounds(img)
 
         # If detection returned full image, use fallback constants
-        # (This happens when not in Doodle paint mode, or no gutter visible)
+        # (This happens when not in Art paint mode, or no gutter visible)
         if left == 0 and top == 0 and right == img_width and bottom == img_height:
             print("[Crop] No gutter detected, using fallback bounds")
             cell_width = img_width / REQUIRED_TERMINAL_COLS
             cell_height = img_height / REQUIRED_TERMINAL_ROWS
-            # Fallback: approximate Doodle mode canvas area from config
-            # Title(2) + border(1) + header(DOODLE_HEADER_ROWS) + gutter(GUTTER)
-            from purple_tui.doodle_config import DOODLE_HEADER_ROWS
-            from purple_tui.modes.doodle_mode import GUTTER
+            # Fallback: approximate Art mode canvas area from config
+            # Title(2) + border(1) + header(ART_HEADER_ROWS) + gutter(GUTTER)
+            from purple_tui.art_config import ART_HEADER_ROWS
+            from purple_tui.rooms.art_room import GUTTER
             col_start = GUTTER + 1  # +1 for border
-            row_start = 2 + 1 + DOODLE_HEADER_ROWS + GUTTER  # title + border + header + gutter
+            row_start = 2 + 1 + ART_HEADER_ROWS + GUTTER  # title + border + header + gutter
             left = int(col_start * cell_width)
             top = int(row_start * cell_height)
             right = int((col_start + CANVAS_WIDTH) * cell_width)
@@ -1160,13 +1160,13 @@ class PurpleController:
         print(f"[Screenshot] FAILED - trigger_exists={os.path.exists(trigger_path)}")
         return None
 
-    def switch_to_doodle(self) -> None:
-        """Switch to Doodle mode."""
-        self.send_command("mode", "doodle")
+    def switch_to_art(self) -> None:
+        """Switch to Art mode."""
+        self.send_command("mode", "art")
         time.sleep(0.1)
 
     def enter_paint_mode(self) -> None:
-        """Enter paint mode (Tab in Doodle mode)."""
+        """Enter paint mode (Tab in Art mode)."""
         self.send_key('tab')
         time.sleep(0.1)
 
@@ -1275,7 +1275,7 @@ class PurpleController:
 # AI VISION FEEDBACK LOOP
 # =============================================================================
 
-PLANNING_PROMPT = f"""You are an AI artist planning a pixel art drawing in Purple Computer's Doodle mode.
+PLANNING_PROMPT = f"""You are an AI artist planning a pixel art drawing in Purple Computer's Art mode.
 
 ## CANVAS SIZE
 {describe_canvas()}
@@ -1395,7 +1395,7 @@ The draw_technique for each should specify which portion to draw.
 **BACKGROUND TIP:** Keep backgrounds MINIMAL. A tree doesn't need a full blue sky fill ({CANVAS_HEIGHT} rows x {CANVAS_WIDTH} columns = boring). Instead, leave most of the canvas background showing and focus detail on the subject. If you want a ground line, use 2-3 rows, not 10. If you want sky, use a few accent strokes or a gradient strip, not a full fill."""
 
 
-EXECUTION_PROMPT = f"""You are an AI artist creating pixel art in Purple Computer's Doodle mode.
+EXECUTION_PROMPT = f"""You are an AI artist creating pixel art in Purple Computer's Art mode.
 
 ## GOALS
 Your drawings should be:
@@ -2343,7 +2343,7 @@ Respond with JSON metadata followed by a compact ```actions``` block with ## com
     return result
 
 
-COMPONENT_REFINEMENT_PROMPT = f"""You are an AI artist refining ONE component of a pixel art drawing in Purple Computer's Doodle mode.
+COMPONENT_REFINEMENT_PROMPT = f"""You are an AI artist refining ONE component of a pixel art drawing in Purple Computer's Art mode.
 
 You will receive:
 1. The FULL composite drawing (all components combined)
@@ -3194,7 +3194,7 @@ def _adjust_bounds_with_ai(
     Args:
         feedback: Natural language description of what needs to change.
         library: Current component library (has composition with bounds).
-        goal: What the doodle is supposed to depict.
+        goal: What the drawing is supposed to depict.
         api_key: Anthropic API key.
         model: Model to use.
         full_image_b64: Optional base64 PNG of the current composite.
@@ -3301,7 +3301,7 @@ def judge_components_human(
     Args:
         all_candidate_crops: List of (label, crops_dict, full_image_b64) for each candidate.
         library: The component library with current best versions.
-        goal: The doodle goal description.
+        goal: The art goal description.
         library_full_image: Base64 PNG of the current library composite.
 
     Returns:
@@ -3885,9 +3885,9 @@ def run_visual_feedback_loop(
             library = ComponentLibrary.from_plan(plan)
             print(f"[Library] Initialized with {len(library.component_order)} components: {', '.join(library.component_order)}")
 
-        # Switch to Doodle mode and enter paint mode
-        print("\n[Setup] Switching to Doodle mode...")
-        controller.switch_to_doodle()
+        # Switch to Art mode and enter paint mode
+        print("\n[Setup] Switching to Art mode...")
+        controller.switch_to_art()
         controller.enter_paint_mode()
         time.sleep(0.2)
 
@@ -4499,7 +4499,7 @@ def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, 
         '',
         'AI_DRAWING = [',
         '    Comment("=== AI GENERATED DRAWING ==="),',
-        '    SwitchRoom("doodle"),',
+        '    SwitchRoom("art"),',
         '    Pause(0.3),',
         '    PressKey("tab"),  # Enter paint mode',
         '',
@@ -4612,7 +4612,7 @@ def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, 
 # MAIN
 # =============================================================================
 
-def generate_output_dir(base_dir: str = "doodle_ai_output") -> str:
+def generate_output_dir(base_dir: str = "art_ai_output") -> str:
     """Generate a unique output directory with timestamp."""
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -4625,19 +4625,19 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    python tools/doodle_ai.py --goal "a tree on a green hill"
-    python tools/doodle_ai.py --goal "sunset with orange sky" --iterations 8
-    python tools/doodle_ai.py --goal "simple house" --iterations 3
+    python tools/art_ai.py --goal "a tree on a green hill"
+    python tools/art_ai.py --goal "sunset with orange sky" --iterations 8
+    python tools/art_ai.py --goal "simple house" --iterations 3
 
     # Use a reference image
-    python tools/doodle_ai.py --goal "a palm tree" --reference photo.png
+    python tools/art_ai.py --goal "a palm tree" --reference photo.png
 
     # Resume from a specific screenshot
-    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png
-    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png --instruction "make trunk thicker"
+    python tools/art_ai.py --from art_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png
+    python tools/art_ai.py --from art_ai_output/TIMESTAMP/screenshots/iteration_2b_refinement_cropped.png --instruction "make trunk thicker"
 
     # Resume from final state of a run
-    python tools/doodle_ai.py --from doodle_ai_output/TIMESTAMP --instruction "add more shading"
+    python tools/art_ai.py --from art_ai_output/TIMESTAMP --instruction "add more shading"
 
 Requirements:
     - ANTHROPIC_API_KEY environment variable
@@ -4653,7 +4653,7 @@ Output (auto-generated timestamped folder):
         """
     )
     parser.add_argument("goal_positional", nargs="?", default=None, metavar="GOAL",
-                        help="What to draw (positional, e.g. ./tools/doodle-ai \"a tree\")")
+                        help="What to draw (positional, e.g. ./tools/art-ai \"a tree\")")
     parser.add_argument("--goal", default=None, help="What to draw (required unless using --from)")
     parser.add_argument("--from", dest="from_path", default=None, metavar="PATH",
                         help="Resume from a previous screenshot (PNG or SVG) or output directory")

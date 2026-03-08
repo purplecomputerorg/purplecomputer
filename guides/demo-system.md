@@ -11,8 +11,8 @@ How to create, generate, and compose demo screencasts for Purple Computer.
   - [Removing a Segment](#removing-a-segment)
   - [Per-Segment Speed](#per-segment-speed)
 - [Generating Segments](#generating-segments)
-  - [Play Mode Segment (play-ai)](#play-mode-segment-play-ai)
-  - [Doodle Segment (doodle-ai)](#doodle-segment-doodle-ai)
+  - [Music Room Segment (play-ai)](#music-room-segment-play-ai)
+  - [Art Segment (doodle-ai)](#art-segment-doodle-ai)
   - [Writing a Segment by Hand](#writing-a-segment-by-hand)
 - [Fallback Chain](#fallback-chain)
 - [How It Works](#how-it-works)
@@ -21,9 +21,9 @@ How to create, generate, and compose demo screencasts for Purple Computer.
   - [SetSpeed Action](#setspeed-action)
   - [Demo Player Callbacks](#demo-player-callbacks)
 - [Mode Behaviors (for Scripting)](#mode-behaviors-for-scripting)
-  - [Play Mode](#play-mode)
-  - [Doodle Mode](#doodle-mode)
-  - [Explore Mode](#explore-mode)
+  - [Music Room](#music-room)
+  - [Art Room](#art-room)
+  - [Play Room](#play-room)
 - [Action Reference](#action-reference)
 - [Color Reference](#color-reference)
 - [Troubleshooting](#troubleshooting)
@@ -33,10 +33,10 @@ How to create, generate, and compose demo screencasts for Purple Computer.
 ## Quick Start
 
 ```bash
-# Generate a Play Mode segment
+# Generate a Music Room segment
 ./tools/play-ai "smiley face" --save smiley
 
-# Generate a Doodle segment
+# Generate an Art segment
 ./tools/doodle-ai --goal "palm tree"
 ./tools/install-doodle-demo --from doodle_ai_output/TIMESTAMP --save palm_tree
 
@@ -96,9 +96,9 @@ The player inserts a `SetSpeed` action before each segment, so different segment
 
 ## Generating Segments
 
-### Play Mode Segment (play-ai)
+### Music Room Segment (play-ai)
 
-Generates a Play Mode composition (music + colored grid art) from a text prompt:
+Generates a Music Room composition (music + colored grid art) from a text prompt:
 
 ```bash
 ./tools/play-ai "smiley face" --save smiley
@@ -113,7 +113,7 @@ Options:
 
 Without `--save`, it just prints the generated code to stdout.
 
-### Doodle Segment (doodle-ai)
+### Art Segment (doodle-ai)
 
 Two steps: generate the drawing, then install it as a segment.
 
@@ -170,7 +170,7 @@ Create a Python file in `purple_tui/demo/segments/`:
 from ..script import SwitchMode, TypeText, PressKey, Pause
 
 SEGMENT = [
-    SwitchMode("explore"),
+    SwitchMode("play"),
     TypeText("hello!"),
     PressKey("enter", pause_after=1.0),
     Pause(1.5),
@@ -266,14 +266,14 @@ DemoPlayer(
 ```
 
 - `clear_all`: called by `ClearAll()` to reset all modes
-- `set_play_key_color`: direct color control for Play Mode keys
+- `set_play_key_color`: direct color control for Music Room keys
 - `is_doodle_paint_mode`: lets `DrawPath` check if Tab is needed
 
 ---
 
 ## Mode Behaviors (for Scripting)
 
-### Play Mode
+### Music Room
 
 - 10x4 grid mapped to the keyboard
 - Each key press **cycles** the color: off -> purple -> blue -> red -> off
@@ -296,7 +296,7 @@ PlayKeys(sequence=['a', None, 'l'], seconds_between=0.6)       # Corners (purple
 PlayKeys(sequence=['c', 'v', 'b', 'n'], seconds_between=0.43)  # Smile (purple)
 ```
 
-### Doodle Mode
+### Art Room
 
 Two sub-modes:
 1. **Text mode** (default): typing places letters on the canvas
@@ -314,12 +314,12 @@ Drawing mechanics:
 - Space+arrows: draw lines (hold space while moving)
 - `DrawPath` handles all of this automatically
 
-### Explore Mode
+### Play Room
 
 Text input with results below. Just use `TypeText` + `PressKey("enter")`.
 
 ```python
-SwitchMode("explore"),
+SwitchMode("play"),
 TypeText("red + blue"),
 PressKey("enter", pause_after=1.5),
 ```
@@ -363,9 +363,9 @@ Moves cursor without painting. For repositioning between draws.
 
 ### SwitchMode
 ```python
-SwitchMode("play")     # F2
-SwitchMode("explore")  # F1
-SwitchMode("doodle")   # F3
+SwitchMode("music")    # F2
+SwitchMode("play")     # F1
+SwitchMode("art")      # F3
 ```
 
 ### Pause
@@ -388,7 +388,7 @@ Normally inserted automatically by the composition loader.
 
 ## Color Reference
 
-### Play Mode
+### Music Room
 | Presses | Color  | Hex     |
 |---------|--------|---------|
 | 0       | Off    | default |
@@ -397,7 +397,7 @@ Normally inserted automatically by the composition loader.
 | 3       | Red    | #ff6b6b |
 | 4       | Off    | cycles  |
 
-### Doodle Mode Brushes
+### Art Room Brushes
 | Row    | Keys                 | Colors       |
 |--------|----------------------|--------------|
 | 1-0    | number row           | Grayscale    |
@@ -407,7 +407,7 @@ Normally inserted automatically by the composition loader.
 
 Within each row, colors go light (left) to dark (right).
 
-### Color Mixing (Doodle)
+### Color Mixing (Art Room)
 Overlapping paint strokes mix subtractively:
 - Red + Blue = Purple
 - Red + Yellow = Orange
@@ -417,16 +417,16 @@ Overlapping paint strokes mix subtractively:
 
 ## Troubleshooting
 
-**Play mode shows a blob instead of a shape.**
+**Music room shows a blob instead of a shape.**
 Plan your key sequence on the grid first. Mark which keys form the picture before writing code.
 
-**Play mode colors are wrong.**
+**Music room colors are wrong.**
 A key pressed N times lands on color (N % 4). Press once for purple, twice for blue, three times for red. Four presses cycle back to off.
 
-**Doodle mode types letters instead of painting.**
+**Art room types letters instead of painting.**
 You're in text mode. Press Tab to switch to paint mode. `DrawPath` does this automatically, but manual `PressKey` sequences don't.
 
-**Doodle colors are wrong.**
+**Art room colors are wrong.**
 Check which keyboard row the key is on (QWERTY=red, ASDF=yellow, ZXCV=blue).
 
 **Demo doesn't use my segments.**

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate fun sounds for Purple Computer Play Mode
+Generate fun sounds for Purple Computer Music Mode
 
 Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
@@ -23,7 +23,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.play_constants import NOTE_FREQUENCIES
+from purple_tui.music_constants import NOTE_FREQUENCIES
 
 
 def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,

@@ -64,8 +64,8 @@ When making UX changes (behavior, interaction patterns, visual feedback), add a 
 
 **No em-dashes or spaced dashes.** Instead of ` - ` or ` — `, use colons, commas, or periods.
 
-Bad: `Press F1 - opens Explore mode`
-Good: `Press F1: opens Explore mode` or `Press F1 to open Explore mode`
+Bad: `Press F1 - opens Play room`
+Good: `Press F1: opens Play room` or `Press F1 to open Play room`
 
 This applies to docs, comments, and UI strings.
 
@@ -211,10 +211,10 @@ class MyMode(Container):
             return
 ```
 
-**Important:** If your widget is inside a container (like `ArtCanvas` inside `DoodleMode`), the container must delegate:
+**Important:** If your widget is inside a container (like `ArtCanvas` inside `ArtMode`), the container must delegate:
 
 ```python
-class DoodleMode(Container):
+class ArtMode(Container):
     async def handle_keyboard_action(self, action) -> None:
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
@@ -227,9 +227,9 @@ Modal screens are automatically dispatched to when active (checked via `screen_s
 Textual's focus system (Tab/Shift-Tab) doesn't work with evdev since we suppress terminal events. Handle all navigation explicitly via `handle_keyboard_action()` using `NavigationAction` for arrows and `ControlAction` for Enter/Escape.
 
 This pattern is used in:
-- `PlayMode`: handles character keys for sound/color
-- `ExploreMode`: handles characters, navigation, autocomplete
-- `DoodleMode`: delegates to `ArtCanvas` for painting
+- `MusicMode`: handles character keys for sound/color
+- `PlayMode`: handles characters, navigation, autocomplete
+- `ArtMode`: delegates to `ArtCanvas` for painting
 - `ParentMenu`: tracks menu selection with up/down/enter
 - `SleepScreen`: any key wakes the screen
 

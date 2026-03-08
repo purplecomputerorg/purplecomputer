@@ -12,9 +12,9 @@ echo "ANTHROPIC_API_KEY=sk-ant-your-key-here" > tools/.env
 pip install -r tools/requirements.txt
 ```
 
-## AI Drawing Tool (`doodle_ai.py`)
+## AI Drawing Tool (`art_ai.py`)
 
-Uses Claude vision to generate drawings in Doodle mode with a visual feedback loop.
+Uses Claude vision to generate drawings in the Art room with a visual feedback loop.
 
 **How it works:**
 1. Starts Purple Computer in dev mode (`PURPLE_DEV_MODE=1`)

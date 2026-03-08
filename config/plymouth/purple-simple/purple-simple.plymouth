@@ -1,8 +1,0 @@
-[Plymouth Theme]
-Name=Purple Simple
-Description=Solid purple background for Purple Computer boot
-ModuleName=script
-
-[script]
-ImageDir=/usr/share/plymouth/themes/purple-simple
-ScriptFile=/usr/share/plymouth/themes/purple-simple/purple-simple.script

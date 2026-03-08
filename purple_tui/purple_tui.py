@@ -564,9 +564,8 @@ class PurpleApp(App):
         self._idle_timer = None
         self._sleep_screen_active = False
         self._power_button_reader: PowerButtonReader | None = None
-        self._power_button_down_time: float | None = None
-        self._power_hold_timer = None
         self._bye_screen_active = False
+        self._app_suspended = False  # True while shell is open via parent menu
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -675,8 +674,10 @@ class PurpleApp(App):
 
         # Start power button reader (separate device from keyboard)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            from .power_manager import POWER_HOLD_SHUTDOWN
             self._power_button_reader = PowerButtonReader(
                 callback=self._handle_power_button_event,
+                hold_seconds=POWER_HOLD_SHUTDOWN,
             )
             try:
                 await self._power_button_reader.start()
@@ -762,19 +763,29 @@ class PurpleApp(App):
 
         @contextmanager
         def _suspend_ctx():
+            self._app_suspended = True
+
             # Release evdev grab so terminal can receive keyboard input
             if self._evdev_reader:
                 self._evdev_reader.release_grab()
+
+            # Let logind handle power button directly while shell is open
+            from .power_manager import set_logind_power_key
+            logind_switched = set_logind_power_key("poweroff")
 
             try:
                 with self.suspend():
                     yield
             finally:
+                # Restore TUI control of power button
+                if logind_switched:
+                    set_logind_power_key("ignore")
                 # Reacquire grab when resuming
                 if self._evdev_reader:
                     self._evdev_reader.reacquire_grab()
                 # Reset keyboard state to avoid stuck keys
                 self._keyboard_state_machine.reset()
+                self._app_suspended = False
 
         return _suspend_ctx()
 
@@ -1261,40 +1272,18 @@ class PurpleApp(App):
     # ── Power Button ──────────────────────────────────────────────────
 
     async def _handle_power_button_event(self, event: PowerButtonEvent) -> None:
-        """Handle power button press/release from evdev.
+        """Handle power button tap/hold from PowerButtonReader.
 
-        Tap (< 3s): show sleep screen (cute, not scary)
+        Tap: show sleep screen (cute, not scary)
         Hold (3s): show bye screen and shut down
         """
-        if self._bye_screen_active:
+        if self._app_suspended or self._bye_screen_active:
             return
 
-        if event.is_down:
-            self._power_button_down_time = event.timestamp
-            # Start a timer for the hold threshold
-            from .power_manager import POWER_HOLD_SHUTDOWN
-            self._cancel_power_hold_timer()
-            self._power_hold_timer = self.set_timer(
-                POWER_HOLD_SHUTDOWN, self._power_hold_triggered
-            )
-        else:
-            # Released before hold threshold: show sleep screen (tap)
-            self._cancel_power_hold_timer()
-            if self._power_button_down_time is not None:
-                self._power_button_down_time = None
-                self._show_sleep_screen()
-
-    def _cancel_power_hold_timer(self) -> None:
-        """Cancel the power button hold timer."""
-        if self._power_hold_timer:
-            self._power_hold_timer.stop()
-            self._power_hold_timer = None
-
-    def _power_hold_triggered(self) -> None:
-        """Power button held for 3 seconds: initiate shutdown."""
-        self._cancel_power_hold_timer()
-        self._power_button_down_time = None
-        self._show_bye_screen()
+        if event.action == "tap":
+            self._show_sleep_screen()
+        elif event.action == "hold":
+            self._show_bye_screen()
 
     def _show_bye_screen(self) -> None:
         """Show the goodbye screen and shut down."""

@@ -530,7 +530,7 @@ class InstallConfirmScreen(ModalScreen):
                 yield Static(" Install ", id="btn-install")
                 yield Static(" Cancel ", id="btn-cancel-install")
             yield Static(
-                "\u2190 \u2192 choose   Enter confirm",
+                "Arrow keys choose   Enter confirm",
                 id="install-hint"
             )
 
@@ -553,7 +553,7 @@ class InstallConfirmScreen(ModalScreen):
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction in ('left', 'right'):
+            if action.direction in ('left', 'right', 'up', 'down'):
                 self._selected_button = 1 - self._selected_button
                 self._update_buttons()
             return

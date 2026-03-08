@@ -145,10 +145,10 @@ class RoomPickerScreen(ModalScreen):
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
-            if action.direction == 'left':
+            if action.direction in ('left', 'up'):
                 self._selected_index = max(0, self._selected_index - 1)
                 self._update_selection()
-            elif action.direction == 'right':
+            elif action.direction in ('right', 'down'):
                 self._selected_index = min(len(ROOM_OPTIONS) - 1, self._selected_index + 1)
                 self._update_selection()
             return

@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&amp;display=swap');
+      text { font-family: 'Nunito', 'Rounded Mplus 1c', 'Arial Rounded MT Bold', sans-serif; }
+    </style>
+    <!-- Key shape -->
+    <clipPath id="keyClip">
+      <rect rx="6" ry="6" width="70" height="70"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1800" rx="24" fill="#1a0a2e"/>
+
+  <!-- Title -->
+  <text x="600" y="110" text-anchor="middle" font-size="52" font-weight="900" fill="#c084fc" letter-spacing="2">
+    Art Room Colors
+  </text>
+  <text x="600" y="160" text-anchor="middle" font-size="26" fill="#a78bfa" opacity="0.8">
+    Each row of your keyboard paints a different color
+  </text>
+
+  <!-- Divider -->
+  <line x1="150" y1="195" x2="1050" y2="195" stroke="#7c3aed" stroke-width="2" opacity="0.4"/>
+
+  <!-- ROW LABELS -->
+  <!-- Number Row Label -->
+  <text x="110" y="290" text-anchor="end" font-size="22" font-weight="700" fill="#999999">Grays</text>
+
+  <!-- Number Row: Grayscale ` 1 2 3 4 5 6 7 8 9 0 - = -->
+  <!-- Using 75px spacing, starting at x=140 -->
+  <g transform="translate(140, 250)">
+    <rect width="70" height="70" rx="8" fill="#FFFFFF" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">`</text>
+  </g>
+  <g transform="translate(215, 250)">
+    <rect width="70" height="70" rx="8" fill="#F0F0F0" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">1</text>
+  </g>
+  <g transform="translate(290, 250)">
+    <rect width="70" height="70" rx="8" fill="#D8D8D8" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">2</text>
+  </g>
+  <g transform="translate(365, 250)">
+    <rect width="70" height="70" rx="8" fill="#C0C0C0" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">3</text>
+  </g>
+  <g transform="translate(440, 250)">
+    <rect width="70" height="70" rx="8" fill="#A8A8A8" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">4</text>
+  </g>
+  <g transform="translate(515, 250)">
+    <rect width="70" height="70" rx="8" fill="#909090" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">5</text>
+  </g>
+  <g transform="translate(590, 250)">
+    <rect width="70" height="70" rx="8" fill="#787878" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">6</text>
+  </g>
+  <g transform="translate(665, 250)">
+    <rect width="70" height="70" rx="8" fill="#606060" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">7</text>
+  </g>
+  <g transform="translate(740, 250)">
+    <rect width="70" height="70" rx="8" fill="#484848" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">8</text>
+  </g>
+  <g transform="translate(815, 250)">
+    <rect width="70" height="70" rx="8" fill="#303030" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">9</text>
+  </g>
+  <g transform="translate(890, 250)">
+    <rect width="70" height="70" rx="8" fill="#181818" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">0</text>
+  </g>
+  <g transform="translate(965, 250)">
+    <rect width="70" height="70" rx="8" fill="#080808" stroke="#444" stroke-width="1.5"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">-</text>
+  </g>
+
+  <!-- Q Row Label -->
+  <text x="110" y="410" text-anchor="end" font-size="22" font-weight="700" fill="#E86262">Reds</text>
+
+  <!-- Q Row: Red family, offset right slightly like real keyboard -->
+  <g transform="translate(165, 370)">
+    <rect width="70" height="70" rx="8" fill="#E86262"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">Q</text>
+  </g>
+  <g transform="translate(240, 370)">
+    <rect width="70" height="70" rx="8" fill="#E65555"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">W</text>
+  </g>
+  <g transform="translate(315, 370)">
+    <rect width="70" height="70" rx="8" fill="#E44848"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">E</text>
+  </g>
+  <g transform="translate(390, 370)">
+    <rect width="70" height="70" rx="8" fill="#E33B3B"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">R</text>
+  </g>
+  <g transform="translate(465, 370)">
+    <rect width="70" height="70" rx="8" fill="#E12E2E"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">T</text>
+  </g>
+  <g transform="translate(540, 370)">
+    <rect width="70" height="70" rx="8" fill="#DF2121"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">Y</text>
+  </g>
+  <g transform="translate(615, 370)">
+    <rect width="70" height="70" rx="8" fill="#D31E1E"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">U</text>
+  </g>
+  <g transform="translate(690, 370)">
+    <rect width="70" height="70" rx="8" fill="#C61C1C"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">I</text>
+  </g>
+  <g transform="translate(765, 370)">
+    <rect width="70" height="70" rx="8" fill="#B91A1A"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">O</text>
+  </g>
+  <g transform="translate(840, 370)">
+    <rect width="70" height="70" rx="8" fill="#AC1818"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">P</text>
+  </g>
+
+  <!-- A Row Label -->
+  <text x="110" y="530" text-anchor="end" font-size="22" font-weight="700" fill="#E8D262">Yellows</text>
+
+  <!-- A Row: Yellow/Gold family, offset further right -->
+  <g transform="translate(185, 490)">
+    <rect width="70" height="70" rx="8" fill="#E8D262"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">A</text>
+  </g>
+  <g transform="translate(260, 490)">
+    <rect width="70" height="70" rx="8" fill="#E6CD53"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">S</text>
+  </g>
+  <g transform="translate(335, 490)">
+    <rect width="70" height="70" rx="8" fill="#E4C943"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="#1a0a2e">D</text>
+  </g>
+  <g transform="translate(410, 490)">
+    <rect width="70" height="70" rx="8" fill="#E1C433"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">F</text>
+  </g>
+  <g transform="translate(485, 490)">
+    <rect width="70" height="70" rx="8" fill="#DFC024"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">G</text>
+  </g>
+  <g transform="translate(560, 490)">
+    <rect width="70" height="70" rx="8" fill="#D3B51E"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">H</text>
+  </g>
+  <g transform="translate(635, 490)">
+    <rect width="70" height="70" rx="8" fill="#C4A81C"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">J</text>
+  </g>
+  <g transform="translate(710, 490)">
+    <rect width="70" height="70" rx="8" fill="#B49A19"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">K</text>
+  </g>
+  <g transform="translate(785, 490)">
+    <rect width="70" height="70" rx="8" fill="#A58D17"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">L</text>
+  </g>
+
+  <!-- Z Row Label -->
+  <text x="110" y="650" text-anchor="end" font-size="22" font-weight="700" fill="#628FE8">Blues</text>
+
+  <!-- Z Row: Blue family, offset even further -->
+  <g transform="translate(215, 610)">
+    <rect width="70" height="70" rx="8" fill="#628FE8"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">Z</text>
+  </g>
+  <g transform="translate(290, 610)">
+    <rect width="70" height="70" rx="8" fill="#5183E6"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">X</text>
+  </g>
+  <g transform="translate(365, 610)">
+    <rect width="70" height="70" rx="8" fill="#4076E3"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">C</text>
+  </g>
+  <g transform="translate(440, 610)">
+    <rect width="70" height="70" rx="8" fill="#2E6AE1"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">V</text>
+  </g>
+  <g transform="translate(515, 610)">
+    <rect width="70" height="70" rx="8" fill="#1F5EDC"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">B</text>
+  </g>
+  <g transform="translate(590, 610)">
+    <rect width="70" height="70" rx="8" fill="#1D57CB"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">N</text>
+  </g>
+  <g transform="translate(665, 610)">
+    <rect width="70" height="70" rx="8" fill="#1A4FB9"/>
+    <text x="35" y="45" text-anchor="middle" font-size="24" font-weight="700" fill="white">M</text>
+  </g>
+
+  <!-- Space bar -->
+  <g transform="translate(290, 730)">
+    <rect width="370" height="55" rx="10" fill="#2a1845" stroke="#7c3aed" stroke-width="2"/>
+    <text x="185" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#c084fc">Space</text>
+  </g>
+
+  <!-- Instructions below keyboard -->
+  <line x1="150" y1="830" x2="1050" y2="830" stroke="#7c3aed" stroke-width="2" opacity="0.3"/>
+
+  <text x="600" y="890" text-anchor="middle" font-size="32" font-weight="800" fill="#c084fc">How to paint</text>
+
+  <!-- Instruction 1 -->
+  <rect x="100" y="930" width="1000" height="100" rx="12" fill="#2a1845"/>
+  <circle cx="160" cy="980" r="30" fill="#7c3aed"/>
+  <text x="160" y="992" text-anchor="middle" font-size="28" font-weight="800" fill="white">1</text>
+  <text x="210" y="970" font-size="26" fill="#e0d0ff">Press any letter to stamp its color.</text>
+  <text x="210" y="1005" font-size="22" fill="#a78bfa">Q makes light red. Z makes light blue.</text>
+
+  <!-- Instruction 2 -->
+  <rect x="100" y="1050" width="1000" height="100" rx="12" fill="#2a1845"/>
+  <circle cx="160" cy="1100" r="30" fill="#7c3aed"/>
+  <text x="160" y="1112" text-anchor="middle" font-size="28" font-weight="800" fill="white">2</text>
+  <text x="210" y="1090" font-size="26" fill="#e0d0ff">Hold Space + arrow keys to brush!</text>
+  <text x="210" y="1125" font-size="22" fill="#a78bfa">Paints a trail as you move around.</text>
+
+  <!-- Instruction 3 -->
+  <rect x="100" y="1170" width="1000" height="100" rx="12" fill="#2a1845"/>
+  <circle cx="160" cy="1220" r="30" fill="#7c3aed"/>
+  <text x="160" y="1232" text-anchor="middle" font-size="28" font-weight="800" fill="white">3</text>
+  <text x="210" y="1210" font-size="26" fill="#e0d0ff">Hold a letter + arrow keys to paint</text>
+  <text x="210" y="1245" font-size="22" fill="#a78bfa">that letter's color as a continuous stroke.</text>
+
+  <!-- Instruction 4 -->
+  <rect x="100" y="1290" width="1000" height="100" rx="12" fill="#2a1845"/>
+  <circle cx="160" cy="1340" r="30" fill="#7c3aed"/>
+  <text x="160" y="1352" text-anchor="middle" font-size="28" font-weight="800" fill="white">4</text>
+  <text x="210" y="1330" font-size="26" fill="#e0d0ff">Press Tab to switch to writing mode.</text>
+  <text x="210" y="1365" font-size="22" fill="#a78bfa">Type words and sentences on your canvas!</text>
+
+  <!-- Instruction 5 -->
+  <rect x="100" y="1410" width="1000" height="100" rx="12" fill="#2a1845"/>
+  <circle cx="160" cy="1460" r="30" fill="#7c3aed"/>
+  <text x="160" y="1472" text-anchor="middle" font-size="28" font-weight="800" fill="white">5</text>
+  <text x="210" y="1450" font-size="26" fill="#e0d0ff">Hold Backspace to clear the canvas.</text>
+  <text x="210" y="1485" font-size="22" fill="#a78bfa">Start fresh anytime!</text>
+
+  <!-- Gradient hint -->
+  <rect x="100" y="1560" width="1000" height="120" rx="12" fill="#1e1145" stroke="#7c3aed" stroke-width="1"/>
+  <text x="600" y="1610" text-anchor="middle" font-size="24" fill="#c084fc" font-style="italic">
+    Colors go from light (left side) to dark (right side).
+  </text>
+  <text x="600" y="1650" text-anchor="middle" font-size="24" fill="#c084fc" font-style="italic">
+    Try mixing keys from different rows!
+  </text>
+
+  <!-- Footer -->
+  <text x="600" y="1760" text-anchor="middle" font-size="20" fill="#7c3aed" opacity="0.5">
+    purplecomputer.com
+  </text>
+</svg>

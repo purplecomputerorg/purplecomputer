@@ -463,37 +463,40 @@ class EvdevReader:
 
 @dataclass
 class PowerButtonEvent:
-    """A power button event.
+    """A high-level power button event.
 
     Attributes:
-        is_down: True for press, False for release
-        timestamp: Monotonic timestamp in seconds
+        action: "tap" (short press) or "hold" (held for threshold)
+        timestamp: Monotonic timestamp of the original press
     """
-    is_down: bool
+    action: str  # "tap" or "hold"
     timestamp: float
 
 
 class PowerButtonReader:
     """
-    Reads power button events from evdev.
+    Reads power button events from evdev and detects tap vs hold.
 
-    The power button is a separate input device from the keyboard
-    (typically an ACPI device). This reader finds it and monitors
-    press/release events.
+    Hold detection uses asyncio timers, independent of Textual's event loop.
+    This ensures reliable detection even if the TUI is suspended.
 
     Usage:
         async def handle_power(event: PowerButtonEvent):
-            print(f"Power {'pressed' if event.is_down else 'released'}")
+            print(f"Power {event.action}")
 
-        reader = PowerButtonReader(handle_power)
+        reader = PowerButtonReader(handle_power, hold_seconds=3)
         await reader.start()
     """
 
-    def __init__(self, callback: Callable[[PowerButtonEvent], Awaitable[None]]):
+    def __init__(self, callback: Callable[[PowerButtonEvent], Awaitable[None]],
+                 hold_seconds: float = 3):
         self._callback = callback
+        self._hold_seconds = hold_seconds
         self._device = None
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._hold_task: Optional[asyncio.Task] = None
+        self._press_time: Optional[float] = None
 
     async def start(self) -> None:
         """Start reading power button events in background."""
@@ -511,6 +514,7 @@ class PowerButtonReader:
     async def stop(self) -> None:
         """Stop reading and release the device."""
         self._running = False
+        self._cancel_hold_task()
 
         if self._task:
             self._task.cancel()
@@ -529,6 +533,25 @@ class PowerButtonReader:
 
         logger.info("PowerButtonReader: stopped")
 
+    def _cancel_hold_task(self) -> None:
+        if self._hold_task and not self._hold_task.done():
+            self._hold_task.cancel()
+        self._hold_task = None
+
+    async def _hold_timer(self) -> None:
+        """Wait for hold threshold, then emit hold event."""
+        try:
+            await asyncio.sleep(self._hold_seconds)
+            # Held long enough: emit hold
+            if self._press_time is not None:
+                await self._callback(PowerButtonEvent(
+                    action="hold",
+                    timestamp=self._press_time,
+                ))
+                self._press_time = None  # Prevent tap on late release
+        except asyncio.CancelledError:
+            pass
+
     async def _read_loop(self) -> None:
         """Main event reading loop."""
         try:
@@ -536,13 +559,21 @@ class PowerButtonReader:
                 if not self._running:
                     break
 
-                # Only care about KEY_POWER press (1) and release (0)
-                if event.type == EV_KEY and event.code == KeyCode.KEY_POWER and event.value in (0, 1):
-                    power_event = PowerButtonEvent(
-                        is_down=(event.value == 1),
-                        timestamp=event.timestamp(),
-                    )
-                    await self._callback(power_event)
+                if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
+                    if event.value == 1:  # press
+                        self._press_time = event.timestamp()
+                        self._cancel_hold_task()
+                        self._hold_task = asyncio.create_task(self._hold_timer())
+                    elif event.value == 0:  # release
+                        if self._hold_task and not self._hold_task.done():
+                            # Released before hold threshold: tap
+                            self._cancel_hold_task()
+                            if self._press_time is not None:
+                                await self._callback(PowerButtonEvent(
+                                    action="tap",
+                                    timestamp=self._press_time,
+                                ))
+                        self._press_time = None
 
         except asyncio.CancelledError:
             pass

@@ -149,7 +149,7 @@ create-update version output *args:
 
 # Run Python with venv (e.g., just python script.py, just python -c 'print(1)')
 python *args:
-    @.venv/bin/python {{args}}
+    @.venv/bin/python3 {{args}}
 
 # Run Python from stdin (e.g., echo 'print("hi")' | just pystdin)
 pystdin:

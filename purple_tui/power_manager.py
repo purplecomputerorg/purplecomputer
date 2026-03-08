@@ -33,6 +33,59 @@ LID_SHUTDOWN_DELAY = _get_timing(120, 5)      # 2 min / 5 sec: lid close to shut
 # Power button timing
 POWER_HOLD_SHUTDOWN = _get_timing(3, 2)       # 3 sec / 2 sec: hold power to shut down
 
+LOGIND_CONF_PATH = "/etc/systemd/logind.conf.d/purple-power.conf"
+
+
+def set_logind_power_key(mode: str) -> bool:
+    """Switch logind HandlePowerKey between 'ignore' and 'poweroff'.
+
+    Used to let logind handle shutdown directly when the TUI is suspended
+    (e.g., parent menu bash shell), then restore TUI control after.
+
+    Returns True on success. Fails silently (best effort).
+    """
+    try:
+        with open(LOGIND_CONF_PATH, "r") as f:
+            content = f.read()
+    except OSError:
+        return False
+
+    if mode == "poweroff":
+        new_content = content.replace("HandlePowerKey=ignore", "HandlePowerKey=poweroff")
+    elif mode == "ignore":
+        new_content = content.replace("HandlePowerKey=poweroff", "HandlePowerKey=ignore")
+    else:
+        return False
+
+    if new_content == content:
+        return True  # Already in the desired state
+
+    try:
+        with open(LOGIND_CONF_PATH, "w") as f:
+            f.write(new_content)
+    except OSError:
+        # No write permission, try via sudo
+        try:
+            subprocess.run(
+                ["sudo", "tee", LOGIND_CONF_PATH],
+                input=new_content.encode(),
+                stdout=subprocess.DEVNULL,
+                timeout=5,
+            )
+        except Exception:
+            return False
+
+    # Signal logind to re-read config (HUP reloads without killing sessions)
+    try:
+        subprocess.run(
+            ["sudo", "systemctl", "kill", "-s", "HUP", "systemd-logind"],
+            capture_output=True, timeout=5,
+        )
+    except Exception:
+        pass  # Config is written, logind will pick it up on next restart
+
+    return True
+
 
 class PowerManager:
     """

@@ -2,6 +2,12 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Art mode: toggling caps mode no longer strips background colors from typed text (row tints and paint colors now preserved)
+- Play mode: fixed continuation lines being indented 1 cell too far when colored text blocks wrap across multiple lines
+- Caps Lock key now toggles caps mode on a single press (previously required double-tap like Shift)
+- Room picker and install confirmation dialog: up/down arrows now work in addition to left/right for navigation
+- Music room: grid key labels, note names, and percussion names now respect caps mode (show uppercase when caps lock is on)
+- Power button: hold detection moved out of Textual into asyncio for reliability across hardware. Pressing power button during parent terminal shell now triggers system shutdown via logind instead of crashing.
 - Code mode (F4): renamed from "Command" to "Code" so parents immediately see the value (coding for kids) and the room lineup reads Play, Music, Art, Code
 - Code mode: "Watch me!" replaces F5 recording. Empty canvas shows "Watch me!" prompt, Enter opens room picker, kid plays in chosen room, F4 returns with captured blocks. Also available via Tab menu. F5 key removed entirely.
 - "Adjust Display" menu item hidden on hardware where xrandr brightness/contrast controls don't work (e.g. Surface Laptop 2)
@@ -11,7 +17,7 @@ Brief descriptions of user experience changes, newest first.
 - F5 badge added to bottom menu bar with keyboard icon
 - Recording indicator changed from generic record symbol to "Capturing keys" text with better spacing
 - All recording-related text clarified to say "key presses" (toasts, hints) to avoid confusion with voice recording
-- Boot splash: Plymouth shows a solid purple screen during boot, matching the app's background. Replaces the previous black screen (quiet boot with hidden console text). Clean transition from purple splash to Purple Computer app.
+- Boot splash: solid purple screen with "Starting up..." message during boot, using VT escape codes on tty1 (console output redirected to tty2). Replaces Plymouth, which was unreliable across hardware.
 - Music room: Enter now changes instrument in Letters mode too (previously only worked in Music mode).
 - Play room: number words (one, two, three) and comma-separated lists now work. "one, two, three dinos" shows a dino abacus. Multiplication with emojis shows grouping ("2 x 3 cats" shows 3 groups of 2 cats).
 - Play room: type "..." to continue patterns. Number sequences (5 4 3 ...), emoji pyramids (5 cats ...), ranges (2 4 6 ... 20), and growing sequences (cats ... 5) all work.

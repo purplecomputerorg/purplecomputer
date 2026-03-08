@@ -435,7 +435,6 @@ class ArtCanvas(Widget, can_focus=True):
                                 fg_color = self._contrast_text_color(bg_color)
                             else:
                                 fg_color = self._get_text_fg()
-                                bg_color = default_bg
                         segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                     else:
                         segments.append(Segment(" ", Style(bgcolor=default_bg)))
@@ -453,7 +452,6 @@ class ArtCanvas(Widget, can_focus=True):
                                     fg_color = self._contrast_text_color(bg_color)
                                 else:
                                     fg_color = self._get_text_fg()
-                                    bg_color = default_bg
                             segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
                         else:
                             segments.append(Segment(" ", Style(bgcolor=default_bg)))
@@ -472,9 +470,7 @@ class ArtCanvas(Widget, can_focus=True):
 
                     if cell:
                         char, fg_color, bg_color = cell
-                        # Text cells on non-painted bg use default bg
-                        if char != BRUSH_CHAR and not is_painted:
-                            bg_color = default_bg
+                        # Keep stored bg for all cells (preserves row tints)
                         # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
                             # Text cell: keep the character, use contrast color for readability
@@ -517,9 +513,9 @@ class ArtCanvas(Widget, can_focus=True):
                     text_fg = self._contrast_text_color(bg_color)
                     char_style = Style(color=text_fg, bgcolor=bg_color)
                 else:
-                    # Text with tint bg: use theme fg on default bg
+                    # Text with tint bg: use stored bg (preserves row tints)
                     text_fg = self._get_text_fg()
-                    char_style = Style(color=text_fg, bgcolor=default_bg)
+                    char_style = Style(color=text_fg, bgcolor=bg_color)
                 segments.append(Segment(self._caps_char(char), char_style))
             else:
                 # Empty cell or gutter: use gutter bg if in gutter

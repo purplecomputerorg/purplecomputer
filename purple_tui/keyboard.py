@@ -639,7 +639,12 @@ class KeyboardStateMachine:
 
         # Handle modifiers (only on fresh press)
         if not is_repeat:
-            if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):
+            if keycode == KeyCode.KEY_CAPSLOCK:
+                # Caps Lock toggles caps on single press (like a normal keyboard)
+                self._caps_lock_on = not self._caps_lock_on
+                actions.append(CapsLockAction())
+                return actions
+            if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
                 self._shift_held = True
                 actions.append(ShiftAction(is_down=True))
                 return actions
@@ -763,8 +768,12 @@ class KeyboardStateMachine:
             self._held_char = None
             self._held_char_keycode = None
 
-        # Handle modifier releases (Shift keys and Caps Lock, which is remapped to Shift)
-        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT, KeyCode.KEY_CAPSLOCK):
+        # Caps Lock release: no-op (toggle already happened on key down)
+        if keycode == KeyCode.KEY_CAPSLOCK:
+            return actions
+
+        # Handle modifier releases (Shift keys)
+        if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
             # Check for sticky shift or double-tap caps lock (quick tap, only if shift wasn't used for a character)
             if press_time and not self._shift_used_for_char:
                 hold_duration = event.timestamp - press_time
@@ -779,7 +788,7 @@ class KeyboardStateMachine:
                     else:
                         # Single tap: activate sticky shift
                         self._sticky_shift_active = True
-                        self._sticky_shift_time = event.timestamp
+                        self._sticky_shift_time = time.time()
                         if self._on_sticky_shift_change:
                             self._on_sticky_shift_change(True)
             self._shift_held = False

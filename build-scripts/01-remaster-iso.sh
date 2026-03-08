@@ -114,13 +114,13 @@ if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
     cat > /root/etc/systemd/system/purple-live.service << 'SERVICE_EOF'
 [Unit]
 Description=Purple Computer
-After=systemd-user-sessions.service plymouth-quit-wait.service
+After=systemd-user-sessions.service
 Before=getty.target
 ConditionKernelCommandLine=!purple.install=1
 Conflicts=getty@tty1.service
 
 [Service]
-ExecStart=-/sbin/agetty --autologin purple --noclear tty1 linux
+ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname tty1 linux
 Type=idle
 Restart=always
 RestartSec=0
@@ -128,14 +128,21 @@ UtmpIdentifier=tty1
 StandardInput=tty
 StandardOutput=tty
 TTYPath=/dev/tty1
-TTYReset=yes
-TTYVHangup=yes
+TTYReset=no
+TTYVHangup=no
 TTYVTDisallocate=no
 SERVICE_EOF
 
     mkdir -p /root/etc/systemd/system/multi-user.target.wants
     ln -sf ../purple-live.service /root/etc/systemd/system/multi-user.target.wants/purple-live.service
     purple_log "Created purple-live.service (autologin on tty1)"
+
+    # Show a simple splash on tty1: purple background, friendly message.
+    # Console output goes to tty2, so tty1 is ours to use.
+    # \033]P0 redefines VT palette color 0 (black) to our purple (#2d1b4e).
+    # This works on all Linux framebuffer consoles (24-bit RGB escapes don't).
+    # Clearing the screen then fills it with the redefined "black" = purple.
+    printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 
     log_end_msg
     exit 0
@@ -419,6 +426,28 @@ SOURCES_EOF
 
     log_info "Main initramfs directory: $MAIN_DIR"
 
+    # Add early splash: paint tty1 purple immediately so the user never sees
+    # a black screen. This runs in init-top, before casper mounts anything.
+    # (Don't write files to /run here, they're lost during switch_root.)
+    log_info "Adding early splash to init-top..."
+    mkdir -p "$MAIN_DIR/scripts/init-top"
+    cat > "$MAIN_DIR/scripts/init-top/01_purple_splash" << 'SPLASH_EOF'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+# Redefine VT color 0 (black) to purple (#2d1b4e), clear tty1, show message
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
+SPLASH_EOF
+    chmod +x "$MAIN_DIR/scripts/init-top/01_purple_splash"
+
+    # Add to init-top ORDER file if it exists
+    INIT_TOP_ORDER="$MAIN_DIR/scripts/init-top/ORDER"
+    if [ -f "$INIT_TOP_ORDER" ]; then
+        # Insert at the beginning (after any existing first line)
+        sed -i '1a /scripts/init-top/01_purple_splash' "$INIT_TOP_ORDER"
+    fi
+
     # Add our hook script to casper-bottom (NOT init-top)
     #
     # CRITICAL: casper-bottom runs AFTER the live root and /run are set up.
@@ -520,13 +549,13 @@ set default=0
 
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet splash loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 ---
+    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 ---
     initrd /casper/initrd
 }
 
 menuentry "Install Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet splash loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 i915.enable_dpcd_backlight=1 ---
+    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 i915.enable_dpcd_backlight=1 ---
     initrd /casper/initrd
 }
 

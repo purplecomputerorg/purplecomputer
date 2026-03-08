@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&amp;display=swap');
+      text { font-family: 'Nunito', 'Rounded Mplus 1c', 'Arial Rounded MT Bold', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1800" rx="24" fill="#1a0a2e"/>
+
+  <!-- Decorative top arc -->
+  <ellipse cx="600" cy="-200" rx="800" ry="500" fill="#2a1845" opacity="0.6"/>
+
+  <!-- Title area -->
+  <text x="600" y="140" text-anchor="middle" font-size="72" font-weight="900" fill="#c084fc" letter-spacing="3">
+    Purple Computer
+  </text>
+  <text x="600" y="210" text-anchor="middle" font-size="36" font-weight="700" fill="#a78bfa" opacity="0.8">
+    Getting Started
+  </text>
+
+  <!-- Divider -->
+  <line x1="200" y1="260" x2="1000" y2="260" stroke="#7c3aed" stroke-width="2" opacity="0.4"/>
+
+  <!-- Step 1 -->
+  <circle cx="140" cy="370" r="40" fill="#7c3aed"/>
+  <text x="140" y="385" text-anchor="middle" font-size="36" font-weight="800" fill="white">1</text>
+  <text x="210" y="360" font-size="34" font-weight="700" fill="white">Plug in the USB drive</text>
+  <text x="210" y="400" font-size="26" fill="#d4b8ff" opacity="0.85">Use any USB port on the laptop.</text>
+
+  <!-- Step 2 -->
+  <circle cx="140" cy="530" r="40" fill="#7c3aed"/>
+  <text x="140" y="545" text-anchor="middle" font-size="36" font-weight="800" fill="white">2</text>
+  <text x="210" y="510" font-size="34" font-weight="700" fill="white">Restart the laptop</text>
+  <text x="210" y="550" font-size="26" fill="#d4b8ff" opacity="0.85">Turn it off, then turn it back on.</text>
+
+  <!-- Step 3 -->
+  <circle cx="140" cy="700" r="40" fill="#7c3aed"/>
+  <text x="140" y="715" text-anchor="middle" font-size="36" font-weight="800" fill="white">3</text>
+  <text x="210" y="680" font-size="34" font-weight="700" fill="white">Open the boot menu</text>
+
+  <!-- Sub-methods box -->
+  <rect x="210" y="720" width="900" height="360" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="2" opacity="0.8"/>
+
+  <!-- Windows method -->
+  <rect x="240" y="740" width="120" height="40" rx="8" fill="#0078d4"/>
+  <text x="300" y="768" text-anchor="middle" font-size="22" font-weight="700" fill="white">Windows</text>
+  <text x="380" y="762" font-size="24" fill="#e0d0ff">Start menu &#x2192; Power icon &#x2192;</text>
+  <text x="380" y="795" font-size="24" fill="#e0d0ff">hold Shift + click Restart &#x2192;</text>
+  <text x="380" y="828" font-size="24" fill="#e0d0ff">choose "Use a device" &#x2192; pick the USB</text>
+
+  <!-- Divider line -->
+  <line x1="260" y1="855" x2="1080" y2="855" stroke="#7c3aed" stroke-width="1" opacity="0.3"/>
+
+  <!-- F12 method -->
+  <rect x="240" y="875" width="120" height="40" rx="8" fill="#5b21b6"/>
+  <text x="300" y="903" text-anchor="middle" font-size="22" font-weight="700" fill="white">Or try</text>
+  <text x="380" y="898" font-size="24" fill="#e0d0ff">Tap F12 quickly while turning on.</text>
+  <text x="380" y="931" font-size="24" fill="#e0d0ff">Pick the USB drive and press Enter.</text>
+
+  <!-- Divider line -->
+  <line x1="260" y1="958" x2="1080" y2="958" stroke="#7c3aed" stroke-width="1" opacity="0.3"/>
+
+  <!-- Mac method -->
+  <rect x="240" y="975" width="120" height="40" rx="8" fill="#374151"/>
+  <text x="300" y="1003" text-anchor="middle" font-size="22" font-weight="700" fill="white">Mac</text>
+  <text x="380" y="998" font-size="24" fill="#e0d0ff">Hold the Option key while turning on.</text>
+  <text x="380" y="1031" font-size="24" fill="#e0d0ff">Pick the USB drive. (Intel Macs only)</text>
+
+  <!-- Step 4 -->
+  <circle cx="140" cy="1170" r="40" fill="#7c3aed"/>
+  <text x="140" y="1185" text-anchor="middle" font-size="36" font-weight="800" fill="white">4</text>
+  <text x="210" y="1155" font-size="34" font-weight="700" fill="white">Wait a few seconds</text>
+  <text x="210" y="1195" font-size="26" fill="#d4b8ff" opacity="0.85">Purple Computer starts automatically!</text>
+
+  <!-- Optional install section -->
+  <rect x="100" y="1290" width="1000" height="200" rx="16" fill="#1e1145" stroke="#7c3aed" stroke-width="1.5" opacity="0.7"/>
+  <text x="600" y="1340" text-anchor="middle" font-size="28" font-weight="800" fill="#c084fc">Want to install it permanently?</text>
+  <text x="600" y="1385" text-anchor="middle" font-size="24" fill="#d4b8ff">When the menu appears, press the down arrow</text>
+  <text x="600" y="1420" text-anchor="middle" font-size="24" fill="#d4b8ff">and choose "Install Purple Computer."</text>
+  <text x="600" y="1460" text-anchor="middle" font-size="22" fill="#a78bfa" opacity="0.7">This will erase everything on the laptop.</text>
+
+  <!-- Footer -->
+  <line x1="200" y1="1570" x2="1000" y2="1570" stroke="#7c3aed" stroke-width="2" opacity="0.3"/>
+  <text x="600" y="1630" text-anchor="middle" font-size="24" fill="#a78bfa" opacity="0.7">Something not working?</text>
+  <text x="600" y="1670" text-anchor="middle" font-size="28" font-weight="700" fill="#c084fc">Flip this card over for help!</text>
+
+  <!-- Corner decorations -->
+  <circle cx="60" cy="1750" r="20" fill="#7c3aed" opacity="0.15"/>
+  <circle cx="1140" cy="1750" r="20" fill="#7c3aed" opacity="0.15"/>
+  <circle cx="60" cy="50" r="20" fill="#7c3aed" opacity="0.15"/>
+  <circle cx="1140" cy="50" r="20" fill="#7c3aed" opacity="0.15"/>
+</svg>

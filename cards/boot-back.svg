@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&amp;display=swap');
+      text { font-family: 'Nunito', 'Rounded Mplus 1c', 'Arial Rounded MT Bold', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1800" rx="24" fill="#1a0a2e"/>
+
+  <!-- Title -->
+  <text x="600" y="120" text-anchor="middle" font-size="52" font-weight="900" fill="#c084fc" letter-spacing="2">
+    Troubleshooting
+  </text>
+
+  <!-- Divider -->
+  <line x1="200" y1="165" x2="1000" y2="165" stroke="#7c3aed" stroke-width="2" opacity="0.4"/>
+
+  <!-- Problem 1 -->
+  <rect x="80" y="200" width="1040" height="240" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="248" font-size="28" font-weight="800" fill="#f87171">F12 didn't do anything</text>
+  <text x="120" y="290" font-size="24" fill="#d4b8ff">Some laptops use a different key:</text>
+  <text x="160" y="330" font-size="22" fill="#e0d0ff">HP: press Esc, then F9</text>
+  <text x="160" y="362" font-size="22" fill="#e0d0ff">Samsung: use F10 instead of F12</text>
+  <text x="160" y="394" font-size="22" fill="#e0d0ff">Acer: F12 may be turned off (use Shift+Restart)</text>
+  <text x="160" y="426" font-size="22" fill="#e0d0ff">ASUS: use Esc instead of F12</text>
+
+  <!-- Problem 2 -->
+  <rect x="80" y="470" width="1040" height="200" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="518" font-size="28" font-weight="800" fill="#f87171">Nothing happens when I press F12</text>
+  <text x="120" y="560" font-size="24" fill="#d4b8ff">Some laptops need Fn + F12.</text>
+  <text x="120" y="600" font-size="24" fill="#d4b8ff">Look for a small "Fn" key in the bottom-left</text>
+  <text x="120" y="640" font-size="24" fill="#d4b8ff">corner and hold it while pressing F12.</text>
+
+  <!-- Problem 3 -->
+  <rect x="80" y="700" width="1040" height="200" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="748" font-size="28" font-weight="800" fill="#f87171">USB drive doesn't show up</text>
+  <text x="120" y="790" font-size="24" fill="#d4b8ff">Try a different USB port on the laptop.</text>
+  <text x="120" y="830" font-size="24" fill="#d4b8ff">Make sure the USB is plugged in before</text>
+  <text x="120" y="870" font-size="24" fill="#d4b8ff">you turn on the laptop.</text>
+
+  <!-- Problem 4 -->
+  <rect x="80" y="930" width="1040" height="200" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="978" font-size="28" font-weight="800" fill="#f87171">It shows "Secure Boot" error</text>
+  <text x="120" y="1020" font-size="24" fill="#d4b8ff">This is rare. You may need to turn off</text>
+  <text x="120" y="1060" font-size="24" fill="#d4b8ff">"Secure Boot" in the laptop's settings.</text>
+  <text x="120" y="1100" font-size="24" fill="#d4b8ff">Contact us for help with this.</text>
+
+  <!-- Problem 5 -->
+  <rect x="80" y="1160" width="1040" height="165" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="1208" font-size="28" font-weight="800" fill="#f87171">Surface tablet</text>
+  <text x="120" y="1250" font-size="24" fill="#d4b8ff">Hold the Volume Down button, then press</text>
+  <text x="120" y="1290" font-size="24" fill="#d4b8ff">Power. Keep holding Volume Down until the logo.</text>
+
+  <!-- Tip box -->
+  <rect x="80" y="1380" width="1040" height="140" rx="16" fill="#1e3a1e" stroke="#4ade80" stroke-width="1.5"/>
+  <text x="120" y="1428" font-size="28" font-weight="800" fill="#4ade80">Best tip for Windows laptops</text>
+  <text x="120" y="1470" font-size="24" fill="#bbf7d0">The Shift + Restart method (on the front)</text>
+  <text x="120" y="1502" font-size="24" fill="#bbf7d0">works on almost every Windows computer.</text>
+
+  <!-- Footer / contact -->
+  <line x1="200" y1="1580" x2="1000" y2="1580" stroke="#7c3aed" stroke-width="2" opacity="0.3"/>
+  <text x="600" y="1640" text-anchor="middle" font-size="26" fill="#a78bfa" opacity="0.8">Still stuck? We're happy to help!</text>
+  <text x="600" y="1690" text-anchor="middle" font-size="30" font-weight="700" fill="#c084fc">purplecomputer.com/help</text>
+  <text x="600" y="1740" text-anchor="middle" font-size="24" fill="#a78bfa" opacity="0.6">or email hello@purplecomputer.com</text>
+
+  <!-- Corner decorations -->
+  <circle cx="60" cy="1750" r="20" fill="#7c3aed" opacity="0.15"/>
+  <circle cx="1140" cy="1750" r="20" fill="#7c3aed" opacity="0.15"/>
+</svg>

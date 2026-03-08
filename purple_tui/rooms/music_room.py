@@ -363,6 +363,7 @@ class MusicGrid(Widget):
 
         default_bg = self._get_default_bg()
         bg_style = Style(bgcolor=default_bg)
+        caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Above or below the grid?
         if y < margin_top or y >= margin_top + grid_height:
@@ -398,17 +399,18 @@ class MusicGrid(Widget):
 
             if line_in_cell == mid_line:
                 # Center the key character
+                display_key = caps(key)
                 pad_left = (cell_width - 1) // 2
                 pad_right = cell_width - pad_left - 1
                 segments.append(Segment(" " * pad_left, cell_bg_style))
-                segments.append(Segment(key, text_style))
+                segments.append(Segment(display_key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
             elif line_in_cell == 1 and key in self._note_labels:
                 # Flash note/percussion name, centered in cell
                 if key.isdigit():
-                    label = PERCUSSION_NAMES.get(key, "")
+                    label = caps(PERCUSSION_NAMES.get(key, ""))
                 else:
-                    label = NOTE_NAMES.get(key, "")
+                    label = caps(NOTE_NAMES.get(key, ""))
                 if label:
                     decorated = f"{ICON_MUSIC} {label} {ICON_MUSIC}"
                     decorated_width = len(decorated)
@@ -574,7 +576,8 @@ class MusicMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
-                label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                label = self.app.caps_text(raw_label)
                 self.app.clear_notifications()
                 self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                 return
@@ -588,7 +591,7 @@ class MusicMode(Container, can_focus=True):
                 if self._header:
                     self._header.update_instrument(inst_name)
                 self.app.clear_notifications()
-                self.app.notify(f"{ICON_MUSIC} {inst_name}", timeout=1.5)
+                self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
                 return
 
         # Character keys cycle colors, play/speak, and record

@@ -106,12 +106,18 @@ deb http://us.archive.ubuntu.com/ubuntu noble-updates main universe
 deb http://security.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
+    # Upgrade all packages (especially the kernel) to latest point release.
+    # debootstrap installs from the initial 'noble' suite, which may have an older
+    # kernel whose matching linux-modules-extra has been removed from the repos.
+    # This ensures the kernel and all its companion packages are in sync.
+    chroot "$MOUNT_DIR" apt-get update
+    chroot "$MOUNT_DIR" apt-get dist-upgrade -y
+
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
     # NOTE: We deliberately omit xserver-xorg-video-all to use the modesetting driver
     # built into xserver-xorg-core. This avoids xf86EnableIO errors from legacy drivers
     # (vesa, fbdev) trying to access VGA I/O ports under rootless X.
     # Mesa is required for glamor acceleration with modesetting.
-    chroot "$MOUNT_DIR" apt-get update
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
         libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
@@ -131,16 +137,25 @@ SOURCES
         xkbset \
         x11-utils \
         xdotool \
-        plymouth plymouth-themes \
+        \
         zstd
 
     # Install kernel modules-extra for hardware drivers (sound, backlight, wifi, etc.)
-    # The package name includes the kernel version, so we find it dynamically
-    KVER=$(ls "$MOUNT_DIR/lib/modules/" | head -1)
-    if [ -n "$KVER" ]; then
-        log_info "Installing linux-modules-extra for kernel $KVER..."
-        chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER" || \
-            log_info "WARNING: linux-modules-extra-$KVER not found, hardware support may be limited"
+    # After dist-upgrade, the kernel is at the latest point release, so the matching
+    # modules-extra package is guaranteed to be available in the repos.
+    # Use the newest kernel version (dist-upgrade may leave the old one behind).
+    KVER=$(ls -v "$MOUNT_DIR/lib/modules/" | tail -1)
+    log_info "Kernel version after upgrade: $KVER"
+    chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
+
+    # Remove old kernel versions (keeps image small, avoids confusion)
+    chroot "$MOUNT_DIR" apt-get autoremove -y
+
+    # Verify sound modules are present (fail the build if not)
+    if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/pci" ]; then
+        echo "ERROR: Sound modules not found after installing modules-extra!"
+        ls -R "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/"
+        exit 1
     fi
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
@@ -160,20 +175,6 @@ SOURCES
 
     chroot "$MOUNT_DIR" fc-cache -fv
 
-    # Install Plymouth boot splash theme (solid purple background)
-    # This provides a clean visual transition: purple screen → Purple Computer app
-    log_info "Installing Plymouth boot splash theme..."
-    THEME_DIR="$MOUNT_DIR/usr/share/plymouth/themes/purple-simple"
-    mkdir -p "$THEME_DIR"
-    cp /purple-src/config/plymouth/purple-simple/purple-simple.plymouth "$THEME_DIR/"
-    cp /purple-src/config/plymouth/purple-simple/purple-simple.script "$THEME_DIR/"
-    # Set the default theme directly (plymouth-set-default-theme may not be in chroot PATH)
-    mkdir -p "$MOUNT_DIR/etc/plymouth"
-    cat > "$MOUNT_DIR/etc/plymouth/plymouthd.conf" <<PLYMOUTH_CONF
-[Daemon]
-Theme=purple-simple
-ShowDelay=0
-PLYMOUTH_CONF
     chroot "$MOUNT_DIR" update-initramfs -u
 
     # Copy application files (project root is mounted at /purple-src)
@@ -238,8 +239,35 @@ LAUNCHER
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
+ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
+
+    # Early boot splash: paint tty1 purple with "Starting up..." message.
+    # With console=tty2, tty1 is blank until agetty starts. This fills the gap.
+    cat > "$MOUNT_DIR/usr/local/bin/purple-splash" <<'SPLASH'
+#!/bin/sh
+# Redefine VT color 0 (black) to Purple Computer purple (#2d1b4e),
+# then clear screen (fills with purple) and show white text.
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
+SPLASH
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-splash"
+
+    cat > "$MOUNT_DIR/etc/systemd/system/purple-splash.service" <<'SPLASHUNIT'
+[Unit]
+Description=Purple Computer Boot Splash
+DefaultDependencies=no
+After=systemd-vconsole-setup.service
+Before=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/purple-splash
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target
+SPLASHUNIT
+    chroot "$MOUNT_DIR" systemctl enable purple-splash.service
 
     # Configure systemd-logind for power management
     # The Purple TUI handles power button and lid close with kid-friendly UX:
@@ -313,9 +341,6 @@ SYSCTL
 
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    # Tell Plymouth to quit (it stays on screen during boot as a splash).
-    # Plymouth keeps the purple screen visible until we're ready to start X.
-    plymouth quit --retain-splash 2>/dev/null
     setterm --cursor off 2>/dev/null
     clear
     # Fail-fast: don't loop forever if X keeps crashing
@@ -375,7 +400,7 @@ AUTOSTART
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin purple --noclear %I $TERM
+ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
 
     # We skip grub-install and update-grub entirely - they create complex configs that
@@ -393,7 +418,7 @@ set default=0
 
 menuentry "PurpleOS" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet splash console=tty0 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
     initrd /boot/initrd.img
 }
 

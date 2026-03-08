@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1800" width="1200" height="1800">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&amp;display=swap');
+      text { font-family: 'Nunito', 'Rounded Mplus 1c', 'Arial Rounded MT Bold', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1800" rx="24" fill="#1a0a2e"/>
+
+  <!-- Decorative scattered dots -->
+  <circle cx="100" cy="80" r="8" fill="#c084fc" opacity="0.2"/>
+  <circle cx="1100" cy="120" r="6" fill="#f87171" opacity="0.2"/>
+  <circle cx="950" cy="60" r="10" fill="#60a5fa" opacity="0.15"/>
+  <circle cx="250" cy="1750" r="8" fill="#facc15" opacity="0.2"/>
+  <circle cx="900" cy="1720" r="6" fill="#4ade80" opacity="0.2"/>
+
+  <!-- Title -->
+  <text x="600" y="120" text-anchor="middle" font-size="64" font-weight="900" fill="#c084fc" letter-spacing="2">
+    Things to Try!
+  </text>
+
+  <!-- Divider -->
+  <line x1="200" y1="168" x2="1000" y2="168" stroke="#7c3aed" stroke-width="2" opacity="0.4"/>
+
+  <!-- Room switcher hint -->
+  <text x="600" y="218" text-anchor="middle" font-size="24" fill="#a78bfa" opacity="0.8">
+    Press F1, F2, F3, F4 to switch rooms
+  </text>
+
+  <!-- PLAY ROOM -->
+  <rect x="80" y="260" width="1040" height="500" rx="16" fill="#2a1845" stroke="#7c3aed" stroke-width="1.5"/>
+  <rect x="80" y="260" width="240" height="48" rx="16" fill="#7c3aed"/>
+  <text x="200" y="293" text-anchor="middle" font-size="26" font-weight="800" fill="white">Play Room</text>
+  <text x="340" y="293" font-size="22" fill="#a78bfa">F1</text>
+
+  <text x="120" y="345" font-size="22" fill="#d4b8ff" opacity="0.7">Type these and press Enter:</text>
+
+  <!-- Play prompts as "typed" examples -->
+  <rect x="120" y="365" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="395" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">red apple</text>
+  <text x="530" y="395" font-size="22" fill="#a78bfa">colors + emoji!</text>
+
+  <rect x="120" y="420" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="450" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">red + blue</text>
+  <text x="530" y="450" font-size="22" fill="#a78bfa">mix colors together</text>
+
+  <rect x="120" y="475" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="505" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">3 × cat</text>
+  <text x="530" y="505" font-size="22" fill="#a78bfa">multiply anything</text>
+
+  <rect x="120" y="530" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="560" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">5 dinos</text>
+  <text x="530" y="560" font-size="22" fill="#a78bfa">see the abacus</text>
+
+  <rect x="120" y="585" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="615" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">5 4 3 ...</text>
+  <text x="530" y="615" font-size="22" fill="#a78bfa">keep the pattern going</text>
+
+  <rect x="120" y="640" width="380" height="42" rx="8" fill="#1a0a2e"/>
+  <text x="140" y="670" font-size="26" font-weight="700" fill="#e0d0ff" font-family="monospace, 'Courier New'">bright purple cat!</text>
+  <text x="530" y="670" font-size="22" fill="#a78bfa">hear it out loud</text>
+
+  <text x="120" y="735" font-size="22" fill="#a78bfa" opacity="0.7" font-style="italic">Try dark, bright, pale, neon before any color...</text>
+
+  <!-- MUSIC ROOM -->
+  <rect x="80" y="780" width="1040" height="300" rx="16" fill="#2a1845" stroke="#60a5fa" stroke-width="1.5"/>
+  <rect x="80" y="780" width="260" height="48" rx="16" fill="#2563eb"/>
+  <text x="210" y="813" text-anchor="middle" font-size="26" font-weight="800" fill="white">Music Room</text>
+  <text x="360" y="813" font-size="22" fill="#93c5fd">F2</text>
+
+  <text x="120" y="870" font-size="24" fill="#bfdbfe">Press any letter or number key to play sounds.</text>
+  <text x="120" y="910" font-size="24" fill="#bfdbfe">Play a little song, then press Space to</text>
+  <text x="120" y="945" font-size="24" fill="#bfdbfe">hear it play back!</text>
+
+  <text x="120" y="995" font-size="24" fill="#93c5fd">Press Enter to try different instruments.</text>
+  <text x="120" y="1035" font-size="24" fill="#93c5fd">Press Tab to switch to Letters mode,</text>
+  <text x="120" y="1065" font-size="24" fill="#93c5fd">where every key says its name out loud.</text>
+
+  <!-- ART ROOM -->
+  <rect x="80" y="1110" width="1040" height="260" rx="16" fill="#2a1845" stroke="#f87171" stroke-width="1.5"/>
+  <rect x="80" y="1110" width="220" height="48" rx="16" fill="#dc2626"/>
+  <text x="190" y="1143" text-anchor="middle" font-size="26" font-weight="800" fill="white">Art Room</text>
+  <text x="320" y="1143" font-size="22" fill="#fca5a5">F3</text>
+
+  <text x="120" y="1200" font-size="24" fill="#fecaca">Hold Space + arrow keys to paint!</text>
+  <text x="120" y="1240" font-size="24" fill="#fecaca">Each row of keys paints a different color.</text>
+  <text x="120" y="1280" font-size="24" fill="#fecaca">Press Tab to switch between painting and writing.</text>
+  <text x="120" y="1325" font-size="22" fill="#fca5a5" font-style="italic">Flip this card for the color map!</text>
+
+  <!-- CODE ROOM -->
+  <rect x="80" y="1400" width="1040" height="235" rx="16" fill="#2a1845" stroke="#4ade80" stroke-width="1.5"/>
+  <rect x="80" y="1400" width="240" height="48" rx="16" fill="#16a34a"/>
+  <text x="200" y="1433" text-anchor="middle" font-size="26" font-weight="800" fill="white">Code Room</text>
+  <text x="340" y="1433" font-size="22" fill="#86efac">F4</text>
+
+  <text x="120" y="1490" font-size="24" fill="#bbf7d0">Press Enter to start recording.</text>
+  <text x="120" y="1530" font-size="24" fill="#bbf7d0">Pick a room and play around!</text>
+  <text x="120" y="1570" font-size="24" fill="#bbf7d0">Press F4 to come back, then Space</text>
+  <text x="120" y="1605" font-size="24" fill="#bbf7d0">to watch it play back by itself.</text>
+
+  <!-- Footer hint -->
+  <text x="600" y="1710" text-anchor="middle" font-size="22" fill="#a78bfa" opacity="0.6">
+    Volume: F11 / F12 &amp;nbsp;&amp;nbsp; Mute: F10
+  </text>
+  <text x="600" y="1760" text-anchor="middle" font-size="20" fill="#7c3aed" opacity="0.5">
+    purplecomputer.com
+  </text>
+</svg>

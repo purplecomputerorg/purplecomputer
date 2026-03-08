@@ -87,7 +87,7 @@ just python -c '...'     # Run Python one-liner with venv
 just               # List all available commands
 ```
 
-All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command. **Always use `just python` or `just pyc` instead of `.venv/bin/python` or `source .venv/bin/activate && python`.**
+All `just` commands are pre-approved and don't need confirmation. When a justfile recipe exists for what you need, use it instead of the raw command. **Always use `just python` instead of `.venv/bin/python` or `source .venv/bin/activate && python`.**
 
 ---
 

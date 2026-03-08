@@ -159,8 +159,11 @@ class HistoryLine(Static):
             width = 108  # fallback
 
         prefix_len = sum(2 if ord(c) > 127 else 1 for c in re.sub(r'\[[^\]]*\]', '', prefix))
-        cont_prefix = f"     [{arrow_color}]→[/] "
-        cont_len = sum(2 if ord(c) > 127 else 1 for c in re.sub(r'\[[^\]]*\]', '', cont_prefix))
+        # Build continuation prefix to match the visual width of the original prefix.
+        # The arrow (→) takes 2 cells, plus a trailing space = 3 cells for "→ ".
+        pad_spaces = max(0, prefix_len - 3)  # 3 = arrow (2) + trailing space (1)
+        cont_prefix = f"{' ' * pad_spaces}[{arrow_color}]→[/] "
+        cont_len = prefix_len
 
         tokens = self._tokenize_markup(text)
         lines = []

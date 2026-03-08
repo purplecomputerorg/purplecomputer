@@ -38,7 +38,6 @@ from enum import Enum
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND, ICON_MENU,
-    ICON_KEYBOARD,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -58,7 +57,8 @@ from .keyboard import (
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
-from .recording import RecordingManager, RecordingState
+from .recording import RecordingManager
+from .rooms.command_room import WatchMeRequested
 from .rooms.art_room import ColorLegend, PaintModeChanged
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
@@ -192,14 +192,14 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        # Mode badges with F-keys (Esc for mode picker, then F1-F3, F5 record)
+        # Mode badges with F-keys (Esc for mode picker, then F1-F4)
         with Horizontal(id="keys-left"):
             # Esc badge for mode picker
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
             esc_badge.add_class("dim")
             yield esc_badge
 
-            # F1-F3 mode badges
+            # F1-F4 mode badges
             for room in Room:
                 info = ROOM_INFO[room]
                 badge = KeyBadge(f"{info['key']} {info['emoji']}", id=f"key-{room.name.lower()}")
@@ -208,11 +208,6 @@ class RoomIndicator(Horizontal):
                 else:
                     badge.add_class("dim")
                 yield badge
-
-            # F5 capture badge
-            f5_badge = KeyBadge(f"F5 {ICON_KEYBOARD}", id="key-record")
-            f5_badge.add_class("dim")
-            yield f5_badge
 
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
@@ -244,15 +239,6 @@ class RoomIndicator(Horizontal):
                     badge.add_class("dim")
             except NoMatches:
                 pass
-
-    def update_record_indicator(self, is_recording: bool) -> None:
-        """Update F5 record badge to show active/dim state."""
-        try:
-            badge = self.query_one("#key-record", KeyBadge)
-            badge.remove_class("active", "dim")
-            badge.add_class("active" if is_recording else "dim")
-        except NoMatches:
-            pass
 
     def update_volume_indicator(self, volume_level: int) -> None:
         """Update volume indicator badge with level icon (F10)"""
@@ -601,9 +587,10 @@ class PurpleApp(App):
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
-        # Recording manager for F5 record/play/stop cycle
+        # Recording manager for Watch me! capture
         self._recording_manager = RecordingManager()
-        self._f5_play_task: asyncio.Task | None = None
+        self._watch_me_active: bool = False
+        self._watch_me_room: str = ""
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -822,21 +809,30 @@ class PurpleApp(App):
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
-        # Handle F5 record_toggle globally (before mode dispatch)
-        if isinstance(action, ControlAction) and action.is_down and action.action == 'record_toggle':
-            # F5 does nothing in Command mode
-            if self.active_room == Room.COMMAND:
+        # During Watch me!, record events and restrict room switching
+        if self._watch_me_active:
+            if isinstance(action, RoomAction):
+                if action.room == ROOM_COMMAND[0]:
+                    # F4 ends Watch me!: stop recording, switch to Command, insert blocks
+                    await self._end_watch_me()
+                # F1/F2/F3 blocked during Watch me!
                 return
-            await self._handle_record_toggle()
-            return
 
-        # Record events when recording (not during demo playback)
-        if self._recording_manager.is_recording:
+            # Block Esc (room picker, long-hold parent menu) during Watch me!
+            if isinstance(action, ControlAction) and action.action == 'escape':
+                return
+            if isinstance(action, LongHoldAction) and action.key == 'escape':
+                return
+
+            # Record the event
             if not (self._demo_player and self._demo_player.is_running):
                 mode = self._get_current_mode()
                 self._recording_manager.record_event(
                     action, self.active_room.name.lower(), mode
                 )
+
+            # Still dispatch to the active room for live feedback
+            # (fall through to mode dispatch below)
 
         if isinstance(action, RoomAction):
             # Dismiss any open modal (like mode picker) when F-key is pressed
@@ -849,10 +845,6 @@ class PurpleApp(App):
             elif action.room == ROOM_ART[0]:
                 self.action_switch_room(ROOM_ART[0])
             elif action.room == ROOM_COMMAND[0]:
-                # F4 during recording: stop recording and switch to Command mode
-                if self._recording_manager.is_recording:
-                    self._recording_manager.stop_recording()
-                    self._update_recording_indicator()
                 self.action_switch_room(ROOM_COMMAND[0])
             elif action.room == 'parent':
                 self.action_parent_menu()
@@ -965,65 +957,82 @@ class PurpleApp(App):
         elif room_name == "command":
             self.action_switch_room(ROOM_COMMAND[0])
 
-    # ── F5 Recording ─────────────────────────────────────────────────
+    # ── Watch me! flow ─────────────────────────────────────────────
 
-    async def _handle_record_toggle(self) -> None:
-        """Handle F5 press: toggle recording on/off."""
-        old_state = self._recording_manager.state
-        new_state = self._recording_manager.toggle()
-        self._update_recording_indicator()
+    def on_watch_me_requested(self, message: WatchMeRequested) -> None:
+        """Handle WatchMeRequested from CommandMode: show room picker or start directly."""
+        if message.room:
+            # Room already chosen (from Tab menu with room picker)
+            self._on_watch_me_room_picked(message.room)
+        else:
+            # Show room picker (Enter on empty canvas)
+            picker = RoomPickerScreen(current_room="command")
+            self.push_screen(picker, self._on_watch_me_room_picked)
 
-        if new_state == RecordingState.RECORDING:
-            self.clear_notifications()
-            self.notify("Capturing key presses", timeout=1.5)
-        elif new_state != RecordingState.RECORDING and old_state == RecordingState.RECORDING:
-            self.clear_notifications()
-            self.notify("Key presses saved!", timeout=1.5)
-
-    async def _play_recording(self) -> None:
-        """Play the current F5 recording: clear state, then replay."""
-        if not self._recording_manager.has_recording():
-            self._recording_manager.finish_playback()
-            self._update_recording_indicator()
+    def _on_watch_me_room_picked(self, result) -> None:
+        """Room picked for Watch me!: start recording and switch."""
+        if result is None:
+            return
+        # Result is either a string (from Tab menu) or a dict (from room picker)
+        if isinstance(result, dict):
+            room_name = result.get("room", "")
+        else:
+            room_name = result
+        if not room_name or room_name == "command":
             return
 
-        from .playback.player import PlaybackPlayer
-        from .program import blocks_to_playback_actions
+        # Map room picker names to internal room IDs
+        # Room picker uses "explore"/"play"/"doodle", internal uses "play"/"music"/"art"
+        picker_to_internal = {
+            "explore": "play", "play": "music", "doodle": "art",
+            "music": "music", "art": "art",
+        }
+        internal_name = picker_to_internal.get(room_name, room_name)
 
-        blocks = self._recording_manager.to_blocks()
-        playback_actions = blocks_to_playback_actions(blocks)
-        if not playback_actions:
-            self._recording_manager.finish_playback()
-            self._update_recording_indicator()
-            return
+        self._recording_manager.start_recording(internal_name)
+        self._watch_me_active = True
+        self._watch_me_room = internal_name
 
-        # Clear target mode state so playback starts fresh
-        self.clear_all_state()
+        # Show "Watching..." in title bar
+        try:
+            title = self.query_one("#room-title", RoomTitle)
+            title.set_recording_indicator("\u23fa Watching... F4 when done")
+        except Exception:
+            pass
 
-        is_art_paint = self._get_art_paint_mode_callback()
-        is_music_letters = self._get_music_letters_mode_callback()
+        # Switch to target room
+        room_id_map = {"play": ROOM_PLAY[0], "music": ROOM_MUSIC[0], "art": ROOM_ART[0]}
+        room_id = room_id_map.get(internal_name)
+        if room_id:
+            self.action_switch_room(room_id)
 
-        player = PlaybackPlayer(
-            dispatch_action=self._dispatch_keyboard_action,
-            speed_multiplier=1.0,
-            is_art_paint_mode=is_art_paint,
-            is_music_letters_mode=is_music_letters,
-        )
+    async def _end_watch_me(self) -> None:
+        """End Watch me! session: stop recording, switch to Command, insert blocks."""
+        self._watch_me_active = False
+        recording = self._recording_manager.stop_recording()
 
-        def stop_playback():
-            if self._f5_play_task and not self._f5_play_task.done():
-                self._f5_play_task.cancel()
+        # Clear title bar indicator
+        try:
+            title = self.query_one("#room-title", RoomTitle)
+            title.set_recording_indicator("")
+        except Exception:
+            pass
 
-        self._recording_manager.set_stop_playback_fn(stop_playback)
+        # Switch to Command mode
+        self.action_switch_room(ROOM_COMMAND[0])
 
-        async def _run():
-            try:
-                await player.play(playback_actions)
-            finally:
-                self._recording_manager.finish_playback()
-                self._update_recording_indicator()
-
-        self._f5_play_task = asyncio.create_task(_run())
+        # Insert blocks if recording was non-empty
+        if recording is not None:
+            from .program import default_target_for_room
+            target = default_target_for_room(self._watch_me_room)
+            blocks = recording.to_blocks(target)
+            if blocks:
+                try:
+                    content_area = self.query_one("#content-area")
+                    command_widget = content_area.query_one("#room-command")
+                    command_widget.insert_watched_blocks(blocks)
+                except Exception:
+                    pass
 
     def _get_current_mode(self) -> str:
         """Get the current sub-mode string for the active mode."""
@@ -1069,16 +1078,14 @@ class PurpleApp(App):
         return check
 
     def _update_recording_indicator(self) -> None:
-        """Update the title bar and F5 badge with recording/playback state."""
-        indicator = self._recording_manager.indicator
+        """Update the title bar with Watch me! recording state."""
+        if self._watch_me_active:
+            indicator = "\u23fa Watching... F4 when done"
+        else:
+            indicator = ""
         try:
             title = self.query_one("#room-title", RoomTitle)
-            title.set_recording_indicator(indicator if indicator else "")
-        except Exception:
-            pass
-        try:
-            room_indicator = self.query_one("#room-indicator", RoomIndicator)
-            room_indicator.update_record_indicator(self._recording_manager.is_recording)
+            title.set_recording_indicator(indicator)
         except Exception:
             pass
 
@@ -1328,17 +1335,13 @@ class PurpleApp(App):
             return PlayMode(classes="room-content")
         elif room == Room.MUSIC:
             from .rooms.music_room import MusicMode
-            return MusicMode(
-                recording_manager=self._recording_manager,
-                classes="room-content",
-            )
+            return MusicMode(classes="room-content")
         elif room == Room.ART:
             from .rooms.art_room import ArtMode
             return ArtMode(classes="room-content")
         elif room == Room.COMMAND:
             from .rooms.command_room import CommandMode
             return CommandMode(
-                recording_manager=self._recording_manager,
                 dispatch_action=self._dispatch_keyboard_action,
                 classes="room-content",
             )

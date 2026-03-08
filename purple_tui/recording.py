@@ -1,9 +1,9 @@
 """
-F5 Recording: intentional cross-mode recording and playback.
+Recording: capture keypresses in a single room for "Watch me!" in Command mode.
 
-Kids press F5 to start recording, play in any mode (Music, Art, Play),
-press F5 again to stop. The recording can be played back via F5 or Space
-in Command mode, and viewed/edited as blocks in Command mode (F4).
+Kids press Enter on an empty Command mode canvas (or use Tab menu) to start
+"Watch me!", pick a room, play in that room, then press F4 to return.
+Captured events become editable blocks in the Command canvas.
 
 Mode-aware conversion: Play events buffer into QUERY blocks, Art paint
 arrows merge into STROKE blocks, and gaps > 300ms become explicit PAUSE blocks.
@@ -36,7 +36,6 @@ from .program import (
 class RecordingState(Enum):
     IDLE = "idle"
     RECORDING = "recording"
-    PLAYING = "playing"
 
 
 def _room_to_target(room_name: str, mode: str = "") -> str:
@@ -78,8 +77,11 @@ class Recording:
             timestamp=timestamp,
         ))
 
-    def to_blocks(self) -> list[ProgramBlock]:
-        """Convert recorded events to ProgramBlock list.
+    def to_blocks(self, target: str) -> list[ProgramBlock]:
+        """Convert recorded events to ProgramBlock list for a single room.
+
+        Prepends a MODE_SWITCH block with the given target, then processes
+        all events as that single mode.
 
         Mode-aware conversion:
         - Music/Art text: each action becomes a KEY block
@@ -93,27 +95,16 @@ class Recording:
             return []
 
         blocks: list[ProgramBlock] = []
-        prev_target = ""
+
+        # Prepend MODE_SWITCH for the target room
+        blocks.append(ProgramBlock(
+            type=ProgramBlockType.MODE_SWITCH,
+            target=target,
+        ))
+
         query_buf = ""
 
         for i, event in enumerate(self.events):
-            current_target = _room_to_target(event.room_name, event.mode)
-
-            # On target change, flush play buffer and emit MODE_SWITCH
-            if current_target != prev_target:
-                if query_buf and prev_target == TARGET_PLAY:
-                    blocks.append(ProgramBlock(
-                        type=ProgramBlockType.QUERY,
-                        query_text=query_buf,
-                    ))
-                    query_buf = ""
-
-                blocks.append(ProgramBlock(
-                    type=ProgramBlockType.MODE_SWITCH,
-                    target=current_target,
-                ))
-                prev_target = current_target
-
             # Calculate gap_ms to next event
             gap_ms = 0
             if i < len(self.events) - 1:
@@ -122,7 +113,7 @@ class Recording:
             action = event.action
 
             # Play room: buffer characters into QUERY blocks
-            if current_target == TARGET_PLAY:
+            if target == TARGET_PLAY:
                 if isinstance(action, CharacterAction):
                     query_buf += action.char
                 elif isinstance(action, ControlAction):
@@ -141,7 +132,7 @@ class Recording:
                 continue
 
             # Art paint mode: arrows merge into STROKE, chars are KEY
-            if current_target == TARGET_ART_PAINT:
+            if target == TARGET_ART_PAINT:
                 if isinstance(action, NavigationAction):
                     if (blocks and blocks[-1].type == ProgramBlockType.STROKE
                             and blocks[-1].direction == action.direction):
@@ -227,85 +218,46 @@ class Recording:
 
 
 class RecordingManager:
-    """Manages F5 recording and Space playback.
+    """Manages Watch me! recording.
 
-    Recording and playback are independent: you can record while playing
-    back a previous recording (overdub). F5 toggles recording, Space
-    triggers playback.
+    start_recording() begins capture, stop_recording() ends it and returns
+    the Recording (or None if empty).
     """
 
     def __init__(self, time_fn: Callable[[], float] | None = None):
         self._is_recording = False
-        self._is_playing = False
         self.current: Recording | None = None
-        self._previous: Recording | None = None  # kept for playback during new recording
         self._time_fn = time_fn or time.monotonic
-        self._stop_playback_fn: Callable | None = None
+        self._target_room: str = ""
+        self._target_mode: str = ""
 
     @property
     def is_recording(self) -> bool:
         return self._is_recording
 
     @property
-    def is_playing(self) -> bool:
-        return self._is_playing
-
-    @property
     def state(self) -> RecordingState:
-        """Primary state for indicator display. Recording takes priority."""
         if self._is_recording:
             return RecordingState.RECORDING
-        if self._is_playing:
-            return RecordingState.PLAYING
         return RecordingState.IDLE
 
-    def toggle(self) -> RecordingState:
-        """Toggle recording on/off. Playback continues independently."""
-        if self._is_recording:
-            self._is_recording = False
-            if self.current and self.current.is_empty():
-                self.current = self._previous
-            self._previous = None
-        else:
-            self._is_recording = True
-            # Preserve previous recording so playback can continue
-            if self.current and not self.current.is_empty():
-                self._previous = self.current
-            self.current = Recording()
-
-        return self.state
-
-    def start_recording(self) -> None:
-        """Explicitly start recording (used by Tab menu "Record in..." action)."""
+    def start_recording(self, room_name: str, mode: str = "") -> None:
+        """Start recording for Watch me! in the given room."""
         self._is_recording = True
-        if self.current and not self.current.is_empty():
-            self._previous = self.current
+        self._target_room = room_name
+        self._target_mode = mode
         self.current = Recording()
 
-    def stop_recording(self) -> None:
-        """Explicitly stop recording."""
-        if self._is_recording:
-            self._is_recording = False
-            if self.current and self.current.is_empty():
-                self.current = None
-
-    def start_playback(self) -> bool:
-        """Start playback if a recording exists. Works during recording too."""
-        if not self.has_recording():
-            return False
-        self._is_playing = True
-        return True
-
-    def stop_playback(self) -> None:
-        """Stop playback if currently playing."""
-        if self._is_playing:
-            if self._stop_playback_fn:
-                self._stop_playback_fn()
-            self._is_playing = False
-
-    def finish_playback(self) -> None:
-        """Mark playback as finished (natural completion, no cancel callback)."""
-        self._is_playing = False
+    def stop_recording(self) -> Recording | None:
+        """Stop recording and return the Recording, or None if empty."""
+        if not self._is_recording:
+            return None
+        self._is_recording = False
+        recording = self.current
+        self.current = None
+        if recording is None or recording.is_empty():
+            return None
+        return recording
 
     def record_event(self, action: KeyAction, room_name: str,
                      mode: str = "") -> None:
@@ -343,35 +295,10 @@ class RecordingManager:
             timestamp=self._time_fn(),
         )
 
-    def to_blocks(self) -> list[ProgramBlock]:
-        """Convert the best available recording to blocks."""
-        rec = self.current
-        if rec is None or rec.is_empty():
-            rec = self._previous
-        if rec is None:
-            return []
-        return rec.to_blocks()
-
-    def has_recording(self) -> bool:
-        """Check if there's a non-empty recording available for playback."""
-        if self.current is not None and not self.current.is_empty():
-            return True
-        return self._previous is not None and not self._previous.is_empty()
-
-    def clear(self) -> None:
-        """Clear all recordings."""
-        self.current = None
-        self._previous = None
+    @property
+    def target_room(self) -> str:
+        return self._target_room
 
     @property
-    def indicator(self) -> str:
-        """Title bar indicator string for current state."""
-        if self._is_recording:
-            return "\u23fa Capturing keys"
-        if self._is_playing:
-            return "\u25b6"
-        return ""
-
-    def set_stop_playback_fn(self, fn: Callable) -> None:
-        """Set the callback for stopping playback when toggle() is called during PLAYING."""
-        self._stop_playback_fn = fn
+    def target_mode(self) -> str:
+        return self._target_mode

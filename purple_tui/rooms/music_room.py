@@ -4,7 +4,7 @@ Music Room: Music and Art Grid
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
 Tab switches between Music and Letters modes.
-Space plays back the F5 recording.
+Space replays recent session keys (loop feature).
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -482,14 +482,13 @@ class MusicMode(Container, can_focus=True):
     }
     """
 
-    def __init__(self, recording_manager=None, **kwargs) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: MusicGrid | None = None
         self._header: MusicRoomHeader | None = None
         self.session = MusicSession()
         self._letters_mode = False
         self._instrument_index = 0
-        self._recording_manager = recording_manager
         self._session_replay_task: asyncio.Task | None = None
 
     @property
@@ -563,23 +562,8 @@ class MusicMode(Container, can_focus=True):
         Space plays/stops the recording.
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space: play/stop recording, or replay recent session
+            # Space: replay recent session keys (loop feature)
             if action.action == 'space':
-                if self._recording_manager:
-                    if self._recording_manager.is_playing:
-                        # Stop playback
-                        self._recording_manager.stop_playback()
-                        if hasattr(self.app, '_update_recording_indicator'):
-                            self.app._update_recording_indicator()
-                        return
-                    if self._recording_manager.has_recording():
-                        if self._recording_manager.start_playback():
-                            if hasattr(self.app, '_update_recording_indicator'):
-                                self.app._update_recording_indicator()
-                            if hasattr(self.app, '_play_recording'):
-                                asyncio.create_task(self.app._play_recording())
-                        return
-                # No F5 recording: replay recent session keys
                 if self.session.has_events():
                     self._start_session_replay()
                 return

@@ -1,6 +1,6 @@
 """
-Tests for F5 Recording: RecordingManager state machine, event capture,
-mode-aware block conversion.
+Tests for Watch me! Recording: RecordingManager state machine, event capture,
+single-room mode-aware block conversion.
 
 Pure logic tests with no Textual app dependency.
 """
@@ -43,59 +43,46 @@ class TestRecordingManagerStates:
         rm = RecordingManager()
         assert rm.state == RecordingState.IDLE
 
-    def test_toggle_idle_to_recording(self):
+    def test_start_recording(self):
         rm = RecordingManager()
-        new_state = rm.toggle()
-        assert new_state == RecordingState.RECORDING
-        assert rm.current is not None
-
-    def test_toggle_recording_to_idle(self):
-        rm = RecordingManager()
-        rm.toggle()  # IDLE -> RECORDING
-        rm.record_event(CharacterAction(char="a"), "music")
-        new_state = rm.toggle()  # RECORDING -> IDLE
-        assert new_state == RecordingState.IDLE
-        assert rm.current is not None
-
-    def test_toggle_idle_with_recording_starts_new_recording(self):
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # IDLE -> RECORDING
-        rm.record_event(CharacterAction(char="a"), "music")
-        rm.toggle()  # RECORDING -> IDLE
-        new_state = rm.toggle()  # IDLE -> RECORDING (overwrites previous)
-        assert new_state == RecordingState.RECORDING
-        assert rm.current.is_empty()  # new recording, no events yet
-
-    def test_toggle_during_playback_starts_recording(self):
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # IDLE -> RECORDING
-        rm.record_event(CharacterAction(char="a"), "music")
-        rm.toggle()  # RECORDING -> IDLE
-        rm.start_playback()  # IDLE -> PLAYING
-        new_state = rm.toggle()  # PLAYING -> RECORDING
-        assert new_state == RecordingState.RECORDING
-
-    def test_empty_recording_discarded(self):
-        rm = RecordingManager()
-        rm.toggle()  # IDLE -> RECORDING
-        rm.toggle()  # RECORDING -> IDLE (empty recording)
-        assert rm.current is None
-        new_state = rm.toggle()
-        assert new_state == RecordingState.RECORDING
-
-    def test_start_recording_explicit(self):
-        rm = RecordingManager()
-        rm.start_recording()
+        rm.start_recording("music")
         assert rm.state == RecordingState.RECORDING
+        assert rm.is_recording
         assert rm.current is not None
 
-    def test_stop_recording_explicit(self):
+    def test_stop_recording_returns_recording(self):
         rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.start_recording()
+        rm.start_recording("music")
+        rm.record_event(CharacterAction(char="a"), "music")
+        recording = rm.stop_recording()
+        assert rm.state == RecordingState.IDLE
+        assert not rm.is_recording
+        assert recording is not None
+        assert not recording.is_empty()
+
+    def test_stop_recording_returns_none_when_empty(self):
+        rm = RecordingManager()
+        rm.start_recording("music")
+        recording = rm.stop_recording()
+        assert recording is None
+
+    def test_stop_recording_returns_none_when_not_recording(self):
+        rm = RecordingManager()
+        recording = rm.stop_recording()
+        assert recording is None
+
+    def test_start_recording_stores_room(self):
+        rm = RecordingManager()
+        rm.start_recording("art", "paint")
+        assert rm.target_room == "art"
+        assert rm.target_mode == "paint"
+
+    def test_current_cleared_after_stop(self):
+        rm = RecordingManager(time_fn=lambda: 0.0)
+        rm.start_recording("music")
         rm.record_event(CharacterAction(char="a"), "music")
         rm.stop_recording()
-        assert rm.state == RecordingState.IDLE
-        assert rm.has_recording()
+        assert rm.current is None
 
 
 # =============================================================================
@@ -105,114 +92,125 @@ class TestRecordingManagerStates:
 class TestEventRecording:
     def test_record_character(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(CharacterAction(char="a"), "music")
-        assert rm.has_recording()
         assert len(rm.current.events) == 1
 
     def test_record_navigation(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("art")
         rm.record_event(NavigationAction(direction="up"), "art", "paint")
         assert len(rm.current.events) == 1
 
     def test_record_control(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(ControlAction(action="enter", is_down=True), "music")
         assert len(rm.current.events) == 1
 
     def test_ignores_when_not_recording(self):
         rm = RecordingManager()
         rm.record_event(CharacterAction(char="a"), "music")
-        assert not rm.has_recording()
+        assert rm.current is None
 
     def test_ignores_key_up(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(ControlAction(action="space", is_down=False), "music")
         assert rm.current.is_empty()
 
     def test_ignores_key_repeat(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(CharacterAction(char="a", is_repeat=True), "music")
         assert rm.current.is_empty()
 
     def test_ignores_room_action(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(RoomAction(room="play"), "music")
         assert rm.current.is_empty()
 
     def test_ignores_escape(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(ControlAction(action="escape", is_down=True), "music")
         assert rm.current.is_empty()
 
     def test_records_mode(self):
         rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
+        rm.start_recording("music")
         rm.record_event(CharacterAction(char="a"), "music", "letters")
         assert rm.current.events[0].mode == "letters"
 
 
 # =============================================================================
-# RECORDING TO BLOCKS: MUSIC/ART TEXT (SIMPLE)
+# RECORDING TO BLOCKS: SINGLE ROOM WITH TARGET
 # =============================================================================
 
-class TestRecordingToBlocksSimple:
+class TestRecordingToBlocksWithTarget:
     def test_empty_recording(self):
         r = Recording()
-        assert r.to_blocks() == []
+        assert r.to_blocks(TARGET_MUSIC_MUSIC) == []
 
-    def test_single_event(self):
+    def test_prepends_mode_switch(self):
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
-        blocks = r.to_blocks()
-        # MODE_SWITCH + KEY block
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         assert len(blocks) == 2
         assert blocks[0].type == ProgramBlockType.MODE_SWITCH
         assert blocks[0].target == TARGET_MUSIC_MUSIC
         assert blocks[1].type == ProgramBlockType.KEY
         assert blocks[1].char == "a"
 
-    def test_mode_switch_on_room_change(self):
+    def test_prepends_correct_target(self):
         r = Recording()
-        r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
-        r.add_event(CharacterAction(char="b"), "art", "text", 0.5)
-        blocks = r.to_blocks()
-        mode_switches = [b for b in blocks if b.type == ProgramBlockType.MODE_SWITCH]
-        assert len(mode_switches) == 2
-        assert mode_switches[0].target == TARGET_MUSIC_MUSIC
-        assert mode_switches[1].target == TARGET_ART_TEXT
+        r.add_event(CharacterAction(char="a"), "art", "paint", 0.0)
+        blocks = r.to_blocks(TARGET_ART_PAINT)
+        assert blocks[0].type == ProgramBlockType.MODE_SWITCH
+        assert blocks[0].target == TARGET_ART_PAINT
 
-    def test_no_switch_when_same_mode(self):
+    def test_no_extra_mode_switches(self):
+        """Single room recording should only have one MODE_SWITCH."""
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         r.add_event(CharacterAction(char="b"), "music", "music", 0.1)
-        blocks = r.to_blocks()
+        r.add_event(CharacterAction(char="c"), "music", "music", 0.2)
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         mode_switches = [b for b in blocks if b.type == ProgramBlockType.MODE_SWITCH]
         assert len(mode_switches) == 1
 
+
+# =============================================================================
+# RECORDING TO BLOCKS: MUSIC (SIMPLE KEY BLOCKS)
+# =============================================================================
+
+class TestRecordingToBlocksSimple:
+    def test_single_event(self):
+        r = Recording()
+        r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
+        assert len(blocks) == 2  # MODE_SWITCH + KEY
+        assert blocks[1].type == ProgramBlockType.KEY
+        assert blocks[1].char == "a"
+
     def test_no_auto_collapse(self):
-        """Repeated keys stay as separate blocks (no auto-collapse in v2)."""
+        """Repeated keys stay as separate blocks."""
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         r.add_event(CharacterAction(char="a"), "music", "music", 0.1)
         r.add_event(CharacterAction(char="a"), "music", "music", 0.2)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
         assert len(key_blocks) == 3
 
-    def test_navigation_not_recorded_in_play(self):
+    def test_navigation_not_recorded_in_music(self):
         """Arrow keys in Music mode are not recorded (navigation only)."""
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         r.add_event(NavigationAction(direction="right"), "music", "music", 0.1)
         r.add_event(CharacterAction(char="b"), "music", "music", 0.2)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
         assert len(key_blocks) == 2
         stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
@@ -230,7 +228,7 @@ class TestRecordingToBlocksPlay:
         r.add_event(CharacterAction(char="h"), "play", "", 0.0)
         r.add_event(CharacterAction(char="i"), "play", "", 0.05)
         r.add_event(ControlAction(action="enter", is_down=True), "play", "", 0.1)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_PLAY)
         query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
         assert len(query_blocks) == 1
         assert query_blocks[0].query_text == "hi"
@@ -243,7 +241,7 @@ class TestRecordingToBlocksPlay:
         r.add_event(ControlAction(action="backspace", is_down=True), "play", "", 0.1)
         r.add_event(CharacterAction(char="i"), "play", "", 0.15)
         r.add_event(ControlAction(action="enter", is_down=True), "play", "", 0.2)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_PLAY)
         query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
         assert len(query_blocks) == 1
         assert query_blocks[0].query_text == "hi"
@@ -255,7 +253,7 @@ class TestRecordingToBlocksPlay:
         r.add_event(ControlAction(action="space", is_down=True), "play", "", 0.05)
         r.add_event(CharacterAction(char="b"), "play", "", 0.1)
         r.add_event(ControlAction(action="enter", is_down=True), "play", "", 0.15)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_PLAY)
         query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
         assert query_blocks[0].query_text == "a b"
 
@@ -264,20 +262,10 @@ class TestRecordingToBlocksPlay:
         r = Recording()
         r.add_event(CharacterAction(char="h"), "play", "", 0.0)
         r.add_event(CharacterAction(char="i"), "play", "", 0.05)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_PLAY)
         query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
         assert len(query_blocks) == 1
         assert query_blocks[0].query_text == "hi"
-
-    def test_query_flushed_on_mode_change(self):
-        """Query buffer is flushed when switching away from Play."""
-        r = Recording()
-        r.add_event(CharacterAction(char="a"), "play", "", 0.0)
-        r.add_event(CharacterAction(char="b"), "music", "music", 0.5)
-        blocks = r.to_blocks()
-        query_blocks = [b for b in blocks if b.type == ProgramBlockType.QUERY]
-        assert len(query_blocks) == 1
-        assert query_blocks[0].query_text == "a"
 
 
 # =============================================================================
@@ -291,7 +279,7 @@ class TestRecordingToBlocksPaint:
         r.add_event(NavigationAction(direction="right"), "art", "paint", 0.0)
         r.add_event(NavigationAction(direction="right"), "art", "paint", 0.05)
         r.add_event(NavigationAction(direction="right"), "art", "paint", 0.1)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_ART_PAINT)
         stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
         assert len(stroke_blocks) == 1
         assert stroke_blocks[0].direction == "right"
@@ -301,7 +289,7 @@ class TestRecordingToBlocksPaint:
         r = Recording()
         r.add_event(NavigationAction(direction="right"), "art", "paint", 0.0)
         r.add_event(NavigationAction(direction="down"), "art", "paint", 0.05)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_ART_PAINT)
         stroke_blocks = [b for b in blocks if b.type == ProgramBlockType.STROKE]
         assert len(stroke_blocks) == 2
 
@@ -310,7 +298,7 @@ class TestRecordingToBlocksPaint:
         r = Recording()
         r.add_event(CharacterAction(char="r"), "art", "paint", 0.0)
         r.add_event(NavigationAction(direction="right"), "art", "paint", 0.05)
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_ART_PAINT)
         key_blocks = [b for b in blocks if b.type == ProgramBlockType.KEY]
         assert len(key_blocks) == 1
         assert key_blocks[0].char == "r"
@@ -326,7 +314,7 @@ class TestPauseInsertion:
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         r.add_event(CharacterAction(char="b"), "music", "music", 1.0)  # 1000ms gap
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         pause_blocks = [b for b in blocks if b.type == ProgramBlockType.PAUSE]
         assert len(pause_blocks) >= 1
 
@@ -335,123 +323,6 @@ class TestPauseInsertion:
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         r.add_event(CharacterAction(char="b"), "music", "music", 0.1)  # 100ms gap
-        blocks = r.to_blocks()
+        blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
         pause_blocks = [b for b in blocks if b.type == ProgramBlockType.PAUSE]
         assert len(pause_blocks) == 0
-
-
-# =============================================================================
-# RECORDING MANAGER HELPERS
-# =============================================================================
-
-class TestRecordingManagerHelpers:
-    def test_indicator_idle(self):
-        rm = RecordingManager()
-        assert rm.indicator == ""
-
-    def test_indicator_recording(self):
-        rm = RecordingManager()
-        rm.toggle()
-        assert "\u23fa" in rm.indicator
-        assert "keys" in rm.indicator.lower()
-
-    def test_indicator_playing(self):
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()
-        rm.record_event(CharacterAction(char="a"), "music")
-        rm.toggle()
-        rm.start_playback()
-        assert rm.indicator == "\u25b6"
-
-    def test_to_blocks_delegation(self):
-        rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
-        rm.record_event(CharacterAction(char="x"), "music", "music")
-        rm.stop_recording()
-        blocks = rm.to_blocks()
-        assert len(blocks) == 2  # MODE_SWITCH + KEY
-        assert blocks[1].char == "x"
-
-    def test_clear(self):
-        rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
-        rm.record_event(CharacterAction(char="a"), "music")
-        rm.stop_recording()
-        rm.clear()
-        assert not rm.has_recording()
-
-    def test_has_recording_false_when_empty(self):
-        rm = RecordingManager()
-        assert not rm.has_recording()
-
-    def test_has_recording_true_after_events(self):
-        rm = RecordingManager(time_fn=lambda: 0.0)
-        rm.start_recording()
-        rm.record_event(CharacterAction(char="a"), "music")
-        rm.stop_recording()
-        assert rm.has_recording()
-
-
-# =============================================================================
-# CONCURRENT RECORDING AND PLAYBACK
-# =============================================================================
-
-class TestConcurrentRecordingPlayback:
-    def test_can_record_during_playback(self):
-        """Starting recording while playing doesn't stop playback."""
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # start recording
-        rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # stop recording
-        rm.start_playback()
-        assert rm.is_playing
-        rm.toggle()  # start new recording
-        assert rm.is_recording
-        assert rm.is_playing  # playback continues
-
-    def test_can_start_playback_during_recording(self):
-        """Starting playback while recording doesn't stop recording."""
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # start recording
-        rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # stop recording (has a recording now)
-        rm.toggle()  # start new recording
-        assert rm.is_recording
-        rm.start_playback()
-        assert rm.is_playing
-        assert rm.is_recording  # recording continues
-
-    def test_finish_playback_preserves_recording(self):
-        """finish_playback() only clears playing, not recording."""
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()  # start recording
-        rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()  # stop recording
-        rm.start_playback()
-        rm.toggle()  # start new recording
-        assert rm.is_recording and rm.is_playing
-        rm.finish_playback()
-        assert not rm.is_playing
-        assert rm.is_recording  # still recording
-
-    def test_state_priority_recording_over_playing(self):
-        """state property returns RECORDING when both are active."""
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        rm.toggle()
-        rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()
-        rm.start_playback()
-        rm.toggle()  # start recording again
-        assert rm.state == RecordingState.RECORDING
-
-    def test_is_recording_and_is_playing_properties(self):
-        rm = RecordingManager(time_fn=lambda: 1.0)
-        assert not rm.is_recording
-        assert not rm.is_playing
-        rm.toggle()
-        assert rm.is_recording
-        rm.record_event(CharacterAction(char="a"), "play")
-        rm.toggle()
-        assert not rm.is_recording
-        rm.start_playback()
-        assert rm.is_playing

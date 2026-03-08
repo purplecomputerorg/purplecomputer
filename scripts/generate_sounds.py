@@ -4,8 +4,8 @@ Generate fun sounds for Purple Computer Music Mode
 
 Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
-- Steel Drum: bright, tropical, shimmery
-- Kalimba: crystalline, plucky, intimate
+- Xylophone: bright, clear, sparkly
+- Trumpet: bold, brassy, sustained
 - Music Box: sparkly, bell-like, magical
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
 """
@@ -165,10 +165,62 @@ def generate_marimba(frequency: float, duration: float = 0.65) -> list[int]:
     return finalize_samples(samples, peak_level=0.5)
 
 
-def generate_steel_drum(frequency: float, duration: float = 0.7) -> list[int]:
+def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
     """
-    Bright, tropical steel drum. Detuned harmonic pairs create metallic shimmer.
-    Slow amplitude wobble for the characteristic "singing" sustain.
+    Bright, clear xylophone. Hard mallet on wooden/synthetic bars.
+    Sharp attack, prominent high partials, quick decay.
+    """
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+    samples = []
+    fade_out_duration = 0.1
+    fade_out_start = duration - fade_out_duration
+
+    # Xylophone bar partials (slightly inharmonic, brighter than marimba)
+    bar_partials = [
+        (1.0, 1.0, 4.0),      # fundamental, strong, moderate decay
+        (3.0, 0.45, 6.0),     # 3rd partial prominent (characteristic of xylophone)
+        (6.0, 0.2, 10.0),     # high partial for brightness
+        (9.9, 0.08, 16.0),    # sparkle partial, decays fast
+    ]
+
+    for i in range(num_samples):
+        t = i / sample_rate
+        sample = 0
+
+        # Very sharp mallet attack with bright click
+        if t < 0.003:
+            attack = t / 0.003
+        elif t < 0.015:
+            # Brief overshoot for hard-mallet "click"
+            attack = 1.0 + 0.25 * math.exp(-(t - 0.003) * 300)
+        else:
+            attack = 1.0
+
+        for ratio, amp, decay_rate in bar_partials:
+            partial_decay = math.exp(-t * decay_rate)
+            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
+
+        # High-frequency click transient (mallet impact)
+        click = 0.15 * math.exp(-t * 80) * math.sin(2 * math.pi * frequency * 12 * t)
+        sample += click
+
+        sample *= attack
+
+        if t > fade_out_start:
+            fade_progress = (t - fade_out_start) / fade_out_duration
+            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+
+        samples.append(sample)
+
+    return finalize_samples(samples, peak_level=0.5)
+
+
+def generate_trumpet(frequency: float, duration: float = 0.8) -> list[int]:
+    """
+    Bold, brassy trumpet. Sawtooth-like waveform built from harmonics,
+    with a characteristic "bwah" attack where brightness builds in.
+    Longer sustain than the percussion instruments.
     """
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
@@ -180,72 +232,35 @@ def generate_steel_drum(frequency: float, duration: float = 0.7) -> list[int]:
         t = i / sample_rate
         sample = 0
 
-        # Quick mallet attack
-        if t < 0.008:
-            attack = t / 0.008
-        elif t < 0.03:
-            attack = 1.0 + 0.15 * math.sin(math.pi * (t - 0.008) / 0.022)
+        # Trumpet attack: breath builds up, brightness increases over ~60ms
+        if t < 0.02:
+            attack = t / 0.02
+            brightness = 0.3 + 0.7 * (t / 0.02)
+        elif t < 0.06:
+            # "Bwah" bloom: slight overshoot as brass resonance kicks in
+            attack = 1.0 + 0.15 * math.sin(math.pi * (t - 0.02) / 0.04)
+            brightness = 0.7 + 0.3 * ((t - 0.02) / 0.04)
         else:
             attack = 1.0
+            brightness = 1.0
 
-        # Detuned harmonic pairs for metallic shimmer
-        sample += 1.0 * math.sin(2 * math.pi * frequency * 1.0 * t)
-        sample += 0.8 * math.sin(2 * math.pi * frequency * 2.01 * t)
-        sample += 0.5 * math.sin(2 * math.pi * frequency * 3.03 * t)
-        sample += 0.25 * math.sin(2 * math.pi * frequency * 4.05 * t)
-
-        # Slow amplitude wobble for "singing" sustain
-        wobble = 1.0 + 0.12 * math.sin(2 * math.pi * 4.5 * t)
-        sample *= wobble
-
-        # Decay: sustains longer than marimba
-        envelope = math.exp(-t * 2.0)
-        sample *= envelope * attack
-
-        if t > fade_out_start:
-            fade_progress = (t - fade_out_start) / fade_out_duration
-            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
-
-        samples.append(sample)
-
-    return finalize_samples(samples, peak_level=0.5)
-
-
-def generate_kalimba(frequency: float, duration: float = 0.5) -> list[int]:
-    """
-    Crystalline, plucky kalimba (thumb piano). Strong fundamental, weak even
-    harmonics, strong odd harmonics. Slight AM buzz from tine vibration.
-    Short decay for the "plink" quality.
-    """
-    sample_rate = 44100
-    num_samples = int(sample_rate * duration)
-    samples = []
-    fade_out_duration = 0.1
-    fade_out_start = duration - fade_out_duration
-
-    for i in range(num_samples):
-        t = i / sample_rate
-        sample = 0
-
-        # Very fast pluck attack
-        if t < 0.003:
-            attack = t / 0.003
-        else:
-            attack = 1.0
-
-        # Strong fundamental, weak even, strong odd harmonics
+        # Brass harmonics (sawtooth-like, odd and even, falling off)
+        # Trumpet has strong harmonics up to about the 8th
         sample += 1.0 * math.sin(2 * math.pi * frequency * t)
-        sample += 0.08 * math.sin(2 * math.pi * frequency * 2 * t)   # weak even
-        sample += 0.35 * math.sin(2 * math.pi * frequency * 3 * t)   # strong odd
-        sample += 0.05 * math.sin(2 * math.pi * frequency * 4 * t)   # weak even
-        sample += 0.15 * math.sin(2 * math.pi * frequency * 5 * t)   # strong odd
+        sample += 0.7 * brightness * math.sin(2 * math.pi * frequency * 2 * t)
+        sample += 0.5 * brightness * math.sin(2 * math.pi * frequency * 3 * t)
+        sample += 0.35 * brightness * math.sin(2 * math.pi * frequency * 4 * t)
+        sample += 0.2 * brightness * math.sin(2 * math.pi * frequency * 5 * t)
+        sample += 0.12 * brightness * math.sin(2 * math.pi * frequency * 6 * t)
+        sample += 0.06 * brightness * math.sin(2 * math.pi * frequency * 7 * t)
+        sample += 0.03 * brightness * math.sin(2 * math.pi * frequency * 8 * t)
 
-        # Tine buzz: slight amplitude modulation at ~80 Hz
-        buzz = 1.0 + 0.06 * math.sin(2 * math.pi * 80 * t) * math.exp(-t * 8)
-        sample *= buzz
+        # Slight vibrato (brass players naturally add this)
+        vibrato = 1.0 + 0.015 * math.sin(2 * math.pi * 5.5 * t) * min(1.0, t / 0.15)
+        sample *= vibrato
 
-        # Quick decay for plucky quality
-        envelope = math.exp(-t * 5.0)
+        # Sustain with gentle decay (trumpet holds notes longer)
+        envelope = math.exp(-t * 1.2)
         sample *= envelope * attack
 
         if t > fade_out_start:
@@ -549,8 +564,8 @@ def main():
     # Instrument generators: (directory_name, generator_function)
     instruments = [
         ("marimba", generate_marimba),
-        ("steeldrum", generate_steel_drum),
-        ("kalimba", generate_kalimba),
+        ("xylophone", generate_xylophone),
+        ("trumpet", generate_trumpet),
         ("musicbox", generate_music_box),
     ]
 

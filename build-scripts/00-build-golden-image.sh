@@ -67,12 +67,21 @@ main() {
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu
 
-    # Mount virtual filesystems for chroot operations (required by systemd commands)
+    # Mount virtual filesystems for chroot operations (required by apt-get, systemd, etc.)
     log_info "Mounting virtual filesystems for chroot..."
     mount --bind /proc "$MOUNT_DIR/proc"
     mount --bind /sys "$MOUNT_DIR/sys"
     mount --bind /dev "$MOUNT_DIR/dev"
     mount --bind /dev/pts "$MOUNT_DIR/dev/pts"
+
+    # Install linux-modules-extra immediately, using debootstrap's sources.list
+    # which points at the same base 'noble' repo. This guarantees the version matches
+    # the kernel debootstrap installed. Must happen BEFORE we overwrite sources.list
+    # with noble-updates (which has newer, non-matching versions).
+    KVER=$(ls "$MOUNT_DIR/lib/modules/" | head -1)
+    log_info "Kernel from debootstrap: $KVER"
+    chroot "$MOUNT_DIR" apt-get update
+    chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
 
     # Configure system
     log_info "Configuring PurpleOS..."
@@ -106,12 +115,7 @@ deb http://us.archive.ubuntu.com/ubuntu noble-updates main universe
 deb http://security.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
-    # Upgrade all packages (especially the kernel) to latest point release.
-    # debootstrap installs from the initial 'noble' suite, which may have an older
-    # kernel whose matching linux-modules-extra has been removed from the repos.
-    # This ensures the kernel and all its companion packages are in sync.
     chroot "$MOUNT_DIR" apt-get update
-    chroot "$MOUNT_DIR" apt-get dist-upgrade -y
 
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
     # NOTE: We deliberately omit xserver-xorg-video-all to use the modesetting driver
@@ -137,26 +141,29 @@ SOURCES
         xkbset \
         x11-utils \
         xdotool \
-        \
+        casper \
         zstd
 
-    # Install kernel modules-extra for hardware drivers (sound, backlight, wifi, etc.)
-    # After dist-upgrade, the kernel is at the latest point release, so the matching
-    # modules-extra package is guaranteed to be available in the repos.
-    # Use the newest kernel version (dist-upgrade may leave the old one behind).
-    KVER=$(ls -v "$MOUNT_DIR/lib/modules/" | tail -1)
-    log_info "Kernel version after upgrade: $KVER"
-    chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
+    # If apt upgraded the kernel (noble-updates has newer versions), install
+    # modules-extra for the new version too, then rebuild initrd.
+    KVER_NOW=$(ls -v "$MOUNT_DIR/lib/modules/" | tail -1)
+    if [ "$KVER_NOW" != "$KVER" ]; then
+        log_info "Kernel upgraded: $KVER -> $KVER_NOW"
+        chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER_NOW"
+        KVER="$KVER_NOW"
+    fi
 
-    # Remove old kernel versions (keeps image small, avoids confusion)
-    chroot "$MOUNT_DIR" apt-get autoremove -y
+    # Rebuild initrd to include casper scripts (installed above)
+    chroot "$MOUNT_DIR" update-initramfs -u -k "$KVER"
 
     # Verify sound modules are present (fail the build if not)
+    log_info "Kernel version: $KVER"
     if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/pci" ]; then
-        echo "ERROR: Sound modules not found after installing modules-extra!"
-        ls -R "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/"
+        echo "ERROR: Sound modules not found! linux-modules-extra may have failed to install."
+        ls -R "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/" 2>/dev/null
         exit 1
     fi
+    log_info "Sound modules verified"
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji
@@ -342,7 +349,9 @@ SYSCTL
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
     setterm --cursor off 2>/dev/null
-    clear
+    # Repaint the splash instead of clearing, so the "Welcome" message
+    # stays visible until X11 covers the VT (avoids a brief blank flash).
+    /usr/local/bin/purple-splash 2>/dev/null || clear
     # Fail-fast: don't loop forever if X keeps crashing
     X_FAIL_COUNT_FILE="/tmp/.x-fail-count"
     X_FAIL_MAX=3
@@ -431,7 +440,7 @@ EOF
 
     # Create symlinks to actual kernel/initrd (Ubuntu installs versioned files)
     # This makes our grub.cfg work regardless of kernel version
-    KERNEL_VERSION=$(ls "$MOUNT_DIR/boot/" | grep "vmlinuz-" | head -1 | sed 's/vmlinuz-//')
+    KERNEL_VERSION=$(ls -v "$MOUNT_DIR/boot/" | grep "vmlinuz-" | tail -1 | sed 's/vmlinuz-//')
     if [ -n "$KERNEL_VERSION" ]; then
         ln -sf "vmlinuz-$KERNEL_VERSION" "$MOUNT_DIR/boot/vmlinuz"
         ln -sf "initrd.img-$KERNEL_VERSION" "$MOUNT_DIR/boot/initrd.img"

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music mode: replaced Steel Drum and Kalimba instruments with Xylophone and Trumpet for more variety and familiarity
 - Art mode: toggling caps mode no longer strips background colors from typed text (row tints and paint colors now preserved)
 - Play mode: fixed continuation lines being indented 1 cell too far when colored text blocks wrap across multiple lines
 - Caps Lock key now toggles caps mode on a single press (previously required double-tap like Shift)

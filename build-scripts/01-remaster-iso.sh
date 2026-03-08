@@ -380,6 +380,23 @@ main() {
 SOURCES_EOF
     log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
 
+    # Replace the ISO's kernel and initrd with ours from the squashfs.
+    # Everything must come from one source to avoid version mismatches.
+    # The squashfs has casper installed, so its initrd supports live boot.
+    # Use unsquashfs (no loop device needed, works reliably in Docker).
+    log_info "Extracting kernel and initrd from squashfs..."
+    SQEXT="$WORK_DIR/sq-extract"
+    unsquashfs -d "$SQEXT" "$LIVE_SQUASHFS" boot/
+
+    # Follow symlinks to get the actual versioned files
+    cp -L "$SQEXT/boot/vmlinuz" "$WORK_DIR/iso-new/casper/vmlinuz"
+    cp -L "$SQEXT/boot/initrd.img" "$WORK_DIR/iso-new/casper/initrd"
+    PURPLE_KVER=$(readlink "$SQEXT/boot/vmlinuz" | sed 's/vmlinuz-//')
+    log_info "  Kernel: $PURPLE_KVER"
+    log_info "  Initrd: $(readlink "$SQEXT/boot/initrd.img")"
+
+    rm -rf "$SQEXT"
+
     # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
     log_step "5/8: Modifying initramfs..."
 
@@ -436,8 +453,10 @@ SOURCES_EOF
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0;; esac
-# Redefine VT color 0 (black) to purple (#2d1b4e), clear tty1, show message
-printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
+# Redefine VT color 0 (black) to purple (#2d1b4e) and clear tty1.
+# Only paint the background here; purple-splash.service adds the text later
+# (after vconsole-setup sets the final console font, avoiding a font-size jump).
+printf '\033]P02d1b4e\033[H\033[2J' > /dev/tty1 2>/dev/null
 SPLASH_EOF
     chmod +x "$MAIN_DIR/scripts/init-top/01_purple_splash"
 

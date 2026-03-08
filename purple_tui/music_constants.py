@@ -23,8 +23,8 @@ COLORS = ["#5a3875", "#2d4f6e", "#5a2d2d", None]
 # Enter cycles through these in Music mode
 INSTRUMENTS = [
     ("marimba", "Marimba"),
-    ("steeldrum", "Steel Drum"),
-    ("kalimba", "Kalimba"),
+    ("xylophone", "Xylophone"),
+    ("trumpet", "Trumpet"),
     ("musicbox", "Music Box"),
 ]
 

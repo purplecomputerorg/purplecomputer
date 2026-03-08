@@ -7,7 +7,7 @@ REPEAT blocks show as gutter metadata. Tab opens a menu modal.
 Space plays the program. F5 (handled globally) records across rooms.
 
 Mode-aware editing: what a keypress does depends on the MODE_SWITCH context.
-Explore context uses compose mode for QUERY blocks.
+Play context uses compose mode for QUERY blocks.
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -58,7 +58,7 @@ from ..recording import RecordingManager
 # CONSTANTS
 # =============================================================================
 
-# Theme colors (matching doodle mode)
+# Theme colors (matching art mode)
 BG_DARK = "#2a1845"
 BG_LIGHT = "#e8daf0"
 FG_DARK = "#d4c4e8"
@@ -749,7 +749,7 @@ class CommandMode(Container, can_focus=True):
             return
 
         # No context: default to KEY insert (should not happen with _ensure_default_mode)
-        # Play / Doodle text / Doodle paint: insert KEY block
+        # Music / Art text / Art paint: insert KEY block
         self._insert_block(ProgramBlock(
             type=ProgramBlockType.KEY,
             char=action.char,
@@ -904,18 +904,18 @@ class CommandMode(Container, can_focus=True):
 
         from ..playback.player import PlaybackPlayer
 
-        is_doodle_paint = None
-        is_play_letters = None
-        if hasattr(self.app, '_get_doodle_paint_mode_callback'):
-            is_doodle_paint = self.app._get_doodle_paint_mode_callback()
-        if hasattr(self.app, '_get_play_letters_mode_callback'):
-            is_play_letters = self.app._get_play_letters_mode_callback()
+        is_art_paint = None
+        is_music_letters = None
+        if hasattr(self.app, '_get_art_paint_mode_callback'):
+            is_art_paint = self.app._get_art_paint_mode_callback()
+        if hasattr(self.app, '_get_music_letters_mode_callback'):
+            is_music_letters = self.app._get_music_letters_mode_callback()
 
         player = PlaybackPlayer(
             dispatch_action=self._dispatch_action,
             speed_multiplier=1.0,
-            is_doodle_paint_mode=is_doodle_paint,
-            is_play_letters_mode=is_play_letters,
+            is_doodle_paint_mode=is_art_paint,
+            is_play_letters_mode=is_music_letters,
         )
 
         async def _run_playback():
@@ -939,16 +939,16 @@ class CommandMode(Container, can_focus=True):
     def _save_to_slot(self, slot: int) -> None:
         if not self._blocks:
             return
-        source_room = "play"
+        source_room = "music"
         for block in self._blocks:
             if block.type == ProgramBlockType.MODE_SWITCH:
                 target = block.target
-                if target.startswith("play"):
+                if target.startswith("music"):
+                    source_room = "music"
+                elif target.startswith("art"):
+                    source_room = "art"
+                elif target.startswith("play"):
                     source_room = "play"
-                elif target.startswith("doodle"):
-                    source_room = "doodle"
-                elif target.startswith("explore"):
-                    source_room = "explore"
                 break
         save_program(self._blocks, slot, source_room)
         self._active_slot = slot

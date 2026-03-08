@@ -1,7 +1,7 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 4 options: Explore, Play, Doodle, Command
+Shows 4 options: Play, Music, Art, Command
 Arrow keys navigate, Enter selects, Escape cancels.
 """
 
@@ -17,9 +17,9 @@ from .keyboard import NavigationAction, ControlAction
 # Room options: (id, icon, label, result)
 # result is what gets returned when selected
 ROOM_OPTIONS = [
-    ("explore", ICON_CHAT, "Explore", {"room": "explore"}),
-    ("play", ICON_MUSIC, "Play", {"room": "play"}),
-    ("doodle", ICON_PALETTE, "Doodle", {"room": "doodle"}),
+    ("play", ICON_CHAT, "Play", {"room": "play"}),
+    ("music", ICON_MUSIC, "Music", {"room": "music"}),
+    ("art", ICON_PALETTE, "Art", {"room": "art"}),
     ("command", ICON_COMMAND, "Command", {"room": "command"}),
 ]
 
@@ -60,7 +60,7 @@ class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Shows Explore, Play, Doodle, and Command options.
+    Shows Play, Music, Art, and Command options.
     Returns the selected room info or None if cancelled.
     """
 
@@ -99,18 +99,18 @@ class RoomPickerScreen(ModalScreen):
     }
     """
 
-    def __init__(self, current_room: str = "explore", **kwargs):
+    def __init__(self, current_room: str = "play", **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
         self._selected_index = self._get_initial_index()
 
     def _get_initial_index(self) -> int:
         """Get initial selection based on current room."""
-        if self._current_room == "explore":
+        if self._current_room == "play":
             return 0
-        elif self._current_room == "play":
+        elif self._current_room == "music":
             return 1
-        elif self._current_room == "doodle":
+        elif self._current_room == "art":
             return 2
         elif self._current_room == "command":
             return 3

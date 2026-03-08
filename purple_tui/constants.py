@@ -84,7 +84,7 @@ ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)
 ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
-ICON_COMMAND = "󰘳"            # nf-md-console (command room)
+ICON_COMMAND = "󰚩"            # nf-md-robot (command room)
 ICON_KEYBOARD = "󰌌"          # nf-md-keyboard (key capture indicator)
 
 # Battery icons (nf-md-battery variants)

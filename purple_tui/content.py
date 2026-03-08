@@ -60,6 +60,9 @@ class ContentManager:
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         self._loaded = False
+        # Prefix indexes built at load time for O(prefix-length) autocomplete
+        self._emoji_prefix_index: dict[str, list[tuple[str, str]]] = {}
+        self._color_prefix_index: dict[str, list[tuple[str, str]]] = {}
 
     def load_all(self) -> None:
         """Load content from all installed packs"""
@@ -83,6 +86,7 @@ class ContentManager:
                     self._load_pack(pack_dir)
 
         self._loaded = True
+        self._build_prefix_indexes()
 
     def _load_defaults(self) -> None:
         """Load default colors. Emoji come from the core-emoji pack."""
@@ -283,33 +287,61 @@ class ContentManager:
         """Get list of all available emoji words"""
         return sorted(self.emojis.keys())
 
+    def _build_prefix_indexes(self) -> None:
+        """Build prefix lookup dicts for instant autocomplete.
+
+        Called once at load time. Pre-computes all plural forms so keystroke-time
+        lookups are just a dict get with no inflect calls.
+        """
+        # Build emoji index: for each prefix of each word (singular and plural),
+        # store (display_word, emoji). Prefer singular form over plural.
+        emoji_by_prefix: dict[str, dict[str, str]] = {}  # prefix -> {display_word: emoji}
+        for word, emoji in self.emojis.items():
+            plural = pluralize(word)
+            # Index all prefixes of the singular form
+            for i in range(2, len(word) + 1):
+                p = word[:i]
+                bucket = emoji_by_prefix.setdefault(p, {})
+                if emoji not in bucket.values():
+                    bucket[word] = emoji
+            # Index prefixes of the plural form (only where they differ)
+            for i in range(2, len(plural) + 1):
+                p = plural[:i]
+                bucket = emoji_by_prefix.setdefault(p, {})
+                if emoji not in bucket.values():
+                    bucket[plural] = emoji
+
+        self._emoji_prefix_index = {
+            p: sorted(entries.items(), key=lambda x: x[0])
+            for p, entries in emoji_by_prefix.items()
+        }
+
+        # Build color index
+        color_by_prefix: dict[str, dict[str, str]] = {}  # prefix -> {display_name: hex}
+        for name, hex_code in self.colors.items():
+            plural = pluralize(name)
+            for i in range(2, len(name) + 1):
+                p = name[:i]
+                bucket = color_by_prefix.setdefault(p, {})
+                if hex_code not in bucket.values():
+                    bucket[name] = hex_code
+            for i in range(2, len(plural) + 1):
+                p = plural[:i]
+                bucket = color_by_prefix.setdefault(p, {})
+                if hex_code not in bucket.values():
+                    bucket[plural] = hex_code
+
+        self._color_prefix_index = {
+            p: sorted(entries.items(), key=lambda x: x[0])
+            for p, entries in color_by_prefix.items()
+        }
+
     def search_emojis(self, prefix: str) -> list[tuple[str, str]]:
         """Search for emojis starting with prefix, returns [(word, emoji), ...].
 
-        Includes plural forms (e.g., 'wolv' matches 'wolves', 'tomatoe' matches 'tomatoes').
-        Avoids redundant suggestions (if 'apple' matches, don't also show 'apples').
+        Uses pre-built prefix index for O(1) lookup (no inflect calls at keystroke time).
         """
-        prefix = prefix.lower()
-        results = []
-        seen_emojis = set()  # Track which emojis we've added to avoid duplicates
-
-        for word, emoji in self.emojis.items():
-            singular_matches = word.startswith(prefix)
-            plural = pluralize(word)
-            plural_matches = plural.startswith(prefix)
-
-            if singular_matches:
-                # Singular matches: prefer singular form
-                if emoji not in seen_emojis:
-                    results.append((word, emoji))
-                    seen_emojis.add(emoji)
-            elif plural_matches:
-                # Only plural matches (e.g., "tomatoe" -> "tomatoes", "wolv" -> "wolves")
-                if emoji not in seen_emojis:
-                    results.append((plural, emoji))
-                    seen_emojis.add(emoji)
-
-        return sorted(results, key=lambda x: x[0])
+        return self._emoji_prefix_index.get(prefix.lower(), [])
 
     def get_color(self, word: str) -> Optional[str]:
         """Get hex color code for a color name, handling plurals (e.g., 'reds' -> red)."""
@@ -362,27 +394,9 @@ class ContentManager:
     def search_colors(self, prefix: str) -> list[tuple[str, str]]:
         """Search for colors starting with prefix, returns [(name, hex), ...].
 
-        Includes plural forms for consistency with emoji search.
+        Uses pre-built prefix index for O(1) lookup (no inflect calls at keystroke time).
         """
-        prefix = prefix.lower()
-        results = []
-        seen_colors = set()
-
-        for name, hex_code in self.colors.items():
-            singular_matches = name.startswith(prefix)
-            plural = pluralize(name)
-            plural_matches = plural.startswith(prefix)
-
-            if singular_matches:
-                if hex_code not in seen_colors:
-                    results.append((name, hex_code))
-                    seen_colors.add(hex_code)
-            elif plural_matches:
-                if hex_code not in seen_colors:
-                    results.append((plural, hex_code))
-                    seen_colors.add(hex_code)
-
-        return sorted(results, key=lambda x: x[0])
+        return self._color_prefix_index.get(prefix.lower(), [])
 
     def list_colors(self) -> list[str]:
         """Get list of all available color names"""

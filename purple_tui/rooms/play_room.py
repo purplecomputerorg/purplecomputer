@@ -689,7 +689,6 @@ class PlayMode(Vertical):
                 play_input.autocomplete_matches = []
                 play_input.autocomplete_index = 0
                 play_input.exact_match_display = ""
-                play_input._check_autocomplete()
             # Left arrow is ignored (no cursor movement for kids)
             return
 
@@ -706,14 +705,12 @@ class PlayMode(Vertical):
                 play_input.autocomplete_matches = []
                 play_input.autocomplete_index = 0
                 play_input.exact_match_display = ""
-                play_input._check_autocomplete()
                 return
 
             if action.action == 'space' and action.is_down:
                 # Space always types a space (autocomplete is accepted with right arrow)
                 play_input.value += " "
                 play_input.cursor_position = len(play_input.value)
-                play_input._check_autocomplete()
                 return
 
             if action.action == 'enter' and action.is_down:
@@ -725,7 +722,6 @@ class PlayMode(Vertical):
                     if self._last_input_text:
                         play_input.value = self._last_input_text
                         play_input.cursor_position = len(play_input.value)
-                        play_input._check_autocomplete()
                 play_input.autocomplete_matches = []
                 play_input.autocomplete_index = 0
                 play_input.exact_match_display = ""
@@ -737,7 +733,6 @@ class PlayMode(Vertical):
                     # Always delete from end (simpler for kids, no cursor confusion)
                     play_input.value = play_input.value[:-1]
                     play_input.cursor_position = len(play_input.value)
-                    play_input._check_autocomplete()
                 return
 
             if action.action == 'escape' and action.is_down and not action.is_repeat:
@@ -748,7 +743,6 @@ class PlayMode(Vertical):
                     play_input.autocomplete_matches = []
                     play_input.autocomplete_index = 0
                     play_input.exact_match_display = ""
-                    play_input._check_autocomplete()
                 return
 
             return
@@ -776,13 +770,11 @@ class PlayMode(Vertical):
 
                 play_input.value = value + insert
                 play_input.cursor_position = len(play_input.value)
-                play_input._check_autocomplete()
                 return
 
             # Normal character (always append at end)
             play_input.value += char
             play_input.cursor_position = len(play_input.value)
-            play_input._check_autocomplete()
             # Update color legend to show active row
             self.post_message(PaintModeChanged(True, get_key_color(char)))
             return

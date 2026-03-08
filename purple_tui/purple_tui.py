@@ -425,7 +425,7 @@ class PurpleApp(App):
 
     #viewport-row {
         width: auto;
-        height: __VIEWPORT_ROW_HEIGHT__;
+        height: auto;
     }
 
     #paint-legend {
@@ -480,7 +480,7 @@ class PurpleApp(App):
     #viewport {
         width: __VIEWPORT_WIDTH__;
         height: __VIEWPORT_HEIGHT__;
-        border: heavy $primary;
+        outline: heavy $primary;
         background: $surface;
     }
 
@@ -539,7 +539,7 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__VIEWPORT_ROW_HEIGHT__", str(VIEWPORT_HEIGHT + 2)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
@@ -1099,13 +1099,13 @@ class PurpleApp(App):
             pass
 
     def _reset_viewport_border(self) -> None:
-        """Reset viewport border to default purple."""
+        """Reset viewport outline to default purple."""
         try:
             from textual.color import Color
             viewport = self.query_one("#viewport")
             # Get primary color based on current theme
             primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
-            viewport.styles.border = ("heavy", Color.parse(primary_color))
+            viewport.styles.outline = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
 

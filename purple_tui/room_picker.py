@@ -59,7 +59,8 @@ class RoomOption(Static):
         self.number = number
 
     def render(self) -> str:
-        return f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}\nor Enter\n"
+        enter_hint = "\nor Enter" if self.has_class("selected") else ""
+        return f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n"
 
 
 class RoomPickerScreen(ModalScreen):

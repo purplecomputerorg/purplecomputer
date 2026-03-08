@@ -539,6 +539,12 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
+
+    /* Narrower toasts, bottom-right */
+    Toast {
+        width: auto;
+        max-width: 35%;
+    }
     """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -944,6 +950,8 @@ class PurpleApp(App):
 
     def _show_room_picker(self) -> None:
         """Show the mode picker modal."""
+        self.clear_notifications()
+        self._volume_notification = None
         current_room = self.active_room.name.lower()
         picker = RoomPickerScreen(current_room=current_room)
         self.push_screen(picker, self._on_room_picked)
@@ -1824,27 +1832,19 @@ class PurpleApp(App):
 
         message = f"{icon}  {bars}  {label}"
 
-        # Update existing volume toast in place to avoid flicker
-        notif = self._volume_notification
-        if notif and not notif.has_expired and notif in self._notifications:
-            from time import time as _time
-            notif.message = message
-            notif.raised_at = _time()
-            # Refresh the Toast widget showing this notification
-            from textual.widgets._toast import Toast as _Toast
+        # Remove previous volume notification (without display refresh) so
+        # toast_rack.show() can remove the old toast and mount the new one
+        # in a single pass, avoiding flicker between consecutive changes.
+        if self._volume_notification:
             try:
-                for toast in self.screen.query(_Toast):
-                    if toast._notification is notif:
-                        toast.refresh()
-                        break
+                del self._notifications[self._volume_notification]
             except Exception:
                 pass
-        else:
-            self.clear_notifications()
-            self.notify(message, timeout=1.5)
-            # Store reference to the notification we just created
-            if self._notifications:
-                self._volume_notification = list(self._notifications)[-1]
+        self.notify(message, timeout=1.5)
+        # Store reference for next volume change
+        self._volume_notification = None
+        for notif in self._notifications:
+            self._volume_notification = notif
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
@@ -1909,6 +1909,8 @@ class PurpleApp(App):
         self._cancel_escape_hold_timer()
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
+        self.clear_notifications()
+        self._volume_notification = None
         self.push_screen(ParentMenu())
 
     def clear_all_state(self) -> None:

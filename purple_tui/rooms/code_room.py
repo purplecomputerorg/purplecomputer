@@ -16,7 +16,6 @@ which reads directly from evdev.
 import asyncio
 from typing import Callable
 
-from textual.widgets import Static
 from textual.containers import Container
 from textual.app import ComposeResult
 from textual.widget import Widget
@@ -36,7 +35,6 @@ from ..program import (
     blocks_to_playback_actions,
     save_program,
     load_program,
-    slot_occupied,
     TARGET_ICONS,
     TARGET_COLORS,
     TARGET_LABELS,
@@ -73,13 +71,6 @@ GUTTER_WIDTH = 3                  # left gutter for mode icons
 
 # Repeat badge in gutter
 REPEAT_BADGE_COLOR = "#2d9e8a"
-
-# Save bar
-SAVE_BAR_HEIGHT = 2
-NUM_SLOTS = 9
-SLOT_FILLED_COLOR = "#9b7bc4"
-SLOT_EMPTY_COLOR = "#3a2a50"
-SLOT_ACTIVE_COLOR = "#FFD700"
 
 
 # =============================================================================
@@ -177,78 +168,6 @@ def _get_mode_context(blocks: list[ProgramBlock], cursor: int) -> str:
             return blocks[i].target
     return ""
 
-
-# =============================================================================
-# SAVE BAR WIDGET
-# =============================================================================
-
-class SaveBar(Widget):
-    """Shows 9 save slots at the top of Code mode."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._active_slot: int = 0
-        self._filled: set[int] = set()
-        self.add_class("caps-sensitive")
-
-    def update_slots(self, active: int = 0) -> None:
-        self._active_slot = active
-        self._filled = {i for i in range(1, NUM_SLOTS + 1) if slot_occupied(i)}
-        self.refresh()
-
-    def _get_bg(self) -> str:
-        try:
-            return BG_DARK if "dark" in self.app.theme else BG_LIGHT
-        except Exception:
-            return BG_DARK
-
-    def render_line(self, y: int) -> Strip:
-        width = self.size.width
-        bg = self._get_bg()
-        bg_style = Style(bgcolor=bg)
-
-        if y >= SAVE_BAR_HEIGHT:
-            return Strip([Segment(" " * width, bg_style)])
-
-        segments = []
-        slot_width = 4
-        total_slots_width = slot_width * NUM_SLOTS
-        pad = max(0, (width - total_slots_width) // 2)
-
-        if y == 0:
-            label = "Programs"
-            label_pad = max(0, (width - len(label)) // 2)
-            dim_style = Style(color="#808080", bgcolor=bg)
-            segments.append(Segment(" " * label_pad, bg_style))
-            segments.append(Segment(label, dim_style))
-            segments.append(Segment(" " * max(0, width - label_pad - len(label)), bg_style))
-        else:
-            segments.append(Segment(" " * pad, bg_style))
-            chars_used = pad
-            for slot in range(1, NUM_SLOTS + 1):
-                if slot == self._active_slot:
-                    color = SLOT_ACTIVE_COLOR
-                elif slot in self._filled:
-                    color = SLOT_FILLED_COLOR
-                else:
-                    color = SLOT_EMPTY_COLOR
-
-                style = Style(color=color, bgcolor=bg, bold=(slot == self._active_slot))
-                if slot in self._filled:
-                    segments.append(Segment(f" {slot}\u25a0 ", style))
-                else:
-                    segments.append(Segment(f" {slot}\u25a1 ", style))
-                chars_used += slot_width
-
-            remaining = width - chars_used
-            if remaining > 0:
-                segments.append(Segment(" " * remaining, bg_style))
-
-        return caps_strip(Strip(segments), self.app)
-
-    async def _on_key(self, event: events.Key) -> None:
-        event.stop()
-        event.prevent_default()
 
 
 # =============================================================================
@@ -581,18 +500,6 @@ class CodeMode(Container, can_focus=True):
         height: 100%;
     }
 
-    SaveBar {
-        width: 100%;
-        height: 2;
-    }
-
-    #code-separator {
-        width: 100%;
-        height: 1;
-        color: $primary;
-        text-align: center;
-    }
-
     CodeCanvas {
         width: 100%;
         height: 1fr;
@@ -612,8 +519,6 @@ class CodeMode(Container, can_focus=True):
         self._compose_text: str = ""
 
     def compose(self) -> ComposeResult:
-        yield SaveBar(id="save-bar")
-        yield Static("\u2500" * 80, id="code-separator")
         yield CodeCanvas(id="code-canvas")
 
     def on_mount(self) -> None:
@@ -623,12 +528,6 @@ class CodeMode(Container, can_focus=True):
         self._refresh_all()
 
     def _refresh_all(self) -> None:
-        try:
-            save_bar = self.query_one("#save-bar", SaveBar)
-            save_bar.update_slots(self._active_slot)
-        except Exception:
-            pass
-
         try:
             canvas = self.query_one("#code-canvas", CodeCanvas)
             canvas._composing = self._composing

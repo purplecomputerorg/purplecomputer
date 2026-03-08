@@ -150,23 +150,47 @@ class KeyBadge(Static):
         return self.text
 
 
+class RoomBadge(KeyBadge):
+    """A room badge that shows icon + room name, responds to caps lock"""
+
+    DEFAULT_CSS = """
+    RoomBadge {
+        width: 11;
+    }
+    """
+
+    def __init__(self, icon: str, room_name: str, **kwargs):
+        super().__init__(text="", **kwargs)
+        self._icon = icon
+        self._room_name = room_name
+        self.add_class("caps-sensitive")
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return f"{self._icon} {caps(self._room_name)}"
+
+
 class RoomIndicator(Horizontal):
-    """Shows mode indicators (icons only) and mute indicator"""
+    """Shows mode indicators (icons + names) and mute indicator, centered"""
 
     DEFAULT_CSS = """
     RoomIndicator {
         width: 100%;
         height: 3;
         background: $background;
-        padding: 0 4;
     }
 
-    #keys-left {
+    #keys-spacer-left {
+        width: 1fr;
+        height: 3;
+    }
+
+    #keys-center {
         width: auto;
         height: 3;
     }
 
-    #keys-spacer {
+    #keys-spacer-right {
         width: 1fr;
         height: 3;
     }
@@ -183,29 +207,31 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        with Horizontal(id="keys-left"):
+        yield Static("", id="keys-spacer-left")
+
+        with Horizontal(id="keys-center"):
             # Esc badge for mode picker
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
             esc_badge.add_class("dim")
             yield esc_badge
 
-            # Room icon badges (no F-key labels)
-            room_icons = {
-                Room.PLAY: ICON_CHAT,
-                Room.MUSIC: ICON_MUSIC,
-                Room.ART: ICON_PALETTE,
-                Room.CODE: ICON_CODE,
+            # Room badges with icon + name
+            room_info = {
+                Room.PLAY: (ICON_CHAT, "Play"),
+                Room.MUSIC: (ICON_MUSIC, "Music"),
+                Room.ART: (ICON_PALETTE, "Art"),
+                Room.CODE: (ICON_CODE, "Code"),
             }
             for room in Room:
-                badge = KeyBadge(room_icons[room], id=f"key-{room.name.lower()}")
+                icon, name = room_info[room]
+                badge = RoomBadge(icon, name, id=f"key-{room.name.lower()}")
                 if room == self.current_room:
                     badge.add_class("active")
                 else:
                     badge.add_class("dim")
                 yield badge
 
-        # Spacer pushes the rest to the right
-        yield Static("", id="keys-spacer")
+        yield Static("", id="keys-spacer-right")
 
         # Mute indicator on the right (only visible when muted)
         with Horizontal(id="keys-right"):
@@ -218,7 +244,7 @@ class RoomIndicator(Horizontal):
         self.current_room = room
         for m in Room:
             try:
-                badge = self.query_one(f"#key-{m.name.lower()}", KeyBadge)
+                badge = self.query_one(f"#key-{m.name.lower()}", RoomBadge)
                 badge.remove_class("active", "dim")
                 if m == room:
                     badge.add_class("active")
@@ -528,6 +554,7 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
+        self._volume_notification = None  # Reused to avoid toast flicker
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -1772,10 +1799,7 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Clear any existing notifications before showing new volume toast
-        self.clear_notifications()
-
-        # Show volume feedback toast
+        # Build volume feedback message
         if self.volume_level == 0:
             icon = ICON_VOLUME_OFF
             label = "Sound Off"
@@ -1797,7 +1821,29 @@ class PurpleApp(App):
             label = "High Sound"
             bars = "████████"
 
-        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        message = f"{icon}  {bars}  {label}"
+
+        # Update existing volume toast in place to avoid flicker
+        notif = self._volume_notification
+        if notif and not notif.has_expired and notif in self._notifications:
+            from time import time as _time
+            notif.message = message
+            notif.raised_at = _time()
+            # Refresh the Toast widget showing this notification
+            from textual.widgets._toast import Toast as _Toast
+            try:
+                for toast in self.screen.query(_Toast):
+                    if toast._notification is notif:
+                        toast.refresh()
+                        break
+            except Exception:
+                pass
+        else:
+            self.clear_notifications()
+            self.notify(message, timeout=1.5)
+            # Store reference to the notification we just created
+            if self._notifications:
+                self._volume_notification = list(self._notifications)[-1]
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""

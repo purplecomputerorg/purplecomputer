@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Bottom bar: room badges now show icon + name (e.g., "Play", "Music"), centered, with uniform width. Names go ALL CAPS when caps lock is on.
 - Music mode: replaced Steel Drum and Kalimba instruments with Xylophone and Trumpet for more variety and familiarity
 - Art mode: toggling caps mode no longer strips background colors from typed text (row tints and paint colors now preserved)
 - Play mode: fixed continuation lines being indented 1 cell too far when colored text blocks wrap across multiple lines

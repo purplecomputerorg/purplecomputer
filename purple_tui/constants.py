@@ -25,10 +25,10 @@ def is_debug() -> bool:
 # Central location for room names to keep them DRY across the codebase.
 # Format: (id, label) where id is lowercase for internal use, label is display text.
 
-ROOM_PLAY = ("play", "Play")           # F1: Math and emoji REPL
-ROOM_MUSIC = ("music", "Music")        # F2: Music and art grid
-ROOM_ART = ("art", "Art")              # F3: Drawing canvas
-ROOM_CODE = ("code", "Code")           # F4: Visual block programming
+ROOM_PLAY = ("play", "Play")           # Math and emoji REPL
+ROOM_MUSIC = ("music", "Music")        # Music and art grid
+ROOM_ART = ("art", "Art")              # Drawing canvas
+ROOM_CODE = ("code", "Code")           # Visual block programming
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS

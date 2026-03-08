@@ -9,7 +9,7 @@ Features:
 - Caps lock toggle (double-tap Shift key)
 - Long-hold detection for parent menu (Escape held > 1s)
 - Space-hold for paint mode line drawing (release detection via evdev)
-- F-key room switching (F1-F4) and toggles (F10-F12 volume)
+- Media key volume controls (hardware mute/vol-down/vol-up)
 
 See guides/keyboard-architecture.md for architecture details.
 """
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_CODE
+from .constants import SUPPORT_EMAIL
 
 
 # ============================================================================
@@ -518,8 +518,8 @@ class NavigationAction(KeyAction):
 
 @dataclass
 class RoomAction(KeyAction):
-    """Room switch requested."""
-    room: str  # 'play' (F1), 'music' (F2), 'art' (F3), 'code' (F4), 'parent' (long Escape)
+    """Room switch requested (via Escape picker or long Escape hold)."""
+    room: str  # 'play', 'music', 'art', 'code', 'parent' (long Escape)
 
 
 @dataclass
@@ -699,30 +699,15 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='tab', is_down=True, is_repeat=is_repeat))
             return actions
 
-        # Handle F-keys for mode switching and volume (no repeats)
+        # Handle media keys for volume (no repeats)
         if not is_repeat:
-            if keycode == KeyCode.KEY_F1:
-                actions.append(RoomAction(room=ROOM_PLAY[0]))
-                return actions
-            if keycode == KeyCode.KEY_F2:
-                actions.append(RoomAction(room=ROOM_MUSIC[0]))
-                return actions
-            if keycode == KeyCode.KEY_F3:
-                actions.append(RoomAction(room=ROOM_ART[0]))
-                return actions
-            if keycode == KeyCode.KEY_F4:
-                actions.append(RoomAction(room=ROOM_CODE[0]))
-                return actions
-            if keycode == KeyCode.KEY_F5:
-                actions.append(ControlAction(action='record_toggle', is_down=True))
-                return actions
-            if keycode == KeyCode.KEY_F10:
+            if keycode == KeyCode.KEY_MUTE:
                 actions.append(ControlAction(action='volume_mute', is_down=True))
                 return actions
-            if keycode == KeyCode.KEY_F11:
+            if keycode == KeyCode.KEY_VOLUMEDOWN:
                 actions.append(ControlAction(action='volume_down', is_down=True))
                 return actions
-            if keycode == KeyCode.KEY_F12:
+            if keycode == KeyCode.KEY_VOLUMEUP:
                 actions.append(ControlAction(action='volume_up', is_down=True))
                 return actions
 

@@ -2,7 +2,9 @@
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
 Shows 4 options: Play, Music, Art, Code
-Arrow keys navigate, Enter selects, Escape cancels.
+Arrow keys navigate (left/right for rooms, up/down for volume),
+number keys 1-4 for direct room selection,
+Enter selects, Escape cancels.
 """
 
 from textual.screen import ModalScreen
@@ -11,7 +13,7 @@ from textual.widgets import Static
 from textual.app import ComposeResult
 
 from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_CODE
-from .keyboard import NavigationAction, ControlAction
+from .keyboard import NavigationAction, ControlAction, CharacterAction
 
 
 # Room options: (id, icon, label, result)
@@ -22,6 +24,9 @@ ROOM_OPTIONS = [
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
     ("code", ICON_CODE, "Code", {"room": "code"}),
 ]
+
+# Map number keys to room indices
+NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2, '4': 3}
 
 
 class RoomOption(Static):
@@ -46,14 +51,15 @@ class RoomOption(Static):
     }
     """
 
-    def __init__(self, option_id: str, icon: str, label: str, **kwargs):
+    def __init__(self, option_id: str, icon: str, label: str, number: int, **kwargs):
         super().__init__(**kwargs)
         self.option_id = option_id
         self.icon = icon
         self.label = label
+        self.number = number
 
     def render(self) -> str:
-        return f"{self.icon}\n{self.label}"
+        return f"{self.icon}\n{self.number} {self.label}"
 
 
 class RoomPickerScreen(ModalScreen):
@@ -61,6 +67,8 @@ class RoomPickerScreen(ModalScreen):
     Modal screen for selecting rooms with arrow key navigation.
 
     Shows Play, Music, Art, and Code options.
+    Left/right arrows navigate rooms, up/down adjusts volume.
+    Number keys 1-4 select rooms directly.
     Returns the selected room info or None if cancelled.
     """
 
@@ -121,10 +129,10 @@ class RoomPickerScreen(ModalScreen):
             yield Static("Pick a Room", id="picker-title")
 
             with Horizontal(id="picker-options"):
-                for opt_id, icon, label, _ in ROOM_OPTIONS:
-                    yield RoomOption(opt_id, icon, label, id=f"opt-{opt_id}")
+                for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
+                    yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            yield Static("\u25c0 \u25b6", id="picker-hint")
+            yield Static("\u25c0 \u25b6  or press 1\u20134       \u25b2 \u25bc volume", id="picker-hint")
 
     def on_mount(self) -> None:
         """Highlight the initially selected option."""
@@ -142,15 +150,32 @@ class RoomPickerScreen(ModalScreen):
             except Exception:
                 pass
 
+    def _select_room(self, index: int) -> None:
+        """Select and dismiss with the room at the given index."""
+        if 0 <= index < len(ROOM_OPTIONS):
+            _, _, _, result = ROOM_OPTIONS[index]
+            self.dismiss(result)
+
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
-            if action.direction in ('left', 'up'):
+            if action.direction in ('left',):
                 self._selected_index = max(0, self._selected_index - 1)
                 self._update_selection()
-            elif action.direction in ('right', 'down'):
+            elif action.direction in ('right',):
                 self._selected_index = min(len(ROOM_OPTIONS) - 1, self._selected_index + 1)
                 self._update_selection()
+            elif action.direction == 'up':
+                # Volume up
+                self.app.action_volume_up()
+            elif action.direction == 'down':
+                # Volume down
+                self.app.action_volume_down()
+            return
+
+        if isinstance(action, CharacterAction) and not action.is_repeat:
+            if action.char in NUMBER_KEY_ROOMS:
+                self._select_room(NUMBER_KEY_ROOMS[action.char])
             return
 
         if isinstance(action, ControlAction) and action.is_down:
@@ -161,6 +186,12 @@ class RoomPickerScreen(ModalScreen):
             elif action.action == 'escape':
                 # Cancel, return None
                 self.dismiss(None)
+            elif action.action == 'volume_mute':
+                self.app.action_volume_mute()
+            elif action.action == 'volume_down':
+                self.app.action_volume_down()
+            elif action.action == 'volume_up':
+                self.app.action_volume_up()
 
     async def _on_key(self, event) -> None:
         """Suppress terminal key events. All input comes via evdev."""

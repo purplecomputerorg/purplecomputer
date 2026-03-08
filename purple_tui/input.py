@@ -2,7 +2,8 @@
 Purple Computer: Direct Keyboard Input via evdev
 
 Reads keyboard events directly from Linux evdev, bypassing the terminal.
-This gives us true key up/down events, precise timing, and access to all keys.
+This gives us true key up/down events, precise timing, and access to all keys
+including media keys (volume).
 
 The terminal (Alacritty) is display-only. Keyboard input flows:
   evdev → EvdevReader → RawKeyEvent → App
@@ -12,7 +13,6 @@ See guides/keyboard-architecture.md for details.
 """
 
 import asyncio
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -96,25 +96,16 @@ class KeyCode:
     KEY_SPACE = 57
     KEY_CAPSLOCK = 58
 
-    # Function keys
-    KEY_F1 = 59
-    KEY_F2 = 60
-    KEY_F3 = 61
-    KEY_F4 = 62
-    KEY_F5 = 63
-    KEY_F6 = 64
-    KEY_F7 = 65
-    KEY_F8 = 66
-    KEY_F9 = 67
-    KEY_F10 = 68
-    KEY_F11 = 87
-    KEY_F12 = 88
-
     # Arrow keys
     KEY_UP = 103
     KEY_LEFT = 105
     KEY_RIGHT = 106
     KEY_DOWN = 108
+
+    # Media keys (hardware volume buttons)
+    KEY_MUTE = 113
+    KEY_VOLUMEDOWN = 114
+    KEY_VOLUMEUP = 115
 
     # Power/system keys
     KEY_POWER = 116
@@ -151,10 +142,8 @@ KEYCODE_TO_NAME: dict[int, str] = {
     KeyCode.KEY_RIGHTSHIFT: 'shift',
     KeyCode.KEY_SPACE: 'space',
     KeyCode.KEY_CAPSLOCK: 'caps_lock',
-    KeyCode.KEY_F1: 'f1', KeyCode.KEY_F2: 'f2', KeyCode.KEY_F3: 'f3',
-    KeyCode.KEY_F4: 'f4', KeyCode.KEY_F5: 'f5', KeyCode.KEY_F6: 'f6',
-    KeyCode.KEY_F7: 'f7', KeyCode.KEY_F8: 'f8', KeyCode.KEY_F9: 'f9',
-    KeyCode.KEY_F10: 'f10', KeyCode.KEY_F11: 'f11', KeyCode.KEY_F12: 'f12',
+    KeyCode.KEY_MUTE: 'mute', KeyCode.KEY_VOLUMEDOWN: 'volume_down',
+    KeyCode.KEY_VOLUMEUP: 'volume_up',
     KeyCode.KEY_UP: 'up', KeyCode.KEY_DOWN: 'down',
     KeyCode.KEY_LEFT: 'left', KeyCode.KEY_RIGHT: 'right',
 }
@@ -199,24 +188,6 @@ class RawKeyEvent:
     def __repr__(self) -> str:
         arrow = "↓" if self.is_down else "↑"
         return f"RawKeyEvent({self.name} {arrow} @{self.timestamp:.3f})"
-
-
-# =============================================================================
-# F-Key Scancode Mapping
-# =============================================================================
-
-MAPPING_FILE = Path.home() / ".config" / "purple" / "keyboard-map.json"
-
-
-def load_scancode_map() -> dict[int, int]:
-    """Load calibrated scancode→keycode mapping from disk."""
-    if MAPPING_FILE.exists():
-        try:
-            data = json.loads(MAPPING_FILE.read_text())
-            return {int(k): v for k, v in data.get("scancodes", {}).items()}
-        except (json.JSONDecodeError, KeyError, ValueError):
-            pass
-    return {}
 
 
 # =============================================================================
@@ -269,7 +240,6 @@ class EvdevReader:
         self._device = None
         self._running = False
         self._pending_scancode = 0
-        self._scancode_map = load_scancode_map()
         self._task: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
@@ -396,10 +366,6 @@ class EvdevReader:
                     keycode = event.code
                     scancode = self._pending_scancode
                     self._pending_scancode = 0
-
-                    # Apply scancode remapping for F-keys
-                    if scancode and scancode in self._scancode_map:
-                        keycode = self._scancode_map[scancode]
 
                     raw_event = RawKeyEvent(
                         keycode=keycode,

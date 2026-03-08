@@ -451,17 +451,15 @@ def _get_menu_items() -> list:
         items.append(("menu-display", "Adjust Display"))
     if _is_live_boot():
         items.append(("menu-install", "Install on this computer"))
-    items.extend([
-        ("menu-shell", "Open Terminal"),
-        ("menu-keyboard", "Recalibrate Keyboard"),
-    ])
+    items.append(("menu-shell", "Open Terminal"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-update", "Git Pull & Exit"))
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
-    items.append(("menu-exit", "Exit"))
+    items.append(("menu-shutdown", "Shut Down"))
+    items.append(("menu-exit", "Exit Parent Menu"))
     return items
 
 
@@ -712,8 +710,6 @@ class ParentMenu(ModalScreen):
             self._install_to_disk()
         elif item_id == "menu-shell":
             self._open_shell()
-        elif item_id == "menu-keyboard":
-            self._recalibrate_keyboard()
         elif item_id == "menu-demo":
             self._start_demo()
         elif item_id == "menu-update":
@@ -722,6 +718,8 @@ class ParentMenu(ModalScreen):
             self._exit_to_bash()
         elif item_id == "menu-system":
             self._exit_to_system()
+        elif item_id == "menu-shutdown":
+            self._shutdown()
         elif item_id == "menu-exit":
             self.dismiss()
 
@@ -825,54 +823,16 @@ class ParentMenu(ModalScreen):
         # Force redraw after returning from suspend
         self.app.refresh(repaint=True)
 
-    def _recalibrate_keyboard(self) -> None:
-        """Run keyboard calibration"""
+    def _shutdown(self) -> None:
+        """Shut down the computer immediately."""
         self.dismiss()
-        self.app.call_later(self._run_keyboard_calibration)
+        self.app.call_later(self._run_shutdown)
 
-    def _run_keyboard_calibration(self) -> None:
-        """Actually run calibration - called after modal dismissed"""
-        # Find the keyboard_normalizer.py script
-        this_dir = Path(__file__).parent
-        candidates = [
-            this_dir.parent.parent / "keyboard_normalizer.py",  # Project root
-            Path("/opt/purple/keyboard_normalizer.py"),  # Installed location
-        ]
-
-        script_path = None
-        for path in candidates:
-            if path.exists():
-                script_path = path
-                break
-
-        if not script_path:
-            self.app.notify("Could not find keyboard calibration script", severity="error")
-            return
-
-        with self.app.suspend_with_terminal_input():
-            os.system('stty sane')
-            os.system('clear')
-
-            # Run the calibration
-            result = subprocess.run([sys.executable, str(script_path), "--calibrate"])
-
-            if result.returncode == 0:
-                print()
-                print("Keyboard calibration complete!")
-                print("Press Enter to return to Purple Computer...")
-            else:
-                print()
-                print("Keyboard calibration failed or was cancelled.")
-                print("Press Enter to return to Purple Computer...")
-
-            input()  # Wait for user to press Enter
-
-            # Flush any buffered input to prevent stray characters
-            _flush_terminal_input()
-            os.system('stty sane')
-
-        # Force redraw after returning from suspend
-        self.app.refresh(repaint=True)
+    def _run_shutdown(self) -> None:
+        """Actually shut down."""
+        _flush_terminal_input()
+        os.system('stty sane')
+        os.system('sudo shutdown -h now')
 
     def _exit_to_system(self) -> None:
         """Exit Purple Computer entirely, dropping to the debug shell."""

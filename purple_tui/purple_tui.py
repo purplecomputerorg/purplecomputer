@@ -2,7 +2,7 @@
 """
 Purple Computer: Main Textual TUI Application
 
-The calm computer for kids. Designed for 4–7 and fun for 2–8+.
+The calm computer for kids. Designed for 4-7 and fun for 2-8+.
 A creativity device, not an entertainment device.
 
 IMPORTANT: Requires Linux with evdev for keyboard input.
@@ -11,9 +11,9 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F4: Switch rooms (Play, Music, Art, Code)
-- F10: Mute/unmute, F11: Volume down, F12: Volume up
+- Escape (tap): Room picker (1-4 for rooms, arrows to navigate/volume)
 - Escape (long hold): Parent menu
+- Media keys: Volume mute/down/up
 - Shift (tap): Sticky shift for one character
 - Shift (double-tap): Toggle caps lock
 - Caps Lock key: Remapped to Shift
@@ -43,7 +43,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
+    ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_CODE,
@@ -66,10 +66,10 @@ from .room_picker import RoomPickerScreen
 
 class Room(Enum):
     """The 4 core rooms of Purple Computer"""
-    PLAY = 1     # F1: Math and emoji REPL
-    MUSIC = 2    # F2: Music and art grid
-    ART = 3      # F3: Simple drawing canvas
-    CODE = 4     # F4: Visual block programming
+    PLAY = 1     # Math and emoji REPL
+    MUSIC = 2    # Music and art grid
+    ART = 3      # Simple drawing canvas
+    CODE = 4     # Visual block programming
 
 
 class View(Enum):
@@ -77,15 +77,6 @@ class View(Enum):
     SCREEN = 1   # 10x6" viewport
     LINE = 2     # 10" wide, 1 line height
     EARS = 3     # Screen off (blank)
-
-
-# Room display info: F-keys for room switching (uses room name constants)
-ROOM_INFO = {
-    Room.PLAY: {"key": "F1", "label": ROOM_PLAY[1], "emoji": ICON_CHAT},
-    Room.MUSIC: {"key": "F2", "label": ROOM_MUSIC[1], "emoji": ICON_MUSIC},
-    Room.ART: {"key": "F3", "label": ROOM_ART[1], "emoji": ICON_PALETTE},
-    Room.CODE: {"key": "F4", "label": ROOM_CODE[1], "emoji": ICON_CODE},
-}
 
 
 class RoomTitle(Static):
@@ -160,7 +151,7 @@ class KeyBadge(Static):
 
 
 class RoomIndicator(Horizontal):
-    """Shows mode indicators with F-keys"""
+    """Shows mode indicators (icons only) and mute indicator"""
 
     DEFAULT_CSS = """
     RoomIndicator {
@@ -192,17 +183,21 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        # Mode badges with F-keys (Esc for mode picker, then F1-F4)
         with Horizontal(id="keys-left"):
             # Esc badge for mode picker
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
             esc_badge.add_class("dim")
             yield esc_badge
 
-            # F1-F4 mode badges
+            # Room icon badges (no F-key labels)
+            room_icons = {
+                Room.PLAY: ICON_CHAT,
+                Room.MUSIC: ICON_MUSIC,
+                Room.ART: ICON_PALETTE,
+                Room.CODE: ICON_CODE,
+            }
             for room in Room:
-                info = ROOM_INFO[room]
-                badge = KeyBadge(f"{info['key']} {info['emoji']}", id=f"key-{room.name.lower()}")
+                badge = KeyBadge(room_icons[room], id=f"key-{room.name.lower()}")
                 if room == self.current_room:
                     badge.add_class("active")
                 else:
@@ -212,20 +207,12 @@ class RoomIndicator(Horizontal):
         # Spacer pushes the rest to the right
         yield Static("", id="keys-spacer")
 
-        # Volume (F10 mute, F11 down, F12 up) on the right
+        # Mute indicator on the right (only visible when muted)
         with Horizontal(id="keys-right"):
-            # Volume controls: F10 mute (shows current level icon), F11 down, F12 up
-            volume_badge = KeyBadge(f"F10 {ICON_VOLUME_HIGH}", id="key-volume")
-            volume_badge.add_class("dim")
-            yield volume_badge
-
-            vol_down_badge = KeyBadge(f"F11 {ICON_VOLUME_DOWN}", id="key-vol-down")
-            vol_down_badge.add_class("dim")
-            yield vol_down_badge
-
-            vol_up_badge = KeyBadge(f"F12 {ICON_VOLUME_UP}", id="key-vol-up")
-            vol_up_badge.add_class("dim")
-            yield vol_up_badge
+            mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
+            mute_badge.add_class("dim")
+            mute_badge.display = False
+            yield mute_badge
 
     def update_room(self, room: Room) -> None:
         self.current_room = room
@@ -241,19 +228,10 @@ class RoomIndicator(Horizontal):
                 pass
 
     def update_volume_indicator(self, volume_level: int) -> None:
-        """Update volume indicator badge with level icon (F10)"""
+        """Show/hide mute indicator based on volume level."""
         try:
-            badge = self.query_one("#key-volume", KeyBadge)
-            if volume_level == 0:
-                icon = ICON_VOLUME_OFF
-            elif volume_level <= 25:
-                icon = ICON_VOLUME_LOW
-            elif volume_level <= 50:
-                icon = ICON_VOLUME_MED
-            else:
-                icon = ICON_VOLUME_HIGH
-            badge.text = f"F10 {icon}"
-            badge.refresh()
+            badge = self.query_one("#key-mute", KeyBadge)
+            badge.display = (volume_level == 0)
         except NoMatches:
             pass
 
@@ -396,8 +374,7 @@ class PurpleApp(App):
     """
     Purple Computer: The calm computer for kids.
 
-    F1-F3: Switch between modes (Play, Music, Art)
-    F10: Mute/unmute, F11: Volume down, F12: Volume up
+    Escape (tap): Room picker
     Escape (long hold): Parent mode
     Caps Lock: Toggle big/small letters
     Ctrl+V: Cycle views (Screen, Line, Ears)
@@ -537,16 +514,9 @@ class PurpleApp(App):
     }
     """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
-    # Mode switching uses F-keys for robustness
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
-        Binding("f1", f"switch_room('{ROOM_PLAY[0]}')", ROOM_PLAY[1], show=False, priority=True),
-        Binding("f2", f"switch_room('{ROOM_MUSIC[0]}')", ROOM_MUSIC[1], show=False, priority=True),
-        Binding("f3", f"switch_room('{ROOM_ART[0]}')", ROOM_ART[1], show=False, priority=True),
         Binding("f8", "take_screenshot", "Screenshot", show=False, priority=True),
-        Binding("f10", "volume_mute", "Mute", show=False, priority=True),
-        Binding("f11", "volume_down", "Vol-", show=False, priority=True),
-        Binding("f12", "volume_up", "Vol+", show=False, priority=True),
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
@@ -556,7 +526,7 @@ class PurpleApp(App):
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
         self.speech_enabled = False
-        self.volume_level = VOLUME_DEFAULT  # 0-100, F10 mute, F11 down, F12 up
+        self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._pending_update = None  # Set by main() if breaking update available
 
@@ -824,9 +794,9 @@ class PurpleApp(App):
         if self._watch_me_active:
             if isinstance(action, RoomAction):
                 if action.room == ROOM_CODE[0]:
-                    # F4 ends Watch me!: stop recording, switch to Code, insert blocks
+                    # Switching to Code ends Watch me!: stop recording, insert blocks
                     await self._end_watch_me()
-                # F1/F2/F3 blocked during Watch me!
+                # Other room switches blocked during Watch me!
                 return
 
             # Block Esc (room picker, long-hold parent menu) during Watch me!
@@ -846,7 +816,7 @@ class PurpleApp(App):
             # (fall through to mode dispatch below)
 
         if isinstance(action, RoomAction):
-            # Dismiss any open modal (like mode picker) when F-key is pressed
+            # Dismiss any open modal (like mode picker) when switching rooms
             if len(self.screen_stack) > 1:
                 self.screen.dismiss(None)
             if action.room == ROOM_PLAY[0]:
@@ -890,7 +860,7 @@ class PurpleApp(App):
                         return
             # Don't return - let escape events propagate to modes for other uses
 
-        # Handle global toggles (F10-F12 volume)
+        # Handle global volume controls (media keys or room picker)
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'volume_mute':
                 self.action_volume_mute()
@@ -1007,7 +977,7 @@ class PurpleApp(App):
         # Show "Watching..." in title bar
         try:
             title = self.query_one("#room-title", RoomTitle)
-            title.set_recording_indicator("\u23fa Watching... F4 when done")
+            title.set_recording_indicator("\u23fa Watching... Esc when done")
         except Exception:
             pass
 
@@ -1091,7 +1061,7 @@ class PurpleApp(App):
     def _update_recording_indicator(self) -> None:
         """Update the title bar with Watch me! recording state."""
         if self._watch_me_active:
-            indicator = "\u23fa Watching... F4 when done"
+            indicator = "\u23fa Watching... Esc when done"
         else:
             indicator = ""
         try:
@@ -1404,7 +1374,7 @@ class PurpleApp(App):
             container.add_class("view-ears")
 
     def action_switch_room(self, room_name: str) -> None:
-        """Switch to a different mode (F1-F3)"""
+        """Switch to a different room"""
         from .rooms.art_room import ArtPromptScreen
 
         # Debug: log who is calling mode switch
@@ -1517,7 +1487,7 @@ class PurpleApp(App):
         self.push_screen(ArtPromptScreen(), handle_prompt_result)
 
     def action_volume_mute(self) -> None:
-        """Toggle mute on/off (F10)"""
+        """Toggle mute on/off"""
         if self.volume_level > 0:
             # Mute: save current level and set to 0
             self._volume_before_mute = self.volume_level
@@ -1528,7 +1498,7 @@ class PurpleApp(App):
         self._apply_volume()
 
     def action_volume_down(self) -> None:
-        """Decrease volume (F11)"""
+        """Decrease volume"""
         # Find current position in VOLUME_LEVELS and go down
         current_idx = 0
         for i, level in enumerate(VOLUME_LEVELS):
@@ -1539,7 +1509,7 @@ class PurpleApp(App):
         self._apply_volume()  # Always show feedback, even at min
 
     def action_volume_up(self) -> None:
-        """Increase volume (F12)"""
+        """Increase volume"""
         # Find current position in VOLUME_LEVELS and go up
         current_idx = len(VOLUME_LEVELS) - 1
         for i, level in enumerate(VOLUME_LEVELS):

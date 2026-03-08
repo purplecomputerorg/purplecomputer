@@ -79,6 +79,45 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
+class VolumeToast(Static):
+    """Custom volume overlay that updates in-place without flicker.
+
+    Unlike Textual's built-in toasts, this is a single persistent widget
+    that shows/hides with a timer we control directly.
+    """
+
+    DEFAULT_CSS = """
+    VolumeToast {
+        display: none;
+        dock: bottom;
+        width: auto;
+        max-width: 40%;
+        height: auto;
+        margin-bottom: 2;
+        margin-right: 2;
+        padding: 1 2;
+        background: $panel-lighten-1;
+        border-left: outer $success;
+        layer: _toastrack;
+        offset-x: -1;
+    }
+    """
+
+    _timer_handle = None
+
+    def show_message(self, message: str, timeout: float = 1.5) -> None:
+        """Show or update the volume message, resetting the hide timer."""
+        self.update(message)
+        self.display = True
+        if self._timer_handle is not None:
+            self._timer_handle.stop()
+        self._timer_handle = self.set_timer(timeout, self._hide)
+
+    def _hide(self) -> None:
+        self.display = False
+        self._timer_handle = None
+
+
 class RoomTitle(Static):
     """Shows current mode title above the viewport"""
 
@@ -539,12 +578,6 @@ class PurpleApp(App):
     #update-buttons Button {
         margin: 0 2;
     }
-
-    /* Narrower toasts, bottom-right */
-    Toast {
-        width: auto;
-        max-width: 35%;
-    }
     """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -561,7 +594,6 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
-        self._volume_notification = None  # Reused to avoid toast flicker
         self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
@@ -647,6 +679,7 @@ class PurpleApp(App):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
             yield RoomIndicator(self.active_room, id="room-indicator")
+        yield VolumeToast(id="volume-toast")
 
     async def on_mount(self) -> None:
         """Called when app starts"""
@@ -906,6 +939,13 @@ class PurpleApp(App):
                 self.action_volume_up()
                 return
 
+        # Remap = key to + (more useful for kids: math, color mixing, emoji combining)
+        if isinstance(action, CharacterAction) and action.char == '=':
+            action = CharacterAction(
+                char='+', shifted=action.shifted, shift_held=action.shift_held,
+                is_repeat=action.is_repeat, arrow_held=action.arrow_held,
+            )
+
         # Check if a modal screen is active (e.g., ParentMenu)
         # screen_stack[0] is the base screen, anything above is a modal
         if len(self.screen_stack) > 1:
@@ -951,7 +991,6 @@ class PurpleApp(App):
     def _show_room_picker(self) -> None:
         """Show the mode picker modal."""
         self.clear_notifications()
-        self._volume_notification = None
         current_room = self.active_room.name.lower()
         picker = RoomPickerScreen(current_room=current_room)
         self.push_screen(picker, self._on_room_picked)
@@ -1832,19 +1871,11 @@ class PurpleApp(App):
 
         message = f"{icon}  {bars}  {label}"
 
-        # Remove previous volume notification (without display refresh) so
-        # toast_rack.show() can remove the old toast and mount the new one
-        # in a single pass, avoiding flicker between consecutive changes.
-        if self._volume_notification:
-            try:
-                del self._notifications[self._volume_notification]
-            except Exception:
-                pass
-        self.notify(message, timeout=1.5)
-        # Store reference for next volume change
-        self._volume_notification = None
-        for notif in self._notifications:
-            self._volume_notification = notif
+        try:
+            toast = self.query_one("#volume-toast", VolumeToast)
+            toast.show_message(message)
+        except NoMatches:
+            pass
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
@@ -1910,7 +1941,6 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
-        self._volume_notification = None
         self.push_screen(ParentMenu())
 
     def clear_all_state(self) -> None:

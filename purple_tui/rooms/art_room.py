@@ -3,7 +3,6 @@ Art Room: Drawing Canvas with Playful Painting
 
 A text-focused canvas with paint-by-key features:
 - Normal typing draws readable text (left-to-right, wrapping at edges)
-- Each key tints the background based on keyboard row
 - Arrow keys move the cursor (no drawing)
 - Hold Space + arrows to paint colored trails
 - Backspace erases glyph and fades background
@@ -52,6 +51,7 @@ GRAYSCALE = {
     "0": "#181818",  # Near black
     "-": "#080808",  # Very dark
     "=": "#000000",  # Pure black (equals, right of -)
+    "+": "#000000",  # Pure black (= remapped to + globally)
 }
 
 # Brush character for painting
@@ -110,10 +110,6 @@ CURSOR_CORNER_LIGHT = APP_BG_DARK  # Dark corners on light theme
 
 # Corner positions in the 3x3 ring
 CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
-
-# Background tint strength (0.0 = no tint, 1.0 = full color)
-# Keep low so text stays readable
-BG_TINT_STRENGTH = 0.15
 
 # Paint color strength when holding space
 PAINT_STRENGTH = 0.7
@@ -176,18 +172,6 @@ def get_key_color(char: str) -> str:
     """Get the color for a key, or white if not mapped."""
     return KEY_COLORS.get(char.lower(), "#AAAAAA")
 
-
-def get_row_tint_color(char: str) -> str | None:
-    """Get a tint color based on which keyboard row a character is on."""
-    lower = char.lower()
-    if lower in QWERTY_ROW:
-        return hsl_to_hex(0, 0.5, 0.35)      # Red family
-    elif lower in ASDF_ROW:
-        return hsl_to_hex(50, 0.5, 0.40)     # Yellow family
-    elif lower in ZXCV_ROW:
-        return hsl_to_hex(220, 0.5, 0.35)    # Blue family
-    else:
-        return None  # No tint for unmapped keys
 
 
 def get_legend_row_from_color(color: str) -> int:
@@ -676,7 +660,7 @@ class ArtCanvas(Widget, can_focus=True):
             self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
     def type_char(self, char: str) -> None:
-        """Type a character at cursor with row-based background tint."""
+        """Type a character at cursor position."""
         self._mark_cursor_dirty()  # Old cursor position
         pos = (self._cursor_x, self._cursor_y)
 
@@ -684,21 +668,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
 
-        # Get tint color based on keyboard row
-        tint = get_row_tint_color(char)
-        default_bg = self._get_default_bg()
-
-        # Get existing background or start from default
-        existing_bg = self._get_cell_bg(pos)
-
-        # Blend tint with existing background (subtle tint)
-        if tint is None:
-            new_bg = existing_bg
-        elif existing_bg == default_bg:
-            new_bg = lerp_color(default_bg, tint, BG_TINT_STRENGTH)
-        else:
-            # Blend new tint into existing
-            new_bg = lerp_color(existing_bg, tint, BG_TINT_STRENGTH * 0.5)
+        # Keep existing background (painted cells keep their color, empty cells stay default)
+        new_bg = self._get_cell_bg(pos)
 
         # Use contrast color on painted backgrounds, theme color otherwise
         if pos in self._painted_positions:
@@ -1203,7 +1174,7 @@ class ArtMode(Container):
     """
     Art Room: Drawing canvas with playful painting.
 
-    Normal typing draws readable text with subtle background tinting.
+    Normal typing draws readable text on the canvas background.
     Holding Space while pressing arrows paints colorful trails.
     Shows a non-blocking tool overlay on first enter to teach Tab switching.
     """

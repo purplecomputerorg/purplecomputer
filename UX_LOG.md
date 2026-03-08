@@ -2,10 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Art room: text typed in write mode now has a transparent background matching the canvas (removed row-based tinting)
 - Removed save slot indicators from Code Room main view: saves 3 rows for the code canvas, save/load still accessible via Tab menu
-- Fixed volume toasts flickering when changed rapidly: old toast is now replaced seamlessly instead of flash-clearing
-- Toasts are cleared when opening the room picker or parent menu, so they don't persist behind modals
-- Toasts are narrower (max 35% width) instead of stretching across half the screen
+- Volume toast replaced with custom widget: no more flickering or duplicate toasts when changing volume rapidly, and toast properly hides when opening room picker or parent menu
 - Caps mode now applies to all text in Code room, Code menu, Room picker (Escape menu), and fixed "Tab" labels in Art/Play modes.
 - Room picker options are now 4-high: blank row, icon + room name + icon, "Press N", blank row. Wider boxes to fit the new layout.
 - Replaced trumpet instrument with ukulele: warm plucked-string sound that sits better on laptop speakers.

@@ -698,6 +698,9 @@ class KeyboardStateMachine:
         if keycode == KeyCode.KEY_TAB:
             actions.append(ControlAction(action='tab', is_down=True, is_repeat=is_repeat))
             return actions
+        if keycode == KeyCode.KEY_COMPOSE:
+            actions.append(ControlAction(action='menu', is_down=True, is_repeat=is_repeat))
+            return actions
 
         # Handle media keys for volume (no repeats)
         if not is_repeat:

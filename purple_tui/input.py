@@ -107,6 +107,9 @@ class KeyCode:
     KEY_VOLUMEDOWN = 114
     KEY_VOLUMEUP = 115
 
+    # Compose/Menu key (right of right Alt on many keyboards)
+    KEY_COMPOSE = 127
+
     # Power/system keys
     KEY_POWER = 116
 

@@ -32,6 +32,7 @@ from ..program import (
     ProgramBlockType,
     BLOCK_WIDTH,
     BLOCK_ROWS,
+    QUERY_COLOR,
     blocks_to_playback_actions,
     save_program,
     load_program,
@@ -102,15 +103,17 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
             current_width = 0  # MODE_SWITCH doesn't take content space
             continue
 
+        block_w = min(block.display_width, content_width)
+
         # Check if this block would overflow
-        if current_width + BLOCK_WIDTH > content_width and current_line:
+        if current_width + block_w > content_width and current_line:
             lines.append(_finalize_line(current_icon, current_line))
             current_icon = ""  # continuation line: blank gutter
             current_line = [(i, block)]
-            current_width = BLOCK_WIDTH
+            current_width = block_w
         else:
             current_line.append((i, block))
-            current_width += BLOCK_WIDTH
+            current_width += block_w
 
     if current_line:
         lines.append(_finalize_line(current_icon, current_line))
@@ -194,6 +197,7 @@ class CodeCanvas(Widget):
         self._composing: bool = False
         self._compose_text: str = ""
         self._playing: bool = False
+        self._adjusting: bool = False
 
     def on_mount(self) -> None:
         self._start_blink()
@@ -274,7 +278,17 @@ class CodeCanvas(Widget):
         icon, line_blocks, line_repeat = self._lines[line_idx]
         content_width = width - GUTTER_WIDTH
 
-        gutter_segments = self._render_gutter(icon, sub_row, bg, bg_style, line_repeat)
+        # Check if the MODE_SWITCH on this line is being adjusted
+        gutter_adjusting = False
+        if self._adjusting and line_blocks:
+            for bi, blk in line_blocks:
+                if bi == self._cursor - 1 and blk.type == ProgramBlockType.MODE_SWITCH:
+                    gutter_adjusting = True
+                    break
+
+        gutter_segments = self._render_gutter(
+            icon, sub_row, bg, bg_style, line_repeat, gutter_adjusting
+        )
         block_segments = self._render_block_strip(
             line_blocks, sub_row, content_width, bg, bg_style
         )
@@ -282,7 +296,8 @@ class CodeCanvas(Widget):
         return Strip(gutter_segments + block_segments)
 
     def _render_gutter(self, icon: str, sub_row: int, bg: str,
-                       bg_style: Style, line_repeat: int = 0) -> list[Segment]:
+                       bg_style: Style, line_repeat: int = 0,
+                       adjusting: bool = False) -> list[Segment]:
         """Render the 3-char left gutter."""
         if not icon:
             if line_repeat > 0 and sub_row == 1:
@@ -301,6 +316,10 @@ class CodeCanvas(Widget):
 
         if not target_color:
             return [Segment(" " * GUTTER_WIDTH, bg_style)]
+
+        # When adjusting MODE_SWITCH, blink gutter between gold and room color
+        if adjusting and self._cursor_visible:
+            target_color = BLOCK_SELECTED_COLOR
 
         block_style = Style(bgcolor=target_color)
         if sub_row == 1:
@@ -325,42 +344,97 @@ class CodeCanvas(Widget):
         else:
             return [Segment(" ", bg_style)]
 
+    def _render_compose_block(self, sub_row: int, available_width: int,
+                              bg: str, bg_style: Style) -> list[Segment]:
+        """Render the in-progress compose block at cursor position."""
+        text = self._compose_text
+        desired_w = max(BLOCK_WIDTH, len(text) + 2)
+        actual_w = min(desired_w, available_width)
+        if actual_w <= 0:
+            return []
+
+        block_bg = QUERY_COLOR
+        text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
+
+        if sub_row == 0 or sub_row == 2:
+            border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+            return [Segment("\u2500" * actual_w, border_style)]
+
+        # sub_row == 1: body with compose text and blinking cursor
+        max_text = actual_w - 2  # 1 char padding each side
+        if max_text <= 0:
+            body_style = Style(color=text_color, bgcolor=block_bg, bold=True)
+            return [Segment(" " * actual_w, body_style)]
+
+        display_text = text
+        if len(display_text) > max_text:
+            if max_text > 3:
+                display_text = display_text[:max_text - 3] + "..."
+            else:
+                display_text = display_text[:max_text]
+
+        cursor_char = "\u2502" if self._cursor_visible else " "
+        if len(display_text) < max_text:
+            display_text += cursor_char
+        centered = _center_text(display_text, actual_w)
+        body_style = Style(color=text_color, bgcolor=block_bg, bold=True)
+        return [Segment(centered, body_style)]
+
     def _render_block_strip(self, line_blocks: list[tuple[int, ProgramBlock]],
                             sub_row: int, content_width: int,
                             bg: str, bg_style: Style) -> list[Segment]:
         """Render a horizontal strip of blocks for one sub-row.
 
-        Every block is exactly BLOCK_WIDTH (5) chars. No variable-width gaps.
+        Blocks use their display_width (variable for QUERY blocks).
+        During compose mode, a live preview block appears at cursor position.
         """
         segments: list[Segment] = []
         x_pos = 0
+
+        def _maybe_render_cursor_or_compose():
+            nonlocal x_pos
+            if x_pos >= content_width:
+                return
+            if self._composing:
+                compose_segs = self._render_compose_block(
+                    sub_row, content_width - x_pos, bg, bg_style)
+                segments.extend(compose_segs)
+                x_pos += sum(len(s.text) for s in compose_segs)
+            else:
+                segments.extend(self._render_cursor_column(sub_row, bg, bg_style))
+                x_pos += 1
 
         # Check if cursor is before first block on this line
         if line_blocks:
             first_block_idx = line_blocks[0][0]
             if self._cursor == first_block_idx:
-                segments.extend(self._render_cursor_column(sub_row, bg, bg_style))
-                x_pos += 1
+                _maybe_render_cursor_or_compose()
 
         for block_idx, block in line_blocks:
             is_before_cursor = (block_idx == self._cursor - 1)
+            is_adjusting = is_before_cursor and self._adjusting
 
             # Skip structural blocks in the strip
             if block.type == ProgramBlockType.MODE_SWITCH:
                 # After MODE_SWITCH, check cursor
                 if block_idx + 1 == self._cursor:
                     if x_pos < content_width:
-                        segments.extend(self._render_cursor_column(sub_row, bg, bg_style))
-                        x_pos += 1
+                        _maybe_render_cursor_or_compose()
                 continue
 
             if x_pos >= content_width:
                 break
 
-            visible_w = min(BLOCK_WIDTH, content_width - x_pos)
+            block_w = min(block.display_width, content_width)
+            visible_w = min(block_w, content_width - x_pos)
 
             block_bg = block.bg_color
             text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
+
+            # When adjusting, blink the entire block between gold and normal
+            if is_adjusting and self._cursor_visible:
+                block_bg = BLOCK_SELECTED_COLOR
+                text_color = "#1A1A1A"
 
             if sub_row == 0:
                 # Top border
@@ -373,7 +447,16 @@ class CodeCanvas(Widget):
             elif sub_row == 1:
                 # Block body with icon
                 icon = block.icon
-                icon_text = _center_text(icon, BLOCK_WIDTH)
+                # For QUERY blocks, truncate with ellipsis if needed
+                if block.type == ProgramBlockType.QUERY and len(icon) > visible_w - 2:
+                    max_text = visible_w - 2
+                    if max_text > 3:
+                        icon = icon[:max_text - 3] + "..."
+                    elif max_text > 0:
+                        icon = icon[:max_text]
+                    else:
+                        icon = ""
+                icon_text = _center_text(icon, block_w)
                 body_style = Style(color=text_color, bgcolor=block_bg,
                                    bold=is_before_cursor)
                 for cx in range(visible_w):
@@ -388,13 +471,12 @@ class CodeCanvas(Widget):
                 else:
                     segments.append(Segment(" " * visible_w, bg_style))
 
-            x_pos += BLOCK_WIDTH
+            x_pos += block_w
 
             # After this block, check if cursor falls here
             if block_idx + 1 == self._cursor:
                 if x_pos < content_width:
-                    segments.extend(self._render_cursor_column(sub_row, bg, bg_style))
-                    x_pos += 1
+                    _maybe_render_cursor_or_compose()
 
         # Fill remaining content width
         chars_used = sum(len(s.text) for s in segments)
@@ -432,7 +514,7 @@ class CodeCanvas(Widget):
                           bg_style: Style) -> Strip:
         """Render context-sensitive bottom hint line."""
         if self._composing:
-            hint = f'Composing: "{self._compose_text}"  Enter confirm  Bksp edit  Esc cancel'
+            hint = "Enter confirm  Bksp edit  Esc cancel"
             return self._centered_dim_text(hint, width, bg, bg_style)
 
         if self._playing:
@@ -444,17 +526,28 @@ class CodeCanvas(Widget):
             block = self._blocks[self._cursor - 1]
             if block.type == ProgramBlockType.MODE_SWITCH:
                 label = TARGET_LABELS.get(block.target, block.target)
-                hint = f"{label}  \u2191\u2193 change mode  Type to add blocks"
+                if self._adjusting:
+                    hint = f"{label}  \u2191\u2193 change mode  Enter/Esc done"
+                else:
+                    hint = f"{label}  Enter to change  Type to add blocks"
                 return self._centered_dim_text(hint, width, bg, bg_style)
             elif block.type == ProgramBlockType.PAUSE:
-                hint = f"Pause {block.duration}s  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                if self._adjusting:
+                    hint = f"Pause {block.duration}s  \u2191\u2193 adjust  Enter/Esc done"
+                else:
+                    hint = f"Pause {block.duration}s  Enter to adjust  \u2190\u2192 move  Bksp delete"
                 return self._centered_dim_text(hint, width, bg, bg_style)
             elif block.type == ProgramBlockType.STROKE:
-                arrow = DIRECTION_ICONS.get(block.direction, "?")
-                hint = f"Stroke {block.direction} x{block.distance}  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                if self._adjusting:
+                    hint = f"Stroke {block.direction} x{block.distance}  \u2191\u2193 adjust  Enter/Esc done"
+                else:
+                    hint = f"Stroke {block.direction} x{block.distance}  Enter to adjust  \u2190\u2192 move  Bksp delete"
                 return self._centered_dim_text(hint, width, bg, bg_style)
             elif block.type == ProgramBlockType.REPEAT:
-                hint = f"Repeat x{block.repeat_count}  \u2191\u2193 adjust  \u2190\u2192 move  Bksp delete"
+                if self._adjusting:
+                    hint = f"Repeat x{block.repeat_count}  \u2191\u2193 adjust  Enter/Esc done"
+                else:
+                    hint = f"Repeat x{block.repeat_count}  Enter to adjust  \u2190\u2192 move  Bksp delete"
                 return self._centered_dim_text(hint, width, bg, bg_style)
 
         hint = "\u2190\u2192 move  \u2191\u2193 lines  Bksp delete  Space play  Tab menu"
@@ -517,6 +610,8 @@ class CodeMode(Container, can_focus=True):
         # Compose mode state for QUERY blocks
         self._composing: bool = False
         self._compose_text: str = ""
+        # Adjustment mode: Enter on adjustable block toggles this
+        self._adjusting: bool = False
 
     def compose(self) -> ComposeResult:
         yield CodeCanvas(id="code-canvas")
@@ -533,6 +628,7 @@ class CodeMode(Container, can_focus=True):
             canvas._composing = self._composing
             canvas._compose_text = self._compose_text
             canvas._playing = self._playing
+            canvas._adjusting = self._adjusting
             canvas.set_blocks(self._blocks, self._cursor)
             canvas._reset_blink()
         except Exception:
@@ -581,18 +677,20 @@ class CodeMode(Container, can_focus=True):
             return
 
     async def _handle_navigation(self, action: NavigationAction) -> None:
-        """Left/Right navigate. Up/Down adjust block before cursor or jump lines."""
-        if action.direction == 'left':
-            if self._cursor > 0:
-                self._cursor -= 1
-                self._refresh_all()
-        elif action.direction == 'right':
-            if self._cursor < len(self._blocks):
-                self._cursor += 1
-                self._refresh_all()
+        """Left/Right navigate (exits adjustment). Up/Down adjust block or jump lines."""
+        if action.direction in ('left', 'right'):
+            self._adjusting = False
+            if action.direction == 'left':
+                if self._cursor > 0:
+                    self._cursor -= 1
+            elif action.direction == 'right':
+                if self._cursor < len(self._blocks):
+                    self._cursor += 1
+            self._refresh_all()
         elif action.direction in ('up', 'down'):
-            direction = 1 if action.direction == 'up' else -1
-            if self._cursor > 0 and self._blocks:
+            # Only adjust block values when in adjustment mode
+            if self._adjusting and self._cursor > 0 and self._blocks:
+                direction = 1 if action.direction == 'up' else -1
                 block = self._blocks[self._cursor - 1]
                 if block.type == ProgramBlockType.MODE_SWITCH:
                     block.cycle_target(direction)
@@ -610,19 +708,43 @@ class CodeMode(Container, can_focus=True):
                     block.cycle_repeat_count(direction)
                     self._refresh_all()
                     return
-            # Fall through to line navigation
+            # Line navigation
             self._jump_line(1 if action.direction == 'down' else -1)
 
+    _ADJUSTABLE_TYPES = frozenset({
+        ProgramBlockType.MODE_SWITCH,
+        ProgramBlockType.PAUSE,
+        ProgramBlockType.STROKE,
+        ProgramBlockType.REPEAT,
+    })
+
     async def _handle_control(self, action: ControlAction) -> None:
+        if action.action == 'escape':
+            if self._adjusting:
+                self._adjusting = False
+                self._refresh_all()
+                # Set flag so app knows not to open room picker
+                self.app._escape_consumed_by_mode = True
+            return
+
         if action.action == 'backspace':
+            self._adjusting = False
             self._delete_block()
         elif action.action == 'space':
+            self._adjusting = False
             await self._start_playback()
         elif action.action == 'enter':
             # Empty canvas: trigger Watch me!
             if not self._blocks:
                 self.post_message(WatchMeRequested())
                 return
+            # Toggle adjustment mode for adjustable blocks
+            if self._cursor > 0:
+                block = self._blocks[self._cursor - 1]
+                if block.type in self._ADJUSTABLE_TYPES:
+                    self._adjusting = not self._adjusting
+                    self._refresh_all()
+                    return
             context = self._mode_context()
             if context == TARGET_PLAY:
                 # Start compose mode for QUERY block
@@ -630,13 +752,27 @@ class CodeMode(Container, can_focus=True):
                 self._compose_text = ""
                 self._refresh_all()
             else:
-                # Insert enter KEY block
+                # Start a new line: insert a MODE_SWITCH block
+                # Default to same room context, or music if none
+                current_target = context or TARGET_MUSIC_MUSIC
                 self._insert_block(ProgramBlock(
-                    type=ProgramBlockType.KEY,
-                    char="enter",
-                    is_control=True,
+                    type=ProgramBlockType.MODE_SWITCH,
+                    target=current_target,
                 ))
+                # Enter adjustment mode so user can pick room with up/down
+                self._adjusting = True
+                self._refresh_all()
+        elif action.action == 'menu':
+            # Menu key inserts an enter symbol block
+            if not self._blocks:
+                self._ensure_default_mode()
+            self._insert_block(ProgramBlock(
+                type=ProgramBlockType.KEY,
+                char="enter",
+                is_control=True,
+            ))
         elif action.action == 'tab':
+            self._adjusting = False
             await self._open_menu()
 
     async def _handle_character(self, action: CharacterAction) -> None:
@@ -717,6 +853,13 @@ class CodeMode(Container, can_focus=True):
             self._insert_block(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
                 target=target,
+            ))
+
+        elif action == "insert_enter":
+            self._insert_block(ProgramBlock(
+                type=ProgramBlockType.KEY,
+                char="enter",
+                is_control=True,
             ))
 
         elif action == "insert_repeat":

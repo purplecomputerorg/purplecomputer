@@ -21,11 +21,11 @@ from purple_tui.rooms.art_room import (
 # =============================================================================
 
 ART_HEADER_ROWS = 1  # CanvasHeader (docked top, height: 1)
+ART_HINT_BAR_ROWS = 1  # ArtHintBar (docked bottom, height: 1)
 
-# Canvas = viewport content minus header minus gutter on all sides
-# Note: ToolOverlay auto-hides (display:none) before AI training starts
+# Canvas = viewport content minus header minus hint bar minus gutter on all sides
 CANVAS_WIDTH = VIEWPORT_WIDTH - 2 * GUTTER
-CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - 2 * GUTTER
+CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - ART_HINT_BAR_ROWS - 2 * GUTTER
 
 
 # =============================================================================

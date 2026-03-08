@@ -2,6 +2,11 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code room: Play (QUERY) blocks now show full text and stretch to fit, with ellipsis if too wide. Compose text appears live in the block itself instead of only at the bottom. Room picker in Tab menu now matches the regular room order (Play, Music, Art) and supports number key selection.
+- Art room: replaced disappearing "Press Tab to switch tools" overlay with a permanent hint bar below the canvas
+- Code room: Enter now starts a new line (inserts MODE_SWITCH in adjustment mode). Menu key inserts an enter symbol. Enter symbol also available in Tab menu. Enter icon changed to nerd font symbol.
+- Code room: up/down arrows now always navigate between lines. Press Enter on adjustable blocks (mode, pause, stroke, repeat) to enter adjustment mode, then up/down changes the value. The block blinks gold while adjusting. Enter or Escape exits adjustment mode.
+- Watch Me mode: pressing Space in Music room now ends Watch Me (space = "play", so it's a natural stop gesture). In Play/Art rooms, space still types normally during Watch Me.
 - Watch Me mode: Escape now exits back to Code room (was previously swallowed). Long-hold Escape exits Watch Me and opens parent menu. Auto-ends after 15 seconds of inactivity.
 - Art room: text typed in write mode now has a transparent background matching the canvas (removed row-based tinting)
 - Removed save slot indicators from Code Room main view: saves 3 rows for the code canvas, save/load still accessible via Tab menu

@@ -39,6 +39,7 @@ MENU_ITEMS = [
     ("insert_pause", "  Pause \u23f8", True),
     ("insert_stroke", "  Stroke \u25b6", True),
     ("insert_repeat", "  Repeat x2", True),
+    ("insert_enter", "  Enter \U000f0311", True),
     ("insert_room_switch", "  Room...", True),
     ("separator", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", False),
     ("load", "  Load...", True),
@@ -185,6 +186,9 @@ class CodeMenuScreen(ModalScreen):
         elif item_id == "insert_pause":
             self.dismiss({"action": "insert_pause"})
 
+        elif item_id == "insert_enter":
+            self.dismiss({"action": "insert_enter"})
+
         elif item_id == "insert_stroke":
             self.dismiss({"action": "insert_stroke"})
 
@@ -260,6 +264,19 @@ class CodeMenuScreen(ModalScreen):
                     self.dismiss({"action": "insert_mode_switch", "target": target})
             elif action.action in ('escape', 'tab'):
                 self._exit_sub_view()
+            return
+
+        # Number keys select rooms directly (1-based)
+        if isinstance(action, CharacterAction) and not action.is_repeat:
+            if action.char.isdigit() and action.char != '0':
+                idx = int(action.char) - 1
+                if 0 <= idx < len(ROOM_ORDER):
+                    room = ROOM_ORDER[idx]
+                    if self._sub_view == "watch_me_picker":
+                        self.dismiss({"action": "watch_me", "room": room})
+                    else:
+                        target = ROOMS[room]["default"]
+                        self.dismiss({"action": "insert_mode_switch", "target": target})
             return
 
     # ── Slot sub-picker ───────────────────────────────────────────────

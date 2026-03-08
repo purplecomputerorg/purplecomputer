@@ -103,7 +103,7 @@ ROOMS = {
     },
 }
 
-ROOM_ORDER = ["music", "art", "play"]
+ROOM_ORDER = ["play", "music", "art"]
 
 def target_room(target: str) -> str:
     """Get the room name for a target (e.g., 'music.music' -> 'music')."""
@@ -165,7 +165,7 @@ TARGET_LABELS = {
 
 # Icons for control keys (KEY blocks with is_control=True)
 CONTROL_ICONS = {
-    "enter": "\u21b5",
+    "enter": "\U000f0311",
     "backspace": "\u232b",
     "space": "\u2423",
     "tab": "\u21e5",
@@ -239,17 +239,21 @@ class ProgramBlock:
     recorded_gap_ms: int = 0    # exact milliseconds from F5 recording
 
     @property
+    def display_width(self) -> int:
+        """Width in chars for rendering this block."""
+        if self.type == ProgramBlockType.QUERY:
+            return max(BLOCK_WIDTH, len(self.query_text) + 2)
+        return BLOCK_WIDTH
+
+    @property
     def icon(self) -> str:
-        """3-char icon text for the center of the block."""
+        """Icon text for the center of the block."""
         if self.type == ProgramBlockType.KEY:
             if self.is_control:
                 return CONTROL_ICONS.get(self.char, "?")
             return self.char.upper() if len(self.char) == 1 else self.char
         elif self.type == ProgramBlockType.QUERY:
-            # Abbreviate to 3 chars
-            if len(self.query_text) <= 3:
-                return self.query_text
-            return self.query_text[:3]
+            return self.query_text
         elif self.type == ProgramBlockType.STROKE:
             arrow = DIRECTION_ICONS.get(self.direction, "?")
             return f"{arrow}{self.distance}"

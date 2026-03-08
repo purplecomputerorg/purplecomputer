@@ -308,7 +308,7 @@ class ArtCanvas(Widget, can_focus=True):
         return GUTTER_BG_LIGHT_A if even else GUTTER_BG_LIGHT_B
 
     def on_resize(self, event) -> None:
-        """Invalidate line cache when widget resizes (e.g. overlay hides)."""
+        """Invalidate line cache when widget resizes."""
         self._invalidate_all()
         self.refresh()
 
@@ -1089,75 +1089,29 @@ class CanvasHeader(Static):
 
 
 # =============================================================================
-# TOOL OVERLAY WIDGET
+# ART HINT BAR
 # =============================================================================
 
-class ToolOverlay(Static):
-    """
-    Non-blocking overlay that introduces tool switching.
-
-    Shows on entering Art room, auto-dismisses after 1.2s or on first action.
-    Does NOT block input: kid can immediately type/draw.
-    """
-
-    # How long to show the overlay (seconds)
-    DISPLAY_DURATION = 1.2
+class ArtHintBar(Static):
+    """Permanent hint bar below the canvas with tips for kids."""
 
     DEFAULT_CSS = """
-    ToolOverlay {
+    ArtHintBar {
         dock: bottom;
         width: 100%;
         height: 1;
         text-align: center;
-        background: $primary;
-        color: $background;
-    }
-
-    ToolOverlay.hidden {
-        display: none;
+        color: $text-muted;
     }
     """
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._hide_timer = None
-        self._is_painting = True
         self.add_class("caps-sensitive")
-
-    def on_mount(self) -> None:
-        """Start auto-hide timer when mounted."""
-        self._hide_timer = self.set_timer(self.DISPLAY_DURATION, self._auto_hide)
-
-    def _auto_hide(self) -> None:
-        """Hide the overlay after timeout."""
-        self.add_class("hidden")
-        if self._hide_timer:
-            self._hide_timer.stop()
-            self._hide_timer = None
-
-    def dismiss(self) -> None:
-        """Dismiss the overlay immediately (called on first action)."""
-        if self._hide_timer:
-            self._hide_timer.stop()
-            self._hide_timer = None
-        self.add_class("hidden")
-
-    def is_visible(self) -> bool:
-        """Check if overlay is still visible."""
-        return "hidden" not in self.classes
-
-    def set_paint_mode(self, is_painting: bool) -> None:
-        """Update the displayed mode."""
-        self._is_painting = is_painting
-        self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self._is_painting:
-            current = "Paint"
-        else:
-            current = "Write"
-        return caps(f"  {current}. Press Tab to switch tools.  ")
+        return caps("  Press Tab to switch tools. Hold Space + arrows to paint.  ")
 
 
 # =============================================================================
@@ -1170,7 +1124,7 @@ class ArtMode(Container):
 
     Normal typing draws readable text on the canvas background.
     Holding Space while pressing arrows paints colorful trails.
-    Shows a non-blocking tool overlay on first enter to teach Tab switching.
+    A permanent hint bar below the canvas shows tips for tool switching.
     """
 
     DEFAULT_CSS = """
@@ -1191,7 +1145,7 @@ class ArtMode(Container):
         height: 1fr;
     }
 
-    #tool-overlay {
+    #art-hint-bar {
         dock: bottom;
     }
     """
@@ -1199,34 +1153,20 @@ class ArtMode(Container):
     def compose(self) -> ComposeResult:
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
-        yield ToolOverlay(id="tool-overlay")
+        yield ArtHintBar(id="art-hint-bar")
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas.focus()
         # Initialize header (canvas starts in paint mode)
-        self._was_painting = True
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(True, "#FFFFFF")
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Update header and overlay when paint mode changes."""
+        """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
-        # Only show toast and update overlay when mode actually toggles
-        prev = getattr(self, '_was_painting', False)
-        if event.is_painting != prev:
-            self._was_painting = event.is_painting
-            try:
-                overlay = self.query_one("#tool-overlay", ToolOverlay)
-                overlay.set_paint_mode(event.is_painting)
-                overlay.dismiss()
-            except Exception:
-                pass
-            label = "Paint" if event.is_painting else "Write"
-            self.app.clear_notifications()
-            self.app.notify(label, timeout=1.5)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""
@@ -1244,26 +1184,8 @@ class ArtMode(Container):
         except Exception:
             pass
 
-    def _dismiss_overlay(self) -> None:
-        """Dismiss the tool overlay on first meaningful action."""
-        try:
-            overlay = self.query_one("#tool-overlay", ToolOverlay)
-            if overlay.is_visible():
-                overlay.dismiss()
-        except Exception:
-            pass
-
     async def handle_keyboard_action(self, action) -> None:
-        """Delegate keyboard actions to the canvas, dismissing overlay on meaningful input."""
-        # Check for meaningful actions that should dismiss the overlay
-        # Meaningful: character typed, space pressed (stamp), or Tab (handled via paint_mode_changed)
-        if isinstance(action, CharacterAction):
-            self._dismiss_overlay()
-        elif isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'space':
-                self._dismiss_overlay()
-
-        # Delegate to canvas
+        """Delegate keyboard actions to the canvas."""
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
 

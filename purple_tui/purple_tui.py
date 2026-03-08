@@ -79,45 +79,6 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-class VolumeToast(Static):
-    """Custom volume overlay that updates in-place without flicker.
-
-    Unlike Textual's built-in toasts, this is a single persistent widget
-    that shows/hides with a timer we control directly.
-    """
-
-    DEFAULT_CSS = """
-    VolumeToast {
-        display: none;
-        dock: bottom;
-        width: auto;
-        max-width: 40%;
-        height: auto;
-        margin-bottom: 2;
-        margin-right: 2;
-        padding: 1 2;
-        background: $panel-lighten-1;
-        border-left: outer $success;
-        layer: _toastrack;
-        offset-x: -1;
-    }
-    """
-
-    _timer_handle = None
-
-    def show_message(self, message: str, timeout: float = 1.5) -> None:
-        """Show or update the volume message, resetting the hide timer."""
-        self.update(message)
-        self.display = True
-        if self._timer_handle is not None:
-            self._timer_handle.stop()
-        self._timer_handle = self.set_timer(timeout, self._hide)
-
-    def _hide(self) -> None:
-        self.display = False
-        self._timer_handle = None
-
-
 class RoomTitle(Static):
     """Shows current mode title above the viewport"""
 
@@ -680,7 +641,6 @@ class PurpleApp(App):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
             yield RoomIndicator(self.active_room, id="room-indicator")
-        yield VolumeToast(id="volume-toast")
 
     async def on_mount(self) -> None:
         """Called when app starts"""
@@ -871,6 +831,11 @@ class PurpleApp(App):
             if isinstance(action, ControlAction) and action.action == 'escape' and action.is_down:
                 await self._end_watch_me()
                 return
+            # Space ends Watch me! in Music room (space = "play", so it's a natural stop)
+            if (isinstance(action, ControlAction) and action.action == 'space'
+                    and action.is_down and self.active_room == Room.MUSIC):
+                await self._end_watch_me()
+                return
             if isinstance(action, ControlAction) and action.action == 'escape':
                 return
             # Long-hold escape: end Watch me! and fall through to open parent menu
@@ -927,7 +892,10 @@ class PurpleApp(App):
                 # If long hold wasn't triggered, this was a tap: toggle mode picker
                 # Only OPEN picker if no modal was open when ESC was pressed
                 # If modal was open, it handles its own ESC (closes itself)
-                if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press:
+                # Also skip if the active mode consumed the escape (e.g. exiting adjustment)
+                consumed = getattr(self, '_escape_consumed_by_mode', False)
+                self._escape_consumed_by_mode = False
+                if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press and not consumed:
                     if len(self.screen_stack) == 1:
                         self._show_room_picker()
                         return
@@ -1539,6 +1507,7 @@ class PurpleApp(App):
 
     def _complete_room_switch(self, new_room: Room) -> None:
         """Complete the mode switch (updates UI, loads content)."""
+        self.clear_notifications()
         self.active_room = new_room
         self._load_room_content()
 
@@ -1898,13 +1867,8 @@ class PurpleApp(App):
             label = "High Sound"
             bars = "████████"
 
-        message = f"{icon}  {bars}  {label}"
-
-        try:
-            toast = self.query_one("#volume-toast", VolumeToast)
-            toast.show_message(message)
-        except NoMatches:
-            pass
+        self.clear_notifications()
+        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""
@@ -1970,7 +1934,7 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
-        self.push_screen(ParentMenu())
+        self.push_screen(ParentMenu(), callback=lambda _: self.clear_notifications())
 
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""

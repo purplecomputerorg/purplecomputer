@@ -130,9 +130,15 @@ class TestQueryBlock:
         block = ProgramBlock(type=ProgramBlockType.QUERY, query_text="hi")
         assert block.icon == "hi"
 
-    def test_icon_truncated(self):
+    def test_icon_full_text(self):
         block = ProgramBlock(type=ProgramBlockType.QUERY, query_text="periwinkle")
-        assert block.icon == "per"
+        assert block.icon == "periwinkle"
+
+    def test_display_width(self):
+        block = ProgramBlock(type=ProgramBlockType.QUERY, query_text="periwinkle")
+        assert block.display_width == 12  # len("periwinkle") + 2
+        short = ProgramBlock(type=ProgramBlockType.QUERY, query_text="hi")
+        assert short.display_width == 5  # min BLOCK_WIDTH
 
     def test_bg_color(self):
         block = ProgramBlock(type=ProgramBlockType.QUERY, query_text="test")

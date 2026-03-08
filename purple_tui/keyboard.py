@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from enum import Enum
 
-from .constants import SUPPORT_EMAIL, ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_COMMAND
+from .constants import SUPPORT_EMAIL, ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_CODE
 
 
 # ============================================================================
@@ -519,7 +519,7 @@ class NavigationAction(KeyAction):
 @dataclass
 class RoomAction(KeyAction):
     """Room switch requested."""
-    room: str  # 'play' (F1), 'music' (F2), 'art' (F3), 'command' (F4), 'parent' (long Escape)
+    room: str  # 'play' (F1), 'music' (F2), 'art' (F3), 'code' (F4), 'parent' (long Escape)
 
 
 @dataclass
@@ -706,7 +706,7 @@ class KeyboardStateMachine:
                 actions.append(RoomAction(room=ROOM_ART[0]))
                 return actions
             if keycode == KeyCode.KEY_F4:
-                actions.append(RoomAction(room=ROOM_COMMAND[0]))
+                actions.append(RoomAction(room=ROOM_CODE[0]))
                 return actions
             if keycode == KeyCode.KEY_F5:
                 actions.append(ControlAction(action='record_toggle', is_down=True))

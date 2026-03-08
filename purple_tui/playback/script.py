@@ -3,7 +3,7 @@
 This module provides a simple, readable format for defining playback scripts.
 Each action is a dataclass that describes what should happen.
 
-Used by Command room for program playback, and by the demo system for
+Used by Code room for program playback, and by the demo system for
 advertising screencasts.
 
 Example script:
@@ -72,7 +72,7 @@ class SwitchRoom(PlaybackAction):
 class SwitchTarget(PlaybackAction):
     """Switch to a specific room and mode.
 
-    Used by Command room playback to switch to the exact room/mode
+    Used by Code room playback to switch to the exact room/mode
     recorded during F5 recording.
 
     Args:

@@ -2,7 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
-- Command mode: "Watch me!" replaces F5 recording. Empty canvas shows "Watch me!" prompt, Enter opens room picker, kid plays in chosen room, F4 returns with captured blocks. Also available via Tab menu. F5 key removed entirely.
+- Code mode (F4): renamed from "Command" to "Code" so parents immediately see the value (coding for kids) and the room lineup reads Play, Music, Art, Code
+- Code mode: "Watch me!" replaces F5 recording. Empty canvas shows "Watch me!" prompt, Enter opens room picker, kid plays in chosen room, F4 returns with captured blocks. Also available via Tab menu. F5 key removed entirely.
 - "Adjust Display" menu item hidden on hardware where xrandr brightness/contrast controls don't work (e.g. Surface Laptop 2)
 - Rooms renamed: Explore is now Play, Play is now Music, Doodle is now Art
 - Music room: Space with no F5 recording replays recent key presses (last 10 seconds or since last pause)
@@ -19,11 +20,11 @@ Brief descriptions of user experience changes, newest first.
 - Music room: note/percussion labels now properly centered in cells. Added "Enter: change instrument" hint at the bottom.
 - Recording: F5 now always starts/stops recording (no more F5 playback). New recording overwrites previous. Space in Music room plays back the recording.
 - Music room: note/percussion labels now show with ♪ on either side (e.g. "♪ G ♪") near the upper-right of the cell, in a muted color to avoid confusion with the main key letter
-- Command mode (F4): renamed from "Build" to "Command" to clarify it controls the other modes; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Music, Art, Play) with default sub-modes
+- Code mode (F4): renamed from "Build" to "Code" to clarify it's coding; icon changed to console; gutter icons now match room title bar icons (Nerd Font); Tab menu "Mode..." replaced with "Room..." showing 3 rooms (Music, Art, Play) with default sub-modes
 - Art: default mode changed from Write to Paint; Paint now appears on left side of Tab header
-- Command mode: MODE_SWITCH blocks now show room icon (same as title bar); non-default sub-modes show a hint suffix; cycling targets now cycles rooms instead of all 5 sub-modes
-- Command mode: direct coding UX, auto-inserts default mode on empty canvas, Up/Down inline adjusts adjustable blocks (MODE_SWITCH/PAUSE/STROKE/REPEAT), Tab menu trimmed to 7 flat items (removed Record/Adjust/Enter), context-sensitive hint bar shows what Up/Down does
-- Command mode: Scratch-inspired block redesign with 6 block types (KEY, QUERY, STROKE, PAUSE, REPEAT, MODE_SWITCH); uniform 5-char grid; explicit PAUSE blocks replace invisible timing gaps; no auto-collapse; mode-aware editing (Play uses compose mode for QUERY blocks, Art paint uses STROKE blocks); v1 save format auto-migrated to v2
+- Code mode: MODE_SWITCH blocks now show room icon (same as title bar); non-default sub-modes show a hint suffix; cycling targets now cycles rooms instead of all 5 sub-modes
+- Code mode: direct coding UX, auto-inserts default mode on empty canvas, Up/Down inline adjusts adjustable blocks (MODE_SWITCH/PAUSE/STROKE/REPEAT), Tab menu trimmed to 7 flat items (removed Record/Adjust/Enter), context-sensitive hint bar shows what Up/Down does
+- Code mode: Scratch-inspired block redesign with 6 block types (KEY, QUERY, STROKE, PAUSE, REPEAT, MODE_SWITCH); uniform 5-char grid; explicit PAUSE blocks replace invisible timing gaps; no auto-collapse; mode-aware editing (Play uses compose mode for QUERY blocks, Art paint uses STROKE blocks); v1 save format auto-migrated to v2
 - Art: text on painted backgrounds now uses black or white for contrast (was always white/dark); grayscale paint backgrounds no longer disappear when typing over them
 - Play: narrow emoji (heart, snow, etc.) always get a padding space to prevent visual overlap in terminal
 - Play: plus expressions now show + between items (e.g. apple + banana shows 🍎 + 🍌)
@@ -60,11 +61,11 @@ Brief descriptions of user experience changes, newest first.
 - Play room: only letters and numbers become colored blocks (symbols like + stay as plain text)
 - Play room: unrecognized text now shows colored blocks with letters visible on top (instead of blank colored blocks)
 - Play room: number dot visualization uses larger dots (⬤ instead of •); bare number input (e.g. "67") shows only dots without repeating the number
-- Command mode: cursor is now a blinking insertion point between blocks (like a text cursor); Enter inserts visual line breaks; backspace deletes the block before the cursor
+- Code mode: cursor is now a blinking insertion point between blocks (like a text cursor); Enter inserts visual line breaks; backspace deletes the block before the cursor
 - Art room: gutter is now a purple checkerboard pattern instead of solid black, visually distinct but not jarring
-- Command mode: consecutive identical blocks auto-collapse into one block with "xN" count badge
-- Command mode: up/down arrows now adjust block count (when count > 1) or gap timing (when count is 1)
-- Command mode: REPEAT blocks at end of a line show repeat count in the gutter
+- Code mode: consecutive identical blocks auto-collapse into one block with "xN" count badge
+- Code mode: up/down arrows now adjust block count (when count > 1) or gap timing (when count is 1)
+- Code mode: REPEAT blocks at end of a line show repeat count in the gutter
 - Recordings auto-collapse consecutive identical actions into counted blocks
 
 ## 2026-03
@@ -76,19 +77,19 @@ Brief descriptions of user experience changes, newest first.
 - **Art paint: hold letter then arrow paints continuously**: Holding a character key and then pressing an arrow now paints that character's color while moving, same as holding arrow first then letter
 - **Kid-proof power button**: Tap shows sleep screen (cute, not scary, any key wakes); hold 3s shows "Bye!" and shuts down (phone-like); logind set to ignore so TUI controls all power UX
 - **Lid close delayed shutdown**: Lid close now turns screen off immediately but waits 2 minutes before shutting down (was 5 seconds); opening lid cancels shutdown; prevents accidental shutdowns when kid briefly closes lid
-- **Command mode: Play clears state first**: Pressing Play in Command mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate
-- **Command mode: bright gutter blocks**: Mode icons in the left gutter are now solid bright colored blocks instead of dim text icons
-- **Command mode: Up/Down navigates lines**: Arrow keys now jump between lines (like a text editor) instead of adjusting timing
-- **Command mode: timing adjust moved to Tab menu**: Gap timing, repeat count, and target cycling are now in the Tab menu under "Adjust"
+- **Code mode: Play clears state first**: Pressing Play in Code mode now clears the target mode's canvas/colors before replaying, so playback reproduces the recording from a clean slate
+- **Code mode: bright gutter blocks**: Mode icons in the left gutter are now solid bright colored blocks instead of dim text icons
+- **Code mode: Up/Down navigates lines**: Arrow keys now jump between lines (like a text editor) instead of adjusting timing
+- **Code mode: timing adjust moved to Tab menu**: Gap timing, repeat count, and target cycling are now in the Tab menu under "Adjust"
 - **USB update restart prompt**: When a USB update is applied, a simple modal appears saying "New update ready! Press Enter to restart."
 - **Removed F9 theme toggle**: Dark mode is now always active; F9 key and theme badge removed from the function bar
-- **Command Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
-- **Command Mode v2: Tab menu**: Tab opens a vertical menu modal in Command mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter command mode
-- **Command Mode v2: multi-line blocks**: Blocks display across multiple lines with mode icons (♫ 🔤 ✎ 🖌 🔍) in a left gutter; MODE_SWITCH blocks start new lines; long sections wrap with indented continuation
-- **Command Mode v2: Enter inserts ↵**: Enter key now inserts a ↵ control block (useful in Play and Art) instead of entering command mode
-- **Command Mode v2: repeat max 99**: Repeat block maximum increased from 9 to 99
+- **Code Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
+- **Code Mode v2: Tab menu**: Tab opens a vertical menu modal in Code mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter code mode
+- **Code Mode v2: multi-line blocks**: Blocks display across multiple lines with mode icons (♫ 🔤 ✎ 🖌 🔍) in a left gutter; MODE_SWITCH blocks start new lines; long sections wrap with indented continuation
+- **Code Mode v2: Enter inserts ↵**: Enter key now inserts a ↵ control block (useful in Play and Art) instead of entering code mode
+- **Code Mode v2: repeat max 99**: Repeat block maximum increased from 9 to 99
 - **Music room Space**: Space now plays the last F5 recording instead of heuristic-based replay
-- **Command Mode (F4)**: Replaced turtle-graphics Command mode with cross-mode visual programming; automatically records Music and Art actions as colored blocks with timing gaps; Space plays the program back live in the real mode; up/down adjusts timing between blocks; 9 save slots (hold number to save, tap to load)
+- **Code Mode (F4)**: Replaced turtle-graphics Code mode with cross-mode visual programming; automatically records Music and Art actions as colored blocks with timing gaps; Space plays the program back live in the real mode; up/down adjusts timing between blocks; 9 save slots (hold number to save, tap to load)
 
 ---
 

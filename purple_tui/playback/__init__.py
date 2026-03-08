@@ -1,7 +1,7 @@
-"""Playback system for Command mode programs and demo scripts.
+"""Playback system for Code mode programs and demo scripts.
 
 Core action types and player for executing scripted keyboard sequences.
-Used by Command mode (command_room.py) for program playback, and by the
+Used by Code mode (code_room.py) for program playback, and by the
 advertising demo system (demo/) for screencast recordings.
 """
 

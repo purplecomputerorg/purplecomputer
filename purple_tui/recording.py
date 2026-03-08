@@ -1,9 +1,9 @@
 """
-Recording: capture keypresses in a single room for "Watch me!" in Command mode.
+Recording: capture keypresses in a single room for "Watch me!" in Code mode.
 
-Kids press Enter on an empty Command mode canvas (or use Tab menu) to start
+Kids press Enter on an empty Code mode canvas (or use Tab menu) to start
 "Watch me!", pick a room, play in that room, then press F4 to return.
-Captured events become editable blocks in the Command canvas.
+Captured events become editable blocks in the Code canvas.
 
 Mode-aware conversion: Play events buffer into QUERY blocks, Art paint
 arrows merge into STROKE blocks, and gaps > 300ms become explicit PAUSE blocks.

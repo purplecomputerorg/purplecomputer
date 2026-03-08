@@ -1,7 +1,7 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 4 options: Play, Music, Art, Command
+Shows 4 options: Play, Music, Art, Code
 Arrow keys navigate, Enter selects, Escape cancels.
 """
 
@@ -10,7 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Static
 from textual.app import ComposeResult
 
-from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND
+from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_CODE
 from .keyboard import NavigationAction, ControlAction
 
 
@@ -20,7 +20,7 @@ ROOM_OPTIONS = [
     ("play", ICON_CHAT, "Play", {"room": "play"}),
     ("music", ICON_MUSIC, "Music", {"room": "music"}),
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
-    ("command", ICON_COMMAND, "Command", {"room": "command"}),
+    ("code", ICON_CODE, "Code", {"room": "code"}),
 ]
 
 
@@ -60,7 +60,7 @@ class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Shows Play, Music, Art, and Command options.
+    Shows Play, Music, Art, and Code options.
     Returns the selected room info or None if cancelled.
     """
 
@@ -112,7 +112,7 @@ class RoomPickerScreen(ModalScreen):
             return 1
         elif self._current_room == "art":
             return 2
-        elif self._current_room == "command":
+        elif self._current_room == "code":
             return 3
         return 0
 

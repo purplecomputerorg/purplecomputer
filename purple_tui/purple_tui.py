@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- F1-F4: Switch rooms (Play, Music, Art, Command)
+- F1-F4: Switch rooms (Play, Music, Art, Code)
 - F10: Mute/unmute, F11: Volume down, F12: Volume up
 - Escape (long hold): Parent menu
 - Shift (tap): Sticky shift for one character
@@ -37,7 +37,7 @@ from textual import events
 from enum import Enum
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_COMMAND, ICON_MENU,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_CODE, ICON_MENU,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -46,7 +46,7 @@ from .constants import (
     ICON_VOLUME_DOWN, ICON_VOLUME_UP, ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_COMMAND,
+    ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_CODE,
     USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
@@ -58,7 +58,7 @@ from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .recording import RecordingManager
-from .rooms.command_room import WatchMeRequested
+from .rooms.code_room import WatchMeRequested
 from .rooms.art_room import ColorLegend, PaintModeChanged
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
@@ -69,7 +69,7 @@ class Room(Enum):
     PLAY = 1     # F1: Math and emoji REPL
     MUSIC = 2    # F2: Music and art grid
     ART = 3      # F3: Simple drawing canvas
-    COMMAND = 4  # F4: Visual block programming
+    CODE = 4     # F4: Visual block programming
 
 
 class View(Enum):
@@ -84,7 +84,7 @@ ROOM_INFO = {
     Room.PLAY: {"key": "F1", "label": ROOM_PLAY[1], "emoji": ICON_CHAT},
     Room.MUSIC: {"key": "F2", "label": ROOM_MUSIC[1], "emoji": ICON_MUSIC},
     Room.ART: {"key": "F3", "label": ROOM_ART[1], "emoji": ICON_PALETTE},
-    Room.COMMAND: {"key": "F4", "label": ROOM_COMMAND[1], "emoji": ICON_COMMAND},
+    Room.CODE: {"key": "F4", "label": ROOM_CODE[1], "emoji": ICON_CODE},
 }
 
 
@@ -812,8 +812,8 @@ class PurpleApp(App):
         # During Watch me!, record events and restrict room switching
         if self._watch_me_active:
             if isinstance(action, RoomAction):
-                if action.room == ROOM_COMMAND[0]:
-                    # F4 ends Watch me!: stop recording, switch to Command, insert blocks
+                if action.room == ROOM_CODE[0]:
+                    # F4 ends Watch me!: stop recording, switch to Code, insert blocks
                     await self._end_watch_me()
                 # F1/F2/F3 blocked during Watch me!
                 return
@@ -844,8 +844,8 @@ class PurpleApp(App):
                 self.action_switch_room(ROOM_MUSIC[0])
             elif action.room == ROOM_ART[0]:
                 self.action_switch_room(ROOM_ART[0])
-            elif action.room == ROOM_COMMAND[0]:
-                self.action_switch_room(ROOM_COMMAND[0])
+            elif action.room == ROOM_CODE[0]:
+                self.action_switch_room(ROOM_CODE[0])
             elif action.room == 'parent':
                 self.action_parent_menu()
             return
@@ -954,19 +954,19 @@ class PurpleApp(App):
             self.action_switch_room(ROOM_MUSIC[0])
         elif room_name == "art":
             self.action_switch_room(ROOM_ART[0])
-        elif room_name == "command":
-            self.action_switch_room(ROOM_COMMAND[0])
+        elif room_name == "code":
+            self.action_switch_room(ROOM_CODE[0])
 
     # ── Watch me! flow ─────────────────────────────────────────────
 
     def on_watch_me_requested(self, message: WatchMeRequested) -> None:
-        """Handle WatchMeRequested from CommandMode: show room picker or start directly."""
+        """Handle WatchMeRequested from CodeMode: show room picker or start directly."""
         if message.room:
             # Room already chosen (from Tab menu with room picker)
             self._on_watch_me_room_picked(message.room)
         else:
             # Show room picker (Enter on empty canvas)
-            picker = RoomPickerScreen(current_room="command")
+            picker = RoomPickerScreen(current_room="code")
             self.push_screen(picker, self._on_watch_me_room_picked)
 
     def _on_watch_me_room_picked(self, result) -> None:
@@ -978,7 +978,7 @@ class PurpleApp(App):
             room_name = result.get("room", "")
         else:
             room_name = result
-        if not room_name or room_name == "command":
+        if not room_name or room_name == "code":
             return
 
         # Map room picker names to internal room IDs
@@ -1007,7 +1007,7 @@ class PurpleApp(App):
             self.action_switch_room(room_id)
 
     async def _end_watch_me(self) -> None:
-        """End Watch me! session: stop recording, switch to Command, insert blocks."""
+        """End Watch me! session: stop recording, switch to Code, insert blocks."""
         self._watch_me_active = False
         recording = self._recording_manager.stop_recording()
 
@@ -1018,8 +1018,8 @@ class PurpleApp(App):
         except Exception:
             pass
 
-        # Switch to Command mode
-        self.action_switch_room(ROOM_COMMAND[0])
+        # Switch to Code mode
+        self.action_switch_room(ROOM_CODE[0])
 
         # Insert blocks if recording was non-empty
         if recording is not None:
@@ -1029,7 +1029,7 @@ class PurpleApp(App):
             if blocks:
                 try:
                     content_area = self.query_one("#content-area")
-                    command_widget = content_area.query_one("#room-command")
+                    command_widget = content_area.query_one("#room-code")
                     command_widget.insert_watched_blocks(blocks)
                 except Exception:
                     pass
@@ -1339,9 +1339,9 @@ class PurpleApp(App):
         elif room == Room.ART:
             from .rooms.art_room import ArtMode
             return ArtMode(classes="room-content")
-        elif room == Room.COMMAND:
-            from .rooms.command_room import CommandMode
-            return CommandMode(
+        elif room == Room.CODE:
+            from .rooms.code_room import CodeMode
+            return CodeMode(
                 dispatch_action=self._dispatch_keyboard_action,
                 classes="room-content",
             )
@@ -1387,13 +1387,11 @@ class PurpleApp(App):
                 widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
-        elif self.active_room == Room.COMMAND:
+        elif self.active_room == Room.CODE:
             widget.focus()
-            # Refresh blocks when re-entering Command mode
+            # Refresh blocks when re-entering Code mode
             if hasattr(widget, 'on_show'):
                 widget.on_show()
-        elif self.active_room == Room.COMMAND:
-            widget.focus()
         else:
             widget.focus()
 
@@ -1424,7 +1422,7 @@ class PurpleApp(App):
             ROOM_PLAY[0]: Room.PLAY,
             ROOM_MUSIC[0]: Room.MUSIC,
             ROOM_ART[0]: Room.ART,
-            ROOM_COMMAND[0]: Room.COMMAND,
+            ROOM_CODE[0]: Room.CODE,
         }
         new_room = room_map.get(room_name, Room.PLAY)
 
@@ -1475,7 +1473,7 @@ class PurpleApp(App):
         self._load_room_content()
 
         # Update title
-        room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0], Room.COMMAND: ROOM_COMMAND[0]}
+        room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0], Room.CODE: ROOM_CODE[0]}
         try:
             title = self.query_one("#room-title", RoomTitle)
             title.set_mode(room_names.get(new_room, ROOM_PLAY[0]))

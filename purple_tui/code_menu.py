@@ -1,5 +1,5 @@
 """
-Command Menu: Tab-activated modal menu for Command mode (F4).
+Code Menu: Tab-activated modal menu for Code mode (F4).
 
 Flat 7-item menu:
   Pause, Stroke, Repeat, Mode... (insert items)
@@ -43,7 +43,7 @@ _SELECTABLE_INDICES = [i for i, (_, _, sel) in enumerate(MENU_ITEMS) if sel]
 
 
 class CodeMenuScreen(ModalScreen):
-    """Modal menu for Command mode, opened with Tab.
+    """Modal menu for Code mode, opened with Tab.
 
     Returns a result dict on selection, or None if cancelled.
     """

@@ -1214,7 +1214,7 @@ class PurpleApp(App):
             pass
 
     def _check_idle_state(self) -> None:
-        """Check if we should enter sleep mode due to inactivity."""
+        """Check if we should enter sleep mode due to inactivity or lid close."""
         # Don't check if sleep screen is already showing
         if self._sleep_screen_active:
             return
@@ -1224,6 +1224,13 @@ class PurpleApp(App):
             from .power_manager import IDLE_SLEEP_UI
 
             pm = get_power_manager()
+
+            # Lid closed: immediately show sleep screen (which handles shutdown countdown)
+            lid_open = pm.get_lid_state()
+            if lid_open is False:
+                self._show_sleep_screen()
+                return
+
             idle_seconds = pm.get_idle_seconds()
 
             if idle_seconds >= IDLE_SLEEP_UI:

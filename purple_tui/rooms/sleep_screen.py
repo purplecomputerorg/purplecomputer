@@ -122,7 +122,7 @@ class SleepScreen(Screen):
         super().__init__(**kwargs)
         self._status_timer = None
         self._lid_close_time: float | None = None
-        self._last_lid_state: bool | None = None
+        self._last_lid_state: bool | None = True
         self._screen_off = False
 
     def compose(self) -> ComposeResult:

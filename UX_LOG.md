@@ -76,6 +76,8 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- **Dynamic padding in Alacritty**: Enabled `dynamic_padding` so leftover pixels are distributed evenly around the cell grid, centering it with purple padding on all edges
+- **Font sizing simplified**: Replaced runtime Alacritty cell probe with hardcoded JetBrainsMono ratio; reduced fill from 80% to 75% for more headroom on small screens
 - **Music room: Enter cycles instruments** (Marimba, Steel Drum, Kalimba, Music Box) in Music mode; header shows current instrument name
 - **Music room: note name flashes on keypress** in Music mode, dim text appears below key letter for ~1 second then fades (e.g. "G", "F#", "kick")
 - **Toast notifications for mode switches**: Music room Tab (Music/Letters), Music room Enter (instrument name), Art room Tab (Paint/Write), and F5 recording start/stop all show a brief toast

@@ -5,7 +5,7 @@
 # Fullscreen with no decorations
 decorations = "None"
 startup_mode = "Fullscreen"
-dynamic_padding = false
+dynamic_padding = true
 opacity = 1.0
 
 [window.padding]

@@ -108,7 +108,7 @@ REQUIRED_TERMINAL_COLS = 114  # Full UI width (viewport + border)
 REQUIRED_TERMINAL_ROWS = 39   # Full UI height (viewport + border + title + footer)
 ```
 
-**Font size calculation:** `scripts/calc_font_size.py` imports these constants and calculates the Alacritty font size to fit the UI on screen at 80% fill. If you change viewport dimensions in `constants.py`, the font calculator automatically adjusts.
+**Font size calculation:** `scripts/calc_font_size.py` imports these constants and uses a hardcoded cell-to-point ratio for JetBrainsMono (the only font we use) to calculate the Alacritty font size. If you change viewport dimensions in `constants.py`, the font calculator automatically adjusts.
 
 **No fallbacks:** Purple Computer always runs with `purple_tui` installed (either via pip in production or PYTHONPATH in dev). Scripts should import directly from `purple_tui.constants` without try/except fallbacks.
 

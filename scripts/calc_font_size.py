@@ -3,18 +3,14 @@
 
 Simple approach:
 1. Get screen resolution
-2. Get cell dimensions (probe or estimate)
-3. Calculate font to fill 80% of screen
-4. Clamp to 12-48pt
-
-No physical size detection (EDID is unreliable).
-No validation loops (calculation should just work).
-Always produces a reasonable result.
+2. Use known cell-to-point ratio for JetBrainsMono at 96 DPI
+3. Calculate font to fill 75% of screen
+4. Floor to nearest 0.5pt, clamp to 12-48pt
 """
 
 import subprocess
 import re
-import os
+import math
 import sys
 
 # Terminal grid required for full UI (must stay in sync with purple_tui)
@@ -22,17 +18,20 @@ from purple_tui.constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
 REQUIRED_COLS = REQUIRED_TERMINAL_COLS
 REQUIRED_ROWS = REQUIRED_TERMINAL_ROWS
 
-# Target: fill 80% of screen (leaves visible border, never clips)
-SCREEN_FILL = 0.80
+# JetBrainsMono cell dimensions per point at 96 DPI (forced via WINIT_X11_SCALE_FACTOR=1.0)
+# At 18pt: cell is 11x22 pixels, so ratio is 11/18 and 22/18
+CELL_WIDTH_PER_PT = 11 / 18   # ~0.611 px per pt
+CELL_HEIGHT_PER_PT = 22 / 18  # ~1.222 px per pt
+
+# Target: fill 75% of screen (leaves visible border, never clips)
+SCREEN_FILL = 0.75
 
 # Font size limits (always reasonable)
 MIN_FONT = 12
-MAX_FONT = 48  # Cap for very high resolution displays
-PROBE_FONT = 18
+MAX_FONT = 48
 
 # Fallbacks
 FALLBACK_RESOLUTION = (1366, 768)
-FALLBACK_CELL = (11, 22)  # Typical for JetBrainsMono at 18pt
 
 
 def get_resolution():
@@ -50,97 +49,39 @@ def get_resolution():
     return FALLBACK_RESOLUTION
 
 
-def probe_cell_size():
-    """Probe Alacritty for cell dimensions at PROBE_FONT. Returns (w, h)."""
-    try:
-        result = subprocess.run(
-            ["alacritty", "-vvv", "-o", f"font.size={PROBE_FONT}", "-e", "true"],
-            capture_output=True, text=True, timeout=5,
-            env={**os.environ, 'WINIT_X11_SCALE_FACTOR': '1.0'}
-        )
-        output = result.stderr + result.stdout
-        # Match: "Cell size: 11 x 22" or similar
-        m = re.search(r'[Cc]ell[^0-9]*(\d+)\s*x\s*(\d+)', output)
-        if m:
-            w, h = int(m.group(1)), int(m.group(2))
-            if 5 <= w <= 30 and 10 <= h <= 60:  # Sanity check
-                return w, h
-    except Exception:
-        pass
-    return FALLBACK_CELL
-
-
-def calculate_font(screen_w, screen_h, cell_w, cell_h):
+def calculate_font(screen_w, screen_h):
     """Calculate font size to fill SCREEN_FILL of screen."""
-    # How much space we have
     available_w = screen_w * SCREEN_FILL
     available_h = screen_h * SCREEN_FILL
 
-    # How much space the grid needs at probe font size
-    grid_w = cell_w * REQUIRED_COLS
-    grid_h = cell_h * REQUIRED_ROWS
+    # Font size where grid fits available space
+    font_from_w = available_w / (REQUIRED_COLS * CELL_WIDTH_PER_PT)
+    font_from_h = available_h / (REQUIRED_ROWS * CELL_HEIGHT_PER_PT)
 
-    # Scale factor (use the more restrictive dimension)
-    scale = min(available_w / grid_w, available_h / grid_h)
+    # Use the more restrictive dimension
+    font = min(font_from_w, font_from_h)
 
-    # Calculate and clamp
-    font = PROBE_FONT * scale
+    # Floor to nearest 0.5pt for extra safety
+    font = math.floor(font * 2) / 2
+
     return max(MIN_FONT, min(MAX_FONT, font))
-
-
-def get_x11_dpi():
-    """Get the DPI that X11/fontconfig is using. Returns (dpi, source) or (None, reason)."""
-    # Check Xft.dpi from X resources (this is what fontconfig/freetype uses)
-    try:
-        out = subprocess.check_output(
-            ["xrdb", "-query"], text=True, timeout=5, stderr=subprocess.DEVNULL
-        )
-        m = re.search(r'Xft\.dpi:\s*(\d+)', out)
-        if m:
-            return int(m.group(1)), "Xft.dpi"
-    except Exception:
-        pass
-
-    # Check xdpyinfo for server DPI
-    try:
-        out = subprocess.check_output(
-            ["xdpyinfo"], text=True, timeout=5, stderr=subprocess.DEVNULL
-        )
-        m = re.search(r'resolution:\s*(\d+)x(\d+)', out)
-        if m:
-            return int(m.group(1)), "xdpyinfo"
-    except Exception:
-        pass
-
-    return None, "unknown"
 
 
 def main():
     # Debug mode
     if len(sys.argv) > 1 and sys.argv[1] == '--info':
         screen = get_resolution()
-        cell = probe_cell_size()
-        font = calculate_font(*screen, *cell)
-        dpi, dpi_source = get_x11_dpi()
+        font = calculate_font(*screen)
         print(f"Screen: {screen[0]}x{screen[1]}")
-        print(f"Cell: {cell[0]}x{cell[1]} (at {PROBE_FONT}pt)")
         print(f"Grid: {REQUIRED_COLS}x{REQUIRED_ROWS}")
+        print(f"Cell ratio: {CELL_WIDTH_PER_PT:.3f}w x {CELL_HEIGHT_PER_PT:.3f}h px/pt")
         print(f"Fill: {SCREEN_FILL*100:.0f}%")
         print(f"Font: {font:.1f}pt")
-        if dpi:
-            print(f"X11 DPI: {dpi} (from {dpi_source})")
-            if dpi != 96:
-                expected_scale = dpi / 96
-                print(f"  WARNING: DPI is not 96. Fonts may render {expected_scale:.1f}x larger than expected.")
-                print(f"  Effective grid at this DPI: ~{int(screen[0] / (cell[0] * expected_scale))}x{int(screen[1] / (cell[1] * expected_scale))} cells")
-        else:
-            print(f"X11 DPI: could not detect ({dpi_source})")
         return
 
     # Normal mode: output font size
     screen = get_resolution()
-    cell = probe_cell_size()
-    font = calculate_font(*screen, *cell)
+    font = calculate_font(*screen)
     print(f"{font:.1f}")
 
 

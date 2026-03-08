@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from calc_font_size import (
     REQUIRED_COLS, REQUIRED_ROWS, SCREEN_FILL, MIN_FONT, MAX_FONT,
-    get_resolution, probe_cell_size, calculate_font
+    get_resolution, calculate_font
 )
 
 
@@ -39,46 +39,39 @@ class TestGetResolution:
         assert 480 <= h <= 5000
 
 
-class TestProbeCellSize:
-    def test_returns_tuple(self):
-        result = probe_cell_size()
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-
-    def test_reasonable_values(self):
-        w, h = probe_cell_size()
-        assert 5 <= w <= 30
-        assert 10 <= h <= 60
-
-
 class TestCalculateFont:
     def test_1080p(self):
         """1920x1080 should give reasonable font."""
-        font = calculate_font(1920, 1080, 11, 22)
+        font = calculate_font(1920, 1080)
         assert MIN_FONT <= font <= MAX_FONT
 
     def test_768p(self):
         """1366x768 should give smaller font."""
-        font = calculate_font(1366, 768, 11, 22)
+        font = calculate_font(1366, 768)
         assert MIN_FONT <= font <= MAX_FONT
 
     def test_4k(self):
         """4K should give a large font size."""
-        font = calculate_font(3840, 2160, 11, 22)
+        font = calculate_font(3840, 2160)
         assert font > 30  # Should be significantly larger than 1080p
         assert font <= MAX_FONT
 
     def test_tiny_screen(self):
         """Tiny screen should hit min font."""
-        font = calculate_font(800, 600, 11, 22)
+        font = calculate_font(800, 600)
         assert font == MIN_FONT
 
     def test_always_in_range(self):
         """Any reasonable input gives valid output."""
         for w in [800, 1280, 1920, 2560, 3840]:
             for h in [600, 720, 1080, 1440, 2160]:
-                font = calculate_font(w, h, 11, 22)
+                font = calculate_font(w, h)
                 assert MIN_FONT <= font <= MAX_FONT
+
+    def test_result_is_half_point(self):
+        """Result should be floored to nearest 0.5pt."""
+        font = calculate_font(1920, 1080)
+        assert (font * 2) == int(font * 2)
 
 
 class TestScript:

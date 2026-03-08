@@ -830,6 +830,7 @@ class PurpleApp(App):
             # Esc ends Watch me! (same as pressing F4 to return to Code)
             if isinstance(action, ControlAction) and action.action == 'escape' and action.is_down:
                 await self._end_watch_me()
+                self._escape_consumed_by_mode = True
                 return
             # Space ends Watch me! in Music room (space = "play", so it's a natural stop)
             if (isinstance(action, ControlAction) and action.action == 'space'
@@ -852,6 +853,21 @@ class PurpleApp(App):
 
             # Still dispatch to the active room for live feedback
             # (fall through to mode dispatch below)
+
+        # During code playback, space/escape stop playback regardless of active room
+        # (playback switches rooms, so the code room may not be the active one)
+        try:
+            content_area = self.query_one("#content-area")
+            code_room = content_area.query_one("#room-code")
+            if code_room._playing:
+                if isinstance(action, ControlAction) and action.is_down:
+                    if action.action in ('space', 'escape'):
+                        code_room._stop_playback()
+                        if action.action == 'escape':
+                            self._escape_consumed_by_mode = True
+                        return
+        except NoMatches:
+            pass
 
         if isinstance(action, RoomAction):
             # Dismiss any open modal (like mode picker) when switching rooms

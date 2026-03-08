@@ -518,7 +518,7 @@ class CodeCanvas(Widget):
             return self._centered_dim_text(hint, width, bg, bg_style)
 
         if self._playing:
-            hint = "Playing...  Space to stop"
+            hint = "Playing...  Space or Esc to stop"
             return self._centered_dim_text(hint, width, bg, bg_style)
 
         # Check block before cursor for context
@@ -655,8 +655,10 @@ class CodeMode(Container, can_focus=True):
     async def handle_keyboard_action(self, action) -> None:
         if self._playing:
             if isinstance(action, ControlAction) and action.is_down:
-                if action.action == 'space':
+                if action.action in ('space', 'escape'):
                     self._stop_playback()
+                    if action.action == 'escape':
+                        self.app._escape_consumed_by_mode = True
             return
 
         # Compose mode intercepts all input

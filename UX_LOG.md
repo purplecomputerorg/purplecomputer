@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code room: Space and Escape now properly stop playback even when playback has switched to another room. Escape also stops playback when code room is active.
+- Watch Me mode: Escape no longer opens the room picker after ending Watch Me.
 - Code room: Play (QUERY) blocks now show full text and stretch to fit, with ellipsis if too wide. Compose text appears live in the block itself instead of only at the bottom. Room picker in Tab menu now matches the regular room order (Play, Music, Art) and supports number key selection.
 - Art room: replaced disappearing "Press Tab to switch tools" overlay with a permanent hint bar below the canvas
 - Code room: Enter now starts a new line (inserts MODE_SWITCH in adjustment mode). Menu key inserts an enter symbol. Enter symbol also available in Tab menu. Enter icon changed to nerd font symbol.

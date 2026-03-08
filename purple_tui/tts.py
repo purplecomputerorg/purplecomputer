@@ -641,6 +641,10 @@ def speak(text: str) -> bool:
     if not text or not text.strip():
         return False
 
+    # Filter profanity (replaces bad words with silly alternatives)
+    from .speech_filter import filter_speech
+    text = filter_speech(text)
+
     # Stop any previous speech and get new ID
     stop()
     my_id = _speech_id

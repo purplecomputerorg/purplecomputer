@@ -34,8 +34,8 @@ class RoomOption(Static):
 
     DEFAULT_CSS = """
     RoomOption {
-        width: 14;
-        height: 5;
+        width: 22;
+        height: 6;
         content-align: center middle;
         text-align: center;
         border: round $surface-lighten-2;
@@ -59,7 +59,7 @@ class RoomOption(Static):
         self.number = number
 
     def render(self) -> str:
-        return f"{self.label}\n{self.icon}\nPress {self.number}"
+        return f"\n{self.icon}  {self.label}  {self.icon}\nPress {self.number}\n"
 
 
 class RoomPickerScreen(ModalScreen):
@@ -78,7 +78,7 @@ class RoomPickerScreen(ModalScreen):
     }
 
     #picker-dialog {
-        width: 74;
+        width: 104;
         height: auto;
         padding: 2 3;
         background: $surface;

@@ -216,41 +216,39 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
     return finalize_samples(samples, peak_level=0.5)
 
 
-def generate_ukulele(frequency: float, duration: float = 0.6) -> list[int]:
+def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
     """
     Warm, plucky ukulele. Nylon string partials with body resonance.
-    Quick finger-pluck attack, natural decay. Sits well on laptop speakers
+    Soft finger-pluck attack, long ring. Sits well on laptop speakers
     since fundamentals land in the 100-1000 Hz sweet spot.
     """
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
     samples = []
-    fade_out_duration = 0.12
+    fade_out_duration = 0.15
     fade_out_start = duration - fade_out_duration
 
-    # Nylon string partials (near-harmonic with slight stretch from stiffness)
-    # Warmer than music box (harmonic vs inharmonic), brighter than marimba
+    # Nylon string partials (near-harmonic with slight stretch from stiffness).
+    # Slower decay than percussion instruments so notes ring out like a real string.
+    # Higher partials lose energy faster (nylon damping).
     string_partials = [
-        (1.0,   1.0,  3.0),    # fundamental, strong, moderate decay
-        (2.001, 0.55, 4.5),    # 2nd partial, warm
-        (3.009, 0.25, 6.5),    # 3rd, adds body
-        (4.02,  0.12, 9.0),    # 4th, brightness
-        (5.04,  0.06, 13.0),   # 5th, sparkle, decays fast
+        (1.0,   1.0,  1.5),    # fundamental rings long
+        (2.001, 0.5,  2.2),    # 2nd partial, warm
+        (3.009, 0.22, 3.5),    # 3rd, adds body
+        (4.02,  0.10, 5.5),    # 4th, gentle brightness
+        (5.04,  0.04, 8.0),    # 5th, fades early
     ]
-
-    # Body resonance frequency (~400 Hz, typical small-body instrument)
-    body_freq = 400.0
 
     for i in range(num_samples):
         t = i / sample_rate
         sample = 0
 
-        # Finger pluck attack: softer than a pick, ~4ms rise
-        if t < 0.004:
-            attack = t / 0.004
-        elif t < 0.02:
-            # Slight overshoot as string stretches then settles
-            attack = 1.0 + 0.15 * math.exp(-(t - 0.004) * 150)
+        # Soft finger pluck: gentler than a pick, ~6ms rise with no hard overshoot
+        if t < 0.006:
+            attack = t / 0.006
+        elif t < 0.03:
+            # Gentle settling, not a percussive click
+            attack = 1.0 + 0.06 * math.exp(-(t - 0.006) * 80)
         else:
             attack = 1.0
 
@@ -259,14 +257,16 @@ def generate_ukulele(frequency: float, duration: float = 0.6) -> list[int]:
             partial_decay = math.exp(-t * decay_rate)
             sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
 
-        # Pluck transient: brief bright burst from finger release (~nail/pad noise)
-        pluck_noise = 0.12 * math.exp(-t * 60) * math.sin(2 * math.pi * frequency * 7.5 * t)
-        sample += pluck_noise
+        # Soft pluck onset: low-amplitude thump from finger pad, not a bright ping.
+        # Uses 3x frequency (close harmonic) instead of 7.5x to avoid metallic click.
+        pluck = 0.08 * math.exp(-t * 35) * math.sin(2 * math.pi * frequency * 3.0 * t)
+        sample += pluck
 
-        # Body resonance: small wooden body colors the sound
-        body_env = math.exp(-t * 5.0)
-        body = 0.2 * body_env * math.sin(2 * math.pi * body_freq * t)
-        body += 0.08 * body_env * math.sin(2 * math.pi * body_freq * 2.1 * t)
+        # Body resonance tied to the note: reinforces the fundamental and
+        # adds the hollow warmth of a small wooden body.
+        body_env = (1 - math.exp(-t * 30)) * math.exp(-t * 3.0)
+        body = 0.15 * body_env * math.sin(2 * math.pi * frequency * 1.0 * t)
+        body += 0.06 * body_env * math.sin(2 * math.pi * frequency * 0.5 * t)
         sample += body
 
         sample *= attack

@@ -11,7 +11,7 @@ title = "Purple Computer"
 
 [window.dimensions]
 columns = 120
-lines = 36
+lines = 42
 
 [window.padding]
 x = 10
@@ -40,15 +40,15 @@ family = "JetBrainsMono Nerd Font"
 style = "Bold Italic"
 
 [colors.primary]
-background = "#2d1b4e"
+background = "#1e1033"
 foreground = "#f5f3ff"
 
 [colors.cursor]
-text = "#2d1b4e"
+text = "#1e1033"
 cursor = "#c4b5fd"
 
 [colors.selection]
-text = "#2d1b4e"
+text = "#1e1033"
 background = "#c4b5fd"
 
 [colors.normal]

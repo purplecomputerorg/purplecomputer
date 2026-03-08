@@ -39,15 +39,15 @@ style = "Bold Italic"
 # Not too dark (avoids looking black), not too bright (avoids tacky plastic)
 
 [colors.primary]
-background = "#2d1b4e"  # Soft deep purple (not black, not garish)
+background = "#1e1033"  # Match Textual $background (outer area)
 foreground = "#f5f3ff"  # Soft white text
 
 [colors.cursor]
-text = "#2d1b4e"
+text = "#1e1033"
 cursor = "#c4b5fd"  # Light purple cursor
 
 [colors.selection]
-text = "#2d1b4e"
+text = "#1e1033"
 background = "#c4b5fd"
 
 # Normal colors (used by Textual and content)
@@ -80,7 +80,7 @@ thickness = 0.15
 [bell]
 animation = "EaseOutExpo"
 duration = 0
-color = "#2d1b4e"
+color = "#1e1033"
 
 [selection]
 save_to_clipboard = false

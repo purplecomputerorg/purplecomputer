@@ -45,7 +45,7 @@ ROOM_CODE = ("code", "Code")           # Visual block programming
 # Total: (VIEWPORT_WIDTH + 2) cols × (VIEWPORT_HEIGHT + 2 + 1 + 3 + 2) rows
 
 VIEWPORT_WIDTH = 112          # Viewport widget width (CSS)
-VIEWPORT_HEIGHT = 32          # Viewport widget height (CSS)
+VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
 REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 8  # Full UI height (+ border + title + gap + footer)
 

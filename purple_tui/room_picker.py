@@ -59,7 +59,7 @@ class RoomOption(Static):
         self.number = number
 
     def render(self) -> str:
-        return f"{self.icon}\n{self.label}\nPress {self.number}"
+        return f"{self.label}\n{self.icon}\nPress {self.number}"
 
 
 class RoomPickerScreen(ModalScreen):

@@ -5,7 +5,7 @@ Generate fun sounds for Purple Computer Music Mode
 Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
 - Xylophone: bright, clear, sparkly
-- Trumpet: bold, brassy, sustained
+- Ukulele: warm, plucky, cheerful
 - Music Box: sparkly, bell-like, magical
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
 """
@@ -216,52 +216,60 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
     return finalize_samples(samples, peak_level=0.5)
 
 
-def generate_trumpet(frequency: float, duration: float = 0.8) -> list[int]:
+def generate_ukulele(frequency: float, duration: float = 0.6) -> list[int]:
     """
-    Bold, brassy trumpet. Sawtooth-like waveform built from harmonics,
-    with a characteristic "bwah" attack where brightness builds in.
-    Longer sustain than the percussion instruments.
+    Warm, plucky ukulele. Nylon string partials with body resonance.
+    Quick finger-pluck attack, natural decay. Sits well on laptop speakers
+    since fundamentals land in the 100-1000 Hz sweet spot.
     """
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
     samples = []
-    fade_out_duration = 0.15
+    fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
+
+    # Nylon string partials (near-harmonic with slight stretch from stiffness)
+    # Warmer than music box (harmonic vs inharmonic), brighter than marimba
+    string_partials = [
+        (1.0,   1.0,  3.0),    # fundamental, strong, moderate decay
+        (2.001, 0.55, 4.5),    # 2nd partial, warm
+        (3.009, 0.25, 6.5),    # 3rd, adds body
+        (4.02,  0.12, 9.0),    # 4th, brightness
+        (5.04,  0.06, 13.0),   # 5th, sparkle, decays fast
+    ]
+
+    # Body resonance frequency (~400 Hz, typical small-body instrument)
+    body_freq = 400.0
 
     for i in range(num_samples):
         t = i / sample_rate
         sample = 0
 
-        # Trumpet attack: breath builds up, brightness increases over ~60ms
-        if t < 0.02:
-            attack = t / 0.02
-            brightness = 0.3 + 0.7 * (t / 0.02)
-        elif t < 0.06:
-            # "Bwah" bloom: slight overshoot as brass resonance kicks in
-            attack = 1.0 + 0.15 * math.sin(math.pi * (t - 0.02) / 0.04)
-            brightness = 0.7 + 0.3 * ((t - 0.02) / 0.04)
+        # Finger pluck attack: softer than a pick, ~4ms rise
+        if t < 0.004:
+            attack = t / 0.004
+        elif t < 0.02:
+            # Slight overshoot as string stretches then settles
+            attack = 1.0 + 0.15 * math.exp(-(t - 0.004) * 150)
         else:
             attack = 1.0
-            brightness = 1.0
 
-        # Brass harmonics (sawtooth-like, odd and even, falling off)
-        # Trumpet has strong harmonics up to about the 8th
-        sample += 1.0 * math.sin(2 * math.pi * frequency * t)
-        sample += 0.7 * brightness * math.sin(2 * math.pi * frequency * 2 * t)
-        sample += 0.5 * brightness * math.sin(2 * math.pi * frequency * 3 * t)
-        sample += 0.35 * brightness * math.sin(2 * math.pi * frequency * 4 * t)
-        sample += 0.2 * brightness * math.sin(2 * math.pi * frequency * 5 * t)
-        sample += 0.12 * brightness * math.sin(2 * math.pi * frequency * 6 * t)
-        sample += 0.06 * brightness * math.sin(2 * math.pi * frequency * 7 * t)
-        sample += 0.03 * brightness * math.sin(2 * math.pi * frequency * 8 * t)
+        # String partials with independent decay rates
+        for ratio, amp, decay_rate in string_partials:
+            partial_decay = math.exp(-t * decay_rate)
+            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
 
-        # Slight vibrato (brass players naturally add this)
-        vibrato = 1.0 + 0.015 * math.sin(2 * math.pi * 5.5 * t) * min(1.0, t / 0.15)
-        sample *= vibrato
+        # Pluck transient: brief bright burst from finger release (~nail/pad noise)
+        pluck_noise = 0.12 * math.exp(-t * 60) * math.sin(2 * math.pi * frequency * 7.5 * t)
+        sample += pluck_noise
 
-        # Sustain with gentle decay (trumpet holds notes longer)
-        envelope = math.exp(-t * 1.2)
-        sample *= envelope * attack
+        # Body resonance: small wooden body colors the sound
+        body_env = math.exp(-t * 5.0)
+        body = 0.2 * body_env * math.sin(2 * math.pi * body_freq * t)
+        body += 0.08 * body_env * math.sin(2 * math.pi * body_freq * 2.1 * t)
+        sample += body
+
+        sample *= attack
 
         if t > fade_out_start:
             fade_progress = (t - fade_out_start) / fade_out_duration
@@ -565,7 +573,7 @@ def main():
     instruments = [
         ("marimba", generate_marimba),
         ("xylophone", generate_xylophone),
-        ("trumpet", generate_trumpet),
+        ("ukulele", generate_ukulele),
         ("musicbox", generate_music_box),
     ]
 

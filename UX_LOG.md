@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Replaced trumpet instrument with ukulele: warm plucked-string sound that sits better on laptop speakers.
 - Unified background color: removed darker outer border, everything is now one consistent purple. Added spacing between viewport and room indicators for breathing room.
 - Room picker: each option now shows the room name and "Press N" on separate lines instead of "N RoomName"
 - Bottom bar: room badges now show icon + name (e.g., "Play", "Music"), centered, with uniform width. Names go ALL CAPS when caps lock is on.

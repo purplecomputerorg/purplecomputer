@@ -24,7 +24,7 @@ COLORS = ["#5a3875", "#2d4f6e", "#5a2d2d", None]
 INSTRUMENTS = [
     ("marimba", "Marimba"),
     ("xylophone", "Xylophone"),
-    ("trumpet", "Trumpet"),
+    ("ukulele", "Ukulele"),
     ("musicbox", "Music Box"),
 ]
 

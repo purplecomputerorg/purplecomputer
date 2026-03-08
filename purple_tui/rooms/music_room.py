@@ -25,6 +25,7 @@ from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
 )
 from ..music_session import MusicSession, MODE_MUSIC, MODE_LETTERS
+from ..constants import ICON_MUSIC
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -127,10 +128,10 @@ class MusicRoomHeader(Static):
         letters_label = caps("Letters")
 
         if self._letters_mode:
-            music_part = f"[dim]♪ {instrument_label}[/]"
+            music_part = f"[dim]{ICON_MUSIC} {instrument_label}[/]"
             letters_part = f"[bold]{letters_label}[/]"
         else:
-            music_part = f"[bold]♪ {instrument_label}[/]"
+            music_part = f"[bold]{ICON_MUSIC} {instrument_label}[/]"
             letters_part = f"[dim]{letters_label}[/]"
 
         return f"{music_part}  [dim]{caps('Tab')}[/]  {letters_part}"
@@ -409,7 +410,7 @@ class MusicGrid(Widget):
                 else:
                     label = NOTE_NAMES.get(key, "")
                 if label:
-                    decorated = f"♪ {label} ♪"
+                    decorated = f"{ICON_MUSIC} {label} {ICON_MUSIC}"
                     decorated_width = len(decorated)
                     muted_color = "#6a5a7a" if bg_color in light_backgrounds else "#887799"
                     dim_style = Style(bgcolor=bg_color, color=muted_color)
@@ -575,7 +576,7 @@ class MusicMode(Container, can_focus=True):
                     self._header.update_mode(self._letters_mode)
                 label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                 self.app.clear_notifications()
-                self.app.notify(f"♪ {label}" if not self._letters_mode else label, timeout=1.5)
+                self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                 return
 
             # Enter cycles instruments
@@ -587,7 +588,7 @@ class MusicMode(Container, can_focus=True):
                 if self._header:
                     self._header.update_instrument(inst_name)
                 self.app.clear_notifications()
-                self.app.notify(f"♪ {inst_name}", timeout=1.5)
+                self.app.notify(f"{ICON_MUSIC} {inst_name}", timeout=1.5)
                 return
 
         # Character keys cycle colors, play/speak, and record

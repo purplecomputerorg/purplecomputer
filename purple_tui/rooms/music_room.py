@@ -312,10 +312,11 @@ class MusicGrid(Widget):
         self.color_state = {k: -1 for k in ALL_KEYS}
         self.refresh()
 
-    def next_color(self, key: str) -> None:
+    def next_color(self, key: str, refresh: bool = True) -> None:
         """Cycle color for a key."""
         self.color_state[key] = (self.color_state[key] + 1) % len(COLORS)
-        self.refresh()
+        if refresh:
+            self.refresh()
 
     def set_color_index(self, key: str, index: int) -> None:
         """Set a key's color to a specific index.
@@ -535,9 +536,10 @@ class MusicMode(Container, can_focus=True):
             for key, submode, delay in replay:
                 if delay > 0:
                     await asyncio.sleep(delay)
-                self.grid.next_color(key)
+                flash = submode == MODE_MUSIC
+                self.grid.next_color(key, refresh=not flash)
                 self._play_key(key, submode)
-                if submode == MODE_MUSIC:
+                if flash:
                     self.grid.flash_note(key)
         except asyncio.CancelledError:
             pass
@@ -604,10 +606,11 @@ class MusicMode(Container, can_focus=True):
 
             if lookup in ALL_KEYS:
                 mode = self._current_mode()
+                flash = mode == MODE_MUSIC
                 self.session.record(lookup, mode)
-                self.grid.next_color(lookup)
+                self.grid.next_color(lookup, refresh=not flash)
                 self._play_key(lookup, mode)
-                if mode == MODE_MUSIC:
+                if flash:
                     self.grid.flash_note(lookup)
             return
 

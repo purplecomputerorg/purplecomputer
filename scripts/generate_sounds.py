@@ -218,64 +218,130 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
 
 def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
     """
-    Warm, plucky ukulele. Nylon string partials with body resonance.
-    Soft finger-pluck attack, long ring. Sits well on laptop speakers
-    since fundamentals land in the 100-1000 Hz sweet spot.
+    Ukulele via Karplus-Strong physical modeling.
+
+    Instead of additive synthesis (static sine waves), this uses a delay line
+    with filtered feedback, which naturally produces the evolving harmonic
+    interactions of a real plucked string. The key parameters that make it
+    sound like a nylon-string ukulele rather than a steel guitar:
+
+    - Warm initial excitation (lowpass-filtered noise, simulating finger pad)
+    - High damping factor (nylon strings lose energy faster than steel)
+    - Strong lowpass in the feedback loop (nylon has few high overtones)
+    - Body resonance filter adds the small hollow-body character
     """
     sample_rate = 44100
     num_samples = int(sample_rate * duration)
-    samples = []
     fade_out_duration = 0.15
     fade_out_start = duration - fade_out_duration
 
-    # Nylon string partials (near-harmonic with slight stretch from stiffness).
-    # Slower decay than percussion instruments so notes ring out like a real string.
-    # Higher partials lose energy faster (nylon damping).
-    string_partials = [
-        (1.0,   1.0,  1.5),    # fundamental rings long
-        (2.001, 0.5,  2.2),    # 2nd partial, warm
-        (3.009, 0.22, 3.5),    # 3rd, adds body
-        (4.02,  0.10, 5.5),    # 4th, gentle brightness
-        (5.04,  0.04, 8.0),    # 5th, fades early
-    ]
+    # Delay line length determines pitch
+    period = sample_rate / frequency
+    # Integer part + fractional allpass interpolation for accurate tuning
+    N = int(period)
+    frac = period - N
+
+    # Allpass coefficient for fractional delay (keeps tuning accurate)
+    allpass_coeff = (1 - frac) / (1 + frac)
+
+    # Initialize delay line with filtered noise (the "pluck").
+    # Lowpass filtering the initial noise simulates a soft finger pad pluck
+    # (vs bright pick = unfiltered white noise).
+    random.seed(int(frequency * 1000))  # deterministic per note
+    raw_noise = [random.random() * 2 - 1 for _ in range(N)]
+
+    # Two-pass smoothing: makes the initial spectrum warm (fewer high harmonics).
+    # This is the main thing that distinguishes nylon uke from steel guitar.
+    delay_line = raw_noise[:]
+    for _ in range(3):  # 3 passes = very warm, finger-pluck character
+        for j in range(1, N):
+            delay_line[j] = 0.5 * delay_line[j] + 0.5 * delay_line[j - 1]
+
+    # Pluck position filter: a real finger plucks ~1/4 to 1/3 along the string,
+    # which suppresses harmonics at multiples of that position.
+    # For ukulele plucked near the soundhole (~1/4 of string length),
+    # this notches out the 4th harmonic, giving a rounder tone.
+    pluck_pos = N // 4
+    if pluck_pos > 0:
+        for j in range(N):
+            if j >= pluck_pos:
+                delay_line[j] = delay_line[j] - 0.5 * delay_line[j - pluck_pos]
+
+    # KS synthesis loop
+    samples = [0.0] * num_samples
+    buf = delay_line[:]
+    write_pos = 0
+    allpass_prev_in = 0.0
+    allpass_prev_out = 0.0
+
+    # Damping: nylon strings lose energy faster than steel.
+    # This controls overall decay rate.
+    damping = 0.996
+
+    # Feedback filter state (one-pole lowpass in the delay loop).
+    # Lower blend = warmer, more ukulele-like.
+    # 0.4 means the feedback strongly favors the previous sample (warm).
+    blend = 0.4
+    prev_sample = 0.0
 
     for i in range(num_samples):
-        t = i / sample_rate
-        sample = 0
+        # Read from delay line
+        out = buf[write_pos]
 
-        # Soft finger pluck: gentler than a pick, ~6ms rise with no hard overshoot
-        if t < 0.006:
-            attack = t / 0.006
-        elif t < 0.03:
-            # Gentle settling, not a percussive click
-            attack = 1.0 + 0.06 * math.exp(-(t - 0.006) * 80)
-        else:
-            attack = 1.0
+        # One-pole lowpass filter in the feedback loop.
+        # This is what makes higher harmonics decay faster than lower ones,
+        # the hallmark of a plucked string sound.
+        filtered = blend * out + (1 - blend) * prev_sample
+        prev_sample = filtered
 
-        # String partials with independent decay rates
-        for ratio, amp, decay_rate in string_partials:
-            partial_decay = math.exp(-t * decay_rate)
-            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
+        # Allpass interpolation for fractional delay (pitch accuracy)
+        allpass_out = allpass_coeff * filtered + allpass_prev_in - allpass_coeff * allpass_prev_out
+        allpass_prev_in = filtered
+        allpass_prev_out = allpass_out
 
-        # Soft pluck onset: low-amplitude thump from finger pad, not a bright ping.
-        # Uses 3x frequency (close harmonic) instead of 7.5x to avoid metallic click.
-        pluck = 0.08 * math.exp(-t * 35) * math.sin(2 * math.pi * frequency * 3.0 * t)
-        sample += pluck
+        # Write back with damping
+        buf[write_pos] = allpass_out * damping
 
-        # Body resonance tied to the note: reinforces the fundamental and
-        # adds the hollow warmth of a small wooden body.
-        body_env = (1 - math.exp(-t * 30)) * math.exp(-t * 3.0)
-        body = 0.15 * body_env * math.sin(2 * math.pi * frequency * 1.0 * t)
-        body += 0.06 * body_env * math.sin(2 * math.pi * frequency * 0.5 * t)
-        sample += body
+        # Advance write position
+        write_pos = (write_pos + 1) % N
 
-        sample *= attack
+        samples[i] = out
 
-        if t > fade_out_start:
-            fade_progress = (t - fade_out_start) / fade_out_duration
-            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+    # Body resonance: simple two-pole resonator at ~420 Hz.
+    # Simulates the small hollow body of a ukulele adding warmth.
+    body_freq = 420.0
+    body_q = 3.0  # moderate Q, broad resonance
+    # Biquad bandpass coefficients
+    w0 = 2 * math.pi * body_freq / sample_rate
+    alpha = math.sin(w0) / (2 * body_q)
+    b0 = alpha
+    b1 = 0.0
+    b2 = -alpha
+    a0 = 1 + alpha
+    a1 = -2 * math.cos(w0)
+    a2 = 1 - alpha
+    # Normalize
+    b0 /= a0; b1 /= a0; b2 /= a0; a1 /= a0; a2 /= a0
 
-        samples.append(sample)
+    body = [0.0] * num_samples
+    x1 = x2 = y1 = y2 = 0.0
+    for i in range(num_samples):
+        x0 = samples[i]
+        y0 = b0 * x0 + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        body[i] = y0
+        x2 = x1; x1 = x0; y2 = y1; y1 = y0
+
+    # Mix: dry string + body resonance
+    body_mix = 0.35
+    for i in range(num_samples):
+        samples[i] = samples[i] + body_mix * body[i]
+
+    # Cosine fade-out
+    fade_start_sample = int(fade_out_start * sample_rate)
+    fade_samples = int(fade_out_duration * sample_rate)
+    for i in range(fade_start_sample, num_samples):
+        progress = (i - fade_start_sample) / fade_samples
+        samples[i] *= 0.5 * (1 + math.cos(math.pi * progress))
 
     return finalize_samples(samples, peak_level=0.5)
 

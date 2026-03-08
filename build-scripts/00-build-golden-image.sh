@@ -157,7 +157,13 @@ SOURCES
     mkdir -p "$THEME_DIR"
     cp /purple-src/config/plymouth/purple-simple/purple-simple.plymouth "$THEME_DIR/"
     cp /purple-src/config/plymouth/purple-simple/purple-simple.script "$THEME_DIR/"
-    chroot "$MOUNT_DIR" plymouth-set-default-theme purple-simple
+    # Set the default theme directly (plymouth-set-default-theme may not be in chroot PATH)
+    mkdir -p "$MOUNT_DIR/etc/plymouth"
+    cat > "$MOUNT_DIR/etc/plymouth/plymouthd.conf" <<PLYMOUTH_CONF
+[Daemon]
+Theme=purple-simple
+ShowDelay=0
+PLYMOUTH_CONF
     chroot "$MOUNT_DIR" update-initramfs -u
 
     # Copy application files (project root is mounted at /purple-src)

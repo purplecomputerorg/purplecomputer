@@ -323,6 +323,11 @@ class ArtCanvas(Widget, can_focus=True):
             return GUTTER_BG_DARK_A if even else GUTTER_BG_DARK_B
         return GUTTER_BG_LIGHT_A if even else GUTTER_BG_LIGHT_B
 
+    def on_resize(self, event) -> None:
+        """Invalidate line cache when widget resizes (e.g. overlay hides)."""
+        self._invalidate_all()
+        self.refresh()
+
     def _mark_cursor_dirty(self) -> None:
         """Mark the 3 lines around the cursor as dirty (cursor ring is 3x3)."""
         cy = self._cursor_y + GUTTER

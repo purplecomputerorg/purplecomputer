@@ -626,6 +626,7 @@ class PurpleApp(App):
         self._recording_manager = RecordingManager()
         self._watch_me_active: bool = False
         self._watch_me_room: str = ""
+        self._watch_me_timer: asyncio.TimerHandle | None = None
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -866,18 +867,23 @@ class PurpleApp(App):
                 # Other room switches blocked during Watch me!
                 return
 
-            # Block Esc (room picker, long-hold parent menu) during Watch me!
+            # Esc ends Watch me! (same as pressing F4 to return to Code)
+            if isinstance(action, ControlAction) and action.action == 'escape' and action.is_down:
+                await self._end_watch_me()
+                return
             if isinstance(action, ControlAction) and action.action == 'escape':
                 return
+            # Long-hold escape: end Watch me! and fall through to open parent menu
             if isinstance(action, LongHoldAction) and action.key == 'escape':
-                return
+                await self._end_watch_me()
 
-            # Record the event
+            # Record the event and reset inactivity timer
             if not (self._demo_player and self._demo_player.is_running):
                 mode = self._get_current_mode()
                 self._recording_manager.record_event(
                     action, self.active_room.name.lower(), mode
                 )
+                self._reset_watch_me_timer()
 
             # Still dispatch to the active room for live feedback
             # (fall through to mode dispatch below)
@@ -1048,6 +1054,7 @@ class PurpleApp(App):
         self._recording_manager.start_recording(internal_name)
         self._watch_me_active = True
         self._watch_me_room = internal_name
+        self._reset_watch_me_timer()
 
         # Show "Watching..." in title bar
         try:
@@ -1065,6 +1072,7 @@ class PurpleApp(App):
     async def _end_watch_me(self) -> None:
         """End Watch me! session: stop recording, switch to Code, insert blocks."""
         self._watch_me_active = False
+        self._cancel_watch_me_timer()
         recording = self._recording_manager.stop_recording()
 
         # Clear title bar indicator
@@ -1089,6 +1097,27 @@ class PurpleApp(App):
                     command_widget.insert_watched_blocks(blocks)
                 except Exception:
                     pass
+
+    WATCH_ME_TIMEOUT = 15  # seconds of inactivity before auto-ending Watch me!
+
+    def _reset_watch_me_timer(self) -> None:
+        """Reset the Watch me! inactivity timer."""
+        self._cancel_watch_me_timer()
+        loop = asyncio.get_event_loop()
+        self._watch_me_timer = loop.call_later(
+            self.WATCH_ME_TIMEOUT, self._watch_me_timed_out
+        )
+
+    def _cancel_watch_me_timer(self) -> None:
+        """Cancel the Watch me! inactivity timer if running."""
+        if self._watch_me_timer is not None:
+            self._watch_me_timer.cancel()
+            self._watch_me_timer = None
+
+    def _watch_me_timed_out(self) -> None:
+        """Called when Watch me! inactivity timeout expires."""
+        if self._watch_me_active:
+            asyncio.ensure_future(self._end_watch_me())
 
     def _get_current_mode(self) -> str:
         """Get the current sub-mode string for the active mode."""

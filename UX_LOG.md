@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Watch Me mode: Escape now exits back to Code room (was previously swallowed). Long-hold Escape exits Watch Me and opens parent menu. Auto-ends after 15 seconds of inactivity.
 - Art room: text typed in write mode now has a transparent background matching the canvas (removed row-based tinting)
 - Removed save slot indicators from Code Room main view: saves 3 rows for the code canvas, save/load still accessible via Tab menu
 - Volume toast replaced with custom widget: no more flickering or duplicate toasts when changing volume rapidly, and toast properly hides when opening room picker or parent menu

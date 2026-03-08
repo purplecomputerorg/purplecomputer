@@ -241,7 +241,7 @@ class ArtCanvas(Widget, can_focus=True):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
+        # NOT caps-sensitive: caps only affects new input, not existing canvas content
         # Grid: dict[(x, y)] = (char, fg_color, bg_color)
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         # Positions that have been deliberately painted (vs text tint bg)
@@ -425,8 +425,6 @@ class ArtCanvas(Widget, can_focus=True):
         is_dark = self._is_dark_theme()
         text_fg = TEXT_FG_DARK if is_dark else TEXT_FG_LIGHT
         corner_fg = CURSOR_CORNER_DARK if is_dark else CURSOR_CORNER_LIGHT
-        caps_mode = hasattr(self.app, 'caps_mode') and self.app.caps_mode
-
         # Cursor position in screen coordinates
         cursor_screen_x = self._cursor_x + GUTTER
         cursor_screen_y = self._cursor_y + GUTTER
@@ -488,8 +486,7 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         if char != BRUSH_CHAR:
                             fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                        c = char.upper() if caps_mode and char.isalpha() else char
-                        char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
+                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
                     else:
                         char_out, style_out = " ", Style(bgcolor=default_bg)
                 else:
@@ -501,8 +498,7 @@ class ArtCanvas(Widget, can_focus=True):
                             char, fg_color, bg_color = cell
                             if char != BRUSH_CHAR:
                                 fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                            c = char.upper() if caps_mode and char.isalpha() else char
-                            char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
+                            char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
                         else:
                             char_out, style_out = " ", Style(bgcolor=default_bg)
                 segments.append(Segment(char_out, style_out))
@@ -519,8 +515,7 @@ class ArtCanvas(Widget, can_focus=True):
                         char, fg_color, bg_color = cell
                         if char not in (" ", BRUSH_CHAR, ""):
                             tfg = self._contrast_text_color(bg_color)
-                            c = char.upper() if caps_mode and char.isalpha() else char
-                            char_out, style_out = c, Style(color=tfg, bgcolor=bg_color)
+                            char_out, style_out = char, Style(color=tfg, bgcolor=bg_color)
                         else:
                             char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg_color)
                     else:
@@ -535,8 +530,7 @@ class ArtCanvas(Widget, can_focus=True):
                             else:
                                 fg_color = text_fg
                                 bg_color = default_bg
-                        c = char.upper() if caps_mode and char.isalpha() else char
-                        char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
+                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
                     else:
                         bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
                         char_out, style_out = " ", Style(bgcolor=bg)
@@ -552,8 +546,7 @@ class ArtCanvas(Widget, can_focus=True):
                     fg_color = self._contrast_text_color(bg_color)
                 else:
                     fg_color = text_fg
-                c = char.upper() if caps_mode and char.isalpha() else char
-                segments.append(Segment(c, Style(color=fg_color, bgcolor=bg_color)))
+                segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
             else:
                 # Empty cell: batch with adjacent empty cells of same style
                 if in_gutter:
@@ -661,6 +654,7 @@ class ArtCanvas(Widget, can_focus=True):
 
     def type_char(self, char: str) -> None:
         """Type a character at cursor position."""
+        char = self._caps_char(char)
         self._mark_cursor_dirty()  # Old cursor position
         pos = (self._cursor_x, self._cursor_y)
 

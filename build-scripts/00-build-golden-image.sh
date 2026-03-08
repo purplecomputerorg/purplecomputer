@@ -188,7 +188,6 @@ SOURCES
     mkdir -p "$MOUNT_DIR/opt/purple"
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
-    cp /purple-src/keyboard_normalizer.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
@@ -225,17 +224,6 @@ SOURCES
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
 cd /opt/purple
-
-# Auto-calibrate keyboard on first boot (if no mapping exists)
-# Uses ~/.config/purple/ which is user-writable, no sudo needed
-if [ ! -f "$HOME/.config/purple/keyboard-map.json" ]; then
-    echo
-    echo "First time setup - configuring keyboard..."
-    echo
-    python3 keyboard_normalizer.py --calibrate
-    echo
-    sleep 1
-fi
 
 exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER

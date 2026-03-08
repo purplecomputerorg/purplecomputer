@@ -59,7 +59,6 @@ INCLUDE_FILES = [
     "VERSION",
     "version.json",
     "BREAKING_VERSION",
-    "keyboard_normalizer.py",
     "requirements.txt",
 ]
 

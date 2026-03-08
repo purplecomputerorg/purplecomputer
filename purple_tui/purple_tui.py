@@ -487,6 +487,7 @@ class PurpleApp(App):
     #room-indicator {
         dock: bottom;
         height: 3;
+        margin-top: 1;
         background: $background;
     }
 
@@ -602,7 +603,7 @@ class PurpleApp(App):
                 error="#c46b7b",
                 success="#7bc48a",
                 accent="#c4a0e8",
-                background="#1e1033",
+                background="#2a1845",
                 surface="#2a1845",
                 panel="#2a1845",
                 dark=True,
@@ -617,7 +618,7 @@ class PurpleApp(App):
                 error="#a04050",
                 success="#40a050",
                 accent="#6a3c90",
-                background="#f0e8f8",
+                background="#e8daf0",
                 surface="#e8daf0",
                 panel="#e8daf0",
                 dark=False,

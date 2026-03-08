@@ -62,7 +62,7 @@ main() {
     debootstrap \
         --arch=amd64 \
         --variant=minbase \
-        --include=linux-image-generic,linux-modules-extra-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
+        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
         noble \
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu
@@ -131,7 +131,17 @@ SOURCES
         xkbset \
         x11-utils \
         xdotool \
-        plymouth plymouth-themes
+        plymouth plymouth-themes \
+        zstd
+
+    # Install kernel modules-extra for hardware drivers (sound, backlight, wifi, etc.)
+    # The package name includes the kernel version, so we find it dynamically
+    KVER=$(ls "$MOUNT_DIR/lib/modules/" | head -1)
+    if [ -n "$KVER" ]; then
+        log_info "Installing linux-modules-extra for kernel $KVER..."
+        chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER" || \
+            log_info "WARNING: linux-modules-extra-$KVER not found, hardware support may be limited"
+    fi
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji

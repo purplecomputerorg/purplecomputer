@@ -62,7 +62,7 @@ main() {
     debootstrap \
         --arch=amd64 \
         --variant=minbase \
-        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
+        --include=linux-image-generic,linux-modules-extra-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
         noble \
         "$MOUNT_DIR" \
         http://archive.ubuntu.com/ubuntu

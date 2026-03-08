@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Command mode: "Watch me!" replaces F5 recording. Empty canvas shows "Watch me!" prompt, Enter opens room picker, kid plays in chosen room, F4 returns with captured blocks. Also available via Tab menu. F5 key removed entirely.
 - Rooms renamed: Explore is now Play, Play is now Music, Doodle is now Art
 - Music room: Space with no F5 recording replays recent key presses (last 10 seconds or since last pause)
 - Music room: F5 recording and playback can now happen simultaneously (overdub, play over yourself)

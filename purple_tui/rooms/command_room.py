@@ -4,7 +4,7 @@ Command Room (F4): Cross-Room Visual Programming
 Shows recorded blocks in a uniform grid layout. Every block is 5 chars wide,
 3 rows tall. MODE_SWITCH blocks start new lines with gutter icons.
 REPEAT blocks show as gutter metadata. Tab opens a menu modal.
-Space plays the program. F5 (handled globally) records across rooms.
+Space plays the program. "Watch me!" captures keypresses in another room.
 
 Mode-aware editing: what a keypress does depends on the MODE_SWITCH context.
 Play context uses compose mode for QUERY blocks.
@@ -21,6 +21,7 @@ from textual.containers import Container
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.strip import Strip
+from textual.message import Message
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
@@ -51,7 +52,6 @@ from ..program import (
     target_room,
     default_target_for_room,
 )
-from ..recording import RecordingManager
 
 
 # =============================================================================
@@ -481,24 +481,24 @@ class CodeCanvas(Widget):
 
     def _render_empty_line(self, y: int, width: int, bg: str,
                            bg_style: Style, height: int) -> Strip:
-        """Render a line when no blocks are present."""
+        """Render a line when no blocks are present (Watch me! prompt)."""
         mid = height // 2
-        if y == mid - 2:
-            segments = [Segment(" " * GUTTER_WIDTH, bg_style)]
-            if self._cursor_visible:
-                cursor_style = Style(bgcolor=CURSOR_COLOR)
-                segments.append(Segment(" ", cursor_style))
-                segments.append(Segment(" " * (width - GUTTER_WIDTH - 1), bg_style))
-            else:
-                segments.append(Segment(" " * (width - GUTTER_WIDTH), bg_style))
-            return Strip(segments)
-        elif y == mid:
-            hint = "Type keys to add blocks"
-            return self._centered_dim_text(hint, width, bg, bg_style)
+        if y == mid - 1:
+            title = "Watch me!"
+            title_style = Style(color="#FFD700", bgcolor=bg, bold=True)
+            pad = max(0, (width - len(title)) // 2)
+            return Strip([
+                Segment(" " * pad, bg_style),
+                Segment(title, title_style),
+                Segment(" " * max(0, width - pad - len(title)), bg_style),
+            ])
         elif y == mid + 1:
-            hint = "or press F5 to capture key presses in another mode!"
+            hint = "Press Enter to record in another room"
             return self._centered_dim_text(hint, width, bg, bg_style)
-        elif y == mid + 3:
+        elif y == mid + 2:
+            hint = "or just start typing to add blocks"
+            return self._centered_dim_text(hint, width, bg, bg_style)
+        elif y == mid + 4:
             hint = "\u2190\u2192 navigate   \u2191\u2193 lines   Tab menu"
             return self._centered_dim_text(hint, width, bg, bg_style)
         return Strip([Segment(" " * width, bg_style)])
@@ -554,10 +554,18 @@ class CodeCanvas(Widget):
 # COMMAND MODE CONTAINER
 # =============================================================================
 
+class WatchMeRequested(Message, bubble=True):
+    """Posted when user triggers Watch me! (Enter on empty canvas or Tab menu)."""
+    def __init__(self, room: str = "") -> None:
+        super().__init__()
+        self.room = room
+
+
 class CommandMode(Container, can_focus=True):
     """Command Mode: cross-mode visual programming.
 
-    Tab opens menu modal. Space plays program. F5 recording handled globally.
+    Tab opens menu modal. Space plays program. "Watch me!" captures
+    keypresses in another room and inserts them as blocks.
     Mode-context aware: typing behaves differently based on MODE_SWITCH context.
     """
 
@@ -585,10 +593,8 @@ class CommandMode(Container, can_focus=True):
     }
     """
 
-    def __init__(self, recording_manager: RecordingManager | None = None,
-                 dispatch_action: Callable | None = None, **kwargs):
+    def __init__(self, dispatch_action: Callable | None = None, **kwargs):
         super().__init__(**kwargs)
-        self._recording_manager = recording_manager
         self._dispatch_action = dispatch_action
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
@@ -605,20 +611,10 @@ class CommandMode(Container, can_focus=True):
         yield CodeCanvas(id="code-canvas")
 
     def on_mount(self) -> None:
-        self._import_from_recording()
-        self._ensure_default_mode()
         self._refresh_all()
 
     def on_show(self) -> None:
-        if not self._blocks:
-            self._import_from_recording()
-        self._ensure_default_mode()
         self._refresh_all()
-
-    def _import_from_recording(self) -> None:
-        if self._recording_manager and self._recording_manager.has_recording():
-            self._blocks = self._recording_manager.to_blocks()
-            self._cursor = len(self._blocks)
 
     def _refresh_all(self) -> None:
         try:
@@ -644,8 +640,7 @@ class CommandMode(Container, can_focus=True):
     def _ensure_default_mode(self) -> None:
         """Auto-insert a default MODE_SWITCH when canvas is empty.
 
-        Called on mount, show, and after clear. Skipped when loading a saved
-        program (it already has a MODE_SWITCH).
+        Called lazily when user starts typing on an empty canvas.
         """
         if not self._blocks:
             self._blocks.append(ProgramBlock(
@@ -719,6 +714,10 @@ class CommandMode(Container, can_focus=True):
         elif action.action == 'space':
             await self._start_playback()
         elif action.action == 'enter':
+            # Empty canvas: trigger Watch me!
+            if not self._blocks:
+                self.post_message(WatchMeRequested())
+                return
             context = self._mode_context()
             if context == TARGET_PLAY:
                 # Start compose mode for QUERY block
@@ -738,6 +737,10 @@ class CommandMode(Container, can_focus=True):
     async def _handle_character(self, action: CharacterAction) -> None:
         if action.is_repeat:
             return
+
+        # Empty canvas: auto-insert default MODE_SWITCH first
+        if not self._blocks:
+            self._ensure_default_mode()
 
         context = self._mode_context()
 
@@ -841,8 +844,20 @@ class CommandMode(Container, can_focus=True):
             self._active_slot = 0
             self._composing = False
             self._compose_text = ""
-            self._ensure_default_mode()
             self._refresh_all()
+
+        elif action == "watch_me":
+            room = result.get("room", "")
+            self.post_message(WatchMeRequested(room=room))
+
+    # ── Public API for Watch me! ────────────────────────────────────
+
+    def insert_watched_blocks(self, blocks: list[ProgramBlock]) -> None:
+        """Insert blocks captured during Watch me! at the current cursor position."""
+        for block in blocks:
+            self._blocks.insert(self._cursor, block)
+            self._cursor += 1
+        self._refresh_all()
 
     # ── Block operations ───────────────────────────────────────────────
 

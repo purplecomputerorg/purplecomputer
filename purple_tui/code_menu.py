@@ -27,6 +27,7 @@ from .program import (
 
 # Menu item definitions: (id, label, selectable)
 MENU_ITEMS = [
+    ("watch_me", "  Watch me!", True),
     ("insert_pause", "  Pause \u23f8", True),
     ("insert_stroke", "  Stroke \u25b6", True),
     ("insert_repeat", "  Repeat x2", True),
@@ -132,7 +133,7 @@ class CodeMenuScreen(ModalScreen):
                 pass
 
     async def handle_keyboard_action(self, action) -> None:
-        if self._sub_view == "room_picker":
+        if self._sub_view in ("room_picker", "watch_me_picker"):
             await self._handle_room_picker(action)
             return
         if self._sub_view == "slot_picker":
@@ -159,7 +160,12 @@ class CodeMenuScreen(ModalScreen):
         menu_idx = _SELECTABLE_INDICES[self._sel_pos]
         item_id = MENU_ITEMS[menu_idx][0]
 
-        if item_id == "insert_room_switch":
+        if item_id == "watch_me":
+            self._sub_view = "watch_me_picker"
+            self._sub_selected = 0
+            self._show_sub_picker_rooms(title="Watch me in...")
+
+        elif item_id == "insert_room_switch":
             self._sub_view = "room_picker"
             self._sub_selected = 0
             self._show_sub_picker_rooms()
@@ -190,11 +196,11 @@ class CodeMenuScreen(ModalScreen):
 
     # ── Room sub-picker ──────────────────────────────────────────────
 
-    def _show_sub_picker_rooms(self) -> None:
+    def _show_sub_picker_rooms(self, title: str = "Pick a room") -> None:
         try:
             dialog = self.query_one("#code-menu-dialog", Container)
-            title = self.query_one("#code-menu-title", Static)
-            title.update("Pick a room")
+            title_widget = self.query_one("#code-menu-title", Static)
+            title_widget.update(title)
 
             for child in dialog.children:
                 if child.has_class("menu-item") or child.has_class("menu-separator"):
@@ -237,8 +243,11 @@ class CodeMenuScreen(ModalScreen):
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
                 room = ROOM_ORDER[self._sub_selected]
-                target = ROOMS[room]["default"]
-                self.dismiss({"action": "insert_mode_switch", "target": target})
+                if self._sub_view == "watch_me_picker":
+                    self.dismiss({"action": "watch_me", "room": room})
+                else:
+                    target = ROOMS[room]["default"]
+                    self.dismiss({"action": "insert_mode_switch", "target": target})
             elif action.action in ('escape', 'tab'):
                 self._exit_sub_view()
             return

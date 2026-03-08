@@ -282,6 +282,11 @@ class ArtCanvas(Widget, can_focus=True):
         self._backspace_start_time: float | None = None
         self._clear_animation_active = False
 
+        # Line-level render cache: y -> Strip (avoids recomputing unchanged lines)
+        self._line_cache: dict[int, Strip] = {}
+        self._dirty_lines: set[int] = set()
+        self._all_dirty = True  # Start fully dirty
+
     def on_mount(self) -> None:
         """Start cursor blinking when canvas is mounted."""
         self._start_blink()
@@ -318,18 +323,30 @@ class ArtCanvas(Widget, can_focus=True):
             return GUTTER_BG_DARK_A if even else GUTTER_BG_DARK_B
         return GUTTER_BG_LIGHT_A if even else GUTTER_BG_LIGHT_B
 
+    def _mark_cursor_dirty(self) -> None:
+        """Mark the 3 lines around the cursor as dirty (cursor ring is 3x3)."""
+        cy = self._cursor_y + GUTTER
+        self._dirty_lines.update(range(cy - 1, cy + 2))
+
+    def _invalidate_all(self) -> None:
+        """Mark all lines dirty (theme change, clear canvas, etc.)."""
+        self._all_dirty = True
+        self._line_cache.clear()
+
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
         self._paint_mode = not self._paint_mode
         self._space_down = False  # Reset brush state on mode change
 
-        # Cursor blinks in both modes
+        # Cursor ring changes between modes, so mark cursor area dirty
+        self._mark_cursor_dirty()
         self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
         self.refresh()
 
     def _toggle_blink(self) -> None:
         """Toggle cursor visibility for blink effect."""
         self._cursor_visible = not self._cursor_visible
+        self._mark_cursor_dirty()
         self.refresh()
 
     def _start_blink(self) -> None:
@@ -346,9 +363,16 @@ class ArtCanvas(Widget, can_focus=True):
             self._blink_timer = None
         self._cursor_visible = True
 
+    def _restart_blink(self) -> None:
+        """Reset blink to visible state. Prevents blink flicker during rapid input."""
+        self._cursor_visible = True
+        if self._blink_timer is not None:
+            self._blink_timer.reset()
+
     def _release_space_down(self) -> None:
         """Release brush-down state (called on space key release)."""
         self._space_down = False
+        self._mark_cursor_dirty()
         self.refresh()
 
     def _start_space_down(self) -> None:
@@ -386,143 +410,182 @@ class ArtCanvas(Widget, can_focus=True):
     def render_line(self, y: int) -> Strip:
         """Render a single line of the canvas.
 
+        Uses line-level caching: only recomputes lines marked dirty.
         Screen coordinates (x, y) map to content coordinates (x - GUTTER, y - GUTTER).
         The gutter area around the edges is where the cursor ring can extend.
         """
+        # Return cached strip if this line is clean
+        all_dirty = self._all_dirty
+        if not all_dirty and y not in self._dirty_lines and y in self._line_cache:
+            return self._line_cache[y]
+
+        # Clear all_dirty flag so subsequent render_line calls for non-dirty
+        # lines on future frames can use the cache
+        if all_dirty:
+            self._all_dirty = False
+            self._dirty_lines.clear()
+
         width = self.size.width
         height = self.size.height
 
         if width <= 0:
             return Strip([])
 
-        segments = []
+        # Cache theme lookups for this render pass
         default_bg = self._get_default_bg()
+        is_dark = self._is_dark_theme()
+        text_fg = TEXT_FG_DARK if is_dark else TEXT_FG_LIGHT
+        corner_fg = CURSOR_CORNER_DARK if is_dark else CURSOR_CORNER_LIGHT
+        caps_mode = hasattr(self.app, 'caps_mode') and self.app.caps_mode
 
         # Cursor position in screen coordinates
         cursor_screen_x = self._cursor_x + GUTTER
         cursor_screen_y = self._cursor_y + GUTTER
 
+        # Pre-check if this line is near the cursor (within brush ring range)
+        dy = y - cursor_screen_y
+        near_cursor = abs(dy) <= 1
+
+        # Gutter flags for this row
+        in_gutter_y = (y < GUTTER or y >= height - GUTTER)
+        gutter_x_min = GUTTER
+        gutter_x_max = width - GUTTER
+
+        segments = []
+        # Track current run for batching consecutive same-style empty cells
+        run_char = None
+        run_style = None
+        run_len = 0
+
+        def flush_run():
+            nonlocal run_char, run_style, run_len
+            if run_len > 0:
+                segments.append(Segment(run_char * run_len, run_style))
+                run_len = 0
+
+        grid = self._grid
+        painted = self._painted_positions
+        paint_mode = self._paint_mode
+        cursor_visible = self._cursor_visible
+        last_key_color = self._last_key_color
+
         for x in range(width):
-            # Check if this screen position is in the gutter
-            in_gutter = (x < GUTTER or x >= width - GUTTER or
-                         y < GUTTER or y >= height - GUTTER)
+            in_gutter = in_gutter_y or x < gutter_x_min or x >= gutter_x_max
 
-            # Check cursor ring (uses screen coordinates)
-            dx = x - cursor_screen_x
-            dy = y - cursor_screen_y
-            is_cursor_center = (dx == 0 and dy == 0)
-            is_brush_ring = (self._paint_mode and
-                             abs(dx) <= 1 and abs(dy) <= 1 and
-                             not is_cursor_center)
-
-            # Content coordinates for grid lookup
+            # Content coordinates
             content_x = x - GUTTER
             content_y = y - GUTTER
-            cell = None if in_gutter else self._grid.get((content_x, content_y))
 
-            # Is this cell on a painted background?
-            content_pos = (content_x, content_y)
-            is_painted = content_pos in self._painted_positions
+            # Fast path: check cursor proximity only if this line is near cursor
+            char_out = None
+            style_out = None
+
+            if near_cursor:
+                dx = x - cursor_screen_x
+                is_cursor_center = (dx == 0 and dy == 0)
+                is_brush_ring = (paint_mode and
+                                 abs(dx) <= 1 and
+                                 not is_cursor_center)
+            else:
+                is_cursor_center = False
+                is_brush_ring = False
+
+            cell = None if in_gutter else grid.get((content_x, content_y))
 
             if is_cursor_center and not in_gutter:
-                if self._paint_mode:
-                    # Paint mode: center always shows underlying (the "hole")
+                flush_run()
+                if paint_mode:
                     if cell:
                         char, fg_color, bg_color = cell
-                        # Apply theme to text cells
                         if char != BRUSH_CHAR:
-                            if is_painted:
-                                fg_color = self._contrast_text_color(bg_color)
-                            else:
-                                fg_color = self._get_text_fg()
-                        segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
+                            fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
+                        c = char.upper() if caps_mode and char.isalpha() else char
+                        char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
                     else:
-                        segments.append(Segment(" ", Style(bgcolor=default_bg)))
+                        char_out, style_out = " ", Style(bgcolor=default_bg)
                 else:
-                    # Text mode cursor (blinks)
-                    if self._cursor_visible:
-                        cursor_style = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
-                        segments.append(Segment("▌", cursor_style))
+                    if cursor_visible:
+                        char_out = "▌"
+                        style_out = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
                     else:
-                        # Blink off: show underlying cell
                         if cell:
                             char, fg_color, bg_color = cell
                             if char != BRUSH_CHAR:
-                                if is_painted:
-                                    fg_color = self._contrast_text_color(bg_color)
-                                else:
-                                    fg_color = self._get_text_fg()
-                            segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
+                                fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
+                            c = char.upper() if caps_mode and char.isalpha() else char
+                            char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
                         else:
-                            segments.append(Segment(" ", Style(bgcolor=default_bg)))
-            elif is_brush_ring:
-                # 3x3 ring around cursor: blinks on/off with box-drawing chars
-                # This can extend into the gutter area
-                if self._cursor_visible:
+                            char_out, style_out = " ", Style(bgcolor=default_bg)
+                segments.append(Segment(char_out, style_out))
+                continue
+
+            if is_brush_ring:
+                flush_run()
+                if cursor_visible:
                     box_char = BOX_CHARS.get((dx, dy), "·")
-
-                    # Corners use high-contrast color, connectors use brush color
                     is_corner = (dx, dy) in CORNER_POSITIONS
-                    if is_corner:
-                        ring_fg = CURSOR_CORNER_DARK if self._is_dark_theme() else CURSOR_CORNER_LIGHT
-                    else:
-                        ring_fg = self._last_key_color
+                    ring_fg = corner_fg if is_corner else last_key_color
 
                     if cell:
                         char, fg_color, bg_color = cell
-                        # Keep stored bg for all cells (preserves row tints)
-                        # Check if cell has real text (not empty/space/block)
                         if char not in (" ", BRUSH_CHAR, ""):
-                            # Text cell: keep the character, use contrast color for readability
-                            text_fg = self._contrast_text_color(bg_color)
-                            ring_style = Style(color=text_fg, bgcolor=bg_color)
-                            segments.append(Segment(self._caps_char(char), ring_style))
+                            tfg = self._contrast_text_color(bg_color)
+                            c = char.upper() if caps_mode and char.isalpha() else char
+                            char_out, style_out = c, Style(color=tfg, bgcolor=bg_color)
                         else:
-                            # Painted/empty cell: show box char with underlying bg
-                            ring_style = Style(color=ring_fg, bgcolor=bg_color)
-                            segments.append(Segment(box_char, ring_style))
+                            char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg_color)
                     else:
-                        # Empty cell or gutter: show box char on appropriate bg
                         bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                        ring_style = Style(color=ring_fg, bgcolor=bg)
-                        segments.append(Segment(box_char, ring_style))
+                        char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg)
                 else:
-                    # Blink off: show underlying cell or empty
                     if cell:
                         char, fg_color, bg_color = cell
-                        # Apply theme to text cells
                         if char != BRUSH_CHAR:
-                            if is_painted:
+                            if (content_x, content_y) in painted:
                                 fg_color = self._contrast_text_color(bg_color)
                             else:
-                                fg_color = self._get_text_fg()
+                                fg_color = text_fg
                                 bg_color = default_bg
-                        segments.append(Segment(self._caps_char(char), Style(color=fg_color, bgcolor=bg_color)))
+                        c = char.upper() if caps_mode and char.isalpha() else char
+                        char_out, style_out = c, Style(color=fg_color, bgcolor=bg_color)
                     else:
-                        # Empty: use gutter bg if in gutter, else default bg
                         bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                        segments.append(Segment(" ", Style(bgcolor=bg)))
-            elif cell:
-                char, fg_color, bg_color = cell
-                # Paint cells (BRUSH_CHAR): keep stored colors
-                # Text cells: adapt to theme
-                if char == BRUSH_CHAR:
-                    char_style = Style(color=fg_color, bgcolor=bg_color)
-                elif is_painted:
-                    # Text over painted bg: use contrast color for readability
-                    text_fg = self._contrast_text_color(bg_color)
-                    char_style = Style(color=text_fg, bgcolor=bg_color)
-                else:
-                    # Text with tint bg: use stored bg (preserves row tints)
-                    text_fg = self._get_text_fg()
-                    char_style = Style(color=text_fg, bgcolor=bg_color)
-                segments.append(Segment(self._caps_char(char), char_style))
-            else:
-                # Empty cell or gutter: use gutter bg if in gutter
-                bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                segments.append(Segment(" ", Style(bgcolor=bg)))
+                        char_out, style_out = " ", Style(bgcolor=bg)
+                segments.append(Segment(char_out, style_out))
+                continue
 
-        return Strip(segments)
+            if cell:
+                flush_run()
+                char, fg_color, bg_color = cell
+                if char == BRUSH_CHAR:
+                    pass  # keep stored colors
+                elif (content_x, content_y) in painted:
+                    fg_color = self._contrast_text_color(bg_color)
+                else:
+                    fg_color = text_fg
+                c = char.upper() if caps_mode and char.isalpha() else char
+                segments.append(Segment(c, Style(color=fg_color, bgcolor=bg_color)))
+            else:
+                # Empty cell: batch with adjacent empty cells of same style
+                if in_gutter:
+                    bg = self._get_gutter_bg(x, y)
+                else:
+                    bg = default_bg
+                s = Style(bgcolor=bg)
+                if run_len > 0 and run_style == s:
+                    run_len += 1
+                else:
+                    flush_run()
+                    run_char = " "
+                    run_style = s
+                    run_len = 1
+
+        flush_run()
+
+        strip = Strip(segments)
+        self._line_cache[y] = strip
+        self._dirty_lines.discard(y)
+        return strip
 
     def _move_cursor_right(self) -> bool:
         """Move cursor right, return False if at edge."""
@@ -609,6 +672,7 @@ class ArtCanvas(Widget, can_focus=True):
 
     def type_char(self, char: str) -> None:
         """Type a character at cursor with row-based background tint."""
+        self._mark_cursor_dirty()  # Old cursor position
         pos = (self._cursor_x, self._cursor_y)
 
         # Update last key color (for painting)
@@ -643,10 +707,13 @@ class ArtCanvas(Widget, can_focus=True):
             # At right edge, wrap to next line
             self._carriage_return()
 
+        self._mark_cursor_dirty()  # New cursor position
+        self._restart_blink()
         self.refresh()
 
     def _backspace(self) -> None:
         """Delete character at cursor and fade background."""
+        self._mark_cursor_dirty()  # Old position
         # Move cursor back first
         if self._cursor_x > 0:
             self._cursor_x -= 1
@@ -672,6 +739,7 @@ class ArtCanvas(Widget, can_focus=True):
                 self._painted_positions.discard(pos)
         # If cell was empty, nothing to do
 
+        self._mark_cursor_dirty()  # New position
         self.refresh()
 
     def _clear_canvas(self) -> None:
@@ -685,6 +753,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_y = 0
 
         self._clear_animation_active = False
+        self._invalidate_all()
         self.refresh()
 
     def has_content(self) -> bool:
@@ -693,8 +762,10 @@ class ArtCanvas(Widget, can_focus=True):
 
     def set_cursor_position(self, x: int, y: int) -> None:
         """Set cursor position directly (for dev/AI tools)."""
+        self._mark_cursor_dirty()  # Old position
         self._cursor_x = max(0, min(x, self.canvas_width - 1))
         self._cursor_y = max(0, min(y, self.canvas_height - 1))
+        self._mark_cursor_dirty()  # New position
         self.refresh()
 
     def paint_at(self, x: int, y: int, color_key: str) -> None:
@@ -744,6 +815,7 @@ class ArtCanvas(Widget, can_focus=True):
         if isinstance(action, ControlAction):
             if action.action == 'space':
                 if action.is_down:
+                    self._mark_cursor_dirty()
                     if self._paint_mode:
                         # In paint mode: stamp and enable "pen down" for line drawing
                         self._paint_at_cursor()
@@ -751,6 +823,8 @@ class ArtCanvas(Widget, can_focus=True):
                         # If an arrow key is held, advance in that direction after stamping
                         if action.arrow_held:
                             self._move_in_direction(action.arrow_held)
+                        self._mark_cursor_dirty()
+                        self._restart_blink()
                         self.refresh()
                     else:
                         # In write mode: type a space
@@ -759,6 +833,8 @@ class ArtCanvas(Widget, can_focus=True):
                         self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
                         if not self._move_cursor_right():
                             self._carriage_return()
+                        self._mark_cursor_dirty()
+                        self._restart_blink()
                         self.refresh()
                 else:
                     # Space release: stop line drawing
@@ -772,7 +848,10 @@ class ArtCanvas(Widget, can_focus=True):
 
             if action.action == 'enter' and action.is_down:
                 # Move down one line, keeping column position (for vertical drawing)
+                self._mark_cursor_dirty()
                 self._move_cursor_down()
+                self._mark_cursor_dirty()
+                self._restart_blink()
                 self.refresh()
                 return
 
@@ -800,6 +879,8 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Handle navigation actions (arrow keys)
         if isinstance(action, NavigationAction):
+            self._mark_cursor_dirty()  # Old position
+
             # When a character key is held while arrowing in paint mode,
             # paint at the current position BEFORE moving. This avoids a
             # one-cell gap: the CharacterAction already painted and advanced
@@ -838,6 +919,8 @@ class ArtCanvas(Widget, can_focus=True):
                 if self._space_down or action.space_held:
                     self._paint_at_cursor()
 
+            self._mark_cursor_dirty()  # New position
+            self._restart_blink()
             self.refresh()
             return
 
@@ -851,6 +934,7 @@ class ArtCanvas(Widget, can_focus=True):
             # This lets you type "leftward" or "downward" by holding an arrow while typing.
             advance_direction = action.arrow_held if action.arrow_held else 'right'
             if self._paint_mode:
+                self._mark_cursor_dirty()  # Old position
                 # In paint mode:
                 # - Lowercase letters: select color, stamp, advance (direction from held arrow, or right)
                 # - Uppercase (shift) letters: just select color (no stamp, no advance)
@@ -861,6 +945,8 @@ class ArtCanvas(Widget, can_focus=True):
                     self._paint_at_cursor()
                     self._move_in_direction(advance_direction)
                     self.post_message(PaintModeChanged(True, self._last_key_color))
+                    self._mark_cursor_dirty()  # New position
+                    self._restart_blink()
                     self.refresh()
                 elif char.isalpha() or char in KEY_COLORS:
                     lower = char.lower()
@@ -874,6 +960,8 @@ class ArtCanvas(Widget, can_focus=True):
                             self._paint_at_cursor()
                             self._move_in_direction(advance_direction)
                         # Shift held: just select brush, no stamp
+                        self._mark_cursor_dirty()  # New position
+                        self._restart_blink()
                         self.refresh()
             else:
                 # In text mode: type the character

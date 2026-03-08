@@ -99,6 +99,48 @@ def _get_xrandr_outputs() -> list:
         return []
 
 
+def _check_xrandr_works() -> bool:
+    """Test whether xrandr can actually control the display.
+
+    Some hardware (e.g. Surface Laptop 2) reports outputs via xrandr but
+    can't set brightness/gamma on them (no CRTC). We test by applying a
+    no-op setting and checking for errors.
+    """
+    outputs = _get_xrandr_outputs()
+    if not outputs:
+        return False
+
+    try:
+        result = subprocess.run(
+            ["xrandr", "--output", outputs[0],
+             "--brightness", "1.0",
+             "--gamma", "1.0:1.0:1.0"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        # xrandr prints warnings like "need crtc to set gamma on" to stdout
+        if "need crtc" in result.stdout or "not found" in result.stdout:
+            return False
+        if "need crtc" in result.stderr or "not found" in result.stderr:
+            return False
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+# Cache the result so we only probe once per session
+_display_control_available: bool | None = None
+
+
+def display_control_available() -> bool:
+    """Check whether display brightness/contrast controls work on this hardware."""
+    global _display_control_available
+    if _display_control_available is None:
+        _display_control_available = _check_xrandr_works()
+    return _display_control_available
+
+
 def apply_display_settings(brightness: float, contrast: float) -> bool:
     """
     Apply brightness and contrast using xrandr.
@@ -108,6 +150,9 @@ def apply_display_settings(brightness: float, contrast: float) -> bool:
 
     Returns True on success.
     """
+    if not display_control_available():
+        return False
+
     brightness = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, brightness))
     contrast = max(CONTRAST_MIN, min(CONTRAST_MAX, contrast))
 
@@ -401,9 +446,9 @@ def _is_dev_environment() -> bool:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    items = [
-        ("menu-display", "Adjust Display"),
-    ]
+    items = []
+    if display_control_available():
+        items.append(("menu-display", "Adjust Display"))
     if _is_live_boot():
         items.append(("menu-install", "Install on this computer"))
     items.extend([

@@ -3,13 +3,14 @@
 Brief descriptions of user experience changes, newest first.
 
 - Command mode: "Watch me!" replaces F5 recording. Empty canvas shows "Watch me!" prompt, Enter opens room picker, kid plays in chosen room, F4 returns with captured blocks. Also available via Tab menu. F5 key removed entirely.
+- "Adjust Display" menu item hidden on hardware where xrandr brightness/contrast controls don't work (e.g. Surface Laptop 2)
 - Rooms renamed: Explore is now Play, Play is now Music, Doodle is now Art
 - Music room: Space with no F5 recording replays recent key presses (last 10 seconds or since last pause)
 - Music room: F5 recording and playback can now happen simultaneously (overdub, play over yourself)
 - F5 badge added to bottom menu bar with keyboard icon
 - Recording indicator changed from generic record symbol to "Capturing keys" text with better spacing
 - All recording-related text clarified to say "key presses" (toasts, hints) to avoid confusion with voice recording
-- Live boot: silent boot. No kernel messages, systemd status lines, or blinking cursor visible before Purple Computer starts.
+- Boot splash: Plymouth shows a solid purple screen during boot, matching the app's background. Replaces the previous black screen (quiet boot with hidden console text). Clean transition from purple splash to Purple Computer app.
 - Music room: Enter now changes instrument in Letters mode too (previously only worked in Music mode).
 - Play room: number words (one, two, three) and comma-separated lists now work. "one, two, three dinos" shows a dino abacus. Multiplication with emojis shows grouping ("2 x 3 cats" shows 3 groups of 2 cats).
 - Play room: type "..." to continue patterns. Number sequences (5 4 3 ...), emoji pyramids (5 cats ...), ranges (2 4 6 ... 20), and growing sequences (cats ... 5) all work.

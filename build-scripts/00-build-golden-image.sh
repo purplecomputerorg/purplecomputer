@@ -130,7 +130,8 @@ SOURCES
         spice-vdagent \
         xkbset \
         x11-utils \
-        xdotool
+        xdotool \
+        plymouth plymouth-themes
 
     # Install JetBrainsMono Nerd Font (for UI icons like battery, volume, etc.)
     # Noto Color Emoji (installed via apt above) provides Unicode emoji
@@ -148,6 +149,16 @@ SOURCES
     cp /purple-src/config/fontconfig/99-emoji.conf "$MOUNT_DIR/etc/fonts/conf.d/"
 
     chroot "$MOUNT_DIR" fc-cache -fv
+
+    # Install Plymouth boot splash theme (solid purple background)
+    # This provides a clean visual transition: purple screen → Purple Computer app
+    log_info "Installing Plymouth boot splash theme..."
+    THEME_DIR="$MOUNT_DIR/usr/share/plymouth/themes/purple-simple"
+    mkdir -p "$THEME_DIR"
+    cp /purple-src/config/plymouth/purple-simple/purple-simple.plymouth "$THEME_DIR/"
+    cp /purple-src/config/plymouth/purple-simple/purple-simple.script "$THEME_DIR/"
+    chroot "$MOUNT_DIR" plymouth-set-default-theme purple-simple
+    chroot "$MOUNT_DIR" update-initramfs -u
 
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
@@ -286,10 +297,9 @@ SYSCTL
 
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    # Hide console text: set foreground to dark purple (matches background),
-    # clear screen, and hide cursor so nothing is visible before X starts
-    printf '\e]P02d1b4e' 2>/dev/null  # redefine black (default fg) to purple
-    printf '\e]P72d1b4e' 2>/dev/null  # redefine white (bold fg) to purple
+    # Tell Plymouth to quit (it stays on screen during boot as a splash).
+    # Plymouth keeps the purple screen visible until we're ready to start X.
+    plymouth quit --retain-splash 2>/dev/null
     setterm --cursor off 2>/dev/null
     clear
     # Fail-fast: don't loop forever if X keeps crashing
@@ -367,13 +377,13 @@ set default=0
 
 menuentry "PurpleOS" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet console=tty0 console=ttyS0,115200n8
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet splash console=tty0 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
     initrd /boot/initrd.img
 }
 
 menuentry "PurpleOS (recovery mode)" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
     initrd /boot/initrd.img
 }
 EOF

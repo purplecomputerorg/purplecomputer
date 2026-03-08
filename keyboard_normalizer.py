@@ -369,7 +369,6 @@ def calibrate(debug: bool = False) -> bool:
     print()
     if save_scancode_map(mapping):
         print(f"Keyboard setup complete! ({len(mapping)} keys mapped)")
-        print("Restart Purple Computer to use the new settings.")
         return True
     else:
         print("Could not save settings.")

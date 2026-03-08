@@ -518,19 +518,15 @@ set timeout=${GRUB_TIMEOUT}
 set timeout_style=hidden
 set default=0
 
-# Clean purple theme
-set menu_color_normal=white/magenta
-set menu_color_highlight=white/dark-gray
-
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service ---
+    linux /casper/vmlinuz boot=casper quiet splash loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 ---
     initrd /casper/initrd
 }
 
 menuentry "Install Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 ---
+    linux /casper/vmlinuz boot=casper quiet splash loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty1 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 i915.enable_dpcd_backlight=1 ---
     initrd /casper/initrd
 }
 

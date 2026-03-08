@@ -1,0 +1,4 @@
+# Purple Computer boot splash: solid purple background
+# Matches the app's background color for a seamless transition
+Window.SetBackgroundTopColor(0.176, 0.106, 0.306);     # #2d1b4e
+Window.SetBackgroundBottomColor(0.176, 0.106, 0.306);   # #2d1b4e

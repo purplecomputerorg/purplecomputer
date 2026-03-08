@@ -480,7 +480,7 @@ class PurpleApp(App):
     #viewport {
         width: __VIEWPORT_WIDTH__;
         height: __VIEWPORT_HEIGHT__;
-        outline: heavy $primary;
+        border: heavy $primary;
         background: $surface;
     }
 
@@ -1105,7 +1105,7 @@ class PurpleApp(App):
             viewport = self.query_one("#viewport")
             # Get primary color based on current theme
             primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
-            viewport.styles.outline = ("heavy", Color.parse(primary_color))
+            viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
 

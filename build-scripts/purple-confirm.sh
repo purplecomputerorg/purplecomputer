@@ -304,9 +304,13 @@ if "$PAYLOAD_PATH/install.sh" >/dev/tty2 2>&1; then
     echo ""
     echo ""
 
-    read -t 60 _ 2>/dev/null || true
+    # Ensure terminal is in a sane state for read (raw mode was used earlier)
+    stty sane 2>/dev/null || true
+    read -t 60 _ </dev/tty1 2>/dev/null || true
     log "Rebooting"
-    reboot -f || echo b > /proc/sysrq-trigger
+    # Start a watchdog: if reboot hangs (some UEFI firmware), force it via sysrq
+    ( sleep 10 && echo b > /proc/sysrq-trigger ) &
+    reboot -f
 else
     EXIT_CODE=$?
     log "FAILED: Installation error (exit $EXIT_CODE)"
@@ -333,6 +337,9 @@ else
     echo ""
     echo ""
 
-    read -t 60 _ 2>/dev/null || true
-    reboot -f || echo b > /proc/sysrq-trigger
+    stty sane 2>/dev/null || true
+    read -t 60 _ </dev/tty1 2>/dev/null || true
+    log "Rebooting after failure"
+    ( sleep 10 && echo b > /proc/sysrq-trigger ) &
+    reboot -f
 fi

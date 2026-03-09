@@ -563,6 +563,7 @@ class PurpleApp(App):
         self._power_button_reader: PowerButtonReader | None = None
         self._bye_screen_active = False
         self._app_suspended = False  # True while shell is open via parent menu
+        self._lid_close_time: float | None = None  # App-level lid tracking (fallback)
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -1273,18 +1274,40 @@ class PurpleApp(App):
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity or lid close."""
-        # Don't check if sleep screen is already showing
-        if self._sleep_screen_active:
-            return
-
         try:
             # Import threshold at runtime so demo mode env var is respected
-            from .power_manager import IDLE_SLEEP_UI
+            from .power_manager import IDLE_SLEEP_UI, LID_SHUTDOWN_DELAY
 
             pm = get_power_manager()
+            lid_open = pm.get_lid_state()
+
+            # Track lid close time at app level (fallback for sleep screen bugs)
+            if lid_open is False:
+                if self._lid_close_time is None:
+                    self._lid_close_time = time.time()
+            else:
+                self._lid_close_time = None
+
+            # Safety: if _sleep_screen_active flag is stuck but screen isn't
+            # actually showing, reset it so we don't block forever
+            if self._sleep_screen_active:
+                from .rooms.sleep_screen import SleepScreen
+                actually_showing = any(
+                    isinstance(s, SleepScreen) for s in self.screen_stack
+                )
+                if not actually_showing:
+                    self._sleep_screen_active = False
+
+            if self._sleep_screen_active:
+                # Sleep screen handles its own lid countdown and idle timers.
+                # But as a last resort: if lid has been closed way past the
+                # shutdown delay and we're still alive, force shutdown directly.
+                if (self._lid_close_time is not None
+                        and time.time() - self._lid_close_time > LID_SHUTDOWN_DELAY + 30):
+                    self._show_bye_screen()
+                return
 
             # Lid closed: immediately show sleep screen (which handles shutdown countdown)
-            lid_open = pm.get_lid_state()
             if lid_open is False:
                 self._show_sleep_screen()
                 return
@@ -1328,6 +1351,7 @@ class PurpleApp(App):
 
     def _record_user_activity(self) -> None:
         """Record that user is active. Resets idle timer."""
+        self._lid_close_time = None  # User is active, reset lid tracking
         try:
             pm = get_power_manager()
             pm.record_activity()
@@ -1346,7 +1370,12 @@ class PurpleApp(App):
             return
 
         if event.action == "tap":
-            self._show_sleep_screen()
+            if self._sleep_screen_active:
+                # Already sleeping: second tap means shut down.
+                # (Many laptops send tap-only for power, hold never fires.)
+                self._show_bye_screen()
+            else:
+                self._show_sleep_screen()
         elif event.action == "hold":
             self._show_bye_screen()
 
@@ -1355,7 +1384,14 @@ class PurpleApp(App):
         if self._bye_screen_active:
             return
 
-        from .rooms.sleep_screen import ByeScreen
+        from .rooms.sleep_screen import ByeScreen, SleepScreen
+
+        # Dismiss sleep screen first if it's showing (avoid stacking)
+        if self._sleep_screen_active:
+            for screen in list(self.screen_stack):
+                if isinstance(screen, SleepScreen):
+                    screen.dismiss()
+                    break
 
         self._bye_screen_active = True
         self.push_screen(ByeScreen())

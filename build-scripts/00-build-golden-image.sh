@@ -241,6 +241,9 @@ AUTOLOGIN
     # With console=tty2, tty1 is blank until agetty starts. This fills the gap.
     cat > "$MOUNT_DIR/usr/local/bin/purple-splash" <<'SPLASH'
 #!/bin/sh
+# Silence kernel console messages (camera drivers, etc.) so they don't
+# overwrite our splash. Works regardless of which modules are loaded.
+dmesg -n 1 2>/dev/null
 # Redefine VT color 0 (black) to Purple Computer purple (#2d1b4e),
 # then clear screen (fills with purple) and show white text.
 printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
@@ -304,11 +307,20 @@ SUDOERS
 # Alt+SysRq+B = instant reboot, Alt+SysRq+O = instant poweroff, etc.
 # These are dangerous when kids mash random key combinations.
 kernel.sysrq = 0
+
+# Suppress kernel messages on console (camera drivers, etc. leak to tty1 during boot).
+# Format: console_loglevel default_message_loglevel minimum_console_loglevel default_console_loglevel
+# Level 1 = only KERN_ALERT and KERN_EMERG reach the console.
+kernel.printk = 1 1 1 1
 SYSCTL
 
     # Disable Ctrl+Alt+Del reboot (systemd target)
     # By default this triggers a system reboot, which kids could hit accidentally
     chroot "$MOUNT_DIR" systemctl mask ctrl-alt-del.target
+
+    # Suppress Ubuntu MOTD on login (PAM's pam_motd.so prints it even with --noissue)
+    touch "$MOUNT_DIR/home/purple/.hushlogin"
+    chown 1000:1000 "$MOUNT_DIR/home/purple/.hushlogin"
 
     # Copy xinitrc from project config (shared with dev environment)
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/home/purple/.xinitrc"
@@ -374,7 +386,7 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
     echo $((X_FAIL_COUNT + 1)) > "$X_FAIL_COUNT_FILE"
 
     # Start X - if it exits cleanly, reset the counter
-    startx
+    startx > /tmp/startx.log 2>&1
     X_EXIT=$?
 
     if [ $X_EXIT -eq 0 ]; then

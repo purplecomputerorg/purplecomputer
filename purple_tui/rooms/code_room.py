@@ -638,6 +638,19 @@ class CodeMode(Container, can_focus=True):
         """Get the current MODE_SWITCH context at cursor position."""
         return _get_mode_context(self._blocks, self._cursor)
 
+    def _mode_switch_has_content(self, block_index: int) -> bool:
+        """Check if a MODE_SWITCH block has content blocks after it.
+
+        Returns True if there are non-MODE_SWITCH blocks between this
+        MODE_SWITCH and the next MODE_SWITCH (or end of program).
+        """
+        for i in range(block_index + 1, len(self._blocks)):
+            if self._blocks[i].type == ProgramBlockType.MODE_SWITCH:
+                return False
+            else:
+                return True
+        return False
+
     def _ensure_default_mode(self) -> None:
         """Auto-insert a default MODE_SWITCH when canvas is empty.
 
@@ -695,8 +708,9 @@ class CodeMode(Container, can_focus=True):
                 direction = 1 if action.direction == 'up' else -1
                 block = self._blocks[self._cursor - 1]
                 if block.type == ProgramBlockType.MODE_SWITCH:
-                    block.cycle_target(direction)
-                    self._refresh_all()
+                    if not self._mode_switch_has_content(self._cursor - 1):
+                        block.cycle_target(direction)
+                        self._refresh_all()
                     return
                 elif block.type == ProgramBlockType.PAUSE:
                     block.cycle_pause_duration(direction)
@@ -744,9 +758,13 @@ class CodeMode(Container, can_focus=True):
             if self._cursor > 0:
                 block = self._blocks[self._cursor - 1]
                 if block.type in self._ADJUSTABLE_TYPES:
-                    self._adjusting = not self._adjusting
-                    self._refresh_all()
-                    return
+                    # Don't allow adjusting a MODE_SWITCH that has content after it
+                    if block.type == ProgramBlockType.MODE_SWITCH and self._mode_switch_has_content(self._cursor - 1):
+                        pass  # Fall through to compose/new-line behavior below
+                    else:
+                        self._adjusting = not self._adjusting
+                        self._refresh_all()
+                        return
             context = self._mode_context()
             if context == TARGET_PLAY:
                 # Start compose mode for QUERY block

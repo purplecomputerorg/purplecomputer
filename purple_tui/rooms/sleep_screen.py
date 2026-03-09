@@ -124,6 +124,7 @@ class SleepScreen(Screen):
         self._lid_close_time: float | None = None
         self._last_lid_state: bool | None = True
         self._screen_off = False
+        self._shutdown_initiated = False
 
     def compose(self) -> ComposeResult:
         yield SleepFace()
@@ -219,7 +220,10 @@ class SleepScreen(Screen):
             hint.update("Press any key to wake")
 
     def _do_shutdown(self) -> None:
-        """Execute shutdown"""
+        """Execute shutdown (only once, further calls are no-ops)."""
+        if self._shutdown_initiated:
+            return
+        self._shutdown_initiated = True
         pm = get_power_manager()
         pm.set_screen_brightness("on")
         if not pm.shutdown():
@@ -240,7 +244,7 @@ class SleepScreen(Screen):
         self._lid_close_time = None
 
         # Dismiss this screen and return to normal
-        self.app.pop_screen()
+        self.dismiss()
 
     def on_key(self, event: events.Key) -> None:
         """Any key press wakes up the computer (terminal fallback)"""

@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Power button: tapping power while on the sleep screen now shuts down (previously did nothing). Fixed power button stopping working after waking from sleep. Added safety checks so lid close shutdown can't get permanently stuck.
+- Boot: suppressed kernel driver errors, Ubuntu MOTD, and Xorg startup messages so only the purple splash screen is visible during startup.
+- Code room: MODE_SWITCH blocks are locked once content blocks follow them, preventing room changes that would make existing blocks meaningless.
 - Code room: Space and Escape now properly stop playback even when playback has switched to another room. Escape also stops playback when code room is active.
 - Watch Me mode: Escape no longer opens the room picker after ending Watch Me.
 - Code room: Play (QUERY) blocks now show full text and stretch to fit, with ellipsis if too wide. Compose text appears live in the block itself instead of only at the bottom. Room picker in Tab menu now matches the regular room order (Play, Music, Art) and supports number key selection.

@@ -107,6 +107,8 @@ if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
     chown 1000:1000 /root/home/purple/.xinitrc
     cat /root/etc/purple/bash-autostart.sh >> /root/home/purple/.bashrc
     chown 1000:1000 /root/home/purple/.bashrc
+    touch /root/home/purple/.hushlogin
+    chown 1000:1000 /root/home/purple/.hushlogin
     purple_log "Restored dotfiles from /etc/purple/"
 
     # Write our own getty service (casper doesn't enable getty@tty1 on Ubuntu Server).

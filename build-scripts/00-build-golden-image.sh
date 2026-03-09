@@ -259,6 +259,8 @@ Before=getty@tty1.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/purple-splash
+# On shutdown, repaint tty1 purple so no X.Org or systemd messages are visible
+ExecStop=/usr/local/bin/purple-splash
 RemainAfterExit=yes
 
 [Install]

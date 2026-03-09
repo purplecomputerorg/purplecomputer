@@ -9,6 +9,12 @@ echo "=== $(date) ==="
 # Wait for X to initialize
 sleep 1
 
+# Clear the underlying VT text buffer. X.Org writes startup messages (version
+# info, keymap warnings) to tty1 before switching to graphics mode. Those stay
+# in the VT buffer and reappear when X exits (e.g. during shutdown). Clearing
+# now while X covers the screen means there's nothing scary underneath.
+printf '\033]P02d1b4e\033[H\033[2J\033[?25l' > /dev/tty1 2>/dev/null
+
 # Start PulseAudio (may not auto-start in live boot)
 pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
 

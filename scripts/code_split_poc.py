@@ -4,22 +4,25 @@ Proof of concept: split-screen code mode via font resizing.
 Press 'c' to toggle code mode (shrinks font to 2/3, shows split layout).
 Press 'q' to quit.
 
-Run with: just python scripts/code_split_poc.py
+Run with: just code-split-poc
 (Must be inside Alacritty with PURPLE_ALACRITTY_CONFIG set)
 """
 
 import os
 import re
-import time
 
 from textual.app import App, ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.strip import Strip
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
+
+
+# Background color matching Alacritty/Textual theme
+BG_PURPLE = "#1e1033"
 
 
 # Alacritty config handling (copied minimal version from font_sizer)
@@ -77,10 +80,20 @@ class ColorPanel(Widget):
         return Strip([Segment(" " * width, style)])
 
 
+class Curtain(Widget):
+    """Full-screen purple curtain to hide font transitions."""
+
+    def render_line(self, y: int) -> Strip:
+        width = self.size.width
+        style = Style(bgcolor=BG_PURPLE)
+        return Strip([Segment(" " * width, style)])
+
+
 class CodeSplitApp(App):
     CSS = """
     Screen {
         layout: vertical;
+        background: """ + BG_PURPLE + """;
     }
 
     #normal-layout {
@@ -104,6 +117,10 @@ class CodeSplitApp(App):
         width: 1fr;
     }
 
+    #curtain {
+        height: 1fr;
+    }
+
     #status {
         dock: bottom;
         height: 1;
@@ -116,6 +133,7 @@ class CodeSplitApp(App):
     def __init__(self):
         super().__init__()
         self._code_mode = False
+        self._transitioning = False
         self._config_path = _get_config_path()
         self._original_font: float | None = None
         if self._config_path:
@@ -125,10 +143,18 @@ class CodeSplitApp(App):
         yield ColorPanel("Room (Play / Music / Art)", "#2a1845", id="normal-layout")
         yield Static("Press 'c' to toggle code mode | 'q' to quit", id="status")
 
-    def _rebuild_layout(self) -> None:
-        """Swap between normal and split layouts."""
-        # Remove existing content (not the status bar)
-        for widget in list(self.query("ColorPanel, #split-top, #split-bottom")):
+    def _show_curtain(self) -> None:
+        """Replace all content with a purple curtain."""
+        for widget in list(self.query("ColorPanel, Curtain, #split-top, #split-bottom, #normal-layout")):
+            widget.remove()
+        status = self.query_one("#status")
+        self.mount(Curtain(id="curtain"), before=status)
+
+    def _reveal_layout(self) -> None:
+        """Remove curtain and show the actual layout."""
+        self._transitioning = False
+
+        for widget in list(self.query("ColorPanel, Curtain, #split-top, #split-bottom, #normal-layout")):
             widget.remove()
 
         status = self.query_one("#status")
@@ -158,29 +184,41 @@ class CodeSplitApp(App):
         if not self._config_path or not self._original_font:
             self.query_one("#status").update("No Alacritty config found!")
             return
+        if self._transitioning:
+            return  # Ignore rapid presses
 
+        self._transitioning = True
         self._code_mode = not self._code_mode
 
+        # Step 1: show purple curtain (matches Alacritty background)
+        self._show_curtain()
+
+        # Step 2: change font after curtain is painted (one frame)
+        self.set_timer(0.05, self._change_font)
+
+    def _change_font(self) -> None:
+        """Change the font size. Called after curtain is visible."""
         if self._code_mode:
-            new_font = round(self._original_font * 2 / 3 * 2) / 2  # floor to 0.5
+            new_font = round(self._original_font * 2 / 3 * 2) / 2
             _write_font_size(self._config_path, new_font)
         else:
             _write_font_size(self._config_path, self._original_font)
 
-        # Give Alacritty a moment to reload, then rebuild
-        self.set_timer(0.3, self._rebuild_layout)
+        # Step 3: reveal layout after Alacritty reloads
+        self.set_timer(0.3, self._reveal_layout)
 
     async def on_key(self, event: events.Key) -> None:
         if event.key == "c":
             self._toggle_code_mode()
         elif event.key == "q":
-            # Restore font before quitting
             if self._config_path and self._original_font:
                 _write_font_size(self._config_path, self._original_font)
             self.exit()
 
     def on_resize(self, event: events.Resize) -> None:
         """Update status with current terminal size."""
+        if self._transitioning:
+            return  # Don't update status during transition
         status = self.query_one("#status", Static)
         mode = "CODE" if self._code_mode else "NORMAL"
         status.update(

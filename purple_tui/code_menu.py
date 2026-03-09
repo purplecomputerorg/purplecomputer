@@ -38,7 +38,8 @@ MENU_ITEMS = [
     ("watch_me", "  Watch me!", True),
     ("insert_pause", "  Pause \u23f8", True),
     ("insert_stroke", "  Stroke \u25b6", True),
-    ("insert_repeat", "  Repeat x2", True),
+    ("insert_repeat_block", "  Repeat block", True),
+    ("insert_repeat_line", "  Repeat line", True),
     ("insert_enter", "  Enter \U000f0311", True),
     ("insert_room_switch", "  Room...", True),
     ("separator", "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", False),
@@ -180,8 +181,11 @@ class CodeMenuScreen(ModalScreen):
             self._sub_selected = 0
             self._show_sub_picker_rooms()
 
-        elif item_id == "insert_repeat":
-            self.dismiss({"action": "insert_repeat"})
+        elif item_id == "insert_repeat_block":
+            self.dismiss({"action": "insert_repeat_block"})
+
+        elif item_id == "insert_repeat_line":
+            self.dismiss({"action": "insert_repeat_line"})
 
         elif item_id == "insert_pause":
             self.dismiss({"action": "insert_pause"})

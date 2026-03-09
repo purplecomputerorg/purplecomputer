@@ -33,6 +33,7 @@ from ..program import (
     BLOCK_WIDTH,
     BLOCK_ROWS,
     QUERY_COLOR,
+    REPEAT_COLOR,
     blocks_to_playback_actions,
     save_program,
     load_program,
@@ -70,26 +71,24 @@ CURSOR_COLOR = "#6633AA"          # blinking insertion-point cursor
 CURSOR_BLINK_INTERVAL = 0.4      # seconds
 GUTTER_WIDTH = 3                  # left gutter for mode icons
 
-# Repeat badge in gutter
-REPEAT_BADGE_COLOR = "#2d9e8a"
 
 
 # =============================================================================
 # LINE LAYOUT
 # =============================================================================
 
-def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[str, list[tuple[int, ProgramBlock]], int]]:
+def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[str, list[tuple[int, ProgramBlock]], int, int, int]]:
     """Pre-process blocks into display lines.
 
-    Returns list of (gutter_icon, [(block_index, block), ...], line_repeat) tuples.
+    Returns list of (gutter_icon, [(block_index, block), ...], repeat_count, repeat_span, repeat_block_idx) tuples.
     MODE_SWITCH blocks start a new line with their icon in the gutter.
-    REPEAT blocks at end of a line are extracted as line metadata.
+    REPEAT blocks are removed from line_blocks and stored as metadata.
     Lines wrap automatically at content_width.
     """
     if not blocks:
         return []
 
-    lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]] = []
+    lines: list[tuple[str, list[tuple[int, ProgramBlock]], int, int, int]] = []
     current_icon = ""
     current_line: list[tuple[int, ProgramBlock]] = []
     current_width = 0
@@ -121,15 +120,21 @@ def _layout_lines(blocks: list[ProgramBlock], content_width: int) -> list[tuple[
     return lines
 
 
-def _finalize_line(icon: str, line_blocks: list[tuple[int, ProgramBlock]]) -> tuple[str, list[tuple[int, ProgramBlock]], int]:
-    """Extract REPEAT block at end of line as line_repeat metadata."""
-    line_repeat = 0
+def _finalize_line(icon: str, line_blocks: list[tuple[int, ProgramBlock]]) -> tuple[str, list[tuple[int, ProgramBlock]], int, int, int]:
+    """Extract REPEAT block at end of line as metadata, remove from line_blocks."""
+    repeat_count = 0
+    repeat_span = 0
+    repeat_block_idx = -1
     if line_blocks and line_blocks[-1][1].type == ProgramBlockType.REPEAT:
-        line_repeat = line_blocks[-1][1].repeat_count
-    return (icon, line_blocks, line_repeat)
+        repeat_block = line_blocks[-1][1]
+        repeat_block_idx = line_blocks[-1][0]
+        repeat_count = repeat_block.repeat_count
+        repeat_span = repeat_block.repeat_span
+        line_blocks = line_blocks[:-1]  # remove REPEAT from visible blocks
+    return (icon, line_blocks, repeat_count, repeat_span, repeat_block_idx)
 
 
-def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]], cursor: int) -> tuple[int, int]:
+def _cursor_to_line_pos(lines: list[tuple], cursor: int) -> tuple[int, int]:
     """Convert insertion-point cursor to (line_index, position_in_line).
 
     Cursor is an insertion point (0 to len(blocks)). Position N means
@@ -138,8 +143,15 @@ def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]], i
     if not lines:
         return 0, 0
 
-    for line_idx, (_, line_blocks, _) in enumerate(lines):
+    for line_idx, line_tuple in enumerate(lines):
+        line_blocks = line_tuple[1]
+        repeat_block_idx = line_tuple[4]
         if not line_blocks:
+            # Cursor might be on the repeat block of an empty content line
+            if repeat_block_idx >= 0 and repeat_block_idx == cursor:
+                return line_idx, 0
+            if repeat_block_idx >= 0 and cursor == repeat_block_idx + 1:
+                return line_idx, 0
             continue
         last_block_idx = line_blocks[-1][0]
 
@@ -147,7 +159,9 @@ def _cursor_to_line_pos(lines: list[tuple[str, list[tuple[int, ProgramBlock]], i
             if block_idx == cursor:
                 return line_idx, pos
 
-        if cursor == last_block_idx + 1:
+        # Cursor after last visible block (could be on repeat block or after it)
+        effective_last = repeat_block_idx if repeat_block_idx >= 0 else last_block_idx
+        if cursor == last_block_idx + 1 or cursor == effective_last + 1:
             if line_idx + 1 < len(lines):
                 next_line_blocks = lines[line_idx + 1][1]
                 if next_line_blocks and next_line_blocks[0][0] == cursor:
@@ -189,7 +203,7 @@ class CodeCanvas(Widget):
         self._blocks: list[ProgramBlock] = []
         self._cursor: int = 0
         self._scroll_y: int = 0
-        self._lines: list[tuple[str, list[tuple[int, ProgramBlock]], int]] = []
+        self._lines: list[tuple[str, list[tuple[int, ProgramBlock]], int, int, int]] = []
         self._cursor_visible = True
         self._blink_timer = None
         self.add_class("caps-sensitive")
@@ -275,7 +289,7 @@ class CodeCanvas(Widget):
         if line_idx < 0 or line_idx >= len(self._lines):
             return Strip([Segment(" " * width, bg_style)])
 
-        icon, line_blocks, line_repeat = self._lines[line_idx]
+        icon, line_blocks, repeat_count, repeat_span, repeat_block_idx = self._lines[line_idx]
         content_width = width - GUTTER_WIDTH
 
         # Check if the MODE_SWITCH on this line is being adjusted
@@ -286,25 +300,37 @@ class CodeCanvas(Widget):
                     gutter_adjusting = True
                     break
 
+        # Check if REPEAT bracket is being adjusted
+        repeat_adjusting = (
+            self._adjusting
+            and repeat_block_idx >= 0
+            and self._cursor - 1 == repeat_block_idx
+        )
+
+        # Determine which block is being adjusted (for dimming)
+        adjusting_block_idx = -1
+        if self._adjusting and self._cursor > 0:
+            adjusting_block_idx = self._cursor - 1
+
         gutter_segments = self._render_gutter(
-            icon, sub_row, bg, bg_style, line_repeat, gutter_adjusting
+            icon, sub_row, bg, bg_style, repeat_count, gutter_adjusting,
+            dimmed=(self._adjusting and not gutter_adjusting and not repeat_adjusting)
         )
         block_segments = self._render_block_strip(
-            line_blocks, sub_row, content_width, bg, bg_style
+            line_blocks, sub_row, content_width, bg, bg_style,
+            repeat_count=repeat_count, repeat_span=repeat_span,
+            repeat_adjusting=repeat_adjusting,
+            adjusting_block_idx=adjusting_block_idx,
         )
 
         return Strip(gutter_segments + block_segments)
 
     def _render_gutter(self, icon: str, sub_row: int, bg: str,
                        bg_style: Style, line_repeat: int = 0,
-                       adjusting: bool = False) -> list[Segment]:
+                       adjusting: bool = False,
+                       dimmed: bool = False) -> list[Segment]:
         """Render the 3-char left gutter."""
         if not icon:
-            if line_repeat > 0 and sub_row == 1:
-                badge = f"x{line_repeat}"
-                badge_style = Style(color=REPEAT_BADGE_COLOR, bgcolor=bg, bold=True)
-                display = badge[:GUTTER_WIDTH].center(GUTTER_WIDTH)
-                return [Segment(display, badge_style)]
             return [Segment(" " * GUTTER_WIDTH, bg_style)]
 
         # Look up room color from icon
@@ -317,9 +343,11 @@ class CodeCanvas(Widget):
         if not target_color:
             return [Segment(" " * GUTTER_WIDTH, bg_style)]
 
-        # When adjusting MODE_SWITCH, blink gutter between gold and room color
-        if adjusting and self._cursor_visible:
+        # When adjusting MODE_SWITCH, solid gold gutter
+        if adjusting:
             target_color = BLOCK_SELECTED_COLOR
+        elif dimmed:
+            target_color = _dim_color(target_color)
 
         block_style = Style(bgcolor=target_color)
         if sub_row == 1:
@@ -327,12 +355,6 @@ class CodeCanvas(Widget):
             icon_style = Style(color=text_color, bgcolor=target_color, bold=True)
             display = icon[:GUTTER_WIDTH].center(GUTTER_WIDTH)
             return [Segment(display, icon_style)]
-        elif sub_row == 2 and line_repeat > 0:
-            badge = f"x{line_repeat}"
-            text_color = "#FFFFFF" if _is_dark_color(target_color) else "#1A1A1A"
-            badge_style = Style(color=text_color, bgcolor=target_color)
-            display = badge[:GUTTER_WIDTH].center(GUTTER_WIDTH)
-            return [Segment(display, badge_style)]
         else:
             return [Segment(" " * GUTTER_WIDTH, block_style)]
 
@@ -382,14 +404,37 @@ class CodeCanvas(Widget):
 
     def _render_block_strip(self, line_blocks: list[tuple[int, ProgramBlock]],
                             sub_row: int, content_width: int,
-                            bg: str, bg_style: Style) -> list[Segment]:
+                            bg: str, bg_style: Style,
+                            repeat_count: int = 0, repeat_span: int = 0,
+                            repeat_adjusting: bool = False,
+                            adjusting_block_idx: int = -1) -> list[Segment]:
         """Render a horizontal strip of blocks for one sub-row.
 
         Blocks use their display_width (variable for QUERY blocks).
         During compose mode, a live preview block appears at cursor position.
+        Supports dimming, gold frames, and repeat brackets.
         """
         segments: list[Segment] = []
         x_pos = 0
+
+        # Determine bracket info: which content blocks are inside the bracket
+        content_blocks = [(i, bi, blk) for i, (bi, blk) in enumerate(line_blocks)
+                          if blk.type != ProgramBlockType.MODE_SWITCH
+                          and blk.type != ProgramBlockType.VOICE]
+        bracket_start_pos = -1  # position in content_blocks
+        bracket_end_pos = -1
+        if repeat_count > 0 and content_blocks:
+            clamped_span = min(repeat_span, len(content_blocks))
+            bracket_start_pos = len(content_blocks) - clamped_span
+            bracket_end_pos = len(content_blocks) - 1
+        # Build set of block indices inside bracket
+        bracketed_indices = set()
+        if bracket_start_pos >= 0:
+            for ci in range(bracket_start_pos, bracket_end_pos + 1):
+                bracketed_indices.add(content_blocks[ci][1])
+
+        # Bracket color
+        bracket_color = BLOCK_SELECTED_COLOR if repeat_adjusting else REPEAT_COLOR
 
         def _maybe_render_cursor_or_compose():
             nonlocal x_pos
@@ -410,13 +455,17 @@ class CodeCanvas(Widget):
             if self._cursor == first_block_idx:
                 _maybe_render_cursor_or_compose()
 
-        for block_idx, block in line_blocks:
+        for pos_in_line, (block_idx, block) in enumerate(line_blocks):
             is_before_cursor = (block_idx == self._cursor - 1)
-            is_adjusting = is_before_cursor and self._adjusting
 
             # Skip structural blocks in the strip
             if block.type == ProgramBlockType.MODE_SWITCH:
-                # After MODE_SWITCH, check cursor
+                if block_idx + 1 == self._cursor:
+                    if x_pos < content_width:
+                        _maybe_render_cursor_or_compose()
+                continue
+
+            if block.type == ProgramBlockType.VOICE:
                 if block_idx + 1 == self._cursor:
                     if x_pos < content_width:
                         _maybe_render_cursor_or_compose()
@@ -431,23 +480,61 @@ class CodeCanvas(Widget):
             block_bg = block.bg_color
             text_color = "#FFFFFF" if _is_dark_color(block_bg) else "#1A1A1A"
 
-            # When adjusting, blink the entire block between gold and normal
-            if is_adjusting and self._cursor_visible:
-                block_bg = BLOCK_SELECTED_COLOR
-                text_color = "#1A1A1A"
+            # Is this block being directly adjusted (non-repeat)?
+            is_this_adjusting = (is_before_cursor and self._adjusting
+                                 and block_idx == adjusting_block_idx)
+            in_bracket = block_idx in bracketed_indices
+
+            # Dimming: when adjusting, dim blocks not being adjusted and not in active bracket
+            if self._adjusting and not is_this_adjusting:
+                if repeat_adjusting and in_bracket:
+                    pass  # inside active bracket: full brightness
+                else:
+                    block_bg = _dim_color(block_bg)
+                    text_color = _dim_color(text_color)
+
+            # Determine bracket position for this content block
+            content_pos = -1
+            for ci, (_, cbi, _) in enumerate(content_blocks):
+                if cbi == block_idx:
+                    content_pos = ci
+                    break
+
+            is_bracket_first = (content_pos == bracket_start_pos)
+            is_bracket_last = (content_pos == bracket_end_pos)
+            is_in_bracket = (bracket_start_pos >= 0
+                             and bracket_start_pos <= content_pos <= bracket_end_pos)
 
             if sub_row == 0:
-                # Top border
-                if is_before_cursor:
+                if is_this_adjusting:
+                    # Gold frame top: ━▲━━━
                     border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
-                    segments.append(Segment("\u2500" * visible_w, border_style))
+                    frame = "━" * visible_w
+                    mid = visible_w // 2
+                    if visible_w >= 3:
+                        frame = frame[:mid] + "▲" + frame[mid+1:]
+                    segments.append(Segment(frame, border_style))
+                elif is_in_bracket:
+                    # Bracket top border
+                    bstyle = Style(color=bracket_color, bgcolor=bg)
+                    if is_bracket_first and is_bracket_last:
+                        line_str = "┌" + "─" * (visible_w - 2) + "┐" if visible_w >= 2 else "─" * visible_w
+                    elif is_bracket_first:
+                        line_str = "┌" + "─" * (visible_w - 1)
+                    elif is_bracket_last:
+                        line_str = "─" * (visible_w - 1) + "┐"
+                    else:
+                        line_str = "─" * visible_w
+                    segments.append(Segment(line_str[:visible_w], bstyle))
+                elif is_before_cursor:
+                    border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    segments.append(Segment("─" * visible_w, border_style))
                 else:
                     segments.append(Segment(" " * visible_w, bg_style))
 
             elif sub_row == 1:
                 # Block body with icon
                 icon = block.icon
-                # For QUERY blocks, truncate with ellipsis if needed
                 if block.type == ProgramBlockType.QUERY and len(icon) > visible_w - 2:
                     max_text = visible_w - 2
                     if max_text > 3:
@@ -456,18 +543,97 @@ class CodeCanvas(Widget):
                         icon = icon[:max_text]
                     else:
                         icon = ""
-                icon_text = _center_text(icon, block_w)
-                body_style = Style(color=text_color, bgcolor=block_bg,
-                                   bold=is_before_cursor)
-                for cx in range(visible_w):
-                    char = icon_text[cx] if cx < len(icon_text) else " "
-                    segments.append(Segment(char, body_style))
+
+                if is_this_adjusting:
+                    # Gold frame sides: ┃ icon ┃
+                    frame_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    body_style = Style(color=text_color, bgcolor=block_bg, bold=True)
+                    inner_w = visible_w - 2
+                    if inner_w > 0:
+                        icon_text = _center_text(icon, inner_w)
+                        segments.append(Segment("┃", frame_style))
+                        segments.append(Segment(icon_text, body_style))
+                        segments.append(Segment("┃", frame_style))
+                    else:
+                        icon_text = _center_text(icon, visible_w)
+                        segments.append(Segment(icon_text, body_style))
+                elif is_in_bracket:
+                    # Bracket sides
+                    bstyle = Style(color=bracket_color, bgcolor=bg)
+                    body_style = Style(color=text_color, bgcolor=block_bg,
+                                       bold=is_before_cursor)
+                    if is_bracket_first and is_bracket_last:
+                        inner_w = visible_w - 2
+                        if inner_w > 0:
+                            icon_text = _center_text(icon, inner_w)
+                            segments.append(Segment("│", bstyle))
+                            segments.append(Segment(icon_text, body_style))
+                            segments.append(Segment("│", bstyle))
+                        else:
+                            segments.append(Segment(_center_text(icon, visible_w), body_style))
+                    elif is_bracket_first:
+                        inner_w = visible_w - 1
+                        icon_text = _center_text(icon, inner_w)
+                        segments.append(Segment("│", bstyle))
+                        segments.append(Segment(icon_text, body_style))
+                    elif is_bracket_last:
+                        inner_w = visible_w - 1
+                        icon_text = _center_text(icon, inner_w)
+                        segments.append(Segment(icon_text, body_style))
+                        segments.append(Segment("│", bstyle))
+                    else:
+                        icon_text = _center_text(icon, visible_w)
+                        segments.append(Segment(icon_text, body_style))
+                else:
+                    icon_text = _center_text(icon, block_w)
+                    body_style = Style(color=text_color, bgcolor=block_bg,
+                                       bold=is_before_cursor)
+                    for cx in range(visible_w):
+                        char = icon_text[cx] if cx < len(icon_text) else " "
+                        segments.append(Segment(char, body_style))
 
             elif sub_row == 2:
-                # Bottom border
-                if is_before_cursor:
+                if is_this_adjusting:
+                    # Gold frame bottom: ━▼━━━
                     border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
-                    segments.append(Segment("\u2500" * visible_w, border_style))
+                    frame = "━" * visible_w
+                    mid = visible_w // 2
+                    if visible_w >= 3:
+                        frame = frame[:mid] + "▼" + frame[mid+1:]
+                    segments.append(Segment(frame, border_style))
+                elif is_in_bracket:
+                    # Bracket bottom border with count label on last block
+                    bstyle = Style(color=bracket_color, bgcolor=bg)
+                    if is_bracket_last:
+                        # Show count at bottom-right: ─xN┘ or ◀xN▶┘ when adjusting
+                        if repeat_adjusting:
+                            label = f"◀x{repeat_count}▶"
+                        else:
+                            label = f"x{repeat_count}"
+                        if is_bracket_first:
+                            # Single block bracket
+                            inner = visible_w - 2  # └...┘
+                            if inner >= len(label):
+                                fill = "─" * (inner - len(label))
+                                line_str = "└" + fill + label + "┘"
+                            else:
+                                line_str = "└" + label[:inner] + "┘"
+                        else:
+                            inner = visible_w - 1  # ...┘
+                            if inner >= len(label):
+                                fill = "─" * (inner - len(label))
+                                line_str = fill + label + "┘"
+                            else:
+                                line_str = label[:inner] + "┘"
+                        segments.append(Segment(line_str[:visible_w], bstyle))
+                    elif is_bracket_first:
+                        line_str = "└" + "─" * (visible_w - 1)
+                        segments.append(Segment(line_str[:visible_w], bstyle))
+                    else:
+                        segments.append(Segment("─" * visible_w, bstyle))
+                elif is_before_cursor:
+                    border_style = Style(color=BLOCK_SELECTED_COLOR, bgcolor=bg)
+                    segments.append(Segment("─" * visible_w, border_style))
                 else:
                     segments.append(Segment(" " * visible_w, bg_style))
 
@@ -545,7 +711,7 @@ class CodeCanvas(Widget):
                 return self._centered_dim_text(hint, width, bg, bg_style)
             elif block.type == ProgramBlockType.REPEAT:
                 if self._adjusting:
-                    hint = f"Repeat x{block.repeat_count}  \u2191\u2193 adjust  Enter/Esc done"
+                    hint = f"Repeat x{block.repeat_count}  \u2191\u2193 count  \u2190\u2192 resize  Enter/Esc done"
                 else:
                     hint = f"Repeat x{block.repeat_count}  Enter to adjust  \u2190\u2192 move  Bksp delete"
                 return self._centered_dim_text(hint, width, bg, bg_style)
@@ -700,8 +866,17 @@ class CodeMode(Container, can_focus=True):
             return
 
     async def _handle_navigation(self, action: NavigationAction) -> None:
-        """Left/Right navigate (exits adjustment). Up/Down adjust block or jump lines."""
+        """Left/Right navigate (exits adjustment, or resizes REPEAT bracket). Up/Down adjust block or jump lines."""
         if action.direction in ('left', 'right'):
+            # When adjusting a REPEAT block, left/right resizes the bracket
+            if self._adjusting and self._cursor > 0:
+                block = self._blocks[self._cursor - 1]
+                if block.type == ProgramBlockType.REPEAT:
+                    max_span = self._max_repeat_span(self._cursor - 1)
+                    direction = -1 if action.direction == 'left' else 1
+                    block.adjust_repeat_span(direction, max_span)
+                    self._refresh_all()
+                    return
             self._adjusting = False
             if action.direction == 'left':
                 if self._cursor > 0:
@@ -954,8 +1129,13 @@ class CodeMode(Container, can_focus=True):
                 is_control=True,
             ))
 
-        elif action == "insert_repeat":
-            self._insert_block(ProgramBlock(type=ProgramBlockType.REPEAT))
+        elif action == "insert_repeat_block":
+            self._insert_repeat(span=1)
+
+        elif action == "insert_repeat_line":
+            span = self._count_content_blocks_before_cursor()
+            if span > 0:
+                self._insert_repeat(span=span)
 
         elif action == "insert_pause":
             self._insert_block(ProgramBlock(
@@ -1040,6 +1220,46 @@ class CodeMode(Container, can_focus=True):
             return
         self._blocks.pop(self._cursor - 1)
         self._cursor -= 1
+        self._refresh_all()
+
+    # Content block types (blocks that REPEAT can span over)
+    _CONTENT_TYPES = frozenset({
+        ProgramBlockType.KEY,
+        ProgramBlockType.QUERY,
+        ProgramBlockType.STROKE,
+        ProgramBlockType.PAUSE,
+    })
+
+    def _count_content_blocks_before_cursor(self) -> int:
+        """Count content blocks between cursor and the last MODE_SWITCH/VOICE/REPEAT."""
+        count = 0
+        for i in range(self._cursor - 1, -1, -1):
+            if self._blocks[i].type in self._CONTENT_TYPES:
+                count += 1
+            else:
+                break
+        return count
+
+    def _max_repeat_span(self, repeat_index: int) -> int:
+        """Max span for a REPEAT block: content blocks between it and last MODE_SWITCH/VOICE."""
+        count = 0
+        for i in range(repeat_index - 1, -1, -1):
+            if self._blocks[i].type in self._CONTENT_TYPES:
+                count += 1
+            else:
+                break
+        return max(1, count)
+
+    def _insert_repeat(self, span: int) -> None:
+        """Insert a REPEAT block with given span and auto-enter adjustment mode."""
+        if span <= 0:
+            return
+        block = ProgramBlock(
+            type=ProgramBlockType.REPEAT,
+            repeat_span=span,
+        )
+        self._insert_block(block)
+        self._adjusting = True
         self._refresh_all()
 
     # ── Playback ───────────────────────────────────────────────────────
@@ -1147,3 +1367,17 @@ def _is_dark_color(hex_color: str) -> bool:
     r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
     luminance = 0.299 * r + 0.587 * g + 0.114 * b
     return luminance < 128
+
+
+def _dim_color(hex_color: str, factor: float = 0.5) -> str:
+    """Blend a color toward BG_DARK by the given factor (0=original, 1=BG_DARK)."""
+    c = hex_color.lstrip("#")
+    if len(c) != 6:
+        return hex_color
+    r, g, b = int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    bg = BG_DARK.lstrip("#")
+    br, bg_g, bb = int(bg[0:2], 16), int(bg[2:4], 16), int(bg[4:6], 16)
+    nr = int(r + (br - r) * factor)
+    ng = int(g + (bg_g - g) * factor)
+    nb = int(b + (bb - b) * factor)
+    return f"#{nr:02x}{ng:02x}{nb:02x}"

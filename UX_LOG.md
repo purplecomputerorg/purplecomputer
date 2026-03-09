@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code room: adjustment mode now dims non-active blocks and shows a solid gold frame (with ▲▼ arrows) instead of blinking. Repeat blocks use Scratch-inspired brackets that visually wrap the repeated section, with "Repeat block" (one block) and "Repeat line" (all blocks) options in the Tab menu. While adjusting a repeat, left/right arrow resizes the bracket scope and up/down changes the repeat count.
 - Play room: speech indicator shows `··` while generating TTS audio, then `🔊` while playing, so it no longer looks frozen during synthesis.
 - TTS cache: punctuation and case no longer cause cache misses (e.g. "hello!" and "Hello" now share the same cached audio).
 - Speech filter: blocked content is silenced instead of speaking a random silly word, fixing TTS cache misses on leet-speak number strings.

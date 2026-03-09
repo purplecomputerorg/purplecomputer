@@ -236,6 +236,26 @@ class TestRepeatBlock:
         block.cycle_repeat_count(1)
         assert block.repeat_count == 99
 
+    def test_adjust_span_left_grows(self):
+        block = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_span=1)
+        block.adjust_repeat_span(-1, max_span=5)  # left = grow
+        assert block.repeat_span == 2
+
+    def test_adjust_span_right_shrinks(self):
+        block = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_span=3)
+        block.adjust_repeat_span(1, max_span=5)  # right = shrink
+        assert block.repeat_span == 2
+
+    def test_adjust_span_clamp_min(self):
+        block = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_span=1)
+        block.adjust_repeat_span(1, max_span=5)  # right at min
+        assert block.repeat_span == 1
+
+    def test_adjust_span_clamp_max(self):
+        block = ProgramBlock(type=ProgramBlockType.REPEAT, repeat_span=5)
+        block.adjust_repeat_span(-1, max_span=5)  # left at max
+        assert block.repeat_span == 5
+
 
 # =============================================================================
 # MODE SWITCH BLOCK TESTS
@@ -373,12 +393,28 @@ class TestPlayback:
         pause_actions = [a for a in actions if isinstance(a, Pause)]
         assert any(a.duration == 1.0 for a in pause_actions)
 
-    def test_repeat_block_playback(self):
+    def test_repeat_block_playback_span1(self):
+        """With repeat_span=1 (default), only the last content block repeats."""
         blocks = [
             ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
             ProgramBlock(type=ProgramBlockType.KEY, char="a"),
             ProgramBlock(type=ProgramBlockType.KEY, char="b"),
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3),
+        ]
+        actions = blocks_to_playback_actions(blocks)
+        type_actions = [a for a in actions if isinstance(a, TypeText)]
+        # "a" plays once (prefix), "b" repeats 3 times = 4 TypeText actions
+        assert len(type_actions) == 4
+        assert type_actions[0].text == "a"
+        assert all(a.text == "b" for a in type_actions[1:])
+
+    def test_repeat_block_playback_full_span(self):
+        """With repeat_span covering all content blocks, all repeat."""
+        blocks = [
+            ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC),
+            ProgramBlock(type=ProgramBlockType.KEY, char="a"),
+            ProgramBlock(type=ProgramBlockType.KEY, char="b"),
+            ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, repeat_span=2),
         ]
         actions = blocks_to_playback_actions(blocks)
         type_actions = [a for a in actions if isinstance(a, TypeText)]
@@ -461,6 +497,13 @@ class TestSerializationV2:
         json_str = blocks_to_json(blocks)
         loaded, _ = blocks_from_json(json_str)
         assert loaded[0].repeat_count == 5
+        assert loaded[0].repeat_span == 1  # default
+
+    def test_roundtrip_repeat_span(self):
+        blocks = [ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3, repeat_span=4)]
+        json_str = blocks_to_json(blocks)
+        loaded, _ = blocks_from_json(json_str)
+        assert loaded[0].repeat_span == 4
 
     def test_roundtrip_mode_switch(self):
         blocks = [ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY)]
@@ -610,8 +653,7 @@ class TestLayout:
         ]
         lines = _layout_lines(blocks, 100)
         assert len(lines) == 1
-        # Line should contain both blocks
-        icon, line_blocks, _ = lines[0]
+        icon, line_blocks, repeat_count, repeat_span, repeat_block_idx = lines[0]
         assert icon == TARGET_ICONS[TARGET_MUSIC_MUSIC]
 
     def test_mode_switch_starts_new_line(self):
@@ -643,8 +685,11 @@ class TestLayout:
             ProgramBlock(type=ProgramBlockType.REPEAT, repeat_count=3),
         ]
         lines = _layout_lines(blocks, 100)
-        _, _, line_repeat = lines[0]
-        assert line_repeat == 3
+        _, line_blocks, repeat_count, repeat_span, repeat_block_idx = lines[0]
+        assert repeat_count == 3
+        assert repeat_block_idx == 2
+        # REPEAT block should be removed from line_blocks
+        assert all(blk.type != ProgramBlockType.REPEAT for _, blk in line_blocks)
 
 
 class TestCursorToLinePos:

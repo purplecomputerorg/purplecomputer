@@ -275,6 +275,7 @@ class ProgramBlock:
 
     # REPEAT fields
     repeat_count: int = 2       # 2-99
+    repeat_span: int = 1        # how many preceding content blocks this REPEAT covers
 
     # MODE_SWITCH fields
     target: str = ""            # "music.music", "art.paint", etc.
@@ -355,6 +356,12 @@ class ProgramBlock:
     def cycle_repeat_count(self, direction: int) -> None:
         """Cycle repeat count up or down, clamping to 2-99."""
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
+
+    def adjust_repeat_span(self, direction: int, max_span: int) -> None:
+        """Adjust repeat_span. Left (direction=-1) increases, right (+1) decreases."""
+        # Left = grow bracket (more blocks), right = shrink
+        new_span = self.repeat_span - direction
+        self.repeat_span = max(1, min(max_span, new_span))
 
     def cycle_room(self, direction: int) -> None:
         """Cycle MODE_SWITCH through rooms (Play, Music, Art)."""
@@ -453,9 +460,17 @@ def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackActio
     for block in blocks:
         if block.type == ProgramBlockType.REPEAT:
             count = block.repeat_count
-            section_actions = _section_to_actions(section)
+            span = min(block.repeat_span, len(section))
+            if span < len(section):
+                # Play non-repeated prefix once
+                prefix = section[:-span]
+                repeated = section[-span:]
+                actions.extend(_section_to_actions(prefix))
+            else:
+                repeated = section
+            repeated_actions = _section_to_actions(repeated)
             for _ in range(count):
-                actions.extend(section_actions)
+                actions.extend(repeated_actions)
             gap = _gap_pause(block)
             if gap > 0:
                 actions.append(Pause(duration=gap))
@@ -624,6 +639,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["duration"] = block.duration
     elif block.type == ProgramBlockType.REPEAT:
         d["repeat_count"] = block.repeat_count
+        if block.repeat_span != 1:
+            d["repeat_span"] = block.repeat_span
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
     elif block.type == ProgramBlockType.VOICE:
@@ -645,6 +662,7 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         distance=d.get("distance", 1),
         duration=d.get("duration", 0.5),
         repeat_count=d.get("repeat_count", 2),
+        repeat_span=d.get("repeat_span", 1),
         target=d.get("target", ""),
         voice=d.get("voice", ""),
         recorded_gap_ms=d.get("gap_ms", 0),

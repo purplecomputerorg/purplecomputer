@@ -324,20 +324,28 @@ search --no-floppy --fs-uuid a1b2c3d4-... --set=root
 root=UUID=a1b2c3d4-...
 ```
 
-**2. Multiple EFI paths (belt and suspenders):**
-```
-/EFI/BOOT/BOOTX64.EFI           # UEFI spec fallback, all firmware checks this
-/EFI/Microsoft/Boot/bootmgfw.efi # Some firmware (Surface, HP) only boot this
-/EFI/purple/grubx64.efi          # Vendor path for NVRAM entry
-```
-All three contain the same GRUB binary. Duplication is intentional.
+**2. Signed boot chain (shim → GRUB → kernel):**
+Uses Ubuntu's signed shim (Microsoft-signed) and GRUB (Canonical-signed) for Secure Boot.
+Shim loads `grubx64.efi` from the same directory. Signed GRUB loads `/EFI/ubuntu/grub.cfg`.
 
-**3. NVRAM entries are bonus, not requirement:**
+**3. Multiple EFI paths (belt and suspenders):**
+```
+/EFI/BOOT/BOOTX64.EFI           # shim, UEFI spec fallback
+/EFI/BOOT/grubx64.efi           # signed GRUB, loaded by shim
+/EFI/Microsoft/Boot/bootmgfw.efi # shim, Surface/HP firmware bias
+/EFI/Microsoft/Boot/grubx64.efi  # signed GRUB for Microsoft path
+/EFI/purple/shimx64.efi          # shim, vendor path for NVRAM entry
+/EFI/purple/grubx64.efi          # signed GRUB for purple path
+/EFI/ubuntu/grub.cfg             # search config (signed GRUB's prefix)
+```
+Each directory has shim + GRUB. All signed GRUBs load `/EFI/ubuntu/grub.cfg`.
+
+**4. NVRAM entries are bonus, not requirement:**
 - Create them (helps compliant firmware)
 - Don't depend on them (firmware resets them, ignores them)
 - Fallback paths ensure boot even with empty NVRAM
 
-**4. Embedded GRUB config should have multiple search fallbacks:**
+**5. EFI search config (`/EFI/ubuntu/grub.cfg`) should have multiple search fallbacks:**
 ```
 1. UUID search (primary, set by installer)
 2. Label search (fallback for old images)

@@ -413,12 +413,12 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
 
-    # We skip grub-install and update-grub entirely - they create complex configs that
-    # don't work well with our standalone GRUB. Instead we use grub-mkstandalone for
-    # the bootloader and create our own minimal grub.cfg.
+    # Use Ubuntu's signed boot chain (shim → GRUB → kernel) for Secure Boot compatibility.
+    # We download the signed binaries and set them up manually, rather than running
+    # grub-install which doesn't work in a container/chroot build environment.
 
     # Create minimal grub.cfg for the installed system
-    # This is what gets loaded when our standalone BOOTX64.EFI calls configfile
+    # This is what gets loaded when the EFI search config calls configfile
     log_info "Creating minimal GRUB configuration..."
     mkdir -p "$MOUNT_DIR/boot/grub"
     cat > "$MOUNT_DIR/boot/grub/grub.cfg" <<'EOF'
@@ -448,30 +448,56 @@ EOF
         log_info "  Kernel version: $KERNEL_VERSION"
     fi
 
-    # Create fallback bootloader using grub-mkstandalone for maximum hardware compatibility
-    # Ubuntu's grubx64.efi may not have all modules (e.g., serial) built in
-    # grub-mkstandalone ensures we have all modules needed for debugging and boot
-    log_info "Creating UEFI fallback bootloader with grub-mkstandalone..."
+    # Set up Secure Boot compatible UEFI boot chain
+    # shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel (Canonical-signed)
+    # See CLAUDE.md "UEFI Boot and Hardware Compatibility" for the multi-path strategy
+    log_info "Setting up Secure Boot boot chain..."
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
 
-    # Create the grub.cfg that will be embedded in the standalone EFI binary
-    # Uses multiple fallback methods for maximum hardware compatibility
-    # See CLAUDE.md "UEFI Boot and Hardware Compatibility" for rationale
-    #
-    # IMPORTANT: This config must NOT call configfile multiple times, as each call
-    # adds to the stack and causes "recursion depth exceeded" errors.
-    # Instead, we find root first, then call configfile exactly once at the end.
-    cat > /tmp/grub-standalone.cfg <<'EOF'
-# PurpleOS embedded GRUB config
-terminal_output console
-terminal_input console
-set pager=0
-set timeout=3
+    # Download signed binaries without full install (avoids grub-install postinst
+    # which fails in container/chroot and would fight our manual EFI layout)
+    if ! chroot "$MOUNT_DIR" bash -c 'cd /tmp && apt-get download shim-signed grub-efi-amd64-signed'; then
+        echo "ERROR: Failed to download signed boot packages"
+        exit 1
+    fi
 
-# Find root partition using multiple fallback methods
-# We set root variable but DON'T call configfile until the end
+    # Extract signed binaries from downloaded debs
+    EXTRACT_DIR="$MOUNT_DIR/tmp/boot-extract"
+    mkdir -p "$EXTRACT_DIR"
+    for deb in "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb; do
+        [ -f "$deb" ] && dpkg -x "$deb" "$EXTRACT_DIR"
+    done
 
-# Method 1: Label search (most reliable, works on fresh installs)
+    # Find signed shim (follow symlinks, skip .previous versions)
+    SHIM_SRC=$(find "$EXTRACT_DIR" -name "shimx64.efi.signed*" ! -name "*.previous" 2>/dev/null | head -1)
+    GRUB_SRC=$(find "$EXTRACT_DIR" -name "grubx64.efi.signed" 2>/dev/null | head -1)
+
+    if [ -z "$SHIM_SRC" ] || [ -z "$GRUB_SRC" ]; then
+        echo "ERROR: Could not find signed boot binaries"
+        echo "  Shim: $SHIM_SRC"
+        echo "  GRUB: $GRUB_SRC"
+        ls -laR "$EXTRACT_DIR/usr/lib/" 2>/dev/null
+        exit 1
+    fi
+
+    # BOOTX64.EFI = shim (UEFI spec fallback path, all firmware checks this)
+    cp -L "$SHIM_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
+    # grubx64.efi = signed GRUB (shim loads this from same directory)
+    cp -L "$GRUB_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/grubx64.efi"
+    log_info "  Shim: $(basename "$SHIM_SRC")"
+    log_info "  GRUB: $(basename "$GRUB_SRC")"
+
+    # Create EFI search config at /EFI/ubuntu/ (where Ubuntu's signed GRUB expects it).
+    # The signed GRUB binary has prefix=/EFI/ubuntu compiled in, so it loads
+    # /EFI/ubuntu/grub.cfg regardless of which directory shim loaded it from.
+    # This config searches for the root partition and loads the full /boot/grub/grub.cfg.
+    mkdir -p "$MOUNT_DIR/boot/efi/EFI/ubuntu"
+    cat > "$MOUNT_DIR/boot/efi/EFI/ubuntu/grub.cfg" <<'EOF'
+# PurpleOS EFI search config
+# Finds root partition using multiple fallback methods, then loads full config.
+# IMPORTANT: call configfile exactly once to avoid "recursion depth exceeded".
+
+# Method 1: Label search (most reliable on fresh installs)
 search --no-floppy --label PURPLE_ROOT --set=root
 
 # Method 2: File search (works if label is missing/changed)
@@ -479,7 +505,7 @@ if [ -z "$root" ]; then
     search --no-floppy --file /boot/grub/grub.cfg --set=root
 fi
 
-# Method 3: Device probe for SATA/SAS
+# Method 3: SATA/SAS device probe
 if [ -z "$root" ]; then
     for dev in hd0,gpt2 hd1,gpt2 hd2,gpt2; do
         if [ -f ($dev)/boot/grub/grub.cfg ]; then
@@ -499,14 +525,12 @@ if [ -z "$root" ]; then
     done
 fi
 
-# Now load the real config exactly once (or show error)
+# Load full config from root partition (exactly once)
 if [ -n "$root" ]; then
     set prefix=($root)/boot/grub
     configfile ($root)/boot/grub/grub.cfg
 fi
 
-# If we get here, either root wasn't found or configfile returned
-# (configfile returning means the loaded config didn't boot the kernel)
 echo ""
 echo "Purple Computer could not start."
 echo ""
@@ -521,15 +545,8 @@ echo ""
 sleep 10
 EOF
 
-    # Generate standalone GRUB EFI with all required modules
-    grub-mkstandalone \
-        --format=x86_64-efi \
-        --output="$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI" \
-        --modules="part_gpt part_msdos fat ext2 normal linux configfile search search_label efi_gop efi_uga all_video video video_bochs video_cirrus video_fb gfxterm gfxterm_background terminal terminfo font echo test" \
-        --locales="" \
-        "boot/grub/grub.cfg=/tmp/grub-standalone.cfg"
-
-    rm -f /tmp/grub-standalone.cfg
+    # Clean up downloaded debs and extracted files
+    rm -rf "$EXTRACT_DIR" "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb
 
     # Unmount virtual filesystems BEFORE creating squashfs
     # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)

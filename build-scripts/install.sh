@@ -219,11 +219,13 @@ main() {
     # ==========================================================================
     # UEFI BOOT SETUP - See CLAUDE.md "UEFI Boot and Hardware Compatibility"
     # ==========================================================================
+    # Signed boot chain: shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel
     # Multiple EFI paths for hardware compatibility:
-    # 1. /EFI/BOOT/BOOTX64.EFI - UEFI spec fallback (all firmware)
-    # 2. /EFI/Microsoft/Boot/bootmgfw.efi - Surface, HP firmware bias
-    # 3. /EFI/purple/grubx64.efi - vendor path for NVRAM entry
+    # 1. /EFI/BOOT/BOOTX64.EFI (shim) + grubx64.efi - UEFI spec fallback
+    # 2. /EFI/Microsoft/Boot/bootmgfw.efi (shim) + grubx64.efi - Surface, HP
+    # 3. /EFI/purple/shimx64.efi + grubx64.efi - vendor path for NVRAM entry
     # 4. NVRAM Boot#### entry - bonus for compliant firmware
+    # Plus: /EFI/ubuntu/grub.cfg has search config (signed GRUB's prefix)
     # Plus: Update grub.cfg with actual UUID for deterministic boot
     # ==========================================================================
 
@@ -254,24 +256,26 @@ main() {
         if mount "$EFI_PART" /mnt/efi; then
 
             # Layer 1: Standard fallback path (already in golden image)
-            if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ]; then
-                log "  Layer 1: /EFI/BOOT/BOOTX64.EFI present"
+            # shim (BOOTX64.EFI) loads grubx64.efi from same directory
+            if [ -f /mnt/efi/EFI/BOOT/BOOTX64.EFI ] && [ -f /mnt/efi/EFI/BOOT/grubx64.efi ]; then
+                log "  Layer 1: /EFI/BOOT/ shim + GRUB present"
             else
-                warn "  Layer 1: BOOTX64.EFI missing!"
+                warn "  Layer 1: signed boot files missing!"
             fi
 
-            # Layer 2: Vendor path for NVRAM entry
+            # Layer 2: Vendor path for NVRAM entry (shim + GRUB)
             mkdir -p /mnt/efi/EFI/purple
-            cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/grubx64.efi 2>/dev/null || true
-            log "  Layer 2: /EFI/purple/grubx64.efi"
+            cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/shimx64.efi 2>/dev/null || true
+            cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/purple/grubx64.efi 2>/dev/null || true
+            log "  Layer 2: /EFI/purple/ shim + GRUB"
 
             # Layer 3: Microsoft path (Surface, HP need this)
-            # Check for existing Windows first
+            # shim as bootmgfw.efi + grubx64.efi in same directory
             WINDOWS_DETECTED=0
             if [ -f /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi ]; then
                 MS_SIZE=$(stat -c%s /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi 2>/dev/null || echo 0)
-                # Windows bootmgfw.efi is ~1.5-2.5MB, our GRUB is ~3-6MB
-                if [ "$MS_SIZE" -gt 1000000 ] && [ "$MS_SIZE" -lt 2800000 ]; then
+                # Windows bootmgfw.efi is ~1.5-2.5MB, our shim is smaller (~1.2MB)
+                if [ "$MS_SIZE" -gt 1500000 ] && [ "$MS_SIZE" -lt 2800000 ]; then
                     log "  Layer 3: Windows detected, preserving bootmgfw.efi"
                     WINDOWS_DETECTED=1
                 fi
@@ -279,17 +283,19 @@ main() {
             if [ "$WINDOWS_DETECTED" -eq 0 ]; then
                 mkdir -p /mnt/efi/EFI/Microsoft/Boot
                 cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
-                log "  Layer 3: /EFI/Microsoft/Boot/bootmgfw.efi"
+                cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi
+                log "  Layer 3: /EFI/Microsoft/Boot/ shim + GRUB"
             fi
 
             # Layer 4: NVRAM entry (bonus, not required)
+            # Points to shim, which chain-loads grubx64.efi
             if command -v efibootmgr >/dev/null 2>&1; then
                 # Remove existing PurpleOS entries
                 for bootnum in $(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | sed 's/Boot//' || true); do
                     efibootmgr -b "$bootnum" -B 2>/dev/null || true
                 done
 
-                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\purple\grubx64.efi' 2>/dev/null; then
+                if efibootmgr -c -d "/dev/$TARGET" -p 1 -L "PurpleOS" -l '\EFI\purple\shimx64.efi' 2>/dev/null; then
                     log "  Layer 4: NVRAM entry created"
                     # Set boot order
                     PURPLE_BOOTNUM=$(efibootmgr 2>/dev/null | grep -i "PurpleOS" | grep -oE "Boot[0-9A-Fa-f]+" | head -1 | sed 's/Boot//')
@@ -306,20 +312,27 @@ main() {
                 fi
             fi
 
+            # Layer 5 (EFI part): Update search config with UUID
+            if [ -n "$ROOT_UUID" ] && [ -f /mnt/efi/EFI/ubuntu/grub.cfg ]; then
+                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/efi/EFI/ubuntu/grub.cfg
+                log "  Layer 5: Updated EFI search config with UUID"
+            fi
+
             umount /mnt/efi 2>/dev/null || true
         else
             warn "Could not mount EFI partition"
         fi
 
-        # Layer 5: Update grub.cfg with UUID (critical for multi-disk reliability)
-        if [ -n "$ROOT_UUID" ] && mount "$ROOT_PART" /mnt/root 2>/dev/null; then
-            if [ -f /mnt/root/boot/grub/grub.cfg ]; then
-                # Replace label-based with UUID-based
-                sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                log "  Layer 5: Updated grub.cfg with UUID"
+        # Layer 5 (root part): Update grub.cfg with UUID
+        if [ -n "$ROOT_UUID" ]; then
+            if mount "$ROOT_PART" /mnt/root 2>/dev/null; then
+                if [ -f /mnt/root/boot/grub/grub.cfg ]; then
+                    sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                    sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                    log "  Layer 5: Updated root grub.cfg with UUID"
+                fi
+                umount /mnt/root 2>/dev/null || true
             fi
-            umount /mnt/root 2>/dev/null || true
         fi
 
         rmdir /mnt/efi /mnt/root 2>/dev/null || true

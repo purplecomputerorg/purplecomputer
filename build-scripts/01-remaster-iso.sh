@@ -122,7 +122,7 @@ ConditionKernelCommandLine=!purple.install=1
 Conflicts=getty@tty1.service
 
 [Service]
-ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname tty1 linux
+ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname tty1 linux
 Type=idle
 Restart=always
 RestartSec=0

@@ -233,7 +233,7 @@ LAUNCHER
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname %I $TERM
+ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
 
     # Early boot splash: paint tty1 purple with "Starting up..." message.
@@ -410,7 +410,7 @@ AUTOSTART
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
-ExecStart=-/sbin/agetty --autologin purple --noclear --noissue --nohostname %I $TERM
+ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
 
     # We skip grub-install and update-grub entirely - they create complex configs that

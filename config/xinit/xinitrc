@@ -35,8 +35,10 @@ xset r rate 300 30
 # SPICE agent for VM resize (harmless on real hardware)
 command -v spice-vdagent &>/dev/null && spice-vdagent &
 
-# Purple background (fills space around viewport)
-xsetroot -solid "#2d1b4e"
+# Hide the mouse cursor (keyboard-only UI, no mouse needed).
+# Create a 1x1 blank XBM cursor rather than using unclutter, which had timing issues.
+printf '#define b_width 1\n#define b_height 1\nstatic unsigned char b_bits[] = { 0x00 };\n' > /tmp/blank.xbm
+xsetroot -solid "#2d1b4e" -cursor /tmp/blank.xbm /tmp/blank.xbm
 
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &

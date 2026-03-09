@@ -227,6 +227,13 @@ write_iso() {
 
     log_info "Syncing..."
     sync
+    # Flush the USB drive's hardware write cache (the drive's internal buffer,
+    # not the kernel page cache). Without this, the drive firmware may report
+    # "done" while data is still in its NAND write buffer, causing readback
+    # verification to see stale data.
+    sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
+    sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
+    sleep 3
 
     # Verification step - read back and compare
     echo ""

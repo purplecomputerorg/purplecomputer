@@ -49,6 +49,40 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# =============================================================================
+# COUNTDOWN REBOOT - works without any keyboard input
+# =============================================================================
+# Previous approach used `read -t 60 _ </dev/tty1` which is fragile:
+# terminal may be in bad state after raw mode + installer, tty1 may not
+# be the right device, and read -t may hang if the fd is broken.
+# This countdown approach always reboots, no keyboard dependency.
+countdown_reboot() {
+    local seconds="${1:-30}"
+    log "Countdown reboot: ${seconds}s"
+
+    # Start a hard watchdog: if everything else fails, sysrq reboot
+    # Runs in background, fires after countdown + 15s grace period
+    ( sleep $((seconds + 15)) && echo b > /proc/sysrq-trigger ) &
+
+    while [ "$seconds" -gt 0 ]; do
+        # Show countdown on same line (carriage return to overwrite)
+        printf "\r         Restarting in %2d seconds...  " "$seconds"
+        sleep 1
+        seconds=$((seconds - 1))
+    done
+    echo ""
+
+    log "Rebooting now"
+    sync
+    reboot -f 2>/dev/null || true
+    # If reboot -f failed, try other methods
+    sleep 2
+    echo b > /proc/sysrq-trigger 2>/dev/null || true
+    # Last resort
+    sleep 5
+    reboot 2>/dev/null || true
+}
+
 cancel_and_reboot() {
     log "Installation CANCELLED by user"
     echo ""
@@ -62,10 +96,7 @@ cancel_and_reboot() {
         echo "Type 'reboot' to restart."
         exec /bin/bash
     else
-        echo "Rebooting in 5 seconds..."
-        sleep 5
-        log "Rebooting after cancellation"
-        reboot -f || echo b > /proc/sysrq-trigger
+        countdown_reboot 5
     fi
 }
 
@@ -83,10 +114,8 @@ input_error_and_reboot() {
     echo "    - Keyboard is plugged in"
     echo "    - USB ports are working"
     echo ""
-    echo "  Rebooting in 30 seconds..."
     echo ""
-    sleep 30
-    reboot -f || echo b > /proc/sysrq-trigger
+    countdown_reboot 30
 }
 
 # =============================================================================
@@ -120,9 +149,7 @@ if [ ! -x "$PAYLOAD_PATH/install.sh" ]; then
     echo "ERROR: Installer payload not found."
     echo "Please ensure the USB drive is still connected."
     echo ""
-    echo "Rebooting in 10 seconds..."
-    sleep 10
-    reboot -f
+    countdown_reboot 10
 fi
 
 # =============================================================================
@@ -192,43 +219,41 @@ log "Waiting for user input..."
 # =============================================================================
 # READ USER INPUT
 # =============================================================================
-# Set terminal to raw mode to catch ESC immediately
-stty -echo -icanon min 0 time 0
+# Use bash read -n 1 instead of dd|od pipeline (simpler, more reliable).
+# read -n 1 returns empty string for Enter (it's the delimiter).
+# ESC is $'\e'. read -t 1 gives us a 1-second poll interval.
+stty -echo 2>/dev/null || true
 
 CONFIRMED=0
 CANCELLED=0
 WAIT_TIME=0
 
 while [ $WAIT_TIME -lt $INPUT_TIMEOUT ]; do
-    # Try to read a character
-    char=$(dd bs=1 count=1 2>/dev/null | od -An -tx1 | tr -d ' ')
+    if read -n 1 -t 1 key 2>/dev/null; then
+        case "$key" in
+            "")  # Enter (read -n 1 returns empty for the delimiter)
+                CONFIRMED=1
+                break
+                ;;
+            $'\e')  # ESC
+                CANCELLED=1
+                break
+                ;;
+            *)
+                echo ""
+                echo "     Press ENTER to install, or ESC to cancel."
+                echo ""
+                ;;
+        esac
+    else
+        # read timed out (1 second), no input
+        WAIT_TIME=$((WAIT_TIME + 1))
 
-    case "$char" in
-        "0a"|"0d")  # Enter (LF or CR)
-            CONFIRMED=1
-            break
-            ;;
-        "1b")  # ESC
-            CANCELLED=1
-            break
-            ;;
-        "")
-            # No input yet
-            sleep 0.5
-            WAIT_TIME=$((WAIT_TIME + 1))
-
-            # Show waiting indicator every 30 seconds
-            if [ $((WAIT_TIME % 60)) -eq 0 ]; then
-                echo "     (Still waiting for input... $((INPUT_TIMEOUT - WAIT_TIME))s remaining)"
-            fi
-            ;;
-        *)
-            # Any other key - remind user of options
-            echo ""
-            echo "     Invalid key. Press ENTER to install, or ESC to cancel."
-            echo ""
-            ;;
-    esac
+        # Show waiting indicator every 60 seconds
+        if [ $((WAIT_TIME % 60)) -eq 0 ] && [ $WAIT_TIME -gt 0 ]; then
+            echo "     (Still waiting... $((INPUT_TIMEOUT - WAIT_TIME))s remaining)"
+        fi
+    fi
 done
 
 # Restore terminal
@@ -298,19 +323,11 @@ if "$PAYLOAD_PATH/install.sh" >/dev/tty2 2>&1; then
     echo ""
     echo ""
     echo ""
-    echo "         Remove the USB drive."
-    echo ""
-    echo "         Press ENTER to restart."
+    echo "         Remove the USB drive now."
     echo ""
     echo ""
 
-    # Ensure terminal is in a sane state for read (raw mode was used earlier)
-    stty sane 2>/dev/null || true
-    read -t 60 _ </dev/tty1 2>/dev/null || true
-    log "Rebooting"
-    # Start a watchdog: if reboot hangs (some UEFI firmware), force it via sysrq
-    ( sleep 10 && echo b > /proc/sysrq-trigger ) &
-    reboot -f
+    countdown_reboot 30
 else
     EXIT_CODE=$?
     log "FAILED: Installation error (exit $EXIT_CODE)"
@@ -331,15 +348,9 @@ else
     echo ""
     echo "         Setup could not be completed."
     echo ""
-    echo "         Press ENTER to restart and try again."
-    echo ""
     echo "         (Press Alt+F2 for technical details)"
     echo ""
     echo ""
 
-    stty sane 2>/dev/null || true
-    read -t 60 _ </dev/tty1 2>/dev/null || true
-    log "Rebooting after failure"
-    ( sleep 10 && echo b > /proc/sysrq-trigger ) &
-    reboot -f
+    countdown_reboot 30
 fi

@@ -200,7 +200,6 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.3)
                     cache[key] = sound
                 except pygame.error:
                     pass
@@ -218,7 +217,6 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.3)
                     self._percussion_sounds[key] = sound
                 except pygame.error:
                     pass
@@ -226,7 +224,7 @@ class MusicGrid(Widget):
 
     def play_sound(self, key: str) -> None:
         """Play instrument or percussion sound for a key."""
-        if hasattr(self.app, 'volume_on') and not self.app.volume_on:
+        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         if key.isdigit():
             self._ensure_percussion_loaded()
@@ -280,14 +278,13 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
-                    sound.set_volume(0.5)
                     self._letter_sounds[key] = sound
                 except pygame.error:
                     pass
 
     def play_letter(self, key: str) -> None:
         """Play the letter name clip for a key (respects app volume setting)."""
-        if hasattr(self.app, 'volume_on') and not self.app.volume_on:
+        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         self._ensure_letter_sounds_loaded()
         if key in self._letter_sounds:

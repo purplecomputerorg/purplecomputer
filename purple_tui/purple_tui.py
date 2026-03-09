@@ -647,6 +647,9 @@ class PurpleApp(App):
         apply_saved_display_settings()
         self._load_room_content()
 
+        # Set system volume to match app volume (default 100%)
+        self._apply_volume_system()
+
         # Initialize color legend (visible in play mode, hidden otherwise)
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
@@ -1872,11 +1875,22 @@ class PurpleApp(App):
 
         return None
 
+    def _apply_volume_system(self) -> None:
+        """Set system volume via ALSA to match app volume_level."""
+        try:
+            import subprocess
+            subprocess.run(
+                ["amixer", "sset", "Master", f"{self.volume_level}%"],
+                capture_output=True, timeout=2,
+            )
+        except Exception:
+            pass
+
     def _apply_volume(self) -> None:
-        """Apply volume level to TTS and update UI"""
+        """Apply volume level to TTS, system mixer, and update UI"""
         from . import tts
         tts.set_muted(self.volume_level == 0)
-        # TODO: Set actual volume level when TTS supports it
+        self._apply_volume_system()
 
         # Update volume indicator badge
         try:

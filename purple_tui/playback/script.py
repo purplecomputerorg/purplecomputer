@@ -78,9 +78,11 @@ class SwitchTarget(PlaybackAction):
     Args:
         target: Target string like "music.music", "art.paint", "play"
         pause_after: Pause after switching
+        instrument: Instrument id (e.g. "ukulele") or "" for current/default
     """
     target: str
     pause_after: float = 0.3
+    instrument: str = ""
 
 
 @dataclass

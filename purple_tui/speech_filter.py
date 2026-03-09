@@ -5,8 +5,8 @@ Uses two layers:
 1. Leet-speak normalization (4->a, $->s, etc.)
 2. Substring matching against blocked words
 
-When a blocked word is detected, returns a silly replacement instead of
-the original text. This makes the filter feel playful rather than punitive.
+When a blocked word is detected, the word is scrubbed out. If there's not
+enough left to speak, returns empty string (TTS silently skips it).
 
 Design philosophy: explicit variant lists over fuzzy matching. Phonetic
 algorithms (metaphone, soundex) produce too many false positives on common
@@ -15,22 +15,7 @@ explicit list gives zero false positives with comprehensive coverage.
 """
 
 import base64
-import random
 import re
-
-# Silly replacements when blocked. Kids hear something funny instead of silence.
-SILLY_REPLACEMENTS = [
-    "bloop",
-    "banana",
-    "noodle",
-    "wiggle",
-    "pickle",
-    "bubbles",
-    "sprocket",
-    "wombat",
-    "jellyfish",
-    "spaghetti",
-]
 
 # Blocked words and common misspellings, base64-encoded to keep plaintext
 # profanity out of source code. Decoded at import time.
@@ -111,7 +96,7 @@ def _normalize(text: str) -> str:
 
 # Minimum remaining characters after scrubbing for the result to be
 # speakable. Below this threshold, the input was basically just the
-# blocked word (possibly with minor padding), so replace entirely.
+# blocked word (possibly with minor padding), so silence it.
 _MIN_SCRUBBED_LEN = 5
 
 
@@ -142,9 +127,9 @@ def filter_speech(text: str) -> str:
 
     Returns the original text if clean. If blocked content is found:
     - If the input is an allowed word, returns it unchanged.
-    - If the input is mostly the blocked word, returns a silly replacement.
-    - If the blocked word is a small part of longer gibberish, scrubs it
-      out and returns the rest (so kids can still hear their gibberish).
+    - If the blocked word is a small part of longer text, scrubs it out.
+    - If the input is mostly the blocked word, returns empty string
+      (TTS will silently skip it).
     """
     if not text or not text.strip():
         return text
@@ -163,7 +148,7 @@ def filter_speech(text: str) -> str:
         scrubbed = _scrub(normalized, blocked_matches)
         if len(scrubbed) >= _MIN_SCRUBBED_LEN:
             return scrubbed
-        return random.choice(SILLY_REPLACEMENTS)
+        return ""
 
     # Check individual words (for multi-word input like "say <blocked>")
     words = re.split(r"[^a-zA-Z]+", text.lower())
@@ -182,6 +167,6 @@ def filter_speech(text: str) -> str:
                     re.escape(word), scrubbed, text, count=1, flags=re.IGNORECASE
                 )
             else:
-                return random.choice(SILLY_REPLACEMENTS)
+                return ""
 
     return text

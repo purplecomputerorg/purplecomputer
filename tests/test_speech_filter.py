@@ -8,7 +8,6 @@ import base64
 
 import pytest
 from purple_tui.speech_filter import (
-    SILLY_REPLACEMENTS,
     _normalize,
     filter_speech,
 )
@@ -62,47 +61,47 @@ class TestBlockedWords:
     @pytest.mark.parametrize("word", _DIRECT_WORDS)
     def test_direct_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _CASE_VARS)
     def test_case_variations_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _SPACED)
     def test_spaced_out_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _VARIANTS)
     def test_spelling_variants_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _LEET)
     def test_leet_speak_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _SUFFIXED)
     def test_suffixed_forms_blocked(self, word):
         result = filter_speech(word)
-        assert result in SILLY_REPLACEMENTS, f"should be blocked"
+        assert result == "", f"should be blocked"
 
     def test_sentence_with_blocked_word_scrubbed(self):
         # "say the <blocked> word" → scrubbed to "saytheword" (long enough)
         result = filter_speech(_SENTENCES[0])
-        assert result not in SILLY_REPLACEMENTS
+        assert result != ""
         assert result == "saytheword"
 
     def test_short_sentence_with_blocked_word_replaced(self):
         # "say <blocked>" → per-word check catches the blocked word
         result = filter_speech(_SENTENCES[1])
-        assert result in SILLY_REPLACEMENTS
+        assert result == ""
 
     def test_replacement_is_from_silly_list(self):
         result = filter_speech(_DIRECT_WORDS[0])
-        assert result in SILLY_REPLACEMENTS
+        assert result == ""
 
 
 class TestAllowedWords:
@@ -285,15 +284,15 @@ class TestScrubbing:
 
     def test_short_remainder_gets_silly_replacement(self):
         inp = base64.b64decode("ZnVja3g=").decode()
-        assert filter_speech(inp) in SILLY_REPLACEMENTS
+        assert filter_speech(inp) == ""
 
     def test_exact_blocked_word_gets_silly_replacement(self):
         result = filter_speech(_DIRECT_WORDS[0])
-        assert result in SILLY_REPLACEMENTS
+        assert result == ""
 
     def test_suffixed_blocked_gets_silly_replacement(self):
         inp = base64.b64decode("c2hpdHR5").decode()
-        assert filter_speech(inp) in SILLY_REPLACEMENTS
+        assert filter_speech(inp) == ""
 
     def test_allowed_word_not_scrubbed(self):
         assert filter_speech("class") == "class"

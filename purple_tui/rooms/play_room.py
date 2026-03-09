@@ -14,7 +14,8 @@ Features:
 - Speech: add ! anywhere (e.g., "cat!") or prefix with "say"/"talk"
 - Command recall: Enter on empty populates input with last command
 - History (up/down arrows)
-- Emoji autocomplete (Space to accept)
+- Emoji autocomplete (Tab to accept)
+- Cursor navigation (left/right arrows)
 """
 
 from textual.widgets import Static, Input
@@ -105,11 +106,17 @@ class HistoryLine(Static):
     ANSWER_ARROW_DARK = "#ffffff"
     ANSWER_ARROW_LIGHT = "#3a2a50"
 
+    # Speech states for the indicator prefix
+    SPEECH_NONE = ""       # no speech
+    SPEECH_GENERATING = "generating"  # TTS synthesizing
+    SPEECH_PLAYING = "playing"        # audio playing
+
     def __init__(self, text: str, line_type: str = "ask", speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
         self.text = _pad_narrow_emoji(text)
         self.line_type = line_type  # "ask" or "answer"
         self.speaking = speaking
+        self.speech_state = self.SPEECH_GENERATING if speaking else self.SPEECH_NONE
         self.add_class("caps-sensitive")
         if line_type == "ask":
             self.add_class("ask")
@@ -193,7 +200,12 @@ class HistoryLine(Static):
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')
-            speaker = " 🔊" if self.speaking else "   "
+            if self.speech_state == self.SPEECH_GENERATING:
+                speaker = " ··"
+            elif self.speech_state == self.SPEECH_PLAYING:
+                speaker = " 🔊"
+            else:
+                speaker = "   "
             first_prefix = f"{speaker} [{answer_color}]→[/] "
             result = [self._wrap_with_arrows(caps(lines[0]), first_prefix, answer_color)]
             for line in lines[1:]:
@@ -241,6 +253,7 @@ class ColorResultLine(Widget):
         self._color_name = color_name
         self._component_colors = component_colors or []
         self._speaking = speaking
+        self._speech_state = HistoryLine.SPEECH_GENERATING if speaking else HistoryLine.SPEECH_NONE
 
     def _get_surface_color(self) -> str:
         """Get surface color based on current theme."""
@@ -277,7 +290,9 @@ class ColorResultLine(Widget):
 
         # Line 0: Show component colors and arrow to result
         if y == 0:
-            if self._speaking:
+            if self._speech_state == HistoryLine.SPEECH_GENERATING:
+                segments = [Segment(" ·· ", surface_style), Segment("→ ", triangle_style)]
+            elif self._speech_state == HistoryLine.SPEECH_PLAYING:
                 segments = [Segment(" 🔊 ", surface_style), Segment("→ ", triangle_style)]
             else:
                 segments = [Segment("    ", surface_style), Segment("→ ", triangle_style)]
@@ -498,7 +513,7 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return caps(f"{hint}   [dim]→ Tab[/]")
+        return caps(f"{hint}   [dim]Tab ↲[/]")
 
 
 class InputPrompt(Static):
@@ -675,30 +690,24 @@ class PlayMode(Vertical):
         """
         play_input = self.query_one("#play-input", InlineInput)
 
-        # Handle navigation (up/down for scrolling history, left/right ignored)
+        # Handle navigation (up/down for scrolling history, left/right for cursor)
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
                 play_input.action_scroll_up()
             elif action.direction == 'down':
                 play_input.action_scroll_down()
-            elif action.direction == 'right' and play_input.autocomplete_matches:
-                # Right arrow: accept autocomplete suggestion
-                selected_word = play_input.autocomplete_matches[play_input.autocomplete_index][0]
-                words = play_input.value.split()
-                if words:
-                    words[-1] = selected_word
-                    play_input.value = " ".join(words) + " "
-                    play_input.cursor_position = len(play_input.value)
-                play_input.autocomplete_matches = []
-                play_input.autocomplete_index = 0
-                play_input.exact_match_display = ""
-            # Left arrow is ignored (no cursor movement for kids)
+            elif action.direction == 'left':
+                if play_input.cursor_position > 0:
+                    play_input.cursor_position -= 1
+            elif action.direction == 'right':
+                if play_input.cursor_position < len(play_input.value):
+                    play_input.cursor_position += 1
             return
 
         # Handle control actions
         if isinstance(action, ControlAction):
             if action.action == 'tab' and action.is_down and play_input.autocomplete_matches:
-                # Tab: accept autocomplete suggestion (same as right arrow)
+                # Tab: accept autocomplete suggestion
                 selected_word = play_input.autocomplete_matches[play_input.autocomplete_index][0]
                 words = play_input.value.split()
                 if words:
@@ -711,9 +720,9 @@ class PlayMode(Vertical):
                 return
 
             if action.action == 'space' and action.is_down:
-                # Space always types a space (autocomplete is accepted with right arrow)
-                play_input.value += " "
-                play_input.cursor_position = len(play_input.value)
+                pos = play_input.cursor_position
+                play_input.value = play_input.value[:pos] + " " + play_input.value[pos:]
+                play_input.cursor_position = pos + 1
                 return
 
             if action.action == 'enter' and action.is_down:
@@ -732,10 +741,10 @@ class PlayMode(Vertical):
 
             if action.action == 'backspace' and action.is_down:
                 # Allow key repeats: held backspace erases like an eraser
-                if play_input.value:
-                    # Always delete from end (simpler for kids, no cursor confusion)
-                    play_input.value = play_input.value[:-1]
-                    play_input.cursor_position = len(play_input.value)
+                pos = play_input.cursor_position
+                if pos > 0:
+                    play_input.value = play_input.value[:pos - 1] + play_input.value[pos:]
+                    play_input.cursor_position = pos - 1
                 return
 
             if action.action == 'escape' and action.is_down and not action.is_repeat:
@@ -761,23 +770,25 @@ class PlayMode(Vertical):
             # Math operators: auto-space for readability and substitute display chars
             if char in play_input.MATH_OPERATORS:
                 display_char = play_input.MATH_DISPLAY.get(char, char)
-                value = play_input.value
+                pos = play_input.cursor_position
+                before = play_input.value[:pos]
 
                 # Add spaces around operator only if there's an operand before (binary operation)
                 # No spaces if preceded by space, operator, or open paren (allows negative numbers)
-                has_operand_before = value and value[-1] not in ' +-×÷*/('
+                has_operand_before = before and before[-1] not in ' +-×÷*/('
                 if has_operand_before:
                     insert = f" {display_char} "
                 else:
                     insert = display_char
 
-                play_input.value = value + insert
-                play_input.cursor_position = len(play_input.value)
+                play_input.value = before + insert + play_input.value[pos:]
+                play_input.cursor_position = pos + len(insert)
                 return
 
-            # Normal character (always append at end)
-            play_input.value += char
-            play_input.cursor_position = len(play_input.value)
+            # Insert character at cursor position
+            pos = play_input.cursor_position
+            play_input.value = play_input.value[:pos] + char + play_input.value[pos:]
+            play_input.cursor_position = pos + 1
             # Update color legend to show active row
             self.post_message(PaintModeChanged(True, get_key_color(char)))
             return
@@ -897,7 +908,32 @@ class PlayMode(Vertical):
 
         speakable = self.evaluator._make_speakable(input_text, result)
         if speakable:
-            speak(speakable)
+            # Find the answer line we just mounted to update its speech indicator
+            scroll = self.query_one("#history-scroll")
+            answer_widget = scroll.children[-1] if scroll.children else None
+
+            def on_playing():
+                if answer_widget:
+                    self.app.call_from_thread(
+                        self._set_speech_state, answer_widget, HistoryLine.SPEECH_PLAYING
+                    )
+
+            def on_done():
+                if answer_widget:
+                    self.app.call_from_thread(
+                        self._set_speech_state, answer_widget, HistoryLine.SPEECH_NONE
+                    )
+
+            speak(speakable, on_playing=on_playing, on_done=on_done)
+
+    def _set_speech_state(self, widget, state: str) -> None:
+        """Update a HistoryLine or ColorResultLine speech indicator."""
+        if isinstance(widget, HistoryLine):
+            widget.speech_state = state
+            widget.refresh()
+        elif isinstance(widget, ColorResultLine):
+            widget._speech_state = state
+            widget.refresh()
 
 
 class SimpleEvaluator:

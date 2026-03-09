@@ -75,6 +75,7 @@ class PlaybackPlayer:
         set_play_key_color: Callable[[str, int], None] | None = None,
         is_doodle_paint_mode: Callable[[], bool] | None = None,
         is_play_letters_mode: Callable[[], bool] | None = None,
+        set_instrument: Callable[[str], None] | None = None,
         get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
         zoom_events_file: str | Path | None = None,
     ):
@@ -106,6 +107,7 @@ class PlaybackPlayer:
         self._set_play_key_color = set_play_key_color
         self._is_doodle_paint_mode = is_doodle_paint_mode
         self._is_play_letters_mode = is_play_letters_mode
+        self._set_instrument = set_instrument
         self._get_cursor_position = get_cursor_position
         self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
         self._running = False
@@ -295,6 +297,10 @@ class PlaybackPlayer:
             if in_paint:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
+
+        # Set instrument if specified
+        if action.instrument and self._set_instrument:
+            self._set_instrument(action.instrument)
 
         await self._sleep(action.pause_after)
 

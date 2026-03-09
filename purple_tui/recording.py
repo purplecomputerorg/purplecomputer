@@ -77,7 +77,7 @@ class Recording:
             timestamp=timestamp,
         ))
 
-    def to_blocks(self, target: str) -> list[ProgramBlock]:
+    def to_blocks(self, target: str, instrument: str = "") -> list[ProgramBlock]:
         """Convert recorded events to ProgramBlock list for a single room.
 
         Prepends a MODE_SWITCH block with the given target, then processes
@@ -100,6 +100,7 @@ class Recording:
         blocks.append(ProgramBlock(
             type=ProgramBlockType.MODE_SWITCH,
             target=target,
+            instrument=instrument,
         ))
 
         query_buf = ""

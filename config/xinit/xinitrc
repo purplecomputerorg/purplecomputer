@@ -57,9 +57,15 @@ if [ -f "$DEBUG_FLAG" ]; then
     echo "--- End display diagnostics ---"
 fi
 
-# Calculate font size (80% of screen, clamped to 12-48pt)
+# Best-guess font size (the app auto-corrects on startup via font_sizer.py)
 FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "16")
-echo "Font size: $FONT_SIZE"
+echo "Font size (initial guess): $FONT_SIZE"
+
+# Copy config to writable location so the app can adjust font size at runtime.
+# Alacritty watches this file and auto-reloads on changes.
+ALACRITTY_CONFIG="/tmp/purple-alacritty.toml"
+cp /etc/purple/alacritty.toml "$ALACRITTY_CONFIG"
+export PURPLE_ALACRITTY_CONFIG="$ALACRITTY_CONFIG"
 
 # Debug mode: log terminal size after launch
 if [ -f "$DEBUG_FLAG" ]; then
@@ -74,7 +80,7 @@ if [ -f "$DEBUG_FLAG" ]; then
     ) >> /tmp/xinitrc.log 2>&1 &
 fi
 
-alacritty --config-file /etc/purple/alacritty.toml \
+alacritty --config-file "$ALACRITTY_CONFIG" \
     -o "font.size=${FONT_SIZE}" \
     -e /usr/local/bin/purple
 
@@ -82,7 +88,7 @@ alacritty --config-file /etc/purple/alacritty.toml \
 if [ -f "$DEBUG_FLAG" ]; then
     # Debug: drop to interactive debug shell
     echo "Exited, opening debug shell"
-    exec alacritty --config-file /etc/purple/alacritty.toml \
+    exec alacritty --config-file "$ALACRITTY_CONFIG" \
         -o "font.size=16" \
         -e bash --rcfile /opt/purple/debug-shell.sh
 else

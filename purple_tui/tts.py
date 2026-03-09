@@ -10,6 +10,7 @@ ensures identical input always produces identical WAV output.
 
 import array
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -90,12 +91,27 @@ def _fix_pronunciation(text: str) -> str:
     return text
 
 
+def _normalize_for_cache(text: str) -> str:
+    """Strip characters that don't affect TTS pronunciation.
+
+    Piper ignores most punctuation, so "hello" and "hello!" sound identical.
+    Normalizing before cache key generation ensures they share a cache entry.
+    """
+    # Keep letters, digits, spaces (whitespace affects pacing)
+    text = re.sub(r"[^\w\s]", "", text, flags=re.UNICODE)
+    # Collapse multiple spaces
+    text = re.sub(r"\s+", " ", text).strip()
+    # Lowercase for consistent keys
+    return text.lower()
+
+
 def _prepare_text(text: str) -> str:
     """Prepare text for synthesis: letter expansion, pronunciation fixes, padding.
 
     1. If input is exactly one letter A-Z (upper or lower), replace with phonetic spelling.
     2. Apply pronunciation overrides.
-    3. If result is < 4 characters, append a period for prosody stability.
+    3. Normalize punctuation/case for cache consistency.
+    4. If result is < 4 characters, append a period for prosody stability.
     """
     stripped = text.strip()
 
@@ -105,6 +121,9 @@ def _prepare_text(text: str) -> str:
 
     # Pronunciation fixes
     stripped = _fix_pronunciation(stripped)
+
+    # Normalize punctuation and case for cache consistency
+    stripped = _normalize_for_cache(stripped)
 
     # Micro-context padding for very short utterances
     if len(stripped) < 4:
@@ -623,7 +642,7 @@ def stop() -> None:
     _current_channel = None
 
 
-def speak(text: str) -> bool:
+def speak(text: str, on_playing: callable = None, on_done: callable = None) -> bool:
     """
     Speak the given text using Piper TTS.
     Runs in a background thread to not block the UI.
@@ -631,6 +650,8 @@ def speak(text: str) -> bool:
 
     Args:
         text: The text to speak
+        on_playing: Called from background thread when audio starts playing
+        on_done: Called from background thread when speech finishes (or fails)
 
     Returns:
         True if speech was started, False otherwise
@@ -641,72 +662,85 @@ def speak(text: str) -> bool:
     if not text or not text.strip():
         return False
 
-    # Filter profanity (replaces bad words with silly alternatives)
+    # Filter profanity
     from .speech_filter import filter_speech
     text = filter_speech(text)
+
+    if not text or not text.strip():
+        return False
 
     # Stop any previous speech and get new ID
     stop()
     my_id = _speech_id
 
     # Run TTS in background thread
-    thread = threading.Thread(target=_speak_sync, args=(text, my_id), daemon=True)
+    thread = threading.Thread(
+        target=_speak_sync, args=(text, my_id, on_playing, on_done), daemon=True
+    )
     thread.start()
     return True
 
 
-def _speak_sync(text: str, speech_id: int) -> bool:
+def _speak_sync(text: str, speech_id: int,
+                on_playing: callable = None, on_done: callable = None) -> bool:
     """Synchronous speech, called from background thread"""
     global _current_channel, _speech_id
 
-    # Check cancellation first
-    if speech_id != _speech_id:
-        return False
-
-    if not _ensure_mixer():
-        return False
-
-    # Check for pre-generated voice clip first (hand-curated clips take priority)
-    clip_path = _get_voice_clip(text)
-    if clip_path:
-        return _play_clip(clip_path, speech_id)
-
-    # Prepare text (letter expansion, pronunciation, padding)
-    prepared = _prepare_text(text)
-
-    # Check cache
-    cached_path = _get_cached(prepared)
-    if cached_path:
-        return _play_clip(cached_path, speech_id)
-
-    # Fall back to Piper TTS for dynamic content
-    voice = _get_piper_voice()
-    if voice is None:
-        return False
-
-    # Check again after potentially slow voice load
-    if speech_id != _speech_id:
-        return False
-
-    # Synthesize, post-process, and cache (if short enough to be worth caching)
-    result_path = _synthesize_to_cache(voice, prepared)
-    if result_path is None:
-        return False
-
-    # Check if we've been cancelled after generating
-    if speech_id != _speech_id:
-        return False
-
-    is_temp = not str(result_path).startswith(str(_CACHE_DIR))
     try:
-        return _play_clip(result_path, speech_id)
+        # Check cancellation first
+        if speech_id != _speech_id:
+            return False
+
+        if not _ensure_mixer():
+            return False
+
+        # Check for pre-generated voice clip first (hand-curated clips take priority)
+        clip_path = _get_voice_clip(text)
+        if clip_path:
+            return _play_clip(clip_path, speech_id, on_playing)
+
+        # Prepare text (letter expansion, pronunciation, padding)
+        prepared = _prepare_text(text)
+
+        # Check cache
+        cached_path = _get_cached(prepared)
+        if cached_path:
+            return _play_clip(cached_path, speech_id, on_playing)
+
+        # Fall back to Piper TTS for dynamic content
+        voice = _get_piper_voice()
+        if voice is None:
+            return False
+
+        # Check again after potentially slow voice load
+        if speech_id != _speech_id:
+            return False
+
+        # Synthesize, post-process, and cache (if short enough to be worth caching)
+        result_path = _synthesize_to_cache(voice, prepared)
+        if result_path is None:
+            return False
+
+        # Check if we've been cancelled after generating
+        if speech_id != _speech_id:
+            return False
+
+        is_temp = not str(result_path).startswith(str(_CACHE_DIR))
+        try:
+            return _play_clip(result_path, speech_id, on_playing)
+        finally:
+            # Clean up temp files (uncached results)
+            if is_temp:
+                result_path.unlink(missing_ok=True)
     finally:
-        # Clean up temp files (uncached results)
-        if is_temp:
-            result_path.unlink(missing_ok=True)
+        if on_done:
+            try:
+                on_done()
+            except Exception:
+                pass
 
 
-def _play_clip(clip_path: Path, speech_id: int) -> bool:
+def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> bool:
     """Play a pre-generated or cached voice clip."""
     global _current_channel, _speech_id
 
@@ -717,6 +751,12 @@ def _play_clip(clip_path: Path, speech_id: int) -> bool:
         sound = pygame.mixer.Sound(str(clip_path))
         channel = sound.play()
         _current_channel = channel
+
+        if on_playing:
+            try:
+                on_playing()
+            except Exception:
+                pass
 
         if channel:
             while channel.get_busy():

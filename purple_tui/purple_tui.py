@@ -1074,7 +1074,17 @@ class PurpleApp(App):
         if recording is not None:
             from .program import default_target_for_room
             target = default_target_for_room(self._watch_me_room)
-            blocks = recording.to_blocks(target)
+            # Capture current instrument if recording in music room
+            instrument = ""
+            if self._watch_me_room == "music":
+                try:
+                    from .music_constants import INSTRUMENTS
+                    content_area = self.query_one("#content-area")
+                    music = content_area.query_one("#room-music")
+                    instrument = INSTRUMENTS[music._instrument_index][0]
+                except Exception:
+                    pass
+            blocks = recording.to_blocks(target, instrument=instrument)
             if blocks:
                 try:
                     content_area = self.query_one("#content-area")
@@ -1146,6 +1156,25 @@ class PurpleApp(App):
             except Exception:
                 return False
         return check
+
+    def _get_set_instrument_callback(self):
+        """Get a callback for setting the music room instrument."""
+        def set_inst(instrument_id: str):
+            try:
+                from .music_constants import INSTRUMENTS
+                content_area = self.query_one("#content-area")
+                music = content_area.query_one("#room-music")
+                inst_ids = [inst_id for inst_id, _ in INSTRUMENTS]
+                if instrument_id in inst_ids:
+                    idx = inst_ids.index(instrument_id)
+                    music._instrument_index = idx
+                    if music.grid:
+                        music.grid.set_instrument(idx)
+                    if music._header:
+                        music._header.update_instrument(INSTRUMENTS[idx][1])
+            except Exception:
+                pass
+        return set_inst
 
     def _update_recording_indicator(self) -> None:
         """Update the title bar with Watch me! recording state."""
@@ -2218,6 +2247,12 @@ def main():
     # Note: We intentionally do NOT filter stderr here.
     # Textual renders to stderr, so any pipe redirection causes UI lag.
     # ALSA noise should be silenced at the source (see tts.py for handlers).
+
+    # Auto-size Alacritty font to fit the required terminal grid.
+    # Measures actual terminal dimensions and adjusts empirically.
+    # Shows "Loading..." if adjustment is needed (usually <1 second).
+    from .font_sizer import ensure_terminal_size
+    ensure_terminal_size()
 
     # Check for updates before starting
     from .updater import auto_update_if_available

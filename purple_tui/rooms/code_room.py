@@ -612,6 +612,8 @@ class CodeMode(Container, can_focus=True):
         self._compose_text: str = ""
         # Adjustment mode: Enter on adjustable block toggles this
         self._adjusting: bool = False
+        # For MODE_SWITCH: which level is being adjusted (0=room, 1=mode, 2=instrument)
+        self._adjust_level: int = 0
 
     def compose(self) -> ComposeResult:
         yield CodeCanvas(id="code-canvas")
@@ -695,6 +697,7 @@ class CodeMode(Container, can_focus=True):
         """Left/Right navigate (exits adjustment). Up/Down adjust block or jump lines."""
         if action.direction in ('left', 'right'):
             self._adjusting = False
+            self._adjust_level = 0
             if action.direction == 'left':
                 if self._cursor > 0:
                     self._cursor -= 1
@@ -709,7 +712,12 @@ class CodeMode(Container, can_focus=True):
                 block = self._blocks[self._cursor - 1]
                 if block.type == ProgramBlockType.MODE_SWITCH:
                     if not self._mode_switch_has_content(self._cursor - 1):
-                        block.cycle_target(direction)
+                        if self._adjust_level == 0:
+                            block.cycle_room(direction)
+                        elif self._adjust_level == 1:
+                            block.cycle_mode(direction)
+                        elif self._adjust_level == 2:
+                            block.cycle_instrument(direction)
                         self._refresh_all()
                     return
                 elif block.type == ProgramBlockType.PAUSE:
@@ -738,6 +746,7 @@ class CodeMode(Container, can_focus=True):
         if action.action == 'escape':
             if self._adjusting:
                 self._adjusting = False
+                self._adjust_level = 0
                 self._refresh_all()
                 # Set flag so app knows not to open room picker
                 self.app._escape_consumed_by_mode = True
@@ -745,9 +754,11 @@ class CodeMode(Container, can_focus=True):
 
         if action.action == 'backspace':
             self._adjusting = False
+            self._adjust_level = 0
             self._delete_block()
         elif action.action == 'space':
             self._adjusting = False
+            self._adjust_level = 0
             await self._start_playback()
         elif action.action == 'enter':
             # Empty canvas: trigger Watch me!
@@ -761,6 +772,29 @@ class CodeMode(Container, can_focus=True):
                     # Don't allow adjusting a MODE_SWITCH that has content after it
                     if block.type == ProgramBlockType.MODE_SWITCH and self._mode_switch_has_content(self._cursor - 1):
                         pass  # Fall through to compose/new-line behavior below
+                    elif block.type == ProgramBlockType.MODE_SWITCH:
+                        # Multi-level drill-down: room -> mode -> instrument -> done
+                        if not self._adjusting:
+                            self._adjusting = True
+                            self._adjust_level = 0  # start at room level
+                        else:
+                            # Drill to next applicable level
+                            if self._adjust_level == 0:
+                                if block.has_modes():
+                                    self._adjust_level = 1
+                                elif block.has_instruments():
+                                    self._adjust_level = 2
+                                else:
+                                    self._adjusting = False
+                            elif self._adjust_level == 1:
+                                if block.has_instruments():
+                                    self._adjust_level = 2
+                                else:
+                                    self._adjusting = False
+                            else:
+                                self._adjusting = False
+                        self._refresh_all()
+                        return
                     else:
                         self._adjusting = not self._adjusting
                         self._refresh_all()
@@ -793,6 +827,7 @@ class CodeMode(Container, can_focus=True):
             ))
         elif action.action == 'tab':
             self._adjusting = False
+            self._adjust_level = 0
             await self._open_menu()
 
     async def _handle_character(self, action: CharacterAction) -> None:
@@ -994,11 +1029,16 @@ class CodeMode(Container, can_focus=True):
         if hasattr(self.app, '_get_music_letters_mode_callback'):
             is_music_letters = self.app._get_music_letters_mode_callback()
 
+        set_instrument = None
+        if hasattr(self.app, '_get_set_instrument_callback'):
+            set_instrument = self.app._get_set_instrument_callback()
+
         player = PlaybackPlayer(
             dispatch_action=self._dispatch_action,
             speed_multiplier=1.0,
             is_doodle_paint_mode=is_art_paint,
             is_play_letters_mode=is_music_letters,
+            set_instrument=set_instrument,
         )
 
         async def _run_playback():

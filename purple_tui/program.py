@@ -26,6 +26,7 @@ from .keyboard import (
     KeyAction,
     RoomAction,
 )
+from .music_constants import INSTRUMENTS
 from .playback.script import (
     PlaybackAction,
     TypeText,
@@ -163,6 +164,12 @@ TARGET_LABELS = {
     TARGET_PLAY: "Play",
 }
 
+# 2-char instrument abbreviations for MODE_SWITCH block display
+INSTRUMENT_ABBREVS = {inst_id: inst_name[:2] for inst_id, inst_name in INSTRUMENTS}
+
+# Default instrument (first in list)
+DEFAULT_INSTRUMENT = INSTRUMENTS[0][0]
+
 # Icons for control keys (KEY blocks with is_control=True)
 CONTROL_ICONS = {
     "enter": "\U000f0311",
@@ -234,6 +241,7 @@ class ProgramBlock:
 
     # MODE_SWITCH fields
     target: str = ""            # "music.music", "art.paint", etc.
+    instrument: str = ""        # instrument id ("marimba", "ukulele", etc.) or "" for default
 
     # Hidden timing metadata (not displayed, used for playback)
     recorded_gap_ms: int = 0    # exact milliseconds from F5 recording
@@ -265,11 +273,17 @@ class ProgramBlock:
             room = target_room(self.target)
             room_info = ROOMS.get(room, {})
             icon = ROOM_ICONS.get(room, "?")
+            suffix = ""
             # Show sub-mode hint for non-default modes
             if self.target != room_info.get("default"):
                 label = MODE_LABELS.get(self.target, "")
                 if label:
-                    return f"{icon}{label[:2]}"
+                    suffix = label[:2]
+            # Show instrument hint for non-default instrument
+            if self.instrument and self.instrument != DEFAULT_INSTRUMENT:
+                suffix = INSTRUMENT_ABBREVS.get(self.instrument, self.instrument[:2])
+            if suffix:
+                return f"{icon}{suffix}"
             return icon
         return "?"
 
@@ -312,8 +326,8 @@ class ProgramBlock:
         """Cycle repeat count up or down, clamping to 2-99."""
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
 
-    def cycle_target(self, direction: int) -> None:
-        """Cycle MODE_SWITCH target through rooms (using default targets)."""
+    def cycle_room(self, direction: int) -> None:
+        """Cycle MODE_SWITCH through rooms (Play, Music, Art). Resets mode and instrument."""
         room_defaults = [ROOMS[r]["default"] for r in ROOM_ORDER]
         current_room = target_room(self.target)
         if current_room in ROOM_ORDER:
@@ -322,6 +336,41 @@ class ProgramBlock:
             idx = 0
         idx = (idx + direction) % len(ROOM_ORDER)
         self.target = room_defaults[idx]
+        self.instrument = ""
+
+    def cycle_mode(self, direction: int) -> None:
+        """Cycle through modes within the current room."""
+        room = target_room(self.target)
+        targets = ROOMS.get(room, {}).get("targets", [self.target])
+        if len(targets) <= 1:
+            return
+        try:
+            idx = targets.index(self.target)
+        except ValueError:
+            idx = 0
+        idx = (idx + direction) % len(targets)
+        self.target = targets[idx]
+
+    def cycle_instrument(self, direction: int) -> None:
+        """Cycle through instruments (only meaningful for music targets)."""
+        current = self.instrument or DEFAULT_INSTRUMENT
+        inst_ids = [inst_id for inst_id, _ in INSTRUMENTS]
+        try:
+            idx = inst_ids.index(current)
+        except ValueError:
+            idx = 0
+        idx = (idx + direction) % len(inst_ids)
+        self.instrument = inst_ids[idx]
+
+    def has_modes(self) -> bool:
+        """Whether the current room has multiple modes to cycle through."""
+        room = target_room(self.target)
+        targets = ROOMS.get(room, {}).get("targets", [])
+        return len(targets) > 1
+
+    def has_instruments(self) -> bool:
+        """Whether the current target supports instrument selection."""
+        return target_room(self.target) == "music"
 
 
 def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:
@@ -407,7 +456,7 @@ def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackActio
         elif block.type == ProgramBlockType.MODE_SWITCH:
             actions.extend(_section_to_actions(section))
             section = []
-            actions.append(SwitchTarget(target=block.target, pause_after=0.3))
+            actions.append(SwitchTarget(target=block.target, pause_after=0.3, instrument=block.instrument))
         else:
             section.append(block)
 
@@ -556,6 +605,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["repeat_count"] = block.repeat_count
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
+        if block.instrument:
+            d["instrument"] = block.instrument
     if block.recorded_gap_ms > 0:
         d["gap_ms"] = block.recorded_gap_ms
     return d
@@ -574,6 +625,7 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         duration=d.get("duration", 0.5),
         repeat_count=d.get("repeat_count", 2),
         target=d.get("target", ""),
+        instrument=d.get("instrument", ""),
         recorded_gap_ms=d.get("gap_ms", 0),
     )
 

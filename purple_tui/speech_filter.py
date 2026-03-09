@@ -1,9 +1,10 @@
 """Speech content filter for Purple Computer.
 
 Prevents TTS from speaking profanity while allowing arbitrary gibberish.
-Uses two layers:
-1. Leet-speak normalization (4->a, $->s, etc.)
-2. Substring matching against blocked words
+Matches against blocked words using lowercase + non-alpha removal.
+
+No leet-speak normalization: digits in TTS are pronounced as numbers
+(e.g. "F4CK" becomes "F four C K"), so they don't sound like profanity.
 
 When a blocked word is detected, the word is scrubbed out. If there's not
 enough left to speak, returns empty string (TTS silently skips it).
@@ -40,19 +41,6 @@ _BLOCKED_WORDS = frozenset(
     .split(",")
 )
 
-# Letter-to-number substitutions kids/siblings use
-_LEET_MAP = {
-    "0": "o",
-    "1": "i",
-    "3": "e",
-    "4": "a",
-    "5": "s",
-    "7": "t",
-    "8": "b",
-    "@": "a",
-    "$": "s",
-}
-
 # Words that are legitimate despite containing blocked substrings.
 # For example, "class" contains a blocked word, "hello" contains another.
 _ALLOWED_WORDS = frozenset({
@@ -85,11 +73,8 @@ _ALLOWED_WORDS = frozenset({
 
 
 def _normalize(text: str) -> str:
-    """Normalize text for comparison: lowercase, de-leet, collapse spaces."""
+    """Normalize text for comparison: lowercase, strip non-alpha."""
     text = text.lower()
-    for digit, letter in _LEET_MAP.items():
-        text = text.replace(digit, letter)
-    # Remove all non-alpha characters
     text = re.sub(r"[^a-z]", "", text)
     return text
 

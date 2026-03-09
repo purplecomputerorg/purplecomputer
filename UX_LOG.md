@@ -6,7 +6,7 @@ Brief descriptions of user experience changes, newest first.
 - TTS cache: punctuation and case no longer cause cache misses (e.g. "hello!" and "Hello" now share the same cached audio).
 - Speech filter: blocked content is silenced instead of speaking a random silly word, fixing TTS cache misses on leet-speak number strings.
 - Play room: left/right arrows now move the cursor in the ask prompt. Backspace and typing work at cursor position. Tab is the only way to accept autocomplete (hint updated to show "Tab").
-- Code room: MODE_SWITCH blocks now support multi-level adjustment with Enter drilling down (room -> mode -> instrument). Up/down cycles within each level. Instruments are captured during Watch Me recording and set during playback.
+- Code room: replaced invisible multi-level drill-down with visible VOICE blocks. Music and Art room lines now show a separate block for instrument/mode (e.g. "Mar" for Marimba, "Ltr" for Letters, "Pnt" for Paint). Each block is independently adjustable with Enter + up/down. Instruments captured during Watch Me and set during playback.
 - Font auto-sizing: app now measures actual terminal dimensions at startup and adjusts Alacritty font size to fit, replacing brittle DPI-based calculation. Shows "Loading..." during adjustment.
 - Power button: tapping power while on the sleep screen now shuts down (previously did nothing). Fixed power button stopping working after waking from sleep. Added safety checks so lid close shutdown can't get permanently stuck.
 - Boot: suppressed kernel driver errors, Ubuntu MOTD, and Xorg startup messages so only the purple splash screen is visible during startup.

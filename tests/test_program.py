@@ -61,15 +61,16 @@ from purple_tui.playback.script import TypeText, PressKey, SwitchRoom, SwitchTar
 # =============================================================================
 
 class TestBlockTypes:
-    def test_six_block_types(self):
+    def test_block_types(self):
         types = list(ProgramBlockType)
-        assert len(types) == 6
+        assert len(types) == 7
         assert ProgramBlockType.KEY in types
         assert ProgramBlockType.QUERY in types
         assert ProgramBlockType.STROKE in types
         assert ProgramBlockType.PAUSE in types
         assert ProgramBlockType.REPEAT in types
         assert ProgramBlockType.MODE_SWITCH in types
+        assert ProgramBlockType.VOICE in types
 
     def test_block_width_is_5(self):
         assert BLOCK_WIDTH == 5
@@ -259,30 +260,25 @@ class TestModeSwitchBlock:
         block.cycle_room(1)
         assert block.target == TARGET_MUSIC_MUSIC  # play -> music (wraps)
 
-    def test_cycle_mode(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC)
-        block.cycle_mode(1)
-        assert block.target == TARGET_MUSIC_LETTERS
-        block.cycle_mode(1)
-        assert block.target == TARGET_MUSIC_MUSIC  # wraps
-
-    def test_cycle_mode_no_modes(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_PLAY)
-        block.cycle_mode(1)
-        assert block.target == TARGET_PLAY  # no change, play has no modes
-
-    def test_cycle_instrument(self):
+    def test_cycle_voice_music(self):
         from purple_tui.music_constants import INSTRUMENTS
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC)
-        block.cycle_instrument(1)
-        assert block.instrument == INSTRUMENTS[1][0]  # second instrument
-        block.cycle_instrument(-1)
-        assert block.instrument == INSTRUMENTS[0][0]  # back to first
+        block = ProgramBlock(type=ProgramBlockType.VOICE, voice=INSTRUMENTS[0][0])
+        block.cycle_voice(1, "music")
+        assert block.voice == INSTRUMENTS[1][0]  # second instrument
+        block.cycle_voice(-1, "music")
+        assert block.voice == INSTRUMENTS[0][0]  # back to first
 
-    def test_cycle_room_resets_instrument(self):
-        block = ProgramBlock(type=ProgramBlockType.MODE_SWITCH, target=TARGET_MUSIC_MUSIC, instrument="ukulele")
-        block.cycle_room(1)
-        assert block.instrument == ""  # reset on room change
+    def test_cycle_voice_music_includes_letters(self):
+        block = ProgramBlock(type=ProgramBlockType.VOICE, voice="musicbox")
+        block.cycle_voice(1, "music")
+        assert block.voice == "letters"  # last instrument -> letters
+
+    def test_cycle_voice_art(self):
+        block = ProgramBlock(type=ProgramBlockType.VOICE, voice="paint")
+        block.cycle_voice(1, "art")
+        assert block.voice == "text"
+        block.cycle_voice(1, "art")
+        assert block.voice == "paint"  # wraps
 
 
 # =============================================================================

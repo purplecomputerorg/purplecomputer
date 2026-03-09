@@ -80,8 +80,8 @@ class Recording:
     def to_blocks(self, target: str, instrument: str = "") -> list[ProgramBlock]:
         """Convert recorded events to ProgramBlock list for a single room.
 
-        Prepends a MODE_SWITCH block with the given target, then processes
-        all events as that single mode.
+        Prepends a MODE_SWITCH block with the given target, then a VOICE block
+        if applicable, then processes all events as that single mode.
 
         Mode-aware conversion:
         - Music/Art text: each action becomes a KEY block
@@ -100,8 +100,27 @@ class Recording:
         blocks.append(ProgramBlock(
             type=ProgramBlockType.MODE_SWITCH,
             target=target,
-            instrument=instrument,
         ))
+
+        # Add VOICE block for music/art rooms
+        from .program import target_room, default_voice_for_room
+        room = target_room(target)
+        if room != "play":
+            # Determine voice from target and instrument
+            if room == "music":
+                if target == TARGET_MUSIC_LETTERS:
+                    voice = "letters"
+                elif instrument:
+                    voice = instrument
+                else:
+                    voice = default_voice_for_room(room)
+            else:
+                # Art: derive from target
+                voice = "text" if target == TARGET_ART_TEXT else "paint"
+            blocks.append(ProgramBlock(
+                type=ProgramBlockType.VOICE,
+                voice=voice,
+            ))
 
         query_buf = ""
 

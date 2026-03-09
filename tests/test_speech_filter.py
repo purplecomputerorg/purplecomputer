@@ -44,9 +44,6 @@ class TestNormalize:
     def test_lowercase(self):
         assert _normalize("HELLO") == "hello"
 
-    def test_leet_speak(self):
-        assert _normalize("h3ll0") == "hello"
-
     def test_strips_spaces_and_punctuation(self):
         assert _normalize("h.e" + ".l.l.o") == "hello"
         assert _normalize("h-e-l-l-o") == "hello"
@@ -79,9 +76,11 @@ class TestBlockedWords:
         assert result == "", f"should be blocked"
 
     @pytest.mark.parametrize("word", _LEET)
-    def test_leet_speak_blocked(self, word):
+    def test_leet_speak_passes_through(self, word):
+        # Leet-speak passes through because TTS pronounces digits as numbers,
+        # so "f4ck" sounds like "f four c k", not the blocked word
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == word, f"leet-speak should pass through TTS filter"
 
     @pytest.mark.parametrize("word", _SUFFIXED)
     def test_suffixed_forms_blocked(self, word):

@@ -164,11 +164,47 @@ TARGET_LABELS = {
     TARGET_PLAY: "Play",
 }
 
-# 2-char instrument abbreviations for MODE_SWITCH block display
-INSTRUMENT_ABBREVS = {inst_id: inst_name[:2] for inst_id, inst_name in INSTRUMENTS}
-
 # Default instrument (first in list)
 DEFAULT_INSTRUMENT = INSTRUMENTS[0][0]
+
+# VOICE block: valid values per room, with display labels
+# Music voices: each instrument + "letters" mode
+MUSIC_VOICES = [inst_id for inst_id, _ in INSTRUMENTS] + ["letters"]
+# Art voices: paint and text modes
+ART_VOICES = ["paint", "text"]
+
+VOICE_LABELS = {
+    **{inst_id: inst_name for inst_id, inst_name in INSTRUMENTS},
+    "letters": "Letters",
+    "paint": "Paint",
+    "text": "Text",
+}
+
+# Short labels for block display (max 3 chars)
+VOICE_SHORT_LABELS = {
+    **{inst_id: inst_name[:3] for inst_id, inst_name in INSTRUMENTS},
+    "letters": "Ltr",
+    "paint": "Pnt",
+    "text": "Txt",
+}
+
+VOICE_COLOR = "#4a4a6a"  # muted purple-gray for VOICE blocks
+
+def default_voice_for_room(room: str) -> str:
+    """Get the default VOICE value for a room."""
+    if room == "music":
+        return DEFAULT_INSTRUMENT
+    elif room == "art":
+        return "paint"
+    return ""
+
+def voices_for_room(room: str) -> list[str]:
+    """Get the list of valid VOICE values for a room."""
+    if room == "music":
+        return MUSIC_VOICES
+    elif room == "art":
+        return ART_VOICES
+    return []
 
 # Icons for control keys (KEY blocks with is_control=True)
 CONTROL_ICONS = {
@@ -197,7 +233,8 @@ class ProgramBlockType(Enum):
     STROKE = "stroke"         # Art paint direction + distance
     PAUSE = "pause"           # Explicit visible wait
     REPEAT = "repeat"         # Repeat preceding line N times
-    MODE_SWITCH = "mode_switch"  # Switch target mode
+    MODE_SWITCH = "mode_switch"  # Switch target room
+    VOICE = "voice"           # Room detail: instrument, mode (after MODE_SWITCH)
 
 
 def key_color(char: str) -> str:
@@ -241,7 +278,9 @@ class ProgramBlock:
 
     # MODE_SWITCH fields
     target: str = ""            # "music.music", "art.paint", etc.
-    instrument: str = ""        # instrument id ("marimba", "ukulele", etc.) or "" for default
+
+    # VOICE fields
+    voice: str = ""             # "marimba", "letters", "paint", "text", etc.
 
     # Hidden timing metadata (not displayed, used for playback)
     recorded_gap_ms: int = 0    # exact milliseconds from F5 recording
@@ -271,20 +310,9 @@ class ProgramBlock:
             return f"x{self.repeat_count}"
         elif self.type == ProgramBlockType.MODE_SWITCH:
             room = target_room(self.target)
-            room_info = ROOMS.get(room, {})
-            icon = ROOM_ICONS.get(room, "?")
-            suffix = ""
-            # Show sub-mode hint for non-default modes
-            if self.target != room_info.get("default"):
-                label = MODE_LABELS.get(self.target, "")
-                if label:
-                    suffix = label[:2]
-            # Show instrument hint for non-default instrument
-            if self.instrument and self.instrument != DEFAULT_INSTRUMENT:
-                suffix = INSTRUMENT_ABBREVS.get(self.instrument, self.instrument[:2])
-            if suffix:
-                return f"{icon}{suffix}"
-            return icon
+            return ROOM_ICONS.get(room, "?")
+        elif self.type == ProgramBlockType.VOICE:
+            return VOICE_SHORT_LABELS.get(self.voice, self.voice[:3])
         return "?"
 
     @property
@@ -303,6 +331,8 @@ class ProgramBlock:
             return REPEAT_COLOR
         elif self.type == ProgramBlockType.MODE_SWITCH:
             return TARGET_COLORS.get(self.target, KEY_COLOR_GRAY)
+        elif self.type == ProgramBlockType.VOICE:
+            return VOICE_COLOR
         return KEY_COLOR_GRAY
 
     def cycle_pause_duration(self, direction: int) -> None:
@@ -327,7 +357,7 @@ class ProgramBlock:
         self.repeat_count = max(2, min(99, self.repeat_count + direction))
 
     def cycle_room(self, direction: int) -> None:
-        """Cycle MODE_SWITCH through rooms (Play, Music, Art). Resets mode and instrument."""
+        """Cycle MODE_SWITCH through rooms (Play, Music, Art)."""
         room_defaults = [ROOMS[r]["default"] for r in ROOM_ORDER]
         current_room = target_room(self.target)
         if current_room in ROOM_ORDER:
@@ -336,41 +366,18 @@ class ProgramBlock:
             idx = 0
         idx = (idx + direction) % len(ROOM_ORDER)
         self.target = room_defaults[idx]
-        self.instrument = ""
 
-    def cycle_mode(self, direction: int) -> None:
-        """Cycle through modes within the current room."""
-        room = target_room(self.target)
-        targets = ROOMS.get(room, {}).get("targets", [self.target])
-        if len(targets) <= 1:
+    def cycle_voice(self, direction: int, room: str) -> None:
+        """Cycle VOICE block through valid values for the given room."""
+        valid = voices_for_room(room)
+        if not valid:
             return
         try:
-            idx = targets.index(self.target)
+            idx = valid.index(self.voice)
         except ValueError:
             idx = 0
-        idx = (idx + direction) % len(targets)
-        self.target = targets[idx]
-
-    def cycle_instrument(self, direction: int) -> None:
-        """Cycle through instruments (only meaningful for music targets)."""
-        current = self.instrument or DEFAULT_INSTRUMENT
-        inst_ids = [inst_id for inst_id, _ in INSTRUMENTS]
-        try:
-            idx = inst_ids.index(current)
-        except ValueError:
-            idx = 0
-        idx = (idx + direction) % len(inst_ids)
-        self.instrument = inst_ids[idx]
-
-    def has_modes(self) -> bool:
-        """Whether the current room has multiple modes to cycle through."""
-        room = target_room(self.target)
-        targets = ROOMS.get(room, {}).get("targets", [])
-        return len(targets) > 1
-
-    def has_instruments(self) -> bool:
-        """Whether the current target supports instrument selection."""
-        return target_room(self.target) == "music"
+        idx = (idx + direction) % len(valid)
+        self.voice = valid[idx]
 
 
 def action_to_block(action: KeyAction, room: str) -> ProgramBlock | None:
@@ -456,7 +463,21 @@ def blocks_to_playback_actions(blocks: list[ProgramBlock]) -> list[PlaybackActio
         elif block.type == ProgramBlockType.MODE_SWITCH:
             actions.extend(_section_to_actions(section))
             section = []
-            actions.append(SwitchTarget(target=block.target, pause_after=0.3, instrument=block.instrument))
+            actions.append(SwitchTarget(target=block.target, pause_after=0.3))
+        elif block.type == ProgramBlockType.VOICE:
+            # VOICE modifies the most recent SwitchTarget
+            if actions and isinstance(actions[-1], SwitchTarget):
+                voice = block.voice
+                switch = actions[-1]
+                if voice == "letters":
+                    switch.target = TARGET_MUSIC_LETTERS
+                elif voice == "text":
+                    switch.target = TARGET_ART_TEXT
+                elif voice == "paint":
+                    switch.target = TARGET_ART_PAINT
+                elif voice in [inst_id for inst_id, _ in INSTRUMENTS]:
+                    switch.target = TARGET_MUSIC_MUSIC
+                    switch.instrument = voice
         else:
             section.append(block)
 
@@ -605,8 +626,8 @@ def _block_to_dict(block: ProgramBlock) -> dict:
         d["repeat_count"] = block.repeat_count
     elif block.type == ProgramBlockType.MODE_SWITCH:
         d["target"] = block.target
-        if block.instrument:
-            d["instrument"] = block.instrument
+    elif block.type == ProgramBlockType.VOICE:
+        d["voice"] = block.voice
     if block.recorded_gap_ms > 0:
         d["gap_ms"] = block.recorded_gap_ms
     return d
@@ -625,7 +646,7 @@ def _dict_to_block(d: dict) -> ProgramBlock:
         duration=d.get("duration", 0.5),
         repeat_count=d.get("repeat_count", 2),
         target=d.get("target", ""),
-        instrument=d.get("instrument", ""),
+        voice=d.get("voice", ""),
         recorded_gap_ms=d.get("gap_ms", 0),
     )
 

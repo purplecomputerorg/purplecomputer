@@ -612,8 +612,6 @@ class CodeMode(Container, can_focus=True):
         self._compose_text: str = ""
         # Adjustment mode: Enter on adjustable block toggles this
         self._adjusting: bool = False
-        # For MODE_SWITCH: which level is being adjusted (0=room, 1=mode, 2=instrument)
-        self._adjust_level: int = 0
 
     def compose(self) -> ComposeResult:
         yield CodeCanvas(id="code-canvas")
@@ -643,27 +641,35 @@ class CodeMode(Container, can_focus=True):
     def _mode_switch_has_content(self, block_index: int) -> bool:
         """Check if a MODE_SWITCH block has content blocks after it.
 
-        Returns True if there are non-MODE_SWITCH blocks between this
+        Returns True if there are non-MODE_SWITCH/non-VOICE blocks between this
         MODE_SWITCH and the next MODE_SWITCH (or end of program).
+        VOICE blocks are part of the MODE_SWITCH configuration, not content.
         """
         for i in range(block_index + 1, len(self._blocks)):
             if self._blocks[i].type == ProgramBlockType.MODE_SWITCH:
                 return False
+            elif self._blocks[i].type == ProgramBlockType.VOICE:
+                continue  # skip VOICE blocks
             else:
                 return True
         return False
 
     def _ensure_default_mode(self) -> None:
-        """Auto-insert a default MODE_SWITCH when canvas is empty.
+        """Auto-insert a default MODE_SWITCH + VOICE when canvas is empty.
 
         Called lazily when user starts typing on an empty canvas.
         """
         if not self._blocks:
+            from ..program import default_voice_for_room
             self._blocks.append(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
                 target=TARGET_MUSIC_MUSIC,
             ))
-            self._cursor = 1
+            self._blocks.append(ProgramBlock(
+                type=ProgramBlockType.VOICE,
+                voice=default_voice_for_room("music"),
+            ))
+            self._cursor = 2
 
     # ── Keyboard handling ──────────────────────────────────────────────
 
@@ -697,7 +703,6 @@ class CodeMode(Container, can_focus=True):
         """Left/Right navigate (exits adjustment). Up/Down adjust block or jump lines."""
         if action.direction in ('left', 'right'):
             self._adjusting = False
-            self._adjust_level = 0
             if action.direction == 'left':
                 if self._cursor > 0:
                     self._cursor -= 1
@@ -712,13 +717,14 @@ class CodeMode(Container, can_focus=True):
                 block = self._blocks[self._cursor - 1]
                 if block.type == ProgramBlockType.MODE_SWITCH:
                     if not self._mode_switch_has_content(self._cursor - 1):
-                        if self._adjust_level == 0:
-                            block.cycle_room(direction)
-                        elif self._adjust_level == 1:
-                            block.cycle_mode(direction)
-                        elif self._adjust_level == 2:
-                            block.cycle_instrument(direction)
+                        block.cycle_room(direction)
+                        # Update the VOICE block after this MODE_SWITCH to match
+                        self._sync_voice_after_mode_switch(self._cursor - 1)
                         self._refresh_all()
+                    return
+                elif block.type == ProgramBlockType.VOICE:
+                    block.cycle_voice(direction, self._voice_room_context(self._cursor - 1))
+                    self._refresh_all()
                     return
                 elif block.type == ProgramBlockType.PAUSE:
                     block.cycle_pause_duration(direction)
@@ -737,16 +743,55 @@ class CodeMode(Container, can_focus=True):
 
     _ADJUSTABLE_TYPES = frozenset({
         ProgramBlockType.MODE_SWITCH,
+        ProgramBlockType.VOICE,
         ProgramBlockType.PAUSE,
         ProgramBlockType.STROKE,
         ProgramBlockType.REPEAT,
     })
 
+    def _voice_room_context(self, voice_index: int) -> str:
+        """Find the room for a VOICE block by looking at the preceding MODE_SWITCH."""
+        for i in range(voice_index - 1, -1, -1):
+            if self._blocks[i].type == ProgramBlockType.MODE_SWITCH:
+                from ..program import target_room
+                return target_room(self._blocks[i].target)
+        return ""
+
+    def _sync_voice_after_mode_switch(self, mode_switch_index: int) -> None:
+        """When a MODE_SWITCH room changes, update or remove the VOICE block after it."""
+        from ..program import target_room, default_voice_for_room
+        block = self._blocks[mode_switch_index]
+        room = target_room(block.target)
+        next_idx = mode_switch_index + 1
+
+        has_voice = (
+            next_idx < len(self._blocks)
+            and self._blocks[next_idx].type == ProgramBlockType.VOICE
+        )
+
+        if room == "play":
+            # Play has no VOICE block, remove if present
+            if has_voice:
+                self._blocks.pop(next_idx)
+                if self._cursor > next_idx:
+                    self._cursor -= 1
+        else:
+            # Music/Art need a VOICE block
+            default_voice = default_voice_for_room(room)
+            if has_voice:
+                self._blocks[next_idx].voice = default_voice
+            else:
+                self._blocks.insert(next_idx, ProgramBlock(
+                    type=ProgramBlockType.VOICE,
+                    voice=default_voice,
+                ))
+                if self._cursor > mode_switch_index:
+                    self._cursor += 1
+
     async def _handle_control(self, action: ControlAction) -> None:
         if action.action == 'escape':
             if self._adjusting:
                 self._adjusting = False
-                self._adjust_level = 0
                 self._refresh_all()
                 # Set flag so app knows not to open room picker
                 self.app._escape_consumed_by_mode = True
@@ -754,11 +799,9 @@ class CodeMode(Container, can_focus=True):
 
         if action.action == 'backspace':
             self._adjusting = False
-            self._adjust_level = 0
             self._delete_block()
         elif action.action == 'space':
             self._adjusting = False
-            self._adjust_level = 0
             await self._start_playback()
         elif action.action == 'enter':
             # Empty canvas: trigger Watch me!
@@ -772,29 +815,6 @@ class CodeMode(Container, can_focus=True):
                     # Don't allow adjusting a MODE_SWITCH that has content after it
                     if block.type == ProgramBlockType.MODE_SWITCH and self._mode_switch_has_content(self._cursor - 1):
                         pass  # Fall through to compose/new-line behavior below
-                    elif block.type == ProgramBlockType.MODE_SWITCH:
-                        # Multi-level drill-down: room -> mode -> instrument -> done
-                        if not self._adjusting:
-                            self._adjusting = True
-                            self._adjust_level = 0  # start at room level
-                        else:
-                            # Drill to next applicable level
-                            if self._adjust_level == 0:
-                                if block.has_modes():
-                                    self._adjust_level = 1
-                                elif block.has_instruments():
-                                    self._adjust_level = 2
-                                else:
-                                    self._adjusting = False
-                            elif self._adjust_level == 1:
-                                if block.has_instruments():
-                                    self._adjust_level = 2
-                                else:
-                                    self._adjusting = False
-                            else:
-                                self._adjusting = False
-                        self._refresh_all()
-                        return
                     else:
                         self._adjusting = not self._adjusting
                         self._refresh_all()
@@ -806,14 +826,25 @@ class CodeMode(Container, can_focus=True):
                 self._compose_text = ""
                 self._refresh_all()
             else:
-                # Start a new line: insert a MODE_SWITCH block
-                # Default to same room context, or music if none
+                # Start a new line: insert a MODE_SWITCH block + VOICE block
+                from ..program import target_room, default_voice_for_room
                 current_target = context or TARGET_MUSIC_MUSIC
+                room = target_room(current_target)
                 self._insert_block(ProgramBlock(
                     type=ProgramBlockType.MODE_SWITCH,
                     target=current_target,
                 ))
-                # Enter adjustment mode so user can pick room with up/down
+                # Auto-insert VOICE block for music/art
+                if room != "play":
+                    default_voice = default_voice_for_room(room)
+                    self._insert_block(ProgramBlock(
+                        type=ProgramBlockType.VOICE,
+                        voice=default_voice,
+                    ))
+                # Enter adjustment mode on the MODE_SWITCH so user can pick room
+                # Cursor is after VOICE, move it back to after MODE_SWITCH
+                if room != "play":
+                    self._cursor -= 1
                 self._adjusting = True
                 self._refresh_all()
         elif action.action == 'menu':
@@ -827,7 +858,6 @@ class CodeMode(Container, can_focus=True):
             ))
         elif action.action == 'tab':
             self._adjusting = False
-            self._adjust_level = 0
             await self._open_menu()
 
     async def _handle_character(self, action: CharacterAction) -> None:
@@ -904,11 +934,18 @@ class CodeMode(Container, can_focus=True):
         action = result.get("action")
 
         if action == "insert_mode_switch":
+            from ..program import target_room, default_voice_for_room
             target = result.get("target", TARGET_MUSIC_MUSIC)
             self._insert_block(ProgramBlock(
                 type=ProgramBlockType.MODE_SWITCH,
                 target=target,
             ))
+            room = target_room(target)
+            if room != "play":
+                self._insert_block(ProgramBlock(
+                    type=ProgramBlockType.VOICE,
+                    voice=default_voice_for_room(room),
+                ))
 
         elif action == "insert_enter":
             self._insert_block(ProgramBlock(

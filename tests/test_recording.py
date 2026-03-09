@@ -153,15 +153,17 @@ class TestRecordingToBlocksWithTarget:
         r = Recording()
         assert r.to_blocks(TARGET_MUSIC_MUSIC) == []
 
-    def test_prepends_mode_switch(self):
+    def test_prepends_mode_switch_and_voice(self):
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
-        assert len(blocks) == 2
+        assert len(blocks) == 3  # MODE_SWITCH + VOICE + KEY
         assert blocks[0].type == ProgramBlockType.MODE_SWITCH
         assert blocks[0].target == TARGET_MUSIC_MUSIC
-        assert blocks[1].type == ProgramBlockType.KEY
-        assert blocks[1].char == "a"
+        assert blocks[1].type == ProgramBlockType.VOICE
+        assert blocks[1].voice == "marimba"
+        assert blocks[2].type == ProgramBlockType.KEY
+        assert blocks[2].char == "a"
 
     def test_prepends_correct_target(self):
         r = Recording()
@@ -169,6 +171,8 @@ class TestRecordingToBlocksWithTarget:
         blocks = r.to_blocks(TARGET_ART_PAINT)
         assert blocks[0].type == ProgramBlockType.MODE_SWITCH
         assert blocks[0].target == TARGET_ART_PAINT
+        assert blocks[1].type == ProgramBlockType.VOICE
+        assert blocks[1].voice == "paint"
 
     def test_no_extra_mode_switches(self):
         """Single room recording should only have one MODE_SWITCH."""
@@ -190,9 +194,9 @@ class TestRecordingToBlocksSimple:
         r = Recording()
         r.add_event(CharacterAction(char="a"), "music", "music", 0.0)
         blocks = r.to_blocks(TARGET_MUSIC_MUSIC)
-        assert len(blocks) == 2  # MODE_SWITCH + KEY
-        assert blocks[1].type == ProgramBlockType.KEY
-        assert blocks[1].char == "a"
+        assert len(blocks) == 3  # MODE_SWITCH + VOICE + KEY
+        assert blocks[2].type == ProgramBlockType.KEY
+        assert blocks[2].char == "a"
 
     def test_no_auto_collapse(self):
         """Repeated keys stay as separate blocks."""

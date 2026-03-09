@@ -1326,7 +1326,7 @@ class PurpleApp(App):
         try:
             from .rooms.sleep_screen import SleepScreen
 
-            def on_sleep_screen_dismiss() -> None:
+            def on_sleep_screen_dismiss(_result) -> None:
                 try:
                     pm = get_power_manager()
                     pm.disable_dpms()

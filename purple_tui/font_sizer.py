@@ -7,9 +7,8 @@ this measures the actual terminal dimensions and adjusts empirically.
 How it works:
 1. Check os.get_terminal_size()
 2. If rows/cols don't meet the minimum, compute correction
-3. Write new font size to the Alacritty config file
-4. Alacritty auto-reloads, terminal resizes
-5. Repeat until correct (usually 1 iteration)
+3. Set new font size via `alacritty msg config` (instant IPC)
+4. Repeat until correct (usually 1-2 iterations)
 
 The math: cell count is inversely proportional to font size, so
     new_font = current_font * (actual_rows / required_rows)
@@ -18,7 +17,7 @@ The math: cell count is inversely proportional to font size, so
 import math
 import os
 import re
-import sys
+import subprocess
 import time
 
 from .constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
@@ -27,12 +26,15 @@ from .constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
 ALACRITTY_CONFIG_ENV = "PURPLE_ALACRITTY_CONFIG"
 ALACRITTY_CONFIG_DEFAULT = "/etc/purple/alacritty.toml"
 
-# How many attempts before giving up (each takes ~0.5s)
+# How many attempts before giving up
 MAX_ATTEMPTS = 5
 
 # Font size limits
 MIN_FONT = 8.0
 MAX_FONT = 48.0
+
+# Brief pause after setting font size for terminal to resize
+SETTLE_DELAY = 0.3
 
 
 def _get_config_path() -> str | None:
@@ -57,8 +59,23 @@ def _read_font_size(config_path: str) -> float | None:
     return None
 
 
-def _write_font_size(config_path: str, new_size: float) -> bool:
-    """Write a new font size to alacritty.toml. Returns True on success."""
+def _set_font_size(new_size: float, config_path: str) -> bool:
+    """Set font size via alacritty msg (IPC), with file fallback.
+
+    Returns True on success.
+    """
+    # Try IPC first (instant, no file-watch delay)
+    try:
+        subprocess.run(
+            ["alacritty", "msg", "config", f"font.size={new_size:.1f}"],
+            timeout=2,
+            capture_output=True,
+        )
+        return True
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    # Fallback: write to config file (Alacritty live-reloads)
     try:
         with open(config_path) as f:
             content = f.read()
@@ -120,13 +137,13 @@ def ensure_terminal_size() -> None:
         if new_font == current_font:
             break  # Can't adjust further
 
-        if not _write_font_size(config_path, new_font):
-            break  # Can't write config
+        if not _set_font_size(new_font, config_path):
+            break  # Can't set font
 
         current_font = new_font
 
-        # Wait for Alacritty to detect the change and resize
-        time.sleep(0.6)
+        # Wait for terminal to resize
+        time.sleep(SETTLE_DELAY)
 
     # Clear loading message before Textual takes over
     print("\033[2J\033[H", end="", flush=True)

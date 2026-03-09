@@ -1,7 +1,7 @@
 """
 Purple Computer: Power Management
 
-Handles idle detection, lid monitoring, screen dimming, and shutdown.
+Handles idle detection, lid monitoring, screen control, and shutdown.
 Designed to be robust and fail gracefully. No errors, just fallbacks.
 
 Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
@@ -10,7 +10,7 @@ Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
 import os
 import subprocess
 import time
-from typing import Callable, Optional
+from typing import Optional
 
 
 def _get_timing(normal: int, demo: int) -> int:
@@ -23,12 +23,10 @@ def _get_timing(normal: int, demo: int) -> int:
 # Timing constants (seconds)
 # Normal values / Demo values (for quick testing)
 IDLE_SLEEP_UI = _get_timing(3 * 60, 2)        # 3 min / 2 sec: show sleeping face
-IDLE_SCREEN_DIM = _get_timing(10 * 60, 6)     # 10 min / 6 sec: dim screen
 IDLE_SCREEN_OFF = _get_timing(15 * 60, 10)    # 15 min / 10 sec: screen off
-IDLE_SHUTDOWN_WARN = _get_timing(25 * 60, 15) # 25 min / 15 sec: shutdown warning
-IDLE_SHUTDOWN = _get_timing(30 * 60, 20)      # 30 min / 20 sec: shutdown
+IDLE_SHUTDOWN = _get_timing(25 * 60, 15)      # 25 min / 15 sec: shutdown
 
-LID_SHUTDOWN_DELAY = _get_timing(120, 5)      # 2 min / 5 sec: lid close to shutdown
+LID_SHUTDOWN_DELAY = _get_timing(30, 5)       # 30 sec / 5 sec: lid close to shutdown
 
 # Power button timing
 POWER_HOLD_SHUTDOWN = _get_timing(3, 2)       # 3 sec / 2 sec: hold power to shut down
@@ -102,16 +100,6 @@ class PowerManager:
         self._lid_path: Optional[str] = None
         self._dpms_available = False
         self._poweroff_available = False
-        self._callbacks: dict[str, list[Callable]] = {
-            "idle_sleep": [],      # Show sleep UI
-            "idle_dim": [],        # Dim screen
-            "idle_screen_off": [], # Screen off
-            "shutdown_warning": [],# Show shutdown warning
-            "shutdown": [],        # Actually shutdown
-            "lid_close": [],       # Lid closed
-            "lid_open": [],        # Lid opened
-            "wake": [],            # Any wake event
-        }
 
         # Probe capabilities on init
         self._probe_capabilities()
@@ -156,25 +144,9 @@ class PowerManager:
         except Exception:
             self._poweroff_available = False
 
-    def register_callback(self, event: str, callback: Callable) -> None:
-        """Register a callback for a power event."""
-        if event in self._callbacks:
-            self._callbacks[event].append(callback)
-
-    def _fire_event(self, event: str, *args) -> None:
-        """Fire all callbacks for an event. Never raises."""
-        for callback in self._callbacks.get(event, []):
-            try:
-                callback(*args)
-            except Exception:
-                pass  # Swallow all errors
-
     def record_activity(self) -> None:
         """Call this on any user input to reset idle timer."""
-        was_idle = self.get_idle_seconds() > IDLE_SLEEP_UI
         self._last_activity = time.time()
-        if was_idle:
-            self._fire_event("wake")
 
     def get_idle_seconds(self) -> float:
         """Get seconds since last activity."""
@@ -202,7 +174,7 @@ class PowerManager:
     def set_screen_brightness(self, level: str) -> bool:
         """
         Control screen brightness via DPMS.
-        level: "on", "dim", "off"
+        level: "on" or "off"
         Returns True on success.
         """
         if not self._dpms_available:
@@ -223,26 +195,6 @@ class PowerManager:
                     capture_output=True,
                     timeout=5
                 )
-            return True
-        except Exception:
-            return False
-
-    def enable_dpms(self, standby: int = 600, suspend: int = 900, off: int = 900) -> bool:
-        """Enable DPMS with specified timeouts (seconds)."""
-        if not self._dpms_available:
-            return False
-
-        try:
-            subprocess.run(
-                ["xset", "+dpms"],
-                capture_output=True,
-                timeout=5
-            )
-            subprocess.run(
-                ["xset", "dpms", str(standby), str(suspend), str(off)],
-                capture_output=True,
-                timeout=5
-            )
             return True
         except Exception:
             return False
@@ -298,47 +250,6 @@ class PowerManager:
                 continue
 
         return False
-
-    def get_idle_state(self) -> str:
-        """
-        Get the current idle state based on time.
-        Returns: "active", "sleep_ui", "dim", "screen_off", "shutdown_warning", "shutdown"
-        """
-        idle = self.get_idle_seconds()
-
-        if idle >= IDLE_SHUTDOWN:
-            return "shutdown"
-        elif idle >= IDLE_SHUTDOWN_WARN:
-            return "shutdown_warning"
-        elif idle >= IDLE_SCREEN_OFF:
-            return "screen_off"
-        elif idle >= IDLE_SCREEN_DIM:
-            return "dim"
-        elif idle >= IDLE_SLEEP_UI:
-            return "sleep_ui"
-        else:
-            return "active"
-
-    def get_time_until_next_state(self) -> tuple[str, int]:
-        """
-        Get the next state transition and seconds until it happens.
-        Returns: (next_state, seconds_until)
-        """
-        idle = self.get_idle_seconds()
-
-        thresholds = [
-            (IDLE_SLEEP_UI, "sleep_ui"),
-            (IDLE_SCREEN_DIM, "dim"),
-            (IDLE_SCREEN_OFF, "screen_off"),
-            (IDLE_SHUTDOWN_WARN, "shutdown_warning"),
-            (IDLE_SHUTDOWN, "shutdown"),
-        ]
-
-        for threshold, state in thresholds:
-            if idle < threshold:
-                return (state, int(threshold - idle))
-
-        return ("shutdown", 0)
 
 
 # Singleton instance

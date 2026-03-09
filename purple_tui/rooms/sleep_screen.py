@@ -14,7 +14,6 @@ import time
 from ..power_manager import (
     get_power_manager,
     IDLE_SCREEN_OFF,
-    IDLE_SHUTDOWN_WARN,
     IDLE_SHUTDOWN,
     LID_SHUTDOWN_DELAY,
 )
@@ -34,52 +33,12 @@ class SleepFace(Static):
         ])
 
 
-class SleepStatus(Static):
-    """Shows current sleep status and countdown"""
-
-    DEFAULT_CSS = """
-    SleepStatus {
-        width: 100%;
-        height: auto;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 2;
-    }
-
-    SleepStatus.warning {
-        color: $warning;
-    }
-
-    SleepStatus.danger {
-        color: $error;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._message = ""
-        self._style_class = ""
-
-    def set_status(self, message: str, style: str = "") -> None:
-        """Update the status message and style"""
-        self._message = message
-        self._style_class = style
-        self.remove_class("warning", "danger")
-        if style:
-            self.add_class(style)
-        self.refresh()
-
-    def render(self) -> str:
-        return self._message
-
-
 class SleepScreen(Screen):
     """
     Sleep screen shown when computer is idle or power button is tapped.
 
     Press any key to wake up and return to normal operation.
-    Shows countdown warnings before screen off and shutdown.
+    Turns screen off after extended idle and shuts down eventually.
     """
 
     DEFAULT_CSS = """
@@ -98,126 +57,62 @@ class SleepScreen(Screen):
         color: $text-muted;
         margin-top: 2;
     }
-
-    #sleep-status {
-        content-align: center middle;
-        color: $text-muted;
-        margin-top: 1;
-    }
-
-    #lid-warning {
-        content-align: center middle;
-        color: $error;
-        text-style: bold;
-        margin-top: 1;
-        display: none;
-    }
-
-    #lid-warning.visible {
-        display: block;
-    }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._status_timer = None
         self._lid_close_time: float | None = None
-        self._last_lid_state: bool | None = True
         self._screen_off = False
         self._shutdown_initiated = False
 
     def compose(self) -> ComposeResult:
         yield SleepFace()
         yield Static("Press any key to wake", id="sleep-hint")
-        yield SleepStatus(id="sleep-status")
-        yield Static("Lid closed!", id="lid-warning")
 
     def on_mount(self) -> None:
-        """Start update timer when screen is shown"""
+        """Start update timer when screen is shown."""
         self._status_timer = self.set_interval(1.0, self._update_status)
         self._update_status()
 
     def on_unmount(self) -> None:
-        """Clean up timer when screen is hidden"""
+        """Clean up timer when screen is hidden."""
         if self._status_timer:
             self._status_timer.stop()
 
     def _update_status(self) -> None:
-        """Update the status display based on idle time and lid state"""
+        """Check idle time and lid state, act accordingly."""
         pm = get_power_manager()
         idle = pm.get_idle_seconds()
-
-        # Check lid state
         lid_open = pm.get_lid_state()
-        if lid_open is not None:
-            if not lid_open and self._last_lid_state:
-                # Lid just closed: turn screen off immediately to save power
-                self._lid_close_time = time.time()
-                pm.set_screen_brightness("off")
-                self._screen_off = True
-            elif lid_open and not self._last_lid_state:
-                # Lid just opened: cancel shutdown, turn screen back on
-                self._lid_close_time = None
-                if self._screen_off:
-                    pm.set_screen_brightness("on")
-                    self._screen_off = False
-            self._last_lid_state = lid_open
 
-        # Handle lid close countdown
-        lid_warning = self.query_one("#lid-warning", Static)
+        # Lid close edge detection (use _lid_close_time as the state flag)
+        if lid_open is False and self._lid_close_time is None:
+            self._lid_close_time = time.time()
+            pm.set_screen_brightness("off")
+            self._screen_off = True
+        elif lid_open is not False and self._lid_close_time is not None:
+            self._lid_close_time = None
+            if self._screen_off:
+                pm.set_screen_brightness("on")
+                self._screen_off = False
+
+        # Lid shutdown
         if self._lid_close_time is not None:
-            elapsed = time.time() - self._lid_close_time
-            remaining = max(0, LID_SHUTDOWN_DELAY - int(elapsed))
+            if time.time() - self._lid_close_time >= LID_SHUTDOWN_DELAY:
+                self._do_shutdown()
+            return
 
-            if remaining <= 0:
-                lid_warning.update("Turning off...")
-                lid_warning.add_class("visible")
-                self.call_later(self._do_shutdown)
-                return
-            else:
-                mins = remaining // 60
-                secs = remaining % 60
-                if mins > 0:
-                    lid_warning.update(f"Lid closed, turning off in {mins}m {secs}s")
-                else:
-                    lid_warning.update(f"Lid closed ({remaining}s)")
-                lid_warning.add_class("visible")
-        else:
-            lid_warning.remove_class("visible")
-
-        # Update status based on idle time
-        status = self.query_one("#sleep-status", SleepStatus)
-        hint = self.query_one("#sleep-hint", Static)
-
+        # Idle shutdown
         if idle >= IDLE_SHUTDOWN:
-            status.set_status("Turning off...", "danger")
-            hint.update("")
-            self.call_later(self._do_shutdown)
-        elif idle >= IDLE_SHUTDOWN_WARN:
-            remaining = int(IDLE_SHUTDOWN - idle)
-            mins = remaining // 60
-            secs = remaining % 60
-            if mins > 0:
-                status.set_status(f"Turning off in {mins} minutes", "danger")
-            else:
-                status.set_status(f"Turning off in {secs} seconds", "danger")
-            hint.update("Press any key to stay on")
-        elif idle >= IDLE_SCREEN_OFF:
+            self._do_shutdown()
+            return
+
+        # Idle screen off
+        if idle >= IDLE_SCREEN_OFF:
             if not self._screen_off:
                 pm.set_screen_brightness("off")
                 self._screen_off = True
-            remaining = int(IDLE_SHUTDOWN_WARN - idle)
-            mins = remaining // 60
-            status.set_status(f"Screen off, turning off in {mins} minutes", "warning")
-            hint.update("Press any key to wake")
-        else:
-            remaining = int(IDLE_SCREEN_OFF - idle)
-            mins = remaining // 60
-            if mins > 0:
-                status.set_status(f"Screen dims in {mins} minutes", "")
-            else:
-                status.set_status("", "")
-            hint.update("Press any key to wake")
 
     def _do_shutdown(self) -> None:
         """Execute shutdown (only once, further calls are no-ops)."""
@@ -227,8 +122,10 @@ class SleepScreen(Screen):
         pm = get_power_manager()
         pm.set_screen_brightness("on")
         if not pm.shutdown():
-            status = self.query_one("#sleep-status", SleepStatus)
-            status.set_status("Please turn off", "danger")
+            try:
+                self.query_one("#sleep-hint", Static).update("Please turn off")
+            except Exception:
+                pass
 
     def _wake_up(self) -> None:
         """Wake up and return to normal operation"""

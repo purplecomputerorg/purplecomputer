@@ -559,11 +559,9 @@ class PurpleApp(App):
 
         # Power management
         self._idle_timer = None
-        self._sleep_screen_active = False
         self._power_button_reader: PowerButtonReader | None = None
         self._bye_screen_active = False
         self._app_suspended = False  # True while shell is open via parent menu
-        self._lid_close_time: float | None = None  # App-level lid tracking (fallback)
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -1301,69 +1299,34 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+    def _is_sleep_or_bye_active(self) -> bool:
+        """Check if a sleep or bye screen is currently showing."""
+        from .rooms.sleep_screen import SleepScreen, ByeScreen
+        return any(isinstance(s, (SleepScreen, ByeScreen)) for s in self.screen_stack)
+
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity or lid close."""
         try:
-            # Import threshold at runtime so demo mode env var is respected
-            from .power_manager import IDLE_SLEEP_UI, LID_SHUTDOWN_DELAY
+            if self._is_sleep_or_bye_active():
+                return
 
+            from .power_manager import IDLE_SLEEP_UI
             pm = get_power_manager()
-            lid_open = pm.get_lid_state()
 
-            # Track lid close time at app level (fallback for sleep screen bugs)
-            if lid_open is False:
-                if self._lid_close_time is None:
-                    self._lid_close_time = time.time()
-            else:
-                self._lid_close_time = None
-
-            # Safety: if _sleep_screen_active flag is stuck but screen isn't
-            # actually showing, reset it so we don't block forever
-            if self._sleep_screen_active:
-                from .rooms.sleep_screen import SleepScreen
-                actually_showing = any(
-                    isinstance(s, SleepScreen) for s in self.screen_stack
-                )
-                if not actually_showing:
-                    self._sleep_screen_active = False
-
-            if self._sleep_screen_active:
-                # Sleep screen handles its own lid countdown and idle timers.
-                # But as a last resort: if lid has been closed way past the
-                # shutdown delay and we're still alive, force shutdown directly.
-                if (self._lid_close_time is not None
-                        and time.time() - self._lid_close_time > LID_SHUTDOWN_DELAY + 30):
-                    self._show_bye_screen()
-                return
-
-            # Lid closed: immediately show sleep screen (which handles shutdown countdown)
-            if lid_open is False:
+            if pm.get_lid_state() is False or pm.get_idle_seconds() >= IDLE_SLEEP_UI:
                 self._show_sleep_screen()
-                return
-
-            idle_seconds = pm.get_idle_seconds()
-
-            if idle_seconds >= IDLE_SLEEP_UI:
-                self._show_sleep_screen()
-        except Exception as e:
-            # In demo mode, show errors for debugging
-            import os
-            if os.environ.get("PURPLE_SLEEP_DEMO"):
-                self.notify(f"Idle check error: {e}", title="Error", timeout=5)
+        except Exception:
+            pass
 
     def _show_sleep_screen(self) -> None:
         """Show the sleep screen overlay."""
-        if self._sleep_screen_active:
+        if self._is_sleep_or_bye_active():
             return
 
         try:
             from .rooms.sleep_screen import SleepScreen
 
-            self._sleep_screen_active = True
-
             def on_sleep_screen_dismiss() -> None:
-                self._sleep_screen_active = False
-                # Re-enable DPMS disable (screen stays on during normal use)
                 try:
                     pm = get_power_manager()
                     pm.disable_dpms()
@@ -1371,16 +1334,11 @@ class PurpleApp(App):
                     pass
 
             self.push_screen(SleepScreen(), on_sleep_screen_dismiss)
-        except Exception as e:
-            # If sleep screen fails, show error in demo mode
-            self._sleep_screen_active = False
-            import os
-            if os.environ.get("PURPLE_SLEEP_DEMO"):
-                self.notify(f"Sleep screen error: {e}", title="Error", timeout=5)
+        except Exception:
+            pass
 
     def _record_user_activity(self) -> None:
         """Record that user is active. Resets idle timer."""
-        self._lid_close_time = None  # User is active, reset lid tracking
         try:
             pm = get_power_manager()
             pm.record_activity()
@@ -1399,7 +1357,9 @@ class PurpleApp(App):
             return
 
         if event.action == "tap":
-            if self._sleep_screen_active:
+            from .rooms.sleep_screen import SleepScreen
+            sleep_showing = any(isinstance(s, SleepScreen) for s in self.screen_stack)
+            if sleep_showing:
                 # Already sleeping: second tap means shut down.
                 # (Many laptops send tap-only for power, hold never fires.)
                 self._show_bye_screen()
@@ -1416,11 +1376,10 @@ class PurpleApp(App):
         from .rooms.sleep_screen import ByeScreen, SleepScreen
 
         # Dismiss sleep screen first if it's showing (avoid stacking)
-        if self._sleep_screen_active:
-            for screen in list(self.screen_stack):
-                if isinstance(screen, SleepScreen):
-                    screen.dismiss()
-                    break
+        for screen in list(self.screen_stack):
+            if isinstance(screen, SleepScreen):
+                screen.dismiss()
+                break
 
         self._bye_screen_active = True
         self.push_screen(ByeScreen())

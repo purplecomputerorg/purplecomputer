@@ -73,59 +73,25 @@ if HAS_PYTEST:
                 power_manager.record_activity()
                 assert power_manager.get_idle_seconds() < 0.05
 
-    class TestIdleStates:
-        """Test idle state transitions."""
+    class TestIdleThresholds:
+        """Test idle threshold values."""
 
-        def test_active_state(self, power_manager):
-            """Fresh manager should be in active state."""
-            state = power_manager.get_idle_state()
-            assert state == "active"
+        def test_idle_below_sleep_ui(self, power_manager):
+            """Fresh manager should have idle below sleep UI threshold."""
+            assert power_manager.get_idle_seconds() < IDLE_SLEEP_UI
 
-        def test_state_after_activity(self, power_manager):
-            """State should be active after recording activity."""
-            power_manager.record_activity()
-            state = power_manager.get_idle_state()
-            assert state == "active"
-
-        def test_get_time_until_next_state(self, power_manager):
-            """Should return time until sleep UI state."""
-            next_state, seconds = power_manager.get_time_until_next_state()
-            assert next_state == "sleep_ui"
-            assert seconds > 0
-            assert seconds <= IDLE_SLEEP_UI
-
-    class TestWakeCallback:
-        """Test wake event callback."""
-
-        def test_wake_callback_fires_when_idle(self, power_manager):
-            """Wake callback should fire when recording activity after being idle."""
-            callback = MagicMock()
-            power_manager.register_callback("wake", callback)
-
-            # Simulate being idle (manually set last_activity in the past)
+        def test_idle_after_activity(self, power_manager):
+            """Idle should be near zero after recording activity."""
             power_manager._last_activity = time.time() - (IDLE_SLEEP_UI + 10)
-
-            # Record activity - should trigger wake
             power_manager.record_activity()
-
-            callback.assert_called_once()
-
-        def test_wake_callback_not_fired_when_active(self, power_manager):
-            """Wake callback should NOT fire when already active."""
-            callback = MagicMock()
-            power_manager.register_callback("wake", callback)
-
-            # Record activity while active
-            power_manager.record_activity()
-
-            callback.assert_not_called()
+            assert power_manager.get_idle_seconds() < 0.05
 
     class TestPowerTimings:
         """Test power button and lid delay timings."""
 
-        def test_lid_shutdown_delay_is_two_minutes(self):
-            """Lid close should wait 2 minutes before shutdown."""
-            assert LID_SHUTDOWN_DELAY == 120
+        def test_lid_shutdown_delay_is_thirty_seconds(self):
+            """Lid close should wait 30 seconds before shutdown."""
+            assert LID_SHUTDOWN_DELAY == 30
 
         def test_power_hold_shutdown_is_three_seconds(self):
             """Power button hold should trigger shutdown after 3 seconds."""
@@ -151,7 +117,7 @@ if HAS_PYTEST:
                 # Check timings are short
                 assert pm_module.IDLE_SLEEP_UI == 2
                 assert pm_module.IDLE_SCREEN_OFF == 10
-                assert pm_module.IDLE_SHUTDOWN == 20
+                assert pm_module.IDLE_SHUTDOWN == 15
 
             finally:
                 # Restore
@@ -207,7 +173,6 @@ if __name__ == "__main__":
 
         pm = PowerManager()
         print(f"Initial idle: {pm.get_idle_seconds():.3f}s")
-        print(f"Initial state: {pm.get_idle_state()}")
 
         time.sleep(0.1)
         print(f"After 0.1s: {pm.get_idle_seconds():.3f}s")

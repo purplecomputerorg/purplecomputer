@@ -147,6 +147,10 @@ keygen:
 create-update version output *args:
     .venv/bin/python tools/create_usb_update.py --version {{version}} --output {{output}} {{args}}
 
+# Test code split-screen POC (font resize proof of concept)
+code-split-poc:
+    PURPLE_ALACRITTY_CONFIG=config/alacritty/alacritty-dev.toml alacritty --config-file config/alacritty/alacritty-dev.toml -e .venv/bin/python scripts/code_split_poc.py
+
 # Run Python with venv (e.g., just python script.py, just python -c 'print(1)')
 python *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python3 {{args}}

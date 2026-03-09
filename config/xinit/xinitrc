@@ -70,6 +70,10 @@ ALACRITTY_CONFIG="/tmp/purple-alacritty.toml"
 cp /etc/purple/alacritty.toml "$ALACRITTY_CONFIG"
 export PURPLE_ALACRITTY_CONFIG="$ALACRITTY_CONFIG"
 
+# Write initial font size into the config file (not -o flag, which would
+# override the file and prevent font_sizer.py from adjusting at runtime)
+sed -i "s/^size = .*/size = ${FONT_SIZE}/" "$ALACRITTY_CONFIG"
+
 # Debug mode: log terminal size after launch
 if [ -f "$DEBUG_FLAG" ]; then
     (
@@ -84,15 +88,14 @@ if [ -f "$DEBUG_FLAG" ]; then
 fi
 
 alacritty --config-file "$ALACRITTY_CONFIG" \
-    -o "font.size=${FONT_SIZE}" \
     -e /usr/local/bin/purple
 
 # After Purple exits
 if [ -f "$DEBUG_FLAG" ]; then
     # Debug: drop to interactive debug shell
     echo "Exited, opening debug shell"
+    sed -i 's/^size = .*/size = 16.0/' "$ALACRITTY_CONFIG"
     exec alacritty --config-file "$ALACRITTY_CONFIG" \
-        -o "font.size=16" \
         -e bash --rcfile /opt/purple/debug-shell.sh
 else
     # Production: restart Purple

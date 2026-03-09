@@ -276,7 +276,6 @@ Purple Computer is **keyboard-only**. Mouse and trackpad input is disabled at mu
 |-------|-----|--------|
 | **X.Org** | `MatchIsPointer "on"` → `Ignore "true"` | `40-disable-pointer.conf` |
 | **Textual** | `app.run(mouse=False)` | `purple_tui.py` |
-| **Visual** | `unclutter -idle 2` hides cursor | `.xinitrc` |
 
 The X.Org config (`/usr/share/X11/xorg.conf.d/40-disable-pointer.conf`) completely ignores all pointer and touchpad devices:
 

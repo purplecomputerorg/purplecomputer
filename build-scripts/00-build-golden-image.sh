@@ -128,13 +128,12 @@ SOURCES
         alsa-utils pulseaudio \
         xorg xinit x11-xserver-utils \
         xserver-xorg-core \
-        xserver-xorg-input-all \
+        xserver-xorg-input-libinput \
         libgl1-mesa-dri \
         matchbox-window-manager \
         alacritty \
         ncurses-term \
         libxkbcommon-x11-0 \
-        unclutter \
         fontconfig \
         fonts-noto-color-emoji \
         spice-vdagent \

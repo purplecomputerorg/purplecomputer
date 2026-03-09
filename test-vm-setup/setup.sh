@@ -63,7 +63,7 @@ install_if_needed \
     matchbox-window-manager feh \
     alacritty xterm \
     libxkbcommon-x11-0 libgl1 libegl1 libgles2 \
-    ncurses-term unclutter xkbset evtest
+    ncurses-term xkbset evtest
 
 # Install audio (pygame/sound)
 echo "[4/7] Audio and SDL libraries..."
@@ -147,9 +147,6 @@ command -v xkbset &>/dev/null && xkbset -a
 
 # Keyboard repeat
 xset r rate 300 30
-
-# Hide cursor when idle
-command -v unclutter &>/dev/null && unclutter -idle 2 &
 
 # Purple background
 xsetroot -solid "#2d1b4e"

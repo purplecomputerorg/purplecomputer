@@ -26,9 +26,6 @@ fi
 # Keyboard repeat (faster for kids)
 xset r rate 300 30
 
-# Hide cursor when idle
-command -v unclutter &>/dev/null && unclutter -idle 2 &
-
 # SPICE agent for VM resize (harmless on real hardware)
 command -v spice-vdagent &>/dev/null && spice-vdagent &
 

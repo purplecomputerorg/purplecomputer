@@ -47,7 +47,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_CAPS_LOCK, ICON_SHIFT,
+    ICON_CAPS_LOCK,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     CODE_PANEL_HEIGHT,
@@ -393,6 +393,52 @@ class ZoomCurtain(Widget):
         return Strip(segments)
 
 
+class ShiftBanner(Widget):
+    """Full-width contextual banner showing shift hints.
+
+    Appears when sticky shift is active, shows context-dependent hints
+    like "Letter: UPPERCASE" or "Space: play". Uses render_line/Strip/Segment
+    for reliable repainting.
+    """
+
+    DEFAULT_CSS = """
+    ShiftBanner {
+        width: 100%;
+        height: 1;
+        display: none;
+    }
+    ShiftBanner.active {
+        display: block;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._hint_text = ""
+
+    def show(self, hint_text: str) -> None:
+        self._hint_text = hint_text
+        self.add_class("active")
+        self.refresh()
+
+    def hide(self) -> None:
+        self._hint_text = ""
+        self.remove_class("active")
+        self.refresh()
+
+    def render_line(self, y: int) -> Strip:
+        width = self.size.width
+        style = Style(bgcolor="#FFD700", color="#1a1a1a", bold=True)
+        text = self._hint_text
+        if len(text) < width:
+            pad_left = (width - len(text)) // 2
+            pad_right = width - pad_left - len(text)
+            line = " " * pad_left + text + " " * pad_right
+        else:
+            line = text[:width]
+        return Strip([Segment(line, style)])
+
+
 class BatteryIndicator(Static):
     """
     Shows battery status in the top-right corner.
@@ -552,18 +598,6 @@ class PurpleApp(App):
     #room-title {
         width: 1fr;
         text-align: center;
-    }
-
-    #shift-indicator {
-        width: auto;
-        height: 1;
-        margin-right: 1;
-        color: $accent;
-        display: none;
-    }
-
-    #shift-indicator.active {
-        display: block;
     }
 
     #caps-indicator {
@@ -752,13 +786,13 @@ class PurpleApp(App):
                 with Horizontal(id="title-row"):
                     yield Static("", id="title-spacer-left")  # Balance for right elements
                     yield RoomTitle(id="room-title")
-                    yield Static(ICON_SHIFT, id="shift-indicator")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
                 with Horizontal(id="viewport-row"):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
+                yield ShiftBanner(id="shift-banner")
                 yield CodePanel(id="code-panel")
             yield RoomIndicator(self.active_room, id="room-indicator")
 
@@ -869,6 +903,8 @@ class PurpleApp(App):
             legend.set_active_color(event.last_color)
         except NoMatches:
             pass
+        # Refresh shift banner hint (paint vs text mode shows different hints)
+        self._update_shift_banner()
 
     def suspend_with_terminal_input(self):
         """
@@ -1071,6 +1107,43 @@ class PurpleApp(App):
                 await active_screen.handle_keyboard_action(action)
             return
 
+        # Shift+Space: replay when code panel is focused
+        if (self._code_panel_open and self._code_panel_focused
+                and isinstance(action, ControlAction) and action.action == 'space'
+                and action.is_down and not action.is_repeat):
+            sm = self._keyboard_state_machine
+            if sm._sticky_shift_active or sm._shift_held:
+                try:
+                    panel = self.query_one("#code-panel", CodePanel)
+                    panel._start_replay()
+                    if sm._sticky_shift_active:
+                        sm._sticky_shift_active = False
+                        if sm._on_sticky_shift_change:
+                            sm._on_sticky_shift_change(False)
+                except NoMatches:
+                    pass
+                return
+
+        # Shift+Enter: toggle focus between code panel and main viewport
+        if (self._code_panel_open
+                and isinstance(action, ControlAction) and action.action == 'enter'
+                and action.is_down and not action.is_repeat):
+            sm = self._keyboard_state_machine
+            if sm._sticky_shift_active or sm._shift_held:
+                try:
+                    panel = self.query_one("#code-panel", CodePanel)
+                    if self._code_panel_focused:
+                        panel.exit_panel()
+                    else:
+                        panel.enter_panel()
+                    if sm._sticky_shift_active:
+                        sm._sticky_shift_active = False
+                        if sm._on_sticky_shift_change:
+                            sm._on_sticky_shift_change(False)
+                except NoMatches:
+                    pass
+                return
+
         # If code panel is focused, route keyboard there
         if self._code_panel_open and self._code_panel_focused:
             try:
@@ -1098,6 +1171,17 @@ class PurpleApp(App):
                     return
                 except NoMatches:
                     pass
+
+        # C key toggles panel focus when panel is open (works in all rooms)
+        if (self._code_panel_open and not self._code_panel_focused
+                and isinstance(action, CharacterAction)
+                and action.char.lower() == 'c' and not action.is_repeat):
+            try:
+                panel = self.query_one("#code-panel", CodePanel)
+                panel.enter_panel()
+                return
+            except NoMatches:
+                pass
 
         # Dispatch to the current mode widget
         room_id = f"room-{self.active_room.name.lower()}"
@@ -1152,13 +1236,33 @@ class PurpleApp(App):
         """Show the mode picker modal."""
         self.clear_notifications()
         current_room = self.active_room.name.lower()
-        picker = RoomPickerScreen(current_room=current_room)
+        if self._code_panel_open:
+            picker = RoomPickerScreen(
+                current_room=current_room,
+                code_panel_open=True,
+                code_panel_focused=self._code_panel_focused,
+            )
+        else:
+            picker = RoomPickerScreen(current_room=current_room)
         self.push_screen(picker, self._on_room_picked)
 
     def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker result."""
         if result is None:
             # Cancelled, do nothing
+            return
+
+        # Option: switch pane focus (code panel mode)
+        if result.get("focus_pane"):
+            pane = result["focus_pane"]
+            try:
+                panel = self.query_one("#code-panel", CodePanel)
+                if pane == "code" and not self._code_panel_focused:
+                    panel.enter_panel()
+                elif pane == "main" and self._code_panel_focused:
+                    panel.exit_panel()
+            except NoMatches:
+                pass
             return
 
         # Option: toggle inline code panel
@@ -1252,6 +1356,9 @@ class PurpleApp(App):
                 panel.exit_panel()
         except NoMatches:
             pass
+
+        # Refresh shift banner (code panel open/close changes hints)
+        self._update_shift_banner()
 
     def on_code_panel_focus_changed(self, message: CodePanelFocusChanged) -> None:
         """Track code panel focus state."""
@@ -2002,6 +2109,9 @@ class PurpleApp(App):
             except NoMatches:
                 pass
 
+        # Refresh shift banner hint (different rooms show different hints)
+        self._update_shift_banner()
+
     def _show_art_prompt(self) -> None:
         """Show prompt when entering Art mode with existing content."""
         from .rooms.art_room import ArtPromptScreen
@@ -2371,29 +2481,64 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+    def _get_shift_banner_hint(self) -> str:
+        """Get contextual hint text for the shift banner."""
+        caps = getattr(self, 'caps_text', lambda x: x)
+
+        # Code panel open (any room, focused or not): show code panel hints
+        if self._code_panel_open:
+            return caps("\u21e7 Letter: UPPERCASE \u00b7 Space: play \u00b7 Enter: switch pane")
+
+        # Art room in paint mode
+        room_name = self.active_room.name.lower()
+        if room_name == "art":
+            try:
+                content_area = self.query_one("#content-area")
+                art = content_area.query_one("#room-art")
+                canvas = art.query_one("#art-canvas")
+                if canvas.is_painting:
+                    return caps("\u21e7 Letter: pick color")
+            except Exception:
+                pass
+
+        # Default (Play, Music, Art-text): uppercase hint
+        return caps("\u21e7 Letter: UPPERCASE")
+
+    def _update_shift_banner(self) -> None:
+        """Refresh the shift banner text if sticky shift is currently active."""
+        sm = self._keyboard_state_machine
+        if sm._sticky_shift_active:
+            try:
+                banner = self.query_one("#shift-banner", ShiftBanner)
+                hint = self._get_shift_banner_hint()
+                banner.show(hint)
+            except NoMatches:
+                pass
+
     def _on_sticky_shift_change(self, active: bool) -> None:
         """Called when sticky shift state changes."""
         if self._sticky_shift_timer:
             self._sticky_shift_timer.stop()
             self._sticky_shift_timer = None
         try:
-            indicator = self.query_one("#shift-indicator", Static)
+            banner = self.query_one("#shift-banner", ShiftBanner)
             if active:
-                indicator.add_class("active")
+                hint = self._get_shift_banner_hint()
+                banner.show(hint)
                 self._sticky_shift_timer = self.set_timer(
                     STICKY_SHIFT_GRACE, self._expire_sticky_shift_indicator
                 )
             else:
-                indicator.remove_class("active")
+                banner.hide()
         except NoMatches:
             pass
 
     def _expire_sticky_shift_indicator(self) -> None:
-        """Hide sticky shift indicator after grace period."""
+        """Hide shift banner after grace period."""
         self._sticky_shift_timer = None
         try:
-            indicator = self.query_one("#shift-indicator", Static)
-            indicator.remove_class("active")
+            banner = self.query_one("#shift-banner", ShiftBanner)
+            banner.hide()
         except NoMatches:
             pass
 

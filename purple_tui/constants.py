@@ -60,7 +60,7 @@ CODE_BLOCK_WIDTH = 3          # Width of each block cell in chars
 
 # Timing
 TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapid toggles)
-STICKY_SHIFT_GRACE = 1.0     # How long sticky shift stays active (seconds)
+STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
 # Volume levels (0-100, step by 25)

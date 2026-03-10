@@ -217,7 +217,7 @@ class ShiftState:
 
     def __init__(
         self,
-        sticky_grace_period: float = 1.0,
+        sticky_grace_period: float = 8.0,
     ):
         # Sticky shift state
         self.sticky_active: bool = False
@@ -425,7 +425,7 @@ class KeyboardState:
 # ============================================================================
 
 def create_keyboard_state(
-    sticky_grace_period: float = 1.0,
+    sticky_grace_period: float = 8.0,
     escape_hold_threshold: float = 1.0,
 ) -> KeyboardState:
     """
@@ -575,7 +575,7 @@ class KeyboardStateMachine:
 
     # Timing thresholds
     ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
-    STICKY_SHIFT_GRACE = 1.0     # seconds sticky shift stays active
+    STICKY_SHIFT_GRACE = 8.0     # seconds sticky shift stays active
 
     def __init__(self):
         # Key press state: keycode -> timestamp

@@ -162,7 +162,7 @@ def generate_marimba(frequency: float, duration: float = 0.65) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.9)
+    return finalize_samples(samples, peak_level=0.7)
 
 
 def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
@@ -213,7 +213,7 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.9)
+    return finalize_samples(samples, peak_level=0.7)
 
 
 def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
@@ -343,7 +343,7 @@ def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
         progress = (i - fade_start_sample) / fade_samples
         samples[i] *= 0.5 * (1 + math.cos(math.pi * progress))
 
-    return finalize_samples(samples, peak_level=0.9)
+    return finalize_samples(samples, peak_level=0.7)
 
 
 def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
@@ -389,7 +389,7 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.9)
+    return finalize_samples(samples, peak_level=0.7)
 
 
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:

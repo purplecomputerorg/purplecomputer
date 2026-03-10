@@ -200,6 +200,7 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.5)
                     cache[key] = sound
                 except pygame.error:
                     pass
@@ -217,6 +218,7 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.5)
                     self._percussion_sounds[key] = sound
                 except pygame.error:
                     pass
@@ -278,6 +280,7 @@ class MusicGrid(Widget):
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
+                    sound.set_volume(0.7)
                     self._letter_sounds[key] = sound
                 except pygame.error:
                     pass

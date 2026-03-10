@@ -28,7 +28,7 @@ def is_debug() -> bool:
 ROOM_PLAY = ("play", "Play")           # Math and emoji REPL
 ROOM_MUSIC = ("music", "Music")        # Music and art grid
 ROOM_ART = ("art", "Art")              # Drawing canvas
-ROOM_CODE = ("code", "Code")           # Visual block programming
+ROOM_CODE = ("code", "Code")           # Legacy code room (being replaced by inline code panel)
 
 # =============================================================================
 # TERMINAL LAYOUT CONSTANTS
@@ -48,6 +48,11 @@ VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
 REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 8  # Full UI height (+ border + title + gap + footer)
+
+# Code panel (inline code trail below viewport in split-screen mode)
+CODE_PANEL_HEIGHT = 19        # Rows for code panel when open
+CODE_FONT_RATIO = 2 / 3      # Font shrink ratio for split mode
+CODE_BLOCK_WIDTH = 3          # Width of each block cell in chars
 
 # =============================================================================
 # TIMING

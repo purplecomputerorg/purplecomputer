@@ -1,10 +1,12 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 4 options: Play, Music, Art, Code
+Shows 3 room options: Play, Music, Art
+Plus a separate "C: Code" option below a divider.
 Arrow keys navigate (left/right for rooms, up/down for volume),
-number keys 1-4 for direct room selection,
+number keys 1-3 for direct room selection, C for code panel toggle,
 Enter selects, Escape cancels.
+Any unrecognized key dismisses the picker gracefully.
 """
 
 from textual.screen import ModalScreen
@@ -17,16 +19,15 @@ from .keyboard import NavigationAction, ControlAction, CharacterAction
 
 
 # Room options: (id, icon, label, result)
-# result is what gets returned when selected
+# Only the 3 main rooms; Code is handled separately via 'C' key
 ROOM_OPTIONS = [
     ("play", ICON_CHAT, "Play", {"room": "play"}),
     ("music", ICON_MUSIC, "Music", {"room": "music"}),
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
-    ("code", ICON_CODE, "Code", {"room": "code"}),
 ]
 
 # Map number keys to room indices
-NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2, '4': 3}
+NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
 
 class RoomOption(Static):
@@ -69,9 +70,10 @@ class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Shows Play, Music, Art, and Code options.
+    Shows Play, Music, Art options with a separate Code option below.
     Left/right arrows navigate rooms, up/down adjusts volume.
-    Number keys 1-4 select rooms directly.
+    Number keys 1-3 select rooms directly, C toggles code panel.
+    Any other key dismisses the picker gracefully.
     Returns the selected room info or None if cancelled.
     """
 
@@ -102,6 +104,23 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
+    #picker-divider {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin: 0 0;
+    }
+
+    #picker-code-option {
+        width: 24;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: dashed $surface-lighten-1;
+        margin: 0 auto;
+        color: $text-muted;
+    }
+
     #picker-hint {
         width: 100%;
         text-align: center;
@@ -123,8 +142,6 @@ class RoomPickerScreen(ModalScreen):
             return 1
         elif self._current_room == "art":
             return 2
-        elif self._current_room == "code":
-            return 3
         return 0
 
     def compose(self) -> ComposeResult:
@@ -135,6 +152,9 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
+
+            yield Static("╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌", id="picker-divider")
+            yield Static(caps(f"╌╌ C: {ICON_CODE} Code ╌╌"), id="picker-code-option")
 
             yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc volume"), id="picker-hint")
 
@@ -180,6 +200,11 @@ class RoomPickerScreen(ModalScreen):
         if isinstance(action, CharacterAction) and not action.is_repeat:
             if action.char in NUMBER_KEY_ROOMS:
                 self._select_room(NUMBER_KEY_ROOMS[action.char])
+            elif action.char.lower() == 'c':
+                self.dismiss({"toggle_code_panel": True})
+            else:
+                # Any other character key: graceful escape (dismiss picker)
+                self.dismiss(None)
             return
 
         if isinstance(action, ControlAction) and action.is_down:

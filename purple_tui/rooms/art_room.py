@@ -615,6 +615,20 @@ class ArtCanvas(Widget, can_focus=True):
         if self._cursor_y < self.canvas_height - 1:
             self._cursor_y += 1
 
+    def execute_logo_command(self, action: str, direction: str, distance: int) -> None:
+        """Execute a Logo-style command: move or paint N steps in a direction."""
+        self._mark_cursor_dirty()
+        for _ in range(distance):
+            if action == "paint":
+                self._paint_at_cursor()
+            moved = self._move_in_direction(direction)
+            if not moved:
+                break
+        self._mark_cursor_dirty()
+        self._invalidate_all()
+        self._restart_blink()
+        self.refresh()
+
     def _get_cell_bg(self, pos: tuple[int, int]) -> str:
         """Get background color of a cell, or default if empty."""
         cell = self._grid.get(pos)

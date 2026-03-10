@@ -510,7 +510,7 @@ class InlineInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return caps(f"{hint}   [dim]Tab ↲[/]")
+        return caps(f"{hint}   [dim]󰌒 Tab[/]")
 
 
 class InputPrompt(Static):
@@ -558,6 +558,14 @@ class ExampleHint(Static):
         else:
             text = caps(self.DEFAULT_HINT)
         return f"[dim]{text}[/]"
+
+
+class ExpressionEvaluated(Message, bubble=True):
+    """Emitted when a play mode expression is evaluated. Used by code panel."""
+    def __init__(self, expression: str, result: str):
+        super().__init__()
+        self.expression = expression
+        self.result = result
 
 
 class PlayMode(Vertical):
@@ -659,6 +667,14 @@ class PlayMode(Vertical):
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
         self.query_one("#play-input").focus()
+
+    def evaluate_for_panel(self, expression: str) -> str:
+        """Evaluate an expression for the code panel. Returns result string."""
+        result = self.evaluator.evaluate(expression)
+        if not result:
+            return "?"
+        # Strip Rich markup for clean display
+        return _strip_markup(result)
 
     def _update_example_hint(self) -> None:
         """Update the example hint to show last command for recall."""
@@ -887,6 +903,10 @@ class PlayMode(Vertical):
         # Store raw input for recall (Enter on empty)
         self._last_input_text = input_text
         self._update_example_hint()
+
+        # Emit for code panel capture
+        if eval_text and result:
+            self.post_message(ExpressionEvaluated(eval_text, _strip_markup(result)))
 
         # Handle speech (if ! or say/talk was used)
         if force_speak:

@@ -452,18 +452,10 @@ class InlineInput(Input):
             return
         self.exact_match_display = ""
 
-        # Search both colors and emojis
-        color_matches = {w: h for w, h in content.search_colors(last_word) if w != last_word}
-        emoji_matches = {w: e for w, e in content.search_emojis(last_word) if w != last_word}
-
-        # Combine results, grouping overlapping words together
-        # Format: (word, color_hex or None, emoji or None)
-        all_words = sorted(set(color_matches.keys()) | set(emoji_matches.keys()))
-        combined = []
-        for word in all_words:
-            color_hex = color_matches.get(word)
-            emoji = emoji_matches.get(word)
-            combined.append((word, color_hex, emoji))
+        # Search words (unified, ranked by kid-likelihood)
+        combined = [
+            (w, c, e) for w, c, e in content.search_words(last_word) if w != last_word
+        ]
 
         # Limit to 5 total suggestions
         combined = combined[:5]

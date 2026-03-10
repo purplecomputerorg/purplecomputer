@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Autocomplete suggestions ranked by kid-likelihood (e.g. "tr" suggests tree before triangle) instead of alphabetically. Rankings defined in rankings.txt, unified across emojis and colors.
 - Expanded profanity filter with 17 new words. Filtered speech now shows a muted speaker icon (🔇) that fades after 1.5 seconds instead of showing "··" forever.
 - Inline code panel: press 4 in the room picker to toggle a live code trail below the viewport. Blocks appear as you play music, draw in art, or evaluate expressions. Arrow down to edit, backspace to delete, space to replay. Font shrinks to 2/3 with a purple curtain transition. Each room has its own panel content. Replaces the separate Code room.
 - Viewport widened from 112 to 134 columns, using more horizontal screen space on all displays. Font size calculation now fills both dimensions evenly instead of leaving wide black bars on the sides.

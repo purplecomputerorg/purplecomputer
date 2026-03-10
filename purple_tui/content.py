@@ -60,9 +60,9 @@ class ContentManager:
         self.colors: dict[str, str] = {}           # color name -> hex code
         self.sounds: dict[str, Path] = {}          # sound_id -> file path
         self._loaded = False
-        # Prefix indexes built at load time for O(prefix-length) autocomplete
-        self._emoji_prefix_index: dict[str, list[tuple[str, str]]] = {}
-        self._color_prefix_index: dict[str, list[tuple[str, str]]] = {}
+        # Unified prefix index: prefix -> [(word, color_hex|None, emoji|None), ...]
+        # Ranked by kid-likelihood from rankings.txt
+        self._word_prefix_index: dict[str, list[tuple[str, str | None, str | None]]] = {}
 
     def load_all(self) -> None:
         """Load content from all installed packs"""
@@ -281,61 +281,100 @@ class ContentManager:
         """Get list of all available emoji words"""
         return sorted(self.emojis.keys())
 
-    def _build_prefix_indexes(self) -> None:
-        """Build prefix lookup dicts for instant autocomplete.
+    def _load_rankings(self) -> dict[str, int]:
+        """Load word rankings from rankings.txt files in packs.
 
-        Called once at load time. Pre-computes all plural forms so keystroke-time
-        lookups are just a dict get with no inflect calls.
+        Returns {word: rank} where lower rank = higher priority.
         """
-        # Build emoji index: for each prefix of each word (singular and plural),
-        # store (display_word, emoji). Prefer singular form over plural.
-        emoji_by_prefix: dict[str, dict[str, str]] = {}  # prefix -> {display_word: emoji}
-        for word, emoji in self.emojis.items():
+        rankings: dict[str, int] = {}
+        rank = 0
+        # Check source-relative packs first, then user packs
+        for packs_dir in [Path(__file__).parent.parent / "packs", self.packs_dir]:
+            if not packs_dir.exists():
+                continue
+            for pack_dir in packs_dir.iterdir():
+                rankings_file = pack_dir / "content" / "rankings.txt"
+                if not rankings_file.exists():
+                    continue
+                try:
+                    for line in rankings_file.read_text().splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            if line not in rankings:
+                                rankings[line] = rank
+                                rank += 1
+                except OSError:
+                    pass
+        return rankings
+
+    def _build_prefix_indexes(self) -> None:
+        """Build unified prefix index for instant autocomplete.
+
+        Called once at load time. Merges emojis and colors into a single index,
+        ranked by kid-likelihood from rankings.txt.
+        """
+        rankings = self._load_rankings()
+        unranked = len(rankings)
+
+        # prefix -> {word: (color_hex|None, emoji|None)}
+        by_prefix: dict[str, dict[str, tuple[str | None, str | None]]] = {}
+
+        def _add_word(word: str, color: str | None, emoji: str | None) -> None:
             plural = pluralize(word)
-            # Index all prefixes of the singular form
-            for i in range(2, len(word) + 1):
-                p = word[:i]
-                bucket = emoji_by_prefix.setdefault(p, {})
-                if emoji not in bucket.values():
-                    bucket[word] = emoji
-            # Index prefixes of the plural form (only where they differ)
-            for i in range(2, len(plural) + 1):
-                p = plural[:i]
-                bucket = emoji_by_prefix.setdefault(p, {})
-                if emoji not in bucket.values():
-                    bucket[plural] = emoji
+            for form in [word, plural]:
+                for i in range(2, len(form) + 1):
+                    p = form[:i]
+                    bucket = by_prefix.setdefault(p, {})
+                    if form in bucket:
+                        # Merge: word can be both a color and an emoji
+                        old_color, old_emoji = bucket[form]
+                        bucket[form] = (color or old_color, emoji or old_emoji)
+                    else:
+                        bucket[form] = (color, emoji)
 
-        self._emoji_prefix_index = {
-            p: sorted(entries.items(), key=lambda x: x[0])
-            for p, entries in emoji_by_prefix.items()
-        }
+        for word, emoji in self.emojis.items():
+            _add_word(word, None, emoji)
 
-        # Build color index
-        color_by_prefix: dict[str, dict[str, str]] = {}  # prefix -> {display_name: hex}
         for name, hex_code in self.colors.items():
-            plural = pluralize(name)
-            for i in range(2, len(name) + 1):
-                p = name[:i]
-                bucket = color_by_prefix.setdefault(p, {})
-                if hex_code not in bucket.values():
-                    bucket[name] = hex_code
-            for i in range(2, len(plural) + 1):
-                p = plural[:i]
-                bucket = color_by_prefix.setdefault(p, {})
-                if hex_code not in bucket.values():
-                    bucket[plural] = hex_code
+            _add_word(name, hex_code, None)
 
-        self._color_prefix_index = {
-            p: sorted(entries.items(), key=lambda x: x[0])
-            for p, entries in color_by_prefix.items()
+        # Sort by rank, then dedup: keep the best-ranked word for each emoji/color
+        def _dedup(entries: list[tuple[str, str | None, str | None]]):
+            seen_emojis: set[str] = set()
+            seen_colors: set[str] = set()
+            result = []
+            for w, c, e in entries:
+                if e and e in seen_emojis:
+                    continue
+                if c and not e and c in seen_colors:
+                    continue
+                if e:
+                    seen_emojis.add(e)
+                if c:
+                    seen_colors.add(c)
+                result.append((w, c, e))
+            return result
+
+        self._word_prefix_index = {
+            p: _dedup(sorted(
+                [(w, c, e) for w, (c, e) in entries.items()],
+                key=lambda x: rankings.get(x[0], unranked),
+            ))
+            for p, entries in by_prefix.items()
         }
+
+    def search_words(self, prefix: str) -> list[tuple[str, str | None, str | None]]:
+        """Search for words starting with prefix, returns [(word, color_hex|None, emoji|None), ...].
+
+        Unified ranked search across emojis and colors.
+        """
+        return self._word_prefix_index.get(prefix.lower(), [])
 
     def search_emojis(self, prefix: str) -> list[tuple[str, str]]:
-        """Search for emojis starting with prefix, returns [(word, emoji), ...].
-
-        Uses pre-built prefix index for O(1) lookup (no inflect calls at keystroke time).
-        """
-        return self._emoji_prefix_index.get(prefix.lower(), [])
+        """Search for emojis starting with prefix, returns [(word, emoji), ...]."""
+        return [
+            (w, e) for w, _c, e in self.search_words(prefix) if e is not None
+        ]
 
     def get_color(self, word: str) -> Optional[str]:
         """Get hex color code for a color name, handling plurals (e.g., 'reds' -> red)."""
@@ -386,11 +425,10 @@ class ContentManager:
         return (modified, base_hex, adjectives, color_name)
 
     def search_colors(self, prefix: str) -> list[tuple[str, str]]:
-        """Search for colors starting with prefix, returns [(name, hex), ...].
-
-        Uses pre-built prefix index for O(1) lookup (no inflect calls at keystroke time).
-        """
-        return self._color_prefix_index.get(prefix.lower(), [])
+        """Search for colors starting with prefix, returns [(name, hex), ...]."""
+        return [
+            (w, c) for w, c, _e in self.search_words(prefix) if c is not None
+        ]
 
     def list_colors(self) -> list[str]:
         """Get list of all available color names"""

@@ -24,9 +24,27 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.generate_sounds import generate_marimba, generate_xylophone, generate_ukulele, generate_music_box
+import math
+from scripts.generate_sounds import generate_marimba, generate_xylophone, generate_ukulele, generate_music_box, finalize_samples
 
 FREQ = 261.63  # Middle C
+
+
+def generate_sine(frequency: float, duration: float = 0.5) -> list[int]:
+    """Pure sine wave for diagnostic testing."""
+    sample_rate = 44100
+    num_samples = int(sample_rate * duration)
+    samples = []
+    for i in range(num_samples):
+        t = i / sample_rate
+        # Fade in/out to avoid clicks
+        env = 1.0
+        if t < 0.01:
+            env = t / 0.01
+        elif t > duration - 0.01:
+            env = (duration - t) / 0.01
+        samples.append(env * math.sin(2 * math.pi * frequency * t))
+    return finalize_samples(samples, peak_level=0.7)
 
 
 def write_wav(path: str, samples: list[int], sample_rate: int = 44100):
@@ -130,6 +148,12 @@ def main():
     print("  c2) Best volume + buffer combos (systematic sweep)")
     print("  c3) peak_level shootout: 0.5 / 0.6 / 0.7 at set_volume(0.5)")
     print("  c4) WAV rapid-fire at set_volume(0.3 / 0.5 / 0.7 / 1.0)")
+    print()
+    print("  DIAGNOSTIC TESTS (isolate the cause):")
+    print("  d1) Pure sine wave at 0.3 / 0.5 / 0.7 / 1.0 (no overlap)")
+    print("  d2) Single marimba note, NO overlap, at 0.3 / 0.5 / 0.7 / 1.0")
+    print("  d3) Rapid-fire WITH stop trick (like the real app) at 0.5 / 0.7 / 1.0")
+    print("  d4) Rapid-fire different keys WITH stop trick at 0.5 / 0.7 / 1.0")
     print()
     print("  q) Quit")
     print()
@@ -339,6 +363,76 @@ def main():
                     time.sleep(0.05)
                 time.sleep(2)
             print("  If WAV also distorts at high volumes, it's mixer clipping (not OGG).")
+
+        elif choice == 'd1':
+            print("  Pure sine wave, single note, no overlap:")
+            print("  (if this has static, it's the VM audio system)")
+            sine_samples = generate_sine(FREQ)
+            sine_path = str(tmp / "pure_sine.wav")
+            write_wav(sine_path, sine_samples)
+            for vol in [0.3, 0.5, 0.7, 1.0]:
+                s = pygame.mixer.Sound(sine_path)
+                s.set_volume(vol)
+                print(f"    set_volume({vol}): single note, 1.5s")
+                s.play()
+                time.sleep(1.5)
+                s.stop()
+                time.sleep(0.5)
+
+        elif choice == 'd2':
+            print("  Single marimba note, NO overlap, different volumes:")
+            print("  (if this has static, the sound itself has artifacts)")
+            marimba_path = tests[1][0]  # marimba OGG
+            for vol in [0.3, 0.5, 0.7, 1.0]:
+                s = pygame.mixer.Sound(marimba_path)
+                s.set_volume(vol)
+                print(f"    set_volume({vol}): single note, wait for decay")
+                s.play()
+                time.sleep(1.5)
+                s.stop()
+                time.sleep(0.5)
+
+        elif choice == 'd3':
+            print("  Rapid-fire same key WITH stop trick (like real app):")
+            print("  (stop previous before playing next)")
+            marimba_path = tests[1][0]
+            for vol in [0.5, 0.7, 1.0]:
+                s = pygame.mixer.Sound(marimba_path)
+                s.set_volume(vol)
+                print(f"    set_volume({vol}): 10 hits, 0.05s apart, stop before each")
+                for i in range(10):
+                    s.stop()
+                    s.play()
+                    time.sleep(0.05)
+                time.sleep(1.5)
+
+        elif choice == 'd4':
+            print("  Rapid-fire DIFFERENT keys with stop trick at different volumes:")
+            print("  (this is closest to real app usage)")
+            # Generate marimba at 4 different frequencies
+            freqs = [261.63, 293.66, 329.63, 392.00]  # C D E G
+            diff_sounds = {}
+            for freq in freqs:
+                raw = generate_marimba(freq)
+                p = str(tmp / f"marimba_d4_{freq}.ogg")
+                write_wav(p.replace('.ogg', '.wav'), raw)
+                wav_to_ogg(p.replace('.ogg', '.wav'), p, quality=3)
+                diff_sounds[freq] = p
+
+            for vol in [0.5, 0.7, 1.0]:
+                loaded = {}
+                for freq, p in diff_sounds.items():
+                    s = pygame.mixer.Sound(p)
+                    s.set_volume(vol)
+                    loaded[freq] = s
+                print(f"    set_volume({vol}): 12 hits across 4 notes, 0.05s apart")
+                freq_list = list(loaded.keys())
+                for i in range(12):
+                    snd = loaded[freq_list[i % len(freq_list)]]
+                    snd.stop()  # stop trick: stop this specific note
+                    snd.play()
+                    time.sleep(0.05)
+                time.sleep(2)
 
         else:
             try:

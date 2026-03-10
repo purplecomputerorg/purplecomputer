@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code panel: removed diagonal zoom effect during open transition. Changed color scheme from blue/navy to dark purple (space theme). Code is now a proper button in the room picker (press 4 or C) instead of a dashed text option. Added focus indicators: focused panel gets a purple border, unfocused panel is dimmed. Code panel auto-focuses when opened.
 - Shift actions: sticky shift timeout increased to 8s with a full-width yellow banner showing contextual hints (e.g. "Letter: UPPERCASE", "Space: play", "Enter: switch pane"). Shift+Space replays code panel, Shift+Enter toggles focus between viewport and code panel. Escape picker shows a pane row (Main/Code) when code panel is open, with up/down to switch between pane and room rows.
 - Autocomplete suggestions ranked by kid-likelihood (e.g. "tr" suggests tree before triangle) instead of alphabetically. Rankings defined in rankings.txt, unified across emojis and colors.
 - Expanded profanity filter with 17 new words. Filtered speech now shows a muted speaker icon (🔇) that fades after 1.5 seconds instead of showing "··" forever.

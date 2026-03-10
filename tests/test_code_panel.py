@@ -364,10 +364,10 @@ class TestArtGuide:
 # =============================================================================
 
 class TestRoomPickerConfig:
-    def test_three_room_options(self):
+    def test_four_room_options(self):
         from purple_tui.room_picker import ROOM_OPTIONS, NUMBER_KEY_ROOMS
-        assert len(ROOM_OPTIONS) == 3
-        assert '4' not in NUMBER_KEY_ROOMS
+        assert len(ROOM_OPTIONS) == 4
         assert '1' in NUMBER_KEY_ROOMS
         assert '2' in NUMBER_KEY_ROOMS
         assert '3' in NUMBER_KEY_ROOMS
+        assert '4' in NUMBER_KEY_ROOMS

@@ -319,79 +319,6 @@ class Curtain(Widget):
         return Strip([Segment(" " * width, style)])
 
 
-class ZoomCurtain(Widget):
-    """Curtain with diagonal perspective lines for code panel opening.
-
-    Renders diagonal lines extending from viewport bottom corners,
-    creating a 3D zoom-out effect as font shrinks.
-    """
-
-    DEFAULT_CSS = """
-    ZoomCurtain {
-        width: 100%;
-        height: 100%;
-        dock: top;
-        layer: above;
-    }
-    """
-
-    def __init__(self, viewport_bottom: int, viewport_left: int,
-                 viewport_right: int, **kwargs):
-        super().__init__(**kwargs)
-        self._vp_bottom = viewport_bottom
-        self._vp_left = viewport_left
-        self._vp_right = viewport_right
-
-    def render_line(self, y: int) -> Strip:
-        width = self.size.width
-        height = self.size.height
-        bg_style = Style(bgcolor="#1e1033")
-        panel_style = Style(bgcolor="#12091f")
-        diag_style = Style(bgcolor="#1e1033", color="#6a4c93")
-
-        # Lines above viewport bottom: solid curtain
-        if y <= self._vp_bottom:
-            return Strip([Segment(" " * width, bg_style)])
-
-        # Lines below viewport bottom: diagonal perspective
-        dy = y - self._vp_bottom
-        total_dy = max(1, height - self._vp_bottom)
-
-        # Left diagonal goes from vp_left toward 0
-        left_x = self._vp_left - int(self._vp_left * dy / total_dy)
-        # Right diagonal goes from vp_right toward width
-        right_x = self._vp_right + int((width - self._vp_right) * dy / total_dy)
-
-        left_x = max(0, min(width - 1, left_x))
-        right_x = max(0, min(width, right_x))
-
-        segments: list[Segment] = []
-
-        # Left solid region
-        if left_x > 0:
-            segments.append(Segment(" " * left_x, bg_style))
-
-        # Left diagonal char
-        if left_x < width:
-            segments.append(Segment("\u2572", diag_style))  # ╲
-
-        # Middle panel region
-        middle = right_x - left_x - 2
-        if middle > 0:
-            segments.append(Segment(" " * middle, panel_style))
-
-        # Right diagonal char
-        if right_x - 1 > left_x and right_x - 1 < width:
-            segments.append(Segment("\u2571", diag_style))  # ╱
-
-        # Right solid region
-        used = left_x + 1 + max(0, middle) + (1 if right_x - 1 > left_x and right_x - 1 < width else 0)
-        remaining = width - used
-        if remaining > 0:
-            segments.append(Segment(" " * remaining, bg_style))
-
-        return Strip(segments)
-
 
 class ShiftBanner(Widget):
     """Full-width contextual banner showing shift hints.
@@ -627,10 +554,23 @@ class PurpleApp(App):
         height: __CODE_PANEL_HEIGHT__;
         display: none;
         margin-top: 1;
+        border: heavy transparent;
     }
 
     #code-panel.visible {
         display: block;
+    }
+
+    #code-panel.panel-focused {
+        border: heavy #9b7bc4;
+    }
+
+    #viewport.viewport-dimmed {
+        opacity: 0.5;
+    }
+
+    #code-panel.panel-dimmed {
+        opacity: 0.5;
     }
 
     #room-indicator {
@@ -1298,20 +1238,8 @@ class PurpleApp(App):
 
         # Step 1: show curtain to hide font change
         if self._code_panel_open:
-            # Opening: zoom curtain with diagonal perspective lines
-            # Viewport is centered; estimate position from constants
-            term_cols, term_rows = os.get_terminal_size()
-            vp_width = VIEWPORT_WIDTH + 2  # + border
-            vp_height = VIEWPORT_HEIGHT + 2  # + border
-            vp_left = max(0, (term_cols - vp_width) // 2)
-            vp_right = vp_left + vp_width
-            vp_bottom = 2 + vp_height  # title row (2h) + viewport
-            curtain = ZoomCurtain(
-                viewport_bottom=vp_bottom,
-                viewport_left=vp_left,
-                viewport_right=vp_right,
-                id="transition-curtain",
-            )
+            # Opening: simple curtain (no diagonal effect)
+            curtain = Curtain(id="transition-curtain")
         else:
             # Closing: simple flat curtain
             curtain = Curtain(id="transition-curtain")
@@ -1335,7 +1263,7 @@ class PurpleApp(App):
         """Remove curtain and show/hide code panel."""
         self._code_panel_transitioning = False
 
-        # Remove curtain (could be Curtain or ZoomCurtain)
+        # Remove curtain
         try:
             curtain = self.query_one("#transition-curtain")
             curtain.remove()
@@ -1351,18 +1279,47 @@ class PurpleApp(App):
                 room_name = self.active_room.name.lower()
                 if room_name in ("play", "music", "art"):
                     panel.set_room(room_name)
+                # Auto-focus the code panel when opening
+                panel.enter_panel()
             else:
                 panel.remove_class("visible")
                 panel.exit_panel()
         except NoMatches:
             pass
 
+        # Update focus visuals
+        self._update_focus_visuals()
+
         # Refresh shift banner (code panel open/close changes hints)
         self._update_shift_banner()
 
     def on_code_panel_focus_changed(self, message: CodePanelFocusChanged) -> None:
-        """Track code panel focus state."""
+        """Track code panel focus state and update visual indicators."""
         self._code_panel_focused = message.focused
+        self._update_focus_visuals()
+
+    def _update_focus_visuals(self) -> None:
+        """Update border and dimming to show which panel has focus."""
+        try:
+            viewport = self.query_one("#viewport")
+            panel = self.query_one("#code-panel", CodePanel)
+
+            if self._code_panel_open and self._code_panel_focused:
+                # Code panel focused: highlight it, dim viewport
+                panel.add_class("panel-focused")
+                panel.remove_class("panel-dimmed")
+                viewport.add_class("viewport-dimmed")
+            elif self._code_panel_open:
+                # Viewport focused: dim code panel
+                panel.remove_class("panel-focused")
+                panel.add_class("panel-dimmed")
+                viewport.remove_class("viewport-dimmed")
+            else:
+                # Code panel closed: reset everything
+                panel.remove_class("panel-focused", "panel-dimmed")
+                viewport.remove_class("viewport-dimmed")
+        except NoMatches:
+            pass
 
     def on_expression_evaluated(self, message: ExpressionEvaluated) -> None:
         """Capture play mode expression evaluations for the code panel."""

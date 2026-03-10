@@ -148,6 +148,12 @@ def ensure_terminal_size() -> None:
     # Clear loading message before Textual takes over
     print("\033[2J\033[H", end="", flush=True)
 
+    # Cache the final font size so code split restore uses the correct value.
+    # IPC-only font changes don't update the config file, so reading the file
+    # later would return the stale pre-adjustment size.
+    global _original_font_size
+    _original_font_size = current_font
+
 
 # =============================================================================
 # CODE SPLIT: Font toggle for inline code panel

@@ -296,7 +296,7 @@ class CodePanel(Widget):
     CodePanel {
         width: 100%;
         height: 100%;
-        background: #1a1a2a;
+        background: #120a20;
     }
     """
 
@@ -475,7 +475,7 @@ class CodePanel(Widget):
         if width <= 0:
             return Strip.blank(0)
 
-        bg = "#1a1a2a"
+        bg = "#120a20"
         bg_style = Style(bgcolor=bg)
 
         # Line 0: header bar
@@ -540,13 +540,13 @@ class CodePanel(Widget):
         else:
             header = header[:width]
 
-        style = Style(bgcolor="#2a2a4a", color="#a0a0c0", bold=True)
+        style = Style(bgcolor="#1e1035", color="#b8a0d0", bold=True)
         return Strip([Segment(header, style)])
 
     def _render_block_line(self, line: list[tuple[CodeBlock, int]], width: int) -> Strip:
         """Render a single line of blocks."""
         segments: list[Segment] = []
-        bg = "#1a1a2a"
+        bg = "#120a20"
         bg_style = Style(bgcolor=bg)
         used = 0
 

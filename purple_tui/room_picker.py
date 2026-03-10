@@ -23,15 +23,15 @@ from .keyboard import NavigationAction, ControlAction, CharacterAction
 
 
 # Room options: (id, icon, label, result)
-# Only the 3 main rooms; Code is handled separately via 'C' key
 ROOM_OPTIONS = [
     ("play", ICON_CHAT, "Play", {"room": "play"}),
     ("music", ICON_MUSIC, "Music", {"room": "music"}),
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
+    ("code", ICON_CODE, "Code", {"toggle_code_panel": True}),
 ]
 
 # Map number keys to room indices
-NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
+NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2, '4': 3}
 
 # Pane options when code panel is open
 PANE_OPTIONS = [
@@ -45,7 +45,7 @@ class RoomOption(Static):
 
     DEFAULT_CSS = """
     RoomOption {
-        width: 18;
+        width: 16;
         height: 8;
         content-align: center middle;
         text-align: center;
@@ -134,7 +134,7 @@ class RoomPickerScreen(ModalScreen):
     }
 
     #picker-dialog {
-        width: 88;
+        width: 100;
         height: auto;
         padding: 2 3;
         background: $surface;
@@ -167,21 +167,6 @@ class RoomPickerScreen(ModalScreen):
         height: auto;
         align: center middle;
         margin-bottom: 1;
-    }
-
-    #picker-divider {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin: 0 0;
-    }
-
-    #picker-code-option {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        color: $text-muted;
     }
 
     #picker-hint {
@@ -240,9 +225,6 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
-
-            yield Static("\u254c" * 20, id="picker-divider")
-            yield Static(caps(f"\u254c\u254c C: {ICON_CODE} Code \u254c\u254c"), id="picker-code-option")
 
             if self._code_panel_open:
                 yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc switch row"), id="picker-hint")
@@ -321,7 +303,7 @@ class RoomPickerScreen(ModalScreen):
             if action.char in NUMBER_KEY_ROOMS:
                 self._select_room(NUMBER_KEY_ROOMS[action.char])
             elif action.char.lower() == 'c':
-                self.dismiss({"toggle_code_panel": True})
+                self._select_room(3)  # Code is index 3
             else:
                 # Any other character key: graceful escape (dismiss picker)
                 self.dismiss(None)

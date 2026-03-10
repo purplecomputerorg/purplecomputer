@@ -29,13 +29,15 @@ import re
 #     print(base64.b64encode(','.join(sorted(set(words))).encode()).decode())"
 _BLOCKED_WORDS = frozenset(
     base64.b64decode(
-        "YXJzZSxhc3MsYmFzdGFyZCxiZW90Y2gsYmlhdGNoLGJpY2gsYml0Y2gsYm9s"
-        "bG9ja3MsYm9vYixib29icyxieXRjaCxjb2NrLGNvayxjdW50LGRhbW4sZGlj"
-        "ayxkaWssZHlrLGZhY2ssZmFnLGZhZ2dldCxmYWdnb3QsZmFnb3QsZnVjLGZ1"
-        "Y2ssZnVrLGZ1cSxoZWxsLGhvcmUsa29rLGt1bnQsbmlnYSxuaWdlcixuaWdn"
-        "YSxuaWdnZXIsbmlxcWEsbmlxcWVyLHBlbmlzLHBlbnVzLHBodWMscGh1Y2ss"
-        "cGh1ayxwaXNzLHJldGFyZCxzaGF0LHNoaXQsc2hpdGUsc2h5dCxzbHV0LHRp"
-        "dCx0aXRzLHR3YXQsdmFnaW5hLHdhbmssd2hvcmU="
+        "YXJzZSxhc3MsYmFzdGFyZCxiZW90Y2gsYmlhdGNoLGJpY2gsYml0Y2gsYm9sbG9j"
+        "a3MsYm9uZXIsYm9vYixib29icyxib290eSxieXRjaCxjb2NrLGNvayxjcmFwLGN1"
+        "bnQsZGFtbixkaWNrLGRpayxkaWxkbyxkeWssZmFjayxmYWcsZmFnZ2V0LGZhZ2dv"
+        "dCxmYWdvdCxmYXJ0LGZ1YyxmdWNrLGZ1ayxmdXEsaGVsbCxob3JlLGhvcm55LGpp"
+        "enosa29rLGt1bnQsbmlnYSxuaWdlcixuaWdnYSxuaWdnZXIsbmlxcWEsbmlxcWVy"
+        "LG9yZ2FzbSxwZW5pcyxwZW51cyxwaHVjLHBodWNrLHBodWsscGlzcyxwb28scG9v"
+        "cCxwb3JuLHJldGFyZCxzZXh5LHNoYXQsc2hpdCxzaGl0ZSxzaHl0LHNsdXQsc3B1"
+        "bmssc3RmdSxzdWNrLHRpdCx0aXRzLHR1cmQsdHdhdCx2YWdpbmEsd2Fuayx3aG9y"
+        "ZSx3dGY="
     )
     .decode()
     .split(",")
@@ -69,6 +71,15 @@ _ALLOWED_WORDS = frozenset({
     "flag",
     "swank", "swanky",
     "butt", "button", "butter", "butterfly", "butterscotch", "rebuttal",
+    # Contains "poo"
+    "pool", "poor", "poodle", "spoon", "spook", "spooky", "scoop",
+    "shampoo", "harpoon", "cartoon", "drool",
+    # Contains "suck"
+    "honeysuckle", "sucker",
+    # Contains "crap"
+    "scrap", "scrappy", "scrape",
+    # Contains "horn" (from "horny")
+    "horn", "hornet", "unicorn", "acorn",
 })
 
 
@@ -127,13 +138,24 @@ def filter_speech(text: str) -> str:
     if normalized in _ALLOWED_WORDS:
         return text
 
+    # Collect allowed words from the input so we don't scrub their substrings.
+    # e.g. "hello" is allowed and contains "hell", so "hell" found inside a
+    # concatenated multi-word string shouldn't trigger scrubbing.
+    input_words = re.split(r"[^a-zA-Z]+", text.lower())
+    allowed_in_input = {_normalize(w) for w in input_words
+                        if w and _normalize(w) in _ALLOWED_WORDS}
+
     # Check the full normalized string
     blocked_matches = _find_blocked(normalized)
     if blocked_matches:
-        scrubbed = _scrub(normalized, blocked_matches)
-        if len(scrubbed) >= _MIN_SCRUBBED_LEN:
-            return scrubbed
-        return ""
+        # Keep only matches that aren't substrings of an allowed input word
+        real_blocked = [bw for bw in blocked_matches
+                        if not any(bw in aw for aw in allowed_in_input)]
+        if real_blocked:
+            scrubbed = _scrub(normalized, real_blocked)
+            if len(scrubbed) >= _MIN_SCRUBBED_LEN:
+                return scrubbed
+            return ""
 
     # Check individual words (for multi-word input like "say <blocked>")
     words = re.split(r"[^a-zA-Z]+", text.lower())

@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Expanded profanity filter with 17 new words. Filtered speech now shows a muted speaker icon (🔇) that fades after 1.5 seconds instead of showing "··" forever.
+- Inline code panel: press 4 in the room picker to toggle a live code trail below the viewport. Blocks appear as you play music, draw in art, or evaluate expressions. Arrow down to edit, backspace to delete, space to replay. Font shrinks to 2/3 with a purple curtain transition. Each room has its own panel content. Replaces the separate Code room.
 - Viewport widened from 112 to 134 columns, using more horizontal screen space on all displays. Font size calculation now fills both dimensions evenly instead of leaving wide black bars on the sides.
 - Volume keys now control actual system volume (via ALSA). Previously they only showed a visual toast. Sounds are also louder overall: instrument synthesis uses 90% peak level (was 50%) and per-sound volume caps removed.
 - Installer: post-install reboot now uses a 30-second countdown instead of waiting for Enter (which was unreliable across hardware). Confirmation input loop simplified from dd/od pipeline to bash read.

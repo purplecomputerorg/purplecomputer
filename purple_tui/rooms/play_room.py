@@ -110,6 +110,7 @@ class HistoryLine(Static):
     SPEECH_NONE = ""       # no speech
     SPEECH_GENERATING = "generating"  # TTS synthesizing
     SPEECH_PLAYING = "playing"        # audio playing
+    SPEECH_FILTERED = "filtered"      # blocked by profanity filter
 
     def __init__(self, text: str, line_type: str = "ask", speaking: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -204,6 +205,8 @@ class HistoryLine(Static):
                 speaker = " ··"
             elif self.speech_state == self.SPEECH_PLAYING:
                 speaker = " 🔊"
+            elif self.speech_state == self.SPEECH_FILTERED:
+                speaker = " 🔇"
             else:
                 speaker = "   "
             first_prefix = f"{speaker} [{answer_color}]→[/] "
@@ -294,6 +297,8 @@ class ColorResultLine(Widget):
                 segments = [Segment(" ·· ", surface_style), Segment("→ ", triangle_style)]
             elif self._speech_state == HistoryLine.SPEECH_PLAYING:
                 segments = [Segment(" 🔊 ", surface_style), Segment("→ ", triangle_style)]
+            elif self._speech_state == HistoryLine.SPEECH_FILTERED:
+                segments = [Segment(" 🔇 ", surface_style), Segment("→ ", triangle_style)]
             else:
                 segments = [Segment("    ", surface_style), Segment("→ ", triangle_style)]
 
@@ -924,7 +929,11 @@ class PlayMode(Vertical):
                         self._set_speech_state, answer_widget, HistoryLine.SPEECH_NONE
                     )
 
-            speak(speakable, on_playing=on_playing, on_done=on_done)
+            started = speak(speakable, on_playing=on_playing, on_done=on_done)
+            if not started and answer_widget:
+                # Speech was blocked (filtered or muted): show muted icon briefly
+                self._set_speech_state(answer_widget, HistoryLine.SPEECH_FILTERED)
+                self._schedule_clear_speech(answer_widget, 1.5)
 
     def _set_speech_state(self, widget, state: str) -> None:
         """Update a HistoryLine or ColorResultLine speech indicator."""
@@ -934,6 +943,15 @@ class PlayMode(Vertical):
         elif isinstance(widget, ColorResultLine):
             widget._speech_state = state
             widget.refresh()
+
+    def _schedule_clear_speech(self, widget, delay: float) -> None:
+        """Clear a speech indicator after a delay (seconds)."""
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(delay, self._set_speech_state, widget, HistoryLine.SPEECH_NONE)
+        except RuntimeError:
+            pass
 
 
 class SimpleEvaluator:

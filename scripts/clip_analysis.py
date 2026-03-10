@@ -12,7 +12,7 @@ from scripts.generate_sounds import (
 SET_VOLUME = 0.5
 SAMPLE_RATE = 44100
 INTERVAL = 0.05  # 50ms between rapid hits
-NUM_NOTES = 5
+NUM_NOTES = 12
 
 instruments = {
     'marimba': generate_marimba,
@@ -66,18 +66,18 @@ for name, gen_func in instruments.items():
 
 print()
 print("=" * 70)
-print("Safe set_volume for 4 overlapping notes:")
+print("Safe set_volume for 10 overlapping notes:")
 print("-" * 50)
 for name, gen_func in instruments.items():
     samples = gen_func(FREQ)
     float_samples = [s / 32767.0 for s in samples]
     interval_samples = int(INTERVAL * SAMPLE_RATE)
 
-    mix_4 = [0.0] * (len(samples) + interval_samples * 3)
-    for j in range(4):
+    mix_10 = [0.0] * (len(samples) + interval_samples * 9)
+    for j in range(10):
         offset = j * interval_samples
         for i, s in enumerate(float_samples):
-            mix_4[offset + i] += s  # volume=1.0 to find raw peak
-    raw_peak = max(abs(s) for s in mix_4)
+            mix_10[offset + i] += s  # volume=1.0 to find raw peak
+    raw_peak = max(abs(s) for s in mix_10)
     safe_vol = 1.0 / raw_peak if raw_peak > 0 else 1.0
-    print(f"  {name:<12} set_volume <= {safe_vol:.2f}  (raw 4-note peak: {raw_peak:.2f})")
+    print(f"  {name:<12} set_volume <= {safe_vol:.2f}  (raw 10-note peak: {raw_peak:.2f})")

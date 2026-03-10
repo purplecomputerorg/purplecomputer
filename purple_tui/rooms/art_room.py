@@ -114,9 +114,6 @@ CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
 # Paint color strength when holding space
 PAINT_STRENGTH = 0.7
 
-# Fade factor for backspace (how much background fades toward default)
-FADE_FACTOR = 0.5
-
 # Hold duration for backspace clear (in seconds)
 BACKSPACE_HOLD_CLEAR_TIME = 1.0
 
@@ -138,16 +135,6 @@ def hsl_to_hex(h: float, s: float, l: float) -> str:
     """Convert HSL to hex color string."""
     r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
     return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
-
-
-def lerp_color(c1: str, c2: str, t: float) -> str:
-    """Linear interpolation between two colors."""
-    r1, g1, b1 = hex_to_rgb(c1)
-    r2, g2, b2 = hex_to_rgb(c2)
-    r = int(r1 + (r2 - r1) * t)
-    g = int(g1 + (g2 - g1) * t)
-    b = int(b1 + (b2 - b1) * t)
-    return rgb_to_hex(r, g, b)
 
 
 def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
@@ -696,7 +683,7 @@ class ArtCanvas(Widget, can_focus=True):
         self.refresh()
 
     def _backspace(self) -> None:
-        """Delete character at cursor and fade background."""
+        """Delete character at cursor, reverting to blank canvas."""
         self._mark_cursor_dirty()  # Old position
         # Move cursor back first
         if self._cursor_x > 0:
@@ -707,21 +694,10 @@ class ArtCanvas(Widget, can_focus=True):
             self._cursor_x = self.canvas_width - 1
 
         pos = (self._cursor_x, self._cursor_y)
-        cell = self._grid.get(pos)
-        default_bg = self._get_default_bg()
-
-        if cell:
-            _, _, bg = cell
-            # Fade background toward default
-            faded_bg = lerp_color(bg, default_bg, FADE_FACTOR)
-            # Clear the glyph but keep faded background
-            if faded_bg != default_bg:
-                self._set_cell(pos, " ", self._get_text_fg(), faded_bg)
-            else:
-                # Fully faded, remove cell entirely
-                del self._grid[pos]
-                self._painted_positions.discard(pos)
-        # If cell was empty, nothing to do
+        # Remove cell entirely, reverting to blank canvas
+        if pos in self._grid:
+            del self._grid[pos]
+            self._painted_positions.discard(pos)
 
         self._mark_cursor_dirty()  # New position
         self.refresh()

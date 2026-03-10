@@ -123,9 +123,9 @@ def generate_marimba(frequency: float, duration: float = 0.65) -> list[int]:
     ]
 
     tube_modes = [
-        (1.0, 0.9, 1.5),
-        (2.0, 0.35, 2.5),
-        (3.0, 0.15, 3.5),
+        (1.0, 0.45, 1.5),
+        (2.0, 0.2, 2.5),
+        (3.0, 0.1, 3.5),
     ]
 
     samples = []

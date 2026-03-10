@@ -2227,6 +2227,10 @@ def main():
     from .font_sizer import ensure_terminal_size
     ensure_terminal_size()
 
+    # Show loading message that persists until Textual clears the screen on start
+    print("\033[2J\033[H", end="")  # Clear screen, cursor to top-left
+    print("\n\n    Loading...", end="", flush=True)
+
     # Check for updates before starting
     from .updater import auto_update_if_available
     update_result = auto_update_if_available()

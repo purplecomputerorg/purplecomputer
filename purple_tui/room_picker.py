@@ -112,12 +112,10 @@ class RoomPickerScreen(ModalScreen):
     }
 
     #picker-code-option {
-        width: 24;
+        width: 100%;
         height: 3;
         content-align: center middle;
         text-align: center;
-        border: dashed $surface-lighten-1;
-        margin: 0 auto;
         color: $text-muted;
     }
 

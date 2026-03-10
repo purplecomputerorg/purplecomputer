@@ -121,9 +121,15 @@ def main():
     print("  r2) Marimba WAV rapid-fire (10 hits, 0.05s apart)")
     print("  r3) All instruments OGG rapid-fire")
     print("  r4) Mixed instruments simultaneously (like real usage)")
-    print("  r5) Marimba OGG with set_volume(0.5) vs set_volume(0.3)")
+    print("  r5) Marimba OGG with set_volume(0.3 / 0.5 / 0.7 / 1.0)")
     print("  r6) Buffer size test: reinit mixer with larger buffer")
     print("  r7) Channel count test: 8 vs 16 vs 32 channels")
+    print()
+    print("  COMBINED TESTS (find the best combo):")
+    print("  c1) OGG vs WAV at set_volume(0.5), rapid-fire back to back")
+    print("  c2) Best volume + buffer combos (systematic sweep)")
+    print("  c3) peak_level shootout: 0.5 / 0.6 / 0.7 at set_volume(0.5)")
+    print("  c4) WAV rapid-fire at set_volume(0.3 / 0.5 / 0.7 / 1.0)")
     print()
     print("  q) Quit")
     print()
@@ -260,6 +266,79 @@ def main():
                     s.play()
                     time.sleep(0.05)
                 time.sleep(1.5)
+
+        elif choice == 'c1':
+            print("  OGG vs WAV at set_volume(0.5), 10 rapid hits:")
+            for fmt, idx in [("OGG", 1), ("WAV", 0)]:
+                s = sounds[idx]
+                if s:
+                    print(f"    {fmt}...")
+                    pygame.mixer.stop()
+                    time.sleep(0.3)
+                    for i in range(10):
+                        s.play()
+                        time.sleep(0.05)
+                    time.sleep(2)
+            print("  Did one sound cleaner than the other?")
+
+        elif choice == 'c2':
+            print("  Systematic sweep: buffer x volume combos")
+            print("  (listen for which combo sounds clean + loud)")
+            ogg_path = tests[1][0]
+            combos = [
+                (2048, 0.3, "buffer=2048 vol=0.3 (conservative)"),
+                (2048, 0.5, "buffer=2048 vol=0.5 (current)"),
+                (4096, 0.3, "buffer=4096 vol=0.3"),
+                (4096, 0.5, "buffer=4096 vol=0.5"),
+                (4096, 0.7, "buffer=4096 vol=0.7"),
+            ]
+            for buf, vol, label in combos:
+                pygame.mixer.quit()
+                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=buf)
+                pygame.mixer.set_num_channels(16)
+                s = pygame.mixer.Sound(ogg_path)
+                s.set_volume(vol)
+                print(f"    {label}: 10 rapid hits")
+                for i in range(10):
+                    s.play()
+                    time.sleep(0.05)
+                time.sleep(2)
+            # Restore
+            pygame.mixer.quit()
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+            pygame.mixer.set_num_channels(16)
+            print("  (mixer restored)")
+
+        elif choice == 'c3':
+            print("  peak_level shootout at set_volume(0.5), OGG q3:")
+            raw = generate_marimba(FREQ)
+            for pl in [0.5, 0.6, 0.7]:
+                peak = max(abs(s) for s in raw) or 1
+                scaled = [int(s / peak * pl * 32767) for s in raw]
+                wav_p = str(tmp / f"shootout_{pl}.wav")
+                ogg_p = str(tmp / f"shootout_{pl}.ogg")
+                write_wav(wav_p, scaled)
+                wav_to_ogg(wav_p, ogg_p, quality=3)
+                s = pygame.mixer.Sound(ogg_p)
+                s.set_volume(0.5)
+                print(f"    peak_level={pl}: 10 rapid hits")
+                for i in range(10):
+                    s.play()
+                    time.sleep(0.05)
+                time.sleep(2)
+
+        elif choice == 'c4':
+            print("  WAV rapid-fire at different set_volume levels:")
+            wav_path = tests[0][0]  # marimba WAV
+            for vol in [0.3, 0.5, 0.7, 1.0]:
+                s = pygame.mixer.Sound(wav_path)
+                s.set_volume(vol)
+                print(f"    WAV set_volume({vol}): 10 hits, 0.05s apart")
+                for i in range(10):
+                    s.play()
+                    time.sleep(0.05)
+                time.sleep(2)
+            print("  If WAV also distorts at high volumes, it's mixer clipping (not OGG).")
 
         else:
             try:

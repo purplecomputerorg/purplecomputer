@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.generate_sounds import generate_marimba
 from purple_tui.music_constants import NOTE_FREQUENCIES
 
-SET_VOLUME = 0.35
+SET_VOLUME = 0.4
 SAMPLE_RATE = 44100
 INTERVAL = 0.03  # 30ms between hits (fast mashing)
 

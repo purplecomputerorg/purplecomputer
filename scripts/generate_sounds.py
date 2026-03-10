@@ -117,15 +117,15 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
     num_samples = int(sample_rate * duration)
 
     bar_partials = [
-        (1.0, 1.0, 3.5),
-        (3.9, 0.15, 7.0),
-        (9.2, 0.05, 13.0),
+        (1.0, 1.0, 5.0),
+        (3.9, 0.15, 10.5),
+        (9.2, 0.05, 19.5),
     ]
 
     tube_modes = [
-        (1.0, 0.7, 3.0),
-        (2.0, 0.3, 4.0),
-        (3.0, 0.12, 5.0),
+        (1.0, 0.7, 4.5),
+        (2.0, 0.3, 6.0),
+        (3.0, 0.12, 7.5),
     ]
 
     samples = []
@@ -151,7 +151,7 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
             tube_env = (1 - math.exp(-t * 25)) * math.exp(-t * decay_rate)
             sample += amp * tube_env * math.sin(2 * math.pi * frequency * ratio * t)
 
-        sub_bass = 0.3 * math.exp(-t * 3.5) * math.sin(2 * math.pi * frequency * 0.5 * t)
+        sub_bass = 0.3 * math.exp(-t * 5.0) * math.sin(2 * math.pi * frequency * 0.5 * t)
         sample += sub_bass
 
         sample *= attack

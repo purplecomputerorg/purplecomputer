@@ -231,17 +231,13 @@ class MusicGrid(Widget):
         if key.isdigit():
             self._ensure_percussion_loaded()
             if key in self._percussion_sounds:
-                snd = self._percussion_sounds[key]
-                snd.stop()
-                snd.play()
+                self._percussion_sounds[key].play()
         else:
             inst_id = INSTRUMENTS[self._instrument_index][0]
             self._ensure_instrument_loaded(inst_id)
             sounds = self._instrument_sounds.get(inst_id, {})
             if key in sounds:
-                snd = sounds[key]
-                snd.stop()
-                snd.play()
+                sounds[key].play()
 
     def set_instrument(self, index: int) -> None:
         """Set the current instrument index."""
@@ -295,9 +291,7 @@ class MusicGrid(Widget):
             return
         self._ensure_letter_sounds_loaded()
         if key in self._letter_sounds:
-            snd = self._letter_sounds[key]
-            snd.stop()
-            snd.play()
+            self._letter_sounds[key].play()
 
     def cleanup_sounds(self) -> None:
         """Stop all currently playing sounds and clear loaded sounds."""

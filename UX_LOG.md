@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Viewport widened from 112 to 134 columns, using more horizontal screen space on all displays. Font size calculation now fills both dimensions evenly instead of leaving wide black bars on the sides.
 - Volume keys now control actual system volume (via ALSA). Previously they only showed a visual toast. Sounds are also louder overall: instrument synthesis uses 90% peak level (was 50%) and per-sound volume caps removed.
 - Installer: post-install reboot now uses a 30-second countdown instead of waiting for Enter (which was unreliable across hardware). Confirmation input loop simplified from dd/od pipeline to bash read.
 - Sleep screen: removed countdown timers and lid-closed warnings (kids don't need them). Lid shutdown delay reduced from 2 minutes to 30 seconds. Idle shutdown reduced from 30 to 25 minutes, removed the separate "dim" and "shutdown warning" stages.

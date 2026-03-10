@@ -102,10 +102,10 @@ If a shell command or Python snippet might be useful more than once, save it as 
 **Single source of truth:** `purple_tui/constants.py` defines the viewport dimensions.
 
 ```python
-VIEWPORT_WIDTH = 112          # Viewport widget width
-VIEWPORT_HEIGHT = 32          # Viewport widget height
-REQUIRED_TERMINAL_COLS = 114  # Full UI width (viewport + border)
-REQUIRED_TERMINAL_ROWS = 39   # Full UI height (viewport + border + title + footer)
+VIEWPORT_WIDTH = 134          # Viewport widget width
+VIEWPORT_HEIGHT = 30          # Viewport widget height
+REQUIRED_TERMINAL_COLS = 136  # Full UI width (viewport + border)
+REQUIRED_TERMINAL_ROWS = 38   # Full UI height (viewport + border + title + footer)
 ```
 
 **Font size calculation:** `scripts/calc_font_size.py` imports these constants and uses a hardcoded cell-to-point ratio for JetBrainsMono (the only font we use) to calculate the Alacritty font size. If you change viewport dimensions in `constants.py`, the font calculator automatically adjusts.

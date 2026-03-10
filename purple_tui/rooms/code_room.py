@@ -243,7 +243,7 @@ class CodeCanvas(Widget):
         self.refresh()
 
     def _rebuild_lines(self) -> None:
-        content_width = max(1, (self.size.width or 112) - GUTTER_WIDTH)
+        content_width = max(1, (self.size.width or 134) - GUTTER_WIDTH)
         self._lines = _layout_lines(self._blocks, content_width)
 
     def _ensure_cursor_visible(self) -> None:

@@ -79,7 +79,7 @@ class TestSetFontSize:
 class TestEnsureTerminalSize:
     def test_already_correct_size(self):
         """No config modification when terminal is already the right size."""
-        with mock.patch('purple_tui.font_sizer.os.get_terminal_size', return_value=os.terminal_size((114, 38))):
+        with mock.patch('purple_tui.font_sizer.os.get_terminal_size', return_value=os.terminal_size((136, 38))):
             # Should return immediately without touching any files
             ensure_terminal_size()
 
@@ -99,8 +99,8 @@ class TestEnsureTerminalSize:
         def fake_terminal_size():
             call_count[0] += 1
             if call_count[0] <= 2:
-                return os.terminal_size((118, 34))  # Too few rows (pre-loop + first loop check)
-            return os.terminal_size((114, 38))  # Correct after adjustment
+                return os.terminal_size((120, 34))  # Too few cols and rows (pre-loop + first loop check)
+            return os.terminal_size((136, 38))  # Correct after adjustment
 
         with mock.patch('purple_tui.font_sizer.os.get_terminal_size', side_effect=fake_terminal_size):
             with mock.patch.dict(os.environ, {'PURPLE_ALACRITTY_CONFIG': path}):
@@ -110,7 +110,7 @@ class TestEnsureTerminalSize:
                             ensure_terminal_size()
 
         # Verify IPC was called with reduced font size
-        # 24.0 * 34/38 = 21.47 -> floor to 21.0
+        # min(24.0 * 120/136, 24.0 * 34/38) = min(21.18, 21.47) -> floor to 21.0
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args == ['alacritty', 'msg', 'config', 'font.size=21.0']

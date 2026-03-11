@@ -114,8 +114,18 @@ class MusicCodeRunner:
         self.color_fn = color_fn
         self.flash_fn = flash_fn
 
+    # Speed presets: delay between notes in seconds
+    SPEED_NORMAL = 0.2
+    SPEED_FAST = 0.08
+    SPEED_SLOW = 0.4
+
     async def run(self, lines: list[str], mode: str = "music") -> None:
-        """Run music code asynchronously with timing."""
+        """Run music code asynchronously with timing.
+
+        Supports speed prefixes per line:
+        - "fast qwerty" plays notes quickly
+        - "slow qwerty" plays notes slowly
+        """
         from .music_constants import ALL_KEYS
 
         cmds = parse_lines(lines)
@@ -133,6 +143,14 @@ class MusicCodeRunner:
                 await asyncio.sleep(0.1)
                 continue
 
+            # Check for speed prefix
+            delay = self.SPEED_NORMAL
+            m = re.match(r'^(fast|slow)\s+(.+)$', text, re.IGNORECASE)
+            if m:
+                speed_word = m.group(1).lower()
+                text = m.group(2)
+                delay = self.SPEED_FAST if speed_word == 'fast' else self.SPEED_SLOW
+
             # Play each character as a note
             for ch in text:
                 lookup = ch.upper() if ch.isalpha() else ch
@@ -142,7 +160,7 @@ class MusicCodeRunner:
                     self.play_key(lookup, mode)
                     if self.flash_fn:
                         self.flash_fn(lookup)
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(delay)
 
 
 class ArtCodeRunner:
@@ -158,11 +176,15 @@ class ArtCodeRunner:
         self.canvas = canvas
 
     async def run(self, lines: list[str]) -> None:
-        """Run art code asynchronously."""
+        """Run art code asynchronously.
+
+        Defaults to paint mode on, so unrecognized lines paint their
+        characters onto the canvas (like typing with the brush).
+        """
         cmds = parse_lines(lines)
         flat = flatten_commands(cmds)
 
-        paint_on = False
+        paint_on = True  # Default: painting is on
         write_on = False
 
         for cmd in flat:
@@ -200,3 +222,8 @@ class ArtCodeRunner:
                     self.canvas.type_char(ch)
                     await asyncio.sleep(0.02)
                 continue
+
+            # Unrecognized text: paint it as characters on the canvas
+            for ch in text:
+                self.canvas.type_char(ch)
+                await asyncio.sleep(0.02)

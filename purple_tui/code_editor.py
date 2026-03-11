@@ -452,6 +452,12 @@ class CodeTextEditor(Widget, can_focus=True):
 
     # -- Autocomplete --
 
+    # Art mode commands for autocomplete
+    _ART_COMMANDS = ["paint on", "paint off", "write on", "write off",
+                     "left", "right", "up", "down"]
+    # Music mode commands for autocomplete
+    _MUSIC_COMMANDS = ["choose", "instrument", "fast", "slow"]
+
     def _update_autocomplete(self) -> None:
         """Check for autocomplete matches based on current word."""
         self._autocomplete_suggestion = None
@@ -474,6 +480,23 @@ class CodeTextEditor(Widget, can_focus=True):
         # "rep" -> "repeat "
         if "repeat".startswith(prefix) and prefix != "repeat":
             self._autocomplete_suggestion = "repeat "[len(prefix):]
+            return
+
+        # Room-specific autocomplete
+        if self._room == "art":
+            # Match against full line content (for multi-word like "paint on")
+            line_so_far = line[:col].lstrip()
+            for cmd in self._ART_COMMANDS:
+                if cmd.startswith(line_so_far) and cmd != line_so_far and len(line_so_far) >= 1:
+                    self._autocomplete_suggestion = cmd[len(line_so_far):]
+                    return
+            return
+
+        if self._room == "music":
+            for cmd in self._MUSIC_COMMANDS:
+                if cmd.startswith(prefix) and cmd != prefix and len(prefix) >= 1:
+                    self._autocomplete_suggestion = cmd[len(prefix):] + " "
+                    return
             return
 
         # Play room: emoji/color autocomplete

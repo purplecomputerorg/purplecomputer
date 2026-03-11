@@ -194,7 +194,12 @@ class HistoryLine(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         dark = self._is_dark()
-        if self.line_type == "ask":
+        if self.line_type == "code_header":
+            # Code results header: no "Ask →" prefix, just bold text
+            answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
+            prefix = f"[bold {answer_color}]{caps(self.text)}[/] "
+            return prefix
+        elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "
             return self._wrap_with_arrows(caps(self.text), prefix, ask_color)
@@ -695,15 +700,75 @@ class PlayMode(Vertical):
             pass
 
     def add_code_results(self, results: list[str]) -> None:
-        """Add results from code runner to the history."""
+        """Add results from code runner to the history.
+
+        Aggregates all results into a single display block.
+        Handles COLOR_RESULT tokens by rendering them as color swatches.
+        Strips verbose labels (like "= N emoji") to show compact output.
+        """
+        if not results:
+            return
         try:
             scroll = self.query_one("#history-scroll")
-            scroll.mount(HistoryLine("Your code says:", line_type="ask"))
+            scroll.mount(HistoryLine("Your code says...", line_type="code_header"))
+
+            # Process each result: compact it and handle COLOR_RESULT
+            compact_parts = []
             for result in results:
-                scroll.mount(HistoryLine(result, line_type="answer"))
+                compact = self._compact_code_result(result)
+                if compact:
+                    compact_parts.append(compact)
+
+            # Combine all results into one display
+            combined = "\n".join(compact_parts)
+            if combined.strip():
+                scroll.mount(HistoryLine(combined, line_type="answer"))
             scroll.scroll_end(animate=False)
         except Exception:
             pass
+
+    def _compact_code_result(self, result: str) -> str:
+        """Compact a code result for aggregate display.
+
+        - Strips "= N emoji" label lines, keeping just the visual
+        - Converts COLOR_RESULT tokens into color swatches
+        """
+        if not result:
+            return ""
+
+        # Handle COLOR_RESULT tokens
+        if "COLOR_RESULT:" in result:
+            return self._render_color_result_inline(result)
+
+        # Strip "= N emoji" label from multiline results (keep the visual)
+        lines = result.split('\n')
+        if len(lines) >= 2 and lines[0].startswith("= "):
+            # The first line is a label like "= 3 🦕", rest is the visual
+            return '\n'.join(lines[1:])
+
+        return result
+
+    def _render_color_result_inline(self, result: str) -> str:
+        """Convert COLOR_RESULT tokens in a string to color swatches."""
+        parts = result.split()
+        output_parts = []
+        for p in parts:
+            if p.startswith("COLOR_RESULT:"):
+                color_data = self.evaluator._parse_color_result(p)
+                if color_data:
+                    hex_color, color_name, components = color_data
+                    if components and len(components) >= 2:
+                        # Mixed color: show component swatches → result
+                        comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
+                        result_box = f"[on {hex_color}]  [/]"
+                        output_parts.append(f"{comp_boxes} → {result_box}")
+                    else:
+                        output_parts.append(f"[on {hex_color}]  [/]")
+                else:
+                    output_parts.append(p)
+            else:
+                output_parts.append(p)
+        return " ".join(output_parts)
 
     async def handle_keyboard_action(self, action) -> None:
         """

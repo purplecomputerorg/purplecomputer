@@ -83,6 +83,30 @@ except pygame.error:
     _MIXER_READY = False
 
 
+def reinit_mixer() -> None:
+    """Quit and re-init the pygame mixer to recover from a dead audio backend.
+
+    In VMs, PulseAudio/PipeWire can drop the connection and SDL2 won't reconnect
+    on its own. This forces a fresh connection. All cached Sound objects become
+    invalid after quit(), so callers must clear their sound caches.
+    """
+    global _MIXER_READY
+    try:
+        pygame.mixer.quit()
+    except Exception:
+        pass
+    try:
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+        pygame.mixer.set_num_channels(16)
+        _MIXER_READY = True
+    except pygame.error:
+        _MIXER_READY = False
+    # Reset TTS state so it picks up the fresh mixer
+    from . import tts
+    tts._mixer_initialized = False
+    tts._current_channel = None
+
+
 # Default backgrounds (dark and light themes)
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"

@@ -18,7 +18,17 @@ from textual.message import Message
 from rich.segment import Segment
 from rich.style import Style
 
+import re
+
 from .keyboard import CharacterAction, NavigationAction, ControlAction
+
+# Keywords to underline per room (recognized commands)
+_ROOM_KEYWORDS = {
+    "play": {"repeat", "end", "times", "plus", "minus"},
+    "music": {"repeat", "end", "choose", "instrument", "fast", "slow"},
+    "art": {"repeat", "end", "left", "right", "up", "down",
+            "paint", "write", "on", "off"},
+}
 
 
 # Colors for the code editor
@@ -27,6 +37,10 @@ CODE_FG = "#2a1845"       # Very dark purple text
 CODE_CURSOR_BG = "#2a1845"  # Cursor: dark block
 CODE_CURSOR_FG = "#d8c8e8"  # Cursor: light text
 CODE_GHOST_FG = "#9b7bc4"  # Autocomplete ghost text color
+CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
+
+# Gutter: 1-cell padding on all sides of the text area
+GUTTER = 1
 
 
 class RunCodeRequested(Message, bubble=True):
@@ -225,10 +239,10 @@ class CodeTextEditor(Widget, can_focus=True):
     # -- Scrolling --
 
     def _ensure_scroll_visible(self) -> None:
-        """Make sure cursor row is visible."""
+        """Make sure cursor row is visible (accounting for gutter)."""
         row, _ = self._get_cursor()
         scroll = self._get_scroll()
-        visible_lines = self.size.height
+        visible_lines = self.size.height - GUTTER * 2
 
         if visible_lines <= 0:
             return
@@ -240,60 +254,84 @@ class CodeTextEditor(Widget, can_focus=True):
 
     # -- Rendering --
 
+    def _get_keyword_positions(self, line: str) -> set[int]:
+        """Return character indices that are part of a recognized keyword."""
+        keywords = _ROOM_KEYWORDS.get(self._room, set())
+        positions = set()
+        for m in re.finditer(r'[a-zA-Z+]+', line):
+            word = m.group().lower()
+            if word in keywords:
+                for i in range(m.start(), m.end()):
+                    positions.add(i)
+        return positions
+
     def render_line(self, y: int) -> Strip:
         width = self.size.width
         if width <= 0:
             return Strip([])
 
-        lines = self._get_lines()
-        cursor_row, cursor_col = self._get_cursor()
-        scroll = self._get_scroll()
-
-        line_idx = y + scroll
+        gutter_style = Style(bgcolor=CODE_GUTTER_BG)
         bg_style = Style(bgcolor=CODE_BG, color=CODE_FG)
+        kw_style = Style(bgcolor=CODE_BG, color=CODE_FG, underline=True)
         cursor_style = Style(bgcolor=CODE_CURSOR_BG, color=CODE_CURSOR_FG)
+        cursor_kw_style = Style(bgcolor=CODE_CURSOR_BG, color=CODE_CURSOR_FG, underline=True)
         ghost_style = Style(bgcolor=CODE_BG, color=CODE_GHOST_FG)
 
+        # Top and bottom gutter rows
+        lines = self._get_lines()
+        scroll = self._get_scroll()
+        inner_height = self.size.height - GUTTER * 2
+        inner_width = width - GUTTER * 2
+
+        if y < GUTTER or y >= self.size.height - GUTTER or inner_width <= 0:
+            return Strip([Segment(" " * width, gutter_style)])
+
         segments = []
+        # Left gutter
+        segments.append(Segment(" " * GUTTER, gutter_style))
+
+        cursor_row, cursor_col = self._get_cursor()
+        line_idx = (y - GUTTER) + scroll
 
         if line_idx < len(lines):
             line = lines[line_idx]
             is_cursor_line = (line_idx == cursor_row)
+            kw_positions = self._get_keyword_positions(line)
 
-            # Render characters
             col = 0
             for i, ch in enumerate(line):
-                if col >= width:
+                if col >= inner_width:
                     break
+                is_kw = i in kw_positions
                 if is_cursor_line and i == cursor_col and self._cursor_visible:
-                    segments.append(Segment(ch, cursor_style))
+                    segments.append(Segment(ch, cursor_kw_style if is_kw else cursor_style))
                 else:
-                    segments.append(Segment(ch, bg_style))
+                    segments.append(Segment(ch, kw_style if is_kw else bg_style))
                 col += 1
 
             # Cursor at end of line
             if is_cursor_line and cursor_col >= len(line) and self._cursor_visible:
-                if col < width:
+                if col < inner_width:
                     segments.append(Segment(" ", cursor_style))
                     col += 1
 
-            # Autocomplete ghost text (shown after cursor on cursor line)
+            # Autocomplete ghost text
             if is_cursor_line and self._autocomplete_suggestion and cursor_col >= len(line):
                 ghost = self._autocomplete_suggestion
-                # If cursor was rendered as block, ghost starts after it
                 for ch in ghost:
-                    if col >= width:
+                    if col >= inner_width:
                         break
                     segments.append(Segment(ch, ghost_style))
                     col += 1
 
-            # Fill rest
-            remaining = width - col
+            remaining = inner_width - col
             if remaining > 0:
                 segments.append(Segment(" " * remaining, bg_style))
         else:
-            # Empty line below text content
-            segments.append(Segment(" " * width, bg_style))
+            segments.append(Segment(" " * inner_width, bg_style))
+
+        # Right gutter
+        segments.append(Segment(" " * GUTTER, gutter_style))
 
         return Strip(segments)
 
@@ -457,6 +495,7 @@ class CodeTextEditor(Widget, can_focus=True):
                      "left", "right", "up", "down"]
     # Music mode commands for autocomplete
     _MUSIC_COMMANDS = ["choose", "instrument", "fast", "slow"]
+    _INSTRUMENT_NAMES = ["marimba", "xylophone", "ukulele", "musicbox"]
 
     def _update_autocomplete(self) -> None:
         """Check for autocomplete matches based on current word."""
@@ -493,6 +532,21 @@ class CodeTextEditor(Widget, can_focus=True):
             return
 
         if self._room == "music":
+            # After "choose " or "instrument ", autocomplete instrument names
+            line_so_far = line[:col].lstrip()
+            m = re.match(r'^(?:choose|instrument)\s+(\S*)$', line_so_far, re.IGNORECASE)
+            if m:
+                inst_prefix = m.group(1).lower()
+                if inst_prefix:
+                    for name in self._INSTRUMENT_NAMES:
+                        if name.startswith(inst_prefix) and name != inst_prefix:
+                            self._autocomplete_suggestion = name[len(inst_prefix):]
+                            return
+                else:
+                    # Just typed "choose ", suggest first instrument
+                    self._autocomplete_suggestion = self._INSTRUMENT_NAMES[0]
+                    return
+                return
             for cmd in self._MUSIC_COMMANDS:
                 if cmd.startswith(prefix) and cmd != prefix and len(prefix) >= 1:
                     self._autocomplete_suggestion = cmd[len(prefix):] + " "

@@ -116,8 +116,8 @@ class MusicCodeRunner:
 
     # Speed presets: delay between notes in seconds
     SPEED_NORMAL = 0.2
-    SPEED_FAST = 0.08
-    SPEED_SLOW = 0.4
+    SPEED_FAST = 0.04
+    SPEED_SLOW = 0.6
 
     async def run(self, lines: list[str], mode: str = "music") -> None:
         """Run music code asynchronously with timing.

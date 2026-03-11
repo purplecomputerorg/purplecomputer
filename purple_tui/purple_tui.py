@@ -461,9 +461,10 @@ class CodeHintsPanel(Widget):
             "  fast asdf",
             "  slow 12345",
             "",
-            "  choose drums",
-            "  choose piano",
-            "  choose guitar",
+            "  choose marimba",
+            "  choose xylophone",
+            "  choose ukulele",
+            "  choose musicbox",
             "",
             "  repeat 2",
             "    qwerty",
@@ -510,16 +511,28 @@ class CodeHintsPanel(Widget):
             return Strip([])
 
         bg = "#2a1845"
+        gutter_bg = "#1e1235"  # Slightly darker gutter
+        gutter_style = Style(bgcolor=gutter_bg)
         dim_style = Style(bgcolor=bg, color="#6a5a7a")
         title_style = Style(bgcolor=bg, color="#9b7bc4")
         code_style = Style(bgcolor=bg, color="#8a6ab4")
         hint_style = Style(bgcolor=bg, color="#5a4a6a")
 
-        hints = self._HINTS.get(self._room, self._HINTS["play"])
+        # 1-cell gutter on all sides
+        gutter = 1
+        inner_width = width - gutter * 2
 
-        if y < len(hints):
-            line = hints[y]
-            if y == 0:
+        if y < gutter or y >= self.size.height - gutter or inner_width <= 0:
+            return Strip([Segment(" " * width, gutter_style)])
+
+        hints = self._HINTS.get(self._room, self._HINTS["play"])
+        hint_idx = y - gutter
+
+        segments = [Segment(" " * gutter, gutter_style)]
+
+        if hint_idx < len(hints):
+            line = hints[hint_idx]
+            if hint_idx == 0:
                 style = title_style
             elif line.startswith("  "):
                 style = code_style
@@ -528,13 +541,15 @@ class CodeHintsPanel(Widget):
             else:
                 style = dim_style
 
-            text = line[:width]
-            pad = width - len(text)
-            segments = [Segment(text, style)]
+            text = line[:inner_width]
+            pad = inner_width - len(text)
+            segments.append(Segment(text, style))
             if pad > 0:
                 segments.append(Segment(" " * pad, dim_style))
         else:
-            segments = [Segment(" " * width, dim_style)]
+            segments.append(Segment(" " * inner_width, dim_style))
+
+        segments.append(Segment(" " * gutter, gutter_style))
 
         return Strip(segments)
 
@@ -2210,10 +2225,28 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _invalidate_sound_caches(self) -> None:
+        """Clear cached Sound objects after a mixer reinit (they become invalid)."""
+        try:
+            from .rooms.music_room import MusicGrid
+            for grid in self.query(MusicGrid):
+                grid.cleanup_sounds()
+        except Exception:
+            pass
+
     def _apply_volume(self) -> None:
-        """Apply volume level to TTS, system mixer, and update UI"""
+        """Apply volume level to TTS, system mixer, and update UI.
+
+        Also reinits the pygame mixer to recover from dead audio backends
+        (common in VMs where PulseAudio/PipeWire drops the SDL2 connection).
+        """
         from . import tts
+        from .rooms.music_room import reinit_mixer
         tts.set_muted(self.volume_level == 0)
+        # Reinit mixer to recover from dead audio backend
+        reinit_mixer()
+        # Invalidate sound caches (Sound objects are invalid after mixer reinit)
+        self._invalidate_sound_caches()
         self._apply_volume_system()
 
         # Update volume indicator badge

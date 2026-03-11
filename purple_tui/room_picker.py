@@ -26,11 +26,12 @@ ROOM_OPTIONS = [
 # Map number keys to room indices
 NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
-# Rows: 0 = rooms, 1 = code toggle, 2 = volume
+# Rows: 0 = rooms, 1 = code toggle, 2 = volume, 3 = start fresh
 ROW_ROOMS = 0
 ROW_CODE = 1
 ROW_VOLUME = 2
-NUM_ROWS = 3
+ROW_FRESH = 3
+NUM_ROWS = 4
 
 
 class RoomOption(Static):
@@ -98,9 +99,9 @@ class ToggleOption(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         if self._code_space_open:
-            return caps("Close Code Space")
+            return caps("Close Code Space (Space)")
         else:
-            return caps("Open Code Space")
+            return caps("Open Code Space (Space)")
 
 
 class VolumeOption(Static):
@@ -131,6 +132,131 @@ class VolumeOption(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         return caps(f"{ICON_VOLUME_HIGH} Volume (V)")
+
+
+class StartFreshOption(Static):
+    """A 'Start Fresh' button to clear all rooms."""
+
+    DEFAULT_CSS = """
+    StartFreshOption {
+        width: 40;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    StartFreshOption.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return caps("Start Fresh")
+
+
+class ConfirmFreshScreen(ModalScreen):
+    """Are you sure? confirmation for Start Fresh."""
+
+    CSS = """
+    ConfirmFreshScreen {
+        align: center middle;
+    }
+
+    #confirm-dialog {
+        width: 50;
+        height: auto;
+        padding: 2 3;
+        background: $surface;
+        border: heavy $warning;
+    }
+
+    #confirm-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #confirm-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
+
+    .confirm-btn {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    .confirm-btn.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._selected = 1  # Default to "No, go back" (safer)
+
+    def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        with Container(id="confirm-dialog"):
+            yield Static(caps("Are you sure?"), id="confirm-title")
+            yield Static(caps("This will clear everything."), id="confirm-hint")
+            with Horizontal(id="confirm-buttons"):
+                yield Static(caps("Yes, start fresh"), id="btn-yes", classes="confirm-btn")
+                yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction in ('left', 'right'):
+                self._selected = 1 - self._selected
+                self._update_selection()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                self.dismiss(self._selected == 0)
+            elif action.action == 'escape':
+                self.dismiss(False)
+            return
+
+        if isinstance(action, CharacterAction):
+            self.dismiss(False)
+
+    def _update_selection(self) -> None:
+        try:
+            yes_btn = self.query_one("#btn-yes")
+            no_btn = self.query_one("#btn-no")
+            if self._selected == 0:
+                yes_btn.add_class("selected")
+                no_btn.remove_class("selected")
+            else:
+                yes_btn.remove_class("selected")
+                no_btn.add_class("selected")
+        except Exception:
+            pass
+
+    async def _on_key(self, event) -> None:
+        event.stop()
+        event.prevent_default()
 
 
 class RoomPickerScreen(ModalScreen):
@@ -184,6 +310,13 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
+    #picker-fresh-row {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-bottom: 1;
+    }
+
     #picker-hint {
         width: 100%;
         text-align: center;
@@ -222,6 +355,9 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-volume-row"):
                 yield VolumeOption(id="opt-volume")
 
+            with Horizontal(id="picker-fresh-row"):
+                yield StartFreshOption(id="opt-start-fresh")
+
             yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc between rows       Space: Code Space"), id="picker-hint")
 
     def on_mount(self) -> None:
@@ -257,6 +393,16 @@ class RoomPickerScreen(ModalScreen):
                 vol.add_class("selected")
             else:
                 vol.remove_class("selected")
+        except Exception:
+            pass
+
+        # Start Fresh
+        try:
+            fresh = self.query_one("#opt-start-fresh", StartFreshOption)
+            if self._active_row == ROW_FRESH:
+                fresh.add_class("selected")
+            else:
+                fresh.remove_class("selected")
         except Exception:
             pass
 
@@ -307,6 +453,8 @@ class RoomPickerScreen(ModalScreen):
                     self.dismiss({"toggle_code_space": True})
                 elif self._active_row == ROW_VOLUME:
                     self._open_volume()
+                elif self._active_row == ROW_FRESH:
+                    self._confirm_start_fresh()
             elif action.action == 'escape':
                 self.dismiss(None)
             elif action.action == 'space':
@@ -318,6 +466,14 @@ class RoomPickerScreen(ModalScreen):
                 self.app.action_volume_down()
             elif action.action == 'volume_up':
                 self.app.action_volume_up()
+
+    def _confirm_start_fresh(self) -> None:
+        """Show confirmation before clearing all rooms."""
+        def on_confirm(confirmed: bool) -> None:
+            if confirmed:
+                self.dismiss({"start_fresh": True})
+
+        self.app.push_screen(ConfirmFreshScreen(), on_confirm)
 
     def _open_volume(self) -> None:
         """Open the volume modal."""

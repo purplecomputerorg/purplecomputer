@@ -1146,6 +1146,11 @@ class PurpleApp(App):
             self.toggle_code_space()
             return
 
+        # Start fresh: clear all rooms
+        if result.get("start_fresh"):
+            self._start_fresh()
+            return
+
         room_name = result.get("room")
 
         # Switch to the selected room
@@ -1228,6 +1233,16 @@ class PurpleApp(App):
         # Hide/show play input when code space is open
         self._toggle_play_input_visibility()
 
+        # When closing code space, scroll play room history to bottom
+        if not self._code_space_open:
+            try:
+                content_area = self.query_one("#content-area")
+                play = content_area.query_one("#room-play")
+                scroll = play.query_one("#history-scroll")
+                scroll.scroll_end(animate=False)
+            except Exception:
+                pass
+
         # Refresh shift banner
         self._update_shift_banner()
 
@@ -1263,6 +1278,9 @@ class PurpleApp(App):
             try:
                 content_area = self.query_one("#content-area")
                 music = content_area.query_one("#room-music")
+                # Fresh start: reset colors before running code
+                if music.grid:
+                    music.grid.reset_colors()
                 mode = "letters" if music._letters_mode else "music"
 
                 def play_key(key, m):
@@ -1294,6 +1312,8 @@ class PurpleApp(App):
                 content_area = self.query_one("#content-area")
                 art = content_area.query_one("#room-art")
                 canvas = art.query_one("#art-canvas")
+                # Fresh start: clear canvas before running code
+                canvas._clear_canvas()
                 runner = ArtCodeRunner(canvas)
                 await runner.run(lines)
             except Exception:
@@ -1653,19 +1673,6 @@ class PurpleApp(App):
                 except NoMatches:
                     pass
 
-            # Check if entering art mode with existing content
-            if new_room == Room.ART:
-                try:
-                    content_area = self.query_one("#content-area")
-                    art_widget = content_area.query_one(f"#room-{ROOM_ART[0]}")
-                    if hasattr(art_widget, 'has_content') and art_widget.has_content() and not self.demo_running:
-                        # Switch first (shows drawing), then prompt on top
-                        self._complete_room_switch(new_room)
-                        self._show_art_prompt()
-                        return
-                except NoMatches:
-                    pass  # First time entering, no content yet
-
             self._complete_room_switch(new_room)
 
     def _complete_room_switch(self, new_room: Room) -> None:
@@ -1717,6 +1724,42 @@ class PurpleApp(App):
 
         # Refresh shift banner hint (different rooms show different hints)
         self._update_shift_banner()
+
+    def _start_fresh(self) -> None:
+        """Clear all rooms: art canvas, music colors, play history, code buffers."""
+        from .rooms.art_room import ArtMode
+        from .rooms.music_room import MusicMode
+
+        # Clear art canvas
+        try:
+            art = self.query_one(ArtMode)
+            art.clear_canvas()
+        except Exception:
+            pass
+
+        # Reset music colors and loop
+        try:
+            music = self.query_one(MusicMode)
+            music.reset_state()
+        except Exception:
+            pass
+
+        # Clear play history
+        try:
+            content_area = self.query_one("#content-area")
+            play = content_area.query_one("#room-play")
+            if hasattr(play, 'clear_history'):
+                play.clear_history()
+        except Exception:
+            pass
+
+        # Clear code editor buffers
+        try:
+            editor = self.query_one("#code-editor", CodeTextEditor)
+            for room in ("play", "music", "art"):
+                editor.clear_buffer(room)
+        except Exception:
+            pass
 
     def _show_art_prompt(self) -> None:
         """Show prompt when entering Art mode with existing content."""

@@ -47,7 +47,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_CAPS_LOCK,
+    ICON_CAPS_LOCK, ICON_SHIFT,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     CODE_PANEL_HEIGHT,
@@ -423,50 +423,120 @@ class Curtain(Widget):
 
 
 
-class ShiftBanner(Widget):
-    """Full-width contextual banner showing shift hints.
 
-    Appears when sticky shift is active, shows context-dependent hints
-    like "Letter: UPPERCASE" or "Space: play". Uses render_line/Strip/Segment
-    for reliable repainting.
+class CodeHintsPanel(Widget):
+    """Side panel showing code hints for each room.
+
+    Displays room-specific examples of what code to try in the code space.
+    Uses render_line/Strip/Segment for reliable rendering.
     """
 
     DEFAULT_CSS = """
-    ShiftBanner {
+    CodeHintsPanel {
         width: 100%;
-        height: 1;
-        display: none;
-    }
-    ShiftBanner.active {
-        display: block;
+        height: 100%;
     }
     """
 
+    _HINTS = {
+        "play": [
+            "Code to try:",
+            "",
+            "  cat",
+            "  2 + 2",
+            "  red + blue",
+            "  cat times 3",
+            "",
+            "  repeat 3",
+            "    dog",
+            "  end",
+            "",
+            "Shift+Space: run",
+            "Tab: menu",
+        ],
+        "music": [
+            "Code to try:",
+            "",
+            "  qwerty",
+            "  fast asdf",
+            "  slow 12345",
+            "",
+            "  choose drums",
+            "  choose piano",
+            "  choose guitar",
+            "",
+            "  repeat 2",
+            "    qwerty",
+            "  end",
+            "",
+            "Shift+Space: run",
+            "Tab: menu",
+        ],
+        "art": [
+            "Code to try:",
+            "",
+            "  right 10",
+            "  down 5",
+            "  left 10",
+            "  up 5",
+            "",
+            "  asdfasdf",
+            "  (paints colors!)",
+            "",
+            "  write on",
+            "  hello world",
+            "  write off",
+            "",
+            "  repeat 4",
+            "    right 10",
+            "    down 10",
+            "  end",
+            "",
+            "Shift+Space: run",
+        ],
+    }
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._hint_text = ""
+        self._room = "play"
 
-    def show(self, hint_text: str) -> None:
-        self._hint_text = hint_text
-        self.add_class("active")
-        self.refresh()
-
-    def hide(self) -> None:
-        self._hint_text = ""
-        self.remove_class("active")
+    def set_room(self, room: str) -> None:
+        self._room = room
         self.refresh()
 
     def render_line(self, y: int) -> Strip:
         width = self.size.width
-        style = Style(bgcolor="#FFD700", color="#1a1a1a", bold=True)
-        text = self._hint_text
-        if len(text) < width:
-            pad_left = (width - len(text)) // 2
-            pad_right = width - pad_left - len(text)
-            line = " " * pad_left + text + " " * pad_right
+        if width <= 0:
+            return Strip([])
+
+        bg = "#2a1845"
+        dim_style = Style(bgcolor=bg, color="#6a5a7a")
+        title_style = Style(bgcolor=bg, color="#9b7bc4")
+        code_style = Style(bgcolor=bg, color="#8a6ab4")
+        hint_style = Style(bgcolor=bg, color="#5a4a6a")
+
+        hints = self._HINTS.get(self._room, self._HINTS["play"])
+
+        if y < len(hints):
+            line = hints[y]
+            if y == 0:
+                style = title_style
+            elif line.startswith("  "):
+                style = code_style
+            elif ":" in line:
+                style = hint_style
+            else:
+                style = dim_style
+
+            text = line[:width]
+            pad = width - len(text)
+            segments = [Segment(text, style)]
+            if pad > 0:
+                segments.append(Segment(" " * pad, dim_style))
         else:
-            line = text[:width]
-        return Strip([Segment(line, style)])
+            segments = [Segment(" " * width, dim_style)]
+
+        return Strip(segments)
 
 
 class BatteryIndicator(Static):
@@ -630,6 +700,17 @@ class PurpleApp(App):
         text-align: center;
     }
 
+    #shift-indicator {
+        width: auto;
+        height: 1;
+        margin-right: 1;
+        color: $text-muted;
+    }
+
+    #shift-indicator.active {
+        color: $accent;
+    }
+
     #caps-indicator {
         width: auto;
         height: 1;
@@ -652,16 +733,28 @@ class PurpleApp(App):
         background: $surface;
     }
 
-    #code-editor {
+    #code-panel-row {
         width: __VIEWPORT_WIDTH__;
         height: __CODE_PANEL_HEIGHT__;
         display: none;
         margin-top: 1;
     }
 
-    #code-editor.visible {
+    #code-panel-row.visible {
         display: block;
+    }
+
+    #code-editor {
+        width: 2fr;
+        height: 100%;
         border: heavy #9b7bc4;
+    }
+
+    #code-hints {
+        width: 1fr;
+        height: 100%;
+        border: heavy #4a3660;
+        margin-left: 1;
     }
 
     .code-space-open #viewport {
@@ -814,14 +907,16 @@ class PurpleApp(App):
                 with Horizontal(id="title-row"):
                     yield Static("", id="title-spacer-left")  # Balance for right elements
                     yield RoomTitle(id="room-title")
+                    yield Static("", id="shift-indicator")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
                 with Horizontal(id="viewport-row"):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
-                yield ShiftBanner(id="shift-banner")
-                yield CodeTextEditor(id="code-editor")
+                with Horizontal(id="code-panel-row"):
+                    yield CodeTextEditor(id="code-editor")
+                    yield CodeHintsPanel(id="code-hints")
             yield RoomIndicator(self.active_room, id="room-indicator")
 
     async def on_mount(self) -> None:
@@ -932,7 +1027,7 @@ class PurpleApp(App):
         except NoMatches:
             pass
         # Refresh shift banner hint (paint vs text mode shows different hints)
-        self._update_shift_banner()
+        self._update_shift_indicator()
 
     def suspend_with_terminal_input(self):
         """
@@ -1199,15 +1294,18 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Show/hide code editor
+        # Show/hide code panel row (editor + hints)
         try:
-            editor = self.query_one("#code-editor", CodeTextEditor)
+            panel_row = self.query_one("#code-panel-row")
             if self._code_space_open:
-                editor.add_class("visible")
+                panel_row.add_class("visible")
                 room_name = self.active_room.name.lower()
+                editor = self.query_one("#code-editor", CodeTextEditor)
                 editor.set_room(room_name)
+                hints = self.query_one("#code-hints", CodeHintsPanel)
+                hints.set_room(room_name)
             else:
-                editor.remove_class("visible")
+                panel_row.remove_class("visible")
         except NoMatches:
             pass
 
@@ -1230,8 +1328,11 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Hide/show play input when code space is open
+        # Hide/show play input cursor when code space is open
         self._toggle_play_input_visibility()
+
+        # Hide/show room hints when code space toggles
+        self._toggle_room_hints_visibility()
 
         # When closing code space, scroll play room history to bottom
         if not self._code_space_open:
@@ -1244,7 +1345,7 @@ class PurpleApp(App):
                 pass
 
         # Refresh shift banner
-        self._update_shift_banner()
+        self._update_shift_indicator()
 
     def on_run_code_requested(self, message: RunCodeRequested) -> None:
         """Handle code execution request from code editor."""
@@ -1324,16 +1425,57 @@ class PurpleApp(App):
         self.toggle_code_space()
 
     def _toggle_play_input_visibility(self) -> None:
-        """Hide/show play room input widgets when code space toggles."""
+        """Toggle play room cursor blink and hint visibility when code space toggles.
+
+        Keeps the input field visible but disables the blinking cursor
+        when code space is open (input is not active in that state).
+        """
         try:
             content_area = self.query_one("#content-area")
             play = content_area.query_one("#room-play")
-            for widget_id in ("#input-row", "#autocomplete-hint", "#play-example-hint"):
+            # Disable/enable cursor blink on the input field
+            try:
+                play_input = play.query_one("#play-input")
+                if self._code_space_open:
+                    play_input.cursor_blink = False
+                    # Move cursor to start to make it less distracting
+                    play_input.cursor_position = 0
+                else:
+                    play_input.cursor_blink = True
+            except NoMatches:
+                pass
+            # Hide/show example hints (not needed with code space)
+            for widget_id in ("#autocomplete-hint", "#play-example-hint"):
                 try:
                     widget = play.query_one(widget_id)
                     widget.display = not self._code_space_open
                 except NoMatches:
                     pass
+        except NoMatches:
+            pass
+
+    def _toggle_room_hints_visibility(self) -> None:
+        """Hide/show room-specific hints when code space toggles.
+
+        Hides the 'try pressing...' hints in music and art rooms
+        when the code space is open (they're redundant with the code hints panel).
+        """
+        try:
+            content_area = self.query_one("#content-area")
+            # Music room hint
+            try:
+                music = content_area.query_one("#room-music")
+                hint = music.query_one("#example-hint")
+                hint.display = not self._code_space_open
+            except NoMatches:
+                pass
+            # Art room hint
+            try:
+                art = content_area.query_one("#room-art")
+                hint = art.query_one("#art-hint-bar")
+                hint.display = not self._code_space_open
+            except NoMatches:
+                pass
         except NoMatches:
             pass
 
@@ -1681,7 +1823,7 @@ class PurpleApp(App):
         self.active_room = new_room
         self._load_room_content()
 
-        # Sync code editor to new room's buffer
+        # Sync code editor and hints panel to new room's buffer
         if self._code_space_open:
             room_name = new_room.name.lower()
             try:
@@ -1689,7 +1831,13 @@ class PurpleApp(App):
                 editor.set_room(room_name)
             except NoMatches:
                 pass
+            try:
+                hints = self.query_one("#code-hints", CodeHintsPanel)
+                hints.set_room(room_name)
+            except NoMatches:
+                pass
             self._toggle_play_input_visibility()
+            self._toggle_room_hints_visibility()
 
         # Update title
         room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0]}
@@ -1723,7 +1871,7 @@ class PurpleApp(App):
                 pass
 
         # Refresh shift banner hint (different rooms show different hints)
-        self._update_shift_banner()
+        self._update_shift_indicator()
 
     def _start_fresh(self) -> None:
         """Clear all rooms: art canvas, music colors, play history, code buffers."""
@@ -2130,62 +2278,37 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def _get_shift_banner_hint(self) -> str:
-        """Get contextual hint text for the shift banner."""
-        caps = getattr(self, 'caps_text', lambda x: x)
-
-        # Art room in paint mode
-        room_name = self.active_room.name.lower()
-        if room_name == "art":
-            try:
-                content_area = self.query_one("#content-area")
-                art = content_area.query_one("#room-art")
-                canvas = art.query_one("#art-canvas")
-                if canvas.is_painting:
-                    return caps("\u21e7 Letter: pick color")
-            except Exception:
-                pass
-
-        # Default: uppercase hint
-        return caps("\u21e7 Letter: UPPERCASE")
-
-    def _update_shift_banner(self) -> None:
-        """Refresh the shift banner text if sticky shift is currently active."""
+    def _update_shift_indicator(self) -> None:
+        """Update the shift icon in the title bar based on sticky shift state."""
         sm = self._keyboard_state_machine
-        if sm._sticky_shift_active:
-            try:
-                banner = self.query_one("#shift-banner", ShiftBanner)
-                hint = self._get_shift_banner_hint()
-                banner.show(hint)
-            except NoMatches:
-                pass
+        try:
+            indicator = self.query_one("#shift-indicator", Static)
+            if sm._sticky_shift_active:
+                indicator.update(ICON_SHIFT)
+                indicator.add_class("active")
+            else:
+                indicator.update("")
+                indicator.remove_class("active")
+        except NoMatches:
+            pass
 
     def _on_sticky_shift_change(self, active: bool) -> None:
         """Called when sticky shift state changes."""
         if self._sticky_shift_timer:
             self._sticky_shift_timer.stop()
             self._sticky_shift_timer = None
-        try:
-            banner = self.query_one("#shift-banner", ShiftBanner)
-            if active:
-                hint = self._get_shift_banner_hint()
-                banner.show(hint)
-                self._sticky_shift_timer = self.set_timer(
-                    STICKY_SHIFT_GRACE, self._expire_sticky_shift_indicator
-                )
-            else:
-                banner.hide()
-        except NoMatches:
-            pass
+
+        self._update_shift_indicator()
+
+        if active:
+            self._sticky_shift_timer = self.set_timer(
+                STICKY_SHIFT_GRACE, self._expire_sticky_shift_indicator
+            )
 
     def _expire_sticky_shift_indicator(self) -> None:
-        """Hide shift banner after grace period."""
+        """Hide shift indicator after grace period."""
         self._sticky_shift_timer = None
-        try:
-            banner = self.query_one("#shift-banner", ShiftBanner)
-            banner.hide()
-        except NoMatches:
-            pass
+        self._update_shift_indicator()
 
     def action_parent_menu(self) -> None:
         """Enter parent mode. Shows admin menu for parents."""

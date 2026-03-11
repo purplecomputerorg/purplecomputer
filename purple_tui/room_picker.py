@@ -1,18 +1,22 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art), a Code Space toggle, and a Volume button.
+Shows 3 rooms (Play, Music, Art), then 3 action buttons below
+(Code Space toggle, Volume, Start Fresh). Same box style for all.
 Arrow keys navigate, number keys 1-3 for direct room selection,
 Space toggles code space, V opens volume, Enter selects, Escape cancels.
 Any unrecognized key dismisses the picker gracefully.
 """
 
 from textual.screen import ModalScreen
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Static
 from textual.app import ComposeResult
 
-from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH
+from .constants import (
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH,
+    ICON_BROOM, ICON_CODE,
+)
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 
 
@@ -26,12 +30,16 @@ ROOM_OPTIONS = [
 # Map number keys to room indices
 NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
-# Rows: 0 = rooms, 1 = code toggle, 2 = volume, 3 = start fresh
+# Rows: 0 = rooms, 1 = actions (code/volume/fresh)
 ROW_ROOMS = 0
-ROW_CODE = 1
-ROW_VOLUME = 2
-ROW_FRESH = 3
-NUM_ROWS = 4
+ROW_ACTIONS = 1
+NUM_ROWS = 2
+
+# Action columns: 0 = code toggle, 1 = volume, 2 = start fresh
+COL_CODE = 0
+COL_VOLUME = 1
+COL_FRESH = 2
+NUM_ACTION_COLS = 3
 
 
 class RoomOption(Static):
@@ -70,20 +78,21 @@ class RoomOption(Static):
         return caps(f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n")
 
 
-class ToggleOption(Static):
-    """A toggle option for Code Space (on/off lightswitch style)."""
+class ActionOption(Static):
+    """A selectable action button (same size as room boxes)."""
 
     DEFAULT_CSS = """
-    ToggleOption {
-        width: 40;
-        height: 3;
+    ActionOption {
+        width: 16;
+        height: 8;
         content-align: center middle;
         text-align: center;
         border: round $surface-lighten-2;
         margin: 0 1;
+        padding: 0 1;
     }
 
-    ToggleOption.selected {
+    ActionOption.selected {
         border: heavy $accent;
         background: $primary;
         color: $background;
@@ -91,81 +100,25 @@ class ToggleOption(Static):
     }
     """
 
-    def __init__(self, code_space_open: bool, **kwargs):
+    def __init__(self, icon: str, label: str, key_hint: str, **kwargs):
         super().__init__(**kwargs)
-        self._code_space_open = code_space_open
+        self._icon = icon
+        self._label = label
+        self._key_hint = key_hint
         self.add_class("caps-sensitive")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self._code_space_open:
-            return caps("Close Code Space (Space)")
-        else:
-            return caps("Open Code Space (Space)")
-
-
-class VolumeOption(Static):
-    """A volume button option."""
-
-    DEFAULT_CSS = """
-    VolumeOption {
-        width: 40;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    VolumeOption.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        return caps(f"{ICON_VOLUME_HIGH} Volume (V)")
-
-
-class StartFreshOption(Static):
-    """A 'Start Fresh' button to clear all rooms."""
-
-    DEFAULT_CSS = """
-    StartFreshOption {
-        width: 40;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    StartFreshOption.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        return caps("Start Fresh")
+        enter_hint = "\nor Enter" if self.has_class("selected") else ""
+        return caps(f"\n{self._icon}  {self._label}  {self._icon}\n\nPress {self._key_hint}{enter_hint}\n")
 
 
 class ConfirmFreshScreen(ModalScreen):
-    """Are you sure? confirmation for Start Fresh."""
+    """Are you sure? confirmation for Start Fresh.
+
+    Uses vertical layout (up/down navigation) consistent with
+    the brightness/contrast adjustment dialogs.
+    """
 
     CSS = """
     ConfirmFreshScreen {
@@ -175,6 +128,7 @@ class ConfirmFreshScreen(ModalScreen):
     #confirm-dialog {
         width: 50;
         height: auto;
+        max-height: 16;
         padding: 2 3;
         background: $surface;
         border: heavy $warning;
@@ -187,11 +141,11 @@ class ConfirmFreshScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #confirm-hint {
+    #confirm-subtitle {
         width: 100%;
         text-align: center;
         color: $text-muted;
-        margin-top: 1;
+        margin-bottom: 1;
     }
 
     .confirm-btn {
@@ -209,6 +163,13 @@ class ConfirmFreshScreen(ModalScreen):
         color: $background;
         text-style: bold;
     }
+
+    #confirm-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
     """
 
     def __init__(self, **kwargs):
@@ -219,14 +180,15 @@ class ConfirmFreshScreen(ModalScreen):
         caps = getattr(self.app, 'caps_text', lambda x: x)
         with Container(id="confirm-dialog"):
             yield Static(caps("Are you sure?"), id="confirm-title")
-            yield Static(caps("This will clear everything."), id="confirm-hint")
-            with Horizontal(id="confirm-buttons"):
+            yield Static(caps("This will clear everything."), id="confirm-subtitle")
+            with Vertical(id="confirm-buttons"):
                 yield Static(caps("Yes, start fresh"), id="btn-yes", classes="confirm-btn")
                 yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
+            yield Static(caps("\u25b2 \u25bc to choose       Enter to confirm"), id="confirm-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction in ('left', 'right'):
+            if action.direction in ('up', 'down'):
                 self._selected = 1 - self._selected
                 self._update_selection()
             return
@@ -263,10 +225,9 @@ class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Layout (3 navigable rows):
-      [1 Play]  [2 Music]  [3 Art]     <- room row
-      [Open Code Space]                 <- toggle
-      [Volume (V)]                      <- volume button
+    Layout (2 navigable rows):
+      [1 Play]  [2 Music]  [3 Art]                <- room row
+      [Code Space]  [Volume]  [Start Fresh]        <- action row
     """
 
     CSS = """
@@ -296,21 +257,7 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #picker-code-row {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #picker-volume-row {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #picker-fresh-row {
+    #picker-actions {
         width: 100%;
         height: auto;
         align: center middle;
@@ -333,6 +280,7 @@ class RoomPickerScreen(ModalScreen):
         self._code_space_open = code_space_open
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
+        self._action_index = COL_CODE
 
     def _get_initial_room_index(self) -> int:
         for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
@@ -342,6 +290,9 @@ class RoomPickerScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
+
+        code_label = "Close Code" if self._code_space_open else "Open Code"
+
         with Container(id="picker-dialog"):
             yield Static(caps("Pick a Room"), id="picker-title")
 
@@ -349,14 +300,10 @@ class RoomPickerScreen(ModalScreen):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            with Horizontal(id="picker-code-row"):
-                yield ToggleOption(self._code_space_open, id="opt-code-toggle")
-
-            with Horizontal(id="picker-volume-row"):
-                yield VolumeOption(id="opt-volume")
-
-            with Horizontal(id="picker-fresh-row"):
-                yield StartFreshOption(id="opt-start-fresh")
+            with Horizontal(id="picker-actions"):
+                yield ActionOption(ICON_CODE, code_label, "Space", id="opt-code-toggle")
+                yield ActionOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
+                yield ActionOption(ICON_BROOM, "Start Fresh", "Enter", id="opt-start-fresh")
 
             yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc between rows       Space: Code Space"), id="picker-hint")
 
@@ -376,35 +323,17 @@ class RoomPickerScreen(ModalScreen):
             except Exception:
                 pass
 
-        # Code toggle
-        try:
-            toggle = self.query_one("#opt-code-toggle", ToggleOption)
-            if self._active_row == ROW_CODE:
-                toggle.add_class("selected")
-            else:
-                toggle.remove_class("selected")
-        except Exception:
-            pass
-
-        # Volume
-        try:
-            vol = self.query_one("#opt-volume", VolumeOption)
-            if self._active_row == ROW_VOLUME:
-                vol.add_class("selected")
-            else:
-                vol.remove_class("selected")
-        except Exception:
-            pass
-
-        # Start Fresh
-        try:
-            fresh = self.query_one("#opt-start-fresh", StartFreshOption)
-            if self._active_row == ROW_FRESH:
-                fresh.add_class("selected")
-            else:
-                fresh.remove_class("selected")
-        except Exception:
-            pass
+        # Action row
+        action_ids = ["#opt-code-toggle", "#opt-volume", "#opt-start-fresh"]
+        for i, aid in enumerate(action_ids):
+            try:
+                widget = self.query_one(aid, ActionOption)
+                if self._active_row == ROW_ACTIONS and i == self._action_index:
+                    widget.add_class("selected")
+                else:
+                    widget.remove_class("selected")
+            except Exception:
+                pass
 
     def _select_room(self, index: int) -> None:
         if 0 <= index < len(ROOM_OPTIONS):
@@ -417,10 +346,14 @@ class RoomPickerScreen(ModalScreen):
             if action.direction == 'left':
                 if self._active_row == ROW_ROOMS:
                     self._room_index = max(0, self._room_index - 1)
+                elif self._active_row == ROW_ACTIONS:
+                    self._action_index = max(0, self._action_index - 1)
                 self._update_selection()
             elif action.direction == 'right':
                 if self._active_row == ROW_ROOMS:
                     self._room_index = min(len(ROOM_OPTIONS) - 1, self._room_index + 1)
+                elif self._active_row == ROW_ACTIONS:
+                    self._action_index = min(NUM_ACTION_COLS - 1, self._action_index + 1)
                 self._update_selection()
             elif action.direction == 'up':
                 if self._active_row > 0:
@@ -436,8 +369,9 @@ class RoomPickerScreen(ModalScreen):
             if action.char in NUMBER_KEY_ROOMS:
                 self._select_room(NUMBER_KEY_ROOMS[action.char])
             elif action.char.lower() == 'v':
-                # Jump to volume row and activate
-                self._active_row = ROW_VOLUME
+                # Jump to volume and activate
+                self._active_row = ROW_ACTIONS
+                self._action_index = COL_VOLUME
                 self._update_selection()
                 self._open_volume()
             else:
@@ -449,12 +383,13 @@ class RoomPickerScreen(ModalScreen):
             if action.action == 'enter':
                 if self._active_row == ROW_ROOMS:
                     self._select_room(self._room_index)
-                elif self._active_row == ROW_CODE:
-                    self.dismiss({"toggle_code_space": True})
-                elif self._active_row == ROW_VOLUME:
-                    self._open_volume()
-                elif self._active_row == ROW_FRESH:
-                    self._confirm_start_fresh()
+                elif self._active_row == ROW_ACTIONS:
+                    if self._action_index == COL_CODE:
+                        self.dismiss({"toggle_code_space": True})
+                    elif self._action_index == COL_VOLUME:
+                        self._open_volume()
+                    elif self._action_index == COL_FRESH:
+                        self._confirm_start_fresh()
             elif action.action == 'escape':
                 self.dismiss(None)
             elif action.action == 'space':

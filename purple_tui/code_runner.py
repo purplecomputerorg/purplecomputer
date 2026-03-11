@@ -223,7 +223,17 @@ class ArtCodeRunner:
                     await asyncio.sleep(0.02)
                 continue
 
-            # Unrecognized text: paint it as characters on the canvas
-            for ch in text:
-                self.canvas.type_char(ch)
-                await asyncio.sleep(0.02)
+            # Unrecognized text: paint colored blocks or type text
+            if paint_on:
+                # Paint mode: each character stamps its key color as a block
+                for ch in text:
+                    if ch == ' ':
+                        self.canvas.type_char(ch)
+                    else:
+                        self.canvas.paint_char(ch)
+                    await asyncio.sleep(0.02)
+            else:
+                # No paint, no write: type text at cursor
+                for ch in text:
+                    self.canvas.type_char(ch)
+                    await asyncio.sleep(0.02)

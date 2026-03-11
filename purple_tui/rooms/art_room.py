@@ -653,6 +653,21 @@ class ArtCanvas(Widget, can_focus=True):
         else:
             self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
+    def paint_char(self, char: str) -> None:
+        """Paint a colored block for a character (like interactive paint mode).
+
+        Sets the key's color as both fg and bg with BRUSH_CHAR, then advances right.
+        Used by the code runner when paint mode is on.
+        """
+        self._mark_cursor_dirty()
+        self._last_key_char = char.lower()
+        self._last_key_color = get_key_color(char)
+        self._paint_at_cursor()
+        if not self._move_cursor_right():
+            self._carriage_return()
+        self._mark_cursor_dirty()
+        self.refresh()
+
     def type_char(self, char: str) -> None:
         """Type a character at cursor position."""
         char = self._caps_char(char)

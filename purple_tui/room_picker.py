@@ -594,7 +594,7 @@ class VolumeModal(ModalScreen):
             return
 
         if isinstance(action, ControlAction) and action.is_down:
-            if action.action in ('enter', 'escape'):
+            if action.action in ('enter', 'escape', 'tab'):
                 self.dismiss(None)
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()

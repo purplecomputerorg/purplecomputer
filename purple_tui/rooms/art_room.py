@@ -57,6 +57,9 @@ GRAYSCALE = {
 # Brush character for painting
 BRUSH_CHAR = "█"
 
+# Code mode cursor (single-width smiley)
+CODE_CURSOR_CHAR = "☺"
+
 # Box-drawing characters for cursor border
 # Sides use heavy lines (in brush color), corners use light lines (in contrast color)
 BOX_CHARS = {
@@ -248,6 +251,7 @@ class ArtCanvas(Widget, can_focus=True):
         # Cursor blink state
         self._cursor_visible = True
         self._blink_timer = None
+        self._code_mode = False
 
         # Backspace hold state
         self._backspace_start_time: float | None = None
@@ -318,6 +322,26 @@ class ArtCanvas(Widget, can_focus=True):
         self._mark_cursor_dirty()
         self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
         self.refresh()
+
+    def set_code_mode(self, code_mode: bool) -> None:
+        """Toggle code mode cursor (smiley instead of ring)."""
+        self._code_mode = code_mode
+        self._mark_cursor_dirty()
+        # In code mode with no text under cursor, don't blink
+        self._update_blink_for_code_mode()
+        self.refresh()
+
+    def _update_blink_for_code_mode(self) -> None:
+        """In code mode, only blink if there's a non-paint character under cursor."""
+        if self._code_mode:
+            cell = self._grid.get((self._cursor_x, self._cursor_y))
+            has_text = cell is not None and cell[0] not in (" ", BRUSH_CHAR, "")
+            if has_text:
+                self._start_blink()
+            else:
+                self._stop_blink()
+        else:
+            self._start_blink()
 
     def _toggle_blink(self) -> None:
         """Toggle cursor visibility for blink effect."""
@@ -440,6 +464,7 @@ class ArtCanvas(Widget, can_focus=True):
         grid = self._grid
         painted = self._painted_positions
         paint_mode = self._paint_mode
+        code_mode = self._code_mode
         cursor_visible = self._cursor_visible
         last_key_color = self._last_key_color
 
@@ -457,7 +482,7 @@ class ArtCanvas(Widget, can_focus=True):
             if near_cursor:
                 dx = x - cursor_screen_x
                 is_cursor_center = (dx == 0 and dy == 0)
-                is_brush_ring = (paint_mode and
+                is_brush_ring = (paint_mode and not code_mode and
                                  abs(dx) <= 1 and
                                  not is_cursor_center)
             else:
@@ -468,7 +493,21 @@ class ArtCanvas(Widget, can_focus=True):
 
             if is_cursor_center and not in_gutter:
                 flush_run()
-                if paint_mode:
+                if code_mode:
+                    # Code mode: smiley cursor, blinks only when text underneath
+                    if cursor_visible:
+                        bg = cell[2] if cell else default_bg
+                        char_out = CODE_CURSOR_CHAR
+                        style_out = Style(color="#FFD700", bgcolor=bg, bold=True)
+                    else:
+                        if cell:
+                            char, fg_color, bg_color = cell
+                            if char != BRUSH_CHAR:
+                                fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
+                            char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
+                        else:
+                            char_out, style_out = " ", Style(bgcolor=default_bg)
+                elif paint_mode:
                     if cell:
                         char, fg_color, bg_color = cell
                         if char != BRUSH_CHAR:
@@ -1056,12 +1095,17 @@ class CanvasHeader(Static):
         super().__init__(**kwargs)
         self._is_painting = True
         self._last_color = "#FFFFFF"
+        self._code_mode = False
         self.add_class("caps-sensitive")
 
     def update_state(self, is_painting: bool, last_color: str) -> None:
         """Update displayed state."""
         self._is_painting = is_painting
         self._last_color = last_color
+        self.refresh()
+
+    def set_code_mode(self, code_mode: bool) -> None:
+        self._code_mode = code_mode
         self.refresh()
 
     def _get_contrast_color(self, color: str) -> str:
@@ -1083,14 +1127,17 @@ class CanvasHeader(Static):
         if self._is_painting:
             # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
-            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/] {caps('paint on')}"
-            write_part = f"[dim]{caps('write on')} {write_icon}[/]"
+            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
+            write_part = f"[dim]{write_icon}[/]"
         else:
             # Write mode: WRITE highlighted, Paint dim
-            paint_part = f"[dim]{paint_icon} {caps('paint on')}[/]"
-            write_part = f"{caps('write on')} [bold]{write_icon}[/]"
+            paint_part = f"[dim]{paint_icon}[/]"
+            write_part = f"[bold]{write_icon}[/]"
 
-        return f"{paint_part}    {write_part}"
+        if self._code_mode:
+            return f"{paint_part} {caps('paint on')}    {caps('write on')} {write_part}"
+
+        return caps(f"{paint_part}  [dim]Tab[/]  {write_part}")
 
 
 # =============================================================================

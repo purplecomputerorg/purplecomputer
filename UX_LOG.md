@@ -3,8 +3,10 @@
 Brief descriptions of user experience changes, newest first.
 
 - Music room header: when code space is open, shows just the instrument name (hides "Tab" and "Letters" toggle since letters aren't programmable from code mode).
-- Art room header: replaced "Tab" label with descriptive "paint on" / "write on" labels next to each tool.
+- Art room header: when code space is open, shows "paint on" / "write on" labels instead of "Tab".
+- Art room cursor: when code space is open, cursor is a gold ☺ smiley instead of the 3x3 paint ring. Doesn't blink unless there's text underneath (blinks to reveal the text).
 - Code space tab menu: added "Clear (C)" option to clear the code buffer. Close shortcut changed from C to X.
+- Volume modal: Tab key now dismisses the modal (previously got stuck).
 - Room switching no longer flickers: room content swaps under the picker overlay before it dismisses, so you never see the old room flash.
 - Room picker redesigned: Code Space toggle is now a wide button spanning the full width of the 3 rooms with a toggle indicator (● on / ○ off). Volume and Clear Rooms (renamed from Start Fresh) are side by side below at 50% width each. Clear Rooms shortcut changed from Enter to C. "Extras" label added above the non-room options. Bottom hint simplified to "Arrow keys to move, Enter to pick" (removed "Space: Code Space" and separate arrow labels). Confirmation dialog updated to say "Yes, clear rooms."
 - Code mode: removed 2 wasted rows below the compact indicator by removing margin and adjusting font ratio from 0.667 to 0.69, allowing a slightly larger font in code split mode.

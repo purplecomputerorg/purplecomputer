@@ -1489,11 +1489,16 @@ class PurpleApp(App):
                 header.set_code_mode(self._code_space_open)
             except NoMatches:
                 pass
-            # Art room hint
+            # Art room hint and header
             try:
                 art = content_area.query_one("#room-art")
                 hint = art.query_one("#art-hint-bar")
                 hint.display = not self._code_space_open
+                from .rooms.art_room import CanvasHeader, ArtCanvas
+                art_header = art.query_one("#canvas-header", CanvasHeader)
+                art_header.set_code_mode(self._code_space_open)
+                canvas = art.query_one(ArtCanvas)
+                canvas.set_code_mode(self._code_space_open)
             except NoMatches:
                 pass
         except NoMatches:

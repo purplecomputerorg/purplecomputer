@@ -27,7 +27,7 @@ _ROOM_KEYWORDS = {
     "play": {"repeat", "end", "times", "plus", "minus"},
     "music": {"repeat", "end", "choose", "instrument", "fast", "slow"},
     "art": {"repeat", "end", "left", "right", "up", "down",
-            "paint", "write", "on", "off"},
+            "forward", "turn", "paint", "write", "on", "off"},
 }
 
 
@@ -525,7 +525,8 @@ class CodeTextEditor(Widget, can_focus=True):
 
     # Art mode commands for autocomplete
     _ART_COMMANDS = ["paint on", "paint off", "write on", "write off",
-                     "left", "right", "up", "down"]
+                     "left", "right", "up", "down",
+                     "forward", "turn left", "turn right"]
     # Music mode commands for autocomplete
     _MUSIC_COMMANDS = ["choose", "instrument", "fast", "slow"]
     _INSTRUMENT_NAMES = ["marimba", "xylophone", "ukulele", "musicbox"]

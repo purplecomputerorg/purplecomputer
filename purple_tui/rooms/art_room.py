@@ -57,8 +57,14 @@ GRAYSCALE = {
 # Brush character for painting
 BRUSH_CHAR = "█"
 
-# Code mode cursor (single-width smiley)
+# Code mode cursor (single-width smiley, or directional when using turn/forward)
 CODE_CURSOR_CHAR = "☺"
+HEADING_CURSORS = {
+    'right': "▶",
+    'left': "◀",
+    'up': "▲",
+    'down': "▼",
+}
 
 # Box-drawing characters for cursor border
 # Sides use heavy lines (in brush color), corners use light lines (in contrast color)
@@ -252,6 +258,10 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_visible = True
         self._blink_timer = None
         self._code_mode = False
+
+        # Heading for turn/forward commands (Logo turtle direction)
+        self._heading = 'right'
+        self._use_heading_cursor = False  # Show directional cursor during code run
 
         # Backspace hold state
         self._backspace_start_time: float | None = None
@@ -494,10 +504,13 @@ class ArtCanvas(Widget, can_focus=True):
             if is_cursor_center and not in_gutter:
                 flush_run()
                 if code_mode:
-                    # Code mode: smiley cursor, blinks only when text underneath
+                    # Code mode: directional arrow if using turn/forward, smiley otherwise
                     if cursor_visible:
                         bg = cell[2] if cell else default_bg
-                        char_out = CODE_CURSOR_CHAR
+                        if self._use_heading_cursor:
+                            char_out = HEADING_CURSORS.get(self._heading, CODE_CURSOR_CHAR)
+                        else:
+                            char_out = CODE_CURSOR_CHAR
                         style_out = Style(color="#FFD700", bgcolor=bg, bold=True)
                     else:
                         if cell:
@@ -655,6 +668,21 @@ class ArtCanvas(Widget, can_focus=True):
         self._restart_blink()
         self.refresh()
 
+    _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
+    _TURN_LEFT = {'right': 'up', 'up': 'left', 'left': 'down', 'down': 'right'}
+
+    def turn(self, direction: str) -> None:
+        """Turn the heading 90 degrees left or right."""
+        self._mark_cursor_dirty()
+        if direction == 'right':
+            self._heading = self._TURN_RIGHT[self._heading]
+        elif direction == 'left':
+            self._heading = self._TURN_LEFT[self._heading]
+        self._use_heading_cursor = True
+        self._mark_cursor_dirty()
+        self._restart_blink()
+        self.refresh()
+
     def _get_cell_bg(self, pos: tuple[int, int]) -> str:
         """Get background color of a cell, or default if empty."""
         cell = self._grid.get(pos)
@@ -765,6 +793,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._painted_positions.clear()
         self._cursor_x = 0
         self._cursor_y = 0
+        self._heading = 'right'
+        self._use_heading_cursor = False
 
         self._clear_animation_active = False
         self._invalidate_all()

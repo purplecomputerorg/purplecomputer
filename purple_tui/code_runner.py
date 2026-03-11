@@ -166,7 +166,8 @@ class MusicCodeRunner:
 class ArtCodeRunner:
     """Run code in the Art room context.
 
-    Movement: left N, right N, up N, down N
+    Movement: left N, right N, up N, down N, forward N
+    Turning: turn left, turn right
     Drawing: paint on/off, write on/off
     Text in write mode: characters typed at cursor position
     """
@@ -202,6 +203,24 @@ class ArtCodeRunner:
             m = re.match(r'^write\s+(on|off)\s*$', text, re.IGNORECASE)
             if m:
                 write_on = m.group(1).lower() == 'on'
+                continue
+
+            # turn left/right
+            m = re.match(r'^turn\s+(left|right)\s*$', text, re.IGNORECASE)
+            if m:
+                self.canvas.turn(m.group(1).lower())
+                await asyncio.sleep(0.05)
+                continue
+
+            # forward N (move in current heading direction)
+            m = re.match(r'^forward\s*(\d*)\s*$', text, re.IGNORECASE)
+            if m:
+                distance = int(m.group(1)) if m.group(1) else 1
+                distance = min(distance, 200)
+                action = "paint" if paint_on else "move"
+                self.canvas._use_heading_cursor = True
+                self.canvas.execute_logo_command(action, self.canvas._heading, distance)
+                await asyncio.sleep(0.05)
                 continue
 
             # Movement: direction N

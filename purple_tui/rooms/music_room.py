@@ -499,6 +499,7 @@ class MusicMode(Container, can_focus=True):
         self._instrument_index = 0
         self._loop_task: asyncio.Task | None = None
         self._recording_timer = None
+        self._loop_progress_timer = None
 
     @property
     def is_letters_mode(self) -> bool:
@@ -530,7 +531,7 @@ class MusicMode(Container, can_focus=True):
     # -- Loop station controls -----------------------------------------------
 
     def _handle_space(self) -> None:
-        """Space key state machine: idle → recording → looping → merge/stop."""
+        """Space key state machine: idle → recording → looping/stop."""
         state = self._loop.state
         if state == IDLE:
             self._loop.start_recording()
@@ -544,24 +545,19 @@ class MusicMode(Container, can_focus=True):
             self._stop_recording_timer()
             if events:
                 self._start_loop_playback()
+                self._start_loop_progress_timer()
                 self._update_hint()
                 self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Looping!"), timeout=1.5)
+                self.app.notify(self.app.caps_text("Looping! Play on top!"), timeout=2.0)
             else:
                 # No notes recorded, go back to idle
                 self._loop.stop()
                 self._update_hint()
 
         elif state == LOOPING:
-            if self._loop.has_overlay_events():
-                self._loop.merge_overlay()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Layer added!"), timeout=1.0)
-            else:
-                # No new notes played, stop the loop
-                self._stop_loop()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+            self._stop_loop()
+            self.app.clear_notifications()
+            self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
 
     def _handle_escape(self) -> bool:
         """Escape stops loop from any non-idle state. Returns True if consumed."""
@@ -573,9 +569,10 @@ class MusicMode(Container, can_focus=True):
         return True
 
     def _stop_loop(self) -> None:
-        """Stop everything: loop, recording timer, playback task."""
+        """Stop everything: loop, timers, playback task."""
         self._loop.stop()
         self._stop_recording_timer()
+        self._stop_loop_progress_timer()
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
@@ -652,6 +649,23 @@ class MusicMode(Container, can_focus=True):
         else:
             self._update_hint()
 
+    # -- Loop progress timer (for cycling position indicator) -----------------
+
+    def _start_loop_progress_timer(self) -> None:
+        self._loop_progress_timer = self.set_interval(0.15, self._on_loop_progress_tick)
+
+    def _stop_loop_progress_timer(self) -> None:
+        if self._loop_progress_timer:
+            self._loop_progress_timer.stop()
+            self._loop_progress_timer = None
+
+    def _on_loop_progress_tick(self) -> None:
+        """Update hint bar with current loop position."""
+        if self._loop.state != LOOPING:
+            self._stop_loop_progress_timer()
+            return
+        self._update_hint()
+
     # -- Hint bar ------------------------------------------------------------
 
     def _update_hint(self) -> None:
@@ -686,11 +700,17 @@ class MusicMode(Container, can_focus=True):
                 hint.update(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
 
         elif state == LOOPING:
+            progress = self._loop.loop_progress()
+            pos = int(progress * PROGRESS_BLOCKS)
+            # Build bar with a moving marker
+            bar_chars = list("░" * PROGRESS_BLOCKS)
+            if pos < PROGRESS_BLOCKS:
+                bar_chars[pos] = "█"
+            bar = "".join(bar_chars)
             label = caps("Looping!")
             play = caps("Play on top!")
-            space = caps("Space: add layer")
-            esc = caps("Esc: stop")
-            hint.update(f"[bold green]● {label}[/]  [dim]{play}    {space}    {esc}[/]")
+            stop = caps("Space/Esc: stop")
+            hint.update(f"[bold green]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------
 

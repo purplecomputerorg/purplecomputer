@@ -45,13 +45,12 @@ class TestStateTransitions:
         assert len(events) == 1
         assert duration == 1.0
 
-    def test_finish_recording_no_events_stays_idle(self):
+    def test_finish_recording_no_events_returns_empty(self):
         loop = LoopStation()
         loop.start_recording(now=0.0)
         events, duration = loop.finish_recording(now=1.0)
         assert events == []
         assert duration == 0.0
-        # State doesn't change (caller should call stop())
 
     def test_stop_from_recording(self):
         loop = LoopStation()
@@ -197,95 +196,119 @@ class TestMaxDuration:
 
 
 # =============================================================================
-# Overlay and merging
+# Auto-layering during looping
 # =============================================================================
 
-class TestOverlay:
-    """Test recording overlay events during looping and merging."""
+class TestAutoLayering:
+    """Test that notes played during looping are auto-added to the loop."""
 
-    def test_overlay_records_during_looping(self):
+    def test_new_notes_added_during_looping(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5)
+        loop.finish_recording(now=2.0)  # cycle_start = 2.0
+        # Play a new note at 0.8s into the cycle
+        loop.record_event('B', MODE_MUSIC, now=2.8)
+        events = loop.loop_events
+        assert len(events) == 2
+        keys = [e[0] for e in events]
+        assert 'A' in keys
+        assert 'B' in keys
+
+    def test_new_notes_sorted_by_offset(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=1.0)  # offset 1.0
+        loop.finish_recording(now=2.0)
+        # Play note earlier in the cycle than A
+        loop.record_event('B', MODE_MUSIC, now=2.3)  # offset 0.3
+        events = loop.loop_events
+        keys = [e[0] for e in events]
+        assert keys == ['B', 'A']  # B at 0.3, A at 1.0
+
+    def test_new_notes_preserve_mode(self):
         loop = LoopStation()
         loop.start_recording(now=0.0)
         loop.record_event('A', MODE_MUSIC, now=0.5)
         loop.finish_recording(now=2.0)
-        # Play overlay note at 0.5s into the cycle
-        loop.record_event('B', MODE_MUSIC, now=2.5)
-        assert loop.has_overlay_events()
+        loop.record_event('B', MODE_LETTERS, now=2.8)
+        events = loop.loop_events
+        b_event = [e for e in events if e[0] == 'B'][0]
+        assert b_event[1] == MODE_LETTERS
 
-    def test_overlay_offset_relative_to_cycle(self):
+    def test_new_note_offset_relative_to_cycle(self):
         loop = LoopStation()
         loop.start_recording(now=0.0)
         loop.record_event('A', MODE_MUSIC, now=0.5)
         loop.finish_recording(now=2.0)  # cycle_start = 2.0
         loop.record_event('B', MODE_MUSIC, now=2.8)  # offset = 0.8
-        events, duration = loop.merge_overlay(now=3.0)
-        offsets = {e[0]: e[2] for e in events}
-        assert offsets['A'] == pytest.approx(0.5)
-        assert offsets['B'] == pytest.approx(0.8)
+        events = loop.loop_events
+        b_event = [e for e in events if e[0] == 'B'][0]
+        assert b_event[2] == pytest.approx(0.8)
 
-    def test_merge_sorts_by_offset(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=1.0)
-        loop.finish_recording(now=2.0)
-        # Overlay note earlier in the cycle than A
-        loop.record_event('B', MODE_MUSIC, now=2.3)  # offset 0.3
-        events, _ = loop.merge_overlay(now=3.0)
-        keys = [e[0] for e in events]
-        assert keys == ['B', 'A']  # B at 0.3, A at 1.0
-
-    def test_merge_preserves_duration(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        events, duration = loop.finish_recording(now=2.0)
-        loop.record_event('B', MODE_MUSIC, now=2.5)
-        events, new_duration = loop.merge_overlay(now=3.0)
-        assert new_duration == duration  # duration doesn't change
-
-    def test_merge_with_no_overlay(self):
+    def test_multiple_new_notes(self):
         loop = LoopStation()
         loop.start_recording(now=0.0)
         loop.record_event('A', MODE_MUSIC, now=0.5)
         loop.finish_recording(now=2.0)
-        events, duration = loop.merge_overlay(now=3.0)
-        assert len(events) == 1  # just the original
-        assert duration == 2.0
-
-    def test_multiple_merges(self):
-        loop = LoopStation()
-        loop.start_recording(now=0.0)
-        loop.record_event('A', MODE_MUSIC, now=0.5)
-        loop.finish_recording(now=2.0)
-
-        # First layer
         loop.record_event('B', MODE_MUSIC, now=2.3)
-        loop.merge_overlay(now=4.0)
+        loop.record_event('C', MODE_MUSIC, now=2.8)
+        loop.record_event('D', MODE_MUSIC, now=3.5)
+        assert len(loop.loop_events) == 4
 
-        # Second layer
-        loop.record_event('C', MODE_MUSIC, now=4.8)
-        events, _ = loop.merge_overlay(now=6.0)
-
-        keys = sorted(e[0] for e in events)
-        assert keys == ['A', 'B', 'C']
-
-    def test_overlay_wraps_around_cycle(self):
-        """Overlay offset wraps if played past the loop duration."""
+    def test_offset_wraps_around_cycle(self):
+        """Notes past the loop duration wrap around."""
         loop = LoopStation()
         loop.start_recording(now=0.0)
         loop.record_event('A', MODE_MUSIC, now=0.5)
         loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
         # Play at 2.5s into cycle (duration is 2.0, so offset = 0.5)
         loop.record_event('B', MODE_MUSIC, now=4.5)
-        events, _ = loop.merge_overlay(now=5.0)
-        b_offset = [e[2] for e in events if e[0] == 'B'][0]
-        assert b_offset == pytest.approx(0.5)
+        events = loop.loop_events
+        b_event = [e for e in events if e[0] == 'B'][0]
+        assert b_event[2] == pytest.approx(0.5)
 
-    def test_merge_when_not_looping(self):
+    def test_duration_unchanged_by_new_notes(self):
         loop = LoopStation()
-        events, duration = loop.merge_overlay()
-        assert events == []
-        assert duration == 0.0
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5)
+        events, duration = loop.finish_recording(now=2.0)
+        loop.record_event('B', MODE_MUSIC, now=2.8)
+        assert loop.loop_duration == duration  # unchanged
+
+
+# =============================================================================
+# Loop progress
+# =============================================================================
+
+class TestLoopProgress:
+    """Test loop_progress() for position indicator."""
+
+    def test_progress_zero_when_not_looping(self):
+        loop = LoopStation()
+        assert loop.loop_progress() == 0.0
+
+    def test_progress_at_cycle_start(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5)
+        loop.finish_recording(now=2.0)
+        assert loop.loop_progress(now=2.0) == pytest.approx(0.0)
+
+    def test_progress_midway(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5)
+        loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
+        assert loop.loop_progress(now=3.0) == pytest.approx(0.5)
+
+    def test_progress_wraps(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5)
+        loop.finish_recording(now=2.0)  # duration=2.0, cycle_start=2.0
+        # 2.5 cycles later: at 50% of a cycle
+        assert loop.loop_progress(now=7.0) == pytest.approx(0.5)
 
 
 # =============================================================================
@@ -299,11 +322,11 @@ class TestCycleManagement:
         loop.record_event('A', MODE_MUSIC, now=0.5)
         loop.finish_recording(now=2.0)
         loop.start_new_cycle(now=4.0)
-        # Overlay should be relative to new cycle start
+        # New notes relative to new cycle start
         loop.record_event('B', MODE_MUSIC, now=4.3)
-        events, _ = loop.merge_overlay(now=5.0)
-        b_offset = [e[2] for e in events if e[0] == 'B'][0]
-        assert b_offset == pytest.approx(0.3)
+        events = loop.loop_events
+        b_event = [e for e in events if e[0] == 'B'][0]
+        assert b_event[2] == pytest.approx(0.3)
 
 
 # =============================================================================

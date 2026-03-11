@@ -4,10 +4,11 @@ Pure logic with no UI or audio dependencies. Manages three states:
 
   IDLE: nothing happening
   RECORDING: capturing key presses with timing
-  LOOPING: loop plays back, new key presses captured as overlay
+  LOOPING: loop plays back, new key presses added automatically
 
-Space transitions: IDLE → RECORDING → LOOPING → merge/stop.
-Escape stops from any non-idle state.
+Space transitions: IDLE → RECORDING → LOOPING. Space/Escape stops.
+Notes played during looping are added to the loop automatically
+and play back on the next cycle (no explicit merge step).
 
 Max loop duration prevents runaway recordings. When recording hits the
 limit, the caller should auto-transition to looping.
@@ -24,10 +25,13 @@ LOOPING = 'looping'
 
 
 class LoopStation:
-    """Records, loops, and layers music key presses.
+    """Records and loops music key presses with automatic layering.
 
     Events are stored as (key, mode, offset) where offset is seconds
     from the start of the recording/loop cycle.
+
+    During looping, any new events are added directly to the loop
+    and play back on the next cycle.
 
     Usage:
         loop = LoopStation()
@@ -38,8 +42,7 @@ class LoopStation:
 
         events, duration = loop.finish_recording()  # starts looping
 
-        loop.record_event('C', 'music')  # overlay
-        events, duration = loop.merge_overlay()
+        loop.record_event('C', 'music')  # auto-added to loop
 
         loop.stop()
     """
@@ -52,7 +55,6 @@ class LoopStation:
         self._recording_events: list[tuple[str, str, float]] = []
         self._loop_events: list[tuple[str, str, float]] = []
         self._loop_duration: float = 0.0
-        self._overlay_events: list[tuple[str, str, float]] = []
         self._cycle_start: float = 0.0
 
     @property
@@ -65,7 +67,7 @@ class LoopStation:
 
     @property
     def loop_events(self) -> list[tuple[str, str, float]]:
-        """Current loop events (read each cycle for up-to-date data after merge)."""
+        """Current loop events (may grow as new notes are added during looping)."""
         return list(self._loop_events)
 
     @property
@@ -79,14 +81,14 @@ class LoopStation:
         self._recording_start = now
         self._recording_events.clear()
         self._loop_events.clear()
-        self._overlay_events.clear()
         self._loop_duration = 0.0
 
     def record_event(self, key: str, mode: str, now: float | None = None) -> None:
         """Record a key press.
 
         RECORDING: stores with offset from recording start (capped at max duration).
-        LOOPING: stores as overlay with offset in current cycle.
+        LOOPING: adds directly to the loop at the current cycle position.
+                 New events play back on the next cycle.
         IDLE: ignored.
         """
         now = now if now is not None else self._time_fn()
@@ -97,7 +99,8 @@ class LoopStation:
         elif self._state == LOOPING and self._loop_duration > 0:
             elapsed = now - self._cycle_start
             cycle_offset = elapsed % self._loop_duration
-            self._overlay_events.append((key, mode, cycle_offset))
+            self._loop_events.append((key, mode, cycle_offset))
+            self._loop_events.sort(key=lambda e: e[2])
 
     def finish_recording(self, now: float | None = None) -> tuple[list[tuple[str, str, float]], float]:
         """Stop recording and begin looping.
@@ -117,38 +120,28 @@ class LoopStation:
         self._loop_duration = duration
         self._loop_events = list(self._recording_events)
         self._recording_events.clear()
-        self._overlay_events.clear()
         self._state = LOOPING
         self._cycle_start = now
         return list(self._loop_events), self._loop_duration
 
-    def merge_overlay(self, now: float | None = None) -> tuple[list[tuple[str, str, float]], float]:
-        """Merge overlay events into the loop.
-
-        Returns (merged_events, duration). Overlay is cleared and a new
-        cycle starts. Returns ([], 0.0) if not looping.
-        """
-        if self._state != LOOPING:
-            return [], 0.0
-        now = now if now is not None else self._time_fn()
-        if self._overlay_events:
-            self._loop_events.extend(self._overlay_events)
-            self._loop_events.sort(key=lambda e: e[2])
-            self._overlay_events.clear()
-        self._cycle_start = now
-        return list(self._loop_events), self._loop_duration
-
     def start_new_cycle(self, now: float | None = None) -> None:
-        """Mark the start of a new playback cycle (for overlay timing)."""
+        """Mark the start of a new playback cycle."""
         now = now if now is not None else self._time_fn()
         self._cycle_start = now
+
+    def loop_progress(self, now: float | None = None) -> float:
+        """Current position in the loop as 0.0 to 1.0. 0 if not looping."""
+        if self._state != LOOPING or self._loop_duration <= 0:
+            return 0.0
+        now = now if now is not None else self._time_fn()
+        elapsed = now - self._cycle_start
+        return (elapsed % self._loop_duration) / self._loop_duration
 
     def stop(self) -> None:
         """Stop everything and return to idle."""
         self._state = IDLE
         self._recording_events.clear()
         self._loop_events.clear()
-        self._overlay_events.clear()
         self._loop_duration = 0.0
 
     def recording_remaining(self, now: float | None = None) -> float:
@@ -176,7 +169,3 @@ class LoopStation:
     def has_recording_events(self) -> bool:
         """Whether any events have been recorded in the current recording."""
         return bool(self._recording_events)
-
-    def has_overlay_events(self) -> bool:
-        """Whether any overlay events exist (played during looping)."""
-        return bool(self._overlay_events)

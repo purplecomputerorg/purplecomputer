@@ -1083,14 +1083,14 @@ class CanvasHeader(Static):
         if self._is_painting:
             # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
-            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
-            write_part = f"[dim]{write_icon}[/]"
+            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/] {caps('paint on')}"
+            write_part = f"[dim]{caps('write on')} {write_icon}[/]"
         else:
             # Write mode: WRITE highlighted, Paint dim
-            paint_part = f"[dim]{paint_icon}[/]"
-            write_part = f"[bold]{write_icon}[/]"
+            paint_part = f"[dim]{paint_icon} {caps('paint on')}[/]"
+            write_part = f"{caps('write on')} [bold]{write_icon}[/]"
 
-        return caps(f"{paint_part}  [dim]Tab[/]  {write_part}")
+        return f"{paint_part}    {write_part}"
 
 
 # =============================================================================

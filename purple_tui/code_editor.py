@@ -38,6 +38,8 @@ CODE_CURSOR_BG = "#2a1845"  # Cursor: dark block
 CODE_CURSOR_FG = "#d8c8e8"  # Cursor: light text
 CODE_GHOST_FG = "#9b7bc4"  # Autocomplete ghost text color
 CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
+CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
+CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
 
 # Gutter: 1-cell padding on all sides of the text area
 GUTTER = 1
@@ -97,7 +99,8 @@ class CodeTabMenu(ModalScreen):
         self._selected = 0
         self._items = [
             ("run", "Run Code (Space)"),
-            ("close", "Close Code Space (C)"),
+            ("clear", "Clear (C)"),
+            ("close", "Close Code Space (X)"),
         ]
 
     def compose(self) -> ComposeResult:
@@ -143,6 +146,8 @@ class CodeTabMenu(ModalScreen):
 
         if isinstance(action, CharacterAction):
             if action.char.lower() == 'c':
+                self.dismiss("clear")
+            elif action.char.lower() == 'x':
                 self.dismiss("close")
             else:
                 self.dismiss(None)
@@ -252,6 +257,26 @@ class CodeTextEditor(Widget, can_focus=True):
         elif row >= scroll + visible_lines:
             self._set_scroll(row - visible_lines + 1)
 
+    # -- Scrollbar --
+
+    def _get_scrollbar_thumb(self) -> tuple[int, int] | None:
+        """Return (thumb_start, thumb_end) in inner row coords, or None if no scrollbar needed."""
+        lines = self._get_lines()
+        inner_height = self.size.height - GUTTER * 2
+        if inner_height <= 0 or len(lines) <= inner_height:
+            return None
+        total = len(lines)
+        scroll = self._get_scroll()
+        # Thumb size: at least 1 row
+        thumb_size = max(1, round(inner_height * inner_height / total))
+        # Thumb position
+        max_scroll = total - inner_height
+        if max_scroll > 0:
+            thumb_start = round(scroll / max_scroll * (inner_height - thumb_size))
+        else:
+            thumb_start = 0
+        return (thumb_start, thumb_start + thumb_size)
+
     # -- Rendering --
 
     def _get_keyword_positions(self, line: str) -> set[int]:
@@ -330,8 +355,16 @@ class CodeTextEditor(Widget, can_focus=True):
         else:
             segments.append(Segment(" " * inner_width, bg_style))
 
-        # Right gutter
-        segments.append(Segment(" " * GUTTER, gutter_style))
+        # Right gutter (scrollbar when content overflows)
+        thumb = self._get_scrollbar_thumb()
+        if thumb is not None and GUTTER > 0:
+            inner_y = y - GUTTER
+            if 0 <= inner_y < self.size.height - GUTTER * 2 and thumb[0] <= inner_y < thumb[1]:
+                segments.append(Segment(" " * GUTTER, Style(bgcolor=CODE_SCROLLBAR_THUMB)))
+            else:
+                segments.append(Segment(" " * GUTTER, Style(bgcolor=CODE_SCROLLBAR_TRACK)))
+        else:
+            segments.append(Segment(" " * GUTTER, gutter_style))
 
         return Strip(segments)
 
@@ -587,6 +620,8 @@ class CodeTextEditor(Widget, can_focus=True):
                     room=self._room,
                     lines=list(self._get_lines()),
                 ))
+            elif result == "clear":
+                self.clear_buffer()
             elif result == "close":
                 self.post_message(CloseCodeSpaceRequested())
 

@@ -2,6 +2,13 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music room header: when code space is open, shows just the instrument name (hides "Tab" and "Letters" toggle since letters aren't programmable from code mode).
+- Art room header: replaced "Tab" label with descriptive "paint on" / "write on" labels next to each tool.
+- Code space tab menu: added "Clear (C)" option to clear the code buffer. Close shortcut changed from C to X.
+- Room switching no longer flickers: room content swaps under the picker overlay before it dismisses, so you never see the old room flash.
+- Room picker redesigned: Code Space toggle is now a wide button spanning the full width of the 3 rooms with a toggle indicator (● on / ○ off). Volume and Clear Rooms (renamed from Start Fresh) are side by side below at 50% width each. Clear Rooms shortcut changed from Enter to C. "Extras" label added above the non-room options. Bottom hint simplified to "Arrow keys to move, Enter to pick" (removed "Space: Code Space" and separate arrow labels). Confirmation dialog updated to say "Yes, clear rooms."
+- Code mode: removed 2 wasted rows below the compact indicator by removing margin and adjusting font ratio from 0.667 to 0.69, allowing a slightly larger font in code split mode.
+- Code space: scrollbar appears in right gutter when content overflows the visible area. Scrollbar is visual only, arrow keys control scrolling.
 - Code space: 1-cell gutter padding around text editor and hints panel so text isn't against the border. Keywords (repeat, end, choose, fast, slow, etc.) are underlined in the editor across all rooms. Music hints corrected to show real instruments (marimba, xylophone, ukulele, musicbox). Instrument names autocomplete after "choose" or "instrument". Fast/slow tempo difference widened (fast: 40ms, slow: 600ms, was 80ms/400ms).
 - Volume knob now reinitializes the audio system when adjusted, recovering from stale audio connections (fixes sound randomly stopping in VMs).
 - Room picker redesigned: Code Space, Volume, and Start Fresh are now 3 equal boxes in a row (same size as room boxes) with icons (robot for code, volume icon, broom for clear). Code Space toggle shows robot icon. Start Fresh confirmation dialog uses up/down navigation (consistent with brightness adjust) and is properly sized. Sticky shift banner replaced with a small shift icon (⇧) near the caps lock indicator in the title bar. Code editor is now 2/3 width with an adjacent 1/3 hints panel showing room-specific code examples. Room hints ("Try pressing letters...") hidden when code space is open. Play room input stays visible when code space opens but cursor blink is disabled.
@@ -137,6 +144,7 @@ Brief descriptions of user experience changes, newest first.
 - **Code mode: timing adjust moved to Tab menu**: Gap timing, repeat count, and target cycling are now in the Tab menu under "Adjust"
 - **USB update restart prompt**: When a USB update is applied, a simple modal appears saying "New update ready! Press Enter to restart."
 - **Removed F9 theme toggle**: Dark mode is now always active; F9 key and theme badge removed from the function bar
+- **Larger UI**: Font sizing now uses maximum size that fits the screen instead of 75% fill; UI is bigger on all screens. Code space font ratio derived from layout constants instead of hardcoded.
 - **Code Mode v2: F5 recording**: F5 starts intentional cross-mode recording (replaces always-on capture); press F5 again to stop; press F5 a third time to play back; blinking ⏺ indicator in title bar while recording, ▶ while playing
 - **Code Mode v2: Tab menu**: Tab opens a vertical menu modal in Code mode with Record, Insert, and Program sections; "Record in..." starts recording in a specific mode/sub-mode; replaces Enter code mode
 - **Code Mode v2: multi-line blocks**: Blocks display across multiple lines with mode icons (♫ 🔤 ✎ 🖌 🔍) in a left gutter; MODE_SWITCH blocks start new lines; long sections wrap with indented continuation

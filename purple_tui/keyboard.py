@@ -518,8 +518,8 @@ class NavigationAction(KeyAction):
 
 @dataclass
 class RoomAction(KeyAction):
-    """Room switch requested (via Escape picker or long Escape hold)."""
-    room: str  # 'play', 'music', 'art', 'code', 'parent' (long Escape)
+    """Room action (long Escape hold for parent menu, or playback-driven room switch)."""
+    room: str  # 'parent', 'play', 'music', 'art'
 
 
 @dataclass

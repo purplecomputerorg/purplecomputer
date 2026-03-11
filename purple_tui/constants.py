@@ -34,24 +34,39 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 # TERMINAL LAYOUT CONSTANTS
 # =============================================================================
 # These define the terminal grid required for the full UI.
-# Font size is calculated to fill 80% of screen (see scripts/calc_font_size.py).
+# Font size is calculated to fill the screen (see scripts/calc_font_size.py).
 #
-# Layout (from purple_tui.py CSS):
-#   - Title row: VIEWPORT_WIDTH × 2h (including margin)
-#   - Viewport: VIEWPORT_WIDTH × VIEWPORT_HEIGHT + border(2) = +2 each dimension
-#   - Gap: 1h (between viewport and footer)
-#   - Footer: 3h
+# Normal mode layout (from purple_tui.py CSS):
+#   - Title row: 1h + margin-bottom 1h = 2 rows
+#   - Viewport: VIEWPORT_HEIGHT + border(2) rows
+#   - Room indicator: margin-top 1h + height 3h = 4 rows
 #
-# Total: (VIEWPORT_WIDTH + 2) cols × (VIEWPORT_HEIGHT + 2 + 1 + 3 + 2) rows
+# Code space layout (font shrinks so more rows fit):
+#   - Title row: 1h + margin-bottom 1h = 2 rows
+#   - Viewport: VIEWPORT_HEIGHT + border(2) rows
+#   - Code panel: margin-top 1h + CODE_PANEL_HEIGHT rows
+#   - Compact indicator: 1 row (no margin)
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
-REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 8  # Full UI height (+ border + title + gap + footer)
+
+# Normal mode: title(2) + viewport+border(32) + indicator margin(1) + indicator(3)
+_TITLE_ROWS = 2               # Title row + margin-bottom
+_VIEWPORT_ROWS = VIEWPORT_HEIGHT + 2  # Content + heavy border
+_INDICATOR_ROWS = 4            # margin-top(1) + height(3)
+REQUIRED_TERMINAL_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _INDICATOR_ROWS
 
 # Code panel (inline code trail below viewport in split-screen mode)
 CODE_PANEL_HEIGHT = 19        # Rows for code panel when open
-CODE_FONT_RATIO = 2 / 3      # Font shrink ratio for split mode
+
+# Code space mode: compact indicator(1, no margin) replaces normal, adds code panel
+_COMPACT_INDICATOR_ROWS = 1
+_CODE_PANEL_ROWS = 1 + CODE_PANEL_HEIGHT  # margin-top(1) + height
+CODE_SPACE_REQUIRED_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _CODE_PANEL_ROWS + _COMPACT_INDICATOR_ROWS
+
+# Font shrink ratio: sized so the code space layout fits in the same screen pixels
+CODE_FONT_RATIO = REQUIRED_TERMINAL_ROWS / CODE_SPACE_REQUIRED_ROWS
 
 # =============================================================================
 # TIMING

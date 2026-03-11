@@ -283,6 +283,7 @@ class RoomIndicator(Horizontal):
 
     RoomIndicator.compact {
         height: 1;
+        margin-top: 0;
     }
 
     RoomIndicator.compact #keys-spacer-left,
@@ -1120,17 +1121,11 @@ class PurpleApp(App):
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
         if isinstance(action, RoomAction):
-            # Dismiss any open modal (like mode picker) when switching rooms
-            if len(self.screen_stack) > 1:
-                self.screen.dismiss(None)
-            if action.room == ROOM_PLAY[0]:
-                self.action_switch_room(ROOM_PLAY[0])
-            elif action.room == ROOM_MUSIC[0]:
-                self.action_switch_room(ROOM_MUSIC[0])
-            elif action.room == ROOM_ART[0]:
-                self.action_switch_room(ROOM_ART[0])
-            elif action.room == 'parent':
+            if action.room == 'parent':
                 self.action_parent_menu()
+            else:
+                # Room switching (used by playback/demo system)
+                self.action_switch_room(action.room)
             return
 
         if isinstance(action, CapsLockAction):
@@ -1246,8 +1241,25 @@ class PurpleApp(App):
         )
         self.push_screen(picker, self._on_room_picked)
 
+    def on_room_picker_screen_room_selected(self, event: RoomPickerScreen.RoomSelected) -> None:
+        """Handle room selection from picker: switch room, then dismiss picker.
+
+        By switching the room content before dismissing, we avoid a flicker
+        frame where the old room is visible behind the picker.
+        """
+        room_name = event.result.get("room")
+        if room_name == "play":
+            self.action_switch_room(ROOM_PLAY[0])
+        elif room_name == "music":
+            self.action_switch_room(ROOM_MUSIC[0])
+        elif room_name == "art":
+            self.action_switch_room(ROOM_ART[0])
+        # Now dismiss the picker (new room is already showing underneath)
+        if len(self.screen_stack) > 1:
+            self.screen.dismiss(None)
+
     def _on_room_picked(self, result: dict | None) -> None:
-        """Handle mode picker result."""
+        """Handle mode picker dismiss for non-room actions."""
         if result is None:
             return
 
@@ -1260,16 +1272,6 @@ class PurpleApp(App):
         if result.get("start_fresh"):
             self._start_fresh()
             return
-
-        room_name = result.get("room")
-
-        # Switch to the selected room
-        if room_name == "play":
-            self.action_switch_room(ROOM_PLAY[0])
-        elif room_name == "music":
-            self.action_switch_room(ROOM_MUSIC[0])
-        elif room_name == "art":
-            self.action_switch_room(ROOM_ART[0])
 
     # ── Code Space ─────────────────────────────────────────────────
 
@@ -1477,11 +1479,14 @@ class PurpleApp(App):
         """
         try:
             content_area = self.query_one("#content-area")
-            # Music room hint
+            # Music room hint and header
             try:
                 music = content_area.query_one("#room-music")
                 hint = music.query_one("#example-hint")
                 hint.display = not self._code_space_open
+                from .rooms.music_room import MusicRoomHeader
+                header = music.query_one("#music-header", MusicRoomHeader)
+                header.set_code_mode(self._code_space_open)
             except NoMatches:
                 pass
             # Art room hint
@@ -1732,27 +1737,29 @@ class PurpleApp(App):
         return None
 
     def _load_room_content(self) -> None:
-        """Load the content widget for the current mode"""
+        """Load the content widget for the current mode."""
         content_area = self.query_one("#content-area")
-
-        # Hide all existing mode widgets
-        for child in content_area.children:
-            child.display = False
-
-        # Check if we already have this mode mounted
         room_id = f"room-{self.active_room.name.lower()}"
+
+        # Show new room first, then hide others (avoids blank frame flicker)
         try:
             existing = content_area.query_one(f"#{room_id}")
             existing.display = True
+            for child in content_area.children:
+                if child is not existing:
+                    child.display = False
             self._focus_room(existing)
             return
         except NoMatches:
             pass
 
-        # Create and mount new widget
+        # Create and mount new widget (hides others after mount)
         widget = self._create_room_widget(self.active_room)
         if widget:
             widget.id = room_id
+            # Hide others before mounting so the new widget appears immediately
+            for child in content_area.children:
+                child.display = False
             content_area.mount(widget)
             # Focus will happen in on_mount of the widget
 

@@ -165,7 +165,7 @@ class RawKeyEvent:
         keycode: Linux key code (KEY_SPACE, KEY_A, etc.)
         is_down: True for key press, False for key release
         timestamp: Monotonic timestamp in seconds
-        scancode: Hardware scancode (for F-key remapping), 0 if unavailable
+        scancode: Hardware scancode, 0 if unavailable
         is_repeat: True if this is a key repeat event (key held down)
     """
     keycode: int
@@ -211,7 +211,7 @@ class EvdevReader:
     - True key down/up events (value=1/0)
     - Precise timestamps
     - All keycodes (no terminal filtering)
-    - Scancodes for F-key remapping
+    - Scancodes
 
     Usage:
         async def handle_key(event: RawKeyEvent):

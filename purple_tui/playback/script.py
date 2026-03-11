@@ -61,7 +61,7 @@ class SwitchRoom(PlaybackAction):
     """Switch to a different room.
 
     Args:
-        room: 'play' (F1), 'music' (F2), or 'art' (F3)
+        room: 'play', 'music', or 'art'
         pause_after: Pause after switching to let the room render
     """
     room: Literal["play", "music", "art"]

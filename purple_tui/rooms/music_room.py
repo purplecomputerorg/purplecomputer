@@ -137,6 +137,7 @@ class MusicRoomHeader(Static):
         super().__init__(**kwargs)
         self._letters_mode = False
         self._instrument_name = INSTRUMENTS[0][1]
+        self._code_mode = False
         self.add_class("caps-sensitive")
 
     def update_mode(self, letters_mode: bool) -> None:
@@ -147,9 +148,17 @@ class MusicRoomHeader(Static):
         self._instrument_name = name
         self.refresh()
 
+    def set_code_mode(self, code_mode: bool) -> None:
+        self._code_mode = code_mode
+        self.refresh()
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         instrument_label = caps(self._instrument_name)
+
+        if self._code_mode:
+            return f"[bold]{ICON_MUSIC} {instrument_label}[/]"
+
         letters_label = caps("Letters")
 
         if self._letters_mode:

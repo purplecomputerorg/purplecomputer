@@ -47,7 +47,7 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
-REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 6  # Full UI height (+ border + title + gap + 1-row footer)
+REQUIRED_TERMINAL_ROWS = VIEWPORT_HEIGHT + 8  # Full UI height (+ border + title + gap + footer)
 
 # Code panel (inline code trail below viewport in split-screen mode)
 CODE_PANEL_HEIGHT = 19        # Rows for code panel when open

@@ -222,7 +222,7 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-volume-row"):
                 yield VolumeOption(id="opt-volume")
 
-            yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc between rows"), id="picker-hint")
+            yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc between rows       Space: Code Space"), id="picker-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -373,7 +373,7 @@ class VolumeModal(ModalScreen):
         with Container(id="volume-dialog"):
             yield Static(caps("Volume"), id="volume-title")
             yield Static("", id="volume-display")
-            yield Static(caps("\u25b2 \u25bc  to adjust       Enter to close"), id="volume-hint")
+            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc  to adjust       Enter to close"), id="volume-hint")
 
     def on_mount(self) -> None:
         self._update_display()
@@ -407,10 +407,10 @@ class VolumeModal(ModalScreen):
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction == 'up':
+            if action.direction in ('up', 'right'):
                 self.app.action_volume_up()
                 self._update_display()
-            elif action.direction == 'down':
+            elif action.direction in ('down', 'left'):
                 self.app.action_volume_down()
                 self._update_display()
             return

@@ -22,12 +22,11 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 
 
 # Colors for the code editor
-CODE_BG = "#e8daf0"       # Light purple background
+CODE_BG = "#d8c8e8"       # Soft purple background
 CODE_FG = "#2a1845"       # Very dark purple text
 CODE_CURSOR_BG = "#2a1845"  # Cursor: dark block
-CODE_CURSOR_FG = "#e8daf0"  # Cursor: light text
-CODE_LINE_NUM_FG = "#9b7bc4"  # Line number color
-GUTTER_WIDTH = 4           # Width for line numbers + space
+CODE_CURSOR_FG = "#d8c8e8"  # Cursor: light text
+CODE_GHOST_FG = "#9b7bc4"  # Autocomplete ghost text color
 
 
 class RunCodeRequested(Message, bubble=True):
@@ -253,23 +252,18 @@ class CodeTextEditor(Widget, can_focus=True):
         line_idx = y + scroll
         bg_style = Style(bgcolor=CODE_BG, color=CODE_FG)
         cursor_style = Style(bgcolor=CODE_CURSOR_BG, color=CODE_CURSOR_FG)
-        linenum_style = Style(bgcolor=CODE_BG, color=CODE_LINE_NUM_FG)
+        ghost_style = Style(bgcolor=CODE_BG, color=CODE_GHOST_FG)
 
         segments = []
 
         if line_idx < len(lines):
-            # Line number
-            num_str = f"{line_idx + 1:>{GUTTER_WIDTH - 1}} "
-            segments.append(Segment(num_str, linenum_style))
-
             line = lines[line_idx]
-            content_width = width - GUTTER_WIDTH
             is_cursor_line = (line_idx == cursor_row)
 
             # Render characters
             col = 0
             for i, ch in enumerate(line):
-                if col >= content_width:
+                if col >= width:
                     break
                 if is_cursor_line and i == cursor_col and self._cursor_visible:
                     segments.append(Segment(ch, cursor_style))
@@ -279,24 +273,27 @@ class CodeTextEditor(Widget, can_focus=True):
 
             # Cursor at end of line
             if is_cursor_line and cursor_col >= len(line) and self._cursor_visible:
-                if col < content_width:
+                if col < width:
                     segments.append(Segment(" ", cursor_style))
                     col += 1
 
+            # Autocomplete ghost text (shown after cursor on cursor line)
+            if is_cursor_line and self._autocomplete_suggestion and cursor_col >= len(line):
+                ghost = self._autocomplete_suggestion
+                # If cursor was rendered as block, ghost starts after it
+                for ch in ghost:
+                    if col >= width:
+                        break
+                    segments.append(Segment(ch, ghost_style))
+                    col += 1
+
             # Fill rest
-            remaining = content_width - col
+            remaining = width - col
             if remaining > 0:
                 segments.append(Segment(" " * remaining, bg_style))
         else:
-            # Empty line (below text content)
-            # Show ~ for empty lines like vim
-            num_str = " " * GUTTER_WIDTH
-            segments.append(Segment(num_str, linenum_style))
-            content_width = width - GUTTER_WIDTH
-            tilde_style = Style(bgcolor=CODE_BG, color=CODE_LINE_NUM_FG)
-            segments.append(Segment("~", tilde_style))
-            if content_width > 1:
-                segments.append(Segment(" " * (content_width - 1), bg_style))
+            # Empty line below text content
+            segments.append(Segment(" " * width, bg_style))
 
         return Strip(segments)
 

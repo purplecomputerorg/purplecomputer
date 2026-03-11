@@ -111,22 +111,75 @@ class RoomTitle(Static):
         return f"{icon}  {caps(label)}"
 
 
-class RoomIndicator(Widget):
-    """1-row footer showing room names with active room highlighted.
+class KeyBadge(Static):
+    """A single key badge with rounded border"""
 
-    Renders: [Esc]  [Play]  [Music]  [Art]  with mute indicator on right.
+    DEFAULT_CSS = """
+    KeyBadge {
+        width: auto;
+        height: 3;
+        padding: 0 1;
+        margin: 0 1;
+        border: round $primary;
+        background: $surface;
+        content-align: center middle;
+    }
+
+    KeyBadge.active {
+        border: round $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+
+    KeyBadge.dim {
+        border: round $surface-darken-2;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, text: str, **kwargs):
+        super().__init__(**kwargs)
+        self.text = text
+
+    def render(self) -> str:
+        return self.text
+
+
+class RoomBadge(KeyBadge):
+    """A room badge that shows icon + room name, responds to caps lock"""
+
+    DEFAULT_CSS = """
+    RoomBadge {
+        width: 11;
+    }
+    """
+
+    def __init__(self, icon: str, room_name: str, **kwargs):
+        super().__init__(text="", **kwargs)
+        self._icon = icon
+        self._room_name = room_name
+        self.add_class("caps-sensitive")
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return f"{self._icon} {caps(self._room_name)}"
+
+
+class CompactIndicator(Widget):
+    """1-row compact footer for when code space is open.
+
+    Renders: [Esc]  [Play]  [Music]  [Art]  with mute indicator.
     Uses render_line() for reliable single-row rendering.
     """
 
     DEFAULT_CSS = """
-    RoomIndicator {
+    CompactIndicator {
         width: 100%;
         height: 1;
-        dock: bottom;
     }
     """
 
-    # Room display info: (Room enum, icon, label)
     _ROOMS = [
         (Room.PLAY, ICON_CHAT, "Play"),
         (Room.MUSIC, ICON_MUSIC, "Music"),
@@ -153,8 +206,6 @@ class RoomIndicator(Widget):
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         segments = []
-
-        # Build room indicators centered
         parts = []
         parts.append(("esc", f"[Esc {ICON_MENU}]", esc_style))
         for room, icon, label in self._ROOMS:
@@ -162,20 +213,13 @@ class RoomIndicator(Widget):
             text = f"[{icon} {caps(label)}]"
             parts.append((room, text, style))
 
-        # Calculate total content width
-        content_parts = []
-        for _, text, style in parts:
-            content_parts.append((text, style))
-
-        # Add spacing between parts
+        content_parts = [(text, style) for _, text, style in parts]
         separator = "  "
         total_len = sum(len(t) for t, _ in content_parts) + len(separator) * (len(content_parts) - 1)
 
-        # Mute indicator
         mute_text = f" {ICON_VOLUME_OFF}" if self._muted else ""
         total_len += len(mute_text)
 
-        # Center
         pad_left = max(0, (width - total_len) // 2)
         pad_right = max(0, width - total_len - pad_left)
 
@@ -199,6 +243,134 @@ class RoomIndicator(Widget):
     def update_volume_indicator(self, volume_level: int) -> None:
         self._muted = (volume_level == 0)
         self.refresh()
+
+
+class RoomIndicator(Horizontal):
+    """Shows mode indicators (icons + names) and mute indicator.
+
+    Has two modes:
+    - Normal (3-row): badge-style indicators with borders
+    - Compact (1-row): text-only indicators (used when code space is open)
+    """
+
+    DEFAULT_CSS = """
+    RoomIndicator {
+        width: 100%;
+        height: 3;
+        background: $background;
+    }
+
+    #keys-spacer-left {
+        width: 1fr;
+        height: 3;
+    }
+
+    #keys-center {
+        width: auto;
+        height: 3;
+    }
+
+    #keys-spacer-right {
+        width: 1fr;
+        height: 3;
+    }
+
+    #keys-right {
+        width: auto;
+        height: 3;
+        margin-right: 2;
+    }
+
+    RoomIndicator.compact {
+        height: 1;
+    }
+
+    RoomIndicator.compact #keys-spacer-left,
+    RoomIndicator.compact #keys-center,
+    RoomIndicator.compact #keys-spacer-right,
+    RoomIndicator.compact #keys-right {
+        display: none;
+    }
+    """
+
+    def __init__(self, current_room: Room, **kwargs):
+        super().__init__(**kwargs)
+        self.current_room = current_room
+        self._compact_indicator: CompactIndicator | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Static("", id="keys-spacer-left")
+
+        with Horizontal(id="keys-center"):
+            esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
+            esc_badge.add_class("dim")
+            yield esc_badge
+
+            room_info = {
+                Room.PLAY: (ICON_CHAT, "Play"),
+                Room.MUSIC: (ICON_MUSIC, "Music"),
+                Room.ART: (ICON_PALETTE, "Art"),
+            }
+            for room in [Room.PLAY, Room.MUSIC, Room.ART]:
+                icon, name = room_info[room]
+                badge = RoomBadge(icon, name, id=f"key-{room.name.lower()}")
+                if room == self.current_room:
+                    badge.add_class("active")
+                else:
+                    badge.add_class("dim")
+                yield badge
+
+        yield Static("", id="keys-spacer-right")
+
+        with Horizontal(id="keys-right"):
+            mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
+            mute_badge.add_class("dim")
+            mute_badge.display = False
+            yield mute_badge
+
+        # Compact indicator (hidden by default)
+        compact = CompactIndicator(self.current_room, id="compact-indicator")
+        compact.display = False
+        self._compact_indicator = compact
+        yield compact
+
+    def set_compact(self, compact: bool) -> None:
+        """Switch between 3-row (normal) and 1-row (compact) mode."""
+        if compact:
+            self.add_class("compact")
+            if self._compact_indicator:
+                self._compact_indicator.display = True
+        else:
+            self.remove_class("compact")
+            if self._compact_indicator:
+                self._compact_indicator.display = False
+
+    def update_room(self, room: Room) -> None:
+        self.current_room = room
+        for m in [Room.PLAY, Room.MUSIC, Room.ART]:
+            try:
+                badge = self.query_one(f"#key-{m.name.lower()}", RoomBadge)
+                badge.remove_class("active", "dim")
+                if m == room:
+                    badge.add_class("active")
+                else:
+                    badge.add_class("dim")
+            except NoMatches:
+                pass
+
+        if self._compact_indicator:
+            self._compact_indicator.update_room(room)
+
+    def update_volume_indicator(self, volume_level: int) -> None:
+        """Show/hide mute indicator based on volume level."""
+        try:
+            badge = self.query_one("#key-mute", KeyBadge)
+            badge.display = (volume_level == 0)
+        except NoMatches:
+            pass
+
+        if self._compact_indicator:
+            self._compact_indicator.update_volume_indicator(volume_level)
 
 
 class SpeechIndicator(Static):
@@ -489,10 +661,15 @@ class PurpleApp(App):
 
     #code-editor.visible {
         display: block;
+        border: heavy #9b7bc4;
+    }
+
+    .code-space-open #viewport {
+        border: heavy #4a3660;
     }
 
     #room-indicator {
-        height: 1;
+        height: 3;
         background: $background;
     }
 
@@ -1024,6 +1201,22 @@ class PurpleApp(App):
                 editor.set_room(room_name)
             else:
                 editor.remove_class("visible")
+        except NoMatches:
+            pass
+
+        # Toggle border dimming and compact indicator
+        try:
+            wrapper = self.query_one("#viewport-wrapper")
+            if self._code_space_open:
+                wrapper.add_class("code-space-open")
+            else:
+                wrapper.remove_class("code-space-open")
+        except NoMatches:
+            pass
+
+        try:
+            indicator = self.query_one("#room-indicator", RoomIndicator)
+            indicator.set_compact(self._code_space_open)
         except NoMatches:
             pass
 

@@ -694,6 +694,17 @@ class PlayMode(Vertical):
         except Exception:
             pass
 
+    def add_code_results(self, results: list[str]) -> None:
+        """Add results from code runner to the history."""
+        try:
+            scroll = self.query_one("#history-scroll")
+            scroll.mount(HistoryLine("Your code says:", line_type="ask"))
+            for result in results:
+                scroll.mount(HistoryLine(result, line_type="answer"))
+            scroll.scroll_end(animate=False)
+        except Exception:
+            pass
+
     async def handle_keyboard_action(self, action) -> None:
         """
         Handle keyboard actions from the main app's KeyboardStateMachine.

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code Space overhaul: replaced block-based code panel with per-room text editor. Kids type code and run it with Shift+Space. Each room has its own buffer that persists across room switches. Mode indicator shrunk from 3 rows to 1 row (bigger font). Room picker redesigned with 3 rows: rooms, code space toggle, and volume button. Removed Code room, watch-me recording, pane switching, and shift+space/shift+enter shortcuts.
 - Code panel: removed diagonal zoom effect during open transition. Changed color scheme from blue/navy to dark purple (space theme). Code is now a proper button in the room picker (press 4 or C) instead of a dashed text option. Added focus indicators: focused panel gets a purple border, unfocused panel is dimmed. Code panel auto-focuses when opened.
 - Shift actions: sticky shift timeout increased to 8s with a full-width yellow banner showing contextual hints (e.g. "Letter: UPPERCASE", "Space: play", "Enter: switch pane"). Shift+Space replays code panel, Shift+Enter toggles focus between viewport and code panel. Escape picker shows a pane row (Main/Code) when code panel is open, with up/down to switch between pane and room rows.
 - Autocomplete suggestions ranked by kid-likelihood (e.g. "tr" suggests tree before triangle) instead of alphabetically. Rankings defined in rankings.txt, unified across emojis and colors.

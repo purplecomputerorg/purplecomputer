@@ -1,16 +1,10 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 room options: Play, Music, Art
-Plus a separate "C: Code" option below a divider.
-Arrow keys navigate (left/right for rooms, up/down for volume),
-number keys 1-3 for direct room selection, C for code panel toggle,
-Enter selects, Escape cancels.
+Shows 3 rooms (Play, Music, Art), a Code Space toggle, and a Volume button.
+Arrow keys navigate, number keys 1-3 for direct room selection,
+Space toggles code space, V opens volume, Enter selects, Escape cancels.
 Any unrecognized key dismisses the picker gracefully.
-
-When the code panel is open, shows a pane row above the rooms:
-  [Main]  [Code]
-for switching focus between the viewport and code panel.
 """
 
 from textual.screen import ModalScreen
@@ -18,7 +12,7 @@ from textual.containers import Container, Horizontal
 from textual.widgets import Static
 from textual.app import ComposeResult
 
-from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_CODE
+from .constants import ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 
 
@@ -27,17 +21,16 @@ ROOM_OPTIONS = [
     ("play", ICON_CHAT, "Play", {"room": "play"}),
     ("music", ICON_MUSIC, "Music", {"room": "music"}),
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
-    ("code", ICON_CODE, "Code", {"toggle_code_panel": True}),
 ]
 
 # Map number keys to room indices
-NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2, '4': 3}
+NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
-# Pane options when code panel is open
-PANE_OPTIONS = [
-    ("main", "Main"),
-    ("code", "Code"),
-]
+# Rows: 0 = rooms, 1 = code toggle, 2 = volume
+ROW_ROOMS = 0
+ROW_CODE = 1
+ROW_VOLUME = 2
+NUM_ROWS = 3
 
 
 class RoomOption(Static):
@@ -76,12 +69,12 @@ class RoomOption(Static):
         return caps(f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n")
 
 
-class PaneOption(Static):
-    """A selectable pane option (Main or Code) in the pane row."""
+class ToggleOption(Static):
+    """A toggle option for Code Space (on/off lightswitch style)."""
 
     DEFAULT_CSS = """
-    PaneOption {
-        width: 16;
+    ToggleOption {
+        width: 40;
         height: 3;
         content-align: center middle;
         text-align: center;
@@ -89,43 +82,65 @@ class PaneOption(Static):
         margin: 0 1;
     }
 
-    PaneOption.selected {
+    ToggleOption.selected {
         border: heavy $accent;
         background: $primary;
         color: $background;
         text-style: bold;
     }
-
-    PaneOption.current-pane {
-        color: $accent;
-    }
     """
 
-    def __init__(self, pane_id: str, label: str, is_current: bool = False, **kwargs):
+    def __init__(self, code_space_open: bool, **kwargs):
         super().__init__(**kwargs)
-        self.pane_id = pane_id
-        self.label = label
-        if is_current:
-            self.add_class("current-pane")
+        self._code_space_open = code_space_open
         self.add_class("caps-sensitive")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        marker = " \u25cf" if self.has_class("current-pane") else ""
-        return caps(f"{self.label}{marker}")
+        if self._code_space_open:
+            return caps("Close Code Space")
+        else:
+            return caps("Open Code Space")
+
+
+class VolumeOption(Static):
+    """A volume button option."""
+
+    DEFAULT_CSS = """
+    VolumeOption {
+        width: 40;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    VolumeOption.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return caps(f"{ICON_VOLUME_HIGH} Volume (V)")
 
 
 class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Shows Play, Music, Art options with a separate Code option below.
-    Left/right arrows navigate rooms, up/down adjusts volume.
-    Number keys 1-3 select rooms directly, C toggles code panel.
-    Any other key dismisses the picker gracefully.
-
-    When code panel is open, shows a pane row (Main/Code) above the rooms.
-    Up/down navigates between pane row and room row.
+    Layout (3 navigable rows):
+      [1 Play]  [2 Music]  [3 Art]     <- room row
+      [Open Code Space]                 <- toggle
+      [Volume (V)]                      <- volume button
     """
 
     CSS = """
@@ -148,21 +163,21 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #picker-panes {
+    #picker-options {
         width: 100%;
         height: auto;
         align: center middle;
         margin-bottom: 1;
     }
 
-    #picker-pane-divider {
+    #picker-code-row {
         width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin: 0 0;
+        height: auto;
+        align: center middle;
+        margin-bottom: 1;
     }
 
-    #picker-options {
+    #picker-volume-row {
         width: 100%;
         height: auto;
         align: center middle;
@@ -178,90 +193,74 @@ class RoomPickerScreen(ModalScreen):
     """
 
     def __init__(self, current_room: str = "play",
-                 code_panel_open: bool = False,
-                 code_panel_focused: bool = False,
+                 code_space_open: bool = False,
                  **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
-        self._code_panel_open = code_panel_open
-        self._code_panel_focused = code_panel_focused
-        self._selected_index = self._get_initial_index()
-        # When code panel is open, start on the pane row
-        self._on_pane_row = code_panel_open
-        self._pane_index = 1 if code_panel_focused else 0  # 0=Main, 1=Code
+        self._code_space_open = code_space_open
+        self._active_row = ROW_ROOMS
+        self._room_index = self._get_initial_room_index()
 
-    def _get_initial_index(self) -> int:
-        """Get initial selection based on current room."""
-        if self._current_room == "play":
-            return 0
-        elif self._current_room == "music":
-            return 1
-        elif self._current_room == "art":
-            return 2
+    def _get_initial_room_index(self) -> int:
+        for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
+            if opt_id == self._current_room:
+                return i
         return 0
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         with Container(id="picker-dialog"):
-            if self._code_panel_open:
-                yield Static(caps("Switch Pane or Room"), id="picker-title")
-
-                with Horizontal(id="picker-panes"):
-                    yield PaneOption(
-                        "main", "Main",
-                        is_current=not self._code_panel_focused,
-                        id="pane-main",
-                    )
-                    yield PaneOption(
-                        "code", "Code",
-                        is_current=self._code_panel_focused,
-                        id="pane-code",
-                    )
-
-                yield Static("\u254c" * 20, id="picker-pane-divider")
-            else:
-                yield Static(caps("Pick a Room"), id="picker-title")
+            yield Static(caps("Pick a Room"), id="picker-title")
 
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            if self._code_panel_open:
-                yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc switch row"), id="picker-hint")
-            else:
-                yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc volume"), id="picker-hint")
+            with Horizontal(id="picker-code-row"):
+                yield ToggleOption(self._code_space_open, id="opt-code-toggle")
+
+            with Horizontal(id="picker-volume-row"):
+                yield VolumeOption(id="opt-volume")
+
+            yield Static(caps("\u25c0 \u25b6  to browse       \u25b2 \u25bc between rows"), id="picker-hint")
 
     def on_mount(self) -> None:
-        """Highlight the initially selected option."""
         self._update_selection()
 
     def _update_selection(self) -> None:
-        """Update visual selection state for both pane row and room row."""
-        # Update room row
+        """Update visual selection state."""
+        # Room row
         for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
             try:
                 option = self.query_one(f"#opt-{opt_id}", RoomOption)
-                if not self._on_pane_row and i == self._selected_index:
+                if self._active_row == ROW_ROOMS and i == self._room_index:
                     option.add_class("selected")
                 else:
                     option.remove_class("selected")
             except Exception:
                 pass
 
-        # Update pane row (if present)
-        if self._code_panel_open:
-            for i, (pane_id, _) in enumerate(PANE_OPTIONS):
-                try:
-                    option = self.query_one(f"#pane-{pane_id}", PaneOption)
-                    if self._on_pane_row and i == self._pane_index:
-                        option.add_class("selected")
-                    else:
-                        option.remove_class("selected")
-                except Exception:
-                    pass
+        # Code toggle
+        try:
+            toggle = self.query_one("#opt-code-toggle", ToggleOption)
+            if self._active_row == ROW_CODE:
+                toggle.add_class("selected")
+            else:
+                toggle.remove_class("selected")
+        except Exception:
+            pass
+
+        # Volume
+        try:
+            vol = self.query_one("#opt-volume", VolumeOption)
+            if self._active_row == ROW_VOLUME:
+                vol.add_class("selected")
+            else:
+                vol.remove_class("selected")
+        except Exception:
+            pass
 
     def _select_room(self, index: int) -> None:
-        """Select and dismiss with the room at the given index."""
         if 0 <= index < len(ROOM_OPTIONS):
             _, _, _, result = ROOM_OPTIONS[index]
             self.dismiss(result)
@@ -270,58 +269,49 @@ class RoomPickerScreen(ModalScreen):
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
             if action.direction == 'left':
-                if self._on_pane_row:
-                    self._pane_index = max(0, self._pane_index - 1)
-                else:
-                    self._selected_index = max(0, self._selected_index - 1)
+                if self._active_row == ROW_ROOMS:
+                    self._room_index = max(0, self._room_index - 1)
                 self._update_selection()
             elif action.direction == 'right':
-                if self._on_pane_row:
-                    self._pane_index = min(len(PANE_OPTIONS) - 1, self._pane_index + 1)
-                else:
-                    self._selected_index = min(len(ROOM_OPTIONS) - 1, self._selected_index + 1)
+                if self._active_row == ROW_ROOMS:
+                    self._room_index = min(len(ROOM_OPTIONS) - 1, self._room_index + 1)
                 self._update_selection()
             elif action.direction == 'up':
-                if self._code_panel_open and not self._on_pane_row:
-                    # Move from room row to pane row
-                    self._on_pane_row = True
+                if self._active_row > 0:
+                    self._active_row -= 1
                     self._update_selection()
-                else:
-                    # Volume up (when on pane row or no code panel)
-                    self.app.action_volume_up()
             elif action.direction == 'down':
-                if self._code_panel_open and self._on_pane_row:
-                    # Move from pane row to room row
-                    self._on_pane_row = False
+                if self._active_row < NUM_ROWS - 1:
+                    self._active_row += 1
                     self._update_selection()
-                else:
-                    # Volume down (when on room row or no code panel)
-                    self.app.action_volume_down()
             return
 
         if isinstance(action, CharacterAction) and not action.is_repeat:
             if action.char in NUMBER_KEY_ROOMS:
                 self._select_room(NUMBER_KEY_ROOMS[action.char])
-            elif action.char.lower() == 'c':
-                self._select_room(3)  # Code is index 3
+            elif action.char.lower() == 'v':
+                # Jump to volume row and activate
+                self._active_row = ROW_VOLUME
+                self._update_selection()
+                self._open_volume()
             else:
-                # Any other character key: graceful escape (dismiss picker)
+                # Any other character key: dismiss picker
                 self.dismiss(None)
             return
 
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
-                if self._on_pane_row:
-                    # Select the pane
-                    pane_id, _ = PANE_OPTIONS[self._pane_index]
-                    self.dismiss({"focus_pane": pane_id})
-                else:
-                    # Select the room
-                    _, _, _, result = ROOM_OPTIONS[self._selected_index]
-                    self.dismiss(result)
+                if self._active_row == ROW_ROOMS:
+                    self._select_room(self._room_index)
+                elif self._active_row == ROW_CODE:
+                    self.dismiss({"toggle_code_space": True})
+                elif self._active_row == ROW_VOLUME:
+                    self._open_volume()
             elif action.action == 'escape':
-                # Cancel, return None
                 self.dismiss(None)
+            elif action.action == 'space':
+                # Space toggles code space from any row
+                self.dismiss({"toggle_code_space": True})
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()
             elif action.action == 'volume_down':
@@ -329,7 +319,120 @@ class RoomPickerScreen(ModalScreen):
             elif action.action == 'volume_up':
                 self.app.action_volume_up()
 
+    def _open_volume(self) -> None:
+        """Open the volume modal."""
+        self.app.push_screen(VolumeModal())
+
     async def _on_key(self, event) -> None:
         """Suppress terminal key events. All input comes via evdev."""
+        event.stop()
+        event.prevent_default()
+
+
+class VolumeModal(ModalScreen):
+    """Simple volume adjustment modal.
+
+    Shows current volume level. Up/down arrows adjust. Enter/Esc to close.
+    """
+
+    CSS = """
+    VolumeModal {
+        align: center middle;
+    }
+
+    #volume-dialog {
+        width: 50;
+        height: auto;
+        padding: 2 3;
+        background: $surface;
+        border: heavy $primary;
+    }
+
+    #volume-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #volume-display {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #volume-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        with Container(id="volume-dialog"):
+            yield Static(caps("Volume"), id="volume-title")
+            yield Static("", id="volume-display")
+            yield Static(caps("\u25b2 \u25bc  to adjust       Enter to close"), id="volume-hint")
+
+    def on_mount(self) -> None:
+        self._update_display()
+
+    def _update_display(self) -> None:
+        level = self.app.volume_level
+        from .constants import (
+            ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
+        )
+        if level == 0:
+            icon = ICON_VOLUME_OFF
+            bars = "\u2591" * 8
+        elif level <= 25:
+            icon = ICON_VOLUME_LOW
+            bars = "\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2591"
+        elif level <= 50:
+            icon = ICON_VOLUME_MED
+            bars = "\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591"
+        elif level <= 75:
+            icon = ICON_VOLUME_HIGH
+            bars = "\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591"
+        else:
+            icon = ICON_VOLUME_HIGH
+            bars = "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"
+
+        try:
+            display = self.query_one("#volume-display", Static)
+            display.update(f"{icon}  {bars}  {level}%")
+        except Exception:
+            pass
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self.app.action_volume_up()
+                self._update_display()
+            elif action.direction == 'down':
+                self.app.action_volume_down()
+                self._update_display()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action in ('enter', 'escape'):
+                self.dismiss(None)
+            elif action.action == 'volume_mute':
+                self.app.action_volume_mute()
+                self._update_display()
+            elif action.action == 'volume_down':
+                self.app.action_volume_down()
+                self._update_display()
+            elif action.action == 'volume_up':
+                self.app.action_volume_up()
+                self._update_display()
+            return
+
+        if isinstance(action, CharacterAction):
+            # Any character key dismisses
+            self.dismiss(None)
+
+    async def _on_key(self, event) -> None:
         event.stop()
         event.prevent_default()

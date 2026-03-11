@@ -11,7 +11,7 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- Escape (tap): Room picker (1-4 for rooms, arrows to navigate/volume)
+- Escape (tap): Room picker (1-3 for rooms, arrows to navigate/volume)
 - Escape (long hold): Parent menu
 - Media keys: Volume mute/down/up
 - Shift (tap): Sticky shift for one character
@@ -41,7 +41,7 @@ from rich.style import Style
 from enum import Enum
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_CODE, ICON_MENU,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -51,7 +51,7 @@ from .constants import (
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     CODE_PANEL_HEIGHT,
-    ROOM_PLAY, ROOM_MUSIC, ROOM_ART, ROOM_CODE,
+    ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     USB_UPDATE_SIGNAL_FILE,
 )
 from .keyboard import (
@@ -62,22 +62,18 @@ from .keyboard import (
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
-from .recording import RecordingManager
-from .rooms.code_room import WatchMeRequested
 from .rooms.art_room import ColorLegend, PaintModeChanged
-from .rooms.play_room import ExpressionEvaluated
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
-from .code_panel import CodePanel, CodePanelFocusChanged, ReplayBlock, LogoCommand, EvaluateExpression, make_music_block
+from .code_editor import CodeTextEditor, RunCodeRequested, CloseCodeSpaceRequested
 from .font_sizer import set_code_split_font, restore_normal_font
 
 
 class Room(Enum):
-    """The 4 core rooms of Purple Computer"""
+    """The 3 core rooms of Purple Computer"""
     PLAY = 1     # Math and emoji REPL
     MUSIC = 2    # Music and art grid
     ART = 3      # Simple drawing canvas
-    CODE = 4     # Visual block programming
 
 
 class View(Enum):
@@ -103,171 +99,106 @@ class RoomTitle(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mode = ROOM_PLAY[0]
-        self._recording_indicator = ""
         self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
         self.refresh()
 
-    def set_recording_indicator(self, indicator: str) -> None:
-        self._recording_indicator = indicator
-        self.refresh()
-
     def render(self) -> str:
         icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        title = f"{icon}  {caps(label)}"
-        if self._recording_indicator:
-            title = f"{self._recording_indicator}   {title}"
-        return title
+        return f"{icon}  {caps(label)}"
 
 
-class KeyBadge(Static):
-    """A single key badge with rounded border"""
+class RoomIndicator(Widget):
+    """1-row footer showing room names with active room highlighted.
 
-    DEFAULT_CSS = """
-    KeyBadge {
-        width: auto;
-        height: 3;
-        padding: 0 1;
-        margin: 0 1;
-        border: round $primary;
-        background: $surface;
-        content-align: center middle;
-    }
-
-    KeyBadge.active {
-        border: round $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-
-    KeyBadge.dim {
-        border: round $surface-darken-2;
-        color: $text-muted;
-    }
+    Renders: [Esc]  [Play]  [Music]  [Art]  with mute indicator on right.
+    Uses render_line() for reliable single-row rendering.
     """
-
-    def __init__(self, text: str, **kwargs):
-        super().__init__(**kwargs)
-        self.text = text
-
-    def render(self) -> str:
-        return self.text
-
-
-class RoomBadge(KeyBadge):
-    """A room badge that shows icon + room name, responds to caps lock"""
-
-    DEFAULT_CSS = """
-    RoomBadge {
-        width: 11;
-    }
-    """
-
-    def __init__(self, icon: str, room_name: str, **kwargs):
-        super().__init__(text="", **kwargs)
-        self._icon = icon
-        self._room_name = room_name
-        self.add_class("caps-sensitive")
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"{self._icon} {caps(self._room_name)}"
-
-
-class RoomIndicator(Horizontal):
-    """Shows mode indicators (icons + names) and mute indicator, centered"""
 
     DEFAULT_CSS = """
     RoomIndicator {
         width: 100%;
-        height: 3;
-        background: $background;
-    }
-
-    #keys-spacer-left {
-        width: 1fr;
-        height: 3;
-    }
-
-    #keys-center {
-        width: auto;
-        height: 3;
-    }
-
-    #keys-spacer-right {
-        width: 1fr;
-        height: 3;
-    }
-
-    #keys-right {
-        width: auto;
-        height: 3;
-        margin-right: 2;
+        height: 1;
+        dock: bottom;
     }
     """
+
+    # Room display info: (Room enum, icon, label)
+    _ROOMS = [
+        (Room.PLAY, ICON_CHAT, "Play"),
+        (Room.MUSIC, ICON_MUSIC, "Music"),
+        (Room.ART, ICON_PALETTE, "Art"),
+    ]
 
     def __init__(self, current_room: Room, **kwargs):
         super().__init__(**kwargs)
         self.current_room = current_room
+        self._muted = False
 
-    def compose(self) -> ComposeResult:
-        yield Static("", id="keys-spacer-left")
+    def render_line(self, y: int) -> Strip:
+        width = self.size.width
+        if width <= 0 or y != 0:
+            return Strip([])
 
-        with Horizontal(id="keys-center"):
-            # Esc badge for mode picker
-            esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
-            esc_badge.add_class("dim")
-            yield esc_badge
+        bg = "#1e1033"
+        dim_style = Style(bgcolor=bg, color="#6a5a7a")
+        active_style = Style(bgcolor=bg, color="#c4a0e8", bold=True)
+        esc_style = Style(bgcolor=bg, color="#6a5a7a")
+        mute_style = Style(bgcolor=bg, color="#c46b7b")
+        spacer_style = Style(bgcolor=bg)
 
-            # Room badges with icon + name
-            room_info = {
-                Room.PLAY: (ICON_CHAT, "Play"),
-                Room.MUSIC: (ICON_MUSIC, "Music"),
-                Room.ART: (ICON_PALETTE, "Art"),
-                Room.CODE: (ICON_CODE, "Code"),
-            }
-            for room in Room:
-                icon, name = room_info[room]
-                badge = RoomBadge(icon, name, id=f"key-{room.name.lower()}")
-                if room == self.current_room:
-                    badge.add_class("active")
-                else:
-                    badge.add_class("dim")
-                yield badge
+        caps = getattr(self.app, 'caps_text', lambda x: x)
 
-        yield Static("", id="keys-spacer-right")
+        segments = []
 
-        # Mute indicator on the right (only visible when muted)
-        with Horizontal(id="keys-right"):
-            mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
-            mute_badge.add_class("dim")
-            mute_badge.display = False
-            yield mute_badge
+        # Build room indicators centered
+        parts = []
+        parts.append(("esc", f"[Esc {ICON_MENU}]", esc_style))
+        for room, icon, label in self._ROOMS:
+            style = active_style if room == self.current_room else dim_style
+            text = f"[{icon} {caps(label)}]"
+            parts.append((room, text, style))
+
+        # Calculate total content width
+        content_parts = []
+        for _, text, style in parts:
+            content_parts.append((text, style))
+
+        # Add spacing between parts
+        separator = "  "
+        total_len = sum(len(t) for t, _ in content_parts) + len(separator) * (len(content_parts) - 1)
+
+        # Mute indicator
+        mute_text = f" {ICON_VOLUME_OFF}" if self._muted else ""
+        total_len += len(mute_text)
+
+        # Center
+        pad_left = max(0, (width - total_len) // 2)
+        pad_right = max(0, width - total_len - pad_left)
+
+        segments.append(Segment(" " * pad_left, spacer_style))
+        for i, (text, style) in enumerate(content_parts):
+            if i > 0:
+                segments.append(Segment(separator, spacer_style))
+            segments.append(Segment(text, style))
+
+        if mute_text:
+            segments.append(Segment(mute_text, mute_style))
+
+        segments.append(Segment(" " * pad_right, spacer_style))
+
+        return Strip(segments)
 
     def update_room(self, room: Room) -> None:
         self.current_room = room
-        for m in Room:
-            try:
-                badge = self.query_one(f"#key-{m.name.lower()}", RoomBadge)
-                badge.remove_class("active", "dim")
-                if m == room:
-                    badge.add_class("active")
-                else:
-                    badge.add_class("dim")
-            except NoMatches:
-                pass
+        self.refresh()
 
     def update_volume_indicator(self, volume_level: int) -> None:
-        """Show/hide mute indicator based on volume level."""
-        try:
-            badge = self.query_one("#key-mute", KeyBadge)
-            badge.display = (volume_level == 0)
-        except NoMatches:
-            pass
+        self._muted = (volume_level == 0)
+        self.refresh()
 
 
 class SpeechIndicator(Static):
@@ -549,34 +480,19 @@ class PurpleApp(App):
         background: $surface;
     }
 
-    #code-panel {
+    #code-editor {
         width: __VIEWPORT_WIDTH__;
         height: __CODE_PANEL_HEIGHT__;
         display: none;
         margin-top: 1;
-        border: heavy transparent;
     }
 
-    #code-panel.visible {
+    #code-editor.visible {
         display: block;
     }
 
-    #code-panel.panel-focused {
-        border: heavy #9b7bc4;
-    }
-
-    #viewport.viewport-dimmed {
-        opacity: 0.5;
-    }
-
-    #code-panel.panel-dimmed {
-        opacity: 0.5;
-    }
-
     #room-indicator {
-        dock: bottom;
-        height: 3;
-        margin-top: 1;
+        height: 1;
         background: $background;
     }
 
@@ -671,16 +587,9 @@ class PurpleApp(App):
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
-        # Recording manager for Watch me! capture
-        self._recording_manager = RecordingManager()
-        self._watch_me_active: bool = False
-        self._watch_me_room: str = ""
-        self._watch_me_timer: asyncio.TimerHandle | None = None
-
-        # Inline code panel state
-        self._code_panel_open = False
+        # Code space state (persists across room switches)
+        self._code_space_open = False
         self._code_panel_transitioning = False
-        self._code_panel_focused = False
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -733,7 +642,7 @@ class PurpleApp(App):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
                 yield ShiftBanner(id="shift-banner")
-                yield CodePanel(id="code-panel")
+                yield CodeTextEditor(id="code-editor")
             yield RoomIndicator(self.active_room, id="room-indicator")
 
     async def on_mount(self) -> None:
@@ -822,7 +731,7 @@ class PurpleApp(App):
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
         # Restore normal font if code panel was open
-        if self._code_panel_open:
+        if self._code_space_open:
             restore_normal_font()
 
         # Clean up evdev reader
@@ -921,57 +830,6 @@ class PurpleApp(App):
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
-        # During Watch me!, record events and restrict room switching
-        if self._watch_me_active:
-            if isinstance(action, RoomAction):
-                if action.room == ROOM_CODE[0]:
-                    # Switching to Code ends Watch me!: stop recording, insert blocks
-                    await self._end_watch_me()
-                # Other room switches blocked during Watch me!
-                return
-
-            # Esc ends Watch me! (same as pressing F4 to return to Code)
-            if isinstance(action, ControlAction) and action.action == 'escape' and action.is_down:
-                await self._end_watch_me()
-                self._escape_consumed_by_mode = True
-                return
-            # Space ends Watch me! in Music room (space = "play", so it's a natural stop)
-            if (isinstance(action, ControlAction) and action.action == 'space'
-                    and action.is_down and self.active_room == Room.MUSIC):
-                await self._end_watch_me()
-                return
-            if isinstance(action, ControlAction) and action.action == 'escape':
-                return
-            # Long-hold escape: end Watch me! and fall through to open parent menu
-            if isinstance(action, LongHoldAction) and action.key == 'escape':
-                await self._end_watch_me()
-
-            # Record the event and reset inactivity timer
-            if not (self._demo_player and self._demo_player.is_running):
-                mode = self._get_current_mode()
-                self._recording_manager.record_event(
-                    action, self.active_room.name.lower(), mode
-                )
-                self._reset_watch_me_timer()
-
-            # Still dispatch to the active room for live feedback
-            # (fall through to mode dispatch below)
-
-        # During code playback, space/escape stop playback regardless of active room
-        # (playback switches rooms, so the code room may not be the active one)
-        try:
-            content_area = self.query_one("#content-area")
-            code_room = content_area.query_one("#room-code")
-            if code_room._playing:
-                if isinstance(action, ControlAction) and action.is_down:
-                    if action.action in ('space', 'escape'):
-                        code_room._stop_playback()
-                        if action.action == 'escape':
-                            self._escape_consumed_by_mode = True
-                        return
-        except NoMatches:
-            pass
-
         if isinstance(action, RoomAction):
             # Dismiss any open modal (like mode picker) when switching rooms
             if len(self.screen_stack) > 1:
@@ -982,8 +840,6 @@ class PurpleApp(App):
                 self.action_switch_room(ROOM_MUSIC[0])
             elif action.room == ROOM_ART[0]:
                 self.action_switch_room(ROOM_ART[0])
-            elif action.room == ROOM_CODE[0]:
-                self.action_switch_room(ROOM_CODE[0])
             elif action.room == 'parent':
                 self.action_parent_menu()
             return
@@ -1047,81 +903,15 @@ class PurpleApp(App):
                 await active_screen.handle_keyboard_action(action)
             return
 
-        # Shift+Space: replay when code panel is focused
-        if (self._code_panel_open and self._code_panel_focused
-                and isinstance(action, ControlAction) and action.action == 'space'
-                and action.is_down and not action.is_repeat):
-            sm = self._keyboard_state_machine
-            if sm._sticky_shift_active or sm._shift_held:
-                try:
-                    panel = self.query_one("#code-panel", CodePanel)
-                    panel._start_replay()
-                    if sm._sticky_shift_active:
-                        sm._sticky_shift_active = False
-                        if sm._on_sticky_shift_change:
-                            sm._on_sticky_shift_change(False)
-                except NoMatches:
-                    pass
-                return
-
-        # Shift+Enter: toggle focus between code panel and main viewport
-        if (self._code_panel_open
-                and isinstance(action, ControlAction) and action.action == 'enter'
-                and action.is_down and not action.is_repeat):
-            sm = self._keyboard_state_machine
-            if sm._sticky_shift_active or sm._shift_held:
-                try:
-                    panel = self.query_one("#code-panel", CodePanel)
-                    if self._code_panel_focused:
-                        panel.exit_panel()
-                    else:
-                        panel.enter_panel()
-                    if sm._sticky_shift_active:
-                        sm._sticky_shift_active = False
-                        if sm._on_sticky_shift_change:
-                            sm._on_sticky_shift_change(False)
-                except NoMatches:
-                    pass
-                return
-
-        # If code panel is focused, route keyboard there
-        if self._code_panel_open and self._code_panel_focused:
+        # When code space is open, route ALL input to code editor
+        # except escape (handled above) and media keys (handled above)
+        if self._code_space_open:
             try:
-                panel = self.query_one("#code-panel", CodePanel)
-                consumed = await panel.handle_keyboard_action(action)
-                if consumed:
-                    # If panel consumed escape, prevent room picker from opening
-                    if (isinstance(action, ControlAction) and action.action == 'escape'
-                            and action.is_down):
-                        self._escape_consumed_by_mode = True
-                    return
+                editor = self.query_one("#code-editor", CodeTextEditor)
+                await editor.handle_keyboard_action(action)
             except NoMatches:
                 pass
-
-        # If code panel is open and user presses arrow down, enter the panel
-        if (self._code_panel_open and not self._code_panel_focused
-                and isinstance(action, NavigationAction)
-                and action.direction == "down"):
-            # Only enter panel from music room (play/art use down arrow for other things)
-            room_name = self.active_room.name.lower()
-            if room_name == "music":
-                try:
-                    panel = self.query_one("#code-panel", CodePanel)
-                    panel.enter_panel()
-                    return
-                except NoMatches:
-                    pass
-
-        # C key toggles panel focus when panel is open (works in all rooms)
-        if (self._code_panel_open and not self._code_panel_focused
-                and isinstance(action, CharacterAction)
-                and action.char.lower() == 'c' and not action.is_repeat):
-            try:
-                panel = self.query_one("#code-panel", CodePanel)
-                panel.enter_panel()
-                return
-            except NoMatches:
-                pass
+            return
 
         # Dispatch to the current mode widget
         room_id = f"room-{self.active_room.name.lower()}"
@@ -1134,21 +924,6 @@ class PurpleApp(App):
                 await room_widget.handle_keyboard_action(action)
         except NoMatches:
             pass
-
-        # Capture blocks for the code panel (after room processes the action)
-        if self._code_panel_open and not self._code_panel_focused:
-            room_name = self.active_room.name.lower()
-            if room_name == "music":
-                if isinstance(action, CharacterAction):
-                    char = action.char
-                    if char:
-                        from .music_constants import ALL_KEYS
-                        lookup = char.upper() if char.isalpha() else char
-                        if lookup in ALL_KEYS:
-                            self._capture_music_block(action, lookup)
-                # Enter in music cycles instruments, no newline block needed
-            elif room_name == "art":
-                self._capture_art_block(action)
 
     def _start_escape_hold_timer(self) -> None:
         """Schedule a one-shot timer to trigger parent mode after 1s.
@@ -1176,91 +951,61 @@ class PurpleApp(App):
         """Show the mode picker modal."""
         self.clear_notifications()
         current_room = self.active_room.name.lower()
-        if self._code_panel_open:
-            picker = RoomPickerScreen(
-                current_room=current_room,
-                code_panel_open=True,
-                code_panel_focused=self._code_panel_focused,
-            )
-        else:
-            picker = RoomPickerScreen(current_room=current_room)
+        picker = RoomPickerScreen(
+            current_room=current_room,
+            code_space_open=self._code_space_open,
+        )
         self.push_screen(picker, self._on_room_picked)
 
     def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker result."""
         if result is None:
-            # Cancelled, do nothing
             return
 
-        # Option: switch pane focus (code panel mode)
-        if result.get("focus_pane"):
-            pane = result["focus_pane"]
-            try:
-                panel = self.query_one("#code-panel", CodePanel)
-                if pane == "code" and not self._code_panel_focused:
-                    panel.enter_panel()
-                elif pane == "main" and self._code_panel_focused:
-                    panel.exit_panel()
-            except NoMatches:
-                pass
-            return
-
-        # Option: toggle inline code panel
-        if result.get("toggle_code_panel"):
-            self.toggle_code_panel()
+        # Toggle code space
+        if result.get("toggle_code_space"):
+            self.toggle_code_space()
             return
 
         room_name = result.get("room")
 
-        # Close code panel when switching rooms
-        if self._code_panel_open and room_name:
-            self.toggle_code_panel()
-
-        # Switch to the selected mode
+        # Switch to the selected room
         if room_name == "play":
             self.action_switch_room(ROOM_PLAY[0])
         elif room_name == "music":
             self.action_switch_room(ROOM_MUSIC[0])
         elif room_name == "art":
             self.action_switch_room(ROOM_ART[0])
-        elif room_name == "code":
-            self.action_switch_room(ROOM_CODE[0])
 
-    # ── Inline Code Panel ────────────────────────────────────────────
+    # ── Code Space ─────────────────────────────────────────────────
 
-    def toggle_code_panel(self) -> None:
-        """Toggle the inline code panel open/closed with font transition."""
+    def toggle_code_space(self) -> None:
+        """Toggle the code space editor open/closed with font transition."""
         if self._code_panel_transitioning:
             return
 
         self._code_panel_transitioning = True
-        self._code_panel_open = not self._code_panel_open
+        self._code_space_open = not self._code_space_open
 
-        # Step 1: show curtain to hide font change
-        if self._code_panel_open:
-            # Opening: simple curtain (no diagonal effect)
-            curtain = Curtain(id="transition-curtain")
-        else:
-            # Closing: simple flat curtain
-            curtain = Curtain(id="transition-curtain")
+        # Show curtain to hide font change
+        curtain = Curtain(id="transition-curtain")
         self.mount(curtain)
 
-        # Step 2: change font after one frame
-        self.set_timer(0.05, self._code_panel_change_font)
+        # Change font after one frame
+        self.set_timer(0.05, self._code_space_change_font)
 
-    def _code_panel_change_font(self) -> None:
-        """Change font size for code panel toggle. Called after curtain is visible."""
-        if self._code_panel_open:
+    def _code_space_change_font(self) -> None:
+        """Change font size for code space toggle."""
+        if self._code_space_open:
             set_code_split_font()
         else:
             restore_normal_font()
-            self._code_panel_focused = False
 
-        # Step 3: reveal layout after Alacritty resizes
-        self.set_timer(0.3, self._code_panel_reveal)
+        # Reveal layout after Alacritty resizes
+        self.set_timer(0.3, self._code_space_reveal)
 
-    def _code_panel_reveal(self) -> None:
-        """Remove curtain and show/hide code panel."""
+    def _code_space_reveal(self) -> None:
+        """Remove curtain and show/hide code editor."""
         self._code_panel_transitioning = False
 
         # Remove curtain
@@ -1270,394 +1015,108 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Show/hide code panel
+        # Show/hide code editor
         try:
-            panel = self.query_one("#code-panel", CodePanel)
-            if self._code_panel_open:
-                panel.add_class("visible")
-                # Set panel to show current room's blocks
+            editor = self.query_one("#code-editor", CodeTextEditor)
+            if self._code_space_open:
+                editor.add_class("visible")
                 room_name = self.active_room.name.lower()
-                if room_name in ("play", "music", "art"):
-                    panel.set_room(room_name)
-                # Auto-focus the code panel when opening
-                panel.enter_panel()
+                editor.set_room(room_name)
             else:
-                panel.remove_class("visible")
-                panel.exit_panel()
+                editor.remove_class("visible")
         except NoMatches:
             pass
 
-        # Update focus visuals
-        self._update_focus_visuals()
+        # Hide/show play input when code space is open
+        self._toggle_play_input_visibility()
 
-        # Refresh shift banner (code panel open/close changes hints)
+        # Refresh shift banner
         self._update_shift_banner()
 
-    def on_code_panel_focus_changed(self, message: CodePanelFocusChanged) -> None:
-        """Track code panel focus state and update visual indicators."""
-        self._code_panel_focused = message.focused
-        self._update_focus_visuals()
+    def on_run_code_requested(self, message: RunCodeRequested) -> None:
+        """Handle code execution request from code editor."""
+        asyncio.ensure_future(self._run_code(message.room, message.lines))
 
-    def _update_focus_visuals(self) -> None:
-        """Update border and dimming to show which panel has focus."""
-        try:
-            viewport = self.query_one("#viewport")
-            panel = self.query_one("#code-panel", CodePanel)
+    async def _run_code(self, room: str, lines: list[str]) -> None:
+        """Execute code for the given room."""
+        if room == "play":
+            from .rooms.play_room import SimpleEvaluator
+            from .code_runner import PlayCodeRunner
+            evaluator = SimpleEvaluator()
+            runner = PlayCodeRunner(evaluator)
+            results = runner.run(lines)
+            if results:
+                # Display results in play room history
+                try:
+                    content_area = self.query_one("#content-area")
+                    play = content_area.query_one("#room-play")
+                    if hasattr(play, 'add_code_results'):
+                        play.add_code_results(results)
+                    else:
+                        # Fallback: add each result as a history line
+                        for r in results:
+                            if hasattr(play, '_add_to_history'):
+                                play._add_to_history(r)
+                except Exception:
+                    pass
 
-            if self._code_panel_open and self._code_panel_focused:
-                # Code panel focused: highlight it, dim viewport
-                panel.add_class("panel-focused")
-                panel.remove_class("panel-dimmed")
-                viewport.add_class("viewport-dimmed")
-            elif self._code_panel_open:
-                # Viewport focused: dim code panel
-                panel.remove_class("panel-focused")
-                panel.add_class("panel-dimmed")
-                viewport.remove_class("viewport-dimmed")
-            else:
-                # Code panel closed: reset everything
-                panel.remove_class("panel-focused", "panel-dimmed")
-                viewport.remove_class("viewport-dimmed")
-        except NoMatches:
-            pass
-
-    def on_expression_evaluated(self, message: ExpressionEvaluated) -> None:
-        """Capture play mode expression evaluations for the code panel."""
-        if not self._code_panel_open:
-            return
-        try:
-            panel = self.query_one("#code-panel", CodePanel)
-            if panel._room != "play":
-                return
-            from .code_panel import make_query_block
-            panel.add_block(make_query_block(message.expression, message.result))
-        except Exception:
-            pass
-
-    def on_replay_block(self, message: ReplayBlock) -> None:
-        """Handle block replay from code panel."""
-        block = message.block
-        room_name = self.active_room.name.lower()
-
-        if room_name == "music" and block.kind == "key" and block.key:
-            # Replay a music key press
+        elif room == "music":
+            from .code_runner import MusicCodeRunner
             try:
                 content_area = self.query_one("#content-area")
                 music = content_area.query_one("#room-music")
-                from .music_session import MODE_MUSIC, MODE_LETTERS
-                mode = MODE_LETTERS if block.submode == "letters" else MODE_MUSIC
-                flash = mode == MODE_MUSIC
-                music.grid.next_color(block.key, refresh=not flash)
-                music._play_key(block.key, mode)
-                if flash:
-                    music.grid.flash_note(block.key)
-            except Exception:
-                pass
+                mode = "letters" if music._letters_mode else "music"
 
-        elif room_name == "art":
-            # Replay art blocks by dispatching synthetic actions
-            try:
-                if block.kind == "key" and block.key:
-                    # Color selection
-                    action = CharacterAction(char=block.key)
-                    asyncio.ensure_future(self._dispatch_keyboard_action(action))
-                elif block.kind == "stroke" and block.direction:
-                    # Direction strokes
-                    for _ in range(max(1, block.distance)):
-                        action = NavigationAction(
-                            direction=block.direction,
-                            space_held=True,
-                        )
-                        asyncio.ensure_future(self._dispatch_keyboard_action(action))
-            except Exception:
-                pass
+                def play_key(key, m):
+                    music.grid.next_color(key, refresh=True)
+                    music._play_key(key, m)
 
-        elif room_name == "play" and block.kind == "query" and block.expression:
-            # Replay a play expression by typing it and pressing Enter
-            try:
-                content_area = self.query_one("#content-area")
-                play = content_area.query_one("#room-play")
-                play_input = play.query_one("#play-input")
-                play_input.value = block.expression
-                from .rooms.play_room import InlineInput
-                play_input.post_message(InlineInput.Submitted(block.expression))
-                play_input.value = ""
-            except Exception:
-                pass
-
-    def on_logo_command(self, message: LogoCommand) -> None:
-        """Handle logo command from art guide in code panel."""
-        if self.active_room != Room.ART:
-            return
-        try:
-            content_area = self.query_one("#content-area")
-            art = content_area.query_one("#room-art")
-            canvas = art.query_one("#art-canvas")
-            canvas.execute_logo_command(message.action, message.direction, message.distance)
-        except Exception:
-            pass
-
-    def on_evaluate_expression(self, message: EvaluateExpression) -> None:
-        """Handle expression evaluation request from play panel input."""
-        expression = message.expression
-        try:
-            panel = self.query_one("#code-panel", CodePanel)
-            # Substitute `it` with its value
-            it_val = panel._play_state.get("it")
-            eval_expr = expression
-            if it_val is not None:
-                eval_expr = eval_expr.replace("it", str(it_val))
-
-            # Use play room evaluator
-            content_area = self.query_one("#content-area")
-            play = content_area.query_one("#room-play")
-            if hasattr(play, 'evaluate_for_panel'):
-                result = play.evaluate_for_panel(eval_expr)
-            else:
-                # Fallback: simple eval
-                try:
-                    result = str(eval(eval_expr))
-                except Exception:
-                    result = "?"
-            panel.add_play_result(expression, result)
-        except Exception:
-            pass
-
-    def _capture_music_block(self, action, key: str) -> None:
-        """Capture a music key press as a code panel block."""
-        if not self._code_panel_open:
-            return
-        if action.is_repeat:
-            return
-        try:
-            panel = self.query_one("#code-panel", CodePanel)
-            if panel._room != "music":
-                return
-            # Determine submode
-            content_area = self.query_one("#content-area")
-            music = content_area.query_one("#room-music")
-            submode = "letters" if music._letters_mode else "music"
-            # Calculate gap from previous block
-            now_ms = int(time.monotonic() * 1000)
-            last_time = getattr(self, '_last_music_block_ms', 0)
-            gap_ms = now_ms - last_time if last_time > 0 else 0
-            self._last_music_block_ms = now_ms
-            block = make_music_block(key, submode=submode, gap_ms=gap_ms)
-            panel.add_block(block)
-        except Exception:
-            pass
-
-    def _capture_art_block(self, action) -> None:
-        """Capture an art room action as a code panel block."""
-        if not self._code_panel_open:
-            return
-        try:
-            panel = self.query_one("#code-panel", CodePanel)
-            if panel._room != "art":
-                return
-
-            # Check if art room is in paint mode
-            content_area = self.query_one("#content-area")
-            art = content_area.query_one("#room-art")
-            canvas = art.query_one("#art-canvas")
-
-            if isinstance(action, CharacterAction) and canvas.is_painting:
-                # Color selection in paint mode
-                from .rooms.art_room import get_key_color
-                from .code_panel import make_color_block
-                color_hex = get_key_color(action.char)
-                panel.add_block(make_color_block(action.char, color_hex))
-
-            elif isinstance(action, NavigationAction):
-                # Direction movement (both painting and non-painting)
-                if canvas.is_painting and (canvas._space_down or action.space_held):
-                    from .code_panel import make_stroke_block
-                    panel.add_block(make_stroke_block(action.direction))
-        except Exception:
-            pass
-
-    # ── Watch me! flow ─────────────────────────────────────────────
-
-    def on_watch_me_requested(self, message: WatchMeRequested) -> None:
-        """Handle WatchMeRequested from CodeMode: show room picker or start directly."""
-        if message.room:
-            # Room already chosen (from Tab menu with room picker)
-            self._on_watch_me_room_picked(message.room)
-        else:
-            # Show room picker (Enter on empty canvas)
-            picker = RoomPickerScreen(current_room="code")
-            self.push_screen(picker, self._on_watch_me_room_picked)
-
-    def _on_watch_me_room_picked(self, result) -> None:
-        """Room picked for Watch me!: start recording and switch."""
-        if result is None:
-            return
-        # Result is either a string (from Tab menu) or a dict (from room picker)
-        if isinstance(result, dict):
-            room_name = result.get("room", "")
-        else:
-            room_name = result
-        if not room_name or room_name == "code":
-            return
-
-        # Map room picker names to internal room IDs
-        # Room picker uses "explore"/"play"/"doodle", internal uses "play"/"music"/"art"
-        picker_to_internal = {
-            "explore": "play", "play": "music", "doodle": "art",
-            "music": "music", "art": "art",
-        }
-        internal_name = picker_to_internal.get(room_name, room_name)
-
-        self._recording_manager.start_recording(internal_name)
-        self._watch_me_active = True
-        self._watch_me_room = internal_name
-        self._reset_watch_me_timer()
-
-        # Show "Watching..." in title bar
-        try:
-            title = self.query_one("#room-title", RoomTitle)
-            title.set_recording_indicator("\u23fa Watching... Esc when done")
-        except Exception:
-            pass
-
-        # Switch to target room
-        room_id_map = {"play": ROOM_PLAY[0], "music": ROOM_MUSIC[0], "art": ROOM_ART[0]}
-        room_id = room_id_map.get(internal_name)
-        if room_id:
-            self.action_switch_room(room_id)
-
-    async def _end_watch_me(self) -> None:
-        """End Watch me! session: stop recording, switch to Code, insert blocks."""
-        self._watch_me_active = False
-        self._cancel_watch_me_timer()
-        recording = self._recording_manager.stop_recording()
-
-        # Clear title bar indicator
-        try:
-            title = self.query_one("#room-title", RoomTitle)
-            title.set_recording_indicator("")
-        except Exception:
-            pass
-
-        # Switch to Code mode
-        self.action_switch_room(ROOM_CODE[0])
-
-        # Insert blocks if recording was non-empty
-        if recording is not None:
-            from .program import default_target_for_room
-            target = default_target_for_room(self._watch_me_room)
-            # Capture current instrument if recording in music room
-            instrument = ""
-            if self._watch_me_room == "music":
-                try:
+                def set_inst(name):
                     from .music_constants import INSTRUMENTS
-                    content_area = self.query_one("#content-area")
-                    music = content_area.query_one("#room-music")
-                    instrument = INSTRUMENTS[music._instrument_index][0]
-                except Exception:
-                    pass
-            blocks = recording.to_blocks(target, instrument=instrument)
-            if blocks:
-                try:
-                    content_area = self.query_one("#content-area")
-                    command_widget = content_area.query_one("#room-code")
-                    command_widget.insert_watched_blocks(blocks)
-                except Exception:
-                    pass
+                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
+                        if inst_name.lower() == name.lower() or inst_id.lower() == name.lower():
+                            music._instrument_index = i
+                            if music.grid:
+                                music.grid.set_instrument(i)
+                            break
 
-    WATCH_ME_TIMEOUT = 15  # seconds of inactivity before auto-ending Watch me!
+                runner = MusicCodeRunner(
+                    play_key_fn=play_key,
+                    set_instrument_fn=set_inst,
+                    color_fn=lambda k: music.grid.next_color(k, refresh=True),
+                    flash_fn=lambda k: music.grid.flash_note(k),
+                )
+                await runner.run(lines, mode)
+            except Exception:
+                pass
 
-    def _reset_watch_me_timer(self) -> None:
-        """Reset the Watch me! inactivity timer."""
-        self._cancel_watch_me_timer()
-        loop = asyncio.get_event_loop()
-        self._watch_me_timer = loop.call_later(
-            self.WATCH_ME_TIMEOUT, self._watch_me_timed_out
-        )
-
-    def _cancel_watch_me_timer(self) -> None:
-        """Cancel the Watch me! inactivity timer if running."""
-        if self._watch_me_timer is not None:
-            self._watch_me_timer.cancel()
-            self._watch_me_timer = None
-
-    def _watch_me_timed_out(self) -> None:
-        """Called when Watch me! inactivity timeout expires."""
-        if self._watch_me_active:
-            asyncio.ensure_future(self._end_watch_me())
-
-    def _get_current_mode(self) -> str:
-        """Get the current sub-mode string for the active mode."""
-        room_name = self.active_room.name.lower()
-        try:
-            content_area = self.query_one("#content-area")
-            if room_name == "music":
-                music_widget = content_area.query_one("#room-music")
-                if hasattr(music_widget, '_letters_mode') and music_widget._letters_mode:
-                    return "letters"
-                return "music"
-            elif room_name == "art":
-                art_widget = content_area.query_one("#room-art")
-                canvas = art_widget.query_one("#art-canvas")
-                if hasattr(canvas, 'is_painting') and canvas.is_painting:
-                    return "paint"
-                return "text"
-        except Exception:
-            pass
-        return ""
-
-    def _get_art_paint_mode_callback(self):
-        """Get a callback for checking art paint mode."""
-        def check():
+        elif room == "art":
+            from .code_runner import ArtCodeRunner
             try:
                 content_area = self.query_one("#content-area")
                 art = content_area.query_one("#room-art")
                 canvas = art.query_one("#art-canvas")
-                return hasattr(canvas, 'is_painting') and canvas.is_painting
-            except Exception:
-                return False
-        return check
-
-    def _get_music_letters_mode_callback(self):
-        """Get a callback for checking music letters mode."""
-        def check():
-            try:
-                content_area = self.query_one("#content-area")
-                music = content_area.query_one("#room-music")
-                return hasattr(music, '_letters_mode') and music._letters_mode
-            except Exception:
-                return False
-        return check
-
-    def _get_set_instrument_callback(self):
-        """Get a callback for setting the music room instrument."""
-        def set_inst(instrument_id: str):
-            try:
-                from .music_constants import INSTRUMENTS
-                content_area = self.query_one("#content-area")
-                music = content_area.query_one("#room-music")
-                inst_ids = [inst_id for inst_id, _ in INSTRUMENTS]
-                if instrument_id in inst_ids:
-                    idx = inst_ids.index(instrument_id)
-                    music._instrument_index = idx
-                    if music.grid:
-                        music.grid.set_instrument(idx)
-                    if music._header:
-                        music._header.update_instrument(INSTRUMENTS[idx][1])
+                runner = ArtCodeRunner(canvas)
+                await runner.run(lines)
             except Exception:
                 pass
-        return set_inst
 
-    def _update_recording_indicator(self) -> None:
-        """Update the title bar with Watch me! recording state."""
-        if self._watch_me_active:
-            indicator = "\u23fa Watching... Esc when done"
-        else:
-            indicator = ""
+    def on_close_code_space_requested(self, message: CloseCodeSpaceRequested) -> None:
+        """Handle close code space request from tab menu."""
+        self.toggle_code_space()
+
+    def _toggle_play_input_visibility(self) -> None:
+        """Hide/show play room input widgets when code space toggles."""
         try:
-            title = self.query_one("#room-title", RoomTitle)
-            title.set_recording_indicator(indicator)
-        except Exception:
+            content_area = self.query_one("#content-area")
+            play = content_area.query_one("#room-play")
+            for widget_id in ("#input-row", "#autocomplete-hint", "#play-example-hint"):
+                try:
+                    widget = play.query_one(widget_id)
+                    widget.display = not self._code_space_open
+                except NoMatches:
+                    pass
+        except NoMatches:
             pass
 
     def _reset_viewport_border(self) -> None:
@@ -1891,12 +1350,6 @@ class PurpleApp(App):
         elif room == Room.ART:
             from .rooms.art_room import ArtMode
             return ArtMode(classes="room-content")
-        elif room == Room.CODE:
-            from .rooms.code_room import CodeMode
-            return CodeMode(
-                dispatch_action=self._dispatch_keyboard_action,
-                classes="room-content",
-            )
         return None
 
     def _load_room_content(self) -> None:
@@ -1939,11 +1392,6 @@ class PurpleApp(App):
                 widget.query_one("#art-canvas").focus()
             except Exception:
                 widget.focus()
-        elif self.active_room == Room.CODE:
-            widget.focus()
-            # Refresh blocks when re-entering Code mode
-            if hasattr(widget, 'on_show'):
-                widget.on_show()
         else:
             widget.focus()
 
@@ -1974,7 +1422,6 @@ class PurpleApp(App):
             ROOM_PLAY[0]: Room.PLAY,
             ROOM_MUSIC[0]: Room.MUSIC,
             ROOM_ART[0]: Room.ART,
-            ROOM_CODE[0]: Room.CODE,
         }
         new_room = room_map.get(room_name, Room.PLAY)
 
@@ -2025,18 +1472,18 @@ class PurpleApp(App):
         self.active_room = new_room
         self._load_room_content()
 
-        # Sync code panel to show new room's blocks
-        if self._code_panel_open:
+        # Sync code editor to new room's buffer
+        if self._code_space_open:
             room_name = new_room.name.lower()
-            if room_name in ("play", "music", "art"):
-                try:
-                    panel = self.query_one("#code-panel", CodePanel)
-                    panel.set_room(room_name)
-                except NoMatches:
-                    pass
+            try:
+                editor = self.query_one("#code-editor", CodeTextEditor)
+                editor.set_room(room_name)
+            except NoMatches:
+                pass
+            self._toggle_play_input_visibility()
 
         # Update title
-        room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0], Room.CODE: ROOM_CODE[0]}
+        room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0]}
         try:
             title = self.query_one("#room-title", RoomTitle)
             title.set_mode(room_names.get(new_room, ROOM_PLAY[0]))
@@ -2442,10 +1889,6 @@ class PurpleApp(App):
         """Get contextual hint text for the shift banner."""
         caps = getattr(self, 'caps_text', lambda x: x)
 
-        # Code panel open (any room, focused or not): show code panel hints
-        if self._code_panel_open:
-            return caps("\u21e7 Letter: UPPERCASE \u00b7 Space: play \u00b7 Enter: switch pane")
-
         # Art room in paint mode
         room_name = self.active_room.name.lower()
         if room_name == "art":
@@ -2458,7 +1901,7 @@ class PurpleApp(App):
             except Exception:
                 pass
 
-        # Default (Play, Music, Art-text): uppercase hint
+        # Default: uppercase hint
         return caps("\u21e7 Letter: UPPERCASE")
 
     def _update_shift_banner(self) -> None:

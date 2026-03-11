@@ -1,8 +1,7 @@
-"""Playback system for Code mode programs and demo scripts.
+"""Playback system for demo scripts.
 
 Core action types and player for executing scripted keyboard sequences.
-Used by Code mode (code_room.py) for program playback, and by the
-advertising demo system (demo/) for screencast recordings.
+Used by the demo system (demo/) for screencast recordings.
 """
 
 from .script import (

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music room loop station: replaced invisible space-replay with a loop pedal. Space starts recording (with progress bar and countdown), Space again starts looping, play on top to layer, Space merges the layer, Escape or Space-with-no-new-notes stops. 20s max recording with auto-loop when full. Hint bar shows state-specific instructions.
 - Code Space polish: restored 3-row room indicator as default (compact 1-row only when code space open). Removed line numbers and tildes from code editor for kid-friendliness. Added inline autocomplete ghost text near cursor. Viewport border dims when code space open, bright purple border on code editor. Room picker hint now shows "Space: Code Space". Volume modal supports left/right arrows.
 - Code Space overhaul: replaced block-based code panel with per-room text editor. Kids type code and run it with Shift+Space. Each room has its own buffer that persists across room switches. Room picker redesigned with 3 rows: rooms, code space toggle, and volume button. Removed Code room, watch-me recording, pane switching, and shift+space/shift+enter shortcuts.
 - Code panel: removed diagonal zoom effect during open transition. Changed color scheme from blue/navy to dark purple (space theme). Code is now a proper button in the room picker (press 4 or C) instead of a dashed text option. Added focus indicators: focused panel gets a purple border, unfocused panel is dimmed. Code panel auto-focuses when opened.

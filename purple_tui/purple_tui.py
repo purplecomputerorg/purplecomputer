@@ -669,7 +669,9 @@ class PurpleApp(App):
     }
 
     #room-indicator {
+        dock: bottom;
         height: 3;
+        margin-top: 1;
         background: $background;
     }
 
@@ -1214,6 +1216,9 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+        # Set viewport border directly (inline styles from art mode can override CSS)
+        self._reset_viewport_border()
+
         try:
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.set_compact(self._code_space_open)
@@ -1313,13 +1318,17 @@ class PurpleApp(App):
             pass
 
     def _reset_viewport_border(self) -> None:
-        """Reset viewport outline to default purple."""
+        """Reset viewport outline to default purple (or dimmed if code space is open)."""
         try:
             from textual.color import Color
             viewport = self.query_one("#viewport")
-            # Get primary color based on current theme
-            primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
-            viewport.styles.border = ("heavy", Color.parse(primary_color))
+            if self._code_space_open:
+                # Code space open: use dimmed border color
+                viewport.styles.border = ("heavy", Color.parse("#4a3660"))
+            else:
+                # Normal: use primary color based on current theme
+                primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
+                viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
 

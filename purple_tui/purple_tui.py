@@ -1106,6 +1106,7 @@ class PurpleApp(App):
         This is called by EvdevReader for each key press/release.
         Events are processed through KeyboardStateMachine to produce actions.
         """
+        self._log(f"evdev: keycode={event.keycode} is_down={event.is_down} stack={len(self.screen_stack)}")
         # Log evdev events in dev mode to debug mode switching
         if os.environ.get("PURPLE_DEV_MODE") == "1":
             self._dev_log(f"[Evdev] keycode={event.keycode} is_down={event.is_down}")
@@ -1194,7 +1195,12 @@ class PurpleApp(App):
         if len(self.screen_stack) > 1:
             active_screen = self.screen
             if hasattr(active_screen, 'handle_keyboard_action'):
+                t0 = time.monotonic()
+                self._log(f"modal dispatch -> {type(active_screen).__name__} action={action}")
                 await active_screen.handle_keyboard_action(action)
+                dt = time.monotonic() - t0
+                if dt > 0.05:
+                    self._log(f"modal dispatch SLOW: {dt:.3f}s")
             return
 
         # When code space is open, route ALL input to code editor

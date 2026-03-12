@@ -122,7 +122,8 @@ class CodeToggleOption(Static):
             status_line = "\u25cf Off  \u25cb On"
         # Line 3: Turn On / Turn Off hint
         action = "Turn Off" if self._code_on else "Turn On"
-        hint = f"Press Space: {action}"
+        enter_hint = " or Enter" if self.has_class("selected") else ""
+        hint = f"Press Space{enter_hint}: {action}"
         return caps(f"\n{title_line}\n{status_line}\n{hint}")
 
 

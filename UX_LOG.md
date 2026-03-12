@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code Space editor bottom border shows "Shift Space: run    Tab: menu" hint text.
+- Code Space toggle in Esc switcher now shows "Press Space or Enter" when selected, matching other buttons.
 - Volume adjustment no longer freezes: removed per-step mixer reinit and made amixer call non-blocking.
 - Display settings (brightness/contrast) no longer freeze: made xrandr calls non-blocking and cached display outputs.
 - Music room header: when code space is open, shows just the instrument name (hides "Tab" and "Letters" toggle since letters aren't programmable from code mode).

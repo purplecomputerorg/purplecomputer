@@ -40,6 +40,7 @@ CODE_GHOST_FG = "#9b7bc4"  # Autocomplete ghost text color
 CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
 CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
 CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
+CODE_HINT_FG = "#8a6bb4"          # Hint text in bottom gutter
 
 # Gutter: 1-cell padding on all sides of the text area
 GUTTER = 1
@@ -308,8 +309,25 @@ class CodeTextEditor(Widget, can_focus=True):
         inner_height = self.size.height - GUTTER * 2
         inner_width = width - GUTTER * 2
 
-        if y < GUTTER or y >= self.size.height - GUTTER or inner_width <= 0:
+        if y < GUTTER or inner_width <= 0:
             return Strip([Segment(" " * width, gutter_style)])
+
+        # Bottom gutter: show hint text
+        if y >= self.size.height - GUTTER:
+            hint_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
+            hint = "Shift Space: run    Tab: menu"
+            caps = getattr(self.app, 'caps_text', lambda x: x)
+            hint = caps(hint)
+            if len(hint) < width:
+                # Center the hint
+                pad_left = (width - len(hint)) // 2
+                pad_right = width - len(hint) - pad_left
+                return Strip([
+                    Segment(" " * pad_left, gutter_style),
+                    Segment(hint, hint_style),
+                    Segment(" " * pad_right, gutter_style),
+                ])
+            return Strip([Segment(hint[:width], hint_style)])
 
         segments = []
         # Left gutter

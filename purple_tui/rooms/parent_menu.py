@@ -77,8 +77,13 @@ def save_display_settings(settings: dict) -> bool:
         return False
 
 
+_cached_xrandr_outputs: list | None = None
+
 def _get_xrandr_outputs() -> list:
-    """Get list of connected display outputs. Returns empty list on failure."""
+    """Get list of connected display outputs. Cached after first call."""
+    global _cached_xrandr_outputs
+    if _cached_xrandr_outputs is not None:
+        return _cached_xrandr_outputs
     try:
         result = subprocess.run(
             ["xrandr", "--query"],
@@ -94,6 +99,7 @@ def _get_xrandr_outputs() -> list:
             if " connected" in line:
                 output_name = line.split()[0]
                 outputs.append(output_name)
+        _cached_xrandr_outputs = outputs
         return outputs
     except Exception:
         return []
@@ -170,12 +176,11 @@ def apply_display_settings(brightness: float, contrast: float) -> bool:
 
     try:
         for output in outputs:
-            subprocess.run(
+            subprocess.Popen(
                 ["xrandr", "--output", output,
                  "--brightness", str(brightness),
                  "--gamma", gamma_str],
-                capture_output=True,
-                timeout=5
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         return True
     except Exception:

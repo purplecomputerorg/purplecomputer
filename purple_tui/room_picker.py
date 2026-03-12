@@ -584,29 +584,17 @@ class VolumeModal(ModalScreen):
             pass
 
     async def handle_keyboard_action(self, action) -> None:
-        import time
-        self.app._log(f"VolumeModal.handle_keyboard_action: {action}")
-
         if isinstance(action, NavigationAction):
             if action.direction in ('up', 'right'):
-                t0 = time.monotonic()
                 self.app.action_volume_up()
-                t1 = time.monotonic()
                 self._update_display()
-                t2 = time.monotonic()
-                self.app._log(f"VolumeModal vol_up: action={t1-t0:.3f}s display={t2-t1:.3f}s")
             elif action.direction in ('down', 'left'):
-                t0 = time.monotonic()
                 self.app.action_volume_down()
-                t1 = time.monotonic()
                 self._update_display()
-                t2 = time.monotonic()
-                self.app._log(f"VolumeModal vol_down: action={t1-t0:.3f}s display={t2-t1:.3f}s")
             return
 
         if isinstance(action, ControlAction) and action.is_down:
             if action.action in ('enter', 'escape', 'tab'):
-                self.app._log(f"VolumeModal dismiss via {action.action}")
                 self.dismiss(None)
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()
@@ -621,7 +609,6 @@ class VolumeModal(ModalScreen):
 
         if isinstance(action, CharacterAction):
             # Any character key dismisses
-            self.app._log(f"VolumeModal dismiss via char '{action.char}'")
             self.dismiss(None)
 
     async def _on_key(self, event) -> None:

@@ -538,11 +538,37 @@ class AutocompleteHint(Static):
         self.add_class("caps-sensitive")
 
 
-class ExampleHint(Static):
-    """Shows example hint or last command for recall.
+class RecallHint(Static):
+    """Shows 'Enter to try again' hint below the input when input is empty and there's a previous command."""
 
-    Cycles through different hint sets each time play mode is opened.
-    """
+    MAX_RECALL_LEN = 40
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.add_class("caps-sensitive")
+        self._last_command: str = ""
+        self.display = False
+
+    def set_last_command(self, command: str) -> None:
+        self._last_command = command
+
+    def show_if_empty(self, input_empty: bool) -> None:
+        self.display = input_empty and bool(self._last_command)
+        if self.display:
+            self.refresh()
+
+    def render(self) -> str:
+        if not self._last_command:
+            return ""
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        display = self._last_command
+        if len(display) > self.MAX_RECALL_LEN:
+            display = display[:self.MAX_RECALL_LEN - 1] + "…"
+        return f"[dim]{caps(f'Enter to try again: {display}')}[/]"
+
+
+class ExampleHint(Static):
+    """Shows cycling 'Try' hints at the bottom of play mode."""
 
     HINTS = [
         "Try: cat  •  5 + 3  •  red + blue",
@@ -555,29 +581,16 @@ class ExampleHint(Static):
         "Try: 3 dogs + 2 cats  •  red + 2 blues",
     ]
     _hint_index: int = 0
-    MAX_RECALL_LEN = 40
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
-        self._last_command: str = ""
         self._my_hint = ExampleHint.HINTS[ExampleHint._hint_index % len(ExampleHint.HINTS)]
         ExampleHint._hint_index += 1
 
-    def set_last_command(self, command: str) -> None:
-        self._last_command = command
-        self.refresh()
-
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self._last_command:
-            display = self._last_command
-            if len(display) > self.MAX_RECALL_LEN:
-                display = display[:self.MAX_RECALL_LEN - 1] + "…"
-            text = caps(f"Enter to try again: {display}")
-        else:
-            text = caps(self._my_hint)
-        return f"[dim]{text}[/]"
+        return f"[dim]{caps(self._my_hint)}[/]"
 
 
 class ExpressionEvaluated(Message, bubble=True):
@@ -654,6 +667,12 @@ class PlayMode(Vertical):
         border: none;
     }
 
+    #play-recall-hint {
+        height: 1;
+        color: $text-muted;
+        margin-left: 5;
+    }
+
     #autocomplete-hint {
         height: 1;
         color: $text-muted;
@@ -681,6 +700,7 @@ class PlayMode(Vertical):
             with Horizontal(id="input-row"):
                 yield InputPrompt(id="input-prompt")
                 yield InlineInput(id="play-input")
+            yield RecallHint(id="play-recall-hint")
             yield AutocompleteHint(id="autocomplete-hint")
             yield ExampleHint(id="play-example-hint")
 
@@ -696,11 +716,13 @@ class PlayMode(Vertical):
         # Strip Rich markup for clean display
         return _strip_markup(result)
 
-    def _update_example_hint(self) -> None:
-        """Update the example hint to show last command for recall."""
+    def _update_recall_hint(self) -> None:
+        """Update the recall hint with last command and show/hide based on input state."""
         try:
-            hint = self.query_one("#play-example-hint", ExampleHint)
-            hint.set_last_command(self._last_input_text)
+            recall = self.query_one("#play-recall-hint", RecallHint)
+            recall.set_last_command(self._last_input_text)
+            play_input = self.query_one("#play-input", InlineInput)
+            recall.show_if_empty(not play_input.value)
         except Exception:
             pass
 
@@ -710,7 +732,7 @@ class PlayMode(Vertical):
             scroll = self.query_one("#history-scroll")
             scroll.remove_children()
             self._last_input_text = ""
-            self._update_example_hint()
+            self._update_recall_hint()
         except Exception:
             pass
 
@@ -898,11 +920,13 @@ class PlayMode(Vertical):
             return
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Update autocomplete hint display"""
+        """Update autocomplete and recall hint display"""
         try:
             play_input = self.query_one("#play-input", InlineInput)
             hint = self.query_one("#autocomplete-hint", AutocompleteHint)
             hint.update(play_input.autocomplete_hint)
+            recall = self.query_one("#play-recall-hint", RecallHint)
+            recall.show_if_empty(not play_input.value)
         except Exception:
             pass
 
@@ -993,7 +1017,7 @@ class PlayMode(Vertical):
 
         # Store raw input for recall (Enter on empty)
         self._last_input_text = input_text
-        self._update_example_hint()
+        self._update_recall_hint()
 
         # Emit for code panel capture
         if eval_text and result:

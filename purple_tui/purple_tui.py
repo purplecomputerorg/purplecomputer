@@ -784,6 +784,11 @@ class PurpleApp(App):
         background: $background;
     }
 
+    #room-indicator.compact {
+        height: 1;
+        margin-top: 0;
+    }
+
     #content-area {
         width: 100%;
         height: 100%;

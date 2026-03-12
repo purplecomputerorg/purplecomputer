@@ -1,8 +1,8 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then an "Extras" section
-with a code space toggle (full width), and Volume + Clear Rooms side by side.
+Shows 3 rooms (Play, Music, Art) at the top, then a code space toggle
+(full width) with On/Off indicator, and Volume + Clear Rooms side by side.
 Arrow keys navigate, number keys 1-3 for direct room selection,
 Space toggles code space, V opens volume, C clears rooms,
 Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
@@ -85,7 +85,7 @@ class CodeToggleOption(Static):
     DEFAULT_CSS = """
     CodeToggleOption {
         width: 52;
-        height: 5;
+        height: 7;
         content-align: center middle;
         text-align: center;
         border: round $surface-lighten-2;
@@ -113,9 +113,17 @@ class CodeToggleOption(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        indicator = "\u25cf" if self._code_on else "\u25cb"
-        hint = "Press Space or Enter" if self.has_class("selected") else "Press Space"
-        return caps(f"\n{ICON_CODE}  Code Space  {indicator}\n{hint}")
+        # Line 1: robots on either side of "Code Space"
+        title_line = f"{ICON_CODE}  Code Space  {ICON_CODE}"
+        # Line 2: radio-style indicator, filled circle marks current state
+        if self._code_on:
+            status_line = "\u25cb Off  \u25cf On"
+        else:
+            status_line = "\u25cf Off  \u25cb On"
+        # Line 3: Turn On / Turn Off hint
+        action = "Turn Off" if self._code_on else "Turn On"
+        hint = f"Press Space: {action}"
+        return caps(f"\n{title_line}\n{status_line}\n{hint}")
 
 
 class ExtraOption(Static):
@@ -149,7 +157,7 @@ class ExtraOption(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         hint = f"Press {self._key_hint} or Enter" if self.has_class("selected") else f"Press {self._key_hint}"
-        return caps(f"\n{self._icon}  {self._label}\n{hint}")
+        return caps(f"\n{self._icon}  {self._label}  {self._icon}\n{hint}")
 
 
 class ConfirmFreshScreen(ModalScreen):
@@ -297,13 +305,6 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #extras-title {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
     #picker-toggle-row {
         width: 100%;
         height: auto;
@@ -343,7 +344,8 @@ class RoomPickerScreen(ModalScreen):
         super().__init__(**kwargs)
         self._current_room = current_room
         self._code_space_open = code_space_open
-        self._active_row = ROW_ROOMS
+        # If code space is active, start focused on code space row
+        self._active_row = ROW_CODE if code_space_open else ROW_ROOMS
         self._room_index = self._get_initial_room_index()
         self._extra_index = COL_VOLUME
 
@@ -362,8 +364,6 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
-
-            yield Static(caps("Extras"), id="extras-title")
 
             with Horizontal(id="picker-toggle-row"):
                 yield CodeToggleOption(

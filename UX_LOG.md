@@ -131,6 +131,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- Room picker: removed "Extras" title. Code Space toggle now shows robots on both sides, radio-style On/Off circles on a second line, and "Turn On"/"Turn Off" hint. Volume and Clear Rooms show icons on both sides like rooms do. When code space is active, picker opens focused on the Code Space row. Fixed compact room indicator not docking to bottom of screen in code space mode (CSS specificity fix).
 - Play room: "Try" hints cycle through different suggestions each time the room is opened (dinos, sharks, colors, speech, autocomplete tips). "Enter to recall" changed to "Enter to try again" for kid-friendliness.
 - **Removed function keys entirely**: No more F1-F4 for room switching or F10-F12 for volume. Bottom bar shows room icons only (no F-key labels). Mute icon appears on right side when volume is zero. Room switching via Escape picker (tap Escape, press 1-4 or arrow left/right, Enter to confirm). Volume via up/down arrows in picker or hardware media keys. Keyboard calibration removed from parent menu and startup.
 - **Parent menu: Shut Down option**: Added "Shut Down" to parent menu for immediate shutdown. "Exit" renamed to "Exit Parent Menu" for clarity.

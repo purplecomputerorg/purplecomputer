@@ -840,6 +840,16 @@ class PurpleApp(App):
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
+    _LOG_PATH = "/tmp/purple-debug.log"
+
+    def _log(self, msg: str) -> None:
+        """Append a timestamped line to the debug log."""
+        try:
+            with open(self._LOG_PATH, "a") as f:
+                f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+        except Exception:
+            pass
+
     def __init__(self):
         super().__init__()
         self.active_room = Room.PLAY
@@ -2227,12 +2237,12 @@ class PurpleApp(App):
         return None
 
     def _apply_volume_system(self) -> None:
-        """Set system volume via ALSA to match app volume_level."""
+        """Set system volume via ALSA to match app volume_level (non-blocking)."""
         try:
             import subprocess
-            subprocess.run(
+            subprocess.Popen(
                 ["amixer", "sset", "Master", f"{self.volume_level}%"],
-                capture_output=True, timeout=2,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception:
             pass
@@ -2247,19 +2257,16 @@ class PurpleApp(App):
             pass
 
     def _apply_volume(self) -> None:
-        """Apply volume level to TTS, system mixer, and update UI.
-
-        Also reinits the pygame mixer to recover from dead audio backends
-        (common in VMs where PulseAudio/PipeWire drops the SDL2 connection).
-        """
+        """Apply volume level to TTS, system mixer, and update UI."""
+        t0 = time.monotonic()
         from . import tts
-        from .rooms.music_room import reinit_mixer
         tts.set_muted(self.volume_level == 0)
-        # Reinit mixer to recover from dead audio backend
-        reinit_mixer()
-        # Invalidate sound caches (Sound objects are invalid after mixer reinit)
-        self._invalidate_sound_caches()
+        t1 = time.monotonic()
         self._apply_volume_system()
+        t2 = time.monotonic()
+
+        if t2 - t0 > 0.05:
+            self._log(f"_apply_volume: tts={t1-t0:.3f}s amixer={t2-t1:.3f}s total={t2-t0:.3f}s")
 
         # Update volume indicator badge
         try:

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Volume adjustment no longer freezes: removed per-step mixer reinit and made amixer call non-blocking.
 - Music room header: when code space is open, shows just the instrument name (hides "Tab" and "Letters" toggle since letters aren't programmable from code mode).
 - Art room header: when code space is open, shows "paint on" / "write on" labels instead of "Tab".
 - Art room cursor: when code space is open, cursor is a gold ☺ smiley instead of the 3x3 paint ring. Doesn't blink unless there's text underneath (blinks to reveal the text).

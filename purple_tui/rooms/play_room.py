@@ -547,18 +547,17 @@ class RecallHint(Static):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
         self._last_command: str = ""
-        self.display = False
+        self._visible = False
 
     def set_last_command(self, command: str) -> None:
         self._last_command = command
 
     def show_if_empty(self, input_empty: bool) -> None:
-        self.display = input_empty and bool(self._last_command)
-        if self.display:
-            self.refresh()
+        self._visible = input_empty and bool(self._last_command)
+        self.refresh()
 
     def render(self) -> str:
-        if not self._last_command:
+        if not self._visible or not self._last_command:
             return ""
         caps = getattr(self.app, 'caps_text', lambda x: x)
         display = self._last_command
@@ -670,7 +669,7 @@ class PlayMode(Vertical):
     #play-recall-hint {
         height: 1;
         color: $text-muted;
-        margin-left: 5;
+        margin-left: 6;
     }
 
     #autocomplete-hint {

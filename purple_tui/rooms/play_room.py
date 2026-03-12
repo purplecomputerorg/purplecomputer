@@ -539,15 +539,30 @@ class AutocompleteHint(Static):
 
 
 class ExampleHint(Static):
-    """Shows example hint or last command for recall"""
+    """Shows example hint or last command for recall.
 
-    DEFAULT_HINT = "Try: cat  •  2 + 2  •  red + blue  •  cat times 3"
+    Cycles through different hint sets each time play mode is opened.
+    """
+
+    HINTS = [
+        "Try: cat  •  5 + 3  •  red + blue",
+        "Try: 12 x 12 dinos  •  light red dog",
+        "Try: asdfghjkl  •  hello there!  (add ! to speak out loud)",
+        "Try: 5 sharks...  •  say 2 carrots + 5 broccoli",
+        "Try: dark green frog  •  20 19 18 17 16 15...",
+        "Try: red + yellow  •  cat times 3  •  100",
+        "Try: say 582  •  bright blue whale!",
+        "Try: 3 dogs + 2 cats  •  red + 2 blues",
+    ]
+    _hint_index: int = 0
     MAX_RECALL_LEN = 40
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
         self._last_command: str = ""
+        self._my_hint = ExampleHint.HINTS[ExampleHint._hint_index % len(ExampleHint.HINTS)]
+        ExampleHint._hint_index += 1
 
     def set_last_command(self, command: str) -> None:
         self._last_command = command
@@ -559,9 +574,9 @@ class ExampleHint(Static):
             display = self._last_command
             if len(display) > self.MAX_RECALL_LEN:
                 display = display[:self.MAX_RECALL_LEN - 1] + "…"
-            text = caps(f"Enter to recall: {display}")
+            text = caps(f"Enter to try again: {display}")
         else:
-            text = caps(self.DEFAULT_HINT)
+            text = caps(self._my_hint)
         return f"[dim]{text}[/]"
 
 
@@ -1768,7 +1783,7 @@ class SimpleEvaluator:
         # Try _parse_emoji for word-based patterns
         if emoji_data := self._parse_emoji(t_lower):
             e, c, w = emoji_data
-            if c <= 100:
+            if c <= 10000:
                 # Show label if there's explicit operator (*, x, times)
                 if has_operator and c > 1:
                     # Extract numeric expression for grouping (e.g., "2*3" from "2 * 3 cats")
@@ -1845,23 +1860,23 @@ class SimpleEvaluator:
         if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+(\w+)$', term):
             n1, n2, word = int(m.group(1)), int(m.group(2)), m.group(3)
             count = n1 * n2
-            if (e := self._get_emoji(word)) and count <= 100:
+            if (e := self._get_emoji(word)) and count <= 10000:
                 return (e, count, word)
 
         # "N * word" or "word * N"
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', term):
             word = m.group(2)
-            if (e := self._get_emoji(word)) and int(m.group(1)) <= 100:
+            if (e := self._get_emoji(word)) and int(m.group(1)) <= 10000:
                 return (e, int(m.group(1)), word)
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
             word = m.group(1)
-            if (e := self._get_emoji(word)) and int(m.group(2)) <= 100:
+            if (e := self._get_emoji(word)) and int(m.group(2)) <= 10000:
                 return (e, int(m.group(2)), word)
 
         # "N word" or "Nword"
         if m := re.match(r'^(\d+)\s*(\w+)$', term):
             word = m.group(2)
-            if (e := self._get_emoji(word)) and int(m.group(1)) <= 100:
+            if (e := self._get_emoji(word)) and int(m.group(1)) <= 10000:
                 return (e, int(m.group(1)), word)
 
         # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)

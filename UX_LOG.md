@@ -131,6 +131,7 @@ Brief descriptions of user experience changes, newest first.
 
 ## 2026-03
 
+- Play room: "Try" hints cycle through different suggestions each time the room is opened (dinos, sharks, colors, speech, autocomplete tips). "Enter to recall" changed to "Enter to try again" for kid-friendliness.
 - **Removed function keys entirely**: No more F1-F4 for room switching or F10-F12 for volume. Bottom bar shows room icons only (no F-key labels). Mute icon appears on right side when volume is zero. Room switching via Escape picker (tap Escape, press 1-4 or arrow left/right, Enter to confirm). Volume via up/down arrows in picker or hardware media keys. Keyboard calibration removed from parent menu and startup.
 - **Parent menu: Shut Down option**: Added "Shut Down" to parent menu for immediate shutdown. "Exit" renamed to "Exit Parent Menu" for clarity.
 - **Dynamic padding in Alacritty**: Enabled `dynamic_padding` so leftover pixels are distributed evenly around the cell grid, centering it with purple padding on all edges

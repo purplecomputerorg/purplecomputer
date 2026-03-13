@@ -464,6 +464,10 @@ class CodeHintsPanel(Widget):
             "  choose ukulele",
             "  choose musicbox",
             "",
+            "  letters on",
+            "  cat",
+            "  letters off",
+            "",
             "  repeat 2",
             "    qwerty",
             "  end",
@@ -1426,11 +1430,17 @@ class PurpleApp(App):
                                 music.grid.set_instrument(i)
                             break
 
+                def set_letters(on):
+                    music._letters_mode = on
+                    if music._header:
+                        music._header.update_mode(on)
+
                 runner = MusicCodeRunner(
                     play_key_fn=play_key,
                     set_instrument_fn=set_inst,
                     color_fn=lambda k: music.grid.next_color(k, refresh=True),
                     flash_fn=lambda k: music.grid.flash_note(k),
+                    set_letters_fn=set_letters,
                 )
                 await runner.run(lines, mode)
             except Exception:

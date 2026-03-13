@@ -88,3 +88,5 @@ tools/update-key.priv
 update-key.pub
 
 .claude/worktrees
+
+pytest-of-*/

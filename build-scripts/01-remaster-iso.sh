@@ -111,6 +111,16 @@ if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
     chown 1000:1000 /root/home/purple/.hushlogin
     purple_log "Restored dotfiles from /etc/purple/"
 
+    # Debug mode: create flag file and undo kernel message suppression
+    if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
+        touch /root/opt/purple/debug
+        # Override kernel message suppression so boot messages are visible
+        cat > /root/etc/sysctl.d/99-purple-debug.conf << 'SYSCTL_EOF'
+kernel.printk = 7 4 1 7
+SYSCTL_EOF
+        purple_log "DEBUG MODE: created /opt/purple/debug, enabled kernel messages"
+    fi
+
     # Write our own getty service (casper doesn't enable getty@tty1 on Ubuntu Server).
     mkdir -p /root/etc/systemd/system
     cat > /root/etc/systemd/system/purple-live.service << 'SERVICE_EOF'
@@ -336,7 +346,7 @@ main() {
     mkdir -p /opt/purple-installer/output
 
     # Step 1: Download Ubuntu Server ISO if needed
-    log_step "1/8: Checking Ubuntu Server ISO..."
+    log_step "1/9: Checking Ubuntu Server ISO..."
     if [ -f "$UBUNTU_ISO" ]; then
         log_info "Using cached ISO: $UBUNTU_ISO"
     else
@@ -346,19 +356,19 @@ main() {
     log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
 
     # Step 2: Setup working directories
-    log_step "2/8: Setting up working directories..."
+    log_step "2/9: Setting up working directories..."
     rm -rf "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
     mkdir -p "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
 
     # Step 3: Mount and copy ISO contents
-    log_step "3/8: Extracting ISO contents..."
+    log_step "3/9: Extracting ISO contents..."
     mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
 
     # Copy everything from ISO
     rsync -a --info=progress2 "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
 
     # Step 4: Replace squashfs with Purple Computer
-    log_step "4/8: Replacing squashfs with Purple Computer..."
+    log_step "4/9: Replacing squashfs with Purple Computer..."
     # Remove ALL Ubuntu Server squashfs files and replace with ours.
     # Casper reads install-sources.yaml to know which layers to mount.
     rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
@@ -400,7 +410,7 @@ SOURCES_EOF
     rm -rf "$SQEXT"
 
     # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
-    log_step "5/8: Modifying initramfs..."
+    log_step "5/9: Modifying initramfs..."
 
     # Find the initrd (might be named differently)
     INITRD_PATH=""
@@ -527,7 +537,7 @@ SPLASH_EOF
     log_info "Initramfs modified successfully"
 
     # Step 6: Add payload to ISO
-    log_step "6/8: Adding payload to ISO..."
+    log_step "6/9: Adding payload to ISO..."
 
     PAYLOAD_DIR="$WORK_DIR/iso-new/purple"
     mkdir -p "$PAYLOAD_DIR"
@@ -548,7 +558,7 @@ SPLASH_EOF
     umount "$WORK_DIR/iso-mount"
 
     # Step 7: Replace GRUB config with live boot default + optional install
-    log_step "7/8: Configuring GRUB boot menu..."
+    log_step "7/9: Configuring GRUB boot menu..."
 
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     if [ -f "$GRUB_CFG" ]; then
@@ -598,12 +608,12 @@ GRUB_PURPLE
     # NOTE: Ubuntu Server 24.04 uses GRUB for both BIOS and UEFI boot (not isolinux).
     # Boot configuration is preserved via xorriso's -boot_image any replay.
 
-    # Step 8: Rebuild ISO
-    log_step "8/8: Building final ISO..."
+    # Step 8: Build normal ISO
+    log_step "8/9: Building normal ISO..."
 
     OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).iso"
 
-    # Remove existing ISO (xorriso can't overwrite)
+    # Remove existing ISOs (xorriso can't overwrite)
     rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256"
 
     # ==========================================================================
@@ -628,10 +638,73 @@ GRUB_PURPLE
     # Generate checksum
     sha256sum "$OUTPUT_ISO" > "${OUTPUT_ISO}.sha256"
 
-    log_info "ISO built successfully!"
+    log_info "Normal ISO built successfully!"
     log_info "Output: $OUTPUT_ISO"
     log_info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
     log_info "SHA256: $(cat "${OUTPUT_ISO}.sha256")"
+
+    # Step 9: Build debug ISO
+    # Same squashfs/initramfs, different GRUB config: verbose boot, visible menu,
+    # purple.debug=1 flag triggers debug mode in casper hook and .bashrc
+    log_step "9/9: Building debug ISO..."
+
+    DEBUG_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).debug.iso"
+    rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256"
+
+    # Save normal GRUB config and write debug version
+    GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
+    cp "$GRUB_CFG" "${GRUB_CFG}.normal"
+
+    cat > "$GRUB_CFG" << GRUB_DEBUG
+# Purple Computer - DEBUG GRUB Configuration
+# Verbose boot, visible menu, all diagnostics enabled
+
+set timeout=5
+set timeout_style=menu
+set default=0
+
+menuentry "Purple Computer (DEBUG)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 purple.debug=1 ---
+    initrd /casper/initrd
+}
+
+menuentry "Purple Computer (DEBUG, recovery shell)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service purple.debug=1 ---
+    initrd /casper/initrd
+}
+
+menuentry "Install Purple Computer (DEBUG)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper systemd.show_status=true cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 purple.debug=1 i915.enable_dpcd_backlight=1 ---
+    initrd /casper/initrd
+}
+
+menuentry "Boot from next volume" {
+    exit
+}
+
+menuentry "UEFI Firmware Settings" {
+    fwsetup
+}
+GRUB_DEBUG
+
+    xorriso -indev "$UBUNTU_ISO" \
+        -outdev "$DEBUG_ISO" \
+        -volid "PURPLE_DEBUG" \
+        -update_r "$WORK_DIR/iso-new" / \
+        -boot_image any replay
+
+    sha256sum "$DEBUG_ISO" > "${DEBUG_ISO}.sha256"
+
+    log_info "Debug ISO built successfully!"
+    log_info "Output: $DEBUG_ISO"
+    log_info "Size: $(du -h "$DEBUG_ISO" | cut -f1)"
+    log_info "SHA256: $(cat "${DEBUG_ISO}.sha256")"
+
+    # Restore normal GRUB config (for clean state)
+    mv "${GRUB_CFG}.normal" "$GRUB_CFG"
 
     # Cleanup
     log_info "Cleaning up working directories..."

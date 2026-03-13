@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Debug ISO: every build now produces a `.debug.iso` alongside the normal ISO. Debug ISO shows GRUB menu, kernel messages, systemd startup, X11 errors on screen, and drops to a debug shell if Purple crashes.
+- Music Code Space: added "letters on" / "letters off" commands to toggle letter sounds mid-code, matching art mode's "paint on" / "write on" pattern. Header shows current letters state in code mode.
 - Code Space: Tab+Enter now runs code (same as Tab+Space). Menu label changed from "x: close" to "x: exit code" to clarify it exits the entire code space.
 - Code Space tab menu is now an inline bar in the bottom gutter instead of a modal popup. Shows "tab  space: run  ·  c: clear  ·  x: close" dimmed when inactive, lights up when Tab is pressed (sticky tab).
 - Play mode "Try" hints auto-cycle every 60 seconds and on room switch. Tab also cycles them when no autocomplete is active. "Tab: more hints" shown when Tab is available for cycling.

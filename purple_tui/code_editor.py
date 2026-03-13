@@ -21,7 +21,8 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 # Keywords to underline per room (recognized commands)
 _ROOM_KEYWORDS = {
     "play": {"repeat", "end", "times", "plus", "minus"},
-    "music": {"repeat", "end", "choose", "instrument", "fast", "slow"},
+    "music": {"repeat", "end", "choose", "instrument", "fast", "slow",
+              "letters", "on", "off"},
     "art": {"repeat", "end", "left", "right", "up", "down",
             "forward", "turn", "paint", "write", "on", "off"},
 }
@@ -531,7 +532,8 @@ class CodeTextEditor(Widget, can_focus=True):
                      "left", "right", "up", "down",
                      "forward", "turn left", "turn right"]
     # Music mode commands for autocomplete
-    _MUSIC_COMMANDS = ["choose", "instrument", "fast", "slow"]
+    _MUSIC_COMMANDS = ["choose", "instrument", "fast", "slow",
+                       "letters on", "letters off"]
     _INSTRUMENT_NAMES = ["marimba", "xylophone", "ukulele", "musicbox"]
 
     def _update_autocomplete(self) -> None:
@@ -584,8 +586,13 @@ class CodeTextEditor(Widget, can_focus=True):
                     self._autocomplete_suggestion = self._INSTRUMENT_NAMES[0]
                     return
                 return
+            # Match against full line for multi-word commands (e.g. "letters on")
             for cmd in self._MUSIC_COMMANDS:
-                if cmd.startswith(prefix) and cmd != prefix and len(prefix) >= 1:
+                if ' ' in cmd:
+                    if cmd.startswith(line_so_far) and cmd != line_so_far and len(line_so_far) >= 1:
+                        self._autocomplete_suggestion = cmd[len(line_so_far):]
+                        return
+                elif cmd.startswith(prefix) and cmd != prefix and len(prefix) >= 1:
                     self._autocomplete_suggestion = cmd[len(prefix):] + " "
                     return
             return

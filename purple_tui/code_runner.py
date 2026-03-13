@@ -99,20 +99,23 @@ class MusicCodeRunner:
 
     Letters on a line play as notes sequentially.
     `choose [instrument]` or `instrument [name]` changes instrument.
+    `letters on` / `letters off` toggles letters mode mid-execution.
     """
 
     def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None):
+                 color_fn=None, flash_fn=None, set_letters_fn=None):
         """
         play_key_fn: callable(key: str, mode: str) to play a note
         set_instrument_fn: callable(instrument_id: str) to change instrument
         color_fn: callable(key: str) to set key color
         flash_fn: callable(key: str) to flash a note
+        set_letters_fn: callable(on: bool) to toggle letters mode
         """
         self.play_key = play_key_fn
         self.set_instrument = set_instrument_fn
         self.color_fn = color_fn
         self.flash_fn = flash_fn
+        self.set_letters = set_letters_fn
 
     # Speed presets: delay between notes in seconds
     SPEED_NORMAL = 0.2
@@ -136,9 +139,17 @@ class MusicCodeRunner:
                 continue
             text = cmd['text']
 
+            # letters on/off
+            m = re.match(r'^letters\s+(on|off)\s*$', text, re.IGNORECASE)
+            if m:
+                letters_on = m.group(1).lower() == 'on'
+                mode = "letters" if letters_on else "music"
+                if self.set_letters:
+                    self.set_letters(letters_on)
+                continue
+
             # instrument/choose command
             m = re.match(r'^(?:choose|instrument)\s+(.+)$', text, re.IGNORECASE)
-            if m and self.set_instrument:
                 self.set_instrument(m.group(1).strip())
                 await asyncio.sleep(0.1)
                 continue

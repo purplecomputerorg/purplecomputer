@@ -240,6 +240,8 @@ AUTOLOGIN
     # With console=tty2, tty1 is blank until agetty starts. This fills the gap.
     cat > "$MOUNT_DIR/usr/local/bin/purple-splash" <<'SPLASH'
 #!/bin/sh
+# In debug mode, skip the splash so kernel/systemd messages stay visible
+[ -f /opt/purple/debug ] && exit 0
 # Silence kernel console messages (camera drivers, etc.) so they don't
 # overwrite our splash. Works regardless of which modules are loaded.
 dmesg -n 1 2>/dev/null
@@ -349,10 +351,26 @@ SYSCTL
 
 # Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
 if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    setterm --cursor off 2>/dev/null
-    # Repaint the splash instead of clearing, so the "Welcome" message
-    # stays visible until X11 covers the VT (avoids a brief blank flash).
-    /usr/local/bin/purple-splash 2>/dev/null || clear
+    PURPLE_DEBUG=0
+    [ -f /opt/purple/debug ] && PURPLE_DEBUG=1
+
+    if [ "$PURPLE_DEBUG" = "1" ]; then
+        echo ""
+        echo "=========================================="
+        echo "  Purple Computer - DEBUG MODE"
+        echo "=========================================="
+        echo "  Logs: /tmp/startx.log, /tmp/xinitrc.log"
+        echo "  X.Org: /var/log/Xorg.0.log"
+        echo "  tty2: Ctrl+Alt+F2 for shell"
+        echo "=========================================="
+        echo ""
+    else
+        setterm --cursor off 2>/dev/null
+        # Repaint the splash instead of clearing, so the "Welcome" message
+        # stays visible until X11 covers the VT (avoids a brief blank flash).
+        /usr/local/bin/purple-splash 2>/dev/null || clear
+    fi
+
     # Fail-fast: don't loop forever if X keeps crashing
     X_FAIL_COUNT_FILE="/tmp/.x-fail-count"
     X_FAIL_MAX=3
@@ -386,8 +404,13 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
     # Increment fail count before starting (will be reset on clean exit)
     echo $((X_FAIL_COUNT + 1)) > "$X_FAIL_COUNT_FILE"
 
-    # Start X - if it exits cleanly, reset the counter
-    startx > /tmp/startx.log 2>&1
+    # Start X: in debug mode, show output on screen too
+    if [ "$PURPLE_DEBUG" = "1" ]; then
+        echo "[DEBUG] Starting X11 (startx)..."
+        startx 2>&1 | tee /tmp/startx.log
+    else
+        startx > /tmp/startx.log 2>&1
+    fi
     X_EXIT=$?
 
     if [ $X_EXIT -eq 0 ]; then

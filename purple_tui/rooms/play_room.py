@@ -579,17 +579,37 @@ class ExampleHint(Static):
         "Try: say 582  •  bright blue whale!",
         "Try: 3 dogs + 2 cats  •  red + 2 blues",
     ]
-    _hint_index: int = 0
+
+    CYCLE_SECONDS = 60
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
-        self._my_hint = ExampleHint.HINTS[ExampleHint._hint_index % len(ExampleHint.HINTS)]
-        ExampleHint._hint_index += 1
+        self._hint_index = 0
+        self._show_tab_hint = True
+
+    def on_mount(self) -> None:
+        self.set_interval(self.CYCLE_SECONDS, self._next_hint)
+
+    def _next_hint(self) -> None:
+        self._hint_index = (self._hint_index + 1) % len(self.HINTS)
+        self.refresh()
+
+    def advance(self) -> None:
+        """Manually advance to next hint (called on Tab)."""
+        self._next_hint()
+
+    def set_tab_hint_visible(self, visible: bool) -> None:
+        """Show or hide the 'Tab: more hints' suffix."""
+        if self._show_tab_hint != visible:
+            self._show_tab_hint = visible
+            self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"[dim]{caps(self._my_hint)}[/]"
+        hint = self.HINTS[self._hint_index]
+        tab_suffix = "     Tab: more hints" if self._show_tab_hint else ""
+        return f"[dim]{caps(hint + tab_suffix)}[/]"
 
 
 class ExpressionEvaluated(Message, bubble=True):
@@ -831,17 +851,24 @@ class PlayMode(Vertical):
 
         # Handle control actions
         if isinstance(action, ControlAction):
-            if action.action == 'tab' and action.is_down and play_input.autocomplete_matches:
-                # Tab: accept autocomplete suggestion
-                selected_word = play_input.autocomplete_matches[play_input.autocomplete_index][0]
-                words = play_input.value.split()
-                if words:
-                    words[-1] = selected_word
-                    play_input.value = " ".join(words) + " "
-                    play_input.cursor_position = len(play_input.value)
-                play_input.autocomplete_matches = []
-                play_input.autocomplete_index = 0
-                play_input.exact_match_display = ""
+            if action.action == 'tab' and action.is_down:
+                if play_input.autocomplete_matches:
+                    # Tab: accept autocomplete suggestion
+                    selected_word = play_input.autocomplete_matches[play_input.autocomplete_index][0]
+                    words = play_input.value.split()
+                    if words:
+                        words[-1] = selected_word
+                        play_input.value = " ".join(words) + " "
+                        play_input.cursor_position = len(play_input.value)
+                    play_input.autocomplete_matches = []
+                    play_input.autocomplete_index = 0
+                    play_input.exact_match_display = ""
+                else:
+                    # No autocomplete: cycle try hints
+                    try:
+                        self.query_one("#play-example-hint", ExampleHint).advance()
+                    except Exception:
+                        pass
                 return
 
             if action.action == 'space' and action.is_down:
@@ -926,6 +953,8 @@ class PlayMode(Vertical):
             hint.update(play_input.autocomplete_hint)
             recall = self.query_one("#play-recall-hint", RecallHint)
             recall.show_if_empty(not play_input.value)
+            example = self.query_one("#play-example-hint", ExampleHint)
+            example.set_tab_hint_visible(not play_input.autocomplete_matches)
         except Exception:
             pass
 

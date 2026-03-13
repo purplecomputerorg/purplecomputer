@@ -1896,6 +1896,14 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
+        # Cycle play mode "Try" hint on room switch
+        if new_room == Room.PLAY:
+            try:
+                from .rooms.play_room import ExampleHint
+                self.query_one("#play-example-hint", ExampleHint).advance()
+            except (NoMatches, Exception):
+                pass
+
         # Show color legend in play mode (always visible, no active row)
         # Hide it when leaving both art and play modes
         if new_room == Room.PLAY:

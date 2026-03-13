@@ -781,7 +781,18 @@ class ParentMenu(ModalScreen):
             input()
             _flush_terminal_input()
             os.system('stty sane')
-            os.system('sudo reboot')
+            # Use reboot -f to bypass systemd service shutdown, which can
+            # hang on live USB (casper mounts, etc.). Matches purple-confirm.sh.
+            os.system('sudo sync')
+            os.system('sudo reboot -f')
+            # Fallback: sysrq reboot if reboot -f didn't work
+            import time
+            time.sleep(3)
+            try:
+                with open('/proc/sysrq-trigger', 'w') as f:
+                    f.write('b')
+            except OSError:
+                os.system('sudo reboot')
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

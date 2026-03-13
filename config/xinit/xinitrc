@@ -35,10 +35,21 @@ xset r rate 300 30
 # SPICE agent for VM resize (harmless on real hardware)
 command -v spice-vdagent &>/dev/null && spice-vdagent &
 
-# Hide the mouse cursor (keyboard-only UI, no mouse needed).
-# Create a 1x1 blank XBM cursor rather than using unclutter, which had timing issues.
-printf '#define b_width 1\n#define b_height 1\nstatic unsigned char b_bits[] = { 0x00 };\n' > /tmp/blank.xbm
-xsetroot -solid "#2d1b4e" -cursor /tmp/blank.xbm /tmp/blank.xbm
+# Set root window background color
+xsetroot -solid "#2d1b4e"
+
+# Hide the mouse cursor globally (keyboard-only UI, no mouse needed).
+# xsetroot -cursor only hides the cursor on the root window, not inside app windows.
+# XFixesHideCursor hides it everywhere, including inside Alacritty.
+python3 -c "
+from ctypes import cdll, c_ulong
+X = cdll.LoadLibrary('libX11.so.6')
+Xf = cdll.LoadLibrary('libXfixes.so.3')
+d = X.XOpenDisplay(None)
+X.XDefaultRootWindow.restype = c_ulong
+Xf.XFixesHideCursor(d, X.XDefaultRootWindow(d))
+X.XFlush(d)
+" 2>/dev/null || true
 
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &

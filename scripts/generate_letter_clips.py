@@ -38,7 +38,7 @@ _SYNTH_PARAMS = {
 # Same pronunciation map as tts.py
 LETTER_PRONUNCIATION = {
     "A": "ehh", "B": "bee", "C": "see", "D": "dee", "E": "ee",
-    "F": "ef", "G": "jee", "H": "aitch", "I": "eye", "J": "jay",
+    "F": "ef.", "G": "jee", "H": "aitch", "I": "eye", "J": "jay",
     "K": "kay", "L": "el", "M": "em", "N": "en", "O": "oh",
     "P": "pee", "Q": "cue", "R": "ar", "S": "es", "T": "tee",
     "U": "you", "V": "vee", "W": "double you", "X": "ex",

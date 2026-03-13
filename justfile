@@ -14,6 +14,10 @@ setup:
 run:
     PURPLE_TEST_BATTERY=1 ./scripts/run_local.sh
 
+# Run in dev mode (no idle shutdown, debug logging)
+run-dev:
+    PURPLE_TEST_BATTERY=1 PURPLE_DEV_MODE=1 ./scripts/run_local.sh
+
 # Run with demo auto-start
 run-demo:
     PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh

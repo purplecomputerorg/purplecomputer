@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code Space: Tab+Enter now runs code (same as Tab+Space). Menu label changed from "x: close" to "x: exit code" to clarify it exits the entire code space.
 - Code Space tab menu is now an inline bar in the bottom gutter instead of a modal popup. Shows "tab  space: run  ·  c: clear  ·  x: close" dimmed when inactive, lights up when Tab is pressed (sticky tab).
 - Play mode "Try" hints auto-cycle every 60 seconds and on room switch. Tab also cycles them when no autocomplete is active. "Tab: more hints" shown when Tab is available for cycling.
 - Code Space editor bottom border shows "Shift Space: run    Tab: menu" hint text.

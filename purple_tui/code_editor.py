@@ -2,7 +2,7 @@
 Code Space: A per-room text editor widget.
 
 Kids type code in a file-like interface below the viewport,
-then run it with Tab+Space (or Shift+Space). Each room has its own buffer.
+then run it with Tab+Space, Tab+Enter, or Shift+Space. Each room has its own buffer.
 
 Uses render_line()/Strip/Segment for reliable rendering (same
 pattern as ArtCanvas).
@@ -294,11 +294,11 @@ class CodeTextEditor(Widget, can_focus=True):
 
         parts = [
             (caps(" tab "), tab_style),
-            (caps("  space: run"), item_style),
+            (caps("  space/enter: run"), item_style),
             (caps("  \u00b7  "), sep_style),
             (caps("c: clear"), item_style),
             (caps("  \u00b7  "), sep_style),
-            (caps("x: close"), item_style),
+            (caps("x: exit code"), item_style),
         ]
 
         total_len = sum(len(text) for text, _ in parts)
@@ -321,8 +321,8 @@ class CodeTextEditor(Widget, can_focus=True):
         if isinstance(action, ControlAction) and not action.is_down:
             return True
 
-        # Space: run code
-        if isinstance(action, ControlAction) and action.is_down and action.action == 'space':
+        # Space or Enter: run code
+        if isinstance(action, ControlAction) and action.is_down and action.action in ('space', 'enter'):
             self._tab_menu_active = False
             self.post_message(RunCodeRequested(
                 room=self._room,

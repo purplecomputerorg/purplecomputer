@@ -2,17 +2,13 @@
 Code Space: A per-room text editor widget.
 
 Kids type code in a file-like interface below the viewport,
-then run it with Shift+Space. Each room has its own buffer.
+then run it with Tab+Space (or Shift+Space). Each room has its own buffer.
 
 Uses render_line()/Strip/Segment for reliable rendering (same
 pattern as ArtCanvas).
 """
 
 from textual.widget import Widget
-from textual.screen import ModalScreen
-from textual.containers import Container
-from textual.widgets import Static
-from textual.app import ComposeResult
 from textual.strip import Strip
 from textual.message import Message
 from rich.segment import Segment
@@ -41,6 +37,10 @@ CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
 CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
 CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
 CODE_HINT_FG = "#8a6bb4"          # Hint text in bottom gutter
+CODE_TAB_LABEL_FG = "#b0a4be"      # Tab label when inactive (dim but visible)
+CODE_TAB_DIMMED_FG = "#c0b4cc"     # Menu items when inactive (very dim)
+CODE_TAB_ACTIVE_BG = "#8a6bb4"     # Tab label background when active
+CODE_TAB_ACTIVE_FG = "#f0e8f4"     # Tab label text when active
 
 # Gutter: 1-cell padding on all sides of the text area
 GUTTER = 1
@@ -58,105 +58,6 @@ class CloseCodeSpaceRequested(Message, bubble=True):
     """Posted when user closes code space from tab menu."""
     pass
 
-
-class CodeTabMenu(ModalScreen):
-    """Small modal for code space actions: Run Code, Close Code Space."""
-
-    CSS = """
-    CodeTabMenu {
-        align: center middle;
-    }
-
-    #tab-menu-dialog {
-        width: 40;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: heavy $primary;
-    }
-
-    #tab-menu-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-
-    .tab-menu-item {
-        width: 100%;
-        height: 1;
-        padding: 0 1;
-    }
-
-    .tab-menu-item.selected {
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._selected = 0
-        self._items = [
-            ("run", "Run Code (Space)"),
-            ("clear", "Clear (C)"),
-            ("close", "Close Code Space (X)"),
-        ]
-
-    def compose(self) -> ComposeResult:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        with Container(id="tab-menu-dialog"):
-            yield Static(caps("Code Space"), id="tab-menu-title")
-            for i, (item_id, label) in enumerate(self._items):
-                widget = Static(caps(label), id=f"tab-item-{item_id}", classes="tab-menu-item")
-                if i == 0:
-                    widget.add_class("selected")
-                yield widget
-
-    def _update_selection(self) -> None:
-        for i, (item_id, _) in enumerate(self._items):
-            try:
-                widget = self.query_one(f"#tab-item-{item_id}", Static)
-                if i == self._selected:
-                    widget.add_class("selected")
-                else:
-                    widget.remove_class("selected")
-            except Exception:
-                pass
-
-    async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, NavigationAction):
-            if action.direction == 'up':
-                self._selected = max(0, self._selected - 1)
-                self._update_selection()
-            elif action.direction == 'down':
-                self._selected = min(len(self._items) - 1, self._selected + 1)
-                self._update_selection()
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                item_id = self._items[self._selected][0]
-                self.dismiss(item_id)
-            elif action.action in ('escape', 'tab'):
-                self.dismiss(None)
-            elif action.action == 'space':
-                self.dismiss("run")
-            return
-
-        if isinstance(action, CharacterAction):
-            if action.char.lower() == 'c':
-                self.dismiss("clear")
-            elif action.char.lower() == 'x':
-                self.dismiss("close")
-            else:
-                self.dismiss(None)
-            return
-
-    async def _on_key(self, event) -> None:
-        event.stop()
-        event.prevent_default()
 
 
 class CodeTextEditor(Widget, can_focus=True):
@@ -191,6 +92,9 @@ class CodeTextEditor(Widget, can_focus=True):
         # Autocomplete state
         self._autocomplete_suggestion: str | None = None
 
+        # Inline tab menu state
+        self._tab_menu_active = False
+
     # -- Buffer access helpers --
 
     def _get_lines(self) -> list[str]:
@@ -217,6 +121,7 @@ class CodeTextEditor(Widget, can_focus=True):
     def set_room(self, room_name: str) -> None:
         self._room = room_name
         self._autocomplete_suggestion = None
+        self._tab_menu_active = False
         self._ensure_scroll_visible()
         self.refresh()
 
@@ -312,22 +217,9 @@ class CodeTextEditor(Widget, can_focus=True):
         if y < GUTTER or inner_width <= 0:
             return Strip([Segment(" " * width, gutter_style)])
 
-        # Bottom gutter: show hint text
+        # Bottom gutter: inline tab menu bar
         if y >= self.size.height - GUTTER:
-            hint_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
-            hint = "Shift Space: run    Tab: menu"
-            caps = getattr(self.app, 'caps_text', lambda x: x)
-            hint = caps(hint)
-            if len(hint) < width:
-                # Center the hint
-                pad_left = (width - len(hint)) // 2
-                pad_right = width - len(hint) - pad_left
-                return Strip([
-                    Segment(" " * pad_left, gutter_style),
-                    Segment(hint, hint_style),
-                    Segment(" " * pad_right, gutter_style),
-                ])
-            return Strip([Segment(hint[:width], hint_style)])
+            return self._render_tab_menu_bar(width)
 
         segments = []
         # Left gutter
@@ -386,10 +278,102 @@ class CodeTextEditor(Widget, can_focus=True):
 
         return Strip(segments)
 
+    def _render_tab_menu_bar(self, width: int) -> Strip:
+        """Render the inline tab menu bar in the bottom gutter."""
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        gutter_style = Style(bgcolor=CODE_GUTTER_BG)
+
+        if self._tab_menu_active:
+            tab_style = Style(bgcolor=CODE_TAB_ACTIVE_BG, color=CODE_TAB_ACTIVE_FG, bold=True)
+            item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
+            sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
+        else:
+            tab_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_LABEL_FG)
+            item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
+            sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
+
+        parts = [
+            (caps(" tab "), tab_style),
+            (caps("  space: run"), item_style),
+            (caps("  \u00b7  "), sep_style),
+            (caps("c: clear"), item_style),
+            (caps("  \u00b7  "), sep_style),
+            (caps("x: close"), item_style),
+        ]
+
+        total_len = sum(len(text) for text, _ in parts)
+        pad_left = max(0, (width - total_len) // 2)
+        pad_right = max(0, width - total_len - pad_left)
+
+        segments = []
+        if pad_left > 0:
+            segments.append(Segment(" " * pad_left, gutter_style))
+        for text, style in parts:
+            segments.append(Segment(text, style))
+        if pad_right > 0:
+            segments.append(Segment(" " * pad_right, gutter_style))
+
+        return Strip(segments)
+
+    def _handle_tab_menu_key(self, action) -> bool:
+        """Handle keyboard input while tab menu is active. Returns True if consumed."""
+        # Consume key-up events without deactivating
+        if isinstance(action, ControlAction) and not action.is_down:
+            return True
+
+        # Space: run code
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'space':
+            self._tab_menu_active = False
+            self.post_message(RunCodeRequested(
+                room=self._room,
+                lines=list(self._get_lines()),
+            ))
+            self.refresh()
+            return True
+
+        # Tab: toggle off (ignore repeats)
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'tab':
+            if not action.is_repeat:
+                self._tab_menu_active = False
+                self.refresh()
+            return True
+
+        # Escape: deactivate
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'escape':
+            self._tab_menu_active = False
+            self.refresh()
+            return True
+
+        # Character shortcuts
+        if isinstance(action, CharacterAction):
+            ch = action.char.lower()
+            if ch == 'c':
+                self._tab_menu_active = False
+                self.clear_buffer()
+            elif ch == 'x':
+                self._tab_menu_active = False
+                self.post_message(CloseCodeSpaceRequested())
+                self.refresh()
+            else:
+                # Any other character: just deactivate
+                self._tab_menu_active = False
+                self.refresh()
+            return True
+
+        # Any other action (navigation, etc.): deactivate
+        self._tab_menu_active = False
+        self.refresh()
+        return True
+
     # -- Keyboard handling --
 
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard input. Returns True if consumed."""
+        # Intercept keys when inline tab menu is active
+        if self._tab_menu_active:
+            if self._handle_tab_menu_key(action):
+                return
+
         if isinstance(action, CharacterAction):
             # Backtick/tilde inserts repeat template
             if action.char in ('`', '~'):
@@ -419,12 +403,13 @@ class CodeTextEditor(Widget, can_focus=True):
                 return
 
             if action.action == 'tab':
-                # Tab: accept autocomplete or open tab menu
+                # Tab: accept autocomplete or activate inline menu
                 if self._autocomplete_suggestion:
                     self._accept_autocomplete()
                     self._restart_blink()
-                else:
-                    self._open_tab_menu()
+                elif not action.is_repeat:
+                    self._tab_menu_active = True
+                    self.refresh()
                 return
 
             if action.action == 'space':
@@ -630,21 +615,6 @@ class CodeTextEditor(Widget, can_focus=True):
         self._autocomplete_suggestion = None
         self._ensure_scroll_visible()
         self.refresh()
-
-    def _open_tab_menu(self) -> None:
-        """Open the tab menu modal."""
-        def on_tab_result(result):
-            if result == "run":
-                self.post_message(RunCodeRequested(
-                    room=self._room,
-                    lines=list(self._get_lines()),
-                ))
-            elif result == "clear":
-                self.clear_buffer()
-            elif result == "close":
-                self.post_message(CloseCodeSpaceRequested())
-
-        self.app.push_screen(CodeTabMenu(), on_tab_result)
 
     # -- Public API --
 

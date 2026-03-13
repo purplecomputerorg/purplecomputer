@@ -1379,9 +1379,14 @@ class PurpleApp(App):
         # Refresh shift banner
         self._update_shift_indicator()
 
+    _code_run_task: asyncio.Task | None = None
+
     def on_run_code_requested(self, message: RunCodeRequested) -> None:
         """Handle code execution request from code editor."""
-        asyncio.ensure_future(self._run_code(message.room, message.lines))
+        # Cancel any in-progress code run before starting a new one
+        if self._code_run_task and not self._code_run_task.done():
+            self._code_run_task.cancel()
+        self._code_run_task = asyncio.ensure_future(self._run_code(message.room, message.lines))
 
     async def _run_code(self, room: str, lines: list[str]) -> None:
         """Execute code for the given room."""

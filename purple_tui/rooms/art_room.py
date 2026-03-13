@@ -58,7 +58,7 @@ GRAYSCALE = {
 BRUSH_CHAR = "█"
 
 # Code mode cursor (single-width smiley, or directional when using turn/forward)
-CODE_CURSOR_CHAR = "☺"
+CODE_CURSOR_CHAR = "●"
 HEADING_CURSORS = {
     'right': "▶",
     'left': "◀",
@@ -247,7 +247,7 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Paint mode toggle
         self._paint_mode = True
-        self._last_key_color = "#FFFFFF"  # Color from last key in paint mode
+        self._last_key_color = "#9b7bc4"  # Default brush: Purple Computer purple
         self._last_key_char = ""  # Last key pressed
 
         # Space-hold for drawing lines in paint mode
@@ -342,16 +342,8 @@ class ArtCanvas(Widget, can_focus=True):
         self.refresh()
 
     def _update_blink_for_code_mode(self) -> None:
-        """In code mode, only blink if there's a non-paint character under cursor."""
-        if self._code_mode:
-            cell = self._grid.get((self._cursor_x, self._cursor_y))
-            has_text = cell is not None and cell[0] not in (" ", BRUSH_CHAR, "")
-            if has_text:
-                self._start_blink()
-            else:
-                self._stop_blink()
-        else:
-            self._start_blink()
+        """Update blink state. Always blink in code mode and normal mode."""
+        self._start_blink()
 
     def _toggle_blink(self) -> None:
         """Toggle cursor visibility for blink effect."""
@@ -511,7 +503,7 @@ class ArtCanvas(Widget, can_focus=True):
                             char_out = HEADING_CURSORS.get(self._heading, CODE_CURSOR_CHAR)
                         else:
                             char_out = CODE_CURSOR_CHAR
-                        style_out = Style(color="#FFD700", bgcolor=bg, bold=True)
+                        style_out = Style(color="#FFFFFF", bgcolor=bg, bold=True)
                     else:
                         if cell:
                             char, fg_color, bg_color = cell
@@ -795,6 +787,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_y = 0
         self._heading = 'right'
         self._use_heading_cursor = False
+        self._last_key_color = "#9b7bc4"
 
         self._clear_animation_active = False
         self._invalidate_all()

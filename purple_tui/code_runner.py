@@ -244,13 +244,16 @@ class ArtCodeRunner:
 
             # Unrecognized text: paint colored blocks or type text
             if paint_on:
-                # Paint mode: each character stamps its key color as a block
+                # Paint mode: each character stamps its key color as a block.
+                # Save/restore brush color so typed letters don't change state.
+                saved_color = self.canvas._last_key_color
                 for ch in text:
                     if ch == ' ':
                         self.canvas.type_char(ch)
                     else:
                         self.canvas.paint_char(ch)
                     await asyncio.sleep(0.02)
+                self.canvas._last_key_color = saved_color
             else:
                 # No paint, no write: type text at cursor
                 for ch in text:

@@ -451,9 +451,6 @@ class CodeHintsPanel(Widget):
             "  repeat 3",
             "    dog",
             "  end",
-            "",
-            "Shift+Space: run",
-            "Tab: menu",
         ],
         "music": [
             "Code to try:",
@@ -470,9 +467,6 @@ class CodeHintsPanel(Widget):
             "  repeat 2",
             "    qwerty",
             "  end",
-            "",
-            "Shift+Space: run",
-            "Tab: menu",
         ],
         "art": [
             "Code to try:",
@@ -493,8 +487,6 @@ class CodeHintsPanel(Widget):
             "    right 10",
             "    down 10",
             "  end",
-            "",
-            "Shift+Space: run",
         ],
     }
 

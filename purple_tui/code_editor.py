@@ -293,12 +293,12 @@ class CodeTextEditor(Widget, can_focus=True):
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
         parts = [
-            (caps(" tab "), tab_style),
-            (caps("  space/enter: run"), item_style),
+            (caps(" Tab: Menu "), tab_style),
+            (caps("  Space: Run"), item_style),
             (caps("  \u00b7  "), sep_style),
-            (caps("c: clear"), item_style),
+            (caps("C: Clear"), item_style),
             (caps("  \u00b7  "), sep_style),
-            (caps("x: exit code"), item_style),
+            (caps("X: Exit Code"), item_style),
         ]
 
         total_len = sum(len(text) for text, _ in parts)

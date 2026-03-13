@@ -196,9 +196,10 @@ class HistoryLine(Static):
         dark = self._is_dark()
         if self.line_type == "code_header":
             # Code results header: no "Ask →" prefix, just bold text
+            # Extra newline above for visual separation from previous output
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             prefix = f"[bold {answer_color}]{caps(self.text)}[/] "
-            return prefix
+            return f"\n{prefix}"
         elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "

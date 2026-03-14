@@ -80,6 +80,7 @@ ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 # Volume levels (0-100, step by 25)
 VOLUME_LEVELS = [0, 25, 50, 75, 100]
 VOLUME_DEFAULT = 100
+SYSTEM_VOLUME_MAX = 85  # Cap system mixer to avoid analog amp hiss on real hardware
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 # These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.

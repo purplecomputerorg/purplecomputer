@@ -609,8 +609,12 @@ class ExampleHint(Static):
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         hint = self.HINTS[self._hint_index]
-        tab_suffix = "     Tab: more hints" if self._show_tab_hint else ""
-        return f"[dim]{caps(hint + tab_suffix)}[/]"
+        tab_text = "     Tab: more hints"
+        if self._show_tab_hint:
+            return f"[dim]{caps(hint + tab_text)}[/]"
+        else:
+            # Keep same-width spacing so center-aligned text doesn't shift
+            return f"[dim]{caps(hint)}[/]{' ' * len(tab_text)}"
 
 
 class ExpressionEvaluated(Message, bubble=True):

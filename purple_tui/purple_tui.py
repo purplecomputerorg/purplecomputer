@@ -1644,9 +1644,12 @@ class PurpleApp(App):
             pass
 
     def _is_sleep_or_bye_active(self) -> bool:
-        """Check if a sleep or bye screen is currently showing."""
-        from .rooms.sleep_screen import SleepScreen, ByeScreen
-        return any(isinstance(s, (SleepScreen, ByeScreen)) for s in self.screen_stack)
+        """Check if a sleep, shutdown confirm, or bye screen is currently showing."""
+        from .rooms.sleep_screen import SleepScreen, ShutdownConfirmScreen, ByeScreen
+        return any(
+            isinstance(s, (SleepScreen, ShutdownConfirmScreen, ByeScreen))
+            for s in self.screen_stack
+        )
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity or lid close."""
@@ -1681,6 +1684,17 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _show_shutdown_confirm(self) -> None:
+        """Show the shutdown confirmation screen (power button tap)."""
+        if self._is_sleep_or_bye_active():
+            return
+
+        try:
+            from .rooms.sleep_screen import ShutdownConfirmScreen
+            self.push_screen(ShutdownConfirmScreen())
+        except Exception:
+            pass
+
     def _record_user_activity(self) -> None:
         """Record that user is active. Resets idle timer."""
         try:
@@ -1701,14 +1715,16 @@ class PurpleApp(App):
             return
 
         if event.action == "tap":
-            from .rooms.sleep_screen import SleepScreen
-            sleep_showing = any(isinstance(s, SleepScreen) for s in self.screen_stack)
-            if sleep_showing:
-                # Already sleeping: second tap means shut down.
+            from .rooms.sleep_screen import ShutdownConfirmScreen
+            confirm_showing = any(
+                isinstance(s, ShutdownConfirmScreen) for s in self.screen_stack
+            )
+            if confirm_showing:
+                # Second tap on confirm screen: shut down.
                 # (Many laptops send tap-only for power, hold never fires.)
                 self._show_bye_screen()
             else:
-                self._show_sleep_screen()
+                self._show_shutdown_confirm()
         elif event.action == "hold":
             self._show_bye_screen()
 
@@ -1717,11 +1733,11 @@ class PurpleApp(App):
         if self._bye_screen_active:
             return
 
-        from .rooms.sleep_screen import ByeScreen, SleepScreen
+        from .rooms.sleep_screen import ByeScreen, SleepScreen, ShutdownConfirmScreen
 
-        # Dismiss sleep screen first if it's showing (avoid stacking)
+        # Dismiss sleep/confirm screen first if showing (avoid stacking)
         for screen in list(self.screen_stack):
-            if isinstance(screen, SleepScreen):
+            if isinstance(screen, (SleepScreen, ShutdownConfirmScreen)):
                 screen.dismiss()
                 break
 
@@ -2257,11 +2273,17 @@ class PurpleApp(App):
         return None
 
     def _apply_volume_system(self) -> None:
-        """Set system volume via ALSA to match app volume_level (non-blocking)."""
+        """Set system volume via ALSA to match app volume_level (non-blocking).
+
+        Maps app volume (0-100) onto 0-SYSTEM_VOLUME_MAX to avoid pushing
+        the analog amplifier into its noisy range on real hardware.
+        """
         try:
             import subprocess
+            from .constants import SYSTEM_VOLUME_MAX
+            system_vol = round(self.volume_level * SYSTEM_VOLUME_MAX / 100)
             subprocess.Popen(
-                ["amixer", "sset", "Master", f"{self.volume_level}%"],
+                ["amixer", "sset", "Master", f"{system_vol}%"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
         except Exception:

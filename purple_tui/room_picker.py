@@ -176,7 +176,7 @@ class ConfirmFreshScreen(ModalScreen):
     #confirm-dialog {
         width: 50;
         height: auto;
-        max-height: 16;
+        max-height: 22;
         padding: 2 3;
         background: $surface;
         border: heavy $warning;
@@ -232,7 +232,7 @@ class ConfirmFreshScreen(ModalScreen):
             with Vertical(id="confirm-buttons"):
                 yield Static(caps("Yes, clear rooms"), id="btn-yes", classes="confirm-btn")
                 yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
-            yield Static(caps("\u25b2 \u25bc to choose       Enter to confirm"), id="confirm-hint")
+            yield Static(caps("\u25b2 \u25bc to choose       Enter to confirm       Escape to cancel"), id="confirm-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):

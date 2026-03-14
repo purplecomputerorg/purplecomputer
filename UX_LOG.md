@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Clear Rooms confirmation: fixed dialog max-height so the "No, go back" button and Escape hint are no longer clipped off-screen. Added Escape hint.
+- Play mode "Tab: more hints" text now replaced with equal-width spaces instead of hidden when autocomplete is active, preventing hint text from shifting due to center alignment.
+- Power button tap now shows "Press power button again to shut down" confirmation screen. Any other key cancels back to normal. Idle sleep screen unchanged.
 - Debug ISO: every build now produces a `.debug.iso` alongside the normal ISO. Debug ISO shows GRUB menu, kernel messages, systemd startup, X11 errors on screen, and drops to a debug shell if Purple crashes.
 - Music Code Space: added "letters on" / "letters off" commands to toggle letter sounds mid-code, matching art mode's "paint on" / "write on" pattern. Header shows current letters state in code mode.
 - Code Space: Tab+Enter now runs code (same as Tab+Space). Menu label changed from "x: close" to "x: exit code" to clarify it exits the entire code space.

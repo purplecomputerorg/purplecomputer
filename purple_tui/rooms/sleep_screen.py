@@ -1,8 +1,8 @@
 """
-Purple Computer - Sleep Screen and Bye Screen
+Purple Computer - Sleep Screen, Shutdown Confirm Screen, and Bye Screen
 
-Kid-friendly screens for sleep (idle timeout, power button tap) and
-shutdown (power button hold, lid close timeout).
+Kid-friendly screens for sleep (idle timeout), shutdown confirmation
+(power button tap), and shutdown (power button hold, lid close timeout).
 """
 
 from textual.app import ComposeResult
@@ -152,6 +152,62 @@ class SleepScreen(Screen):
     async def handle_keyboard_action(self, action) -> None:
         """Any key action wakes up the computer (evdev)"""
         self._wake_up()
+
+
+class ShutdownConfirmScreen(Screen):
+    """
+    Confirmation screen shown when power button is tapped.
+
+    Shows "Press power button again to shut down". Any other key
+    dismisses back to normal operation.
+    """
+
+    DEFAULT_CSS = """
+    ShutdownConfirmScreen {
+        align: center middle;
+        background: $background;
+    }
+
+    #shutdown-face {
+        content-align: center middle;
+        color: $primary;
+    }
+
+    #shutdown-hint {
+        content-align: center middle;
+        color: $text-muted;
+        margin-top: 2;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            "\n".join([
+                "---     ---",
+                "           ",
+                "   \\___/   ",
+                "           ",
+                "   z z z   ",
+            ]),
+            id="shutdown-face",
+        )
+        yield Static("Press power button again to shut down", id="shutdown-hint")
+
+    def _cancel(self) -> None:
+        """Cancel shutdown and return to normal operation."""
+        pm = get_power_manager()
+        pm.record_activity()
+        self.dismiss()
+
+    def on_key(self, event: events.Key) -> None:
+        """Any non-power key cancels (terminal fallback)."""
+        event.stop()
+        event.prevent_default()
+        self._cancel()
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Any non-power key cancels (evdev)."""
+        self._cancel()
 
 
 class ByeScreen(Screen):

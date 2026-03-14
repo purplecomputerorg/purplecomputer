@@ -24,14 +24,21 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 MAX_SIZE_GB=256
 
 find_latest_iso() {
-    # Find most recent ISO in output directory
+    # Find most recent ISO in output directory (exclude .debug.iso)
     if [[ -d "$OUTPUT_DIR" ]]; then
-        ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | head -1
+        ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v '\.debug\.iso$' | head -1
+    fi
+}
+
+find_latest_debug_iso() {
+    # Find most recent debug ISO in output directory
+    if [[ -d "$OUTPUT_DIR" ]]; then
+        ls -t "$OUTPUT_DIR"/purple-*.debug.iso 2>/dev/null | head -1
     fi
 }
 
 usage() {
-    echo "Usage: $0 [iso-path]"
+    echo "Usage: $0 [options] [iso-path]"
     echo ""
     echo "Flash PurpleOS ISO to a whitelisted USB drive."
     echo ""
@@ -44,6 +51,7 @@ usage() {
     echo "  Run '$0 --list' to see connected USB drives and their serials."
     echo ""
     echo "Options:"
+    echo "  --debug     Flash the debug ISO (.debug.iso) instead"
     echo "  --list      List all USB drives (for finding serial numbers)"
     echo "  --help      Show this help"
 }
@@ -233,7 +241,7 @@ write_iso() {
     # verification to see stale data.
     sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
     sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
-    sleep 3
+    sleep 5
 
     # Verification step - read back and compare
     echo ""
@@ -243,9 +251,15 @@ write_iso() {
     # Drop caches to ensure we read from disk, not memory
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
 
-    # Read back exactly iso_size_bytes from the USB and calculate SHA256
+    # Close and re-open the device by reading through a fresh dd invocation.
+    # iflag=direct: bypass kernel page cache entirely (O_DIRECT), forcing
+    #   reads from the physical device. This is the real fix for intermittent
+    #   verification failures where drop_caches alone wasn't enough.
+    # iflag=count_bytes: interpret count as bytes (not blocks), so we read
+    #   exactly iso_size_bytes without needing head -c in a pipeline (which
+    #   could cause SIGPIPE issues with dd).
     local usb_sha256
-    usb_sha256="$(sudo dd if="$TARGET_DEV" bs=4M count=$(( (iso_size_bytes + 4194303) / 4194304 )) status=progress 2>/dev/null | head -c "$iso_size_bytes" | sha256sum | awk '{print $1}')"
+    usb_sha256="$(sudo dd if="$TARGET_DEV" bs=4M count="$iso_size_bytes" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')"
 
     echo ""
 
@@ -289,20 +303,37 @@ write_iso() {
 
 main() {
     # Handle options
-    case "${1:-}" in
-        --help|-h)
-            usage
-            exit 0
-            ;;
-        --list|-l)
-            list_usb_drives
-            exit 0
-            ;;
-    esac
+    local use_debug=false
+    while [[ -n "${1:-}" ]]; do
+        case "$1" in
+            --help|-h)
+                usage
+                exit 0
+                ;;
+            --list|-l)
+                list_usb_drives
+                exit 0
+                ;;
+            --debug|-d)
+                use_debug=true
+                shift
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
 
     # Determine ISO path
     if [[ -n "${1:-}" ]]; then
         ISO_PATH="$1"
+    elif [[ "$use_debug" == true ]]; then
+        ISO_PATH="$(find_latest_debug_iso)"
+        if [[ -z "$ISO_PATH" ]]; then
+            log_error "No debug ISO found in $OUTPUT_DIR"
+            echo "Run build-in-docker.sh first to generate a .debug.iso."
+            exit 1
+        fi
     else
         ISO_PATH="$(find_latest_iso)"
         if [[ -z "$ISO_PATH" ]]; then

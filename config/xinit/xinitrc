@@ -58,6 +58,10 @@ sleep 0.5
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
 
+# Software GL rendering: works on any GPU (no driver/firmware dependencies).
+# For a TUI, software GL is indistinguishable from hardware GL.
+export LIBGL_ALWAYS_SOFTWARE=1
+
 DEBUG_FLAG=/opt/purple/debug
 
 # Debug mode: extra diagnostics at boot

@@ -150,6 +150,7 @@ class MusicCodeRunner:
 
             # instrument/choose command
             m = re.match(r'^(?:choose|instrument)\s+(.+)$', text, re.IGNORECASE)
+            if m and self.set_instrument:
                 self.set_instrument(m.group(1).strip())
                 await asyncio.sleep(0.1)
                 continue

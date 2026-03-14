@@ -38,7 +38,7 @@ CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
 CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
 CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
 CODE_HINT_FG = "#8a6bb4"          # Hint text in bottom gutter
-CODE_TAB_LABEL_FG = "#b0a4be"      # Tab label when inactive (dim but visible)
+CODE_TAB_LABEL_FG = "#5a3d7a"      # Tab label when inactive (high contrast)
 CODE_TAB_DIMMED_FG = "#c0b4cc"     # Menu items when inactive (very dim)
 CODE_TAB_ACTIVE_BG = "#8a6bb4"     # Tab label background when active
 CODE_TAB_ACTIVE_FG = "#f0e8f4"     # Tab label text when active
@@ -294,7 +294,7 @@ class CodeTextEditor(Widget, can_focus=True):
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
         parts = [
-            (caps(" Tab: Menu "), tab_style),
+            (caps(" Press Tab for Menu "), tab_style),
             (caps("  Space: Run"), item_style),
             (caps("  \u00b7  "), sep_style),
             (caps("C: Clear"), item_style),
@@ -376,8 +376,8 @@ class CodeTextEditor(Widget, can_focus=True):
                 return
 
         if isinstance(action, CharacterAction):
-            # Backtick/tilde inserts repeat template
-            if action.char in ('`', '~'):
+            # Backtick inserts repeat template
+            if action.char == '`':
                 self._insert_repeat_template()
                 self._restart_blink()
                 return

@@ -475,11 +475,6 @@ class CodeHintsPanel(Widget):
         "art": [
             "Code to try:",
             "",
-            "  right 10",
-            "  down 5",
-            "  left 10",
-            "  up 5",
-            "",
             "  asdfasdf",
             "  (paints colors!)",
             "",
@@ -488,9 +483,10 @@ class CodeHintsPanel(Widget):
             "  write off",
             "",
             "  repeat 4",
-            "    right 10",
-            "    down 10",
+            "    forward 10",
+            "    turn right",
             "  end",
+            "  (draws a square!)",
         ],
     }
 

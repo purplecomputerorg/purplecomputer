@@ -602,7 +602,6 @@ def _get_menu_items() -> list:
     items.append(("menu-shell", "Open Terminal"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
-        items.append(("menu-update", "Git Pull & Exit"))
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
@@ -864,8 +863,6 @@ class ParentMenu(ModalScreen):
             self._open_shell()
         elif item_id == "menu-demo":
             self._start_demo()
-        elif item_id == "menu-update":
-            self._update_and_restart()
         elif item_id == "menu-bash":
             self._exit_to_bash()
         elif item_id == "menu-system":
@@ -1041,66 +1038,3 @@ class ParentMenu(ModalScreen):
         # Tell the app to start demo after modal is closed
         self.app.call_later(self.app.start_demo)
 
-    def _update_and_restart(self) -> None:
-        """Git pull and restart the app (dev mode only)."""
-        self.dismiss()
-        self.app.call_later(self._run_update_and_restart)
-
-    def _run_update_and_restart(self) -> None:
-        """Actually run the update - called after modal dismissed."""
-        project_root = Path(__file__).parent.parent.parent
-
-        with self.app.suspend_with_terminal_input():
-            os.system('stty sane')
-            os.system('clear')
-
-            print("=" * 60)
-            print("Purple Computer - Update & Restart")
-            print("=" * 60)
-            print()
-
-            # Git pull
-            print("Pulling latest changes...")
-            result = subprocess.run(
-                ["git", "pull"],
-                cwd=project_root,
-            )
-
-            if result.returncode != 0:
-                print()
-                print("Git pull failed. Check the error above.")
-                print("Press Enter to return to Purple Computer...")
-                input()
-                _flush_terminal_input()
-                os.system('stty sane')
-                return
-
-            # Pip install (in case dependencies changed)
-            print()
-            print("Updating dependencies...")
-            venv_pip = project_root / ".venv" / "bin" / "pip"
-            if venv_pip.exists():
-                subprocess.run(
-                    [str(venv_pip), "install", "-q", "-r", "requirements.txt"],
-                    cwd=project_root,
-                )
-
-            print()
-            print("Update complete!")
-            print("Press Enter to exit. Then run 'just run' to restart.")
-            print()
-
-            input()
-
-            # Restore terminal and exit.
-            # We use os._exit(0) instead of sys.exit(0) because we're inside
-            # Textual's suspend context. sys.exit() would try to unwind through
-            # Textual's cleanup code, which can leave the terminal in a broken
-            # state (blank screen, no echo). os._exit() exits immediately while
-            # the terminal is still in the clean state from suspend().
-            _flush_terminal_input()
-            os.system('stty sane')
-            os.system('clear')
-            print("Run 'just run' to start Purple Computer.")
-            print()
-            os._exit(0)

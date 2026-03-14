@@ -823,16 +823,6 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    #update-buttons {
-        width: 100%;
-        height: 3;
-        align: center middle;
-        margin-top: 1;
-    }
-
-    #update-buttons Button {
-        margin: 0 2;
-    }
     """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -859,7 +849,6 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
-        self._pending_update = None  # Set by main() if breaking update available
 
         # Power management
         self._idle_timer = None
@@ -1032,10 +1021,6 @@ class PurpleApp(App):
 
         # Poll for USB update signal file (written by systemd usb_updater service)
         self._usb_update_timer = self.set_interval(2.0, self._check_usb_update_signal)
-
-        # Show breaking update prompt if available
-        if self._pending_update:
-            self._show_update_prompt()
 
         # Auto-start demo if requested (for recording)
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
@@ -1575,54 +1560,6 @@ class PurpleApp(App):
                 viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
-
-    def _show_update_prompt(self) -> None:
-        """Show a prompt for breaking updates"""
-        from textual.widgets import Button, Label
-        from textual.containers import Horizontal
-        from textual.screen import ModalScreen
-
-        update_info = self._pending_update
-
-        class UpdateScreen(ModalScreen):
-            """Modal screen for update prompt"""
-
-            BINDINGS = [("escape", "dismiss", "Cancel")]
-
-            def compose(self):
-                with Container(id="update-dialog"):
-                    yield Label(f"Purple Computer {update_info['version']} is available!")
-                    yield Label(update_info['message'])
-                    yield Label("")
-                    yield Label("This is a major update. Would you like to update now?")
-                    with Horizontal(id="update-buttons"):
-                        yield Button("Update", id="update-yes", variant="primary")
-                        yield Button("Later", id="update-no")
-
-            def on_button_pressed(self, event: Button.Pressed) -> None:
-                if event.button.id == "update-yes":
-                    self.dismiss(True)
-                else:
-                    self.dismiss(False)
-
-            async def handle_keyboard_action(self, action) -> None:
-                """Handle keyboard actions from evdev."""
-                if isinstance(action, ControlAction) and action.is_down:
-                    if action.action == 'enter':
-                        self.dismiss(True)  # Update
-                    elif action.action == 'escape':
-                        self.dismiss(False)  # Later
-
-        def handle_update_result(should_update: bool) -> None:
-            if should_update:
-                from .updater import apply_breaking_update
-                if apply_breaking_update():
-                    # Restart the app
-                    import sys
-                    import os
-                    os.execv(sys.executable, [sys.executable] + sys.argv)
-
-        self.push_screen(UpdateScreen(), handle_update_result)
 
     def _check_usb_update_signal(self) -> None:
         """Poll for USB update signal file. Written by the systemd usb_updater service."""
@@ -2734,18 +2671,6 @@ def main():
     print("\033[2J\033[H", end="")  # Clear screen, cursor to top-left
     print("\n\n    Loading...", end="", flush=True)
 
-    # Check for updates before starting
-    from .updater import auto_update_if_available
-    update_result = auto_update_if_available()
-
-    if update_result == "updated":
-        # Minor update applied. Restart the app
-        import os
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-
-    # If breaking update available, the app will show a prompt
-    # (handled in PurpleApp.on_mount)
-
     try:
         app = PurpleApp()
     except RuntimeError as e:
@@ -2753,13 +2678,6 @@ def main():
         print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
         sys.exit(1)
 
-    if update_result and update_result.startswith("breaking:"):
-        # Pass breaking update info to app
-        parts = update_result.split(":", 2)
-        app._pending_update = {
-            "version": parts[1],
-            "message": parts[2] if len(parts) > 2 else "A new version is available"
-        }
     app.run(mouse=False)  # Purple Computer is keyboard-only
 
 

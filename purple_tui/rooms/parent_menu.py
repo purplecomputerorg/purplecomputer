@@ -414,6 +414,133 @@ class DisplaySettingsScreen(ModalScreen):
                 self.dismiss(False)
 
 
+class LittlesModeScreen(ModalScreen):
+    """
+    Pick a Littles Mode: lock the app into a single activity for young kids.
+
+    Options: Off, Music, Art. Uses up/down navigation, Enter to confirm.
+    """
+
+    CSS = """
+    LittlesModeScreen {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.7);
+    }
+
+    #littles-dialog {
+        width: 50;
+        height: auto;
+        padding: 1 2;
+        background: $surface;
+        border: round $primary;
+    }
+
+    #littles-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        color: $primary;
+        margin-bottom: 1;
+    }
+
+    #littles-desc {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-bottom: 1;
+    }
+
+    .littles-option {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    .littles-option.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+
+    #littles-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    """
+
+    OPTIONS = [
+        (None, "Off", "All rooms, full experience"),
+        ("music", "Music", "Every key plays a sound and shows a color"),
+        ("art", "Art", "Every key puts color on the canvas"),
+    ]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_littles_mode
+        current = get_littles_mode()
+        # Find current selection index
+        self._selected = 0
+        for i, (value, _, _) in enumerate(self.OPTIONS):
+            if value == current:
+                self._selected = i
+                break
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="littles-dialog"):
+            yield Static("Littles Mode", id="littles-title")
+            yield Static("One activity, no menus, no switching", id="littles-desc")
+            for i, (value, label, desc) in enumerate(self.OPTIONS):
+                yield Static(
+                    f"{label}\n{desc}",
+                    id=f"littles-opt-{i}",
+                    classes="littles-option",
+                )
+            yield Static("\u25b2 \u25bc to choose   Enter to confirm   Esc to cancel", id="littles-hint")
+
+    def on_mount(self) -> None:
+        self._update_selection()
+
+    def _update_selection(self) -> None:
+        for i in range(len(self.OPTIONS)):
+            try:
+                widget = self.query_one(f"#littles-opt-{i}", Static)
+                if i == self._selected:
+                    widget.add_class("selected")
+                else:
+                    widget.remove_class("selected")
+            except Exception:
+                pass
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self._selected = (self._selected - 1) % len(self.OPTIONS)
+                self._update_selection()
+            elif action.direction == 'down':
+                self._selected = (self._selected + 1) % len(self.OPTIONS)
+                self._update_selection()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                from ..settings import set_littles_mode
+                value = self.OPTIONS[self._selected][0]
+                set_littles_mode(value)
+                self.dismiss(value)
+            elif action.action == 'escape':
+                self.dismiss(None)
+
+
 def _flush_terminal_input() -> None:
     """Flush any buffered terminal input to prevent stray characters."""
     try:
@@ -451,7 +578,23 @@ def _is_dev_environment() -> bool:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
+    from ..settings import get_littles_mode, is_code_space_enabled
+
     items = []
+
+    # Littles Mode
+    littles = get_littles_mode()
+    if littles:
+        littles_label = f"Littles Mode: {littles.title()}"
+    else:
+        littles_label = "Littles Mode: Off"
+    items.append(("menu-littles", littles_label))
+
+    # Code Space toggle (not shown in Littles Mode since it's always off)
+    if not littles:
+        code_label = "Code Space: On" if is_code_space_enabled() else "Code Space: Off"
+        items.append(("menu-code-toggle", code_label))
+
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
     if _is_live_boot():
@@ -709,7 +852,11 @@ class ParentMenu(ModalScreen):
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""
         item_id = self._menu_items[self._selected_index][0]
-        if item_id == "menu-display":
+        if item_id == "menu-littles":
+            self._open_littles_mode()
+        elif item_id == "menu-code-toggle":
+            self._toggle_code_space_setting()
+        elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
             self._install_to_disk()
@@ -727,6 +874,22 @@ class ParentMenu(ModalScreen):
             self._shutdown()
         elif item_id == "menu-exit":
             self.dismiss()
+
+    def _open_littles_mode(self) -> None:
+        """Open the Littles Mode picker."""
+        def on_result(result):
+            if result is not None:
+                # Dismiss parent menu with the littles mode change
+                self.dismiss({"littles_mode": result})
+
+        self.app.push_screen(LittlesModeScreen(), callback=on_result)
+
+    def _toggle_code_space_setting(self) -> None:
+        """Toggle Code Space on/off and dismiss with result."""
+        from ..settings import is_code_space_enabled, set_code_space_enabled
+        new_state = not is_code_space_enabled()
+        set_code_space_enabled(new_state)
+        self.dismiss({"code_space_enabled": new_state})
 
     def _open_display_settings(self) -> None:
         """Open the display settings modal."""

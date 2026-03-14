@@ -890,6 +890,9 @@ class PurpleApp(App):
         self._code_space_open = False
         self._code_panel_transitioning = False
 
+        # Littles Mode: locks into a single room with no switching
+        self._littles_mode: str | None = None  # None, "music", or "art"
+
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
         self._demo_task = None
@@ -950,6 +953,15 @@ class PurpleApp(App):
         """Called when app starts"""
         self._apply_theme()
         apply_saved_display_settings()
+
+        # Load Littles Mode setting before loading room content
+        from .settings import get_littles_mode
+        saved_littles = get_littles_mode()
+        if saved_littles:
+            self._littles_mode = saved_littles
+            room_map = {"music": Room.MUSIC, "art": Room.ART}
+            self.active_room = room_map.get(saved_littles, Room.MUSIC)
+
         self._load_room_content()
 
         # Set system volume to match app volume (default 100%)
@@ -965,6 +977,14 @@ class PurpleApp(App):
                 legend.set_visible(False)
         except NoMatches:
             pass
+
+        # Hide room indicator in Littles Mode
+        if self._littles_mode:
+            try:
+                indicator = self.query_one("#room-indicator", RoomIndicator)
+                indicator.display = False
+            except NoMatches:
+                pass
 
         # Start direct evdev keyboard reader (unless disabled for AI tools)
         # This reads keyboard events directly, bypassing the terminal
@@ -1166,7 +1186,7 @@ class PurpleApp(App):
                 consumed = getattr(self, '_escape_consumed_by_mode', False)
                 self._escape_consumed_by_mode = False
                 if not self._escape_triggered_long_hold and not self._modal_open_at_escape_press and not consumed:
-                    if len(self.screen_stack) == 1:
+                    if len(self.screen_stack) == 1 and not self._littles_mode:
                         self._show_room_picker()
                         return
             # Don't return - let escape events propagate to modes for other uses
@@ -1208,6 +1228,10 @@ class PurpleApp(App):
                 pass
             return
 
+        # Block tab in Littles Mode (prevents sub-mode switching in music/art)
+        if self._littles_mode and isinstance(action, ControlAction) and action.action == 'tab':
+            return
+
         # Dispatch to the current mode widget
         room_id = f"room-{self.active_room.name.lower()}"
         try:
@@ -1244,11 +1268,13 @@ class PurpleApp(App):
 
     def _show_room_picker(self) -> None:
         """Show the mode picker modal."""
+        from .settings import is_code_space_enabled
         self.clear_notifications()
         current_room = self.active_room.name.lower()
         picker = RoomPickerScreen(
             current_room=current_room,
             code_space_open=self._code_space_open,
+            code_space_available=is_code_space_enabled(),
         )
         self.push_screen(picker, self._on_room_picked)
 
@@ -1290,6 +1316,15 @@ class PurpleApp(App):
         """Toggle the code space editor open/closed with font transition."""
         if self._code_panel_transitioning:
             return
+
+        # Block in Littles Mode or when Code Space is disabled
+        # (_force_close_code_space bypasses by setting _code_space_force_close)
+        if not getattr(self, '_code_space_force_close', False):
+            if self._littles_mode:
+                return
+            from .settings import is_code_space_enabled
+            if not is_code_space_enabled():
+                return
 
         self._code_panel_transitioning = True
         self._code_space_open = not self._code_space_open
@@ -2406,7 +2441,57 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
-        self.push_screen(ParentMenu(), callback=lambda _: self.clear_notifications())
+        self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
+
+    def _on_parent_menu_dismissed(self, result) -> None:
+        """Handle parent menu dismiss, applying any setting changes."""
+        self.clear_notifications()
+
+        if not result or not isinstance(result, dict):
+            return
+
+        # Littles Mode changed
+        if "littles_mode" in result:
+            self._apply_littles_mode(result["littles_mode"])
+
+        # Code Space toggled off while it was open
+        if "code_space_enabled" in result:
+            if not result["code_space_enabled"] and self._code_space_open:
+                self._force_close_code_space()
+
+    def _force_close_code_space(self) -> None:
+        """Close code space, bypassing setting guards."""
+        self._code_space_force_close = True
+        self.toggle_code_space()
+        self._code_space_force_close = False
+
+    def _apply_littles_mode(self, mode: str | None) -> None:
+        """Apply a Littles Mode change. Switches room, hides/shows UI."""
+        self._littles_mode = mode
+
+        if mode:
+            # Close code space if open
+            if self._code_space_open:
+                self._force_close_code_space()
+
+            # Switch to the locked room
+            room_map = {"music": ROOM_MUSIC[0], "art": ROOM_ART[0]}
+            room_name = room_map.get(mode, ROOM_MUSIC[0])
+            self.action_switch_room(room_name)
+
+            # Hide room indicator
+            try:
+                indicator = self.query_one("#room-indicator", RoomIndicator)
+                indicator.display = False
+            except NoMatches:
+                pass
+        else:
+            # Show room indicator
+            try:
+                indicator = self.query_one("#room-indicator", RoomIndicator)
+                indicator.display = True
+            except NoMatches:
+                pass
 
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""

@@ -31,6 +31,7 @@ from rich.highlighter import Highlighter
 from rich.text import Text
 import re
 
+from ..constants import ICON_ROBOT
 from ..content import singularize
 
 from ..content import get_content
@@ -198,7 +199,7 @@ class HistoryLine(Static):
             # Code results header: no "Ask →" prefix, just bold text
             # Extra newline above for visual separation from previous output
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
-            prefix = f"[bold {answer_color}]{caps(self.text)}[/] "
+            prefix = f"{ICON_ROBOT} [{answer_color}]→[/] [bold {answer_color}]{caps(self.text)}[/] "
             return f"\n{prefix}"
         elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT

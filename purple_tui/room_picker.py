@@ -341,12 +341,17 @@ class RoomPickerScreen(ModalScreen):
 
     def __init__(self, current_room: str = "play",
                  code_space_open: bool = False,
+                 code_space_available: bool = True,
                  **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
         self._code_space_open = code_space_open
+        self._code_space_available = code_space_available
         # If code space is active, start focused on code space row
-        self._active_row = ROW_CODE if code_space_open else ROW_ROOMS
+        if code_space_open and code_space_available:
+            self._active_row = ROW_CODE
+        else:
+            self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
         self._extra_index = COL_VOLUME
 
@@ -355,6 +360,15 @@ class RoomPickerScreen(ModalScreen):
             if opt_id == self._current_room:
                 return i
         return 0
+
+    @property
+    def _visible_rows(self) -> list[int]:
+        """Row indices that are navigable (skips code row when unavailable)."""
+        rows = [ROW_ROOMS]
+        if self._code_space_available:
+            rows.append(ROW_CODE)
+        rows.append(ROW_EXTRAS)
+        return rows
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
@@ -366,11 +380,12 @@ class RoomPickerScreen(ModalScreen):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
-            with Horizontal(id="picker-toggle-row"):
-                yield CodeToggleOption(
-                    code_on=self._code_space_open,
-                    id="opt-code-toggle",
-                )
+            if self._code_space_available:
+                with Horizontal(id="picker-toggle-row"):
+                    yield CodeToggleOption(
+                        code_on=self._code_space_open,
+                        id="opt-code-toggle",
+                    )
 
             with Horizontal(id="picker-extras"):
                 yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
@@ -424,6 +439,7 @@ class RoomPickerScreen(ModalScreen):
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
+            visible = self._visible_rows
             if action.direction == 'left':
                 if self._active_row == ROW_ROOMS:
                     self._room_index = max(0, self._room_index - 1)
@@ -438,12 +454,14 @@ class RoomPickerScreen(ModalScreen):
                     self._extra_index = min(NUM_EXTRA_COLS - 1, self._extra_index + 1)
                 self._update_selection()
             elif action.direction == 'up':
-                if self._active_row > 0:
-                    self._active_row -= 1
+                cur = visible.index(self._active_row) if self._active_row in visible else 0
+                if cur > 0:
+                    self._active_row = visible[cur - 1]
                     self._update_selection()
             elif action.direction == 'down':
-                if self._active_row < NUM_ROWS - 1:
-                    self._active_row += 1
+                cur = visible.index(self._active_row) if self._active_row in visible else 0
+                if cur < len(visible) - 1:
+                    self._active_row = visible[cur + 1]
                     self._update_selection()
             return
 
@@ -481,8 +499,9 @@ class RoomPickerScreen(ModalScreen):
             elif action.action == 'escape':
                 self.dismiss(None)
             elif action.action == 'space':
-                # Space toggles code space from any row
-                self.dismiss({"toggle_code_space": True})
+                # Space toggles code space from any row (if available)
+                if self._code_space_available:
+                    self.dismiss({"toggle_code_space": True})
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()
             elif action.action == 'volume_down':

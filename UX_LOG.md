@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Littles Mode: parent menu option to lock the app into a single activity (Music or Art) for young kids. Disables room switching, Tab, Code Space, and the room picker. Long-press Escape still opens the parent menu.
+- Code Space toggle: parent menu option to enable/disable Code Space entirely. When off, Code Space is hidden from the room picker and can't be activated.
 - Clear Rooms confirmation: fixed dialog max-height so the "No, go back" button and Escape hint are no longer clipped off-screen. Added Escape hint.
 - Play mode "Tab: more hints" text now replaced with equal-width spaces instead of hidden when autocomplete is active, preventing hint text from shifting due to center alignment.
 - Power button tap now shows "Press power button again to shut down" confirmation screen. Any other key cancels back to normal. Idle sleep screen unchanged.

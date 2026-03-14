@@ -4,7 +4,7 @@ Music Room: Music and Art Grid
 A rectangular grid mapped to QWERTY keyboard.
 Press keys to play sounds and cycle colors.
 Tab switches between Music and Letters modes.
-Space controls the loop station (record → loop → layer → stop).
+Space controls the loop station (record → loop → layer → double-tap stop).
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev.
@@ -20,6 +20,7 @@ from rich.style import Style
 from pathlib import Path
 import asyncio
 import os
+import time
 from ..keyboard import CharacterAction, ControlAction
 from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
@@ -534,6 +535,7 @@ class MusicMode(Container, can_focus=True):
         self._loop_task: asyncio.Task | None = None
         self._recording_timer = None
         self._loop_progress_timer = None
+        self._last_loop_space_time: float = 0.0
 
     @property
     def is_letters_mode(self) -> bool:
@@ -589,9 +591,16 @@ class MusicMode(Container, can_focus=True):
                 self._update_hint()
 
         elif state == LOOPING:
-            self._stop_loop()
-            self.app.clear_notifications()
-            self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+            now = time.monotonic()
+            if now - self._last_loop_space_time < 2.0:
+                # Double-tap space: stop the loop
+                self._stop_loop()
+                self.app.clear_notifications()
+                self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+                self._last_loop_space_time = 0.0
+            else:
+                # First tap: ignore but remember the time
+                self._last_loop_space_time = now
 
     def _handle_escape(self) -> bool:
         """Escape stops loop from any non-idle state. Returns True if consumed."""
@@ -610,6 +619,7 @@ class MusicMode(Container, can_focus=True):
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
+        self._last_loop_space_time = 0.0
         self._update_hint()
 
     def _start_loop_playback(self) -> None:
@@ -743,7 +753,7 @@ class MusicMode(Container, can_focus=True):
             bar = "".join(bar_chars)
             label = caps("Looping!")
             play = caps("Play on top!")
-            stop = caps("Space/Esc: stop")
+            stop = caps("Space+Space: stop")
             hint.update(f"[bold green]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------

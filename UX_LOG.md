@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Modal hint text: standardized format across all modals (consistent arrow symbols, "Esc cancel" everywhere escape works, no "to" filler words, uniform spacing). Fixes "Esc to cancel" wrapping onto two lines in Code Space and Littles Mode dialogs.
 - Littles Mode: parent menu option to lock the app into a single activity (Music or Art) for young kids. Disables room switching, Tab, Code Space, and the room picker. Long-press Escape still opens the parent menu.
 - Code Space toggle: parent menu option to enable/disable Code Space entirely. When off, Code Space is hidden from the room picker and can't be activated.
 - Clear Rooms confirmation: fixed dialog max-height so the "No, go back" button and Escape hint are no longer clipped off-screen. Added Escape hint.

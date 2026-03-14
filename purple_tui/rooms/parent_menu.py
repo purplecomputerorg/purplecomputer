@@ -291,7 +291,7 @@ class DisplaySettingsScreen(ModalScreen):
             with Horizontal(id="button-row"):
                 yield Static("  Save  ", id="btn-save")
                 yield Static(" Cancel ", id="btn-cancel")
-            yield Static("← → adjust   ↑ ↓ move   Enter confirm", id="display-hint")
+            yield Static("← → adjust  \u25b2 \u25bc move  Enter confirm  Esc cancel", id="display-hint")
 
     def on_mount(self) -> None:
         self._update_display()
@@ -504,7 +504,7 @@ class LittlesModeScreen(ModalScreen):
                     id=f"littles-opt-{i}",
                     classes="littles-option",
                 )
-            yield Static("\u25b2 \u25bc to choose   Enter to confirm   Esc to cancel", id="littles-hint")
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="littles-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -625,7 +625,7 @@ class CodeSpaceScreen(ModalScreen):
                     id=f"codespace-opt-{i}",
                     classes="codespace-option",
                 )
-            yield Static("\u25b2 \u25bc to choose   Enter to confirm   Esc to cancel", id="codespace-hint")
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="codespace-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -793,10 +793,7 @@ class InstallConfirmScreen(ModalScreen):
             with Horizontal(id="install-buttons"):
                 yield Static(" Install ", id="btn-install")
                 yield Static(" Cancel ", id="btn-cancel-install")
-            yield Static(
-                "Arrow keys choose   Enter confirm",
-                id="install-hint"
-            )
+            yield Static("← → choose   Enter confirm   Esc cancel", id="install-hint")
 
     def on_mount(self):
         self._update_buttons()
@@ -915,7 +912,7 @@ class ParentMenu(ModalScreen):
             with Vertical(id="parent-items"):
                 for item_id, label in self._menu_items:
                     yield ParentMenuItem(label, item_id)
-            yield Static("↑↓ Enter Esc", id="parent-hint")
+            yield Static("\u25b2 \u25bc   Enter   Esc", id="parent-hint")
 
     def on_mount(self) -> None:
         """Highlight the first menu item"""

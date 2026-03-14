@@ -232,7 +232,7 @@ class ConfirmFreshScreen(ModalScreen):
             with Vertical(id="confirm-buttons"):
                 yield Static(caps("Yes, clear rooms"), id="btn-yes", classes="confirm-btn")
                 yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
-            yield Static(caps("\u25b2 \u25bc to choose       Enter to confirm       Escape to cancel"), id="confirm-hint")
+            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="confirm-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
@@ -391,7 +391,7 @@ class RoomPickerScreen(ModalScreen):
                 yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
 
-            yield Static(caps("Arrow keys to move    Enter to pick"), id="picker-hint")
+            yield Static(caps("Arrow keys move   Enter pick"), id="picker-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -571,7 +571,7 @@ class VolumeModal(ModalScreen):
         with Container(id="volume-dialog"):
             yield Static(caps("Volume"), id="volume-title")
             yield Static("", id="volume-display")
-            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc  to adjust       Enter to close"), id="volume-hint")
+            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close"), id="volume-hint")
 
     def on_mount(self) -> None:
         self._update_display()

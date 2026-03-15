@@ -4,10 +4,25 @@
 
 # Log for debugging (view with: cat /tmp/xinitrc.log)
 exec >> /tmp/xinitrc.log 2>&1
-echo "=== $(date) ==="
+
+DEBUG_FLAG=/opt/purple/debug
+
+# Timestamped logging: only active in debug mode
+if [ -f "$DEBUG_FLAG" ]; then
+    xlog() {
+        local msg="[$(date '+%H:%M:%S')] [xinitrc] $1"
+        echo "$msg"
+        echo "$msg" >> /tmp/purple-boot.log 2>/dev/null
+    }
+else
+    xlog() { :; }
+fi
+
+xlog "=== xinitrc started ==="
 
 # Wait for X to initialize
 sleep 1
+xlog "X server ready (after 1s wait)"
 
 # Clear the underlying VT text buffer. X.Org writes startup messages (version
 # info, keymap warnings) to tty1 before switching to graphics mode. Those stay
@@ -54,6 +69,7 @@ X.XFlush(d)
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &
 sleep 0.5
+xlog "matchbox-window-manager started"
 
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
@@ -62,24 +78,32 @@ export WINIT_X11_SCALE_FACTOR=1.0
 # For a TUI, software GL is indistinguishable from hardware GL.
 export LIBGL_ALWAYS_SOFTWARE=1
 
-DEBUG_FLAG=/opt/purple/debug
-
 # Debug mode: extra diagnostics at boot
 if [ -f "$DEBUG_FLAG" ]; then
-    echo "--- Display diagnostics (debug mode) ---"
+    xlog "--- Display diagnostics (debug mode) ---"
     echo "xrandr:"
     xrandr 2>&1 | head -20
     echo "Xft.dpi:"
     xrdb -query 2>&1 | grep -i dpi || echo "  (none set)"
     echo "GDK_SCALE=$GDK_SCALE QT_SCALE_FACTOR=$QT_SCALE_FACTOR"
     echo "WINIT_X11_SCALE_FACTOR=$WINIT_X11_SCALE_FACTOR"
+    echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
     python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "calc_font_size.py --info failed"
-    echo "--- End display diagnostics ---"
+    # GL driver info
+    echo "GL renderer:"
+    python3 -c "
+import subprocess
+r = subprocess.run(['glxinfo'], capture_output=True, text=True, timeout=5)
+for line in r.stdout.splitlines():
+    if any(k in line.lower() for k in ['renderer', 'vendor', 'version', 'string']):
+        print(' ', line.strip())
+" 2>&1 || echo "  (glxinfo not available)"
+    xlog "--- End display diagnostics ---"
 fi
 
 # Best-guess font size (the app auto-corrects on startup via font_sizer.py)
 FONT_SIZE=$(python3 /opt/purple/calc_font_size.py 2>/dev/null || echo "16")
-echo "Font size (initial guess): $FONT_SIZE"
+xlog "Font size: $FONT_SIZE"
 
 # Copy config to writable location so the app can adjust font size at runtime.
 # Alacritty watches this file and auto-reloads on changes.
@@ -95,27 +119,34 @@ sed -i "s/^size = .*/size = ${FONT_SIZE}/" "$ALACRITTY_CONFIG"
 if [ -f "$DEBUG_FLAG" ]; then
     (
         sleep 3
-        echo "--- Terminal size check (3s after launch) ---"
+        xlog "--- Terminal size check (3s after launch) ---"
         if command -v xdotool &>/dev/null; then
             WID=$(xdotool search --name "Alacritty" 2>/dev/null | head -1)
-            [ -n "$WID" ] && xdotool getwindowgeometry "$WID" 2>&1
+            if [ -n "$WID" ]; then
+                xdotool getwindowgeometry "$WID" 2>&1
+            else
+                echo "  Alacritty window not found!"
+            fi
         fi
-        echo "--- End terminal size check ---"
+        xlog "--- End terminal size check ---"
     ) >> /tmp/xinitrc.log 2>&1 &
 fi
 
+xlog "Launching Alacritty..."
 alacritty --config-file "$ALACRITTY_CONFIG" \
     -e /usr/local/bin/purple
+ALACRITTY_EXIT=$?
+xlog "Alacritty exited with code $ALACRITTY_EXIT"
 
 # After Purple exits
 if [ -f "$DEBUG_FLAG" ]; then
     # Debug: drop to interactive debug shell
-    echo "Exited, opening debug shell"
+    xlog "Opening debug shell"
     sed -i 's/^size = .*/size = 16.0/' "$ALACRITTY_CONFIG"
     exec alacritty --config-file "$ALACRITTY_CONFIG" \
         -e bash --rcfile /opt/purple/debug-shell.sh
 else
     # Production: restart Purple
-    echo "Exited, restarting"
+    xlog "Restarting xinitrc"
     exec "$0"
 fi

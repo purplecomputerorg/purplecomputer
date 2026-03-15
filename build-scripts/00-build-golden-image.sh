@@ -115,6 +115,11 @@ deb http://us.archive.ubuntu.com/ubuntu noble-updates main universe
 deb http://security.ubuntu.com/ubuntu noble-security main universe
 SOURCES
 
+    # Don't install Recommended packages. This is an appliance, not a desktop.
+    # Saves ~100-200MB by skipping optional extras (e.g. bluetooth modules,
+    # extra font packages, documentation). Test boot after changing this.
+    echo 'APT::Install-Recommends "0";' > "$MOUNT_DIR/etc/apt/apt.conf.d/99norecommends"
+
     chroot "$MOUNT_DIR" apt-get update
 
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
@@ -122,13 +127,17 @@ SOURCES
     # built into xserver-xorg-core. This avoids xf86EnableIO errors from legacy drivers
     # (vesa, fbdev) trying to access VGA I/O ports under rootless X.
     # Mesa is required for glamor acceleration with modesetting.
+    #
+    # X11: minimal packages instead of the `xorg` metapackage (which pulls in
+    # x11-apps, xfonts-base, xfonts-utils, x11-session-utils, xorg-docs, etc.)
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
         libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
         alsa-utils pulseaudio \
-        xorg xinit x11-xserver-utils \
+        xinit x11-xserver-utils \
         xserver-xorg-core \
         xserver-xorg-input-libinput \
+        xkb-data xauth \
         libgl1-mesa-dri \
         matchbox-window-manager \
         alacritty \
@@ -136,10 +145,7 @@ SOURCES
         libxkbcommon-x11-0 \
         fontconfig \
         fonts-noto-color-emoji \
-        spice-vdagent \
         xkbset \
-        x11-utils \
-        xdotool \
         casper \
         zstd
 
@@ -149,6 +155,12 @@ SOURCES
     if [ "$KVER_NOW" != "$KVER" ]; then
         log_info "Kernel upgraded: $KVER -> $KVER_NOW"
         chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER_NOW"
+
+        # Remove old kernel to save ~100-200MB (appliance only needs one kernel)
+        log_info "Removing old kernel $KVER..."
+        chroot "$MOUNT_DIR" apt-get remove --purge -y \
+            "linux-image-$KVER" "linux-modules-$KVER" "linux-modules-extra-$KVER" 2>/dev/null || true
+
         KVER="$KVER_NOW"
     fi
 
@@ -171,7 +183,14 @@ SOURCES
     FONT_DIR="$MOUNT_DIR/usr/share/fonts/truetype/jetbrains-mono-nerd"
     mkdir -p "$FONT_DIR"
     curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/JetBrainsMono.zip -o /tmp/JetBrainsMono.zip
-    unzip -o /tmp/JetBrainsMono.zip -d "$FONT_DIR"
+    # Install only the 4 weights Alacritty uses (Regular, Bold, Italic, Bold Italic).
+    # The full zip has 40+ files (Thin, Light, Medium, SemiBold, ExtraBold, etc.)
+    unzip -o /tmp/JetBrainsMono.zip \
+        "JetBrainsMonoNerdFont-Regular.ttf" \
+        "JetBrainsMonoNerdFont-Bold.ttf" \
+        "JetBrainsMonoNerdFont-Italic.ttf" \
+        "JetBrainsMonoNerdFont-BoldItalic.ttf" \
+        -d "$FONT_DIR"
     rm /tmp/JetBrainsMono.zip
 
     # Install fontconfig rule to prioritize Noto Color Emoji
@@ -205,7 +224,7 @@ SOURCES
     fi
 
     # Install Python dependencies from requirements.txt
-    chroot "$MOUNT_DIR" pip3 install --break-system-packages -r /opt/purple/requirements.txt
+    chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."
@@ -215,8 +234,63 @@ SOURCES
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
 
-    # Clean apt cache to save space
+    # =========================================================================
+    # SIZE REDUCTION: strip everything not needed for an offline kids' appliance
+    # These changes apply to both the squashfs AND the golden image (2x savings)
+    # =========================================================================
+
+    # Remove pip (no longer needed after installing requirements)
+    log_info "Removing pip and build tools..."
+    chroot "$MOUNT_DIR" pip3 cache purge 2>/dev/null || true
+    chroot "$MOUNT_DIR" apt-get remove --purge -y python3-pip 2>/dev/null || true
+
+    # Clean apt cache and remove orphaned packages
+    chroot "$MOUNT_DIR" apt-get autoremove --purge -y
     chroot "$MOUNT_DIR" apt-get clean
+
+    # Remove apt package lists (~30-50MB, not needed on appliance)
+    rm -rf "$MOUNT_DIR/var/lib/apt/lists/"*
+
+    # Strip documentation, man pages, and lintian data (~50-80MB)
+    rm -rf "$MOUNT_DIR/usr/share/doc"
+    rm -rf "$MOUNT_DIR/usr/share/man"
+    rm -rf "$MOUNT_DIR/usr/share/info"
+    rm -rf "$MOUNT_DIR/usr/share/lintian"
+
+    # Prune firmware: keep only what laptops need for display, sound, and wired ethernet.
+    # Removes ~400MB of WiFi, Bluetooth, enterprise networking, and legacy firmware.
+    # The kernel logs "firmware not found" for missing hardware and continues normally.
+    log_info "Pruning firmware (keeping GPU, sound, ethernet only)..."
+    FIRMWARE_DIR="$MOUNT_DIR/lib/firmware"
+    FIRMWARE_KEEP="$BUILD_DIR/firmware-keep"
+    mkdir -p "$FIRMWARE_KEEP"
+
+    # GPU display firmware (needed for modesetting to initialize the display)
+    for dir in i915 amdgpu nvidia; do
+        [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
+    done
+    # Intel misc firmware (includes SOF audio firmware for newer laptop speakers)
+    [ -d "$FIRMWARE_DIR/intel" ] && mv "$FIRMWARE_DIR/intel" "$FIRMWARE_KEEP/"
+    # Keep loose files in firmware root (some drivers expect files here)
+    find "$FIRMWARE_DIR" -maxdepth 1 -type f -exec mv {} "$FIRMWARE_KEEP/" \;
+
+    # Remove everything else and restore kept firmware
+    rm -rf "$FIRMWARE_DIR"/*
+    mv "$FIRMWARE_KEEP"/* "$FIRMWARE_DIR/"
+    rmdir "$FIRMWARE_KEEP"
+
+    log_info "Firmware pruned. Remaining: $(du -sh "$FIRMWARE_DIR" | cut -f1)"
+
+    # Remove network kernel modules. This is an offline appliance: no WiFi,
+    # no Bluetooth, no ethernet. Removing both firmware (above) and drivers
+    # ensures no network interface can come up, even accidentally.
+    log_info "Removing network kernel modules..."
+    for kdir in "$MOUNT_DIR/lib/modules"/*/kernel; do
+        rm -rf "$kdir/drivers/net"           # All network drivers (WiFi, ethernet, USB net)
+        rm -rf "$kdir/drivers/bluetooth"     # Bluetooth drivers
+        rm -rf "$kdir/net/bluetooth"         # Bluetooth protocol stack
+        rm -rf "$kdir/net/wireless"          # Wireless stack (cfg80211, mac80211)
+    done
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
@@ -354,17 +428,24 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
     PURPLE_DEBUG=0
     [ -f /opt/purple/debug ] && PURPLE_DEBUG=1
 
+    # Debug mode: boot log with timestamps, preserved across X restarts
     if [ "$PURPLE_DEBUG" = "1" ]; then
+        BOOT_LOG="/tmp/purple-boot.log"
+        blog() { echo "[$(date '+%H:%M:%S')] $1" >> "$BOOT_LOG"; }
+
         echo ""
         echo "=========================================="
         echo "  Purple Computer - DEBUG MODE"
         echo "=========================================="
-        echo "  Logs: /tmp/startx.log, /tmp/xinitrc.log"
-        echo "  X.Org: /var/log/Xorg.0.log"
+        echo "  Logs: $BOOT_LOG (boot sequence)"
+        echo "        /tmp/startx.log (X11 output)"
+        echo "        /tmp/xinitrc.log (xinitrc output)"
+        echo "        /var/log/Xorg.0.log (X server)"
         echo "  tty2: Ctrl+Alt+F2 for shell"
         echo "=========================================="
         echo ""
     else
+        blog() { :; }
         setterm --cursor off 2>/dev/null
         # Repaint the splash instead of clearing, so the "Welcome" message
         # stays visible until X11 covers the VT (avoids a brief blank flash).
@@ -382,8 +463,11 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
         X_FAIL_COUNT=0
     fi
 
+    blog "=== .bashrc attempt $((X_FAIL_COUNT + 1))/$X_FAIL_MAX ==="
+
     # Check if we've failed too many times
     if [ "$X_FAIL_COUNT" -ge "$X_FAIL_MAX" ]; then
+        blog "GIVING UP: X failed $X_FAIL_MAX times"
         echo ""
         echo "=========================================="
         echo "  X11 failed to start $X_FAIL_MAX times"
@@ -404,18 +488,33 @@ if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
     # Increment fail count before starting (will be reset on clean exit)
     echo $((X_FAIL_COUNT + 1)) > "$X_FAIL_COUNT_FILE"
 
+    # Debug: save previous attempt's logs before overwriting
+    if [ "$PURPLE_DEBUG" = "1" ]; then
+        [ -f /tmp/startx.log ] && cp /tmp/startx.log "/tmp/startx.attempt${X_FAIL_COUNT}.log"
+        [ -f /var/log/Xorg.0.log ] && cp /var/log/Xorg.0.log "/tmp/Xorg.attempt${X_FAIL_COUNT}.log"
+    fi
+
+    blog "Starting X11 (startx)..."
+
     # Start X: in debug mode, show output on screen too
     if [ "$PURPLE_DEBUG" = "1" ]; then
-        echo "[DEBUG] Starting X11 (startx)..."
         startx 2>&1 | tee /tmp/startx.log
     else
         startx > /tmp/startx.log 2>&1
     fi
     X_EXIT=$?
 
+    blog "startx exited with code $X_EXIT"
+
     if [ $X_EXIT -eq 0 ]; then
         # Clean exit - reset fail counter
         rm -f "$X_FAIL_COUNT_FILE"
+        blog "Clean exit, counter reset"
+    else
+        blog "Non-zero exit. startx.log tail:"
+        tail -5 /tmp/startx.log >> "$BOOT_LOG" 2>/dev/null
+        blog "Xorg.0.log errors:"
+        grep -i "EE\|fatal\|error\|failed" /var/log/Xorg.0.log >> "$BOOT_LOG" 2>/dev/null
     fi
 
     # Re-exec bash to show the error message on next login

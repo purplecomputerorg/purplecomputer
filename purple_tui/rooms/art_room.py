@@ -1192,6 +1192,8 @@ class ArtHintBar(Static):
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
+        if getattr(self.app, '_littles_mode', None):
+            return caps("  Hold Space + arrows to paint.  ")
         return caps("  Press Tab to switch tools. Hold Space + arrows to paint.  ")
 
 

@@ -2426,6 +2426,22 @@ class PurpleApp(App):
             except NoMatches:
                 pass
 
+        # Refresh headers/hints so they pick up the new littles state
+        try:
+            from .rooms.music_room import MusicRoomHeader
+            for h in self.query(MusicRoomHeader):
+                h.refresh()
+        except (NoMatches, Exception):
+            pass
+        try:
+            from .rooms.art_room import CanvasHeader, ArtHintBar
+            for h in self.query(CanvasHeader):
+                h.refresh()
+            for h in self.query(ArtHintBar):
+                h.refresh()
+        except (NoMatches, Exception):
+            pass
+
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""
         from .rooms.play_room import PlayMode

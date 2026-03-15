@@ -245,13 +245,6 @@ class DisplaySettingsScreen(ModalScreen):
         padding-left: 1;
     }
 
-    #button-row {
-        width: 100%;
-        height: 3;
-        align: center middle;
-        margin-top: 1;
-    }
-
     #display-hint {
         width: 100%;
         text-align: center;
@@ -260,17 +253,13 @@ class DisplaySettingsScreen(ModalScreen):
     }
     """
 
-    # Focus areas: brightness, contrast, buttons
-    FOCUS_AREAS = ["brightness", "contrast", "buttons"]
+    FOCUS_AREAS = ["brightness", "contrast"]
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         settings = load_display_settings()
         self._brightness = settings["brightness"]
         self._contrast = settings["contrast"]
-        self._original_brightness = self._brightness
-        self._original_contrast = self._contrast
-        self._selected_button = 0  # 0=Save, 1=Cancel
         self._focus_index = 0  # Index into FOCUS_AREAS
 
     @property
@@ -279,7 +268,7 @@ class DisplaySettingsScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="display-dialog"):
-            yield Static("Display Settings", id="display-title")
+            yield Static("Adjust Display", id="display-title")
             with Horizontal(classes="setting-row"):
                 yield Static("Brightness:", classes="setting-label")
                 yield Static("", id="brightness-bar", classes="setting-bar")
@@ -288,10 +277,7 @@ class DisplaySettingsScreen(ModalScreen):
                 yield Static("Contrast:", classes="setting-label")
                 yield Static("", id="contrast-bar", classes="setting-bar")
                 yield Static("", id="contrast-value", classes="setting-value")
-            with Horizontal(id="button-row"):
-                yield Static("  Save  ", id="btn-save")
-                yield Static(" Cancel ", id="btn-cancel")
-            yield Static("← → adjust  \u25b2 \u25bc move  Enter confirm  Esc cancel", id="display-hint")
+            yield Static("\u2190 \u2192 adjust   \u25b2 \u25bc switch   Esc done", id="display-hint")
 
     def on_mount(self) -> None:
         self._update_display()
@@ -332,24 +318,13 @@ class DisplaySettingsScreen(ModalScreen):
             contrast_text = "High"
         contrast_val.update(contrast_text)
 
-        # Buttons
-        save_btn = self.query_one("#btn-save", Static)
-        cancel_btn = self.query_one("#btn-cancel", Static)
-
-        if self._focus_area == "buttons":
-            if self._selected_button == 0:
-                save_btn.update("[bold reverse]  Save  [/]")
-                cancel_btn.update(" Cancel ")
-            else:
-                save_btn.update("  Save  ")
-                cancel_btn.update("[bold reverse] Cancel [/]")
-        else:
-            save_btn.update("  Save  ")
-            cancel_btn.update(" Cancel ")
-
-    def _apply_current_settings(self) -> None:
-        """Apply current brightness and contrast to display."""
+    def _save_and_apply(self) -> None:
+        """Apply current settings to display and save to disk."""
         apply_display_settings(self._brightness, self._contrast)
+        save_display_settings({
+            "brightness": self._brightness,
+            "contrast": self._contrast,
+        })
 
     def on_key(self, event: events.Key) -> None:
         """Suppress terminal key events."""
@@ -362,56 +337,29 @@ class DisplaySettingsScreen(ModalScreen):
             if self._focus_area == "brightness":
                 if action.direction == 'left':
                     self._brightness = max(BRIGHTNESS_MIN, self._brightness - BRIGHTNESS_STEP)
-                    self._apply_current_settings()
+                    self._save_and_apply()
                 elif action.direction == 'right':
                     self._brightness = min(BRIGHTNESS_MAX, self._brightness + BRIGHTNESS_STEP)
-                    self._apply_current_settings()
+                    self._save_and_apply()
                 elif action.direction == 'down':
-                    self._focus_index = 1  # contrast
+                    self._focus_index = 1
                 self._update_display()
 
             elif self._focus_area == "contrast":
                 if action.direction == 'left':
                     self._contrast = max(CONTRAST_MIN, self._contrast - CONTRAST_STEP)
-                    self._apply_current_settings()
+                    self._save_and_apply()
                 elif action.direction == 'right':
                     self._contrast = min(CONTRAST_MAX, self._contrast + CONTRAST_STEP)
-                    self._apply_current_settings()
+                    self._save_and_apply()
                 elif action.direction == 'up':
-                    self._focus_index = 0  # brightness
-                elif action.direction == 'down':
-                    self._focus_index = 2  # buttons
+                    self._focus_index = 0
                 self._update_display()
-
-            else:  # buttons
-                if action.direction == 'up':
-                    self._focus_index = 1  # contrast
-                    self._update_display()
-                elif action.direction in ('left', 'right'):
-                    self._selected_button = 1 - self._selected_button
-                    self._update_display()
             return
 
         if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                if self._focus_area == "buttons":
-                    if self._selected_button == 0:  # Save
-                        save_display_settings({
-                            "brightness": self._brightness,
-                            "contrast": self._contrast,
-                        })
-                        self.dismiss(True)
-                    else:  # Cancel
-                        apply_display_settings(self._original_brightness, self._original_contrast)
-                        self.dismiss(False)
-                else:
-                    # Enter on sliders moves to buttons
-                    self._focus_index = 2
-                    self._update_display()
-            elif action.action == 'escape':
-                # Restore original settings and exit
-                apply_display_settings(self._original_brightness, self._original_contrast)
-                self.dismiss(False)
+            if action.action in ('enter', 'escape'):
+                self.dismiss(True)
 
 
 _LITTLES_CANCELLED = object()  # Sentinel: user pressed Escape without choosing

@@ -9,11 +9,44 @@ BUILD_DIR="/opt/purple-installer/build"
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
 IMAGE_SIZE_MB=8192
+MOUNT_DIR="${BUILD_DIR}/mnt-golden"
 
 # Colors
 GREEN='\033[0;32m'
+RED='\033[0;31m'
 NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+
+# Track the loop device so cleanup can find it
+LOOP_DEV=""
+
+cleanup_build() {
+    # Tear down mounts, kpartx mappings, and loop devices from this or previous builds.
+    # Safe to call multiple times (every step is idempotent).
+    log_info "Cleaning up stale mounts and loop devices..."
+
+    # Unmount anything under the mount dir
+    if [ -d "$MOUNT_DIR" ]; then
+        for mp in "$MOUNT_DIR/dev/pts" "$MOUNT_DIR/dev" "$MOUNT_DIR/sys" "$MOUNT_DIR/proc" "$MOUNT_DIR/boot/efi" "$MOUNT_DIR"; do
+            mountpoint -q "$mp" 2>/dev/null && umount -l "$mp" 2>/dev/null || true
+        done
+    fi
+
+    # Remove kpartx mappings and detach loop devices associated with our image
+    for loop in $(losetup -j "$GOLDEN_IMAGE" 2>/dev/null | cut -d: -f1); do
+        kpartx -dv "$loop" 2>/dev/null || true
+        losetup -d "$loop" 2>/dev/null || true
+    done
+
+    # Also clean up the tracked loop device (in case the image file was already deleted)
+    if [ -n "$LOOP_DEV" ] && losetup "$LOOP_DEV" &>/dev/null; then
+        kpartx -dv "$LOOP_DEV" 2>/dev/null || true
+        losetup -d "$LOOP_DEV" 2>/dev/null || true
+    fi
+}
+
+# Clean up on exit (success or failure) so failed builds never leave stale state
+trap cleanup_build EXIT
 
 main() {
     log_info "Building PurpleOS Golden Image..."
@@ -22,6 +55,9 @@ main() {
         echo "This script must be run as root"
         exit 1
     fi
+
+    # Clean up any leftover state from a previous failed build
+    cleanup_build
 
     mkdir -p "$BUILD_DIR"
 
@@ -51,7 +87,6 @@ main() {
     mkfs.ext4 -L PURPLE_ROOT "/dev/mapper/${LOOP_NAME}p2"
 
     # Mount root partition
-    MOUNT_DIR="${BUILD_DIR}/mnt-golden"
     mkdir -p "$MOUNT_DIR"
     mount "/dev/mapper/${LOOP_NAME}p2" "$MOUNT_DIR"
     mkdir -p "$MOUNT_DIR/boot/efi"
@@ -142,6 +177,7 @@ SOURCES
         matchbox-window-manager \
         alacritty \
         ncurses-term \
+        libxfixes3 \
         libxkbcommon-x11-0 \
         fontconfig \
         fonts-noto-color-emoji \
@@ -223,8 +259,16 @@ SOURCES
         log_info "  Run 'just keygen' to generate a key pair."
     fi
 
+    # Install build deps for compiling Python C extensions.
+    # evdev needs gcc + linux/input.h. Previously pulled in as Recommends,
+    # now needed explicitly with --no-install-recommends. Removed after pip install.
+    chroot "$MOUNT_DIR" apt-get install -y gcc linux-libc-dev python3-dev
+
     # Install Python dependencies from requirements.txt
     chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
+
+    # Remove build deps (only needed for compilation)
+    chroot "$MOUNT_DIR" apt-get remove --purge -y gcc linux-libc-dev python3-dev 2>/dev/null || true
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."
@@ -233,64 +277,6 @@ SOURCES
     mkdir -p "$VOICE_DIR"
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
     curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
-
-    # =========================================================================
-    # SIZE REDUCTION: strip everything not needed for an offline kids' appliance
-    # These changes apply to both the squashfs AND the golden image (2x savings)
-    # =========================================================================
-
-    # Remove pip (no longer needed after installing requirements)
-    log_info "Removing pip and build tools..."
-    chroot "$MOUNT_DIR" pip3 cache purge 2>/dev/null || true
-    chroot "$MOUNT_DIR" apt-get remove --purge -y python3-pip 2>/dev/null || true
-
-    # Clean apt cache and remove orphaned packages
-    chroot "$MOUNT_DIR" apt-get autoremove --purge -y
-    chroot "$MOUNT_DIR" apt-get clean
-
-    # Remove apt package lists (~30-50MB, not needed on appliance)
-    rm -rf "$MOUNT_DIR/var/lib/apt/lists/"*
-
-    # Strip documentation, man pages, and lintian data (~50-80MB)
-    rm -rf "$MOUNT_DIR/usr/share/doc"
-    rm -rf "$MOUNT_DIR/usr/share/man"
-    rm -rf "$MOUNT_DIR/usr/share/info"
-    rm -rf "$MOUNT_DIR/usr/share/lintian"
-
-    # Prune firmware: keep only what laptops need for display, sound, and wired ethernet.
-    # Removes ~400MB of WiFi, Bluetooth, enterprise networking, and legacy firmware.
-    # The kernel logs "firmware not found" for missing hardware and continues normally.
-    log_info "Pruning firmware (keeping GPU, sound, ethernet only)..."
-    FIRMWARE_DIR="$MOUNT_DIR/lib/firmware"
-    FIRMWARE_KEEP="$BUILD_DIR/firmware-keep"
-    mkdir -p "$FIRMWARE_KEEP"
-
-    # GPU display firmware (needed for modesetting to initialize the display)
-    for dir in i915 amdgpu nvidia; do
-        [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
-    done
-    # Intel misc firmware (includes SOF audio firmware for newer laptop speakers)
-    [ -d "$FIRMWARE_DIR/intel" ] && mv "$FIRMWARE_DIR/intel" "$FIRMWARE_KEEP/"
-    # Keep loose files in firmware root (some drivers expect files here)
-    find "$FIRMWARE_DIR" -maxdepth 1 -type f -exec mv {} "$FIRMWARE_KEEP/" \;
-
-    # Remove everything else and restore kept firmware
-    rm -rf "$FIRMWARE_DIR"/*
-    mv "$FIRMWARE_KEEP"/* "$FIRMWARE_DIR/"
-    rmdir "$FIRMWARE_KEEP"
-
-    log_info "Firmware pruned. Remaining: $(du -sh "$FIRMWARE_DIR" | cut -f1)"
-
-    # Remove network kernel modules. This is an offline appliance: no WiFi,
-    # no Bluetooth, no ethernet. Removing both firmware (above) and drivers
-    # ensures no network interface can come up, even accidentally.
-    log_info "Removing network kernel modules..."
-    for kdir in "$MOUNT_DIR/lib/modules"/*/kernel; do
-        rm -rf "$kdir/drivers/net"           # All network drivers (WiFi, ethernet, USB net)
-        rm -rf "$kdir/drivers/bluetooth"     # Bluetooth drivers
-        rm -rf "$kdir/net/bluetooth"         # Bluetooth protocol stack
-        rm -rf "$kdir/net/wireless"          # Wireless stack (cfg80211, mac80211)
-    done
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
@@ -398,6 +384,10 @@ SYSCTL
     # Suppress Ubuntu MOTD on login (PAM's pam_motd.so prints it even with --noissue)
     touch "$MOUNT_DIR/home/purple/.hushlogin"
     chown 1000:1000 "$MOUNT_DIR/home/purple/.hushlogin"
+
+    # Pre-create .Xauthority so startx doesn't warn about it missing
+    touch "$MOUNT_DIR/home/purple/.Xauthority"
+    chown 1000:1000 "$MOUNT_DIR/home/purple/.Xauthority"
 
     # Copy xinitrc from project config (shared with dev environment)
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/home/purple/.xinitrc"
@@ -670,6 +660,86 @@ EOF
     # Clean up downloaded debs and extracted files
     rm -rf "$EXTRACT_DIR" "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb
 
+    # =========================================================================
+    # SIZE REDUCTION: strip everything not needed for an offline kids' appliance
+    # These changes apply to both the squashfs AND the golden image (2x savings).
+    # This block runs LAST, after all apt operations (including boot chain setup).
+    # =========================================================================
+
+    # Remove pip (no longer needed after installing requirements)
+    log_info "Removing pip and build tools..."
+    chroot "$MOUNT_DIR" pip3 cache purge 2>/dev/null || true
+    chroot "$MOUNT_DIR" apt-get remove --purge -y python3-pip 2>/dev/null || true
+
+    # NOTE: we intentionally skip apt-get autoremove. It aggressively removes
+    # packages it considers orphaned, including linux-modules (which contains
+    # evdev.ko, required for keyboard input). The ~20-50MB savings isn't worth
+    # the risk of breaking essential packages on an appliance image.
+    chroot "$MOUNT_DIR" apt-get clean
+
+    # Remove apt package lists (~30-50MB, not needed on appliance)
+    rm -rf "$MOUNT_DIR/var/lib/apt/lists/"*
+
+    # Strip documentation, man pages, and lintian data (~50-80MB)
+    rm -rf "$MOUNT_DIR/usr/share/doc"
+    rm -rf "$MOUNT_DIR/usr/share/man"
+    rm -rf "$MOUNT_DIR/usr/share/info"
+    rm -rf "$MOUNT_DIR/usr/share/lintian"
+
+    # Prune firmware: keep only what laptops need for display and sound.
+    # Removes ~400MB of WiFi, Bluetooth, enterprise networking, and legacy firmware.
+    # The kernel logs "firmware not found" for missing hardware and continues normally.
+    log_info "Pruning firmware (keeping GPU and sound only)..."
+    FIRMWARE_DIR="$MOUNT_DIR/lib/firmware"
+    FIRMWARE_KEEP="$BUILD_DIR/firmware-keep"
+    mkdir -p "$FIRMWARE_KEEP"
+
+    # GPU display firmware (needed for modesetting to initialize the display)
+    for dir in i915 amdgpu nvidia; do
+        [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
+    done
+    # Intel misc firmware (includes SOF audio firmware for newer laptop speakers)
+    [ -d "$FIRMWARE_DIR/intel" ] && mv "$FIRMWARE_DIR/intel" "$FIRMWARE_KEEP/"
+    # Keep loose files in firmware root (some drivers expect files here)
+    find "$FIRMWARE_DIR" -maxdepth 1 -type f -exec mv {} "$FIRMWARE_KEEP/" \;
+
+    # Remove everything else and restore kept firmware
+    rm -rf "$FIRMWARE_DIR"/*
+    mv "$FIRMWARE_KEEP"/* "$FIRMWARE_DIR/"
+    rmdir "$FIRMWARE_KEEP"
+
+    log_info "Firmware pruned. Remaining: $(du -sh "$FIRMWARE_DIR" | cut -f1)"
+
+    # Remove kernel modules not needed for an offline kids' laptop.
+    # Keep: sound, input, USB, storage (NVMe/SATA), GPU, ACPI/power, platform.
+    # Removing both firmware (above) and drivers ensures unused hardware can't activate.
+    log_info "Removing unnecessary kernel modules..."
+    for kdir in "$MOUNT_DIR/lib/modules"/*/kernel; do
+        # Networking (offline appliance)
+        rm -rf "$kdir/drivers/net"           # All network drivers (WiFi, ethernet, USB net)
+        rm -rf "$kdir/drivers/bluetooth"     # Bluetooth drivers
+        rm -rf "$kdir/net/bluetooth"         # Bluetooth protocol stack
+        rm -rf "$kdir/net/wireless"          # Wireless stack (cfg80211, mac80211)
+        rm -rf "$kdir/drivers/nfc"           # NFC/RFID
+        rm -rf "$kdir/drivers/isdn"          # Legacy telecom
+        # Cameras and media capture
+        rm -rf "$kdir/drivers/media"         # Webcams, TV tuners, video capture
+        # Enterprise/server hardware
+        rm -rf "$kdir/drivers/infiniband"    # Datacenter clustering
+        rm -rf "$kdir/drivers/comedi"        # Lab/data acquisition equipment
+        rm -rf "$kdir/drivers/iio"           # Industrial sensors
+        # Experimental
+        rm -rf "$kdir/drivers/staging"       # Unstable/in-development drivers
+        # Exotic filesystems (keep ext4, vfat, iso9660, squashfs, fuse, overlayfs)
+        for fs in "$kdir"/fs/btrfs "$kdir"/fs/xfs "$kdir"/fs/cifs "$kdir"/fs/smb \
+                  "$kdir"/fs/nfs "$kdir"/fs/nfsd "$kdir"/fs/ocfs2 "$kdir"/fs/gfs2 \
+                  "$kdir"/fs/afs "$kdir"/fs/ceph "$kdir"/fs/f2fs "$kdir"/fs/jfs \
+                  "$kdir"/fs/reiserfs "$kdir"/fs/nilfs2 "$kdir"/fs/orangefs \
+                  "$kdir"/fs/dlm "$kdir"/fs/9p; do
+            rm -rf "$fs"
+        done
+    done
+
     # Unmount virtual filesystems BEFORE creating squashfs
     # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)
     log_info "Unmounting virtual filesystems..."
@@ -701,13 +771,9 @@ EOF
     log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
     log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
 
-    # Cleanup
-    log_info "Cleaning up..."
-
-    umount "$MOUNT_DIR/boot/efi"
-    umount "$MOUNT_DIR"
-    kpartx -dv "$LOOP_DEV"
-    losetup -d "$LOOP_DEV"
+    # Unmount and detach (the EXIT trap also calls cleanup_build as a safety net)
+    log_info "Cleaning up mounts..."
+    cleanup_build
 
     # Compress golden image
     log_info "Compressing golden image..."

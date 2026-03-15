@@ -54,17 +54,18 @@ command -v spice-vdagent &>/dev/null && spice-vdagent &
 xsetroot -solid "#2d1b4e"
 
 # Hide the mouse cursor globally (keyboard-only UI, no mouse needed).
-# xsetroot -cursor only hides the cursor on the root window, not inside app windows.
-# XFixesHideCursor hides it everywhere, including inside Alacritty.
+# XFixesHideCursor is display-global: no window can override it, unlike xsetroot.
+# Requires libxfixes3 (explicitly listed in golden image packages).
 python3 -c "
 from ctypes import cdll, c_ulong
 X = cdll.LoadLibrary('libX11.so.6')
 Xf = cdll.LoadLibrary('libXfixes.so.3')
 d = X.XOpenDisplay(None)
+assert d, 'Failed to open X display'
 X.XDefaultRootWindow.restype = c_ulong
 Xf.XFixesHideCursor(d, X.XDefaultRootWindow(d))
 X.XFlush(d)
-" 2>/dev/null || true
+" 2>/dev/null || xlog "Failed to hide mouse cursor"
 
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &
@@ -91,13 +92,11 @@ if [ -f "$DEBUG_FLAG" ]; then
     python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "calc_font_size.py --info failed"
     # GL driver info
     echo "GL renderer:"
-    python3 -c "
-import subprocess
-r = subprocess.run(['glxinfo'], capture_output=True, text=True, timeout=5)
-for line in r.stdout.splitlines():
-    if any(k in line.lower() for k in ['renderer', 'vendor', 'version', 'string']):
-        print(' ', line.strip())
-" 2>&1 || echo "  (glxinfo not available)"
+    if command -v glxinfo &>/dev/null; then
+        glxinfo 2>/dev/null | grep -iE 'renderer|vendor|version|string' | sed 's/^/  /'
+    else
+        echo "  (glxinfo not installed)"
+    fi
     xlog "--- End display diagnostics ---"
 fi
 

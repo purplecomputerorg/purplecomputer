@@ -970,18 +970,6 @@ class PurpleApp(App):
                 indicator.display = False
             except NoMatches:
                 pass
-            # Hide "Tab" toggle in littles mode headers
-            try:
-                if self._littles_mode == "music":
-                    from .rooms.music_room import MusicRoomHeader
-                    header = self.query_one("#music-header", MusicRoomHeader)
-                    header.set_littles_mode(True)
-                elif self._littles_mode == "art":
-                    from .rooms.art_room import CanvasHeader
-                    header = self.query_one("#canvas-header", CanvasHeader)
-                    header.set_littles_mode(True)
-            except NoMatches:
-                pass
 
         # Start direct evdev keyboard reader (unless disabled for AI tools)
         # This reads keyboard events directly, bypassing the terminal

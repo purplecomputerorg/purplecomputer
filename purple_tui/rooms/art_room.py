@@ -1119,7 +1119,6 @@ class CanvasHeader(Static):
         self._is_painting = True
         self._last_color = "#FFFFFF"
         self._code_mode = False
-        self._littles_mode = False
         self.add_class("caps-sensitive")
 
     def update_state(self, is_painting: bool, last_color: str) -> None:
@@ -1130,10 +1129,6 @@ class CanvasHeader(Static):
 
     def set_code_mode(self, code_mode: bool) -> None:
         self._code_mode = code_mode
-        self.refresh()
-
-    def set_littles_mode(self, littles: bool) -> None:
-        self._littles_mode = littles
         self.refresh()
 
     def _get_contrast_color(self, color: str) -> str:
@@ -1165,7 +1160,7 @@ class CanvasHeader(Static):
         if self._code_mode:
             return f"{paint_part} {caps('paint on')}    {caps('write on')} {write_part}"
 
-        if self._littles_mode:
+        if getattr(self.app, '_littles_mode', None):
             if self._is_painting:
                 return f"{paint_part}"
             else:

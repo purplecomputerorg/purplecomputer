@@ -605,8 +605,8 @@ class CodeSpaceScreen(ModalScreen):
     """
 
     OPTIONS = [
-        (True, "On", "Code Space available in room picker"),
-        (False, "Off", "Code Space hidden"),
+        (True, "Enabled", "Code Space available in room picker"),
+        (False, "Disabled", "Code Space hidden from room picker"),
     ]
 
     def __init__(self, **kwargs):
@@ -711,7 +711,7 @@ def _get_menu_items() -> list:
 
     # Code Space (not shown in Littles Mode since it's always off)
     if not littles:
-        code_status = "On" if is_code_space_enabled() else "Off"
+        code_status = "Enabled" if is_code_space_enabled() else "Disabled"
         items.append(("menu-code-toggle", f"Code Space: {code_status}"))
 
     if display_control_available():

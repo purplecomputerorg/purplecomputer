@@ -139,7 +139,6 @@ class MusicRoomHeader(Static):
         self._letters_mode = False
         self._instrument_name = INSTRUMENTS[0][1]
         self._code_mode = False
-        self._littles_mode = False
         self.add_class("caps-sensitive")
 
     def update_mode(self, letters_mode: bool) -> None:
@@ -154,10 +153,6 @@ class MusicRoomHeader(Static):
         self._code_mode = code_mode
         self.refresh()
 
-    def set_littles_mode(self, littles: bool) -> None:
-        self._littles_mode = littles
-        self.refresh()
-
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         instrument_label = caps(self._instrument_name)
@@ -166,7 +161,7 @@ class MusicRoomHeader(Static):
             letters_label = caps("letters on") if self._letters_mode else caps("letters off")
             return f"[bold]{ICON_MUSIC} {instrument_label}[/]    {letters_label}"
 
-        if self._littles_mode:
+        if getattr(self.app, '_littles_mode', None):
             return f"[bold]{ICON_MUSIC} {instrument_label}[/]"
 
         letters_label = caps("Letters")

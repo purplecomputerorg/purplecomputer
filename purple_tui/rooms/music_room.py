@@ -726,6 +726,9 @@ class MusicMode(Container, can_focus=True):
 
         if state == IDLE:
             text = caps("Try pressing letters and numbers!")
+            if getattr(self.app, '_littles_mode', None):
+                hint.update(f"[dim]{text}[/]")
+                return
             space_hint = caps("Space: record a loop")
             enter_hint = caps("Enter: change instrument")
             hint.update(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
@@ -784,9 +787,10 @@ class MusicMode(Container, can_focus=True):
         Escape stops the loop (if active).
         """
         if isinstance(action, ControlAction) and action.is_down:
-            # Space: loop station control
+            # Space: loop station control (disabled in littles mode)
             if action.action == 'space':
-                self._handle_space()
+                if not getattr(self.app, '_littles_mode', None):
+                    self._handle_space()
                 return
 
             # Escape: stop loop if active (consume so room picker doesn't open)

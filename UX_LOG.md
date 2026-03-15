@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Littles Mode music: space bar no longer triggers the loop station. Loop hints are hidden. Kids just press keys to play sounds.
 - Art Code Space hints: replaced individual direction commands with a square-drawing example using repeat/turn/forward. Removed tilde (~) as shortcut for repeat template (backtick still works).
 - Code Space tab menu: "Tab: Menu" changed to "Press Tab for Menu" with higher contrast color when inactive, so users can discover how to open the menu.
 - Modal hint text: standardized format across all modals (consistent arrow symbols, "Esc cancel" everywhere escape works, no "to" filler words, uniform spacing). Fixes "Esc to cancel" wrapping onto two lines in Code Space and Littles Mode dialogs.

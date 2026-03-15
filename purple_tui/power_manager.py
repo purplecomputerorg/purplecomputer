@@ -251,6 +251,30 @@ class PowerManager:
 
         return False
 
+    def force_shutdown(self) -> None:
+        """Force immediate power off. Used as fallback when normal shutdown hangs.
+
+        On live ISOs, the normal shutdown sequence can hang on overlayfs unmount.
+        --force skips the clean service stop and goes straight to power off.
+        """
+        if os.environ.get("PURPLE_SLEEP_DEMO"):
+            return
+
+        for cmd in [
+            ["systemctl", "poweroff", "--force"],
+            ["sudo", "systemctl", "poweroff", "--force"],
+            ["sudo", "poweroff", "-f"],
+        ]:
+            try:
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return
+            except Exception:
+                continue
+
 
 # Singleton instance
 _power_manager: Optional[PowerManager] = None

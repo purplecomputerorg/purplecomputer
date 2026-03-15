@@ -252,6 +252,9 @@ class ByeScreen(Screen):
     def on_mount(self) -> None:
         """Show goodbye briefly, then shut down."""
         self.set_timer(2.0, self._do_shutdown)
+        # Fallback: if normal shutdown hangs (common on live ISOs),
+        # force power off after 10 seconds
+        self.set_timer(10.0, self._force_shutdown)
 
     def _do_shutdown(self) -> None:
         """Execute shutdown"""
@@ -262,6 +265,11 @@ class ByeScreen(Screen):
                 self.query_one("#bye-text", Static).update("Please turn off")
             except Exception:
                 pass
+
+    def _force_shutdown(self) -> None:
+        """Force power off if normal shutdown is stuck."""
+        pm = get_power_manager()
+        pm.force_shutdown()
 
     def on_key(self, event: events.Key) -> None:
         """Suppress all keys during shutdown."""

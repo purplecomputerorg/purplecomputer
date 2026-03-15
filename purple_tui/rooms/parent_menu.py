@@ -1070,15 +1070,9 @@ class ParentMenu(ModalScreen):
         self.app.refresh(repaint=True)
 
     def _shutdown(self) -> None:
-        """Shut down the computer immediately."""
+        """Shut down the computer via the ByeScreen (same as power button hold)."""
         self.dismiss()
-        self.app.call_later(self._run_shutdown)
-
-    def _run_shutdown(self) -> None:
-        """Actually shut down."""
-        _flush_terminal_input()
-        os.system('stty sane')
-        os.system('sudo shutdown -h now')
+        self.app._show_bye_screen()
 
     def _exit_to_system(self) -> None:
         """Exit Purple Computer entirely, dropping to the debug shell."""

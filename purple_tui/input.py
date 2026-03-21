@@ -249,6 +249,17 @@ class EvdevReader:
         """Start reading keyboard events in background."""
         from evdev import InputDevice
 
+        def _diag(msg):
+            """Write diagnostic to a file readable from recovery shell."""
+            try:
+                with open("/tmp/evdev-diag.log", "a") as f:
+                    f.write(f"{msg}\n")
+            except Exception:
+                pass
+            logger.info(msg)
+
+        _diag("EvdevReader.start() called")
+
         # Find or open device
         if self._device_path:
             self._device = InputDevice(self._device_path)
@@ -256,24 +267,26 @@ class EvdevReader:
             self._device = self._find_keyboard()
 
         if self._device is None:
+            _diag("ERROR: no keyboard found")
             raise RuntimeError(
                 "Could not find your keyboard.\n"
                 "Please make sure a keyboard is connected.\n\n"
                 f"If this keeps happening, contact {SUPPORT_EMAIL}"
             )
 
-        logger.info(f"EvdevReader: using {self._device.path} ({self._device.name})")
+        _diag(f"EvdevReader: using {self._device.path} ({self._device.name})")
 
         # Grab device if requested
         if self._grab:
             try:
                 self._device.grab()
-                logger.info("EvdevReader: grabbed keyboard exclusively")
+                _diag("EvdevReader: grabbed keyboard exclusively")
             except IOError as e:
-                logger.warning(f"EvdevReader: could not grab device: {e}")
+                _diag(f"EvdevReader: could not grab device: {e}")
 
         self._running = True
         self._task = asyncio.create_task(self._read_loop())
+        _diag("EvdevReader: read loop started")
 
     async def stop(self) -> None:
         """Stop reading and release the device."""
@@ -354,10 +367,20 @@ class EvdevReader:
 
     async def _read_loop(self) -> None:
         """Main event reading loop."""
+        _event_count = 0
         try:
             async for event in self._device.async_read_loop():
                 if not self._running:
                     break
+
+                # Log first few events to diagnose keyboard issues
+                if _event_count < 5:
+                    try:
+                        with open("/tmp/evdev-diag.log", "a") as f:
+                            f.write(f"event: type={event.type} code={event.code} value={event.value}\n")
+                    except Exception:
+                        pass
+                    _event_count += 1
 
                 # Capture scancode (arrives before key event)
                 if event.type == EV_MSC and event.code == MSC_SCAN:
@@ -386,16 +409,50 @@ class EvdevReader:
             # Device was closed (normal during shutdown)
             pass
         except Exception as e:
+            try:
+                with open("/tmp/evdev-diag.log", "a") as f:
+                    f.write(f"ERROR in read_loop: {e}\n")
+            except Exception:
+                pass
             logger.error(f"EvdevReader error: {e}")
             raise
 
     def _find_keyboard(self):
-        """Find the first keyboard device."""
+        """Find the first real keyboard device.
+
+        Must work on every laptop keyboard (ThinkPad, Dell, Surface, Apple, etc.)
+        without being fooled by USB flash drives that expose HID interfaces with
+        partial keyboard capabilities.
+
+        A real keyboard has: all 26 letter keys, Enter, Space, at least one
+        Shift, and EV_REP (auto-repeat). USB drive HID interfaces typically
+        report some key capabilities but lack the full set or EV_REP.
+        """
         import evdev
         from evdev import InputDevice
 
-        # Keys that indicate a real keyboard
-        keyboard_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))
+        # Minimum keys a real keyboard must have (not vendor-specific)
+        letter_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))
+        required_keys = letter_keys | {
+            KeyCode.KEY_ENTER,
+            KeyCode.KEY_SPACE,
+            KeyCode.KEY_LEFTSHIFT,
+        }
+
+        def _is_real_keyboard(dev):
+            """Check if a device is a real keyboard, not a USB drive HID interface."""
+            caps = dev.capabilities()
+            key_caps = set(caps.get(evdev.ecodes.EV_KEY, []))
+
+            # Must have all required keys
+            if not required_keys.issubset(key_caps):
+                return False
+
+            # Must support auto-repeat (real keyboards do, USB drive HID doesn't)
+            if evdev.ecodes.EV_REP not in caps:
+                return False
+
+            return True
 
         # Prefer by-id path (stable across reboots)
         by_id = Path("/dev/input/by-id")
@@ -405,8 +462,7 @@ class EvdevReader:
                 if "kbd" in name or "keyboard" in name:
                     try:
                         dev = InputDevice(str(path.resolve()))
-                        caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
-                        if set(caps) & keyboard_keys:
+                        if _is_real_keyboard(dev):
                             return dev
                     except (PermissionError, OSError):
                         continue
@@ -415,9 +471,19 @@ class EvdevReader:
         for dev_path in sorted(evdev.list_devices()):
             try:
                 dev = InputDevice(dev_path)
-                # Check for letter keys (indicates a real keyboard)
-                caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
-                if set(caps) & keyboard_keys:
+                if _is_real_keyboard(dev):
+                    return dev
+            except (PermissionError, OSError):
+                continue
+
+        # Last resort: accept any device with letter keys (weaker check,
+        # but better than no keyboard at all)
+        logger.warning("No keyboard passed strict check, falling back to loose match")
+        for dev_path in sorted(evdev.list_devices()):
+            try:
+                dev = InputDevice(dev_path)
+                key_caps = set(dev.capabilities().get(evdev.ecodes.EV_KEY, []))
+                if letter_keys.issubset(key_caps):
                     return dev
             except (PermissionError, OSError):
                 continue

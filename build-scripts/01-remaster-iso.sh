@@ -669,6 +669,12 @@ menuentry "Purple Computer (DEBUG)" {
     initrd /casper/initrd
 }
 
+menuentry "Purple Computer (DEBUG, input test)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 purple.debug=1 purple.inputtest=1 ---
+    initrd /casper/initrd
+}
+
 menuentry "Purple Computer (DEBUG, recovery shell)" {
     set gfxpayload=keep
     linux /casper/vmlinuz boot=casper single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service purple.debug=1 ---

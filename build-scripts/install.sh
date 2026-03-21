@@ -180,16 +180,56 @@ main() {
     log "  This will take approximately 10-15 minutes..."
     log ""
 
-    # Use pv for progress if available, otherwise dd with status=progress
+    # Decompress and write, teeing the decompressed stream to sha256sum so we
+    # can verify the disk contents afterwards without decompressing again.
+    # The tee sends the same bytes to both dd (disk write) and sha256sum (checksum).
+    WRITE_SHA256_FILE="/tmp/purple-write-sha256"
+    WRITE_SIZE_FILE="/tmp/purple-write-size"
     if command -v pv >/dev/null 2>&1; then
-        zstd -dc "$GOLDEN_IMAGE" | pv -s $(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G") | dd of=/dev/$TARGET bs=4M conv=fsync
+        zstd -dc "$GOLDEN_IMAGE" \
+            | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
+            | tee >(wc -c > "$WRITE_SIZE_FILE") \
+            | pv -s $(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G") \
+            | dd of=/dev/$TARGET bs=4M conv=fsync
     else
-        zstd -dc "$GOLDEN_IMAGE" | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
+        zstd -dc "$GOLDEN_IMAGE" \
+            | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
+            | tee >(wc -c > "$WRITE_SIZE_FILE") \
+            | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
     fi
 
     # Force kernel to re-read partition table from the new image
     log "Reloading partition table..."
     sync
+
+    # Post-write verification: read back from disk and compare to what we wrote.
+    # This catches silent write failures (bad sectors, firmware lies, etc.).
+    if [ -f "$WRITE_SHA256_FILE" ] && [ -s "$WRITE_SHA256_FILE" ] && [ -f "$WRITE_SIZE_FILE" ] && [ -s "$WRITE_SIZE_FILE" ]; then
+        WRITE_SHA256=$(cat "$WRITE_SHA256_FILE")
+        WRITE_SIZE=$(cat "$WRITE_SIZE_FILE" | tr -d ' ')
+        log "Verifying disk write (this takes a few minutes)..."
+
+        # Flush hardware write caches before reading back
+        blockdev --flushbufs /dev/$TARGET 2>/dev/null || true
+        hdparm -F /dev/$TARGET 2>/dev/null || true
+        sleep 5
+
+        # Drop page cache, then read back with O_DIRECT
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
+        DISK_SHA256=$(dd if=/dev/$TARGET bs=4M count="$WRITE_SIZE" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')
+
+        if [ "$WRITE_SHA256" = "$DISK_SHA256" ]; then
+            log "Disk verification passed (SHA256 match)"
+        else
+            warn "Disk verification: SHA256 mismatch"
+            warn "  Expected: $WRITE_SHA256"
+            warn "  Got:      $DISK_SHA256"
+            error "Disk write verification failed. The installation may be corrupt."
+        fi
+        rm -f "$WRITE_SHA256_FILE" "$WRITE_SIZE_FILE"
+    else
+        warn "Could not capture write checksum, skipping verification"
+    fi
 
     # Retry partition re-read: the kernel sometimes needs a moment after dd
     for attempt in 1 2 3 4 5; do

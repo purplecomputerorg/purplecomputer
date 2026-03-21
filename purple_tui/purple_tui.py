@@ -21,6 +21,7 @@ Keyboard controls:
 
 # Suppress ONNX runtime warnings early (before any imports that might load it)
 import os
+from pathlib import Path
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
@@ -1015,6 +1016,18 @@ class PurpleApp(App):
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
+        # Keyboard diagnostic mode: if no evdev input for 60 seconds, exit to
+        # debug shell. Activated by purple.inputtest=1 kernel parameter.
+        # This lets developers diagnose keyboard issues when the app can't
+        # receive input (can't open parent menu, can't switch to tty2).
+        self._debug_no_input_received = False
+        try:
+            cmdline = Path("/proc/cmdline").read_text()
+            if "purple.inputtest=1" in cmdline:
+                self.set_timer(60.0, self._debug_exit_on_no_input)
+        except Exception:
+            pass
+
         # Poll for USB update signal file (written by systemd usb_updater service)
         self._usb_update_timer = self.set_interval(2.0, self._check_usb_update_signal)
 
@@ -1111,6 +1124,9 @@ class PurpleApp(App):
         # Log evdev events in dev mode to debug mode switching
         if os.environ.get("PURPLE_DEV_MODE") == "1":
             self._dev_log(f"[Evdev] keycode={event.keycode} is_down={event.is_down}")
+
+        # Mark that we've received evdev input (used by debug exit timer)
+        self._debug_no_input_received = True
 
         # Record user activity for idle detection
         self._record_user_activity()
@@ -1618,6 +1634,15 @@ class PurpleApp(App):
             isinstance(s, (SleepScreen, ShutdownConfirmScreen, ByeScreen))
             for s in self.screen_stack
         )
+
+    def _debug_exit_on_no_input(self) -> None:
+        """Exit to debug shell if no evdev input was received within 60 seconds.
+
+        Only active on debug ISO. Lets developers diagnose keyboard issues
+        when the app can't receive input.
+        """
+        if not self._debug_no_input_received:
+            self.exit(return_code=0)
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity or lid close."""

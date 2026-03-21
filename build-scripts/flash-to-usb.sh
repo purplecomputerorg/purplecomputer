@@ -2,7 +2,7 @@
 # Flash PurpleOS ISO to a whitelisted USB drive
 # Usage: ./flash-to-usb.sh [iso-path]
 
-set -e
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -243,28 +243,46 @@ write_iso() {
     sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
     sleep 5
 
-    # Verification step - read back and compare
+    # Verification: read back from USB and compare SHA256.
+    # On mismatch, retry once with a longer flush delay before failing.
+    local usb_sha256=""
+    local verify_passed=false
+
+    for verify_attempt in 1 2; do
+        echo ""
+        if [[ $verify_attempt -eq 1 ]]; then
+            log_info "Verifying write (reading back from USB)..."
+        else
+            log_warn "First verification failed, retrying with extended flush..."
+            # Extended flush: give the drive more time, then re-flush
+            sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
+            sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
+            sleep 10
+        fi
+        echo ""
+
+        # Drop kernel page cache
+        sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+
+        # Read back with O_DIRECT to bypass page cache entirely.
+        # iflag=count_bytes: interpret count as bytes (not blocks), so we read
+        #   exactly iso_size_bytes without needing head -c in a pipeline (which
+        #   could cause SIGPIPE issues with dd).
+        usb_sha256="$(sudo dd if="$TARGET_DEV" bs=4M count="$iso_size_bytes" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')"
+
+        if [[ "$iso_sha256" == "$usb_sha256" ]]; then
+            verify_passed=true
+            break
+        fi
+
+        if [[ $verify_attempt -eq 1 ]]; then
+            log_warn "Checksum mismatch on first read (may be cache lag)"
+        fi
+    done
+
     echo ""
-    log_info "Verifying write (reading back from USB)..."
-    echo ""
 
-    # Drop caches to ensure we read from disk, not memory
-    sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
-
-    # Close and re-open the device by reading through a fresh dd invocation.
-    # iflag=direct: bypass kernel page cache entirely (O_DIRECT), forcing
-    #   reads from the physical device. This is the real fix for intermittent
-    #   verification failures where drop_caches alone wasn't enough.
-    # iflag=count_bytes: interpret count as bytes (not blocks), so we read
-    #   exactly iso_size_bytes without needing head -c in a pipeline (which
-    #   could cause SIGPIPE issues with dd).
-    local usb_sha256
-    usb_sha256="$(sudo dd if="$TARGET_DEV" bs=4M count="$iso_size_bytes" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')"
-
-    echo ""
-
-    # Compare checksums
-    if [[ "$iso_sha256" == "$usb_sha256" ]]; then
+    if [[ "$verify_passed" == true ]]; then
         echo -e "${BOLD}${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${BOLD}${GREEN}║                 FLASH COMPLETE - VERIFIED                  ║${NC}"
         echo -e "${BOLD}${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"

@@ -267,8 +267,12 @@ SOURCES
     # Install Python dependencies from requirements.txt
     chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
 
-    # Remove build deps (only needed for compilation)
-    chroot "$MOUNT_DIR" apt-get remove --purge -y gcc linux-libc-dev python3-dev 2>/dev/null || true
+    # Remove build deps (only needed for compilation).
+    # --no-auto-remove prevents apt from cascading into unrelated packages.
+    log_info "Packages apt will remove with build deps:"
+    chroot "$MOUNT_DIR" apt-get remove --purge -y -s gcc linux-libc-dev python3-dev 2>/dev/null | grep "^Remv" || true
+
+    chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc linux-libc-dev python3-dev 2>/dev/null || true
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."
@@ -667,14 +671,16 @@ EOF
     # =========================================================================
 
     # Remove pip (no longer needed after installing requirements)
+    # Use --no-auto-remove to prevent apt from cascading into kernel packages.
     log_info "Removing pip and build tools..."
     chroot "$MOUNT_DIR" pip3 cache purge 2>/dev/null || true
-    chroot "$MOUNT_DIR" apt-get remove --purge -y python3-pip 2>/dev/null || true
 
-    # NOTE: we intentionally skip apt-get autoremove. It aggressively removes
-    # packages it considers orphaned, including linux-modules (which contains
-    # evdev.ko, required for keyboard input). The ~20-50MB savings isn't worth
-    # the risk of breaking essential packages on an appliance image.
+    # Log what apt plans to remove (for debugging disappearing packages)
+    log_info "Packages apt will remove with python3-pip:"
+    chroot "$MOUNT_DIR" apt-get remove --purge -y -s python3-pip 2>/dev/null | grep "^Remv" || true
+
+    chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove python3-pip 2>/dev/null || true
+
     chroot "$MOUNT_DIR" apt-get clean
 
     # Remove apt package lists (~30-50MB, not needed on appliance)
@@ -739,6 +745,24 @@ EOF
             rm -rf "$fs"
         done
     done
+
+    # Rebuild module dependency database after pruning
+    chroot "$MOUNT_DIR" depmod -a "$KVER"
+
+    # Verify critical kernel modules and built-ins survived pruning.
+    # evdev is built into the kernel on Ubuntu 24.04 (not a loadable module),
+    # so we check for the input directory and sound modules instead.
+    log_info "Verifying critical kernel components..."
+    if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/drivers/input" ]; then
+        echo "ERROR: kernel input drivers directory missing!"
+        exit 1
+    fi
+    if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/sound" ]; then
+        echo "ERROR: kernel sound modules missing!"
+        exit 1
+    fi
+    log_info "  input drivers: OK"
+    log_info "  sound modules: OK"
 
     # Unmount virtual filesystems BEFORE creating squashfs
     # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)

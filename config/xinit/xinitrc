@@ -24,20 +24,13 @@ xlog "=== xinitrc started ==="
 sleep 1
 xlog "X server ready (after 1s wait)"
 
-# Hide the mouse cursor immediately (keyboard-only UI, no mouse needed).
-# This runs first to minimize any cursor flash during boot.
-# XFixesHideCursor is display-global: no window can override it, unlike xsetroot.
-# Requires libxfixes3 (explicitly listed in golden image packages).
-python3 -c "
-from ctypes import cdll, c_ulong
-X = cdll.LoadLibrary('libX11.so.6')
-Xf = cdll.LoadLibrary('libXfixes.so.3')
-d = X.XOpenDisplay(None)
-assert d, 'Failed to open X display'
-X.XDefaultRootWindow.restype = c_ulong
-Xf.XFixesHideCursor(d, X.XDefaultRootWindow(d))
-X.XFlush(d)
-" 2>/dev/null || xlog "Failed to hide mouse cursor"
+# Hide the mouse cursor permanently (keyboard-only UI, no mouse needed).
+# unclutter -idle 0 hides immediately; -root avoids event interference.
+# Previous approaches that didn't work:
+#   xsetroot -cursor: only hides on root window, not inside Alacritty
+#   XFixesHideCursor one-shot: cursor hide dies when the script exits
+unclutter -idle 0 -root &
+xlog "unclutter started (PID=$!)"
 
 # Clear the underlying VT text buffer. X.Org writes startup messages (version
 # info, keymap warnings) to tty1 before switching to graphics mode. Those stay

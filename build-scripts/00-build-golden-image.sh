@@ -177,11 +177,11 @@ SOURCES
         matchbox-window-manager \
         alacritty \
         ncurses-term \
-        libxfixes3 \
         libxkbcommon-x11-0 \
         fontconfig \
         fonts-noto-color-emoji \
         xkbset \
+        unclutter \
         casper \
         zstd
 

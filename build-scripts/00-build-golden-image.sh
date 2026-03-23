@@ -746,7 +746,7 @@ EOF
     log_info "Verifying critical kernel modules..."
     MODULES_FAILED=0
     for mod in i915 amdgpu snd_hda_intel; do
-        if chroot "$MOUNT_DIR" modprobe --dry-run "$mod" 2>/dev/null; then
+        if chroot "$MOUNT_DIR" modprobe -S "$KVER" --dry-run "$mod" 2>/dev/null; then
             log_info "  $mod: OK"
         else
             echo "ERROR: modprobe --dry-run $mod failed! A dependency was likely removed."

@@ -165,6 +165,12 @@ SOURCES
     #
     # X11: minimal packages instead of the `xorg` metapackage (which pulls in
     # x11-apps, xfonts-base, xfonts-utils, x11-session-utils, xorg-docs, etc.)
+    # linux-firmware is a Recommend of linux-image-generic (not a hard dep).
+    # With --no-install-recommends it's skipped, but we need GPU firmware
+    # (i915, amdgpu, nvidia) for display. Install it explicitly here;
+    # the firmware pruning step later strips everything we don't need.
+    chroot "$MOUNT_DIR" apt-get install -y linux-firmware
+
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
         libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \

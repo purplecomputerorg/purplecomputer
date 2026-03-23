@@ -249,17 +249,6 @@ class EvdevReader:
         """Start reading keyboard events in background."""
         from evdev import InputDevice
 
-        def _diag(msg):
-            """Write diagnostic to a file readable from recovery shell."""
-            try:
-                with open("/tmp/evdev-diag.log", "a") as f:
-                    f.write(f"{msg}\n")
-            except Exception:
-                pass
-            logger.info(msg)
-
-        _diag("EvdevReader.start() called")
-
         # Find or open device
         if self._device_path:
             self._device = InputDevice(self._device_path)
@@ -267,26 +256,24 @@ class EvdevReader:
             self._device = self._find_keyboard()
 
         if self._device is None:
-            _diag("ERROR: no keyboard found")
             raise RuntimeError(
                 "Could not find your keyboard.\n"
                 "Please make sure a keyboard is connected.\n\n"
                 f"If this keeps happening, contact {SUPPORT_EMAIL}"
             )
 
-        _diag(f"EvdevReader: using {self._device.path} ({self._device.name})")
+        logger.info(f"EvdevReader: using {self._device.path} ({self._device.name})")
 
         # Grab device if requested
         if self._grab:
             try:
                 self._device.grab()
-                _diag("EvdevReader: grabbed keyboard exclusively")
+                logger.info("EvdevReader: grabbed keyboard exclusively")
             except IOError as e:
-                _diag(f"EvdevReader: could not grab device: {e}")
+                logger.warning(f"EvdevReader: could not grab device: {e}")
 
         self._running = True
         self._task = asyncio.create_task(self._read_loop())
-        _diag("EvdevReader: read loop started")
 
     async def stop(self) -> None:
         """Stop reading and release the device."""
@@ -367,20 +354,10 @@ class EvdevReader:
 
     async def _read_loop(self) -> None:
         """Main event reading loop."""
-        _event_count = 0
         try:
             async for event in self._device.async_read_loop():
                 if not self._running:
                     break
-
-                # Log first few events to diagnose keyboard issues
-                if _event_count < 5:
-                    try:
-                        with open("/tmp/evdev-diag.log", "a") as f:
-                            f.write(f"event: type={event.type} code={event.code} value={event.value}\n")
-                    except Exception:
-                        pass
-                    _event_count += 1
 
                 # Capture scancode (arrives before key event)
                 if event.type == EV_MSC and event.code == MSC_SCAN:
@@ -409,12 +386,8 @@ class EvdevReader:
             # Device was closed (normal during shutdown)
             pass
         except Exception as e:
-            try:
-                with open("/tmp/evdev-diag.log", "a") as f:
-                    f.write(f"ERROR in read_loop: {e}\n")
-            except Exception:
-                pass
             logger.error(f"EvdevReader error: {e}")
+            raise
             raise
 
     def _find_keyboard(self):

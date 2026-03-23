@@ -722,53 +722,41 @@ EOF
 
     log_info "Firmware pruned. Remaining: $(du -sh "$FIRMWARE_DIR" | cut -f1)"
 
-    # Remove kernel modules not needed for an offline kids' laptop.
-    # Keep: sound, input, USB, storage (NVMe/SATA), GPU, ACPI/power, platform.
-    # Removing both firmware (above) and drivers ensures unused hardware can't activate.
-    log_info "Removing unnecessary kernel modules..."
+    # Remove networking kernel modules only. This is an offline appliance:
+    # no WiFi, no Bluetooth, no ethernet.
+    # We intentionally keep all other modules (GPU, sound, media, platform, etc.)
+    # because they have hidden dependency chains that break on specific hardware
+    # if removed (e.g., i915 depends on drivers/media/cec via drm_display_helper).
+    log_info "Removing network kernel modules..."
     for kdir in "$MOUNT_DIR/lib/modules"/*/kernel; do
-        # Networking (offline appliance)
         rm -rf "$kdir/drivers/net"           # All network drivers (WiFi, ethernet, USB net)
         rm -rf "$kdir/drivers/bluetooth"     # Bluetooth drivers
         rm -rf "$kdir/net/bluetooth"         # Bluetooth protocol stack
         rm -rf "$kdir/net/wireless"          # Wireless stack (cfg80211, mac80211)
         rm -rf "$kdir/drivers/nfc"           # NFC/RFID
         rm -rf "$kdir/drivers/isdn"          # Legacy telecom
-        # Cameras and media capture
-        rm -rf "$kdir/drivers/media"         # Webcams, TV tuners, video capture
-        # Enterprise/server hardware
-        rm -rf "$kdir/drivers/infiniband"    # Datacenter clustering
-        rm -rf "$kdir/drivers/comedi"        # Lab/data acquisition equipment
-        rm -rf "$kdir/drivers/iio"           # Industrial sensors
-        # Experimental
-        rm -rf "$kdir/drivers/staging"       # Unstable/in-development drivers
-        # Exotic filesystems (keep ext4, vfat, iso9660, squashfs, fuse, overlayfs)
-        for fs in "$kdir"/fs/btrfs "$kdir"/fs/xfs "$kdir"/fs/cifs "$kdir"/fs/smb \
-                  "$kdir"/fs/nfs "$kdir"/fs/nfsd "$kdir"/fs/ocfs2 "$kdir"/fs/gfs2 \
-                  "$kdir"/fs/afs "$kdir"/fs/ceph "$kdir"/fs/f2fs "$kdir"/fs/jfs \
-                  "$kdir"/fs/reiserfs "$kdir"/fs/nilfs2 "$kdir"/fs/orangefs \
-                  "$kdir"/fs/dlm "$kdir"/fs/9p; do
-            rm -rf "$fs"
-        done
     done
 
     # Rebuild module dependency database after pruning
     chroot "$MOUNT_DIR" depmod -a "$KVER"
 
-    # Verify critical kernel modules and built-ins survived pruning.
-    # evdev is built into the kernel on Ubuntu 24.04 (not a loadable module),
-    # so we check for the input directory and sound modules instead.
-    log_info "Verifying critical kernel components..."
-    if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/drivers/input" ]; then
-        echo "ERROR: kernel input drivers directory missing!"
+    # Verify critical modules can load with all their dependencies.
+    # modprobe --dry-run resolves the full dependency chain and fails if
+    # any required module was removed by the pruning above.
+    log_info "Verifying critical kernel modules..."
+    MODULES_FAILED=0
+    for mod in i915 amdgpu snd_hda_intel; do
+        if chroot "$MOUNT_DIR" modprobe --dry-run "$mod" 2>/dev/null; then
+            log_info "  $mod: OK"
+        else
+            echo "ERROR: modprobe --dry-run $mod failed! A dependency was likely removed."
+            echo "  Run: modprobe -v $mod  to see which module is missing."
+            MODULES_FAILED=1
+        fi
+    done
+    if [ "$MODULES_FAILED" -eq 1 ]; then
         exit 1
     fi
-    if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/sound" ]; then
-        echo "ERROR: kernel sound modules missing!"
-        exit 1
-    fi
-    log_info "  input drivers: OK"
-    log_info "  sound modules: OK"
 
     # Unmount virtual filesystems BEFORE creating squashfs
     # Otherwise mksquashfs tries to include /proc, /sys, /dev (huge and slow)

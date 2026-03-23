@@ -367,3 +367,27 @@ Run `build-scripts/diagnose-boot.sh` on a booted system to check:
 - NVRAM entries
 - UUID vs label usage
 - Partition layout
+
+---
+
+## Build Image Size Reduction
+
+The golden image uses `--no-install-recommends` to avoid pulling in hundreds of MB of optional packages. This means some packages that were previously installed implicitly must now be installed explicitly. When adding new packages to the build, check if they have Recommends that are actually required.
+
+**`linux-firmware` must be installed explicitly.** It's a Recommend of `linux-image-generic`, not a hard dependency. Without it, GPU drivers (i915, amdgpu) can't load, and the display falls back to `simple-framebuffer` (no brightness control, dim screen). The build installs it explicitly, then the firmware pruning step keeps only GPU and audio firmware.
+
+### Two Different Kinds of Pruning
+
+The build prunes two different directories. They have very different risk profiles:
+
+**1. Kernel modules (`/lib/modules/.../kernel/`): DANGEROUS to prune aggressively.**
+Kernel modules depend on each other across directories. These dependencies are invisible until you try to load them on real hardware. For example, `i915` (in `drivers/gpu/`) depends on `drm_display_helper`, which depends on `cec` (in `drivers/media/`). Deleting `drivers/media/` breaks the Intel GPU driver on every Intel machine, even though "media" sounds like cameras.
+
+**Only remove networking modules** (`drivers/net`, `drivers/bluetooth`, `net/bluetooth`, `net/wireless`, `drivers/nfc`, `drivers/isdn`). These are safe because Purple Computer is an offline appliance by design, and no GPU/sound/platform driver depends on networking code.
+
+Do NOT remove other module directories (media, staging, infiniband, filesystems, etc.) even if they seem unrelated. The build runs `modprobe --dry-run` for i915, amdgpu, and snd_hda_intel after pruning to catch dependency issues at build time.
+
+**2. Firmware files (`/lib/firmware/`): Safe to prune aggressively.**
+Firmware files are standalone binary blobs with no cross-dependencies. Each hardware driver looks for its own firmware in its own directory. If `i915/` firmware exists, the Intel GPU loads. If `iwlwifi/` firmware is missing, the WiFi driver logs "firmware not found" and moves on. No other driver is affected.
+
+The build keeps only `i915/`, `amdgpu/`, `nvidia/`, and `intel/` (GPU display and audio firmware), deleting everything else (~400MB of WiFi, Bluetooth, enterprise networking, legacy hardware).

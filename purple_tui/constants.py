@@ -49,7 +49,7 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
-REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2   # Full UI width (+ border)
+REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5  # Full UI width (+ border + color legend)
 
 # Normal mode: title(2) + viewport+border(32) + indicator margin(1) + indicator(3)
 _TITLE_ROWS = 2               # Title row + margin-bottom
@@ -77,8 +77,8 @@ TOGGLE_DEBOUNCE = 0.3        # Delay before speaking toggle state (debounce rapi
 STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
-# Volume levels (0-100, step by 25)
-VOLUME_LEVELS = [0, 25, 50, 75, 100]
+# Volume levels (0-100, perceptually spaced: more steps at low end)
+VOLUME_LEVELS = [0, 15, 35, 60, 85, 100]
 VOLUME_DEFAULT = 100
 SYSTEM_VOLUME_MAX = 85  # Cap system mixer to avoid analog amp hiss on real hardware
 
@@ -86,9 +86,9 @@ SYSTEM_VOLUME_MAX = 85  # Cap system mixer to avoid analog amp hiss on real hard
 # These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
 # Volume icons (nf-md-volume variants)
 ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off (muted)
-ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low (25%)
-ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium (50%)
-ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high (75-100%)
+ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low (15-35%)
+ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium (60%)
+ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high (85-100%)
 ICON_VOLUME_DOWN = "󰝞"      # nf-md-volume_minus
 ICON_VOLUME_UP = "󰝝"        # nf-md-volume_plus
 ICON_ERASER = "󰇾"           # nf-md-eraser

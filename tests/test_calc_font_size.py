@@ -7,15 +7,15 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
 from calc_font_size import (
-    REQUIRED_COLS, REQUIRED_ROWS, SCREEN_FILL, MIN_FONT, MAX_FONT,
+    REQUIRED_COLS, REQUIRED_ROWS, MIN_FONT, MAX_FONT,
     get_resolution, calculate_font
 )
 
 
 class TestConstants:
     def test_grid_size(self):
-        """Grid must match purple_tui.constants (136x38 for current viewport with 3-row footer)."""
-        assert REQUIRED_COLS == 136
+        """Grid must match purple_tui.constants (141x38 for current viewport with 3-row footer + legend)."""
+        assert REQUIRED_COLS == 141
         assert REQUIRED_ROWS == 38
 
     def test_limits(self):
@@ -23,8 +23,9 @@ class TestConstants:
         assert MAX_FONT <= 48  # Capped to prevent huge viewports
         assert MIN_FONT < MAX_FONT
 
-    def test_fill(self):
-        assert 0.7 <= SCREEN_FILL <= 0.9
+    def test_fill_removed(self):
+        """SCREEN_FILL was removed when switching to 100% fill (max font that fits grid)."""
+        assert not hasattr(__import__('calc_font_size'), 'SCREEN_FILL')
 
 
 class TestGetResolution:

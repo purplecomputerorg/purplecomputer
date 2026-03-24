@@ -486,12 +486,16 @@ if HAS_PYTEST:
 
             return usb
 
-        def test_full_update_success(self, tmp_path):
+        def test_full_update_success(self, tmp_path, monkeypatch):
             signing_key, pub_key = _make_test_keys()
 
             install_dir = tmp_path / "install"
             install_dir.mkdir()
             (install_dir / "VERSION").write_text("0.1.0\n")
+
+            # Use tmp_path for signal file so tests don't write to /tmp
+            signal_file = str(tmp_path / "purple-update-applied")
+            monkeypatch.setattr("purple_tui.usb_updater.USB_UPDATE_SIGNAL_FILE", signal_file)
 
             usb = self._setup_usb(tmp_path, signing_key, {
                 "app.py": b"updated app code",
@@ -548,20 +552,19 @@ if HAS_PYTEST:
             )
             assert result is False
 
-        def test_signal_file_written_on_success(self, tmp_path):
+        def test_signal_file_written_on_success(self, tmp_path, monkeypatch):
             signing_key, pub_key = _make_test_keys()
 
             install_dir = tmp_path / "install"
             install_dir.mkdir()
 
+            # Use tmp_path for signal file so tests don't write to /tmp
+            signal = tmp_path / "purple-update-applied"
+            monkeypatch.setattr("purple_tui.usb_updater.USB_UPDATE_SIGNAL_FILE", str(signal))
+
             usb = self._setup_usb(tmp_path, signing_key, {
                 "app.py": b"updated code",
             })
-
-            # Clean up any leftover signal file
-            signal = Path(USB_UPDATE_SIGNAL_FILE)
-            if signal.exists():
-                signal.unlink()
 
             result = process_usb_update(
                 str(usb), install_dir=install_dir, public_key_bytes=pub_key
@@ -574,9 +577,6 @@ if HAS_PYTEST:
             signal_data = json_mod.loads(signal.read_text())
             assert signal_data["version"] == "0.2.0"
             assert "applied_at" in signal_data
-
-            # Clean up
-            signal.unlink()
 
         def test_tampered_payload_rejected(self, tmp_path):
             signing_key, pub_key = _make_test_keys()

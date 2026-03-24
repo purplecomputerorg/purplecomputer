@@ -742,6 +742,7 @@ class PurpleApp(App):
     #viewport-wrapper {
         width: auto;
         height: auto;
+        position: relative;
     }
 
     #viewport-row {
@@ -752,8 +753,9 @@ class PurpleApp(App):
     #paint-legend {
         width: 4;
         height: 4;
-        margin-left: 1;
-        margin-top: __LEGEND_TOP_MARGIN__;
+        position: absolute;
+        offset-x: __LEGEND_OFFSET_X__;
+        offset-y: __LEGEND_OFFSET_Y__;
     }
 
     #title-row {
@@ -882,7 +884,7 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend 1 row above viewport bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_OFFSET_X__", str(VIEWPORT_WIDTH + 3)).replace("__LEGEND_OFFSET_Y__", str(VIEWPORT_HEIGHT - 2))  # legend: right of viewport border, near bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
@@ -908,6 +910,7 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
+        self._brightness_hint_showing = False  # Prevent layering brightness toasts
 
         # Power management
         self._idle_timer = None
@@ -994,7 +997,7 @@ class PurpleApp(App):
                 with Horizontal(id="viewport-row"):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
-                    yield ColorLegend(id="paint-legend")
+                yield ColorLegend(id="paint-legend")
                 with Horizontal(id="code-panel-row"):
                     yield CodeTextEditor(id="code-editor")
                     yield CodeHintsPanel(id="code-hints")
@@ -1286,6 +1289,9 @@ class PurpleApp(App):
                 return
             if action.action == 'volume_up':
                 self.action_volume_up()
+                return
+            if action.action == 'brightness_hint':
+                self._show_brightness_hint()
                 return
 
         # Remap = key to + (more useful for kids: math, color mixing, emoji combining)
@@ -2174,6 +2180,14 @@ class PurpleApp(App):
             self.volume_level = VOLUME_LEVELS[current_idx + 1]
         self._apply_volume()  # Always show feedback, even at max
 
+    def _show_brightness_hint(self) -> None:
+        """Show a one-time hint about brightness being in the Parent Menu."""
+        if self._brightness_hint_showing:
+            return
+        self._brightness_hint_showing = True
+        self.notify("Go to the Parent Menu to change brightness", timeout=3)
+        self.set_timer(3, lambda: setattr(self, '_brightness_hint_showing', False))
+
     def action_take_screenshot(self) -> None:
         """Take a screenshot (F8). Used by AI training tools.
 
@@ -2452,27 +2466,31 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Build volume feedback message
+        # Build volume feedback message (6 levels: 0, 15, 35, 60, 85, 100)
         if self.volume_level == 0:
             icon = ICON_VOLUME_OFF
             label = "Sound Off"
-            bars = "░░░░░░░░"
-        elif self.volume_level <= 25:
+            bars = "░░░░░░░░░░"
+        elif self.volume_level <= 15:
             icon = ICON_VOLUME_LOW
-            label = "Quiet Sound"
-            bars = "██░░░░░░"
-        elif self.volume_level <= 50:
+            label = "Whisper"
+            bars = "██░░░░░░░░"
+        elif self.volume_level <= 35:
+            icon = ICON_VOLUME_LOW
+            label = "Quiet"
+            bars = "████░░░░░░"
+        elif self.volume_level <= 60:
             icon = ICON_VOLUME_MED
-            label = "Low Sound"
-            bars = "████░░░░"
-        elif self.volume_level <= 75:
+            label = "Medium"
+            bars = "██████░░░░"
+        elif self.volume_level <= 85:
             icon = ICON_VOLUME_HIGH
-            label = "Medium Sound"
-            bars = "██████░░"
+            label = "Loud"
+            bars = "████████░░"
         else:
             icon = ICON_VOLUME_HIGH
-            label = "High Sound"
-            bars = "████████"
+            label = "Full"
+            bars = "██████████"
 
         self.clear_notifications()
         self.notify(f"{icon}  {bars}  {label}", timeout=1.5)

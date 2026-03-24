@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Volume steps redistributed for more even perceived loudness: 0/15/35/60/85/100 instead of 0/25/50/75/100. Labels: Sound Off, Whisper, Quiet, Medium, Loud, Full.
+- Color legend no longer shifts the viewport off-center; it floats to the right of the border independently.
+- Pressing brightness media keys now shows a toast: "Go to the Parent Menu to change brightness" (shown once, not repeated while visible).
 - Power management overhaul: simplified from 3 states (sleep face, screen off, shutdown) to 2 states (sleep face, shutdown). Removed DPMS screen-off. Timers now adapt to charger: on charger with lid open, 5 min to sleep face, no auto-shutdown. On battery, 2 min to sleep face, 10 min to shutdown. Lid close shows sleep face immediately and shuts down after 10 min (was 30 sec). Lid reopen resets all timers.
 - Live boot awareness: splash screen on first USB boot explains Purple will need the USB again after shutdown. Sleep face and parent menu also show USB reminders during live boot.
 - Music Room: looping hint now says "Play on top, keep recording!" so kids know it's still recording. Hint text responds to caps/double-shift changes immediately (was only updating on room switch).

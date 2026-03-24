@@ -113,6 +113,10 @@ class KeyCode:
     # Power/system keys
     KEY_POWER = 116
 
+    # Brightness keys
+    KEY_BRIGHTNESSDOWN = 224
+    KEY_BRIGHTNESSUP = 225
+
 
 # Keycode to character mapping (printable keys only)
 KEYCODE_TO_CHAR: dict[int, str] = {
@@ -147,6 +151,8 @@ KEYCODE_TO_NAME: dict[int, str] = {
     KeyCode.KEY_CAPSLOCK: 'caps_lock',
     KeyCode.KEY_MUTE: 'mute', KeyCode.KEY_VOLUMEDOWN: 'volume_down',
     KeyCode.KEY_VOLUMEUP: 'volume_up',
+    KeyCode.KEY_BRIGHTNESSDOWN: 'brightness_down',
+    KeyCode.KEY_BRIGHTNESSUP: 'brightness_up',
     KeyCode.KEY_UP: 'up', KeyCode.KEY_DOWN: 'down',
     KeyCode.KEY_LEFT: 'left', KeyCode.KEY_RIGHT: 'right',
 }

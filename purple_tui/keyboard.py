@@ -702,7 +702,7 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='menu', is_down=True, is_repeat=is_repeat))
             return actions
 
-        # Handle media keys for volume (no repeats)
+        # Handle media keys for volume and brightness (no repeats)
         if not is_repeat:
             if keycode == KeyCode.KEY_MUTE:
                 actions.append(ControlAction(action='volume_mute', is_down=True))
@@ -712,6 +712,9 @@ class KeyboardStateMachine:
                 return actions
             if keycode == KeyCode.KEY_VOLUMEUP:
                 actions.append(ControlAction(action='volume_up', is_down=True))
+                return actions
+            if keycode in (KeyCode.KEY_BRIGHTNESSDOWN, KeyCode.KEY_BRIGHTNESSUP):
+                actions.append(ControlAction(action='brightness_hint', is_down=True))
                 return actions
 
         # Handle printable characters

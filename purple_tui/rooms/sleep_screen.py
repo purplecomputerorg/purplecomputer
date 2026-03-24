@@ -14,12 +14,8 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Static
 from textual import events
-import time
 
-from ..power_manager import (
-    get_power_manager,
-    LID_SHUTDOWN_DELAY,
-)
+from ..power_manager import get_power_manager
 from ..constants import is_live_boot
 
 # Live boot message shown on the sleep face screen
@@ -80,7 +76,6 @@ class SleepScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._status_timer = None
-        self._lid_close_time: float | None = None
         self._shutdown_initiated = False
 
     def compose(self) -> ComposeResult:
@@ -91,40 +86,26 @@ class SleepScreen(Screen):
 
     def on_mount(self) -> None:
         """Start update timer when screen is shown."""
-        self._status_timer = self.set_interval(1.0, self._update_status)
-        self._update_status()
+        # Check for idle shutdown periodically.
+        # Lid detection and lid-close shutdown are handled by
+        # LidSwitchReader and the app's _check_idle_state timer.
+        self._status_timer = self.set_interval(5.0, self._check_idle_shutdown)
 
     def on_unmount(self) -> None:
         """Clean up timer when screen is hidden."""
         if self._status_timer:
             self._status_timer.stop()
 
-    def _update_status(self) -> None:
-        """Check idle time, lid state, and charger. Act accordingly."""
+    def _check_idle_shutdown(self) -> None:
+        """Check if idle time has reached shutdown threshold (battery only)."""
         pm = get_power_manager()
-        idle = pm.get_idle_seconds()
-        lid_open = pm.get_lid_state()
 
-        # Refresh charger state each tick
+        # Refresh charger state
         pm.is_on_charger()
 
-        # Lid close edge detection
-        if lid_open is False and self._lid_close_time is None:
-            self._lid_close_time = time.time()
-        elif lid_open is not False and self._lid_close_time is not None:
-            self._lid_close_time = None
-
-        # Lid-closed shutdown: 10 min after lid close, regardless of charger
-        if self._lid_close_time is not None:
-            if time.time() - self._lid_close_time >= LID_SHUTDOWN_DELAY:
-                self._do_shutdown()
-            return
-
-        # Idle shutdown (only on battery, never on charger with lid open)
         shutdown_threshold = pm.get_idle_shutdown_threshold()
-        if shutdown_threshold is not None and idle >= shutdown_threshold:
+        if shutdown_threshold is not None and pm.get_idle_seconds() >= shutdown_threshold:
             self._do_shutdown()
-            return
 
     def _do_shutdown(self) -> None:
         """Execute shutdown (only once, further calls are no-ops)."""
@@ -139,14 +120,9 @@ class SleepScreen(Screen):
                 pass
 
     def _wake_up(self) -> None:
-        """Wake up and return to normal operation"""
+        """Wake up and return to normal operation."""
         pm = get_power_manager()
         pm.record_activity()
-
-        # Reset lid close tracking
-        self._lid_close_time = None
-
-        # Dismiss this screen and return to normal
         self.dismiss()
 
     def on_key(self, event: events.Key) -> None:

@@ -63,7 +63,7 @@ from .keyboard import (
     KeyboardStateMachine, CharacterAction, NavigationAction,
     RoomAction, ControlAction, CapsLockAction, LongHoldAction,
 )
-from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, check_evdev_available
+from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
 from .power_manager import get_power_manager
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .rooms.art_room import ColorLegend, PaintModeChanged
@@ -912,6 +912,8 @@ class PurpleApp(App):
         # Power management
         self._idle_timer = None
         self._power_button_reader: PowerButtonReader | None = None
+        self._lid_switch_reader: LidSwitchReader | None = None
+        self._lid_close_time: float | None = None  # When lid was closed (for shutdown timer)
         self._bye_screen_active = False
         self._app_suspended = False  # True while shell is open via parent menu
 
@@ -1058,6 +1060,16 @@ class PurpleApp(App):
             except Exception:
                 self._power_button_reader = None
 
+        # Start lid switch reader (instant lid open/close detection via evdev)
+        if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            self._lid_switch_reader = LidSwitchReader(
+                callback=self._handle_lid_switch_event,
+            )
+            try:
+                await self._lid_switch_reader.start()
+            except Exception:
+                self._lid_switch_reader = None
+
         # Start idle detection timer (disabled in dev mode for AI training)
         # In demo mode, check every second for responsiveness
         # In normal mode, check every 5 seconds to save resources
@@ -1129,6 +1141,11 @@ class PurpleApp(App):
         if self._power_button_reader:
             await self._power_button_reader.stop()
             self._power_button_reader = None
+
+        # Clean up lid switch reader
+        if self._lid_switch_reader:
+            await self._lid_switch_reader.stop()
+            self._lid_switch_reader = None
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Show/hide paint legend and update active row when paint mode changes."""
@@ -1716,25 +1733,56 @@ class PurpleApp(App):
             self.exit(return_code=0)
 
     def _check_idle_state(self) -> None:
-        """Check if we should enter sleep mode due to inactivity or lid close."""
-        try:
-            if self._is_sleep_or_bye_active():
-                return
+        """Check if we should enter sleep mode due to inactivity.
 
+        Lid detection is primarily handled by LidSwitchReader (evdev, instant).
+        Falls back to polling /proc/acpi if evdev lid detection is unavailable.
+        This timer also handles the lid-close shutdown countdown and idle timeouts.
+        """
+        try:
             pm = get_power_manager()
 
             # Refresh charger state each tick (for smoothing)
             pm.is_on_charger()
 
-            # Lid closed: immediate sleep face
-            if pm.get_lid_state() is False:
-                self._show_sleep_screen()
+            # Fallback lid detection: if LidSwitchReader isn't available,
+            # poll /proc/acpi (up to 5s latency, but works everywhere)
+            if self._lid_switch_reader is None:
+                lid_open = pm.get_lid_state()
+                if lid_open is False and self._lid_close_time is None:
+                    self._lid_close_time = time.time()
+                    if not self._is_sleep_or_bye_active():
+                        self._show_sleep_screen()
+                elif lid_open is not False and self._lid_close_time is not None:
+                    self._lid_close_time = None
+                    self._record_user_activity()
+                    from .rooms.sleep_screen import SleepScreen
+                    for screen in list(self.screen_stack):
+                        if isinstance(screen, SleepScreen):
+                            screen.dismiss()
+                            break
+
+            # Lid-close shutdown countdown (lid events come from LidSwitchReader
+            # or fallback polling above)
+            if self._lid_close_time is not None:
+                from .power_manager import LID_SHUTDOWN_DELAY
+                if time.time() - self._lid_close_time >= LID_SHUTDOWN_DELAY:
+                    self._show_bye_screen()
+                return  # Don't also check idle while lid is closed
+
+            if self._is_sleep_or_bye_active():
                 return
 
             # Idle threshold adapts to charger state
             sleep_threshold = pm.get_idle_sleep_threshold()
             if pm.get_idle_seconds() >= sleep_threshold:
                 self._show_sleep_screen()
+                return
+
+            # Idle shutdown (only on battery, never on charger with lid open)
+            shutdown_threshold = pm.get_idle_shutdown_threshold()
+            if shutdown_threshold is not None and pm.get_idle_seconds() >= shutdown_threshold:
+                self._show_bye_screen()
         except Exception:
             pass
 
@@ -1767,6 +1815,34 @@ class PurpleApp(App):
             pm.record_activity()
         except Exception:
             pass
+
+    # ── Lid Switch ────────────────────────────────────────────────────
+
+    async def _handle_lid_switch_event(self, event: LidSwitchEvent) -> None:
+        """Handle lid open/close from LidSwitchReader (evdev, instant).
+
+        Lid close: show sleep screen immediately, start shutdown countdown.
+        Lid open: wake up, reset everything.
+        """
+        if self._bye_screen_active:
+            return
+
+        if not event.is_open:
+            # Lid closed: start shutdown countdown and show sleep screen
+            self._lid_close_time = time.time()
+            if not self._is_sleep_or_bye_active():
+                self._show_sleep_screen()
+        else:
+            # Lid opened: reset everything, wake up
+            self._lid_close_time = None
+            self._record_user_activity()
+
+            # Dismiss sleep screen if showing
+            from .rooms.sleep_screen import SleepScreen
+            for screen in list(self.screen_stack):
+                if isinstance(screen, SleepScreen):
+                    screen.dismiss()
+                    break
 
     # ── Power Button ──────────────────────────────────────────────────
 

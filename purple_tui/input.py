@@ -199,8 +199,10 @@ class RawKeyEvent:
 
 # Event type constants (from linux/input-event-codes.h)
 EV_KEY = 1
+EV_SW = 5    # Switch events (lid, headphone jack, etc.)
 EV_MSC = 4
 MSC_SCAN = 4
+SW_LID = 0   # Lid switch code
 
 
 class EvdevReader:
@@ -616,6 +618,137 @@ class PowerButtonReader:
                 dev = InputDevice(dev_path)
                 caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
                 if evdev.ecodes.KEY_POWER in caps:
+                    return dev
+            except (PermissionError, OSError):
+                continue
+
+        return None
+
+
+# =============================================================================
+# Lid Switch Reader (evdev)
+# =============================================================================
+
+@dataclass
+class LidSwitchEvent:
+    """A lid switch event.
+
+    Attributes:
+        is_open: True if lid was opened, False if closed
+        timestamp: Monotonic timestamp of the event
+    """
+    is_open: bool
+    timestamp: float
+
+
+class LidSwitchReader:
+    """
+    Reads lid switch events from evdev for instant lid open/close detection.
+
+    Uses the kernel's SW_LID switch event (same mechanism systemd-logind uses).
+    Falls back gracefully if no lid switch device is found (desktops, some hardware).
+
+    Also reads the initial lid state on start so we don't miss a lid that's
+    already closed when the app launches.
+
+    Usage:
+        async def handle_lid(event: LidSwitchEvent):
+            if event.is_open:
+                wake_up()
+            else:
+                show_sleep_face()
+
+        reader = LidSwitchReader(handle_lid)
+        await reader.start()
+    """
+
+    def __init__(self, callback: Callable[[LidSwitchEvent], Awaitable[None]]):
+        self._callback = callback
+        self._device = None
+        self._running = False
+        self._task: Optional[asyncio.Task] = None
+
+    async def start(self) -> None:
+        """Start reading lid switch events in background."""
+        self._device = self._find_lid_switch()
+
+        if self._device is None:
+            logger.info("LidSwitchReader: no lid switch device found (OK on desktops)")
+            return
+
+        logger.info(f"LidSwitchReader: using {self._device.path} ({self._device.name})")
+
+        # Read initial state so we catch "lid already closed at boot"
+        try:
+            import fcntl
+            # EVIOCGSW(len) = _IOC(_IOC_READ, 'E', 0x1b, len)
+            EVIOCGSW = 0x8001451b  # _IOR('E', 0x1b, 1 byte)
+            buf = bytearray(1)
+            fcntl.ioctl(self._device.fd, EVIOCGSW, buf)
+            lid_closed = bool(buf[0] & (1 << SW_LID))
+            if lid_closed:
+                await self._callback(LidSwitchEvent(
+                    is_open=False,
+                    timestamp=time.monotonic(),
+                ))
+        except Exception:
+            pass  # Non-critical, we'll get events going forward
+
+        self._running = True
+        self._task = asyncio.create_task(self._read_loop())
+
+    async def stop(self) -> None:
+        """Stop reading and release the device."""
+        self._running = False
+
+        if self._task:
+            self._task.cancel()
+            if self._device:
+                self._device.close()
+                self._device = None
+            try:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            self._task = None
+        elif self._device:
+            self._device.close()
+            self._device = None
+
+        logger.info("LidSwitchReader: stopped")
+
+    async def _read_loop(self) -> None:
+        """Main event reading loop."""
+        try:
+            async for event in self._device.async_read_loop():
+                if not self._running:
+                    break
+
+                if event.type == EV_SW and event.code == SW_LID:
+                    # value 1 = lid closed, value 0 = lid open
+                    await self._callback(LidSwitchEvent(
+                        is_open=(event.value == 0),
+                        timestamp=event.timestamp(),
+                    ))
+
+        except asyncio.CancelledError:
+            pass
+        except OSError:
+            # Device was closed (normal during shutdown)
+            pass
+        except Exception as e:
+            logger.error(f"LidSwitchReader error: {e}")
+
+    def _find_lid_switch(self):
+        """Find the lid switch input device."""
+        import evdev
+        from evdev import InputDevice
+
+        for dev_path in sorted(evdev.list_devices()):
+            try:
+                dev = InputDevice(dev_path)
+                sw_caps = dev.capabilities().get(evdev.ecodes.EV_SW, [])
+                if evdev.ecodes.SW_LID in sw_caps:
                     return dev
             except (PermissionError, OSError):
                 continue

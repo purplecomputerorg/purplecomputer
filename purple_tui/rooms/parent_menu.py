@@ -625,9 +625,61 @@ def _is_casper_boot() -> bool:
     return is_live_boot()
 
 
+_USB_LABELS = ("PURPLE_INSTALLER", "PURPLE_DEBUG")
+_PAYLOAD_PATH = Path("/cdrom/purple/install.sh")
+
+
+def _find_usb_device() -> str | None:
+    """Return the resolved device path for the Purple USB, or None.
+
+    Checks /dev/disk/by-label/ symlinks, which udev manages. This is a cheap
+    sysfs lookup that never touches the actual device.
+    """
+    for label in _USB_LABELS:
+        dev_link = Path(f"/dev/disk/by-label/{label}")
+        if dev_link.exists():
+            try:
+                return str(dev_link.resolve())
+            except OSError:
+                pass  # Symlink vanished between exists() and resolve()
+    return None
+
+
+def _try_remount_usb(dev: str) -> bool:
+    """Remount the USB at /cdrom after removal and re-insertion.
+
+    Casper mounts the USB at /cdrom during boot. After physical removal the
+    mount goes stale. This lazy-unmounts the stale mount and remounts the
+    device read-only.
+    """
+    try:
+        # Lazy unmount: detaches immediately even if the mount is stale.
+        # Regular umount can hang waiting for I/O on a dead device.
+        subprocess.run(
+            ["sudo", "umount", "-l", "/cdrom"],
+            capture_output=True, timeout=5,
+        )
+        subprocess.run(
+            ["sudo", "mount", "-o", "ro", dev, "/cdrom"],
+            capture_output=True, timeout=5,
+        )
+        return _PAYLOAD_PATH.exists()
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
 def _is_usb_payload_available() -> bool:
-    """Check if the install payload is accessible on the USB."""
-    return Path("/cdrom/purple/install.sh").exists()
+    """Check if the install payload is accessible on the USB.
+
+    Checks device presence first to avoid stat-ing a potentially stale /cdrom
+    mount when the USB has been physically removed.
+    """
+    dev = _find_usb_device()
+    if dev is None:
+        return False
+    if _PAYLOAD_PATH.exists():
+        return True
+    return _try_remount_usb(dev)
 
 
 def _is_dev_environment() -> bool:
@@ -878,6 +930,8 @@ class ParentMenu(ModalScreen):
         self._selected_index = 0
         # Escape is always "tainted" since user held it to open this menu
         self._ignore_until_released = {'escape'}
+        # Track USB remount attempts to avoid retrying every poll tick
+        self._usb_remount_attempted = False
 
     def compose(self) -> ComposeResult:
         with Vertical(id="parent-dialog"):
@@ -900,11 +954,24 @@ class ParentMenu(ModalScreen):
         self._update_selection()
         # Poll for USB re-insertion/removal so the install item updates live
         if _is_casper_boot():
-            self.set_interval(2.0, self._refresh_install_item)
+            self.set_interval(0.5, self._refresh_install_item)
 
     def _refresh_install_item(self) -> None:
         """Update the install menu item based on USB availability."""
-        usb_available = _is_usb_payload_available()
+        dev = _find_usb_device()
+        if dev is None:
+            # Device gone, reset so we retry when it reappears
+            usb_available = False
+            self._usb_remount_attempted = False
+        elif _PAYLOAD_PATH.exists():
+            usb_available = True
+            self._usb_remount_attempted = False
+        elif not self._usb_remount_attempted:
+            # Device present but payload not accessible: try remount once
+            self._usb_remount_attempted = True
+            usb_available = _try_remount_usb(dev)
+        else:
+            usb_available = False
         for i, (item_id, _) in enumerate(self._menu_items):
             if item_id in ("menu-install", "menu-install-disabled"):
                 if usb_available:

@@ -108,8 +108,8 @@ class TestRecording:
         loop.record_event('A', MODE_MUSIC, now=1.5)
         loop.record_event('B', MODE_MUSIC, now=2.0)
         events, duration = loop.finish_recording(now=3.0)
-        assert events[0] == ('A', MODE_MUSIC, 0.5)
-        assert events[1] == ('B', MODE_MUSIC, 1.0)
+        assert events[0][:3] == ('A', MODE_MUSIC, 0.5)
+        assert events[1][:3] == ('B', MODE_MUSIC, 1.0)
 
     def test_record_preserves_mode(self):
         loop = LoopStation()
@@ -119,6 +119,15 @@ class TestRecording:
         events, _ = loop.finish_recording(now=2.0)
         assert events[0][1] == MODE_MUSIC
         assert events[1][1] == MODE_LETTERS
+
+    def test_record_preserves_instrument(self):
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5, instrument=0)
+        loop.record_event('B', MODE_MUSIC, now=1.0, instrument=2)
+        events, _ = loop.finish_recording(now=2.0)
+        assert events[0][3] == 0
+        assert events[1][3] == 2
 
     def test_record_in_idle_is_ignored(self):
         loop = LoopStation()
@@ -235,6 +244,19 @@ class TestAutoLayering:
         events = loop.loop_events
         b_event = [e for e in events if e[0] == 'B'][0]
         assert b_event[1] == MODE_LETTERS
+
+    def test_new_notes_preserve_instrument(self):
+        """Each layer keeps the instrument it was recorded with."""
+        loop = LoopStation()
+        loop.start_recording(now=0.0)
+        loop.record_event('A', MODE_MUSIC, now=0.5, instrument=0)
+        loop.finish_recording(now=2.0)
+        loop.record_event('B', MODE_MUSIC, now=2.8, instrument=2)
+        events = loop.loop_events
+        a_event = [e for e in events if e[0] == 'A'][0]
+        b_event = [e for e in events if e[0] == 'B'][0]
+        assert a_event[3] == 0
+        assert b_event[3] == 2
 
     def test_new_note_offset_relative_to_cycle(self):
         loop = LoopStation()

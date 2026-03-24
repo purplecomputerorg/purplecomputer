@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music Room loop layers now preserve their instrument: previously recorded layers play back with the instrument they were recorded with, not the currently selected one.
+- Parent menu: "Install on this computer" is grayed out with "(re-insert USB)" when the USB drive has been removed. Updates live if USB is re-inserted while menu is open.
 - Boot now waits for the GPU display to be ready before starting, fixing black screen on older hardware (MacBook 2014, some ThinkPads). Removed forced DPCD backlight parameter that could turn off the screen on unsupported panels.
 - Live USB safe-to-remove indicator: when booted from USB, a blinking USB icon appears in the title bar while the system caches to RAM. Once done, it changes to a green eject symbol meaning the USB can be safely removed.
 - Littles Mode music: space bar no longer triggers the loop station. Loop hints are hidden. Kids just press keys to play sounds.

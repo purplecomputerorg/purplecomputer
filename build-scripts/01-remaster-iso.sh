@@ -543,6 +543,16 @@ SPLASH_EOF
 # Purple Computer - GRUB Configuration
 # Default: live boot (no install, no disk writes)
 # Optional: install to internal disk
+#
+# Masked services (systemd.mask=...):
+#   subiquity, snapd: Ubuntu Server installer (not needed)
+#   ssh: no network access
+#   udisks2: prevents auto-mounting internal disk
+#   casper-md5check: reads the entire squashfs at boot to verify its checksum.
+#     Disabled because: (1) if the squashfs is corrupted, the system is already
+#     broken (casper mounts it as root, so corrupted files cause crashes whether
+#     or not the check ran), (2) the check only logs a warning, it doesn't prevent
+#     boot or fix anything, (3) it adds 30-90s of boot time reading the full USB.
 
 set timeout=${GRUB_TIMEOUT}
 set timeout_style=hidden
@@ -550,7 +560,7 @@ set default=0
 
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service ---
+    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service ---
     initrd /casper/initrd
 }
 
@@ -628,6 +638,7 @@ GRUB_PURPLE
     cat > "$GRUB_CFG" << GRUB_DEBUG
 # Purple Computer - DEBUG GRUB Configuration
 # Verbose boot, visible menu, all diagnostics enabled
+# (See normal GRUB config above for explanation of masked services)
 
 set timeout=5
 set timeout_style=menu
@@ -635,19 +646,19 @@ set default=0
 
 menuentry "Purple Computer (DEBUG)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service purple.debug=1 ---
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 ---
     initrd /casper/initrd
 }
 
 menuentry "Purple Computer (DEBUG, input test)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service purple.debug=1 purple.inputtest=1 ---
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.inputtest=1 ---
     initrd /casper/initrd
 }
 
 menuentry "Purple Computer (DEBUG, recovery shell)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service purple.debug=1 ---
+    linux /casper/vmlinuz boot=casper single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=casper-md5check.service purple.debug=1 ---
     initrd /casper/initrd
 }
 

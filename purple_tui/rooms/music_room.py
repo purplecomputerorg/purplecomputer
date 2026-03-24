@@ -278,6 +278,21 @@ class MusicGrid(Widget):
             if key in sounds:
                 sounds[key].play()
 
+    def play_sound_with_instrument(self, key: str, instrument_index: int) -> None:
+        """Play a sound using a specific instrument (for loop playback)."""
+        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
+            return
+        if key.isdigit():
+            self._ensure_percussion_loaded()
+            if key in self._percussion_sounds:
+                self._percussion_sounds[key].play()
+        else:
+            inst_id = INSTRUMENTS[instrument_index][0]
+            self._ensure_instrument_loaded(inst_id)
+            sounds = self._instrument_sounds.get(inst_id, {})
+            if key in sounds:
+                sounds[key].play()
+
     def set_instrument(self, index: int) -> None:
         """Set the current instrument index."""
         self._instrument_index = index
@@ -644,7 +659,7 @@ class MusicMode(Container, can_focus=True):
                 self._loop.start_new_cycle()
 
                 sorted_events = sorted(events, key=lambda e: e[2])
-                for key, mode, offset in sorted_events:
+                for key, mode, offset, instrument in sorted_events:
                     if self._loop.state != LOOPING:
                         return
                     now = asyncio.get_event_loop().time()
@@ -656,7 +671,7 @@ class MusicMode(Container, can_focus=True):
 
                     flash = mode == MODE_MUSIC
                     self.grid.next_color(key, refresh=not flash)
-                    self._play_key(key, mode)
+                    self._play_key(key, mode, instrument=instrument)
                     if flash:
                         self.grid.flash_note(key)
 
@@ -767,14 +782,20 @@ class MusicMode(Container, can_focus=True):
     def _current_mode(self) -> str:
         return MODE_LETTERS if self._letters_mode else MODE_MUSIC
 
-    def _play_key(self, key: str, mode: str) -> None:
+    def _play_key(self, key: str, mode: str, instrument: int | None = None) -> None:
         """Play audio for a key in the given mode.
 
         In music mode, all keys play instrument sounds.
         In letters mode, letter keys (A-Z) play their letter name clip
         layered with the instrument sound. Other keys just play sounds.
+
+        If instrument is provided, play with that instrument instead of the
+        current one (used by loop playback to preserve each layer's sound).
         """
-        self.grid.play_sound(key)
+        if instrument is not None:
+            self.grid.play_sound_with_instrument(key, instrument)
+        else:
+            self.grid.play_sound(key)
         if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
 
@@ -835,7 +856,7 @@ class MusicMode(Container, can_focus=True):
                 flash = mode == MODE_MUSIC
 
                 # Record into loop station (no-op if idle)
-                self._loop.record_event(lookup, mode)
+                self._loop.record_event(lookup, mode, instrument=self._instrument_index)
 
                 self.grid.next_color(lookup, refresh=not flash)
                 self._play_key(lookup, mode)

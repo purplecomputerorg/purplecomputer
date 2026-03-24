@@ -27,22 +27,24 @@ LOOPING = 'looping'
 class LoopStation:
     """Records and loops music key presses with automatic layering.
 
-    Events are stored as (key, mode, offset) where offset is seconds
-    from the start of the recording/loop cycle.
+    Events are stored as (key, mode, offset, instrument) where offset is
+    seconds from the start of the recording/loop cycle and instrument is
+    the instrument index that was active when the note was played.
 
     During looping, any new events are added directly to the loop
-    and play back on the next cycle.
+    and play back on the next cycle. Each event remembers its instrument
+    so layered loops preserve the sound each note was recorded with.
 
     Usage:
         loop = LoopStation()
 
         loop.start_recording()
-        loop.record_event('A', 'music')
-        loop.record_event('B', 'music')
+        loop.record_event('A', 'music', instrument=0)
+        loop.record_event('B', 'music', instrument=0)
 
         events, duration = loop.finish_recording()  # starts looping
 
-        loop.record_event('C', 'music')  # auto-added to loop
+        loop.record_event('C', 'music', instrument=1)  # auto-added with new instrument
 
         loop.stop()
     """
@@ -52,8 +54,8 @@ class LoopStation:
         self._max_duration = max_duration
         self._state = IDLE
         self._recording_start: float = 0.0
-        self._recording_events: list[tuple[str, str, float]] = []
-        self._loop_events: list[tuple[str, str, float]] = []
+        self._recording_events: list[tuple[str, str, float, int]] = []
+        self._loop_events: list[tuple[str, str, float, int]] = []
         self._loop_duration: float = 0.0
         self._cycle_start: float = 0.0
 
@@ -66,7 +68,7 @@ class LoopStation:
         return self._loop_duration
 
     @property
-    def loop_events(self) -> list[tuple[str, str, float]]:
+    def loop_events(self) -> list[tuple[str, str, float, int]]:
         """Current loop events (may grow as new notes are added during looping)."""
         return list(self._loop_events)
 
@@ -83,26 +85,30 @@ class LoopStation:
         self._loop_events.clear()
         self._loop_duration = 0.0
 
-    def record_event(self, key: str, mode: str, now: float | None = None) -> None:
+    def record_event(self, key: str, mode: str, now: float | None = None,
+                     instrument: int = 0) -> None:
         """Record a key press.
 
         RECORDING: stores with offset from recording start (capped at max duration).
         LOOPING: adds directly to the loop at the current cycle position.
                  New events play back on the next cycle.
         IDLE: ignored.
+
+        The instrument index is stored with each event so layered loops
+        preserve which instrument each note was recorded with.
         """
         now = now if now is not None else self._time_fn()
         if self._state == RECORDING:
             offset = now - self._recording_start
             if offset <= self._max_duration:
-                self._recording_events.append((key, mode, offset))
+                self._recording_events.append((key, mode, offset, instrument))
         elif self._state == LOOPING and self._loop_duration > 0:
             elapsed = now - self._cycle_start
             cycle_offset = elapsed % self._loop_duration
-            self._loop_events.append((key, mode, cycle_offset))
+            self._loop_events.append((key, mode, cycle_offset, instrument))
             self._loop_events.sort(key=lambda e: e[2])
 
-    def finish_recording(self, now: float | None = None) -> tuple[list[tuple[str, str, float]], float]:
+    def finish_recording(self, now: float | None = None) -> tuple[list[tuple[str, str, float, int]], float]:
         """Stop recording and begin looping.
 
         Duration spans from recording start to now (preserving trailing

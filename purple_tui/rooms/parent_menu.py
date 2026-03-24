@@ -616,14 +616,17 @@ def _flush_terminal_input() -> None:
         pass  # Not a TTY or other error, ignore
 
 
-def _is_live_boot() -> bool:
-    """Check if running from a live USB with install payload available."""
+def _is_casper_boot() -> bool:
+    """Check if running from a casper live boot (USB or otherwise)."""
     try:
         cmdline = Path("/proc/cmdline").read_text()
-        if "boot=casper" not in cmdline:
-            return False
+        return "boot=casper" in cmdline
     except Exception:
         return False
+
+
+def _is_usb_payload_available() -> bool:
+    """Check if the install payload is accessible on the USB."""
     return Path("/cdrom/purple/install.sh").exists()
 
 
@@ -664,8 +667,11 @@ def _get_menu_items() -> list:
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
-    if _is_live_boot():
-        items.append(("menu-install", "Install on this computer"))
+    if _is_casper_boot():
+        if _is_usb_payload_available():
+            items.append(("menu-install", "Install on this computer"))
+        else:
+            items.append(("menu-install-disabled", "Install (re-insert USB)"))
     items.append(("menu-shell", "Open Terminal"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
@@ -791,6 +797,17 @@ class ParentMenuItem(Static):
         color: $text;
         text-style: bold;
     }
+
+    ParentMenuItem.disabled {
+        color: $text-muted;
+        text-style: italic;
+    }
+
+    ParentMenuItem.disabled.selected {
+        background: $surface;
+        color: $text-muted;
+        text-style: italic;
+    }
     """
 
     def __init__(self, label: str, item_id: str, **kwargs):
@@ -859,12 +876,41 @@ class ParentMenu(ModalScreen):
             yield Static("Parent Menu", id="parent-title")
             with Vertical(id="parent-items"):
                 for item_id, label in self._menu_items:
-                    yield ParentMenuItem(label, item_id)
+                    item = ParentMenuItem(label, item_id)
+                    if item_id.endswith("-disabled"):
+                        item.add_class("disabled")
+                    yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="parent-hint")
 
     def on_mount(self) -> None:
         """Highlight the first menu item"""
         self._update_selection()
+        # Poll for USB re-insertion/removal so the install item updates live
+        if _is_casper_boot():
+            self.set_interval(2.0, self._refresh_install_item)
+
+    def _refresh_install_item(self) -> None:
+        """Update the install menu item based on USB availability."""
+        usb_available = _is_usb_payload_available()
+        for i, (item_id, _) in enumerate(self._menu_items):
+            if item_id in ("menu-install", "menu-install-disabled"):
+                if usb_available:
+                    new_id = "menu-install"
+                    new_label = "Install on this computer"
+                else:
+                    new_id = "menu-install-disabled"
+                    new_label = "Install (re-insert USB)"
+                if new_id != item_id:
+                    self._menu_items[i] = (new_id, new_label)
+                    item = self.query_one(f"#{item_id}", ParentMenuItem)
+                    item.id = new_id
+                    item.update(new_label)
+                    if new_id.endswith("-disabled"):
+                        item.add_class("disabled")
+                    else:
+                        item.remove_class("disabled")
+                    self._update_selection()
+                return
 
     def _update_selection(self) -> None:
         """Update visual selection state"""
@@ -915,6 +961,8 @@ class ParentMenu(ModalScreen):
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""
         item_id = self._menu_items[self._selected_index][0]
+        if item_id.endswith("-disabled"):
+            return
         if item_id == "menu-littles":
             self._open_littles_mode()
         elif item_id == "menu-code-toggle":

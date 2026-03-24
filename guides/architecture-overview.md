@@ -88,6 +88,7 @@ Parent plugs in USB, presses boot key
 - 5-second auto-boot to Purple Computer
 - No menus, no prompts, no configuration
 - Child plays immediately
+- USB can be removed after boot (see "USB Safe Removal" below)
 
 **The installed system is NOT an appliance:**
 - Normal Ubuntu 24.04 system
@@ -135,6 +136,28 @@ In live boot mode, `purple.install=1` is absent, so the hook is a no-op.
 | Boot configuration | EFI/MBR boot records | Boot on all hardware |
 
 We never modify the kernel, shim, GRUB binary, or casper's own scripts.
+
+---
+
+## USB Safe Removal (Live Boot)
+
+After booting from USB, the system caches the entire squashfs filesystem into RAM so the USB drive can be physically removed.
+
+**How it works:**
+
+The live boot uses casper's overlayfs: the squashfs (read-only, on USB) is the lower layer, and a tmpfs (writable, in RAM) is the upper layer. Normally this means the USB must stay inserted because reads go to the squashfs on the USB.
+
+At boot, a background process in xinitrc reads the entire squashfs file, which populates the kernel's page cache (RAM). Once every block has been read, all future filesystem reads are served from RAM, not from the USB. The USB is no longer needed.
+
+**User-facing indicator:**
+
+The TUI title bar shows a blinking USB icon while caching is in progress. When caching completes, the icon changes to a green eject symbol (⏏), telling the parent it's safe to remove the USB drive.
+
+**Why not `toram`?** Casper supports a `toram` kernel parameter that copies the squashfs into RAM before booting. This blocks the entire boot until the copy finishes (30-90 seconds on USB 2.0). Our approach lets the child start playing immediately while caching happens in the background.
+
+**Why we disable `casper-md5check.service`:** Ubuntu's casper includes an integrity check that reads the entire squashfs at boot to verify its MD5 checksum. We mask this service because: (1) if the squashfs is corrupted, the system is already broken since casper mounts it as the root filesystem, so corrupted files would cause crashes or missing files whether or not the check ran, (2) the check only logs a warning and proceeds with the corrupted squashfs anyway, it doesn't prevent boot or repair anything, and (3) reading the full squashfs at boot adds 30-90 seconds on USB.
+
+**Note on install:** The "Install Purple Computer" option in the parent menu requires the USB to still be inserted, since the golden image payload (`purple/purple-os.img.zst`) is on the USB and is not part of the squashfs cache. If the USB has been removed, the install cannot proceed.
 
 ---
 

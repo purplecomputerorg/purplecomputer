@@ -1,0 +1,40 @@
+[Unit]
+Description=Purple Computer X11 Session
+# Event-driven GPU wait: don't start until the DRM device is registered.
+# Wants= (not Requires=) so we still start if the device unit name differs
+# on unusual hardware (e.g. card1, renderD128 in VMs).
+Wants=dev-dri-card0.device
+After=dev-dri-card0.device
+After=systemd-user-sessions.service
+After=purple-splash.service
+# Keep the boot splash visible while we wait for the GPU
+Requires=purple-splash.service
+# Don't start in installer mode
+ConditionKernelCommandLine=!purple.install=1
+
+[Service]
+# Poll for a connected display connector (handles i915 async init)
+ExecStartPre=/usr/local/bin/purple-wait-display
+# Clean stale X lock files from previous crashes
+ExecStartPre=-/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+ExecStart=/usr/bin/startx /home/purple/.xinitrc -- vt1
+User=purple
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal+console
+UtmpIdentifier=tty1
+TTYReset=no
+TTYVHangup=no
+TTYVTDisallocate=no
+# Restart on failure (replaces manual fail counter)
+Restart=on-failure
+RestartSec=2
+StartLimitIntervalSec=60
+StartLimitBurst=3
+# Show error on tty1 if we hit the restart limit (or any failure)
+ExecStopPost=-/usr/local/bin/purple-x11-failed
+
+[Install]
+WantedBy=graphical.target

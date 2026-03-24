@@ -105,8 +105,6 @@ if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
     cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
     chmod +x /root/home/purple/.xinitrc
     chown 1000:1000 /root/home/purple/.xinitrc
-    cat /root/etc/purple/bash-autostart.sh >> /root/home/purple/.bashrc
-    chown 1000:1000 /root/home/purple/.bashrc
     touch /root/home/purple/.hushlogin
     chown 1000:1000 /root/home/purple/.hushlogin
     purple_log "Restored dotfiles from /etc/purple/"
@@ -120,34 +118,6 @@ kernel.printk = 7 4 1 7
 SYSCTL_EOF
         purple_log "DEBUG MODE: created /opt/purple/debug, enabled kernel messages"
     fi
-
-    # Write our own getty service (casper doesn't enable getty@tty1 on Ubuntu Server).
-    mkdir -p /root/etc/systemd/system
-    cat > /root/etc/systemd/system/purple-live.service << 'SERVICE_EOF'
-[Unit]
-Description=Purple Computer
-After=systemd-user-sessions.service
-Before=getty.target
-ConditionKernelCommandLine=!purple.install=1
-Conflicts=getty@tty1.service
-
-[Service]
-ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname tty1 linux
-Type=idle
-Restart=always
-RestartSec=0
-UtmpIdentifier=tty1
-StandardInput=tty
-StandardOutput=tty
-TTYPath=/dev/tty1
-TTYReset=no
-TTYVHangup=no
-TTYVTDisallocate=no
-SERVICE_EOF
-
-    mkdir -p /root/etc/systemd/system/multi-user.target.wants
-    ln -sf ../purple-live.service /root/etc/systemd/system/multi-user.target.wants/purple-live.service
-    purple_log "Created purple-live.service (autologin on tty1)"
 
     # Show a simple splash on tty1: purple background, friendly message.
     # Console output goes to tty2, so tty1 is ours to use.
@@ -580,13 +550,13 @@ set default=0
 
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 ---
+    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service ---
     initrd /casper/initrd
 }
 
 menuentry "Install Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 i915.enable_dpcd_backlight=1 ---
+    linux /casper/vmlinuz boot=casper quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200 cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 ---
     initrd /casper/initrd
 }
 
@@ -665,13 +635,13 @@ set default=0
 
 menuentry "Purple Computer (DEBUG)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 purple.debug=1 ---
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service purple.debug=1 ---
     initrd /casper/initrd
 }
 
 menuentry "Purple Computer (DEBUG, input test)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service i915.enable_dpcd_backlight=1 purple.debug=1 purple.inputtest=1 ---
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service purple.debug=1 purple.inputtest=1 ---
     initrd /casper/initrd
 }
 
@@ -683,7 +653,7 @@ menuentry "Purple Computer (DEBUG, recovery shell)" {
 
 menuentry "Install Purple Computer (DEBUG)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper systemd.show_status=true cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 purple.debug=1 i915.enable_dpcd_backlight=1 ---
+    linux /casper/vmlinuz boot=casper systemd.show_status=true cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=ssh.service purple.install=1 purple.debug=1 ---
     initrd /casper/initrd
 }
 

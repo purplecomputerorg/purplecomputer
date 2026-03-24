@@ -298,13 +298,8 @@ exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 
-    # Configure auto-login for purple user on tty1
-    mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d"
-    cat > "$MOUNT_DIR/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<'AUTOLOGIN'
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
-AUTOLOGIN
+    # Mask getty@tty1: the purple-x11 service owns tty1 directly (no login shell needed)
+    chroot "$MOUNT_DIR" systemctl mask getty@tty1.service
 
     # Early boot splash: paint tty1 purple with "Starting up..." message.
     # With console=tty2, tty1 is blank until agetty starts. This fills the gap.
@@ -411,6 +406,14 @@ SYSCTL
     # Disable mouse/trackpad - kids use keyboard only
     cp /purple-src/config/xorg/40-disable-pointer.conf "$MOUNT_DIR/usr/share/X11/xorg.conf.d/"
 
+    # Purple X11 service: systemd-managed, waits for GPU readiness before starting X
+    cp /purple-src/config/systemd/purple-x11.service "$MOUNT_DIR/etc/systemd/system/"
+    cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
+    cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
+    chroot "$MOUNT_DIR" systemctl enable purple-x11.service
+
     # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/alacritty/alacritty.toml "$MOUNT_DIR/etc/purple/alacritty.toml"
@@ -419,113 +422,6 @@ SYSCTL
     # The casper live boot hook copies them back to /home/purple/ after casper's
     # adduser overwrites the home directory with skeleton files.
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/etc/purple/xinitrc"
-
-    # Configure auto-start X11 on login (via .bashrc)
-    cat >> "$MOUNT_DIR/home/purple/.bashrc" <<'AUTOSTART'
-
-# Auto-start X11 with Purple Computer on login (only on tty1, not SSH)
-if [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = "/dev/tty1" ]; then
-    PURPLE_DEBUG=0
-    [ -f /opt/purple/debug ] && PURPLE_DEBUG=1
-
-    # Debug mode: boot log with timestamps, preserved across X restarts
-    if [ "$PURPLE_DEBUG" = "1" ]; then
-        BOOT_LOG="/tmp/purple-boot.log"
-        blog() { echo "[$(date '+%H:%M:%S')] $1" >> "$BOOT_LOG"; }
-
-        echo ""
-        echo "=========================================="
-        echo "  Purple Computer - DEBUG MODE"
-        echo "=========================================="
-        echo "  Logs: $BOOT_LOG (boot sequence)"
-        echo "        /tmp/startx.log (X11 output)"
-        echo "        /tmp/xinitrc.log (xinitrc output)"
-        echo "        /var/log/Xorg.0.log (X server)"
-        echo "  tty2: Ctrl+Alt+F2 for shell"
-        echo "=========================================="
-        echo ""
-    else
-        blog() { :; }
-        setterm --cursor off 2>/dev/null
-        # Repaint the splash instead of clearing, so the "Welcome" message
-        # stays visible until X11 covers the VT (avoids a brief blank flash).
-        /usr/local/bin/purple-splash 2>/dev/null || clear
-    fi
-
-    # Fail-fast: don't loop forever if X keeps crashing
-    X_FAIL_COUNT_FILE="/tmp/.x-fail-count"
-    X_FAIL_MAX=3
-
-    # Read current fail count
-    if [ -f "$X_FAIL_COUNT_FILE" ]; then
-        X_FAIL_COUNT=$(cat "$X_FAIL_COUNT_FILE")
-    else
-        X_FAIL_COUNT=0
-    fi
-
-    blog "=== .bashrc attempt $((X_FAIL_COUNT + 1))/$X_FAIL_MAX ==="
-
-    # Check if we've failed too many times
-    if [ "$X_FAIL_COUNT" -ge "$X_FAIL_MAX" ]; then
-        blog "GIVING UP: X failed $X_FAIL_MAX times"
-        echo ""
-        echo "=========================================="
-        echo "  X11 failed to start $X_FAIL_MAX times"
-        echo "=========================================="
-        echo ""
-        echo "Check /var/log/Xorg.0.log for errors."
-        echo "Common fixes:"
-        echo "  - Switch to tty2 (Ctrl+Alt+F2) for shell access"
-        echo "  - Run 'rm $X_FAIL_COUNT_FILE' to retry X11"
-        echo ""
-        # Don't start X, just give them a shell
-        exec bash
-    fi
-
-    # Clean stale X lock files from previous crashes
-    rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 2>/dev/null
-
-    # Increment fail count before starting (will be reset on clean exit)
-    echo $((X_FAIL_COUNT + 1)) > "$X_FAIL_COUNT_FILE"
-
-    # Debug: save previous attempt's logs before overwriting
-    if [ "$PURPLE_DEBUG" = "1" ]; then
-        [ -f /tmp/startx.log ] && cp /tmp/startx.log "/tmp/startx.attempt${X_FAIL_COUNT}.log"
-        [ -f /var/log/Xorg.0.log ] && cp /var/log/Xorg.0.log "/tmp/Xorg.attempt${X_FAIL_COUNT}.log"
-    fi
-
-    blog "Starting X11 (startx)..."
-
-    # Start X: in debug mode, show output on screen too
-    if [ "$PURPLE_DEBUG" = "1" ]; then
-        startx 2>&1 | tee /tmp/startx.log
-    else
-        startx > /tmp/startx.log 2>&1
-    fi
-    X_EXIT=$?
-
-    blog "startx exited with code $X_EXIT"
-
-    if [ $X_EXIT -eq 0 ]; then
-        # Clean exit - reset fail counter
-        rm -f "$X_FAIL_COUNT_FILE"
-        blog "Clean exit, counter reset"
-    else
-        blog "Non-zero exit. startx.log tail:"
-        tail -5 /tmp/startx.log >> "$BOOT_LOG" 2>/dev/null
-        blog "Xorg.0.log errors:"
-        grep -i "EE\|fatal\|error\|failed" /var/log/Xorg.0.log >> "$BOOT_LOG" 2>/dev/null
-    fi
-
-    # Re-exec bash to show the error message on next login
-    exec bash --login
-fi
-AUTOSTART
-    chown 1000:1000 "$MOUNT_DIR/home/purple/.bashrc"
-
-    # Store the autostart snippet in /etc/purple/ for the live boot hook
-    # (Everything between the AUTOSTART markers above)
-    sed -n '/^# Auto-start X11/,/^fi$/p' "$MOUNT_DIR/home/purple/.bashrc" > "$MOUNT_DIR/etc/purple/bash-autostart.sh"
 
     # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
@@ -550,13 +446,13 @@ set default=0
 
 menuentry "PurpleOS" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8
     initrd /boot/initrd.img
 }
 
 menuentry "PurpleOS (recovery mode)" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
     initrd /boot/initrd.img
 }
 EOF

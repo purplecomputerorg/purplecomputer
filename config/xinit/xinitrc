@@ -145,15 +145,7 @@ alacritty --config-file "$ALACRITTY_CONFIG" \
 ALACRITTY_EXIT=$?
 xlog "Alacritty exited with code $ALACRITTY_EXIT"
 
-# After Purple exits
-if [ -f "$DEBUG_FLAG" ]; then
-    # Debug: drop to interactive debug shell
-    xlog "Opening debug shell"
-    sed -i 's/^size = .*/size = 16.0/' "$ALACRITTY_CONFIG"
-    exec alacritty --config-file "$ALACRITTY_CONFIG" \
-        -e bash --rcfile /opt/purple/debug-shell.sh
-else
-    # Production: restart Purple
-    xlog "Restarting xinitrc"
-    exec "$0"
-fi
+# Restart Purple (keeps X running for fast restart without screen flash).
+# If X itself crashes, this script exits and systemd restarts the whole service.
+xlog "Restarting xinitrc"
+exec "$0"

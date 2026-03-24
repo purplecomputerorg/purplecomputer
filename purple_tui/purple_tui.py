@@ -742,8 +742,6 @@ class PurpleApp(App):
     #viewport-wrapper {
         width: auto;
         height: auto;
-        position: relative;
-        overflow: visible visible;
     }
 
     #viewport-row {
@@ -751,12 +749,15 @@ class PurpleApp(App):
         height: auto;
     }
 
+    #legend-spacer {
+        width: 5;
+    }
+
     #paint-legend {
         width: 4;
         height: 4;
-        position: absolute;
-        offset-x: __LEGEND_OFFSET_X__;
-        offset-y: __LEGEND_OFFSET_Y__;
+        margin-left: 1;
+        margin-top: __LEGEND_TOP_MARGIN__;
     }
 
     #title-row {
@@ -885,7 +886,7 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_OFFSET_X__", str(VIEWPORT_WIDTH + 3)).replace("__LEGEND_OFFSET_Y__", str(VIEWPORT_HEIGHT - 2))  # legend: right of viewport border, near bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [
@@ -996,9 +997,10 @@ class PurpleApp(App):
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")
                 with Horizontal(id="viewport-row"):
+                    yield Static("", id="legend-spacer")
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
-                yield ColorLegend(id="paint-legend")
+                    yield ColorLegend(id="paint-legend")
                 with Horizontal(id="code-panel-row"):
                     yield CodeTextEditor(id="code-editor")
                     yield CodeHintsPanel(id="code-hints")

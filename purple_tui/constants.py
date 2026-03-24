@@ -49,7 +49,7 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 30          # Viewport widget height (CSS)
-REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5  # Full UI width (+ border + color legend)
+REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5 + 5  # Full UI width (+ border + spacer + legend)
 
 # Normal mode: title(2) + viewport+border(32) + indicator margin(1) + indicator(3)
 _TITLE_ROWS = 2               # Title row + margin-bottom

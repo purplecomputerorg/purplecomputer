@@ -743,6 +743,7 @@ class PurpleApp(App):
         width: auto;
         height: auto;
         position: relative;
+        overflow: visible visible;
     }
 
     #viewport-row {

@@ -761,9 +761,10 @@ class PurpleApp(App):
     }
 
     #title-row {
-        width: __VIEWPORT_WIDTH__;
+        width: __VIEWPORT_BORDER_WIDTH__;
         height: 1;
         margin-bottom: 1;
+        margin-left: 5;
     }
 
     #title-spacer-left {
@@ -809,10 +810,11 @@ class PurpleApp(App):
     }
 
     #code-panel-row {
-        width: __VIEWPORT_WIDTH__;
+        width: __VIEWPORT_BORDER_WIDTH__;
         height: __CODE_PANEL_HEIGHT__;
         display: none;
         margin-top: 1;
+        margin-left: 5;
     }
 
     #code-panel-row.visible {
@@ -886,7 +888,7 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_BORDER_WIDTH__", str(VIEWPORT_WIDTH + 2)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [

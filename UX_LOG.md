@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Shutdown confirm screen now auto-dismisses after 3 seconds with a visible countdown. Power button must be tapped twice within that window to shut down.
 - Volume steps redistributed for more even perceived loudness: 0/15/35/60/85/100 instead of 0/25/50/75/100. Labels: Sound Off, Whisper, Quiet, Medium, Loud, Full.
 - Color legend no longer shifts the viewport off-center; it floats to the right of the border independently.
 - Pressing brightness media keys now shows a toast: "Go to the Parent Menu to change brightness" (shown once, not repeated while visible).

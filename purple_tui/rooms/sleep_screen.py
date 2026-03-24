@@ -140,9 +140,12 @@ class ShutdownConfirmScreen(Screen):
     """
     Confirmation screen shown when power button is tapped.
 
-    Shows "Press power button again to shut down". Any other key
-    dismisses back to normal operation.
+    Shows "Press power button again to shut down" with a 3-second
+    countdown. Auto-dismisses when the countdown expires. Any other
+    key also dismisses back to normal operation.
     """
+
+    COUNTDOWN_SECONDS = 3
 
     DEFAULT_CSS = """
     ShutdownConfirmScreen {
@@ -173,7 +176,22 @@ class ShutdownConfirmScreen(Screen):
             ]),
             id="shutdown-face",
         )
-        yield Static("Press power button again to shut down", id="shutdown-hint")
+        yield Static(
+            f"Press power button again to shut down ({self.COUNTDOWN_SECONDS})",
+            id="shutdown-hint",
+        )
+
+    def on_mount(self) -> None:
+        self._remaining = self.COUNTDOWN_SECONDS
+        self.set_interval(1.0, self._tick)
+
+    def _tick(self) -> None:
+        self._remaining -= 1
+        if self._remaining <= 0:
+            self._cancel()
+            return
+        hint = self.query_one("#shutdown-hint", Static)
+        hint.update(f"Press power button again to shut down ({self._remaining})")
 
     def _cancel(self) -> None:
         """Cancel shutdown and return to normal operation."""

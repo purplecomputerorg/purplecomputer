@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Live USB safe-to-remove indicator: when booted from USB, a blinking USB icon appears in the title bar while the system caches to RAM. Once done, it changes to a green eject symbol meaning the USB can be safely removed.
 - Littles Mode music: space bar no longer triggers the loop station. Loop hints are hidden. Kids just press keys to play sounds.
 - Art Code Space hints: replaced individual direction commands with a square-drawing example using repeat/turn/forward. Removed tilde (~) as shortcut for repeat template (backtick still works).
 - Code Space tab menu: "Tab: Menu" changed to "Press Tab for Menu" with higher contrast color when inactive, so users can discover how to open the menu.

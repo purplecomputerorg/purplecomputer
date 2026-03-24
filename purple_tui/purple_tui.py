@@ -49,6 +49,8 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
+    ICON_USB, ICON_USB_SAFE,
+    SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     CODE_PANEL_HEIGHT,
@@ -655,6 +657,65 @@ class BatteryIndicator(Static):
         return icon
 
 
+class UsbIndicator(Static):
+    """
+    Shows USB caching status during live boot.
+    Only visible when booted from USB (squashfs exists).
+    Blinks a USB icon while caching, then shows an eject symbol when safe to remove.
+    """
+
+    DEFAULT_CSS = """
+    UsbIndicator {
+        width: auto;
+        height: 1;
+        margin-right: 1;
+        color: $text-muted;
+    }
+    UsbIndicator.safe {
+        color: #66bb6a;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._is_live_boot = False
+        self._is_cached = False
+        self._blink_state = True
+
+    def on_mount(self) -> None:
+        self._is_live_boot = os.path.exists(SQUASHFS_PATH)
+        if not self._is_live_boot:
+            return
+
+        if os.path.exists(USB_CACHE_MARKER):
+            self._is_cached = True
+            self.add_class("safe")
+            return
+
+        self.set_interval(5.0, self._check_cache_done)
+        self.set_interval(1.0, self._toggle_blink)
+
+    def _check_cache_done(self) -> None:
+        if os.path.exists(USB_CACHE_MARKER):
+            self._is_cached = True
+            self.add_class("safe")
+            self._blink_state = True
+            self.refresh()
+
+    def _toggle_blink(self) -> None:
+        if self._is_cached:
+            return
+        self._blink_state = not self._blink_state
+        self.refresh()
+
+    def render(self) -> str:
+        if not self._is_live_boot:
+            return ""
+        if self._is_cached:
+            return ICON_USB_SAFE
+        return ICON_USB if self._blink_state else " "
+
+
 class PurpleApp(App):
     """
     Purple Computer: The calm computer for kids.
@@ -923,6 +984,7 @@ class PurpleApp(App):
                 with Horizontal(id="title-row"):
                     yield Static("", id="title-spacer-left")  # Balance for right elements
                     yield RoomTitle(id="room-title")
+                    yield UsbIndicator(id="usb-indicator")
                     yield Static("", id="shift-indicator")
                     yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
                     yield BatteryIndicator(id="battery-indicator")

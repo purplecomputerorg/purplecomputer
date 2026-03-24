@@ -61,6 +61,20 @@ command -v spice-vdagent &>/dev/null && spice-vdagent &
 # Set root window background color
 xsetroot -solid "#2d1b4e"
 
+# Live boot: cache squashfs into page cache so the USB can be removed.
+# Reads the entire compressed file, which populates the kernel page cache.
+# The TUI shows a blinking USB icon until this finishes, then an eject symbol.
+SQUASHFS="/cdrom/casper/filesystem.squashfs"
+USB_CACHE_MARKER="/tmp/purple-usb-cached"
+if [ -f "$SQUASHFS" ] && [ ! -f "$USB_CACHE_MARKER" ]; then
+    xlog "Caching squashfs into page cache..."
+    (
+        cat "$SQUASHFS" > /dev/null 2>&1
+        touch "$USB_CACHE_MARKER"
+        xlog "Squashfs cached, USB safe to remove"
+    ) &
+fi
+
 # Window manager (required for fullscreen)
 matchbox-window-manager -use_titlebar no &
 sleep 0.5

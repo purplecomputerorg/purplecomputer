@@ -1,8 +1,17 @@
 """
 Purple Computer: Power Management
 
-Handles idle detection, lid monitoring, screen control, and shutdown.
+Handles idle detection, lid monitoring, charger detection, and shutdown.
 Designed to be robust and fail gracefully. No errors, just fallbacks.
+
+Power states (2-tier):
+  Awake: normal operation
+  Sleep face: sleeping face shown, any key wakes
+
+Timing varies by charger and lid state:
+  On charger, lid open:  5 min idle -> sleep face, no auto-shutdown
+  On battery, lid open:  2 min idle -> sleep face, 10 min idle -> shutdown
+  Lid closed (any):      immediate sleep face, 10 min -> shutdown
 
 Demo mode: Set PURPLE_SLEEP_DEMO=1 to use accelerated timings for testing.
 """
@@ -22,16 +31,25 @@ def _get_timing(normal: int, demo: int) -> int:
 
 # Timing constants (seconds)
 # Normal values / Demo values (for quick testing)
-IDLE_SLEEP_UI = _get_timing(3 * 60, 2)        # 3 min / 2 sec: show sleeping face
-IDLE_SCREEN_OFF = _get_timing(15 * 60, 10)    # 15 min / 10 sec: screen off
-IDLE_SHUTDOWN = _get_timing(25 * 60, 15)      # 25 min / 15 sec: shutdown
 
-LID_SHUTDOWN_DELAY = _get_timing(30, 5)       # 30 sec / 5 sec: lid close to shutdown
+# On charger, lid open
+CHARGER_IDLE_SLEEP = _get_timing(5 * 60, 3)     # 5 min / 3 sec: show sleeping face
+# No auto-shutdown on charger with lid open
+
+# On battery (or unknown), lid open
+BATTERY_IDLE_SLEEP = _get_timing(2 * 60, 2)     # 2 min / 2 sec: show sleeping face
+BATTERY_IDLE_SHUTDOWN = _get_timing(10 * 60, 10) # 10 min / 10 sec: shutdown
+
+# Lid closed (regardless of charger)
+LID_SHUTDOWN_DELAY = _get_timing(10 * 60, 8)    # 10 min / 8 sec: shutdown after lid close
 
 # Power button timing
-POWER_HOLD_SHUTDOWN = _get_timing(3, 2)       # 3 sec / 2 sec: hold power to shut down
+POWER_HOLD_SHUTDOWN = _get_timing(3, 2)          # 3 sec / 2 sec: hold power to shut down
 
 LOGIND_CONF_PATH = "/etc/systemd/logind.conf.d/purple-power.conf"
+
+# Number of consecutive reads before changing charger state (smoothing)
+_CHARGER_SMOOTH_COUNT = 2
 
 
 def set_logind_power_key(mode: str) -> bool:
@@ -93,13 +111,21 @@ class PowerManager:
     - All operations have try/except with fallbacks
     - Prefers staying awake over crashing
     - Works across different laptop models
+    - Charger unknown = treated as battery (conservative)
     """
 
     def __init__(self):
         self._last_activity = time.time()
         self._lid_path: Optional[str] = None
-        self._dpms_available = False
+        self._mains_path: Optional[str] = None
         self._poweroff_available = False
+
+        # Charger state smoothing: require _CHARGER_SMOOTH_COUNT consecutive
+        # reads of the same value before changing state. Prevents flicker
+        # from firmware noise during plug/unplug.
+        self._charger_state: Optional[bool] = None  # None = unknown, True = on charger
+        self._charger_pending: Optional[bool] = None
+        self._charger_pending_count = 0
 
         # Probe capabilities on init
         self._probe_capabilities()
@@ -122,16 +148,8 @@ class PowerManager:
                 except (IOError, OSError, PermissionError):
                     continue
 
-        # Check if xset is available for DPMS
-        try:
-            result = subprocess.run(
-                ["which", "xset"],
-                capture_output=True,
-                timeout=2
-            )
-            self._dpms_available = result.returncode == 0
-        except Exception:
-            self._dpms_available = False
+        # Find AC mains power supply (charger detection)
+        self._find_mains()
 
         # Check if we can poweroff (systemctl)
         try:
@@ -143,6 +161,45 @@ class PowerManager:
             self._poweroff_available = result.returncode == 0
         except Exception:
             self._poweroff_available = False
+
+    def _find_mains(self) -> None:
+        """Find an AC mains power supply in /sys/class/power_supply/.
+
+        Scans by type rather than name, since naming varies across hardware
+        (AC, AC0, ADP0, ADP1, ACAD, etc.).
+        """
+        try:
+            power_supply_path = "/sys/class/power_supply"
+            if not os.path.exists(power_supply_path):
+                return
+
+            for entry in os.listdir(power_supply_path):
+                entry_path = os.path.join(power_supply_path, entry)
+                type_file = os.path.join(entry_path, "type")
+                try:
+                    with open(type_file) as f:
+                        if f.read().strip() == "Mains":
+                            online_file = os.path.join(entry_path, "online")
+                            if os.path.exists(online_file):
+                                self._mains_path = entry_path
+                                # Read initial state without smoothing
+                                self._charger_state = self._read_mains_online()
+                                return
+                except (IOError, OSError, PermissionError):
+                    continue
+        except (IOError, OSError, PermissionError):
+            pass
+
+    def _read_mains_online(self) -> Optional[bool]:
+        """Read the raw online state of the AC mains. Returns None on error."""
+        if not self._mains_path:
+            return None
+        try:
+            online_file = os.path.join(self._mains_path, "online")
+            with open(online_file) as f:
+                return f.read().strip() == "1"
+        except (IOError, OSError, PermissionError, ValueError):
+            return None
 
     def record_activity(self) -> None:
         """Call this on any user input to reset idle timer."""
@@ -171,46 +228,45 @@ class PowerManager:
         except Exception:
             return None
 
-    def set_screen_brightness(self, level: str) -> bool:
+    def is_on_charger(self) -> Optional[bool]:
+        """Check if AC charger is connected.
+
+        Returns: True if on charger, False if on battery, None if unknown.
+        Uses smoothing: requires multiple consecutive reads of the same value
+        before changing state, to avoid flicker from firmware noise.
         """
-        Control screen brightness via DPMS.
-        level: "on" or "off"
-        Returns True on success.
+        raw = self._read_mains_online()
+        if raw is None:
+            return self._charger_state  # Keep last known state
+
+        if raw == self._charger_pending:
+            self._charger_pending_count += 1
+        else:
+            self._charger_pending = raw
+            self._charger_pending_count = 1
+
+        if self._charger_pending_count >= _CHARGER_SMOOTH_COUNT:
+            self._charger_state = raw
+
+        return self._charger_state
+
+    def get_idle_sleep_threshold(self) -> int:
+        """Get the idle seconds threshold for showing the sleep face.
+
+        Depends on charger state: longer timeout when plugged in.
         """
-        if not self._dpms_available:
-            return False
+        if self._charger_state is True:
+            return CHARGER_IDLE_SLEEP
+        return BATTERY_IDLE_SLEEP
 
-        try:
-            if level == "off":
-                # Force screen off
-                subprocess.run(
-                    ["xset", "dpms", "force", "off"],
-                    capture_output=True,
-                    timeout=5
-                )
-            elif level == "on":
-                # Re-enable and force on
-                subprocess.run(
-                    ["xset", "dpms", "force", "on"],
-                    capture_output=True,
-                    timeout=5
-                )
-            return True
-        except Exception:
-            return False
+    def get_idle_shutdown_threshold(self) -> Optional[int]:
+        """Get the idle seconds threshold for auto-shutdown.
 
-    def disable_dpms(self) -> bool:
-        """Disable DPMS (screen stays on forever)."""
-        if not self._dpms_available:
-            return False
-
-        try:
-            subprocess.run(["xset", "s", "off"], capture_output=True, timeout=5)
-            subprocess.run(["xset", "-dpms"], capture_output=True, timeout=5)
-            subprocess.run(["xset", "s", "noblank"], capture_output=True, timeout=5)
-            return True
-        except Exception:
-            return False
+        Returns None if no auto-shutdown (on charger with lid open).
+        """
+        if self._charger_state is True:
+            return None  # No auto-shutdown on charger
+        return BATTERY_IDLE_SHUTDOWN
 
     def shutdown(self) -> bool:
         """

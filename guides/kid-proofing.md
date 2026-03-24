@@ -124,8 +124,8 @@ This is the deepest layer of protection. Even if other layers fail, the terminal
 **Files:**
 - `/etc/systemd/logind.conf.d/purple-power.conf` (logind ignores all buttons)
 - `purple_tui/input.py`: `PowerButtonReader` monitors power button via evdev
-- `purple_tui/modes/sleep_screen.py`: `SleepScreen` and `ByeScreen`
-- `purple_tui/power_manager.py`: idle tracking and shutdown
+- `purple_tui/rooms/sleep_screen.py`: `SleepScreen`, `ByeScreen`, `LiveBootSplash`
+- `purple_tui/power_manager.py`: idle tracking, charger detection, and shutdown
 
 ```ini
 [Login]
@@ -139,19 +139,24 @@ HandleHibernateKey=ignore
 
 logind ignores all power actions so the TUI has full control over the UX.
 
+Two power states: awake and sleep face. Timers adapt to charger and lid:
+
 | Action | What happens |
 |--------|-------------|
-| Power button tap | Shows sleep screen (cute sleeping face). Any key wakes. |
+| Power button tap | Shows shutdown confirm. Second tap shuts down. Any other key cancels. |
 | Power button hold (3s) | Shows "Bye!" screen, then shuts down after 2s. |
 | Power button hold (10s) | Hardware forced off (ACPI, cannot be changed). |
-| Lid close | Screen off immediately. Shuts down after 2 minutes. Lid reopen cancels. |
-| Idle 3 min | Sleep screen |
-| Idle 15 min | Screen off (DPMS) |
-| Idle 30 min | Shutdown |
+| Lid close | Sleep face immediately. Shuts down after 10 min. Lid reopen resets everything. |
+| Idle (on charger) | 5 min: sleep face. No auto-shutdown. |
+| Idle (on battery) | 2 min: sleep face. 10 min: shutdown. |
 
-**Why this design:** A 3-year-old mashing the power button sees a cute sleeping face (not scary) and can press any key to get back. A parent who wants to turn it off holds power for 3 seconds (phone-like, intuitive). No suspend/hibernate (unreliable on old laptops).
+Charger detection scans `/sys/class/power_supply/` for `type == "Mains"` with smoothing (2 consecutive reads). Falls back to battery timers if charger state is unknown.
+
+**Why this design:** A 3-year-old mashing the power button sees a cute sleeping face (not scary) and can press any key to get back. A parent who wants to turn it off holds power for 3 seconds (phone-like, intuitive). No suspend/hibernate (unreliable on old laptops). Closing the lid to carry the laptop is safe for 10 minutes. Plugged in machines stay alive longer since battery drain is not a concern.
 
 The 10-second forced power-off is a **hardware feature** (ACPI) that bypasses the OS. This cannot be changed and serves as the ultimate escape hatch.
+
+**Live boot:** On first launch from USB, a splash screen explains that Purple is running from USB and will need the USB again after shutdown. The sleep face and parent menu also show reminders during live boot.
 
 ---
 

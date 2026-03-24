@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 from ..keyboard import NavigationAction, ControlAction
-from ..constants import is_debug, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL
 
 
 # =============================================================================
@@ -617,12 +617,12 @@ def _flush_terminal_input() -> None:
 
 
 def _is_casper_boot() -> bool:
-    """Check if running from a casper live boot (USB or otherwise)."""
-    try:
-        cmdline = Path("/proc/cmdline").read_text()
-        return "boot=casper" in cmdline
-    except Exception:
-        return False
+    """Check if running from a casper live boot (USB or otherwise).
+
+    Delegates to shared is_live_boot() in constants.py.
+    Kept as a local alias for backward compatibility within this module.
+    """
+    return is_live_boot()
 
 
 def _is_usb_payload_available() -> bool:
@@ -862,6 +862,14 @@ class ParentMenu(ModalScreen):
         color: $text-muted;
         margin-top: 1;
     }
+
+    #parent-live-hint {
+        width: 100%;
+        height: auto;
+        text-align: center;
+        color: $text-muted;
+        margin-bottom: 1;
+    }
     """
 
     def __init__(self, **kwargs):
@@ -874,6 +882,11 @@ class ParentMenu(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="parent-dialog"):
             yield Static("Parent Menu", id="parent-title")
+            if is_live_boot():
+                yield Static(
+                    "Running from USB.\nInstall to keep it without the USB.",
+                    id="parent-live-hint",
+                )
             with Vertical(id="parent-items"):
                 for item_id, label in self._menu_items:
                     item = ParentMenuItem(label, item_id)

@@ -128,6 +128,20 @@ ICON_USB_SAFE = "⏏"          # eject symbol (safe to remove)
 SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 
+
+def is_live_boot() -> bool:
+    """Check if running from a casper live boot (USB or otherwise).
+
+    Reads /proc/cmdline once and caches the result (doesn't change at runtime).
+    """
+    if not hasattr(is_live_boot, "_cached"):
+        try:
+            from pathlib import Path
+            is_live_boot._cached = "boot=casper" in Path("/proc/cmdline").read_text()
+        except Exception:
+            is_live_boot._cached = False
+    return is_live_boot._cached
+
 # Room titles with icons (uses room name constants)
 ROOM_TITLES = {
     ROOM_PLAY[0]: (ICON_CHAT, ROOM_PLAY[1]),

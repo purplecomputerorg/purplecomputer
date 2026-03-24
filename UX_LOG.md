@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Power management overhaul: simplified from 3 states (sleep face, screen off, shutdown) to 2 states (sleep face, shutdown). Removed DPMS screen-off. Timers now adapt to charger: on charger with lid open, 5 min to sleep face, no auto-shutdown. On battery, 2 min to sleep face, 10 min to shutdown. Lid close shows sleep face immediately and shuts down after 10 min (was 30 sec). Lid reopen resets all timers.
+- Live boot awareness: splash screen on first USB boot explains Purple will need the USB again after shutdown. Sleep face and parent menu also show USB reminders during live boot.
+- Music Room: looping hint now says "Play on top, keep recording!" so kids know it's still recording. Hint text responds to caps/double-shift changes immediately (was only updating on room switch).
 - Music Room loop layers now preserve their instrument: previously recorded layers play back with the instrument they were recorded with, not the currently selected one.
 - Parent menu: "Install on this computer" is grayed out with "(re-insert USB)" when the USB drive has been removed. Updates live if USB is re-inserted while menu is open.
 - Boot now waits for the GPU display to be ready before starting, fixing black screen on older hardware (MacBook 2014, some ThinkPads). Removed forced DPCD backlight parameter that could turn off the screen on unsupported panels.

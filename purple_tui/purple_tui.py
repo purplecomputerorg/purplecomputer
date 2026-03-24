@@ -56,6 +56,7 @@ from .constants import (
     CODE_PANEL_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     USB_UPDATE_SIGNAL_FILE,
+    is_live_boot,
 )
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -1064,12 +1065,15 @@ class PurpleApp(App):
             # Dev mode: no sleep screen (for AI training)
             self._idle_timer = None
         else:
-            from .power_manager import IDLE_SLEEP_UI, IDLE_SHUTDOWN
+            from .power_manager import (
+                CHARGER_IDLE_SLEEP, BATTERY_IDLE_SLEEP, BATTERY_IDLE_SHUTDOWN,
+            )
 
             if os.environ.get("PURPLE_SLEEP_DEMO"):
                 check_interval = 1.0
                 self.notify(
-                    f"Demo: sleep@{IDLE_SLEEP_UI}s, off@{IDLE_SHUTDOWN}s",
+                    f"Demo: sleep@{BATTERY_IDLE_SLEEP}s/{CHARGER_IDLE_SLEEP}s, "
+                    f"shutdown@{BATTERY_IDLE_SHUTDOWN}s",
                     title="Sleep Demo",
                     timeout=5,
                 )
@@ -1097,6 +1101,11 @@ class PurpleApp(App):
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
             # Wait 2 seconds for FFmpeg to stabilize (trimmed from final video)
             self.set_timer(2.0, self.start_demo)
+
+        # Show live boot splash on first launch from USB
+        if is_live_boot() and not os.environ.get("PURPLE_DEV_MODE") == "1":
+            from .rooms.sleep_screen import LiveBootSplash
+            self.push_screen(LiveBootSplash())
 
         # In dev mode, check for screenshot and command trigger files (for AI tools)
         if os.environ.get("PURPLE_DEV_MODE") == "1":
@@ -1712,10 +1721,19 @@ class PurpleApp(App):
             if self._is_sleep_or_bye_active():
                 return
 
-            from .power_manager import IDLE_SLEEP_UI
             pm = get_power_manager()
 
-            if pm.get_lid_state() is False or pm.get_idle_seconds() >= IDLE_SLEEP_UI:
+            # Refresh charger state each tick (for smoothing)
+            pm.is_on_charger()
+
+            # Lid closed: immediate sleep face
+            if pm.get_lid_state() is False:
+                self._show_sleep_screen()
+                return
+
+            # Idle threshold adapts to charger state
+            sleep_threshold = pm.get_idle_sleep_threshold()
+            if pm.get_idle_seconds() >= sleep_threshold:
                 self._show_sleep_screen()
         except Exception:
             pass
@@ -1727,15 +1745,7 @@ class PurpleApp(App):
 
         try:
             from .rooms.sleep_screen import SleepScreen
-
-            def on_sleep_screen_dismiss(_result) -> None:
-                try:
-                    pm = get_power_manager()
-                    pm.disable_dpms()
-                except Exception:
-                    pass
-
-            self.push_screen(SleepScreen(), on_sleep_screen_dismiss)
+            self.push_screen(SleepScreen())
         except Exception:
             pass
 

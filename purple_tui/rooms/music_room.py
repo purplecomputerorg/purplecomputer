@@ -500,11 +500,25 @@ PROGRESS_BLOCKS = 20  # number of blocks in the recording progress bar
 
 
 class MusicExampleHint(Static):
-    """Shows context-sensitive hint for current loop station state."""
+    """Shows context-sensitive hint for current loop station state.
+
+    Stores raw markup and applies caps in render() so the caps-sensitive
+    refresh pattern works (same as every other hint widget).
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
+        self._raw_markup: str = ""
+
+    def set_hint(self, markup: str) -> None:
+        """Set the hint markup (without caps). Caps applied at render time."""
+        self._raw_markup = markup
+        self.refresh()
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        return caps(self._raw_markup)
 
 
 class MusicMode(Container, can_focus=True):
@@ -731,22 +745,25 @@ class MusicMode(Container, can_focus=True):
     # -- Hint bar ------------------------------------------------------------
 
     def _update_hint(self) -> None:
-        """Update the bottom hint bar based on loop station state."""
+        """Update the bottom hint bar based on loop station state.
+
+        Text is stored raw (without caps). MusicExampleHint.render()
+        applies caps at render time so it responds to caps changes immediately.
+        """
         try:
             hint = self.query_one("#example-hint", MusicExampleHint)
         except Exception:
             return
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         state = self._loop.state
 
         if state == IDLE:
-            text = caps("Try pressing letters and numbers!")
+            text = "Try pressing letters and numbers!"
             if getattr(self.app, '_littles_mode', None):
-                hint.update(f"[dim]{text}[/]")
+                hint.set_hint(f"[dim]{text}[/]")
                 return
-            space_hint = caps("Space: record a loop")
-            enter_hint = caps("Enter: change instrument")
-            hint.update(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
+            space_hint = "Space: record a loop"
+            enter_hint = "Enter: change instrument"
+            hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
 
         elif state == RECORDING:
             progress = self._loop.recording_progress()
@@ -756,13 +773,13 @@ class MusicMode(Container, can_focus=True):
             bar = "█" * filled + "░" * empty
             secs = int(remaining)
             if remaining <= 5:
-                label = caps(f"Recording  {secs}s left")
-                action = caps("Almost full!")
-                hint.update(f"[bold dark_orange]● {label}[/]  {bar}  [dim]{action}[/]")
+                label = f"Recording  {secs}s left"
+                action = "Almost full!"
+                hint.set_hint(f"[bold dark_orange]● {label}[/]  {bar}  [dim]{action}[/]")
             else:
-                label = caps(f"Recording  {secs}s left")
-                action = caps("Space: loop it!")
-                hint.update(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
+                label = f"Recording  {secs}s left"
+                action = "Space: loop it!"
+                hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
 
         elif state == LOOPING:
             progress = self._loop.loop_progress()
@@ -772,10 +789,10 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            label = caps("Looping!")
-            play = caps("Play on top!")
-            stop = caps("Space+Space: stop")
-            hint.update(f"[bold green]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
+            label = "Looping!"
+            play = "Play on top, keep recording!"
+            stop = "Space+Space: stop"
+            hint.set_hint(f"[bold green]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------
 

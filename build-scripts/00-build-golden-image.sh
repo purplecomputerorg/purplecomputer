@@ -242,8 +242,6 @@ SOURCES
 
     chroot "$MOUNT_DIR" fc-cache -fv
 
-    chroot "$MOUNT_DIR" update-initramfs -u
-
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"

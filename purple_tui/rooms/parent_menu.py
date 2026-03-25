@@ -720,10 +720,7 @@ def _get_menu_items() -> list:
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
     if _is_casper_boot():
-        if _is_usb_payload_available():
-            items.append(("menu-install", "Install on this computer"))
-        else:
-            items.append(("menu-install-disabled", "Install (re-insert USB)"))
+        items.append(("menu-install", "Install on this computer" if _is_usb_payload_available() else "Install (re-insert USB)"))
     items.append(("menu-shell", "Open Terminal"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
@@ -944,7 +941,7 @@ class ParentMenu(ModalScreen):
             with Vertical(id="parent-items"):
                 for item_id, label in self._menu_items:
                     item = ParentMenuItem(label, item_id)
-                    if item_id.endswith("-disabled"):
+                    if item_id == "menu-install" and not _is_usb_payload_available():
                         item.add_class("disabled")
                     yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="parent-hint")
@@ -972,23 +969,20 @@ class ParentMenu(ModalScreen):
             usb_available = _try_remount_usb(dev)
         else:
             usb_available = False
-        for i, (item_id, _) in enumerate(self._menu_items):
-            if item_id in ("menu-install", "menu-install-disabled"):
+        for i, (item_id, old_label) in enumerate(self._menu_items):
+            if item_id == "menu-install":
                 if usb_available:
-                    new_id = "menu-install"
                     new_label = "Install on this computer"
                 else:
-                    new_id = "menu-install-disabled"
                     new_label = "Install (re-insert USB)"
-                if new_id != item_id:
-                    self._menu_items[i] = (new_id, new_label)
+                if new_label != old_label:
+                    self._menu_items[i] = (item_id, new_label)
                     item = self.query_one(f"#{item_id}", ParentMenuItem)
-                    item.id = new_id
                     item.update(new_label)
-                    if new_id.endswith("-disabled"):
-                        item.add_class("disabled")
-                    else:
+                    if usb_available:
                         item.remove_class("disabled")
+                    else:
+                        item.add_class("disabled")
                     self._update_selection()
                 return
 
@@ -1041,7 +1035,8 @@ class ParentMenu(ModalScreen):
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""
         item_id = self._menu_items[self._selected_index][0]
-        if item_id.endswith("-disabled"):
+        item_widget = self.query_one(f"#{item_id}", ParentMenuItem)
+        if item_widget.has_class("disabled"):
             return
         if item_id == "menu-littles":
             self._open_littles_mode()

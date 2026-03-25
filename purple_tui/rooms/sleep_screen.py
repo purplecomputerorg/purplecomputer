@@ -98,13 +98,18 @@ class SleepScreen(Screen):
 
     def _check_idle_shutdown(self) -> None:
         """Check if idle time has reached shutdown threshold (battery only)."""
+        from ..power_manager import _power_log
         pm = get_power_manager()
 
         # Refresh charger state
-        pm.is_on_charger()
+        charger = pm.is_on_charger()
 
+        idle = pm.get_idle_seconds()
         shutdown_threshold = pm.get_idle_shutdown_threshold()
-        if shutdown_threshold is not None and pm.get_idle_seconds() >= shutdown_threshold:
+        if int(idle) % 30 == 0:
+            _power_log(f"SLEEP_SCREEN TICK: idle={idle:.0f}s, shutdown_threshold={shutdown_threshold}, charger={charger}")
+        if shutdown_threshold is not None and idle >= shutdown_threshold:
+            _power_log(f"SLEEP_SCREEN SHUTDOWN: idle {idle:.0f}s >= {shutdown_threshold}s")
             self._do_shutdown()
 
     def _do_shutdown(self) -> None:
@@ -121,6 +126,8 @@ class SleepScreen(Screen):
 
     def _wake_up(self) -> None:
         """Wake up and return to normal operation."""
+        from ..power_manager import _power_log
+        _power_log("WAKE UP: key pressed on sleep screen")
         pm = get_power_manager()
         pm.record_activity()
         self.dismiss()

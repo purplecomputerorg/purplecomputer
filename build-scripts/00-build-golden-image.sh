@@ -250,6 +250,14 @@ SOURCES
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
 
+    # Copy on-device scripts (everything in scripts/on-device/)
+    # These are available on the image for debugging from the parent menu terminal
+    if [ -d /purple-src/scripts/on-device ]; then
+        mkdir -p "$MOUNT_DIR/opt/purple/scripts"
+        cp /purple-src/scripts/on-device/*.py "$MOUNT_DIR/opt/purple/scripts/" 2>/dev/null || true
+        cp /purple-src/scripts/on-device/*.sh "$MOUNT_DIR/opt/purple/scripts/" 2>/dev/null || true
+    fi
+
     # Copy USB update config (udev rule + systemd service)
     cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
     cp /purple-src/config/systemd/purple-usb-update@.service "$MOUNT_DIR/etc/systemd/system/"
@@ -444,7 +452,7 @@ set default=0
 
 menuentry "PurpleOS" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
     initrd /boot/initrd.img
 }
 

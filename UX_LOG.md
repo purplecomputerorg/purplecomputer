@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Esc now stops demo playback in any room and opens the room switcher. Music room loop hint changed from "Space+Space: stop" to "Esc: stop" (both still work). Looping state now shows red "Looping and recording // Play on top" instead of green "Looping!".
+- Music room code runner: key colors now cycle properly (purple, blue, red, off) instead of all staying blue.
 - Shutdown confirm screen now auto-dismisses after 3 seconds with a visible countdown. Power button must be tapped twice within that window to shut down.
 - Volume steps redistributed for more even perceived loudness: 0/15/35/60/85/100 instead of 0/25/50/75/100. Labels: Sound Off, Whisper, Quiet, Medium, Loud, Full.
 - Color legend no longer shifts the viewport off-center; it floats to the right of the border independently.

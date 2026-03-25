@@ -789,10 +789,10 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            label = "Looping!"
-            play = "Play on top, keep recording!"
-            stop = "Space+Space: stop"
-            hint.set_hint(f"[bold green]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
+            label = "Looping and recording"
+            play = "Play on top"
+            stop = "Esc: stop"
+            hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------
 
@@ -831,10 +831,9 @@ class MusicMode(Container, can_focus=True):
                     self._handle_space()
                 return
 
-            # Escape: stop loop if active (consume so room picker doesn't open)
+            # Escape: stop loop if active (don't consume, let room picker open too)
             if action.action == 'escape':
-                if self._handle_escape():
-                    self.app._escape_consumed_by_mode = True
+                self._handle_escape()
                 return
 
             # Tab switches mode

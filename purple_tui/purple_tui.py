@@ -1058,14 +1058,19 @@ class PurpleApp(App):
 
         # Start power button reader (separate device from keyboard)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
-            from .power_manager import POWER_HOLD_SHUTDOWN
+            from .power_manager import POWER_HOLD_SHUTDOWN, _power_log
             self._power_button_reader = PowerButtonReader(
                 callback=self._handle_power_button_event,
                 hold_seconds=POWER_HOLD_SHUTDOWN,
             )
             try:
                 await self._power_button_reader.start()
-            except Exception:
+                if self._power_button_reader._device is None:
+                    _power_log("POWER BUTTON INIT: no device found")
+                else:
+                    _power_log(f"POWER BUTTON INIT: using {self._power_button_reader._device.path}")
+            except Exception as e:
+                _power_log(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None
 
         # Start lid switch reader (instant lid open/close detection via evdev)
@@ -1267,6 +1272,9 @@ class PurpleApp(App):
         if isinstance(action, ControlAction) and action.action == 'escape':
             if action.is_down and not action.is_repeat:
                 self._escape_triggered_long_hold = False  # Reset on fresh press
+                # Stop demo/code playback if running (in any room)
+                if self.demo_running:
+                    self.cancel_demo()
                 # Track if modal was open when ESC pressed (for toggle behavior)
                 self._modal_open_at_escape_press = len(self.screen_stack) > 1
                 self._start_escape_hold_timer()
@@ -1549,7 +1557,6 @@ class PurpleApp(App):
                 mode = "letters" if music._letters_mode else "music"
 
                 def play_key(key, m):
-                    music.grid.next_color(key, refresh=True)
                     music._play_key(key, m)
 
                 def set_inst(name):
@@ -1751,20 +1758,23 @@ class PurpleApp(App):
         This timer also handles the lid-close shutdown countdown and idle timeouts.
         """
         try:
+            from .power_manager import _power_log
             pm = get_power_manager()
 
             # Refresh charger state each tick (for smoothing)
-            pm.is_on_charger()
+            charger = pm.is_on_charger()
 
             # Fallback lid detection: if LidSwitchReader isn't available,
             # poll /proc/acpi (up to 5s latency, but works everywhere)
             if self._lid_switch_reader is None:
                 lid_open = pm.get_lid_state()
                 if lid_open is False and self._lid_close_time is None:
+                    _power_log("LID CLOSED (polled /proc/acpi fallback)")
                     self._lid_close_time = time.time()
                     if not self._is_sleep_or_bye_active():
                         self._show_sleep_screen()
                 elif lid_open is not False and self._lid_close_time is not None:
+                    _power_log("LID OPENED (polled /proc/acpi fallback)")
                     self._lid_close_time = None
                     self._record_user_activity()
                     from .rooms.sleep_screen import SleepScreen
@@ -1777,22 +1787,29 @@ class PurpleApp(App):
             # or fallback polling above)
             if self._lid_close_time is not None:
                 from .power_manager import LID_SHUTDOWN_DELAY
-                if time.time() - self._lid_close_time >= LID_SHUTDOWN_DELAY:
+                elapsed = time.time() - self._lid_close_time
+                if elapsed >= LID_SHUTDOWN_DELAY:
+                    _power_log(f"LID SHUTDOWN: lid closed for {elapsed:.0f}s >= {LID_SHUTDOWN_DELAY}s, shutting down")
                     self._show_bye_screen()
+                elif int(elapsed) % 30 == 0:
+                    _power_log(f"TICK: lid closed {elapsed:.0f}s/{LID_SHUTDOWN_DELAY}s, charger={charger}")
                 return  # Don't also check idle while lid is closed
 
             if self._is_sleep_or_bye_active():
                 return
 
+            idle = pm.get_idle_seconds()
             # Idle threshold adapts to charger state
             sleep_threshold = pm.get_idle_sleep_threshold()
-            if pm.get_idle_seconds() >= sleep_threshold:
+            if idle >= sleep_threshold:
+                _power_log(f"IDLE SLEEP: idle {idle:.0f}s >= {sleep_threshold}s, charger={charger}")
                 self._show_sleep_screen()
                 return
 
             # Idle shutdown (only on battery, never on charger with lid open)
             shutdown_threshold = pm.get_idle_shutdown_threshold()
-            if shutdown_threshold is not None and pm.get_idle_seconds() >= shutdown_threshold:
+            if shutdown_threshold is not None and idle >= shutdown_threshold:
+                _power_log(f"IDLE SHUTDOWN: idle {idle:.0f}s >= {shutdown_threshold}s, charger={charger}")
                 self._show_bye_screen()
         except Exception:
             pass
@@ -1835,16 +1852,22 @@ class PurpleApp(App):
         Lid close: show sleep screen immediately, start shutdown countdown.
         Lid open: wake up, reset everything.
         """
+        from .power_manager import _power_log
+
         if self._bye_screen_active:
+            _power_log(f"LID EVENT ignored: bye screen active, is_open={event.is_open}")
             return
 
         if not event.is_open:
             # Lid closed: start shutdown countdown and show sleep screen
+            _power_log("LID CLOSED (evdev)")
             self._lid_close_time = time.time()
             if not self._is_sleep_or_bye_active():
                 self._show_sleep_screen()
         else:
             # Lid opened: reset everything, wake up
+            closed_for = time.time() - self._lid_close_time if self._lid_close_time else 0
+            _power_log(f"LID OPENED (evdev), was closed for {closed_for:.1f}s")
             self._lid_close_time = None
             self._record_user_activity()
 
@@ -1863,6 +1886,10 @@ class PurpleApp(App):
         Tap: show sleep screen (cute, not scary)
         Hold (3s): show bye screen and shut down
         """
+        from .power_manager import _power_log
+        _power_log(f"POWER BUTTON: action={event.action}, suspended={self._app_suspended}, "
+                    f"bye_active={self._bye_screen_active}")
+
         if self._app_suspended or self._bye_screen_active:
             return
 

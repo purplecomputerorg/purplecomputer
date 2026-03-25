@@ -53,7 +53,7 @@ from .constants import (
     SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    CODE_PANEL_HEIGHT,
+    CODE_PANEL_MIN_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     USB_UPDATE_SIGNAL_FILE,
     is_live_boot,
@@ -815,27 +815,31 @@ class PurpleApp(App):
     }
 
     #code-panel-row {
-        width: __VIEWPORT_BORDER_WIDTH__;
-        height: __CODE_PANEL_HEIGHT__;
+        width: __VIEWPORT_WIDTH__;
         display: none;
         margin-left: 5;
+        border: heavy #4a3660;
+        border-top: none;
     }
 
     #code-panel-row.visible {
         display: block;
+        height: 1fr;
     }
 
     #code-editor {
         width: 2fr;
         height: 100%;
-        border: heavy #9b7bc4;
+        border-right: heavy #4a3660;
     }
 
     #code-hints {
         width: 1fr;
         height: 100%;
-        border: heavy #4a3660;
-        margin-left: 1;
+    }
+
+    #viewport-wrapper.code-space-open {
+        height: 100%;
     }
 
     .code-space-open #title-row {
@@ -896,7 +900,7 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_BORDER_WIDTH__", str(VIEWPORT_WIDTH + 2)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__CODE_PANEL_HEIGHT__", str(CODE_PANEL_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
+    """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_BORDER_WIDTH__", str(VIEWPORT_WIDTH + 2)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
     BINDINGS = [

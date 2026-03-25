@@ -761,19 +761,24 @@ class PurpleApp(App):
     }
 
     #title-row {
+        layers: title indicators;
         width: __VIEWPORT_BORDER_WIDTH__;
         height: 1;
         margin-bottom: 1;
         margin-left: 5;
     }
 
-    #title-spacer-left {
-        width: 12;  /* Balance right side: caps (~8) + battery (~3) + margin */
+    #room-title {
+        layer: title;
+        width: 100%;
+        text-align: center;
     }
 
-    #room-title {
-        width: 1fr;
-        text-align: center;
+    #title-indicators {
+        layer: indicators;
+        dock: right;
+        width: auto;
+        height: 1;
     }
 
     #shift-indicator {
@@ -813,7 +818,6 @@ class PurpleApp(App):
         width: __VIEWPORT_BORDER_WIDTH__;
         height: __CODE_PANEL_HEIGHT__;
         display: none;
-        margin-top: 1;
         margin-left: 5;
     }
 
@@ -832,6 +836,10 @@ class PurpleApp(App):
         height: 100%;
         border: heavy #4a3660;
         margin-left: 1;
+    }
+
+    .code-space-open #title-row {
+        margin-bottom: 0;
     }
 
     .code-space-open #viewport {
@@ -991,13 +999,13 @@ class PurpleApp(App):
         """Create the UI layout"""
         with Container(id="outer-container"):
             with Vertical(id="viewport-wrapper"):
-                with Horizontal(id="title-row"):
-                    yield Static("", id="title-spacer-left")  # Balance for right elements
+                with Container(id="title-row"):
                     yield RoomTitle(id="room-title")
-                    yield UsbIndicator(id="usb-indicator")
-                    yield Static("", id="shift-indicator")
-                    yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
-                    yield BatteryIndicator(id="battery-indicator")
+                    with Horizontal(id="title-indicators"):
+                        yield UsbIndicator(id="usb-indicator")
+                        yield Static("", id="shift-indicator")
+                        yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
+                        yield BatteryIndicator(id="battery-indicator")
                 with Horizontal(id="viewport-row"):
                     yield Static("", id="legend-spacer")
                     with ViewportContainer(id="viewport"):
@@ -1670,10 +1678,14 @@ class PurpleApp(App):
             from textual.color import Color
             viewport = self.query_one("#viewport")
             if self._code_space_open:
-                # Code space open: use dimmed border color
-                viewport.styles.border = ("heavy", Color.parse("#4a3660"))
+                # Code space open: dimmed border, no bottom border (shared with code panel)
+                dim = Color.parse("#4a3660")
+                viewport.styles.border_top = ("heavy", dim)
+                viewport.styles.border_left = ("heavy", dim)
+                viewport.styles.border_right = ("heavy", dim)
+                viewport.styles.border_bottom = ("none", dim)
             else:
-                # Normal: use primary color based on current theme
+                # Normal: full border in primary color
                 primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
                 viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:

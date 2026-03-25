@@ -42,9 +42,9 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 #   - Room indicator: margin-top 1h + height 3h = 4 rows
 #
 # Code space layout (font shrinks so more rows fit):
-#   - Title row: 1h + margin-bottom 1h = 2 rows
-#   - Viewport: VIEWPORT_HEIGHT + border(2) rows
-#   - Code panel: margin-top 1h + CODE_PANEL_HEIGHT rows
+#   - Title row: 1h (no margin-bottom)
+#   - Viewport: VIEWPORT_HEIGHT + border-top(1) rows (no bottom border)
+#   - Code panel: CODE_PANEL_HEIGHT rows (no margin-top, top border is shared divider)
 #   - Compact indicator: 1 row (no margin)
 
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
@@ -60,10 +60,11 @@ REQUIRED_TERMINAL_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _INDICATOR_ROWS
 # Code panel (inline code trail below viewport in split-screen mode)
 CODE_PANEL_HEIGHT = 19        # Rows for code panel when open
 
-# Code space mode: compact indicator(1, no margin) replaces normal, adds code panel
+# Code space mode: compact layout (no title margin, no viewport bottom border, no code panel margin)
+_CODE_TITLE_ROWS = 1              # Title row only (no margin-bottom)
+_CODE_VIEWPORT_ROWS = VIEWPORT_HEIGHT + 1  # Content + top border only (bottom border removed)
 _COMPACT_INDICATOR_ROWS = 1
-_CODE_PANEL_ROWS = 1 + CODE_PANEL_HEIGHT  # margin-top(1) + height
-CODE_SPACE_REQUIRED_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _CODE_PANEL_ROWS + _COMPACT_INDICATOR_ROWS
+CODE_SPACE_REQUIRED_ROWS = _CODE_TITLE_ROWS + _CODE_VIEWPORT_ROWS + CODE_PANEL_HEIGHT + _COMPACT_INDICATOR_ROWS
 
 # Font shrink ratio: sized so the code space layout fits in the same screen pixels
 CODE_FONT_RATIO = REQUIRED_TERMINAL_ROWS / CODE_SPACE_REQUIRED_ROWS

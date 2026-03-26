@@ -162,7 +162,7 @@ class TitleBar(Widget):
             indicator_parts.append((" " + self._battery_text, primary))
 
         indicator_total = sum(display_len(t) for t, _ in indicator_parts)
-        indicator_start = max(0, width - indicator_total - 1)
+        indicator_start = max(0, width - indicator_total - 4)
 
         # Build segments left to right, handling potential overlap
         title_style = Style(color=primary, bold=True)

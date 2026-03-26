@@ -140,11 +140,6 @@ class TitleBar(Widget):
         if width <= 0 or y != 0:
             return Strip([])
 
-        # DEBUG: log width to file
-        import os
-        with open("/tmp/titlebar_debug.log", "a") as f:
-            f.write(f"TitleBar width={width}\n")
-
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Title (centered)
@@ -859,10 +854,9 @@ class PurpleApp(App):
     }
 
     #title-bar {
-        width: __VIEWPORT_BORDER_WIDTH__;
+        width: 100%;
         height: 1;
         margin-bottom: 1;
-        margin-left: 5;
     }
 
     #battery-indicator, #usb-indicator {

@@ -293,20 +293,21 @@ class CodeTextEditor(Widget, can_focus=True):
             run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
+
+            parts = [
+                (caps(" Press Tab for Menu "), tab_style),
+                (caps("  Space: Run  "), run_style),
+                (caps("  \u00b7  "), sep_style),
+                (caps("C: Clear"), item_style),
+                (caps("  \u00b7  "), sep_style),
+                (caps("X: Exit Code"), item_style),
+            ]
         else:
             tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
-            run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
-            item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
-            sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
-        parts = [
-            (caps(" Press Tab for Menu "), tab_style),
-            (caps("  Space: Run"), run_style),
-            (caps("  \u00b7  "), sep_style),
-            (caps("C: Clear"), item_style),
-            (caps("  \u00b7  "), sep_style),
-            (caps("X: Exit Code"), item_style),
-        ]
+            parts = [
+                (caps(" Press Tab for Menu "), tab_style),
+            ]
 
         total_len = sum(len(text) for text, _ in parts)
         pad_left = max(0, (width - total_len) // 2)

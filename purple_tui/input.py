@@ -511,6 +511,7 @@ class PowerButtonReader:
         self._device = None
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._heartbeat_task: Optional[asyncio.Task] = None
         self._hold_task: Optional[asyncio.Task] = None
         self._press_time: Optional[float] = None
 
@@ -526,11 +527,16 @@ class PowerButtonReader:
 
         self._running = True
         self._task = asyncio.create_task(self._read_loop())
+        self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
     async def stop(self) -> None:
         """Stop reading and release the device."""
         self._running = False
         self._cancel_hold_task()
+
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
 
         if self._task:
             self._task.cancel()
@@ -548,6 +554,23 @@ class PowerButtonReader:
             self._device = None
 
         logger.info("PowerButtonReader: stopped")
+
+    async def _heartbeat(self) -> None:
+        """Periodic check that the read loop task is still alive (debug only)."""
+        from .power_manager import _power_log
+        try:
+            # First heartbeat after 30s, then every 60s
+            await asyncio.sleep(30)
+            while self._running:
+                task_state = "alive" if self._task and not self._task.done() else "DEAD"
+                if self._task and self._task.done():
+                    exc = self._task.exception() if not self._task.cancelled() else "cancelled"
+                    task_state = f"DEAD (exception={exc})"
+                _power_log(f"POWER HEARTBEAT: read_loop={task_state}, "
+                           f"device={self._device.path if self._device else 'None'}")
+                await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            pass
 
     def _cancel_hold_task(self) -> None:
         if self._hold_task and not self._hold_task.done():
@@ -570,12 +593,23 @@ class PowerButtonReader:
 
     async def _read_loop(self) -> None:
         """Main event reading loop."""
+        from .power_manager import _power_log
+        _power_log(f"POWER READ LOOP: starting on {self._device.path}")
+        event_count = 0
         try:
             async for event in self._device.async_read_loop():
                 if not self._running:
+                    _power_log("POWER READ LOOP: stopped (_running=False)")
                     break
 
+                event_count += 1
+                # Log first few events to confirm device is alive
+                if event_count <= 5:
+                    _power_log(f"POWER READ LOOP: event #{event_count} type={event.type} "
+                               f"code={event.code} value={event.value}")
+
                 if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
+                    _power_log(f"POWER KEY: value={event.value} (1=press, 0=release)")
                     if event.value == 1:  # press
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()
@@ -592,43 +626,65 @@ class PowerButtonReader:
                         self._press_time = None
 
         except asyncio.CancelledError:
-            pass
-        except OSError:
-            # Device was closed (normal during shutdown)
-            pass
+            _power_log("POWER READ LOOP: cancelled")
+        except OSError as e:
+            _power_log(f"POWER READ LOOP: OSError (device closed?): {e}")
         except Exception as e:
+            _power_log(f"POWER READ LOOP: unexpected error: {e}")
             logger.error(f"PowerButtonReader error: {e}")
+        else:
+            _power_log(f"POWER READ LOOP: exited normally after {event_count} events")
 
     def _find_power_button(self):
         """Find the power button input device."""
         import evdev
         from evdev import InputDevice
+        from .power_manager import _power_log
 
-        # Scan all devices for one with KEY_POWER capability
-        # Power button devices typically have very few keys (just KEY_POWER)
+        # Log all devices with KEY_POWER so we can diagnose wrong-device issues
+        candidates = []
         for dev_path in sorted(evdev.list_devices()):
             try:
                 dev = InputDevice(dev_path)
                 caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
                 if evdev.ecodes.KEY_POWER in caps:
-                    # Prefer devices with few keys (dedicated power button)
-                    # over keyboards that also report KEY_POWER
-                    if len(caps) < 20:
-                        return dev
-            except (PermissionError, OSError):
+                    n_keys = len(caps)
+                    candidates.append((dev, dev_path, dev.name, n_keys))
+                    _power_log(f"POWER SCAN: {dev_path} name={dev.name!r} keys={n_keys}")
+                else:
+                    dev.close()
+            except (PermissionError, OSError) as e:
+                _power_log(f"POWER SCAN: {dev_path} error: {e}")
                 continue
 
-        # Fallback: any device with KEY_POWER
-        for dev_path in sorted(evdev.list_devices()):
-            try:
-                dev = InputDevice(dev_path)
-                caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
-                if evdev.ecodes.KEY_POWER in caps:
-                    return dev
-            except (PermissionError, OSError):
-                continue
+        if not candidates:
+            _power_log("POWER SCAN: no devices with KEY_POWER found")
+            return None
 
-        return None
+        # Prefer devices with few keys (dedicated power button)
+        # over keyboards that also report KEY_POWER
+        candidates.sort(key=lambda c: c[3])
+        chosen = candidates[0]
+        # Close the ones we didn't pick
+        for dev, _, _, _ in candidates[1:]:
+            dev.close()
+
+        _power_log(f"POWER SCAN: selected {chosen[1]} name={chosen[2]!r} ({chosen[3]} keys)")
+
+        # Test if another process has an exclusive grab on this device
+        dev = chosen[0]
+        try:
+            import fcntl
+            EVIOCGRAB = 0x40044590
+            # Try to grab; if it fails, something else has it
+            fcntl.ioctl(dev.fd, EVIOCGRAB, 1)
+            # Release our grab immediately (we don't want to hold it)
+            fcntl.ioctl(dev.fd, EVIOCGRAB, 0)
+            _power_log("POWER GRAB TEST: device is NOT grabbed by another process")
+        except OSError as e:
+            _power_log(f"POWER GRAB TEST: device IS grabbed by another process: {e}")
+
+        return dev
 
 
 # =============================================================================

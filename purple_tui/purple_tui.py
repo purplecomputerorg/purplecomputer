@@ -587,22 +587,22 @@ class CodeHintsPanel(Widget):
             return Strip([])
 
         bg = "#c8b8d8"          # Light purple, slightly darker than code editor
-        gutter_bg = "#b8a8c8"  # Slightly darker gutter
+        gutter_bg = "#c8b8d8"  # Same as code editor gutter
         gutter_style = Style(bgcolor=gutter_bg)
         dim_style = Style(bgcolor=bg, color="#7a6a8a")
         code_style = Style(bgcolor=bg, color="#4a2d6a")
         hint_style = Style(bgcolor=bg, color="#8a7a9a")
         title_style = Style(bgcolor=gutter_bg, color="#5a3d7a", bold=True)
 
-        # 1-cell gutter on left/right, top gutter has title
-        gutter = 1
-        inner_width = width - gutter * 2
+        # No left gutter (touches code editor's right gutter), 1-cell right gutter
+        right_gutter = 1
+        inner_width = width - right_gutter
 
         # Top gutter: "Code to try:"
         if y == 0 or inner_width <= 0:
             caps = getattr(self.app, 'caps_text', lambda x: x)
             label = caps("Code to try:")
-            label = (" " + label)[:width]
+            label = label[:width]
             pad = max(0, width - len(label))
             return Strip([
                 Segment(label, title_style),
@@ -610,13 +610,11 @@ class CodeHintsPanel(Widget):
             ])
 
         # Bottom gutter
-        if y >= self.size.height - gutter:
+        if y >= self.size.height - right_gutter:
             return Strip([Segment(" " * width, gutter_style)])
 
         hints = self._HINTS.get(self._room, self._HINTS["play"])
-        hint_idx = y - gutter
-
-        segments = [Segment(" " * gutter, gutter_style)]
+        hint_idx = y - 1  # 1 row for top gutter
 
         if hint_idx < len(hints):
             line = hints[hint_idx]
@@ -629,13 +627,13 @@ class CodeHintsPanel(Widget):
 
             text = line[:inner_width]
             pad = inner_width - len(text)
-            segments.append(Segment(text, style))
+            segments = [Segment(text, style)]
             if pad > 0:
                 segments.append(Segment(" " * pad, dim_style))
         else:
-            segments.append(Segment(" " * inner_width, dim_style))
+            segments = [Segment(" " * inner_width, dim_style)]
 
-        segments.append(Segment(" " * gutter, gutter_style))
+        segments.append(Segment(" " * right_gutter, gutter_style))
 
         return Strip(segments)
 
@@ -1128,7 +1126,8 @@ class PurpleApp(App):
                 if self._power_button_reader._device is None:
                     _power_log("POWER BUTTON INIT: no device found")
                 else:
-                    _power_log(f"POWER BUTTON INIT: using {self._power_button_reader._device.path}")
+                    dev = self._power_button_reader._device
+                    _power_log(f"POWER BUTTON INIT: using {dev.path} ({dev.name})")
             except Exception as e:
                 _power_log(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None
@@ -1332,9 +1331,11 @@ class PurpleApp(App):
         if isinstance(action, ControlAction) and action.action == 'escape':
             if action.is_down and not action.is_repeat:
                 self._escape_triggered_long_hold = False  # Reset on fresh press
+                self._escape_consumed_by_mode = False
                 # Stop demo/code playback if running (in any room)
                 if self.demo_running:
                     self.cancel_demo()
+                    self._escape_consumed_by_mode = True
                 # Track if modal was open when ESC pressed (for toggle behavior)
                 self._modal_open_at_escape_press = len(self.screen_stack) > 1
                 self._start_escape_hold_timer()

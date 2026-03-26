@@ -831,9 +831,10 @@ class MusicMode(Container, can_focus=True):
                     self._handle_space()
                 return
 
-            # Escape: stop loop if active (don't consume, let room picker open too)
+            # Escape: stop loop if active
             if action.action == 'escape':
-                self._handle_escape()
+                if self._handle_escape():
+                    self.app._escape_consumed_by_mode = True
                 return
 
             # Tab switches mode

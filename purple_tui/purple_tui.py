@@ -1334,9 +1334,7 @@ class PurpleApp(App):
                     self.cancel_demo()
                     self._escape_consumed_by_mode = True
                 # Stop code space execution if running
-                if self._code_run_task and not self._code_run_task.done():
-                    self._code_run_task.cancel()
-                    self._code_run_task = None
+                if self._stop_code_execution():
                     self._escape_consumed_by_mode = True
                 # Track if modal was open when ESC pressed (for toggle behavior)
                 self._modal_open_at_escape_press = len(self.screen_stack) > 1
@@ -1494,7 +1492,12 @@ class PurpleApp(App):
                 return
 
         self._code_panel_transitioning = True
+        closing = self._code_space_open
         self._code_space_open = not self._code_space_open
+
+        # Stop any running code when closing code space
+        if closing:
+            self._stop_code_execution()
 
         # Show curtain to hide font change
         curtain = Curtain(id="transition-curtain")
@@ -1579,11 +1582,17 @@ class PurpleApp(App):
 
     _code_run_task: asyncio.Task | None = None
 
-    def on_run_code_requested(self, message: RunCodeRequested) -> None:
-        """Handle code execution request from code editor."""
-        # Cancel any in-progress code run before starting a new one
+    def _stop_code_execution(self) -> bool:
+        """Cancel any running code task. Returns True if something was stopped."""
         if self._code_run_task and not self._code_run_task.done():
             self._code_run_task.cancel()
+            self._code_run_task = None
+            return True
+        return False
+
+    def on_run_code_requested(self, message: RunCodeRequested) -> None:
+        """Handle code execution request from code editor."""
+        self._stop_code_execution()
         self._code_run_task = asyncio.ensure_future(self._run_code(message.room, message.lines))
 
     async def _run_code(self, room: str, lines: list[str]) -> None:

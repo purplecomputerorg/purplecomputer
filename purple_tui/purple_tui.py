@@ -1334,6 +1334,11 @@ class PurpleApp(App):
                 if self.demo_running:
                     self.cancel_demo()
                     self._escape_consumed_by_mode = True
+                # Stop code space execution if running
+                if self._code_run_task and not self._code_run_task.done():
+                    self._code_run_task.cancel()
+                    self._code_run_task = None
+                    self._escape_consumed_by_mode = True
                 # Track if modal was open when ESC pressed (for toggle behavior)
                 self._modal_open_at_escape_press = len(self.screen_stack) > 1
                 self._start_escape_hold_timer()

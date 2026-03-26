@@ -291,11 +291,11 @@ class CodeTextEditor(Widget, can_focus=True):
         if self._tab_menu_active:
             tab_style = Style(bgcolor=CODE_TAB_ACTIVE_BG, color=CODE_TAB_ACTIVE_FG, bold=True)
             run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
-            item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
+            item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
             parts = [
-                (caps(" Press Tab for Menu "), tab_style),
+                (caps(" Press Tab for Code Menu "), tab_style),
                 (caps("  Space: Run  "), run_style),
                 (caps("  \u00b7  "), sep_style),
                 (caps("C: Clear"), item_style),
@@ -304,15 +304,18 @@ class CodeTextEditor(Widget, can_focus=True):
             ]
         else:
             tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
+            hint_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
             parts = [
-                (caps(" Press Tab for Menu "), tab_style),
+                (caps(" Press Tab for Code Menu "), tab_style),
+                (caps("  Tab+Space: Run"), hint_style),
             ]
 
+        left_pad = GUTTER + 5
         total_len = sum(len(text) for text, _ in parts)
-        pad_right = max(0, width - GUTTER - total_len)
+        pad_right = max(0, width - left_pad - total_len)
 
-        segments = [Segment(" " * GUTTER, gutter_style)]
+        segments = [Segment(" " * left_pad, gutter_style)]
         for text, style in parts:
             segments.append(Segment(text, style))
         if pad_right > 0:

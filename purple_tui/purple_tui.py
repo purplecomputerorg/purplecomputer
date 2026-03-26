@@ -601,7 +601,7 @@ class CodeHintsPanel(Widget):
         # Top gutter: "Code to try:"
         if y == 0 or inner_width <= 0:
             caps = getattr(self.app, 'caps_text', lambda x: x)
-            label = caps("Code to try:")
+            label = caps("Code to Try")
             label = label[:width]
             pad = max(0, width - len(label))
             return Strip([

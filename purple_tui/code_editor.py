@@ -289,7 +289,7 @@ class CodeTextEditor(Widget, can_focus=True):
         gutter_style = Style(bgcolor=CODE_GUTTER_BG)
 
         if self._tab_menu_active:
-            tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
+            tab_style = Style(bgcolor="#c88020", color=CODE_TAB_LABEL_FG, bold=True)
             run_style = Style(bgcolor="#9b7bc4", color="#f0e8f4", bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)

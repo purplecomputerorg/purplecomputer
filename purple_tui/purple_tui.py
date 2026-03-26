@@ -140,6 +140,11 @@ class TitleBar(Widget):
         if width <= 0 or y != 0:
             return Strip([])
 
+        # DEBUG: log width to file
+        import os
+        with open("/tmp/titlebar_debug.log", "a") as f:
+            f.write(f"TitleBar width={width}\n")
+
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Title (centered)
@@ -1121,11 +1126,11 @@ class PurpleApp(App):
             )
             try:
                 await self._power_button_reader.start()
-                if self._power_button_reader._device is None:
+                if not self._power_button_reader._devices:
                     _power_log("POWER BUTTON INIT: no device found")
                 else:
-                    dev = self._power_button_reader._device
-                    _power_log(f"POWER BUTTON INIT: using {dev.path} ({dev.name})")
+                    for dev in self._power_button_reader._devices:
+                        _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
             except Exception as e:
                 _power_log(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None

@@ -87,32 +87,117 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-class RoomTitle(Static):
-    """Shows current mode title above the viewport"""
+class TitleBar(Widget):
+    """Renders centered room title with right-aligned status indicators.
+
+    Uses render_line for pixel-perfect positioning: title is centered within
+    the full width regardless of indicator widths. Indicators are always
+    right-aligned 1 cell from the right edge.
+    """
 
     DEFAULT_CSS = """
-    RoomTitle {
+    TitleBar {
         width: 100%;
         height: 1;
-        text-align: center;
-        color: $primary;
-        text-style: bold;
     }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mode = ROOM_PLAY[0]
+        self._caps_on = False
+        self._shift_text = ""
+        self._shift_active = False
+        self._battery_text = ""
+        self._usb_text = ""
+        self._usb_safe = False
         self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
         self.refresh()
 
-    def render(self) -> str:
-        icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
+    def set_caps(self, on: bool) -> None:
+        self._caps_on = on
+        self.refresh()
+
+    def set_shift(self, text: str, active: bool) -> None:
+        self._shift_text = text
+        self._shift_active = active
+        self.refresh()
+
+    def set_battery(self, text: str) -> None:
+        self._battery_text = text
+        self.refresh()
+
+    def set_usb(self, text: str, safe: bool) -> None:
+        self._usb_text = text
+        self._usb_safe = safe
+        self.refresh()
+
+    def render_line(self, y: int) -> Strip:
+        width = self.size.width
+        if width <= 0 or y != 0:
+            return Strip([])
+
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"{icon}  {caps(label)}"
+
+        # Title (centered)
+        icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
+        title = f"{icon}  {caps(label)}"
+        title_start = max(0, (width - len(title)) // 2)
+
+        # Indicator segments (right-aligned)
+        primary = "#9b7bc4"
+        accent = "#6a3c90"
+        muted = "#6a5a80"
+        indicator_parts: list[tuple[str, str]] = []
+        if self._usb_text:
+            indicator_parts.append((self._usb_text + " ", "#66bb6a" if self._usb_safe else muted))
+        if self._shift_text:
+            indicator_parts.append((self._shift_text + " ", accent if self._shift_active else muted))
+        caps_label = caps(f"{ICON_CAPS_LOCK} {'ABC' if self._caps_on else 'abc'}")
+        indicator_parts.append((caps_label, accent if self._caps_on else muted))
+        if self._battery_text:
+            indicator_parts.append((" " + self._battery_text, primary))
+
+        indicator_total = sum(len(t) for t, _ in indicator_parts)
+        indicator_start = max(0, width - indicator_total - 1)
+
+        # Build segments left to right, handling potential overlap
+        title_style = Style(color=primary, bold=True)
+        title_end = min(width, title_start + len(title))
+        # If indicators overlap with title, truncate title
+        effective_title_end = min(title_end, indicator_start)
+
+        segments: list[Segment] = []
+        pos = 0
+
+        # Leading space
+        if title_start > 0:
+            segments.append(Segment(" " * title_start))
+            pos = title_start
+
+        # Title text (possibly truncated)
+        if effective_title_end > pos:
+            segments.append(Segment(title[:effective_title_end - title_start], title_style))
+            pos = effective_title_end
+
+        # Gap between title and indicators
+        if indicator_start > pos:
+            segments.append(Segment(" " * (indicator_start - pos)))
+            pos = indicator_start
+
+        # Indicators
+        for text, color in indicator_parts:
+            segments.append(Segment(text, Style(color=color)))
+            pos += len(text)
+
+        # Trailing space
+        if pos < width:
+            segments.append(Segment(" " * (width - pos)))
+
+        return Strip(segments)
 
 
 class KeyBadge(Static):
@@ -445,52 +530,46 @@ class CodeHintsPanel(Widget):
 
     _HINTS = {
         "play": [
-            "Code to try:",
+            "cat",
+            "2 + 2",
+            "red + blue",
+            "cat times 3",
             "",
-            "  cat",
-            "  2 + 2",
-            "  red + blue",
-            "  cat times 3",
-            "",
-            "  repeat 3",
-            "    dog",
-            "  end",
+            "repeat 3",
+            "  dog",
+            "end",
         ],
         "music": [
-            "Code to try:",
+            "qwerty",
+            "fast asdf",
+            "slow 12345",
             "",
+            "choose marimba",
+            "choose xylophone",
+            "choose ukulele",
+            "choose musicbox",
+            "",
+            "letters on",
+            "cat",
+            "letters off",
+            "",
+            "repeat 2",
             "  qwerty",
-            "  fast asdf",
-            "  slow 12345",
-            "",
-            "  choose marimba",
-            "  choose xylophone",
-            "  choose ukulele",
-            "  choose musicbox",
-            "",
-            "  letters on",
-            "  cat",
-            "  letters off",
-            "",
-            "  repeat 2",
-            "    qwerty",
-            "  end",
+            "end",
         ],
         "art": [
-            "Code to try:",
+            "asdfasdf",
+            "(paints colors!)",
             "",
-            "  asdfasdf",
-            "  (paints colors!)",
+            "write on",
+            "hello world",
+            "write off",
             "",
-            "  write on",
-            "  hello world",
-            "  write off",
-            "",
-            "  repeat 4",
-            "    forward 10",
-            "    turn right",
-            "  end",
-            "  (draws a square!)",
+            "repeat 4",
+            "  forward 10",
+            "  turn right",
+            "end",
+            "(draws a square!)",
         ],
     }
 
@@ -511,28 +590,28 @@ class CodeHintsPanel(Widget):
         gutter_bg = "#b8a8c8"  # Slightly darker gutter
         gutter_style = Style(bgcolor=gutter_bg)
         dim_style = Style(bgcolor=bg, color="#7a6a8a")
-        title_style = Style(bgcolor=bg, color="#5a3d7a")
         code_style = Style(bgcolor=bg, color="#4a2d6a")
         hint_style = Style(bgcolor=bg, color="#8a7a9a")
+        title_style = Style(bgcolor=gutter_bg, color="#5a3d7a", bold=True)
 
-        # 1-cell gutter on all sides
+        # 1-cell gutter on left/right, top gutter has title
         gutter = 1
         inner_width = width - gutter * 2
-        tab_label_style = Style(bgcolor=gutter_bg, color="#e8a030", bold=True)
 
-        if y < gutter or y >= self.size.height - gutter or inner_width <= 0:
-            # Top/bottom gutters: show "Press Tab for Menu"
+        # Top gutter: "Code to try:"
+        if y == 0 or inner_width <= 0:
             caps = getattr(self.app, 'caps_text', lambda x: x)
-            label = caps(" Press Tab for Menu ")
-            label = label[:width]
-            pad = width - len(label)
-            pad_left = pad // 2
-            pad_right = pad - pad_left
+            label = caps("Code to try:")
+            label = (" " + label)[:width]
+            pad = max(0, width - len(label))
             return Strip([
-                Segment(" " * pad_left, gutter_style),
-                Segment(label, tab_label_style),
-                Segment(" " * pad_right, gutter_style),
+                Segment(label, title_style),
+                Segment(" " * pad, gutter_style),
             ])
+
+        # Bottom gutter
+        if y >= self.size.height - gutter:
+            return Strip([Segment(" " * width, gutter_style)])
 
         hints = self._HINTS.get(self._room, self._HINTS["play"])
         hint_idx = y - gutter
@@ -541,14 +620,12 @@ class CodeHintsPanel(Widget):
 
         if hint_idx < len(hints):
             line = hints[hint_idx]
-            if hint_idx == 0:
-                style = title_style
-            elif line.startswith("  "):
-                style = code_style
-            elif ":" in line:
-                style = hint_style
+            if line.startswith("  "):
+                style = hint_style  # Indented (nested) content
+            elif line.startswith("("):
+                style = hint_style  # Parenthetical comment
             else:
-                style = dim_style
+                style = code_style  # Code example
 
             text = line[:inner_width]
             pad = inner_width - len(text)
@@ -587,7 +664,7 @@ class BatteryIndicator(Static):
         """Find battery and start periodic updates"""
         self._find_battery()
         if self._battery_available:
-            # Update every 30 seconds
+            self._update_battery()  # Push initial state
             self._update_timer = self.set_interval(30, self._update_battery)
 
     def _find_battery(self) -> None:
@@ -653,21 +730,21 @@ class BatteryIndicator(Static):
             return ICON_BATTERY_EMPTY
 
     def _update_battery(self) -> None:
-        """Periodic update callback"""
-        self.refresh()
-
-    def render(self) -> str:
-        """Render the battery indicator"""
+        """Periodic update callback: push battery text to TitleBar."""
         status = self._read_battery_status()
         if status is None:
-            # Dev mode: show test battery if PURPLE_TEST_BATTERY is set
-            if os.environ.get("PURPLE_TEST_BATTERY"):
-                return ICON_BATTERY_FULL
-            return ""
+            text = ICON_BATTERY_FULL if os.environ.get("PURPLE_TEST_BATTERY") else ""
+        else:
+            capacity, charging = status
+            text = self._get_battery_icon(capacity, charging)
+        try:
+            title_bar = self.app.query_one("#title-bar", TitleBar)
+            title_bar.set_battery(text)
+        except Exception:
+            pass
 
-        capacity, charging = status
-        icon = self._get_battery_icon(capacity, charging)
-        return icon
+    def render(self) -> str:
+        return ""
 
 
 class UsbIndicator(Static):
@@ -711,22 +788,30 @@ class UsbIndicator(Static):
     def _check_cache_done(self) -> None:
         if os.path.exists(USB_CACHE_MARKER):
             self._is_cached = True
-            self.add_class("safe")
             self._blink_state = True
-            self.refresh()
+            self._push_to_title_bar()
 
     def _toggle_blink(self) -> None:
         if self._is_cached:
             return
         self._blink_state = not self._blink_state
-        self.refresh()
+        self._push_to_title_bar()
+
+    def _push_to_title_bar(self) -> None:
+        if not self._is_live_boot:
+            text, safe = "", False
+        elif self._is_cached:
+            text, safe = ICON_USB_SAFE, True
+        else:
+            text, safe = (ICON_USB if self._blink_state else " "), False
+        try:
+            title_bar = self.app.query_one("#title-bar", TitleBar)
+            title_bar.set_usb(text, safe)
+        except Exception:
+            pass
 
     def render(self) -> str:
-        if not self._is_live_boot:
-            return ""
-        if self._is_cached:
-            return ICON_USB_SAFE
-        return ICON_USB if self._blink_state else " "
+        return ""
 
 
 class PurpleApp(App):
@@ -772,52 +857,15 @@ class PurpleApp(App):
         margin-top: __LEGEND_TOP_MARGIN__;
     }
 
-    #title-row {
-        layers: title indicators;
+    #title-bar {
         width: __VIEWPORT_BORDER_WIDTH__;
         height: 1;
         margin-bottom: 1;
         margin-left: 5;
     }
 
-    #room-title {
-        layer: title;
-        width: 100%;
-        text-align: center;
-    }
-
-    #title-indicators {
-        layer: indicators;
-        dock: right;
-        width: auto;
-        height: 1;
-        margin-right: 1;
-    }
-
-    #shift-indicator {
-        width: auto;
-        height: 1;
-        margin-right: 1;
-        color: $text-muted;
-    }
-
-    #shift-indicator.active {
-        color: $accent;
-    }
-
-    #caps-indicator {
-        width: auto;
-        height: 1;
-        margin-right: 2;
-        color: $text-muted;
-    }
-
-    #caps-indicator.active {
-        color: $accent;
-    }
-
-    #battery-indicator {
-        width: auto;
+    #battery-indicator, #usb-indicator {
+        display: none;
     }
 
     #viewport {
@@ -843,7 +891,6 @@ class PurpleApp(App):
     #code-editor {
         width: 2fr;
         height: 100%;
-        border-right: heavy #9b7bc4;
     }
 
     #code-hints {
@@ -855,7 +902,7 @@ class PurpleApp(App):
         height: 100%;
     }
 
-    .code-space-open #title-row {
+    .code-space-open #title-bar {
         margin-bottom: 0;
     }
 
@@ -921,15 +968,6 @@ class PurpleApp(App):
         Binding("ctrl+v", "cycle_view", "View", show=False, priority=True),
     ]
 
-    _LOG_PATH = "/tmp/purple-debug.log"
-
-    def _log(self, msg: str) -> None:
-        """Append a timestamped line to the debug log."""
-        try:
-            with open(self._LOG_PATH, "a") as f:
-                f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
-        except Exception:
-            pass
 
     def __init__(self):
         super().__init__()
@@ -1016,13 +1054,7 @@ class PurpleApp(App):
         """Create the UI layout"""
         with Container(id="outer-container"):
             with Vertical(id="viewport-wrapper"):
-                with Container(id="title-row"):
-                    yield RoomTitle(id="room-title")
-                    with Horizontal(id="title-indicators"):
-                        yield UsbIndicator(id="usb-indicator")
-                        yield Static("", id="shift-indicator")
-                        yield Static(f"{ICON_CAPS_LOCK} abc", id="caps-indicator")
-                        yield BatteryIndicator(id="battery-indicator")
+                yield TitleBar(id="title-bar")
                 with Horizontal(id="viewport-row"):
                     yield Static("", id="legend-spacer")
                     with ViewportContainer(id="viewport"):
@@ -1032,6 +1064,9 @@ class PurpleApp(App):
                     yield CodeTextEditor(id="code-editor")
                     yield CodeHintsPanel(id="code-hints")
             yield RoomIndicator(self.active_room, id="room-indicator")
+            # Hidden state-tracking widgets (push updates to TitleBar)
+            yield BatteryIndicator(id="battery-indicator")
+            yield UsbIndicator(id="usb-indicator")
 
     async def on_mount(self) -> None:
         """Called when app starts"""
@@ -2115,7 +2150,7 @@ class PurpleApp(App):
         # Update title
         room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0]}
         try:
-            title = self.query_one("#room-title", RoomTitle)
+            title = self.query_one("#title-bar", TitleBar)
             title.set_mode(room_names.get(new_room, ROOM_PLAY[0]))
         except NoMatches:
             pass
@@ -2576,13 +2611,8 @@ class PurpleApp(App):
         """Called when caps lock state changes"""
         self._refresh_caps_sensitive_widgets()
         try:
-            indicator = self.query_one("#caps-indicator", Static)
-            if caps_on:
-                indicator.update(f"{ICON_CAPS_LOCK} ABC")
-                indicator.add_class("active")
-            else:
-                indicator.update(f"{ICON_CAPS_LOCK} abc")
-                indicator.remove_class("active")
+            title_bar = self.query_one("#title-bar", TitleBar)
+            title_bar.set_caps(caps_on)
         except NoMatches:
             pass
 
@@ -2590,13 +2620,11 @@ class PurpleApp(App):
         """Update the shift icon in the title bar based on sticky shift state."""
         sm = self._keyboard_state_machine
         try:
-            indicator = self.query_one("#shift-indicator", Static)
+            title_bar = self.query_one("#title-bar", TitleBar)
             if sm._sticky_shift_active:
-                indicator.update(ICON_SHIFT)
-                indicator.add_class("active")
+                title_bar.set_shift(ICON_SHIFT, True)
             else:
-                indicator.update("")
-                indicator.remove_class("active")
+                title_bar.set_shift("", False)
         except NoMatches:
             pass
 

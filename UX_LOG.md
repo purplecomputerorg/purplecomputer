@@ -2,7 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
-- Room title in status bar now truly centered over viewport regardless of indicator widths. Code mode layout is more compact: viewport and code panel share continuous borders with no gaps, code panel height is flexible (fills available space), allowing ~22% larger font (ratio 0.84 vs old 0.69).
+- Title bar rebuilt as single render_line widget: room title always centered, indicators always right-aligned to viewport border. Consistent positioning in both normal and code mode. Code panel uses bright purple border, hints panel has light background with "Code to try:" in gutter. "Press Tab for Menu" and "Space: Run" use orange background for visibility. No divider between code editor and hints (gutters touch).
 - Esc now stops demo playback in any room and opens the room switcher. Music room loop hint changed from "Space+Space: stop" to "Esc: stop" (both still work). Looping state now shows red "Looping and recording // Play on top" instead of green "Looping!".
 - Music room code runner: key colors now cycle properly (purple, blue, red, off) instead of all staying blue.
 - Shutdown confirm screen now auto-dismisses after 3 seconds with a visible countdown. Power button must be tapped twice within that window to shut down.

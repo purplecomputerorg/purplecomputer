@@ -38,11 +38,13 @@ CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
 CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
 CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
 CODE_HINT_FG = "#8a6bb4"          # Hint text in bottom gutter
-CODE_TAB_LABEL_FG = "#e8a030"      # Tab label when inactive: bright orange (eye-catching)
+CODE_TAB_LABEL_BG = "#e8a030"      # Tab label bg when inactive: bright orange (eye-catching)
+CODE_TAB_LABEL_FG = "#2a1845"      # Tab label text when inactive: dark on orange
 CODE_TAB_DIMMED_FG = "#c0b4cc"     # Menu items when inactive (very dim)
 CODE_TAB_ACTIVE_BG = "#8a6bb4"     # Tab label background when active
 CODE_TAB_ACTIVE_FG = "#f0e8f4"     # Tab label text when active
-CODE_RUN_FG = "#e8a030"            # "Space: Run" text: bright orange for visibility
+CODE_RUN_BG = "#e8a030"            # "Space: Run" bg: bright orange for visibility
+CODE_RUN_FG = "#2a1845"            # "Space: Run" text: dark on orange
 
 # Gutter: 1-cell padding on all sides of the text area
 GUTTER = 1
@@ -288,12 +290,12 @@ class CodeTextEditor(Widget, can_focus=True):
 
         if self._tab_menu_active:
             tab_style = Style(bgcolor=CODE_TAB_ACTIVE_BG, color=CODE_TAB_ACTIVE_FG, bold=True)
-            run_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_RUN_FG, bold=True)
+            run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
         else:
-            tab_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_LABEL_FG, bold=True)
-            run_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_RUN_FG, bold=True)
+            tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
+            run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 

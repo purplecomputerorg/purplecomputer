@@ -289,8 +289,8 @@ class CodeTextEditor(Widget, can_focus=True):
         gutter_style = Style(bgcolor=CODE_GUTTER_BG)
 
         if self._tab_menu_active:
-            tab_style = Style(bgcolor=CODE_TAB_ACTIVE_BG, color=CODE_TAB_ACTIVE_FG, bold=True)
-            run_style = Style(bgcolor=CODE_RUN_BG, color=CODE_RUN_FG, bold=True)
+            tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
+            run_style = Style(bgcolor="#9b7bc4", color="#f0e8f4", bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
@@ -304,7 +304,7 @@ class CodeTextEditor(Widget, can_focus=True):
             ]
         else:
             tab_style = Style(bgcolor=CODE_TAB_LABEL_BG, color=CODE_TAB_LABEL_FG, bold=True)
-            hint_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
+            hint_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_FG)
 
             parts = [
                 (caps(" Press Tab for Code Menu "), tab_style),

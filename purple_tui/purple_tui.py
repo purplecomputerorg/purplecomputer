@@ -49,7 +49,7 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
-    ICON_USB, ICON_USB_SAFE,
+    ICON_USB, ICON_USB_SAFE, display_len,
     SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
@@ -145,7 +145,7 @@ class TitleBar(Widget):
         # Title (centered)
         icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
         title = f"{icon}  {caps(label)}"
-        title_start = max(0, (width - len(title)) // 2)
+        title_start = max(0, (width - display_len(title)) // 2)
 
         # Indicator segments (right-aligned)
         primary = "#9b7bc4"
@@ -161,12 +161,12 @@ class TitleBar(Widget):
         if self._battery_text:
             indicator_parts.append((" " + self._battery_text, primary))
 
-        indicator_total = sum(len(t) for t, _ in indicator_parts)
+        indicator_total = sum(display_len(t) for t, _ in indicator_parts)
         indicator_start = max(0, width - indicator_total - 1)
 
         # Build segments left to right, handling potential overlap
         title_style = Style(color=primary, bold=True)
-        title_end = min(width, title_start + len(title))
+        title_end = min(width, title_start + display_len(title))
         # If indicators overlap with title, truncate title
         effective_title_end = min(title_end, indicator_start)
 
@@ -191,7 +191,7 @@ class TitleBar(Widget):
         # Indicators
         for text, color in indicator_parts:
             segments.append(Segment(text, Style(color=color)))
-            pos += len(text)
+            pos += display_len(text)
 
         # Trailing space
         if pos < width:

@@ -125,6 +125,22 @@ ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 ICON_USB = "󰗘"              # nf-md-usb
 ICON_USB_SAFE = "⏏"          # eject symbol (safe to remove)
 
+
+def display_len(text: str) -> int:
+    """String length adjusted for double-wide Nerd Font icons in JetBrainsMono.
+
+    Nerd Font glyphs in the Private Use Area render as 2 cells wide,
+    but Python's len() counts them as 1. This adds 1 for each such character.
+    """
+    extra = 0
+    for ch in text:
+        cp = ord(ch)
+        # Nerd Font PUA ranges: U+E000-U+F8FF (BMP PUA), U+F0000-U+FFFFF (Supp PUA-A)
+        if 0xE000 <= cp <= 0xF8FF or 0xF0000 <= cp <= 0xFFFFF:
+            extra += 1
+    return len(text) + extra
+
+
 # Live boot squashfs caching
 SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"

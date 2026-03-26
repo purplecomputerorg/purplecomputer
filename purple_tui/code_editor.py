@@ -38,10 +38,11 @@ CODE_GUTTER_BG = "#c8b8d8"  # Slightly darker purple gutter
 CODE_SCROLLBAR_TRACK = "#c8b8d8"  # Scrollbar track (same as gutter)
 CODE_SCROLLBAR_THUMB = "#9b7bc4"  # Scrollbar thumb (visible indicator)
 CODE_HINT_FG = "#8a6bb4"          # Hint text in bottom gutter
-CODE_TAB_LABEL_FG = "#5a3d7a"      # Tab label when inactive (high contrast)
+CODE_TAB_LABEL_FG = "#e8a030"      # Tab label when inactive: bright orange (eye-catching)
 CODE_TAB_DIMMED_FG = "#c0b4cc"     # Menu items when inactive (very dim)
 CODE_TAB_ACTIVE_BG = "#8a6bb4"     # Tab label background when active
 CODE_TAB_ACTIVE_FG = "#f0e8f4"     # Tab label text when active
+CODE_RUN_FG = "#e8a030"            # "Space: Run" text: bright orange for visibility
 
 # Gutter: 1-cell padding on all sides of the text area
 GUTTER = 1
@@ -216,9 +217,10 @@ class CodeTextEditor(Widget, can_focus=True):
         inner_width = width - GUTTER * 2
 
         if y < GUTTER or inner_width <= 0:
-            return Strip([Segment(" " * width, gutter_style)])
+            # Top gutter: show tab menu bar
+            return self._render_tab_menu_bar(width)
 
-        # Bottom gutter: inline tab menu bar
+        # Bottom gutter: show tab menu bar
         if y >= self.size.height - GUTTER:
             return self._render_tab_menu_bar(width)
 
@@ -286,16 +288,18 @@ class CodeTextEditor(Widget, can_focus=True):
 
         if self._tab_menu_active:
             tab_style = Style(bgcolor=CODE_TAB_ACTIVE_BG, color=CODE_TAB_ACTIVE_FG, bold=True)
+            run_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_RUN_FG, bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_HINT_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
         else:
-            tab_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_LABEL_FG)
+            tab_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_LABEL_FG, bold=True)
+            run_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_RUN_FG, bold=True)
             item_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
             sep_style = Style(bgcolor=CODE_GUTTER_BG, color=CODE_TAB_DIMMED_FG)
 
         parts = [
             (caps(" Press Tab for Menu "), tab_style),
-            (caps("  Space: Run"), item_style),
+            (caps("  Space: Run"), run_style),
             (caps("  \u00b7  "), sep_style),
             (caps("C: Clear"), item_style),
             (caps("  \u00b7  "), sep_style),

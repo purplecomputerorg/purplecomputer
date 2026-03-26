@@ -507,20 +507,32 @@ class CodeHintsPanel(Widget):
         if width <= 0:
             return Strip([])
 
-        bg = "#2a1845"
-        gutter_bg = "#1e1235"  # Slightly darker gutter
+        bg = "#c8b8d8"          # Light purple, slightly darker than code editor
+        gutter_bg = "#b8a8c8"  # Slightly darker gutter
         gutter_style = Style(bgcolor=gutter_bg)
-        dim_style = Style(bgcolor=bg, color="#6a5a7a")
-        title_style = Style(bgcolor=bg, color="#9b7bc4")
-        code_style = Style(bgcolor=bg, color="#8a6ab4")
-        hint_style = Style(bgcolor=bg, color="#5a4a6a")
+        dim_style = Style(bgcolor=bg, color="#7a6a8a")
+        title_style = Style(bgcolor=bg, color="#5a3d7a")
+        code_style = Style(bgcolor=bg, color="#4a2d6a")
+        hint_style = Style(bgcolor=bg, color="#8a7a9a")
 
         # 1-cell gutter on all sides
         gutter = 1
         inner_width = width - gutter * 2
+        tab_label_style = Style(bgcolor=gutter_bg, color="#e8a030", bold=True)
 
         if y < gutter or y >= self.size.height - gutter or inner_width <= 0:
-            return Strip([Segment(" " * width, gutter_style)])
+            # Top/bottom gutters: show "Press Tab for Menu"
+            caps = getattr(self.app, 'caps_text', lambda x: x)
+            label = caps(" Press Tab for Menu ")
+            label = label[:width]
+            pad = width - len(label)
+            pad_left = pad // 2
+            pad_right = pad - pad_left
+            return Strip([
+                Segment(" " * pad_left, gutter_style),
+                Segment(label, tab_label_style),
+                Segment(" " * pad_right, gutter_style),
+            ])
 
         hints = self._HINTS.get(self._room, self._HINTS["play"])
         hint_idx = y - gutter
@@ -779,6 +791,7 @@ class PurpleApp(App):
         dock: right;
         width: auto;
         height: 1;
+        margin-right: 1;
     }
 
     #shift-indicator {
@@ -818,7 +831,7 @@ class PurpleApp(App):
         width: __VIEWPORT_WIDTH__;
         display: none;
         margin-left: 5;
-        border: heavy #4a3660;
+        border: heavy #9b7bc4;
         border-top: none;
     }
 
@@ -830,7 +843,7 @@ class PurpleApp(App):
     #code-editor {
         width: 2fr;
         height: 100%;
-        border-right: heavy #4a3660;
+        border-right: heavy #9b7bc4;
     }
 
     #code-hints {
@@ -847,7 +860,7 @@ class PurpleApp(App):
     }
 
     .code-space-open #viewport {
-        border: heavy #4a3660;
+        border: heavy #9b7bc4;
     }
 
     #room-indicator {
@@ -1682,12 +1695,12 @@ class PurpleApp(App):
             from textual.color import Color
             viewport = self.query_one("#viewport")
             if self._code_space_open:
-                # Code space open: dimmed border, no bottom border (shared with code panel)
-                dim = Color.parse("#4a3660")
-                viewport.styles.border_top = ("heavy", dim)
-                viewport.styles.border_left = ("heavy", dim)
-                viewport.styles.border_right = ("heavy", dim)
-                viewport.styles.border_bottom = ("none", dim)
+                # Code space open: bright border, no bottom border (continuous with code panel)
+                primary = Color.parse("#9b7bc4")
+                viewport.styles.border_top = ("heavy", primary)
+                viewport.styles.border_left = ("heavy", primary)
+                viewport.styles.border_right = ("heavy", primary)
+                viewport.styles.border_bottom = ("none", primary)
             else:
                 # Normal: full border in primary color
                 primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"

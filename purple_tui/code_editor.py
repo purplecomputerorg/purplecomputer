@@ -310,12 +310,9 @@ class CodeTextEditor(Widget, can_focus=True):
             ]
 
         total_len = sum(len(text) for text, _ in parts)
-        pad_left = max(0, (width - total_len) // 2)
-        pad_right = max(0, width - total_len - pad_left)
+        pad_right = max(0, width - GUTTER - total_len)
 
-        segments = []
-        if pad_left > 0:
-            segments.append(Segment(" " * pad_left, gutter_style))
+        segments = [Segment(" " * GUTTER, gutter_style)]
         for text, style in parts:
             segments.append(Segment(text, style))
         if pad_right > 0:
@@ -456,7 +453,16 @@ class CodeTextEditor(Widget, can_focus=True):
             lines.extend([""] * (row - len(lines) + 1))
         line = lines[row]
         lines[row] = line[:col] + ch + line[col:]
-        self._set_cursor(row, col + 1)
+        col += 1
+
+        # Auto-dedent: if line is now just whitespace + "end", remove 2 spaces of indent
+        new_line = lines[row]
+        indent = len(new_line) - len(new_line.lstrip())
+        if new_line.strip().lower() == "end" and indent >= 2:
+            lines[row] = new_line[2:]
+            col -= 2
+
+        self._set_cursor(row, col)
         self._ensure_scroll_visible()
         self.refresh()
 
@@ -464,9 +470,20 @@ class CodeTextEditor(Widget, can_focus=True):
         lines = self._get_lines()
         row, col = self._get_cursor()
         line = lines[row]
-        lines[row] = line[:col]
-        lines.insert(row + 1, line[col:])
-        self._set_cursor(row + 1, 0)
+        before = line[:col]
+        after = line[col:]
+        lines[row] = before
+
+        # Auto-indent: carry forward existing indentation
+        indent = len(before) - len(before.lstrip())
+        # If line before cursor starts a block (repeat), add 2 more spaces
+        stripped = before.strip().lower()
+        if stripped.startswith("repeat"):
+            indent += 2
+
+        new_line = " " * indent + after
+        lines.insert(row + 1, new_line)
+        self._set_cursor(row + 1, indent)
         self._ensure_scroll_visible()
         self.refresh()
 

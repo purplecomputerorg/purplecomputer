@@ -559,7 +559,7 @@ class CodeHintsPanel(Widget):
         ],
         "art": [
             "asdfasdf",
-            "(paints colors!)",
+            "\u2192 paints colors!",
             "",
             "write on",
             "hello world",
@@ -569,7 +569,7 @@ class CodeHintsPanel(Widget):
             "  forward 10",
             "  turn right",
             "end",
-            "(draws a square!)",
+            "\u2192 draws a square!",
         ],
     }
 
@@ -586,12 +586,12 @@ class CodeHintsPanel(Widget):
         if width <= 0:
             return Strip([])
 
-        bg = "#c8b8d8"          # Light purple, slightly darker than code editor
+        bg = "#d0c4e0"          # Light lavender, between gutter and code editor bg
         gutter_bg = "#c8b8d8"  # Same as code editor gutter
         gutter_style = Style(bgcolor=gutter_bg)
         dim_style = Style(bgcolor=bg, color="#7a6a8a")
         code_style = Style(bgcolor=bg, color="#4a2d6a")
-        hint_style = Style(bgcolor=bg, color="#8a7a9a")
+        comment_style = Style(bgcolor=bg, color="#8a7a9a", italic=True)
         title_style = Style(bgcolor=gutter_bg, color="#5a3d7a", bold=True)
 
         # No left gutter (touches code editor's right gutter), 1-cell right gutter
@@ -618,12 +618,10 @@ class CodeHintsPanel(Widget):
 
         if hint_idx < len(hints):
             line = hints[hint_idx]
-            if line.startswith("  "):
-                style = hint_style  # Indented (nested) content
-            elif line.startswith("("):
-                style = hint_style  # Parenthetical comment
+            if line.startswith("\u2192"):
+                style = comment_style  # Comment with arrow
             else:
-                style = code_style  # Code example
+                style = code_style  # All code same color
 
             text = line[:inner_width]
             pad = inner_width - len(text)

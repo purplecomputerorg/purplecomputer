@@ -898,7 +898,7 @@ class PurpleApp(App):
     }
 
     .code-space-open #title-bar {
-        margin-bottom: 0;
+        display: none;
     }
 
     .code-space-open #viewport {

@@ -1158,10 +1158,7 @@ class CanvasHeader(Static):
             write_part = f"[bold]{write_icon}[/]"
 
         if self._code_mode:
-            if self._is_painting:
-                return f"{paint_part}"
-            else:
-                return f"{write_part}"
+            return ""
 
         if getattr(self.app, '_littles_mode', None):
             if self._is_painting:

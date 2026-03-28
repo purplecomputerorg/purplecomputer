@@ -347,11 +347,8 @@ class RoomPickerScreen(ModalScreen):
         self._current_room = current_room
         self._code_space_open = code_space_open
         self._code_space_available = code_space_available
-        # If code space is active, start focused on code space row
-        if code_space_open and code_space_available:
-            self._active_row = ROW_CODE
-        else:
-            self._active_row = ROW_ROOMS
+        # Always start on the room row, highlighting the current room
+        self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
         self._extra_index = COL_VOLUME
 

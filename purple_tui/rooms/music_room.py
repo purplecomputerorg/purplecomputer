@@ -158,7 +158,7 @@ class MusicRoomHeader(Static):
         instrument_label = caps(self._instrument_name)
 
         if self._code_mode:
-            return f"[bold]{ICON_MUSIC} {instrument_label}[/]"
+            return ""
 
         if getattr(self.app, '_littles_mode', None):
             return f"[bold]{ICON_MUSIC} {instrument_label}[/]"

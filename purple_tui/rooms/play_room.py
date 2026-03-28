@@ -25,6 +25,7 @@ from textual.app import ComposeResult
 from textual import events
 from textual.message import Message
 from textual.strip import Strip
+from rich.markup import escape as rich_escape
 from rich.segment import Segment
 from rich.style import Style
 from rich.highlighter import Highlighter
@@ -204,7 +205,7 @@ class HistoryLine(Static):
         elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "
-            return self._wrap_with_arrows(caps(self.text), prefix, ask_color)
+            return self._wrap_with_arrows(rich_escape(caps(self.text)), prefix, ask_color)
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')

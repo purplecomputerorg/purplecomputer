@@ -1230,24 +1230,24 @@ class ArtMode(Container):
         height: 1fr;
     }
 
-    #art-hint-bar {
-        dock: bottom;
-    }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._repl_panel = None
         self._space_hold_timer = None
         self._space_other_key_pressed = False
 
+    @property
+    def _repl_panel(self):
+        try:
+            from ..repl_panel import ReplPanel
+            return self.app.query_one("#repl-panel", ReplPanel)
+        except Exception:
+            return None
+
     def compose(self) -> ComposeResult:
-        from ..repl_panel import ReplPanel
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
-        yield ArtHintBar(id="art-hint-bar")
-        self._repl_panel = ReplPanel(room="art", id="art-repl")
-        yield self._repl_panel
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
@@ -1256,11 +1256,28 @@ class ArtMode(Container):
         # Initialize header (canvas starts in paint mode)
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(True, "#FFFFFF")
+        self._update_art_hint(True)
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
+        self._update_art_hint(event.is_painting)
+
+    def _update_art_hint(self, is_painting: bool) -> None:
+        """Update REPL stub hint based on paint/write mode."""
+        if not self._repl_panel:
+            return
+        if getattr(self.app, '_littles_mode', None):
+            if is_painting:
+                self._repl_panel.set_stub_hint("Hold Space + arrows to paint!")
+            else:
+                self._repl_panel.set_stub_hint("Type to write!")
+        else:
+            if is_painting:
+                self._repl_panel.set_stub_hint("Press Tab to switch tools. Hold Space + arrows to paint.")
+            else:
+                self._repl_panel.set_stub_hint("Press Tab to switch tools. Type to write.")
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""
@@ -1291,10 +1308,8 @@ class ArtMode(Container):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
-        if self._repl_panel and not self._repl_panel.is_open:
-            self._repl_panel.open()
-        elif self._repl_panel and self._repl_panel.is_open:
-            self._repl_panel.close()
+        from ..repl_panel import ReplPanelToggleRequested
+        self.post_message(ReplPanelToggleRequested("art"))
 
     async def handle_keyboard_action(self, action) -> None:
         """Route to REPL panel if open, otherwise delegate to canvas."""

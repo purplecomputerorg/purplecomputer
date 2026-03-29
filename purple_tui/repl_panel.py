@@ -47,6 +47,13 @@ class ReplPanelClosed(Message, bubble=True):
     pass
 
 
+class ReplPanelToggleRequested(Message, bubble=True):
+    """Posted by rooms to request opening/closing the REPL panel."""
+    def __init__(self, room: str):
+        super().__init__()
+        self.room = room
+
+
 class ReplPanel(Widget):
     """REPL panel for music/art rooms.
 
@@ -55,7 +62,6 @@ class ReplPanel(Widget):
 
     DEFAULT_CSS = """
     ReplPanel {
-        dock: bottom;
         width: 100%;
         height: 1;
     }
@@ -71,6 +77,7 @@ class ReplPanel(Widget):
         self._history_scroll = 0  # how far scrolled up from bottom
         self._repeat_stack: list[dict] = []
         self._target_height = DEFAULT_HEIGHT
+        self._stub_hint = ""  # Raw markup for stub row when closed
 
     @property
     def is_open(self) -> bool:
@@ -133,16 +140,30 @@ class ReplPanel(Widget):
         else:
             return Strip([Segment(" " * width, Style(bgcolor=BG))])
 
+    def set_stub_hint(self, markup: str) -> None:
+        """Set the hint text shown in the stub row when closed."""
+        self._stub_hint = markup
+        if not self._open:
+            self.refresh()
+
     def _render_stub(self, width: int) -> Strip:
-        """Render the 1-row closed state."""
-        hint = "Hold Space: type commands"
-        pad_left = max(0, (width - len(hint)) // 2)
-        pad_right = max(0, width - len(hint) - pad_left)
-        style = Style(color=SEPARATOR_COLOR, bgcolor=BG)
+        """Render the 1-row closed state as a visible bar."""
+        hint = self._stub_hint or ""
+        plain = re.sub(r'\[[^\]]*\]', '', hint)
+        bar_bg = "#1e1033"
+        text_style = Style(color="#7a6a9a", bgcolor=bar_bg)
+        bg_style = Style(bgcolor=bar_bg)
+        edge_style = Style(color="#3a2555", bgcolor=bar_bg)
+        # ▔ top-edge character on first cell, then centered text, then ▔ on last
+        inner_width = width - 2
+        pad_left = max(0, (inner_width - len(plain)) // 2)
+        pad_right = max(0, inner_width - len(plain) - pad_left)
         return Strip([
-            Segment(" " * pad_left, Style(bgcolor=BG)),
-            Segment(hint, style),
-            Segment(" " * pad_right, Style(bgcolor=BG)),
+            Segment("▕", edge_style),
+            Segment(" " * pad_left, bg_style),
+            Segment(plain, text_style),
+            Segment(" " * pad_right, bg_style),
+            Segment("▏", edge_style),
         ])
 
     def _render_separator(self, width: int) -> Strip:

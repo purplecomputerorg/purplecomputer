@@ -2204,10 +2204,8 @@ class PurpleApp(App):
         except (NoMatches, Exception):
             pass
         try:
-            from .rooms.art_room import CanvasHeader, ArtHintBar
+            from .rooms.art_room import CanvasHeader
             for h in self.query(CanvasHeader):
-                h.refresh()
-            for h in self.query(ArtHintBar):
                 h.refresh()
         except (NoMatches, Exception):
             pass

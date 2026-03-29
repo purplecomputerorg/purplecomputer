@@ -21,12 +21,11 @@ from purple_tui.rooms.art_room import (
 # =============================================================================
 
 ART_HEADER_ROWS = 1  # CanvasHeader (docked top, height: 1)
-ART_HINT_BAR_ROWS = 1  # ArtHintBar (docked bottom, height: 1)
-ART_REPL_STUB_ROWS = 1  # ReplPanel stub (docked bottom, height: 1)
+ART_REPL_STUB_ROWS = 1  # ReplPanel stub (docked bottom, height: 1, includes hint text)
 
-# Canvas = viewport content minus header minus hint bar minus REPL stub minus gutter on all sides
+# Canvas = viewport content minus header minus REPL stub minus gutter on all sides
 CANVAS_WIDTH = VIEWPORT_WIDTH - 2 * GUTTER
-CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - ART_HINT_BAR_ROWS - ART_REPL_STUB_ROWS - 2 * GUTTER
+CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - ART_REPL_STUB_ROWS - 2 * GUTTER
 
 
 # =============================================================================

@@ -83,7 +83,7 @@ class ExtraOption(Static):
     DEFAULT_CSS = """
     ExtraOption {
         width: 25;
-        height: 5;
+        height: 6;
         content-align: center middle;
         text-align: center;
         border: round $surface-lighten-2;

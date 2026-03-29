@@ -17,6 +17,14 @@ from rich.style import Style
 
 from .keyboard import CharacterAction, NavigationAction, ControlAction
 
+# Keywords per room for autocomplete and underlining
+ROOM_KEYWORDS: dict[str, list[str]] = {
+    'music': ['letters', 'on', 'off', 'choose', 'instrument', 'fast', 'slow',
+              'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'musicbox'],
+    'art': ['left', 'right', 'up', 'down', 'forward', 'turn', 'paint', 'write',
+            'on', 'off', 'repeat', 'end'],
+}
+
 # Visual constants
 BG = "#2a1845"
 FG = "#d8c8e8"
@@ -27,6 +35,8 @@ CURSOR_BG = "#d8c8e8"
 CURSOR_FG = "#2a1845"
 BLOCK_PROMPT_COLOR = "#9b7bc4"
 SEPARATOR_COLOR = "#4a2870"
+KEYWORD_COLOR = "#c4a0e8"
+HINT_COLOR = "#7a6a9a"
 
 # Default height when not in a repeat block
 DEFAULT_HEIGHT = 5
@@ -78,7 +88,8 @@ class ReplPanel(Widget):
         self._history_scroll = 0  # how far scrolled up from bottom
         self._repeat_stack: list[dict] = []
         self._target_height = DEFAULT_HEIGHT
-        self._stub_hint = ""  # Raw markup for stub row when closed
+        self._autocomplete_matches: list[str] = []
+        self._keywords = set(ROOM_KEYWORDS.get(room, []))
 
     @property
     def is_open(self) -> bool:
@@ -112,6 +123,47 @@ class ReplPanel(Widget):
         self._history_scroll = 0
         self.refresh()
 
+    def _get_current_word(self) -> tuple[str, int, int]:
+        """Get the word at/before cursor. Returns (word_lower, start, end)."""
+        text = self._input_text
+        pos = self._cursor_pos
+        start = pos
+        while start > 0 and text[start - 1] != ' ':
+            start -= 1
+        end = pos
+        while end < len(text) and text[end] != ' ':
+            end += 1
+        return text[start:end].lower(), start, end
+
+    def _check_autocomplete(self) -> None:
+        """Update autocomplete matches based on current word at cursor."""
+        word, _, _ = self._get_current_word()
+        if not word or word in self._keywords:
+            self._autocomplete_matches = []
+            return
+        matches = [kw for kw in sorted(self._keywords) if kw.startswith(word) and kw != word]
+        self._autocomplete_matches = matches[:5]
+
+    def _get_keyword_positions(self) -> set[int]:
+        """Return character positions in _input_text that are part of recognized keywords."""
+        if not self._keywords:
+            return set()
+        positions: set[int] = set()
+        i = 0
+        text_lower = self._input_text.lower()
+        while i < len(self._input_text):
+            if self._input_text[i] == ' ':
+                i += 1
+                continue
+            j = i
+            while j < len(self._input_text) and self._input_text[j] != ' ':
+                j += 1
+            if text_lower[i:j] in self._keywords:
+                for k in range(i, j):
+                    positions.add(k)
+            i = j
+        return positions
+
     def render_line(self, y: int) -> Strip:
         width = self.size.width
         height = self.size.height
@@ -133,7 +185,7 @@ class ReplPanel(Widget):
         elif y == input_row:
             return self._render_input_line(width)
         elif y == blank_row:
-            return Strip([Segment(" " * width, Style(bgcolor=BG))])
+            return self._render_hint_line(width)
         elif y > separator_row and y < blank_row:
             # History area
             history_y = y - 1  # 0-indexed within history area
@@ -141,16 +193,9 @@ class ReplPanel(Widget):
         else:
             return Strip([Segment(" " * width, Style(bgcolor=BG))])
 
-    def set_stub_hint(self, markup: str) -> None:
-        """Set the hint text shown in the stub row when closed."""
-        self._stub_hint = markup
-        if not self._open:
-            self.refresh()
-
     def _render_stub(self, width: int) -> Strip:
         """Render the 1-row closed state as a visible bar."""
-        hint = self._stub_hint or ""
-        plain = re.sub(r'\[[^\]]*\]', '', hint)
+        plain = "Hold Space: type commands"
         bar_bg = "#1e1033"
         text_style = Style(color="#7a6a9a", bgcolor=bar_bg)
         bg_style = Style(bgcolor=bar_bg)
@@ -179,35 +224,79 @@ class ReplPanel(Widget):
         else:
             prompt = "> "
 
-        segments = []
+        segments: list[Segment] = []
         prompt_style = Style(color=BLOCK_PROMPT_COLOR if self._repeat_stack else PROMPT_COLOR,
                             bgcolor=BG, bold=True)
         segments.append(Segment(prompt, prompt_style))
 
-        # Render input text with cursor
+        # Render input text with cursor, underlining keywords
         text = self._input_text
         cursor = self._cursor_pos
-        text_style = Style(color=FG, bgcolor=BG)
-        cursor_style = Style(color=CURSOR_FG, bgcolor=CURSOR_BG)
+        kw_pos = self._get_keyword_positions()
 
         if text:
-            before = text[:cursor]
-            cursor_char = text[cursor] if cursor < len(text) else " "
-            after = text[cursor + 1:] if cursor < len(text) else ""
+            i = 0
+            while i < len(text):
+                is_cursor = (i == cursor)
+                is_kw = (i in kw_pos)
 
-            if before:
-                segments.append(Segment(before, text_style))
-            segments.append(Segment(cursor_char, cursor_style))
-            if after:
-                segments.append(Segment(after, text_style))
+                if is_cursor:
+                    # Cursor char rendered individually
+                    segments.append(Segment(text[i], Style(
+                        color=CURSOR_FG, bgcolor=CURSOR_BG,
+                        underline=is_kw)))
+                    i += 1
+                else:
+                    # Batch consecutive chars with same style
+                    j = i
+                    while j < len(text) and j != cursor and (j in kw_pos) == is_kw:
+                        j += 1
+                    style = Style(color=KEYWORD_COLOR if is_kw else FG, bgcolor=BG,
+                                  underline=is_kw)
+                    segments.append(Segment(text[i:j], style))
+                    i = j
+
+            # Cursor at end of text
+            if cursor >= len(text):
+                segments.append(Segment(" ", Style(color=CURSOR_FG, bgcolor=CURSOR_BG)))
         else:
-            segments.append(Segment(" ", cursor_style))
+            segments.append(Segment(" ", Style(color=CURSOR_FG, bgcolor=CURSOR_BG)))
 
         # Fill remaining width
         used = len(prompt) + max(len(text), 1)
         remaining = width - used
         if remaining > 0:
             segments.append(Segment(" " * remaining, Style(bgcolor=BG)))
+
+        return Strip(segments)
+
+    def _render_hint_line(self, width: int) -> Strip:
+        """Render autocomplete hint or blank line."""
+        bg_style = Style(bgcolor=BG)
+        if not self._autocomplete_matches:
+            return Strip([Segment(" " * width, bg_style)])
+
+        hint_style = Style(color=HINT_COLOR, bgcolor=BG)
+        kw_style = Style(color=KEYWORD_COLOR, bgcolor=BG)
+
+        segments: list[Segment] = []
+        segments.append(Segment("  ", bg_style))
+        used = 2
+
+        for i, kw in enumerate(self._autocomplete_matches):
+            if i > 0:
+                segments.append(Segment("  ", bg_style))
+                used += 2
+            segments.append(Segment(kw, kw_style))
+            used += len(kw)
+
+        tab_hint = "  \u2192Tab"
+        segments.append(Segment(tab_hint, hint_style))
+        used += len(tab_hint)
+
+        remaining = width - used
+        if remaining > 0:
+            segments.append(Segment(" " * remaining, bg_style))
 
         return Strip(segments)
 
@@ -240,7 +329,9 @@ class ReplPanel(Widget):
             segments.append(Segment(" " * remaining, Style(bgcolor=BG)))
         return Strip(segments)
 
-    async def handle_keyboard_action(self, action) -> None:
+    async def handle_keyboard_action(self, action):
+        """Handle keyboard input. Returns "tab_fallthrough" if tab should be
+        handled by the parent (no autocomplete match), None otherwise."""
         if isinstance(action, NavigationAction):
             if action.direction == 'left':
                 if self._cursor_pos > 0:
@@ -248,11 +339,26 @@ class ReplPanel(Widget):
             elif action.direction == 'right':
                 if self._cursor_pos < len(self._input_text):
                     self._cursor_pos += 1
+            self._check_autocomplete()
             self.refresh()
             return
 
         if isinstance(action, ControlAction):
+            if action.action == 'tab' and action.is_down:
+                if self._autocomplete_matches:
+                    word, start, end = self._get_current_word()
+                    replacement = self._autocomplete_matches[0]
+                    self._input_text = (self._input_text[:start] + replacement
+                                       + self._input_text[end:])
+                    self._cursor_pos = start + len(replacement)
+                    self._check_autocomplete()
+                    self.refresh()
+                    return
+                else:
+                    return "tab_fallthrough"
+
             if action.action == 'enter' and action.is_down:
+                self._autocomplete_matches = []
                 self._handle_enter()
                 return
 
@@ -261,6 +367,7 @@ class ReplPanel(Widget):
                     self._input_text = (self._input_text[:self._cursor_pos - 1]
                                        + self._input_text[self._cursor_pos:])
                     self._cursor_pos -= 1
+                    self._check_autocomplete()
                     self.refresh()
                 return
 
@@ -268,6 +375,7 @@ class ReplPanel(Widget):
                 self._input_text = (self._input_text[:self._cursor_pos] + " "
                                    + self._input_text[self._cursor_pos:])
                 self._cursor_pos += 1
+                self._autocomplete_matches = []
                 self.refresh()
                 return
 
@@ -277,10 +385,12 @@ class ReplPanel(Widget):
                     self._repeat_stack.clear()
                     self._input_text = ""
                     self._cursor_pos = 0
+                    self._autocomplete_matches = []
                     self._update_height()
                 elif self._input_text:
                     self._input_text = ""
                     self._cursor_pos = 0
+                    self._autocomplete_matches = []
                     self.refresh()
                 else:
                     # Empty input, no block: close panel
@@ -298,6 +408,7 @@ class ReplPanel(Widget):
             self._input_text = (self._input_text[:self._cursor_pos] + char
                                + self._input_text[self._cursor_pos:])
             self._cursor_pos += 1
+            self._check_autocomplete()
             self.refresh()
 
     def _handle_enter(self) -> None:

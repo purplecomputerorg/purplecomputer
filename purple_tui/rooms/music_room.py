@@ -547,6 +547,13 @@ class MusicMode(Container, can_focus=True):
         width: 100%;
         height: 1fr;
     }
+
+    #example-hint {
+        dock: bottom;
+        height: 1;
+        text-align: center;
+        color: $text-muted;
+    }
     """
 
     def __init__(self, **kwargs) -> None:
@@ -563,6 +570,7 @@ class MusicMode(Container, can_focus=True):
         # Space hold REPL toggle
         self._space_hold_timer = None
         self._space_other_key_pressed = False
+        self._space_hold_fired = False
         self._repl_panel = None
 
     @property
@@ -576,6 +584,7 @@ class MusicMode(Container, can_focus=True):
         yield self._header
         self.grid = MusicGrid()
         yield self.grid
+        yield MusicExampleHint(id="example-hint")
         self._repl_panel = ReplPanel(room="music", id="music-repl")
         yield self._repl_panel
 
@@ -750,19 +759,25 @@ class MusicMode(Container, can_focus=True):
     # -- Hint bar ------------------------------------------------------------
 
     def _update_hint(self) -> None:
-        """Update the REPL panel stub with loop station state."""
-        if not self._repl_panel:
+        """Update the bottom hint bar based on loop station state.
+
+        Text is stored raw (without caps). MusicExampleHint.render()
+        applies caps at render time so it responds to caps changes immediately.
+        """
+        try:
+            hint = self.query_one("#example-hint", MusicExampleHint)
+        except Exception:
             return
         state = self._loop.state
 
         if state == IDLE:
             text = "Try pressing letters and numbers!"
             if getattr(self.app, '_littles_mode', None):
-                self._repl_panel.set_stub_hint(text)
+                hint.set_hint(f"[dim]{text}[/]")
                 return
             space_hint = "Space: record a loop"
             enter_hint = "Enter: change instrument"
-            self._repl_panel.set_stub_hint(f"{text}    {space_hint}    {enter_hint}")
+            hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
 
         elif state == RECORDING:
             progress = self._loop.recording_progress()
@@ -772,9 +787,13 @@ class MusicMode(Container, can_focus=True):
             bar = "█" * filled + "░" * empty
             secs = int(remaining)
             if remaining <= 5:
-                self._repl_panel.set_stub_hint(f"● Recording  {secs}s left  {bar}  Almost full!")
+                label = f"Recording  {secs}s left"
+                action = "Almost full!"
+                hint.set_hint(f"[bold dark_orange]● {label}[/]  {bar}  [dim]{action}[/]")
             else:
-                self._repl_panel.set_stub_hint(f"● Recording  {secs}s left  {bar}  Space: loop it!")
+                label = f"Recording  {secs}s left"
+                action = "Space: loop it!"
+                hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
 
         elif state == LOOPING:
             progress = self._loop.loop_progress()
@@ -783,7 +802,10 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            self._repl_panel.set_stub_hint(f"● Looping and recording  {bar}  Play on top    Esc: stop")
+            label = "Looping and recording"
+            play = "Play on top"
+            stop = "Esc: stop"
+            hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------
 
@@ -817,11 +839,8 @@ class MusicMode(Container, can_focus=True):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
+        self._space_hold_fired = True
         if self._repl_panel and not self._repl_panel.is_open:
-            # Cancel any loop recording that just started
-            if self._loop.state == RECORDING:
-                self._stop_loop()
-                self._update_hint()
             self._repl_panel.open()
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
@@ -852,21 +871,32 @@ class MusicMode(Container, can_focus=True):
                 return
             # Any other key: mark as pressed (cancels space hold) and route to REPL
             self._space_other_key_pressed = True
-            await self._repl_panel.handle_keyboard_action(action)
+            result = await self._repl_panel.handle_keyboard_action(action)
+            if result == "tab_fallthrough":
+                # Tab with no autocomplete: switch music/letters mode
+                self._letters_mode = not self._letters_mode
+                if self._header:
+                    self._header.update_mode(self._letters_mode)
+                raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                label = self.app.caps_text(raw_label)
+                self.app.clear_notifications()
+                self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
             return
 
         if isinstance(action, ControlAction):
             if action.action == 'space':
                 if action.is_down and not action.is_repeat:
-                    # Fresh press: start hold timer AND fire normal action
+                    # Fresh press: start hold timer, defer normal action to key-up
                     self._space_other_key_pressed = False
+                    self._space_hold_fired = False
                     self._cancel_space_hold_timer()
-                    if not getattr(self.app, '_littles_mode', None):
-                        self._handle_space()
                     self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
                 elif not action.is_down:
-                    # Space released: cancel hold timer
+                    # Space released: fire normal action if hold didn't trigger
                     self._cancel_space_hold_timer()
+                    if not self._space_hold_fired:
+                        if not getattr(self.app, '_littles_mode', None):
+                            self._handle_space()
                 return
 
             if action.is_down:

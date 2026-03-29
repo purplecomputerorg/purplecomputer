@@ -563,25 +563,21 @@ class MusicMode(Container, can_focus=True):
         # Space hold REPL toggle
         self._space_hold_timer = None
         self._space_other_key_pressed = False
+        self._repl_panel = None
 
     @property
     def is_letters_mode(self) -> bool:
         """Whether Music room is in Letters mode (for DemoPlayer callback)."""
         return self._letters_mode
 
-    @property
-    def _repl_panel(self):
-        try:
-            from ..repl_panel import ReplPanel
-            return self.app.query_one("#repl-panel", ReplPanel)
-        except Exception:
-            return None
-
     def compose(self) -> ComposeResult:
+        from ..repl_panel import ReplPanel
         self._header = MusicRoomHeader(id="music-header")
         yield self._header
         self.grid = MusicGrid()
         yield self.grid
+        self._repl_panel = ReplPanel(room="music", id="music-repl")
+        yield self._repl_panel
 
     def on_mount(self) -> None:
         self.focus()
@@ -821,14 +817,18 @@ class MusicMode(Container, can_focus=True):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
-        panel = self._repl_panel
-        if panel and not panel.is_open:
+        if self._repl_panel and not self._repl_panel.is_open:
             # Cancel any loop recording that just started
             if self._loop.state == RECORDING:
                 self._stop_loop()
                 self._update_hint()
-        from ..repl_panel import ReplPanelToggleRequested
-        self.post_message(ReplPanelToggleRequested("music"))
+            self._repl_panel.open()
+            from ..repl_panel import ReplPanelToggleRequested
+            self.post_message(ReplPanelToggleRequested("music"))
+        elif self._repl_panel and self._repl_panel.is_open:
+            self._repl_panel.close()
+            from ..repl_panel import ReplPanelToggleRequested
+            self.post_message(ReplPanelToggleRequested("music"))
 
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard actions from the main app's KeyboardStateMachine.

@@ -746,7 +746,6 @@ class PurpleApp(App):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
-            yield ReplPanel(room="", id="repl-panel")
             yield RoomIndicator(self.active_room, id="room-indicator")
             # Hidden state-tracking widgets (push updates to TitleBar)
             yield BatteryIndicator(id="battery-indicator")
@@ -766,13 +765,6 @@ class PurpleApp(App):
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
 
         self._load_room_content()
-
-        # Hide REPL panel stub in play mode (shown in music/art)
-        try:
-            panel = self.query_one("#repl-panel", ReplPanel)
-            panel.display = (self.active_room != Room.PLAY)
-        except NoMatches:
-            pass
 
         # Set system volume to match app volume (default 100%)
         self._apply_volume_system()
@@ -1222,39 +1214,49 @@ class PurpleApp(App):
                 pass
 
     def on_repl_panel_closed(self, message: ReplPanelClosed) -> None:
-        """Handle REPL panel close request."""
+        """Handle REPL panel close request (from Escape on empty)."""
+        # Panel already closed itself; restore viewport
         self._close_repl_panel()
 
     def on_repl_panel_toggle_requested(self, message: ReplPanelToggleRequested) -> None:
-        """Handle REPL toggle from room space-hold."""
+        """Handle REPL toggle from room: resize viewport and hide/show indicator."""
+        room_id = f"room-{message.room}"
         try:
-            panel = self.query_one("#repl-panel", ReplPanel)
+            content_area = self.query_one("#content-area")
+            room_widget = content_area.query_one(f"#{room_id}")
+            panel = room_widget.query_one(ReplPanel)
             if panel.is_open:
-                self._close_repl_panel()
+                self._open_repl_panel()
             else:
-                self._open_repl_panel(message.room)
+                self._close_repl_panel()
         except NoMatches:
             pass
 
-    def _open_repl_panel(self, room: str) -> None:
-        """Open the REPL panel below the viewport."""
+    def _open_repl_panel(self) -> None:
+        """Grow viewport to accommodate REPL panel, hide room indicator."""
         try:
-            panel = self.query_one("#repl-panel", ReplPanel)
-            panel._room = room
-            panel.open()
+            viewport = self.query_one("#viewport")
+            viewport.styles.height = VIEWPORT_HEIGHT + 4
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.display = False
         except NoMatches:
             pass
 
     def _close_repl_panel(self) -> None:
-        """Close the REPL panel and restore room indicator."""
+        """Restore viewport height and room indicator."""
         try:
-            panel = self.query_one("#repl-panel", ReplPanel)
-            panel.close()
+            viewport = self.query_one("#viewport")
+            viewport.styles.height = VIEWPORT_HEIGHT
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.display = True
         except NoMatches:
+            pass
+        # Close any open panel (for room-switch cleanup)
+        try:
+            for panel in self.query(ReplPanel):
+                if panel.is_open:
+                    panel.close()
+        except Exception:
             pass
 
     def _reset_viewport_border(self) -> None:
@@ -1670,13 +1672,8 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Close REPL panel if open, show/hide stub based on room
+        # Close REPL panel if open
         self._close_repl_panel()
-        try:
-            panel = self.query_one("#repl-panel", ReplPanel)
-            panel.display = (new_room != Room.PLAY)
-        except NoMatches:
-            pass
 
         # Cycle play mode "Try" hint on room switch
         if new_room == Room.PLAY:

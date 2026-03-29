@@ -62,6 +62,7 @@ class ReplPanel(Widget):
 
     DEFAULT_CSS = """
     ReplPanel {
+        dock: bottom;
         width: 100%;
         height: 1;
     }

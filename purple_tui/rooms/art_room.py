@@ -1234,20 +1234,16 @@ class ArtMode(Container):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._repl_panel = None
         self._space_hold_timer = None
         self._space_other_key_pressed = False
 
-    @property
-    def _repl_panel(self):
-        try:
-            from ..repl_panel import ReplPanel
-            return self.app.query_one("#repl-panel", ReplPanel)
-        except Exception:
-            return None
-
     def compose(self) -> ComposeResult:
+        from ..repl_panel import ReplPanel
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
+        self._repl_panel = ReplPanel(room="art", id="art-repl")
+        yield self._repl_panel
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
@@ -1308,6 +1304,10 @@ class ArtMode(Container):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
+        if self._repl_panel and not self._repl_panel.is_open:
+            self._repl_panel.open()
+        elif self._repl_panel and self._repl_panel.is_open:
+            self._repl_panel.close()
         from ..repl_panel import ReplPanelToggleRequested
         self.post_message(ReplPanelToggleRequested("art"))
 

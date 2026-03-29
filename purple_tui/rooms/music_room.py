@@ -580,6 +580,7 @@ class MusicMode(Container, can_focus=True):
         self._space_other_key_pressed = False
         self._space_hold_fired = False
         self._repl_panel = None
+        self._noscreen_dot_timer = None
 
     @property
     def is_letters_mode(self) -> bool:
@@ -642,6 +643,27 @@ class MusicMode(Container, can_focus=True):
         try:
             self.query_one("#noscreen-label").remove()
         except Exception:
+            pass
+
+    def _noscreen_flash(self, color: str) -> None:
+        """Show a colored circle briefly in no-screen mode."""
+        try:
+            label = self.query_one("#noscreen-label", Static)
+        except Exception:
+            return
+        label.update(f"[{color}]●[/]")
+        if self._noscreen_dot_timer is not None:
+            self._noscreen_dot_timer.cancel()
+        try:
+            loop = asyncio.get_running_loop()
+            def _clear():
+                self._noscreen_dot_timer = None
+                try:
+                    label.update("")
+                except Exception:
+                    pass
+            self._noscreen_dot_timer = loop.call_later(0.4, _clear)
+        except RuntimeError:
             pass
 
     def on_unmount(self) -> None:
@@ -754,6 +776,9 @@ class MusicMode(Container, can_focus=True):
                     self._play_key(key, mode, instrument=instrument)
                     if flash:
                         self.grid.flash_note(key)
+                    if self._is_noscreen:
+                        color = COLORS[self.grid.color_state[key]]
+                        self._noscreen_flash(color)
 
                 # Wait for remaining loop duration
                 elapsed = asyncio.get_event_loop().time() - cycle_start
@@ -1012,5 +1037,8 @@ class MusicMode(Container, can_focus=True):
                 self._play_key(lookup, mode)
                 if flash:
                     self.grid.flash_note(lookup)
+                if self._is_noscreen:
+                    color = COLORS[self.grid.color_state[lookup]]
+                    self._noscreen_flash(color)
             return
 

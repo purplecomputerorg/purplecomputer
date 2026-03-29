@@ -861,11 +861,11 @@ class MusicMode(Container, can_focus=True):
         if self._repl_panel and self._repl_panel.is_open:
             # Space hold to close REPL
             if isinstance(action, ControlAction) and action.action == 'space':
-                if action.is_down:
+                if action.is_down and not action.is_repeat:
                     self._space_other_key_pressed = False
                     self._cancel_space_hold_timer()
                     self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
-                else:
+                elif not action.is_down:
                     self._cancel_space_hold_timer()
                 return
             # Any other key: mark as pressed (cancels space hold) and route to REPL
@@ -875,14 +875,14 @@ class MusicMode(Container, can_focus=True):
 
         if isinstance(action, ControlAction):
             if action.action == 'space':
-                if action.is_down:
-                    # Start space hold timer AND fire normal action
+                if action.is_down and not action.is_repeat:
+                    # Fresh press: start hold timer AND fire normal action
                     self._space_other_key_pressed = False
                     self._cancel_space_hold_timer()
                     if not getattr(self.app, '_littles_mode', None):
                         self._handle_space()
                     self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
-                else:
+                elif not action.is_down:
                     # Space released: cancel hold timer
                     self._cancel_space_hold_timer()
                 return

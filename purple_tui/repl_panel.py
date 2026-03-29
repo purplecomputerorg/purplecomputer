@@ -16,24 +16,24 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
-    'music': ['letters', 'on', 'off', 'choose', 'instrument', 'fast', 'slow',
+    'music': ['choose', 'instrument', 'fast', 'slow',
               'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'musicbox'],
-    'art': ['left', 'right', 'up', 'down', 'forward', 'turn', 'paint', 'write',
-            'on', 'off', 'repeat', 'end'],
+    'art': ['left', 'right', 'up', 'down', 'forward', 'turn',
+            'repeat', 'end'],
 }
 
 ROOM_HINTS: dict[str, list[str]] = {
     'music': [
         "Try: abcdefg  \u2022  choose ukulele",
-        "Try: fast qwertyuiop  \u2022  letters on",
-        "Try: repeat 3 abcdefg  \u2022  slow asdf",
-        "Try: choose xylophone  \u2022  choose musicbox",
+        "Try: fast qwertyuiop  \u2022  slow asdf",
+        "Try: repeat 3 abcdefg  \u2022  choose musicbox",
+        "Try: choose xylophone  \u2022  choose marimba",
     ],
     'art': [
         "Try: forward 10  \u2022  turn right",
         "Try: repeat 4 forward 20, turn right",
         "Try: repeat 36 forward 5, turn right",
-        "Try: paint off, forward 5, paint on",
+        "Try: forward 20, turn left, forward 10",
     ],
 }
 
@@ -97,43 +97,12 @@ class ReplPanel(Vertical):
         layout: horizontal;
     }
 
-    #repl-prompt {
-        width: auto;
-        height: 1;
-        color: $primary;
-    }
-
-    #repl-input {
-        width: 1fr;
-        height: 1;
-        border: none;
-        background: $surface;
-        padding: 0;
-        margin: 0 0 0 1;
-    }
-
-    #repl-input:focus {
-        border: none;
-    }
-
     #repl-recall-hint {
-        height: 1;
-        color: $text-muted;
-        margin-left: 6;
+        margin-left: 7;
     }
 
     #repl-autocomplete-hint {
-        height: 1;
-        color: $text-muted;
-        margin-bottom: 1;
-        margin-top: 1;
-        margin-left: 5;
-    }
-
-    #repl-example-hint {
-        height: 1;
-        text-align: center;
-        color: $text-muted;
+        margin-left: 6;
     }
     """
 
@@ -154,6 +123,10 @@ class ReplPanel(Vertical):
     def open(self) -> None:
         self._open = True
         self.display = True
+        try:
+            self.query_one("#repl-input", CodeInput).focus()
+        except Exception:
+            pass
 
     def close(self) -> None:
         self._open = False
@@ -179,8 +152,6 @@ class ReplPanel(Vertical):
             hint.update(code_input.autocomplete_hint)
             recall = self.query_one("#repl-recall-hint", RecallHint)
             recall.show_if_empty(not code_input.value)
-            example = self.query_one("#repl-example-hint", ExampleHint)
-            example.set_tab_hint_visible(not code_input.autocomplete_matches)
         except Exception:
             pass
 
@@ -215,11 +186,6 @@ class ReplPanel(Vertical):
                     code_input.autocomplete_index = 0
                     code_input.exact_match_display = ""
                 else:
-                    # No autocomplete: cycle hints or fall through
-                    try:
-                        self.query_one("#repl-example-hint", ExampleHint).advance()
-                    except Exception:
-                        pass
                     return "tab_fallthrough"
                 return
 
@@ -241,6 +207,10 @@ class ReplPanel(Vertical):
                     # Enter on empty: recall last command
                     code_input.value = self._last_input_text
                     code_input.cursor_position = len(code_input.value)
+                try:
+                    self.query_one("#repl-example-hint", ExampleHint).advance()
+                except Exception:
+                    pass
                 return
 
             if action.action == 'backspace' and action.is_down:

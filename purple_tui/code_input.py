@@ -36,6 +36,21 @@ class CodeInput(Input):
     If math_mode=True, auto-spaces and substitutes math operators.
     """
 
+    DEFAULT_CSS = """
+    CodeInput {
+        width: 1fr;
+        height: 1;
+        border: none;
+        background: $surface;
+        padding: 0;
+        margin: 0 0 0 1;
+    }
+
+    CodeInput:focus {
+        border: none;
+    }
+    """
+
     class Submitted(Message, bubble=True):
         """Message sent when user presses Enter."""
         def __init__(self, value: str) -> None:
@@ -153,6 +168,14 @@ class CodeInput(Input):
 class InputPrompt(Static):
     """Shows 'Ask \u2192' or custom prompt label."""
 
+    DEFAULT_CSS = """
+    InputPrompt {
+        width: auto;
+        height: 1;
+        color: $primary;
+    }
+    """
+
     def __init__(self, label: str = "Ask", **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
@@ -174,6 +197,14 @@ class InputPrompt(Static):
 class AutocompleteHint(Static):
     """Shows autocomplete suggestion and help hints."""
 
+    DEFAULT_CSS = """
+    AutocompleteHint {
+        height: 1;
+        color: $text-muted;
+        margin-left: 5;
+    }
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
@@ -181,6 +212,14 @@ class AutocompleteHint(Static):
 
 class RecallHint(Static):
     """Shows 'Enter to try again' hint when input is empty and there's a previous command."""
+
+    DEFAULT_CSS = """
+    RecallHint {
+        height: 1;
+        color: $text-muted;
+        margin-left: 6;
+    }
+    """
 
     MAX_RECALL_LEN = 40
 
@@ -210,6 +249,14 @@ class RecallHint(Static):
 class ExampleHint(Static):
     """Shows cycling 'Try' hints."""
 
+    DEFAULT_CSS = """
+    ExampleHint {
+        height: 1;
+        text-align: center;
+        color: $text-muted;
+    }
+    """
+
     DEFAULT_HINTS = [
         "Try: cat  \u2022  5 + 3  \u2022  red + blue",
     ]
@@ -221,7 +268,6 @@ class ExampleHint(Static):
         self.add_class("caps-sensitive")
         self.HINTS = hints or self.DEFAULT_HINTS
         self._hint_index = 0
-        self._show_tab_hint = True
 
     def on_mount(self) -> None:
         self.set_interval(self.CYCLE_SECONDS, self._next_hint)
@@ -231,19 +277,10 @@ class ExampleHint(Static):
         self.refresh()
 
     def advance(self) -> None:
-        """Manually advance to next hint (called on Tab)."""
+        """Manually advance to next hint (called on Enter)."""
         self._next_hint()
-
-    def set_tab_hint_visible(self, visible: bool) -> None:
-        if self._show_tab_hint != visible:
-            self._show_tab_hint = visible
-            self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         hint = self.HINTS[self._hint_index]
-        tab_text = "     Tab: more hints"
-        if self._show_tab_hint:
-            return f"[dim]{caps(hint + tab_text)}[/]"
-        else:
-            return f"[dim]{caps(hint)}[/]{' ' * len(tab_text)}"
+        return f"[dim]{caps(hint)}[/]"

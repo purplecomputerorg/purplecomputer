@@ -1241,13 +1241,18 @@ class PurpleApp(App):
             pass
 
     def _open_repl_panel(self) -> None:
-        """Grow viewport to accommodate REPL panel, hide room indicator."""
+        """Grow viewport to accommodate REPL panel, hide room indicator.
+
+        Uses batch_update to apply both changes in a single repaint,
+        preventing visual jitter from intermediate states.
+        """
         self._stop_code_execution()
         try:
             viewport = self.query_one("#viewport")
-            viewport.styles.height = VIEWPORT_HEIGHT + 4
             indicator = self.query_one("#room-indicator", RoomIndicator)
-            indicator.display = False
+            with self.batch_update():
+                indicator.display = False
+                viewport.styles.height = VIEWPORT_HEIGHT + 4
         except NoMatches:
             pass
 
@@ -1256,9 +1261,10 @@ class PurpleApp(App):
         self._stop_code_execution()
         try:
             viewport = self.query_one("#viewport")
-            viewport.styles.height = VIEWPORT_HEIGHT
             indicator = self.query_one("#room-indicator", RoomIndicator)
-            indicator.display = True
+            with self.batch_update():
+                viewport.styles.height = VIEWPORT_HEIGHT
+                indicator.display = True
         except NoMatches:
             pass
         # Close any open panel (for room-switch cleanup)

@@ -474,43 +474,9 @@ class PlayMode(Vertical):
         layout: horizontal;
     }
 
-    #input-prompt {
-        width: auto;
-        height: 1;
-        color: $primary;
-    }
-
-    #play-input {
-        width: 1fr;
-        height: 1;
-        border: none;
-        background: $surface;
-        padding: 0;
-        margin: 0 0 0 1;
-    }
-
-    #play-input:focus {
-        border: none;
-    }
-
-    #play-recall-hint {
-        height: 1;
-        color: $text-muted;
-        margin-left: 6;
-    }
-
     #autocomplete-hint {
-        height: 1;
-        color: $text-muted;
         margin-bottom: 1;
         margin-top: 1;
-        margin-left: 5;
-    }
-
-    #play-example-hint {
-        height: 1;
-        text-align: center;
-        color: $text-muted;
     }
     """
 
@@ -706,12 +672,6 @@ class PlayMode(Vertical):
                     play_input.autocomplete_matches = []
                     play_input.autocomplete_index = 0
                     play_input.exact_match_display = ""
-                else:
-                    # No autocomplete: cycle try hints
-                    try:
-                        self.query_one("#play-example-hint", ExampleHint).advance()
-                    except Exception:
-                        pass
                 return
 
             if action.action == 'space' and action.is_down:
@@ -763,6 +723,10 @@ class PlayMode(Vertical):
                 play_input.autocomplete_matches = []
                 play_input.autocomplete_index = 0
                 play_input.exact_match_display = ""
+                try:
+                    self.query_one("#play-example-hint", ExampleHint).advance()
+                except Exception:
+                    pass
                 return
 
             if action.action == 'backspace' and action.is_down:
@@ -833,8 +797,6 @@ class PlayMode(Vertical):
             hint.update(play_input.autocomplete_hint)
             recall = self.query_one("#play-recall-hint", RecallHint)
             recall.show_if_empty(not play_input.value)
-            example = self.query_one("#play-example-hint", ExampleHint)
-            example.set_tab_hint_visible(not play_input.autocomplete_matches)
         except Exception:
             pass
 

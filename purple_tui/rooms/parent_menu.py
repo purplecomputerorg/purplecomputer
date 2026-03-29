@@ -586,7 +586,7 @@ def _is_dev_environment() -> bool:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode
+    from ..settings import get_littles_mode, get_code_panel
 
     items = []
 
@@ -598,6 +598,11 @@ def _get_menu_items() -> list:
     else:
         littles_label = "Littles Mode: Off"
     items.append(("menu-littles", littles_label))
+
+    # Code Panel toggle (only show when not in littles mode, since littles always disables it)
+    if not littles:
+        code_label = "Code Panel: On" if get_code_panel() else "Code Panel: Off"
+        items.append(("menu-code-panel", code_label))
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -922,6 +927,8 @@ class ParentMenu(ModalScreen):
             return
         if item_id == "menu-littles":
             self._open_littles_mode()
+        elif item_id == "menu-code-panel":
+            self._toggle_code_panel()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -938,6 +945,26 @@ class ParentMenu(ModalScreen):
             self._shutdown()
         elif item_id == "menu-exit":
             self.dismiss()
+
+    def _toggle_code_panel(self) -> None:
+        """Toggle the code panel setting and update the menu label."""
+        from ..settings import get_code_panel, set_code_panel
+        new_value = not get_code_panel()
+        set_code_panel(new_value)
+        self.app._code_panel_enabled = new_value
+        # Close any open REPL panels if disabling
+        if not new_value:
+            from ..repl_panel import ReplPanel
+            for panel in self.app.query(ReplPanel):
+                if panel.is_open:
+                    panel.close()
+        # Update menu label
+        label = "Code Panel: On" if new_value else "Code Panel: Off"
+        try:
+            widget = self.query_one("#menu-code-panel", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
 
     def _open_littles_mode(self) -> None:
         """Open the Littles Mode picker."""

@@ -698,6 +698,7 @@ class PurpleApp(App):
 
         # Littles Mode: locks into a single room with no switching
         self._littles_mode: str | None = None  # None, "music", or "art"
+        self._code_panel_enabled: bool = True
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -757,12 +758,15 @@ class PurpleApp(App):
         apply_saved_display_settings()
 
         # Load Littles Mode setting before loading room content
-        from .settings import get_littles_mode
+        from .settings import get_littles_mode, get_code_panel
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
+            self._code_panel_enabled = False  # Littles mode disables code panel
             room_map = {"music": Room.MUSIC, "music_noscreen": Room.MUSIC, "art": Room.ART}
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
+        else:
+            self._code_panel_enabled = get_code_panel()
 
         self._load_room_content()
 
@@ -2203,10 +2207,22 @@ class PurpleApp(App):
         self._littles_mode = mode
 
         if mode:
+            self._code_panel_enabled = False
+        else:
+            from .settings import get_code_panel
+            self._code_panel_enabled = get_code_panel()
+
+        if mode:
             # Switch to the locked room
             room_map = {"music": ROOM_MUSIC[0], "music_noscreen": ROOM_MUSIC[0], "art": ROOM_ART[0]}
             room_name = room_map.get(mode, ROOM_MUSIC[0])
             self.action_switch_room(room_name)
+
+            # Close any open REPL panels
+            from .repl_panel import ReplPanel
+            for panel in self.query(ReplPanel):
+                if panel.is_open:
+                    panel.close()
 
             # Hide room indicator
             try:

@@ -12,6 +12,7 @@ SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 
 _defaults = {
     "littles_mode": None,        # None = off, "music", "music_noscreen", or "art"
+    "code_panel": True,          # Whether the code panel can be opened (space hold)
 }
 
 
@@ -48,6 +49,17 @@ def set_littles_mode(mode: str | None) -> None:
     """Set Littles Mode. None to disable, 'music' or 'art' to enable."""
     settings = load_settings()
     settings["littles_mode"] = mode
+    save_settings(settings)
+
+
+def get_code_panel() -> bool:
+    """Whether the code panel is enabled."""
+    return load_settings()["code_panel"]
+
+
+def set_code_panel(enabled: bool) -> None:
+    settings = load_settings()
+    settings["code_panel"] = enabled
     save_settings(settings)
 
 

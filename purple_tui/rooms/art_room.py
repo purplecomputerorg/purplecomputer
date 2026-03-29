@@ -1292,6 +1292,8 @@ class ArtMode(Container):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
+        if not getattr(self.app, '_code_panel_enabled', True):
+            return
         self._space_hold_fired = True
         if self._repl_panel and not self._repl_panel.is_open:
             self._repl_panel.open()

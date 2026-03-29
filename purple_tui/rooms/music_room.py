@@ -646,15 +646,14 @@ class MusicMode(Container, can_focus=True):
             pass
 
     _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc: parent menu[/]"
-    _NOSCREEN_DOT = "[#9070C0]●[/]"
 
-    def _noscreen_flash(self) -> None:
-        """Show a purple circle briefly in no-screen mode."""
+    def _noscreen_flash(self, color: str) -> None:
+        """Show a colored circle briefly in no-screen mode."""
         try:
             label = self.query_one("#noscreen-label", Static)
         except Exception:
             return
-        label.update(f"{self._NOSCREEN_DOT}\n\n{self._NOSCREEN_TEXT}")
+        label.update(f"[{color}]●[/]\n\n{self._NOSCREEN_TEXT}")
         if self._noscreen_dot_timer is not None:
             self._noscreen_dot_timer.cancel()
         try:
@@ -780,7 +779,7 @@ class MusicMode(Container, can_focus=True):
                     if flash:
                         self.grid.flash_note(key)
                     if self._is_noscreen:
-                        self._noscreen_flash()
+                        self._noscreen_flash(COLORS[self.grid.color_state[key]])
 
                 # Wait for remaining loop duration
                 elapsed = asyncio.get_event_loop().time() - cycle_start
@@ -918,6 +917,8 @@ class MusicMode(Container, can_focus=True):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
+        if not getattr(self.app, '_code_panel_enabled', True):
+            return
         self._space_hold_fired = True
         if self._repl_panel and not self._repl_panel.is_open:
             self._repl_panel.open()
@@ -1040,6 +1041,6 @@ class MusicMode(Container, can_focus=True):
                 if flash:
                     self.grid.flash_note(lookup)
                 if self._is_noscreen:
-                    self._noscreen_flash()
+                    self._noscreen_flash(COLORS[self.grid.color_state[lookup]])
             return
 

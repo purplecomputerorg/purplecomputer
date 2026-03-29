@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Parent menu: "Code Panel: On/Off" toggle controls whether space-hold opens the code panel in music/art rooms. Littles mode always disables it.
 - Littles Mode: added "No-Screen Music" option. Screen stays dark with minimal text, keys still play sounds. For kids who should focus on the sounds, not the screen.
 - "Try" hints now cycle on Enter instead of Tab. Removed "Tab: more hints" text.
 - REPL code panel: removed letters on/off, paint on/off, write on/off keywords (now controlled via Tab).

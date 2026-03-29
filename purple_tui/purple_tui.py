@@ -1242,6 +1242,7 @@ class PurpleApp(App):
 
     def _open_repl_panel(self) -> None:
         """Grow viewport to accommodate REPL panel, hide room indicator."""
+        self._stop_code_execution()
         try:
             viewport = self.query_one("#viewport")
             viewport.styles.height = VIEWPORT_HEIGHT + 4
@@ -1252,6 +1253,7 @@ class PurpleApp(App):
 
     def _close_repl_panel(self) -> None:
         """Restore viewport height and room indicator."""
+        self._stop_code_execution()
         try:
             viewport = self.query_one("#viewport")
             viewport.styles.height = VIEWPORT_HEIGHT

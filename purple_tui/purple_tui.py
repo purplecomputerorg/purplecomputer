@@ -49,7 +49,7 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
-    ICON_USB, ICON_USB_SAFE, display_len,
+    ICON_USB, ICON_USB_SAFE, ICON_ROBOT, display_len,
     SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
@@ -773,7 +773,7 @@ class PurpleApp(App):
         try:
             viewport = self.query_one("#viewport")
             if self.active_room in (Room.MUSIC, Room.ART):
-                viewport.border_subtitle = "Hold Space: open code panel"
+                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
         except NoMatches:
             pass
 
@@ -1687,7 +1687,7 @@ class PurpleApp(App):
         try:
             viewport = self.query_one("#viewport")
             if new_room in (Room.MUSIC, Room.ART):
-                viewport.border_subtitle = "Hold Space: open code panel"
+                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
             else:
                 viewport.border_subtitle = ""
         except NoMatches:

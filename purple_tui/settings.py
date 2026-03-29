@@ -1,7 +1,7 @@
 """
 Purple Computer - Persistent Settings
 
-Settings that survive across app restarts (Littles Mode, Code Space toggle).
+Settings that survive across app restarts (Littles Mode, etc.).
 Stored in ~/.config/purple/settings.json alongside display.json.
 """
 
@@ -12,7 +12,6 @@ SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 
 _defaults = {
     "littles_mode": None,        # None = off, "music" or "art" = locked room
-    "code_space_enabled": True,  # Whether Code Space appears in room picker
 }
 
 
@@ -52,13 +51,3 @@ def set_littles_mode(mode: str | None) -> None:
     save_settings(settings)
 
 
-def is_code_space_enabled() -> bool:
-    """Check if Code Space is enabled."""
-    return load_settings()["code_space_enabled"]
-
-
-def set_code_space_enabled(enabled: bool) -> None:
-    """Enable or disable Code Space."""
-    settings = load_settings()
-    settings["code_space_enabled"] = enabled
-    save_settings(settings)

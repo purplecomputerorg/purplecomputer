@@ -527,8 +527,16 @@ class InputPrompt(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
+        self._block_depth = 0
+
+    def set_block_depth(self, depth: int) -> None:
+        self._block_depth = depth
+        self.refresh()
 
     def render(self) -> str:
+        if self._block_depth > 0:
+            dots = "·" * self._block_depth
+            return f"[bold #9b7bc4]{dots}··[/]"
         text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
         return f"[bold #c4a0e8]{text} →[/]"
 
@@ -719,6 +727,8 @@ class PlayMode(Vertical):
         self.evaluator = SimpleEvaluator()
         # Track last command for recall (Enter on empty)
         self._last_input_text: str = ""
+        # Repeat block collection: stack of {'count': int, 'lines': [str]}
+        self._repeat_stack: list[dict] = []
 
     def compose(self) -> ComposeResult:
         yield KeyboardOnlyScroll(id="history-scroll")
@@ -761,6 +771,40 @@ class PlayMode(Vertical):
             self._update_recall_hint()
         except Exception:
             pass
+
+    def _add_block_line_to_history(self, line: str) -> None:
+        """Show a line being collected in a repeat block in the history."""
+        depth = len(self._repeat_stack)
+        indent = "  " * depth
+        display = f"[#9b7bc4]{indent}{line}[/]"
+        try:
+            scroll = self.query_one("#history-scroll")
+            scroll.mount(HistoryLine(display, line_type="ask"))
+            scroll.scroll_end(animate=False)
+        except Exception:
+            pass
+
+    def _update_prompt_for_block(self) -> None:
+        """Update prompt to show block collection state."""
+        try:
+            prompt = self.query_one("#input-prompt", InputPrompt)
+            prompt.set_block_depth(len(self._repeat_stack))
+        except Exception:
+            pass
+
+    def _execute_repeat_block(self, lines: list[str]) -> None:
+        """Execute a completed repeat block and show results in history."""
+        from ..code_runner import parse_lines, flatten_commands
+        cmds = parse_lines(lines)
+        flat = flatten_commands(cmds)
+        results = []
+        for cmd in flat:
+            if cmd['type'] == 'line':
+                result = self.evaluator.evaluate(cmd['text'])
+                if result:
+                    results.append(result)
+        if results:
+            self.add_code_results(results)
 
     def add_code_results(self, results: list[str]) -> None:
         """Add results from code runner to the history.
@@ -886,11 +930,42 @@ class PlayMode(Vertical):
 
             if action.action == 'enter' and action.is_down:
                 if play_input.value.strip():
-                    play_input.post_message(InlineInput.Submitted(play_input.value))
+                    line = play_input.value.strip()
                     play_input.value = ""
+
+                    # Check if this starts a repeat block
+                    m = re.match(r'^repeat\s+(\d+)\s*$', line, re.IGNORECASE)
+                    if m:
+                        count = max(1, min(int(m.group(1)), 100))
+                        self._repeat_stack.append({'count': count, 'lines': [line]})
+                        self._add_block_line_to_history(line)
+                        self._update_prompt_for_block()
+                    elif re.match(r'^end\s*$', line, re.IGNORECASE) and self._repeat_stack:
+                        # Close innermost block
+                        self._repeat_stack[-1]['lines'].append(line)
+                        self._add_block_line_to_history(line)
+                        if len(self._repeat_stack) == 1:
+                            # Outermost end: execute the whole block
+                            all_lines = self._repeat_stack[0]['lines']
+                            self._repeat_stack.clear()
+                            self._update_prompt_for_block()
+                            self._execute_repeat_block(all_lines)
+                        else:
+                            # Nested end: pop inner block, merge lines into parent
+                            inner = self._repeat_stack.pop()
+                            self._repeat_stack[-1]['lines'].extend(inner['lines'])
+                            self._update_prompt_for_block()
+                    elif self._repeat_stack:
+                        # Inside a block: collect line
+                        self._repeat_stack[-1]['lines'].append(line)
+                        self._add_block_line_to_history(line)
+                        self._update_prompt_for_block()
+                    else:
+                        # Normal single-line submission
+                        play_input.post_message(InlineInput.Submitted(line))
                 else:
                     # Enter on empty: recall last command into input
-                    if self._last_input_text:
+                    if not self._repeat_stack and self._last_input_text:
                         play_input.value = self._last_input_text
                         play_input.cursor_position = len(play_input.value)
                 play_input.autocomplete_matches = []
@@ -907,8 +982,14 @@ class PlayMode(Vertical):
                 return
 
             if action.action == 'escape' and action.is_down and not action.is_repeat:
-                # ESC tap clears the prompt (start over button)
-                if play_input.value:
+                if self._repeat_stack:
+                    # Cancel repeat block
+                    self._repeat_stack.clear()
+                    self._update_prompt_for_block()
+                    play_input.value = ""
+                    play_input.cursor_position = 0
+                elif play_input.value:
+                    # ESC tap clears the prompt (start over button)
                     play_input.value = ""
                     play_input.cursor_position = 0
                     play_input.autocomplete_matches = []

@@ -1235,10 +1235,19 @@ class ArtMode(Container):
     }
     """
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._repl_panel = None
+        self._space_hold_timer = None
+        self._space_other_key_pressed = False
+
     def compose(self) -> ComposeResult:
+        from ..repl_panel import ReplPanel
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
         yield ArtHintBar(id="art-hint-bar")
+        self._repl_panel = ReplPanel(room="art", id="art-repl")
+        yield self._repl_panel
 
     def on_mount(self) -> None:
         """Focus the canvas when mode loads."""
@@ -1272,8 +1281,57 @@ class ArtMode(Container):
         except Exception:
             pass
 
+    def _cancel_space_hold_timer(self) -> None:
+        if self._space_hold_timer:
+            self._space_hold_timer.stop()
+            self._space_hold_timer = None
+
+    def _on_space_hold_fired(self) -> None:
+        """Space held long enough without arrows: toggle REPL."""
+        self._space_hold_timer = None
+        if self._space_other_key_pressed:
+            return
+        if self._repl_panel and not self._repl_panel.is_open:
+            self._repl_panel.open()
+        elif self._repl_panel and self._repl_panel.is_open:
+            self._repl_panel.close()
+
     async def handle_keyboard_action(self, action) -> None:
-        """Delegate keyboard actions to the canvas."""
+        """Route to REPL panel if open, otherwise delegate to canvas."""
+        # When REPL is open, route everything there
+        if self._repl_panel and self._repl_panel.is_open:
+            # Space hold to close REPL
+            if isinstance(action, ControlAction) and action.action == 'space':
+                if action.is_down:
+                    self._space_other_key_pressed = False
+                    self._cancel_space_hold_timer()
+                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                else:
+                    self._cancel_space_hold_timer()
+                return
+            self._space_other_key_pressed = True
+            await self._repl_panel.handle_keyboard_action(action)
+            return
+
+        # Check for space hold to open REPL
+        if isinstance(action, ControlAction) and action.action == 'space':
+            if action.is_down:
+                self._space_other_key_pressed = False
+                if action.arrow_held:
+                    self._space_other_key_pressed = True
+                self._cancel_space_hold_timer()
+                self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+            else:
+                self._cancel_space_hold_timer()
+            # Still pass through to canvas for normal space behavior
+            canvas = self.query_one("#art-canvas", ArtCanvas)
+            await canvas.handle_keyboard_action(action)
+            return
+
+        # Any other key: cancel space hold timer
+        if isinstance(action, (ControlAction, CharacterAction, NavigationAction)):
+            self._space_other_key_pressed = True
+
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)
 

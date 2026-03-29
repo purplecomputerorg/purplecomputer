@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Removed Code Space (multi-line editor with font switching). Play room now supports `repeat N`/`end` blocks directly in the prompt. Music and Art rooms get a REPL overlay panel (hold Space ~0.5s to toggle). Enter runs each command live. No font changes.
 - All rooms reset to defaults when leaving or clearing: music resets instrument to piano and letters mode off, art resets to paint mode with default color.
 - Code space: title bar hidden (slightly larger font), room headers no longer show "letters off"/"paint on"/"write on" labels (were confusing in code context).
 - Closing code space (via menu X or room switcher) now stops any currently running code, matching Esc behavior.

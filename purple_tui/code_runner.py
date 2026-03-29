@@ -1,7 +1,7 @@
 """
 Code runners for each room.
 
-Parse and execute code from the Code Space text editor.
+Parse and execute code from REPL input.
 Shared syntax: `repeat N` ... `end` blocks.
 """
 

@@ -53,7 +53,6 @@ from .constants import (
     SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
-    CODE_PANEL_MIN_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     USB_UPDATE_SIGNAL_FILE,
     is_live_boot,
@@ -69,8 +68,7 @@ from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .rooms.art_room import ColorLegend, PaintModeChanged
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
-from .code_editor import CodeTextEditor, RunCodeRequested, CloseCodeSpaceRequested
-from .font_sizer import set_code_split_font, restore_normal_font
+from .repl_panel import ReplCommandSubmitted, ReplPanelClosed
 
 
 class Room(Enum):
@@ -255,92 +253,8 @@ class RoomBadge(KeyBadge):
         return f"{self._icon} {caps(self._room_name)}"
 
 
-class CompactIndicator(Widget):
-    """1-row compact footer for when code space is open.
-
-    Renders: [Esc]  [Play]  [Music]  [Art]  with mute indicator.
-    Uses render_line() for reliable single-row rendering.
-    """
-
-    DEFAULT_CSS = """
-    CompactIndicator {
-        width: 100%;
-        height: 1;
-    }
-    """
-
-    _ROOMS = [
-        (Room.PLAY, ICON_CHAT, "Play"),
-        (Room.MUSIC, ICON_MUSIC, "Music"),
-        (Room.ART, ICON_PALETTE, "Art"),
-    ]
-
-    def __init__(self, current_room: Room, **kwargs):
-        super().__init__(**kwargs)
-        self.current_room = current_room
-        self._muted = False
-
-    def render_line(self, y: int) -> Strip:
-        width = self.size.width
-        if width <= 0 or y != 0:
-            return Strip([])
-
-        bg = "#1e1033"
-        dim_style = Style(bgcolor=bg, color="#6a5a7a")
-        active_style = Style(bgcolor=bg, color="#c4a0e8", bold=True)
-        esc_style = Style(bgcolor=bg, color="#6a5a7a")
-        mute_style = Style(bgcolor=bg, color="#c46b7b")
-        spacer_style = Style(bgcolor=bg)
-
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-
-        segments = []
-        parts = []
-        parts.append(("esc", f"[Esc {ICON_MENU}]", esc_style))
-        for room, icon, label in self._ROOMS:
-            style = active_style if room == self.current_room else dim_style
-            text = f"[{icon} {caps(label)}]"
-            parts.append((room, text, style))
-
-        content_parts = [(text, style) for _, text, style in parts]
-        separator = "  "
-        total_len = sum(len(t) for t, _ in content_parts) + len(separator) * (len(content_parts) - 1)
-
-        mute_text = f" {ICON_VOLUME_OFF}" if self._muted else ""
-        total_len += len(mute_text)
-
-        pad_left = max(0, (width - total_len) // 2)
-        pad_right = max(0, width - total_len - pad_left)
-
-        segments.append(Segment(" " * pad_left, spacer_style))
-        for i, (text, style) in enumerate(content_parts):
-            if i > 0:
-                segments.append(Segment(separator, spacer_style))
-            segments.append(Segment(text, style))
-
-        if mute_text:
-            segments.append(Segment(mute_text, mute_style))
-
-        segments.append(Segment(" " * pad_right, spacer_style))
-
-        return Strip(segments)
-
-    def update_room(self, room: Room) -> None:
-        self.current_room = room
-        self.refresh()
-
-    def update_volume_indicator(self, volume_level: int) -> None:
-        self._muted = (volume_level == 0)
-        self.refresh()
-
-
 class RoomIndicator(Horizontal):
-    """Shows mode indicators (icons + names) and mute indicator.
-
-    Has two modes:
-    - Normal (3-row): badge-style indicators with borders
-    - Compact (1-row): text-only indicators (used when code space is open)
-    """
+    """Shows mode indicators (icons + names) and mute indicator."""
 
     DEFAULT_CSS = """
     RoomIndicator {
@@ -369,24 +283,11 @@ class RoomIndicator(Horizontal):
         height: 3;
         margin-right: 2;
     }
-
-    RoomIndicator.compact {
-        height: 1;
-        margin-top: 0;
-    }
-
-    RoomIndicator.compact #keys-spacer-left,
-    RoomIndicator.compact #keys-center,
-    RoomIndicator.compact #keys-spacer-right,
-    RoomIndicator.compact #keys-right {
-        display: none;
-    }
     """
 
     def __init__(self, current_room: Room, **kwargs):
         super().__init__(**kwargs)
         self.current_room = current_room
-        self._compact_indicator: CompactIndicator | None = None
 
     def compose(self) -> ComposeResult:
         yield Static("", id="keys-spacer-left")
@@ -418,23 +319,6 @@ class RoomIndicator(Horizontal):
             mute_badge.display = False
             yield mute_badge
 
-        # Compact indicator (hidden by default)
-        compact = CompactIndicator(self.current_room, id="compact-indicator")
-        compact.display = False
-        self._compact_indicator = compact
-        yield compact
-
-    def set_compact(self, compact: bool) -> None:
-        """Switch between 3-row (normal) and 1-row (compact) mode."""
-        if compact:
-            self.add_class("compact")
-            if self._compact_indicator:
-                self._compact_indicator.display = True
-        else:
-            self.remove_class("compact")
-            if self._compact_indicator:
-                self._compact_indicator.display = False
-
     def update_room(self, room: Room) -> None:
         self.current_room = room
         for m in [Room.PLAY, Room.MUSIC, Room.ART]:
@@ -448,9 +332,6 @@ class RoomIndicator(Horizontal):
             except NoMatches:
                 pass
 
-        if self._compact_indicator:
-            self._compact_indicator.update_room(room)
-
     def update_volume_indicator(self, volume_level: int) -> None:
         """Show/hide mute indicator based on volume level."""
         try:
@@ -458,9 +339,6 @@ class RoomIndicator(Horizontal):
             badge.display = (volume_level == 0)
         except NoMatches:
             pass
-
-        if self._compact_indicator:
-            self._compact_indicator.update_volume_indicator(volume_level)
 
 
 class SpeechIndicator(Static):
@@ -490,156 +368,7 @@ class ViewportContainer(Container):
     pass
 
 
-class Curtain(Widget):
-    """Full-screen purple curtain to hide font transitions.
 
-    Mounted temporarily during code panel toggle to hide the visual
-    disruption of Alacritty resizing from the font change.
-    """
-
-    DEFAULT_CSS = """
-    Curtain {
-        width: 100%;
-        height: 100%;
-        dock: top;
-        layer: above;
-    }
-    """
-
-    def render_line(self, y: int) -> Strip:
-        width = self.size.width
-        style = Style(bgcolor="#1e1033")
-        return Strip([Segment(" " * width, style)])
-
-
-
-
-class CodeHintsPanel(Widget):
-    """Side panel showing code hints for each room.
-
-    Displays room-specific examples of what code to try in the code space.
-    Uses render_line/Strip/Segment for reliable rendering.
-    """
-
-    DEFAULT_CSS = """
-    CodeHintsPanel {
-        width: 100%;
-        height: 100%;
-    }
-    """
-
-    _HINTS = {
-        "play": [
-            "cat",
-            "2 + 2",
-            "red + blue",
-            "cat times 3",
-            "",
-            "repeat 3",
-            "  dog",
-            "end",
-        ],
-        "music": [
-            "\u2192 starts on marimba",
-            "qwerty",
-            "fast asdf",
-            "slow 12345",
-            "",
-            "choose uke",
-            "choose xylophone",
-            "choose musicbox",
-            "choose marimba",
-            "",
-            "letters on",
-            "cat",
-            "letters off",
-            "",
-            "repeat 2",
-            "  qwerty",
-            "end",
-        ],
-        "art": [
-            "\u2192 starts in paint mode",
-            "asdfasdf",
-            "",
-            "up 5",
-            "down 3",
-            "left 2",
-            "right 10",
-            "",
-            "write on",
-            "hello world",
-            "write off",
-            "",
-            "repeat 4",
-            "  forward 10",
-            "  turn right",
-            "end",
-            "\u2192 draws a square!",
-        ],
-    }
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._room = "play"
-
-    def set_room(self, room: str) -> None:
-        self._room = room
-        self.refresh()
-
-    def render_line(self, y: int) -> Strip:
-        width = self.size.width
-        if width <= 0:
-            return Strip([])
-
-        bg = "#d0c4e0"          # Light lavender, between gutter and code editor bg
-        gutter_bg = "#c8b8d8"  # Same as code editor gutter
-        gutter_style = Style(bgcolor=gutter_bg)
-        dim_style = Style(bgcolor=bg, color="#7a6a8a")
-        code_style = Style(bgcolor=bg, color="#4a2d6a")
-        comment_style = Style(bgcolor=bg, color="#8a7a9a", italic=True)
-        title_style = Style(bgcolor=gutter_bg, color="#5a3d7a", bold=True)
-
-        # No left gutter (touches code editor's right gutter), 1-cell right gutter
-        right_gutter = 1
-        inner_width = width - right_gutter
-
-        # Top gutter: "Code to try:"
-        if y == 0 or inner_width <= 0:
-            caps = getattr(self.app, 'caps_text', lambda x: x)
-            label = caps("Code to Try")
-            label = label[:width]
-            pad = max(0, width - len(label))
-            return Strip([
-                Segment(label, title_style),
-                Segment(" " * pad, gutter_style),
-            ])
-
-        # Bottom gutter
-        if y >= self.size.height - right_gutter:
-            return Strip([Segment(" " * width, gutter_style)])
-
-        hints = self._HINTS.get(self._room, self._HINTS["play"])
-        hint_idx = y - 1  # 1 row for top gutter
-
-        if hint_idx < len(hints):
-            line = hints[hint_idx]
-            if line.startswith("\u2192"):
-                style = comment_style  # Comment with arrow
-            else:
-                style = code_style  # All code same color
-
-            text = line[:inner_width]
-            pad = inner_width - len(text)
-            segments = [Segment(text, style)]
-            if pad > 0:
-                segments.append(Segment(" " * pad, dim_style))
-        else:
-            segments = [Segment(" " * inner_width, dim_style)]
-
-        segments.append(Segment(" " * right_gutter, gutter_style))
-
-        return Strip(segments)
 
 
 class BatteryIndicator(Static):
@@ -876,51 +605,11 @@ class PurpleApp(App):
         background: $surface;
     }
 
-    #code-panel-row {
-        width: __VIEWPORT_WIDTH__;
-        display: none;
-        margin-left: 5;
-        border: heavy #9b7bc4;
-        border-top: none;
-    }
-
-    #code-panel-row.visible {
-        display: block;
-        height: 1fr;
-    }
-
-    #code-editor {
-        width: 2fr;
-        height: 100%;
-    }
-
-    #code-hints {
-        width: 1fr;
-        height: 100%;
-    }
-
-    #viewport-wrapper.code-space-open {
-        height: 100%;
-    }
-
-    .code-space-open #title-bar {
-        display: none;
-    }
-
-    .code-space-open #viewport {
-        border: heavy #9b7bc4;
-    }
-
     #room-indicator {
         dock: bottom;
         height: 3;
         margin-top: 1;
         background: $background;
-    }
-
-    #room-indicator.compact {
-        height: 1;
-        margin-top: 0;
     }
 
     #content-area {
@@ -1007,10 +696,6 @@ class PurpleApp(App):
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
 
-        # Code space state (persists across room switches)
-        self._code_space_open = False
-        self._code_panel_transitioning = False
-
         # Littles Mode: locks into a single room with no switching
         self._littles_mode: str | None = None  # None, "music", or "art"
 
@@ -1061,9 +746,6 @@ class PurpleApp(App):
                     with ViewportContainer(id="viewport"):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
-                with Horizontal(id="code-panel-row"):
-                    yield CodeTextEditor(id="code-editor")
-                    yield CodeHintsPanel(id="code-hints")
             yield RoomIndicator(self.active_room, id="room-indicator")
             # Hidden state-tracking widgets (push updates to TitleBar)
             yield BatteryIndicator(id="battery-indicator")
@@ -1203,10 +885,6 @@ class PurpleApp(App):
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
-        # Restore normal font if code panel was open
-        if self._code_space_open:
-            restore_normal_font()
-
         # Clean up evdev reader
         if self._evdev_reader:
             await self._evdev_reader.stop()
@@ -1389,16 +1067,6 @@ class PurpleApp(App):
                 await active_screen.handle_keyboard_action(action)
             return
 
-        # When code space is open, route ALL input to code editor
-        # except escape (handled above) and media keys (handled above)
-        if self._code_space_open:
-            try:
-                editor = self.query_one("#code-editor", CodeTextEditor)
-                await editor.handle_keyboard_action(action)
-            except NoMatches:
-                pass
-            return
-
         # Block tab in Littles Mode (prevents sub-mode switching in music/art)
         if self._littles_mode and isinstance(action, ControlAction) and action.action == 'tab':
             return
@@ -1439,13 +1107,10 @@ class PurpleApp(App):
 
     def _show_room_picker(self) -> None:
         """Show the mode picker modal."""
-        from .settings import is_code_space_enabled
         self.clear_notifications()
         current_room = self.active_room.name.lower()
         picker = RoomPickerScreen(
             current_room=current_room,
-            code_space_open=self._code_space_open,
-            code_space_available=is_code_space_enabled(),
         )
         self.push_screen(picker, self._on_room_picked)
 
@@ -1471,120 +1136,10 @@ class PurpleApp(App):
         if result is None:
             return
 
-        # Toggle code space
-        if result.get("toggle_code_space"):
-            self.toggle_code_space()
-            return
-
         # Start fresh: clear all rooms
         if result.get("start_fresh"):
             self._start_fresh()
             return
-
-    # ── Code Space ─────────────────────────────────────────────────
-
-    def toggle_code_space(self) -> None:
-        """Toggle the code space editor open/closed with font transition."""
-        if self._code_panel_transitioning:
-            return
-
-        # Block in Littles Mode or when Code Space is disabled
-        # (_force_close_code_space bypasses by setting _code_space_force_close)
-        if not getattr(self, '_code_space_force_close', False):
-            if self._littles_mode:
-                return
-            from .settings import is_code_space_enabled
-            if not is_code_space_enabled():
-                return
-
-        self._code_panel_transitioning = True
-        closing = self._code_space_open
-        self._code_space_open = not self._code_space_open
-
-        # Stop any running code when closing code space
-        if closing:
-            self._stop_code_execution()
-
-        # Show curtain to hide font change
-        curtain = Curtain(id="transition-curtain")
-        self.mount(curtain)
-
-        # Change font after one frame
-        self.set_timer(0.05, self._code_space_change_font)
-
-    def _code_space_change_font(self) -> None:
-        """Change font size for code space toggle."""
-        if self._code_space_open:
-            set_code_split_font()
-        else:
-            restore_normal_font()
-
-        # Reveal layout after Alacritty resizes
-        self.set_timer(0.3, self._code_space_reveal)
-
-    def _code_space_reveal(self) -> None:
-        """Remove curtain and show/hide code editor."""
-        self._code_panel_transitioning = False
-
-        # Remove curtain
-        try:
-            curtain = self.query_one("#transition-curtain")
-            curtain.remove()
-        except NoMatches:
-            pass
-
-        # Show/hide code panel row (editor + hints)
-        try:
-            panel_row = self.query_one("#code-panel-row")
-            if self._code_space_open:
-                panel_row.add_class("visible")
-                room_name = self.active_room.name.lower()
-                editor = self.query_one("#code-editor", CodeTextEditor)
-                editor.set_room(room_name)
-                hints = self.query_one("#code-hints", CodeHintsPanel)
-                hints.set_room(room_name)
-            else:
-                panel_row.remove_class("visible")
-        except NoMatches:
-            pass
-
-        # Toggle border dimming and compact indicator
-        try:
-            wrapper = self.query_one("#viewport-wrapper")
-            if self._code_space_open:
-                wrapper.add_class("code-space-open")
-            else:
-                wrapper.remove_class("code-space-open")
-        except NoMatches:
-            pass
-
-        # Set viewport border directly (inline styles from art mode can override CSS)
-        self._reset_viewport_border()
-
-        try:
-            indicator = self.query_one("#room-indicator", RoomIndicator)
-            indicator.set_compact(self._code_space_open)
-        except NoMatches:
-            pass
-
-        # Hide/show play input cursor when code space is open
-        self._toggle_play_input_visibility()
-
-        # Hide/show room hints when code space toggles
-        self._toggle_room_hints_visibility()
-
-        # When closing code space, scroll play room history to bottom
-        if not self._code_space_open:
-            try:
-                content_area = self.query_one("#content-area")
-                play = content_area.query_one("#room-play")
-                scroll = play.query_one("#history-scroll")
-                scroll.scroll_end(animate=False)
-            except Exception:
-                pass
-
-        # Refresh shift banner
-        self._update_shift_indicator()
 
     _code_run_task: asyncio.Task | None = None
 
@@ -1596,42 +1151,20 @@ class PurpleApp(App):
             return True
         return False
 
-    def on_run_code_requested(self, message: RunCodeRequested) -> None:
-        """Handle code execution request from code editor."""
+    def on_repl_command_submitted(self, message: ReplCommandSubmitted) -> None:
+        """Handle command from REPL panel in music/art rooms."""
         self._stop_code_execution()
-        self._code_run_task = asyncio.ensure_future(self._run_code(message.room, message.lines))
+        self._code_run_task = asyncio.ensure_future(
+            self._run_repl_command(message.room, message.lines)
+        )
 
-    async def _run_code(self, room: str, lines: list[str]) -> None:
-        """Execute code for the given room."""
-        if room == "play":
-            from .rooms.play_room import SimpleEvaluator
-            from .code_runner import PlayCodeRunner
-            evaluator = SimpleEvaluator()
-            runner = PlayCodeRunner(evaluator)
-            results = runner.run(lines)
-            if results:
-                # Display results in play room history
-                try:
-                    content_area = self.query_one("#content-area")
-                    play = content_area.query_one("#room-play")
-                    if hasattr(play, 'add_code_results'):
-                        play.add_code_results(results)
-                    else:
-                        # Fallback: add each result as a history line
-                        for r in results:
-                            if hasattr(play, '_add_to_history'):
-                                play._add_to_history(r)
-                except Exception:
-                    pass
-
-        elif room == "music":
+    async def _run_repl_command(self, room: str, lines: list[str]) -> None:
+        """Execute REPL command for music/art rooms."""
+        if room == "music":
             from .code_runner import MusicCodeRunner
             try:
                 content_area = self.query_one("#content-area")
                 music = content_area.query_one("#room-music")
-                # Fresh start: reset colors before running code
-                if music.grid:
-                    music.grid.reset_colors()
                 mode = "letters" if music._letters_mode else "music"
 
                 def play_key(key, m):
@@ -1640,7 +1173,6 @@ class PurpleApp(App):
                 def set_inst(name):
                     from .music_constants import INSTRUMENTS
                     name_lower = name.lower()
-                    # Exact match first, then prefix match
                     for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
                         if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
                             music._instrument_index = i
@@ -1676,96 +1208,22 @@ class PurpleApp(App):
                 content_area = self.query_one("#content-area")
                 art = content_area.query_one("#room-art")
                 canvas = art.query_one("#art-canvas")
-                # Fresh start: clear canvas before running code
-                canvas._clear_canvas()
                 runner = ArtCodeRunner(canvas)
                 await runner.run(lines)
             except Exception:
                 pass
 
-    def on_close_code_space_requested(self, message: CloseCodeSpaceRequested) -> None:
-        """Handle close code space request from tab menu."""
-        self.toggle_code_space()
-
-    def _toggle_play_input_visibility(self) -> None:
-        """Toggle play room cursor blink and hint visibility when code space toggles.
-
-        Keeps the input field visible but disables the blinking cursor
-        when code space is open (input is not active in that state).
-        """
-        try:
-            content_area = self.query_one("#content-area")
-            play = content_area.query_one("#room-play")
-            # Disable/enable cursor blink on the input field
-            try:
-                play_input = play.query_one("#play-input")
-                if self._code_space_open:
-                    play_input.cursor_blink = False
-                    # Move cursor to start to make it less distracting
-                    play_input.cursor_position = 0
-                else:
-                    play_input.cursor_blink = True
-            except NoMatches:
-                pass
-            # Hide/show example hints (not needed with code space)
-            for widget_id in ("#autocomplete-hint", "#play-example-hint"):
-                try:
-                    widget = play.query_one(widget_id)
-                    widget.display = not self._code_space_open
-                except NoMatches:
-                    pass
-        except NoMatches:
-            pass
-
-    def _toggle_room_hints_visibility(self) -> None:
-        """Hide/show room-specific hints when code space toggles.
-
-        Hides the 'try pressing...' hints in music and art rooms
-        when the code space is open (they're redundant with the code hints panel).
-        """
-        try:
-            content_area = self.query_one("#content-area")
-            # Music room hint and header
-            try:
-                music = content_area.query_one("#room-music")
-                hint = music.query_one("#example-hint")
-                hint.display = not self._code_space_open
-                from .rooms.music_room import MusicRoomHeader
-                header = music.query_one("#music-header", MusicRoomHeader)
-                header.set_code_mode(self._code_space_open)
-            except NoMatches:
-                pass
-            # Art room hint and header
-            try:
-                art = content_area.query_one("#room-art")
-                hint = art.query_one("#art-hint-bar")
-                hint.display = not self._code_space_open
-                from .rooms.art_room import CanvasHeader, ArtCanvas
-                art_header = art.query_one("#canvas-header", CanvasHeader)
-                art_header.set_code_mode(self._code_space_open)
-                canvas = art.query_one(ArtCanvas)
-                canvas.set_code_mode(self._code_space_open)
-            except NoMatches:
-                pass
-        except NoMatches:
-            pass
+    def on_repl_panel_closed(self, message: ReplPanelClosed) -> None:
+        """Handle REPL panel close request."""
+        pass  # Panel closes itself; this is just for any cleanup needed
 
     def _reset_viewport_border(self) -> None:
-        """Reset viewport outline to default purple (or dimmed if code space is open)."""
+        """Reset viewport outline to default purple."""
         try:
             from textual.color import Color
             viewport = self.query_one("#viewport")
-            if self._code_space_open:
-                # Code space open: bright border, no bottom border (continuous with code panel)
-                primary = Color.parse("#9b7bc4")
-                viewport.styles.border_top = ("heavy", primary)
-                viewport.styles.border_left = ("heavy", primary)
-                viewport.styles.border_right = ("heavy", primary)
-                viewport.styles.border_bottom = ("none", primary)
-            else:
-                # Normal: full border in primary color
-                primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
-                viewport.styles.border = ("heavy", Color.parse(primary_color))
+            primary_color = "#9b7bc4" if self.active_theme == "purple-dark" else "#7a4ca0"
+            viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
 
@@ -2157,22 +1615,6 @@ class PurpleApp(App):
         self.active_room = new_room
         self._load_room_content()
 
-        # Sync code editor and hints panel to new room's buffer
-        if self._code_space_open:
-            room_name = new_room.name.lower()
-            try:
-                editor = self.query_one("#code-editor", CodeTextEditor)
-                editor.set_room(room_name)
-            except NoMatches:
-                pass
-            try:
-                hints = self.query_one("#code-hints", CodeHintsPanel)
-                hints.set_room(room_name)
-            except NoMatches:
-                pass
-            self._toggle_play_input_visibility()
-            self._toggle_room_hints_visibility()
-
         # Update title
         room_names = {Room.PLAY: ROOM_PLAY[0], Room.MUSIC: ROOM_MUSIC[0], Room.ART: ROOM_ART[0]}
         try:
@@ -2240,14 +1682,6 @@ class PurpleApp(App):
             play = content_area.query_one("#room-play")
             if hasattr(play, 'clear_history'):
                 play.clear_history()
-        except Exception:
-            pass
-
-        # Clear code editor buffers
-        try:
-            editor = self.query_one("#code-editor", CodeTextEditor)
-            for room in ("play", "music", "art"):
-                editor.clear_buffer(room)
         except Exception:
             pass
 
@@ -2693,26 +2127,11 @@ class PurpleApp(App):
         if "littles_mode" in result:
             self._apply_littles_mode(result["littles_mode"])
 
-        # Code Space toggled off while it was open
-        if "code_space_enabled" in result:
-            if not result["code_space_enabled"] and self._code_space_open:
-                self._force_close_code_space()
-
-    def _force_close_code_space(self) -> None:
-        """Close code space, bypassing setting guards."""
-        self._code_space_force_close = True
-        self.toggle_code_space()
-        self._code_space_force_close = False
-
     def _apply_littles_mode(self, mode: str | None) -> None:
         """Apply a Littles Mode change. Switches room, hides/shows UI."""
         self._littles_mode = mode
 
         if mode:
-            # Close code space if open
-            if self._code_space_open:
-                self._force_close_code_space()
-
             # Switch to the locked room
             room_map = {"music": ROOM_MUSIC[0], "art": ROOM_ART[0]}
             room_name = room_map.get(mode, ROOM_MUSIC[0])

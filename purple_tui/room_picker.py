@@ -1,11 +1,10 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then a code space toggle
-(full width) with On/Off indicator, and Volume + Clear Rooms side by side.
-Arrow keys navigate, number keys 1-3 for direct room selection,
-Space toggles code space, V opens volume, C clears rooms,
-Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
+Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Rooms
+side by side. Arrow keys navigate, number keys 1-3 for direct room
+selection, V opens volume, C clears rooms, Enter selects, Escape cancels.
+Any unrecognized key dismisses gracefully.
 """
 
 from textual.screen import ModalScreen
@@ -16,7 +15,7 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH,
-    ICON_BROOM, ICON_CODE,
+    ICON_BROOM,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 
@@ -33,9 +32,8 @@ NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
 # Navigation rows
 ROW_ROOMS = 0
-ROW_CODE = 1
-ROW_EXTRAS = 2
-NUM_ROWS = 3
+ROW_EXTRAS = 1
+NUM_ROWS = 2
 
 # Extras columns: 0 = volume, 1 = clear rooms
 COL_VOLUME = 0
@@ -77,54 +75,6 @@ class RoomOption(Static):
         caps = getattr(self.app, 'caps_text', lambda x: x)
         enter_hint = "\nor Enter" if self.has_class("selected") else ""
         return caps(f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n")
-
-
-class CodeToggleOption(Static):
-    """Wide toggle button for code space, spanning the width of 3 room boxes."""
-
-    DEFAULT_CSS = """
-    CodeToggleOption {
-        width: 52;
-        height: 7;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    CodeToggleOption.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-
-    CodeToggleOption.code-active {
-        border: round $accent;
-    }
-    """
-
-    def __init__(self, code_on: bool = False, **kwargs):
-        super().__init__(**kwargs)
-        self._code_on = code_on
-        if code_on:
-            self.add_class("code-active")
-        self.add_class("caps-sensitive")
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        # Line 1: robots on either side of "Code Space"
-        title_line = f"{ICON_CODE}  Code Space  {ICON_CODE}"
-        # Line 2: radio-style indicator, filled circle marks current state
-        if self._code_on:
-            status_line = "\u25cb Off  \u25cf On"
-        else:
-            status_line = "\u25cf Off  \u25cb On"
-        # Line 3: Turn On / Turn Off hint
-        action = "Turn Off" if self._code_on else "Turn On"
-        enter_hint = " or Enter" if self.has_class("selected") else ""
-        hint = f"Press Space{enter_hint}: {action}"
-        return caps(f"\n{title_line}\n{status_line}\n{hint}")
 
 
 class ExtraOption(Static):
@@ -273,9 +223,8 @@ class RoomPickerScreen(ModalScreen):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
-    Layout (3 navigable rows):
+    Layout (2 navigable rows):
       [1 Play]  [2 Music]  [3 Art]          <- room row
-      [Code Space  ● / ○    Press Space]     <- code toggle (full width)
       [Volume  V]  [Clear Rooms  C]          <- extras row (50/50)
     """
 
@@ -300,13 +249,6 @@ class RoomPickerScreen(ModalScreen):
     }
 
     #picker-options {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #picker-toggle-row {
         width: 100%;
         height: auto;
         align: center middle;
@@ -339,14 +281,9 @@ class RoomPickerScreen(ModalScreen):
             super().__init__()
             self.result = result
 
-    def __init__(self, current_room: str = "play",
-                 code_space_open: bool = False,
-                 code_space_available: bool = True,
-                 **kwargs):
+    def __init__(self, current_room: str = "play", **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
-        self._code_space_open = code_space_open
-        self._code_space_available = code_space_available
         # Always start on the room row, highlighting the current room
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
@@ -358,15 +295,6 @@ class RoomPickerScreen(ModalScreen):
                 return i
         return 0
 
-    @property
-    def _visible_rows(self) -> list[int]:
-        """Row indices that are navigable (skips code row when unavailable)."""
-        rows = [ROW_ROOMS]
-        if self._code_space_available:
-            rows.append(ROW_CODE)
-        rows.append(ROW_EXTRAS)
-        return rows
-
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
@@ -376,13 +304,6 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
-
-            if self._code_space_available:
-                with Horizontal(id="picker-toggle-row"):
-                    yield CodeToggleOption(
-                        code_on=self._code_space_open,
-                        id="opt-code-toggle",
-                    )
 
             with Horizontal(id="picker-extras"):
                 yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
@@ -406,16 +327,6 @@ class RoomPickerScreen(ModalScreen):
             except Exception:
                 pass
 
-        # Code toggle
-        try:
-            toggle = self.query_one("#opt-code-toggle", CodeToggleOption)
-            if self._active_row == ROW_CODE:
-                toggle.add_class("selected")
-            else:
-                toggle.remove_class("selected")
-        except Exception:
-            pass
-
         # Extras row
         extra_ids = ["#opt-volume", "#opt-clear-rooms"]
         for i, eid in enumerate(extra_ids):
@@ -436,13 +347,11 @@ class RoomPickerScreen(ModalScreen):
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard navigation from evdev."""
         if isinstance(action, NavigationAction):
-            visible = self._visible_rows
             if action.direction == 'left':
                 if self._active_row == ROW_ROOMS:
                     self._room_index = max(0, self._room_index - 1)
                 elif self._active_row == ROW_EXTRAS:
                     self._extra_index = max(0, self._extra_index - 1)
-                # ROW_CODE: single item, no left/right
                 self._update_selection()
             elif action.direction == 'right':
                 if self._active_row == ROW_ROOMS:
@@ -451,14 +360,12 @@ class RoomPickerScreen(ModalScreen):
                     self._extra_index = min(NUM_EXTRA_COLS - 1, self._extra_index + 1)
                 self._update_selection()
             elif action.direction == 'up':
-                cur = visible.index(self._active_row) if self._active_row in visible else 0
-                if cur > 0:
-                    self._active_row = visible[cur - 1]
+                if self._active_row == ROW_EXTRAS:
+                    self._active_row = ROW_ROOMS
                     self._update_selection()
             elif action.direction == 'down':
-                cur = visible.index(self._active_row) if self._active_row in visible else 0
-                if cur < len(visible) - 1:
-                    self._active_row = visible[cur + 1]
+                if self._active_row == ROW_ROOMS:
+                    self._active_row = ROW_EXTRAS
                     self._update_selection()
             return
 
@@ -486,8 +393,6 @@ class RoomPickerScreen(ModalScreen):
             if action.action == 'enter':
                 if self._active_row == ROW_ROOMS:
                     self._select_room(self._room_index)
-                elif self._active_row == ROW_CODE:
-                    self.dismiss({"toggle_code_space": True})
                 elif self._active_row == ROW_EXTRAS:
                     if self._extra_index == COL_VOLUME:
                         self._open_volume()
@@ -495,10 +400,6 @@ class RoomPickerScreen(ModalScreen):
                         self._confirm_clear_rooms()
             elif action.action == 'escape':
                 self.dismiss(None)
-            elif action.action == 'space':
-                # Space toggles code space from any row (if available)
-                if self._code_space_available:
-                    self.dismiss({"toggle_code_space": True})
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()
             elif action.action == 'volume_down':

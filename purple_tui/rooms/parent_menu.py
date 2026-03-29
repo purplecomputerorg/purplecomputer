@@ -492,121 +492,6 @@ class LittlesModeScreen(ModalScreen):
                 self.dismiss(_LITTLES_CANCELLED)
 
 
-class CodeSpaceScreen(ModalScreen):
-    """
-    Toggle Code Space on or off.
-
-    Simple two-option modal matching Littles Mode style.
-    """
-
-    CSS = """
-    CodeSpaceScreen {
-        align: center middle;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
-    #codespace-dialog {
-        width: 50;
-        height: auto;
-        padding: 1 2;
-        background: $surface;
-        border: round $primary;
-    }
-
-    #codespace-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
-        color: $primary;
-        margin-bottom: 1;
-    }
-
-    #codespace-desc {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
-    .codespace-option {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    .codespace-option.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-
-    #codespace-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
-    }
-    """
-
-    OPTIONS = [
-        (True, "Enabled", "Code Space available in room picker"),
-        (False, "Disabled", "Code Space hidden from room picker"),
-    ]
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        from ..settings import is_code_space_enabled
-        current = is_code_space_enabled()
-        self._selected = 0 if current else 1
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="codespace-dialog"):
-            yield Static("Code Space", id="codespace-title")
-            yield Static("Show Code Space in the room picker?", id="codespace-desc")
-            for i, (value, label, desc) in enumerate(self.OPTIONS):
-                yield Static(
-                    f"{label}\n{desc}",
-                    id=f"codespace-opt-{i}",
-                    classes="codespace-option",
-                )
-            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="codespace-hint")
-
-    def on_mount(self) -> None:
-        self._update_selection()
-
-    def _update_selection(self) -> None:
-        for i in range(len(self.OPTIONS)):
-            try:
-                widget = self.query_one(f"#codespace-opt-{i}", Static)
-                if i == self._selected:
-                    widget.add_class("selected")
-                else:
-                    widget.remove_class("selected")
-            except Exception:
-                pass
-
-    def on_key(self, event: events.Key) -> None:
-        event.stop()
-        event.prevent_default()
-
-    async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, NavigationAction):
-            if action.direction in ('up', 'down'):
-                self._selected = 1 - self._selected
-                self._update_selection()
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                value = self.OPTIONS[self._selected][0]
-                self.dismiss(value)
-            elif action.action == 'escape':
-                self.dismiss(None)
-
 
 def _flush_terminal_input() -> None:
     """Flush any buffered terminal input to prevent stray characters."""
@@ -700,7 +585,7 @@ def _is_dev_environment() -> bool:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode, is_code_space_enabled
+    from ..settings import get_littles_mode
 
     items = []
 
@@ -711,11 +596,6 @@ def _get_menu_items() -> list:
     else:
         littles_label = "Littles Mode: Off"
     items.append(("menu-littles", littles_label))
-
-    # Code Space (not shown in Littles Mode since it's always off)
-    if not littles:
-        code_status = "Enabled" if is_code_space_enabled() else "Disabled"
-        items.append(("menu-code-toggle", f"Code Space: {code_status}"))
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -1040,8 +920,6 @@ class ParentMenu(ModalScreen):
             return
         if item_id == "menu-littles":
             self._open_littles_mode()
-        elif item_id == "menu-code-toggle":
-            self._open_code_space_setting()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -1069,17 +947,6 @@ class ParentMenu(ModalScreen):
             self.dismiss({"littles_mode": result})
 
         self.app.push_screen(LittlesModeScreen(), callback=on_result)
-
-    def _open_code_space_setting(self) -> None:
-        """Open the Code Space toggle modal."""
-        def on_result(result):
-            if result is None:
-                return  # User pressed Escape, no change
-            from ..settings import set_code_space_enabled
-            set_code_space_enabled(result)
-            self.dismiss({"code_space_enabled": result})
-
-        self.app.push_screen(CodeSpaceScreen(), callback=on_result)
 
     def _open_display_settings(self) -> None:
         """Open the display settings modal."""

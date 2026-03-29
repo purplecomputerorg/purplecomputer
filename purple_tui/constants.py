@@ -57,18 +57,6 @@ _VIEWPORT_ROWS = VIEWPORT_HEIGHT + 2  # Content + heavy border
 _INDICATOR_ROWS = 4            # margin-top(1) + height(3)
 REQUIRED_TERMINAL_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _INDICATOR_ROWS
 
-# Code panel (inline code trail below viewport in split-screen mode)
-CODE_PANEL_MIN_HEIGHT = 12    # Minimum rows for code panel (actual height is flexible via 1fr)
-
-# Code space mode: compact layout (no title, no viewport bottom border, no code panel margin)
-_CODE_TITLE_ROWS = 0              # Title bar hidden in code space
-_CODE_VIEWPORT_ROWS = VIEWPORT_HEIGHT + 1  # Content + top border only (bottom border removed)
-_COMPACT_INDICATOR_ROWS = 1
-CODE_SPACE_REQUIRED_ROWS = _CODE_TITLE_ROWS + _CODE_VIEWPORT_ROWS + CODE_PANEL_MIN_HEIGHT + _COMPACT_INDICATOR_ROWS
-
-# Font shrink ratio: sized so the code space layout fits in the same screen pixels
-CODE_FONT_RATIO = REQUIRED_TERMINAL_ROWS / CODE_SPACE_REQUIRED_ROWS
-
 # =============================================================================
 # TIMING
 # =============================================================================

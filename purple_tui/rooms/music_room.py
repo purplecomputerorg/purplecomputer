@@ -567,6 +567,10 @@ class MusicMode(Container, can_focus=True):
         self._recording_timer = None
         self._loop_progress_timer = None
         self._last_loop_space_time: float = 0.0
+        # Space hold REPL toggle
+        self._space_hold_timer = None
+        self._space_other_key_pressed = False
+        self._repl_panel = None
 
     @property
     def is_letters_mode(self) -> bool:
@@ -574,11 +578,14 @@ class MusicMode(Container, can_focus=True):
         return self._letters_mode
 
     def compose(self) -> ComposeResult:
+        from ..repl_panel import ReplPanel
         self._header = MusicRoomHeader(id="music-header")
         yield self._header
         self.grid = MusicGrid()
         yield self.grid
         yield MusicExampleHint(id="example-hint")
+        self._repl_panel = ReplPanel(room="music", id="music-repl")
+        yield self._repl_panel
 
     def on_mount(self) -> None:
         self.focus()
@@ -822,6 +829,25 @@ class MusicMode(Container, can_focus=True):
         if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
 
+    def _cancel_space_hold_timer(self) -> None:
+        if self._space_hold_timer:
+            self._space_hold_timer.stop()
+            self._space_hold_timer = None
+
+    def _on_space_hold_fired(self) -> None:
+        """Space held long enough without other keys: toggle REPL."""
+        self._space_hold_timer = None
+        if self._space_other_key_pressed:
+            return
+        if self._repl_panel and not self._repl_panel.is_open:
+            # Cancel any loop recording that just started
+            if self._loop.state == RECORDING:
+                self._stop_loop()
+                self._update_hint()
+            self._repl_panel.open()
+        elif self._repl_panel and self._repl_panel.is_open:
+            self._repl_panel.close()
+
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard actions from the main app's KeyboardStateMachine.
 
@@ -829,45 +855,76 @@ class MusicMode(Container, can_focus=True):
         Character keys cycle colors, play sounds or speak.
         Space controls the loop station.
         Escape stops the loop (if active).
+        Space hold (~0.5s, no other keys): toggles REPL panel.
         """
-        if isinstance(action, ControlAction) and action.is_down:
-            # Space: loop station control (disabled in littles mode)
+        # When REPL panel is open, route everything there
+        if self._repl_panel and self._repl_panel.is_open:
+            # Space hold to close REPL
+            if isinstance(action, ControlAction) and action.action == 'space':
+                if action.is_down:
+                    self._space_other_key_pressed = False
+                    self._cancel_space_hold_timer()
+                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                else:
+                    self._cancel_space_hold_timer()
+                return
+            # Any other key: mark as pressed (cancels space hold) and route to REPL
+            self._space_other_key_pressed = True
+            await self._repl_panel.handle_keyboard_action(action)
+            return
+
+        if isinstance(action, ControlAction):
             if action.action == 'space':
-                if not getattr(self.app, '_littles_mode', None):
-                    self._handle_space()
+                if action.is_down:
+                    # Start space hold timer AND fire normal action
+                    self._space_other_key_pressed = False
+                    self._cancel_space_hold_timer()
+                    if not getattr(self.app, '_littles_mode', None):
+                        self._handle_space()
+                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                else:
+                    # Space released: cancel hold timer
+                    self._cancel_space_hold_timer()
                 return
 
-            # Escape: stop loop if active
-            if action.action == 'escape':
-                if self._handle_escape():
-                    self.app._escape_consumed_by_mode = True
-                return
+            if action.is_down:
+                # Any other control key pressed: cancel space hold
+                self._space_other_key_pressed = True
 
-            # Tab switches mode
-            if action.action == 'tab':
-                self._letters_mode = not self._letters_mode
-                if self._header:
-                    self._header.update_mode(self._letters_mode)
-                raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
-                label = self.app.caps_text(raw_label)
-                self.app.clear_notifications()
-                self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
-                return
+                # Escape: stop loop if active
+                if action.action == 'escape':
+                    if self._handle_escape():
+                        self.app._escape_consumed_by_mode = True
+                    return
 
-            # Enter cycles instruments
-            if action.action == 'enter':
-                self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
-                inst_id, inst_name = INSTRUMENTS[self._instrument_index]
-                if self.grid:
-                    self.grid.set_instrument(self._instrument_index)
-                if self._header:
-                    self._header.update_instrument(inst_name)
-                self.app.clear_notifications()
-                self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
-                return
+                # Tab switches mode
+                if action.action == 'tab':
+                    self._letters_mode = not self._letters_mode
+                    if self._header:
+                        self._header.update_mode(self._letters_mode)
+                    raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                    label = self.app.caps_text(raw_label)
+                    self.app.clear_notifications()
+                    self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
+                    return
+
+                # Enter cycles instruments
+                if action.action == 'enter':
+                    self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
+                    inst_id, inst_name = INSTRUMENTS[self._instrument_index]
+                    if self.grid:
+                        self.grid.set_instrument(self._instrument_index)
+                    if self._header:
+                        self._header.update_instrument(inst_name)
+                    self.app.clear_notifications()
+                    self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
+                    return
 
         # Character keys: play sound, cycle color, record into loop if active
         if isinstance(action, CharacterAction):
+            # Any key press: cancel space hold
+            self._space_other_key_pressed = True
+
             char = action.char
             if not char:
                 return

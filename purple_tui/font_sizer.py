@@ -20,7 +20,7 @@ import re
 import subprocess
 import time
 
-from .constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS, CODE_FONT_RATIO
+from .constants import REQUIRED_TERMINAL_COLS, REQUIRED_TERMINAL_ROWS
 
 # Alacritty config path: set by xinitrc (writable copy), or fall back to /etc
 ALACRITTY_CONFIG_ENV = "PURPLE_ALACRITTY_CONFIG"
@@ -148,57 +148,3 @@ def ensure_terminal_size() -> None:
     # Clear loading message before Textual takes over
     print("\033[2J\033[H", end="", flush=True)
 
-    # Cache the final font size so code split restore uses the correct value.
-    # IPC-only font changes don't update the config file, so reading the file
-    # later would return the stale pre-adjustment size.
-    global _original_font_size
-    _original_font_size = current_font
-
-
-# =============================================================================
-# CODE SPLIT: Font toggle for inline code panel
-# =============================================================================
-
-# Module-level state for font toggle (one Alacritty instance per app)
-_original_font_size: float | None = None
-
-
-def get_original_font_size() -> float | None:
-    """Read and cache the current (normal mode) font size."""
-    global _original_font_size
-    if _original_font_size is not None:
-        return _original_font_size
-    config_path = _get_config_path()
-    if config_path:
-        _original_font_size = _read_font_size(config_path)
-    return _original_font_size
-
-
-def set_code_split_font() -> bool:
-    """Shrink font to CODE_FONT_RATIO for split-screen code panel.
-
-    Returns True if font was changed successfully.
-    """
-    original = get_original_font_size()
-    if original is None:
-        return False
-    config_path = _get_config_path()
-    if not config_path:
-        return False
-    new_size = _floor_half(original * CODE_FONT_RATIO)
-    new_size = max(MIN_FONT, min(MAX_FONT, new_size))
-    return _set_font_size(new_size, config_path)
-
-
-def restore_normal_font() -> bool:
-    """Restore font to the original (normal mode) size.
-
-    Returns True if font was changed successfully.
-    """
-    original = get_original_font_size()
-    if original is None:
-        return False
-    config_path = _get_config_path()
-    if not config_path:
-        return False
-    return _set_font_size(original, config_path)

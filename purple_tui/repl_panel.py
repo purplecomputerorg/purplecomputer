@@ -48,20 +48,23 @@ class ReplPanelClosed(Message, bubble=True):
 
 
 class ReplPanel(Widget):
-    """Overlay REPL panel for music/art rooms."""
+    """REPL panel for music/art rooms.
+
+    Always visible as a 1-row stub when closed. Expands when opened.
+    """
 
     DEFAULT_CSS = """
     ReplPanel {
         dock: bottom;
         width: 100%;
-        height: 5;
-        display: none;
+        height: 1;
     }
     """
 
     def __init__(self, room: str, **kwargs):
         super().__init__(**kwargs)
         self._room = room
+        self._open = False
         self._input_text = ""
         self._cursor_pos = 0
         self._history: list[tuple[str, str]] = []  # (type, text): type is "input" or "result"
@@ -71,16 +74,18 @@ class ReplPanel(Widget):
 
     @property
     def is_open(self) -> bool:
-        return self.display
+        return self._open
 
     def open(self) -> None:
-        self.display = True
+        self._open = True
+        self.styles.height = self._target_height
         self.refresh()
 
     def close(self) -> None:
-        self.display = False
+        self._open = False
         self._repeat_stack.clear()
-        self._update_height()
+        self.styles.height = 1
+        self.refresh()
 
     def _update_height(self) -> None:
         """Adjust height based on repeat block depth."""
@@ -105,6 +110,10 @@ class ReplPanel(Widget):
         if width == 0 or height == 0:
             return Strip.blank(width)
 
+        # Stub mode: single row with hint
+        if not self._open:
+            return self._render_stub(width)
+
         # Layout: separator (1 row), history (height-3 rows), blank (1 row), input (1 row)
         separator_row = 0
         input_row = height - 1
@@ -123,6 +132,18 @@ class ReplPanel(Widget):
             return self._render_history_line(history_y, history_rows, width)
         else:
             return Strip([Segment(" " * width, Style(bgcolor=BG))])
+
+    def _render_stub(self, width: int) -> Strip:
+        """Render the 1-row closed state."""
+        hint = "Hold Space: type commands"
+        pad_left = max(0, (width - len(hint)) // 2)
+        pad_right = max(0, width - len(hint) - pad_left)
+        style = Style(color=SEPARATOR_COLOR, bgcolor=BG)
+        return Strip([
+            Segment(" " * pad_left, Style(bgcolor=BG)),
+            Segment(hint, style),
+            Segment(" " * pad_right, Style(bgcolor=BG)),
+        ])
 
     def _render_separator(self, width: int) -> Strip:
         line = "─" * width

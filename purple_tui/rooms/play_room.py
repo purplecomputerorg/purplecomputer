@@ -645,6 +645,7 @@ class PlayMode(Vertical):
         width: 100%;
         height: 100%;
         background: $surface;
+        padding-bottom: 1;
     }
 
     #history-scroll {

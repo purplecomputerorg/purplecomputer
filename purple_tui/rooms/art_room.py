@@ -1157,7 +1157,7 @@ class CanvasHeader(Static):
         else:
             # Write mode: WRITE highlighted, Paint dim
             paint_part = f"[dim]{paint_icon}[/]"
-            write_part = f"[bold]{write_icon}[/]"
+            write_part = f"[{APP_BG_DARK} on #9070C0] {write_icon} [/]"
 
         if self._code_mode:
             return ""
@@ -1240,6 +1240,7 @@ class ArtMode(Container):
         self._repl_panel = None
         self._space_hold_timer = None
         self._space_other_key_pressed = False
+        self._space_hold_fired = False
 
     def compose(self) -> ComposeResult:
         from ..repl_panel import ReplPanel
@@ -1291,6 +1292,7 @@ class ArtMode(Container):
         self._space_hold_timer = None
         if self._space_other_key_pressed:
             return
+        self._space_hold_fired = True
         if self._repl_panel and not self._repl_panel.is_open:
             self._repl_panel.open()
         elif self._repl_panel and self._repl_panel.is_open:
@@ -1302,14 +1304,19 @@ class ArtMode(Container):
         """Route to REPL panel if open, otherwise delegate to canvas."""
         # When REPL is open, route everything there
         if self._repl_panel and self._repl_panel.is_open:
-            # Space hold to close REPL
+            # Space hold to close REPL, short press inserts space
             if isinstance(action, ControlAction) and action.action == 'space':
                 if action.is_down and not action.is_repeat:
                     self._space_other_key_pressed = False
+                    self._space_hold_fired = False
                     self._cancel_space_hold_timer()
                     self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
                 elif not action.is_down:
                     self._cancel_space_hold_timer()
+                    if not self._space_hold_fired:
+                        from ..keyboard import ControlAction as CA
+                        await self._repl_panel.handle_keyboard_action(
+                            CA(action='space', is_down=True, is_repeat=False))
                 return
             self._space_other_key_pressed = True
             result = await self._repl_panel.handle_keyboard_action(action)

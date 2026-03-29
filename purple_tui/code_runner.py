@@ -9,10 +9,19 @@ import asyncio
 import re
 
 
+def _split_clauses(text: str) -> list[str]:
+    """Split text on clause separators: , . ; |
+
+    Returns a list of trimmed, non-empty clauses.
+    """
+    return [s.strip() for s in re.split(r'[,.\;|]', text) if s.strip()]
+
+
 def parse_lines(lines: list[str]) -> list[dict]:
     """Parse lines into a list of commands.
 
     Handles `repeat N` ... `end` blocks (can be nested).
+    Clause separators (, . ; |) split a line into multiple commands.
     Returns a flat list of command dicts with 'type' and params.
     """
     result = []
@@ -30,7 +39,7 @@ def parse_lines(lines: list[str]) -> list[dict]:
             count = int(m.group(1))
             count = max(1, min(count, 100))
             body_text = m.group(2)
-            sub_lines = [s.strip() for s in body_text.split(',') if s.strip()]
+            sub_lines = _split_clauses(body_text)
             body_cmds = parse_lines(sub_lines)
             result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
             continue
@@ -63,7 +72,13 @@ def parse_lines(lines: list[str]) -> list[dict]:
         if re.match(r'^end\s*$', line, re.IGNORECASE):
             continue  # Stray end, ignore
 
-        result.append({'type': 'line', 'text': line})
+        # Split on clause separators for multi-command lines
+        clauses = _split_clauses(line)
+        if len(clauses) > 1:
+            for clause in clauses:
+                result.append({'type': 'line', 'text': clause})
+        else:
+            result.append({'type': 'line', 'text': line})
 
     return result
 

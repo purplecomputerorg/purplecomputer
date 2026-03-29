@@ -912,14 +912,20 @@ class MusicMode(Container, can_focus=True):
         """
         # When REPL panel is open, route everything there
         if self._repl_panel and self._repl_panel.is_open:
-            # Space hold to close REPL
+            # Space hold to close REPL, short press inserts space
             if isinstance(action, ControlAction) and action.action == 'space':
                 if action.is_down and not action.is_repeat:
                     self._space_other_key_pressed = False
+                    self._space_hold_fired = False
                     self._cancel_space_hold_timer()
                     self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
                 elif not action.is_down:
                     self._cancel_space_hold_timer()
+                    if not self._space_hold_fired:
+                        # Short press: insert space in REPL
+                        from ..keyboard import ControlAction as CA
+                        await self._repl_panel.handle_keyboard_action(
+                            CA(action='space', is_down=True, is_repeat=False))
                 return
             # Any other key: mark as pressed (cancels space hold) and route to REPL
             self._space_other_key_pressed = True

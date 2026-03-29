@@ -785,6 +785,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._painted_positions.clear()
         self._cursor_x = 0
         self._cursor_y = 0
+        self._paint_mode = True
+        self._code_mode = False
         self._heading = 'right'
         self._use_heading_cursor = False
         self._last_key_color = "#9b7bc4"
@@ -1260,10 +1262,13 @@ class ArtMode(Container):
             return False
 
     def clear_canvas(self) -> None:
-        """Clear the canvas (start fresh)."""
+        """Clear the canvas and reset to defaults."""
         try:
             canvas = self.query_one("#art-canvas", ArtCanvas)
             canvas._clear_canvas()
+            header = self.query_one("#canvas-header", CanvasHeader)
+            header.update_state(True, "#FFFFFF")
+            header.set_code_mode(False)
         except Exception:
             pass
 

@@ -590,10 +590,17 @@ class MusicMode(Container, can_focus=True):
             self.grid.cleanup_sounds()
 
     def reset_state(self) -> None:
-        """Reset music mode state (colors, loop). Called when leaving mode."""
+        """Reset music mode to defaults (colors, loop, instrument, letters mode)."""
         self._stop_loop()
+        self._instrument_index = 0
+        self._letters_mode = False
         if self.grid:
             self.grid.reset_colors()
+            self.grid.set_instrument(0)
+        if self._header:
+            self._header.update_instrument(INSTRUMENTS[0][1])
+            self._header.update_mode(False)
+            self._header.set_code_mode(False)
 
     # -- Loop station controls -----------------------------------------------
 

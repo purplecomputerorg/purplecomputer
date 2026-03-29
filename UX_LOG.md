@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- All rooms reset to defaults when leaving or clearing: music resets instrument to piano and letters mode off, art resets to paint mode with default color.
 - Code space: title bar hidden (slightly larger font), room headers no longer show "letters off"/"paint on"/"write on" labels (were confusing in code context).
 - Closing code space (via menu X or room switcher) now stops any currently running code, matching Esc behavior.
 - Title bar rebuilt as single render_line widget: room title always centered, indicators always right-aligned to viewport border. Consistent positioning in both normal and code mode. Code panel uses bright purple border, hints panel has light background with "Code to try:" in gutter. "Press Tab for Menu" and "Space: Run" use orange background for visibility. No divider between code editor and hints (gutters touch).

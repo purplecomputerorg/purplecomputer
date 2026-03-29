@@ -547,6 +547,13 @@ class MusicMode(Container, can_focus=True):
         width: 100%;
         height: 1fr;
     }
+
+    #example-hint {
+        dock: bottom;
+        height: 1;
+        text-align: center;
+        color: $text-muted;
+    }
     """
 
     def __init__(self, **kwargs) -> None:
@@ -577,6 +584,7 @@ class MusicMode(Container, can_focus=True):
         yield self._header
         self.grid = MusicGrid()
         yield self.grid
+        yield MusicExampleHint(id="example-hint")
         self._repl_panel = ReplPanel(room="music", id="music-repl")
         yield self._repl_panel
 
@@ -751,18 +759,25 @@ class MusicMode(Container, can_focus=True):
     # -- Hint bar ------------------------------------------------------------
 
     def _update_hint(self) -> None:
-        """Update the REPL panel stub with loop station state."""
-        if not self._repl_panel:
+        """Update the bottom hint bar based on loop station state.
+
+        Text is stored raw (without caps). MusicExampleHint.render()
+        applies caps at render time so it responds to caps changes immediately.
+        """
+        try:
+            hint = self.query_one("#example-hint", MusicExampleHint)
+        except Exception:
             return
         state = self._loop.state
 
         if state == IDLE:
             text = "Try pressing letters and numbers!"
             if getattr(self.app, '_littles_mode', None):
-                self._repl_panel.set_stub_hint(text)
+                hint.set_hint(f"[dim]{text}[/]")
                 return
-            self._repl_panel.set_stub_hint(
-                f"{text}    Space: record a loop    Enter: change instrument")
+            space_hint = "Space: record a loop"
+            enter_hint = "Enter: change instrument"
+            hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
 
         elif state == RECORDING:
             progress = self._loop.recording_progress()
@@ -772,9 +787,13 @@ class MusicMode(Container, can_focus=True):
             bar = "█" * filled + "░" * empty
             secs = int(remaining)
             if remaining <= 5:
-                self._repl_panel.set_stub_hint(f"● Recording  {secs}s left  {bar}  Almost full!")
+                label = f"Recording  {secs}s left"
+                action = "Almost full!"
+                hint.set_hint(f"[bold dark_orange]● {label}[/]  {bar}  [dim]{action}[/]")
             else:
-                self._repl_panel.set_stub_hint(f"● Recording  {secs}s left  {bar}  Space: loop it!")
+                label = f"Recording  {secs}s left"
+                action = "Space: loop it!"
+                hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
 
         elif state == LOOPING:
             progress = self._loop.loop_progress()
@@ -783,8 +802,10 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            self._repl_panel.set_stub_hint(
-                f"● Looping and recording  {bar}  Play on top    Esc: stop")
+            label = "Looping and recording"
+            play = "Play on top"
+            stop = "Esc: stop"
+            hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
 
     # -- Core key handling ---------------------------------------------------
 

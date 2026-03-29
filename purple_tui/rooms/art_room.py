@@ -1230,6 +1230,9 @@ class ArtMode(Container):
         height: 1fr;
     }
 
+    #art-hint-bar {
+        dock: bottom;
+    }
     """
 
     def __init__(self, **kwargs):
@@ -1242,6 +1245,7 @@ class ArtMode(Container):
         from ..repl_panel import ReplPanel
         yield CanvasHeader(id="canvas-header")
         yield ArtCanvas(id="art-canvas")
+        yield ArtHintBar(id="art-hint-bar")
         self._repl_panel = ReplPanel(room="art", id="art-repl")
         yield self._repl_panel
 
@@ -1252,30 +1256,11 @@ class ArtMode(Container):
         # Initialize header (canvas starts in paint mode)
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(True, "#FFFFFF")
-        self._update_art_stub(True)
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
-        self._update_art_stub(event.is_painting)
-
-    def _update_art_stub(self, is_painting: bool) -> None:
-        """Update REPL stub hint with paint/write mode info."""
-        if not self._repl_panel:
-            return
-        if getattr(self.app, '_littles_mode', None):
-            if is_painting:
-                self._repl_panel.set_stub_hint("Hold Space + arrows to paint!")
-            else:
-                self._repl_panel.set_stub_hint("Type to write!")
-        else:
-            if is_painting:
-                self._repl_panel.set_stub_hint(
-                    "Press Tab to switch tools. Hold Space + arrows to paint.")
-            else:
-                self._repl_panel.set_stub_hint(
-                    "Press Tab to switch tools. Type to write.")
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""

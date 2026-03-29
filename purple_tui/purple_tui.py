@@ -769,6 +769,14 @@ class PurpleApp(App):
         # Set system volume to match app volume (default 100%)
         self._apply_volume_system()
 
+        # Set viewport border subtitle for music/art rooms
+        try:
+            viewport = self.query_one("#viewport")
+            if self.active_room in (Room.MUSIC, Room.ART):
+                viewport.border_subtitle = "Hold Space: open code panel"
+        except NoMatches:
+            pass
+
         # Initialize color legend (visible in play mode, hidden otherwise)
         try:
             legend = self.query_one("#paint-legend", ColorLegend)
@@ -1675,6 +1683,16 @@ class PurpleApp(App):
         # Close REPL panel if open
         self._close_repl_panel()
 
+        # Update viewport border subtitle (code panel hint for music/art)
+        try:
+            viewport = self.query_one("#viewport")
+            if new_room in (Room.MUSIC, Room.ART):
+                viewport.border_subtitle = "Hold Space: open code panel"
+            else:
+                viewport.border_subtitle = ""
+        except NoMatches:
+            pass
+
         # Cycle play mode "Try" hint on room switch
         if new_room == Room.PLAY:
             try:
@@ -2204,8 +2222,10 @@ class PurpleApp(App):
         except (NoMatches, Exception):
             pass
         try:
-            from .rooms.art_room import CanvasHeader
+            from .rooms.art_room import CanvasHeader, ArtHintBar
             for h in self.query(CanvasHeader):
+                h.refresh()
+            for h in self.query(ArtHintBar):
                 h.refresh()
         except (NoMatches, Exception):
             pass

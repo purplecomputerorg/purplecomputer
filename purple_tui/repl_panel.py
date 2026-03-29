@@ -67,14 +67,15 @@ class ReplPanelToggleRequested(Message, bubble=True):
 class ReplPanel(Widget):
     """REPL panel for music/art rooms.
 
-    Always visible as a 1-row stub when closed. Expands when opened.
+    Hidden when closed. Expands when opened.
     """
 
     DEFAULT_CSS = """
     ReplPanel {
         dock: bottom;
         width: 100%;
-        height: 1;
+        height: 5;
+        display: none;
     }
     """
 
@@ -88,7 +89,6 @@ class ReplPanel(Widget):
         self._history_scroll = 0  # how far scrolled up from bottom
         self._repeat_stack: list[dict] = []
         self._target_height = DEFAULT_HEIGHT
-        self._stub_hint = ""
         self._autocomplete_matches: list[str] = []
         self._keywords = set(ROOM_KEYWORDS.get(room, []))
 
@@ -98,13 +98,14 @@ class ReplPanel(Widget):
 
     def open(self) -> None:
         self._open = True
+        self.display = True
         self.styles.height = self._target_height
         self.refresh()
 
     def close(self) -> None:
         self._open = False
         self._repeat_stack.clear()
-        self.styles.height = 1
+        self.display = False
         self.refresh()
 
     def _update_height(self) -> None:
@@ -117,12 +118,6 @@ class ReplPanel(Widget):
             self._target_height = DEFAULT_HEIGHT
         self.styles.height = self._target_height
         self.refresh()
-
-    def set_stub_hint(self, text: str) -> None:
-        """Set the hint text (plain, no markup) shown in stub when closed."""
-        self._stub_hint = text
-        if not self._open:
-            self.refresh()
 
     def add_result(self, text: str) -> None:
         """Add a result line to history (called by the app after execution)."""
@@ -177,10 +172,6 @@ class ReplPanel(Widget):
         if width == 0 or height == 0:
             return Strip.blank(width)
 
-        # Stub mode: single row with hint
-        if not self._open:
-            return self._render_stub(width)
-
         # Layout: separator (1 row), history (height-3 rows), blank (1 row), input (1 row)
         separator_row = 0
         input_row = height - 1
@@ -199,52 +190,6 @@ class ReplPanel(Widget):
             return self._render_history_line(history_y, history_rows, width)
         else:
             return Strip([Segment(" " * width, Style(bgcolor=BG))])
-
-    def _render_stub(self, width: int) -> Strip:
-        """Render the 1-row closed state: hint text centered, 'Hold Space' on right."""
-        bar_bg = "#1e1033"
-        hint_style = Style(color="#7a6a9a", bgcolor=bar_bg)
-        bg_style = Style(bgcolor=bar_bg)
-        edge_style = Style(color="#3a2555", bgcolor=bar_bg)
-
-        hint = self._stub_hint or ""
-        # Strip Rich markup for plain text
-        hint_plain = re.sub(r'\[[^\]]*\]', '', hint)
-        hold_text = "Hold Space ▸"
-
-        inner_width = width - 2  # edges
-        # Center the hint, put hold_text at right
-        # If both fit, show both. If not, just center hint.
-        total = len(hint_plain) + len(hold_text) + 4  # 4 for spacing
-        if total <= inner_width and hint_plain:
-            # hint centered, hold_text right-aligned
-            center_pad_left = max(0, (inner_width - len(hint_plain)) // 2)
-            # Place hold_text at the right
-            right_start = inner_width - len(hold_text)
-            # Build: edge + pad + hint + pad + hold_text + edge
-            mid_pad = max(0, right_start - center_pad_left - len(hint_plain))
-            right_pad = 0
-            return Strip([
-                Segment("▕", edge_style),
-                Segment(" " * center_pad_left, bg_style),
-                Segment(hint_plain, hint_style),
-                Segment(" " * mid_pad, bg_style),
-                Segment(hold_text, Style(color="#5a4a7a", bgcolor=bar_bg)),
-                Segment(" " * right_pad, bg_style),
-                Segment("▏", edge_style),
-            ])
-        else:
-            # Just center whatever we have
-            text = hint_plain or hold_text
-            pad_left = max(0, (inner_width - len(text)) // 2)
-            pad_right = max(0, inner_width - len(text) - pad_left)
-            return Strip([
-                Segment("▕", edge_style),
-                Segment(" " * pad_left, bg_style),
-                Segment(text, hint_style),
-                Segment(" " * pad_right, bg_style),
-                Segment("▏", edge_style),
-            ])
 
     def _render_separator(self, width: int) -> Strip:
         line = "─" * width

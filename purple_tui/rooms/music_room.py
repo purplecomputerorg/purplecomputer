@@ -626,7 +626,7 @@ class MusicMode(Container, can_focus=True):
             self.query_one("#noscreen-label")
         except Exception:
             self.mount(Static(
-                "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc: parent menu[/]",
+                f"\n\n{self._NOSCREEN_TEXT}",
                 id="noscreen-label",
             ))
 
@@ -645,13 +645,16 @@ class MusicMode(Container, can_focus=True):
         except Exception:
             pass
 
-    def _noscreen_flash(self, color: str) -> None:
-        """Show a colored circle briefly in no-screen mode."""
+    _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc: parent menu[/]"
+    _NOSCREEN_DOT = "[#9070C0]●[/]"
+
+    def _noscreen_flash(self) -> None:
+        """Show a purple circle briefly in no-screen mode."""
         try:
             label = self.query_one("#noscreen-label", Static)
         except Exception:
             return
-        label.update(f"[{color}]●[/]")
+        label.update(f"{self._NOSCREEN_DOT}\n\n{self._NOSCREEN_TEXT}")
         if self._noscreen_dot_timer is not None:
             self._noscreen_dot_timer.cancel()
         try:
@@ -659,7 +662,7 @@ class MusicMode(Container, can_focus=True):
             def _clear():
                 self._noscreen_dot_timer = None
                 try:
-                    label.update("")
+                    label.update(f"\n\n{self._NOSCREEN_TEXT}")
                 except Exception:
                     pass
             self._noscreen_dot_timer = loop.call_later(0.4, _clear)
@@ -777,8 +780,7 @@ class MusicMode(Container, can_focus=True):
                     if flash:
                         self.grid.flash_note(key)
                     if self._is_noscreen:
-                        color = COLORS[self.grid.color_state[key]]
-                        self._noscreen_flash(color)
+                        self._noscreen_flash()
 
                 # Wait for remaining loop duration
                 elapsed = asyncio.get_event_loop().time() - cycle_start
@@ -1038,7 +1040,6 @@ class MusicMode(Container, can_focus=True):
                 if flash:
                     self.grid.flash_note(lookup)
                 if self._is_noscreen:
-                    color = COLORS[self.grid.color_state[lookup]]
-                    self._noscreen_flash(color)
+                    self._noscreen_flash()
             return
 

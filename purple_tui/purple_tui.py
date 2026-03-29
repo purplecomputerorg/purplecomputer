@@ -540,14 +540,15 @@ class CodeHintsPanel(Widget):
             "end",
         ],
         "music": [
+            "\u2192 starts on marimba",
             "qwerty",
             "fast asdf",
             "slow 12345",
             "",
-            "choose marimba",
+            "choose uke",
             "choose xylophone",
-            "choose ukulele",
             "choose musicbox",
+            "choose marimba",
             "",
             "letters on",
             "cat",
@@ -558,8 +559,13 @@ class CodeHintsPanel(Widget):
             "end",
         ],
         "art": [
+            "\u2192 starts in paint mode",
             "asdfasdf",
-            "\u2192 paints colors!",
+            "",
+            "up 5",
+            "down 3",
+            "left 2",
+            "right 10",
             "",
             "write on",
             "hello world",
@@ -1633,12 +1639,20 @@ class PurpleApp(App):
 
                 def set_inst(name):
                     from .music_constants import INSTRUMENTS
+                    name_lower = name.lower()
+                    # Exact match first, then prefix match
                     for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
-                        if inst_name.lower() == name.lower() or inst_id.lower() == name.lower():
+                        if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
                             music._instrument_index = i
                             if music.grid:
                                 music.grid.set_instrument(i)
-                            break
+                            return
+                    for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
+                        if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
+                            music._instrument_index = i
+                            if music.grid:
+                                music.grid.set_instrument(i)
+                            return
 
                 def set_letters(on):
                     music._letters_mode = on

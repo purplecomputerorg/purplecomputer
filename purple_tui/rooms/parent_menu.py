@@ -428,6 +428,7 @@ class LittlesModeScreen(ModalScreen):
     OPTIONS = [
         (None, "Off", "All rooms, full experience"),
         ("music", "Music", "Every key plays a sound and shows a color"),
+        ("music_noscreen", "No-Screen Music", "Sounds only, screen stays dark"),
         ("art", "Art", "Every key puts color on the canvas"),
     ]
 
@@ -592,7 +593,8 @@ def _get_menu_items() -> list:
     # Littles Mode
     littles = get_littles_mode()
     if littles:
-        littles_label = f"Littles Mode: {littles.title()}"
+        display_names = {"music": "Music", "music_noscreen": "No-Screen Music", "art": "Art"}
+        littles_label = f"Littles Mode: {display_names.get(littles, littles.title())}"
     else:
         littles_label = "Littles Mode: Off"
     items.append(("menu-littles", littles_label))

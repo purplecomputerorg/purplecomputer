@@ -11,7 +11,7 @@ from pathlib import Path
 SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 
 _defaults = {
-    "littles_mode": None,        # None = off, "music" or "art" = locked room
+    "littles_mode": None,        # None = off, "music", "music_noscreen", or "art"
 }
 
 

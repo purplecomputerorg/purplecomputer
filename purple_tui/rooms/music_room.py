@@ -554,6 +554,14 @@ class MusicMode(Container, can_focus=True):
         text-align: center;
         color: $text-muted;
     }
+
+    #noscreen-label {
+        width: 100%;
+        height: 100%;
+        text-align: center;
+        content-align: center middle;
+        color: $text-muted;
+    }
     """
 
     def __init__(self, **kwargs) -> None:
@@ -588,9 +596,53 @@ class MusicMode(Container, can_focus=True):
         self._repl_panel = ReplPanel(room="music", id="music-repl")
         yield self._repl_panel
 
+    @property
+    def _is_noscreen(self) -> bool:
+        return getattr(self.app, '_littles_mode', None) == 'music_noscreen'
+
     def on_mount(self) -> None:
         self.focus()
         self._update_hint()
+        if self._is_noscreen:
+            self._apply_noscreen()
+
+    def _apply_noscreen(self) -> None:
+        """Hide visual elements for no-screen music mode."""
+        if self._header:
+            self._header.display = False
+        if self.grid:
+            self.grid.display = False
+        try:
+            self.query_one("#example-hint").display = False
+        except Exception:
+            pass
+        try:
+            self.query_one("#music-repl").display = False
+        except Exception:
+            pass
+        # Show minimal centered message (if not already mounted)
+        try:
+            self.query_one("#noscreen-label")
+        except Exception:
+            self.mount(Static(
+                "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc: parent menu[/]",
+                id="noscreen-label",
+            ))
+
+    def _restore_screen(self) -> None:
+        """Restore visual elements after leaving no-screen mode."""
+        if self._header:
+            self._header.display = True
+        if self.grid:
+            self.grid.display = True
+        try:
+            self.query_one("#example-hint").display = True
+        except Exception:
+            pass
+        try:
+            self.query_one("#noscreen-label").remove()
+        except Exception:
+            pass
 
     def on_unmount(self) -> None:
         self._stop_loop()

@@ -2,6 +2,9 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Littles Mode: added "No-Screen Music" option. Screen stays dark with minimal text, keys still play sounds. For kids who should focus on the sounds, not the screen.
+- "Try" hints now cycle on Enter instead of Tab. Removed "Tab: more hints" text.
+- REPL code panel: removed letters on/off, paint on/off, write on/off keywords (now controlled via Tab).
 - REPL panel (music/art) now uses the same input widgets as Play room: "Code \u2192" prompt, keyword underlining, tab completion, recall hint (Enter to try again), and cycling Try hints. Tab completes keywords or falls through to mode switch (music/letters, paint/write). Single-line repeat syntax: `repeat 3 forward 10, turn right`.
 - Removed Code Space (multi-line editor with font switching). Play room now supports `repeat N`/`end` blocks directly in the prompt. Music and Art rooms get a REPL overlay panel (hold Space ~0.5s to toggle). Enter runs each command live. No font changes.
 - All rooms reset to defaults when leaving or clearing: music resets instrument to piano and letters mode off, art resets to paint mode with default color.

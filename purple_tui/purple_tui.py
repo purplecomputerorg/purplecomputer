@@ -761,7 +761,7 @@ class PurpleApp(App):
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
-            room_map = {"music": Room.MUSIC, "art": Room.ART}
+            room_map = {"music": Room.MUSIC, "music_noscreen": Room.MUSIC, "art": Room.ART}
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
 
         self._load_room_content()
@@ -2204,7 +2204,7 @@ class PurpleApp(App):
 
         if mode:
             # Switch to the locked room
-            room_map = {"music": ROOM_MUSIC[0], "art": ROOM_ART[0]}
+            room_map = {"music": ROOM_MUSIC[0], "music_noscreen": ROOM_MUSIC[0], "art": ROOM_ART[0]}
             room_name = room_map.get(mode, ROOM_MUSIC[0])
             self.action_switch_room(room_name)
 
@@ -2221,6 +2221,17 @@ class PurpleApp(App):
                 indicator.display = True
             except NoMatches:
                 pass
+
+        # Apply no-screen music mode or restore normal music UI
+        try:
+            from .rooms.music_room import MusicMode
+            for m in self.query(MusicMode):
+                if mode == 'music_noscreen':
+                    m._apply_noscreen()
+                else:
+                    m._restore_screen()
+        except (NoMatches, Exception):
+            pass
 
         # Refresh headers/hints so they pick up the new littles state
         try:

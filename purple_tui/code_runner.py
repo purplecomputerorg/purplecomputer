@@ -24,7 +24,18 @@ def parse_lines(lines: list[str]) -> list[dict]:
         if not line:
             continue
 
-        # repeat N
+        # Single-line repeat: repeat N cmd1, cmd2, ...
+        m = re.match(r'^repeat\s+(\d+)\s+(.+)$', line, re.IGNORECASE)
+        if m:
+            count = int(m.group(1))
+            count = max(1, min(count, 100))
+            body_text = m.group(2)
+            sub_lines = [s.strip() for s in body_text.split(',') if s.strip()]
+            body_cmds = parse_lines(sub_lines)
+            result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
+            continue
+
+        # Multiline repeat N ... end (used by play room)
         m = re.match(r'^repeat\s+(\d+)\s*$', line, re.IGNORECASE)
         if m:
             count = int(m.group(1))

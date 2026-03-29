@@ -28,14 +28,16 @@ from textual.strip import Strip
 from rich.markup import escape as rich_escape
 from rich.segment import Segment
 from rich.style import Style
-from rich.highlighter import Highlighter
-from rich.text import Text
 import re
 
 from ..constants import ICON_ROBOT
 from ..content import singularize
 
 from ..content import get_content
+from ..code_input import (
+    WordHighlighter, CodeInput, InputPrompt,
+    AutocompleteHint, RecallHint, ExampleHint,
+)
 from ..keyboard import (
     SHIFT_MAP, KeyRepeatSuppressor,
     CharacterAction, NavigationAction, ControlAction,
@@ -358,273 +360,63 @@ class ColorResultLine(Widget):
         return "#000000" if luminance > 0.5 else "#FFFFFF"
 
 
-class ValidWordHighlighter(Highlighter):
-    """Underlines valid emoji and color words as user types."""
-
-    def highlight(self, text: Text) -> None:
-        content = get_content()
-        plain = str(text).lower()
-        for match in re.finditer(r'[a-z]+', plain):
-            if content.is_valid_word(match.group()):
-                text.stylize("underline", match.start(), match.end())
+def _play_validator(word: str) -> bool:
+    """Check if a word is a valid emoji or color name."""
+    return get_content().is_valid_word(word)
 
 
-class InlineInput(Input):
-    """
-    Inline input widget that appears after Ask: prompt.
-    """
+def _play_autocomplete(last_word: str) -> list[tuple[str, str, str]]:
+    """Search emoji/color words for autocomplete suggestions."""
+    content = get_content()
+    # Include exact match as first result if valid
+    if content.is_valid_word(last_word):
+        emoji = content.get_emoji(last_word) or ""
+        color = content.get_color(last_word) or ""
+        return [(last_word, color, emoji)]
+    return [(w, c, e) for w, c, e in content.search_words(last_word)]
+
+
+class InlineInput(CodeInput):
+    """Play room input: emoji/color autocomplete with math mode."""
 
     class Submitted(Message, bubble=True):
-        """Message sent when user presses Enter"""
+        """Message sent when user presses Enter."""
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
 
-    # Display math operators as clearer Unicode versions (not emoji, so they inherit text color)
-    # Only substitute * and / since + and - are already clear
-    MATH_DISPLAY = {
-        '*': '×',   # Multiplication sign U+00D7
-        '/': '÷',   # Division sign U+00F7
-    }
-
-    # Math operators that get auto-spaced for readability (e.g., "5+3" becomes "5 + 3")
-    MATH_OPERATORS = {'+', '-', '*', '/'}
-
     def __init__(self, **kwargs):
-        super().__init__(placeholder="", highlighter=ValidWordHighlighter(), **kwargs)
-        self.autocomplete_matches: list[tuple[str, str]] = []  # [(word, emoji/hex), ...]
-        self.autocomplete_type: str = "emoji"  # "emoji" or "color"
-        self.autocomplete_index: int = 0
-        self.exact_match_display: str = ""  # emoji/color hint for exact word matches
+        super().__init__(
+            highlighter=WordHighlighter(_play_validator),
+            autocomplete_fn=_play_autocomplete,
+            math_mode=True,
+            **kwargs,
+        )
         self._repeat_suppressor = KeyRepeatSuppressor()
 
     def action_scroll_up(self) -> None:
-        """Scroll the history up"""
         try:
             scroll_widget(self.app.query_one("#history-scroll"), -1)
         except Exception:
             pass
 
     def action_scroll_down(self) -> None:
-        """Scroll the history down"""
         try:
             scroll_widget(self.app.query_one("#history-scroll"), 1)
         except Exception:
             pass
 
-    async def _on_key(self, event: events.Key) -> None:
-        """Suppress terminal key events. All input comes via evdev/handle_keyboard_action()."""
-        # Purple Computer uses evdev for keyboard input, bypassing the terminal.
-        # This handler suppresses any terminal key events to avoid duplicate processing.
-        # See handle_keyboard_action() in PlayMode for the actual input handling.
-        event.stop()
-        event.prevent_default()
 
-    def _check_autocomplete(self) -> None:
-        """Check if current input should show autocomplete for colors and/or emojis.
-
-        Colors and emojis can both appear in expressions like "cat + red" or "red + blue",
-        so we search both and combine results, prioritizing exact matches.
-        """
-        content = get_content()
-        text = self.value.lower().strip()
-
-        # Common 2-letter words that shouldn't trigger autocomplete
-        COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if',
-                        'in', 'is', 'it', 'me', 'my', 'no', 'of', 'on', 'or', 'so',
-                        'to', 'up', 'us', 'we', 'hi', 'oh', 'ok'}
-
-        # Find the last word being typed (sequence of letters at the end)
-        match = re.search(r'([a-z]+)$', text)
-        last_word = match.group(1) if match else ""
-        if len(last_word) < 2 or last_word in COMMON_2CHAR:
-            self.autocomplete_matches = []
-            self.autocomplete_type = "emoji"
-            self.autocomplete_index = 0
-            self.exact_match_display = ""
-            return
-
-        # If exact match exists, show its emoji/color as confirmation (no arrow hint)
-        if content.is_valid_word(last_word):
-            self.autocomplete_matches = []
-            self.autocomplete_type = "emoji"
-            self.autocomplete_index = 0
-            emoji = content.get_emoji(last_word)
-            color = content.get_color(last_word)
-            parts = []
-            if emoji:
-                parts.append(emoji)
-            if color:
-                parts.append(f"[{color}]██[/]")
-            self.exact_match_display = " ".join(parts)
-            return
-        self.exact_match_display = ""
-
-        # Search words (unified, ranked by kid-likelihood)
-        combined = [
-            (w, c, e) for w, c, e in content.search_words(last_word) if w != last_word
-        ]
-
-        # Limit to 5 total suggestions
-        combined = combined[:5]
-
-        if not combined:
-            self.autocomplete_matches = []
-            self.autocomplete_type = "emoji"
-            self.autocomplete_index = 0
-            self.exact_match_display = ""
-            return
-
-        # Store matches as (word, color_hex, emoji) tuples
-        has_colors = any(c for _, c, _ in combined)
-        has_emojis = any(e for _, _, e in combined)
-
-        self.autocomplete_matches = combined
-        self.autocomplete_type = "mixed" if (has_colors and has_emojis) else ("color" if has_colors else "emoji")
-        self.autocomplete_index = 0
-
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Update autocomplete suggestions as user types"""
-        self._check_autocomplete()
-
-    @property
-    def autocomplete_hint(self) -> str:
-        """Get the autocomplete hint to display. Shows up to 5 options.
-
-        Handles colors (shown as colored blocks) and emojis.
-        Overlapping words (both color and emoji) show as: word [color] emoji
-        When an exact match is typed, shows just the emoji/color as confirmation.
-        """
-        # Exact match: show emoji/color confirmation (no arrow hint)
-        if self.exact_match_display:
-            return self.exact_match_display
-
-        if not self.autocomplete_matches:
-            return ""
-
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-
-        # Show up to 5 matches
-        shown = self.autocomplete_matches[:5]
-        parts = []
-
-        for word, color_hex, emoji in shown:
-            # Build display: word emoji? [color]?
-            display = f"[dim]{caps(word)}[/]"
-            if emoji:
-                display += f" {emoji}"
-            if color_hex:
-                display += f" [{color_hex}]██[/]"
-            parts.append(display)
-
-        hint = "   ".join(parts)
-        return caps(f"{hint}   [dim]󰌒 Tab[/]")
-
-
-class InputPrompt(Static):
-    """Shows 'Ask →' prompt with input area"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-        self._block_depth = 0
-
-    def set_block_depth(self, depth: int) -> None:
-        self._block_depth = depth
-        self.refresh()
-
-    def render(self) -> str:
-        if self._block_depth > 0:
-            dots = "·" * self._block_depth
-            return f"[bold #9b7bc4]{dots}··[/]"
-        text = self.app.caps_text("Ask") if hasattr(self.app, 'caps_text') else "Ask"
-        return f"[bold #c4a0e8]{text} →[/]"
-
-
-class AutocompleteHint(Static):
-    """Shows autocomplete suggestion and help hints"""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-
-
-class RecallHint(Static):
-    """Shows 'Enter to try again' hint below the input when input is empty and there's a previous command."""
-
-    MAX_RECALL_LEN = 40
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-        self._last_command: str = ""
-        self._visible = False
-
-    def set_last_command(self, command: str) -> None:
-        self._last_command = command
-
-    def show_if_empty(self, input_empty: bool) -> None:
-        self._visible = input_empty and bool(self._last_command)
-        self.refresh()
-
-    def render(self) -> str:
-        if not self._visible or not self._last_command:
-            return ""
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        display = self._last_command
-        if len(display) > self.MAX_RECALL_LEN:
-            display = display[:self.MAX_RECALL_LEN - 1] + "…"
-        return f"[dim]{caps(f'Enter to try again: {display}')}[/]"
-
-
-class ExampleHint(Static):
-    """Shows cycling 'Try' hints at the bottom of play mode."""
-
-    HINTS = [
-        "Try: cat  •  5 + 3  •  red + blue",
-        "Try: 12 x 12 dinos  •  light red dog",
-        "Try: asdfghjkl  •  hello there!  (add ! to speak out loud)",
-        "Try: 5 sharks...  •  say 2 carrots + 5 broccoli",
-        "Try: dark green frog  •  20 19 18 17 16 15...",
-        "Try: red + yellow  •  cat times 3  •  100",
-        "Try: say 582  •  bright blue whale!",
-        "Try: 3 dogs + 2 cats  •  red + 2 blues",
-    ]
-
-    CYCLE_SECONDS = 60
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
-        self._hint_index = 0
-        self._show_tab_hint = True
-
-    def on_mount(self) -> None:
-        self.set_interval(self.CYCLE_SECONDS, self._next_hint)
-
-    def _next_hint(self) -> None:
-        self._hint_index = (self._hint_index + 1) % len(self.HINTS)
-        self.refresh()
-
-    def advance(self) -> None:
-        """Manually advance to next hint (called on Tab)."""
-        self._next_hint()
-
-    def set_tab_hint_visible(self, visible: bool) -> None:
-        """Show or hide the 'Tab: more hints' suffix."""
-        if self._show_tab_hint != visible:
-            self._show_tab_hint = visible
-            self.refresh()
-
-    def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        hint = self.HINTS[self._hint_index]
-        tab_text = "     Tab: more hints"
-        if self._show_tab_hint:
-            return f"[dim]{caps(hint + tab_text)}[/]"
-        else:
-            # Keep same-width spacing so center-aligned text doesn't shift
-            return f"[dim]{caps(hint)}[/]{' ' * len(tab_text)}"
+PLAY_HINTS = [
+    "Try: cat  \u2022  5 + 3  \u2022  red + blue",
+    "Try: 12 x 12 dinos  \u2022  light red dog",
+    "Try: asdfghjkl  \u2022  hello there!  (add ! to speak out loud)",
+    "Try: 5 sharks...  \u2022  say 2 carrots + 5 broccoli",
+    "Try: dark green frog  \u2022  20 19 18 17 16 15...",
+    "Try: red + yellow  \u2022  cat times 3  \u2022  100",
+    "Try: say 582  \u2022  bright blue whale!",
+    "Try: 3 dogs + 2 cats  \u2022  red + 2 blues",
+]
 
 
 class ExpressionEvaluated(Message, bubble=True):
@@ -738,7 +530,7 @@ class PlayMode(Vertical):
                 yield InlineInput(id="play-input")
             yield RecallHint(id="play-recall-hint")
             yield AutocompleteHint(id="autocomplete-hint")
-            yield ExampleHint(id="play-example-hint")
+            yield ExampleHint(hints=PLAY_HINTS, id="play-example-hint")
 
     def on_mount(self) -> None:
         """Focus the input when mode loads"""

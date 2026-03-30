@@ -19,10 +19,10 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
-    'music': ['choose', 'instrument', 'fast', 'slow',
+    'music': ['choose', 'instrument', 'fast', 'slow', 'letters',
               'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'musicbox'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step',
-            'turn', 'color', 'lift', 'pen', 'penup', 'pendown',
+            'turn', 'color', 'paint', 'write', 'lift', 'pen', 'penup', 'pendown',
             'repeat', 'end'],
 }
 
@@ -32,6 +32,9 @@ ROOM_HINTS: dict[str, list[str]] = {
         "Try: fast qwertyuiop  \u2022  slow asdf",
         "Try: repeat 3 abcdefg  \u2022  choose musicbox",
         "Try: choose xylophone  \u2022  choose marimba",
+        "Try: repeat 4 cdefgagf  \u2022  fast abcdefg",
+        "Try: slow cdefga  \u2022  letters on",
+        "Try: fast repeat 2 cdefgagf  \u2022  choose ukulele",
     ],
     'art': [
         "Try: forward 10  \u2022  turn right",
@@ -41,6 +44,10 @@ ROOM_HINTS: dict[str, list[str]] = {
         "Try: color red, go 10  \u2022  color blue, go 5",
         "Try: lift, go 5, lift, go 5",
         "Try: turn down  \u2022  turn around  \u2022  turn 90",
+        "Try: paint on, color green, forward 15",
+        "Try: write on, hello world",
+        "Try: repeat 4 color red, go 5, turn right",
+        "Try: color purple, repeat 8 go 3, turn right",
     ],
 }
 

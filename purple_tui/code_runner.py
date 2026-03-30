@@ -295,28 +295,35 @@ class ArtCodeRunner:
                 m = re.match(r'^paint\s+(on|off)\s*$', text, re.IGNORECASE)
                 if m:
                     paint_on = m.group(1).lower() == 'on'
+                    if paint_on:
+                        write_on = False
+                    self.canvas._set_paint_mode(paint_on)
                     continue
 
                 # write on/off
                 m = re.match(r'^write\s+(on|off)\s*$', text, re.IGNORECASE)
                 if m:
                     write_on = m.group(1).lower() == 'on'
+                    if write_on:
+                        paint_on = False
+                    self.canvas._set_paint_mode(not write_on)
                     continue
 
-                # color <name> or color <key> (set brush color)
+                # color <name> or color <key> (set brush color, switch to paint mode)
                 m = re.match(r'^color\s+(\S+)\s*$', text, re.IGNORECASE)
                 if m:
                     color_arg = m.group(1).lower()
-                    # Try named color first (red, blue, etc.)
                     content = get_content()
                     hex_color = content.get_color(color_arg)
                     if not hex_color:
-                        # Try as a key mapping (t, f, etc.)
                         candidate = get_key_color(color_arg)
                         if candidate != "#AAAAAA":
                             hex_color = candidate
                     if hex_color:
                         self.canvas._last_key_color = hex_color
+                        self.canvas._set_paint_mode(True)
+                        paint_on = True
+                        write_on = False
                         self.canvas._mark_cursor_dirty()
                         self.canvas.refresh()
                     continue

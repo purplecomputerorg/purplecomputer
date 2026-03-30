@@ -324,10 +324,15 @@ class ArtCanvas(Widget, can_focus=True):
 
     def _toggle_paint_mode(self) -> None:
         """Toggle between paint mode and text mode."""
-        self._paint_mode = not self._paint_mode
-        self._space_down = False  # Reset brush state on mode change
+        self._set_paint_mode(not self._paint_mode)
 
-        # Cursor ring changes between modes, so mark cursor area dirty
+    def _set_paint_mode(self, painting: bool) -> None:
+        """Set paint mode explicitly."""
+        if self._paint_mode == painting:
+            return
+        self._paint_mode = painting
+        self._space_down = False
+
         self._mark_cursor_dirty()
         self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
         self.refresh()

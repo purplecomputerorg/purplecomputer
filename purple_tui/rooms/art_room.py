@@ -57,6 +57,18 @@ GRAYSCALE = {
 # Brush character for painting
 BRUSH_CHAR = "█"
 
+
+def _visible_arrow_color(fg_hex: str, bg_hex: str) -> str:
+    """Return fg_hex if it contrasts enough with bg, otherwise black or white."""
+    fr, fg, fb = hex_to_rgb(fg_hex)
+    br, bg_, bb = hex_to_rgb(bg_hex)
+    # Perceived luminance difference (0-1 scale)
+    fl = (0.299 * fr + 0.587 * fg + 0.114 * fb) / 255
+    bl = (0.299 * br + 0.587 * bg_ + 0.114 * bb) / 255
+    if abs(fl - bl) > 0.25:
+        return fg_hex
+    return "#000000" if bl > 0.5 else "#FFFFFF"
+
 # Heading indicator: arrow char + offset from cursor center
 HEADING_ARROWS = {
     'right': ("▶", (1, 0)),
@@ -545,7 +557,8 @@ class ArtCanvas(Widget, can_focus=True):
 
                     if heading_arrow:
                         bg = cell[2] if cell else (self._get_gutter_bg(x, y) if in_gutter else default_bg)
-                        char_out, style_out = heading_arrow, Style(color=last_key_color, bgcolor=bg, bold=True)
+                        arrow_fg = _visible_arrow_color(last_key_color, bg)
+                        char_out, style_out = heading_arrow, Style(color=arrow_fg, bgcolor=bg, bold=True)
                     else:
                         box_char = BOX_CHARS.get((dx, dy), "·")
                         is_corner = (dx, dy) in CORNER_POSITIONS
@@ -582,8 +595,9 @@ class ArtCanvas(Widget, can_focus=True):
                 if cursor_visible:
                     arrow_char, _ = HEADING_ARROWS[self._heading]
                     bg = cell[2] if cell else default_bg
+                    arrow_fg = _visible_arrow_color("#FFFFFF", bg)
                     char_out = arrow_char
-                    style_out = Style(color="#FFFFFF", bgcolor=bg, bold=True)
+                    style_out = Style(color=arrow_fg, bgcolor=bg, bold=True)
                 else:
                     if cell:
                         char, fg_color, bg_color = cell

@@ -150,10 +150,11 @@ class ReplPanel(Vertical):
     }
 
     #repl-recall-hint {
-        margin-left: 7;
+        margin-left: 0;
     }
 
     #repl-autocomplete-hint {
+        margin-left: 0;
     }
     """
 

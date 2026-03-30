@@ -1367,26 +1367,23 @@ class ArtMode(Container):
                 return
             if action.is_down and not action.is_repeat:
                 if not action.arrow_held:
+                    # Buffer space: don't pass through until we know tap vs hold
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
-                    if canvas._paint_mode:
-                        # Paint mode: pass through immediately for painting
-                        await canvas.handle_keyboard_action(action)
-                    # Write mode: buffer space, send on tap only
                     return
                 # Arrow held: pass through for painting (no REPL toggle)
                 await canvas.handle_keyboard_action(action)
                 return
             elif action.is_down and action.is_repeat:
-                if not canvas._paint_mode and self._space_hold.is_pending:
-                    # Write mode: suppress repeats while hold timer is pending
+                if self._space_hold.is_pending:
+                    # Suppress repeats while hold timer is pending
                     return
-                # Paint mode or no pending hold: pass through
+                # No pending hold: pass through
                 await canvas.handle_keyboard_action(action)
                 return
             elif not action.is_down:
                 tapped = self._space_hold.on_up()
-                if tapped and not canvas._paint_mode:
-                    # Write mode tap: send the buffered space-down
+                if tapped:
+                    # Quick tap: send space-down then space-up to canvas
                     await canvas.handle_keyboard_action(
                         ControlAction(action='space', is_down=True, is_repeat=False))
                 # Pass through up event to canvas (releases paint brush etc.)
@@ -1394,9 +1391,9 @@ class ArtMode(Container):
                 return
             return
 
-        # Another key while space is pending: flush space as a tap in write mode
+        # Another key while space is pending: flush space as a tap
         canvas = self.query_one("#art-canvas", ArtCanvas)
-        if self._space_hold.on_other_key() and not canvas._paint_mode:
+        if self._space_hold.on_other_key():
             await canvas.handle_keyboard_action(
                 ControlAction(action='space', is_down=True, is_repeat=False))
 

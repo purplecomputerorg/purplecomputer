@@ -6,6 +6,7 @@ Brief descriptions of user experience changes, newest first.
 - Art room: "lift" toggles pen up/down. "pen up"/"penup" and "pen down"/"pendown" for explicit control.
 - Art room: color autocomplete shows named colors after typing "color " in REPL.
 - Art room: brush color persists across paint commands (typing "t" then "forward 5" paints in t's color).
+- Code panel: viewport no longer shifts up by 1 row when opening (viewport growth now matches freed indicator space).
 - All rooms: commands on a single line (e.g. "turn right turn right") are now split and executed individually; one failing command no longer breaks the rest.
 - Art room: cursor stops at canvas edges instead of wrapping to the other side (typing, painting, and code mode).
 - Art room: paint mode in code follows heading direction (turn down, then paint chars go downward).

@@ -416,6 +416,12 @@ PLAY_HINTS = [
     "Try: red + yellow  \u2022  cat times 3  \u2022  100",
     "Try: say 582  \u2022  bright blue whale!",
     "Try: 3 dogs + 2 cats  \u2022  red + 2 blues",
+    "Try: neon pink  \u2022  (2 + 3) x 4  \u2022  pale lavender",
+    "Try: 2 4 6 8...  \u2022  deep purple butterfly",
+    "Try: red + yellow + blue  \u2022  muted teal",
+    "Try: 1000  \u2022  vivid orange fish!  \u2022  soft green",
+    "Try: say red plus blue  \u2022  10 cats...  \u2022  cool blue",
+    "Try: rich gold  \u2022  5 x 5 apples  \u2022  warm red",
 ]
 
 

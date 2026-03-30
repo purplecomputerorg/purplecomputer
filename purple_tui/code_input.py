@@ -102,7 +102,7 @@ class CodeInput(Input):
             self.exact_match_display = ""
             return
 
-        results = self._autocomplete_fn(last_word)
+        results = self._autocomplete_fn(last_word, text)
 
         # Separate exact matches from suggestions
         exact = [r for r in results if r[0] == last_word]

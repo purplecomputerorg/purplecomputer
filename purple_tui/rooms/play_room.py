@@ -365,7 +365,7 @@ def _play_validator(word: str) -> bool:
     return get_content().is_valid_word(word)
 
 
-def _play_autocomplete(last_word: str) -> list[tuple[str, str, str]]:
+def _play_autocomplete(last_word: str, full_text: str = "") -> list[tuple[str, str, str]]:
     """Search emoji/color words for autocomplete suggestions."""
     content = get_content()
     # Include exact match as first result if valid

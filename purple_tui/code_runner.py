@@ -9,6 +9,9 @@ import asyncio
 import logging
 import re
 
+from .content import get_content
+from .rooms.art_room import get_key_color
+
 log = logging.getLogger(__name__)
 
 
@@ -23,7 +26,7 @@ def _split_clauses(text: str) -> list[str]:
 # Command keywords that start a new command when found mid-line.
 # Order matters: longer prefixes first so "turn" matches before single words.
 _COMMAND_STARTS = re.compile(
-    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|choose|instrument|letters|fast|slow|repeat)\b)',
+    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|instrument|letters|fast|slow|repeat)\b)',
     re.IGNORECASE,
 )
 
@@ -258,9 +261,10 @@ class MusicCodeRunner:
 class ArtCodeRunner:
     """Run code in the Art room context.
 
-    Movement: left N, right N, up N, down N, forward/go/move N
+    Movement: left N, right N, up N, down N, forward/go/move/walk/step N
     Turning: turn left/right/up/down/back/backward/around/90/180/270/360
-    Drawing: paint on/off, write on/off
+    Drawing: paint on/off, write on/off, lift (toggle), pen up, pen down
+    Color: color <name> (red, blue, etc.) or color <key> (t, f, etc.)
     Text in write mode: characters typed at cursor position
     """
 
@@ -297,6 +301,37 @@ class ArtCodeRunner:
                 m = re.match(r'^write\s+(on|off)\s*$', text, re.IGNORECASE)
                 if m:
                     write_on = m.group(1).lower() == 'on'
+                    continue
+
+                # color <name> or color <key> (set brush color)
+                m = re.match(r'^color\s+(\S+)\s*$', text, re.IGNORECASE)
+                if m:
+                    color_arg = m.group(1).lower()
+                    # Try named color first (red, blue, etc.)
+                    content = get_content()
+                    hex_color = content.get_color(color_arg)
+                    if not hex_color:
+                        # Try as a key mapping (t, f, etc.)
+                        candidate = get_key_color(color_arg)
+                        if candidate != "#AAAAAA":
+                            hex_color = candidate
+                    if hex_color:
+                        self.canvas._last_key_color = hex_color
+                        self.canvas._mark_cursor_dirty()
+                        self.canvas.refresh()
+                    continue
+
+                # lift (toggle pen), pen up/penup, pen down/pendown
+                if re.match(r'^lift\s*$', text, re.IGNORECASE):
+                    paint_on = not paint_on
+                    continue
+
+                if re.match(r'^(?:pen\s*up|penup)\s*$', text, re.IGNORECASE):
+                    paint_on = False
+                    continue
+
+                if re.match(r'^(?:pen\s*down|pendown)\s*$', text, re.IGNORECASE):
+                    paint_on = True
                     continue
 
                 # turn left/right/up/down/back/backward/around/90/180/270/360
@@ -346,16 +381,14 @@ class ArtCodeRunner:
                 # Unrecognized text: paint colored blocks or type text
                 if paint_on:
                     # Paint mode: each character stamps its key color as a block.
-                    # Save/restore brush color so typed letters don't change state.
+                    # Color state persists (last typed key's color sticks).
                     heading = self.canvas._heading
-                    saved_color = self.canvas._last_key_color
                     for ch in text:
                         if ch == ' ':
                             self.canvas.type_char(ch, direction=heading)
                         else:
                             self.canvas.paint_char(ch, direction=heading)
                         await asyncio.sleep(0.02)
-                    self.canvas._last_key_color = saved_color
                 else:
                     # No paint, no write: type text at cursor
                     for ch in text:

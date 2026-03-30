@@ -966,6 +966,11 @@ class MusicMode(Container, can_focus=True):
 
         if isinstance(action, ControlAction):
             if action.action == 'space':
+                # After hold fired (panel just opened/closed), suppress until release
+                if self._space_hold.fired:
+                    if not action.is_down:
+                        self._space_hold.on_up()
+                    return
                 if action.is_down and not action.is_repeat:
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:

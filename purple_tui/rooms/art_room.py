@@ -1355,6 +1355,11 @@ class ArtMode(Container):
         # Check for space hold to open REPL
         if isinstance(action, ControlAction) and action.action == 'space':
             canvas = self.query_one("#art-canvas", ArtCanvas)
+            # After hold fired (panel just opened/closed), suppress until release
+            if self._space_hold.fired:
+                if not action.is_down:
+                    self._space_hold.on_up()
+                return
             if action.is_down and not action.is_repeat:
                 if not action.arrow_held:
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)

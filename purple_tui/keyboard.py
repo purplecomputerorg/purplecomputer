@@ -396,8 +396,14 @@ class HoldOrTap:
         was_pending = self._pending
         self._pending = False
         if self._hold_fired:
+            self._hold_fired = False  # Reset so next press cycle starts clean
             return False
         return was_pending
+
+    @property
+    def fired(self) -> bool:
+        """True after hold fired, until key is released. Use to suppress repeats."""
+        return self._hold_fired
 
     def on_other_key(self) -> bool:
         """Call when any other key is pressed.

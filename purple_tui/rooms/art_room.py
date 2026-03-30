@@ -57,13 +57,12 @@ GRAYSCALE = {
 # Brush character for painting
 BRUSH_CHAR = "█"
 
-# Code mode cursor (single-width smiley, or directional when using turn/forward)
-CODE_CURSOR_CHAR = "●"
-HEADING_CURSORS = {
-    'right': "▶",
-    'left': "◀",
-    'up': "▲",
-    'down': "▼",
+# Heading indicator: arrow char + offset from cursor center
+HEADING_ARROWS = {
+    'right': ("▶", (1, 0)),
+    'left': ("◀", (-1, 0)),
+    'up': ("▲", (0, -1)),
+    'down': ("▼", (0, 1)),
 }
 
 # Box-drawing characters for cursor border
@@ -334,10 +333,14 @@ class ArtCanvas(Widget, can_focus=True):
         self.refresh()
 
     def set_code_mode(self, code_mode: bool) -> None:
-        """Toggle code mode cursor (smiley instead of ring)."""
+        """Toggle code mode cursor."""
         self._code_mode = code_mode
+        if code_mode:
+            self._use_heading_cursor = True
+            self._heading = 'right'
+        else:
+            self._use_heading_cursor = False
         self._mark_cursor_dirty()
-        # In code mode with no text under cursor, don't blink
         self._update_blink_for_code_mode()
         self.refresh()
 
@@ -466,7 +469,6 @@ class ArtCanvas(Widget, can_focus=True):
         grid = self._grid
         painted = self._painted_positions
         paint_mode = self._paint_mode
-        code_mode = self._code_mode
         cursor_visible = self._cursor_visible
         last_key_color = self._last_key_color
 
@@ -484,40 +486,26 @@ class ArtCanvas(Widget, can_focus=True):
             if near_cursor:
                 dx = x - cursor_screen_x
                 is_cursor_center = (dx == 0 and dy == 0)
-                is_brush_ring = (paint_mode and not code_mode and
+                is_brush_ring = (paint_mode and
                                  abs(dx) <= 1 and
                                  not is_cursor_center)
+                # Write mode heading indicator: arrow one cell from cursor
+                heading_info = HEADING_ARROWS.get(self._heading)
+                is_write_heading = (not paint_mode and
+                                    self._use_heading_cursor and
+                                    heading_info is not None and
+                                    (dx, dy) == heading_info[1] and
+                                    not is_cursor_center)
             else:
                 is_cursor_center = False
                 is_brush_ring = False
+                is_write_heading = False
 
             cell = None if in_gutter else grid.get((content_x, content_y))
 
             if is_cursor_center and not in_gutter:
                 flush_run()
-                if code_mode:
-                    # Code mode: directional arrow if using turn/forward, dot otherwise
-                    if cursor_visible:
-                        bg = cell[2] if cell else default_bg
-                        if self._use_heading_cursor:
-                            char_out = HEADING_CURSORS.get(self._heading, CODE_CURSOR_CHAR)
-                        else:
-                            char_out = CODE_CURSOR_CHAR
-                        # Use current paint color in paint mode, white in write mode
-                        if paint_mode:
-                            cursor_fg = self._last_key_color or "#FFFFFF"
-                        else:
-                            cursor_fg = "#FFFFFF"
-                        style_out = Style(color=cursor_fg, bgcolor=bg, bold=True)
-                    else:
-                        if cell:
-                            char, fg_color, bg_color = cell
-                            if char != BRUSH_CHAR:
-                                fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                            char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
-                        else:
-                            char_out, style_out = " ", Style(bgcolor=default_bg)
-                elif paint_mode:
+                if paint_mode:
                     if cell:
                         char, fg_color, bg_color = cell
                         if char != BRUSH_CHAR:
@@ -543,20 +531,31 @@ class ArtCanvas(Widget, can_focus=True):
             if is_brush_ring:
                 flush_run()
                 if cursor_visible:
-                    box_char = BOX_CHARS.get((dx, dy), "·")
-                    is_corner = (dx, dy) in CORNER_POSITIONS
-                    ring_fg = corner_fg if is_corner else last_key_color
+                    # Check if this ring cell should show a heading arrow
+                    heading_arrow = None
+                    if self._use_heading_cursor:
+                        h_info = HEADING_ARROWS.get(self._heading)
+                        if h_info and (dx, dy) == h_info[1]:
+                            heading_arrow = h_info[0]
 
-                    if cell:
-                        char, fg_color, bg_color = cell
-                        if char not in (" ", BRUSH_CHAR, ""):
-                            tfg = self._contrast_text_color(bg_color)
-                            char_out, style_out = char, Style(color=tfg, bgcolor=bg_color)
-                        else:
-                            char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg_color)
+                    if heading_arrow:
+                        bg = cell[2] if cell else (self._get_gutter_bg(x, y) if in_gutter else default_bg)
+                        char_out, style_out = heading_arrow, Style(color=last_key_color, bgcolor=bg, bold=True)
                     else:
-                        bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                        char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg)
+                        box_char = BOX_CHARS.get((dx, dy), "·")
+                        is_corner = (dx, dy) in CORNER_POSITIONS
+                        ring_fg = corner_fg if is_corner else last_key_color
+
+                        if cell:
+                            char, fg_color, bg_color = cell
+                            if char not in (" ", BRUSH_CHAR, ""):
+                                tfg = self._contrast_text_color(bg_color)
+                                char_out, style_out = char, Style(color=tfg, bgcolor=bg_color)
+                            else:
+                                char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg_color)
+                        else:
+                            bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
+                            char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg)
                 else:
                     if cell:
                         char, fg_color, bg_color = cell
@@ -570,6 +569,24 @@ class ArtCanvas(Widget, can_focus=True):
                     else:
                         bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
                         char_out, style_out = " ", Style(bgcolor=bg)
+                segments.append(Segment(char_out, style_out))
+                continue
+
+            if is_write_heading and not in_gutter:
+                flush_run()
+                if cursor_visible:
+                    arrow_char, _ = HEADING_ARROWS[self._heading]
+                    bg = cell[2] if cell else default_bg
+                    char_out = arrow_char
+                    style_out = Style(color="#FFFFFF", bgcolor=bg, bold=True)
+                else:
+                    if cell:
+                        char, fg_color, bg_color = cell
+                        if char != BRUSH_CHAR:
+                            fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
+                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
+                    else:
+                        char_out, style_out = " ", Style(bgcolor=default_bg)
                 segments.append(Segment(char_out, style_out))
                 continue
 
@@ -1298,7 +1315,6 @@ class ArtMode(Container):
         elif self._repl_panel and self._repl_panel.is_open:
             self._repl_panel.close()
             canvas.set_code_mode(False)
-            canvas._use_heading_cursor = False
             header.set_code_mode(False)
         from ..repl_panel import ReplPanelToggleRequested
         self.post_message(ReplPanelToggleRequested("art"))

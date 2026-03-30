@@ -3,7 +3,7 @@
 Brief descriptions of user experience changes, newest first.
 
 - Space-hold REPL toggle: typing another key while space is held now flushes the space immediately, fixing character ordering when typing fast (e.g. "left 10" no longer becomes "left1 0").
-- Art code panel: canvas enters code mode when REPL opens (directional cursor), restores paint/write cursor on close. Cursor uses current paint color in paint mode, white in write mode.
+- Art code panel: heading arrow integrates into existing cursors. Paint mode: arrow replaces one edge of the 3x3 ring. Write mode: arrow appears one cell away in the heading direction. Arrows always visible in code mode (default: right). Bare direction commands (e.g. "down 5") implicitly turn to face that direction before moving.
 - Music code panel: "choose instrument" now updates the instrument name in the header.
 - Parent menu: "Code Panel: On/Off" toggle controls whether space-hold opens the code panel in music/art rooms. Littles mode always disables it.
 - Littles Mode: added "No-Screen Music" option. Screen stays dark with minimal text, keys still play sounds. For kids who should focus on the sounds, not the screen.

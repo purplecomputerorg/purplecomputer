@@ -261,13 +261,19 @@ class ArtCodeRunner:
                 await asyncio.sleep(0.05)
                 continue
 
-            # Movement: direction N
+            # Movement: direction N (implicitly turns to face that direction)
             m = re.match(r'^(left|right|up|down)\s*(\d*)\s*$', text, re.IGNORECASE)
             if m:
                 direction = m.group(1).lower()
                 distance = int(m.group(2)) if m.group(2) else 1
                 distance = min(distance, 200)  # Safety cap
 
+                # Implicit turn: face the direction before moving
+                if self.canvas._heading != direction:
+                    self.canvas._heading = direction
+                    self.canvas._mark_cursor_dirty()
+                    self.canvas.refresh()
+                self.canvas._use_heading_cursor = True
                 action = "paint" if paint_on else "move"
                 self.canvas.execute_logo_command(action, direction, distance)
                 await asyncio.sleep(0.05)

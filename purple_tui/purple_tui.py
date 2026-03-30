@@ -1282,7 +1282,6 @@ class PurpleApp(App):
             art = content_area.query_one("#room-art")
             canvas = art.query_one("#art-canvas", ArtCanvas)
             canvas.set_code_mode(False)
-            canvas._use_heading_cursor = False
             header = art.query_one("#canvas-header", CanvasHeader)
             header.set_code_mode(False)
         except Exception:

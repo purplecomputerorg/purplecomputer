@@ -943,7 +943,11 @@ class MusicMode(Container, can_focus=True):
         if not getattr(self.app, '_code_panel_enabled', True):
             return
         if self._repl_panel and not self._repl_panel.is_open:
-            # Pin grid height so REPL panel doesn't change it
+            # Hide hint bar (REPL has its own hints) and pin grid height
+            try:
+                self.query_one("#example-hint", MusicExampleHint).display = False
+            except Exception:
+                pass
             grid = self.query_one(MusicGrid)
             grid.styles.height = grid.size.height
             # Sync instrument state (grid is authoritative for sound playback)
@@ -957,7 +961,11 @@ class MusicMode(Container, can_focus=True):
             self._instrument_index = self.grid._instrument_index
             if self._header:
                 self._header.update_instrument(INSTRUMENTS[self._instrument_index][1])
-            # Restore flex sizing; suppress rendering during reflow
+            # Restore hint bar and flex sizing; suppress rendering during reflow
+            try:
+                self.query_one("#example-hint", MusicExampleHint).display = True
+            except Exception:
+                pass
             grid = self.query_one(MusicGrid)
             grid._layout_ready = False
             grid.styles.height = "1fr"

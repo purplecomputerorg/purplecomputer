@@ -149,6 +149,11 @@ class ReplPanel(Vertical):
         layout: horizontal;
     }
 
+    #repl-recall-hint {
+        margin-left: 7;
+        margin-top: 1;
+    }
+
     #repl-autocomplete-hint {
         margin-top: 1;
     }

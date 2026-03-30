@@ -1329,7 +1329,9 @@ class ArtMode(Container):
         canvas._release_space_down()  # Release any paint brush state
         header = self.query_one("#canvas-header", CanvasHeader)
         if self._repl_panel and not self._repl_panel.is_open:
-            # Pin canvas height so REPL panel doesn't change it
+            # Hide hint bar (REPL has its own hints) and pin canvas height
+            hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
+            hint_bar.display = False
             canvas.styles.height = canvas.size.height
             self._repl_panel.open()
             canvas.set_code_mode(True)
@@ -1338,7 +1340,9 @@ class ArtMode(Container):
             self._repl_panel.close()
             canvas.set_code_mode(False)
             header.set_code_mode(False)
-            # Restore flex sizing
+            # Restore hint bar and flex sizing
+            hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
+            hint_bar.display = True
             canvas.styles.height = "1fr"
         from ..repl_panel import ReplPanelToggleRequested
         self.post_message(ReplPanelToggleRequested("art"))

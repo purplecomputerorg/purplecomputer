@@ -1362,6 +1362,8 @@ class PurpleApp(App):
             canvas.styles.height = "1fr"
             header = art.query_one("#canvas-header", CanvasHeader)
             header.set_code_mode(False)
+            from .rooms.art_room import ArtHintBar
+            art.query_one("#art-hint-bar", ArtHintBar).display = True
         except Exception:
             pass
         try:
@@ -1376,6 +1378,8 @@ class PurpleApp(App):
             header.update_instrument(INSTRUMENTS[grid._instrument_index][1])
             grid._layout_ready = False
             grid.styles.height = "1fr"
+            from .rooms.music_room import MusicExampleHint
+            music.query_one("#example-hint", MusicExampleHint).display = True
         except Exception:
             pass
 
@@ -1393,9 +1397,9 @@ class PurpleApp(App):
     def _open_code_panel_in_room(self, room: Room) -> None:
         """Open the REPL panel in the specified room and apply code panel UI.
 
-        Does NOT pin canvas/grid height here because the room may not be
-        laid out yet (size would be 0). Height stays at 1fr; the viewport
-        growth compensates for the REPL panel.
+        Pins canvas/grid height if the widget is already laid out (size > 0).
+        If not laid out yet (room switch), height stays at 1fr and the
+        viewport growth compensates for the REPL panel.
         """
         self._apply_code_panel_ui(active=True)
         room_id = f"room-{room.name.lower()}"
@@ -1405,11 +1409,21 @@ class PurpleApp(App):
             panel = room_widget.query_one(ReplPanel)
             if not panel.is_open:
                 if room == Room.ART:
-                    from .rooms.art_room import ArtCanvas, CanvasHeader
+                    from .rooms.art_room import ArtCanvas, CanvasHeader, ArtHintBar
                     canvas = room_widget.query_one("#art-canvas", ArtCanvas)
                     canvas.set_code_mode(True)
+                    if canvas.size.height > 0:
+                        canvas.styles.height = canvas.size.height
                     header = room_widget.query_one("#canvas-header", CanvasHeader)
                     header.set_code_mode(True)
+                    room_widget.query_one("#art-hint-bar", ArtHintBar).display = False
+                elif room == Room.MUSIC:
+                    from .rooms.music_room import MusicGrid, MusicExampleHint
+                    room_widget.query_one("#example-hint", MusicExampleHint).display = False
+                    grid = room_widget.query_one(MusicGrid)
+                    if grid.size.height > 0:
+                        grid.styles.height = grid.size.height
+                        grid.set_instrument(room_widget._instrument_index)
                 panel.open()
         except Exception:
             pass

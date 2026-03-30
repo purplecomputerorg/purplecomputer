@@ -192,6 +192,12 @@ class ReplPanel(Vertical):
             if action.action == 'enter' and action.is_down:
                 line = code_input.value.strip()
                 if line:
+                    # "exit" closes the code panel
+                    if line.lower() == 'exit':
+                        code_input.value = ""
+                        code_input.cursor_position = 0
+                        self.post_message(ReplPanelClosed())
+                        return
                     self._last_input_text = line
                     code_input.value = ""
                     code_input.cursor_position = 0
@@ -227,13 +233,12 @@ class ReplPanel(Vertical):
                 return
 
             if action.action == 'escape' and action.is_down and not action.is_repeat:
+                # Escape clears input text, but does not close the panel
                 if code_input.value:
                     code_input.value = ""
                     code_input.cursor_position = 0
                     code_input.autocomplete_matches = []
                     code_input.exact_match_display = ""
-                else:
-                    self.post_message(ReplPanelClosed())
                 return
 
             return

@@ -342,13 +342,17 @@ class RoomIndicator(Horizontal):
 
 
 class CompactRoomIndicator(Static):
-    """Compact 1-row room indicator shown when REPL panel is open."""
+    """Compact 2-row indicator shown when REPL panel is open.
+
+    Row 1: Room switcher (Esc + room icons)
+    Row 2: Close Code Panel hint (Space)
+    """
 
     DEFAULT_CSS = """
     CompactRoomIndicator {
         dock: bottom;
         width: 100%;
-        height: 1;
+        height: 2;
         text-align: center;
         color: $text-muted;
         background: $background;
@@ -378,7 +382,9 @@ class CompactRoomIndicator(Static):
                 parts.append(f"[bold $accent]{icon} {caps(name)}[/]")
             else:
                 parts.append(f"[dim]{icon} {caps(name)}[/]")
-        return f"Esc {ICON_MENU}  " + "  ".join(parts)
+        row1 = f"Esc {ICON_MENU}  " + "  ".join(parts)
+        row2 = caps(f"{ICON_CODE} Close Code (hold Space) {ICON_CODE}")
+        return f"{row1}\n{row2}"
 
 
 class SpeechIndicator(Static):
@@ -1306,9 +1312,9 @@ class PurpleApp(App):
                 indicator.display = False
                 compact.update_room(self.active_room)
                 compact.display = True
-                # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
-                # title(2) + viewport(35) + compact(1) = 38 rows.
-                viewport.styles.height = VIEWPORT_HEIGHT + 5
+                # Full indicator(4) → compact(2) saves 2, REPL needs 5 rows.
+                # title(2) + viewport(34) + compact(2) = 38 rows.
+                viewport.styles.height = VIEWPORT_HEIGHT + 4
                 viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
         except NoMatches:
             pass

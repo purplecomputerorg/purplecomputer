@@ -8,6 +8,8 @@ Brief descriptions of user experience changes, newest first.
 - Art room: write mode works when code panel is open (text goes to canvas, not code input).
 - Code panel: canvas no longer changes size when panel opens/closes (pinned height).
 - Code panel: breathing room added above code input row.
+- Code panel: escape no longer closes the panel (clears input only). Type "exit" or hold Space to close.
+- Code panel: compact indicator shows "Close Code (hold Space)" hint row.
 - Code panel: compact 1-row room indicator shown instead of hiding indicator entirely.
 - Space-hold REPL toggle: typing another key while space is held now flushes the space immediately, fixing character ordering when typing fast (e.g. "left 10" no longer becomes "left1 0").
 - Art code panel: heading arrow integrates into existing cursors. Paint mode: arrow replaces one edge of the 3x3 ring. Write mode: arrow appears one cell away in the heading direction. Arrows always visible in code mode (default: right). Bare direction commands (e.g. "down 5") implicitly turn to face that direction before moving.

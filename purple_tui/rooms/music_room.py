@@ -200,9 +200,12 @@ class MusicGrid(Widget):
         # Keys currently showing a note/percussion label (brief flash on press)
         self._note_labels: set[str] = set()
         self._note_timers: dict[str, asyncio.TimerHandle] = {}
-        # Suppress rendering until layout stabilizes (prevents flicker on mount)
+        # Suppress rendering until layout stabilizes (prevents flicker on mount).
+        # Once ready, cache cell dimensions so reflows show the old layout
+        # instead of a blank grid.
         self._layout_ready = False
         self._pending_ready_timer: asyncio.TimerHandle | None = None
+        self._cached_layout: tuple[int, int, int, int, int, int] | None = None  # (cell_w, cell_h, margin_l, margin_t, grid_w, grid_h)
 
     def on_resize(self, event) -> None:
         """Mark layout ready after size stabilizes (debounced)."""
@@ -426,19 +429,24 @@ class MusicGrid(Widget):
         width = self.size.width
         height = self.size.height
 
-        # Don't render until layout has stabilized (prevents flicker on mount)
-        if not self._layout_ready or width < 10 or height < 4:
+        # First mount: no cached layout yet, show blank until ready
+        if not self._layout_ready and self._cached_layout is None:
             return Strip([Segment(" " * max(width, 0), Style(bgcolor=self._get_default_bg()))])
 
-        # Calculate cell dimensions. All cells equal size
-        cell_width = width // 10
-        cell_height = height // 4
-
-        # Calculate grid dimensions and margins to center it
-        grid_width = cell_width * 10
-        grid_height = cell_height * 4
-        margin_left = (width - grid_width) // 2
-        margin_top = (height - grid_height) // 2
+        if self._layout_ready and width >= 10 and height >= 4:
+            # Calculate and cache cell dimensions
+            cell_width = width // 10
+            cell_height = height // 4
+            grid_width = cell_width * 10
+            grid_height = cell_height * 4
+            margin_left = (width - grid_width) // 2
+            margin_top = (height - grid_height) // 2
+            self._cached_layout = (cell_width, cell_height, margin_left, margin_top, grid_width, grid_height)
+        elif self._cached_layout is not None:
+            # Reflow in progress: reuse last good layout
+            cell_width, cell_height, margin_left, margin_top, grid_width, grid_height = self._cached_layout
+        else:
+            return Strip([Segment(" " * max(width, 0), Style(bgcolor=self._get_default_bg()))])
 
         default_bg = self._get_default_bg()
         bg_style = Style(bgcolor=default_bg)

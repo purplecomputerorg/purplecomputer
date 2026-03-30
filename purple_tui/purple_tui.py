@@ -722,7 +722,8 @@ class PurpleApp(App):
             sticky_grace_period=STICKY_SHIFT_GRACE,
             escape_hold_threshold=ESCAPE_HOLD_THRESHOLD,
         )
-        self.keyboard.mode = detect_keyboard_mode()
+        if os.environ.get("PURPLE_NO_EVDEV") != "1":
+            self.keyboard.mode = detect_keyboard_mode()
 
         # Register callback for caps lock changes
         self.keyboard.caps.on_change(self._on_caps_change)

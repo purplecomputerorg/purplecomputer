@@ -26,7 +26,7 @@ def _split_clauses(text: str) -> list[str]:
 # Command keywords that start a new command when found mid-line.
 # Order matters: longer prefixes first so "turn" matches before single words.
 _COMMAND_STARTS = re.compile(
-    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|instrument|letters|fast|slow|repeat)\b)',
+    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|select|play|instrument|letters|fast|slow|repeat)\b)',
     re.IGNORECASE,
 )
 
@@ -226,8 +226,8 @@ class MusicCodeRunner:
                         self.set_letters(letters_on)
                     continue
 
-                # instrument/choose command
-                m = re.match(r'^(?:choose|instrument)\s+(.+)$', text, re.IGNORECASE)
+                # instrument/choose/select/play command
+                m = re.match(r'^(?:choose|instrument|select|play)\s+(.+)$', text, re.IGNORECASE)
                 if m and self.set_instrument:
                     self.set_instrument(m.group(1).strip())
                     await asyncio.sleep(0.1)

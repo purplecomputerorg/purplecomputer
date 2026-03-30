@@ -42,6 +42,10 @@ run-sleep-demo:
     @echo ""
     PURPLE_TEST_BATTERY=1 PURPLE_SLEEP_DEMO=1 ./scripts/run_local.sh
 
+# Headless UI preview (play, music, or art)
+preview room="play":
+    @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/preview.py {{room}}
+
 # Run tests
 test:
     .venv/bin/python -m pytest tests/ -v

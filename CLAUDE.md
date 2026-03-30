@@ -62,6 +62,10 @@ Always `just python` instead of `.venv/bin/python`. The justfile handles venv ac
 
 `widget.styles.background` on `Static` doesn't repaint. Use `Widget` subclass with `render_line()` returning `Strip([Segment(" " * width, Style(bgcolor=color))])`. This is the pattern used throughout (MusicGrid, ArtCanvas, ColorLegend, etc.).
 
+### Flicker-Free Reflows (MusicGrid pattern)
+
+When a widget's height changes (e.g. REPL panel open/close), Textual may render intermediate sizes causing cell flicker. Fix: set `_layout_ready = False` before the height change, cache the last good cell dimensions in `_cached_layout`, and keep rendering with cached values during the reflow. `on_resize` debounces 50ms then sets `_layout_ready = True` and refreshes. On first mount (no cache), render blank background instead. Apply this to both open and close transitions.
+
 ### Keyboard Input (evdev)
 
 **Linux only.** Keyboard input via evdev (`/dev/input/event*`), bypassing the terminal. Alacritty is display-only. This gives true key down/up events and precise timestamps.

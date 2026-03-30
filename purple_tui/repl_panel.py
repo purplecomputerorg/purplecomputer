@@ -19,8 +19,8 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
-    'music': ['choose', 'instrument', 'fast', 'slow', 'letters',
-              'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'musicbox'],
+    'music': ['choose', 'select', 'play', 'instrument', 'fast', 'slow', 'letters',
+              'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'uke', 'musicbox'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step',
             'turn', 'color', 'paint', 'write', 'lift', 'pen', 'penup', 'pendown',
             'repeat', 'end'],
@@ -52,10 +52,19 @@ ROOM_HINTS: dict[str, list[str]] = {
 }
 
 
-def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False):
+# Instrument names for autocomplete after "choose"/"select"/"play"/"instrument"
+_INSTRUMENT_NAMES = ['marimba', 'xylophone', 'ukulele', 'uke', 'musicbox']
+_INSTRUMENT_PREFIX = re.compile(
+    r'.*\b(?:choose|select|play|instrument)\s+\S*$', re.IGNORECASE
+)
+
+
+def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False,
+                               instrument_aware: bool = False):
     """Create an autocomplete function for a keyword set.
 
     When color_aware=True, suggests color names after 'color' prefix.
+    When instrument_aware=True, suggests instrument names after 'choose'/'select'/'play'/'instrument'.
     """
     def autocomplete_fn(last_word: str, full_text: str = "") -> list[tuple[str, str, str]]:
         # After "color ", suggest color names instead of keywords
@@ -67,6 +76,13 @@ def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False):
             # Filter to color-only results (no emoji-only entries)
             colors = [(w, c or "", "") for w, c, _e in results if c]
             return colors[:5]
+
+        # After "choose "/"select "/"play "/"instrument ", suggest instrument names
+        if instrument_aware and _INSTRUMENT_PREFIX.match(full_text):
+            if last_word in _INSTRUMENT_NAMES:
+                return [(last_word, "", "")]
+            matches = sorted(n for n in _INSTRUMENT_NAMES if n.startswith(last_word))
+            return [(n, "", "") for n in matches[:5]]
 
         if last_word in keywords:
             return [(last_word, "", "")]
@@ -139,7 +155,9 @@ class ReplPanel(Vertical):
         self._open = False
         self._last_input_text = ""
         keywords = set(ROOM_KEYWORDS.get(room, []))
-        self._autocomplete_fn = _make_keyword_autocomplete(keywords, color_aware=(room == 'art'))
+        self._autocomplete_fn = _make_keyword_autocomplete(
+            keywords, color_aware=(room == 'art'), instrument_aware=(room == 'music')
+        )
         self._validator = _make_keyword_validator(keywords)
         self._hints = ROOM_HINTS.get(room, ["Try: repeat 3 forward 10"])
 

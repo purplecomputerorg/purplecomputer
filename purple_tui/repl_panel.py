@@ -154,7 +154,6 @@ class ReplPanel(Vertical):
     }
 
     #repl-autocomplete-hint {
-        margin-top: 1;
     }
     """
 

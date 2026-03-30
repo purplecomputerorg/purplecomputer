@@ -1346,8 +1346,7 @@ class PurpleApp(App):
                     compact.update_room(self.active_room)
                     compact.display = True
                     # Full indicator(4) → compact(1) frees 3 rows.
-                    # Grow viewport by 4: 3 from indicator + 1 from available space.
-                    viewport.styles.height = VIEWPORT_HEIGHT + 4
+                    viewport.styles.height = VIEWPORT_HEIGHT + 3
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT

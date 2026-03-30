@@ -280,10 +280,11 @@ class ArtCodeRunner:
                 await asyncio.sleep(0.05)
                 continue
 
-            # In write mode, type characters at cursor
+            # In write mode, type characters along current heading
             if write_on:
+                heading = self.canvas._heading
                 for ch in text:
-                    self.canvas.type_char(ch)
+                    self.canvas.type_char(ch, direction=heading)
                     await asyncio.sleep(0.02)
                 continue
 

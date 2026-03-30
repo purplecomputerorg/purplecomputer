@@ -749,8 +749,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._mark_cursor_dirty()
         self.refresh()
 
-    def type_char(self, char: str) -> None:
-        """Type a character at cursor position."""
+    def type_char(self, char: str, direction: str = 'right') -> None:
+        """Type a character at cursor position, advancing in direction."""
         char = self._caps_char(char)
         self._mark_cursor_dirty()  # Old cursor position
         pos = (self._cursor_x, self._cursor_y)
@@ -769,10 +769,12 @@ class ArtCanvas(Widget, can_focus=True):
             text_fg = self._get_text_fg()
         self._set_cell(pos, char, text_fg, new_bg)
 
-        # Move cursor right (with wrapping to next line)
-        if not self._move_cursor_right():
-            # At right edge, wrap to next line
-            self._carriage_return()
+        # Move cursor in the specified direction
+        if direction == 'right':
+            if not self._move_cursor_right():
+                self._carriage_return()
+        else:
+            self._move_in_direction(direction)
 
         self._mark_cursor_dirty()  # New cursor position
         self._restart_blink()

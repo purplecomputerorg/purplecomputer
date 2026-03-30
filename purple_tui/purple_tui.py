@@ -1332,9 +1332,11 @@ class PurpleApp(App):
                     indicator.display = False
                     compact.update_room(self.active_room)
                     compact.display = True
-                    # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
-                    # title(2) + viewport(35) + compact(1) = 38 rows.
-                    viewport.styles.height = VIEWPORT_HEIGHT + 5
+                    # Full indicator(4) → compact(1) frees 3 rows.
+                    # Grow viewport by exactly 3 to keep total height constant,
+                    # preventing the vertical centering from shifting.
+                    # title(2) + viewport(33+2border) + compact(1) = 38 rows.
+                    viewport.styles.height = VIEWPORT_HEIGHT + 3
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT

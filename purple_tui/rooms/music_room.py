@@ -377,7 +377,10 @@ class MusicGrid(Widget):
     def cleanup_sounds(self) -> None:
         """Stop all currently playing sounds and clear loaded sounds."""
         if _MIXER_READY:
-            pygame.mixer.stop()
+            try:
+                pygame.mixer.stop()
+            except pygame.error:
+                pass
         self._instrument_sounds.clear()
         self._percussion_sounds.clear()
         self._percussion_loaded = False

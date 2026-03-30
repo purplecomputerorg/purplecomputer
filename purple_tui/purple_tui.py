@@ -1367,6 +1367,7 @@ class PurpleApp(App):
             content_area = self.query_one("#content-area")
             music = content_area.query_one("#room-music")
             grid = music.query_one(MusicGrid)
+            grid._layout_ready = False
             grid.styles.height = "1fr"
         except Exception:
             pass

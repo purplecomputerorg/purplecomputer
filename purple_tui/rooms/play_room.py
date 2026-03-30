@@ -39,7 +39,7 @@ from ..code_input import (
     AutocompleteHint, RecallHint, ExampleHint,
 )
 from ..keyboard import (
-    SHIFT_MAP, KeyRepeatSuppressor,
+    SHIFT_MAP, KeyRepeatSuppressor, HoldOrTap,
     CharacterAction, NavigationAction, ControlAction,
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation
@@ -416,12 +416,11 @@ PLAY_HINTS = [
     "Try: red + yellow  \u2022  cat times 3  \u2022  100",
     "Try: say 582  \u2022  bright blue whale!",
     "Try: 3 dogs + 2 cats  \u2022  red + 2 blues",
-    "Try: neon pink  \u2022  (2 + 3) x 4  \u2022  pale lavender",
-    "Try: 2 4 6 8...  \u2022  deep purple butterfly",
-    "Try: red + yellow + blue  \u2022  muted teal",
-    "Try: 1000  \u2022  vivid orange fish!  \u2022  soft green",
-    "Try: say red plus blue  \u2022  10 cats...  \u2022  cool blue",
-    "Try: rich gold  \u2022  5 x 5 apples  \u2022  warm red",
+    "Try: 2 4 6 8...  \u2022  (2 + 3) x 4  \u2022  1000",
+    "Try: 5 x 5 apples  \u2022  say red plus blue",
+    "Try: red + yellow + blue  \u2022  10 cats...",
+    "Try: say hello!  \u2022  repeat 3 cat, dog",
+    "Try: 99 fish  \u2022  1 apple 2 apples 3 apples...",
 ]
 
 
@@ -493,6 +492,8 @@ class PlayMode(Vertical):
         self._last_input_text: str = ""
         # Repeat block collection: stack of {'count': int, 'lines': [str]}
         self._repeat_stack: list[dict] = []
+        # Space hold: tap inserts space, hold is no-op (consistent with other rooms)
+        self._space_hold = HoldOrTap(hold_seconds=0.5)
 
     def compose(self) -> ComposeResult:
         yield KeyboardOnlyScroll(id="history-scroll")
@@ -650,6 +651,13 @@ class PlayMode(Vertical):
         """
         play_input = self.query_one("#play-input", InlineInput)
 
+        # Flush buffered space tap before any other key
+        if not (isinstance(action, ControlAction) and action.action == 'space'):
+            if self._space_hold.on_other_key():
+                pos = play_input.cursor_position
+                play_input.value = play_input.value[:pos] + " " + play_input.value[pos:]
+                play_input.cursor_position = pos + 1
+
         # Handle navigation (up/down for scrolling history, left/right for cursor)
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
@@ -680,11 +688,24 @@ class PlayMode(Vertical):
                     play_input.exact_match_display = ""
                 return
 
-            if action.action == 'space' and action.is_down:
-                pos = play_input.cursor_position
-                play_input.value = play_input.value[:pos] + " " + play_input.value[pos:]
-                play_input.cursor_position = pos + 1
-                return
+            if action.action == 'space':
+                # Same HoldOrTap pattern as music/art: tap inserts, hold is no-op
+                if self._space_hold.fired:
+                    if not action.is_down:
+                        self._space_hold.on_up()
+                    return
+                if action.is_down and not action.is_repeat:
+                    self._space_hold.on_down(self.set_timer, lambda: None)
+                    return
+                if action.is_down and action.is_repeat:
+                    return  # Suppress repeats while pending
+                if not action.is_down:
+                    if self._space_hold.on_up():
+                        # Tap: insert space
+                        pos = play_input.cursor_position
+                        play_input.value = play_input.value[:pos] + " " + play_input.value[pos:]
+                        play_input.cursor_position = pos + 1
+                    return
 
             if action.action == 'enter' and action.is_down:
                 if play_input.value.strip():

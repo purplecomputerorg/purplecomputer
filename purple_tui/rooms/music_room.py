@@ -200,6 +200,27 @@ class MusicGrid(Widget):
         # Keys currently showing a note/percussion label (brief flash on press)
         self._note_labels: set[str] = set()
         self._note_timers: dict[str, asyncio.TimerHandle] = {}
+        # Suppress rendering until layout stabilizes (prevents flicker on mount)
+        self._layout_ready = False
+        self._pending_ready_timer: asyncio.TimerHandle | None = None
+
+    def on_resize(self, event) -> None:
+        """Mark layout ready after size stabilizes (debounced)."""
+        if self._layout_ready:
+            return
+        # Cancel any pending ready signal, restart the debounce
+        if self._pending_ready_timer is not None:
+            self._pending_ready_timer.cancel()
+        try:
+            loop = asyncio.get_running_loop()
+            self._pending_ready_timer = loop.call_later(0.05, self._mark_layout_ready)
+        except RuntimeError:
+            self._layout_ready = True
+
+    def _mark_layout_ready(self) -> None:
+        self._pending_ready_timer = None
+        self._layout_ready = True
+        self.refresh()
 
     def _get_sounds_path(self) -> Path:
         """Find the sounds directory."""
@@ -404,6 +425,10 @@ class MusicGrid(Widget):
         """Render a single line of the grid."""
         width = self.size.width
         height = self.size.height
+
+        # Don't render until layout has stabilized (prevents flicker on mount)
+        if not self._layout_ready or width < 10 or height < 4:
+            return Strip([Segment(" " * max(width, 0), Style(bgcolor=self._get_default_bg()))])
 
         # Calculate cell dimensions. All cells equal size
         cell_width = width // 10

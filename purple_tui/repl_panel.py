@@ -150,7 +150,7 @@ class ReplPanel(Vertical):
     }
 
     #repl-recall-hint {
-        margin-left: 0;
+        margin-left: 7;
     }
 
     #repl-autocomplete-hint {

@@ -1309,6 +1309,7 @@ class PurpleApp(App):
                 # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
                 # title(2) + viewport(35) + compact(1) = 38 rows.
                 viewport.styles.height = VIEWPORT_HEIGHT + 5
+                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
         except NoMatches:
             pass
 
@@ -1323,6 +1324,10 @@ class PurpleApp(App):
                 viewport.styles.height = VIEWPORT_HEIGHT
                 compact.display = False
                 indicator.display = True
+                if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
+                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                else:
+                    viewport.border_subtitle = ""
         except NoMatches:
             pass
         # Restore art canvas from code mode

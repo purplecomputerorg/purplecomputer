@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from purple_tui.rooms.art_room import ArtCanvas, HEADING_CURSORS, CODE_CURSOR_CHAR
+from purple_tui.rooms.art_room import ArtCanvas, HEADING_ARROWS
 
 
 # ---------------------------------------------------------------------------
@@ -201,17 +201,13 @@ class TestForward:
 # ---------------------------------------------------------------------------
 
 class TestHeadingCursors:
-    def test_all_directions_have_cursors(self):
+    def test_all_directions_have_arrows(self):
         for direction in ['right', 'left', 'up', 'down']:
-            assert direction in HEADING_CURSORS
+            assert direction in HEADING_ARROWS
 
-    def test_cursors_are_distinct(self):
-        cursors = list(HEADING_CURSORS.values())
-        assert len(set(cursors)) == 4
-
-    def test_cursors_differ_from_default(self):
-        for cursor in HEADING_CURSORS.values():
-            assert cursor != CODE_CURSOR_CHAR
+    def test_arrows_are_distinct(self):
+        arrows = [v[0] for v in HEADING_ARROWS.values()]
+        assert len(set(arrows)) == 4
 
 
 # ---------------------------------------------------------------------------
@@ -323,3 +319,149 @@ class TestArtCodeRunnerTurtle:
         runner = ArtCodeRunner(canvas)
         self._run(runner.run(["paint off", "forward 1"]))
         assert canvas._use_heading_cursor is True
+
+    def test_turn_up_sets_absolute(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn up"]))
+        assert canvas._heading == 'up'
+
+    def test_turn_down_sets_absolute(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn down"]))
+        assert canvas._heading == 'down'
+
+    def test_turn_back(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn back"]))
+        assert canvas._heading == 'left'  # opposite of default 'right'
+
+    def test_turn_around(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        canvas._heading = 'up'
+        self._run(runner.run(["turn around"]))
+        assert canvas._heading == 'down'
+
+    def test_turn_backward(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn backward"]))
+        assert canvas._heading == 'left'
+
+    def test_turn_90(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn 90"]))
+        assert canvas._heading == 'down'  # 90 degrees right from 'right'
+
+    def test_turn_180(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn 180"]))
+        assert canvas._heading == 'left'
+
+    def test_turn_270(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn 270"]))
+        assert canvas._heading == 'up'
+
+    def test_turn_360(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn 360"]))
+        assert canvas._heading == 'right'  # no change
+
+    def test_go_synonym(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "go 3"]))
+        assert canvas._cursor_x == 3
+
+    def test_move_synonym(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "move 4"]))
+        assert canvas._cursor_x == 4
+
+    def test_walk_synonym(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "walk 2"]))
+        assert canvas._cursor_x == 2
+
+    def test_step_synonym(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "step 1"]))
+        assert canvas._cursor_x == 1
+
+    def test_repeated_commands_on_one_line(self, canvas):
+        """'turn right turn right' on a single line should execute both turns."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn right turn right"]))
+        # Default heading is 'right', two right turns = 'left'
+        assert canvas._heading == 'left'
+
+    def test_mixed_commands_on_one_line(self, canvas):
+        """'forward 3 turn right forward 2' should move and turn correctly."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "forward 3 turn right forward 2"]))
+        # Start at (0,0) heading right: forward 3 -> (3,0)
+        # turn right -> heading down: forward 2 -> (3,2)
+        assert canvas._cursor_x == 3
+        assert canvas._cursor_y == 2
+
+    def test_bad_command_doesnt_break_others(self, canvas):
+        """A command that causes an error shouldn't prevent subsequent commands."""
+        from purple_tui.code_runner import ArtCodeRunner
+        import unittest.mock as mock
+        runner = ArtCodeRunner(canvas)
+        # Temporarily make turn raise an exception
+        original_turn = canvas.turn
+        call_count = [0]
+        def flaky_turn(direction):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("simulated failure")
+            original_turn(direction)
+        canvas.turn = flaky_turn
+        # First turn fails, second should still execute
+        self._run(runner.run(["turn right", "turn right"]))
+        assert call_count[0] == 2  # Both were attempted
+        assert canvas._heading == 'down'  # Only second turn took effect
+
+
+# ---------------------------------------------------------------------------
+# Edge stop (no wrapping) tests
+# ---------------------------------------------------------------------------
+
+class TestEdgeStop:
+    def test_forward_stops_at_right_edge(self):
+        c = FakeCanvas(width=10)
+        c._cursor_x = 8
+        c.execute_logo_command("move", "right", 5)
+        assert c._cursor_x == 9  # stops at edge, doesn't wrap
+
+    def test_forward_stops_at_left_edge(self):
+        c = FakeCanvas(width=10)
+        c._cursor_x = 2
+        c.execute_logo_command("move", "left", 5)
+        assert c._cursor_x == 0
+
+    def test_forward_stops_at_top_edge(self):
+        c = FakeCanvas(height=10)
+        c._cursor_y = 2
+        c.execute_logo_command("move", "up", 5)
+        assert c._cursor_y == 0
+
+    def test_forward_stops_at_bottom_edge(self):
+        c = FakeCanvas(height=10)
+        c._cursor_y = 7
+        c.execute_logo_command("move", "down", 5)
+        assert c._cursor_y == 9

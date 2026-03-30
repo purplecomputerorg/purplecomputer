@@ -739,6 +739,7 @@ class PurpleApp(App):
         # Littles Mode: locks into a single room with no switching
         self._littles_mode: str | None = None  # None, "music", or "art"
         self._code_panel_enabled: bool = True
+        self._code_panel_active: bool = False  # True when code panel mode is on (persists across rooms)
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -1162,18 +1163,9 @@ class PurpleApp(App):
         """Show the mode picker modal."""
         self.clear_notifications()
         current_room = self.active_room.name.lower()
-        # Check if any REPL panel is currently open
-        code_open = False
-        try:
-            for panel in self.query(ReplPanel):
-                if panel.is_open:
-                    code_open = True
-                    break
-        except Exception:
-            pass
         picker = RoomPickerScreen(
             current_room=current_room,
-            code_panel_open=code_open,
+            code_panel_open=self._code_panel_active,
         )
         self.push_screen(picker, self._on_room_picked)
 
@@ -1271,8 +1263,10 @@ class PurpleApp(App):
                     set_letters_fn=set_letters,
                 )
                 await runner.run(lines, mode)
-            except Exception:
-                pass
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.log.error(f"REPL music command failed: {exc}")
 
         elif room == "art":
             from .code_runner import ArtCodeRunner
@@ -1283,8 +1277,10 @@ class PurpleApp(App):
                 runner = ArtCodeRunner(canvas)
                 # Canvas paint_mode determines default: paint vs write
                 await runner.run(lines, paint=canvas._paint_mode)
-            except Exception:
-                pass
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                self.log.error(f"REPL art command failed: {exc}")
 
     def on_repl_panel_closed(self, message: ReplPanelClosed) -> None:
         """Handle REPL panel close request (from Escape on empty)."""
@@ -1306,46 +1302,53 @@ class PurpleApp(App):
             pass
 
     def _open_repl_panel(self) -> None:
-        """Grow viewport to accommodate REPL panel, switch to compact indicator.
-
-        Uses batch_update to apply both changes in a single repaint,
-        preventing visual jitter from intermediate states.
-        Full indicator (4 rows) → compact 1-row indicator, viewport grows by 3.
-        """
+        """Grow viewport to accommodate REPL panel, switch to compact indicator."""
         self._stop_code_execution()
-        try:
-            viewport = self.query_one("#viewport")
-            indicator = self.query_one("#room-indicator", RoomIndicator)
-            compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
-            with self.batch_update():
-                indicator.display = False
-                compact.update_room(self.active_room)
-                compact.display = True
-                # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
-                # title(2) + viewport(35) + compact(1) = 38 rows.
-                viewport.styles.height = VIEWPORT_HEIGHT + 5
-                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
-        except NoMatches:
-            pass
+        self._code_panel_active = True
+        self._apply_code_panel_ui(active=True)
 
     def _close_repl_panel(self) -> None:
-        """Restore viewport height and room indicator."""
+        """Fully close code panel mode: restore viewport, indicator, and all room state."""
         self._stop_code_execution()
+        self._code_panel_active = False
+        self._apply_code_panel_ui(active=False)
+        self._restore_room_code_state()
+        # Close any open panel
+        try:
+            for panel in self.query(ReplPanel):
+                if panel.is_open:
+                    panel.close()
+        except Exception:
+            pass
+
+    def _apply_code_panel_ui(self, active: bool) -> None:
+        """Toggle viewport size and indicator between code-panel and normal mode."""
         try:
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
             compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
             with self.batch_update():
-                viewport.styles.height = VIEWPORT_HEIGHT
-                compact.display = False
-                indicator.display = True
-                if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
-                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                if active:
+                    indicator.display = False
+                    compact.update_room(self.active_room)
+                    compact.display = True
+                    # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
+                    # title(2) + viewport(35) + compact(1) = 38 rows.
+                    viewport.styles.height = VIEWPORT_HEIGHT + 5
+                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
-                    viewport.border_subtitle = ""
+                    viewport.styles.height = VIEWPORT_HEIGHT
+                    compact.display = False
+                    indicator.display = True
+                    if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
+                        viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                    else:
+                        viewport.border_subtitle = ""
         except NoMatches:
             pass
-        # Restore art canvas from code mode
+
+    def _restore_room_code_state(self) -> None:
+        """Reset art canvas and music grid from code mode."""
         try:
             from .rooms.art_room import ArtCanvas, CanvasHeader
             content_area = self.query_one("#content-area")
@@ -1357,7 +1360,6 @@ class PurpleApp(App):
             header.set_code_mode(False)
         except Exception:
             pass
-        # Restore music grid height
         try:
             from .rooms.music_room import MusicGrid
             content_area = self.query_one("#content-area")
@@ -1366,11 +1368,40 @@ class PurpleApp(App):
             grid.styles.height = "1fr"
         except Exception:
             pass
-        # Close any open panel (for room-switch cleanup)
+
+    def _close_repl_panels_only(self) -> None:
+        """Close REPL panels and restore room widget state without changing UI chrome."""
+        self._stop_code_execution()
+        self._restore_room_code_state()
         try:
             for panel in self.query(ReplPanel):
                 if panel.is_open:
                     panel.close()
+        except Exception:
+            pass
+
+    def _open_code_panel_in_room(self, room: Room) -> None:
+        """Open the REPL panel in the specified room and apply code panel UI."""
+        self._apply_code_panel_ui(active=True)
+        room_id = f"room-{room.name.lower()}"
+        try:
+            content_area = self.query_one("#content-area")
+            room_widget = content_area.query_one(f"#{room_id}")
+            panel = room_widget.query_one(ReplPanel)
+            if not panel.is_open:
+                # Pin the content widget height before opening panel
+                if room == Room.ART:
+                    from .rooms.art_room import ArtCanvas, CanvasHeader
+                    canvas = room_widget.query_one("#art-canvas", ArtCanvas)
+                    canvas.styles.height = canvas.size.height
+                    canvas.set_code_mode(True)
+                    header = room_widget.query_one("#canvas-header", CanvasHeader)
+                    header.set_code_mode(True)
+                elif room == Room.MUSIC:
+                    from .rooms.music_room import MusicGrid
+                    grid = room_widget.query_one(MusicGrid)
+                    grid.styles.height = grid.size.height
+                panel.open()
         except Exception:
             pass
 
@@ -1789,18 +1820,38 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Close REPL panel if open
-        self._close_repl_panel()
-
-        # Update viewport border subtitle (code panel hint for music/art)
-        try:
-            viewport = self.query_one("#viewport")
+        # Handle code panel state across room switches
+        if self._code_panel_active:
+            # Close old room's panel and widget state
+            self._close_repl_panels_only()
             if new_room in (Room.MUSIC, Room.ART):
-                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                # Open code panel in the new room
+                self._open_code_panel_in_room(new_room)
             else:
-                viewport.border_subtitle = ""
-        except NoMatches:
-            pass
+                # Play room: swap to compact indicator but keep normal viewport height
+                try:
+                    viewport = self.query_one("#viewport")
+                    indicator = self.query_one("#room-indicator", RoomIndicator)
+                    compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
+                    with self.batch_update():
+                        indicator.display = False
+                        compact.update_room(new_room)
+                        compact.display = True
+                        viewport.styles.height = VIEWPORT_HEIGHT
+                        viewport.border_subtitle = ""
+                except NoMatches:
+                    pass
+        else:
+            # Not in code panel mode: clean close
+            self._close_repl_panel()
+            try:
+                viewport = self.query_one("#viewport")
+                if new_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
+                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                else:
+                    viewport.border_subtitle = ""
+            except NoMatches:
+                pass
 
         # Cycle play mode "Try" hint on room switch
         if new_room == Room.PLAY:

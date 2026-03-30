@@ -2,6 +2,10 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Art room: cursor stops at canvas edges instead of wrapping to the other side (typing, painting, and code mode).
+- Art room: paint mode in code follows heading direction (turn down, then paint chars go downward).
+- Art room: new turn commands: turn up/down/back/backward/around and turn 90/180/270/360.
+- Art room: forward synonyms: go, move, walk, step (e.g. "go 5" = "forward 5").
 - Art room: hint text changed from "Hold Space + arrows to paint" to "Type to paint."
 - Art room: paint/write selector stays visible when code panel is open.
 - Art room: holding space to open code panel no longer types spaces in write mode.
@@ -9,6 +13,7 @@ Brief descriptions of user experience changes, newest first.
 - Code panel: canvas no longer changes size when panel opens/closes (pinned height).
 - Code panel: breathing room added above code input row.
 - Code panel: escape no longer closes the panel (clears input only). Type "exit" or hold Space to close.
+- Code panel mode persists across room switches. Switching rooms auto-opens panel in Music/Art. Play shows compact indicator (already a REPL). Mode ends on explicit close only.
 - Code panel: room picker (Esc tap) shows "Close Code" option as a third row when code panel is open. Space key is a shortcut to close from the picker.
 - Code panel: compact 1-row room indicator shown instead of hiding indicator entirely.
 - Space-hold REPL toggle: typing another key while space is held now flushes the space immediately, fixing character ordering when typing fast (e.g. "left 10" no longer becomes "left1 0").

@@ -686,12 +686,18 @@ class ArtCanvas(Widget, can_focus=True):
     _TURN_LEFT = {'right': 'up', 'up': 'left', 'left': 'down', 'down': 'right'}
 
     def turn(self, direction: str) -> None:
-        """Turn the heading 90 degrees left or right."""
+        """Turn the heading. Supports relative (left/right/back/around) and absolute (up/down) and angles (90/180/270/360)."""
         self._mark_cursor_dirty()
-        if direction == 'right':
+        if direction in ('right', '90'):
             self._heading = self._TURN_RIGHT[self._heading]
-        elif direction == 'left':
+        elif direction in ('left', '270'):
             self._heading = self._TURN_LEFT[self._heading]
+        elif direction in ('back', 'backward', 'around', '180'):
+            self._heading = self._TURN_RIGHT[self._TURN_RIGHT[self._heading]]
+        elif direction == '360':
+            pass  # Full circle, no change
+        elif direction in ('up', 'down'):
+            self._heading = direction
         self._use_heading_cursor = True
         self._mark_cursor_dirty()
         self._restart_blink()
@@ -734,18 +740,18 @@ class ArtCanvas(Widget, can_focus=True):
         else:
             self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
 
-    def paint_char(self, char: str) -> None:
+    def paint_char(self, char: str, direction: str = 'right') -> None:
         """Paint a colored block for a character (like interactive paint mode).
 
-        Sets the key's color as both fg and bg with BRUSH_CHAR, then advances right.
+        Sets the key's color as both fg and bg with BRUSH_CHAR, then advances
+        in the given direction. Stops at canvas edges (no wrapping).
         Used by the code runner when paint mode is on.
         """
         self._mark_cursor_dirty()
         self._last_key_char = char.lower()
         self._last_key_color = get_key_color(char)
         self._paint_at_cursor()
-        if not self._move_cursor_right():
-            self._carriage_return()
+        self._move_in_direction(direction)
         self._mark_cursor_dirty()
         self.refresh()
 
@@ -769,12 +775,8 @@ class ArtCanvas(Widget, can_focus=True):
             text_fg = self._get_text_fg()
         self._set_cell(pos, char, text_fg, new_bg)
 
-        # Move cursor in the specified direction
-        if direction == 'right':
-            if not self._move_cursor_right():
-                self._carriage_return()
-        else:
-            self._move_in_direction(direction)
+        # Move cursor in the specified direction (stop at edge, no wrapping)
+        self._move_in_direction(direction)
 
         self._mark_cursor_dirty()  # New cursor position
         self._restart_blink()
@@ -894,8 +896,7 @@ class ArtCanvas(Widget, can_focus=True):
                         pos = (self._cursor_x, self._cursor_y)
                         existing_bg = self._get_cell_bg(pos)
                         self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
-                        if not self._move_cursor_right():
-                            self._carriage_return()
+                        self._move_cursor_right()
                         self._mark_cursor_dirty()
                         self._restart_blink()
                         self.refresh()

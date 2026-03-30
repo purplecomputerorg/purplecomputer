@@ -341,6 +341,45 @@ class RoomIndicator(Horizontal):
             pass
 
 
+class CompactRoomIndicator(Static):
+    """Compact 1-row room indicator shown when REPL panel is open."""
+
+    DEFAULT_CSS = """
+    CompactRoomIndicator {
+        width: 100%;
+        height: 1;
+        text-align: center;
+        color: $text-muted;
+        background: $background;
+        display: none;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._current_room = Room.PLAY
+        self.add_class("caps-sensitive")
+
+    def update_room(self, room: Room) -> None:
+        self._current_room = room
+        self.refresh()
+
+    def render(self) -> str:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        rooms = [
+            (Room.PLAY, ICON_CHAT, "Play"),
+            (Room.MUSIC, ICON_MUSIC, "Music"),
+            (Room.ART, ICON_PALETTE, "Art"),
+        ]
+        parts = []
+        for room, icon, name in rooms:
+            if room == self._current_room:
+                parts.append(f"[bold $accent]{icon} {caps(name)}[/]")
+            else:
+                parts.append(f"[dim]{icon} {caps(name)}[/]")
+        return f"Esc {ICON_MENU}  " + "  ".join(parts)
+
+
 class SpeechIndicator(Static):
     """Shows whether speech is on/off"""
 
@@ -748,6 +787,7 @@ class PurpleApp(App):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
             yield RoomIndicator(self.active_room, id="room-indicator")
+            yield CompactRoomIndicator(id="compact-room-indicator")
             # Hidden state-tracking widgets (push updates to TitleBar)
             yield BatteryIndicator(id="battery-indicator")
             yield UsbIndicator(id="usb-indicator")
@@ -1249,18 +1289,23 @@ class PurpleApp(App):
             pass
 
     def _open_repl_panel(self) -> None:
-        """Grow viewport to accommodate REPL panel, hide room indicator.
+        """Grow viewport to accommodate REPL panel, switch to compact indicator.
 
         Uses batch_update to apply both changes in a single repaint,
         preventing visual jitter from intermediate states.
+        Full indicator (4 rows) → compact 1-row indicator, viewport grows by 3.
         """
         self._stop_code_execution()
         try:
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
+            compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
             with self.batch_update():
                 indicator.display = False
-                viewport.styles.height = VIEWPORT_HEIGHT + 4
+                compact.update_room(self.active_room)
+                compact.display = True
+                # Indicator saves 4 rows (3h + 1m), compact uses 1 → net +3
+                viewport.styles.height = VIEWPORT_HEIGHT + 3
         except NoMatches:
             pass
 
@@ -1270,8 +1315,10 @@ class PurpleApp(App):
         try:
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
+            compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
             with self.batch_update():
                 viewport.styles.height = VIEWPORT_HEIGHT
+                compact.display = False
                 indicator.display = True
         except NoMatches:
             pass
@@ -1282,8 +1329,18 @@ class PurpleApp(App):
             art = content_area.query_one("#room-art")
             canvas = art.query_one("#art-canvas", ArtCanvas)
             canvas.set_code_mode(False)
+            canvas.styles.height = "1fr"
             header = art.query_one("#canvas-header", CanvasHeader)
             header.set_code_mode(False)
+        except Exception:
+            pass
+        # Restore music grid height
+        try:
+            from .rooms.music_room import MusicGrid
+            content_area = self.query_one("#content-area")
+            music = content_area.query_one("#room-music")
+            grid = music.query_one(MusicGrid)
+            grid.styles.height = "1fr"
         except Exception:
             pass
         # Close any open panel (for room-switch cleanup)
@@ -1704,6 +1761,8 @@ class PurpleApp(App):
         try:
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.update_room(new_room)
+            compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
+            compact.update_room(new_room)
         except NoMatches:
             pass
 

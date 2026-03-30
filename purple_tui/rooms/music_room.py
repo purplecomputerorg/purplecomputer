@@ -910,11 +910,17 @@ class MusicMode(Container, can_focus=True):
         if not getattr(self.app, '_code_panel_enabled', True):
             return
         if self._repl_panel and not self._repl_panel.is_open:
+            # Pin grid height so REPL panel doesn't change it
+            grid = self.query_one(MusicGrid)
+            grid.styles.height = grid.size.height
             self._repl_panel.open()
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
         elif self._repl_panel and self._repl_panel.is_open:
             self._repl_panel.close()
+            # Restore flex sizing
+            grid = self.query_one(MusicGrid)
+            grid.styles.height = "1fr"
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
 

@@ -65,10 +65,11 @@ class CodeInput(Input):
     MATH_OPERATORS = {'+', '-', '*', '/'}
 
     def __init__(self, autocomplete_fn: Callable[[str], list[tuple[str, str, str]]] | None = None,
-                 math_mode: bool = False, **kwargs):
+                 math_mode: bool = False, context_autocomplete: bool = False, **kwargs):
         super().__init__(placeholder="", **kwargs)
         self._autocomplete_fn = autocomplete_fn
         self._math_mode = math_mode
+        self._context_autocomplete = context_autocomplete
         self.autocomplete_matches: list[tuple[str, str, str]] = []
         self.autocomplete_type: str = "emoji"
         self.autocomplete_index: int = 0
@@ -96,13 +97,20 @@ class CodeInput(Input):
                         'to', 'up', 'us', 'we', 'hi', 'oh', 'ok'}
 
         if len(last_word) < 2 or last_word in COMMON_2CHAR:
-            self.autocomplete_matches = []
-            self.autocomplete_type = "emoji"
-            self.autocomplete_index = 0
-            self.exact_match_display = ""
-            return
-
-        results = self._autocomplete_fn(last_word, text)
+            # Context-aware REPL panels (music/art) can handle short words
+            # (e.g. "choose " showing instruments, "color " showing colors)
+            if self._context_autocomplete and self._autocomplete_fn:
+                results = self._autocomplete_fn(last_word, text)
+            else:
+                results = []
+            if not results:
+                self.autocomplete_matches = []
+                self.autocomplete_type = "emoji"
+                self.autocomplete_index = 0
+                self.exact_match_display = ""
+                return
+        else:
+            results = self._autocomplete_fn(last_word, text)
 
         # Separate exact matches from suggestions
         exact = [r for r in results if r[0] == last_word]

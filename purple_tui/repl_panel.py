@@ -58,6 +58,12 @@ _INSTRUMENT_PREFIX = re.compile(
     r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE
 )
 
+# Curated color suggestions when typing "color " with no/short prefix
+_DEFAULT_COLORS = ['red', 'green', 'blue', 'yellow', 'purple']
+
+# Hard cap on context-aware autocomplete results
+_MAX_CONTEXT_RESULTS = 7
+
 
 def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False,
                                instrument_aware: bool = False):
@@ -72,22 +78,24 @@ def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False,
             content = get_content()
             if content.get_color(last_word):
                 return [(last_word, content.get_color(last_word), "")]
+            if len(last_word) < 2:
+                # Short/empty prefix: show curated defaults instead of searching
+                return [(w, content.get_color(w) or "", "") for w in _DEFAULT_COLORS]
             results = content.search_words(last_word)
-            # Filter to color-only results (no emoji-only entries)
             colors = [(w, c or "", "") for w, c, _e in results if c]
-            return colors[:5]
+            return colors[:_MAX_CONTEXT_RESULTS]
 
         # After "choose "/"select "/"play "/"instrument ", suggest instrument names
         if instrument_aware and _INSTRUMENT_PREFIX.match(full_text):
             if last_word in _INSTRUMENT_NAMES:
                 return [(last_word, "", "")]
             matches = sorted(n for n in _INSTRUMENT_NAMES if n.startswith(last_word))
-            return [(n, "", "") for n in matches[:5]]
+            return [(n, "", "") for n in matches[:_MAX_CONTEXT_RESULTS]]
 
         if last_word in keywords:
             return [(last_word, "", "")]
         matches = sorted(kw for kw in keywords if kw.startswith(last_word))
-        return [(kw, "", "") for kw in matches[:5]]
+        return [(kw, "", "") for kw in matches[:_MAX_CONTEXT_RESULTS]]
     return autocomplete_fn
 
 
@@ -183,6 +191,7 @@ class ReplPanel(Vertical):
             yield CodeInput(
                 highlighter=WordHighlighter(self._validator),
                 autocomplete_fn=self._autocomplete_fn,
+                context_autocomplete=(self._room in ('music', 'art')),
                 id="repl-input",
             )
         yield RecallHint(id="repl-recall-hint")

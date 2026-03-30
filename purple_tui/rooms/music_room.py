@@ -165,14 +165,18 @@ class MusicRoomHeader(Static):
 
         letters_label = caps("Letters")
 
-        if self._letters_mode:
-            music_part = f"[dim]{ICON_MUSIC} {instrument_label}[/]"
-            letters_part = f"[bold]{letters_label}[/]"
-        else:
-            music_part = f"[bold]{ICON_MUSIC} {instrument_label}[/]"
-            letters_part = f"[dim]{letters_label}[/]"
+        sel = "bold #1e1033 on #9b7bc4"
+        unsel = "dim"
 
-        return f"{music_part}  [dim]{caps('Tab')}[/]  {letters_part}"
+        if self._letters_mode:
+            music_part = f"[{unsel}]{ICON_MUSIC} {instrument_label}[/]"
+            letters_part = f"[{sel}] {letters_label} [/]"
+        else:
+            music_part = f"[{sel}] {ICON_MUSIC} {instrument_label} [/]"
+            letters_part = f"[{unsel}]{letters_label}[/]"
+
+        tab_label = caps("Tab")
+        return f"{music_part}  [{unsel}]{tab_label}[/]  {letters_part}"
 
 
 class MusicGrid(Widget):

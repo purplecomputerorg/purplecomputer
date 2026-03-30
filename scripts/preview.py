@@ -1,15 +1,40 @@
 #!/usr/bin/env python3
 """Headless preview of Purple Computer UI.
 
-Runs the app without a real terminal, navigates to a room, takes a screenshot.
-Outputs SVG and (if rsvg-convert is available) PNG.
+Runs the app without a real terminal, performs actions, takes a screenshot.
 
 Usage:
-    just preview [room]        # play, music, or art (default: play)
-    just preview art
-    just preview music
+    just preview [room] [actions...]
 
-The screenshot is saved to /tmp/screenshots/preview.svg (and .png if possible).
+    # Basic room previews
+    just preview play
+    just preview music
+    just preview art
+
+    # With code panel open
+    just preview art code_panel
+
+    # Type text into the Play room prompt
+    just preview play type:hello
+
+    # Type on art canvas then open code panel
+    just preview art type:hi code_panel
+
+    # Press specific keys
+    just preview music key:tab key:a key:b key:c
+
+    # Combine everything
+    just preview art code_panel type:print key:enter
+
+Actions (processed left to right):
+    code_panel       Toggle the code panel on
+    type:TEXT        Type text characters one at a time
+    key:KEY          Press a key (enter, tab, space, up, down, left, right,
+                     escape, backspace, delete, or a single character)
+    wait:SECONDS     Pause for N seconds (e.g. wait:0.5)
+    clear            Clear the art canvas
+
+Output: path to the PNG (or SVG if PNG conversion unavailable).
 """
 
 import asyncio
@@ -26,8 +51,10 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-# Suppress pygame welcome message
+# Suppress noisy import output
 import io
+_real_stdout = sys.__stdout__
+_real_stderr = sys.__stderr__
 sys.stdout = io.StringIO()
 sys.stderr = io.StringIO()
 
@@ -37,9 +64,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from purple_tui.purple_tui import PurpleApp  # noqa: E402
 from purple_tui.constants import ROOM_PLAY, ROOM_MUSIC, ROOM_ART  # noqa: E402
 
-# Restore stdout/stderr
-sys.stdout = sys.__stdout__
-sys.stderr = sys.__stderr__
+# Restore
+sys.stdout = _real_stdout
+sys.stderr = _real_stderr
 
 SCREENSHOT_DIR = "/tmp/screenshots"
 ROOM_MAP = {
@@ -51,19 +78,15 @@ ROOM_MAP = {
 
 def svg_to_png(svg_path: str, png_path: str) -> bool:
     """Convert SVG to PNG using rsvg-convert (via nix-shell if needed)."""
-    # Try direct rsvg-convert first
     rsvg = shutil.which("rsvg-convert")
     if rsvg:
         try:
-            subprocess.run(
-                [rsvg, "-o", png_path, svg_path],
-                check=True, capture_output=True,
-            )
+            subprocess.run([rsvg, "-o", png_path, svg_path],
+                           check=True, capture_output=True)
             return True
         except subprocess.CalledProcessError:
             pass
 
-    # Try via nix-shell
     try:
         subprocess.run(
             ["nix-shell", "-p", "librsvg", "--run",
@@ -77,12 +100,57 @@ def svg_to_png(svg_path: str, png_path: str) -> bool:
     return False
 
 
-async def preview(room_name: str) -> str:
-    """Run the app headlessly and take a screenshot."""
+async def run_action(app, action_str: str) -> None:
+    """Execute a single action string against the running app."""
+    if action_str == "code_panel":
+        app._open_repl_panel()
+        # Open the REPL panel in the current room
+        room = app.active_room
+        app._open_code_panel_in_room(room)
+        await asyncio.sleep(0.3)
+
+    elif action_str == "clear":
+        await app._execute_dev_command({"action": "clear"})
+        await asyncio.sleep(0.1)
+
+    elif action_str.startswith("type:"):
+        text = action_str[5:]
+        for char in text:
+            await app._execute_dev_command({"action": "key", "value": char})
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.1)
+
+    elif action_str.startswith("key:"):
+        key = action_str[4:]
+        await app._execute_dev_command({"action": "key", "value": key})
+        await asyncio.sleep(0.1)
+
+    elif action_str.startswith("wait:"):
+        seconds = float(action_str[5:])
+        await asyncio.sleep(seconds)
+
+
+def build_filename(room: str, actions: list[str]) -> str:
+    """Build a descriptive filename from room and actions."""
+    parts = [room]
+    for a in actions:
+        # Sanitize for filename
+        safe = a.replace(":", "_").replace(" ", "")
+        parts.append(safe)
+    name = "_".join(parts)
+    # Truncate if too long
+    if len(name) > 80:
+        name = name[:80]
+    return name
+
+
+async def preview(room_name: str, actions: list[str]) -> str:
+    """Run the app headlessly, perform actions, take a screenshot."""
     os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
-    svg_path = os.path.join(SCREENSHOT_DIR, f"preview_{room_name}.svg")
-    png_path = os.path.join(SCREENSHOT_DIR, f"preview_{room_name}.png")
+    fname = build_filename(room_name, actions)
+    svg_path = os.path.join(SCREENSHOT_DIR, f"{fname}.svg")
+    png_path = os.path.join(SCREENSHOT_DIR, f"{fname}.png")
 
     app = PurpleApp()
 
@@ -100,6 +168,11 @@ async def preview(room_name: str) -> str:
             await asyncio.sleep(0.3)
             await pilot.pause()
 
+        # Execute actions
+        for action_str in actions:
+            await run_action(app, action_str)
+            await pilot.pause()
+
         # Take screenshot
         app.save_screenshot(svg_path)
 
@@ -112,13 +185,17 @@ async def preview(room_name: str) -> str:
 
 
 def main():
-    room = sys.argv[1] if len(sys.argv) > 1 else "play"
-    if room not in ROOM_MAP:
-        print(f"Unknown room: {room}")
-        print(f"Available: {', '.join(ROOM_MAP.keys())}")
-        sys.exit(1)
+    args = sys.argv[1:]
 
-    result = asyncio.run(preview(room))
+    # First arg is room (or default to play)
+    if args and args[0] in ROOM_MAP:
+        room = args[0]
+        actions = args[1:]
+    else:
+        room = "play"
+        actions = args
+
+    result = asyncio.run(preview(room, actions))
     print(result)
 
 

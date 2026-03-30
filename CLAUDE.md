@@ -1,5 +1,21 @@
 # Claude Code Notes for Purple Computer
 
+## Headless UI Preview
+
+Use `just preview` to take headless screenshots on the server (no display needed). After making UI changes, preview them to verify layout and behavior.
+
+```bash
+just preview play                              # Default Play room
+just preview art                               # Art room
+just preview music                             # Music room
+just preview art code_panel                    # Art with code panel open
+just preview play type:5+3 key:enter           # Type and submit in Play
+just preview art code_panel type:forward key:enter  # Run a turtle command
+just preview music key:tab                     # Switch instrument tab
+```
+
+Output is a PNG at `/tmp/screenshots/`. Read the file to view it. See `guides/headless-preview.md` for the full action reference.
+
 ## Screenshots
 
 Screenshots are stored in `/tmp/screenshots/`. Check for recent files sorted by date (e.g. `SCR-20260306-*.png`).

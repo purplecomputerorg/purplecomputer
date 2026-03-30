@@ -1337,10 +1337,8 @@ class PurpleApp(App):
                     compact.update_room(self.active_room)
                     compact.display = True
                     # Full indicator(4) → compact(1) frees 3 rows.
-                    # Grow viewport by exactly 3 to keep total height constant,
-                    # preventing the vertical centering from shifting.
-                    # title(2) + viewport(33+2border) + compact(1) = 38 rows.
-                    viewport.styles.height = VIEWPORT_HEIGHT + 3
+                    # Grow viewport by 4: 3 from indicator + 1 from available space.
+                    viewport.styles.height = VIEWPORT_HEIGHT + 4
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
@@ -1733,8 +1731,16 @@ class PurpleApp(App):
             # Focus will happen in on_mount of the widget
 
     def _focus_room(self, widget) -> None:
-        """Focus the appropriate element in a mode widget"""
-        # Each mode has a primary focusable element
+        """Focus the appropriate element in a mode widget."""
+        # If code panel is open, focus the REPL input
+        if self._code_panel_active and self.active_room in (Room.MUSIC, Room.ART):
+            try:
+                panel = widget.query_one(ReplPanel)
+                if panel.is_open:
+                    panel.query_one("#repl-input").focus()
+                    return
+            except Exception:
+                pass
         if self.active_room == Room.PLAY:
             try:
                 widget.query_one("#play-input").focus()

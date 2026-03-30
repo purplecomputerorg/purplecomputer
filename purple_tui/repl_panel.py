@@ -149,11 +149,13 @@ class ReplPanel(Vertical):
     }
 
     #repl-recall-hint {
-        margin-left: 7;
+        margin-left: 8;
+        margin-top: 1;
     }
 
     #repl-autocomplete-hint {
-        margin-left: 6;
+        margin-left: 8;
+        margin-top: 1;
     }
     """
 
@@ -199,13 +201,23 @@ class ReplPanel(Vertical):
         yield ExampleHint(hints=self._hints, id="repl-example-hint")
 
     def on_input_changed(self, event) -> None:
-        """Update autocomplete and recall hints when input changes."""
+        """Update autocomplete and recall hints when input changes.
+
+        Recall and autocomplete are mutually exclusive:
+        empty input shows recall, typing shows autocomplete.
+        """
         try:
             code_input = self.query_one("#repl-input", CodeInput)
             hint = self.query_one("#repl-autocomplete-hint", AutocompleteHint)
-            hint.update(code_input.autocomplete_hint)
             recall = self.query_one("#repl-recall-hint", RecallHint)
-            recall.show_if_empty(not code_input.value)
+            if code_input.value:
+                hint.update(code_input.autocomplete_hint)
+                hint.display = True
+                recall.display = False
+            else:
+                hint.display = False
+                recall.display = True
+                recall.show_if_empty(True)
         except Exception:
             pass
 

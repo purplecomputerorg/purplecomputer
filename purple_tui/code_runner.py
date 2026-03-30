@@ -344,10 +344,12 @@ class ArtCodeRunner:
                             hex_color = candidate
                     if hex_color:
                         self.canvas._last_key_color = hex_color
-                        self.canvas._set_paint_mode(True)
+                        self.canvas._paint_mode = True
                         paint_on = True
                         write_on = False
                         self.canvas._mark_cursor_dirty()
+                        from .rooms.art_room import PaintModeChanged
+                        self.canvas.post_message(PaintModeChanged(True, hex_color))
                         self.canvas.refresh()
                     continue
 

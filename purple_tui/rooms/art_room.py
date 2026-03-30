@@ -1363,14 +1363,24 @@ class ArtMode(Container):
                     # Write mode: buffer space, send on tap only
                     return
                 # Arrow held: pass through for painting (no REPL toggle)
+                await canvas.handle_keyboard_action(action)
+                return
+            elif action.is_down and action.is_repeat:
+                if not canvas._paint_mode and self._space_hold.is_pending:
+                    # Write mode: suppress repeats while hold timer is pending
+                    return
+                # Paint mode or no pending hold: pass through
+                await canvas.handle_keyboard_action(action)
+                return
             elif not action.is_down:
                 tapped = self._space_hold.on_up()
                 if tapped and not canvas._paint_mode:
                     # Write mode tap: send the buffered space-down
                     await canvas.handle_keyboard_action(
                         ControlAction(action='space', is_down=True, is_repeat=False))
-            # Pass through to canvas (up events, repeat events, arrow-held)
-            await canvas.handle_keyboard_action(action)
+                # Pass through up event to canvas (releases paint brush etc.)
+                await canvas.handle_keyboard_action(action)
+                return
             return
 
         # Any other key: cancel space hold timer (no flush needed outside REPL)

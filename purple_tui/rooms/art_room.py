@@ -1384,10 +1384,12 @@ class ArtMode(Container):
                 return
             return
 
-        # Any other key: cancel space hold timer (no flush needed outside REPL)
-        self._space_hold.on_other_key()
-
+        # Another key while space is pending: flush space as a tap in write mode
         canvas = self.query_one("#art-canvas", ArtCanvas)
+        if self._space_hold.on_other_key() and not canvas._paint_mode:
+            await canvas.handle_keyboard_action(
+                ControlAction(action='space', is_down=True, is_repeat=False))
+
         await canvas.handle_keyboard_action(action)
 
 

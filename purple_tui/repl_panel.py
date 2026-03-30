@@ -79,8 +79,8 @@ def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False,
             content = get_content()
             if content.get_color(last_word):
                 return [(last_word, content.get_color(last_word), "")]
-            if len(last_word) < 2:
-                # Short/empty prefix: show curated defaults instead of searching
+            if not last_word:
+                # Empty prefix: show curated defaults instead of searching
                 return [(w, content.get_color(w) or "", "") for w in _DEFAULT_COLORS]
             results = content.search_words(last_word)
             colors = [(w, c or "", "") for w, c, _e in results if c]

@@ -22,14 +22,14 @@ The terminal (Alacritty) becomes display-only.
 ```
 Hardware Keyboard
        ↓
-evdev (/dev/input/event*)
+evdev (/dev/input/event*)  ← may be multiple devices
        ↓
 TUI Process:
-  ├── EvdevReader (async task)
-  │     - Reads raw events from evdev
+  ├── EvdevReader (one async task per device)
+  │     - Reads raw events from all keyboard evdev devices
   │     - Sees key down (value=1) and key up (value=0)
-  │     - Captures scancodes for F-key remapping
-  │     - Emits RawKeyEvent
+  │     - Captures scancodes per device (no cross-contamination)
+  │     - Emits RawKeyEvent from whichever device fires
   │           ↓
   │   KeyboardStateMachine
   │     - Tracks pressed keys with timestamps
@@ -67,20 +67,23 @@ class RawKeyEvent:
 
 ### EvdevReader
 
-Async task that reads from the keyboard device:
+Finds all real keyboard devices and reads from all of them concurrently. Some laptops expose two keyboard input devices, and which one delivers events can change when USB devices are added/removed.
 
 ```python
 class EvdevReader:
-    async def run(self):
+    # _find_keyboards() returns ALL real keyboards (strict + loose fallback)
+    # One async task per device, events delivered from any of them
+
+    async def _read_loop(self, device):
         async for event in device.async_read_loop():
-            if event.type == EV_KEY and event.value in (0, 1):
+            if event.type == EV_KEY and event.value in (0, 1, 2):
                 raw_event = RawKeyEvent(
                     keycode=event.code,
-                    is_down=(event.value == 1),
+                    is_down=(event.value in (1, 2)),
                     timestamp=event.timestamp(),
-                    scancode=self._pending_scancode,
+                    scancode=self._pending_scancodes.pop(dev_path, 0),
                 )
-                await self._emit(raw_event)
+                await self._callback(raw_event)
 ```
 
 ### KeyboardStateMachine

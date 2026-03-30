@@ -56,7 +56,7 @@ With the minimal X11 setup, X11 may not claim event5 anymore, leaving it availab
 
 ---
 
-## The Fix
+## The Fix (Phase 1: Strict Detection)
 
 Made `_find_keyboard()` in `purple_tui/input.py` use strict validation instead of just checking for the presence of any letter keys.
 
@@ -68,6 +68,14 @@ A real keyboard must have:
 Falls back to a looser check (just letter keys) if nothing passes the strict test, to avoid breaking on exotic hardware.
 
 This is hardware-agnostic: no vendor name checks, no Apple-specific logic. It works because the test is "can this device type full sentences?" which only real keyboards can do.
+
+## The Fix (Phase 2: Multi-Device Support)
+
+After fixing detection, we hit a related issue: some laptops expose two keyboard input devices. During live boot (with USB drive present), device numbering differs from after install (no USB). The app would find one device that happened to work in live boot, but a different one after install.
+
+The fix mirrors what was done for the power button: `_find_keyboard()` became `_find_keyboards()` and returns ALL matching devices. EvdevReader creates one async read loop per device and delivers events from any of them. Same pattern as PowerButtonReader listening on all power button devices.
+
+This ensures keyboard input works regardless of which evdev device delivers the actual key events, across all laptop hardware and USB configurations.
 
 ---
 

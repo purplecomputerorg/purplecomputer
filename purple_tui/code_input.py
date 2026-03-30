@@ -87,7 +87,7 @@ class CodeInput(Input):
             self.exact_match_display = ""
             return
 
-        text = self.value.lower().strip()
+        text = self.value.lower().lstrip()
         match = re.search(r'([a-z]+)$', text)
         last_word = match.group(1) if match else ""
 

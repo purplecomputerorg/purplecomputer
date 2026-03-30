@@ -27,6 +27,9 @@ UtmpIdentifier=tty1
 TTYReset=no
 TTYVHangup=no
 TTYVTDisallocate=no
+# Don't let this service block shutdown. Default is 90s which causes
+# the system to hang on a purple screen for 90s if something is stuck.
+TimeoutStopSec=10
 # Restart on failure (replaces manual fail counter)
 Restart=on-failure
 RestartSec=2

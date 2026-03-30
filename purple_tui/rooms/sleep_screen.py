@@ -258,10 +258,34 @@ class ByeScreen(Screen):
 
     def on_mount(self) -> None:
         """Show goodbye briefly, then shut down."""
+        # Spawn a detached watchdog process FIRST. This runs independently
+        # of the TUI, so even if systemd kills the X11 session (and thus
+        # the Textual event loop), the watchdog will still force power off.
+        self._spawn_shutdown_watchdog()
         self.set_timer(2.0, self._do_shutdown)
-        # Fallback: if normal shutdown hangs (common on live ISOs),
-        # force power off after 10 seconds
-        self.set_timer(10.0, self._force_shutdown)
+
+    def _spawn_shutdown_watchdog(self) -> None:
+        """Spawn a background process that force-powers-off after 15 seconds.
+
+        Independent of the TUI event loop: survives X11/Textual being killed.
+        Normal shutdown completes well before 15s, so this is pure safety net.
+        """
+        import subprocess
+        try:
+            subprocess.Popen(
+                ["sh", "-c",
+                 "sleep 15 && "
+                 "systemctl poweroff --force 2>/dev/null || "
+                 "sudo systemctl poweroff --force 2>/dev/null; "
+                 "sleep 5 && "
+                 "systemctl poweroff --force --force 2>/dev/null || "
+                 "sudo systemctl poweroff --force --force 2>/dev/null"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,  # Detach from TUI's process group
+            )
+        except Exception:
+            pass
 
     def _do_shutdown(self) -> None:
         """Execute shutdown"""
@@ -271,11 +295,6 @@ class ByeScreen(Screen):
                 self.query_one("#bye-text", Static).update("Please turn off")
             except Exception:
                 pass
-
-    def _force_shutdown(self) -> None:
-        """Force power off if normal shutdown is stuck."""
-        pm = get_power_manager()
-        pm.force_shutdown()
 
     def on_key(self, event: events.Key) -> None:
         """Suppress all keys during shutdown."""

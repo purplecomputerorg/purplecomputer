@@ -1687,6 +1687,11 @@ class PurpleApp(App):
                 screen.dismiss()
                 break
 
+        # Release evdev grabs before shutdown so they don't block
+        # systemd's service stop sequence
+        if self._evdev_reader:
+            self._evdev_reader.release_grab()
+
         self._bye_screen_active = True
         self.push_screen(ByeScreen())
 

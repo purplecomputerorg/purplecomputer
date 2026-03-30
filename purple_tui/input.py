@@ -248,70 +248,85 @@ class EvdevReader:
         self._callback = callback
         self._device_path = device_path
         self._grab = grab
-        self._device = None
+        self._devices: list = []  # All keyboard evdev devices
         self._running = False
-        self._pending_scancode = 0
-        self._task: Optional[asyncio.Task] = None
+        self._pending_scancodes: dict = {}  # Per-device pending scancodes
+        self._tasks: list[asyncio.Task] = []
+
+    @property
+    def _device(self):
+        """Primary device (for backward compat with logging)."""
+        return self._devices[0] if self._devices else None
 
     async def start(self) -> None:
         """Start reading keyboard events in background."""
         from evdev import InputDevice
 
-        # Find or open device
-        if self._device_path:
-            self._device = InputDevice(self._device_path)
-        else:
-            self._device = self._find_keyboard()
+        def _diag(msg):
+            try:
+                with open("/tmp/evdev-diag.log", "a") as f:
+                    f.write(f"{msg}\n")
+            except Exception:
+                pass
+            logger.info(msg)
 
-        if self._device is None:
+        _diag("EvdevReader.start() called")
+
+        # Find or open devices
+        if self._device_path:
+            self._devices = [InputDevice(self._device_path)]
+        else:
+            self._devices = self._find_keyboards()
+
+        if not self._devices:
+            _diag("ERROR: no keyboard found")
             raise RuntimeError(
                 "Could not find your keyboard.\n"
                 "Please make sure a keyboard is connected.\n\n"
                 f"If this keeps happening, contact {SUPPORT_EMAIL}"
             )
 
-        logger.info(f"EvdevReader: using {self._device.path} ({self._device.name})")
+        for dev in self._devices:
+            _diag(f"EvdevReader: using {dev.path} ({dev.name})")
 
-        # Grab device if requested
+        # Grab devices if requested
         if self._grab:
-            try:
-                self._device.grab()
-                logger.info("EvdevReader: grabbed keyboard exclusively")
-            except IOError as e:
-                logger.warning(f"EvdevReader: could not grab device: {e}")
+            for dev in self._devices:
+                try:
+                    dev.grab()
+                    logger.info(f"EvdevReader: grabbed {dev.path} exclusively")
+                except IOError as e:
+                    logger.warning(f"EvdevReader: could not grab {dev.path}: {e}")
 
         self._running = True
-        self._task = asyncio.create_task(self._read_loop())
+        for dev in self._devices:
+            self._tasks.append(asyncio.create_task(self._read_loop(dev)))
 
     async def stop(self) -> None:
-        """Stop reading and release the device."""
+        """Stop reading and release all devices."""
         self._running = False
 
-        if self._task:
-            self._task.cancel()
-            # Close device first to unblock async_read_loop() immediately.
-            # Virtual devices (UTM, QEMU) may not wake up on cancel alone.
-            if self._device:
-                if self._grab:
-                    try:
-                        self._device.ungrab()
-                    except (IOError, OSError):
-                        pass
-                self._device.close()
-                self._device = None
-            try:
-                await asyncio.wait_for(self._task, timeout=2.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
-            self._task = None
-        elif self._device:
+        # Close all devices first to unblock async_read_loop() immediately.
+        # Virtual devices (UTM, QEMU) may not wake up on cancel alone.
+        for dev in self._devices:
             if self._grab:
                 try:
-                    self._device.ungrab()
+                    dev.ungrab()
                 except (IOError, OSError):
                     pass
-            self._device.close()
-            self._device = None
+            try:
+                dev.close()
+            except Exception:
+                pass
+        self._devices = []
+
+        for task in self._tasks:
+            task.cancel()
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+        self._tasks = []
 
         logger.info("EvdevReader: stopped")
 
@@ -323,12 +338,13 @@ class EvdevReader:
         (e.g., for input() to receive keystrokes).
         Call reacquire_grab() after resuming.
         """
-        if self._device and self._grab:
-            try:
-                self._device.ungrab()
-                logger.info("EvdevReader: released grab for terminal")
-            except (IOError, OSError) as e:
-                logger.warning(f"EvdevReader: could not release grab: {e}")
+        if self._grab:
+            for dev in self._devices:
+                try:
+                    dev.ungrab()
+                    logger.info(f"EvdevReader: released grab on {dev.path}")
+                except (IOError, OSError) as e:
+                    logger.warning(f"EvdevReader: could not release grab on {dev.path}: {e}")
 
     def reacquire_grab(self) -> None:
         """
@@ -339,44 +355,42 @@ class EvdevReader:
         """
         import select
 
-        if self._device and self._grab:
-            try:
-                # Flush any pending events before reacquiring grab
-                # (prevents stale keypresses from terminal session)
-                # Use select() with timeout to avoid blocking forever
+        if self._grab:
+            for dev in self._devices:
                 try:
-                    flush_deadline = time.monotonic() + 1.0
-                    while time.monotonic() < flush_deadline:
-                        # Check if there's data to read (0 timeout = non-blocking)
-                        readable, _, _ = select.select([self._device.fd], [], [], 0)
-                        if not readable:
-                            break  # No more events
-                        self._device.read_one()
-                except Exception:
-                    pass
+                    # Flush any pending events before reacquiring grab
+                    try:
+                        flush_deadline = time.monotonic() + 1.0
+                        while time.monotonic() < flush_deadline:
+                            readable, _, _ = select.select([dev.fd], [], [], 0)
+                            if not readable:
+                                break
+                            dev.read_one()
+                    except Exception:
+                        pass
 
-                self._device.grab()
-                logger.info("EvdevReader: reacquired grab")
-            except (IOError, OSError) as e:
-                logger.warning(f"EvdevReader: could not reacquire grab: {e}")
+                    dev.grab()
+                    logger.info(f"EvdevReader: reacquired grab on {dev.path}")
+                except (IOError, OSError) as e:
+                    logger.warning(f"EvdevReader: could not reacquire grab on {dev.path}: {e}")
 
-    async def _read_loop(self) -> None:
-        """Main event reading loop."""
+    async def _read_loop(self, device) -> None:
+        """Main event reading loop for one keyboard device."""
+        dev_path = device.path
         try:
-            async for event in self._device.async_read_loop():
+            async for event in device.async_read_loop():
                 if not self._running:
                     break
 
-                # Capture scancode (arrives before key event)
+                # Capture scancode (arrives before key event), tracked per-device
                 if event.type == EV_MSC and event.code == MSC_SCAN:
-                    self._pending_scancode = event.value
+                    self._pending_scancodes[dev_path] = event.value
                     continue
 
                 # Process key events: 0=up, 1=down, 2=repeat
                 if event.type == EV_KEY and event.value in (0, 1, 2):
                     keycode = event.code
-                    scancode = self._pending_scancode
-                    self._pending_scancode = 0
+                    scancode = self._pending_scancodes.pop(dev_path, 0)
 
                     raw_event = RawKeyEvent(
                         keycode=keycode,
@@ -394,15 +408,17 @@ class EvdevReader:
             # Device was closed (normal during shutdown)
             pass
         except Exception as e:
-            logger.error(f"EvdevReader error: {e}")
-            raise
-            raise
+            logger.error(f"EvdevReader error on {dev_path}: {e}")
 
-    def _find_keyboard(self):
-        """Find the first real keyboard device.
+    def _find_keyboards(self):
+        """Find all real keyboard input devices.
 
-        Must work on every laptop keyboard (ThinkPad, Dell, Surface, Apple, etc.)
-        without being fooled by USB flash drives that expose HID interfaces with
+        Some laptops expose two keyboard devices (e.g. AT Translated Set 2
+        keyboard on two different event nodes). Which one delivers key events
+        can change when USB devices are plugged/unplugged, so listen on all
+        of them, just like PowerButtonReader listens on all power buttons.
+
+        Must not be fooled by USB flash drives that expose HID interfaces with
         partial keyboard capabilities.
 
         A real keyboard has: all 26 letter keys, Enter, Space, at least one
@@ -411,6 +427,15 @@ class EvdevReader:
         """
         import evdev
         from evdev import InputDevice
+
+        def _diag(msg):
+            """Write diagnostic to a file readable from recovery shell."""
+            try:
+                with open("/tmp/evdev-diag.log", "a") as f:
+                    f.write(f"{msg}\n")
+            except Exception:
+                pass
+            logger.info(msg)
 
         # Minimum keys a real keyboard must have (not vendor-specific)
         letter_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))
@@ -435,41 +460,71 @@ class EvdevReader:
 
             return True
 
-        # Prefer by-id path (stable across reboots)
+        found = []
+        seen_paths = set()  # Avoid duplicates from by-id symlinks
+
+        # Check by-id paths first (stable names across reboots)
         by_id = Path("/dev/input/by-id")
         if by_id.exists():
             for path in sorted(by_id.iterdir()):
                 name = path.name.lower()
                 if "kbd" in name or "keyboard" in name:
                     try:
-                        dev = InputDevice(str(path.resolve()))
+                        real_path = str(path.resolve())
+                        if real_path in seen_paths:
+                            continue
+                        dev = InputDevice(real_path)
                         if _is_real_keyboard(dev):
-                            return dev
+                            _diag(f"KBD SCAN: found via by-id: {real_path} ({dev.name})")
+                            found.append(dev)
+                            seen_paths.add(real_path)
+                        else:
+                            dev.close()
                     except (PermissionError, OSError):
                         continue
 
-        # Fall back to scanning all devices
+        # Also scan all devices (catches keyboards without by-id entries)
         for dev_path in sorted(evdev.list_devices()):
+            if dev_path in seen_paths:
+                continue
             try:
                 dev = InputDevice(dev_path)
                 if _is_real_keyboard(dev):
-                    return dev
+                    _diag(f"KBD SCAN: found via scan: {dev_path} ({dev.name})")
+                    found.append(dev)
+                    seen_paths.add(dev_path)
+                else:
+                    dev.close()
             except (PermissionError, OSError):
                 continue
 
+        if found:
+            _diag(f"KBD SCAN: listening on {len(found)} keyboard device(s)")
+            return found
+
         # Last resort: accept any device with letter keys (weaker check,
         # but better than no keyboard at all)
+        _diag("KBD SCAN: no strict matches, falling back to loose match")
         logger.warning("No keyboard passed strict check, falling back to loose match")
         for dev_path in sorted(evdev.list_devices()):
+            if dev_path in seen_paths:
+                continue
             try:
                 dev = InputDevice(dev_path)
                 key_caps = set(dev.capabilities().get(evdev.ecodes.EV_KEY, []))
                 if letter_keys.issubset(key_caps):
-                    return dev
+                    _diag(f"KBD SCAN: loose match: {dev_path} ({dev.name})")
+                    found.append(dev)
+                    seen_paths.add(dev_path)
+                else:
+                    dev.close()
             except (PermissionError, OSError):
                 continue
 
-        return None
+        if found:
+            _diag(f"KBD SCAN: {len(found)} device(s) via loose match")
+
+        return found
 
 
 # =============================================================================

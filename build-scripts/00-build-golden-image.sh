@@ -388,6 +388,15 @@ kernel.sysrq = 0
 kernel.printk = 1 1 1 1
 SYSCTL
 
+    # Reduce systemd's default stop timeout from 90s to 15s.
+    # If any service hangs during shutdown, the system won't wait 90s on a
+    # purple screen. 15s is plenty for clean shutdown of all Purple services.
+    mkdir -p "$MOUNT_DIR/etc/systemd/system.conf.d"
+    cat > "$MOUNT_DIR/etc/systemd/system.conf.d/purple-timeouts.conf" <<'TIMEOUTS'
+[Manager]
+DefaultTimeoutStopSec=15s
+TIMEOUTS
+
     # Disable Ctrl+Alt+Del reboot (systemd target)
     # By default this triggers a system reboot, which kids could hit accidentally
     chroot "$MOUNT_DIR" systemctl mask ctrl-alt-del.target

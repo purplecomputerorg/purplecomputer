@@ -169,11 +169,11 @@ class MusicRoomHeader(Static):
         unsel = "dim"
 
         if self._letters_mode:
-            music_part = f"[{unsel}]{ICON_MUSIC} {instrument_label}[/]"
+            music_part = f"[{unsel}] {ICON_MUSIC} {instrument_label} [/]"
             letters_part = f"[{sel}] {letters_label} [/]"
         else:
             music_part = f"[{sel}] {ICON_MUSIC} {instrument_label} [/]"
-            letters_part = f"[{unsel}]{letters_label}[/]"
+            letters_part = f"[{unsel}] {letters_label} [/]"
 
         tab_label = caps("Tab")
         return f"{music_part}  [{unsel}]{tab_label}[/]  {letters_part}"

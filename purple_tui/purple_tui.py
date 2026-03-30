@@ -955,6 +955,15 @@ class PurpleApp(App):
             await self._lid_switch_reader.stop()
             self._lid_switch_reader = None
 
+        # Shut down pygame mixer to prevent SDL audio thread hang on exit.
+        # Especially important in VMs with virtualized audio devices.
+        try:
+            import pygame.mixer
+            if pygame.mixer.get_init():
+                pygame.mixer.quit()
+        except Exception:
+            pass
+
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Show/hide paint legend and update active row when paint mode changes."""
         try:
@@ -2693,6 +2702,15 @@ def main():
         sys.exit(1)
 
     app.run(mouse=False)  # Purple Computer is keyboard-only
+
+    # Belt-and-suspenders: ensure pygame mixer is shut down after app.run()
+    # returns, in case on_unmount didn't fire or was skipped.
+    try:
+        import pygame.mixer
+        if pygame.mixer.get_init():
+            pygame.mixer.quit()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

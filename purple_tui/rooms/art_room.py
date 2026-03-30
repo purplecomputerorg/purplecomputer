@@ -362,8 +362,8 @@ class ArtCanvas(Widget, can_focus=True):
         self.refresh()
 
     def _update_blink_for_code_mode(self) -> None:
-        """Update blink state. Always blink in code mode and normal mode."""
-        self._start_blink()
+        """Update blink rate. Half speed in code mode so it's less distracting."""
+        self._start_blink(slow=self._code_mode)
 
     def _toggle_blink(self) -> None:
         """Toggle cursor visibility for blink effect."""
@@ -371,12 +371,16 @@ class ArtCanvas(Widget, can_focus=True):
         self._mark_cursor_dirty()
         self.refresh()
 
-    def _start_blink(self) -> None:
-        """Start cursor blinking."""
+    BLINK_NORMAL = 0.4
+    BLINK_SLOW = 0.8
+
+    def _start_blink(self, slow: bool = False) -> None:
+        """Start cursor blinking. Half speed when slow=True (code mode)."""
         self._cursor_visible = True
         if self._blink_timer is not None:
             self._blink_timer.stop()
-        self._blink_timer = self.set_interval(0.4, self._toggle_blink)
+        rate = self.BLINK_SLOW if slow else self.BLINK_NORMAL
+        self._blink_timer = self.set_interval(rate, self._toggle_blink)
 
     def _stop_blink(self) -> None:
         """Stop cursor blinking."""
@@ -1197,10 +1201,10 @@ class CanvasHeader(Static):
             # Paint mode: PAINT highlighted, Write dim
             text_color = self._get_contrast_color(self._last_color)
             paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
-            write_part = f"[dim]{write_icon}[/]"
+            write_part = f"[dim] {write_icon} [/]"
         else:
             # Write mode: WRITE highlighted, Paint dim
-            paint_part = f"[dim]{paint_icon}[/]"
+            paint_part = f"[dim] {paint_icon} [/]"
             write_part = f"[{APP_BG_DARK} on #9070C0] {write_icon} [/]"
 
         if getattr(self.app, '_littles_mode', None):

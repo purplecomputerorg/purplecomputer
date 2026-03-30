@@ -84,6 +84,12 @@ def _make_keyword_autocomplete(keywords: set[str], color_aware: bool = False,
                 return [(w, content.get_color(w) or "", "") for w in _DEFAULT_COLORS]
             results = content.search_words(last_word)
             colors = [(w, c or "", "") for w, c, _e in results if c]
+            if not colors and len(last_word) == 1:
+                # Prefix index starts at 2 chars; scan colors dict for single char
+                colors = sorted(
+                    [(n, h, "") for n, h in content.colors.items() if n.startswith(last_word)],
+                    key=lambda x: x[0],
+                )
             return colors[:_MAX_CONTEXT_RESULTS]
 
         # After "choose "/"select "/"play "/"instrument ", suggest instrument names

@@ -151,7 +151,6 @@ class ReplPanel(Vertical):
 
     #repl-recall-hint {
         margin-left: 7;
-        margin-top: 1;
     }
 
     #repl-autocomplete-hint {
@@ -188,12 +187,7 @@ class ReplPanel(Vertical):
         """Make panel visible and set initial widget state."""
         self.display = True
         try:
-            code_input = self.query_one("#repl-input", CodeInput)
-            code_input.focus()
-            # Hide both hints initially; on_input_changed will show the right one
-            self.query_one("#repl-autocomplete-hint", AutocompleteHint).display = False
-            recall = self.query_one("#repl-recall-hint", RecallHint)
-            recall.display = bool(recall._last_command)
+            self.query_one("#repl-input", CodeInput).focus()
         except Exception:
             pass
 
@@ -217,8 +211,9 @@ class ReplPanel(Vertical):
     def on_input_changed(self, event) -> None:
         """Update autocomplete and recall hints when input changes.
 
-        Recall and autocomplete are mutually exclusive:
-        empty input shows recall, typing shows autocomplete.
+        Both widgets stay visible (height: 1) to keep layout stable.
+        Recall renders empty when there's input, autocomplete renders
+        empty when there isn't. No display toggling.
         """
         try:
             code_input = self.query_one("#repl-input", CodeInput)
@@ -226,12 +221,10 @@ class ReplPanel(Vertical):
             recall = self.query_one("#repl-recall-hint", RecallHint)
             if code_input.value:
                 hint.update(code_input.autocomplete_hint)
-                hint.display = True
-                recall.display = False
+                recall.show_if_empty(False)
             else:
-                hint.display = False
+                hint.update("")
                 recall.show_if_empty(True)
-                recall.display = recall._visible
         except Exception:
             pass
 

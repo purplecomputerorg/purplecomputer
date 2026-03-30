@@ -16,6 +16,8 @@ just preview music key:tab                     # Switch instrument tab
 
 Output is a PNG at `/tmp/screenshots/`. Read the file to view it. See `guides/headless-preview.md` for the full action reference.
 
+**Visual/layout tests:** `app.run_test()` can verify widget sizes, positions, and layout stability headlessly. See `tests/test_code_panel_layout.py`.
+
 ## Screenshots
 
 Screenshots are stored in `/tmp/screenshots/`. Check for recent files sorted by date (e.g. `SCR-20260306-*.png`).

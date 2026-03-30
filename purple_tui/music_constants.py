@@ -28,6 +28,11 @@ INSTRUMENTS = [
     ("musicbox", "Music Box"),
 ]
 
+# Common short names that map to instrument IDs
+INSTRUMENT_ALIASES = {
+    "uke": "ukulele",
+}
+
 # Musical frequencies (G major scale across 3 octaves)
 NOTE_FREQUENCIES = {
     # Top row: bright but not shrill (392-988 Hz)

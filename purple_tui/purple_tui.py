@@ -1241,8 +1241,8 @@ class PurpleApp(App):
                     music._play_key(key, m)
 
                 def set_inst(name):
-                    from .music_constants import INSTRUMENTS
-                    name_lower = name.lower()
+                    from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
+                    name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
                     for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
                         if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
                             music._instrument_index = i

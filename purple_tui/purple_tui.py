@@ -1327,21 +1327,17 @@ class PurpleApp(App):
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
             compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
-            title_bar = self.query_one("#title-bar")
             with self.batch_update():
                 if active:
                     indicator.display = False
-                    title_bar.display = False
                     compact.update_room(self.active_room)
                     compact.display = True
-                    # Hide title(2) and full indicator(4), show compact(1).
-                    # Frees 2+3=5 rows for the REPL panel inside the viewport.
-                    # viewport(35+2border) + compact(1) = 38 rows.
+                    # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
+                    # title(2) + viewport(35) + compact(1) = 38 rows.
                     viewport.styles.height = VIEWPORT_HEIGHT + 5
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
-                    title_bar.display = True
                     compact.display = False
                     indicator.display = True
                     if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:

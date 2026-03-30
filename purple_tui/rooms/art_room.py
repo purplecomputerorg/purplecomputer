@@ -1329,43 +1329,23 @@ class ArtMode(Container):
 
     async def handle_keyboard_action(self, action) -> None:
         """Route to REPL panel if open, otherwise delegate to canvas."""
-        # When REPL is open
+        # When REPL is open, route keyboard to REPL (both paint and write mode)
         if self._repl_panel and self._repl_panel.is_open:
-            canvas = self.query_one("#art-canvas", ArtCanvas)
-
-            # Space hold to close REPL (both modes)
+            # Space hold to close REPL, short press inserts space
             if isinstance(action, ControlAction) and action.action == 'space':
                 if action.is_down and not action.is_repeat:
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
-                    if canvas._paint_mode:
-                        return
-                    # Write mode: buffer, send tap to canvas
                 elif not action.is_down:
                     if self._space_hold.on_up():
-                        if canvas._paint_mode:
-                            await self._flush_space_tap_to_repl()
-                        else:
-                            await canvas.handle_keyboard_action(
-                                ControlAction(action='space', is_down=True, is_repeat=False))
+                        await self._flush_space_tap_to_repl()
                 return
-
-            # In write mode: route to canvas (except tab for mode toggle)
-            if not canvas._paint_mode:
-                if self._space_hold.on_other_key():
-                    # Flush buffered space to canvas
-                    await canvas.handle_keyboard_action(
-                        ControlAction(action='space', is_down=True, is_repeat=False))
-                if isinstance(action, ControlAction) and action.action == 'tab' and action.is_down:
-                    canvas._toggle_paint_mode()
-                    return
-                await canvas.handle_keyboard_action(action)
-                return
-
-            # Paint mode: route to REPL
+            # Another key while space pending: flush space first
             if self._space_hold.on_other_key():
                 await self._flush_space_tap_to_repl()
             result = await self._repl_panel.handle_keyboard_action(action)
             if result == "tab_fallthrough":
+                # Tab with no autocomplete: toggle paint/write mode
+                canvas = self.query_one("#art-canvas", ArtCanvas)
                 canvas._toggle_paint_mode()
             return
 

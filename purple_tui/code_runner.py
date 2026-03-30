@@ -214,17 +214,18 @@ class ArtCodeRunner:
         """canvas: ArtCanvas widget to dispatch commands to."""
         self.canvas = canvas
 
-    async def run(self, lines: list[str]) -> None:
+    async def run(self, lines: list[str], paint: bool = True) -> None:
         """Run art code asynchronously.
 
-        Defaults to paint mode on, so unrecognized lines paint their
-        characters onto the canvas (like typing with the brush).
+        When paint=True (default), unrecognized text paints colored blocks.
+        When paint=False (write mode), unrecognized text types characters.
+        Logo commands (forward, turn, etc.) work in both modes.
         """
         cmds = parse_lines(lines)
         flat = flatten_commands(cmds)
 
-        paint_on = True  # Default: painting is on
-        write_on = False
+        paint_on = paint
+        write_on = not paint
 
         for cmd in flat:
             if cmd['type'] != 'line':

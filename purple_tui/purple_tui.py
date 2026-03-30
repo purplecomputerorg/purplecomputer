@@ -1266,7 +1266,8 @@ class PurpleApp(App):
                 art = content_area.query_one("#room-art")
                 canvas = art.query_one("#art-canvas")
                 runner = ArtCodeRunner(canvas)
-                await runner.run(lines)
+                # Canvas paint_mode determines default: paint vs write
+                await runner.run(lines, paint=canvas._paint_mode)
             except Exception:
                 pass
 

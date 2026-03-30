@@ -1190,12 +1190,16 @@ class PurpleApp(App):
                             music._instrument_index = i
                             if music.grid:
                                 music.grid.set_instrument(i)
+                            if music._header:
+                                music._header.update_instrument(inst_name)
                             return
                     for i, (inst_id, inst_name) in enumerate(INSTRUMENTS):
                         if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
                             music._instrument_index = i
                             if music.grid:
                                 music.grid.set_instrument(i)
+                            if music._header:
+                                music._header.update_instrument(inst_name)
                             return
 
                 def set_letters(on):
@@ -1270,6 +1274,18 @@ class PurpleApp(App):
                 viewport.styles.height = VIEWPORT_HEIGHT
                 indicator.display = True
         except NoMatches:
+            pass
+        # Restore art canvas from code mode
+        try:
+            from .rooms.art_room import ArtCanvas, CanvasHeader
+            content_area = self.query_one("#content-area")
+            art = content_area.query_one("#room-art")
+            canvas = art.query_one("#art-canvas", ArtCanvas)
+            canvas.set_code_mode(False)
+            canvas._use_heading_cursor = False
+            header = art.query_one("#canvas-header", CanvasHeader)
+            header.set_code_mode(False)
+        except Exception:
             pass
         # Close any open panel (for room-switch cleanup)
         try:

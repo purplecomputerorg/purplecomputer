@@ -21,7 +21,7 @@ from pathlib import Path
 import asyncio
 import os
 import time
-from ..keyboard import CharacterAction, ControlAction
+from ..keyboard import CharacterAction, ControlAction, HoldOrTap
 from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
 )
@@ -576,9 +576,7 @@ class MusicMode(Container, can_focus=True):
         self._loop_progress_timer = None
         self._last_loop_space_time: float = 0.0
         # Space hold REPL toggle
-        self._space_hold_timer = None
-        self._space_other_key_pressed = False
-        self._space_hold_fired = False
+        self._space_hold = HoldOrTap(hold_seconds=0.5)
         self._repl_panel = None
         self._noscreen_dot_timer = None
 
@@ -907,19 +905,10 @@ class MusicMode(Container, can_focus=True):
         if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
 
-    def _cancel_space_hold_timer(self) -> None:
-        if self._space_hold_timer:
-            self._space_hold_timer.stop()
-            self._space_hold_timer = None
-
     def _on_space_hold_fired(self) -> None:
-        """Space held long enough without other keys: toggle REPL."""
-        self._space_hold_timer = None
-        if self._space_other_key_pressed:
-            return
+        """Space held long enough: toggle REPL."""
         if not getattr(self.app, '_code_panel_enabled', True):
             return
-        self._space_hold_fired = True
         if self._repl_panel and not self._repl_panel.is_open:
             self._repl_panel.open()
             from ..repl_panel import ReplPanelToggleRequested
@@ -928,6 +917,12 @@ class MusicMode(Container, can_focus=True):
             self._repl_panel.close()
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
+
+    async def _flush_space_tap_to_repl(self) -> None:
+        """Insert a space character into the REPL panel."""
+        from ..keyboard import ControlAction as CA
+        await self._repl_panel.handle_keyboard_action(
+            CA(action='space', is_down=True, is_repeat=False))
 
     async def handle_keyboard_action(self, action) -> None:
         """Handle keyboard actions from the main app's KeyboardStateMachine.
@@ -943,20 +938,14 @@ class MusicMode(Container, can_focus=True):
             # Space hold to close REPL, short press inserts space
             if isinstance(action, ControlAction) and action.action == 'space':
                 if action.is_down and not action.is_repeat:
-                    self._space_other_key_pressed = False
-                    self._space_hold_fired = False
-                    self._cancel_space_hold_timer()
-                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:
-                    self._cancel_space_hold_timer()
-                    if not self._space_hold_fired:
-                        # Short press: insert space in REPL
-                        from ..keyboard import ControlAction as CA
-                        await self._repl_panel.handle_keyboard_action(
-                            CA(action='space', is_down=True, is_repeat=False))
+                    if self._space_hold.on_up():
+                        await self._flush_space_tap_to_repl()
                 return
-            # Any other key: mark as pressed (cancels space hold) and route to REPL
-            self._space_other_key_pressed = True
+            # Another key while space pending: flush space first
+            if self._space_hold.on_other_key():
+                await self._flush_space_tap_to_repl()
             result = await self._repl_panel.handle_keyboard_action(action)
             if result == "tab_fallthrough":
                 # Tab with no autocomplete: switch music/letters mode
@@ -972,22 +961,16 @@ class MusicMode(Container, can_focus=True):
         if isinstance(action, ControlAction):
             if action.action == 'space':
                 if action.is_down and not action.is_repeat:
-                    # Fresh press: start hold timer, defer normal action to key-up
-                    self._space_other_key_pressed = False
-                    self._space_hold_fired = False
-                    self._cancel_space_hold_timer()
-                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:
-                    # Space released: fire normal action if hold didn't trigger
-                    self._cancel_space_hold_timer()
-                    if not self._space_hold_fired:
+                    if self._space_hold.on_up():
                         if not getattr(self.app, '_littles_mode', None):
                             self._handle_space()
                 return
 
             if action.is_down:
-                # Any other control key pressed: cancel space hold
-                self._space_other_key_pressed = True
+                # Any other control key: cancel space hold
+                self._space_hold.on_other_key()
 
                 # Escape: stop loop if active
                 if action.action == 'escape':
@@ -1021,7 +1004,7 @@ class MusicMode(Container, can_focus=True):
         # Character keys: play sound, cycle color, record into loop if active
         if isinstance(action, CharacterAction):
             # Any key press: cancel space hold
-            self._space_other_key_pressed = True
+            self._space_hold.on_other_key()
 
             char = action.char
             if not char:

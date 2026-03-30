@@ -345,6 +345,92 @@ class HoldState:
 
 
 # ============================================================================
+# Hold-or-Tap Detection
+# ============================================================================
+
+
+class HoldOrTap:
+    """Distinguishes a key hold from a quick tap using a timer.
+
+    Used for space-hold-to-toggle-REPL: hold space for 0.5s to toggle,
+    quick tap inserts a space character.
+
+    The critical behavior: if another key is pressed while the hold timer
+    is pending, the tap is flushed immediately (returned via on_other_key)
+    so it gets inserted BEFORE the new key. Without this, fast typing like
+    "left 10" produces "left1 0" because the space only arrives on key-up.
+
+    Usage:
+        hold = HoldOrTap(hold_seconds=0.5)
+
+        # On key down:
+        hold.on_down(widget.set_timer, on_hold_callback)
+
+        # On another key pressed while held:
+        if hold.on_other_key():
+            insert_tap_character()  # Flush space before the new key
+
+        # On key up:
+        if hold.on_up():
+            insert_tap_character()  # Normal tap (released before hold)
+    """
+
+    def __init__(self, hold_seconds: float = 0.5):
+        self.hold_seconds = hold_seconds
+        self._timer = None
+        self._hold_fired = False
+        self._pending = False  # Key is down and waiting for hold/tap resolution
+        self._on_hold = None
+
+    def on_down(self, set_timer_fn, on_hold) -> None:
+        """Call when the key is pressed down. Starts the hold timer."""
+        self._cancel_timer()
+        self._hold_fired = False
+        self._pending = True
+        self._on_hold = on_hold
+        self._timer = set_timer_fn(self.hold_seconds, self._fire_hold)
+
+    def on_up(self) -> bool:
+        """Call when the key is released. Returns True if it was a tap (not a hold)."""
+        self._cancel_timer()
+        was_pending = self._pending
+        self._pending = False
+        if self._hold_fired:
+            return False
+        return was_pending
+
+    def on_other_key(self) -> bool:
+        """Call when any other key is pressed.
+
+        Returns True if a pending tap should be flushed (insert the character
+        immediately, before processing the new key).
+        """
+        if self._pending and not self._hold_fired:
+            self._cancel_timer()
+            self._pending = False
+            return True
+        return False
+
+    @property
+    def is_pending(self) -> bool:
+        """True while key is down and hold/tap hasn't resolved yet."""
+        return self._pending and not self._hold_fired
+
+    def _fire_hold(self) -> None:
+        """Timer callback: hold threshold reached."""
+        self._timer = None
+        if self._pending:
+            self._hold_fired = True
+            if self._on_hold:
+                self._on_hold()
+
+    def _cancel_timer(self) -> None:
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
+
+
+# ============================================================================
 # Unified Keyboard State
 # ============================================================================
 

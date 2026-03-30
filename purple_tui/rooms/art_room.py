@@ -28,7 +28,7 @@ from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
 from ..keyboard import (
-    CharacterAction, NavigationAction, ControlAction,
+    CharacterAction, NavigationAction, ControlAction, HoldOrTap,
 )
 
 
@@ -496,14 +496,19 @@ class ArtCanvas(Widget, can_focus=True):
             if is_cursor_center and not in_gutter:
                 flush_run()
                 if code_mode:
-                    # Code mode: directional arrow if using turn/forward, smiley otherwise
+                    # Code mode: directional arrow if using turn/forward, dot otherwise
                     if cursor_visible:
                         bg = cell[2] if cell else default_bg
                         if self._use_heading_cursor:
                             char_out = HEADING_CURSORS.get(self._heading, CODE_CURSOR_CHAR)
                         else:
                             char_out = CODE_CURSOR_CHAR
-                        style_out = Style(color="#FFFFFF", bgcolor=bg, bold=True)
+                        # Use current paint color in paint mode, white in write mode
+                        if paint_mode:
+                            cursor_fg = self._last_key_color or "#FFFFFF"
+                        else:
+                            cursor_fg = "#FFFFFF"
+                        style_out = Style(color=cursor_fg, bgcolor=bg, bold=True)
                     else:
                         if cell:
                             char, fg_color, bg_color = cell
@@ -1238,9 +1243,7 @@ class ArtMode(Container):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._repl_panel = None
-        self._space_hold_timer = None
-        self._space_other_key_pressed = False
-        self._space_hold_fired = False
+        self._space_hold = HoldOrTap(hold_seconds=0.5)
 
     def compose(self) -> ComposeResult:
         from ..repl_panel import ReplPanel
@@ -1282,25 +1285,29 @@ class ArtMode(Container):
         except Exception:
             pass
 
-    def _cancel_space_hold_timer(self) -> None:
-        if self._space_hold_timer:
-            self._space_hold_timer.stop()
-            self._space_hold_timer = None
-
     def _on_space_hold_fired(self) -> None:
-        """Space held long enough without arrows: toggle REPL."""
-        self._space_hold_timer = None
-        if self._space_other_key_pressed:
-            return
+        """Space held long enough: toggle REPL."""
         if not getattr(self.app, '_code_panel_enabled', True):
             return
-        self._space_hold_fired = True
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        header = self.query_one("#canvas-header", CanvasHeader)
         if self._repl_panel and not self._repl_panel.is_open:
             self._repl_panel.open()
+            canvas.set_code_mode(True)
+            header.set_code_mode(True)
         elif self._repl_panel and self._repl_panel.is_open:
             self._repl_panel.close()
+            canvas.set_code_mode(False)
+            canvas._use_heading_cursor = False
+            header.set_code_mode(False)
         from ..repl_panel import ReplPanelToggleRequested
         self.post_message(ReplPanelToggleRequested("art"))
+
+    async def _flush_space_tap_to_repl(self) -> None:
+        """Insert a space character into the REPL panel."""
+        from ..keyboard import ControlAction as CA
+        await self._repl_panel.handle_keyboard_action(
+            CA(action='space', is_down=True, is_repeat=False))
 
     async def handle_keyboard_action(self, action) -> None:
         """Route to REPL panel if open, otherwise delegate to canvas."""
@@ -1309,18 +1316,14 @@ class ArtMode(Container):
             # Space hold to close REPL, short press inserts space
             if isinstance(action, ControlAction) and action.action == 'space':
                 if action.is_down and not action.is_repeat:
-                    self._space_other_key_pressed = False
-                    self._space_hold_fired = False
-                    self._cancel_space_hold_timer()
-                    self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:
-                    self._cancel_space_hold_timer()
-                    if not self._space_hold_fired:
-                        from ..keyboard import ControlAction as CA
-                        await self._repl_panel.handle_keyboard_action(
-                            CA(action='space', is_down=True, is_repeat=False))
+                    if self._space_hold.on_up():
+                        await self._flush_space_tap_to_repl()
                 return
-            self._space_other_key_pressed = True
+            # Another key while space pending: flush space first
+            if self._space_hold.on_other_key():
+                await self._flush_space_tap_to_repl()
             result = await self._repl_panel.handle_keyboard_action(action)
             if result == "tab_fallthrough":
                 # Tab with no autocomplete: toggle paint/write mode
@@ -1331,21 +1334,18 @@ class ArtMode(Container):
         # Check for space hold to open REPL
         if isinstance(action, ControlAction) and action.action == 'space':
             if action.is_down and not action.is_repeat:
-                self._space_other_key_pressed = False
-                if action.arrow_held:
-                    self._space_other_key_pressed = True
-                self._cancel_space_hold_timer()
-                self._space_hold_timer = self.set_timer(0.5, self._on_space_hold_fired)
+                if not action.arrow_held:
+                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
+                # Arrow held means painting, not REPL toggle
             elif not action.is_down:
-                self._cancel_space_hold_timer()
+                self._space_hold.on_up()  # Cancel any pending hold
             # Still pass through to canvas for normal space behavior
             canvas = self.query_one("#art-canvas", ArtCanvas)
             await canvas.handle_keyboard_action(action)
             return
 
-        # Any other key: cancel space hold timer
-        if isinstance(action, (ControlAction, CharacterAction, NavigationAction)):
-            self._space_other_key_pressed = True
+        # Any other key: cancel space hold timer (no flush needed outside REPL)
+        self._space_hold.on_other_key()
 
         canvas = self.query_one("#art-canvas", ArtCanvas)
         await canvas.handle_keyboard_action(action)

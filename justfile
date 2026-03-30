@@ -160,6 +160,10 @@ create-update version output *args:
 code-split-poc:
     PURPLE_ALACRITTY_CONFIG=config/alacritty/alacritty-dev.toml alacritty --config-file config/alacritty/alacritty-dev.toml -e .venv/bin/python scripts/code_split_poc.py
 
+# Release ISOs to Cloudflare R2 (e.g., just release, just release v1.0)
+release *args:
+    ./build-scripts/release-iso.sh {{args}}
+
 # Flash ISO to USB drive
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}

@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -506,8 +506,8 @@ class TestShutdownWatchdog:
         assert cmd[1] == "-c"
         assert "poweroff --force" in cmd[2]
 
-    def test_watchdog_has_escalating_force(self):
-        """Watchdog should escalate: --force, then --force --force."""
+    def test_watchdog_uses_double_force(self):
+        """Watchdog should use --force --force for immediate power off."""
         import subprocess
         from purple_tui.rooms.sleep_screen import ByeScreen
 
@@ -526,6 +526,62 @@ class TestShutdownWatchdog:
         screen = ByeScreen()
         with patch.object(subprocess, "Popen", side_effect=OSError("spawn failed")):
             screen._spawn_shutdown_watchdog()  # Should not raise
+
+    def test_watchdog_includes_sudo_fallback(self):
+        """Watchdog should try sudo in case user lacks direct permissions."""
+        import subprocess
+        from purple_tui.rooms.sleep_screen import ByeScreen
+
+        screen = ByeScreen()
+        with patch.object(subprocess, "Popen") as mock_popen:
+            screen._spawn_shutdown_watchdog()
+
+        cmd_str = mock_popen.call_args[0][0][2]
+        assert "sudo" in cmd_str
+
+    def test_watchdog_sleep_is_short(self):
+        """Watchdog should fire quickly (5 seconds), not 15 or 90."""
+        import subprocess
+        from purple_tui.rooms.sleep_screen import ByeScreen
+
+        screen = ByeScreen()
+        with patch.object(subprocess, "Popen") as mock_popen:
+            screen._spawn_shutdown_watchdog()
+
+        cmd_str = mock_popen.call_args[0][0][2]
+        # Should start with "sleep 5" not "sleep 10" or "sleep 15"
+        assert cmd_str.startswith("sleep 5")
+
+
+class TestByeScreenShutdown:
+    """Test that ByeScreen triggers shutdown immediately."""
+
+    def test_do_shutdown_calls_pm_shutdown(self):
+        """_do_shutdown should call PowerManager.shutdown()."""
+        from purple_tui.rooms.sleep_screen import ByeScreen
+
+        screen = ByeScreen()
+        with patch("purple_tui.rooms.sleep_screen.get_power_manager") as mock_get_pm:
+            mock_pm = MagicMock()
+            mock_pm.shutdown.return_value = True
+            mock_get_pm.return_value = mock_pm
+
+            screen._do_shutdown()
+
+        mock_pm.shutdown.assert_called_once()
+
+    def test_do_shutdown_handles_failure(self):
+        """If pm.shutdown() returns False, should not crash."""
+        from purple_tui.rooms.sleep_screen import ByeScreen
+
+        screen = ByeScreen()
+        with patch("purple_tui.rooms.sleep_screen.get_power_manager") as mock_get_pm:
+            mock_pm = MagicMock()
+            mock_pm.shutdown.return_value = False
+            mock_get_pm.return_value = mock_pm
+
+            # Should not raise even though shutdown failed
+            screen._do_shutdown()
 
 
 # =============================================================================

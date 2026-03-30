@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Power button shutdown is now near-instant (was ~10 seconds waiting for services to stop).
+- Installer powers off after completion instead of rebooting (no more hanging on "press Enter to restart").
 - Art room: "color red", "color blue", etc. sets brush color by name. "color t" sets by key mapping.
 - Art room: "lift" toggles pen up/down. "pen up"/"penup" and "pen down"/"pendown" for explicit control.
 - Art room: color autocomplete shows named colors after typing "color " in REPL.

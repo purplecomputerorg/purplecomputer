@@ -187,16 +187,12 @@ class PowerManager:
         _power_log(f"INIT: lid_path={self._lid_path}, mains_path={self._mains_path}, "
                     f"initial_charger={self._charger_state}")
 
-        # Check if we can poweroff (systemctl)
-        try:
-            result = subprocess.run(
-                ["which", "systemctl"],
-                capture_output=True,
-                timeout=2
-            )
-            self._poweroff_available = result.returncode == 0
-        except Exception:
-            self._poweroff_available = False
+        # Check if systemctl exists. Use shutil.which (no subprocess, can't hang).
+        import shutil
+        self._poweroff_available = shutil.which("systemctl") is not None
+        if not self._poweroff_available:
+            # Also check for plain poweroff as fallback
+            self._poweroff_available = shutil.which("poweroff") is not None
 
     def _find_mains(self) -> None:
         """Find an AC mains power supply in /sys/class/power_supply/.
@@ -318,6 +314,10 @@ class PowerManager:
         Returns True if command was sent (doesn't mean it worked).
         Falls back through multiple methods for maximum compatibility.
 
+        Uses --force to skip clean service stop (faster shutdown).
+        There's no user data to lose on a kids' computer, and clean
+        shutdown can hang for 10-15 seconds waiting for services.
+
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
@@ -333,13 +333,18 @@ class PowerManager:
             return True
 
         if not self._poweroff_available:
-            return False
+            _power_log("SHUTDOWN: no poweroff command found, trying anyway")
 
-        # Try multiple shutdown methods in order of preference
+        # --force skips clean service stop. This makes shutdown near-instant
+        # instead of waiting 10+ seconds for services to exit. No data to lose.
+        # Try every method regardless of _poweroff_available (sudo might work).
         commands = [
-            ["systemctl", "poweroff"],           # Direct (if user has permission)
-            ["sudo", "systemctl", "poweroff"],   # Via sudo (configured in sudoers)
-            ["sudo", "poweroff"],                # Traditional poweroff command
+            ["systemctl", "poweroff", "--force"],
+            ["sudo", "systemctl", "poweroff", "--force"],
+            ["sudo", "poweroff", "-f"],
+            # Non-force fallbacks in case --force isn't available
+            ["systemctl", "poweroff"],
+            ["sudo", "systemctl", "poweroff"],
         ]
 
         for cmd in commands:
@@ -354,30 +359,6 @@ class PowerManager:
                 continue
 
         return False
-
-    def force_shutdown(self) -> None:
-        """Force immediate power off. Used as fallback when normal shutdown hangs.
-
-        On live ISOs, the normal shutdown sequence can hang on overlayfs unmount.
-        --force skips the clean service stop and goes straight to power off.
-        """
-        if os.environ.get("PURPLE_SLEEP_DEMO"):
-            return
-
-        for cmd in [
-            ["systemctl", "poweroff", "--force"],
-            ["sudo", "systemctl", "poweroff", "--force"],
-            ["sudo", "poweroff", "-f"],
-        ]:
-            try:
-                subprocess.Popen(
-                    cmd,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                return
-            except Exception:
-                continue
 
 
 # Singleton instance

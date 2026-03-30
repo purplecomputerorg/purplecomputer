@@ -144,7 +144,7 @@ Two power states: awake and sleep face. Timers adapt to charger and lid:
 | Action | What happens |
 |--------|-------------|
 | Power button tap | Shows shutdown confirm. Second tap shuts down. Any other key cancels. |
-| Power button hold (3s) | Shows "Bye!" screen, then shuts down after 2s. |
+| Power button hold (3s) | Shows "Bye!" screen and shuts down immediately. |
 | Power button hold (10s) | Hardware forced off (ACPI, cannot be changed). |
 | Lid close | Sleep face immediately. Shuts down after 10 min. Lid reopen resets everything. |
 | Idle (on charger) | 5 min: sleep face. No auto-shutdown. |

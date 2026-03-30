@@ -117,6 +117,20 @@ class SleepScreen(Screen):
         if self._shutdown_initiated:
             return
         self._shutdown_initiated = True
+        # Spawn a watchdog in case shutdown hangs (same as ByeScreen)
+        import subprocess
+        try:
+            subprocess.Popen(
+                ["sh", "-c",
+                 "sleep 5 && "
+                 "systemctl poweroff --force --force 2>/dev/null || "
+                 "sudo systemctl poweroff --force --force 2>/dev/null"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
         pm = get_power_manager()
         if not pm.shutdown():
             try:
@@ -257,26 +271,25 @@ class ByeScreen(Screen):
         yield Static("Turning off...", id="bye-text")
 
     def on_mount(self) -> None:
-        """Show goodbye briefly, then shut down."""
+        """Show goodbye and shut down immediately."""
         # Spawn a detached watchdog process FIRST. This runs independently
         # of the TUI, so even if systemd kills the X11 session (and thus
         # the Textual event loop), the watchdog will still force power off.
         self._spawn_shutdown_watchdog()
-        self.set_timer(2.0, self._do_shutdown)
+        # Shut down immediately. The user already confirmed (held power 3s
+        # or tapped twice). No reason to delay.
+        self._do_shutdown()
 
     def _spawn_shutdown_watchdog(self) -> None:
-        """Spawn a background process that force-powers-off after 15 seconds.
+        """Spawn a background process that force-powers-off after 5 seconds.
 
         Independent of the TUI event loop: survives X11/Textual being killed.
-        Normal shutdown completes well before 15s, so this is pure safety net.
+        Normal --force shutdown is near-instant, so 5s is generous.
         """
         import subprocess
         try:
             subprocess.Popen(
                 ["sh", "-c",
-                 "sleep 15 && "
-                 "systemctl poweroff --force 2>/dev/null || "
-                 "sudo systemctl poweroff --force 2>/dev/null; "
                  "sleep 5 && "
                  "systemctl poweroff --force --force 2>/dev/null || "
                  "sudo systemctl poweroff --force --force 2>/dev/null"],
@@ -288,7 +301,7 @@ class ByeScreen(Screen):
             pass
 
     def _do_shutdown(self) -> None:
-        """Execute shutdown"""
+        """Execute shutdown."""
         pm = get_power_manager()
         if not pm.shutdown():
             try:

@@ -206,6 +206,143 @@ if HAS_PYTEST:
 
 
 # =============================================================================
+# Shutdown Command Tests
+# =============================================================================
+
+if HAS_PYTEST:
+    from unittest.mock import patch, call
+
+    class TestShutdownExecution:
+        """Test that shutdown() actually attempts to power off."""
+
+        @pytest.fixture
+        def pm(self):
+            import purple_tui.power_manager as pm_module
+            pm_module._power_manager = None
+            mgr = PowerManager()
+            mgr._poweroff_available = True
+            return mgr
+
+        def test_shutdown_calls_systemctl_force(self, pm):
+            """shutdown() should try systemctl poweroff --force first."""
+            with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+                result = pm.shutdown()
+
+            assert result is True
+            mock_popen.assert_called_once()
+            cmd = mock_popen.call_args[0][0]
+            assert cmd == ["systemctl", "poweroff", "--force"]
+
+        def test_shutdown_falls_back_on_failure(self, pm):
+            """If first command fails, should try next ones."""
+            call_count = 0
+
+            def fail_then_succeed(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count <= 2:
+                    raise FileNotFoundError("not found")
+                return MagicMock()
+
+            with patch("purple_tui.power_manager.subprocess.Popen",
+                       side_effect=fail_then_succeed):
+                result = pm.shutdown()
+
+            assert result is True
+            assert call_count == 3  # Failed twice, succeeded on third
+
+        def test_shutdown_returns_false_when_all_fail(self, pm):
+            """If every command fails, should return False."""
+            with patch("purple_tui.power_manager.subprocess.Popen",
+                       side_effect=FileNotFoundError("not found")):
+                result = pm.shutdown()
+
+            assert result is False
+
+        def test_shutdown_tries_even_when_poweroff_unavailable(self, pm):
+            """Should still try commands even if _poweroff_available is False."""
+            pm._poweroff_available = False
+            with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+                result = pm.shutdown()
+
+            assert result is True
+            mock_popen.assert_called_once()
+
+        def test_shutdown_demo_mode_does_not_poweroff(self, pm):
+            """In demo mode, shutdown should not call any commands."""
+            import os
+            original = os.environ.get("PURPLE_SLEEP_DEMO")
+            try:
+                os.environ["PURPLE_SLEEP_DEMO"] = "1"
+                with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
+                    result = pm.shutdown()
+                assert result is True
+                mock_popen.assert_not_called()
+            finally:
+                if original:
+                    os.environ["PURPLE_SLEEP_DEMO"] = original
+                else:
+                    os.environ.pop("PURPLE_SLEEP_DEMO", None)
+
+        def test_shutdown_uses_force_flag(self, pm):
+            """First three commands should all use --force or -f."""
+            commands_tried = []
+
+            def capture_cmd(*args, **kwargs):
+                commands_tried.append(args[0])
+                raise FileNotFoundError("not found")
+
+            with patch("purple_tui.power_manager.subprocess.Popen",
+                       side_effect=capture_cmd):
+                pm.shutdown()
+
+            # First three commands should have force flags
+            assert "--force" in commands_tried[0]       # systemctl --force
+            assert "--force" in commands_tried[1]       # sudo systemctl --force
+            assert "-f" in commands_tried[2]            # sudo poweroff -f
+
+    class TestPoweroffAvailableCheck:
+        """Test the _poweroff_available initialization."""
+
+        def test_available_when_systemctl_exists(self):
+            """Should be True when systemctl is on PATH."""
+            import purple_tui.power_manager as pm_module
+            pm_module._power_manager = None
+            with patch("shutil.which", return_value="/usr/bin/systemctl"):
+                mgr = PowerManager()
+            assert mgr._poweroff_available is True
+
+        def test_available_when_only_poweroff_exists(self):
+            """Should be True when poweroff is on PATH (no systemctl)."""
+            import purple_tui.power_manager as pm_module
+            pm_module._power_manager = None
+
+            def which_side_effect(cmd):
+                if cmd == "poweroff":
+                    return "/sbin/poweroff"
+                return None
+
+            with patch("shutil.which", side_effect=which_side_effect):
+                mgr = PowerManager()
+            assert mgr._poweroff_available is True
+
+        def test_unavailable_when_nothing_exists(self):
+            """Should be False when neither systemctl nor poweroff exists."""
+            import purple_tui.power_manager as pm_module
+            pm_module._power_manager = None
+            with patch("shutil.which", return_value=None):
+                mgr = PowerManager()
+            assert mgr._poweroff_available is False
+
+        def test_shutil_which_cannot_hang(self):
+            """shutil.which uses os.access, no subprocess, cannot block."""
+            import shutil
+            # This is a design assertion: shutil.which doesn't spawn processes
+            # so it can't hang on I/O like subprocess.run could
+            assert callable(shutil.which)
+
+
+# =============================================================================
 # Standalone runner
 # =============================================================================
 

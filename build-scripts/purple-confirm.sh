@@ -55,35 +55,54 @@ trap cleanup EXIT
 # Previous approach used `read -t 60 _ </dev/tty1` which is fragile:
 # terminal may be in bad state after raw mode + installer, tty1 may not
 # be the right device, and read -t may hang if the fd is broken.
-# This countdown approach always reboots, no keyboard dependency.
-countdown_reboot() {
+# This countdown approach always powers off, no keyboard dependency.
+countdown_poweroff() {
     local seconds="${1:-30}"
-    log "Countdown reboot: ${seconds}s"
+    log "Countdown poweroff: ${seconds}s"
 
-    # Start a hard watchdog: if everything else fails, sysrq reboot
-    # Runs in background, fires after countdown + 15s grace period
-    ( sleep $((seconds + 15)) && echo b > /proc/sysrq-trigger ) &
+    # Hard watchdog (background): if everything below hangs, this fires.
+    # Re-enables sysrq first since the installed system disables it.
+    (
+        sleep $((seconds + 10))
+        echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
+        echo o > /proc/sysrq-trigger 2>/dev/null
+    ) &
 
     while [ "$seconds" -gt 0 ]; do
-        # Show countdown on same line (carriage return to overwrite)
-        printf "\r         Restarting in %2d seconds...  " "$seconds"
+        printf "\r         Powering off in %2d seconds...  " "$seconds"
         sleep 1
         seconds=$((seconds - 1))
     done
     echo ""
 
-    log "Rebooting now"
-    sync
-    reboot -f 2>/dev/null || true
-    # If reboot -f failed, try other methods
-    sleep 2
-    echo b > /proc/sysrq-trigger 2>/dev/null || true
-    # Last resort
-    sleep 5
-    reboot 2>/dev/null || true
+    log "Powering off now"
+
+    # The USB drive may already be removed at this point, so the live
+    # overlayfs/squashfs backing is gone. ANY command that touches the
+    # filesystem (sync, unmount, reading binaries) can hang forever.
+    #
+    # --force --force = immediate power off, no sync, no unmount.
+    # This is the only reliable method when the boot media is gone.
+    #
+    # We background sync with a timeout so it doesn't block us.
+    # We also background each poweroff attempt so if one hangs on I/O,
+    # the next one still fires.
+    ( sync ) & sleep 1  # Best-effort, don't wait
+
+    # Most aggressive first: --force --force skips everything
+    systemctl poweroff --force --force 2>/dev/null &
+    sleep 3
+    # Direct kernel call (bypasses systemd)
+    poweroff -f 2>/dev/null &
+    sleep 3
+    # Sysrq: kernel-level immediate power off, cannot hang
+    echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
+    echo o > /proc/sysrq-trigger 2>/dev/null
+    # If we're still alive, the background watchdog will get us
+    sleep 30
 }
 
-cancel_and_reboot() {
+cancel_and_poweroff() {
     log "Installation CANCELLED by user"
     echo ""
     echo "Installation cancelled."
@@ -91,16 +110,16 @@ cancel_and_reboot() {
 
     # Check if we're in debug mode
     if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
-        log "Debug mode - dropping to shell instead of reboot"
+        log "Debug mode - dropping to shell instead of poweroff"
         echo "Debug mode active. Dropping to shell..."
-        echo "Type 'reboot' to restart."
+        echo "Type 'poweroff' to shut down."
         exec /bin/bash
     else
-        countdown_reboot 5
+        countdown_poweroff 5
     fi
 }
 
-input_error_and_reboot() {
+input_error_and_poweroff() {
     local reason="$1"
     log_error "Input device failure: $reason"
     echo ""
@@ -115,7 +134,7 @@ input_error_and_reboot() {
     echo "    - USB ports are working"
     echo ""
     echo ""
-    countdown_reboot 30
+    countdown_poweroff 30
 }
 
 # =============================================================================
@@ -149,7 +168,7 @@ if [ ! -x "$PAYLOAD_PATH/install.sh" ]; then
     echo "ERROR: Installer payload not found."
     echo "Please ensure the USB drive is still connected."
     echo ""
-    countdown_reboot 10
+    countdown_poweroff 10
 fi
 
 # =============================================================================
@@ -167,7 +186,7 @@ for tty in /dev/tty1 /dev/tty0 /dev/console; do
 done
 
 if [ -z "$TTY_DEV" ]; then
-    input_error_and_reboot "No writable TTY device found"
+    input_error_and_poweroff "No writable TTY device found"
 fi
 
 log "Using TTY: $TTY_DEV"
@@ -263,7 +282,7 @@ stty sane 2>/dev/null || true
 # HANDLE INPUT RESULT
 # =============================================================================
 if [ $CANCELLED -eq 1 ]; then
-    cancel_and_reboot
+    cancel_and_poweroff
 fi
 
 if [ $CONFIRMED -ne 1 ]; then
@@ -272,7 +291,7 @@ if [ $CONFIRMED -ne 1 ]; then
     echo "Timeout: No input received for $INPUT_TIMEOUT seconds."
     echo "Installation cancelled for safety."
     echo ""
-    cancel_and_reboot
+    cancel_and_poweroff
 fi
 
 # =============================================================================
@@ -327,7 +346,7 @@ if "$PAYLOAD_PATH/install.sh" >/dev/tty2 2>&1; then
     echo ""
     echo ""
 
-    countdown_reboot 30
+    countdown_poweroff 30
 else
     EXIT_CODE=$?
     log "FAILED: Installation error (exit $EXIT_CODE)"
@@ -352,5 +371,5 @@ else
     echo ""
     echo ""
 
-    countdown_reboot 30
+    countdown_poweroff 30
 fi

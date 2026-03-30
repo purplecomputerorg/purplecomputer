@@ -125,10 +125,11 @@ With keyboard input bypassing the terminal:
 
 ### Device Grabbing
 
-When the TUI grabs the keyboard device (`EVIOCGRAB`):
+The TUI grabs all keyboard devices (`EVIOCGRAB`):
 - Other applications can't receive keyboard input
 - This is intentional for kiosk mode
 - In dev mode, grabbing can be disabled for convenience
+- All grabs are released before shutdown to avoid blocking systemd
 
 ---
 

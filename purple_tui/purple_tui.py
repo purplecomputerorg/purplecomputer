@@ -342,17 +342,13 @@ class RoomIndicator(Horizontal):
 
 
 class CompactRoomIndicator(Static):
-    """Compact 2-row indicator shown when REPL panel is open.
-
-    Row 1: Room switcher (Esc + room icons)
-    Row 2: Close Code Panel hint (Space)
-    """
+    """Compact 1-row room indicator shown when REPL panel is open."""
 
     DEFAULT_CSS = """
     CompactRoomIndicator {
         dock: bottom;
         width: 100%;
-        height: 2;
+        height: 1;
         text-align: center;
         color: $text-muted;
         background: $background;
@@ -382,9 +378,7 @@ class CompactRoomIndicator(Static):
                 parts.append(f"[bold $accent]{icon} {caps(name)}[/]")
             else:
                 parts.append(f"[dim]{icon} {caps(name)}[/]")
-        row1 = f"Esc {ICON_MENU}  " + "  ".join(parts)
-        row2 = caps(f"{ICON_CODE} Close Code (hold Space) {ICON_CODE}")
-        return f"{row1}\n{row2}"
+        return f"Esc {ICON_MENU}  " + "  ".join(parts)
 
 
 class SpeechIndicator(Static):
@@ -1168,8 +1162,18 @@ class PurpleApp(App):
         """Show the mode picker modal."""
         self.clear_notifications()
         current_room = self.active_room.name.lower()
+        # Check if any REPL panel is currently open
+        code_open = False
+        try:
+            for panel in self.query(ReplPanel):
+                if panel.is_open:
+                    code_open = True
+                    break
+        except Exception:
+            pass
         picker = RoomPickerScreen(
             current_room=current_room,
+            code_panel_open=code_open,
         )
         self.push_screen(picker, self._on_room_picked)
 
@@ -1193,6 +1197,11 @@ class PurpleApp(App):
     def _on_room_picked(self, result: dict | None) -> None:
         """Handle mode picker dismiss for non-room actions."""
         if result is None:
+            return
+
+        # Close code panel
+        if result.get("close_code"):
+            self._close_repl_panel()
             return
 
         # Start fresh: clear all rooms
@@ -1312,9 +1321,9 @@ class PurpleApp(App):
                 indicator.display = False
                 compact.update_room(self.active_room)
                 compact.display = True
-                # Full indicator(4) → compact(2) saves 2, REPL needs 5 rows.
-                # title(2) + viewport(34) + compact(2) = 38 rows.
-                viewport.styles.height = VIEWPORT_HEIGHT + 4
+                # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
+                # title(2) + viewport(35) + compact(1) = 38 rows.
+                viewport.styles.height = VIEWPORT_HEIGHT + 5
                 viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
         except NoMatches:
             pass

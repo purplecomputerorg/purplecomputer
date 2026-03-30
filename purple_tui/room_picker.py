@@ -15,7 +15,7 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH,
-    ICON_BROOM,
+    ICON_BROOM, ICON_CODE,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 
@@ -33,7 +33,7 @@ NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 # Navigation rows
 ROW_ROOMS = 0
 ROW_EXTRAS = 1
-NUM_ROWS = 2
+ROW_CODE = 2
 
 # Extras columns: 0 = volume, 1 = clear rooms
 COL_VOLUME = 0
@@ -262,6 +262,17 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
+    #picker-code-row {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-bottom: 1;
+    }
+
+    #opt-close-code {
+        width: 52;
+    }
+
     #picker-hint {
         width: 100%;
         text-align: center;
@@ -281,9 +292,10 @@ class RoomPickerScreen(ModalScreen):
             super().__init__()
             self.result = result
 
-    def __init__(self, current_room: str = "play", **kwargs):
+    def __init__(self, current_room: str = "play", code_panel_open: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
+        self._code_panel_open = code_panel_open
         # Always start on the room row, highlighting the current room
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
@@ -308,6 +320,10 @@ class RoomPickerScreen(ModalScreen):
             with Horizontal(id="picker-extras"):
                 yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
+
+            if self._code_panel_open:
+                with Horizontal(id="picker-code-row"):
+                    yield ExtraOption(ICON_CODE, "Close Code", "Space", id="opt-close-code")
 
             yield Static(caps("Arrow keys move   Enter pick"), id="picker-hint")
 
@@ -339,6 +355,17 @@ class RoomPickerScreen(ModalScreen):
             except Exception:
                 pass
 
+        # Code row (only present when code panel is open)
+        if self._code_panel_open:
+            try:
+                code_opt = self.query_one("#opt-close-code", ExtraOption)
+                if self._active_row == ROW_CODE:
+                    code_opt.add_class("selected")
+                else:
+                    code_opt.remove_class("selected")
+            except Exception:
+                pass
+
     def _select_room(self, index: int) -> None:
         if 0 <= index < len(ROOM_OPTIONS):
             _, _, _, result = ROOM_OPTIONS[index]
@@ -360,12 +387,18 @@ class RoomPickerScreen(ModalScreen):
                     self._extra_index = min(NUM_EXTRA_COLS - 1, self._extra_index + 1)
                 self._update_selection()
             elif action.direction == 'up':
-                if self._active_row == ROW_EXTRAS:
+                if self._active_row == ROW_CODE:
+                    self._active_row = ROW_EXTRAS
+                    self._update_selection()
+                elif self._active_row == ROW_EXTRAS:
                     self._active_row = ROW_ROOMS
                     self._update_selection()
             elif action.direction == 'down':
                 if self._active_row == ROW_ROOMS:
                     self._active_row = ROW_EXTRAS
+                    self._update_selection()
+                elif self._active_row == ROW_EXTRAS and self._code_panel_open:
+                    self._active_row = ROW_CODE
                     self._update_selection()
             return
 
@@ -398,6 +431,10 @@ class RoomPickerScreen(ModalScreen):
                         self._open_volume()
                     elif self._extra_index == COL_CLEAR:
                         self._confirm_clear_rooms()
+                elif self._active_row == ROW_CODE:
+                    self.dismiss({"close_code": True})
+            elif action.action == 'space' and self._code_panel_open:
+                self.dismiss({"close_code": True})
             elif action.action == 'escape':
                 self.dismiss(None)
             elif action.action == 'volume_mute':

@@ -5,6 +5,7 @@ Uses the same CodeInput/InputPrompt/AutocompleteHint widgets as the Play room.
 Toggled via space-hold in music/art rooms.
 """
 
+import asyncio
 import re
 
 from textual.containers import Vertical, Horizontal
@@ -148,13 +149,7 @@ class ReplPanel(Vertical):
         layout: horizontal;
     }
 
-    #repl-recall-hint {
-        margin-left: 8;
-        margin-top: 1;
-    }
-
     #repl-autocomplete-hint {
-        margin-left: 8;
         margin-top: 1;
     }
     """
@@ -177,9 +172,23 @@ class ReplPanel(Vertical):
 
     def open(self) -> None:
         self._open = True
+        # Defer visibility so viewport resize settles first (prevents flicker)
+        try:
+            loop = asyncio.get_running_loop()
+            loop.call_later(0.05, self._show_panel)
+        except RuntimeError:
+            self._show_panel()
+
+    def _show_panel(self) -> None:
+        """Make panel visible and set initial widget state."""
         self.display = True
         try:
-            self.query_one("#repl-input", CodeInput).focus()
+            code_input = self.query_one("#repl-input", CodeInput)
+            code_input.focus()
+            # Hide both hints initially; on_input_changed will show the right one
+            self.query_one("#repl-autocomplete-hint", AutocompleteHint).display = False
+            recall = self.query_one("#repl-recall-hint", RecallHint)
+            recall.display = bool(recall._last_command)
         except Exception:
             pass
 
@@ -216,8 +225,8 @@ class ReplPanel(Vertical):
                 recall.display = False
             else:
                 hint.display = False
-                recall.display = True
                 recall.show_if_empty(True)
+                recall.display = recall._visible
         except Exception:
             pass
 

@@ -202,6 +202,8 @@ class MusicCodeRunner:
     @staticmethod
     def _is_instrument(name: str) -> bool:
         """Check if name matches any instrument (exact, alias, or prefix)."""
+        if not name:
+            return False
         from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
         for inst_id, inst_name in INSTRUMENTS:

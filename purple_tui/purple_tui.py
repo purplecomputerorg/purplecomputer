@@ -1381,7 +1381,12 @@ class PurpleApp(App):
             pass
 
     def _open_code_panel_in_room(self, room: Room) -> None:
-        """Open the REPL panel in the specified room and apply code panel UI."""
+        """Open the REPL panel in the specified room and apply code panel UI.
+
+        Does NOT pin canvas/grid height here because the room may not be
+        laid out yet (size would be 0). Height stays at 1fr; the viewport
+        growth compensates for the REPL panel.
+        """
         self._apply_code_panel_ui(active=True)
         room_id = f"room-{room.name.lower()}"
         try:
@@ -1389,18 +1394,12 @@ class PurpleApp(App):
             room_widget = content_area.query_one(f"#{room_id}")
             panel = room_widget.query_one(ReplPanel)
             if not panel.is_open:
-                # Pin the content widget height before opening panel
                 if room == Room.ART:
                     from .rooms.art_room import ArtCanvas, CanvasHeader
                     canvas = room_widget.query_one("#art-canvas", ArtCanvas)
-                    canvas.styles.height = canvas.size.height
                     canvas.set_code_mode(True)
                     header = room_widget.query_one("#canvas-header", CanvasHeader)
                     header.set_code_mode(True)
-                elif room == Room.MUSIC:
-                    from .rooms.music_room import MusicGrid
-                    grid = room_widget.query_one(MusicGrid)
-                    grid.styles.height = grid.size.height
                 panel.open()
         except Exception:
             pass

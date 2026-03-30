@@ -946,11 +946,17 @@ class MusicMode(Container, can_focus=True):
             # Pin grid height so REPL panel doesn't change it
             grid = self.query_one(MusicGrid)
             grid.styles.height = grid.size.height
+            # Sync instrument state (grid is authoritative for sound playback)
+            grid.set_instrument(self._instrument_index)
             self._repl_panel.open()
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
         elif self._repl_panel and self._repl_panel.is_open:
             self._repl_panel.close()
+            # Sync instrument state back from grid
+            self._instrument_index = self.grid._instrument_index
+            if self._header:
+                self._header.update_instrument(INSTRUMENTS[self._instrument_index][1])
             # Restore flex sizing; suppress rendering during reflow
             grid = self.query_one(MusicGrid)
             grid._layout_ready = False

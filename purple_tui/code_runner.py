@@ -26,7 +26,7 @@ def _split_clauses(text: str) -> list[str]:
 # Command keywords that start a new command when found mid-line.
 # Order matters: longer prefixes first so "turn" matches before single words.
 _COMMAND_STARTS = re.compile(
-    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|select|play|instrument|letters|fast|slow|repeat)\b)',
+    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|select|use|play|instrument|letters|fast|slow|repeat)\b)',
     re.IGNORECASE,
 )
 
@@ -199,6 +199,18 @@ class MusicCodeRunner:
     SPEED_FAST = 0.04
     SPEED_SLOW = 0.6
 
+    @staticmethod
+    def _is_instrument(name: str) -> bool:
+        """Check if name matches any instrument (exact or prefix)."""
+        from .music_constants import INSTRUMENTS
+        name_lower = name.lower()
+        for inst_id, inst_name in INSTRUMENTS:
+            if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
+                return True
+            if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
+                return True
+        return False
+
     async def run(self, lines: list[str], mode: str = "music") -> None:
         """Run music code asynchronously with timing.
 
@@ -226,12 +238,23 @@ class MusicCodeRunner:
                         self.set_letters(letters_on)
                     continue
 
-                # instrument/choose/select/play command
-                m = re.match(r'^(?:choose|instrument|select|play)\s+(.+)$', text, re.IGNORECASE)
+                # instrument/choose/select/use command (strict: instrument only)
+                m = re.match(r'^(?:choose|instrument|select|use)\s+(.+)$', text, re.IGNORECASE)
                 if m and self.set_instrument:
                     self.set_instrument(m.group(1).strip())
                     await asyncio.sleep(0.1)
                     continue
+
+                # "play X": try instrument first, fall back to playing as notes
+                m = re.match(r'^play\s+(.+)$', text, re.IGNORECASE)
+                if m:
+                    arg = m.group(1).strip()
+                    if self.set_instrument and self._is_instrument(arg):
+                        self.set_instrument(arg)
+                        await asyncio.sleep(0.1)
+                        continue
+                    # Not an instrument: play each character as a note
+                    text = arg
 
                 # Check for speed prefix
                 delay = self.SPEED_NORMAL

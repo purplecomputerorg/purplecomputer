@@ -1364,10 +1364,15 @@ class PurpleApp(App):
         except Exception:
             pass
         try:
-            from .rooms.music_room import MusicGrid
+            from .rooms.music_room import MusicGrid, MusicRoomHeader
+            from .music_constants import INSTRUMENTS
             content_area = self.query_one("#content-area")
             music = content_area.query_one("#room-music")
             grid = music.query_one(MusicGrid)
+            # Sync instrument: code may have changed it via "choose"
+            music._instrument_index = grid._instrument_index
+            header = music.query_one(MusicRoomHeader)
+            header.update_instrument(INSTRUMENTS[grid._instrument_index][1])
             grid._layout_ready = False
             grid.styles.height = "1fr"
         except Exception:

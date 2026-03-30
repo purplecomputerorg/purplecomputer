@@ -19,7 +19,7 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
-    'music': ['choose', 'select', 'play', 'instrument', 'fast', 'slow', 'letters',
+    'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters',
               'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'uke', 'musicbox'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step',
             'turn', 'color', 'paint', 'write', 'lift', 'pen', 'penup', 'pendown',
@@ -55,7 +55,7 @@ ROOM_HINTS: dict[str, list[str]] = {
 # Instrument names for autocomplete after "choose"/"select"/"play"/"instrument"
 _INSTRUMENT_NAMES = ['marimba', 'xylophone', 'ukulele', 'uke', 'musicbox']
 _INSTRUMENT_PREFIX = re.compile(
-    r'.*\b(?:choose|select|play|instrument)\s+\S*$', re.IGNORECASE
+    r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE
 )
 
 

@@ -346,6 +346,7 @@ class CompactRoomIndicator(Static):
 
     DEFAULT_CSS = """
     CompactRoomIndicator {
+        dock: bottom;
         width: 100%;
         height: 1;
         text-align: center;
@@ -1304,8 +1305,9 @@ class PurpleApp(App):
                 indicator.display = False
                 compact.update_room(self.active_room)
                 compact.display = True
-                # Indicator saves 4 rows (3h + 1m), compact uses 1 → net +3
-                viewport.styles.height = VIEWPORT_HEIGHT + 3
+                # Full indicator(4) → compact(1) saves 3, REPL needs 5 rows.
+                # title(2) + viewport(35) + compact(1) = 38 rows.
+                viewport.styles.height = VIEWPORT_HEIGHT + 5
         except NoMatches:
             pass
 

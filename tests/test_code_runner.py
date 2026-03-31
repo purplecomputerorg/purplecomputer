@@ -6,8 +6,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from purple_tui.code_runner import (
-    _split_clauses, _split_commands, _merge_multiword, _fuzzy,
+    _split_clauses, _split_commands, _merge_multiword,
 )
+from purple_tui.fuzzy import fuzzy_match_small
 
 
 # ---------------------------------------------------------------------------
@@ -149,25 +150,24 @@ class TestMergeMultiword:
 # _fuzzy
 # ---------------------------------------------------------------------------
 
-class TestFuzzy:
+class TestFuzzyMatchSmall:
     def test_exact_match(self):
-        assert _fuzzy("forward", ["forward", "turn"]) == "forward"
+        assert fuzzy_match_small("forward", ["forward", "turn"]) == "forward"
 
     def test_typo_match(self):
-        assert _fuzzy("forwrd", ["forward", "turn", "left"]) == "forward"
+        assert fuzzy_match_small("forwrd", ["forward", "turn", "left"]) == "forward"
 
     def test_no_match(self):
-        assert _fuzzy("xyzzy", ["forward", "turn"]) is None
+        assert fuzzy_match_small("xyzzy", ["forward", "turn"]) is None
 
     def test_short_word_skipped(self):
-        """Words under 3 chars should not fuzzy match."""
-        assert _fuzzy("go", ["go", "turn"]) is None
+        assert fuzzy_match_small("go", ["go", "turn"]) is None
 
     def test_color_fuzzy(self):
-        assert _fuzzy("bleu", ["blue", "red", "green"]) == "blue"
+        assert fuzzy_match_small("bleu", ["blue", "red", "green"]) == "blue"
 
     def test_keymash_no_match(self):
-        assert _fuzzy("fdsajkl", ["forward", "turn", "blue"]) is None
+        assert fuzzy_match_small("fdsajkl", ["forward", "turn", "blue"]) is None
 
 
 # ---------------------------------------------------------------------------

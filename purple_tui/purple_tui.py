@@ -1278,6 +1278,16 @@ class PurpleApp(App):
                     set_letters_fn=set_letters,
                 )
                 await runner.run(lines, mode)
+                # Show correction feedback
+                if runner.corrections:
+                    orig, corrected = runner.corrections[-1]
+                    try:
+                        from .code_input import RecallHint
+                        panel = music.query_one(ReplPanel)
+                        recall = panel.query_one("#repl-recall-hint", RecallHint)
+                        recall.set_correction(orig, corrected)
+                    except Exception:
+                        pass
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

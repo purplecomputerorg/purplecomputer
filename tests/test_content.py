@@ -78,5 +78,73 @@ class TestIsValidWord:
         assert content.is_valid_word("") is False
 
 
+class TestFuzzyEmoji:
+    """Fuzzy matching in get_emoji (DL distance, min 5 chars)."""
+
+    def test_typo_dinno(self, content):
+        assert content.get_emoji("dinno") is not None  # → dino
+
+    def test_typo_rabit(self, content):
+        assert content.get_emoji("rabit") is not None  # → rabbit
+
+    def test_typo_monky(self, content):
+        assert content.get_emoji("monky") is not None  # → monkey
+
+    def test_typo_pengin(self, content):
+        assert content.get_emoji("pengin") is not None  # → penguin
+
+    def test_short_word_no_fuzzy(self, content):
+        """4-char words should NOT fuzzy match (too many false positives)."""
+        # "barn" should not match "bear"
+        result = content.get_emoji("barn")
+        assert result is None
+
+    def test_exact_still_works(self, content):
+        assert content.get_emoji("cat") is not None
+
+    def test_plural_still_works(self, content):
+        assert content.get_emoji("cats") is not None
+
+    def test_correction_tracked(self, content):
+        content._last_correction = None
+        content.get_emoji("dinno")
+        assert content._last_correction is not None
+        orig, corrected = content._last_correction
+        assert orig == "dinno"
+
+    def test_no_correction_on_exact(self, content):
+        content._last_correction = None
+        content.get_emoji("cat")
+        assert content._last_correction is None
+
+
+class TestFuzzyColor:
+    """Fuzzy matching in get_color (DL distance, min 5 chars)."""
+
+    def test_typo_purpel(self, content):
+        assert content.get_color("purpel") is not None
+
+    def test_typo_oragne(self, content):
+        assert content.get_color("oragne") is not None
+
+    def test_typo_yellw(self, content):
+        assert content.get_color("yellw") is not None
+
+    def test_short_word_no_fuzzy(self, content):
+        """4-char words should NOT fuzzy match."""
+        # "bleu" (4 chars) should not fuzzy match at content layer
+        result = content.get_color("bleu")
+        assert result is None
+
+    def test_exact_still_works(self, content):
+        assert content.get_color("red") is not None
+
+    def test_yellow_not_hello(self, content):
+        """'yellow' must not fuzzy match 'hello' emoji."""
+        content._last_correction = None
+        content.get_color("yellow")
+        assert content._last_correction is None  # exact match, no fuzzy
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

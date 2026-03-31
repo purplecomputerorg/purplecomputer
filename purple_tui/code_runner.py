@@ -208,125 +208,188 @@ class PlayCodeRunner:
 class MusicCodeRunner:
     """Run code in the Music room context.
 
-    Letters on a line play as notes sequentially.
-    `choose [instrument]` or `instrument [name]` changes instrument.
-    `letters on` / `letters off` toggles letters mode mid-execution.
+    Uses a command table for dispatch (same pattern as ArtCodeRunner).
+    Unrecognized text plays as notes character-by-character.
     """
-
-    def __init__(self, play_key_fn, set_instrument_fn=None,
-                 color_fn=None, flash_fn=None, set_letters_fn=None):
-        """
-        play_key_fn: callable(key: str, mode: str) to play a note
-        set_instrument_fn: callable(instrument_id: str) to change instrument
-        color_fn: callable(key: str) to set key color
-        flash_fn: callable(key: str) to flash a note
-        set_letters_fn: callable(on: bool) to toggle letters mode
-        """
-        self.play_key = play_key_fn
-        self.set_instrument = set_instrument_fn
-        self.color_fn = color_fn
-        self.flash_fn = flash_fn
-        self.set_letters = set_letters_fn
 
     # Speed presets: delay between notes in seconds
     SPEED_NORMAL = 0.2
     SPEED_FAST = 0.04
     SPEED_SLOW = 0.6
 
+    # Command table: (compiled_regex, handler_method_name)
+    _COMMANDS = [
+        (re.compile(r'^letters\s+(\S+)\s*$', re.I), '_do_letters'),
+        (re.compile(r'^(?:choose|instrument|select|use)\s+(.+)$', re.I), '_do_instrument'),
+        (re.compile(r'^play\s+(.+)$', re.I), '_do_play'),
+    ]
+
+    # Command keywords for fuzzy matching
+    _KEYWORD_VOCAB = ['letters', 'choose', 'instrument', 'select', 'use', 'play', 'fast', 'slow']
+
+    def __init__(self, play_key_fn, set_instrument_fn=None,
+                 color_fn=None, flash_fn=None, set_letters_fn=None):
+        self.play_key = play_key_fn
+        self.set_instrument = set_instrument_fn
+        self.color_fn = color_fn
+        self.flash_fn = flash_fn
+        self.set_letters = set_letters_fn
+        self.corrections: list[tuple[str, str]] = []
+
     @staticmethod
-    def _is_instrument(name: str) -> bool:
-        """Check if name matches any instrument (exact, alias, or prefix)."""
+    def _resolve_instrument(name: str) -> str | None:
+        """Resolve instrument name (exact, alias, prefix, or fuzzy). Returns resolved name or None."""
         if not name:
-            return False
+            return None
         from .music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
         name_lower = INSTRUMENT_ALIASES.get(name.lower(), name.lower())
+        # Exact match
         for inst_id, inst_name in INSTRUMENTS:
             if inst_name.lower() == name_lower or inst_id.lower() == name_lower:
-                return True
+                return inst_name
+        # Prefix match
+        for inst_id, inst_name in INSTRUMENTS:
             if inst_name.lower().startswith(name_lower) or inst_id.lower().startswith(name_lower):
-                return True
-        return False
+                return inst_name
+        # Fuzzy match
+        from .fuzzy import fuzzy_match_small
+        all_names = [n for _, n in INSTRUMENTS] + list(INSTRUMENT_ALIASES.keys())
+        if match := fuzzy_match_small(name_lower, [n.lower() for n in all_names], cutoff=0.6):
+            resolved = INSTRUMENT_ALIASES.get(match, match)
+            for inst_id, inst_name in INSTRUMENTS:
+                if inst_name.lower() == resolved or inst_id.lower() == resolved:
+                    return inst_name
+        return None
+
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
 
     async def run(self, lines: list[str], mode: str = "music") -> None:
-        """Run music code asynchronously with timing.
-
-        Supports speed prefixes per line:
-        - "fast qwerty" plays notes quickly
-        - "slow qwerty" plays notes slowly
-        """
+        """Run music code. Corrections stored in self.corrections."""
         from .music_constants import ALL_KEYS
 
         cmds = parse_lines(lines)
         flat = flatten_commands(cmds)
+        self._mode = mode
+        self._all_keys = ALL_KEYS
 
         for cmd in flat:
             if cmd['type'] != 'line':
                 continue
-            text = cmd['text']
-
             try:
-                # letters on/off
-                m = re.match(r'^letters\s+(on|off)\s*$', text, re.IGNORECASE)
-                if m:
-                    letters_on = m.group(1).lower() == 'on'
-                    mode = "letters" if letters_on else "music"
-                    if self.set_letters:
-                        self.set_letters(letters_on)
-                    continue
-
-                # instrument/choose/select/use command (strict: instrument only)
-                m = re.match(r'^(?:choose|instrument|select|use)\s+(.+)$', text, re.IGNORECASE)
-                if m and self.set_instrument:
-                    self.set_instrument(m.group(1).strip())
-                    await asyncio.sleep(0.1)
-                    continue
-
-                # "play X": try instrument first, fall back to playing as notes
-                m = re.match(r'^play\s+(.+)$', text, re.IGNORECASE)
-                if m:
-                    arg = m.group(1).strip()
-                    if self.set_instrument and self._is_instrument(arg):
-                        self.set_instrument(arg)
-                        await asyncio.sleep(0.1)
-                        continue
-                    # Not an instrument: play each character as a note
-                    text = arg
-
-                # Check for speed prefix
-                delay = self.SPEED_NORMAL
-                m = re.match(r'^(fast|slow)\s+(.+)$', text, re.IGNORECASE)
-                if m:
-                    speed_word = m.group(1).lower()
-                    text = m.group(2)
-                    delay = self.SPEED_FAST if speed_word == 'fast' else self.SPEED_SLOW
-
-                # Play each character as a note
-                for ch in text:
-                    lookup = ch.upper() if ch.isalpha() else ch
-                    if lookup in ALL_KEYS:
-                        if self.color_fn:
-                            self.color_fn(lookup)
-                        self.play_key(lookup, mode)
-                        if self.flash_fn:
-                            self.flash_fn(lookup)
-                        await asyncio.sleep(delay)
+                await self._dispatch(cmd['text'])
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.debug("Music command failed: %s", text, exc_info=True)
-                continue
+                log.debug("Music command failed: %s", cmd['text'], exc_info=True)
 
+    async def _dispatch(self, text: str) -> None:
+        # Stage 1: command table
+        for pattern, handler_name in self._COMMANDS:
+            m = pattern.match(text)
+            if m:
+                handler = getattr(self, handler_name)
+                if await handler(m):
+                    return
 
-def _fuzzy(word: str, vocabulary: list[str], cutoff: float = 0.6) -> str | None:
-    """Fuzzy-match a word against a vocabulary. Returns best match or None.
+        # Stage 2: fuzzy keyword correction (e.g., "chooze marimba")
+        words = text.strip().split(None, 1)
+        if words and len(words[0]) >= 3:
+            from .fuzzy import fuzzy_match_small
+            corrected_kw = fuzzy_match_small(words[0].lower(), self._KEYWORD_VOCAB, cutoff=0.7)
+            if corrected_kw and corrected_kw != words[0].lower():
+                corrected = corrected_kw + (' ' + words[1] if len(words) > 1 else '')
+                self.corrections.append((text, corrected))
+                # Re-try with corrected text (command table only, no recursion)
+                for pattern, handler_name in self._COMMANDS:
+                    m = pattern.match(corrected)
+                    if m:
+                        handler = getattr(self, handler_name)
+                        if await handler(m):
+                            return
 
-    Skips words shorter than 3 characters to avoid false positives from keymash.
-    """
-    if len(word) < 3:
+        # Stage 3: speed prefix + play notes
+        await self._play_notes(text)
+
+    # ------------------------------------------------------------------
+    # Command handlers
+    # ------------------------------------------------------------------
+
+    async def _do_letters(self, m) -> bool | None:
+        arg = m.group(1).lower()
+        if arg in ('on', 'off'):
+            letters_on = arg == 'on'
+            self._mode = "letters" if letters_on else "music"
+            if self.set_letters:
+                self.set_letters(letters_on)
+            return True
+        # Fuzzy match on/off
+        from .fuzzy import fuzzy_match_small
+        corrected = fuzzy_match_small(arg, ['on', 'off'], cutoff=0.7)
+        if corrected:
+            self.corrections.append((f'letters {arg}', f'letters {corrected}'))
+            letters_on = corrected == 'on'
+            self._mode = "letters" if letters_on else "music"
+            if self.set_letters:
+                self.set_letters(letters_on)
+            return True
         return None
-    import difflib
-    matches = difflib.get_close_matches(word.lower(), vocabulary, n=1, cutoff=cutoff)
-    return matches[0] if matches else None
+
+    async def _do_instrument(self, m) -> bool | None:
+        name = m.group(1).strip()
+        resolved = self._resolve_instrument(name)
+        if resolved and self.set_instrument:
+            if resolved.lower() != name.lower():
+                self.corrections.append((f'choose {name}', f'choose {resolved.lower()}'))
+            self.set_instrument(name)
+            await asyncio.sleep(0.1)
+            return True
+        return None
+
+    async def _do_play(self, m) -> bool | None:
+        arg = m.group(1).strip()
+        resolved = self._resolve_instrument(arg)
+        if resolved and self.set_instrument:
+            if resolved.lower() != arg.lower():
+                self.corrections.append((f'play {arg}', f'play {resolved.lower()}'))
+            self.set_instrument(arg)
+            await asyncio.sleep(0.1)
+            return True
+        # Not an instrument: play as notes
+        await self._play_notes(arg)
+        return True
+
+    async def _play_notes(self, text: str) -> None:
+        """Parse speed prefix and play characters as notes."""
+        delay = self.SPEED_NORMAL
+        m = re.match(r'^(fast|slow)\s+(.+)$', text, re.IGNORECASE)
+        if m:
+            delay = self.SPEED_FAST if m.group(1).lower() == 'fast' else self.SPEED_SLOW
+            text = m.group(2)
+        else:
+            # Fuzzy speed prefix
+            words = text.split(None, 1)
+            if words and len(words) > 1 and len(words[0]) >= 3:
+                from .fuzzy import fuzzy_match_small
+                speed = fuzzy_match_small(words[0].lower(), ['fast', 'slow'], cutoff=0.7)
+                if speed:
+                    self.corrections.append((text, f'{speed} {words[1]}'))
+                    delay = self.SPEED_FAST if speed == 'fast' else self.SPEED_SLOW
+                    text = words[1]
+
+        for ch in text:
+            lookup = ch.upper() if ch.isalpha() else ch
+            if lookup in self._all_keys:
+                if self.color_fn:
+                    self.color_fn(lookup)
+                self.play_key(lookup, self._mode)
+                if self.flash_fn:
+                    self.flash_fn(lookup)
+                await asyncio.sleep(delay)
+
+
+from .fuzzy import fuzzy_match, fuzzy_match_small
 
 
 # Vocabulary lists for fuzzy matching
@@ -481,7 +544,7 @@ class ArtCodeRunner:
             if candidate != "#AAAAAA":
                 hex_color = candidate
         if not hex_color:
-            corrected = _fuzzy(color_arg, list(content.colors.keys()))
+            corrected = fuzzy_match_small(color_arg, list(content.colors.keys()))
             if corrected:
                 hex_color = content.get_color(corrected)
                 self.corrections.append((f'color {color_arg}', f'color {corrected}'))
@@ -514,7 +577,7 @@ class ArtCodeRunner:
             self.canvas.turn(arg)
             await asyncio.sleep(0.05)
             return True
-        corrected = _fuzzy(arg, _DIRECTION_VOCAB)
+        corrected = fuzzy_match_small(arg, _DIRECTION_VOCAB)
         if corrected:
             self.corrections.append((f'face {arg}', f'face {corrected}'))
             self.canvas.turn(corrected)
@@ -530,7 +593,7 @@ class ArtCodeRunner:
             self.canvas.turn(arg)
             await asyncio.sleep(0.05)
             return True
-        corrected = _fuzzy(arg, _TURN_VOCAB)
+        corrected = fuzzy_match_small(arg, _TURN_VOCAB)
         if corrected:
             self.corrections.append((f'turn {arg}', f'turn {corrected}'))
             self.canvas.turn(corrected)
@@ -599,7 +662,7 @@ class ArtCodeRunner:
         # 3. Fuzzy command keyword (first word)
         words = text.strip().split()
         if words:
-            corrected_kw = _fuzzy(words[0].lower(), _COMMAND_VOCAB)
+            corrected_kw = fuzzy_match_small(words[0].lower(), _COMMAND_VOCAB)
             if corrected_kw and corrected_kw != words[0].lower():
                 corrected_text = corrected_kw + (' ' + ' '.join(words[1:]) if len(words) > 1 else '')
                 self.corrections.append((text, corrected_text))
@@ -609,7 +672,7 @@ class ArtCodeRunner:
 
         # 4. Fuzzy color name
         color_names = list(content.colors.keys())
-        corrected_color = _fuzzy(t, color_names)
+        corrected_color = fuzzy_match_small(t, color_names)
         if corrected_color:
             hex_color = content.get_color(corrected_color)
             if hex_color:

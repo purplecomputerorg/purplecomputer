@@ -63,6 +63,8 @@ class ContentManager:
         # Unified prefix index: prefix -> [(word, color_hex|None, emoji|None), ...]
         # Ranked by kid-likelihood from rankings.txt
         self._word_prefix_index: dict[str, list[tuple[str, str | None, str | None]]] = {}
+        # Fuzzy match correction tracking (set when fuzzy fallback fires)
+        self._last_correction: tuple[str, str] | None = None
 
     def load_all(self) -> None:
         """Load content from all installed packs"""
@@ -256,7 +258,10 @@ class ContentManager:
     # Public API for modes
 
     def get_emoji(self, word: str) -> Optional[str]:
-        """Get emoji for a word, handling plurals (e.g., 'tomatoes' -> tomato emoji)."""
+        """Get emoji for a word, handling plurals and typos.
+
+        Lookup order: exact → singular → fuzzy (DL distance, min 5 chars).
+        """
         word = word.lower().strip()
         # Try exact match first
         if emoji := self.emojis.get(word):
@@ -264,6 +269,11 @@ class ContentManager:
         # Try singular form (handles tomatoes->tomato, cherries->cherry, wolves->wolf, etc.)
         if (singular := singularize(word)) and (emoji := self.emojis.get(singular)):
             return emoji
+        # Fuzzy fallback (min 5 chars to avoid short-word false positives)
+        from .fuzzy import fuzzy_match
+        if match := fuzzy_match(word, list(self.emojis.keys())):
+            self._last_correction = (word, match)
+            return self.emojis[match]
         return None
 
     def emoji_to_word(self, emoji: str) -> Optional[str]:
@@ -377,7 +387,10 @@ class ContentManager:
         ]
 
     def get_color(self, word: str) -> Optional[str]:
-        """Get hex color code for a color name, handling plurals (e.g., 'reds' -> red)."""
+        """Get hex color code for a color name, handling plurals and typos.
+
+        Lookup order: exact → singular → fuzzy (DL distance, min 5 chars).
+        """
         word = word.lower().strip()
         # Try exact match first
         if color := self.colors.get(word):
@@ -385,7 +398,18 @@ class ContentManager:
         # Try singular form
         if (singular := singularize(word)) and (color := self.colors.get(singular)):
             return color
+        # Fuzzy fallback (min 5 chars to avoid short-word false positives)
+        from .fuzzy import fuzzy_match
+        if match := fuzzy_match(word, list(self.colors.keys())):
+            self._last_correction = (word, match)
+            return self.colors[match]
         return None
+
+    def pop_correction(self) -> tuple[str, str] | None:
+        """Retrieve and clear the last fuzzy correction, if any."""
+        c = self._last_correction
+        self._last_correction = None
+        return c
 
     def get_modified_color(self, text: str) -> tuple[str, str, list[str], str] | None:
         """Parse adjective(s) + color name, e.g. 'bright green', 'dark light blue'.

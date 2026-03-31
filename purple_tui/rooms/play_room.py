@@ -712,6 +712,15 @@ class PlayMode(Vertical):
                     line = play_input.value.strip()
                     play_input.value = ""
 
+                    # Fuzzy-correct structural keywords before matching
+                    first_word = line.split()[0].lower() if line.split() else ''
+                    if first_word not in ('repeat', 'end') and len(first_word) >= 3:
+                        from ..fuzzy import fuzzy_match_small
+                        if fuzzy_match_small(first_word, ['repeat'], cutoff=0.7):
+                            line = 'repeat' + line[len(first_word):]
+                        elif fuzzy_match_small(first_word, ['end'], cutoff=0.7):
+                            line = 'end' + line[len(first_word):]
+
                     # Check if this starts a repeat block
                     m = re.match(r'^repeat\s+(\d+)\s*$', line, re.IGNORECASE)
                     if m:
@@ -843,11 +852,18 @@ class PlayMode(Vertical):
             force_speak = True
             eval_text = eval_text.replace('!', '')
 
-        # Check for speak prefix (e.g., "say", "talk")
+        # Check for speak prefix (e.g., "say", "talk", "speak") with fuzzy
         words = eval_text.split(None, 1)
-        if words and words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES:
-            force_speak = True
-            eval_text = words[1] if len(words) > 1 else ""
+        if words:
+            prefix = words[0].lower()
+            if prefix in SimpleEvaluator.SPEAK_PREFIXES:
+                force_speak = True
+                eval_text = words[1] if len(words) > 1 else ""
+            elif len(prefix) >= 3:
+                from ..fuzzy import fuzzy_match_small
+                if fuzzy_match_small(prefix, list(SimpleEvaluator.SPEAK_PREFIXES), cutoff=0.7):
+                    force_speak = True
+                    eval_text = words[1] if len(words) > 1 else ""
 
         # Clean up whitespace after stripping
         eval_text = eval_text.strip()
@@ -991,7 +1007,7 @@ class SimpleEvaluator:
     """
 
     # Speech prefixes: trigger TTS for one line, stripped from input
-    SPEAK_PREFIXES = {'say', 'talk'}
+    SPEAK_PREFIXES = {'say', 'talk', 'speak'}
 
     # Math operators: symbols and their word equivalents
     MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}
@@ -1861,20 +1877,40 @@ class SimpleEvaluator:
             return re.sub(r',\s+', ' + ', text)
         return text
 
+    # Operator word → symbol mapping (used for exact and fuzzy normalization)
+    _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
+
     def _normalize_math(self, text: str) -> str:
-        """Normalize text for math evaluation."""
+        """Normalize text for math evaluation, with fuzzy operator word matching."""
         result = text.lower()
         # Convert display operators (fullwidth, ×, ÷) to ASCII symbols first
         for display, symbol in self.DISPLAY_TO_SYMBOL.items():
             result = result.replace(display, symbol)
-        # Convert word operators to symbols (no word boundaries to allow "3times4")
-        for word, symbol in self.WORD_TO_SYMBOL.items():
-            if word != 'x':  # 'x' is handled specially below
-                result = result.replace(word, symbol)
-        # Handle "divided by" separately (two words)
-        result = re.sub(r'divided\s*by', '/', result)
+        # Convert word operators to symbols (lookahead prevents partial match on "timess")
+        for word, symbol in self._OPERATOR_WORDS.items():
+            result = re.sub(word + r'(?![a-z])', symbol, result)
+        # Fuzzy match operator words between digits (e.g., "3 timess 2" → "3 * 2")
+        result = self._fuzzy_normalize_operators(result)
+        # Handle "divided by" and typos (e.g., "divded by")
+        result = re.sub(r'divid\w*\s*by', '/', result)
         # Handle x between digits (avoid replacing 'x' in words like "fox")
         return re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
+
+    def _fuzzy_normalize_operators(self, text: str) -> str:
+        """Replace fuzzy operator words that appear between digits."""
+        from ..fuzzy import fuzzy_match_small
+        op_words = list(self._OPERATOR_WORDS.keys())
+
+        def replace_match(m):
+            word = m.group(2)
+            if word in self._OPERATOR_WORDS:
+                return m.group(1) + self._OPERATOR_WORDS[word] + m.group(3)
+            matched = fuzzy_match_small(word, op_words, cutoff=0.7)
+            if matched:
+                return m.group(1) + self._OPERATOR_WORDS[matched] + m.group(3)
+            return m.group(0)
+
+        return re.sub(r'(\d\s+)([a-z]{3,})(\s+\d)', replace_match, text)
 
     def _clean_mostly_math(self, text: str) -> str:
         """Clean text that looks mostly like math (filters typos like accidental '=').

@@ -105,69 +105,43 @@ NAME_TO_KEYCODE.update(_CHAR_TO_KEYCODE)
 TOOLS = [
     {
         "name": "press_key",
-        "description": (
-            "Press and release a key. For simple interaction: letters (a-z), "
-            "digits (0-9), or named keys (enter, tab, space, up, down, left, "
-            "right, escape, backspace, delete)."
-        ),
+        "description": "Press a key. Letters a-z, digits 0-9, or: enter, tab, space, up, down, left, right, escape, backspace, delete. Screen text is returned automatically.",
         "input_schema": {
             "type": "object",
-            "properties": {"key": {"type": "string", "description": "Key to press"}},
+            "properties": {"key": {"type": "string"}},
             "required": ["key"],
         },
     },
     {
         "name": "type_text",
-        "description": "Type a string character by character. Good for typing words or math.",
+        "description": "Type a string character by character. Screen text is returned automatically.",
         "input_schema": {
             "type": "object",
-            "properties": {"text": {"type": "string", "description": "Text to type"}},
+            "properties": {"text": {"type": "string"}},
             "required": ["text"],
         },
     },
     {
         "name": "raw_key",
-        "description": (
-            "Send a raw evdev key event (down or up) for low-level testing. "
-            "Use this for: holding shift while pressing letters, sticky shift "
-            "(double-tap shift quickly), space-hold to toggle code panel, "
-            "holding a character while pressing arrows (art painting), key "
-            "mashing (rapid downs without ups). Key names: a-z, 0-9, space, "
-            "enter, leftshift, rightshift, capslock, up, down, left, right, "
-            "escape, backspace, tab. Set is_repeat=true for OS auto-repeat."
-        ),
+        "description": "Raw evdev key event. For hold/release testing: shift, sticky shift, capslock, space-hold, key mashing. Keys: a-z, 0-9, space, enter, leftshift, rightshift, capslock, up/down/left/right, escape, backspace, tab.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "key": {"type": "string", "description": "Key name (e.g. 'a', 'leftshift', 'space')"},
+                "key": {"type": "string"},
                 "is_down": {"type": "boolean", "description": "true=press, false=release"},
-                "is_repeat": {"type": "boolean", "description": "Simulate OS auto-repeat (default false)"},
+                "is_repeat": {"type": "boolean"},
             },
             "required": ["key", "is_down"],
         },
     },
     {
-        "name": "observe_screen",
-        "description": (
-            "Get the current screen content as plain text. Cheap and fast. "
-            "Use this after actions to see what changed. Returns the full "
-            "terminal text grid (134x30 visible area)."
-        ),
-        "input_schema": {"type": "object", "properties": {}},
-    },
-    {
         "name": "screenshot",
-        "description": (
-            "Capture a PNG screenshot of the screen. More expensive than "
-            "observe_screen but shows colors, layout, and visual details. "
-            "Use sparingly: only when you need to check visual appearance, "
-            "colors, alignment, or something that plain text cannot convey."
-        ),
+        "description": "PNG screenshot showing colors and layout. Use only when visual details matter.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "switch_room",
-        "description": "Switch to a different room: play, music, or art.",
+        "description": "Switch room. Screen text is returned automatically.",
         "input_schema": {
             "type": "object",
             "properties": {"room": {"type": "string", "enum": ["play", "music", "art"]}},
@@ -176,45 +150,29 @@ TOOLS = [
     },
     {
         "name": "toggle_code_panel",
-        "description": "Open or close the code panel (REPL) in the current room.",
+        "description": "Open/close the code panel (REPL). Screen text is returned automatically.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
-        "name": "wait",
-        "description": "Wait for a duration (e.g. after triggering an animation).",
-        "input_schema": {
-            "type": "object",
-            "properties": {"seconds": {"type": "number", "description": "Seconds to wait (max 5)"}},
-            "required": ["seconds"],
-        },
-    },
-    {
         "name": "report_bug",
-        "description": (
-            "Report an unexpected behavior, visual glitch, or confusing UX. "
-            "Include clear steps to reproduce."
-        ),
+        "description": "Report unexpected behavior or confusing UX.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "title": {"type": "string", "description": "Short bug title"},
-                "description": {"type": "string", "description": "What happened vs what you expected"},
+                "title": {"type": "string"},
+                "description": {"type": "string"},
                 "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                "steps": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Steps to reproduce",
-                },
+                "steps": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["title", "description", "severity", "steps"],
         },
     },
     {
         "name": "done",
-        "description": "Call this when you're finished exploring. Include a summary of findings.",
+        "description": "End the session.",
         "input_schema": {
             "type": "object",
-            "properties": {"summary": {"type": "string", "description": "Summary of what you tested and found"}},
+            "properties": {"summary": {"type": "string"}},
             "required": ["summary"],
         },
     },
@@ -444,16 +402,25 @@ class AppHarness:
 
 
 async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list[dict]:
-    """Execute a tool call and return content blocks for the tool result."""
+    """Execute a tool call and return content blocks for the tool result.
+
+    Action tools auto-attach the current screen text so the agent doesn't
+    need a separate observe_screen call (saves ~50% of API calls).
+    """
     harness._step += 1
+
+    def with_screen(msg: str) -> list[dict]:
+        """Return action result + current screen text."""
+        screen = harness.observe_screen()
+        return [{"type": "text", "text": f"{msg}\n\nScreen:\n{screen}"}]
 
     if name == "press_key":
         msg = await harness.press_key(input_data["key"])
-        return [{"type": "text", "text": msg}]
+        return with_screen(msg)
 
     elif name == "type_text":
         msg = await harness.type_text(input_data["text"])
-        return [{"type": "text", "text": msg}]
+        return with_screen(msg)
 
     elif name == "raw_key":
         msg = await harness.raw_key(
@@ -461,32 +428,23 @@ async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list
             input_data["is_down"],
             input_data.get("is_repeat", False),
         )
-        return [{"type": "text", "text": msg}]
-
-    elif name == "observe_screen":
-        text = harness.observe_screen()
-        return [{"type": "text", "text": text}]
+        return with_screen(msg)
 
     elif name == "screenshot":
         b64, path = await harness.screenshot()
         if b64:
             return [
                 {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}},
-                {"type": "text", "text": f"Screenshot saved: {path}"},
             ]
         return [{"type": "text", "text": f"Screenshot (SVG only): {path}"}]
 
     elif name == "switch_room":
         msg = await harness.switch_room(input_data["room"])
-        return [{"type": "text", "text": msg}]
+        return with_screen(msg)
 
     elif name == "toggle_code_panel":
         msg = await harness.toggle_code_panel()
-        return [{"type": "text", "text": msg}]
-
-    elif name == "wait":
-        msg = await harness.wait(input_data["seconds"])
-        return [{"type": "text", "text": msg}]
+        return with_screen(msg)
 
     elif name == "report_bug":
         bug = {
@@ -512,21 +470,11 @@ async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list
 
 
 SYSTEM_PROMPT = """\
-You are testing Purple Computer, an educational app for kids ages 4-7. \
-The app has three rooms: Play (math/typing), Music (keyboard music), and Art (drawing/turtle graphics). \
-Each room has an optional code panel (REPL) opened by holding space or pressing toggle_code_panel.
+Test Purple Computer, an app for kids 4-7 with three rooms: Play (math/typing), Music (notes), Art (drawing/turtle). Each room has a code panel (REPL) via toggle_code_panel.
 
-Your job: explore the app and find bugs, glitches, confusing UX, or anything unexpected. \
-After each action, observe the screen to see what changed. Use screenshot only when you \
-need to check visual layout or colors.
+Every action tool returns the screen text automatically. Only use screenshot when you need to check colors or visual layout.
 
-Guidelines:
-- Start by observing the screen to see the initial state
-- Try each room and the code panel
-- Test edge cases: empty input, rapid keys, unusual sequences
-- The app should never crash, show jargon, or leave the user stuck
-- Report anything unexpected via report_bug
-- Call done when you've tested enough
+Do NOT generate commentary or narration. Only use tools and report_bug. Call done when finished.
 
 {persona}"""
 
@@ -552,13 +500,54 @@ async def run_agent(
     await harness.start(room)
 
     client = anthropic.Anthropic()
+    initial_screen = harness.observe_screen()
     messages: list[dict] = [
-        {"role": "user", "content": "The app is running. Begin your testing session."}
+        {"role": "user", "content": f"App is running. Initial screen:\n{initial_screen}"}
     ]
 
     action_log = []
     total_input_tokens = 0
     total_output_tokens = 0
+
+    def trim_history():
+        """Keep history lean: summarize old observations, drop old images.
+
+        Keeps the first message (start prompt) and the last HISTORY_KEEP
+        turns. For older turns, replaces screen text and images with
+        short summaries so the agent remembers what it did but we don't
+        pay to resend full screen dumps.
+        """
+        HISTORY_KEEP = 6  # keep last 6 messages (3 turns) in full detail
+
+        if len(messages) <= HISTORY_KEEP + 1:
+            return
+
+        for msg in messages[1:-HISTORY_KEEP]:
+            if msg["role"] != "user" or not isinstance(msg.get("content"), list):
+                continue
+            for result in msg["content"]:
+                if result.get("type") != "tool_result":
+                    continue
+                content = result.get("content", [])
+                if not isinstance(content, list):
+                    continue
+                trimmed = []
+                for block in content:
+                    if block.get("type") == "image":
+                        trimmed.append({"type": "text", "text": "[screenshot taken]"})
+                    elif block.get("type") == "text" and len(block.get("text", "")) > 200:
+                        # Long text is a screen observation, summarize
+                        text = block["text"]
+                        # Keep first and last line as context
+                        lines = text.split("\n")
+                        if len(lines) > 4:
+                            preview = f"{lines[0]}... ({len(lines)} lines) ...{lines[-1]}"
+                        else:
+                            preview = text[:150]
+                        trimmed.append({"type": "text", "text": f"[screen: {preview}]"})
+                    else:
+                        trimmed.append(block)
+                result["content"] = trimmed
 
     def api_call_with_retry(max_retries=5):
         """Call the API with exponential backoff on overload errors."""
@@ -566,7 +555,7 @@ async def run_agent(
             try:
                 return client.messages.create(
                     model=model,
-                    max_tokens=1024,
+                    max_tokens=300,
                     system=system,
                     tools=TOOLS,
                     messages=messages,
@@ -587,9 +576,13 @@ async def run_agent(
 
     try:
         for step in range(max_steps):
+            trim_history()
             response = api_call_with_retry()
-            total_input_tokens += response.usage.input_tokens
-            total_output_tokens += response.usage.output_tokens
+            step_in = response.usage.input_tokens
+            step_out = response.usage.output_tokens
+            total_input_tokens += step_in
+            total_output_tokens += step_out
+            print(f"  {DIM}[tokens: {step_in:,} in / {step_out:,} out | total: {total_input_tokens:,} in]{RESET}")
 
             messages.append({"role": "assistant", "content": response.content})
 
@@ -626,8 +619,6 @@ async def run_agent(
                     elif tool_name == "report_bug":
                         summary = f"BUG: {tool_input['title']}"
                         print(f"  [{step+1}] *** {summary} ***")
-                    elif tool_name == "observe_screen":
-                        summary = "observe_screen"
                     elif tool_name == "screenshot":
                         summary = "screenshot"
                     elif tool_name == "done":
@@ -667,6 +658,10 @@ async def run_agent(
     with open(report_path, "w") as f:
         json.dump(report, f, indent=2)
 
+    # Append new bugs to the repo-level bug log
+    if harness._bugs:
+        _append_bug_log(harness._bugs, persona_name, model)
+
     print()
     print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs found")
     print(f"Tokens: {total_input_tokens:,} in / {total_output_tokens:,} out")
@@ -679,6 +674,37 @@ async def run_agent(
     print(f"\nFull report: {report_path}")
 
     return report
+
+
+BUG_LOG_PATH = Path(__file__).resolve().parent.parent / "AI_UX_BUGS.md"
+
+
+def _append_bug_log(bugs: list[dict], persona: str, model: str):
+    """Append bugs to the repo-level markdown bug log."""
+    date = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    # Create file with header if it doesn't exist
+    if not BUG_LOG_PATH.exists():
+        BUG_LOG_PATH.write_text(
+            "# AI UX Test Bugs\n\n"
+            "Bugs discovered by automated AI UX testing (`just ux`). "
+            "Mark fixed bugs with ~~strikethrough~~ or delete them.\n\n"
+        )
+
+    lines = []
+    lines.append(f"## {date} ({persona}, {model})\n\n")
+    for bug in bugs:
+        severity = bug["severity"].upper()
+        lines.append(f"### [{severity}] {bug['title']}\n\n")
+        lines.append(f"{bug['description']}\n\n")
+        if bug.get("steps"):
+            lines.append("**Repro:**\n")
+            for i, step in enumerate(bug["steps"], 1):
+                lines.append(f"{i}. {step}\n")
+            lines.append("\n")
+
+    with open(BUG_LOG_PATH, "a") as f:
+        f.writelines(lines)
 
 
 # ---------------------------------------------------------------------------

@@ -253,17 +253,8 @@ class ReplPanel(Vertical):
 
         if isinstance(action, ControlAction):
             if action.action == 'tab' and action.is_down:
-                if code_input.autocomplete_matches:
-                    # Tab: accept autocomplete suggestion
-                    selected = code_input.autocomplete_matches[code_input.autocomplete_index][0]
-                    words = code_input.value.split()
-                    if words:
-                        words[-1] = selected
-                        code_input.value = " ".join(words) + " "
-                        code_input.cursor_position = len(code_input.value)
-                    code_input.autocomplete_matches = []
-                    code_input.autocomplete_index = 0
-                    code_input.exact_match_display = ""
+                if code_input.accept_autocomplete():
+                    pass
                 else:
                     return "tab_fallthrough"
                 return

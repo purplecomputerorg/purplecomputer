@@ -145,6 +145,27 @@ class CodeInput(Input):
         self.autocomplete_type = "mixed" if (has_colors and has_emojis) else ("color" if has_colors else "emoji")
         self.autocomplete_index = 0
 
+    def accept_autocomplete(self) -> bool:
+        """Accept the current autocomplete suggestion. Returns True if accepted."""
+        if not self.autocomplete_matches:
+            return False
+        selected = self.autocomplete_matches[self.autocomplete_index][0]
+        if self.value.endswith(" "):
+            # Input ends with space: append as new word
+            # e.g. "color " + "red" -> "color red "
+            self.value = self.value + selected + " "
+        else:
+            # Replace partial word: e.g. "co" -> "color "
+            words = self.value.split()
+            if words:
+                words[-1] = selected
+                self.value = " ".join(words) + " "
+        self.cursor_position = len(self.value)
+        self.autocomplete_matches = []
+        self.autocomplete_index = 0
+        self.exact_match_display = ""
+        return True
+
     def on_input_changed(self, event: Input.Changed) -> None:
         self._check_autocomplete()
 

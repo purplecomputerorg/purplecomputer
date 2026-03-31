@@ -675,17 +675,7 @@ class PlayMode(Vertical):
         # Handle control actions
         if isinstance(action, ControlAction):
             if action.action == 'tab' and action.is_down:
-                if play_input.autocomplete_matches:
-                    # Tab: accept autocomplete suggestion
-                    selected_word = play_input.autocomplete_matches[play_input.autocomplete_index][0]
-                    words = play_input.value.split()
-                    if words:
-                        words[-1] = selected_word
-                        play_input.value = " ".join(words) + " "
-                        play_input.cursor_position = len(play_input.value)
-                    play_input.autocomplete_matches = []
-                    play_input.autocomplete_index = 0
-                    play_input.exact_match_display = ""
+                play_input.accept_autocomplete()
                 return
 
             if action.action == 'space':

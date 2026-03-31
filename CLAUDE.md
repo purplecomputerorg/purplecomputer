@@ -52,6 +52,8 @@ Output: PNG at `/tmp/screenshots/`. See `guides/headless-preview.md` for full re
 
 **Visual/layout tests:** `app.run_test()` verifies widget sizes and positions headlessly. See `tests/test_code_panel_layout.py`.
 
+**AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
+
 ---
 
 ## Terminal Layout Constants

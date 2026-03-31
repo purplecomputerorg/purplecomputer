@@ -1099,6 +1099,11 @@ class ParentMenu(ModalScreen):
                 env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"}
             )
 
+            # Sync now while USB is still in and filesystem is healthy.
+            # After this, there's nothing left to write.
+            os.system('sudo sync')
+            os.system('sudo touch /run/casper-no-prompt')
+
             os.system('clear')
             if result.returncode == 0:
                 print()
@@ -1123,14 +1128,11 @@ class ParentMenu(ModalScreen):
             input()
             _flush_terminal_input()
             os.system('stty sane')
-            # Suppress Casper's shutdown prompt, then reboot.
-            # See purple-confirm.sh for the full explanation.
-            os.system('sudo touch /run/casper-no-prompt')
-            os.system('sudo sync')
-            os.system('sudo systemctl reboot')
-            # Fallback: sysrq reboot if systemctl didn't work
-            import time
-            time.sleep(3)
+            # Reboot via sysrq: the kernel's official immediate-reboot
+            # mechanism. This is the correct approach for a live USB session
+            # where the user may have already removed the backing media.
+            # Everything is already synced above, there's nothing to
+            # cleanly shut down.
             try:
                 with open('/proc/sys/kernel/sysrq', 'w') as f:
                     f.write('1')

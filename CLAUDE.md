@@ -4,6 +4,12 @@
 
 ---
 
+## Code Quality (TOP PRIORITY)
+
+Minimize LOC. Never duplicate logic. When you see the same pattern in two places, extract it. Prefer one clear code path over multiple similar ones. Before adding code, check if existing code already handles the case or can be extended to. Keep functions short and single-purpose. No spaghetti: if a function has more than 3 levels of nesting or 5+ early returns, restructure it.
+
+---
+
 ## Sensitive Files (DO NOT READ)
 
 Never read `.env` files, `credentials.json`, or `secrets.yaml`.

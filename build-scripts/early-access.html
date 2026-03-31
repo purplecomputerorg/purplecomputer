@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Early Access - Purple Computer</title>
+  <meta name="description" content="Download the Purple Computer ISO for your pre-order.">
+  <meta name="theme-color" content="#5c2d91">
+  <link rel="icon" href="https://purplecomputer.org/favicon.ico" sizes="any">
+  <link rel="icon" href="https://purplecomputer.org/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #faf5ff;
+      color: #352a4a;
+      -webkit-font-smoothing: antialiased;
+    }
+    main {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem 1.5rem;
+    }
+    .container { max-width: 32rem; width: 100%; text-align: center; }
+
+    .logo { display: inline-block; margin-bottom: 2rem; }
+    .logo svg { width: 64px; height: 64px; }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #5c2d91;
+      margin-bottom: 0.75rem;
+    }
+    @media (min-width: 640px) { h1 { font-size: 2.5rem; } }
+
+    .thanks {
+      color: #5c2d91;
+      font-weight: 600;
+      font-size: 1.125rem;
+      margin-bottom: 0.75rem;
+    }
+    .description {
+      color: #695c7a;
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+    }
+    .paid-notice {
+      color: #857698;
+      font-size: 0.875rem;
+      margin-bottom: 2.5rem;
+      line-height: 1.6;
+    }
+    .paid-notice a {
+      color: #5c2d91;
+      text-decoration: none;
+    }
+    .paid-notice a:hover { text-decoration: underline; }
+
+    .download-btn {
+      display: inline-block;
+      padding: 1rem 2rem;
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: #5c2d91;
+      background:
+        linear-gradient(#ebe2fd, #ebe2fd) padding-box,
+        linear-gradient(to right, #5c2d91 50%, #9b59d0 50%) border-box;
+      border: 5px solid transparent;
+      border-radius: 9999px;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .download-btn:hover {
+      background:
+        linear-gradient(#ded6f7, #ded6f7) padding-box,
+        linear-gradient(to right, #4a2473 50%, #8a4cbf 50%) border-box;
+    }
+
+    .technical {
+      margin-top: 3rem;
+      text-align: left;
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      border: 1px solid rgba(233, 213, 255, 0.5);
+    }
+    .technical h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #857698;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    .technical .row { margin-bottom: 0.75rem; }
+    .technical .row:last-child { margin-bottom: 0; }
+    .technical .label {
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #544868;
+    }
+    .technical .sublabel {
+      font-size: 0.875rem;
+      color: #a99bb8;
+      margin-left: 0.25rem;
+    }
+    .technical .links {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 0.25rem;
+      font-size: 0.875rem;
+    }
+    .technical .links a {
+      color: #5c2d91;
+      text-decoration: none;
+    }
+    .technical .links a:hover { text-decoration: underline; }
+
+    .back {
+      margin-top: 2rem;
+      font-size: 0.875rem;
+    }
+    .back a {
+      color: #a99bb8;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .back a:hover { color: #5c2d91; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="container">
+      <a href="https://purplecomputer.org" class="logo">
+        <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 100 65 A 45 45 0 0 0 100 155 Z" fill="#5c2d91"/>
+          <path d="M 100 65 A 45 45 0 0 1 100 155 Z" fill="#9b59d0"/>
+          <circle cx="100" cy="110" r="32" fill="#ebe2fd"/>
+          <circle cx="90" cy="106" r="5" fill="#5c2d91"/>
+          <circle cx="110" cy="106" r="5" fill="#5c2d91"/>
+          <path d="M 88 120 Q 100 128 112 120" stroke="#5c2d91" stroke-width="3" stroke-linecap="round" fill="none"/>
+          <line x1="85" y1="68" x2="85" y2="50" stroke="#5c2d91" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="85" cy="47" r="6" fill="#9b59d0"/>
+          <line x1="115" y1="68" x2="115" y2="50" stroke="#9b59d0" stroke-width="5" stroke-linecap="round"/>
+          <circle cx="115" cy="47" r="6" fill="#5c2d91"/>
+          <circle cx="85" cy="160" r="10" fill="#5c2d91"/>
+          <circle cx="115" cy="160" r="10" fill="#9b59d0"/>
+        </svg>
+      </a>
+
+      <h1>Early Access</h1>
+      <p class="thanks">Thank you for your order!</p>
+      <p class="description">
+        Download the ISO, flash it to a USB drive, and boot on any laptop.
+      </p>
+      <p class="description">
+        We'll also be shipping a ready-to-go USB drive along with other goodies, if you'd prefer to wait for that.
+      </p>
+      <p class="paid-notice">
+        Purple Computer is a paid product. This download is for customers who have
+        already <a href="https://purplecomputer.org">pre-ordered</a>.
+        Questions? Reach us at
+        <a href="mailto:tavi@purplecomputer.org">tavi@purplecomputer.org</a>.
+      </p>
+
+      <a href="/download.iso" class="download-btn">Download Latest ISO</a>
+
+      <div class="technical">
+        <h2>For technical folks</h2>
+        <div class="row">
+          <span class="label">Standard ISO</span>
+          <div class="links">
+            <a href="/download.iso">download</a>
+            <a href="/download.iso.sha256">sha256</a>
+          </div>
+        </div>
+        <div class="row">
+          <span class="label">Debug ISO</span>
+          <span class="sublabel">(verbose with various GRUB options)</span>
+          <div class="links">
+            <a href="/download-debug.iso">download</a>
+            <a href="/download-debug.iso.sha256">sha256</a>
+          </div>
+        </div>
+      </div>
+
+      <p class="back">
+        <a href="https://purplecomputer.org">&larr; Back to purplecomputer.org</a>
+      </p>
+    </div>
+  </main>
+</body>
+</html>

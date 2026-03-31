@@ -2,15 +2,19 @@
 # Set up Cloudflare cache and redirect rules for ISO downloads.
 #
 # Requires CF_API_TOKEN and CF_ZONE_ID in .env (or environment).
-# CF_API_TOKEN needs "Zone.Cache Rules" and "Zone.Redirect Rules" permissions.
+# CF_API_TOKEN needs "Zone.Cache Rules", "Zone.Dynamic Redirect", and "Zone.Transform Rules" permissions.
 #
 # What this creates:
 #   Cache rules:
 #     /releases/* : cache 1 day at edge
 #     /download*  : bypass cache (so pointer updates take effect immediately)
+#   URL rewrite rules:
+#     /                          → /index.html  (invisible rewrite, URL stays /)
 #   Redirect rules:
-#     /download.iso       → /releases/{version}/standard.iso  (302)
-#     /download-debug.iso → /releases/{version}/debug.iso     (302)
+#     /download.iso              → /releases/{version}/standard.iso         (302)
+#     /download-debug.iso        → /releases/{version}/debug.iso            (302)
+#     /download.iso.sha256       → /releases/{version}/standard.iso.sha256  (302)
+#     /download-debug.iso.sha256 → /releases/{version}/debug.iso.sha256     (302)
 #
 # Usage:
 #   ./setup-cloudflare-rules.sh                    # just cache rules
@@ -142,6 +146,49 @@ ENDJSON
     log_info "Cache rules configured."
 }
 
+# ─── URL Rewrite Rules ───────────────────────────────────────
+
+setup_rewrite_rules() {
+    log_step "Setting up URL rewrite rules..."
+
+    local rules
+    rules=$(cat <<'ENDJSON'
+{
+  "name": "Purple Computer URL rewrites",
+  "kind": "zone",
+  "phase": "http_request_transform",
+  "rules": [
+    {
+      "description": "Rewrite / to /index.html (browser URL stays clean)",
+      "expression": "http.request.uri.path eq \"/\"",
+      "action": "rewrite",
+      "action_parameters": {
+        "uri": {
+          "path": {
+            "value": "/index.html"
+          }
+        }
+      }
+    }
+  ]
+}
+ENDJSON
+)
+
+    local existing_id
+    existing_id=$(find_ruleset_id "http_request_transform")
+
+    if [ -n "$existing_id" ]; then
+        log_info "Updating existing rewrite ruleset ($existing_id)..."
+        cf_api PUT "/rulesets/$existing_id" "$rules" > /dev/null
+    else
+        log_info "Creating new rewrite ruleset..."
+        cf_api POST "/rulesets" "$rules" > /dev/null
+    fi
+
+    log_info "Rewrite rules configured."
+}
+
 # ─── Redirect Rules ──────────────────────────────────────────
 
 setup_redirect_rules() {
@@ -195,6 +242,32 @@ setup_redirect_rules() {
           }
         }
       }
+    },
+    {
+      "description": "Redirect /download.iso.sha256 to current release checksum",
+      "expression": "http.request.uri.path eq \"/download.iso.sha256\"",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 302,
+          "target_url": {
+            "value": "${base_url}/releases/${version}/standard.iso.sha256"
+          }
+        }
+      }
+    },
+    {
+      "description": "Redirect /download-debug.iso.sha256 to current debug release checksum",
+      "expression": "http.request.uri.path eq \"/download-debug.iso.sha256\"",
+      "action": "redirect",
+      "action_parameters": {
+        "from_value": {
+          "status_code": 302,
+          "target_url": {
+            "value": "${base_url}/releases/${version}/debug.iso.sha256"
+          }
+        }
+      }
     }
   ]
 }
@@ -213,8 +286,10 @@ ENDJSON
     fi
 
     log_info "Redirect rules configured:"
-    log_info "  /download.iso       → /releases/${version}/standard.iso"
-    log_info "  /download-debug.iso → /releases/${version}/debug.iso"
+    log_info "  /download.iso              → /releases/${version}/standard.iso"
+    log_info "  /download-debug.iso        → /releases/${version}/debug.iso"
+    log_info "  /download.iso.sha256       → /releases/${version}/standard.iso.sha256"
+    log_info "  /download-debug.iso.sha256 → /releases/${version}/debug.iso.sha256"
 }
 
 # ─── Main ─────────────────────────────────────────────────────
@@ -226,6 +301,8 @@ echo "=========================================="
 echo
 
 setup_cache_rules
+echo
+setup_rewrite_rules
 echo
 setup_redirect_rules "$VERSION"
 

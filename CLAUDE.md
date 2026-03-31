@@ -113,7 +113,7 @@ When buffering space in write mode, always check `on_other_key()` return value t
 
 **Room switch behavior:** When `_code_panel_active`, switching to Music/Art auto-opens the REPL panel. Switching to Play shows compact indicator (Play is already a REPL). Mode ends only on explicit close (hold Space, "exit" command, or room picker).
 
-**Canvas sizing:** When opening REPL via space-hold (user-initiated), the canvas/grid height is pinned to its current size. When opening via room switch, height stays at `1fr` (widget may not be laid out yet, `size.height` would be 0).
+**Canvas sizing:** When opening REPL via space-hold (user-initiated), the canvas/grid height is pinned to its current size. When opening via room switch, height stays at `1fr` (widget may not be laid out yet, `size.height` would be 0). Viewport grows by 4 when code panel opens: 3 from indicator swap (full 4-row → compact 1-row) + 1 extra to accommodate REPL(5 rows) after hint bar(1 row) is hidden.
 
 **Write mode + space buffering:** In art write mode, space-down starts the hold timer but does NOT type immediately. Space repeats are suppressed while pending. On tap (quick release), space is sent to canvas. On `on_other_key()` returning True, space is flushed before the new key.
 

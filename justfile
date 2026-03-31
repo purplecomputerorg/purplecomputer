@@ -164,6 +164,10 @@ code-split-poc:
 release *args:
     ./build-scripts/release-iso.sh {{args}}
 
+# Upload early-access page to Cloudflare R2 (downloads.purplecomputer.org)
+upload-early-access:
+    ./build-scripts/upload-early-access.sh
+
 # Delete old releases from Cloudflare R2, keeping only the current version
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}

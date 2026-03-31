@@ -7,12 +7,15 @@ and settings, then kicks off the AI agent testing session.
 Usage: just ux
 """
 
+import json
 import os
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL
+from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, estimate_cost
+
+LAST_ARGS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".ai_ux_last_args.json")
 
 # ANSI colors
 BOLD = "\033[1m"
@@ -144,19 +147,52 @@ def check_api_key():
     return False
 
 
-def estimate_cost(max_steps):
+def estimate_session_cost(max_steps, model):
     """Rough cost estimate for a session."""
-    # ~2K input tokens per step (system + history), ~200 output tokens
-    # Sonnet pricing: $3/M input, $15/M output
-    avg_input_per_step = 3000  # grows with history, average over session
+    avg_input_per_step = 3000
     avg_output_per_step = 250
-    total_input = avg_input_per_step * max_steps
-    total_output = avg_output_per_step * max_steps
-    cost = (total_input / 1_000_000 * 3) + (total_output / 1_000_000 * 15)
-    return cost
+    return estimate_cost(avg_input_per_step * max_steps, avg_output_per_step * max_steps, model)
+
+
+def save_last_args(persona, room, max_steps, model):
+    with open(LAST_ARGS_PATH, "w") as f:
+        json.dump({"persona": persona, "room": room, "max_steps": max_steps, "model": model}, f)
+
+
+def load_last_args():
+    try:
+        with open(LAST_ARGS_PATH) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
 
 
 def main():
+    redo = "--redo" in sys.argv
+
+    if redo:
+        last = load_last_args()
+        if not last:
+            print(f"  {RED}No previous run found.{RESET}")
+            sys.exit(1)
+        if not check_api_key():
+            print(f"  {RED}No ANTHROPIC_API_KEY found.{RESET}")
+            sys.exit(1)
+        persona, room, max_steps, model = last["persona"], last["room"], last["max_steps"], last["model"]
+        persona_info = PERSONAS.get(persona, {"label": persona})
+        print_header()
+        print(f"  {BOLD}Redo:{RESET} {persona_info['label']}, {room}, {max_steps} steps, {model}")
+        print()
+        save_last_args(persona, room, max_steps, model)
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_ux_test.py")
+        cmd = [sys.executable, script, "--persona", persona, "--room", room,
+               "--max-steps", str(max_steps), "--model", model]
+        try:
+            sys.exit(subprocess.run(cmd).returncode)
+        except KeyboardInterrupt:
+            print(f"\n  {YELLOW}Interrupted.{RESET}")
+            sys.exit(1)
+
     print_header()
 
     # Check API key
@@ -200,7 +236,7 @@ def main():
     print()
 
     # Summary
-    cost = estimate_cost(max_steps)
+    cost = estimate_session_cost(max_steps, model)
     persona_info = PERSONAS[persona]
     print(f"  {BOLD}Ready to run:{RESET}")
     print(f"    Persona:  {persona_info['label']} ({persona})")
@@ -224,7 +260,8 @@ def main():
     print(f"  {GREEN}Launching...{RESET}")
     print()
 
-    # Run the test script
+    save_last_args(persona, room, max_steps, model)
+
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_ux_test.py")
     cmd = [
         sys.executable, script,

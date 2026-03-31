@@ -31,7 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL  # noqa: E402
+from ai_ux_config import DEFAULT_MAX_STEPS, DEFAULT_MODEL, estimate_cost  # noqa: E402
 
 # Set environment before any app imports
 os.environ["PURPLE_NO_EVDEV"] = "1"
@@ -150,7 +150,7 @@ TOOLS = [
     },
     {
         "name": "toggle_code_panel",
-        "description": "Open/close the code panel (REPL). Screen text is returned automatically.",
+        "description": "Open/close the code panel (REPL) in Art or Music room. Not available in Play.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
@@ -382,9 +382,11 @@ class AppHarness:
         return f"Switched to {room}"
 
     async def toggle_code_panel(self) -> str:
+        from purple_tui.constants import ROOM_PLAY
+        if self.app.active_room == ROOM_PLAY[0]:
+            return "Code panel not available in Play room"
         self.app._open_repl_panel()
-        room = self.app.active_room
-        self.app._open_code_panel_in_room(room)
+        self.app._open_code_panel_in_room(self.app.active_room)
         await asyncio.sleep(0.3)
         await self.pilot.pause()
         return "Toggled code panel"
@@ -415,19 +417,19 @@ async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list
         return [{"type": "text", "text": f"{msg}\n\nScreen:\n{screen}"}]
 
     if name == "press_key":
-        msg = await harness.press_key(input_data["key"])
+        msg = await harness.press_key(input_data.get("key", ""))
         return with_screen(msg)
 
     elif name == "type_text":
-        msg = await harness.type_text(input_data["text"])
+        msg = await harness.type_text(input_data.get("text", ""))
         return with_screen(msg)
 
     elif name == "raw_key":
-        msg = await harness.raw_key(
-            input_data["key"],
-            input_data["is_down"],
-            input_data.get("is_repeat", False),
-        )
+        key = input_data.get("key")
+        is_down = input_data.get("is_down")
+        if not key or is_down is None:
+            return [{"type": "text", "text": f"raw_key requires 'key' and 'is_down', got: {input_data}"}]
+        msg = await harness.raw_key(key, is_down, input_data.get("is_repeat", False))
         return with_screen(msg)
 
     elif name == "screenshot":
@@ -449,9 +451,9 @@ async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list
     elif name == "report_bug":
         bug = {
             "step": harness._step,
-            "title": input_data["title"],
-            "description": input_data["description"],
-            "severity": input_data["severity"],
+            "title": input_data.get("title", "Untitled"),
+            "description": input_data.get("description", ""),
+            "severity": input_data.get("severity", "medium"),
             "steps": input_data.get("steps", []),
             "timestamp": datetime.now().isoformat(),
         }
@@ -473,6 +475,11 @@ SYSTEM_PROMPT = """\
 Test Purple Computer, an app for kids 4-7 with three rooms: Play (math/typing), Music (notes), Art (drawing/turtle). Each room has a code panel (REPL) via toggle_code_panel.
 
 Every action tool returns the screen text automatically. Only use screenshot when you need to check colors or visual layout.
+
+Screen text is extracted from SVG and has known limitations:
+- Color swatches appear as empty space or block characters (▅▄██). This is normal, not a bug.
+- "Hold Space: close code" in the bottom bar is expected when the code panel is active.
+- Use screenshot to verify visual issues before reporting them as bugs.
 
 Do NOT generate commentary or narration. Only use tools and report_bug. Call done when finished.
 
@@ -582,7 +589,8 @@ async def run_agent(
             step_out = response.usage.output_tokens
             total_input_tokens += step_in
             total_output_tokens += step_out
-            print(f"  {DIM}[tokens: {step_in:,} in / {step_out:,} out | total: {total_input_tokens:,} in]{RESET}")
+            cost_so_far = estimate_cost(total_input_tokens, total_output_tokens, model)
+            print(f"  {DIM}[tokens: {step_in:,} in / {step_out:,} out | ${cost_so_far:.4f}]{RESET}")
 
             messages.append({"role": "assistant", "content": response.content})
 
@@ -608,16 +616,16 @@ async def run_agent(
                     # Print compact summary
                     summary = tool_name
                     if tool_name == "press_key":
-                        summary = f"press_key({tool_input['key']})"
+                        summary = f"press_key({tool_input.get('key', '?')})"
                     elif tool_name == "type_text":
-                        summary = f"type_text('{tool_input['text'][:20]}')"
+                        summary = f"type_text('{tool_input.get('text', '')[:20]}')"
                     elif tool_name == "raw_key":
-                        d = "v" if tool_input["is_down"] else "^"
-                        summary = f"raw_key({tool_input['key']}{d})"
+                        d = "v" if tool_input.get("is_down") else "^"
+                        summary = f"raw_key({tool_input.get('key', '?')}{d})"
                     elif tool_name == "switch_room":
-                        summary = f"switch_room({tool_input['room']})"
+                        summary = f"switch_room({tool_input.get('room', '?')})"
                     elif tool_name == "report_bug":
-                        summary = f"BUG: {tool_input['title']}"
+                        summary = f"BUG: {tool_input.get('title', '?')}"
                         print(f"  [{step+1}] *** {summary} ***")
                     elif tool_name == "screenshot":
                         summary = "screenshot"
@@ -641,37 +649,37 @@ async def run_agent(
     finally:
         await harness.stop()
 
-    # Write report
-    report = {
-        "persona": persona_name,
-        "start_room": room,
-        "model": model,
-        "steps": len(action_log),
-        "max_steps": max_steps,
-        "bugs": harness._bugs,
-        "bug_count": len(harness._bugs),
-        "tokens": {"input": total_input_tokens, "output": total_output_tokens},
-        "action_log": action_log,
-    }
+        # Always write report, even on crash
+        report = {
+            "persona": persona_name,
+            "start_room": room,
+            "model": model,
+            "steps": len(action_log),
+            "max_steps": max_steps,
+            "bugs": harness._bugs,
+            "bug_count": len(harness._bugs),
+            "tokens": {"input": total_input_tokens, "output": total_output_tokens},
+            "action_log": action_log,
+        }
 
-    report_path = log_dir / "report.json"
-    with open(report_path, "w") as f:
-        json.dump(report, f, indent=2)
+        report_path = log_dir / "report.json"
+        with open(report_path, "w") as f:
+            json.dump(report, f, indent=2)
 
-    # Append new bugs to the repo-level bug log
-    if harness._bugs:
-        _append_bug_log(harness._bugs, persona_name, model)
+        if harness._bugs:
+            _append_bug_log(harness._bugs, persona_name, model)
 
-    print()
-    print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs found")
-    print(f"Tokens: {total_input_tokens:,} in / {total_output_tokens:,} out")
-    if harness._bugs:
         print()
-        print("Bugs found:")
-        for i, bug in enumerate(harness._bugs, 1):
-            print(f"  {i}. [{bug['severity']}] {bug['title']}")
-            print(f"     {bug['description'][:100]}")
-    print(f"\nFull report: {report_path}")
+        print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs found")
+        total_cost = estimate_cost(total_input_tokens, total_output_tokens, model)
+        print(f"Tokens: {total_input_tokens:,} in / {total_output_tokens:,} out (${total_cost:.4f})")
+        if harness._bugs:
+            print()
+            print("Bugs found:")
+            for i, bug in enumerate(harness._bugs, 1):
+                print(f"  {i}. [{bug['severity']}] {bug['title']}")
+                print(f"     {bug['description'][:100]}")
+        print(f"\nFull report: {report_path}")
 
     return report
 

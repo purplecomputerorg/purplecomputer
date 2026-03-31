@@ -652,6 +652,17 @@ class PurpleApp(App):
         background: $background;
     }
 
+    #littles-hint {
+        display: none;
+        dock: bottom;
+        height: 3;
+        margin-top: 1;
+        background: $background;
+        content-align: center middle;
+        text-align: center;
+        color: $text-muted;
+    }
+
     #content-area {
         width: 100%;
         height: 100%;
@@ -791,6 +802,7 @@ class PurpleApp(App):
                         yield Container(id="content-area")
                     yield ColorLegend(id="paint-legend")
             yield RoomIndicator(self.active_room, id="room-indicator")
+            yield Static("🎈 Littles Mode  ·  Hold Esc to exit", id="littles-hint")
             yield CompactRoomIndicator(id="compact-room-indicator")
             # Hidden state-tracking widgets (push updates to TitleBar)
             yield BatteryIndicator(id="battery-indicator")
@@ -835,11 +847,11 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Hide room indicator in Littles Mode
+        # Hide room indicator in Littles Mode, show hint instead
         if self._littles_mode:
             try:
-                indicator = self.query_one("#room-indicator", RoomIndicator)
-                indicator.display = False
+                self.query_one("#room-indicator", RoomIndicator).display = False
+                self.query_one("#littles-hint", Static).display = True
             except NoMatches:
                 pass
 
@@ -2439,17 +2451,17 @@ class PurpleApp(App):
                 if panel.is_open:
                     panel.close()
 
-            # Hide room indicator
+            # Hide room indicator, show littles hint
             try:
-                indicator = self.query_one("#room-indicator", RoomIndicator)
-                indicator.display = False
+                self.query_one("#room-indicator", RoomIndicator).display = False
+                self.query_one("#littles-hint", Static).display = True
             except NoMatches:
                 pass
         else:
-            # Show room indicator
+            # Show room indicator, hide littles hint
             try:
-                indicator = self.query_one("#room-indicator", RoomIndicator)
-                indicator.display = True
+                self.query_one("#room-indicator", RoomIndicator).display = True
+                self.query_one("#littles-hint", Static).display = False
             except NoMatches:
                 pass
 

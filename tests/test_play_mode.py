@@ -70,47 +70,60 @@ if HAS_PYTEST:
             assert result.startswith("= 20\n") and result.count("●") == 2  # 2+0 abacus dots
 
 
-    class TestMostlyMathCleaning:
-        """Test that mostly-math expressions tolerate typos like accidental '='."""
+    class TestMathExpressionCleanup:
+        """Test self-guarding math expression cleanup (replaces old threshold-based heuristics)."""
 
-        def test_accidental_equals_cleaned(self, evaluator):
-            """Accidental = in long math expression should be replaced with +."""
+        def test_stray_equals_with_math_operators(self, evaluator):
+            """= replaced with + when real math operators present."""
             result = evaluator.evaluate("2+3+4-5+5+3-2=3+4+6")
-            # = replaced with +, corrected expression shown first
-            assert result.startswith("→ 2+3+4-5+5+3-2+3+4+6\n= 23\n")
+            assert "= 23" in result
 
-        def test_accidental_equals_middle(self, evaluator):
-            """Equals in middle of expression."""
+        def test_stray_equals_middle(self, evaluator):
             result = evaluator.evaluate("1+2+3=4+5+6")
-            # = replaced with +, corrected expression shown first
-            assert result.startswith("→ 1+2+3+4+5+6\n= 21\n")
+            assert "= 21" in result
 
-        def test_too_few_operators_not_cleaned(self, evaluator):
-            """With only 2 operators, don't clean (might be intentional)."""
-            # Only 2 math operators, doesn't meet MIN_MATH_OPERATORS threshold
-            result = evaluator.evaluate("2+3=5")
-            # Should NOT be cleaned, returns color blocks (not valid math)
-            assert "[/]" in result  # color block markup
+        def test_equals_answer_stripped(self, evaluator):
+            """'5+3=8' strips the =8 assertion, evaluates 5+3."""
+            result = evaluator.evaluate("5+3=8")
+            assert "= 8" in result
 
-        def test_too_many_non_math_symbols_not_cleaned(self, evaluator):
-            """If too many non-math symbols, don't clean."""
-            # 3 math ops (+,+,+) but 3 non-math (=,=,=), ratio is 50% < 60%
+        def test_no_math_operators_equals_untouched(self, evaluator):
+            """'cat=dog' without math operators is not cleaned."""
+            result = evaluator.evaluate("cat=dog")
+            assert "🐱" in result and "🐶" in result
+
+        def test_repeated_plus(self, evaluator):
+            """++ collapsed to +."""
+            result = evaluator.evaluate("5++3")
+            assert "= 8" in result
+
+        def test_repeated_star(self, evaluator):
+            """** collapsed to *."""
+            result = evaluator.evaluate("5**3")
+            assert "= 15" in result
+
+        def test_xx_between_digits(self, evaluator):
+            """xx collapsed to x between digits."""
+            result = evaluator.evaluate("5 xx 3")
+            assert "= 15" in result
+
+        def test_stray_equals_multi(self, evaluator):
+            """Multiple = signs cleaned: trailing =7 stripped, inner = → +."""
             result = evaluator.evaluate("1+2=3+4=5+6=7")
-            assert "[/]" in result  # color block markup
+            assert "= 21" in result  # 1+2+3+4+5+6 (=7 stripped as asserted answer)
 
-        def test_clean_preserves_spaces(self, evaluator):
-            """Cleaning should preserve spaces and replace invalid punct with +."""
-            # 4 math ops (+,+,+,+), 1 non-math (=), ratio = 4/5 = 80% >= 60%
-            result = evaluator.evaluate("2 + 3 + 4 = 5 + 6")
-            # = replaced with +, corrected expression shown first
-            assert result.startswith("→ 2 + 3 + 4 + 5 + 6\n= 20\n")
+        def test_correction_tracked(self, evaluator):
+            evaluator._last_math_correction = None
+            evaluator.evaluate("5++3")
+            assert evaluator._last_math_correction is not None
+            orig, corrected = evaluator._last_math_correction
+            assert orig == "5++3"
+            assert corrected == "5+3"
 
-        def test_borderline_ratio_passes(self, evaluator):
-            """At 60% threshold, 3 math / 5 total (60%) should pass."""
-            # 3 math ops (+,+,+), 2 non-math (=,=), ratio = 3/5 = 60%
-            result = evaluator.evaluate("1+2+3+4=5=6")
-            # Both = replaced with +, corrected expression shown first
-            assert result.startswith("→ 1+2+3+4+5+6\n= 21\n")
+        def test_no_correction_for_clean_expr(self, evaluator):
+            evaluator._last_math_correction = None
+            evaluator.evaluate("5+3")
+            assert evaluator._last_math_correction is None
 
 
     class TestWordOperators:

@@ -930,16 +930,18 @@ class PlayMode(Vertical):
 
         # Store raw input for recall (Enter on empty)
         self._last_input_text = input_text
-        # Show content-layer fuzzy correction in recall hint if applicable
-        correction = self.evaluator.content.pop_correction()
+        # Show correction in recall hint: check math corrections first, then content fuzzy
+        correction = self.evaluator._last_math_correction
+        if not correction:
+            c = self.evaluator.content.pop_correction()
+            if c and c[0] in eval_text.lower():
+                correction = c
         if correction:
-            orig, corrected = correction
-            if orig in eval_text.lower():
-                try:
-                    recall = self.query_one("#play-recall-hint", RecallHint)
-                    recall.set_correction(orig, corrected)
-                except Exception:
-                    pass
+            try:
+                recall = self.query_one("#play-recall-hint", RecallHint)
+                recall.set_correction(correction[0], correction[1])
+            except Exception:
+                pass
         self._update_recall_hint()
 
         # Emit for code panel capture
@@ -1043,14 +1045,10 @@ class SimpleEvaluator:
         r'\b(' + '|'.join(sorted(NUMBER_WORDS.keys(), key=len, reverse=True)) + r')\b',
         re.IGNORECASE,
     )
-    # Valid math punctuation (operators, parens, decimal) for "mostly math" detection
-    MATH_PUNCTUATION = set('+-*/(). ')
-    # Thresholds for "mostly math" detection (filters typos like accidental '=')
-    MIN_MATH_OPERATORS = 3
-    MATH_RATIO_THRESHOLD = 0.6  # 60% of punctuation must be math symbols
 
     def __init__(self):
         self.content = get_content()
+        self._last_math_correction: tuple[str, str] | None = None
 
     def evaluate(self, text: str) -> str:
         """Evaluate input and return result string.
@@ -1070,10 +1068,9 @@ class SimpleEvaluator:
         text = self._normalize_number_words(text)
         text = self._normalize_commas(text)
 
-        # Clean typos in mostly-math expressions (e.g., accidental '=' key)
-        original_text = text
-        text = self._clean_mostly_math(text)
-        was_corrected = (text != original_text)
+        # Clean math expression typos (repeated operators, stray =, etc.)
+        self._last_math_correction = None
+        text = self._clean_math_expression(text)
 
         # Patterns: "5 4 3 ..." or "2 cats ... 5" (check before any other eval)
         if '..' in text:
@@ -1092,18 +1089,18 @@ class SimpleEvaluator:
 
         # Try text with embedded expression (e.g., "what is 2 + 3", "I have 5 apples")
         if result := self._eval_text_with_expr(text, had_parens):
-            return self._prepend_corrected(result, text, was_corrected)
+            return result
 
         # Check if it's a + expression
         if re.search(self.PLUS_PATTERN, text.lower()):
             if result := self._eval_plus_expr(text):
                 result = self._maybe_add_label(result, had_parens)
-                return self._prepend_corrected(result, text, was_corrected)
+                return result
 
         # Try multiplication: "3 * cat", "cat times 5", etc.
         if mult := self._eval_mult(text):
             result = self._maybe_add_label(mult, had_parens)
-            return self._prepend_corrected(result, text, was_corrected)
+            return result
 
         # Try pure math
         normalized = self._normalize_math(text)
@@ -1117,7 +1114,7 @@ class SimpleEvaluator:
             result = self._format_number_with_dots(math_result, show_label=not is_bare_number, expression=normalized)
             if not is_bare_number:
                 result = f"= {result}"
-            return self._prepend_corrected(result, text, was_corrected)
+            return result
 
         # Try single word lookup (emoji or color)
         if single := self._lookup(text.lower().strip()):
@@ -1143,11 +1140,6 @@ class SimpleEvaluator:
                 return f"{len(chars)} {chars[0]}\n{result}"
         return result
 
-    def _prepend_corrected(self, result: str, corrected_text: str, was_corrected: bool) -> str:
-        """If the input was auto-corrected, prepend a line showing what was actually calculated."""
-        if was_corrected:
-            return f"→ {corrected_text}\n{result}"
-        return result
 
 
     def _eval_text_with_expr(self, text: str, had_parens: bool = False) -> str | None:
@@ -1900,25 +1892,26 @@ class SimpleEvaluator:
     _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
 
     def _normalize_math(self, text: str) -> str:
-        """Normalize text for math evaluation, with fuzzy operator word matching."""
+        """Normalize text for math evaluation: operator words/symbols → ASCII math."""
         result = text.lower()
-        # Convert display operators (fullwidth, ×, ÷) to ASCII symbols first
+        # Display operators (×, ÷) → ASCII
         for display, symbol in self.DISPLAY_TO_SYMBOL.items():
             result = result.replace(display, symbol)
-        # Convert word operators to symbols (lookahead prevents partial match on "timess")
+        # Operator words → symbols (exact match with negative lookahead)
         for word, symbol in self._OPERATOR_WORDS.items():
             result = re.sub(word + r'(?![a-z])', symbol, result)
-        # Fuzzy match operator words between digits (e.g., "3 timess 2" → "3 * 2")
+        # Fuzzy operator words between digits ("3 timess 2" → "3 * 2")
         result = self._fuzzy_normalize_operators(result)
-        # Handle "divided by" and typos (e.g., "divded by")
-        result = re.sub(r'divid\w*\s*by', '/', result)
-        # Handle x between digits (avoid replacing 'x' in words like "fox")
+        # "divided by" and typos (divded, dividd, etc.)
+        result = re.sub(r'div\w+\s+by\b', '/', result)
+        # x between digits → * (avoid replacing in words like "fox")
         return re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
 
     def _fuzzy_normalize_operators(self, text: str) -> str:
         """Replace fuzzy operator words that appear between digits."""
         from ..fuzzy import fuzzy_match_small
         op_words = list(self._OPERATOR_WORDS.keys())
+        corrected = [False]
 
         def replace_match(m):
             word = m.group(2)
@@ -1926,41 +1919,45 @@ class SimpleEvaluator:
                 return m.group(1) + self._OPERATOR_WORDS[word] + m.group(3)
             matched = fuzzy_match_small(word, op_words, cutoff=0.7)
             if matched:
+                corrected[0] = True
                 return m.group(1) + self._OPERATOR_WORDS[matched] + m.group(3)
             return m.group(0)
 
-        return re.sub(r'(\d\s+)([a-z]{3,})(\s+\d)', replace_match, text)
+        result = re.sub(r'(\d\s+)([a-z]{3,})(\s+\d)', replace_match, text)
+        if corrected[0]:
+            self._last_math_correction = (text, result)
+        return result
 
-    def _clean_mostly_math(self, text: str) -> str:
-        """Clean text that looks mostly like math (filters typos like accidental '=').
+    def _clean_math_expression(self, text: str) -> str:
+        """Clean up math expression typos. Each rule is self-guarding by context.
 
-        If the text has at least MIN_MATH_OPERATORS math operators and at least
-        MATH_RATIO_THRESHOLD of ASCII punctuation symbols are valid math punctuation,
-        filter out the invalid ones. Digits, letters, emojis, spaces are always kept.
-
-        Example: "2+3+4-5+5+3-2=3+4+6" -> "2+3+4-5+5+3-23+4+6" (= removed)
+        Handles: repeated operators (++→+), stray = signs, leading/trailing
+        operators, xx between digits. Tracks correction for UI display.
         """
-        # Count math operators
-        math_ops = set('+-*/')
-        math_op_count = sum(1 for c in text if c in math_ops)
+        result = text
 
-        # Get all ASCII punctuation (excludes digits, letters, spaces, emojis)
-        ascii_punct = [c for c in text if ord(c) < 128 and not c.isalnum() and not c.isspace()]
-        # Count how many are valid math punctuation
-        math_punct_count = sum(1 for c in ascii_punct if c in self.MATH_PUNCTUATION)
+        # Strip "= <answer>" at end (kid asserting: "5+3=8" → "5+3")
+        result = re.sub(r'\s*=\s*\d+\s*$', '', result)
 
-        # Check if it looks mostly like math
-        if (math_op_count >= self.MIN_MATH_OPERATORS and
-            len(ascii_punct) > 0 and
-            math_punct_count / len(ascii_punct) >= self.MATH_RATIO_THRESHOLD):
-            # Replace invalid ASCII punctuation with '+' (likely typo, e.g. '=' next to '+')
-            def keep_or_plus(c):
-                if c.isalnum() or c.isspace() or ord(c) > 127 or c in self.MATH_PUNCTUATION:
-                    return c
-                return '+'
-            return ''.join(keep_or_plus(c) for c in text)
+        # Replace stray = with + ONLY if real math operators are also present
+        # (so "cat=dog" is untouched, but "5+3=2+1" cleans up)
+        if '=' in result and re.search(r'[+\-*/]', result):
+            result = result.replace('=', '+')
 
-        return text
+        # Collapse repeated operators: ++ → +, ** → *, // → /
+        result = re.sub(r'([+\-*/])\1+', r'\1', result)
+
+        # Collapse xx between digits: "5 xx 3" → "5 x 3"
+        result = re.sub(r'(\d\s*)x+(\s*\d)', r'\1x\2', result, flags=re.IGNORECASE)
+
+        # Strip leading/trailing operators (keep leading - for negatives)
+        result = re.sub(r'^[+*/]+\s*', '', result)
+        result = re.sub(r'\s*[+\-*/]+$', '', result)
+
+        if result != text:
+            self._last_math_correction = (text.strip(), result.strip())
+
+        return result
 
     def _eval_math(self, text: str) -> float | int | None:
         """Safely evaluate math expression."""

@@ -24,16 +24,43 @@ def _split_clauses(text: str) -> list[str]:
 
 
 # Command keywords that start a new command when found mid-line.
-# Order matters: longer prefixes first so "turn" matches before single words.
+# Includes direction words (left/right/up/down) so "turn right down 3" splits.
 _COMMAND_STARTS = re.compile(
-    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|select|use|play|instrument|letters|fast|slow|repeat)\b)',
+    r'\b(?=(?:turn|forward|go|move|walk|step|paint|write|color|lift|pen|choose|select|use|play|instrument|letters|fast|slow|repeat|left|right|up|down)\b)',
     re.IGNORECASE,
 )
+
+# Patterns for merging multi-word commands after keyword splitting.
+# "turn" + direction and "pen" + up/down must stay together.
+_TURN_BARE = re.compile(r'^turn$', re.IGNORECASE)
+_TURN_ARG = re.compile(r'^(?:left|right|up|down|back|backward|around|\d)', re.IGNORECASE)
+_PEN_BARE = re.compile(r'^pen$', re.IGNORECASE)
+_PEN_ARG = re.compile(r'^(?:up|down)\b', re.IGNORECASE)
+
+
+def _merge_multiword(parts: list[str]) -> list[str]:
+    """Rejoin bare 'turn'/'pen' with the following argument chunk."""
+    merged = []
+    i = 0
+    while i < len(parts):
+        if i + 1 < len(parts):
+            if _TURN_BARE.match(parts[i]) and _TURN_ARG.match(parts[i + 1]):
+                merged.append(parts[i] + ' ' + parts[i + 1])
+                i += 2
+                continue
+            if _PEN_BARE.match(parts[i]) and _PEN_ARG.match(parts[i + 1]):
+                merged.append(parts[i] + ' ' + parts[i + 1])
+                i += 2
+                continue
+        merged.append(parts[i])
+        i += 1
+    return merged
+
 
 def _split_commands(text: str) -> list[str]:
     """Split a single line into multiple commands at keyword boundaries.
 
-    Handles cases like "turn right turn right" or "forward 10 turn left forward 5".
+    Handles cases like "turn right down 3" or "forward 10 turn left forward 5".
     Falls back to returning [text] if no split points are found.
     """
     # Find all split positions from command-start keywords
@@ -59,6 +86,7 @@ def _split_commands(text: str) -> list[str]:
         if leading:
             parts.insert(0, leading)
 
+    parts = _merge_multiword(parts) if parts else [text]
     return parts if parts else [text]
 
 

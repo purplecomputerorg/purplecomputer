@@ -103,11 +103,18 @@ s3_upload() {
     local src="$1"
     local dest="$2"
     local content_type="${3:-application/octet-stream}"
+    local disposition="${4:-}"
+
+    local extra_args=()
+    if [ -n "$disposition" ]; then
+        extra_args+=(--content-disposition "$disposition")
+    fi
 
     aws s3 cp "$src" "s3://${R2_BUCKET}/${dest}" \
         --endpoint-url "$R2_ENDPOINT" \
         --content-type "$content_type" \
-        --no-progress
+        --no-progress \
+        "${extra_args[@]}"
 }
 
 echo
@@ -121,10 +128,12 @@ log_info "Debug:    $DEBUG_SHA256"
 
 # Step 2: Upload ISOs and checksums
 log_step "2/4: Uploading standard ISO..."
-s3_upload "$STANDARD_ISO" "releases/${VERSION}/standard.iso"
+s3_upload "$STANDARD_ISO" "releases/${VERSION}/standard.iso" \
+    "application/octet-stream" "attachment; filename=\"purple-computer-${VERSION}.iso\""
 
 log_step "      Uploading debug ISO..."
-s3_upload "$DEBUG_ISO" "releases/${VERSION}/debug.iso"
+s3_upload "$DEBUG_ISO" "releases/${VERSION}/debug.iso" \
+    "application/octet-stream" "attachment; filename=\"purple-computer-${VERSION}-debug.iso\""
 
 log_step "      Uploading checksums..."
 echo "$STANDARD_SHA256  standard.iso" | s3_upload - "releases/${VERSION}/standard.iso.sha256" "text/plain"

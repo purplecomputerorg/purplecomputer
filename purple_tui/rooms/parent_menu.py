@@ -652,7 +652,7 @@ def _get_menu_items() -> list:
 
     # Code Panel toggle (only show when not in littles mode, since littles always disables it)
     if not littles:
-        code_label = "Code Panel: On" if get_code_panel() else "Code Panel: Off"
+        code_label = "Allow Code Panel: Yes" if get_code_panel() else "Allow Code Panel: No"
         items.append(("menu-code-panel", code_label))
 
     if display_control_available():
@@ -1014,14 +1014,11 @@ class ParentMenu(ModalScreen):
         new_value = not get_code_panel()
         set_code_panel(new_value)
         self.app._code_panel_enabled = new_value
-        # Close any open REPL panels if disabling
-        if not new_value:
-            from ..repl_panel import ReplPanel
-            for panel in self.app.query(ReplPanel):
-                if panel.is_open:
-                    panel.close()
+        # Fully close code panel mode if disabling
+        if not new_value and self.app._code_panel_active:
+            self.app._close_repl_panel()
         # Update menu label
-        label = "Code Panel: On" if new_value else "Code Panel: Off"
+        label = "Allow Code Panel: Yes" if new_value else "Allow Code Panel: No"
         try:
             widget = self.query_one("#menu-code-panel", ParentMenuItem)
             widget.update(label)

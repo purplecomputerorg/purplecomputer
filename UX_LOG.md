@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- ESC picker shows "Open Code" in Music/Art when code panel is allowed but not open (previously only showed "Close Code").
+- Parent menu: "Code Panel: On/Off" renamed to "Allow Code Panel: Yes/No". Disabling now fully closes the code panel and removes the "hold space" subtitle.
 - Power button shutdown is now near-instant (was ~10 seconds waiting for services to stop).
 - Installer powers off after completion instead of rebooting (no more hanging on "press Enter to restart").
 - Art room: "color red", "color blue", etc. sets brush color by name. "color t" sets by key mapping.

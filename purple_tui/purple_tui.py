@@ -1176,6 +1176,7 @@ class PurpleApp(App):
         picker = RoomPickerScreen(
             current_room=current_room,
             code_panel_open=self._code_panel_active,
+            code_panel_enabled=self._code_panel_enabled,
         )
         self.push_screen(picker, self._on_room_picked)
 
@@ -1201,9 +1202,13 @@ class PurpleApp(App):
         if result is None:
             return
 
-        # Close code panel
+        # Toggle code panel
         if result.get("close_code"):
             self._close_repl_panel()
+            return
+        if result.get("open_code"):
+            self._code_panel_active = True
+            self._open_code_panel_in_room(self.active_room)
             return
 
         # Start fresh: clear all rooms

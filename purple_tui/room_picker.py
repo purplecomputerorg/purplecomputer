@@ -292,10 +292,12 @@ class RoomPickerScreen(ModalScreen):
             super().__init__()
             self.result = result
 
-    def __init__(self, current_room: str = "play", code_panel_open: bool = False, **kwargs):
+    def __init__(self, current_room: str = "play", code_panel_open: bool = False, code_panel_enabled: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._current_room = current_room
         self._code_panel_open = code_panel_open
+        self._code_panel_enabled = code_panel_enabled
+        self._show_code_row = code_panel_open or (code_panel_enabled and current_room in ("music", "art"))
         # Always start on the room row, highlighting the current room
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()
@@ -321,9 +323,12 @@ class RoomPickerScreen(ModalScreen):
                 yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
 
-            if self._code_panel_open:
+            if self._show_code_row:
                 with Horizontal(id="picker-code-row"):
-                    yield ExtraOption(ICON_CODE, "Close Code", "Space", id="opt-close-code")
+                    if self._code_panel_open:
+                        yield ExtraOption(ICON_CODE, "Close Code", "Space", id="opt-code-toggle")
+                    else:
+                        yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
 
             yield Static(caps("Arrow keys move   Enter pick"), id="picker-hint")
 
@@ -355,10 +360,10 @@ class RoomPickerScreen(ModalScreen):
             except Exception:
                 pass
 
-        # Code row (only present when code panel is open)
-        if self._code_panel_open:
+        # Code row (present when code panel is open or enabled in music/art)
+        if self._show_code_row:
             try:
-                code_opt = self.query_one("#opt-close-code", ExtraOption)
+                code_opt = self.query_one("#opt-code-toggle", ExtraOption)
                 if self._active_row == ROW_CODE:
                     code_opt.add_class("selected")
                 else:
@@ -397,7 +402,7 @@ class RoomPickerScreen(ModalScreen):
                 if self._active_row == ROW_ROOMS:
                     self._active_row = ROW_EXTRAS
                     self._update_selection()
-                elif self._active_row == ROW_EXTRAS and self._code_panel_open:
+                elif self._active_row == ROW_EXTRAS and self._show_code_row:
                     self._active_row = ROW_CODE
                     self._update_selection()
             return
@@ -432,9 +437,15 @@ class RoomPickerScreen(ModalScreen):
                     elif self._extra_index == COL_CLEAR:
                         self._confirm_clear_rooms()
                 elif self._active_row == ROW_CODE:
+                    if self._code_panel_open:
+                        self.dismiss({"close_code": True})
+                    else:
+                        self.dismiss({"open_code": True})
+            elif action.action == 'space' and self._show_code_row:
+                if self._code_panel_open:
                     self.dismiss({"close_code": True})
-            elif action.action == 'space' and self._code_panel_open:
-                self.dismiss({"close_code": True})
+                else:
+                    self.dismiss({"open_code": True})
             elif action.action == 'escape':
                 self.dismiss(None)
             elif action.action == 'volume_mute':

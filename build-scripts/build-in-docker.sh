@@ -34,11 +34,19 @@ main() {
 
     # Mount the entire project directory (parent of build-scripts) as /purple-src
     PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+    # Resolve version on the host where git works (container hits safe.directory errors)
+    if [ -z "${PURPLE_VERSION:-}" ]; then
+        local git_hash
+        git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
+    fi
+
     docker run --rm --privileged \
         -v "$SCRIPT_DIR:/build" \
         -v "$PROJECT_DIR:/purple-src" \
         -v "/opt/purple-installer:/opt/purple-installer" \
-        -e "PURPLE_VERSION=${PURPLE_VERSION:-}" \
+        -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 

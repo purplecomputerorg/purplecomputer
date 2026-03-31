@@ -269,7 +269,7 @@ class RoomPickerScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #opt-close-code {
+    #opt-code-toggle {
         width: 52;
     }
 

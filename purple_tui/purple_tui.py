@@ -819,7 +819,7 @@ class PurpleApp(App):
         # Set viewport border subtitle for music/art rooms
         try:
             viewport = self.query_one("#viewport")
-            if self.active_room in (Room.MUSIC, Room.ART):
+            if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
                 viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
         except NoMatches:
             pass

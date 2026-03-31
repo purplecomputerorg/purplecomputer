@@ -1011,12 +1011,24 @@ class ParentMenu(ModalScreen):
     def _toggle_code_panel(self) -> None:
         """Toggle the code panel setting and update the menu label."""
         from ..settings import get_code_panel, set_code_panel
+        from ..constants import ICON_ROBOT
         new_value = not get_code_panel()
         set_code_panel(new_value)
         self.app._code_panel_enabled = new_value
         # Fully close code panel mode if disabling
         if not new_value and self.app._code_panel_active:
             self.app._close_repl_panel()
+        # Update subtitle for music/art rooms
+        if not self.app._code_panel_active:
+            try:
+                viewport = self.app.query_one("#viewport")
+                room_name = self.app.active_room.name.lower()
+                if new_value and room_name in ("music", "art"):
+                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+                elif not new_value:
+                    viewport.border_subtitle = ""
+            except Exception:
+                pass
         # Update menu label
         label = "Allow Code Panel: Yes" if new_value else "Allow Code Panel: No"
         try:

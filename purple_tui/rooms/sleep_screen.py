@@ -18,19 +18,21 @@ from textual import events
 from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY, BATTERY_IDLE_SHUTDOWN
 from ..constants import is_live_boot
 
+# All lines SAME WIDTH for consistent bounding box
+_SLEEP_FACE = "\n".join([
+    "---     ---",
+    "           ",
+    "   \\___/   ",
+    "           ",
+    "   z z z   ",
+])
+
 
 class SleepFace(Static):
     """Sleeping face widget - centered as a single block."""
 
     def render(self) -> str:
-        # All lines SAME WIDTH for consistent bounding box
-        return "\n".join([
-            "---     ---",
-            "           ",
-            "   \\___/   ",
-            "           ",
-            "   z z z   ",
-        ])
+        return _SLEEP_FACE
 
 
 class SleepScreen(Screen):
@@ -151,20 +153,6 @@ class SleepScreen(Screen):
         if self._shutdown_initiated:
             return
         self._shutdown_initiated = True
-        # Spawn a watchdog in case shutdown hangs (same as ByeScreen)
-        import subprocess
-        try:
-            subprocess.Popen(
-                ["sh", "-c",
-                 "sleep 5 && "
-                 "systemctl poweroff --force --force 2>/dev/null || "
-                 "sudo systemctl poweroff --force --force 2>/dev/null"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-        except Exception:
-            pass
         pm = get_power_manager()
         if not pm.shutdown():
             try:
@@ -223,16 +211,7 @@ class ShutdownConfirmScreen(Screen):
     """
 
     def compose(self) -> ComposeResult:
-        yield Static(
-            "\n".join([
-                "---     ---",
-                "           ",
-                "   \\___/   ",
-                "           ",
-                "   z z z   ",
-            ]),
-            id="shutdown-face",
-        )
+        yield Static(_SLEEP_FACE, id="shutdown-face")
         yield Static(
             f"Press power button again to shut down ({self.COUNTDOWN_SECONDS})",
             id="shutdown-hint",
@@ -307,37 +286,11 @@ class ByeScreen(Screen):
         yield Static("Turning off...", id="bye-text")
 
     def on_mount(self) -> None:
-        """Show goodbye and shut down immediately."""
-        # Spawn a detached watchdog process FIRST. This runs independently
-        # of the TUI, so even if systemd kills the X11 session (and thus
-        # the Textual event loop), the watchdog will still force power off.
-        self._spawn_shutdown_watchdog()
-        # Shut down immediately. The user already confirmed (held power 3s
-        # or tapped twice). No reason to delay.
-        self._do_shutdown()
+        """Show goodbye and shut down immediately.
 
-    def _spawn_shutdown_watchdog(self) -> None:
-        """Spawn a background process that force-powers-off after 5 seconds.
-
-        Independent of the TUI event loop: survives X11/Textual being killed.
-        Normal --force shutdown is near-instant, so 5s is generous.
+        The user already confirmed (held power 3s or tapped twice).
+        No reason to delay.
         """
-        import subprocess
-        try:
-            subprocess.Popen(
-                ["sh", "-c",
-                 "sleep 5 && "
-                 "systemctl poweroff --force --force 2>/dev/null || "
-                 "sudo systemctl poweroff --force --force 2>/dev/null"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,  # Detach from TUI's process group
-            )
-        except Exception:
-            pass
-
-    def _do_shutdown(self) -> None:
-        """Execute shutdown."""
         pm = get_power_manager()
         if not pm.shutdown():
             try:

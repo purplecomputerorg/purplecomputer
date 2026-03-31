@@ -52,6 +52,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --debug     Flash the debug ISO (.debug.iso) instead"
+    echo "  --yes       Skip the confirmation prompt"
     echo "  --list      List all USB drives (for finding serial numbers)"
     echo "  --help      Show this help"
 }
@@ -322,6 +323,7 @@ write_iso() {
 main() {
     # Handle options
     local use_debug=false
+    local skip_confirm=false
     while [[ -n "${1:-}" ]]; do
         case "$1" in
             --help|-h)
@@ -334,6 +336,10 @@ main() {
                 ;;
             --debug|-d)
                 use_debug=true
+                shift
+                ;;
+            --yes|-y)
+                skip_confirm=true
                 shift
                 ;;
             *)
@@ -375,7 +381,9 @@ main() {
 
     find_whitelisted_drives
     select_drive
-    confirm_write
+    if [[ "$skip_confirm" != true ]]; then
+        confirm_write
+    fi
     write_iso
 }
 

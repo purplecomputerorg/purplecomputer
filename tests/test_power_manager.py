@@ -224,23 +224,26 @@ if HAS_PYTEST:
             return mgr
 
         def test_shutdown_calls_systemctl_force(self, pm):
-            """shutdown() should try systemctl poweroff --force first."""
+            """shutdown() should try systemctl poweroff --force first (after watchdog)."""
             with patch("purple_tui.power_manager.subprocess.Popen") as mock_popen:
                 result = pm.shutdown()
 
             assert result is True
-            mock_popen.assert_called_once()
-            cmd = mock_popen.call_args[0][0]
+            # First call is watchdog, second is the actual shutdown command
+            assert mock_popen.call_count == 2
+            cmd = mock_popen.call_args_list[1][0][0]
             assert cmd == ["systemctl", "poweroff", "--force"]
 
         def test_shutdown_falls_back_on_failure(self, pm):
-            """If first command fails, should try next ones."""
+            """If first shutdown command fails, should try next ones."""
             call_count = 0
 
             def fail_then_succeed(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
-                if call_count <= 2:
+                # Call 1 = watchdog (succeeds), calls 2-3 = shutdown (fail),
+                # call 4 = shutdown (succeeds)
+                if call_count in (2, 3):
                     raise FileNotFoundError("not found")
                 return MagicMock()
 
@@ -249,12 +252,21 @@ if HAS_PYTEST:
                 result = pm.shutdown()
 
             assert result is True
-            assert call_count == 3  # Failed twice, succeeded on third
+            assert call_count == 4  # watchdog + 2 failures + 1 success
 
         def test_shutdown_returns_false_when_all_fail(self, pm):
-            """If every command fails, should return False."""
+            """If every shutdown command fails, should return False."""
+            calls = []
+
+            def track(*args, **kwargs):
+                calls.append(args[0])
+                # Let watchdog succeed, fail everything else
+                if len(calls) == 1 and args[0][0] == "sh":
+                    return MagicMock()
+                raise FileNotFoundError("not found")
+
             with patch("purple_tui.power_manager.subprocess.Popen",
-                       side_effect=FileNotFoundError("not found")):
+                       side_effect=track):
                 result = pm.shutdown()
 
             assert result is False
@@ -266,7 +278,8 @@ if HAS_PYTEST:
                 result = pm.shutdown()
 
             assert result is True
-            mock_popen.assert_called_once()
+            # Watchdog + first shutdown command
+            assert mock_popen.call_count == 2
 
         def test_shutdown_demo_mode_does_not_poweroff(self, pm):
             """In demo mode, shutdown should not call any commands."""
@@ -285,21 +298,24 @@ if HAS_PYTEST:
                     os.environ.pop("PURPLE_SLEEP_DEMO", None)
 
         def test_shutdown_uses_force_flag(self, pm):
-            """First three commands should all use --force or -f."""
+            """First three shutdown commands should all use --force or -f."""
             commands_tried = []
 
             def capture_cmd(*args, **kwargs):
                 commands_tried.append(args[0])
+                # Let watchdog succeed, fail shutdown commands to capture all
+                if len(commands_tried) == 1 and args[0][0] == "sh":
+                    return MagicMock()
                 raise FileNotFoundError("not found")
 
             with patch("purple_tui.power_manager.subprocess.Popen",
                        side_effect=capture_cmd):
                 pm.shutdown()
 
-            # First three commands should have force flags
-            assert "--force" in commands_tried[0]       # systemctl --force
-            assert "--force" in commands_tried[1]       # sudo systemctl --force
-            assert "-f" in commands_tried[2]            # sudo poweroff -f
+            # Skip watchdog (index 0), check shutdown commands
+            assert "--force" in commands_tried[1]       # systemctl --force
+            assert "--force" in commands_tried[2]       # sudo systemctl --force
+            assert "-f" in commands_tried[3]            # sudo poweroff -f
 
     class TestPoweroffAvailableCheck:
         """Test the _poweroff_available initialization."""

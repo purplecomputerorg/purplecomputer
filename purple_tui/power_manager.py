@@ -318,6 +318,10 @@ class PowerManager:
         There's no user data to lose on a kids' computer, and clean
         shutdown can hang for 10-15 seconds waiting for services.
 
+        Also spawns a watchdog process that force-powers-off after 5
+        seconds, independent of the TUI event loop. This ensures
+        shutdown completes even if systemd kills X11/Textual first.
+
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
@@ -334,6 +338,22 @@ class PowerManager:
 
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")
+
+        # Spawn a watchdog that force-powers-off after 5 seconds.
+        # Detached from TUI's process group so it survives X11 teardown.
+        # Normal --force shutdown is near-instant, so 5s is generous.
+        try:
+            subprocess.Popen(
+                ["sh", "-c",
+                 "sleep 5 && "
+                 "systemctl poweroff --force --force 2>/dev/null || "
+                 "sudo systemctl poweroff --force --force 2>/dev/null"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except Exception:
+            pass
 
         # --force skips clean service stop. This makes shutdown near-instant
         # instead of waiting 10+ seconds for services to exit. No data to lose.

@@ -496,6 +496,60 @@ class LittlesModeScreen(ModalScreen):
 
 
 
+def _write_reboot_script(success: bool) -> None:
+    """Write a self-contained reboot script to /run (tmpfs).
+
+    After install, the user may remove the USB drive. Once the USB is
+    gone, the live overlayfs backing is dead and any process that touches
+    it (Python, systemctl, even /bin/sh loading a script from it) hangs
+    on I/O forever.
+
+    This script lives entirely in RAM (/run is tmpfs) and uses only
+    kernel interfaces (/proc/sysrq-trigger) to reboot, so it works
+    regardless of whether the USB is still present.
+    """
+    if success:
+        lines = [
+            '',
+            '  All done!',
+            '',
+            '  Purple Computer is installed!',
+            '',
+            "  You don't need the USB drive plugged in anymore.",
+            '',
+            '  Press Enter to restart.',
+            '',
+        ]
+    else:
+        lines = [
+            '',
+            '  Something went wrong during setup.',
+            '',
+            f'  If this keeps happening, contact us at',
+            f'  {SUPPORT_EMAIL}',
+            '',
+            '  Press Enter to restart and try again.',
+            '',
+        ]
+
+    echo_cmds = '\n'.join(f'echo "{line}"' for line in lines)
+    script = (
+        '#!/bin/sh\n'
+        'stty sane 2>/dev/null\n'
+        'clear\n'
+        f'{echo_cmds}\n'
+        'read _\n'
+        # sysrq reboot: direct kernel reboot, no filesystem access.
+        'echo 1 > /proc/sys/kernel/sysrq\n'
+        'echo b > /proc/sysrq-trigger\n'
+        # Fallback (shouldn't reach here)
+        'reboot -f\n'
+    )
+    with open('/run/purple-reboot.sh', 'w') as f:
+        f.write(script)
+    os.chmod('/run/purple-reboot.sh', 0o755)
+
+
 def _flush_terminal_input() -> None:
     """Flush any buffered terminal input to prevent stray characters."""
     try:
@@ -1099,47 +1153,15 @@ class ParentMenu(ModalScreen):
                 env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"}
             )
 
-            # Sync now while USB is still in and filesystem is healthy.
-            # After this, there's nothing left to write.
+            # While the USB is still in and the filesystem is healthy:
+            # sync, suppress Casper, and write a reboot script to tmpfs.
+            # After the user removes the USB, the overlayfs backing is
+            # gone and any process reading from it (Python, systemctl)
+            # hangs on I/O. The script on /run (tmpfs = RAM) keeps working.
             os.system('sudo sync')
             os.system('sudo touch /run/casper-no-prompt')
-
-            os.system('clear')
-            if result.returncode == 0:
-                print()
-                print("  All done!")
-                print()
-                print("  Purple Computer is installed!")
-                print()
-                print("  You don't need the USB drive plugged in anymore.")
-                print()
-                print("  Press Enter to restart.")
-                print()
-            else:
-                print()
-                print("  Something went wrong during setup.")
-                print()
-                print(f"  If this keeps happening, contact us at")
-                print(f"  {SUPPORT_EMAIL}")
-                print()
-                print("  Press Enter to restart and try again.")
-                print()
-
-            input()
-            _flush_terminal_input()
-            os.system('stty sane')
-            # Reboot via sysrq: the kernel's official immediate-reboot
-            # mechanism. This is the correct approach for a live USB session
-            # where the user may have already removed the backing media.
-            # Everything is already synced above, there's nothing to
-            # cleanly shut down.
-            try:
-                with open('/proc/sys/kernel/sysrq', 'w') as f:
-                    f.write('1')
-                with open('/proc/sysrq-trigger', 'w') as f:
-                    f.write('b')
-            except OSError:
-                os.system('sudo reboot -f')
+            _write_reboot_script(result.returncode == 0)
+            os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

@@ -9,6 +9,8 @@ Complete reference for building, installing, and maintaining Purple Computer.
   - [Graphics Stack](#graphics-stack-installed-system)
 - [Ask Mode (F1)](#ask-mode-f1)
 - [Build Process](#build-process)
+  - [Versioning](#versioning)
+  - [Releasing](#releasing)
 - [Installation](#installation)
 - [Customization](#customization)
 - [Power Management](#power-management)
@@ -468,6 +470,47 @@ purple-installer.iso
 ```
 
 The ISO is **hybrid**—bootable from USB stick or optical media, BIOS or UEFI, with Secure Boot support.
+
+### Versioning
+
+Every ISO is stamped with a version in `/etc/purple-version`, visible in the Parent Menu (hold Escape).
+
+**Version formats:**
+
+| Type | Example | Parent Menu shows | When |
+|------|---------|-------------------|------|
+| Semver | `v1.0` | Version 1.0 | Major releases (`./release-iso.sh v1.0`) |
+| Date-time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular releases (`./release-iso.sh`) |
+| Dev build | `build-abc1234-20260330` | Dev build: abc1234 | No `PURPLE_VERSION` set at build time |
+
+**To stamp a specific version at build time:**
+
+```bash
+PURPLE_VERSION=v1.0 ./build-in-docker.sh
+```
+
+If `PURPLE_VERSION` is not set, the build uses the git short hash and date as a fallback.
+
+### Releasing
+
+**Script:** `release-iso.sh`
+
+Uploads ISOs to Cloudflare R2 and updates redirect rules so `/download.iso` points to the new version.
+
+```bash
+./release-iso.sh          # date-time version (v2026.03.30-1430)
+./release-iso.sh v1.0     # semver for major releases
+```
+
+**What it does:**
+1. Generates SHA-256 checksums
+2. Uploads standard + debug ISOs to `releases/{version}/`
+3. Updates Cloudflare redirect rules (`/download.iso` → versioned path)
+4. Writes `latest.json` with version, checksums, and sizes
+
+**Required `.env` values** (see `.env.template`): `R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `CF_API_TOKEN`, `CF_ZONE_ID`, `R2_CUSTOM_DOMAIN`.
+
+**Cloudflare setup (one-time):** `setup-cloudflare-rules.sh` configures cache rules (aggressive caching for `/releases/*`, bypass for `/download*`) and redirect rules. It runs automatically as part of `release-iso.sh`, or can be run standalone to set up cache rules without releasing.
 
 ---
 

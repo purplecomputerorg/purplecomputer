@@ -6,7 +6,8 @@
 #   ./release-iso.sh v1.0         # semver for major releases
 #
 # Uploads standard + debug ISOs with checksums, then updates
-# the /download.iso and /download-debug.iso redirect pointers.
+# the Cloudflare redirect rules so /download.iso and /download-debug.iso
+# point to the new versioned paths (no re-upload needed).
 
 set -euo pipefail
 
@@ -40,6 +41,9 @@ MISSING=()
 [ -z "${R2_ACCOUNT_ID:-}" ] && MISSING+=("R2_ACCOUNT_ID")
 [ -z "${R2_ACCESS_KEY_ID:-}" ] && MISSING+=("R2_ACCESS_KEY_ID")
 [ -z "${R2_SECRET_ACCESS_KEY:-}" ] && MISSING+=("R2_SECRET_ACCESS_KEY")
+[ -z "${CF_API_TOKEN:-}" ] && MISSING+=("CF_API_TOKEN")
+[ -z "${CF_ZONE_ID:-}" ] && MISSING+=("CF_ZONE_ID")
+[ -z "${R2_CUSTOM_DOMAIN:-}" ] && MISSING+=("R2_CUSTOM_DOMAIN")
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     log_error "Missing required values in .env: ${MISSING[*]}"
@@ -106,17 +110,6 @@ s3_upload() {
         --no-progress
 }
 
-s3_copy() {
-    local src_key="$1"
-    local dest_key="$2"
-
-    # Server-side copy so download.iso always points to the latest release.
-    # R2 handles this as a zero-copy operation internally.
-    aws s3 cp "s3://${R2_BUCKET}/${src_key}" "s3://${R2_BUCKET}/${dest_key}" \
-        --endpoint-url "$R2_ENDPOINT" \
-        --no-progress
-}
-
 echo
 
 # Step 1: Generate checksums
@@ -137,10 +130,11 @@ log_step "      Uploading checksums..."
 echo "$STANDARD_SHA256  standard.iso" | s3_upload - "releases/${VERSION}/standard.iso.sha256" "text/plain"
 echo "$DEBUG_SHA256  debug.iso" | s3_upload - "releases/${VERSION}/debug.iso.sha256" "text/plain"
 
-# Step 3: Update redirect pointers
-log_step "3/4: Updating download pointers..."
-s3_copy "releases/${VERSION}/standard.iso" "download.iso"
-s3_copy "releases/${VERSION}/debug.iso" "download-debug.iso"
+# Step 3: Update Cloudflare redirect rules
+# /download.iso and /download-debug.iso redirect (302) to the versioned paths.
+# This replaces re-uploading the full ISOs to pointer paths.
+log_step "3/4: Updating download redirect rules..."
+"$SCRIPT_DIR/setup-cloudflare-rules.sh" "$VERSION"
 
 # Step 4: Write latest.json
 log_step "4/4: Writing latest.json..."
@@ -168,13 +162,8 @@ echo
 log_info "Release $VERSION uploaded successfully!"
 echo
 
-if [ -n "${R2_CUSTOM_DOMAIN:-}" ]; then
-    log_info "Download links:"
-    log_info "  https://${R2_CUSTOM_DOMAIN}/download.iso"
-    log_info "  https://${R2_CUSTOM_DOMAIN}/download-debug.iso"
-    log_info "  https://${R2_CUSTOM_DOMAIN}/latest.json"
-else
-    log_info "Release path: releases/${VERSION}/"
-    log_info "Set R2_CUSTOM_DOMAIN in .env for download links."
-fi
+log_info "Download links:"
+log_info "  https://${R2_CUSTOM_DOMAIN}/download.iso"
+log_info "  https://${R2_CUSTOM_DOMAIN}/download-debug.iso"
+log_info "  https://${R2_CUSTOM_DOMAIN}/latest.json"
 echo

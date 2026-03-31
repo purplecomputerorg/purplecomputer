@@ -438,6 +438,18 @@ TIMEOUTS
     # adduser overwrites the home directory with skeleton files.
     cp /purple-src/config/xinit/xinitrc "$MOUNT_DIR/etc/purple/xinitrc"
 
+    # Stamp build version so parents can report it from the Parent Menu.
+    # PURPLE_VERSION env var can be set externally (e.g. by release-iso.sh).
+    # Falls back to git short hash + build date.
+    local build_version="${PURPLE_VERSION:-}"
+    if [ -z "$build_version" ]; then
+        local git_hash
+        git_hash=$(git -C /purple-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        build_version="build-${git_hash}-$(date +%Y%m%d)"
+    fi
+    echo "$build_version" > "$MOUNT_DIR/etc/purple-version"
+    log_info "Version stamp: $build_version"
+
     # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'

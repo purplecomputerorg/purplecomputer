@@ -38,6 +38,7 @@ main() {
         -v "$SCRIPT_DIR:/build" \
         -v "$PROJECT_DIR:/purple-src" \
         -v "/opt/purple-installer:/opt/purple-installer" \
+        -e "PURPLE_VERSION=${PURPLE_VERSION:-}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 

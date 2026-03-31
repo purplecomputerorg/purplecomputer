@@ -20,6 +20,8 @@ import termios
 import json
 from pathlib import Path
 
+import re
+
 from ..keyboard import NavigationAction, ControlAction
 from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL
 
@@ -584,6 +586,44 @@ def _is_dev_environment() -> bool:
     return (project_root / ".git").is_dir()
 
 
+def _get_version_label() -> str:
+    """Read /etc/purple-version and format it for display.
+
+    Semver (v1.0, v1.2.3) shows as "Version 1.0".
+    Date-time (v2026.03.30-1430) shows as "Build: Mar 30, 2026".
+    Dev builds (build-abc1234-20260330) show as "Dev build: abc1234".
+    Returns empty string if no version file found.
+    """
+    version_file = Path("/etc/purple-version")
+    if not version_file.exists():
+        return ""
+    version = version_file.read_text().strip()
+    if not version:
+        return ""
+
+    # Semver: v1.0 or v1.2.3 (with optional pre-release)
+    if re.match(r'^v?\d+\.\d+(\.\d+)?$', version):
+        return f"Version {version.lstrip('v')}"
+
+    # Date-time release: v2026.03.30-1430
+    m = re.match(r'^v?(\d{4})\.(\d{2})\.(\d{2})-(\d{4})$', version)
+    if m:
+        year, month, day, time = m.groups()
+        month_names = [
+            "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+        ]
+        mon = month_names[int(month)] if 1 <= int(month) <= 12 else month
+        return f"Build: {mon} {int(day)}, {year}"
+
+    # Dev build: build-abc1234-20260330
+    m = re.match(r'^build-([a-f0-9]+)-', version)
+    if m:
+        return f"Dev build: {m.group(1)}"
+
+    return version
+
+
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
     from ..settings import get_littles_mode, get_code_panel
@@ -799,6 +839,14 @@ class ParentMenu(ModalScreen):
         margin-top: 1;
     }
 
+    #parent-version {
+        width: 100%;
+        height: 1;
+        text-align: center;
+        color: $text-muted;
+        margin-top: 1;
+    }
+
     #parent-live-hint {
         width: 100%;
         height: auto;
@@ -832,6 +880,9 @@ class ParentMenu(ModalScreen):
                         item.add_class("disabled")
                     yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="parent-hint")
+            version = _get_version_label()
+            if version:
+                yield Static(version, id="parent-version")
 
     def on_mount(self) -> None:
         """Highlight the first menu item"""

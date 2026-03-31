@@ -134,6 +134,17 @@
       transition: color 0.15s;
     }
     .back a:hover { color: #5c2d91; }
+
+    .version-badge {
+      display: block;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: #857698;
+    }
+    .version-badge .ver {
+      font-weight: 600;
+      color: #695c7a;
+    }
   </style>
 </head>
 <body>
@@ -172,6 +183,7 @@
       </p>
 
       <a href="/download.iso" class="download-btn">Download Latest ISO</a>
+      <div class="version-badge" id="version-badge"></div>
 
       <div class="technical">
         <h2>For technical folks</h2>
@@ -197,5 +209,14 @@
       </p>
     </div>
   </main>
+  <script>
+    fetch('/latest.json')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('version-badge').innerHTML =
+          'Version <span class="ver">' + data.version + '</span>';
+      })
+      .catch(function() {});
+  </script>
 </body>
 </html>

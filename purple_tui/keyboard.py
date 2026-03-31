@@ -734,12 +734,18 @@ class KeyboardStateMachine:
             if keycode == KeyCode.KEY_CAPSLOCK:
                 # Caps Lock toggles caps on single press (like a normal keyboard)
                 self._caps_lock_on = not self._caps_lock_on
+                # Any non-shift key interrupts shift double-tap
+                self._shift_double_tap.reset()
                 actions.append(CapsLockAction())
                 return actions
             if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
                 self._shift_held = True
                 actions.append(ShiftAction(is_down=True))
                 return actions
+
+        # Any non-shift fresh key press interrupts shift double-tap sequence
+        if not is_repeat and keycode not in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
+            self._shift_double_tap.reset()
 
         # Handle Escape (only on fresh press for long-hold tracking)
         if keycode == KeyCode.KEY_ESC:

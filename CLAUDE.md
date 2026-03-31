@@ -117,9 +117,12 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. `purple-confirm.sh` (Gate 2) shows confirmation, requires ENTER
 3. `install.sh` runs, output hidden on tty2
 4. Success screen: "Press ENTER to restart"
-5. `do_reboot` (kernel-level reboot via `systemctl reboot --force --force`)
+5. `do_reboot` (reboot via `systemctl reboot`, sysrq fallback)
 
-**`noprompt` kernel param** is set on install entries to suppress Casper's own "remove media and press enter" shutdown prompt, which hangs when the USB is removed.
+**Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed three ways:
+- `touch /run/casper-no-prompt` before reboot (runtime, in `purple-confirm.sh`)
+- `casper-stop` neutered to `exit 0` at image build time (`00-build-golden-image.sh`)
+- `noprompt` kernel param on GRUB entries (belt-and-suspenders)
 
 ### UEFI Boot (Installed System)
 

@@ -631,7 +631,7 @@ parted -s "$GOLDEN_IMAGE" mkpart primary ext4 4GiB 100%
 
 ## Power Management
 
-Purple Computer includes automatic power management to save energy and protect the screen on unattended laptops.
+Purple Computer includes automatic power management to save energy. Two power states: awake and sleep face (no DPMS screen-off). Timers adapt to charger status and lid position.
 
 ### Power Button
 
@@ -639,7 +639,7 @@ The power button is kid-proofed to prevent accidental shutdowns:
 
 | Gesture | What Happens |
 |---------|-------------|
-| Tap (< 3s) | Shows sleep screen (cute sleeping face). Any key wakes. |
+| Tap (< 3s) | Shows shutdown confirmation with countdown. Tap again to confirm, or wait to cancel. |
 | Hold (3s) | Shows "Bye!" and shuts down. Like a phone. |
 | Hold (10s) | Hardware forced off (ACPI, always available). |
 
@@ -647,29 +647,29 @@ logind is configured to ignore the power button (`HandlePowerKey=ignore`). The T
 
 ### Lid Close
 
-Closing the lid turns the screen off immediately (saves power) and starts a 2-minute countdown to shutdown. Opening the lid within 2 minutes cancels the shutdown and turns the screen back on. This prevents accidental shutdowns when a kid briefly closes the lid, while still shutting down if the laptop is put away.
+Closing the lid shows the sleep screen immediately and starts a 10-minute shutdown countdown. Opening the lid cancels the countdown but keeps the sleep screen visible, showing parents how long the lid was closed and when the computer will turn off. Any key press wakes back to normal.
 
-### Idle Detection
+On charger: won't auto-shutdown (stays on sleep screen indefinitely).
+On battery: shuts down after 10 minutes of lid-closed time.
 
-The system tracks keyboard activity and progresses through idle states:
+### Idle Detection (Lid Open)
 
-| Idle Time | State | What Happens |
-|-----------|-------|--------------|
-| 0-3 min | Active | Normal operation |
-| 3 min | Sleep UI | Show sleeping face, "press any key to wake" |
-| 15 min | Screen Off | DPMS turns off display |
-| 25 min | Shutdown Warning | "Turning off in X minutes" |
-| 30 min | Shutdown | System powers off |
+Timings depend on charger state:
+
+| Condition | Sleep Face | Auto Shutdown |
+|-----------|-----------|---------------|
+| On charger | 5 min idle | Never |
+| On battery | 2 min idle | 10 min idle |
+
+The sleep screen shows a power status message so parents understand what's happening: charger state, elapsed time, and when auto-shutdown will occur. On live boot (USB), it also notes that the USB is needed to restart.
 
 ### Implementation
 
-Activity is tracked via `on_event()` in the Textual app, which catches all keyboard events before they can be consumed by child widgets. This ensures activity is always recorded regardless of which mode is active.
-
 **Key files:**
-- `purple_tui/power_manager.py`: Idle tracking, screen control, shutdown timings
-- `purple_tui/modes/sleep_screen.py`: Sleep UI (`SleepScreen`), shutdown UI (`ByeScreen`)
-- `purple_tui/input.py`: `PowerButtonReader` for power button evdev monitoring
-- `purple_tui/purple_tui.py`: Activity recording, power button integration
+- `purple_tui/power_manager.py`: Idle tracking, charger detection, shutdown timings
+- `purple_tui/rooms/sleep_screen.py`: Sleep UI (`SleepScreen`), shutdown confirm (`ShutdownConfirmScreen`), bye (`ByeScreen`)
+- `purple_tui/input.py`: `PowerButtonReader` and `LidSwitchReader` (evdev)
+- `purple_tui/purple_tui.py`: Activity recording, lid/power button integration
 
 ### Testing Sleep Mode
 
@@ -679,11 +679,7 @@ Use demo mode for accelerated timings:
 PURPLE_SLEEP_DEMO=1 python -m purple_tui.purple_tui
 ```
 
-Demo timings:
-- Sleep UI: 2 seconds
-- Screen off: 10 seconds
-- Shutdown warning: 15 seconds
-- Shutdown: 20 seconds (prints message instead of actual shutdown)
+Demo timings: sleep face in 2-3 seconds, shutdown in 8-10 seconds (prints message instead of actual shutdown).
 
 ---
 

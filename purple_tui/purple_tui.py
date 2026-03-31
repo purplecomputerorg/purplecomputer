@@ -714,6 +714,7 @@ class PurpleApp(App):
         self._power_button_reader: PowerButtonReader | None = None
         self._lid_switch_reader: LidSwitchReader | None = None
         self._lid_close_time: float | None = None  # When lid was closed (for shutdown timer)
+        self._lid_was_closed_for: float = 0  # How long lid was closed (for sleep screen status)
         self._bye_screen_active = False
         self._app_suspended = False  # True while shell is open via parent menu
 
@@ -1567,14 +1568,12 @@ class PurpleApp(App):
                     if not self._is_sleep_or_bye_active():
                         self._show_sleep_screen()
                 elif lid_open is not False and self._lid_close_time is not None:
-                    _power_log("LID OPENED (polled /proc/acpi fallback)")
+                    # Lid opened: reset shutdown countdown, record activity.
+                    # Sleep screen stays visible (same as evdev path).
+                    self._lid_was_closed_for = time.time() - self._lid_close_time
+                    _power_log(f"LID OPENED (polled /proc/acpi fallback), was closed for {self._lid_was_closed_for:.1f}s")
                     self._lid_close_time = None
                     self._record_user_activity()
-                    from .rooms.sleep_screen import SleepScreen
-                    for screen in list(self.screen_stack):
-                        if isinstance(screen, SleepScreen):
-                            screen.dismiss()
-                            break
 
             # Lid-close shutdown countdown (lid events come from LidSwitchReader
             # or fallback polling above)
@@ -1658,18 +1657,13 @@ class PurpleApp(App):
             if not self._is_sleep_or_bye_active():
                 self._show_sleep_screen()
         else:
-            # Lid opened: reset everything, wake up
-            closed_for = time.time() - self._lid_close_time if self._lid_close_time else 0
-            _power_log(f"LID OPENED (evdev), was closed for {closed_for:.1f}s")
+            # Lid opened: reset shutdown countdown, record activity.
+            # Sleep screen stays visible so parents can see power status.
+            # Kid presses any key to wake (same as idle sleep).
+            self._lid_was_closed_for = time.time() - self._lid_close_time if self._lid_close_time else 0
+            _power_log(f"LID OPENED (evdev), was closed for {self._lid_was_closed_for:.1f}s")
             self._lid_close_time = None
             self._record_user_activity()
-
-            # Dismiss sleep screen if showing
-            from .rooms.sleep_screen import SleepScreen
-            for screen in list(self.screen_stack):
-                if isinstance(screen, SleepScreen):
-                    screen.dismiss()
-                    break
 
     # ── Power Button ──────────────────────────────────────────────────
 

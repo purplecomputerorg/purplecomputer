@@ -15,15 +15,8 @@ from textual.screen import Screen
 from textual.widgets import Static
 from textual import events
 
-from ..power_manager import get_power_manager
+from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY, BATTERY_IDLE_SHUTDOWN
 from ..constants import is_live_boot
-
-# Live boot message shown on the sleep face screen
-_LIVE_BOOT_HINT = (
-    "Purple is running from USB.\n"
-    "If the computer turns off,\n"
-    "you'll need the USB to start it again."
-)
 
 
 class SleepFace(Static):
@@ -66,7 +59,7 @@ class SleepScreen(Screen):
         margin-top: 2;
     }
 
-    #sleep-live-hint {
+    #sleep-status {
         content-align: center middle;
         color: $text-muted;
         margin-top: 2;
@@ -81,29 +74,70 @@ class SleepScreen(Screen):
     def compose(self) -> ComposeResult:
         yield SleepFace()
         yield Static("Press any key to wake", id="sleep-hint")
-        if is_live_boot():
-            yield Static(_LIVE_BOOT_HINT, id="sleep-live-hint")
+        yield Static("", id="sleep-status")
 
     def on_mount(self) -> None:
         """Start update timer when screen is shown."""
-        # Check for idle shutdown periodically.
-        # Lid detection and lid-close shutdown are handled by
-        # LidSwitchReader and the app's _check_idle_state timer.
-        self._status_timer = self.set_interval(5.0, self._check_idle_shutdown)
+        self._update_status()
+        self._status_timer = self.set_interval(5.0, self._tick)
 
     def on_unmount(self) -> None:
         """Clean up timer when screen is hidden."""
         if self._status_timer:
             self._status_timer.stop()
 
+    def _tick(self) -> None:
+        """Update status text and check for idle shutdown."""
+        self._update_status()
+        self._check_idle_shutdown()
+
+    def _update_status(self) -> None:
+        """Update the power status hint based on current state."""
+        import time
+        pm = get_power_manager()
+        on_charger = pm.is_on_charger()
+        live = is_live_boot()
+
+        # Lid state: currently closed, or was closed and now reopened
+        lid_close_time = getattr(self.app, '_lid_close_time', None)
+        lid_was_closed_for = getattr(self.app, '_lid_was_closed_for', 0)
+        lid_involved = lid_close_time is not None or lid_was_closed_for > 0
+
+        lines = []
+        if lid_close_time is not None:
+            closed_min = int((time.time() - lid_close_time) / 60)
+            if closed_min < 1:
+                lines.append("Lid is closed.")
+            else:
+                lines.append(f"Lid has been closed for {closed_min} min.")
+        elif lid_was_closed_for > 0:
+            closed_min = int(lid_was_closed_for / 60)
+            if closed_min < 1:
+                lines.append("Lid was closed briefly.")
+            else:
+                lines.append(f"Lid was closed for {closed_min} min.")
+
+        if live:
+            lines.append("Running from USB.")
+            lines.append("If it turns off, you'll need the USB to restart.")
+
+        shutdown_min = LID_SHUTDOWN_DELAY // 60 if lid_involved else BATTERY_IDLE_SHUTDOWN // 60
+        if on_charger is True:
+            lines.append("Plugged in. Won't turn off automatically.")
+        else:
+            lines.append(f"On battery. Turns off after {shutdown_min} min to save power.")
+
+        try:
+            self.query_one("#sleep-status", Static).update("\n".join(lines))
+        except Exception:
+            pass
+
     def _check_idle_shutdown(self) -> None:
         """Check if idle time has reached shutdown threshold (battery only)."""
         from ..power_manager import _power_log
         pm = get_power_manager()
 
-        # Refresh charger state
         charger = pm.is_on_charger()
-
         idle = pm.get_idle_seconds()
         shutdown_threshold = pm.get_idle_shutdown_threshold()
         if int(idle) % 30 == 0:
@@ -144,6 +178,8 @@ class SleepScreen(Screen):
         _power_log("WAKE UP: key pressed on sleep screen")
         pm = get_power_manager()
         pm.record_activity()
+        # Clear the "was closed for" so it doesn't linger into next sleep
+        self.app._lid_was_closed_for = 0
         self.dismiss()
 
     def on_key(self, event: events.Key) -> None:

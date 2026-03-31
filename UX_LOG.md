@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Sleep screen: stays visible when lid is reopened (press any key to wake, same as idle sleep). Shows dynamic power status: how long lid was closed, charger state, auto-shutdown timing, and USB context on live boot. Helps parents understand power behavior at a glance.
 - Install confirmation modal: "Yes, install" / "No, go back" bordered buttons matching Clear Rooms modal pattern, with up/down navigation.
 - All rooms: centralized typo tolerance. Emoji/color lookups auto-correct typos ("dinno" shows dinosaur, "purpel" shows purple). Play room: "sya" triggers speech, "repet 3" starts repeat, "3 timess cat" works. Music room: "chooze xylaphone" switches instrument. Corrections shown in recall hint.
 - Art code REPL: "turn left/right" is now absolute (matches parent intuition). "spin"/"rotate" for relative 90° CW. "face" for explicit absolute. "back N" moves opposite heading. Bare color names ("blue", "dark red") switch colors. "paint hello"/"write hello" for inline text. Fuzzy matching on typos ("forwrd" runs forward, "bleu" switches to blue) with correction hints. Unrecognized text does nothing instead of painting individual letters.

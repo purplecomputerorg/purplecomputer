@@ -934,18 +934,29 @@ class InstallProgressScreen(ModalScreen):
             env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"},
         )
 
-        # Read stderr in chunks; pv/dd use \r not \n, so we can't use readline.
-        buf = b""
-        while True:
-            chunk = await proc.stderr.read(256)
-            if not chunk:
-                break
-            buf += chunk
-            while b'\n' in buf:
-                line, buf = buf.split(b'\n', 1)
-                self._handle_line(line.decode('utf-8', errors='replace'))
+        # Read stderr for live progress updates, then cancel when process exits.
+        # proc.wait() can hang if any child holds the pipe open (asyncio waits
+        # on pipe state in Python 3.13+). proc.returncode is set independently
+        # by the SIGCHLD handler, so polling it is safe.
+        async def _read_stderr() -> None:
+            buf = b""
+            while True:
+                chunk = await proc.stderr.read(256)
+                if not chunk:
+                    break
+                buf += chunk
+                while b'\n' in buf:
+                    line, buf = buf.split(b'\n', 1)
+                    self._handle_line(line.decode('utf-8', errors='replace'))
 
-        await proc.wait()
+        stderr_task = asyncio.ensure_future(_read_stderr())
+        while proc.returncode is None:
+            await asyncio.sleep(0.1)
+        stderr_task.cancel()
+        try:
+            await stderr_task
+        except asyncio.CancelledError:
+            pass
 
         # While USB is still present: sync, suppress casper prompt, prep reboot.
         # Use async subprocesses so Textual's event loop stays unblocked.

@@ -502,7 +502,12 @@ class ArtCodeRunner:
             if resolved:
                 return
 
-        # No match: do nothing (no per-character painting from code REPL)
+        # Stage 4: paint mode paints each character (like interactive mode)
+        if self._paint_on:
+            heading = self.canvas._heading
+            for ch in text:
+                self.canvas.paint_char(ch, direction=heading)
+                await asyncio.sleep(0.02)
 
     # ------------------------------------------------------------------
     # Command handlers (return True if handled, None to pass)

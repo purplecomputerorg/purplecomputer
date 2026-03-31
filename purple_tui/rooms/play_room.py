@@ -1052,9 +1052,36 @@ class SimpleEvaluator:
         self.content.pop_correction()  # Clear stale corrections
         return self._evaluate_inner(text)
 
+    # "and"/"&" → "+" only when between digits, colors, or known emoji words
+    _AND_PATTERN = re.compile(r'(?<=\S)\s+(?:and|&)\s+(?=\S)', re.IGNORECASE)
+
+    def _normalize_and(self, text: str) -> str:
+        """Replace 'and'/'&' with '+' when used as a joiner in expressions.
+
+        Only triggers when at least one side is a number or a pure color
+        (not an emoji that happens to also be a color like "orange").
+        Preserves "and" in plain text like "cat loves dog" or "apple & orange".
+        """
+        def replace_if_expression(m):
+            before = text[:m.start()].rstrip().rsplit(None, 1)[-1] if text[:m.start()].rstrip() else ""
+            after = text[m.end():].lstrip().split(None, 1)[0] if text[m.end():].lstrip() else ""
+            bl, al = before.lower(), after.lower()
+
+            def is_number_or_pure_color(w):
+                if w.isdigit():
+                    return True
+                # Color that is NOT also an emoji (avoids "orange", "lemon", etc.)
+                return bool(self.content.get_color(w)) and not self.content.get_emoji(w)
+
+            if is_number_or_pure_color(bl) or is_number_or_pure_color(al):
+                return ' + '
+            return m.group(0)
+        return self._AND_PATTERN.sub(replace_if_expression, text)
+
     def _evaluate_inner(self, text: str) -> str:
         """Core evaluation pipeline."""
-        # Normalize number words and commas early (before any evaluation)
+        # Normalize "and"/"&" to "+", number words, and commas early
+        text = self._normalize_and(text)
         text = self._normalize_number_words(text)
         text = self._normalize_commas(text)
 
@@ -1470,74 +1497,62 @@ class SimpleEvaluator:
         return f"{input_str}\n{result}"
 
     def _eval_auto_mix(self, text: str) -> str | None:
-        """Auto-mix colors with emojis, other colors, or text without requiring +.
+        """Rewrite space-separated mixed content as a + expression.
 
-        Colors act as adjectives: each color modifies the next non-color item.
-        Consecutive colors before the same item mix together.
-        Trailing colors with no item after them show as swatches (or mix if all colors).
+        Only triggers when at least one word is a color. Groups words into
+        logical chunks (adjective+color, number+noun, bare word) and joins
+        them with "+", then delegates to _eval_plus_expr.
+
+        Examples:
+            "red turtle blue"    -> "red + turtle + blue"
+            "dark blue green"    -> "dark blue + green"
+            "red 2 blues"        -> "red + 2 blues"
+            "red house green car"-> "red + house + green + car"
         """
         words = text.split()
         if len(words) < 2:
             return None
 
-        # Merge adjective+color groups before categorizing
-        # e.g. ["bright", "green", "blue"] -> [("bright green", modified_hex), ("blue", blue_hex)]
+        # Only fire when at least one word is a color, and no non-alpha connectors
+        if not any(self._get_color(w.lower()) for w in words):
+            return None
+        if any(w in ('&', ',', ';') for w in words):
+            return None
+
         from ..color_mixing import COLOR_ADJECTIVES
-        merged_words = []
+
+        # Build groups: each group is a string that stays together
+        groups = []
         i = 0
         while i < len(words):
             lower = words[i].lower()
+
+            # Adjectives (dark, bright, ...) attach to the next word
             if lower in COLOR_ADJECTIVES:
-                # Collect consecutive adjectives
-                adj_start = i
+                chunk = [words[i]]
+                i += 1
                 while i < len(words) and words[i].lower() in COLOR_ADJECTIVES:
+                    chunk.append(words[i])
                     i += 1
                 if i < len(words):
-                    # Try adjectives + remaining word as modified color
-                    adj_phrase = " ".join(w.lower() for w in words[adj_start:i+1])
-                    if mod := self.content.get_modified_color(adj_phrase):
-                        merged_words.append(("__modified_color__", mod[0]))
-                        i += 1
-                        continue
-                # Not a valid adjective+color, put words back as-is
-                for j in range(adj_start, min(i, len(words))):
-                    merged_words.append(words[j])
-            else:
-                merged_words.append(words[i])
-                i += 1
-
-        # Categorize each word
-        word_info = []  # list of ('color', hex) | ('emoji', e, count) | ('text', word)
-        has_color = False
-        has_non_color = False
-
-        for word in merged_words:
-            # Handle pre-merged modified colors
-            if isinstance(word, tuple) and word[0] == "__modified_color__":
-                word_info.append(('color', word[1]))
-                has_color = True
+                    chunk.append(words[i])
+                    i += 1
+                groups.append(" ".join(chunk))
                 continue
-            lower = word.lower()
-            if h := self._get_color(lower):
-                word_info.append(('color', h))
-                has_color = True
-            elif emoji_data := self._parse_emoji(lower):
-                e, c, w = emoji_data
-                word_info.append(('emoji', e, c))
-                has_non_color = True
-            elif self._is_plain_text(lower):
-                word_info.append(('text', word))
-                has_non_color = True
-            else:
-                return None  # Unknown word type, fall through
 
-        if not has_color:
-            return None
-        if not has_non_color and sum(1 for w in word_info if w[0] == 'color') < 2:
+            # Number attaches to the next word ("2 blues" stays together)
+            if lower.isdigit() and i + 1 < len(words):
+                groups.append(f"{words[i]} {words[i+1]}")
+                i += 2
+                continue
+
+            groups.append(words[i])
+            i += 1
+
+        if len(groups) < 2:
             return None
 
-        groups = self._build_adjective_groups(word_info)
-        return self._render_adjective_groups(groups)
+        return self._eval_plus_expr(" + ".join(groups))
 
     def _normalize_mult(self, text: str) -> str:
         """Normalize multiplication operators (x, times, ×) to *."""

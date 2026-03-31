@@ -287,12 +287,12 @@ class TestSmartResolution:
         assert canvas._last_key_color != "#FF0000"
         assert len(runner.corrections) > 0
 
-    def test_no_match_does_nothing(self, canvas):
+    def test_no_match_paints_chars(self, canvas):
+        """Unrecognized text in paint mode should paint each character."""
         from purple_tui.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["xyzzyplugh"]))
-        assert canvas._typed_chars == []
-        assert canvas._painted_chars == []
+        self._run(runner.run(["xyzzy"]))
+        assert canvas._painted_chars == list("xyzzy")
 
     def test_write_mode_still_types(self, canvas):
         from purple_tui.code_runner import ArtCodeRunner
@@ -353,9 +353,31 @@ class TestSmartResolution:
         self._run(runner.run(["paint off", "back 3"]))
         assert canvas._cursor_x == 2
 
-    def test_keymash_does_nothing(self, canvas):
+    def test_keymash_paints_chars(self, canvas):
+        """Key mash in paint mode should paint each character."""
         from purple_tui.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["fdsalkfsadjlfads"]))
-        assert canvas._typed_chars == []
+        self._run(runner.run(["fdsajkl"]))
+        assert canvas._painted_chars == list("fdsajkl")
+
+    def test_abc_paints_three_chars(self, canvas):
+        """'abc' should paint a, b, and c individually."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["abc"]))
+        assert canvas._painted_chars == ['a', 'b', 'c']
+
+    def test_single_letter_paints(self, canvas):
+        """A single non-color letter should paint, not be swallowed."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["k"]))
+        assert canvas._painted_chars == ['k']
+
+    def test_paint_off_unrecognized_does_nothing(self, canvas):
+        """With paint off, unrecognized text should not paint."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["paint off", "abc"]))
         assert canvas._painted_chars == []
+        assert canvas._typed_chars == []

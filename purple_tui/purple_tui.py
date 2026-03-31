@@ -1898,15 +1898,14 @@ class PurpleApp(App):
                 # Open code panel in the new room
                 self._open_code_panel_in_room(new_room)
             else:
-                # Play room: swap to compact indicator but keep normal viewport height
+                # Play room: no code panel, show normal indicator
                 try:
                     viewport = self.query_one("#viewport")
                     indicator = self.query_one("#room-indicator", RoomIndicator)
                     compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
                     with self.batch_update():
-                        indicator.display = False
-                        compact.update_room(new_room)
-                        compact.display = True
+                        compact.display = False
+                        indicator.display = True
                         viewport.styles.height = VIEWPORT_HEIGHT
                         viewport.border_subtitle = ""
                 except NoMatches:

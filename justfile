@@ -180,6 +180,10 @@ flash *args:
 flash-debug *args:
     ./build-scripts/flash-to-usb.sh --debug {{args}}
 
+# AI UX testing: let a Claude agent explore the app as a simulated kid
+ux:
+    @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/ai_ux_runner.py
+
 # Run Python with venv (e.g., just python script.py, just python -c 'print(1)')
 python *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python3 {{args}}

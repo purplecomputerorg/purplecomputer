@@ -1784,6 +1784,110 @@ class TestFuzzyCorrections:
         assert "🍌" in result
 
 
+class TestAndNormalization:
+    """Test 'and'/'&' treated as '+' in expressions."""
+
+    def test_and_with_numbers(self, evaluator):
+        r1 = evaluator.evaluate("2 + 3")
+        r2 = evaluator.evaluate("2 and 3")
+        assert r1 == r2
+
+    def test_and_with_colors(self, evaluator):
+        r1 = evaluator.evaluate("red + blue")
+        r2 = evaluator.evaluate("red and blue")
+        assert r1 == r2
+
+    def test_and_with_emoji_counts(self, evaluator):
+        r1 = evaluator.evaluate("3 cats + 2 dogs")
+        r2 = evaluator.evaluate("3 cats and 2 dogs")
+        assert r1 == r2
+
+    def test_ampersand_with_colors(self, evaluator):
+        r1 = evaluator.evaluate("red + blue")
+        r2 = evaluator.evaluate("red & blue")
+        assert r1 == r2
+
+    def test_ampersand_emoji_preserved(self, evaluator):
+        # "apple & orange" should NOT become a color mix (orange is both)
+        result = evaluator.evaluate("apple & orange")
+        assert "🍎" in result
+        assert "🍊" in result
+
+
+class TestCommaExpressions:
+    """Test comma-separated expressions with colors and numbers."""
+
+    def test_comma_color_counts(self, evaluator):
+        r1 = evaluator.evaluate("2 red + 3 blue")
+        r2 = evaluator.evaluate("2 red, 3 blue")
+        assert r1 == r2
+
+    def test_comma_colors(self, evaluator):
+        r1 = evaluator.evaluate("red + blue")
+        r2 = evaluator.evaluate("red, blue")
+        assert r1 == r2
+
+    def test_comma_plain_text_preserved(self, evaluator):
+        result = evaluator.evaluate("cat, dog")
+        assert result == "🐱, 🐶"
+
+
+class TestAutoMixConsistency:
+    """Test that space-separated color+content works like explicit '+'."""
+
+    def test_color_count_emoji(self, evaluator):
+        r1 = evaluator.evaluate("red + 2 blues")
+        r2 = evaluator.evaluate("red 2 blues")
+        assert r1 == r2
+
+    def test_color_emoji_color(self, evaluator):
+        r1 = evaluator.evaluate("red + turtle + blue")
+        r2 = evaluator.evaluate("red turtle blue")
+        assert r1 == r2
+
+    def test_color_adjective_preserved(self, evaluator):
+        r1 = evaluator.evaluate("dark blue + green")
+        r2 = evaluator.evaluate("dark blue green")
+        assert r1 == r2
+
+    def test_color_items_not_mixed(self, evaluator):
+        # "red house green car" = red house + green car, NOT mixed
+        result = evaluator.evaluate("red house green car")
+        assert "🏠" in result
+        assert "🚗" in result
+
+
+class TestCrashSafety:
+    """No input should ever crash the evaluator or produce invalid markup."""
+
+    def test_bracket_sequences(self, evaluator):
+        from rich.text import Text
+        for t in ["[/][/]", "[on red]", "[bold]hi[/bold]", "[[[[", "test[/]end"]:
+            result = evaluator.evaluate(t)
+            Text.from_markup(result)  # should not raise
+
+    def test_html_injection(self, evaluator):
+        from rich.text import Text
+        result = evaluator.evaluate("<script>alert(1)</script>")
+        Text.from_markup(result)
+
+    def test_special_chars(self, evaluator):
+        from rich.text import Text
+        for t in ["{{{", "}}}", "<<<>>>", "' OR 1=1 --", "))))", "+-+-+-"]:
+            result = evaluator.evaluate(t)
+            Text.from_markup(result)
+
+    def test_empty_and_whitespace(self, evaluator):
+        assert evaluator.evaluate("") == ""
+        assert evaluator.evaluate("   ") == ""
+
+    def test_evaluate_never_raises(self, evaluator):
+        # Even pathological inputs should return something, not crash
+        for t in ["[/]" * 100, "(" * 50, ")" * 50, "\x00\x01\x02"]:
+            result = evaluator.evaluate(t)
+            assert isinstance(result, str)
+
+
 if __name__ == "__main__":
     if HAS_PYTEST:
         sys.exit(pytest.main([__file__, "-v"]))

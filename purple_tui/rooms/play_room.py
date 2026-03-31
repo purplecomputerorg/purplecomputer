@@ -1045,12 +1045,21 @@ class SimpleEvaluator:
 
         Content-layer fuzzy corrections (e.g., "dinno" → "dino") are tracked
         on self.content._last_correction for the UI to display separately.
+        Never raises or produces invalid markup: falls back to colored letter blocks.
         """
         text = text.strip()
         if not text:
             return ""
         self.content.pop_correction()  # Clear stale corrections
-        return self._evaluate_inner(text)
+        try:
+            result = self._evaluate_inner(text)
+            # Validate Rich markup so broken tags never reach the renderer
+            if result and not result.startswith("COLOR_RESULT:"):
+                from rich.text import Text
+                Text.from_markup(result)
+            return result
+        except Exception:
+            return self._format_text_as_color_blocks(text)
 
     # "and"/"&" → "+" only when between digits, colors, or known emoji words
     _AND_PATTERN = re.compile(r'(?<=\S)\s+(?:and|&)\s+(?=\S)', re.IGNORECASE)
@@ -1235,16 +1244,23 @@ class SimpleEvaluator:
         return None
 
     def _eval_parens(self, text: str) -> str:
-        """Evaluate innermost parentheses first, recursively."""
+        """Evaluate innermost parentheses first, recursively.
+
+        Results are stripped to plain values (numbers, emojis) so they can
+        be safely spliced back into the outer expression without leaking
+        Rich markup tags.
+        """
         for _ in range(10):
             if not (match := re.search(r'\(([^()]+)\)', text)):
                 break
             result = self.evaluate(match.group(1))
-            # Strip label/dot visualization for use in outer expressions
+            # Strip to first line (removes dot visualization)
             result = result.split('\n')[0]
             # Strip "= " prefix from math results
             if result.startswith("= "):
                 result = result[2:]
+            # Strip any remaining Rich markup so it doesn't leak into outer text
+            result = _strip_markup(result)
             # If result is "N emoji", extract just the emojis for outer expression
             if m := re.match(r'^(\d+)\s+(.+)$', result):
                 count, emoji_str = int(m.group(1)), m.group(2).strip()
@@ -1884,13 +1900,22 @@ class SimpleEvaluator:
         )
 
     def _normalize_commas(self, text: str) -> str:
-        """Convert commas to plus when separating numbers: '1, 2, 3' → '1 + 2 + 3'.
+        """Convert commas to plus when separating items: '2 red, 3 blue' → '2 red + 3 blue'.
 
-        Only triggers when there's at least one digit-comma-digit pattern,
-        so 'cat, dog' is left unchanged.
+        Triggers when there's at least one digit or color near a comma.
+        Leaves plain text like 'hello, world' unchanged.
         """
-        if re.search(r'\d\s*,\s*\d', text):
-            return re.sub(r',\s+', ' + ', text)
+        if ',' not in text:
+            return text
+        parts = [p.strip() for p in text.split(',')]
+        if len(parts) < 2:
+            return text
+        has_expr = any(
+            re.search(r'\d', p) or self.content.get_color(p.split()[0].lower() if p.split() else '')
+            for p in parts if p
+        )
+        if has_expr:
+            return ' + '.join(parts)
         return text
 
     # Operator word → symbol mapping (used for exact and fuzzy normalization)
@@ -2094,17 +2119,21 @@ class SimpleEvaluator:
         return None
 
     def _format_text_as_color_blocks(self, text: str) -> str:
-        """Format plain text as colored blocks with letters on top."""
+        """Format plain text as colored blocks with letters on top.
+
+        Every printable non-space character gets a colored block.
+        This is the safe fallback: no raw markup can leak through.
+        """
         blocks = []
         for char in text:
             if char.isspace():
                 blocks.append(" ")
-            elif char.isalnum():
+            elif ord(char) >= 32:
                 bg = get_key_color(char)
                 fg = _contrast_color(bg)
-                blocks.append(f"[{fg} on {bg}] {char} [/]")
-            else:
-                blocks.append(char)
+                # Escape [ for Rich markup safety
+                display = "\\[" if char == '[' else char
+                blocks.append(f"[{fg} on {bg}] {display} [/]")
         return "".join(blocks)
 
     def _format_text_on_color(self, text: str, bg_color: str) -> str:
@@ -2193,7 +2222,9 @@ class SimpleEvaluator:
                             matched = True
                             break
                 if not matched:
-                    result.append(text[i])
+                    ch = text[i]
+                    # Escape [ to prevent Rich markup injection
+                    result.append("\\[" if ch == '[' else ch)
                     i += 1
         return ''.join(result)
 

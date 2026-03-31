@@ -1,58 +1,30 @@
 # Claude Code Notes for Purple Computer
 
-## Headless UI Preview
-
-Use `just preview` to take headless screenshots on the server (no display needed). After making UI changes, preview them to verify layout and behavior.
-
-```bash
-just preview play                              # Default Play room
-just preview art                               # Art room
-just preview music                             # Music room
-just preview art code_panel                    # Art with code panel open
-just preview play type:5+3 key:enter           # Type and submit in Play
-just preview art code_panel type:forward key:enter  # Run a turtle command
-just preview music key:tab                     # Switch instrument tab
-```
-
-Output is a PNG at `/tmp/screenshots/`. Read the file to view it. See `guides/headless-preview.md` for the full action reference.
-
-**Visual/layout tests:** `app.run_test()` can verify widget sizes, positions, and layout stability headlessly. See `tests/test_code_panel_layout.py`.
-
-## Screenshots
-
-Screenshots are stored in `/tmp/screenshots/`. Check for recent files sorted by date (e.g. `SCR-20260306-*.png`).
+**Keep this file minimal.** When editing CLAUDE.md, also tighten existing sections: remove anything derivable from code, merge overlaps, cut stale info. Aim for <150 lines.
 
 ---
 
 ## Sensitive Files (DO NOT READ)
 
-Never read `tools/.env`, any `.env` files, `credentials.json`, or `secrets.yaml`.
+Never read `.env` files, `credentials.json`, or `secrets.yaml`.
 
 ---
 
 ## Hardware Safety (CRITICAL)
 
-Never make changes that could cause issues on real laptop hardware for testing, debugging, or VM compatibility. Purple Computer runs on kids' laptops. Real hardware stability always takes priority. VM-specific workarounds must be safe no-ops on real devices.
+Purple Computer runs on kids' laptops. Never make changes that could cause issues on real hardware. VM-specific workarounds must be safe no-ops on real devices.
 
 ---
 
 ## Target Audience
 
-Purple Computer is for **kids 4-7** (and fun for 2-8+) and their **non-technical parents**.
+**Kids 4-7** (fun for 2-8+) and their **non-technical parents**.
 
-User-facing messages: simple, friendly language. No jargon. Clear next steps, not error explanations. Add `(Technical: ...)` hint at end for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
+User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
 
----
+**Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead.
 
-## UX Change Log
-
-When making UX changes, add a one-line description to `UX_LOG.md`.
-
----
-
-## Writing Style
-
-**No em-dashes or spaced dashes.** Use colons, commas, or periods instead of ` - ` or ` — `.
+**UX changes:** Add a one-line description to `UX_LOG.md`.
 
 ---
 
@@ -64,13 +36,27 @@ When making UX changes, add a one-line description to `UX_LOG.md`.
 just test    just run    just lint    just setup    just python foo.py
 ```
 
-Always `just python` instead of `.venv/bin/python`. The justfile handles venv activation.
+Always `just python` instead of `.venv/bin/python`.
+
+---
+
+## Headless UI Preview
+
+```bash
+just preview play                              # Default Play room
+just preview art code_panel                    # Art with code panel open
+just preview play type:5+3 key:enter           # Type and submit in Play
+```
+
+Output: PNG at `/tmp/screenshots/`. See `guides/headless-preview.md` for full reference.
+
+**Visual/layout tests:** `app.run_test()` verifies widget sizes and positions headlessly. See `tests/test_code_panel_layout.py`.
 
 ---
 
 ## Terminal Layout Constants
 
-**Single source of truth:** `purple_tui/constants.py` defines viewport dimensions (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=30`, `REQUIRED_TERMINAL_ROWS=38`). Font size calculation in `scripts/calc_font_size.py` imports from there. No fallbacks needed.
+Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=30`, `REQUIRED_TERMINAL_ROWS=38`). Font size calc in `scripts/calc_font_size.py` imports from there.
 
 ---
 
@@ -78,72 +64,79 @@ Always `just python` instead of `.venv/bin/python`. The justfile handles venv ac
 
 ### Background Colors (Textual 0.67.0)
 
-`widget.styles.background` on `Static` doesn't repaint. Use `Widget` subclass with `render_line()` returning `Strip([Segment(" " * width, Style(bgcolor=color))])`. This is the pattern used throughout (MusicGrid, ArtCanvas, ColorLegend, etc.).
+`widget.styles.background` on `Static` doesn't repaint. Use `Widget` subclass with `render_line()` returning `Strip([Segment(...)])`.
 
 ### Flicker-Free Reflows (MusicGrid pattern)
 
-When a widget's height changes (e.g. REPL panel open/close), Textual may render intermediate sizes causing cell flicker. Fix: set `_layout_ready = False` before the height change, cache the last good cell dimensions in `_cached_layout`, and keep rendering with cached values during the reflow. `on_resize` debounces 50ms then sets `_layout_ready = True` and refreshes. On first mount (no cache), render blank background instead. Apply this to both open and close transitions.
+When widget height changes, Textual renders intermediate sizes causing flicker. Fix: `_layout_ready = False` before change, cache last good dimensions in `_cached_layout`, render with cached values during reflow. `on_resize` debounces 50ms then sets `_layout_ready = True`.
 
 ### Keyboard Input (evdev)
 
-**Linux only.** Keyboard input via evdev (`/dev/input/event*`), bypassing the terminal. Alacritty is display-only. This gives true key down/up events and precise timestamps.
+Input via evdev (`/dev/input/event*`), bypassing the terminal. Alacritty is display-only.
 
 ```
 Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
 ```
 
-**Key files:** `purple_tui/input.py` (EvdevReader), `purple_tui/keyboard.py` (KeyboardStateMachine, action types). See `guides/keyboard-architecture.md`.
+**Key files:** `purple_tui/input.py`, `purple_tui/keyboard.py`. See `guides/keyboard-architecture.md`.
 
-**Single code path:** All keyboard logic in `handle_keyboard_action()`. Textual's `_on_key()` must suppress events (`event.stop(); event.prevent_default()`).
-
-**Focus-free navigation:** Textual's Tab/Shift-Tab doesn't work with evdev. All navigation is explicit via `handle_keyboard_action()`.
+**Single code path:** All keyboard logic in `handle_keyboard_action()`. Textual's `_on_key()` suppresses events. All navigation is explicit (no Tab/Shift-Tab focus).
 
 ### HoldOrTap Pattern
 
-`HoldOrTap` (keyboard.py) distinguishes quick taps from long holds (used for space-hold to toggle code panel). Key behavior:
-- `on_down()`: starts hold timer
-- `on_up()`: returns True if it was a tap (released before threshold)
-- `on_other_key()`: returns True if a pending tap should be flushed before the new key
-
-When buffering space in write mode, always check `on_other_key()` return value to flush the space before the next character (otherwise "apple banana" becomes "applebanana").
+`HoldOrTap` (keyboard.py) distinguishes quick taps from long holds (space-hold toggles code panel). Always check `on_other_key()` return value to flush buffered space before the next character.
 
 ### Code Panel Architecture
 
-**State:** `_code_panel_active` (bool on app) persists across room switches. Individual `ReplPanel.is_open` is per-room runtime state.
+**State:** `_code_panel_active` (bool on app) persists across room switches. `ReplPanel.is_open` is per-room runtime state.
 
-**Room switch behavior:** When `_code_panel_active`, switching to Music/Art auto-opens the REPL panel. Switching to Play shows compact indicator (Play is already a REPL). Mode ends only on explicit close (hold Space, "exit" command, or room picker).
+**Room switch:** When active, switching to Music/Art auto-opens REPL. Play shows compact indicator. Mode ends on explicit close.
 
-**Canvas sizing:** When opening REPL via space-hold (user-initiated), the canvas/grid height is pinned to its current size. When opening via room switch, height stays at `1fr` (widget may not be laid out yet, `size.height` would be 0). Viewport grows by 4 when code panel opens: 3 from indicator swap (full 4-row → compact 1-row) + 1 extra to accommodate REPL(5 rows) after hint bar(1 row) is hidden.
+**Canvas sizing:** Space-hold (user-initiated) pins canvas height. Room switch keeps `1fr`. Viewport grows by 4 when code panel opens: 3 from indicator swap (4-row → 1-row) + 1 extra for REPL after hint bar hidden.
 
-**Write mode + space buffering:** In art write mode, space-down starts the hold timer but does NOT type immediately. Space repeats are suppressed while pending. On tap (quick release), space is sent to canvas. On `on_other_key()` returning True, space is flushed before the new key.
+**Write mode + space buffering:** Space-down starts hold timer, doesn't type immediately. Repeats suppressed while pending. Tap sends space, `on_other_key()` True flushes before new key.
 
 ---
 
 ## Python Gotchas
 
-**Environment variable checks:** Always compare to `"1"`, never use truthiness (`"0"` is truthy).
+**Environment variable checks:** Compare to `"1"`, never use truthiness (`"0"` is truthy).
 
-**Dataclass constructors:** Check the actual definition. `NavigationAction` has `direction`, not `is_down`. `ControlAction` has `action` and `is_down`.
+**Dataclass constructors:** Check actual definitions. `NavigationAction` has `direction`, not `is_down`. `ControlAction` has `action` and `is_down`.
 
 ---
 
-## UEFI Boot
+## Installer and Boot
 
-Boot must work on diverse hardware (ThinkPads, Dells, Surface, etc.). Key principles:
-- **UUID over labels** for root partition (labels aren't unique across disks)
-- **Signed boot chain:** shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel
-- **Multiple EFI paths:** `/EFI/BOOT/`, `/EFI/Microsoft/Boot/`, `/EFI/purple/` each have shim + GRUB
-- **NVRAM entries are bonus:** create them but don't depend on them
-- **EFI search config** has UUID → label → file → device probe fallbacks
+### Live USB Boot (Casper)
 
-Device-specific fixes: comment which device, make it a fallback, keep under 10 lines. Run `build-scripts/diagnose-boot.sh` to debug.
+Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
+
+Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
+1. Live boot detects USB payload
+2. `purple-confirm.sh` (Gate 2) shows confirmation, requires ENTER
+3. `install.sh` runs, output hidden on tty2
+4. Success screen: "Press ENTER to restart"
+5. `do_reboot` (kernel-level reboot via `systemctl reboot --force --force`)
+
+**`noprompt` kernel param** is set on install entries to suppress Casper's own "remove media and press enter" shutdown prompt, which hangs when the USB is removed.
+
+### UEFI Boot (Installed System)
+
+Boot must work on diverse hardware (ThinkPads, Dells, Surface, etc.):
+- **UUID over labels** for root partition
+- **Signed boot chain:** shim → GRUB → kernel
+- **Multiple EFI paths:** `/EFI/BOOT/`, `/EFI/Microsoft/Boot/`, `/EFI/purple/`
+- **NVRAM entries are bonus:** create but don't depend on them
+
+Device-specific fixes: comment which device, keep under 10 lines. Run `build-scripts/diagnose-boot.sh` to debug.
 
 ---
 
 ## Build Image Size Reduction
 
-Uses `--no-install-recommends`. `linux-firmware` must be installed explicitly (it's a Recommend, not a dependency).
+Uses `--no-install-recommends`. `linux-firmware` must be installed explicitly.
 
-**Kernel modules (`/lib/modules/`): DANGEROUS to prune.** Modules have invisible cross-directory dependencies (e.g. `i915` → `drm_display_helper` → `cec` in `drivers/media/`). **Only remove networking modules** (`drivers/net`, `drivers/bluetooth`, `net/bluetooth`, `net/wireless`, `drivers/nfc`, `drivers/isdn`). The build runs `modprobe --dry-run` after pruning to catch breakage.
+**Kernel modules (`/lib/modules/`): DANGEROUS to prune.** Cross-directory dependencies are invisible. **Only remove networking modules** (`drivers/net`, `drivers/bluetooth`, `net/bluetooth`, `net/wireless`, `drivers/nfc`, `drivers/isdn`). Build runs `modprobe --dry-run` after pruning.
 
-**Firmware files (`/lib/firmware/`): Safe to prune aggressively.** Standalone blobs, no cross-dependencies. Keep only `i915/`, `amdgpu/`, `nvidia/`, `intel/` for GPU/audio.
+**Firmware (`/lib/firmware/`): Safe to prune aggressively.** Standalone blobs. Keep `i915/`, `amdgpu/`, `nvidia/`, `intel/`.

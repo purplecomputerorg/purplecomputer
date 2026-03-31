@@ -50,56 +50,48 @@ cleanup() {
 trap cleanup EXIT
 
 # =============================================================================
-# COUNTDOWN REBOOT - works without any keyboard input
+# IMMEDIATE REBOOT / POWEROFF - bypasses Casper shutdown scripts
 # =============================================================================
-# Previous approach used `read -t 60 _ </dev/tty1` which is fragile:
-# terminal may be in bad state after raw mode + installer, tty1 may not
-# be the right device, and read -t may hang if the fd is broken.
-# This countdown approach always powers off, no keyboard dependency.
+# Casper's shutdown hooks can hang (especially if the USB is removed).
+# The `noprompt` kernel param (set in GRUB config) suppresses Casper's
+# "press enter" prompt, and --force --force sends the syscall directly,
+# bypassing all shutdown scripts. Sysrq is the final fallback.
+do_reboot() {
+    log "Rebooting now"
+    ( sync ) & sleep 1  # Best-effort flush, don't wait
+    systemctl reboot --force --force 2>/dev/null &
+    sleep 3
+    reboot -f 2>/dev/null &
+    sleep 3
+    echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
+    echo b > /proc/sysrq-trigger 2>/dev/null
+    sleep 30
+}
+
+do_poweroff() {
+    log "Powering off now"
+    ( sync ) & sleep 1
+    systemctl poweroff --force --force 2>/dev/null &
+    sleep 3
+    poweroff -f 2>/dev/null &
+    sleep 3
+    echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
+    echo o > /proc/sysrq-trigger 2>/dev/null
+    sleep 30
+}
+
 countdown_poweroff() {
     local seconds="${1:-30}"
     log "Countdown poweroff: ${seconds}s"
-
-    # Hard watchdog (background): if everything below hangs, this fires.
-    # Re-enables sysrq first since the installed system disables it.
-    (
-        sleep $((seconds + 10))
-        echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
-        echo o > /proc/sysrq-trigger 2>/dev/null
-    ) &
-
+    # Hard watchdog in case countdown or poweroff hangs
+    ( sleep $((seconds + 10)); echo 1 > /proc/sys/kernel/sysrq 2>/dev/null; echo o > /proc/sysrq-trigger 2>/dev/null ) &
     while [ "$seconds" -gt 0 ]; do
         printf "\r         Powering off in %2d seconds...  " "$seconds"
         sleep 1
         seconds=$((seconds - 1))
     done
     echo ""
-
-    log "Powering off now"
-
-    # The USB drive may already be removed at this point, so the live
-    # overlayfs/squashfs backing is gone. ANY command that touches the
-    # filesystem (sync, unmount, reading binaries) can hang forever.
-    #
-    # --force --force = immediate power off, no sync, no unmount.
-    # This is the only reliable method when the boot media is gone.
-    #
-    # We background sync with a timeout so it doesn't block us.
-    # We also background each poweroff attempt so if one hangs on I/O,
-    # the next one still fires.
-    ( sync ) & sleep 1  # Best-effort, don't wait
-
-    # Most aggressive first: --force --force skips everything
-    systemctl poweroff --force --force 2>/dev/null &
-    sleep 3
-    # Direct kernel call (bypasses systemd)
-    poweroff -f 2>/dev/null &
-    sleep 3
-    # Sysrq: kernel-level immediate power off, cannot hang
-    echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
-    echo o > /proc/sysrq-trigger 2>/dev/null
-    # If we're still alive, the background watchdog will get us
-    sleep 30
+    do_poweroff
 }
 
 cancel_and_poweroff() {
@@ -342,11 +334,22 @@ if "$PAYLOAD_PATH/install.sh" >/dev/tty2 2>&1; then
     echo ""
     echo ""
     echo ""
-    echo "         Remove the USB drive now."
+    echo "         Purple Computer is installed!"
+    echo ""
+    echo "         You don't need the USB drive plugged in anymore."
+    echo ""
+    echo "         Press ENTER to restart."
     echo ""
     echo ""
 
-    countdown_poweroff 30
+    log "Waiting for user to press ENTER..."
+    # Wait for ENTER (with timeout so it doesn't sit forever if abandoned).
+    # If USB is still in, BIOS may boot the live USB again instead of the
+    # installed system. That's fine: they'll just see Purple Computer
+    # running from USB, and can remove it and reboot whenever.
+    read -t "$INPUT_TIMEOUT" _ 2>/dev/null || true
+
+    do_reboot
 else
     EXIT_CODE=$?
     log "FAILED: Installation error (exit $EXIT_CODE)"
@@ -367,9 +370,11 @@ else
     echo ""
     echo "         Setup could not be completed."
     echo ""
+    echo "         Contact tavi@purplecomputer.org for help."
+    echo ""
     echo "         (Press Alt+F2 for technical details)"
     echo ""
     echo ""
 
-    countdown_poweroff 30
+    countdown_poweroff 60
 fi

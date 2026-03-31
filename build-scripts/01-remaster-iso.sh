@@ -25,10 +25,6 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# GRUB timeout: hidden by default, parents never see the menu.
-# During this window, pressing any key reveals the menu (for technical users).
-GRUB_TIMEOUT="${GRUB_TIMEOUT:-3}"
-
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
@@ -139,7 +135,7 @@ main() {
     mkdir -p /opt/purple-installer/output
 
     # Step 1: Download Ubuntu Server ISO if needed
-    log_step "1/9: Checking Ubuntu Server ISO..."
+    log_step "1/11: Checking Ubuntu Server ISO..."
     if [ -f "$UBUNTU_ISO" ]; then
         log_info "Using cached ISO: $UBUNTU_ISO"
     else
@@ -149,19 +145,19 @@ main() {
     log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
 
     # Step 2: Setup working directories
-    log_step "2/9: Setting up working directories..."
+    log_step "2/11: Setting up working directories..."
     rm -rf "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
     mkdir -p "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
 
     # Step 3: Mount and copy ISO contents
-    log_step "3/9: Extracting ISO contents..."
+    log_step "3/11: Extracting ISO contents..."
     mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
 
     # Copy everything from ISO
     rsync -a --info=progress2 "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
 
     # Step 4: Replace squashfs with Purple Computer
-    log_step "4/9: Replacing squashfs with Purple Computer..."
+    log_step "4/11: Replacing squashfs with Purple Computer..."
     # Remove ALL Ubuntu Server squashfs files and replace with ours.
     # Casper reads install-sources.yaml to know which layers to mount.
     rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
@@ -203,7 +199,7 @@ SOURCES_EOF
     rm -rf "$SQEXT"
 
     # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
-    log_step "5/9: Modifying initramfs..."
+    log_step "5/11: Modifying initramfs..."
 
     # Find the initrd (might be named differently)
     INITRD_PATH=""
@@ -258,10 +254,9 @@ SOURCES_EOF
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0;; esac
-# Redefine VT color 0 (black) to purple (#2d1b4e) and clear tty1.
-# Only paint the background here; purple-splash.service adds the text later
-# (after vconsole-setup sets the final console font, avoiding a font-size jump).
-printf '\033]P02d1b4e\033[H\033[2J' > /dev/tty1 2>/dev/null
+# Redefine VT color 0 (black) to purple (#2d1b4e), clear tty1, show message.
+# This is the earliest point we control the screen after GRUB hands off.
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 SPLASH_EOF
     chmod +x "$MAIN_DIR/scripts/init-top/01_purple_splash"
 
@@ -330,7 +325,7 @@ SPLASH_EOF
     log_info "Initramfs modified successfully"
 
     # Step 6: Add payload to ISO
-    log_step "6/9: Adding payload to ISO..."
+    log_step "6/11: Adding payload to ISO..."
 
     PAYLOAD_DIR="$WORK_DIR/iso-new/purple"
     mkdir -p "$PAYLOAD_DIR"
@@ -346,7 +341,7 @@ SPLASH_EOF
     umount "$WORK_DIR/iso-mount"
 
     # Step 7: Replace GRUB config with live boot default + optional install
-    log_step "7/9: Configuring GRUB boot menu..."
+    log_step "7/11: Configuring GRUB boot menu..."
 
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     if [ -f "$GRUB_CFG" ]; then
@@ -356,8 +351,7 @@ SPLASH_EOF
         cp "$GRUB_CFG" "${GRUB_CFG}.orig"
 
         # Replace with live-boot-default GRUB config
-        # Note: Using unquoted heredoc to allow $GRUB_TIMEOUT expansion
-        cat > "$GRUB_CFG" << GRUB_PURPLE
+        cat > "$GRUB_CFG" << 'GRUB_PURPLE'
 # Purple Computer - GRUB Configuration
 # Default: live boot (no install, no disk writes)
 # Optional: install to internal disk
@@ -372,17 +366,9 @@ SPLASH_EOF
 #     or not the check ran), (2) the check only logs a warning, it doesn't prevent
 #     boot or fix anything, (3) it adds 30-90s of boot time reading the full USB.
 
-# Set purple background to hide any firmware/GRUB errors during boot
-if loadfont unicode ; then
-    set gfxmode=auto
-    insmod all_video
-    insmod gfxterm
-    terminal_output gfxterm
-    # Purple background (#2d1b4e)
-    background_color 45,27,78
-fi
-
-set timeout=${GRUB_TIMEOUT}
+# Boot immediately. Purple background is handled by VT palette (kernel params)
+# and init-top splash, not GRUB gfxterm (which flashes gray during init).
+set timeout=0
 set timeout_style=hidden
 set default=0
 
@@ -410,32 +396,52 @@ GRUB_PURPLE
     # NOTE: Ubuntu Server 24.04 uses GRUB for both BIOS and UEFI boot (not isolinux).
     # Boot configuration is preserved via xorriso's -boot_image any replay.
 
-    # Step 8: Build normal ISO
-    log_step "8/9: Building normal ISO..."
+    # Step 8: Patch EFI partition to suppress GRUB error during boot
+    #
+    # Ubuntu's grubx64.efi has an embedded config that checks -e "$prefix" on the
+    # EFI partition. Since the EFI partition doesn't have /boot/grub/, GRUB prints
+    # "error: file '/boot/' not found" before falling back to search /.disk/info.
+    # Fix: add /boot/grub/grub.cfg to the EFI partition so the check passes and
+    # GRUB chains to our real config without any visible error.
+    log_step "8/11: Patching EFI partition..."
+
+    EFI_IMG="$WORK_DIR/efi-patched.img"
+
+    # Extract EFI image: El Torito entry 2 (UEFI), get LBA and size from xorriso
+    EFI_INFO=$(xorriso -indev "$UBUNTU_ISO" -report_el_torito plain 2>&1 | grep "El Torito boot img :   2")
+    EFI_LBA=$(echo "$EFI_INFO" | awk '{print $NF}')
+    EFI_SECTORS=$(echo "$EFI_INFO" | awk '{print $(NF-1)}')
+    dd if="$UBUNTU_ISO" of="$EFI_IMG" bs=512 skip=$((EFI_LBA * 4)) count="$EFI_SECTORS" 2>/dev/null
+
+    # Mount and add /boot/grub/grub.cfg that chains to the ISO's real config
+    EFI_MNT="$WORK_DIR/efi-mount"
+    mkdir -p "$EFI_MNT"
+    mount -o loop "$EFI_IMG" "$EFI_MNT"
+    mkdir -p "$EFI_MNT/boot/grub"
+    cat > "$EFI_MNT/boot/grub/grub.cfg" << 'EFI_GRUB_EOF'
+search --file --set=root /.disk/info
+set prefix=($root)/boot/grub
+source $prefix/grub.cfg
+EFI_GRUB_EOF
+    umount "$EFI_MNT"
+    rmdir "$EFI_MNT"
+    log_info "EFI partition patched (added /boot/grub/grub.cfg)"
+
+    # Step 9: Build normal ISO
+    log_step "9/11: Building normal ISO..."
 
     OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).iso"
 
     # Remove existing ISOs (xorriso can't overwrite)
     rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256"
 
-    # ==========================================================================
-    # ISO REBUILD: Use xorriso modify mode to preserve boot configuration
-    # ==========================================================================
-    # Ubuntu Server 24.04 uses GRUB for both BIOS and UEFI boot (not isolinux).
-    # We use xorriso's modify mode to:
-    # 1. Load the original ISO
-    # 2. Update files in place (our modified initrd, added payload, etc.)
-    # 3. Write new ISO preserving all boot metadata
-    #
-    # This ensures Secure Boot, GRUB config, and EFI partition stay intact.
-    # ==========================================================================
-
-    # Use xorriso in modify mode: load original, update with our changes, write out
+    # Use xorriso modify mode: load original, update files, replace EFI image
     xorriso -indev "$UBUNTU_ISO" \
         -outdev "$OUTPUT_ISO" \
         -volid "PURPLE_INSTALLER" \
         -update_r "$WORK_DIR/iso-new" / \
-        -boot_image any replay
+        -boot_image any replay \
+        -append_partition 2 0xEF "$EFI_IMG"
 
     # Generate checksum
     sha256sum "$OUTPUT_ISO" > "${OUTPUT_ISO}.sha256"
@@ -445,10 +451,10 @@ GRUB_PURPLE
     log_info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
     log_info "SHA256: $(cat "${OUTPUT_ISO}.sha256")"
 
-    # Step 9: Build debug ISO
+    # Step 10: Build debug ISO
     # Same squashfs/initramfs, different GRUB config: verbose boot, visible menu,
     # purple.debug=1 flag triggers debug mode in casper hook and .bashrc
-    log_step "9/9: Building debug ISO..."
+    log_step "10/11: Building debug ISO..."
 
     DEBUG_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).debug.iso"
     rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256"
@@ -507,7 +513,8 @@ GRUB_DEBUG
         -outdev "$DEBUG_ISO" \
         -volid "PURPLE_DEBUG" \
         -update_r "$WORK_DIR/iso-new" / \
-        -boot_image any replay
+        -boot_image any replay \
+        -append_partition 2 0xEF "$EFI_IMG"
 
     sha256sum "$DEBUG_ISO" > "${DEBUG_ISO}.sha256"
 

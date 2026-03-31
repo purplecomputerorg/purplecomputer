@@ -116,6 +116,8 @@ Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_
 
 ## Installer and Boot
 
+**Debugging boot files:** Built ISOs are at `/opt/purple-installer/output/` and the source Ubuntu ISO at `/opt/purple-installer/build/`. Use `xorriso` to extract files (e.g., EFI binaries, grub.cfg) locally instead of needing a live-booted machine.
+
 ### Live USB Boot (Casper)
 
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.

@@ -50,19 +50,24 @@ cleanup() {
 trap cleanup EXIT
 
 # =============================================================================
-# IMMEDIATE REBOOT / POWEROFF - bypasses Casper shutdown scripts
+# REBOOT / POWEROFF - suppress Casper's shutdown prompt
 # =============================================================================
-# Casper's shutdown hooks can hang (especially if the USB is removed).
-# The `noprompt` kernel param (set in GRUB config) suppresses Casper's
-# "press enter" prompt, and --force --force sends the syscall directly,
-# bypassing all shutdown scripts. Sysrq is the final fallback.
+# Casper's casper-stop hook shows a "remove media, press enter" prompt on
+# shutdown/reboot that hangs if the USB is removed. Three layers of defense:
+#   1. /run/casper-no-prompt marker file (tells casper-stop to skip prompt)
+#   2. casper-stop neutered at ISO build time (01-remaster-iso.sh)
+#   3. sysrq fallback (direct kernel reboot/poweroff, bypasses everything)
+suppress_casper_prompt() {
+    touch /run/casper-no-prompt 2>/dev/null || true
+}
+
 do_reboot() {
     log "Rebooting now"
+    suppress_casper_prompt
     ( sync ) & sleep 1  # Best-effort flush, don't wait
-    systemctl reboot --force --force 2>/dev/null &
+    systemctl reboot 2>/dev/null
     sleep 3
-    reboot -f 2>/dev/null &
-    sleep 3
+    # Fallback: sysrq direct kernel reboot
     echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
     echo b > /proc/sysrq-trigger 2>/dev/null
     sleep 30
@@ -70,10 +75,9 @@ do_reboot() {
 
 do_poweroff() {
     log "Powering off now"
+    suppress_casper_prompt
     ( sync ) & sleep 1
-    systemctl poweroff --force --force 2>/dev/null &
-    sleep 3
-    poweroff -f 2>/dev/null &
+    systemctl poweroff 2>/dev/null
     sleep 3
     echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
     echo o > /proc/sysrq-trigger 2>/dev/null

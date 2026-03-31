@@ -206,7 +206,24 @@ SOURCES
         KVER="$KVER_NOW"
     fi
 
-    # Rebuild initrd to include casper scripts (installed above)
+    # Neuter casper-stop: its shutdown prompt ("remove media, press enter")
+    # hangs when the USB is removed. We handle our own reboot UX in
+    # purple-confirm.sh. Belt-and-suspenders with /run/casper-no-prompt.
+    if [ -f "$MOUNT_DIR/usr/share/initramfs-tools/scripts/casper-premount/ORDER" ]; then
+        log_info "Checking for casper-stop in initramfs scripts..."
+    fi
+    for f in "$MOUNT_DIR/usr/share/initramfs-tools/scripts/"*/casper-stop \
+             "$MOUNT_DIR/usr/share/casper/casper-stop" \
+             "$MOUNT_DIR/sbin/casper-stop" \
+             "$MOUNT_DIR/etc/init.d/casper"; do
+        if [ -f "$f" ]; then
+            log_info "Neutering casper shutdown hook: $f"
+            echo '#!/bin/sh' > "$f"
+            echo 'exit 0' >> "$f"
+        fi
+    done
+
+    # Rebuild initrd to include casper scripts (installed above, casper-stop neutered)
     chroot "$MOUNT_DIR" update-initramfs -u -k "$KVER"
 
     # Verify sound modules are present (fail the build if not)

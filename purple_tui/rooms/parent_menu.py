@@ -22,7 +22,7 @@ from pathlib import Path
 
 import re
 
-from ..keyboard import NavigationAction, ControlAction
+from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL
 
 
@@ -701,11 +701,20 @@ class InstallConfirmScreen(ModalScreen):
         margin: 1 0;
     }
 
-    #install-buttons {
+    .install-btn {
         width: 100%;
         height: 3;
-        align: center middle;
-        margin-top: 1;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 1 1 0 1;
+    }
+
+    .install-btn.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
     }
 
     #install-hint {
@@ -721,8 +730,9 @@ class InstallConfirmScreen(ModalScreen):
         self._selected_button = 1  # Default to Cancel (safer)
 
     def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
         with Vertical(id="install-dialog"):
-            yield Static("Install Purple Computer", id="install-title")
+            yield Static(caps("Install Purple Computer"), id="install-title")
             yield Static(
                 "This will set up Purple Computer\n"
                 "on this laptop.\n"
@@ -731,31 +741,31 @@ class InstallConfirmScreen(ModalScreen):
                 "will be erased.[/]",
                 id="install-warning"
             )
-            with Horizontal(id="install-buttons"):
-                yield Static(" Install ", id="btn-install")
-                yield Static(" Cancel ", id="btn-cancel-install")
-            yield Static("← → choose   Enter confirm   Esc cancel", id="install-hint")
-
-    def on_mount(self):
-        self._update_buttons()
+            with Vertical(id="install-buttons"):
+                yield Static(caps("Yes, install"), id="btn-install", classes="install-btn")
+                yield Static(caps("No, go back"), id="btn-cancel-install", classes="install-btn selected")
+            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="install-hint")
 
     def _update_buttons(self):
-        install_btn = self.query_one("#btn-install", Static)
-        cancel_btn = self.query_one("#btn-cancel-install", Static)
-        if self._selected_button == 0:
-            install_btn.update("[bold reverse] Install [/]")
-            cancel_btn.update(" Cancel ")
-        else:
-            install_btn.update(" Install ")
-            cancel_btn.update("[bold reverse] Cancel [/]")
+        try:
+            install_btn = self.query_one("#btn-install")
+            cancel_btn = self.query_one("#btn-cancel-install")
+            if self._selected_button == 0:
+                install_btn.add_class("selected")
+                cancel_btn.remove_class("selected")
+            else:
+                install_btn.remove_class("selected")
+                cancel_btn.add_class("selected")
+        except Exception:
+            pass
 
-    def on_key(self, event: events.Key) -> None:
+    async def _on_key(self, event) -> None:
         event.stop()
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction in ('left', 'right', 'up', 'down'):
+            if action.direction in ('up', 'down'):
                 self._selected_button = 1 - self._selected_button
                 self._update_buttons()
             return
@@ -765,6 +775,10 @@ class InstallConfirmScreen(ModalScreen):
                 self.dismiss(self._selected_button == 0)  # True = Install
             elif action.action == 'escape':
                 self.dismiss(False)
+            return
+
+        if isinstance(action, CharacterAction):
+            self.dismiss(False)
 
 
 class ParentMenuItem(Static):

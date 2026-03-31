@@ -930,6 +930,16 @@ class PlayMode(Vertical):
 
         # Store raw input for recall (Enter on empty)
         self._last_input_text = input_text
+        # Show content-layer fuzzy correction in recall hint if applicable
+        correction = self.evaluator.content.pop_correction()
+        if correction:
+            orig, corrected = correction
+            if orig in eval_text.lower():
+                try:
+                    recall = self.query_one("#play-recall-hint", RecallHint)
+                    recall.set_correction(orig, corrected)
+                except Exception:
+                    pass
         self._update_recall_hint()
 
         # Emit for code panel capture
@@ -1045,23 +1055,14 @@ class SimpleEvaluator:
     def evaluate(self, text: str) -> str:
         """Evaluate input and return result string.
 
-        Wraps _evaluate_inner to prepend content-layer fuzzy corrections
-        (e.g., "dinno → dino") when the content system auto-corrected a typo.
+        Content-layer fuzzy corrections (e.g., "dinno" → "dino") are tracked
+        on self.content._last_correction for the UI to display separately.
         """
         text = text.strip()
         if not text:
             return ""
-        # Clear stale corrections, evaluate, then check for new corrections
-        self.content.pop_correction()
-        result = self._evaluate_inner(text)
-        # Only show correction if the typo was a word in the original input
-        # (not from intermediate parsing artifacts like "apple3")
-        correction = self.content.pop_correction()
-        if correction:
-            orig, corrected = correction
-            if orig in text.lower():
-                return f"→ {orig} → {corrected}\n{result}"
-        return result
+        self.content.pop_correction()  # Clear stale corrections
+        return self._evaluate_inner(text)
 
     def _evaluate_inner(self, text: str) -> str:
         """Core evaluation pipeline."""
@@ -1148,13 +1149,6 @@ class SimpleEvaluator:
             return f"→ {corrected_text}\n{result}"
         return result
 
-    def _prepend_content_correction(self, result: str) -> str:
-        """If a content-layer fuzzy correction fired, prepend it."""
-        correction = self.content.pop_correction()
-        if correction:
-            orig, corrected = correction
-            return f"→ {orig} → {corrected}\n{result}"
-        return result
 
     def _eval_text_with_expr(self, text: str, had_parens: bool = False) -> str | None:
         """Handle text containing expressions like 'what is 2+3' or 'I have 5 apples'.

@@ -1725,28 +1725,33 @@ class TestFuzzyCorrections:
     def evaluator(self):
         return SimpleEvaluator()
 
-    def test_typo_emoji_shows_correction(self, evaluator):
+    def test_typo_emoji_resolves(self, evaluator):
         result = evaluator.evaluate("dinno")
-        assert "→ dinno → dino" in result
         assert "🦕" in result
+        # Correction tracked on content layer for UI display
+        correction = evaluator.content.pop_correction()
+        assert correction is not None
+        assert correction[0] == "dinno"
 
-    def test_typo_color_shows_correction(self, evaluator):
+    def test_typo_color_resolves(self, evaluator):
         result = evaluator.evaluate("purpel")
-        assert "→ purpel → purple" in result
+        assert "#" in result  # color swatch markup
+        correction = evaluator.content.pop_correction()
+        assert correction is not None
+        assert correction[0] == "purpel"
 
     def test_exact_emoji_no_correction(self, evaluator):
         result = evaluator.evaluate("cat")
-        assert "→" not in result
         assert "🐱" in result
+        assert evaluator.content.pop_correction() is None
 
     def test_exact_color_no_correction(self, evaluator):
         result = evaluator.evaluate("red")
-        assert "→" not in result
+        assert evaluator.content.pop_correction() is None
 
     def test_typo_emoji_multiplication(self, evaluator):
         result = evaluator.evaluate("3 dinno")
         assert "🦕" in result
-        assert "→ dinno → dino" in result
 
     def test_no_false_positive_short_word(self, evaluator):
         """4-char words should not fuzzy match (e.g., 'barn' should not become 'bear')."""

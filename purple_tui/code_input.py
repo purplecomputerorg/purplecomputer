@@ -236,9 +236,17 @@ class RecallHint(Static):
         self.add_class("caps-sensitive")
         self._last_command: str = ""
         self._visible = False
+        self._correction: tuple[str, str] | None = None
 
     def set_last_command(self, command: str) -> None:
         self._last_command = command
+
+    def set_correction(self, original: str, corrected: str) -> None:
+        """Show a correction hint and store corrected command for recall."""
+        self._correction = (original, corrected)
+        self._last_command = corrected
+        self._visible = True
+        self.refresh()
 
     def show_if_empty(self, input_empty: bool) -> None:
         self._visible = input_empty and bool(self._last_command)
@@ -248,6 +256,13 @@ class RecallHint(Static):
         if not self._visible or not self._last_command:
             return ""
         caps = getattr(self.app, 'caps_text', lambda x: x)
+        if self._correction:
+            orig, corr = self._correction
+            self._correction = None  # show once
+            display = f"{orig} \u2192 {corr}"
+            if len(display) > self.MAX_RECALL_LEN:
+                display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"
+            return f"[dim]{caps(display)}[/]"
         display = self._last_command
         if len(display) > self.MAX_RECALL_LEN:
             display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"

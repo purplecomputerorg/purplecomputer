@@ -1295,6 +1295,16 @@ class PurpleApp(App):
                 # Sync header with canvas state after code finishes
                 from .rooms.art_room import PaintModeChanged
                 canvas.post_message(PaintModeChanged(canvas._paint_mode, canvas._last_key_color))
+                # Show correction feedback if the runner interpreted anything
+                if runner.corrections:
+                    orig, corrected = runner.corrections[-1]
+                    try:
+                        from .code_input import RecallHint
+                        panel = art.query_one(ReplPanel)
+                        recall = panel.query_one("#repl-recall-hint", RecallHint)
+                        recall.set_correction(orig, corrected)
+                    except Exception:
+                        pass
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

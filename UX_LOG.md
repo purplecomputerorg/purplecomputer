@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Art code REPL: "turn left/right" is now absolute (matches parent intuition). "spin"/"rotate" for relative 90° CW. "face" for explicit absolute. "back N" moves opposite heading. Bare color names ("blue", "dark red") switch colors. "paint hello"/"write hello" for inline text. Fuzzy matching on typos ("forwrd" runs forward, "bleu" switches to blue) with correction hints. Unrecognized text does nothing instead of painting individual letters.
 - ESC picker shows full-width "Open Code"/"Close Code" in Music/Art when code panel is allowed.
 - Parent menu: "Code Panel: On/Off" renamed to "Allow Code Panel: Yes/No". Disabling fully closes the code panel and removes subtitle. Re-enabling in Music/Art immediately shows "hold space" subtitle.
 - "Hold space" subtitle only appears when code panel is allowed.

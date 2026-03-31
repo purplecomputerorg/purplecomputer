@@ -113,16 +113,15 @@ Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_
 Both ISOs boot via Casper (Ubuntu's live boot framework). The normal ISO hides the GRUB menu and auto-boots. The debug ISO shows a GRUB menu with verbose boot options.
 
 Installation is triggered through the live boot, not a GRUB menu entry. The install flow is:
-1. Live boot detects USB payload
-2. `purple-confirm.sh` (Gate 2) shows confirmation, requires ENTER
-3. `install.sh` runs, output hidden on tty2
+1. Live boot starts Purple Computer normally
+2. Parent menu → Install option → user confirms
+3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. `do_reboot` (reboot via `systemctl reboot`, sysrq fallback)
+5. `systemctl reboot` (with sysrq fallback)
 
-**Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed three ways:
-- `touch /run/casper-no-prompt` before reboot (runtime, in `purple-confirm.sh`)
+**Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed two ways:
+- `touch /run/casper-no-prompt` before reboot (runtime, in `parent_menu.py`)
 - `casper-stop` neutered to `exit 0` at image build time (`00-build-golden-image.sh`)
-- `noprompt` kernel param on GRUB entries (belt-and-suspenders)
 
 ### UEFI Boot (Installed System)
 

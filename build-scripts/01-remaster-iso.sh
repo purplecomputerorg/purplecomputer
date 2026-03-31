@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Remaster Ubuntu Server ISO for Purple Computer
 #
-# ARCHITECTURE: Live Boot + Optional Install
+# ARCHITECTURE: Live Boot + Install Payload
 # - Download official Ubuntu Server 24.04 ISO
 # - Replace squashfs with Purple Computer root filesystem
-# - Modify initramfs (add install hook for optional install path)
-# - Add golden image payload (for optional install)
-# - Update GRUB: live boot default, install as menu option
-# - Rebuild ISO
+# - Modify initramfs (boot splash, dotfile restore, debug mode)
+# - Add golden image payload (for install-to-disk via parent menu)
+# - Update GRUB config
+# - Rebuild ISO (normal + debug)
 
 set -e
 
@@ -32,43 +32,22 @@ GRUB_TIMEOUT="${GRUB_TIMEOUT:-3}"
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-create_installer_hook() {
+create_live_boot_hook() {
     local HOOK_DIR="$1"
 
-    # Create the Purple installer hook script for casper-bottom
-    #
-    # CRITICAL: This hook runs in casper-bottom, AFTER the live root is mounted
-    # and /run is set up. Files written to /run here WILL persist to systemd.
-    #
-    # ARCHITECTURE (IMMUTABLE RULES):
-    # - We NEVER modify squashfs
-    # - Gate 2 is implemented via RUNTIME systemd units in /run
-    # - This hook writes the marker AND the systemd service to /run
-    # - systemd automatically loads units from /run/systemd/system/
-    #
-    # WHY casper-bottom (not init-top):
-    # - init-top runs BEFORE casper mounts the live root
-    # - Files written to /run in init-top are LOST during switch_root
-    # - casper-bottom runs AFTER the real /run tmpfs is mounted
-    # - This is the same mechanism Ubuntu's own scripts use (e.g., 55disable_snap_refresh)
-    #
-    # SAFETY REQUIREMENTS:
-    # - Explicit arming via kernel cmdline (purple.install=1)
-    # - Fail-open: exits cleanly if not armed or payload missing
-    # - Loud logging to console
+    # Create the live boot hook for casper-bottom.
+    # Runs AFTER casper mounts the live root and /run is set up.
+    # Restores dotfiles, sets up debug mode, and shows boot splash.
     cat > "$HOOK_DIR/80_purple_installer" << 'HOOK_EOF'
 #!/bin/sh
-# Purple Computer Installer Hook (casper-bottom)
+# Purple Computer Live Boot Hook (casper-bottom)
 #
-# TWO-GATE SAFETY MODEL:
-#   Gate 1 (this hook): Check arming flag, write runtime systemd unit
-#   Gate 2 (runtime systemd service): Show confirmation, require user input
-#
-# This hook runs in casper-bottom, after the live root and /run are ready.
-# Files written to /run here persist into systemd.
+# Runs after casper mounts the live root. Sets up dotfiles, debug mode,
+# and the boot splash. Installation is handled by the parent menu in
+# the running TUI (parent_menu.py), not by this hook.
 
 PREREQ=""
-DESCRIPTION="Setting up Purple Computer installer..."
+DESCRIPTION="Setting up Purple Computer..."
 
 prereqs() { echo "$PREREQ"; }
 
@@ -84,191 +63,35 @@ esac
 
 log_begin_msg "$DESCRIPTION"
 
-# =============================================================================
-# LOUD LOGGING - all output goes to console
-# =============================================================================
 purple_log() {
     echo "[PURPLE] $1" >/dev/console 2>&1 || echo "[PURPLE] $1"
 }
 
-purple_log "=== Purple Computer Installer Hook (casper-bottom) ==="
+purple_log "=== Purple Computer Live Boot Hook (casper-bottom) ==="
 
-# =============================================================================
-# GATE 1: EXPLICIT ARMING CHECK
-# =============================================================================
-if ! grep -q "purple.install=1" /proc/cmdline 2>/dev/null; then
-    purple_log "Live boot mode - configuring Purple Computer..."
+# Restore dotfiles that casper's adduser overwrites with skeleton copies.
+# Canonical versions are stored in /etc/purple/ (which casper doesn't touch).
+mkdir -p /root/home/purple
+cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
+chmod +x /root/home/purple/.xinitrc
+chown 1000:1000 /root/home/purple/.xinitrc
+touch /root/home/purple/.hushlogin
+chown 1000:1000 /root/home/purple/.hushlogin
+purple_log "Restored dotfiles from /etc/purple/"
 
-    # Restore dotfiles that casper's adduser overwrites with skeleton copies.
-    # Canonical versions are stored in /etc/purple/ (which casper doesn't touch).
-    mkdir -p /root/home/purple
-    cp /root/etc/purple/xinitrc /root/home/purple/.xinitrc
-    chmod +x /root/home/purple/.xinitrc
-    chown 1000:1000 /root/home/purple/.xinitrc
-    touch /root/home/purple/.hushlogin
-    chown 1000:1000 /root/home/purple/.hushlogin
-    purple_log "Restored dotfiles from /etc/purple/"
-
-    # Debug mode: create flag file and undo kernel message suppression
-    if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
-        touch /root/opt/purple/debug
-        # Override kernel message suppression so boot messages are visible
-        cat > /root/etc/sysctl.d/99-purple-debug.conf << 'SYSCTL_EOF'
+# Debug mode: create flag file and undo kernel message suppression
+if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
+    touch /root/opt/purple/debug
+    cat > /root/etc/sysctl.d/99-purple-debug.conf << 'SYSCTL_EOF'
 kernel.printk = 7 4 1 7
 SYSCTL_EOF
-        purple_log "DEBUG MODE: created /opt/purple/debug, enabled kernel messages"
-    fi
-
-    # Show a simple splash on tty1: purple background, friendly message.
-    # Console output goes to tty2, so tty1 is ours to use.
-    # \033]P0 redefines VT palette color 0 (black) to our purple (#2d1b4e).
-    # This works on all Linux framebuffer consoles (24-bit RGB escapes don't).
-    # Clearing the screen then fills it with the redefined "black" = purple.
-    printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
-
-    log_end_msg
-    exit 0
+    purple_log "DEBUG MODE: created /opt/purple/debug, enabled kernel messages"
 fi
 
-purple_log "ARMED: purple.install=1 found"
-
-# =============================================================================
-# PAYLOAD LOCATION
-# In casper-bottom, the live media is already mounted at /cdrom
-# =============================================================================
-PAYLOAD_PATH=""
-
-# Debug: understand the filesystem layout
-purple_log "Debug: pwd=$(pwd)"
-purple_log "Debug: root contents:"
-ls / 2>&1 | while read line; do purple_log "  $line"; done
-purple_log "Checking /cdrom contents..."
-ls -la /cdrom/ 2>&1 | while read line; do purple_log "  $line"; done
-purple_log "Checking /root/cdrom contents (casper's actual mount)..."
-ls -la /root/cdrom/ 2>&1 | while read line; do purple_log "  $line"; done
-purple_log "Current mounts:"
-mount 2>&1 | grep -E "(iso|cdrom|vda|loop)" | while read line; do purple_log "  $line"; done
-
-# Try multiple possible locations (including /root prefix for initramfs context)
-for trypath in /cdrom/purple /root/cdrom/purple /isodevice/purple /root/isodevice/purple /run/live/medium/purple; do
-    if [ -f "$trypath/install.sh" ]; then
-        PAYLOAD_PATH="$trypath"
-        purple_log "Found payload at $trypath"
-        break
-    fi
-done
-
-# Fallback: scan for payload if not at /cdrom
-if [ -z "$PAYLOAD_PATH" ]; then
-    purple_log "Payload not at /cdrom, scanning devices..."
-    purple_log "Available block devices:"
-    ls -la /dev/sr* /dev/sd* /dev/vd* 2>&1 | while read line; do purple_log "  $line"; done
-    for dev in /dev/sr0 /dev/sr1 /dev/sda /dev/sda1 /dev/sdb /dev/vda /dev/vda1 /dev/vdb; do
-        [ -b "$dev" ] || continue
-        purple_log "Trying $dev..."
-        TMPMNT="/tmp/purple-scan-$$"
-        mkdir -p "$TMPMNT"
-        if mount -t iso9660 -o ro "$dev" "$TMPMNT" 2>/dev/null || mount -o ro "$dev" "$TMPMNT" 2>/dev/null; then
-            purple_log "  Mounted $dev, checking for payload..."
-            ls "$TMPMNT/" 2>&1 | while read line; do purple_log "    $line"; done
-            if [ -f "$TMPMNT/purple/install.sh" ]; then
-                PAYLOAD_PATH="$TMPMNT/purple"
-                purple_log "Found payload on $dev"
-                break
-            fi
-            umount "$TMPMNT" 2>/dev/null || true
-        else
-            purple_log "  Failed to mount $dev"
-        fi
-        rmdir "$TMPMNT" 2>/dev/null || true
-    done
-fi
-
-# =============================================================================
-# FAIL-OPEN: No payload = normal boot
-# =============================================================================
-if [ -z "$PAYLOAD_PATH" ]; then
-    purple_log "NO PAYLOAD FOUND - Gate 1 CLOSED"
-    log_end_msg
-    exit 0
-fi
-
-# =============================================================================
-# WRITE RUNTIME ARTIFACTS
-# IMPORTANT: Use /root/etc/systemd/system/ NOT /root/run/systemd/system/
-# The /run tmpfs gets mounted OVER /root/run during switch_root, hiding files.
-# /etc/systemd/system/ survives and has highest priority in systemd's load path.
-# =============================================================================
-purple_log "Writing runtime artifacts..."
-
-# Scripts go to /run/purple (NOT /root/run/purple!)
-# The /run tmpfs is moved into the new root during switch_root.
-# Writing to /root/run would put files UNDER the tmpfs mount, where they get shadowed.
-mkdir -p /run/purple
-
-# 1. Write arming marker (use post-switch_root path: /root/cdrom -> /cdrom)
-PAYLOAD_PATH_FINAL=$(echo "$PAYLOAD_PATH" | sed 's|^/root||')
-cat > /run/purple/armed << MARKER_EOF
-PAYLOAD_PATH=$PAYLOAD_PATH_FINAL
-MARKER_EOF
-
-# 2. Copy confirmation script
-if [ -f "$PAYLOAD_PATH/purple-confirm.sh" ]; then
-    cp "$PAYLOAD_PATH/purple-confirm.sh" /run/purple/confirm.sh
-    chmod 755 /run/purple/confirm.sh
-    purple_log "Copied confirmation script to /run/purple/"
-else
-    purple_log "WARNING: No purple-confirm.sh found"
-    cat > /run/purple/confirm.sh << 'FALLBACK'
-#!/bin/sh
-echo "[PURPLE] ERROR: Confirmation script missing"
-sleep 30
-reboot -f
-FALLBACK
-    chmod 755 /run/purple/confirm.sh
-fi
-
-# 3. Write systemd service to /etc (survives switch_root, highest priority)
-mkdir -p /root/etc/systemd/system
-cat > /root/etc/systemd/system/purple-confirm.service << 'SERVICE_EOF'
-[Unit]
-Description=Purple Computer Installer (Gate 2)
-DefaultDependencies=no
-After=basic.target
-Before=multi-user.target getty.target
-ConditionKernelCommandLine=purple.install=1
-Conflicts=subiquity.service snapd.service getty@tty1.service
-
-[Service]
-Type=oneshot
-TTYPath=/dev/tty1
-StandardInput=tty
-StandardOutput=tty
-StandardError=tty
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
-ExecStart=/bin/bash /run/purple/confirm.sh
-TimeoutStartSec=600
-SERVICE_EOF
-
-# 4. Enable the service
-mkdir -p /root/etc/systemd/system/multi-user.target.wants
-ln -sf ../purple-confirm.service /root/etc/systemd/system/multi-user.target.wants/purple-confirm.service
-purple_log "Created service in /root/etc/systemd/system/"
-
-# 5. Mask interfering services (these go to /etc too)
-ln -sf /dev/null /root/etc/systemd/system/subiquity.service
-ln -sf /dev/null /root/etc/systemd/system/snapd.service
-ln -sf /dev/null /root/etc/systemd/system/snapd.socket
-ln -sf /dev/null /root/etc/systemd/system/ssh.service
-ln -sf /dev/null /root/etc/systemd/system/getty@tty1.service
-purple_log "Masked interfering services"
-
-purple_log "============================================"
-purple_log "Gate 1 PASSED - Runtime artifacts written"
-purple_log "Payload: $PAYLOAD_PATH"
-purple_log "============================================"
+# Show boot splash on tty1: purple background with friendly message.
+# Console output goes to tty2, so tty1 is ours.
+# \033]P0 redefines VT palette color 0 (black) to our purple (#2d1b4e).
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 
 log_end_msg
 exit 0
@@ -379,7 +202,7 @@ SOURCES_EOF
 
     rm -rf "$SQEXT"
 
-    # Step 5: Extract and modify initramfs (Gate 1 + Gate 2 runtime units)
+    # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
     log_step "5/9: Modifying initramfs..."
 
     # Find the initrd (might be named differently)
@@ -456,7 +279,7 @@ SPLASH_EOF
     # This is why our previous implementation failed.
     log_info "Adding Purple installer hook to casper-bottom..."
     mkdir -p "$MAIN_DIR/scripts/casper-bottom"
-    create_installer_hook "$MAIN_DIR/scripts/casper-bottom"
+    create_live_boot_hook "$MAIN_DIR/scripts/casper-bottom"
 
     # CRITICAL: Add our script to the ORDER file
     # Casper uses this file to determine which scripts to run and in what order.
@@ -519,11 +342,6 @@ SPLASH_EOF
     # Copy install script
     create_install_script "$PAYLOAD_DIR"
 
-    # Copy confirmation script to payload (initramfs will reference it)
-    log_info "Copying confirmation script to payload..."
-    cp "$SCRIPT_DIR/purple-confirm.sh" "$PAYLOAD_DIR/purple-confirm.sh"
-    chmod +x "$PAYLOAD_DIR/purple-confirm.sh"
-
     # Unmount source ISO
     umount "$WORK_DIR/iso-mount"
 
@@ -554,6 +372,16 @@ SPLASH_EOF
 #     or not the check ran), (2) the check only logs a warning, it doesn't prevent
 #     boot or fix anything, (3) it adds 30-90s of boot time reading the full USB.
 
+# Set purple background to hide any firmware/GRUB errors during boot
+if loadfont unicode ; then
+    set gfxmode=auto
+    insmod all_video
+    insmod gfxterm
+    terminal_output gfxterm
+    # Purple background (#2d1b4e)
+    background_color 45,27,78
+fi
+
 set timeout=${GRUB_TIMEOUT}
 set timeout_style=hidden
 set default=0
@@ -573,7 +401,7 @@ menuentry "UEFI Firmware Settings" {
 }
 GRUB_PURPLE
 
-        log_info "GRUB config replaced (live boot default, install as option)"
+        log_info "GRUB config replaced (live boot default)"
     else
         log_info "WARNING: GRUB config not found at expected location"
         ls -la "$WORK_DIR/iso-new/boot/grub/" 2>/dev/null || true

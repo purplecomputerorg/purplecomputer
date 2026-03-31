@@ -208,7 +208,7 @@ SOURCES
 
     # Neuter casper-stop: its shutdown prompt ("remove media, press enter")
     # hangs when the USB is removed. We handle our own reboot UX in
-    # purple-confirm.sh. Belt-and-suspenders with /run/casper-no-prompt.
+    # parent_menu.py. Belt-and-suspenders with /run/casper-no-prompt.
     if [ -f "$MOUNT_DIR/usr/share/initramfs-tools/scripts/casper-premount/ORDER" ]; then
         log_info "Checking for casper-stop in initramfs scripts..."
     fi

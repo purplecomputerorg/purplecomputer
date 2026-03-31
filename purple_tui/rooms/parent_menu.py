@@ -682,6 +682,7 @@ class InstallConfirmScreen(ModalScreen):
     #install-dialog {
         width: 50;
         height: auto;
+        max-height: 22;
         padding: 1 2;
         background: $surface;
         border: round $primary;
@@ -699,6 +700,10 @@ class InstallConfirmScreen(ModalScreen):
         width: 100%;
         text-align: center;
         margin: 1 0;
+    }
+
+    #install-buttons {
+        height: auto;
     }
 
     .install-btn {
@@ -1099,8 +1104,11 @@ class ParentMenu(ModalScreen):
                 print()
                 print("  All done!")
                 print()
-                print("  Remove the USB drive, then")
-                print("  press Enter to restart.")
+                print("  Purple Computer is installed!")
+                print()
+                print("  You don't need the USB drive plugged in anymore.")
+                print()
+                print("  Press Enter to restart.")
                 print()
             else:
                 print()
@@ -1115,18 +1123,21 @@ class ParentMenu(ModalScreen):
             input()
             _flush_terminal_input()
             os.system('stty sane')
-            # Use reboot -f to bypass systemd service shutdown, which can
-            # hang on live USB (casper mounts, etc.). Matches purple-confirm.sh.
+            # Suppress Casper's shutdown prompt, then reboot.
+            # See purple-confirm.sh for the full explanation.
+            os.system('sudo touch /run/casper-no-prompt')
             os.system('sudo sync')
-            os.system('sudo reboot -f')
-            # Fallback: sysrq reboot if reboot -f didn't work
+            os.system('sudo systemctl reboot')
+            # Fallback: sysrq reboot if systemctl didn't work
             import time
             time.sleep(3)
             try:
+                with open('/proc/sys/kernel/sysrq', 'w') as f:
+                    f.write('1')
                 with open('/proc/sysrq-trigger', 'w') as f:
                     f.write('b')
             except OSError:
-                os.system('sudo reboot')
+                os.system('sudo reboot -f')
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

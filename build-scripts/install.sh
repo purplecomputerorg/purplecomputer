@@ -1,11 +1,6 @@
 #!/bin/bash
 # PurpleOS Factory Installer
-# Runs from Gate 2 confirmation script (purple-confirm.sh)
-#
-# TWO-GATE SAFETY MODEL:
-#   Gate 1 (initramfs): Checks purple.install=1, sets /run/purple/armed marker
-#   Gate 2 (systemd): Shows confirmation screen, requires ENTER to proceed
-#   This script: Only runs AFTER user confirms in Gate 2
+# Called from the parent menu's install option (parent_menu.py)
 #
 # This script:
 # 1. Detects the internal disk (excluding USB/removable devices)

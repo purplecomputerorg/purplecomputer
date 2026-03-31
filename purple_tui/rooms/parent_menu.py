@@ -16,6 +16,7 @@ from textual import events
 import subprocess
 import os
 import sys
+import asyncio
 import termios
 import json
 from pathlib import Path
@@ -496,57 +497,22 @@ class LittlesModeScreen(ModalScreen):
 
 
 
-def _write_reboot_script(success: bool) -> None:
-    """Write a self-contained reboot script to /run (tmpfs).
+def _write_silent_reboot_script() -> None:
+    """Write a minimal reboot script to /run (tmpfs, RAM-only).
 
-    After install, the user may remove the USB drive. Once the USB is
-    gone, the live overlayfs backing is dead and any process that touches
-    it (Python, systemctl, even /bin/sh loading a script from it) hangs
-    on I/O forever.
-
-    This script lives entirely in RAM (/run is tmpfs) and uses only
-    kernel interfaces (/proc/sysrq-trigger) to reboot, so it works
-    regardless of whether the USB is still present.
+    After install, if the USB is removed the live overlayfs backing is gone
+    and any process touching it hangs on I/O. This script uses only kernel
+    interfaces (/proc/sysrq-trigger) so it works whether or not the USB is
+    still present. The success/error messages are shown in Textual before
+    exec-ing into this script.
     """
-    if success:
-        lines = [
-            '',
-            '  All done!',
-            '',
-            '  Purple Computer is installed!',
-            '',
-            "  You don't need the USB drive plugged in anymore.",
-            '',
-            '  Press Enter to restart.',
-            '',
-        ]
-    else:
-        lines = [
-            '',
-            '  Something went wrong during setup.',
-            '',
-            f'  If this keeps happening, contact us at',
-            f'  {SUPPORT_EMAIL}',
-            '',
-            '  Press Enter to restart and try again.',
-            '',
-        ]
-
-    echo_cmds = '\n'.join(f'echo "{line}"' for line in lines)
-    script = (
-        '#!/bin/sh\n'
-        'stty sane 2>/dev/null\n'
-        'clear\n'
-        f'{echo_cmds}\n'
-        'read _\n'
-        # sysrq reboot: direct kernel reboot, no filesystem access.
-        'echo 1 > /proc/sys/kernel/sysrq\n'
-        'echo b > /proc/sysrq-trigger\n'
-        # Fallback (shouldn't reach here)
-        'reboot -f\n'
-    )
     with open('/run/purple-reboot.sh', 'w') as f:
-        f.write(script)
+        f.write(
+            '#!/bin/sh\n'
+            'echo 1 > /proc/sys/kernel/sysrq\n'
+            'echo b > /proc/sysrq-trigger\n'
+            'reboot -f\n'
+        )
     os.chmod('/run/purple-reboot.sh', 0o755)
 
 
@@ -840,6 +806,180 @@ class InstallConfirmScreen(ModalScreen):
             self.dismiss(False)
 
 
+_ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+# Maps substrings in [PURPLE] log output to (progress_percent, display_message).
+# Progress only moves forward; the writing stage dominates the clock.
+_INSTALL_STAGES = [
+    ("Detecting internal disk",   5,  "Finding your disk..."),
+    ("Found internal disk",       8,  "Found it!"),
+    ("Writing Purple Computer",   12, "Copying to disk..."),
+    ("Reloading partition table", 82, "Finishing up..."),
+    ("Verifying disk write",      85, "Checking the disk..."),
+    ("Disk verification passed",  90, "Disk looks good!"),
+    ("Setting up UEFI boot",      92, "Setting up startup..."),
+    ("UEFI boot setup complete",  97, "Startup ready!"),
+    ("Installation complete",     100, "Done!"),
+]
+
+
+class InstallProgressScreen(ModalScreen):
+    """Install progress modal. Stays in Textual the whole time.
+
+    Runs install.sh as an async subprocess, streams [PURPLE] log lines to
+    update a progress bar, then shows the success/error screen and handles
+    the reboot.
+    """
+
+    CSS = """
+    InstallProgressScreen {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.85);
+    }
+
+    #install-progress-dialog {
+        width: 60;
+        height: auto;
+        padding: 2 3;
+        background: $surface;
+        border: round $primary;
+    }
+
+    #ip-title {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+        color: $primary;
+        margin-bottom: 1;
+    }
+
+    #ip-status {
+        width: 100%;
+        text-align: center;
+        color: $text;
+        margin-bottom: 1;
+    }
+
+    #ip-bar {
+        width: 100%;
+        text-align: center;
+        color: $accent;
+        margin-bottom: 1;
+    }
+
+    #ip-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._progress = 0
+        self._status = "Starting..."
+        self._phase = "installing"  # "installing", "success", "error"
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="install-progress-dialog"):
+            yield Static("", id="ip-title")
+            yield Static("", id="ip-status")
+            yield Static("", id="ip-bar")
+            yield Static("", id="ip-hint")
+
+    def on_mount(self) -> None:
+        self._update_ui()
+        asyncio.get_event_loop().create_task(self._run_install_async())
+
+    def _render_bar(self, pct: int) -> str:
+        filled = int(36 * pct / 100)
+        return "█" * filled + "░" * (36 - filled) + f"  {pct}%"
+
+    def _update_ui(self) -> None:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        try:
+            title_w = self.query_one("#ip-title")
+            status_w = self.query_one("#ip-status")
+            bar_w = self.query_one("#ip-bar")
+            hint_w = self.query_one("#ip-hint")
+        except Exception:
+            return
+
+        if self._phase == "installing":
+            title_w.update(caps("Installing Purple Computer"))
+            status_w.update(self._status)
+            bar_w.update(self._render_bar(self._progress))
+            hint_w.update("This takes about 10-15 minutes.")
+        elif self._phase == "success":
+            title_w.update(caps("All done!"))
+            status_w.update(
+                "Purple Computer is installed!\n\n"
+                "You can remove the USB drive."
+            )
+            bar_w.update("")
+            hint_w.update("Press Enter to restart.")
+        else:  # error
+            title_w.update(caps("Something went wrong"))
+            status_w.update(
+                "Setup did not finish.\n\n"
+                f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
+            )
+            bar_w.update("")
+            hint_w.update("Press Enter to restart and try again.")
+
+    async def _run_install_async(self) -> None:
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "-E", "bash", "/cdrom/purple/install.sh",
+            stderr=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
+            env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"},
+        )
+
+        # Read stderr in chunks; pv/dd use \r not \n, so we can't use readline.
+        buf = b""
+        while True:
+            chunk = await proc.stderr.read(256)
+            if not chunk:
+                break
+            buf += chunk
+            while b'\n' in buf:
+                line, buf = buf.split(b'\n', 1)
+                self._handle_line(line.decode('utf-8', errors='replace'))
+
+        await proc.wait()
+
+        # While USB is still present: sync, suppress casper prompt, prep reboot.
+        os.system('sudo sync')
+        os.system('sudo touch /run/casper-no-prompt')
+        _write_silent_reboot_script()
+
+        self._phase = "success" if proc.returncode == 0 else "error"
+        self._update_ui()
+
+    def _handle_line(self, text: str) -> None:
+        clean = _ANSI_ESCAPE.sub('', text).strip()
+        if not clean.startswith('[PURPLE]'):
+            return
+        msg = clean[8:].strip()
+        for keyword, pct, display in _INSTALL_STAGES:
+            if keyword in msg and pct > self._progress:
+                self._progress = pct
+                self._status = display
+                self._update_ui()
+                return
+
+    async def _on_key(self, event) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if self._phase == "installing":
+            return
+        if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
+            os.system('stty sane')
+            os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
+
+
 class ParentMenuItem(Static):
     """A menu item that shows selected state via styling"""
 
@@ -1126,42 +1266,13 @@ class ParentMenu(ModalScreen):
         self.app.push_screen(DisplaySettingsScreen())
 
     def _install_to_disk(self) -> None:
-        """Show install confirmation, then run the installer."""
+        """Show install confirmation, then push the progress screen."""
         def on_confirm(confirmed: bool) -> None:
             if confirmed:
                 self.dismiss()  # Close parent menu
-                self.app.call_later(self._run_install)
+                self.app.call_later(lambda: self.app.push_screen(InstallProgressScreen()))
 
         self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
-
-    def _run_install(self) -> None:
-        """Run the installer, suspending the TUI."""
-        with self.app.suspend_with_terminal_input():
-            os.system('stty sane')
-            os.system('clear')
-
-            print()
-            print("  Setting up Purple Computer...")
-            print("  This will take about 10-15 minutes.")
-            print()
-            print("  Please wait...")
-            print()
-            sys.stdout.flush()
-
-            result = subprocess.run(
-                ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
-                env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"}
-            )
-
-            # While the USB is still in and the filesystem is healthy:
-            # sync, suppress Casper, and write a reboot script to tmpfs.
-            # After the user removes the USB, the overlayfs backing is
-            # gone and any process reading from it (Python, systemctl)
-            # hangs on I/O. The script on /run (tmpfs = RAM) keeps working.
-            os.system('sudo sync')
-            os.system('sudo touch /run/casper-no-prompt')
-            _write_reboot_script(result.returncode == 0)
-            os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

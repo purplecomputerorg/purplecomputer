@@ -100,34 +100,26 @@ class SleepScreen(Screen):
         on_charger = pm.is_on_charger()
         live = is_live_boot()
 
-        # Lid state: currently closed, or was closed and now reopened
         lid_close_time = getattr(self.app, '_lid_close_time', None)
         lid_was_closed_for = getattr(self.app, '_lid_was_closed_for', 0)
-        lid_involved = lid_close_time is not None or lid_was_closed_for > 0
 
         lines = []
         if lid_close_time is not None:
             closed_min = int((time.time() - lid_close_time) / 60)
-            if closed_min < 1:
-                lines.append("Lid is closed.")
-            else:
-                lines.append(f"Lid has been closed for {closed_min} min.")
+            lines.append(f"💻 Lid closed{f' {closed_min} min' if closed_min >= 1 else ''}.")
         elif lid_was_closed_for > 0:
             closed_min = int(lid_was_closed_for / 60)
-            if closed_min < 1:
-                lines.append("Lid was closed briefly.")
-            else:
-                lines.append(f"Lid was closed for {closed_min} min.")
+            lines.append(f"💻 Lid open{f' (closed {closed_min} min)' if closed_min >= 1 else ''}.")
 
         if live:
-            lines.append("Running from USB.")
-            lines.append("If it turns off, you'll need the USB to restart.")
+            lines.append("💾 USB. Need it to restart.")
 
-        shutdown_min = LID_SHUTDOWN_DELAY // 60 if lid_involved else BATTERY_IDLE_SHUTDOWN // 60
-        if on_charger is True:
-            lines.append("Plugged in. Won't turn off automatically.")
+        if lid_close_time is not None:
+            lines.append(f"⏱️ Shuts off in {LID_SHUTDOWN_DELAY // 60} min.")
+        elif on_charger is True:
+            lines.append("🔌 Plugged in. Stays on.")
         else:
-            lines.append(f"On battery. Turns off after {shutdown_min} min to save power.")
+            lines.append(f"🔋 Battery. Shuts off in {BATTERY_IDLE_SHUTDOWN // 60} min.")
 
         try:
             self.query_one("#sleep-status", Static).update("\n".join(lines))

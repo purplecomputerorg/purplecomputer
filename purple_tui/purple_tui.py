@@ -801,12 +801,11 @@ class PurpleApp(App):
         self._apply_theme()
         apply_saved_display_settings()
 
-        # Load Littles Mode setting before loading room content
         from .settings import get_littles_mode, get_code_panel
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
-            self._code_panel_enabled = False  # Littles mode disables code panel
+            self._code_panel_enabled = False
             room_map = {"music": Room.MUSIC, "music_noscreen": Room.MUSIC, "art": Room.ART}
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
         else:
@@ -2400,6 +2399,11 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
+        # Auto-exit littles mode when parent opens the menu
+        if self._littles_mode:
+            from .settings import set_littles_mode
+            set_littles_mode(None)
+            self._apply_littles_mode(None)
         self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
 
     def _on_parent_menu_dismissed(self, result) -> None:

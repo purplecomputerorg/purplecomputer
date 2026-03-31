@@ -40,6 +40,7 @@ def save_settings(settings: dict) -> bool:
         return False
 
 
+
 def get_littles_mode() -> str | None:
     """Get current Littles Mode setting. None = off, 'music' or 'art'."""
     return load_settings()["littles_mode"]

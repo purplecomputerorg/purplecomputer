@@ -1718,6 +1718,54 @@ class TestColorMappingConsistency:
             assert len(lines) == 5  # 5, 4, 3, 2, 1
 
 
+class TestFuzzyCorrections:
+    """Fuzzy matching and correction display in the evaluator."""
+
+    @pytest.fixture
+    def evaluator(self):
+        return SimpleEvaluator()
+
+    def test_typo_emoji_shows_correction(self, evaluator):
+        result = evaluator.evaluate("dinno")
+        assert "→ dinno → dino" in result
+        assert "🦕" in result
+
+    def test_typo_color_shows_correction(self, evaluator):
+        result = evaluator.evaluate("purpel")
+        assert "→ purpel → purple" in result
+
+    def test_exact_emoji_no_correction(self, evaluator):
+        result = evaluator.evaluate("cat")
+        assert "→" not in result
+        assert "🐱" in result
+
+    def test_exact_color_no_correction(self, evaluator):
+        result = evaluator.evaluate("red")
+        assert "→" not in result
+
+    def test_typo_emoji_multiplication(self, evaluator):
+        result = evaluator.evaluate("3 dinno")
+        assert "🦕" in result
+        assert "→ dinno → dino" in result
+
+    def test_no_false_positive_short_word(self, evaluator):
+        """4-char words should not fuzzy match (e.g., 'barn' should not become 'bear')."""
+        result = evaluator.evaluate("barn")
+        assert "→" not in result  # no correction
+        assert "🐻" not in result  # no bear emoji
+
+    def test_operator_fuzzy_between_digits(self, evaluator):
+        result = evaluator.evaluate("3 plas 2")
+        assert "5" in strip_markup(result)
+
+    def test_normal_expression_not_broken(self, evaluator):
+        """Existing expressions should still work without spurious corrections."""
+        result = evaluator.evaluate("apple*3 + banana*2")
+        assert "→" not in result  # no correction for parsing artifacts
+        assert "🍎" in result
+        assert "🍌" in result
+
+
 if __name__ == "__main__":
     if HAS_PYTEST:
         sys.exit(pytest.main([__file__, "-v"]))

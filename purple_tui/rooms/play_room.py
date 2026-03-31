@@ -1043,11 +1043,28 @@ class SimpleEvaluator:
         self.content = get_content()
 
     def evaluate(self, text: str) -> str:
-        """Evaluate input and return result string."""
+        """Evaluate input and return result string.
+
+        Wraps _evaluate_inner to prepend content-layer fuzzy corrections
+        (e.g., "dinno → dino") when the content system auto-corrected a typo.
+        """
         text = text.strip()
         if not text:
             return ""
+        # Clear stale corrections, evaluate, then check for new corrections
+        self.content.pop_correction()
+        result = self._evaluate_inner(text)
+        # Only show correction if the typo was a word in the original input
+        # (not from intermediate parsing artifacts like "apple3")
+        correction = self.content.pop_correction()
+        if correction:
+            orig, corrected = correction
+            if orig in text.lower():
+                return f"→ {orig} → {corrected}\n{result}"
+        return result
 
+    def _evaluate_inner(self, text: str) -> str:
+        """Core evaluation pipeline."""
         # Normalize number words and commas early (before any evaluation)
         text = self._normalize_number_words(text)
         text = self._normalize_commas(text)
@@ -1129,6 +1146,14 @@ class SimpleEvaluator:
         """If the input was auto-corrected, prepend a line showing what was actually calculated."""
         if was_corrected:
             return f"→ {corrected_text}\n{result}"
+        return result
+
+    def _prepend_content_correction(self, result: str) -> str:
+        """If a content-layer fuzzy correction fired, prepend it."""
+        correction = self.content.pop_correction()
+        if correction:
+            orig, corrected = correction
+            return f"→ {orig} → {corrected}\n{result}"
         return result
 
     def _eval_text_with_expr(self, text: str, had_parens: bool = False) -> str | None:

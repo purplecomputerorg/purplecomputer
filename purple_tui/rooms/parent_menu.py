@@ -596,6 +596,17 @@ def _get_version_label() -> str:
     """
     version_file = Path("/etc/purple-version")
     if not version_file.exists():
+        # Fall back to git short hash for dev/VM environments
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                capture_output=True, text=True, timeout=2,
+                cwd=Path(__file__).parent,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return f"Dev: {result.stdout.strip()}"
+        except Exception:
+            pass
         return ""
     version = version_file.read_text().strip()
     if not version:

@@ -949,14 +949,21 @@ class InstallProgressScreen(ModalScreen):
                     line, buf = buf.split(b'\n', 1)
                     self._handle_line(line.decode('utf-8', errors='replace'))
 
+        _SENTINEL = Path('/run/purple-install-complete')
         stderr_task = asyncio.ensure_future(_read_stderr())
-        while proc.returncode is None:
+        # Poll until process exits OR sentinel file appears. The sentinel is
+        # written by install.sh just before exit 0, so it appears even when
+        # proc.returncode stays None (happens when a child process keeps the
+        # bash wrapper alive after install.sh finishes).
+        while proc.returncode is None and not _SENTINEL.exists():
             await asyncio.sleep(0.1)
         stderr_task.cancel()
         try:
             await stderr_task
         except asyncio.CancelledError:
             pass
+
+        success = proc.returncode == 0 or _SENTINEL.exists()
 
         # While USB is still present: sync, suppress casper prompt, prep reboot.
         # Use async subprocesses so Textual's event loop stays unblocked.
@@ -966,7 +973,7 @@ class InstallProgressScreen(ModalScreen):
             await p.wait()
         _write_silent_reboot_script()
 
-        self._phase = "success" if proc.returncode == 0 else "error"
+        self._phase = "success" if success else "error"
         self._update_ui()
 
     def _handle_line(self, text: str) -> None:

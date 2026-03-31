@@ -381,6 +381,10 @@ main() {
     log "Installation complete!"
     log "============================================"
 
+    # Sentinel file so the TUI can detect completion even if proc.returncode
+    # never gets set (can happen when a background child holds the process alive)
+    touch /run/purple-install-complete
+
     # Return success - the initramfs hook handles reboot/user interaction
     # This keeps install.sh focused on disk operations only
     exit 0

@@ -811,15 +811,14 @@ _ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 # Maps substrings in [PURPLE] log output to (progress_percent, display_message).
 # Progress only moves forward; the writing stage dominates the clock.
 _INSTALL_STAGES = [
-    ("Detecting internal disk",   5,  "Finding your disk..."),
-    ("Found internal disk",       8,  "Found it!"),
-    ("Writing Purple Computer",   12, "Copying to disk..."),
-    ("Reloading partition table", 82, "Finishing up..."),
-    ("Verifying disk write",      85, "Checking the disk..."),
-    ("Disk verification passed",  90, "Disk looks good!"),
-    ("Setting up UEFI boot",      92, "Setting up startup..."),
-    ("UEFI boot setup complete",  97, "Startup ready!"),
-    ("Installation complete",     100, "Done!"),
+    ("Detecting internal disk",   5,  "Getting started..."),
+    ("Found internal disk",       8,  "Getting started..."),
+    ("Writing Purple Computer",   12, "Setting up Purple Computer..."),
+    ("Reloading partition table", 82, "Double-checking everything..."),
+    ("Verifying disk write",      85, "Double-checking everything..."),
+    ("Disk verification passed",  90, "Double-checking everything..."),
+    ("Setting up UEFI boot",      92, "Almost ready..."),
+    ("UEFI boot setup complete",  97, "Almost ready..."),
 ]
 
 
@@ -949,8 +948,11 @@ class InstallProgressScreen(ModalScreen):
         await proc.wait()
 
         # While USB is still present: sync, suppress casper prompt, prep reboot.
-        os.system('sudo sync')
-        os.system('sudo touch /run/casper-no-prompt')
+        # Use async subprocesses so Textual's event loop stays unblocked.
+        # sudo sync can take a while after writing 8GB+ to disk.
+        for cmd in (["sudo", "sync"], ["sudo", "touch", "/run/casper-no-prompt"]):
+            p = await asyncio.create_subprocess_exec(*cmd)
+            await p.wait()
         _write_silent_reboot_script()
 
         self._phase = "success" if proc.returncode == 0 else "error"

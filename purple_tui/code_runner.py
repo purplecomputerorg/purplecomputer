@@ -661,45 +661,73 @@ class ArtCodeRunner:
 
     def _resolve(self, text: str) -> bool:
         """Try to interpret unrecognized text. Returns True if handled."""
-        content = get_content()
-        t = text.strip().lower()
-
-        # 1. Bare color name
-        hex_color = content.get_color(t)
-        if hex_color:
-            self._apply_color(hex_color)
-            self.corrections.append((text, t))
-            return True
-
-        # 2. Modified color (e.g. "dark blue")
-        mod = content.get_modified_color(t)
-        if mod:
-            self._apply_color(mod[0])
-            self.corrections.append((text, t))
-            return True
-
-        # 3. Fuzzy command keyword (first word)
         words = text.strip().split()
-        if words:
-            corrected_kw = fuzzy_match_small(words[0].lower(), _COMMAND_VOCAB)
-            if corrected_kw and corrected_kw != words[0].lower():
-                corrected_text = corrected_kw + (' ' + ' '.join(words[1:]) if len(words) > 1 else '')
-                self.corrections.append((text, corrected_text))
-                # Re-dispatch with _resolving=True to prevent infinite loop
-                asyncio.ensure_future(self._dispatch(corrected_text, _resolving=True))
-                return True
+        if not words:
+            return False
 
-        # 4. Fuzzy color name
-        color_names = list(content.colors.keys())
-        corrected_color = fuzzy_match_small(t, color_names)
-        if corrected_color:
-            hex_color = content.get_color(corrected_color)
-            if hex_color:
-                self._apply_color(hex_color)
-                self.corrections.append((text, corrected_color))
-                return True
+        # 1. Try to match a color from the start, dispatch any remainder.
+        #    Handles: "blue", "dark blue", "blue go 5", "dark blue go 5"
+        color_hex, words_used = self._resolve_leading_color(words)
+        if color_hex:
+            self._apply_color(color_hex)
+            color_text = " ".join(words[:words_used])
+            remainder = " ".join(words[words_used:])
+            if remainder:
+                self.corrections.append((text, f"{color_text}, {remainder}"))
+                asyncio.ensure_future(self._dispatch(remainder))
+            else:
+                self.corrections.append((text, color_text))
+            return True
+
+        # 2. Fuzzy command keyword (e.g. "forwrd 10" -> "forward 10")
+        corrected_kw = fuzzy_match_small(words[0].lower(), _COMMAND_VOCAB)
+        if corrected_kw and corrected_kw != words[0].lower():
+            corrected_text = corrected_kw + (" " + " ".join(words[1:]) if len(words) > 1 else "")
+            self.corrections.append((text, corrected_text))
+            asyncio.ensure_future(self._dispatch(corrected_text, _resolving=True))
+            return True
 
         return False
+
+    def _resolve_leading_color(self, words: list[str]) -> tuple[str | None, int]:
+        """Try to match a color from the start of words.
+
+        Returns (hex_color, number_of_words_consumed) or (None, 0).
+        Tries: exact color, modified color (adjectives + color), fuzzy color.
+        """
+        from .color_mixing import COLOR_ADJECTIVES
+
+        content = get_content()
+
+        # Count leading adjectives (dark, bright, light, ...)
+        adj_count = 0
+        for w in words:
+            if w.lower() in COLOR_ADJECTIVES:
+                adj_count += 1
+            else:
+                break
+
+        # Try exact color on the word after adjectives
+        if adj_count < len(words):
+            color_word = words[adj_count].lower()
+            hex_color = content.get_color(color_word)
+            if hex_color:
+                if adj_count > 0:
+                    mod = content.get_modified_color(" ".join(words[:adj_count + 1]))
+                    if mod:
+                        return mod[0], adj_count + 1
+                return hex_color, adj_count + 1
+
+        # Try fuzzy color on the first non-adjective word
+        if adj_count < len(words):
+            color_word = words[adj_count].lower()
+            corrected = fuzzy_match_small(color_word, list(content.colors.keys()))
+            if corrected:
+                hex_color = content.get_color(corrected)
+                if hex_color:
+                    return hex_color, adj_count + 1
+
+        return None, 0
 
     # ------------------------------------------------------------------
     # Helpers

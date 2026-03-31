@@ -297,7 +297,7 @@ class RoomPickerScreen(ModalScreen):
         self._current_room = current_room
         self._code_panel_open = code_panel_open
         self._code_panel_enabled = code_panel_enabled
-        self._show_code_row = code_panel_open or (code_panel_enabled and current_room in ("music", "art"))
+        self._show_code_row = current_room in ("music", "art") and (code_panel_open or code_panel_enabled)
         # Always start on the room row, highlighting the current room
         self._active_row = ROW_ROOMS
         self._room_index = self._get_initial_room_index()

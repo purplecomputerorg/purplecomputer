@@ -5,6 +5,8 @@
 Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for 4–7 and fun for 2–8+.
 They explore, create, and put it down on their own.
 
+> **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.
+
 > **🚧 WORK IN PROGRESS**
 > Purple Computer is still in active development and testing. The installer ISO is not ready for use yet. We'll announce when it's ready.
 
@@ -85,8 +87,8 @@ echo 'YOUR_DRIVE_SERIAL' >> .flash-drives.conf
 
 **Install to hardware:**
 1. Boot laptop from USB (Secure Boot can remain enabled)
-2. Installation runs automatically (10-20 minutes)
-3. System reboots into Purple Computer
+2. Open the parent menu (hold Escape) and choose Install, then confirm
+3. Installation runs (10-20 minutes), then system reboots into Purple Computer
 
 The system logs in automatically as the `purple` user (no password needed).
 

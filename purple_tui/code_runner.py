@@ -109,11 +109,17 @@ def parse_lines(lines: list[str]) -> list[dict]:
         if not line:
             continue
 
-        # Inline repeat: repeat N cmd1, cmd2, ...
+        # Inline repeat: "repeat N cmd1, cmd2" or "repeat cmd1, cmd2" (default 2)
         m = re.match(r'^repeat\s+(\d+)\s+(.+)$', line, re.IGNORECASE)
         if m:
-            count = max(1, min(int(m.group(1)), 100))
-            sub_lines = _split_clauses(m.group(2))
+            count, body_text = int(m.group(1)), m.group(2)
+        else:
+            m = re.match(r'^repeat\s+(.+)$', line, re.IGNORECASE)
+            if m:
+                count, body_text = 2, m.group(1)
+        if m:
+            count = max(1, min(count, 100))
+            sub_lines = _split_clauses(body_text)
             body_cmds = parse_lines(sub_lines)
             result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
             continue
@@ -148,15 +154,24 @@ class PlayCodeRunner:
     """Run code in the Play room context.
 
     Each non-command line is evaluated via SimpleEvaluator.
+    Handles `repeat` as a command keyword (with fuzzy correction).
     Results are collected and returned.
     """
 
+    _KEYWORD_VOCAB = ['repeat']
+
     def __init__(self, evaluator):
         self.evaluator = evaluator
+        self.corrections: list[tuple[str, str]] = []
 
     def run(self, lines: list[str]) -> list[str]:
         """Run code and return list of result strings."""
-        cmds = parse_lines(lines)
+        # Fuzzy-correct repeat keyword before parsing
+        corrected_lines = []
+        for line in lines:
+            corrected_lines.append(self._fuzzy_correct(line))
+
+        cmds = parse_lines(corrected_lines)
         flat = flatten_commands(cmds)
         results = []
         for cmd in flat:
@@ -170,6 +185,22 @@ class PlayCodeRunner:
                     log.debug("Play command failed: %s", text, exc_info=True)
                     continue
         return results
+
+    def _fuzzy_correct(self, line: str) -> str:
+        """Fuzzy-correct command keywords, matching music/art runner pattern."""
+        words = line.strip().split(None, 1)
+        if not words or len(words[0]) < 3:
+            return line
+        first = words[0].lower()
+        if first in ('repeat',):
+            return line
+        from .fuzzy import fuzzy_match_small
+        corrected = fuzzy_match_small(first, self._KEYWORD_VOCAB, cutoff=0.7)
+        if corrected and corrected != first:
+            new_line = corrected + (' ' + words[1] if len(words) > 1 else '')
+            self.corrections.append((line.strip(), new_line))
+            return new_line
+        return line
 
 
 class MusicCodeRunner:

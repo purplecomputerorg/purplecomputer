@@ -666,13 +666,6 @@ class PlayMode(Vertical):
                     line = play_input.value.strip()
                     play_input.value = ""
 
-                    # Fuzzy-correct repeat keyword
-                    first_word = line.split()[0].lower() if line.split() else ''
-                    if first_word != 'repeat' and len(first_word) >= 3:
-                        from ..fuzzy import fuzzy_match_small
-                        if fuzzy_match_small(first_word, ['repeat'], cutoff=0.7):
-                            line = 'repeat' + line[len(first_word):]
-
                     play_input.post_message(InlineInput.Submitted(line))
                 else:
                     # Enter on empty: recall last command into input
@@ -789,13 +782,22 @@ class PlayMode(Vertical):
         if eval_text:
             scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
-        # Repeat commands: use PlayCodeRunner for inline repeat syntax
-        if re.match(r'^repeat\s+\d+\s+', eval_text, re.IGNORECASE):
-            from ..code_runner import PlayCodeRunner
-            runner = PlayCodeRunner(self.evaluator)
+        # Repeat commands: use PlayCodeRunner (handles fuzzy "repeet" → "repeat")
+        from ..code_runner import PlayCodeRunner, parse_lines
+        runner = PlayCodeRunner(self.evaluator)
+        corrected = runner._fuzzy_correct(eval_text)
+        cmds = parse_lines([corrected])
+        is_repeat = any(c['type'] == 'repeat' for c in cmds)
+        if is_repeat:
             results = runner.run([eval_text])
             for result in results:
                 scroll.mount(HistoryLine(result, line_type="answer", speaking=force_speak))
+            if runner.corrections:
+                try:
+                    recall = self.query_one("#play-recall-hint", RecallHint)
+                    recall.set_correction(*runner.corrections[0])
+                except Exception:
+                    pass
             scroll.scroll_end(animate=False)
             self._last_input_text = input_text
             self._update_recall_hint()

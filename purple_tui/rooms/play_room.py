@@ -535,6 +535,53 @@ class PlayMode(Vertical):
         except Exception:
             pass
 
+    def _display_result(self, scroll, result: str, speaking: bool = False) -> None:
+        """Display a single evaluation result, handling COLOR_RESULT tokens."""
+        if "COLOR_RESULT:" not in result:
+            scroll.mount(HistoryLine(result, line_type="answer", speaking=speaking))
+            return
+
+        # Extract the COLOR_RESULT token
+        parts = result.split()
+        color_part = None
+        before_part, after_part = None, None
+        for i, p in enumerate(parts):
+            if p.startswith("COLOR_RESULT:"):
+                color_part = p
+                before_part = " ".join(parts[:i]) if i > 0 else None
+                after_part = " ".join(parts[i+1:]) if i < len(parts) - 1 else None
+                break
+
+        color_data = self.evaluator._parse_color_result(color_part) if color_part else None
+        if not color_data:
+            scroll.mount(HistoryLine(result, line_type="answer", speaking=speaking))
+            return
+
+        hex_color, color_name, components = color_data
+        other_part = " ".join(filter(None, [before_part, after_part]))
+        is_modified = (len(components) == 1 and
+            components[0].upper() != hex_color.upper())
+
+        if len(components) <= 1 and not is_modified:
+            color_box = f"[on {hex_color}]  [/]"
+            display = " ".join(filter(None, [before_part, color_box, after_part]))
+            scroll.mount(HistoryLine(display, line_type="answer", speaking=speaking))
+        elif is_modified and not other_part:
+            scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=speaking))
+        elif other_part:
+            comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
+            result_box = f"[on {hex_color}]  [/]"
+            input_line = " ".join(filter(None, [before_part, comp_boxes, after_part]))
+            result_line = " ".join(filter(None, [before_part, result_box, after_part]))
+            combined = f"{input_line} → {result_line}"
+            if self.evaluator._estimate_visual_width(combined) <= 80:
+                display = combined
+            else:
+                display = f"{input_line}\n\n{result_line}"
+            scroll.mount(HistoryLine(display, line_type="answer", speaking=speaking))
+        else:
+            scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=speaking))
+
     def add_code_results(self, results: list[str]) -> None:
         """Add results from code runner to the history.
 
@@ -789,7 +836,8 @@ class PlayMode(Vertical):
         is_repeat = any(c['type'] == 'repeat' for c in cmds)
         if is_repeat:
             results = runner.run([eval_text])
-            self.add_code_results(results)
+            for result in results:
+                self._display_result(scroll, result, force_speak)
             if runner.corrections:
                 try:
                     recall = self.query_one("#play-recall-hint", RecallHint)
@@ -804,55 +852,7 @@ class PlayMode(Vertical):
         # Evaluate and show result
         result = self.evaluator.evaluate(eval_text)
         if result:
-            # Check if this is a color result (special format)
-            # Mixed results look like "text COLOR_RESULT:hex:name:comps emoji_stuff"
-            color_part, before_part, after_part = None, None, None
-            if "COLOR_RESULT:" in result:
-                # Find and extract the COLOR_RESULT token
-                parts = result.split()
-                for i, p in enumerate(parts):
-                    if p.startswith("COLOR_RESULT:"):
-                        color_part = p
-                        before_part = " ".join(parts[:i]) if i > 0 else None
-                        after_part = " ".join(parts[i+1:]) if i < len(parts) - 1 else None
-                        break
-
-            if color_part:
-                color_data = self.evaluator._parse_color_result(color_part)
-                if color_data:
-                    hex_color, color_name, components = color_data
-                    other_part = " ".join(filter(None, [before_part, after_part]))
-                    # Modified color (1 component that differs): show base → result swatch
-                    is_modified = (len(components) == 1 and
-                        components[0].upper() != hex_color.upper())
-                    # Bare single color: inline box; modified or multi-color: swatch
-                    if len(components) <= 1 and not is_modified:
-                        color_box = f"[on {hex_color}]  [/]"
-                        parts = [before_part, color_box, after_part]
-                        display = " ".join(filter(None, parts))
-                        scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
-                    elif is_modified and not other_part:
-                        scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
-                    else:
-                        # Multi-color with emoji: show inputs → result
-                        if other_part:
-                            comp_boxes = " ".join(f"[on {c}]  [/]" for c in components)
-                            result_box = f"[on {hex_color}]  [/]"
-                            input_parts = [before_part, comp_boxes, after_part]
-                            input_line = " ".join(filter(None, input_parts))
-                            result_parts = [before_part, result_box, after_part]
-                            result_line = " ".join(filter(None, result_parts))
-                            # Prefer inline when compact enough
-                            combined = f"{input_line} → {result_line}"
-                            if self.evaluator._estimate_visual_width(combined) <= 80:
-                                display = combined
-                            else:
-                                display = f"{input_line}\n\n{result_line}"
-                            scroll.mount(HistoryLine(display, line_type="answer", speaking=force_speak))
-                        else:
-                            scroll.mount(ColorResultLine(hex_color, color_name, components, speaking=force_speak))
-            else:
-                scroll.mount(HistoryLine(result, line_type="answer", speaking=force_speak))
+            self._display_result(scroll, result, force_speak)
 
         # Scroll to bottom
         scroll.scroll_end(animate=False)

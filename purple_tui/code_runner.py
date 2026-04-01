@@ -110,7 +110,8 @@ def parse_lines(lines: list[str]) -> list[dict]:
             continue
 
         # Inline repeat: "repeat N cmd1, cmd2" or "repeat cmd1, cmd2" (default 2)
-        m = re.match(r'^repeat\s+(\d+)\s+(.+)$', line, re.IGNORECASE)
+        # Optional colon after count: "repeat 3: cat, dog"
+        m = re.match(r'^repeat\s+(\d+):?\s+(.+)$', line, re.IGNORECASE)
         if m:
             count, body_text = int(m.group(1)), m.group(2)
         else:

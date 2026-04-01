@@ -1049,36 +1049,29 @@ class InstallProgressScreen(ModalScreen):
         self.app.call_from_thread(self._run_debug_shell)
 
     def _run_debug_shell(self) -> None:
-        """Suspend Textual and open a debug shell."""
-        with self.app.suspend_with_terminal_input():
-            os.system('stty sane')
-            os.system('clear')
-            print("=" * 60)
-            print("  DEBUG SHELL (auto-opened after 15s idle)")
-            print("=" * 60)
-            print()
-            print("Debug log:")
-            print("-" * 60)
-            try:
-                with open(_REBOOT_LOG) as f:
-                    print(f.read())
-            except FileNotFoundError:
-                print("(no reboot debug log yet)")
-            print("-" * 60)
-            print()
-            print("Useful commands:")
-            print("  cat /tmp/purple-reboot-debug.log")
-            print("  ls -la /run/purple-reboot-*")
-            print("  ps aux | grep reboot")
-            print()
-            print("Type 'exit' to return to Purple Computer.")
-            print()
-            sys.stdout.flush()
-            shell = os.environ.get('SHELL', '/bin/bash')
-            subprocess.run([shell, '-i'])
-            _flush_terminal_input()
-            os.system('stty sane')
-        self.app.refresh(repaint=True)
+        """Exit Textual entirely and drop to a debug shell."""
+        _reboot_log("debug: exiting app for debug shell")
+        os.system('stty sane')
+        os.system('clear')
+        print("=" * 60)
+        print("  DEBUG SHELL (auto-opened after 30s idle)")
+        print("=" * 60)
+        print()
+        print("Debug log:")
+        print("-" * 60)
+        try:
+            with open(_REBOOT_LOG) as f:
+                print(f.read())
+        except FileNotFoundError:
+            print("(no reboot debug log yet)")
+        print("-" * 60)
+        print()
+        print("  cat /tmp/purple-reboot-debug.log")
+        print("  ls -la /run/purple-reboot-*")
+        print("  ps aux | grep reboot")
+        print()
+        sys.stdout.flush()
+        self.app.exit()
 
     def _handle_line(self, text: str) -> None:
         clean = _ANSI_ESCAPE.sub('', text).strip()

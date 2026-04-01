@@ -1367,9 +1367,13 @@ class SimpleEvaluator:
         # Collect emoji info for label formatting
         emoji_items = [(e, c, w) for t, v in items if t == 'emoji' for e, c, w in [v]]
         total_count = sum(c for _, c, _ in emoji_items)
-        has_computation = total_count > len(emoji_items)
-        show_label = (has_computation
-                      and not has_colors and not any(t == 'text' for t, _ in items))
+        has_text = any(t == 'text' for t, _ in items)
+        # Computation: any term with count > 1
+        all_same_emoji = len(set(e for e, _, _ in emoji_items)) == 1 if emoji_items else False
+        # Singleton addition: apple + apple + apple (all count=1, same emoji)
+        all_singletons = all_same_emoji and all(c == 1 for _, c, _ in emoji_items) and len(emoji_items) > 1
+        has_computation = total_count > len(emoji_items) or all_singletons
+        show_label = has_computation and not has_colors and not has_text
 
         # If colors present, use adjective grouping
         if has_colors:
@@ -1391,14 +1395,28 @@ class SimpleEvaluator:
 
             return result
 
+        # Same-emoji expressions: collapse to abacus when total > 10
+        # (small counts like "2 + 3 cats" keep grouped inline display)
+        if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > 10:
+            e = emoji_items[0][0]
+            return self._format_emoji_label(e, total_count)
+
+        # Singleton emoji addition (apple + apple → "= 2 🍎" with dots)
+        if all_singletons:
+            e = emoji_items[0][0]
+            return self._format_emoji_label(e, total_count)
+
         # No colors: build result in order, showing + between items
         result_parts = []
         for item_type, value in items:
             if item_type == 'emoji':
                 e, c, w = value
-                result_parts.append(e * c)
+                if c > 10:
+                    result_parts.append(self._format_emoji_label(e, c))
+                else:
+                    result_parts.append(e * c)
             elif item_type == 'text':
-                result_parts.append(value)
+                result_parts.append(self._format_text_as_color_blocks(value))
 
         result = ' + '.join(result_parts) if result_parts else None
         if show_label and result:
@@ -1752,15 +1770,13 @@ class SimpleEvaluator:
         # Try _parse_emoji for word-based patterns
         if emoji_data := self._parse_emoji(t_lower):
             e, c, w = emoji_data
-            if c <= 10000:
-                # Show label if there's explicit operator (*, x, times)
-                if has_operator and c > 1:
-                    # Extract numeric expression for grouping (e.g., "2*3" from "2 * 3 cats")
-                    expr = ""
-                    if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+', t_lower):
-                        expr = f"{m.group(1)}*{m.group(2)}"
-                    return self._format_emoji_label(e, c, expression=expr)
-                return e * c
+            # Show label+abacus for explicit operators OR large counts
+            if c > 1 and (has_operator or c > 10):
+                expr = ""
+                if has_operator and (m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+', t_lower)):
+                    expr = f"{m.group(1)}*{m.group(2)}"
+                return self._format_emoji_label(e, c, expression=expr)
+            return e * c
 
         # "N * word" for colors (no label for colors)
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', t_lower):
@@ -1829,23 +1845,23 @@ class SimpleEvaluator:
         if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+(\w+)$', term):
             n1, n2, word = int(m.group(1)), int(m.group(2)), m.group(3)
             count = n1 * n2
-            if (e := self._get_emoji(word)) and count <= 10000:
+            if e := self._get_emoji(word):
                 return (e, count, word)
 
         # "N * word" or "word * N"
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', term):
             word = m.group(2)
-            if (e := self._get_emoji(word)) and int(m.group(1)) <= 10000:
+            if e := self._get_emoji(word):
                 return (e, int(m.group(1)), word)
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
             word = m.group(1)
-            if (e := self._get_emoji(word)) and int(m.group(2)) <= 10000:
+            if e := self._get_emoji(word):
                 return (e, int(m.group(2)), word)
 
         # "N word" or "Nword"
         if m := re.match(r'^(\d+)\s*(\w+)$', term):
             word = m.group(2)
-            if (e := self._get_emoji(word)) and int(m.group(1)) <= 10000:
+            if e := self._get_emoji(word):
                 return (e, int(m.group(1)), word)
 
         # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)

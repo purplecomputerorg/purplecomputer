@@ -21,10 +21,10 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters',
-              'repeat', 'end', 'marimba', 'xylophone', 'ukulele', 'uke', 'musicbox'],
+              'repeat', 'marimba', 'xylophone', 'ukulele', 'uke', 'musicbox'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step',
             'turn', 'color', 'paint', 'write', 'lift', 'pen', 'penup', 'pendown',
-            'repeat', 'end'],
+            'repeat'],
 }
 
 ROOM_HINTS: dict[str, list[str]] = {

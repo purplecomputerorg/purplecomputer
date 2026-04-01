@@ -209,16 +209,8 @@ class InputPrompt(Static):
         super().__init__(**kwargs)
         self.add_class("caps-sensitive")
         self._label = label
-        self._block_depth = 0
-
-    def set_block_depth(self, depth: int) -> None:
-        self._block_depth = depth
-        self.refresh()
 
     def render(self) -> str:
-        if self._block_depth > 0:
-            dots = "\u00b7" * self._block_depth
-            return f"[bold #9b7bc4]{dots}\u00b7\u00b7[/]"
         text = self.app.caps_text(self._label) if hasattr(self.app, 'caps_text') else self._label
         return f"[bold #c4a0e8]{text} \u2192[/]"
 

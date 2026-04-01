@@ -2,7 +2,7 @@
 Code runners for each room.
 
 Parse and execute code from REPL input.
-Shared syntax: `repeat N` ... `end` blocks.
+Shared syntax: inline `repeat N cmd1, cmd2` across all rooms.
 """
 
 import asyncio
@@ -99,57 +99,24 @@ def _split_commands(text: str) -> list[str]:
 def parse_lines(lines: list[str]) -> list[dict]:
     """Parse lines into a list of commands.
 
-    Handles `repeat N` ... `end` blocks (can be nested).
+    Handles inline `repeat N cmd1, cmd2` syntax.
     Clause separators (, . ; |) split a line into multiple commands.
     Returns a flat list of command dicts with 'type' and params.
     """
     result = []
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        i += 1
-
+    for line in lines:
+        line = line.strip()
         if not line:
             continue
 
-        # Single-line repeat: repeat N cmd1, cmd2, ...
+        # Inline repeat: repeat N cmd1, cmd2, ...
         m = re.match(r'^repeat\s+(\d+)\s+(.+)$', line, re.IGNORECASE)
         if m:
-            count = int(m.group(1))
-            count = max(1, min(count, 100))
-            body_text = m.group(2)
-            sub_lines = _split_clauses(body_text)
+            count = max(1, min(int(m.group(1)), 100))
+            sub_lines = _split_clauses(m.group(2))
             body_cmds = parse_lines(sub_lines)
             result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
             continue
-
-        # Multiline repeat N ... end (used by play room)
-        m = re.match(r'^repeat\s+(\d+)\s*$', line, re.IGNORECASE)
-        if m:
-            count = int(m.group(1))
-            count = max(1, min(count, 100))  # Safety cap
-            # Collect body until "end"
-            body_lines = []
-            depth = 1
-            while i < len(lines) and depth > 0:
-                bline = lines[i].strip()
-                i += 1
-                if re.match(r'^repeat\s+\d+', bline, re.IGNORECASE):
-                    depth += 1
-                    body_lines.append(bline)
-                elif re.match(r'^end\s*$', bline, re.IGNORECASE):
-                    depth -= 1
-                    if depth > 0:
-                        body_lines.append(bline)
-                else:
-                    body_lines.append(bline)
-            # Recursively parse body
-            body_cmds = parse_lines(body_lines)
-            result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
-            continue
-
-        if re.match(r'^end\s*$', line, re.IGNORECASE):
-            continue  # Stray end, ignore
 
         # Split on clause separators, then on command-keyword boundaries
         clauses = _split_clauses(line)

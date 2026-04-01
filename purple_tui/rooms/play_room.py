@@ -794,8 +794,8 @@ class PlayMode(Vertical):
             from ..code_runner import PlayCodeRunner
             runner = PlayCodeRunner(self.evaluator)
             results = runner.run([eval_text])
-            if results:
-                self.add_code_results(results)
+            for result in results:
+                scroll.mount(HistoryLine(result, line_type="answer", speaking=force_speak))
             scroll.scroll_end(animate=False)
             self._last_input_text = input_text
             self._update_recall_hint()

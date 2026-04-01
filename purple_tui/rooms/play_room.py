@@ -546,7 +546,6 @@ class PlayMode(Vertical):
             return
         try:
             scroll = self.query_one("#history-scroll")
-            scroll.mount(HistoryLine("Your code says...", line_type="code_header"))
 
             # Process each result: compact it and handle COLOR_RESULT
             compact_parts = []
@@ -790,8 +789,7 @@ class PlayMode(Vertical):
         is_repeat = any(c['type'] == 'repeat' for c in cmds)
         if is_repeat:
             results = runner.run([eval_text])
-            for result in results:
-                scroll.mount(HistoryLine(result, line_type="answer", speaking=force_speak))
+            self.add_code_results(results)
             if runner.corrections:
                 try:
                     recall = self.query_one("#play-recall-hint", RecallHint)
@@ -1736,17 +1734,17 @@ class SimpleEvaluator:
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
             if h := self._get_color(word):
-                return self._format_color_label(h, min(count, 1000))
+                return self._format_color_label(h, count)
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', t_lower):
             word, count = m.group(1), int(m.group(2))
             if h := self._get_color(word):
-                return self._format_color_label(h, min(count, 1000))
+                return self._format_color_label(h, count)
 
         # "N word" for colors (e.g., "3 red")
         if m := re.match(r'^(\d+)\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
             if h := self._get_color(word):
-                return self._format_color_label(h, min(count, 1000))
+                return self._format_color_label(h, count)
 
         # Bare plural for colors (e.g., "yellows" -> 2 yellow boxes)
         if t_lower.endswith('s') and len(t_lower) > 2:

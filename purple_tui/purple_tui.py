@@ -813,6 +813,12 @@ class PurpleApp(App):
         self._apply_theme()
         apply_saved_display_settings()
 
+        # Ensure logind ignores power button (TUI handles it).
+        # Defensive: a previous crash or logind-mediated shutdown during a
+        # shell session can leave the config stuck on "poweroff".
+        from .power_manager import set_logind_power_key
+        set_logind_power_key("ignore")
+
         from .settings import get_littles_mode, get_code_panel
         saved_littles = get_littles_mode()
         if saved_littles:

@@ -479,7 +479,7 @@ def test_watcher_survives_sudo_parent_exit(tmp_path):
 #!/bin/bash
 set -eo pipefail
 rm -f {tmp_path}/purple-reboot-fifo || true
-if mkfifo {tmp_path}/purple-reboot-fifo 2>/dev/null; then
+if mkfifo -m 666 {tmp_path}/purple-reboot-fifo 2>/dev/null; then
     setsid sh -c 'read _ < {tmp_path}/purple-reboot-fifo; touch {tmp_path}/watcher-fired' </dev/null >/dev/null 2>/dev/null &
 fi
 touch {tmp_path}/purple-install-complete
@@ -500,16 +500,22 @@ exit 0
     fifo_path = tmp_path / 'purple-reboot-fifo'
     assert fifo_path.exists(), "FIFO not created"
 
-    # Retry a few times: the setsid watcher may need a moment to open the FIFO
+    # Check FIFO permissions for diagnostics
+    fifo_stat = os.stat(str(fifo_path))
+    fifo_mode = oct(fifo_stat.st_mode)
+
+    # Retry: setsid watcher may need a moment to open the FIFO
     watcher_alive = False
-    for _ in range(5):
+    last_err = None
+    for _ in range(10):
         try:
             fd = os.open(str(fifo_path), os.O_WRONLY | os.O_NONBLOCK)
             os.write(fd, b'go\n')
             os.close(fd)
             watcher_alive = True
             break
-        except OSError:
+        except OSError as e:
+            last_err = e
             time.sleep(0.2)
 
     if watcher_alive:
@@ -517,10 +523,21 @@ exit 0
         assert (tmp_path / 'watcher-fired').exists(), \
             "FIFO write succeeded but watcher didn't fire"
     else:
+        # Check if any process is reading the FIFO
+        import glob as _glob
+        readers = []
+        for fd_link in _glob.glob('/proc/*/fd/*'):
+            try:
+                if os.readlink(fd_link) == str(fifo_path):
+                    readers.append(fd_link.split('/')[2])
+            except (OSError, IndexError):
+                pass
         import pytest
         pytest.fail(
-            "Watcher died after sudo+bash exited! "
-            "sudo may be killing the process group on exit."
+            f"Watcher died after sudo+bash exited! "
+            f"fifo_mode={fifo_mode} last_err={last_err} "
+            f"fifo_readers={readers} "
+            f"stderr={result.stderr.decode()[:200]}"
         )
 
 

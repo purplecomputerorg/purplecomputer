@@ -40,6 +40,12 @@
       margin-bottom: 0.75rem;
     }
     @media (min-width: 640px) { h1 { font-size: 2.5rem; } }
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: #857698;
+      margin-bottom: 0.5rem;
+    }
 
     .thanks {
       color: #5c2d91;
@@ -93,6 +99,52 @@
       box-shadow: 0 1px 2px rgba(0,0,0,0.04);
       border: 1px solid rgba(233, 213, 255, 0.5);
     }
+    .steps {
+      margin-top: 2rem;
+      text-align: left;
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      border: 1px solid rgba(233, 213, 255, 0.5);
+      counter-reset: step;
+    }
+    .steps h2 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #857698;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+    .step {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .step:last-child { margin-bottom: 0; }
+    .step-num {
+      flex-shrink: 0;
+      width: 1.5rem;
+      height: 1.5rem;
+      border-radius: 9999px;
+      background: #5c2d91;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 0.1rem;
+    }
+    .step-text {
+      font-size: 0.9375rem;
+      color: #352a4a;
+      line-height: 1.5;
+    }
+    .step-text a { color: #5c2d91; }
+    .step-text a:hover { text-decoration: underline; }
+
     .technical h2 {
       font-size: 0.75rem;
       font-weight: 600;
@@ -212,7 +264,8 @@
       </a>
 
       <div class="container-narrow">
-        <h1>Early Access</h1>
+        <h1>Purple Computer</h1>
+        <h2>Early Access</h2>
         <div class="technical" style="margin-top: 1.5rem;">
           <p class="thanks" style="margin-bottom: 0.5rem;">Thank you for your order!</p>
           <p class="description">
@@ -229,6 +282,42 @@
 
         <a href="/download.iso" class="download-btn" style="margin-top: 1.5rem;">Download Latest ISO</a>
         <div class="version-badge" id="version-badge"></div>
+      </div>
+
+      <div class="container-narrow">
+        <div class="steps">
+          <h2>How to get started</h2>
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-text">
+              Download the Purple Computer software (.iso file) using the button above.
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-text">
+              Grab any USB drive. Make sure there's nothing you need on it: <strong>we'll be erasing it!</strong> Any old drive with 8GB or more should work.
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-text">
+              Download <a href="https://etcher.balena.io">balenaEtcher</a> (free) to any computer. You'll use it to "flash" the USB drive: this means rewriting the whole USB drive into a format your old laptop can start from.
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-text">
+              Open balenaEtcher, pick the Purple .iso file and your USB drive, and click Flash.
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-text">
+              <strong>Now you have a Purple Key!</strong> See the cards below to boot it on your laptop.
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="card-preview">
@@ -268,6 +357,8 @@
 
       <p class="back">
         <a href="https://purplecomputer.org">&larr; Back to purplecomputer.org</a>
+        &nbsp;&middot;&nbsp;
+        <a href="mailto:tavi@purplecomputer.org">tavi@purplecomputer.org</a>
       </p>
       </div>
     </div>

@@ -384,13 +384,13 @@ main() {
     # Prep for reboot while still running as root with USB present.
     # Python cannot do these without sudo, and sudo from within Textual hangs.
     touch /run/casper-no-prompt
-    cat > /run/purple-reboot.sh << 'REBOOT_EOF'
-#!/bin/sh
-echo 1 > /proc/sys/kernel/sysrq
-echo b > /proc/sysrq-trigger
-reboot -f
-REBOOT_EOF
-    chmod 755 /run/purple-reboot.sh
+
+    # Pre-fork a root shell into RAM that waits on a FIFO for Python's signal.
+    # After USB removal, the overlayfs backing is gone: Python cannot exec /bin/sh
+    # (it's on the USB) so it can't run any subprocess. But it CAN write to /run
+    # (tmpfs = RAM only), which wakes this shell to trigger the sysrq reboot as root.
+    mkfifo /run/purple-reboot-fifo
+    (read _ < /run/purple-reboot-fifo; echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger) &
 
     # Sentinel last - Python polls for this to know install is done.
     touch /run/purple-install-complete

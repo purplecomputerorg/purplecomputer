@@ -965,8 +965,15 @@ class InstallProgressScreen(ModalScreen):
         if self._phase == "installing":
             return
         if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
-            os.system('stty sane')
-            os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
+            # Write to the FIFO that install.sh pre-forked a root shell to read.
+            # This is a pure tmpfs write - no subprocess, no overlayfs access,
+            # safe even after USB removal. The root shell wakes and triggers sysrq.
+            try:
+                with open('/run/purple-reboot-fifo', 'w') as f:
+                    f.write('go\n')
+            except OSError:
+                # Fallback: exec into reboot script (only safe if USB still present)
+                os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
 
 
 class ParentMenuItem(Static):

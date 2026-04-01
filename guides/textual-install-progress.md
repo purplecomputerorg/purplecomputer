@@ -79,18 +79,25 @@ Python polls for this sentinel. When it appears, the install is done regardless 
 
 This was the hardest constraint to preserve. After install, the USB drive can be removed and the system must still reboot cleanly.
 
+The key constraint: after USB removal, the live overlayfs backing is gone. Python cannot `exec` any binary (including `/bin/sh`) because loading it requires a page-fault read from the overlayfs → infinite hang. Python CAN still make raw syscalls on already-mapped pages and write to `/run` (tmpfs = RAM only).
+
 The sequence:
 
 1. `install.sh` (running as root) writes to `/run` (tmpfs, lives in RAM):
    - `/run/casper-no-prompt` — suppresses the casper "remove media" prompt
-   - `/run/purple-reboot.sh` — a sysrq reboot script that needs no filesystem
+   - `/run/purple-reboot-fifo` — a named FIFO; a root shell is pre-forked to block on it
    - `/run/purple-install-complete` — the sentinel (written last)
 2. Python sees the sentinel → shows "Press Enter to restart"
-3. User removes USB drive (optional — nothing in Python reads the USB at this point)
-4. User presses Enter → `os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])` replaces the Python process with the shell script
-5. Shell script: `echo b > /proc/sysrq-trigger` — a kernel call, no filesystem needed
+3. User removes USB drive (optional)
+4. User presses Enter → Python writes `'go\n'` to `/run/purple-reboot-fifo` (pure tmpfs write, no overlayfs touch)
+5. The root shell (pre-forked by install.sh, already in RAM) wakes up and runs `echo b > /proc/sysrq-trigger`
 
-All root work (steps 1-2) is done by install.sh, which already runs as root. Python never needs to sudo after the install finishes. This avoids the sudo-from-Textual hang.
+Why a pre-forked shell instead of `os.execv('/bin/sh', ...)`:
+- `execv` must load `/bin/sh` from disk. `/bin/sh` is on the overlayfs (USB-backed). After USB removal → hang.
+- A write to a FIFO in `/run` is a pure kernel operation against the tmpfs VFS — no overlayfs involved.
+- The root shell was loaded while the USB was still present and is already in the page cache.
+
+All root work (step 1) is done by install.sh. Python never needs sudo after install finishes.
 
 ---
 

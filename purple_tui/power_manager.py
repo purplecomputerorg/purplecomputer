@@ -318,7 +318,7 @@ class PowerManager:
         There's no user data to lose on a kids' computer, and clean
         shutdown can hang for 10-15 seconds waiting for services.
 
-        Also spawns a watchdog process that force-powers-off after 5
+        Also spawns a watchdog process that force-powers-off after 15
         seconds, independent of the TUI event loop. This ensures
         shutdown completes even if systemd kills X11/Textual first.
 
@@ -339,15 +339,17 @@ class PowerManager:
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")
 
-        # Spawn a watchdog that force-powers-off after 5 seconds.
-        # Detached from TUI's process group so it survives X11 teardown.
-        # Normal --force shutdown is near-instant, so 5s is generous.
+        # Watchdog: if primary shutdown hangs (e.g. slow ACPI on Surface/Mac),
+        # force-poweroff after 15s. Single --force goes through systemd-shutdown
+        # and the ACPI power-off sequence -- double --force bypasses ACPI entirely
+        # and can leave keyboard backlights on and the device in a resume-on-next-
+        # boot limbo state on hardware with Modern Standby (Surface, recent Macs).
         try:
             subprocess.Popen(
                 ["sh", "-c",
-                 "sleep 5 && "
-                 "systemctl poweroff --force --force 2>/dev/null || "
-                 "sudo systemctl poweroff --force --force 2>/dev/null"],
+                 "sleep 15 && "
+                 "systemctl poweroff --force 2>/dev/null || "
+                 "sudo systemctl poweroff --force 2>/dev/null"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,

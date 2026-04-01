@@ -20,7 +20,7 @@ def _split_clauses(text: str) -> list[str]:
 
     Returns a list of trimmed, non-empty clauses.
     """
-    return [s.strip() for s in re.split(r'[,.\;|]', text) if s.strip()]
+    return [s.strip() for s in re.split(r'(?<!\.)\.(?!\.)|[,;|]', text) if s.strip()]
 
 
 # Command keywords that start a new command when found mid-line.

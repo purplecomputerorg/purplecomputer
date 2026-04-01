@@ -420,7 +420,9 @@ PLAY_HINTS = [
     "Try: 5 x 5 apples  \u2022  say red plus blue",
     "Try: red + yellow + blue  \u2022  10 cats...",
     "Try: say hello!  \u2022  repeat 3 cat, dog",
+    "Try: repeat 3: 2 green & 3 periwinkle",
     "Try: 99 fish  \u2022  1 apple 2 apples 3 apples...",
+    "Try: repeat 5 rainbow  \u2022  dark purple whale!",
 ]
 
 

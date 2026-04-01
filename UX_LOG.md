@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play room repeat is now inline-only ("repeat 3 dog, cat"), matching music/art rooms. Removed multi-line block syntax (repeat/end).
 - Sleep screen status messages shortened and use emojis (lid, battery, USB).
 - Boot: eliminated GRUB error message and gray screen flash. Boot goes straight from black to purple "Starting up..." screen with no intermediate states.
 - Sleep screen: stays visible when lid is reopened (press any key to wake, same as idle sleep). Shows dynamic power status: how long lid was closed, charger state, auto-shutdown timing, and USB context on live boot. Helps parents understand power behavior at a glance.

@@ -7,9 +7,6 @@ They explore, create, and put it down on their own.
 
 > **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.
 
-> **🚧 WORK IN PROGRESS**
-> Purple Computer is still in active development and testing. The installer ISO is not ready for use yet. We'll announce when it's ready.
-
 > **Purple Computer is a paid product.**
 > The source code is public so you can see how it works, but Purple Computer
 > is not free software. To use it, purchase at [purplecomputer.org](https://purplecomputer.org)

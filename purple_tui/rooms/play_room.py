@@ -994,6 +994,11 @@ class SimpleEvaluator:
         self.content.pop_correction()  # Clear stale corrections
         try:
             result = self._evaluate_inner(text)
+            # Safety cap: prevent huge results from crashing the renderer
+            if result and len(result) > 5000:
+                # Truncate at line boundary to avoid breaking Rich markup
+                lines = result[:5000].split('\n')
+                result = '\n'.join(lines[:-1]) if len(lines) > 1 else lines[0]
             # Validate Rich markup so broken tags never reach the renderer
             if result and not result.startswith("COLOR_RESULT:"):
                 from rich.text import Text
@@ -1545,6 +1550,14 @@ class SimpleEvaluator:
         viz = self._format_number_with_dots(count, show_label=False, expression=expression, bead=emoji)
         return f"= {count} {emoji}\n{viz}"
 
+    def _format_color_label(self, hex_color: str, count: int) -> str:
+        """Format color multiplication with label and abacus visualization."""
+        block = f"[on {hex_color}]  [/]"
+        if count <= 10:
+            return block * count
+        viz = self._format_number_with_dots(count, show_label=False, bead=block)
+        return f"= {count} {block}\n{viz}"
+
     # -- Pattern sequences ("5 4 3 ...", "2 cats ... 10") --
 
     MAX_PATTERN_TERMS = 20
@@ -1719,23 +1732,21 @@ class SimpleEvaluator:
                 return self._format_emoji_label(e, c, expression=expr)
             return e * c
 
-        # "N * word" for colors (no label for colors)
+        # "N * word" or "word * N" for colors
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
-            if (h := self._get_color(word)) and count <= 100:
-                return f"[on {h}]  [/]" * count
-
-        # "word * N" for colors
+            if h := self._get_color(word):
+                return self._format_color_label(h, min(count, 1000))
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', t_lower):
             word, count = m.group(1), int(m.group(2))
-            if (h := self._get_color(word)) and count <= 100:
-                return f"[on {h}]  [/]" * count
+            if h := self._get_color(word):
+                return self._format_color_label(h, min(count, 1000))
 
         # "N word" for colors (e.g., "3 red")
         if m := re.match(r'^(\d+)\s*(\w+)$', t_lower):
             count, word = int(m.group(1)), m.group(2)
-            if (h := self._get_color(word)) and count <= 100:
-                return f"[on {h}]  [/]" * count
+            if h := self._get_color(word):
+                return self._format_color_label(h, min(count, 1000))
 
         # Bare plural for colors (e.g., "yellows" -> 2 yellow boxes)
         if t_lower.endswith('s') and len(t_lower) > 2:

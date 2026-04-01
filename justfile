@@ -51,6 +51,10 @@ preview *args:
 test:
     .venv/bin/python -m pytest tests/ -v
 
+# Test the install/reboot flow in isolation (no hardware needed)
+test-install:
+    .venv/bin/python -m pytest tests/test_install_reboot.py -v
+
 # Run linter
 lint:
     .venv/bin/ruff check purple_tui/ tools/ scripts/ tests/

@@ -80,8 +80,8 @@ on live boot contain no NVRAM or EFI writes.
 
 Purple Computer includes a USB update mechanism (`purple-usb-update@.service`) that
 triggers when a USB labeled `PURPLE_UPDATE` is inserted. If this were inserted during
-a live boot session, the updater would write to `/opt/purple/` — which, during live
-boot, is inside the RAM overlay. Nothing touches the internal disk. The USB update
+a live boot session, the updater would write to `/opt/purple/`, which during live
+boot is inside the RAM overlay. Nothing touches the internal disk. The USB update
 drive is also completely separate from the install USB (different volume label).
 
 ---

@@ -21,10 +21,10 @@ Textual stays running the whole time. There is no terminal handoff.
 
 The first implementation used `asyncio.create_subprocess_exec`. Python 3.13 introduced regressions that caused cascading hangs:
 
-- **`proc.wait()` hangs** — asyncio ties it to pipe state, not process state.
-- **`proc.returncode` never set** — `install.sh` spawns `setsid bash` on tty2, which keeps the bash wrapper alive as a child even after `install.sh` exits. asyncio never gets SIGCHLD from the wrapper.
-- **`StreamReader.read()` can't be cancelled** — `stderr_task.cancel()` + `await stderr_task` would hang. Omitting the await left a dangling task.
-- **`sudo` from within Textual hangs** — DNS resolution, PAM, and terminal state checks inside sudo all block when called from the Textual event loop.
+- **`proc.wait()` hangs:** asyncio ties it to pipe state, not process state.
+- **`proc.returncode` never set:** `install.sh` spawns `setsid bash` on tty2, which keeps the bash wrapper alive as a child even after `install.sh` exits. asyncio never gets SIGCHLD from the wrapper.
+- **`StreamReader.read()` can't be cancelled:** `stderr_task.cancel()` + `await stderr_task` would hang. Omitting the await left a dangling task.
+- **`sudo` from within Textual hangs:** DNS resolution, PAM, and terminal state checks inside sudo all block when called from the Textual event loop.
 
 The fix: `threading.Thread(daemon=True)` + `subprocess.Popen` + `select.select`. Synchronous subprocess in a thread has none of these issues. UI updates go via `app.call_from_thread()`.
 
@@ -60,10 +60,10 @@ def _run_install_thread(self) -> None:
 
 Key design points:
 
-- `select.select(..., timeout=0.1)` — non-blocking stderr poll. The loop exits as soon as the sentinel appears, even if the bash wrapper is still alive.
-- `proc.poll()` — synchronous, never blocks.
-- Daemon thread — dies automatically if the app exits. Never needs to be joined.
-- No sudo after install.sh — all root work is done by install.sh before it signals done.
+- `select.select(..., timeout=0.1)`: non-blocking stderr poll. The loop exits as soon as the sentinel appears, even if the bash wrapper is still alive.
+- `proc.poll()`: synchronous, never blocks.
+- Daemon thread: dies automatically if the app exits. Never needs to be joined.
+- No sudo after install.sh: all root work is done by install.sh before it signals done.
 
 ---
 
@@ -84,9 +84,9 @@ The key constraint: after USB removal, the live overlayfs backing is gone. Pytho
 The sequence:
 
 1. `install.sh` (running as root) writes to `/run` (tmpfs, lives in RAM):
-   - `/run/casper-no-prompt` — suppresses the casper "remove media" prompt
-   - `/run/purple-reboot-fifo` — a named FIFO; a root shell is pre-forked to block on it
-   - `/run/purple-install-complete` — the sentinel (written last)
+   - `/run/casper-no-prompt`: suppresses the casper "remove media" prompt
+   - `/run/purple-reboot-fifo`: a named FIFO; a root shell is pre-forked to block on it
+   - `/run/purple-install-complete`: the sentinel (written last)
 2. Python sees the sentinel → shows "Press Enter to restart"
 3. User removes USB drive (optional)
 4. User presses Enter → Python writes `'go\n'` to `/run/purple-reboot-fifo` (pure tmpfs write, no overlayfs touch)
@@ -94,7 +94,7 @@ The sequence:
 
 Why a pre-forked shell instead of `os.execv('/bin/sh', ...)`:
 - `execv` must load `/bin/sh` from disk. `/bin/sh` is on the overlayfs (USB-backed). After USB removal → hang.
-- A write to a FIFO in `/run` is a pure kernel operation against the tmpfs VFS — no overlayfs involved.
+- A write to a FIFO in `/run` is a pure kernel operation against the tmpfs VFS. No overlayfs involved.
 - The root shell was loaded while the USB was still present and is already in the page cache.
 
 All root work (step 1) is done by install.sh. Python never needs sudo after install finishes.
@@ -118,7 +118,7 @@ _INSTALL_STAGES = [
 ]
 ```
 
-Progress only moves forward (enforced by `pct > self._progress`). The friendly display strings are what the user sees — no technical jargon.
+Progress only moves forward (enforced by `pct > self._progress`). The friendly display strings are what the user sees, no technical jargon.
 
 ---
 
@@ -126,9 +126,9 @@ Progress only moves forward (enforced by `pct > self._progress`). The friendly d
 
 `tests/test_install_progress.py` documents the pipe-hang bug and proves the fix:
 
-- `test_eof_only_hangs_with_pipe_holder` — proves the old asyncio pattern hangs (test passes by timing out in 3s)
-- `test_cancel_on_exit_completes_with_pipe_holder` — proves `proc.returncode` polling completes even when a child holds stderr open
-- `test_cancel_on_exit_collects_all_lines_without_pipe_holder` — sanity check for the normal case
+- `test_eof_only_hangs_with_pipe_holder`: proves the old asyncio pattern hangs (test passes by timing out in 3s)
+- `test_cancel_on_exit_completes_with_pipe_holder`: proves `proc.returncode` polling completes even when a child holds stderr open
+- `test_cancel_on_exit_collects_all_lines_without_pipe_holder`: sanity check for the normal case
 
 Run with: `just test` or `pytest tests/test_install_progress.py -v`
 

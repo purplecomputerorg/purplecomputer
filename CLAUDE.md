@@ -127,9 +127,11 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. `os.execv` into a shell script on `/run` (tmpfs) that reboots via sysrq
+5. Python writes to a FIFO on `/run` (tmpfs), waking a pre-forked root watcher that reboots via sysrq
 
-**USB removal after install:** Once the USB is removed, the live overlayfs backing is gone and any process touching it hangs on I/O. The reboot script is written to `/run` (tmpfs, in RAM) before showing the success screen, then Python `execv`s into it. The script uses sysrq (`echo b > /proc/sysrq-trigger`) to reboot, which is a direct kernel call with no filesystem access.
+**Shutdown architecture:** All shutdown paths funnel through `PowerManager.shutdown()` which has a two-stage watchdog: stage 1 (5s) tries `systemctl poweroff --force`, stage 2 (8s) uses sysrq (`echo o > /proc/sysrq-trigger`), a direct kernel call needing no filesystem. This covers all scenarios including dead overlayfs after USB removal.
+
+**Post-install reboot:** install.sh pre-forks a root watcher (via `setsid`, survives sudo exit) that blocks on `/run/purple-reboot-fifo`. Python writes to the FIFO to trigger `echo b > /proc/sysrq-trigger`. If the FIFO fails, falls through to `PowerManager.shutdown()` with its sysrq fallback.
 
 **Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed two ways:
 - `touch /run/casper-no-prompt` before reboot (runtime, in `parent_menu.py`)

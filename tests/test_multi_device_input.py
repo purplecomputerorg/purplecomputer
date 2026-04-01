@@ -550,8 +550,8 @@ class TestShutdownWatchdog:
                    side_effect=OSError("spawn failed")):
             pm.shutdown()  # Should not raise
 
-    def test_watchdog_includes_sudo_fallback(self):
-        """Watchdog should try sudo in case user lacks direct permissions."""
+    def test_watchdog_has_sysrq_fallback(self):
+        """Watchdog should include sysrq poweroff as nuclear fallback."""
         from purple_tui.power_manager import PowerManager
         pm = PowerManager()
         calls = []
@@ -564,10 +564,10 @@ class TestShutdownWatchdog:
             pm.shutdown()
 
         cmd_str = calls[0][0][0][2]
-        assert "sudo" in cmd_str
+        assert "sysrq-trigger" in cmd_str
 
-    def test_watchdog_sleep_allows_acpi(self):
-        """Watchdog delay is 15s to let ACPI power-off complete on slow hardware."""
+    def test_watchdog_two_stage_timing(self):
+        """Watchdog: stage 1 at 5s (systemctl), stage 2 at 8s (sysrq)."""
         from purple_tui.power_manager import PowerManager
         pm = PowerManager()
         calls = []
@@ -580,7 +580,8 @@ class TestShutdownWatchdog:
             pm.shutdown()
 
         cmd_str = calls[0][0][0][2]
-        assert cmd_str.startswith("sleep 15")
+        assert "sleep 5" in cmd_str
+        assert "sleep 3" in cmd_str
 
 
 # =============================================================================

@@ -94,13 +94,13 @@ The sequence:
 1. `install.sh` (running as root) writes to `/run` (tmpfs):
    - `/run/casper-no-prompt`: suppresses the casper "remove media" prompt
    - `/run/purple-reboot-fifo`: a named FIFO
-   - `/run/purple-reboot.sh`: fallback reboot script (for non-USB-removal case)
    - `/run/purple-install-complete`: the sentinel (written last)
    - A root shell is pre-forked via `setsid` to block on the FIFO
 2. Python sees the sentinel, shows "Press Enter to restart"
 3. User removes USB drive (optional)
 4. User presses Enter, Python writes to the FIFO (pure tmpfs write, no overlayfs)
 5. The root shell wakes up and runs `echo b > /proc/sysrq-trigger`
+6. If FIFO fails for any reason, falls through to `PowerManager.shutdown()` which has a sysrq nuclear fallback (poweroff in 8s)
 
 ### Why `setsid` is critical
 
@@ -117,7 +117,7 @@ This was discovered via debug logging on real hardware: `FIFO reader PIDs: NONE 
 
 ### `_trigger_reboot()` safety
 
-Python's `_trigger_reboot()` uses `O_NONBLOCK` when opening the FIFO. If the watcher is dead (no reader), `os.open` returns ENXIO immediately instead of blocking forever. If the FIFO exists (meaning install.sh ran, USB may be gone), it never falls back to `os.execv` because that would hang on dead overlayfs.
+Python's `_trigger_reboot()` uses `O_NONBLOCK` when opening the FIFO. If the watcher is dead (no reader), `os.open` returns ENXIO immediately instead of blocking forever. On any failure (FIFO missing, watcher dead, not a FIFO), it falls through to `PowerManager.shutdown()` which has a sysrq nuclear fallback that works even with dead overlayfs.
 
 ### Debug logging
 
@@ -156,8 +156,8 @@ Progress only moves forward (enforced by `pct > self._progress`). The friendly d
 
 `tests/test_install_reboot.py` covers the FIFO reboot flow:
 
-- Bash end-section: sentinel, FIFO, reboot.sh creation
-- `_trigger_reboot()`: FIFO write, O_NONBLOCK, execv fallback, dead watcher handling
+- Bash end-section: sentinel, FIFO creation (with setsid watcher)
+- `_trigger_reboot()`: FIFO write, O_NONBLOCK, PowerManager.shutdown() fallback, dead watcher handling
 - Watcher survival: proves watcher lives after parent bash exits (the `setsid` fix)
 - Full flow integration: mock install.sh + sentinel detection + FIFO signal
 

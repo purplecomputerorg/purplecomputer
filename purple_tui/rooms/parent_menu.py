@@ -833,8 +833,8 @@ def _reboot_log(msg):
         pass
 
 
-def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.sh'):
-    """Signal the pre-forked root reboot watcher via FIFO, or fall back to execv.
+def _trigger_reboot(fifo='/run/purple-reboot-fifo'):
+    """Signal the pre-forked root reboot watcher via FIFO.
 
     The FIFO lives in /run (tmpfs). Writing to it is safe after USB removal
     because tmpfs requires no disk I/O. The watcher shell was pre-forked by
@@ -843,19 +843,13 @@ def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.s
     Uses O_NONBLOCK so that if the watcher shell died, the open() returns
     ENXIO immediately instead of blocking forever.
 
-    Falls back to os.execv only when the FIFO doesn't exist at all (install.sh
-    didn't create one), meaning the USB is still present. Never execv when
-    the FIFO exists but has no reader: the USB may already be removed and
-    loading /bin/sh from overlayfs would hang forever.
+    On any failure, falls through to PowerManager.shutdown() which has a
+    sysrq nuclear fallback that works even with dead overlayfs.
     """
-    _reboot_log(f"_trigger_reboot called: fifo={fifo} script={script}")
-    fifo_exists = False
+    _reboot_log(f"_trigger_reboot called: fifo={fifo}")
     try:
         st = os.stat(fifo)
-        is_fifo = stat.S_ISFIFO(st.st_mode)
-        _reboot_log(f"stat ok: is_fifo={is_fifo} mode={oct(st.st_mode)}")
-        if is_fifo:
-            fifo_exists = True
+        if stat.S_ISFIFO(st.st_mode):
             _reboot_log("opening FIFO with O_NONBLOCK...")
             fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
             _reboot_log(f"FIFO opened: fd={fd}, writing...")
@@ -865,11 +859,11 @@ def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.s
             return
     except OSError as e:
         _reboot_log(f"OSError: {e} (errno={e.errno})")
-    if not fifo_exists:
-        _reboot_log(f"no FIFO, falling back to execv: /bin/sh {script}")
-        os.execv('/bin/sh', ['sh', script])
-    else:
-        _reboot_log("FIFO exists but open failed (watcher dead?), not calling execv")
+    # FIFO failed (missing, not a FIFO, watcher dead). Fall through to
+    # PowerManager.shutdown() which has sysrq as a nuclear fallback.
+    _reboot_log("FIFO failed, falling back to PowerManager.shutdown()")
+    from ..power_manager import get_power_manager
+    get_power_manager().shutdown()
 
 
 class InstallProgressScreen(ModalScreen):
@@ -1006,8 +1000,8 @@ class InstallProgressScreen(ModalScreen):
                             self._handle_line,
                             line.decode('utf-8', errors='replace'),
                         )
-        # install.sh writes /run/casper-no-prompt, /run/purple-reboot.sh, then
-        # the sentinel - all as root before exit. No post-install sudo needed.
+        # install.sh writes /run/casper-no-prompt, FIFO, then the sentinel,
+        # all as root before exit. No post-install sudo needed.
         success = _SENTINEL.exists() or proc.poll() == 0
         self.app.call_from_thread(self._on_install_complete, success)
 
@@ -1017,7 +1011,7 @@ class InstallProgressScreen(ModalScreen):
         # Check reboot infrastructure state
         _reboot_log(f"  sentinel exists: {Path('/run/purple-install-complete').exists()}")
         _reboot_log(f"  fifo exists: {Path('/run/purple-reboot-fifo').exists()}")
-        _reboot_log(f"  script exists: {Path('/run/purple-reboot.sh').exists()}")
+        _reboot_log(f"  fifo is_fifo: {Path('/run/purple-reboot-fifo').is_fifo() if Path('/run/purple-reboot-fifo').exists() else 'N/A'}")
         # Check if watcher process is alive by looking for readers on the FIFO.
         # Don't open it (that would trigger the watcher), just check /proc.
         try:

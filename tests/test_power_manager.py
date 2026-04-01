@@ -235,15 +235,15 @@ if HAS_PYTEST:
             assert cmd == ["systemctl", "poweroff", "--force"]
 
         def test_shutdown_falls_back_on_failure(self, pm):
-            """If first shutdown command fails, should try next ones."""
+            """If first shutdown command fails, should try next one."""
             call_count = 0
 
             def fail_then_succeed(*args, **kwargs):
                 nonlocal call_count
                 call_count += 1
-                # Call 1 = watchdog (succeeds), calls 2-3 = shutdown (fail),
-                # call 4 = shutdown (succeeds)
-                if call_count in (2, 3):
+                # Call 1 = watchdog (succeeds), call 2 = shutdown (fail),
+                # call 3 = shutdown (succeeds)
+                if call_count == 2:
                     raise FileNotFoundError("not found")
                 return MagicMock()
 
@@ -252,7 +252,7 @@ if HAS_PYTEST:
                 result = pm.shutdown()
 
             assert result is True
-            assert call_count == 4  # watchdog + 2 failures + 1 success
+            assert call_count == 3  # watchdog + 1 failure + 1 success
 
         def test_shutdown_returns_false_when_all_fail(self, pm):
             """If every shutdown command fails, should return False."""
@@ -298,7 +298,7 @@ if HAS_PYTEST:
                     os.environ.pop("PURPLE_SLEEP_DEMO", None)
 
         def test_shutdown_uses_force_flag(self, pm):
-            """First three shutdown commands should all use --force or -f."""
+            """Both shutdown commands should use --force."""
             commands_tried = []
 
             def capture_cmd(*args, **kwargs):
@@ -315,7 +315,6 @@ if HAS_PYTEST:
             # Skip watchdog (index 0), check shutdown commands
             assert "--force" in commands_tried[1]       # systemctl --force
             assert "--force" in commands_tried[2]       # sudo systemctl --force
-            assert "-f" in commands_tried[3]            # sudo poweroff -f
 
     class TestPoweroffAvailableCheck:
         """Test the _poweroff_available initialization."""

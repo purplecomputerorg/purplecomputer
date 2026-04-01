@@ -339,17 +339,18 @@ class PowerManager:
         if not self._poweroff_available:
             _power_log("SHUTDOWN: no poweroff command found, trying anyway")
 
-        # Watchdog: if primary shutdown hangs (e.g. slow ACPI on Surface/Mac),
-        # force-poweroff after 15s. Single --force goes through systemd-shutdown
-        # and the ACPI power-off sequence -- double --force bypasses ACPI entirely
-        # and can leave keyboard backlights on and the device in a resume-on-next-
-        # boot limbo state on hardware with Modern Standby (Surface, recent Macs).
+        # Two-stage watchdog (detached process group, survives TUI death):
+        #   Stage 1 (5s): systemctl --force (clean ACPI shutdown)
+        #   Stage 2 (8s): sysrq poweroff (direct kernel call, no filesystem needed)
+        # sysrq 'o' still goes through ACPI, unlike double --force which bypasses
+        # ACPI and leaves Surface keyboards lit / devices in resume limbo.
+        # sysrq works even if overlayfs is dead (USB removed during live boot).
         try:
             subprocess.Popen(
                 ["sh", "-c",
-                 "sleep 15 && "
-                 "systemctl poweroff --force 2>/dev/null || "
-                 "sudo systemctl poweroff --force 2>/dev/null"],
+                 "sleep 5 && systemctl poweroff --force 2>/dev/null; "
+                 "sleep 3 && echo 1 > /proc/sys/kernel/sysrq && "
+                 "echo o > /proc/sysrq-trigger"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
@@ -357,16 +358,10 @@ class PowerManager:
         except Exception:
             pass
 
-        # --force skips clean service stop. This makes shutdown near-instant
-        # instead of waiting 10+ seconds for services to exit. No data to lose.
-        # Try every method regardless of _poweroff_available (sudo might work).
+        # --force skips clean service stop (near-instant, no data to lose).
         commands = [
             ["systemctl", "poweroff", "--force"],
             ["sudo", "systemctl", "poweroff", "--force"],
-            ["sudo", "poweroff", "-f"],
-            # Non-force fallbacks in case --force isn't available
-            ["systemctl", "poweroff"],
-            ["sudo", "systemctl", "poweroff"],
         ]
 
         for cmd in commands:

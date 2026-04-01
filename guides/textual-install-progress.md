@@ -77,27 +77,51 @@ Python polls for this sentinel. When it appears, the install is done regardless 
 
 ## USB removal safety
 
-This was the hardest constraint to preserve. After install, the USB drive can be removed and the system must still reboot cleanly.
+After install, the USB drive can be removed and the system must still reboot cleanly. This is the hardest constraint in the entire install flow.
 
-The key constraint: after USB removal, the live overlayfs backing is gone. Python cannot `exec` any binary (including `/bin/sh`) because loading it requires a page-fault read from the overlayfs → infinite hang. Python CAN still make raw syscalls on already-mapped pages and write to `/run` (tmpfs = RAM only).
+### The core problem
+
+Python runs as a regular user. Rebooting requires root (`reboot`, `systemctl reboot`, `/proc/sysrq-trigger` all need root). After USB removal, the live overlayfs backing is gone and loading ANY binary from disk (including `sudo`, `/bin/sh`, `reboot`) causes an infinite hang because the page fault tries to read from the dead squashfs on the removed USB.
+
+So: unprivileged user + no way to escalate to root after USB removal.
+
+### The solution: pre-forked root watcher
+
+`install.sh` runs as root (via sudo). Before exiting, while the USB is still present, it forks a root shell that blocks on a FIFO in `/run` (tmpfs, RAM-only). This shell is already loaded in memory and needs no disk access to run.
 
 The sequence:
 
-1. `install.sh` (running as root) writes to `/run` (tmpfs, lives in RAM):
+1. `install.sh` (running as root) writes to `/run` (tmpfs):
    - `/run/casper-no-prompt`: suppresses the casper "remove media" prompt
-   - `/run/purple-reboot-fifo`: a named FIFO; a root shell is pre-forked to block on it
+   - `/run/purple-reboot-fifo`: a named FIFO
+   - `/run/purple-reboot.sh`: fallback reboot script (for non-USB-removal case)
    - `/run/purple-install-complete`: the sentinel (written last)
-2. Python sees the sentinel → shows "Press Enter to restart"
+   - A root shell is pre-forked via `setsid` to block on the FIFO
+2. Python sees the sentinel, shows "Press Enter to restart"
 3. User removes USB drive (optional)
-4. User presses Enter → Python writes `'go\n'` to `/run/purple-reboot-fifo` (pure tmpfs write, no overlayfs touch)
-5. The root shell (pre-forked by install.sh, already in RAM) wakes up and runs `echo b > /proc/sysrq-trigger`
+4. User presses Enter, Python writes to the FIFO (pure tmpfs write, no overlayfs)
+5. The root shell wakes up and runs `echo b > /proc/sysrq-trigger`
 
-Why a pre-forked shell instead of `os.execv('/bin/sh', ...)`:
-- `execv` must load `/bin/sh` from disk. `/bin/sh` is on the overlayfs (USB-backed). After USB removal → hang.
-- A write to a FIFO in `/run` is a pure kernel operation against the tmpfs VFS. No overlayfs involved.
-- The root shell was loaded while the USB was still present and is already in the page cache.
+### Why `setsid` is critical
 
-All root work (step 1) is done by install.sh. Python never needs sudo after install finishes.
+`install.sh` runs via `sudo -E bash install.sh`. When sudo exits, it kills its entire process group. A plain `&` background job is in the same process group and dies with it. `setsid` puts the watcher in its own process group so it survives.
+
+This was discovered via debug logging on real hardware: `FIFO reader PIDs: NONE (watcher dead!)`.
+
+### Why not simpler alternatives?
+
+- **`os.execv('/bin/sh', ...)`**: must load `/bin/sh` from overlayfs. After USB removal, hangs.
+- **`subprocess.run(['sudo', 'reboot'])`**: must load `sudo` from overlayfs. Same hang.
+- **Software eject USB before reboot**: BIOS re-enumerates USB hardware on reboot regardless of OS-level eject. Would boot from USB again.
+- **`efibootmgr --bootnext`**: viable for the USB-still-present case, but doesn't help if the user already removed the USB before pressing Enter.
+
+### `_trigger_reboot()` safety
+
+Python's `_trigger_reboot()` uses `O_NONBLOCK` when opening the FIFO. If the watcher is dead (no reader), `os.open` returns ENXIO immediately instead of blocking forever. If the FIFO exists (meaning install.sh ran, USB may be gone), it never falls back to `os.execv` because that would hang on dead overlayfs.
+
+### Debug logging
+
+On debug ISO, `_trigger_reboot` writes breadcrumbs to `/tmp/purple-reboot-debug.log` at each step: stat, open, write, fallback. After install completes, it also logs whether the FIFO watcher is alive by scanning `/proc/*/fd/*` for readers. On debug ISO, a shell auto-opens after 30s idle on the success screen.
 
 ---
 
@@ -130,7 +154,14 @@ Progress only moves forward (enforced by `pct > self._progress`). The friendly d
 - `test_cancel_on_exit_completes_with_pipe_holder`: proves `proc.returncode` polling completes even when a child holds stderr open
 - `test_cancel_on_exit_collects_all_lines_without_pipe_holder`: sanity check for the normal case
 
-Run with: `just test` or `pytest tests/test_install_progress.py -v`
+`tests/test_install_reboot.py` covers the FIFO reboot flow:
+
+- Bash end-section: sentinel, FIFO, reboot.sh creation
+- `_trigger_reboot()`: FIFO write, O_NONBLOCK, execv fallback, dead watcher handling
+- Watcher survival: proves watcher lives after parent bash exits (the `setsid` fix)
+- Full flow integration: mock install.sh + sentinel detection + FIFO signal
+
+Run with: `just test`, `just test-install`, or `pytest tests/test_install_reboot.py -v`
 
 ---
 
@@ -138,6 +169,7 @@ Run with: `just test` or `pytest tests/test_install_progress.py -v`
 
 | File | Role |
 |------|------|
-| `purple_tui/rooms/parent_menu.py` | `InstallProgressScreen` class |
-| `build-scripts/install.sh` | Writes sentinel + reboot script to `/run` before exit |
+| `purple_tui/rooms/parent_menu.py` | `InstallProgressScreen`, `_trigger_reboot()` |
+| `build-scripts/install.sh` | Writes sentinel + FIFO + reboot script to `/run`, forks watcher |
 | `tests/test_install_progress.py` | Documents and tests the pipe-hang fix |
+| `tests/test_install_reboot.py` | Tests the FIFO reboot flow and watcher survival |

@@ -17,6 +17,16 @@ RED='\033[0;31m'
 NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 
+# Fast build: use minimal compression for faster iteration
+if [ "${FAST_BUILD:-0}" = "1" ]; then
+    ZSTD_LEVEL=1
+    SQUASHFS_LEVEL=1
+    log_info "FAST BUILD: using minimal compression"
+else
+    ZSTD_LEVEL=19
+    SQUASHFS_LEVEL=19
+fi
+
 # Track the loop device so cleanup can find it
 LOOP_DEV=""
 
@@ -718,7 +728,7 @@ EOF
     rm -f "$SQUASHFS_OUT"
     mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
         -comp zstd \
-        -Xcompression-level 19 \
+        -Xcompression-level $SQUASHFS_LEVEL \
         -noappend \
         -wildcards \
         -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
@@ -735,7 +745,7 @@ EOF
 
     # Compress golden image
     log_info "Compressing golden image..."
-    zstd -19 -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
+    zstd -${ZSTD_LEVEL} -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
 
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"

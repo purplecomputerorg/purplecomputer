@@ -28,6 +28,16 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 
+# Fast build: use minimal compression for faster iteration
+if [ "${FAST_BUILD:-0}" = "1" ]; then
+    ZSTD_LEVEL=1
+    ISO_TAG="-fast"
+    log_info "FAST BUILD: using minimal compression"
+else
+    ZSTD_LEVEL=19
+    ISO_TAG=""
+fi
+
 create_live_boot_hook() {
     local HOOK_DIR="$1"
 
@@ -314,10 +324,10 @@ SPLASH_EOF
 
     # Repack main (compressed with zstd for Ubuntu 24.04)
     if [ "$MAIN_DIR" = "main" ]; then
-        (cd main && find . -print0 | cpio --null -o -H newc 2>/dev/null | zstd -19 -T0) >> "$NEW_INITRD"
+        (cd main && find . -print0 | cpio --null -o -H newc 2>/dev/null | zstd -${ZSTD_LEVEL} -T0) >> "$NEW_INITRD"
     elif [ "$MAIN_DIR" = "." ]; then
         # Single archive, compress the whole thing
-        (find . -print0 | cpio --null -o -H newc 2>/dev/null | zstd -19 -T0) > "$NEW_INITRD"
+        (find . -print0 | cpio --null -o -H newc 2>/dev/null | zstd -${ZSTD_LEVEL} -T0) > "$NEW_INITRD"
     fi
 
     # Replace initrd in ISO
@@ -430,7 +440,7 @@ EFI_GRUB_EOF
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."
 
-    OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).iso"
+    OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
 
     # Remove existing ISOs (xorriso can't overwrite)
     rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256"
@@ -456,7 +466,7 @@ EFI_GRUB_EOF
     # purple.debug=1 flag triggers debug mode in casper hook and .bashrc
     log_step "10/11: Building debug ISO..."
 
-    DEBUG_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d).debug.iso"
+    DEBUG_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
     rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256"
 
     # Save normal GRUB config and write debug version

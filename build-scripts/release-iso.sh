@@ -60,8 +60,9 @@ else
 fi
 
 # Find ISOs (most recent by date)
-STANDARD_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | grep -v debug | head -1)
-DEBUG_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.debug.iso 2>/dev/null | head -1)
+# Reject fast builds (minimal compression, not for release)
+STANDARD_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | grep -v debug | grep -v -- "-fast" | head -1)
+DEBUG_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.debug.iso 2>/dev/null | grep -v -- "-fast" | head -1)
 
 if [ -z "$STANDARD_ISO" ]; then
     log_error "No standard ISO found in $ISO_DIR"

@@ -9,7 +9,16 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IMAGE_NAME="purple-installer-builder"
-START_STEP="${1:-0}"
+FAST_BUILD=0
+
+# Parse arguments
+START_STEP=0
+for arg in "$@"; do
+    case "$arg" in
+        --fast) FAST_BUILD=1 ;;
+        *) START_STEP="$arg" ;;
+    esac
+done
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -47,6 +56,7 @@ main() {
         -v "$PROJECT_DIR:/purple-src" \
         -v "/opt/purple-installer:/opt/purple-installer" \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
+        -e "FAST_BUILD=${FAST_BUILD}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 

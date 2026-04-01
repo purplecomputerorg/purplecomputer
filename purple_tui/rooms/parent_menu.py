@@ -820,7 +820,7 @@ _INSTALL_STAGES = [
 ]
 
 
-_REBOOT_LOG = '/run/purple-reboot-debug.log'
+_REBOOT_LOG = '/tmp/purple-reboot-debug.log'
 
 
 def _reboot_log(msg):
@@ -1041,15 +1041,17 @@ class InstallProgressScreen(ModalScreen):
         # On debug ISO: start idle timer to drop to debug shell
         if is_debug():
             self._debug_idle_timer = threading.Timer(
-                15.0, self._debug_drop_to_shell,
+                30.0, self._debug_drop_to_shell,
             )
             self._debug_idle_timer.daemon = True
             self._debug_idle_timer.start()
-            _reboot_log("  debug: shell drop scheduled in 15s (any key resets)")
+            _reboot_log("  debug: shell drop scheduled in 30s (any key resets)")
 
     def _debug_drop_to_shell(self) -> None:
         """On debug ISO: drop to shell after idle so user can read debug log."""
-        _reboot_log("debug: dropping to shell (idle 15s)")
+        if self._phase == "installing":
+            return  # Don't interrupt an active install
+        _reboot_log("debug: dropping to shell (idle timeout)")
         self.app.call_from_thread(self._run_debug_shell)
 
     def _run_debug_shell(self) -> None:
@@ -1071,7 +1073,7 @@ class InstallProgressScreen(ModalScreen):
             print("-" * 60)
             print()
             print("Useful commands:")
-            print("  cat /run/purple-reboot-debug.log")
+            print("  cat /tmp/purple-reboot-debug.log")
             print("  ls -la /run/purple-reboot-*")
             print("  ps aux | grep reboot")
             print()
@@ -1109,7 +1111,7 @@ class InstallProgressScreen(ModalScreen):
         if timer:
             timer.cancel()
             self._debug_idle_timer = threading.Timer(
-                15.0, self._debug_drop_to_shell,
+                30.0, self._debug_drop_to_shell,
             )
             self._debug_idle_timer.daemon = True
             self._debug_idle_timer.start()

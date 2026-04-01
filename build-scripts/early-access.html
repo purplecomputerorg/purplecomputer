@@ -27,7 +27,8 @@
       justify-content: center;
       padding: 4rem 1.5rem;
     }
-    .container { max-width: 32rem; width: 100%; text-align: center; }
+    .container { max-width: 900px; width: 100%; text-align: center; }
+    .container-narrow { max-width: 600px; margin: 0 auto; }
 
     .logo { display: inline-block; margin-bottom: 2rem; }
     .logo svg { width: 64px; height: 64px; }
@@ -145,6 +146,49 @@
       font-weight: 600;
       color: #695c7a;
     }
+
+    .card-preview {
+      margin-top: 2.5rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    @media (min-width: 640px) {
+      .card-preview {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: center;
+      }
+    }
+    .card-preview-item {
+      flex: 1;
+      min-width: 200px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .card-preview-label {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #857698;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card-preview-frame {
+      width: 100%;
+      aspect-ratio: 4 / 6;
+      border: 1px solid #c4aee0;
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    .card-preview-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
   </style>
 </head>
 <body>
@@ -167,24 +211,42 @@
         </svg>
       </a>
 
-      <h1>Early Access</h1>
-      <p class="thanks">Thank you for your order!</p>
-      <p class="description">
-        Download the ISO, flash it to a USB drive, and boot on any laptop.
-      </p>
-      <p class="description">
-        We'll also be shipping a ready-to-go USB drive along with other goodies, if you'd prefer to wait for that.
-      </p>
-      <p class="paid-notice">
-        Purple Computer is a paid product. This download is for customers who have
-        already <a href="https://purplecomputer.org">pre-ordered</a>.
-        Questions? Reach us at
-        <a href="mailto:tavi@purplecomputer.org">tavi@purplecomputer.org</a>.
-      </p>
+      <div class="container-narrow">
+        <h1>Early Access</h1>
+        <div class="technical" style="margin-top: 1.5rem;">
+          <p class="thanks" style="margin-bottom: 0.5rem;">Thank you for your order!</p>
+          <p class="description">
+            Download the ISO, flash it to a USB drive, and boot on any laptop.
+            We'll also be shipping a ready-to-go USB drive along with other goodies, if you'd prefer to wait for that.
+          </p>
+          <p class="paid-notice" style="margin-bottom: 0;">
+            Purple Computer is a paid product. This download is for customers who have
+            already <a href="https://purplecomputer.org">pre-ordered</a>.
+            Questions? Reach us at
+            <a href="mailto:tavi@purplecomputer.org">tavi@purplecomputer.org</a>.
+          </p>
+        </div>
 
-      <a href="/download.iso" class="download-btn">Download Latest ISO</a>
-      <div class="version-badge" id="version-badge"></div>
+        <a href="/download.iso" class="download-btn" style="margin-top: 1.5rem;">Download Latest ISO</a>
+        <div class="version-badge" id="version-badge"></div>
+      </div>
 
+      <div class="card-preview">
+        <div class="card-preview-item">
+          <div class="card-preview-label">Installation card</div>
+          <div class="card-preview-frame">
+            <iframe src="/purple-installation.pdf#navpanes=0&view=FitH" title="Installation card"></iframe>
+          </div>
+        </div>
+        <div class="card-preview-item">
+          <div class="card-preview-label">Guide card</div>
+          <div class="card-preview-frame">
+            <iframe src="/purple-guide.pdf#navpanes=0&view=FitH" title="Guide card"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <div class="container-narrow">
       <div class="technical">
         <h2>For technical folks</h2>
         <div class="row">
@@ -207,6 +269,7 @@
       <p class="back">
         <a href="https://purplecomputer.org">&larr; Back to purplecomputer.org</a>
       </p>
+      </div>
     </div>
   </main>
   <script>

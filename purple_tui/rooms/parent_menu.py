@@ -16,7 +16,8 @@ from textual import events
 import subprocess
 import os
 import sys
-import asyncio
+import select
+import threading
 import termios
 import json
 from pathlib import Path
@@ -497,23 +498,6 @@ class LittlesModeScreen(ModalScreen):
 
 
 
-def _write_silent_reboot_script() -> None:
-    """Write a minimal reboot script to /run (tmpfs, RAM-only).
-
-    After install, if the USB is removed the live overlayfs backing is gone
-    and any process touching it hangs on I/O. This script uses only kernel
-    interfaces (/proc/sysrq-trigger) so it works whether or not the USB is
-    still present. The success/error messages are shown in Textual before
-    exec-ing into this script.
-    """
-    with open('/run/purple-reboot.sh', 'w') as f:
-        f.write(
-            '#!/bin/sh\n'
-            'echo 1 > /proc/sys/kernel/sysrq\n'
-            'echo b > /proc/sysrq-trigger\n'
-            'reboot -f\n'
-        )
-    os.chmod('/run/purple-reboot.sh', 0o755)
 
 
 def _flush_terminal_input() -> None:
@@ -833,7 +817,7 @@ class InstallProgressScreen(ModalScreen):
     CSS = """
     InstallProgressScreen {
         align: center middle;
-        background: rgba(0, 0, 0, 0.85);
+        background: $background;
     }
 
     #install-progress-dialog {
@@ -888,7 +872,7 @@ class InstallProgressScreen(ModalScreen):
 
     def on_mount(self) -> None:
         self._update_ui()
-        asyncio.get_event_loop().create_task(self._run_install_async())
+        threading.Thread(target=self._run_install_thread, daemon=True).start()
 
     def _render_bar(self, pct: int) -> str:
         filled = int(36 * pct / 100)
@@ -926,53 +910,38 @@ class InstallProgressScreen(ModalScreen):
             bar_w.update("")
             hint_w.update("Press Enter to restart and try again.")
 
-    async def _run_install_async(self) -> None:
-        proc = await asyncio.create_subprocess_exec(
-            "sudo", "-E", "bash", "/cdrom/purple/install.sh",
-            stderr=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.DEVNULL,
+    def _run_install_thread(self) -> None:
+        """Run install.sh in a daemon thread, streaming progress to the UI.
+
+        Uses subprocess.Popen + select.select instead of asyncio subprocess to
+        avoid Python 3.13 pipe-hang bugs. UI updates go via call_from_thread().
+        """
+        _SENTINEL = Path('/run/purple-install-complete')
+        proc = subprocess.Popen(
+            ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"},
         )
+        buf = b""
+        while proc.poll() is None and not _SENTINEL.exists():
+            ready = select.select([proc.stderr], [], [], 0.1)[0]
+            if ready:
+                chunk = proc.stderr.read(256)
+                if chunk:
+                    buf += chunk
+                    while b'\n' in buf:
+                        line, buf = buf.split(b'\n', 1)
+                        self.app.call_from_thread(
+                            self._handle_line,
+                            line.decode('utf-8', errors='replace'),
+                        )
+        # install.sh writes /run/casper-no-prompt, /run/purple-reboot.sh, then
+        # the sentinel - all as root before exit. No post-install sudo needed.
+        success = _SENTINEL.exists() or proc.poll() == 0
+        self.app.call_from_thread(self._on_install_complete, success)
 
-        # Read stderr for live progress updates, then cancel when process exits.
-        # proc.wait() can hang if any child holds the pipe open (asyncio waits
-        # on pipe state in Python 3.13+). proc.returncode is set independently
-        # by the SIGCHLD handler, so polling it is safe.
-        async def _read_stderr() -> None:
-            buf = b""
-            while True:
-                chunk = await proc.stderr.read(256)
-                if not chunk:
-                    break
-                buf += chunk
-                while b'\n' in buf:
-                    line, buf = buf.split(b'\n', 1)
-                    self._handle_line(line.decode('utf-8', errors='replace'))
-
-        _SENTINEL = Path('/run/purple-install-complete')
-        stderr_task = asyncio.ensure_future(_read_stderr())
-        # Poll until process exits OR sentinel file appears. The sentinel is
-        # written by install.sh just before exit 0, so it appears even when
-        # proc.returncode stays None (happens when a child process keeps the
-        # bash wrapper alive after install.sh finishes).
-        while proc.returncode is None and not _SENTINEL.exists():
-            await asyncio.sleep(0.1)
-        stderr_task.cancel()
-        try:
-            await stderr_task
-        except asyncio.CancelledError:
-            pass
-
-        success = proc.returncode == 0 or _SENTINEL.exists()
-
-        # While USB is still present: sync, suppress casper prompt, prep reboot.
-        # Use async subprocesses so Textual's event loop stays unblocked.
-        # sudo sync can take a while after writing 8GB+ to disk.
-        for cmd in (["sudo", "sync"], ["sudo", "touch", "/run/casper-no-prompt"]):
-            p = await asyncio.create_subprocess_exec(*cmd)
-            await p.wait()
-        _write_silent_reboot_script()
-
+    def _on_install_complete(self, success: bool) -> None:
         self._phase = "success" if success else "error"
         self._update_ui()
 

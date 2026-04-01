@@ -2372,6 +2372,10 @@ class PurpleApp(App):
             title_bar.set_caps(caps_on)
         except NoMatches:
             pass
+        # Notify modal screens that may have baked-in caps text
+        top_screen = self.screen
+        if hasattr(top_screen, 'refresh_caps'):
+            top_screen.refresh_caps()
 
     def _update_shift_indicator(self) -> None:
         """Update the shift icon in the title bar based on sticky shift state."""

@@ -21,6 +21,7 @@ import threading
 import termios
 import json
 import stat
+import time
 from pathlib import Path
 
 import re
@@ -756,6 +757,18 @@ class InstallConfirmScreen(ModalScreen):
                 yield Static(caps("No, go back"), id="btn-cancel-install", classes="install-btn selected")
             yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="install-hint")
 
+    def refresh_caps(self) -> None:
+        """Re-apply caps mode to all text in this modal."""
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        try:
+            self.query_one("#install-title").update(caps("Install Purple Computer"))
+            self.query_one("#btn-install").update(caps("Yes, install"))
+            self.query_one("#btn-cancel-install").update(caps("No, go back"))
+            self.query_one("#install-hint").update(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"))
+        except Exception:
+            pass
+        self._update_buttons()
+
     def _update_buttons(self):
         try:
             install_btn = self.query_one("#btn-install")
@@ -807,6 +820,19 @@ _INSTALL_STAGES = [
 ]
 
 
+_REBOOT_LOG = '/run/purple-reboot-debug.log'
+
+
+def _reboot_log(msg):
+    """Write a breadcrumb to /run (tmpfs). Survives USB removal."""
+    try:
+        with open(_REBOOT_LOG, 'a') as f:
+            f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+            f.flush()
+    except Exception:
+        pass
+
+
 def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.sh'):
     """Signal the pre-forked root reboot watcher via FIFO, or fall back to execv.
 
@@ -822,19 +848,28 @@ def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.s
     the FIFO exists but has no reader: the USB may already be removed and
     loading /bin/sh from overlayfs would hang forever.
     """
+    _reboot_log(f"_trigger_reboot called: fifo={fifo} script={script}")
     fifo_exists = False
     try:
-        if stat.S_ISFIFO(os.stat(fifo).st_mode):
+        st = os.stat(fifo)
+        is_fifo = stat.S_ISFIFO(st.st_mode)
+        _reboot_log(f"stat ok: is_fifo={is_fifo} mode={oct(st.st_mode)}")
+        if is_fifo:
             fifo_exists = True
+            _reboot_log("opening FIFO with O_NONBLOCK...")
             fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+            _reboot_log(f"FIFO opened: fd={fd}, writing...")
             os.write(fd, b'go\n')
             os.close(fd)
+            _reboot_log("FIFO write+close done, watcher should reboot now")
             return
-    except OSError:
-        pass
+    except OSError as e:
+        _reboot_log(f"OSError: {e} (errno={e.errno})")
     if not fifo_exists:
-        # No FIFO at all: install.sh didn't set one up, USB still present.
+        _reboot_log(f"no FIFO, falling back to execv: /bin/sh {script}")
         os.execv('/bin/sh', ['sh', script])
+    else:
+        _reboot_log("FIFO exists but open failed (watcher dead?), not calling execv")
 
 
 class InstallProgressScreen(ModalScreen):
@@ -893,6 +928,10 @@ class InstallProgressScreen(ModalScreen):
         self._progress = 0
         self._status = "Starting..."
         self._phase = "installing"  # "installing", "success", "error"
+
+    def refresh_caps(self) -> None:
+        """Re-apply caps mode to all text in this modal."""
+        self._update_ui()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="install-progress-dialog"):
@@ -974,7 +1013,76 @@ class InstallProgressScreen(ModalScreen):
 
     def _on_install_complete(self, success: bool) -> None:
         self._phase = "success" if success else "error"
+        _reboot_log(f"install complete: success={success} phase={self._phase}")
+        # Check reboot infrastructure state
+        _reboot_log(f"  sentinel exists: {Path('/run/purple-install-complete').exists()}")
+        _reboot_log(f"  fifo exists: {Path('/run/purple-reboot-fifo').exists()}")
+        _reboot_log(f"  script exists: {Path('/run/purple-reboot.sh').exists()}")
+        # Check if watcher process is alive by looking for readers on the FIFO.
+        # Don't open it (that would trigger the watcher), just check /proc.
+        try:
+            fifo_path = '/run/purple-reboot-fifo'
+            if os.path.exists(fifo_path):
+                import glob as _glob
+                readers = []
+                for fd_link in _glob.glob('/proc/*/fd/*'):
+                    try:
+                        if os.readlink(fd_link) == fifo_path:
+                            pid = fd_link.split('/')[2]
+                            readers.append(pid)
+                    except (OSError, IndexError):
+                        continue
+                _reboot_log(f"  FIFO reader PIDs: {readers if readers else 'NONE (watcher dead!)'}")
+            else:
+                _reboot_log("  FIFO: does not exist")
+        except Exception as e:
+            _reboot_log(f"  FIFO check error: {e}")
         self._update_ui()
+        # On debug ISO: start idle timer to drop to debug shell
+        if is_debug():
+            self._debug_idle_timer = threading.Timer(
+                15.0, self._debug_drop_to_shell,
+            )
+            self._debug_idle_timer.daemon = True
+            self._debug_idle_timer.start()
+            _reboot_log("  debug: shell drop scheduled in 15s (any key resets)")
+
+    def _debug_drop_to_shell(self) -> None:
+        """On debug ISO: drop to shell after idle so user can read debug log."""
+        _reboot_log("debug: dropping to shell (idle 15s)")
+        self.app.call_from_thread(self._run_debug_shell)
+
+    def _run_debug_shell(self) -> None:
+        """Suspend Textual and open a debug shell."""
+        with self.app.suspend_with_terminal_input():
+            os.system('stty sane')
+            os.system('clear')
+            print("=" * 60)
+            print("  DEBUG SHELL (auto-opened after 15s idle)")
+            print("=" * 60)
+            print()
+            print("Debug log:")
+            print("-" * 60)
+            try:
+                with open(_REBOOT_LOG) as f:
+                    print(f.read())
+            except FileNotFoundError:
+                print("(no reboot debug log yet)")
+            print("-" * 60)
+            print()
+            print("Useful commands:")
+            print("  cat /run/purple-reboot-debug.log")
+            print("  ls -la /run/purple-reboot-*")
+            print("  ps aux | grep reboot")
+            print()
+            print("Type 'exit' to return to Purple Computer.")
+            print()
+            sys.stdout.flush()
+            shell = os.environ.get('SHELL', '/bin/bash')
+            subprocess.run([shell, '-i'])
+            _flush_terminal_input()
+            os.system('stty sane')
+        self.app.refresh(repaint=True)
 
     def _handle_line(self, text: str) -> None:
         clean = _ANSI_ESCAPE.sub('', text).strip()
@@ -993,9 +1101,20 @@ class InstallProgressScreen(ModalScreen):
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
+        _reboot_log(f"InstallProgress key: {type(action).__name__} phase={self._phase}")
         if self._phase == "installing":
             return
+        # Reset debug shell timer on any input
+        timer = getattr(self, '_debug_idle_timer', None)
+        if timer:
+            timer.cancel()
+            self._debug_idle_timer = threading.Timer(
+                15.0, self._debug_drop_to_shell,
+            )
+            self._debug_idle_timer.daemon = True
+            self._debug_idle_timer.start()
         if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
+            _reboot_log("Enter pressed, calling _trigger_reboot()")
             _trigger_reboot()
 
 

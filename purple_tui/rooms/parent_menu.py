@@ -20,6 +20,7 @@ import select
 import threading
 import termios
 import json
+import stat
 from pathlib import Path
 
 import re
@@ -806,6 +807,36 @@ _INSTALL_STAGES = [
 ]
 
 
+def _trigger_reboot(fifo='/run/purple-reboot-fifo', script='/run/purple-reboot.sh'):
+    """Signal the pre-forked root reboot watcher via FIFO, or fall back to execv.
+
+    The FIFO lives in /run (tmpfs). Writing to it is safe after USB removal
+    because tmpfs requires no disk I/O. The watcher shell was pre-forked by
+    install.sh while the USB was present and already has /bin/sh in memory.
+
+    Uses O_NONBLOCK so that if the watcher shell died, the open() returns
+    ENXIO immediately instead of blocking forever.
+
+    Falls back to os.execv only when the FIFO doesn't exist at all (install.sh
+    didn't create one), meaning the USB is still present. Never execv when
+    the FIFO exists but has no reader: the USB may already be removed and
+    loading /bin/sh from overlayfs would hang forever.
+    """
+    fifo_exists = False
+    try:
+        if stat.S_ISFIFO(os.stat(fifo).st_mode):
+            fifo_exists = True
+            fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
+            os.write(fd, b'go\n')
+            os.close(fd)
+            return
+    except OSError:
+        pass
+    if not fifo_exists:
+        # No FIFO at all: install.sh didn't set one up, USB still present.
+        os.execv('/bin/sh', ['sh', script])
+
+
 class InstallProgressScreen(ModalScreen):
     """Install progress modal. Stays in Textual the whole time.
 
@@ -965,15 +996,7 @@ class InstallProgressScreen(ModalScreen):
         if self._phase == "installing":
             return
         if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
-            # Write to the FIFO that install.sh pre-forked a root shell to read.
-            # This is a pure tmpfs write - no subprocess, no overlayfs access,
-            # safe even after USB removal. The root shell wakes and triggers sysrq.
-            try:
-                with open('/run/purple-reboot-fifo', 'w') as f:
-                    f.write('go\n')
-            except OSError:
-                # Fallback: exec into reboot script (only safe if USB still present)
-                os.execv('/bin/sh', ['sh', '/run/purple-reboot.sh'])
+            _trigger_reboot()
 
 
 class ParentMenuItem(Static):

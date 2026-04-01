@@ -520,8 +520,12 @@ class TestShutdownWatchdog:
         assert cmd[1] == "-c"
         assert "poweroff --force" in cmd[2]
 
-    def test_watchdog_uses_double_force(self):
-        """Watchdog should use --force --force for immediate power off."""
+    def test_watchdog_uses_single_force(self):
+        """Watchdog uses single --force to preserve ACPI power-off sequence.
+
+        Double --force bypasses ACPI and can leave keyboard backlights on
+        and devices in limbo on Modern Standby hardware (Surface, Macs).
+        """
         from purple_tui.power_manager import PowerManager
         pm = PowerManager()
         calls = []
@@ -534,8 +538,8 @@ class TestShutdownWatchdog:
             pm.shutdown()
 
         cmd_str = calls[0][0][0][2]
-        assert cmd_str.count("poweroff") >= 2
-        assert "--force --force" in cmd_str
+        assert "--force" in cmd_str
+        assert "--force --force" not in cmd_str
 
     def test_watchdog_swallows_exceptions(self):
         """Watchdog spawn failure should not prevent shutdown attempt."""
@@ -562,8 +566,8 @@ class TestShutdownWatchdog:
         cmd_str = calls[0][0][0][2]
         assert "sudo" in cmd_str
 
-    def test_watchdog_sleep_is_short(self):
-        """Watchdog should fire quickly (5 seconds), not 15 or 90."""
+    def test_watchdog_sleep_allows_acpi(self):
+        """Watchdog delay is 15s to let ACPI power-off complete on slow hardware."""
         from purple_tui.power_manager import PowerManager
         pm = PowerManager()
         calls = []
@@ -576,7 +580,7 @@ class TestShutdownWatchdog:
             pm.shutdown()
 
         cmd_str = calls[0][0][0][2]
-        assert cmd_str.startswith("sleep 5")
+        assert cmd_str.startswith("sleep 15")
 
 
 # =============================================================================

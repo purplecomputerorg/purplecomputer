@@ -121,6 +121,9 @@ def test_fifo_watcher_receives_signal(tmp_path):
     t = threading.Thread(target=watcher, daemon=True)
     t.start()
 
+    # Give the watcher thread time to open the FIFO for reading
+    time.sleep(0.1)
+
     _trigger_reboot(fifo=str(fifo_path))
 
     assert received.wait(timeout=2.0), "Watcher did not receive signal within 2s"
@@ -460,14 +463,16 @@ def test_watcher_survives_sudo_parent_exit(tmp_path):
         import pytest
         pytest.skip("sudo not available")
 
-    # Check if sudo works without password
+    # Check if sudo actually works (not just -n true, but running a real command).
+    # Some environments (containers, sandbox) allow sudo -n true but block
+    # actual privilege escalation with "no new privileges" flag.
     check = subprocess.run(
-        ['sudo', '-n', 'true'],
+        ['sudo', '-n', '-E', 'bash', '-c', 'echo ok'],
         capture_output=True, timeout=5,
     )
     if check.returncode != 0:
         import pytest
-        pytest.skip("sudo requires password")
+        pytest.skip("sudo not functional (password required or privileges restricted)")
 
     mock_script = tmp_path / 'mock_install_sudo.sh'
     mock_script.write_text(f"""\
@@ -489,18 +494,23 @@ exit 0
     )
     assert result.returncode == 0
 
-    time.sleep(0.2)
+    # setsid watcher needs time to settle after sudo exits
+    time.sleep(0.5)
 
     fifo_path = tmp_path / 'purple-reboot-fifo'
     assert fifo_path.exists(), "FIFO not created"
 
-    try:
-        fd = os.open(str(fifo_path), os.O_WRONLY | os.O_NONBLOCK)
-        os.write(fd, b'go\n')
-        os.close(fd)
-        watcher_alive = True
-    except OSError:
-        watcher_alive = False
+    # Retry a few times: the setsid watcher may need a moment to open the FIFO
+    watcher_alive = False
+    for _ in range(5):
+        try:
+            fd = os.open(str(fifo_path), os.O_WRONLY | os.O_NONBLOCK)
+            os.write(fd, b'go\n')
+            os.close(fd)
+            watcher_alive = True
+            break
+        except OSError:
+            time.sleep(0.2)
 
     if watcher_alive:
         time.sleep(0.5)

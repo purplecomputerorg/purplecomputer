@@ -390,7 +390,7 @@ main() {
     # Writing to this FIFO (tmpfs) is safe after USB removal - no overlayfs touch.
     # if/fi guards: mkfifo failure never triggers set -e and kills the script.
     rm -f /run/purple-reboot-fifo || true
-    if mkfifo /run/purple-reboot-fifo 2>/dev/null; then
+    if mkfifo -m 666 /run/purple-reboot-fifo 2>/dev/null; then
         # setsid detaches from the process group so the watcher survives
         # when sudo/bash exit. Without it, sudo kills the watcher on exit.
         setsid sh -c 'read _ < /run/purple-reboot-fifo; echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger' </dev/null >/dev/null 2>/dev/null &

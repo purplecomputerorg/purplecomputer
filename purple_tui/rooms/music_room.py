@@ -683,7 +683,7 @@ class MusicMode(Container, can_focus=True):
         except Exception:
             pass
 
-    _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc: parent menu[/]"
+    _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold ` or Esc: parent menu[/]"
 
     def _noscreen_flash(self, color: str) -> None:
         """Show a colored circle briefly in no-screen mode."""

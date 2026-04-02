@@ -36,20 +36,19 @@ from ..keyboard import (
 # CONSTANTS
 # =============================================================================
 
-# Grayscale values (selected by number row keys: `=lightest, 1-0, then -=darkest)
+# Grayscale values (selected by number row keys: 1=lightest, 0/-/= darkest)
 GRAYSCALE = {
-    "`": "#FFFFFF",  # Pure white (backtick, left of 1)
-    "1": "#F0F0F0",  # Near white
-    "2": "#D8D8D8",
-    "3": "#C0C0C0",
-    "4": "#A8A8A8",
-    "5": "#909090",  # Middle gray
-    "6": "#787878",
-    "7": "#606060",
-    "8": "#484848",
-    "9": "#303030",
-    "0": "#181818",  # Near black
-    "-": "#080808",  # Very dark
+    "1": "#FFFFFF",  # Pure white
+    "2": "#E8E8E8",
+    "3": "#D0D0D0",
+    "4": "#B8B8B8",
+    "5": "#A0A0A0",
+    "6": "#888888",  # Middle gray
+    "7": "#707070",
+    "8": "#585858",
+    "9": "#404040",
+    "0": "#282828",
+    "-": "#101010",  # Near black
     "=": "#000000",  # Pure black (equals, right of -)
     "+": "#000000",  # Pure black (= remapped to + globally)
 }

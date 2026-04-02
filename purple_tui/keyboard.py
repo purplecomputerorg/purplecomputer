@@ -40,7 +40,6 @@ SHIFT_MAP = {
     # Other symbols
     '[': '{', ']': '}', '\\': '|',
     ';': ':', "'": '"', ',': '<', '.': '>', '/': '?',
-    '`': '~',
 }
 
 # Reverse map for checking if a character is a shifted version
@@ -709,6 +708,16 @@ class KeyboardStateMachine:
         Most events produce 0-1 actions, but some (like character with
         double-tap) may produce multiple.
         """
+        # Backtick (KEY_GRAVE) acts as Escape alias: top-left corner key,
+        # covers Touch Bar Macs that lack a physical Escape key.
+        if event.keycode == KeyCode.KEY_GRAVE:
+            event = RawKeyEvent(
+                keycode=KeyCode.KEY_ESC,
+                timestamp=event.timestamp,
+                is_down=event.is_down,
+                is_repeat=event.is_repeat,
+            )
+
         actions = []
 
         if event.is_down:

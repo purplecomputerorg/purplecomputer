@@ -131,7 +131,7 @@ KEYCODE_TO_CHAR: dict[int, str] = {
     KeyCode.KEY_A: 'a', KeyCode.KEY_S: 's', KeyCode.KEY_D: 'd',
     KeyCode.KEY_F: 'f', KeyCode.KEY_G: 'g', KeyCode.KEY_H: 'h',
     KeyCode.KEY_J: 'j', KeyCode.KEY_K: 'k', KeyCode.KEY_L: 'l',
-    KeyCode.KEY_SEMICOLON: ';', KeyCode.KEY_APOSTROPHE: "'", KeyCode.KEY_GRAVE: '`',
+    KeyCode.KEY_SEMICOLON: ';', KeyCode.KEY_APOSTROPHE: "'",
     KeyCode.KEY_BACKSLASH: '\\', KeyCode.KEY_Z: 'z', KeyCode.KEY_X: 'x',
     KeyCode.KEY_C: 'c', KeyCode.KEY_V: 'v', KeyCode.KEY_B: 'b',
     KeyCode.KEY_N: 'n', KeyCode.KEY_M: 'm', KeyCode.KEY_COMMA: ',',

@@ -6,7 +6,7 @@
 
 ## Code Quality (TOP PRIORITY)
 
-Minimize LOC. Never duplicate logic. When you see the same pattern in two places, extract it. Prefer one clear code path over multiple similar ones. Before adding code, check if existing code already handles the case or can be extended to. Keep functions short and single-purpose. No spaghetti: if a function has more than 3 levels of nesting or 5+ early returns, restructure it.
+**DRY is king.** Never duplicate logic. When you see the same pattern in two places, extract it. Before adding code, check if existing code already handles the case or can be extended to. Reuse relentlessly: every copy-pasted block is a future bug. Prefer one clear code path over branching into similar-but-slightly-different flows. Minimize LOC, if-else sprawl, and surface area for bugs. Keep functions short and single-purpose. No spaghetti: if a function has more than 3 levels of nesting or 5+ early returns, restructure it.
 
 ---
 
@@ -127,11 +127,11 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. Python writes to a FIFO on `/run` (tmpfs), waking a pre-forked root watcher that reboots via sysrq
+5. Python calls `os.execv` on a static setuid reboot binary at `/run/purple-reboot` (tmpfs)
 
-**Shutdown architecture:** All shutdown paths funnel through `PowerManager.shutdown()` which has a two-stage watchdog: stage 1 (5s) tries `systemctl poweroff --force`, stage 2 (8s) uses sysrq (`echo o > /proc/sysrq-trigger`), a direct kernel call needing no filesystem. This covers all scenarios including dead overlayfs after USB removal.
+**Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
 
-**Post-install reboot:** install.sh pre-forks a root watcher (via `setsid`, survives sudo exit) that blocks on `/run/purple-reboot-fifo`. Python writes to the FIFO to trigger `echo b > /proc/sysrq-trigger`. If the FIFO fails, falls through to `PowerManager.shutdown()` with its sysrq fallback.
+**Post-install reboot:** `install.sh` remounts `/run` with `exec,suid` (Ubuntu default is `nosuid,noexec`), copies a static reboot binary (`tools/purple-reboot.c`) to `/run/purple-reboot` with setuid root. The binary calls `reboot(2)` directly, no shared libs, survives USB removal (tmpfs). Falls through to `PowerManager.shutdown()` if missing.
 
 **Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed two ways:
 - `touch /run/casper-no-prompt` before reboot (runtime, in `parent_menu.py`)

@@ -68,7 +68,7 @@ ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 
 # Volume levels (0-100, perceptually spaced: more steps at low end)
 VOLUME_LEVELS = [0, 15, 35, 60, 85, 100]
-VOLUME_DEFAULT = 100
+VOLUME_DEFAULT = 60
 SYSTEM_VOLUME_MAX = 85  # Cap system mixer to avoid analog amp hiss on real hardware
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)

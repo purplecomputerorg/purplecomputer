@@ -55,6 +55,16 @@ def _power_log(msg: str) -> None:
         pass
 
 
+def _shutdown_log(msg: str) -> None:
+    """Always-on log for shutdown events. Helps diagnose unreliable shutdowns."""
+    try:
+        with open(_LOG_PATH, "a") as f:
+            ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
+
 def _get_timing(normal: int, demo: int) -> int:
     """Get timing value. Uses demo value if PURPLE_SLEEP_DEMO is set."""
     if os.environ.get("PURPLE_SLEEP_DEMO"):
@@ -324,6 +334,9 @@ class PowerManager:
 
         In demo mode (PURPLE_SLEEP_DEMO=1), just prints a message instead.
         """
+        # Always log shutdown attempts (not just on debug ISO) for diagnostics.
+        _shutdown_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
+                      f"charger={self._charger_state}")
         _power_log(f"SHUTDOWN requested: idle={self.get_idle_seconds():.1f}s, "
                    f"charger={self._charger_state}")
 
@@ -348,7 +361,7 @@ class PowerManager:
         try:
             subprocess.Popen(
                 ["sh", "-c",
-                 "sleep 5 && systemctl poweroff --force 2>/dev/null; "
+                 "sleep 5 && sudo systemctl poweroff --force 2>/dev/null; "
                  "sleep 3 && echo 1 > /proc/sys/kernel/sysrq && "
                  "echo o > /proc/sysrq-trigger"],
                 stdout=subprocess.DEVNULL,
@@ -359,9 +372,13 @@ class PowerManager:
             pass
 
         # --force skips clean service stop (near-instant, no data to lose).
+        # Always use sudo: non-sudo systemctl lacks permission on live USB,
+        # but Popen doesn't fail (it spawns successfully), so we'd falsely
+        # return True. Purple user has passwordless sudo everywhere
+        # (see 00-build-golden-image.sh: /etc/sudoers.d/purple-nopasswd).
         commands = [
-            ["systemctl", "poweroff", "--force"],
             ["sudo", "systemctl", "poweroff", "--force"],
+            ["sudo", "poweroff", "-f"],
         ]
 
         for cmd in commands:

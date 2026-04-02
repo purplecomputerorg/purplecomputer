@@ -61,17 +61,37 @@ command -v spice-vdagent &>/dev/null && spice-vdagent &
 # Set root window background color
 xsetroot -solid "#2d1b4e"
 
-# Live boot: cache squashfs into page cache so the USB can be removed.
-# Reads the entire compressed file, which populates the kernel page cache.
+# Live boot: copy squashfs to tmpfs so pages are pinned (non-evictable).
+# Unlike the old page-cache warmup (cat > /dev/null), tmpfs pages survive
+# memory pressure. This keeps the system alive after USB removal.
+# Falls back to page cache warmup if RAM is too low for the copy.
 # The TUI shows a blinking USB icon until this finishes, then an eject symbol.
 SQUASHFS="/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER="/tmp/purple-usb-cached"
 if [ -f "$SQUASHFS" ] && [ ! -f "$USB_CACHE_MARKER" ]; then
-    xlog "Caching squashfs into page cache..."
+    xlog "Caching squashfs for USB safety..."
     (
-        cat "$SQUASHFS" > /dev/null 2>&1
+        AVAIL_KB=$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        SQUASH_BYTES=$(stat -c %s "$SQUASHFS" 2>/dev/null || echo 0)
+        SQUASH_KB=$((SQUASH_BYTES / 1024))
+        # Need squashfs size + 1GB headroom for the running system
+        NEEDED_KB=$((SQUASH_KB + 1048576))
+
+        if [ "$AVAIL_KB" -gt "$NEEDED_KB" ] 2>/dev/null; then
+            mkdir -p /run/purple-squashfs
+            if cp "$SQUASHFS" /run/purple-squashfs/filesystem.squashfs 2>/dev/null; then
+                xlog "Squashfs copied to tmpfs (${SQUASH_KB}KB, ${AVAIL_KB}KB available)"
+            else
+                xlog "Squashfs tmpfs copy failed, falling back to page cache"
+                rm -f /run/purple-squashfs/filesystem.squashfs
+                cat "$SQUASHFS" > /dev/null 2>&1
+            fi
+        else
+            xlog "Low RAM (${AVAIL_KB}KB avail, need ${NEEDED_KB}KB), using page cache warmup"
+            cat "$SQUASHFS" > /dev/null 2>&1
+        fi
         touch "$USB_CACHE_MARKER"
-        xlog "Squashfs cached, USB safe to remove"
+        xlog "USB safe to remove"
     ) &
 fi
 

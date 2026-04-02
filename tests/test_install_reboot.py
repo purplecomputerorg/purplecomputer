@@ -2,15 +2,14 @@
 """Tests for the install/reboot flow.
 
 Covers:
-- The bash end-section of install.sh (FIFO creation, sentinel write, non-blocking)
-- Python _trigger_reboot() FIFO vs execv fallback logic
-- Python sentinel detection polling loop
+- The bash end-section of install.sh (setuid binary copy, sentinel write)
+- Python _trigger_reboot() setuid binary vs PowerManager fallback
+- Sentinel detection polling loop
 
 Run with: pytest tests/test_install_reboot.py -v
 """
 
 import os
-import stat
 import subprocess
 import sys
 import threading
@@ -26,20 +25,23 @@ from purple_tui.rooms.parent_menu import _trigger_reboot
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _install_end_script(rundir: str, remove_existing_fifo: bool = True) -> str:
-    """Return the bash end-section of install.sh, substituting RUNDIR.
+def _install_end_script(rundir: str, reboot_bin_src: str | None = None) -> str:
+    """Return the bash end-section of install.sh, substituting paths.
 
-    The watcher does `true` instead of real sysrq so tests are safe without root.
+    If reboot_bin_src is provided, it's used as the source binary.
+    Otherwise creates a dummy binary to simulate the real flow.
     """
-    rm_line = f"rm -f {rundir}/purple-reboot-fifo || true" if remove_existing_fifo else ""
+    if reboot_bin_src:
+        cp_line = f"cp {reboot_bin_src} {rundir}/purple-reboot"
+    else:
+        # Create a dummy executable to simulate the static binary
+        cp_line = f"echo '#!/bin/sh' > {rundir}/purple-reboot"
     return f"""\
 set -eo pipefail
 RUNDIR={rundir}
 touch $RUNDIR/casper-no-prompt
-{rm_line}
-if mkfifo $RUNDIR/purple-reboot-fifo 2>/dev/null; then
-    setsid sh -c 'read _ < {rundir}/purple-reboot-fifo; true' </dev/null >/dev/null 2>/dev/null &
-fi
+{cp_line}
+chmod 4755 $RUNDIR/purple-reboot 2>/dev/null || chmod 755 $RUNDIR/purple-reboot
 touch $RUNDIR/purple-install-complete
 """
 
@@ -49,7 +51,7 @@ touch $RUNDIR/purple-install-complete
 # ---------------------------------------------------------------------------
 
 def test_install_end_writes_sentinel(tmp_path):
-    """Sentinel, FIFO, and reboot.sh are all created; exit code is 0."""
+    """Sentinel and reboot binary are both created; exit code is 0."""
     script = _install_end_script(str(tmp_path))
     result = subprocess.run(
         ['bash', '-c', script],
@@ -58,11 +60,11 @@ def test_install_end_writes_sentinel(tmp_path):
     )
     assert result.returncode == 0
     assert (tmp_path / 'purple-install-complete').exists()
-    assert (tmp_path / 'purple-reboot-fifo').exists()
+    assert (tmp_path / 'purple-reboot').exists()
 
 
-def test_install_end_does_not_block_on_fifo(tmp_path):
-    """The script completes in under 2 seconds even though nobody writes the FIFO."""
+def test_install_end_does_not_block(tmp_path):
+    """The script completes in under 2 seconds (no FIFO blocking)."""
     script = _install_end_script(str(tmp_path))
     start = time.monotonic()
     result = subprocess.run(
@@ -75,165 +77,99 @@ def test_install_end_does_not_block_on_fifo(tmp_path):
     assert elapsed < 2.0, f"Script took {elapsed:.2f}s, expected < 2s"
 
 
-def test_install_end_survives_existing_fifo(tmp_path):
-    """Running the script twice succeeds: rm -f handles the pre-existing FIFO."""
+def test_install_end_reboot_binary_is_executable(tmp_path):
+    """The reboot binary has execute permission after install.sh runs."""
+    script = _install_end_script(str(tmp_path))
+    subprocess.run(['bash', '-c', script], timeout=10, capture_output=True)
+    reboot_bin = tmp_path / 'purple-reboot'
+    assert reboot_bin.exists()
+    assert os.access(str(reboot_bin), os.X_OK)
+
+
+def test_install_end_idempotent(tmp_path):
+    """Running the script twice succeeds (no leftover FIFOs blocking)."""
     script = _install_end_script(str(tmp_path))
     r1 = subprocess.run(['bash', '-c', script], timeout=10, capture_output=True)
     assert r1.returncode == 0
-    # Second run: FIFO already exists from first run
     r2 = subprocess.run(['bash', '-c', script], timeout=10, capture_output=True)
     assert r2.returncode == 0
     assert (tmp_path / 'purple-install-complete').exists()
 
 
-def test_sentinel_written_with_fifo_failure(tmp_path):
-    """Sentinel is still written when mkfifo fails (the if/fi guard protects it)."""
-    # Pre-create FIFO so mkfifo will fail, and omit the rm -f line
-    fifo = tmp_path / 'purple-reboot-fifo'
-    os.mkfifo(str(fifo))
-    script = _install_end_script(str(tmp_path), remove_existing_fifo=False)
-    result = subprocess.run(
-        ['bash', '-c', script],
-        timeout=10,
-        capture_output=True,
+# ---------------------------------------------------------------------------
+# Python _trigger_reboot() tests
+# ---------------------------------------------------------------------------
+
+def test_trigger_reboot_calls_execv_when_binary_exists(tmp_path, monkeypatch):
+    """_trigger_reboot() calls os.execv with the reboot binary path."""
+    reboot_bin = tmp_path / 'purple-reboot'
+    reboot_bin.write_text('#!/bin/sh\ntrue\n')
+    reboot_bin.chmod(0o755)
+
+    monkeypatch.setattr('purple_tui.rooms.parent_menu._REBOOT_BIN', str(reboot_bin))
+
+    execv_calls = []
+    monkeypatch.setattr(os, 'execv', lambda path, args: execv_calls.append((path, args)))
+
+    _trigger_reboot()
+
+    assert len(execv_calls) == 1
+    assert execv_calls[0][0] == str(reboot_bin)
+
+
+def test_trigger_reboot_falls_back_when_binary_missing(tmp_path, monkeypatch):
+    """Falls back to PowerManager.shutdown() when the binary doesn't exist."""
+    monkeypatch.setattr(
+        'purple_tui.rooms.parent_menu._REBOOT_BIN',
+        str(tmp_path / 'nonexistent'),
     )
-    assert result.returncode == 0
-    assert (tmp_path / 'purple-install-complete').exists()
 
-
-# ---------------------------------------------------------------------------
-# Python FIFO communication tests
-# ---------------------------------------------------------------------------
-
-def test_fifo_watcher_receives_signal(tmp_path):
-    """_trigger_reboot writes to the FIFO; a waiting reader unblocks."""
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-
-    os.mkfifo(str(fifo_path))
-
-    received = threading.Event()
-
-    def watcher():
-        with open(str(fifo_path), 'r') as f:
-            f.read()
-        received.set()
-
-    t = threading.Thread(target=watcher, daemon=True)
-    t.start()
-
-    # Give the watcher thread time to open the FIFO for reading
-    time.sleep(0.1)
-
-    _trigger_reboot(fifo=str(fifo_path))
-
-    assert received.wait(timeout=2.0), "Watcher did not receive signal within 2s"
-
-
-def test_trigger_reboot_falls_back_to_shutdown_when_no_fifo(tmp_path, monkeypatch):
-    """Falls back to PowerManager.shutdown() when the FIFO path does not exist."""
     shutdown_calls = []
     monkeypatch.setattr(
         'purple_tui.power_manager.get_power_manager',
         lambda: type('PM', (), {'shutdown': lambda self: shutdown_calls.append(True)})(),
     )
 
-    fifo_path = tmp_path / 'purple-reboot-fifo'  # does not exist
-    _trigger_reboot(fifo=str(fifo_path))
+    _trigger_reboot()
 
     assert len(shutdown_calls) == 1
 
 
-def test_trigger_reboot_falls_back_when_regular_file(tmp_path, monkeypatch):
-    """Falls back to PowerManager.shutdown() when the path is a regular file, not a FIFO."""
+def test_trigger_reboot_falls_back_when_not_executable(tmp_path, monkeypatch):
+    """Falls back to PowerManager.shutdown() when binary exists but isn't executable."""
+    reboot_bin = tmp_path / 'purple-reboot'
+    reboot_bin.write_text('not executable')
+    reboot_bin.chmod(0o644)
+
+    monkeypatch.setattr('purple_tui.rooms.parent_menu._REBOOT_BIN', str(reboot_bin))
+
     shutdown_calls = []
     monkeypatch.setattr(
         'purple_tui.power_manager.get_power_manager',
         lambda: type('PM', (), {'shutdown': lambda self: shutdown_calls.append(True)})(),
     )
 
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    fifo_path.write_text('not a fifo')
-    _trigger_reboot(fifo=str(fifo_path))
+    _trigger_reboot()
 
     assert len(shutdown_calls) == 1
 
 
-def test_fifo_write_completes_without_subprocess(tmp_path, monkeypatch):
-    """The FIFO path uses only file I/O; no subprocess calls are made."""
-    fifo_path = tmp_path / 'purple-reboot-fifo'
+def test_trigger_reboot_no_subprocess_calls(tmp_path, monkeypatch):
+    """The reboot binary path uses only os.execv; no subprocess calls."""
+    reboot_bin = tmp_path / 'purple-reboot'
+    reboot_bin.write_text('#!/bin/sh\ntrue\n')
+    reboot_bin.chmod(0o755)
 
-    os.mkfifo(str(fifo_path))
+    monkeypatch.setattr('purple_tui.rooms.parent_menu._REBOOT_BIN', str(reboot_bin))
+    monkeypatch.setattr(os, 'execv', lambda *a: None)
 
     def _boom(*args, **kwargs):
         raise AssertionError("subprocess called unexpectedly")
 
-    monkeypatch.setattr(os, 'system', _boom)
     monkeypatch.setattr(subprocess, 'Popen', _boom)
     monkeypatch.setattr(subprocess, 'run', _boom)
 
-    received = threading.Event()
-
-    def watcher():
-        with open(str(fifo_path), 'r') as f:
-            f.read()
-        received.set()
-
-    t = threading.Thread(target=watcher, daemon=True)
-    t.start()
-
-    _trigger_reboot(fifo=str(fifo_path))
-
-    assert received.wait(timeout=2.0), "FIFO write did not complete"
-
-
-# ---------------------------------------------------------------------------
-# Dead watcher / O_NONBLOCK tests
-# ---------------------------------------------------------------------------
-
-def test_trigger_reboot_falls_back_to_shutdown_when_watcher_dead(tmp_path, monkeypatch):
-    """If the FIFO exists but no reader is waiting (watcher died), falls through
-    to PowerManager.shutdown() immediately without blocking.
-
-    O_NONBLOCK makes os.open return ENXIO immediately instead of blocking.
-    PowerManager.shutdown() has a sysrq nuclear fallback that works even
-    with dead overlayfs.
-    """
-    shutdown_calls = []
-    monkeypatch.setattr(
-        'purple_tui.power_manager.get_power_manager',
-        lambda: type('PM', (), {'shutdown': lambda self: shutdown_calls.append(True)})(),
-    )
-
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    os.mkfifo(str(fifo_path))
-    # FIFO exists, is a FIFO, but NO reader thread.
-
-    start = time.monotonic()
-    _trigger_reboot(fifo=str(fifo_path))
-    elapsed = time.monotonic() - start
-
-    assert elapsed < 1.0, f"_trigger_reboot blocked for {elapsed:.2f}s (should be instant)"
-    assert len(shutdown_calls) == 1, "Should fall through to PowerManager.shutdown()"
-
-
-def test_trigger_reboot_does_not_block_with_timeout(tmp_path, monkeypatch):
-    """Specifically prove the O_NONBLOCK behavior: the call returns in under
-    100ms when no reader exists, not after some long timeout."""
-    shutdown_calls = []
-    monkeypatch.setattr(
-        'purple_tui.power_manager.get_power_manager',
-        lambda: type('PM', (), {'shutdown': lambda self: shutdown_calls.append(True)})(),
-    )
-
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    os.mkfifo(str(fifo_path))
-
-    start = time.monotonic()
-    _trigger_reboot(fifo=str(fifo_path))
-    elapsed = time.monotonic() - start
-
-    assert elapsed < 0.1, f"O_NONBLOCK open took {elapsed:.3f}s, expected <0.1s"
-    assert len(shutdown_calls) == 1
+    _trigger_reboot()  # Should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -241,11 +177,10 @@ def test_trigger_reboot_does_not_block_with_timeout(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_full_install_flow_with_mock_script(tmp_path):
-    """End-to-end: mock install.sh writes stages + FIFO + sentinel,
-    Python detects completion, FIFO signal reaches the watcher."""
+    """End-to-end: mock install.sh writes stages + reboot binary + sentinel,
+    Python detects completion."""
     import select
 
-    # Mock install.sh: outputs [PURPLE] progress lines, creates FIFO + sentinel
     mock_script = tmp_path / 'mock_install.sh'
     mock_script.write_text(f"""\
 #!/bin/bash
@@ -262,16 +197,13 @@ echo "[PURPLE] UEFI boot setup complete" >&2
 echo "[PURPLE] Installation complete!" >&2
 
 # Reboot prep (same as real install.sh)
-rm -f {tmp_path}/purple-reboot-fifo || true
-if mkfifo {tmp_path}/purple-reboot-fifo 2>/dev/null; then
-    setsid sh -c 'read _ < {tmp_path}/purple-reboot-fifo; touch {tmp_path}/watcher-fired' </dev/null >/dev/null 2>/dev/null &
-fi
+echo '#!/bin/sh' > {tmp_path}/purple-reboot
+chmod 755 {tmp_path}/purple-reboot
 touch {tmp_path}/purple-install-complete
 exit 0
 """)
     mock_script.chmod(0o755)
 
-    # Run the same polling loop as _run_install_thread
     sentinel = tmp_path / 'purple-install-complete'
     proc = subprocess.Popen(
         ['bash', str(mock_script)],
@@ -290,29 +222,13 @@ exit 0
                     line, buf = buf.split(b'\n', 1)
                     lines.append(line.decode('utf-8', errors='replace').strip())
 
-    success = sentinel.exists() or proc.poll() == 0
-    assert success, "Install did not complete successfully"
-    assert any("UEFI boot setup complete" in l for l in lines), f"Missing UEFI stage in: {lines}"
     assert sentinel.exists(), "Sentinel not written"
-
-    # Now simulate pressing Enter: write to the FIFO
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    assert fifo_path.exists(), "FIFO not created by install script"
-
-    # Give setsid watcher time to open the FIFO for reading
-    time.sleep(0.3)
-
-    _trigger_reboot(fifo=str(fifo_path))
-
-    # Give the watcher a moment to fire
-    time.sleep(0.5)
-    assert (tmp_path / 'watcher-fired').exists(), "Watcher did not fire after FIFO signal"
+    assert (tmp_path / 'purple-reboot').exists(), "Reboot binary not created"
+    assert any("UEFI boot setup complete" in l for l in lines), f"Missing UEFI stage in: {lines}"
 
 
 def test_full_install_flow_error_detected(tmp_path):
     """When install.sh fails (no sentinel), Python detects the error."""
-    import select
-
     mock_script = tmp_path / 'mock_install_fail.sh'
     mock_script.write_text("""\
 #!/bin/bash
@@ -342,8 +258,6 @@ exit 1
 def test_install_with_pipe_holding_child(tmp_path):
     """Background child holds stderr pipe open (like setsid bash on tty2).
     Sentinel detection must still work via sentinel file, not pipe EOF."""
-    import select
-
     mock_script = tmp_path / 'mock_install_pipe.sh'
     mock_script.write_text(f"""\
 #!/bin/bash
@@ -352,14 +266,10 @@ echo "[PURPLE] Writing Purple Computer to disk" >&2
 echo "[PURPLE] UEFI boot setup complete" >&2
 
 # Background child that holds stderr pipe open (the real bug scenario).
-# Redirect stderr so it doesn't inherit the pipe (sleep itself has nothing
-# to say, but inheriting the fd keeps the pipe open for its lifetime).
 ( sleep 300 ) 2>/dev/null &
 
-rm -f {tmp_path}/purple-reboot-fifo || true
-if mkfifo {tmp_path}/purple-reboot-fifo 2>/dev/null; then
-    setsid sh -c 'read _ < {tmp_path}/purple-reboot-fifo; touch {tmp_path}/watcher-fired' </dev/null >/dev/null 2>/dev/null &
-fi
+echo '#!/bin/sh' > {tmp_path}/purple-reboot
+chmod 755 {tmp_path}/purple-reboot
 touch {tmp_path}/purple-install-complete
 exit 0
 """)
@@ -387,161 +297,6 @@ exit 0
 
 
 # ---------------------------------------------------------------------------
-# Watcher survival tests (THE critical USB-removal bug)
-# ---------------------------------------------------------------------------
-
-def test_watcher_survives_parent_exit(tmp_path):
-    """THE USB-removal bug: does the FIFO watcher survive after bash exits?
-
-    install.sh backgrounds a watcher then exits. If the watcher dies with it,
-    _trigger_reboot gets ENXIO and falls back to os.execv('/bin/sh', ...) which
-    hangs after USB removal because /bin/sh is on the dead overlayfs.
-
-    This test proves the watcher is still alive after bash exits, by writing
-    to the FIFO and checking the watcher fires.
-    """
-    mock_script = tmp_path / 'mock_install_watcher.sh'
-    mock_script.write_text(f"""\
-#!/bin/bash
-set -eo pipefail
-rm -f {tmp_path}/purple-reboot-fifo || true
-if mkfifo {tmp_path}/purple-reboot-fifo 2>/dev/null; then
-    setsid sh -c 'read _ < {tmp_path}/purple-reboot-fifo; touch {tmp_path}/watcher-fired' </dev/null >/dev/null 2>/dev/null &
-fi
-touch {tmp_path}/purple-install-complete
-exit 0
-""")
-    mock_script.chmod(0o755)
-
-    # Run install.sh and wait for it to fully exit
-    result = subprocess.run(
-        ['bash', str(mock_script)],
-        timeout=10,
-        capture_output=True,
-    )
-    assert result.returncode == 0
-    assert (tmp_path / 'purple-install-complete').exists()
-
-    # Parent bash has exited. Is the watcher still alive?
-    # Give it a moment to settle after parent exit
-    time.sleep(0.2)
-
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    assert fifo_path.exists(), "FIFO not created"
-
-    # Try to write to the FIFO. If watcher is dead, O_NONBLOCK gives ENXIO.
-    try:
-        fd = os.open(str(fifo_path), os.O_WRONLY | os.O_NONBLOCK)
-        os.write(fd, b'go\n')
-        os.close(fd)
-        watcher_alive = True
-    except OSError:
-        watcher_alive = False
-
-    if watcher_alive:
-        time.sleep(0.5)
-        assert (tmp_path / 'watcher-fired').exists(), \
-            "FIFO write succeeded but watcher didn't fire"
-    else:
-        # THIS IS THE BUG: watcher died after parent bash exited.
-        # _trigger_reboot falls back to os.execv which hangs after USB removal.
-        import pytest
-        pytest.fail(
-            "Watcher died after parent bash exited! "
-            "This is the USB-removal bug: _trigger_reboot falls back to "
-            "os.execv('/bin/sh', ...) which hangs on dead overlayfs."
-        )
-
-
-def test_watcher_survives_sudo_parent_exit(tmp_path):
-    """Same as above but through sudo, which is how install.sh actually runs.
-
-    sudo may use process groups differently. Skip if sudo requires a password.
-    """
-    import shutil
-    if not shutil.which('sudo'):
-        import pytest
-        pytest.skip("sudo not available")
-
-    # Check if sudo actually works (not just -n true, but running a real command).
-    # Some environments (containers, sandbox) allow sudo -n true but block
-    # actual privilege escalation with "no new privileges" flag.
-    check = subprocess.run(
-        ['sudo', '-n', '-E', 'bash', '-c', 'echo ok'],
-        capture_output=True, timeout=5,
-    )
-    if check.returncode != 0:
-        import pytest
-        pytest.skip("sudo not functional (password required or privileges restricted)")
-
-    mock_script = tmp_path / 'mock_install_sudo.sh'
-    mock_script.write_text(f"""\
-#!/bin/bash
-set -eo pipefail
-rm -f {tmp_path}/purple-reboot-fifo || true
-if mkfifo -m 666 {tmp_path}/purple-reboot-fifo 2>/dev/null; then
-    setsid sh -c 'read _ < {tmp_path}/purple-reboot-fifo; touch {tmp_path}/watcher-fired' </dev/null >/dev/null 2>/dev/null &
-fi
-touch {tmp_path}/purple-install-complete
-exit 0
-""")
-    mock_script.chmod(0o755)
-
-    result = subprocess.run(
-        ['sudo', '-E', 'bash', str(mock_script)],
-        timeout=10,
-        capture_output=True,
-    )
-    assert result.returncode == 0
-
-    # setsid watcher needs time to settle after sudo exits
-    time.sleep(0.5)
-
-    fifo_path = tmp_path / 'purple-reboot-fifo'
-    assert fifo_path.exists(), "FIFO not created"
-
-    # Check FIFO permissions for diagnostics
-    fifo_stat = os.stat(str(fifo_path))
-    fifo_mode = oct(fifo_stat.st_mode)
-
-    # Retry: setsid watcher may need a moment to open the FIFO
-    watcher_alive = False
-    last_err = None
-    for _ in range(10):
-        try:
-            fd = os.open(str(fifo_path), os.O_WRONLY | os.O_NONBLOCK)
-            os.write(fd, b'go\n')
-            os.close(fd)
-            watcher_alive = True
-            break
-        except OSError as e:
-            last_err = e
-            time.sleep(0.2)
-
-    if watcher_alive:
-        time.sleep(0.5)
-        assert (tmp_path / 'watcher-fired').exists(), \
-            "FIFO write succeeded but watcher didn't fire"
-    else:
-        # Check if any process is reading the FIFO
-        import glob as _glob
-        readers = []
-        for fd_link in _glob.glob('/proc/*/fd/*'):
-            try:
-                if os.readlink(fd_link) == str(fifo_path):
-                    readers.append(fd_link.split('/')[2])
-            except (OSError, IndexError):
-                pass
-        import pytest
-        pytest.fail(
-            f"Watcher died after sudo+bash exited! "
-            f"fifo_mode={fifo_mode} last_err={last_err} "
-            f"fifo_readers={readers} "
-            f"stderr={result.stderr.decode()[:200]}"
-        )
-
-
-# ---------------------------------------------------------------------------
 # Sentinel detection test
 # ---------------------------------------------------------------------------
 
@@ -556,7 +311,6 @@ def test_sentinel_detection_exits_loop(tmp_path):
     writer = threading.Thread(target=write_sentinel_after_delay, daemon=True)
     writer.start()
 
-    # Simulate the polling loop from _run_install_thread (no real subprocess needed)
     deadline = time.monotonic() + 3.0
     exited = False
     while time.monotonic() < deadline:

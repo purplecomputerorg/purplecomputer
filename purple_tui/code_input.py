@@ -66,7 +66,7 @@ class CodeInput(Input):
 
     def __init__(self, autocomplete_fn: Callable[[str], list[tuple[str, str, str]]] | None = None,
                  math_mode: bool = False, context_autocomplete: bool = False, **kwargs):
-        super().__init__(placeholder="", **kwargs)
+        super().__init__(placeholder="", select_on_focus=False, **kwargs)
         self._autocomplete_fn = autocomplete_fn
         self._math_mode = math_mode
         self._context_autocomplete = context_autocomplete

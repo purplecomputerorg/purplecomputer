@@ -529,23 +529,32 @@ class VolumeModal(ModalScreen):
         )
         if level == 0:
             icon = ICON_VOLUME_OFF
-            bars = "\u2591" * 8
-        elif level <= 25:
+            label = "Sound Off"
+            bars = "░░░░░░░░░░"
+        elif level <= 15:
             icon = ICON_VOLUME_LOW
-            bars = "\u2588\u2588\u2591\u2591\u2591\u2591\u2591\u2591"
-        elif level <= 50:
+            label = "Whisper"
+            bars = "██░░░░░░░░"
+        elif level <= 35:
+            icon = ICON_VOLUME_LOW
+            label = "Quiet"
+            bars = "████░░░░░░"
+        elif level <= 60:
             icon = ICON_VOLUME_MED
-            bars = "\u2588\u2588\u2588\u2588\u2591\u2591\u2591\u2591"
-        elif level <= 75:
+            label = "Medium"
+            bars = "██████░░░░"
+        elif level <= 85:
             icon = ICON_VOLUME_HIGH
-            bars = "\u2588\u2588\u2588\u2588\u2588\u2588\u2591\u2591"
+            label = "Loud"
+            bars = "████████░░"
         else:
             icon = ICON_VOLUME_HIGH
-            bars = "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588"
+            label = "Full"
+            bars = "██████████"
 
         try:
             display = self.query_one("#volume-display", Static)
-            display.update(f"{icon}  {bars}  {level}%")
+            display.update(f"{icon}  {bars}  {label}")
         except Exception:
             pass
 

@@ -19,9 +19,8 @@ import sys
 import select
 import threading
 import termios
-import json
-import stat
 import time
+import json
 from pathlib import Path
 
 import re
@@ -820,48 +819,34 @@ _INSTALL_STAGES = [
 ]
 
 
+_REBOOT_BIN = '/run/purple-reboot'
 _REBOOT_LOG = '/tmp/purple-reboot-debug.log'
 
 
 def _reboot_log(msg):
-    """Write a breadcrumb to /run (tmpfs). Survives USB removal."""
+    """Breadcrumb to /tmp (tmpfs). Always on: costs nothing, invaluable when debugging."""
     try:
         with open(_REBOOT_LOG, 'a') as f:
             f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
-            f.flush()
     except Exception:
         pass
 
 
-def _trigger_reboot(fifo='/run/purple-reboot-fifo'):
-    """Signal the pre-forked root reboot watcher via FIFO.
+def _trigger_reboot():
+    """Reboot via static setuid binary on tmpfs. Falls back to PowerManager.
 
-    The FIFO lives in /run (tmpfs). Writing to it is safe after USB removal
-    because tmpfs requires no disk I/O. The watcher shell was pre-forked by
-    install.sh while the USB was present and already has /bin/sh in memory.
-
-    Uses O_NONBLOCK so that if the watcher shell died, the open() returns
-    ENXIO immediately instead of blocking forever.
-
-    On any failure, falls through to PowerManager.shutdown() which has a
-    sysrq nuclear fallback that works even with dead overlayfs.
+    install.sh copies a static reboot binary to /run/purple-reboot with setuid
+    root. It calls reboot(2) directly, no shared libs, so it works after USB
+    removal kills the overlayfs. Fallback: PowerManager.shutdown() (sysrq watchdog).
     """
-    _reboot_log(f"_trigger_reboot called: fifo={fifo}")
-    try:
-        st = os.stat(fifo)
-        if stat.S_ISFIFO(st.st_mode):
-            _reboot_log("opening FIFO with O_NONBLOCK...")
-            fd = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK)
-            _reboot_log(f"FIFO opened: fd={fd}, writing...")
-            os.write(fd, b'go\n')
-            os.close(fd)
-            _reboot_log("FIFO write+close done, watcher should reboot now")
-            return
-    except OSError as e:
-        _reboot_log(f"OSError: {e} (errno={e.errno})")
-    # FIFO failed (missing, not a FIFO, watcher dead). Fall through to
-    # PowerManager.shutdown() which has sysrq as a nuclear fallback.
-    _reboot_log("FIFO failed, falling back to PowerManager.shutdown()")
+    _reboot_log(f"_trigger_reboot: exists={os.path.isfile(_REBOOT_BIN)}")
+    if os.path.isfile(_REBOOT_BIN):
+        try:
+            _reboot_log("execv into reboot binary")
+            os.execv(_REBOOT_BIN, [_REBOOT_BIN])
+        except OSError as e:
+            _reboot_log(f"execv failed: {e}")
+    _reboot_log("fallback to PowerManager.shutdown()")
     from ..power_manager import get_power_manager
     get_power_manager().shutdown()
 
@@ -1000,78 +985,14 @@ class InstallProgressScreen(ModalScreen):
                             self._handle_line,
                             line.decode('utf-8', errors='replace'),
                         )
-        # install.sh writes /run/casper-no-prompt, FIFO, then the sentinel,
-        # all as root before exit. No post-install sudo needed.
+        # install.sh writes sentinel + reboot binary to /run as root before exit.
         success = _SENTINEL.exists() or proc.poll() == 0
         self.app.call_from_thread(self._on_install_complete, success)
 
     def _on_install_complete(self, success: bool) -> None:
         self._phase = "success" if success else "error"
-        _reboot_log(f"install complete: success={success} phase={self._phase}")
-        # Check reboot infrastructure state
-        _reboot_log(f"  sentinel exists: {Path('/run/purple-install-complete').exists()}")
-        _reboot_log(f"  fifo exists: {Path('/run/purple-reboot-fifo').exists()}")
-        _reboot_log(f"  fifo is_fifo: {Path('/run/purple-reboot-fifo').is_fifo() if Path('/run/purple-reboot-fifo').exists() else 'N/A'}")
-        # Check if watcher process is alive by looking for readers on the FIFO.
-        # Don't open it (that would trigger the watcher), just check /proc.
-        try:
-            fifo_path = '/run/purple-reboot-fifo'
-            if os.path.exists(fifo_path):
-                import glob as _glob
-                readers = []
-                for fd_link in _glob.glob('/proc/*/fd/*'):
-                    try:
-                        if os.readlink(fd_link) == fifo_path:
-                            pid = fd_link.split('/')[2]
-                            readers.append(pid)
-                    except (OSError, IndexError):
-                        continue
-                _reboot_log(f"  FIFO reader PIDs: {readers if readers else 'NONE (watcher dead!)'}")
-            else:
-                _reboot_log("  FIFO: does not exist")
-        except Exception as e:
-            _reboot_log(f"  FIFO check error: {e}")
+        _reboot_log(f"install complete: success={success} reboot_bin={os.path.isfile(_REBOOT_BIN)}")
         self._update_ui()
-        # On debug ISO: start idle timer to drop to debug shell
-        if is_debug():
-            self._debug_idle_timer = threading.Timer(
-                30.0, self._debug_drop_to_shell,
-            )
-            self._debug_idle_timer.daemon = True
-            self._debug_idle_timer.start()
-            _reboot_log("  debug: shell drop scheduled in 30s (any key resets)")
-
-    def _debug_drop_to_shell(self) -> None:
-        """On debug ISO: drop to shell after idle so user can read debug log."""
-        if self._phase == "installing":
-            return  # Don't interrupt an active install
-        _reboot_log("debug: dropping to shell (idle timeout)")
-        self.app.call_from_thread(self._run_debug_shell)
-
-    def _run_debug_shell(self) -> None:
-        """Exit Textual entirely and drop to a debug shell."""
-        _reboot_log("debug: exiting app for debug shell")
-        os.system('stty sane')
-        os.system('clear')
-        print("=" * 60)
-        print("  DEBUG SHELL (auto-opened after 30s idle)")
-        print("=" * 60)
-        print()
-        print("Debug log:")
-        print("-" * 60)
-        try:
-            with open(_REBOOT_LOG) as f:
-                print(f.read())
-        except FileNotFoundError:
-            print("(no reboot debug log yet)")
-        print("-" * 60)
-        print()
-        print("  cat /tmp/purple-reboot-debug.log")
-        print("  ls -la /run/purple-reboot-*")
-        print("  ps aux | grep reboot")
-        print()
-        sys.stdout.flush()
-        self.app.exit()
 
     def _handle_line(self, text: str) -> None:
         clean = _ANSI_ESCAPE.sub('', text).strip()
@@ -1090,20 +1011,10 @@ class InstallProgressScreen(ModalScreen):
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        _reboot_log(f"InstallProgress key: {type(action).__name__} phase={self._phase}")
         if self._phase == "installing":
             return
-        # Reset debug shell timer on any input
-        timer = getattr(self, '_debug_idle_timer', None)
-        if timer:
-            timer.cancel()
-            self._debug_idle_timer = threading.Timer(
-                30.0, self._debug_drop_to_shell,
-            )
-            self._debug_idle_timer.daemon = True
-            self._debug_idle_timer.start()
         if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
-            _reboot_log("Enter pressed, calling _trigger_reboot()")
+            _reboot_log("Enter pressed")
             _trigger_reboot()
 
 

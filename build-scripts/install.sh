@@ -385,15 +385,17 @@ main() {
     # Python cannot do these without sudo, and sudo from within Textual hangs.
     touch /run/casper-no-prompt
 
-    # Pre-fork a root shell that waits on a FIFO for Python's reboot signal.
-    # After USB removal, overlayfs is dead and Python can't exec /bin/sh.
-    # Writing to this FIFO (tmpfs) is safe after USB removal - no overlayfs touch.
-    # if/fi guards: mkfifo failure never triggers set -e and kills the script.
-    rm -f /run/purple-reboot-fifo || true
-    if mkfifo -m 666 /run/purple-reboot-fifo 2>/dev/null; then
-        # setsid detaches from the process group so the watcher survives
-        # when sudo/bash exit. Without it, sudo kills the watcher on exit.
-        setsid sh -c 'read _ < /run/purple-reboot-fifo; echo 1 > /proc/sys/kernel/sysrq; echo b > /proc/sysrq-trigger' </dev/null >/dev/null 2>/dev/null &
+    # Copy static reboot binary to tmpfs with setuid root. This binary calls
+    # reboot(2) directly, no shared libs needed. Survives USB removal because
+    # it's on tmpfs. Python (unprivileged) can exec it thanks to setuid.
+    # /run is mounted nosuid,noexec by default on Ubuntu, so remount it first.
+    mount -o remount,exec,suid /run
+    if [ -f /opt/purple/bin/purple-reboot ]; then
+        cp /opt/purple/bin/purple-reboot /run/purple-reboot
+        chmod 4755 /run/purple-reboot
+        log "Reboot binary ready at /run/purple-reboot"
+    else
+        warn "Static reboot binary not found, reboot after USB removal may fail"
     fi
 
     # Sentinel last - Python polls for this to know install is done.

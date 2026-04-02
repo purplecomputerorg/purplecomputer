@@ -306,6 +306,14 @@ SOURCES
     # Install Python dependencies from requirements.txt
     chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
 
+    # Compile static reboot binary (used after install for USB-safe reboot).
+    # Must happen before gcc is removed. Static linking = zero overlay dependency.
+    mkdir -p "$MOUNT_DIR/opt/purple/bin"
+    cp /purple-src/tools/purple-reboot.c "$MOUNT_DIR/tmp/purple-reboot.c"
+    chroot "$MOUNT_DIR" gcc -static -o /opt/purple/bin/purple-reboot /tmp/purple-reboot.c
+    rm -f "$MOUNT_DIR/tmp/purple-reboot.c"
+    log_info "Compiled static reboot binary: $(chroot "$MOUNT_DIR" file /opt/purple/bin/purple-reboot)"
+
     # Remove build deps (only needed for compilation).
     # --no-auto-remove prevents apt from cascading into unrelated packages.
     log_info "Packages apt will remove with build deps:"

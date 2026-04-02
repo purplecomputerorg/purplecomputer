@@ -11,7 +11,7 @@ How the install progress modal works and why it's built the way it is.
 1. Runs `install.sh` as a subprocess in a background thread
 2. Streams `[PURPLE]`-prefixed stderr lines to update a progress bar
 3. Shows a success or error screen when the install finishes
-4. On Enter: replaces Python with a RAM-resident sysrq reboot script
+4. On Enter: reboots via a static setuid binary on tmpfs
 
 Textual stays running the whole time. There is no terminal handoff.
 
@@ -75,53 +75,50 @@ Python polls for this sentinel. When it appears, the install is done regardless 
 
 ---
 
-## USB removal safety
+## USB removal safety: static reboot binary
 
 After install, the USB drive can be removed and the system must still reboot cleanly. This is the hardest constraint in the entire install flow.
 
 ### The core problem
 
-Python runs as a regular user. Rebooting requires root (`reboot`, `systemctl reboot`, `/proc/sysrq-trigger` all need root). After USB removal, the live overlayfs backing is gone and loading ANY binary from disk (including `sudo`, `/bin/sh`, `reboot`) causes an infinite hang because the page fault tries to read from the dead squashfs on the removed USB.
+Python runs as a regular user. Rebooting requires root. After USB removal, the live overlayfs lower layer (squashfs on USB) is gone. Any page fault to code not in memory causes an infinite hang because the kernel tries to read from the dead squashfs on the removed USB. This means loading ANY binary from disk (including `sudo`, `/bin/sh`, `reboot`) can hang.
 
-So: unprivileged user + no way to escalate to root after USB removal.
+So: unprivileged user + no way to exec new binaries or escalate to root after USB removal.
 
-### The solution: pre-forked root watcher
+### The solution: static setuid reboot binary on tmpfs
 
-`install.sh` runs as root (via sudo). Before exiting, while the USB is still present, it forks a root shell that blocks on a FIFO in `/run` (tmpfs, RAM-only). This shell is already loaded in memory and needs no disk access to run.
+A tiny C program (~6 lines) calls `reboot(RB_AUTOBOOT)` directly via the kernel syscall. It's compiled statically (zero shared library dependencies) during the golden image build and placed at `/opt/purple/bin/purple-reboot`.
 
-The sequence:
+When `install.sh` runs as root (while USB is still present):
+1. Remounts `/run` with `exec,suid` (Ubuntu mounts `/run` `nosuid,noexec` by default)
+2. Copies the binary to `/run/purple-reboot` (tmpfs, RAM-only)
+3. Sets it setuid root (`chmod 4755`)
 
-1. `install.sh` (running as root) writes to `/run` (tmpfs):
-   - `/run/casper-no-prompt`: suppresses the casper "remove media" prompt
-   - `/run/purple-reboot-fifo`: a named FIFO
-   - `/run/purple-install-complete`: the sentinel (written last)
-   - A root shell is pre-forked via `setsid` to block on the FIFO
-2. Python sees the sentinel, shows "Press Enter to restart"
-3. User removes USB drive (optional)
-4. User presses Enter, Python writes to the FIFO (pure tmpfs write, no overlayfs)
-5. The root shell wakes up and runs `echo b > /proc/sysrq-trigger`
-6. If FIFO fails for any reason, falls through to `PowerManager.shutdown()` which has a sysrq nuclear fallback (poweroff in 8s)
+When the user presses Enter to reboot:
+1. Python calls `os.execv('/run/purple-reboot', ...)` 
+2. The binary is on tmpfs (survives USB removal) and is static (no page faults to shared libs)
+3. Setuid means it runs as root despite Python being unprivileged
+4. It calls `sync()` then `reboot(RB_AUTOBOOT)` directly
 
-### Why `setsid` is critical
+If the binary is missing or not executable, falls through to `PowerManager.shutdown()` which has a sysrq watchdog fallback (powers off instead of rebooting, but the machine doesn't hang).
 
-`install.sh` runs via `sudo -E bash install.sh`. When sudo exits, it kills its entire process group. A plain `&` background job is in the same process group and dies with it. `setsid` puts the watcher in its own process group so it survives.
+### Why this replaced the previous FIFO approach
 
-This was discovered via debug logging on real hardware: `FIFO reader PIDs: NONE (watcher dead!)`.
+The original approach pre-forked a root shell via `setsid` that blocked on a FIFO in `/run`. Python would write to the FIFO to trigger `sysrq-trigger` reboot. This was plagued with bugs:
 
-### Why not simpler alternatives?
+- Process group kills: `sudo` killing the watcher on exit (fixed by `setsid` but fragile)
+- Permission denied on FIFO writes
+- Dead watchers with no recovery
+- Complex debug logging and shell drop needed to diagnose failures
+- Required `O_NONBLOCK` to avoid blocking when watcher died
 
-- **`os.execv('/bin/sh', ...)`**: must load `/bin/sh` from overlayfs. After USB removal, hangs.
-- **`subprocess.run(['sudo', 'reboot'])`**: must load `sudo` from overlayfs. Same hang.
-- **Software eject USB before reboot**: BIOS re-enumerates USB hardware on reboot regardless of OS-level eject. Would boot from USB again.
-- **`efibootmgr --bootnext`**: viable for the USB-still-present case, but doesn't help if the user already removed the USB before pressing Enter.
+The static binary approach eliminates all of this: one `os.execv` call with a PowerManager fallback. No background processes, no FIFOs, no process group management.
 
-### `_trigger_reboot()` safety
+### Page cache vs tmpfs for squashfs caching
 
-Python's `_trigger_reboot()` uses `O_NONBLOCK` when opening the FIFO. If the watcher is dead (no reader), `os.open` returns ENXIO immediately instead of blocking forever. On any failure (FIFO missing, watcher dead, not a FIFO), it falls through to `PowerManager.shutdown()` which has a sysrq nuclear fallback that works even with dead overlayfs.
+The system also copies the squashfs to tmpfs during boot (`config/xinit/xinitrc`). Unlike the previous `cat > /dev/null` page cache warmup, tmpfs pages are non-evictable. This keeps Python and the system alive after USB removal more reliably, since page cache entries can be evicted under memory pressure.
 
-### Debug logging
-
-On debug ISO, `_trigger_reboot` writes breadcrumbs to `/tmp/purple-reboot-debug.log` at each step: stat, open, write, fallback. After install completes, it also logs whether the FIFO watcher is alive by scanning `/proc/*/fd/*` for readers. On debug ISO, a shell auto-opens after 30s idle on the success screen.
+On low-RAM systems (< squashfs + 1GB available), falls back to the old page cache warmup.
 
 ---
 
@@ -146,6 +143,27 @@ Progress only moves forward (enforced by `pct > self._progress`). The friendly d
 
 ---
 
+## Shutdown paths overview
+
+All shutdown and reboot paths on Purple Computer:
+
+| Trigger | Entry point | Mechanism |
+|---------|------------|-----------|
+| Idle timeout (battery) | `SleepScreen._do_shutdown()` | `pm.shutdown()` |
+| Lid closed 10min | `SleepScreen._check_idle_shutdown()` | `pm.shutdown()` |
+| Power button tap+confirm | `ByeScreen.on_mount()` | `pm.shutdown()` |
+| Power button hold 3s | `ByeScreen.on_mount()` | `pm.shutdown()` |
+| Parent menu "Shut Down" | `ParentMenu._shutdown()` | `pm.shutdown()` |
+| Post-install Enter | `InstallProgressScreen` | `_trigger_reboot()` → setuid binary |
+
+`pm.shutdown()` uses `sudo systemctl poweroff --force` with a two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq 'o' (direct kernel poweroff via ACPI). The watchdog runs in a detached process group so it survives TUI death.
+
+All shutdown commands use `sudo` because `systemctl poweroff` without sudo fails with permission denied on the live USB (and Popen doesn't detect this since it only checks if the process spawned, not if it succeeded). The purple user has passwordless sudo everywhere via `/etc/sudoers.d/purple-nopasswd`.
+
+Shutdown events are always logged to `/tmp/purple-power.log` for diagnostics.
+
+---
+
 ## Tests
 
 `tests/test_install_progress.py` documents the pipe-hang bug and proves the fix:
@@ -154,14 +172,14 @@ Progress only moves forward (enforced by `pct > self._progress`). The friendly d
 - `test_cancel_on_exit_completes_with_pipe_holder`: proves `proc.returncode` polling completes even when a child holds stderr open
 - `test_cancel_on_exit_collects_all_lines_without_pipe_holder`: sanity check for the normal case
 
-`tests/test_install_reboot.py` covers the FIFO reboot flow:
+`tests/test_install_reboot.py` covers the reboot flow:
 
-- Bash end-section: sentinel, FIFO creation (with setsid watcher)
-- `_trigger_reboot()`: FIFO write, O_NONBLOCK, PowerManager.shutdown() fallback, dead watcher handling
-- Watcher survival: proves watcher lives after parent bash exits (the `setsid` fix)
-- Full flow integration: mock install.sh + sentinel detection + FIFO signal
+- Bash end-section: sentinel write, reboot binary creation, idempotency
+- `_trigger_reboot()`: execv to binary, PowerManager fallback when missing/not-executable
+- Full flow integration: mock install.sh + sentinel detection + binary creation
+- Sentinel detection polling loop
 
-Run with: `just test`, `just test-install`, or `pytest tests/test_install_reboot.py -v`
+Run with: `just test`, or `pytest tests/test_install_reboot.py -v`
 
 ---
 
@@ -170,6 +188,10 @@ Run with: `just test`, `just test-install`, or `pytest tests/test_install_reboot
 | File | Role |
 |------|------|
 | `purple_tui/rooms/parent_menu.py` | `InstallProgressScreen`, `_trigger_reboot()` |
-| `build-scripts/install.sh` | Writes sentinel + FIFO + reboot script to `/run`, forks watcher |
+| `purple_tui/power_manager.py` | `PowerManager.shutdown()`, always-on shutdown logging |
+| `build-scripts/install.sh` | Copies setuid reboot binary to `/run`, writes sentinel |
+| `build-scripts/00-build-golden-image.sh` | Compiles static reboot binary during image build |
+| `tools/purple-reboot.c` | Source for static reboot binary |
+| `config/xinit/xinitrc` | Squashfs tmpfs copy (replaces page cache warmup) |
 | `tests/test_install_progress.py` | Documents and tests the pipe-hang fix |
-| `tests/test_install_reboot.py` | Tests the FIFO reboot flow and watcher survival |
+| `tests/test_install_reboot.py` | Tests the reboot flow and sentinel detection |

@@ -819,7 +819,7 @@ _INSTALL_STAGES = [
 ]
 
 
-_REBOOT_BIN = '/run/purple-reboot'
+_REBOOT_BIN = '/run/purple-reboot-mount/purple-reboot'
 _REBOOT_LOG = '/tmp/purple-reboot-debug.log'
 
 
@@ -1132,7 +1132,12 @@ class ParentMenu(ModalScreen):
             yield Static("Parent Menu", id="parent-title")
             if is_live_boot():
                 yield Static(
-                    "Running from USB.\nInstall to keep it without the USB.",
+                    "Running from USB. Not yet installed.\nInstall to keep it without the USB.",
+                    id="parent-live-hint",
+                )
+            else:
+                yield Static(
+                    "Installed on this computer.",
                     id="parent-live-hint",
                 )
             with Vertical(id="parent-items"):
@@ -1330,6 +1335,10 @@ class ParentMenu(ModalScreen):
             os.system('clear')
             print("=" * 60)
             print("Purple Computer - Terminal Mode")
+            if is_live_boot():
+                print("Running from USB (not yet installed)")
+            else:
+                print("Installed on this computer")
             print("=" * 60)
             print()
             print("You are now in a bash shell.")

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional, Awaitable
 
-from .constants import SUPPORT_EMAIL
+from .constants import SUPPORT_EMAIL, is_debug
 
 logger = logging.getLogger(__name__)
 
@@ -251,6 +251,7 @@ class EvdevReader:
         self._devices: list = []  # All keyboard evdev devices
         self._running = False
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
+        self._debug_chvt = is_debug()
         self._tasks: list[asyncio.Task] = []
 
     @property
@@ -391,6 +392,13 @@ class EvdevReader:
                 if event.type == EV_KEY and event.value in (0, 1, 2):
                     keycode = event.code
                     scancode = self._pending_scancodes.pop(dev_path, 0)
+
+                    # Debug ISO: backtick switches to tty2 for debugging
+                    if (keycode == KeyCode.KEY_GRAVE and event.value == 1
+                            and self._debug_chvt):
+                        import subprocess
+                        subprocess.Popen(["chvt", "2"])
+                        continue
 
                     raw_event = RawKeyEvent(
                         keycode=keycode,

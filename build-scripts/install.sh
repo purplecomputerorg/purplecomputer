@@ -385,15 +385,16 @@ main() {
     # Python cannot do these without sudo, and sudo from within Textual hangs.
     touch /run/casper-no-prompt
 
-    # Copy static reboot binary to tmpfs with setuid root. This binary calls
-    # reboot(2) directly, no shared libs needed. Survives USB removal because
-    # it's on tmpfs. Python (unprivileged) can exec it thanks to setuid.
-    # /run is mounted nosuid,noexec by default on Ubuntu, so remount it first.
-    mount -o remount,exec,suid /run
+    # Copy static reboot binary to a tmpfs with exec+suid. It calls reboot(2)
+    # directly, no shared libs. Survives USB removal because tmpfs is RAM-only.
+    # /run is nosuid,noexec (systemd-managed, resists remount), so we create
+    # our own tmpfs mount at /run/purple-reboot-mount with the right flags.
+    mkdir -p /run/purple-reboot-mount
+    mount -t tmpfs -o size=1M,exec,suid tmpfs /run/purple-reboot-mount
     if [ -f /opt/purple/bin/purple-reboot ]; then
-        cp /opt/purple/bin/purple-reboot /run/purple-reboot
-        chmod 4755 /run/purple-reboot
-        log "Reboot binary ready at /run/purple-reboot"
+        cp /opt/purple/bin/purple-reboot /run/purple-reboot-mount/purple-reboot
+        chmod 4755 /run/purple-reboot-mount/purple-reboot
+        log "Reboot binary ready at /run/purple-reboot-mount/purple-reboot"
     else
         warn "Static reboot binary not found, reboot after USB removal may fail"
     fi

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Parent menu and terminal mode now show whether Purple Computer is running from USB or installed on the computer.
 - Play room repeat is now inline-only ("repeat 3 dog, cat"), matching music/art rooms. Removed multi-line block syntax (repeat/end).
 - Sleep screen status messages shortened and use emojis (lid, battery, USB).
 - Boot: eliminated GRUB error message and gray screen flash. Boot goes straight from black to purple "Starting up..." screen with no intermediate states.

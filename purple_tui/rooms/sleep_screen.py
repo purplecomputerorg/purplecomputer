@@ -1,14 +1,16 @@
 """
 Purple Computer - Sleep Screen, Shutdown Confirm Screen, Bye Screen,
-and Live Boot Splash
+Live Boot Splash, and First Boot Welcome
 
 Kid-friendly screens for sleep (idle timeout), shutdown confirmation
 (power button tap), shutdown (power button hold, lid close timeout),
-and live boot welcome message.
+live boot welcome message, and first-boot-after-install welcome.
 
 Two power states: awake and sleep face. No DPMS screen-off state.
 Timers adapt to charger status and lid position.
 """
+
+from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -348,4 +350,67 @@ class LiveBootSplash(Screen):
 
     async def handle_keyboard_action(self, action) -> None:
         """Any key dismisses the splash."""
+        self.dismiss()
+
+
+FIRST_BOOT_MARKER = Path("/var/lib/purple/first-boot-done")
+
+
+class FirstBootWelcome(Screen):
+    """
+    Welcome screen shown once after Purple is installed to a hard drive.
+
+    Tells the parent that installation is complete and the USB can be
+    removed. Dismissed by any key press; writes a marker file so it
+    never shows again.
+    """
+
+    DEFAULT_CSS = """
+    FirstBootWelcome {
+        align: center middle;
+        background: $background;
+    }
+
+    #first-boot-message {
+        content-align: center middle;
+        color: $primary;
+        margin-bottom: 2;
+    }
+
+    #first-boot-hint {
+        content-align: center middle;
+        color: $text-muted;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            "Welcome to Purple Computer!\n"
+            "\n"
+            "Purple is now installed on this computer.\n"
+            "You can safely remove the USB drive.\n"
+            "\n"
+            "Have fun!",
+            id="first-boot-message",
+        )
+        yield Static("Press any key to start playing", id="first-boot-hint")
+
+    def _mark_done(self) -> None:
+        """Write the marker file so this screen never shows again."""
+        try:
+            FIRST_BOOT_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            FIRST_BOOT_MARKER.touch()
+        except Exception:
+            pass
+
+    def on_key(self, event: events.Key) -> None:
+        """Any key dismisses the welcome."""
+        event.stop()
+        event.prevent_default()
+        self._mark_done()
+        self.dismiss()
+
+    async def handle_keyboard_action(self, action) -> None:
+        """Any key dismisses the welcome."""
+        self._mark_done()
         self.dismiss()

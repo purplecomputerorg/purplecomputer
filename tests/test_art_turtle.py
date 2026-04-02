@@ -178,9 +178,9 @@ class TestSpin:
         c.turn('rotate')
         assert c._heading == 'down'
 
-    def test_90_is_spin(self):
+    def test_spin_alias(self):
         c = FakeCanvas()
-        c.turn('90')
+        c.turn('spin')
         assert c._heading == 'down'
 
 
@@ -205,20 +205,11 @@ class TestTurnBack:
         c.turn('backward')
         assert c._heading == 'left'
 
-    def test_turn_180(self):
+    def test_turn_back_alias(self):
+        """turn back is equivalent to turn backward."""
         c = FakeCanvas()
-        c.turn('180')
+        c.turn('back')
         assert c._heading == 'left'
-
-    def test_turn_270(self):
-        c = FakeCanvas()
-        c.turn('270')
-        assert c._heading == 'up'
-
-    def test_turn_360(self):
-        c = FakeCanvas()
-        c.turn('360')
-        assert c._heading == 'right'
 
 
 # ---------------------------------------------------------------------------
@@ -484,23 +475,19 @@ class TestArtCodeRunnerTurtle:
         self._run(runner.run(["turn 90"]))
         assert canvas._heading == 'down'  # spin from right
 
-    def test_turn_180(self, canvas):
+    def test_turn_n_spins_and_moves(self, canvas):
+        """turn N = spin 90 CW then forward N."""
         from purple_tui.code_runner import ArtCodeRunner
         runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["turn 180"]))
+        self._run(runner.run(["paint off", "turn 5"]))
+        assert canvas._heading == 'down'  # spun from right
+        assert canvas._cursor_y == 5  # moved down 5
+
+    def test_turn_back_via_runner(self, canvas):
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["turn back"]))
         assert canvas._heading == 'left'
-
-    def test_turn_270(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
-        runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["turn 270"]))
-        assert canvas._heading == 'up'
-
-    def test_turn_360(self, canvas):
-        from purple_tui.code_runner import ArtCodeRunner
-        runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["turn 360"]))
-        assert canvas._heading == 'right'
 
     def test_go_synonym(self, canvas):
         from purple_tui.code_runner import ArtCodeRunner

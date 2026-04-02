@@ -712,20 +712,15 @@ class ArtCanvas(Widget, can_focus=True):
         """Turn the heading.
 
         Absolute: left, right, up, down (sets heading directly).
-        Relative: spin (90 CW), back/backward/around (180).
-        Angles: 90=spin, 180=back, 270=spin left, 360=no-op.
+        Relative: spin/rotate (90 CW), back/backward/around (180).
         """
         self._mark_cursor_dirty()
         if direction in ('left', 'right', 'up', 'down'):
             self._heading = direction
-        elif direction in ('spin', 'rotate', '90'):
+        elif direction in ('spin', 'rotate'):
             self._heading = self._TURN_RIGHT[self._heading]
-        elif direction in ('back', 'backward', 'around', '180'):
+        elif direction in ('back', 'backward', 'around'):
             self._heading = self._TURN_RIGHT[self._TURN_RIGHT[self._heading]]
-        elif direction == '270':
-            self._heading = self._TURN_LEFT[self._heading]
-        elif direction == '360':
-            pass  # Full circle, no change
         self._use_heading_cursor = True
         self._mark_cursor_dirty()
         self._restart_blink()

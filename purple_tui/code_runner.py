@@ -442,13 +442,22 @@ class ArtCodeRunner:
         (re.compile(r'^lift\s*$', re.I), '_do_lift'),
         (re.compile(r'^(?:pen\s*up|penup)\s*$', re.I), '_do_pen_up'),
         (re.compile(r'^(?:pen\s*down|pendown)\s*$', re.I), '_do_pen_down'),
+        (re.compile(r'^(?:spin|rotate)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_spin'),
+        (re.compile(r'^(?:spin|rotate)\s+(\d+)\s*$', re.I), '_do_spin'),
         (re.compile(r'^(?:spin|rotate)\s*$', re.I), '_do_spin'),
         (re.compile(r'^face\s+(\S+)\s*$', re.I), '_do_face'),
+        (re.compile(r'^turn\s+(\d+)\s+(.+?)\s*$', re.I), '_do_turn_n'),
+        (re.compile(r'^turn\s+(\S+)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_turn'),
+        (re.compile(r'^turn\s+(\S+)\s+(\d+)\s*$', re.I), '_do_turn'),
         (re.compile(r'^turn\s+(\S+)\s*$', re.I), '_do_turn'),
         (re.compile(r'^turn\s*$', re.I), '_do_spin'),
+        (re.compile(r'^(?:forward|go|move|walk|step)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_forward'),
         (re.compile(r'^(?:forward|go|move|walk|step)\s*(\d*)\s*$', re.I), '_do_forward'),
+        (re.compile(r'^(?:back|backward)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_back'),
         (re.compile(r'^(?:back|backward)\s*(\d*)\s*$', re.I), '_do_back'),
+        (re.compile(r'^(left|right|up|down)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_direction'),
         (re.compile(r'^(left|right|up|down)\s+(\d+)\s*$', re.I), '_do_direction'),
+        (re.compile(r'^(left|right|up|down)\s+(\D.+?)\s*$', re.I), '_do_direction_text'),
         (re.compile(r'^(left|right|up|down)\s*$', re.I), '_do_direction'),
     ]
 
@@ -589,7 +598,18 @@ class ArtCodeRunner:
         return True
 
     async def _do_spin(self, m) -> bool | None:
+        """spin/rotate [N] [color]: spin 90 CW, optionally move forward N."""
         self.canvas.turn('spin')
+        distance = int(m.group(1)) if m.lastindex >= 1 and m.group(1) else 0
+        if distance:
+            distance = min(distance, 200)
+            if m.lastindex >= 2 and m.group(2):
+                color_hex, _ = self._resolve_leading_color(m.group(2).split())
+                if color_hex:
+                    self._apply_color(color_hex)
+            action = "paint" if self._paint_on else "move"
+            self.canvas._use_heading_cursor = True
+            self.canvas.execute_logo_command(action, self.canvas._heading, distance)
         await asyncio.sleep(0.05)
         return True
 
@@ -608,25 +628,57 @@ class ArtCodeRunner:
             return True
         return None
 
+    async def _do_turn_n(self, m) -> bool | None:
+        """turn N [color]: spin 90 CW then forward N."""
+        distance = min(int(m.group(1)), 200)
+        if m.lastindex >= 2 and m.group(2):
+            color_hex, _ = self._resolve_leading_color(m.group(2).split())
+            if color_hex:
+                self._apply_color(color_hex)
+        self.canvas.turn('spin')
+        action = "paint" if self._paint_on else "move"
+        self.canvas._use_heading_cursor = True
+        self.canvas.execute_logo_command(action, self.canvas._heading, distance)
+        await asyncio.sleep(0.05)
+        return True
+
     async def _do_turn(self, m) -> bool | None:
-        """turn <direction/angle>: absolute for directions, spin for 90, etc."""
+        """turn <dir> [N] [color]: turn then optionally move forward N."""
         arg = m.group(1).lower()
+        distance = int(m.group(2)) if m.lastindex >= 2 and m.group(2) else 0
+        distance = min(distance, 200)
+
+        # "turn 10" → spin + forward 10 (matched when no color follows)
+        if arg.isdigit():
+            return await self._do_turn_n(m)
+
         valid = ('left', 'right', 'up', 'down', 'back', 'backward', 'around')
-        if arg in valid or arg.isdigit():
-            self.canvas.turn(arg)
-            await asyncio.sleep(0.05)
-            return True
-        corrected = fuzzy_match_small(arg, _TURN_VOCAB)
-        if corrected:
+        if arg not in valid:
+            corrected = fuzzy_match_small(arg, _TURN_VOCAB)
+            if not corrected:
+                return None
             self.corrections.append((f'turn {arg}', f'turn {corrected}'))
-            self.canvas.turn(corrected)
-            await asyncio.sleep(0.05)
-            return True
-        return None
+            arg = corrected
+        self.canvas.turn(arg)
+
+        if distance:
+            if m.lastindex >= 3 and m.group(3):
+                color_hex, _ = self._resolve_leading_color(m.group(3).split())
+                if color_hex:
+                    self._apply_color(color_hex)
+            action = "paint" if self._paint_on else "move"
+            self.canvas._use_heading_cursor = True
+            self.canvas.execute_logo_command(action, self.canvas._heading, distance)
+        await asyncio.sleep(0.05)
+        return True
 
     async def _do_forward(self, m) -> bool | None:
         distance = int(m.group(1)) if m.group(1) else 1
         distance = min(distance, 200)
+        if m.lastindex >= 2 and m.group(2):
+            color_hex, _ = self._resolve_leading_color(m.group(2).split())
+            if color_hex:
+                self._apply_color(color_hex)
         action = "paint" if self._paint_on else "move"
         self.canvas._use_heading_cursor = True
         self.canvas.execute_logo_command(action, self.canvas._heading, distance)
@@ -637,6 +689,10 @@ class ArtCodeRunner:
         """back/backward [N]: move opposite to current heading."""
         distance = int(m.group(1)) if m.group(1) else 1
         distance = min(distance, 200)
+        if m.lastindex >= 2 and m.group(2):
+            color_hex, _ = self._resolve_leading_color(m.group(2).split())
+            if color_hex:
+                self._apply_color(color_hex)
         opposite = _OPPOSITE[self.canvas._heading]
         action = "paint" if self._paint_on else "move"
         self.canvas._use_heading_cursor = True
@@ -644,11 +700,39 @@ class ArtCodeRunner:
         await asyncio.sleep(0.05)
         return True
 
+    async def _do_direction_text(self, m) -> bool | None:
+        """left/right/up/down <text>: face direction, then write/paint text."""
+        direction = m.group(1).lower()
+        text = m.group(2)
+        if self.canvas._heading != direction:
+            self.canvas._heading = direction
+            self.canvas._mark_cursor_dirty()
+            self.canvas.refresh()
+        # Try as color first
+        color_hex, _ = self._resolve_leading_color(text.split())
+        if color_hex:
+            self._apply_color(color_hex)
+            await asyncio.sleep(0.05)
+            return True
+        # Otherwise write/paint the text in that direction
+        for ch in text:
+            if self._write_on:
+                self.canvas.type_char(ch, direction=direction)
+            elif self._paint_on:
+                self.canvas.paint_char(ch, direction=direction)
+            await asyncio.sleep(0.02)
+        return True
+
     async def _do_direction(self, m) -> bool | None:
-        """left/right/up/down [N]: face direction + move N."""
+        """left/right/up/down [N] [color]: face direction + move N."""
         direction = m.group(1).lower()
         distance = int(m.group(2)) if m.lastindex >= 2 and m.group(2) else 1
         distance = min(distance, 200)
+        # Optional trailing color (e.g. "down 5 blue")
+        if m.lastindex >= 3 and m.group(3):
+            color_hex, _ = self._resolve_leading_color(m.group(3).split())
+            if color_hex:
+                self._apply_color(color_hex)
         if self.canvas._heading != direction:
             self.canvas._heading = direction
             self.canvas._mark_cursor_dirty()
@@ -677,8 +761,13 @@ class ArtCodeRunner:
             color_text = " ".join(words[:words_used])
             remainder = " ".join(words[words_used:])
             if remainder:
-                self.corrections.append((text, f"{color_text}, {remainder}"))
-                asyncio.ensure_future(self._dispatch(remainder))
+                # Bare number after color → forward N (e.g. "blue 5" → 5 blue squares)
+                if re.match(r'^\d+$', remainder):
+                    self.corrections.append((text, f"color {color_text}, forward {remainder}"))
+                    asyncio.ensure_future(self._dispatch(f"forward {remainder}"))
+                else:
+                    self.corrections.append((text, f"{color_text}, {remainder}"))
+                    asyncio.ensure_future(self._dispatch(remainder))
             else:
                 self.corrections.append((text, color_text))
             return True

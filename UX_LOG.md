@@ -4,6 +4,7 @@ Brief descriptions of user experience changes, newest first.
 
 - Post-install reboot: after install completes, Textual exits and a plain-text screen shows "All done! You can remove the USB drive now. Press Enter to restart." Runs from a static binary on tmpfs so it works even after USB removal.
 - Parent menu and terminal mode now show whether Purple Computer is running from USB or installed on the computer.
+- Art room: movement commands accept trailing color ("down 5 blue", "go 10 red"). Color-then-number draws forward ("blue 5" = 5 blue squares). Direction + text writes/paints in that direction ("left hello" writes "hello" going left). Turn/spin accept a distance ("turn 5" = spin then go 5, "turn left 10" = face left then go 10). Removed numeric angle support (90/180/270) from turn.
 - Play room repeat is now inline-only ("repeat 3 dog, cat"), matching music/art rooms. Removed multi-line block syntax (repeat/end).
 - Sleep screen status messages shortened and use emojis (lid, battery, USB).
 - Boot: eliminated GRUB error message and gray screen flash. Boot goes straight from black to purple "Starting up..." screen with no intermediate states.

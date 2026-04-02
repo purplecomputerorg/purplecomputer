@@ -232,7 +232,7 @@ if HAS_PYTEST:
             # First call is watchdog, second is the actual shutdown command
             assert mock_popen.call_count == 2
             cmd = mock_popen.call_args_list[1][0][0]
-            assert cmd == ["systemctl", "poweroff", "--force"]
+            assert cmd == ["sudo", "systemctl", "poweroff", "--force"]
 
         def test_shutdown_falls_back_on_failure(self, pm):
             """If first shutdown command fails, should try next one."""
@@ -313,8 +313,8 @@ if HAS_PYTEST:
                 pm.shutdown()
 
             # Skip watchdog (index 0), check shutdown commands
-            assert "--force" in commands_tried[1]       # systemctl --force
-            assert "--force" in commands_tried[2]       # sudo systemctl --force
+            assert "--force" in commands_tried[1]       # sudo systemctl --force
+            assert "-f" in commands_tried[2]            # sudo poweroff -f
 
     class TestPoweroffAvailableCheck:
         """Test the _poweroff_available initialization."""

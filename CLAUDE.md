@@ -127,11 +127,11 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. Python calls `os.execv` on a static setuid reboot binary at `/run/purple-reboot` (tmpfs)
+5. Textual exits, Python `execv`s into `/run/purple-reboot-mount/purple-reboot --wait` (static binary on tmpfs)
 
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
 
-**Post-install reboot:** `install.sh` remounts `/run` with `exec,suid` (Ubuntu default is `nosuid,noexec`), copies a static reboot binary (`tools/purple-reboot.c`) to `/run/purple-reboot` with setuid root. The binary calls `reboot(2)` directly, no shared libs, survives USB removal (tmpfs). Falls through to `PowerManager.shutdown()` if missing.
+**Post-install reboot:** When install finishes, Python exits Textual and `execv`s into `/run/purple-reboot-mount/purple-reboot` (own tmpfs with `exec,suid` since Ubuntu's `/run` is `nosuid,noexec`). The binary calls `reboot(2)` directly, no shared libs. With `--wait` it shows a message and waits for Enter before rebooting. This is the only approach that survives USB removal: even `/bin/sh` gets SIGBUS on dead overlayfs code pages.
 
 **Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed two ways:
 - `touch /run/casper-no-prompt` before reboot (runtime, in `parent_menu.py`)

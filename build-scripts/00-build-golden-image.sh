@@ -346,8 +346,12 @@ LAUNCHER
     # With console=tty2, tty1 is blank until agetty starts. This fills the gap.
     cat > "$MOUNT_DIR/usr/local/bin/purple-splash" <<'SPLASH'
 #!/bin/sh
-# In debug mode, skip the splash so kernel/systemd messages stay visible
-[ -f /opt/purple/debug ] && exit 0
+# In debug mode, enable SysRq (Alt+PrtSc+R to ungrab keyboard, then Ctrl+Alt+F2
+# for a debug shell) and verbose logging, then skip the splash.
+if [ -f /opt/purple/debug ]; then
+    sysctl -w kernel.sysrq=1 kernel.printk="7 4 1 7" >/dev/null 2>&1
+    exit 0
+fi
 # Silence kernel console messages (camera drivers, etc.) so they don't
 # overwrite our splash. Works regardless of which modules are loaded.
 dmesg -n 1 2>/dev/null

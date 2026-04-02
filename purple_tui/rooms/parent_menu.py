@@ -19,7 +19,6 @@ import sys
 import select
 import threading
 import termios
-import time
 import json
 from pathlib import Path
 
@@ -820,35 +819,6 @@ _INSTALL_STAGES = [
 
 
 _REBOOT_BIN = '/run/purple-reboot-mount/purple-reboot'
-_REBOOT_LOG = '/tmp/purple-reboot-debug.log'
-
-
-def _reboot_log(msg):
-    """Breadcrumb to /tmp (tmpfs). Always on: costs nothing, invaluable when debugging."""
-    try:
-        with open(_REBOOT_LOG, 'a') as f:
-            f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
-    except Exception:
-        pass
-
-
-def _trigger_reboot():
-    """Reboot via static setuid binary on tmpfs. Falls back to PowerManager.
-
-    install.sh copies a static reboot binary to /run/purple-reboot with setuid
-    root. It calls reboot(2) directly, no shared libs, so it works after USB
-    removal kills the overlayfs. Fallback: PowerManager.shutdown() (sysrq watchdog).
-    """
-    _reboot_log(f"_trigger_reboot: exists={os.path.isfile(_REBOOT_BIN)}")
-    if os.path.isfile(_REBOOT_BIN):
-        try:
-            _reboot_log("execv into reboot binary")
-            os.execv(_REBOOT_BIN, [_REBOOT_BIN])
-        except OSError as e:
-            _reboot_log(f"execv failed: {e}")
-    _reboot_log("fallback to PowerManager.shutdown()")
-    from ..power_manager import get_power_manager
-    get_power_manager().shutdown()
 
 
 class InstallProgressScreen(ModalScreen):
@@ -937,27 +907,19 @@ class InstallProgressScreen(ModalScreen):
         except Exception:
             return
 
-        if self._phase == "installing":
-            title_w.update(caps("Installing Purple Computer"))
-            status_w.update(self._status)
-            bar_w.update(self._render_bar(self._progress))
-            hint_w.update("This takes about 10-15 minutes.")
-        elif self._phase == "success":
-            title_w.update(caps("All done!"))
-            status_w.update(
-                "Purple Computer is installed!\n\n"
-                "You can remove the USB drive."
-            )
-            bar_w.update("")
-            hint_w.update("Press Enter to restart.")
-        else:  # error
+        if self._phase == "error":
             title_w.update(caps("Something went wrong"))
             status_w.update(
                 "Setup did not finish.\n\n"
                 f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
             )
             bar_w.update("")
-            hint_w.update("Press Enter to restart and try again.")
+            hint_w.update("Hold the power button to turn off.")
+        else:
+            title_w.update(caps("Installing Purple Computer"))
+            status_w.update(self._status)
+            bar_w.update(self._render_bar(self._progress))
+            hint_w.update("This takes about 10-15 minutes.")
 
     def _run_install_thread(self) -> None:
         """Run install.sh in a daemon thread, streaming progress to the UI.
@@ -990,8 +952,17 @@ class InstallProgressScreen(ModalScreen):
         self.app.call_from_thread(self._on_install_complete, success)
 
     def _on_install_complete(self, success: bool) -> None:
-        self._phase = "success" if success else "error"
-        _reboot_log(f"install complete: success={success} reboot_bin={os.path.isfile(_REBOOT_BIN)}")
+        self._phase = "done"
+        if success and os.path.isfile(_REBOOT_BIN):
+            # execv into the static reboot binary on tmpfs. The binary shows
+            # "press Enter", waits, then reboots. It's statically linked and
+            # on tmpfs, so it works after USB removal (unlike /bin/sh, Python,
+            # or anything on overlayfs). execv replaces this process entirely,
+            # so Textual cleanup is irrelevant.
+            os.system('stty sane')
+            os.execv(_REBOOT_BIN, [_REBOOT_BIN, '--wait'])
+        # Error or binary missing: stay in Textual with error message
+        self._phase = "error"
         self._update_ui()
 
     def _handle_line(self, text: str) -> None:
@@ -1011,11 +982,7 @@ class InstallProgressScreen(ModalScreen):
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        if self._phase == "installing":
-            return
-        if isinstance(action, ControlAction) and action.is_down and action.action == 'enter':
-            _reboot_log("Enter pressed")
-            _trigger_reboot()
+        pass  # All input ignored during install; reboot is handled by shell script
 
 
 class ParentMenuItem(Static):

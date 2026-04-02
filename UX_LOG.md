@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Post-install reboot: after install completes, Textual exits and a plain-text screen shows "All done! You can remove the USB drive now. Press Enter to restart." Runs from a static binary on tmpfs so it works even after USB removal.
 - Parent menu and terminal mode now show whether Purple Computer is running from USB or installed on the computer.
 - Play room repeat is now inline-only ("repeat 3 dog, cat"), matching music/art rooms. Removed multi-line block syntax (repeat/end).
 - Sleep screen status messages shortened and use emojis (lid, battery, USB).

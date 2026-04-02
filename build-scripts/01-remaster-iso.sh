@@ -85,13 +85,10 @@ touch /root/home/purple/.hushlogin
 chown 1000:1000 /root/home/purple/.hushlogin
 purple_log "Restored dotfiles from /etc/purple/"
 
-# Debug mode: create flag file and undo kernel message suppression
+# Debug mode: create flag file (purple-splash service enables SysRq and verbose logging)
 if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
     touch /root/opt/purple/debug
-    cat > /root/etc/sysctl.d/99-purple-debug.conf << 'SYSCTL_EOF'
-kernel.printk = 7 4 1 7
-SYSCTL_EOF
-    purple_log "DEBUG MODE: created /opt/purple/debug, enabled kernel messages"
+    purple_log "DEBUG MODE: created /opt/purple/debug"
 fi
 
 # Show boot splash on tty1: purple background with friendly message.

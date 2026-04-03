@@ -17,7 +17,6 @@ Usage:
 
 import array
 import string
-import sys
 import wave
 from pathlib import Path
 

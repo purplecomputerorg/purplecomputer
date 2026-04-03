@@ -198,7 +198,7 @@ def main():
     # Check API key
     if not check_api_key():
         print(f"  {RED}No ANTHROPIC_API_KEY found.{RESET}")
-        print(f"  Set it in your environment or in .env")
+        print("  Set it in your environment or in .env")
         print()
         sys.exit(1)
     print(f"  {GREEN}API key found{RESET}")

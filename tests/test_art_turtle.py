@@ -1,7 +1,6 @@
 """Tests for Logo-style turtle commands in art room (turn, forward, heading)."""
 
 import asyncio
-from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -529,7 +528,6 @@ class TestArtCodeRunnerTurtle:
 
     def test_bad_command_doesnt_break_others(self, canvas):
         from purple_tui.code_runner import ArtCodeRunner
-        import unittest.mock as mock
         runner = ArtCodeRunner(canvas)
         original_turn = canvas.turn
         call_count = [0]

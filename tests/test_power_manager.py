@@ -210,7 +210,7 @@ if HAS_PYTEST:
 # =============================================================================
 
 if HAS_PYTEST:
-    from unittest.mock import patch, call
+    from unittest.mock import patch
 
     class TestShutdownExecution:
         """Test that shutdown() actually attempts to power off."""

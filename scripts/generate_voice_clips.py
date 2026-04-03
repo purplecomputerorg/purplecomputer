@@ -91,7 +91,6 @@ def _make_synth_config():
 
 def _trim_silence(samples, sample_rate, threshold_db=-40.0):
     """Trim leading and trailing silence using windowed RMS."""
-    import array as _array
     if not samples:
         return samples
     threshold = 32767 * (10 ** (threshold_db / 20.0))
@@ -264,7 +263,6 @@ def _collect_all_actions() -> list:
     """Collect all demo actions from composition segments and fallback script."""
     sys.path.insert(0, str(PROJECT_ROOT))
 
-    from purple_tui.demo.script import TypeText
     import importlib
     import json
 

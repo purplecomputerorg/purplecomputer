@@ -23,7 +23,7 @@ instruments = {
 
 FREQ = 261.63  # Middle C
 
-print(f"Actual waveform overlap analysis")
+print("Actual waveform overlap analysis")
 print(f"set_volume={SET_VOLUME}, interval={INTERVAL*1000:.0f}ms, freq={FREQ}Hz")
 print("=" * 70)
 

@@ -407,7 +407,7 @@ class MusicCodeRunner:
                 await asyncio.sleep(delay)
 
 
-from .fuzzy import fuzzy_match, fuzzy_match_small
+from .fuzzy import fuzzy_match_small
 
 
 # Vocabulary lists for fuzzy matching

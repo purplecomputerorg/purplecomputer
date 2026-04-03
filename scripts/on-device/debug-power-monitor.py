@@ -27,10 +27,8 @@ Examples:
 
 import argparse
 import os
-import sys
 import time
 from datetime import datetime
-from pathlib import Path
 
 
 def find_mains_path():
@@ -148,7 +146,7 @@ def check_evdev_devices():
                 results.append(f"power_button={dev.path} ({dev.name})")
             if evdev.ecodes.SW_LID in sw_caps:
                 # Read current lid state from evdev
-                sw_state = dev.active_keys()  # doesn't work for switches
+                dev.active_keys()  # doesn't work for switches
                 results.append(f"lid_switch={dev.path} ({dev.name})")
             dev.close()
         except (PermissionError, OSError):

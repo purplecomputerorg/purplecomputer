@@ -13,7 +13,7 @@ import sys
 
 try:
     import evdev
-    from evdev import InputDevice, categorize
+    from evdev import InputDevice
 except ImportError:
     print("evdev not available")
     sys.exit(1)

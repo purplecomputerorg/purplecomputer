@@ -97,21 +97,19 @@ See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
 Purple has three rooms:
 
-| Key | Room | What It Does |
-|-----|------|--------------|
-| **F1** | **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
-| **F2** | **Music** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
-| **F3** | **Art** | Write and paint with colors that mix like real paint. Great around 3-4+. |
+| Room | What It Does |
+|------|--------------|
+| **Play** | Type a word, see an emoji, hear it spoken, mix colors, do math. Kids who can read get the most out of this, but even pre-readers can use it with just numbers (2 + 3). See [guides/play-room-design.md](guides/play-room-design.md) |
+| **Music** | Make music and draw with the keyboard. Press any key to play a sound and paint a color. Even a 2-year-old can have fun here. |
+| **Art** | Write and paint with colors that mix like real paint. Great around 3-4+. |
 
 **Controls:**
 - **Escape (tap):** Room picker (Play, Music, Art)
-- **F1-F3:** Switch rooms directly
-- **F9:** Toggle dark/light theme
-- **F10:** Mute/unmute, **F11:** Volume down, **F12:** Volume up
+- **Hold Escape (1s):** Parent menu
+- **Hold \\ (3s):** Parent menu (alternate, works on all keyboards)
 - **Caps Lock:** Toggle big/small letters
-- **Ctrl+V:** Cycle views (Screen → Line → Ears)
 - **Tab** (in Art): Toggle write/paint mode
-- **Hold Escape (1s):** Parent mode (admin menu)
+- **Volume:** Hardware media keys
 
 **Speech** (in Play room): Add `!` anywhere (e.g., `cat!`) or use `say`/`talk` prefix to hear results spoken aloud.
 
@@ -130,10 +128,6 @@ Kids can type capital letters without holding two keys at once!
 
 ### Parent Mode
 - **Hold Escape for 1 second** — Opens parent menu (display settings, volume, updates)
-
-### F-Key Setup
-
-On first boot, Purple automatically runs keyboard setup. You'll be asked to press F1 through F12. This captures each key's scancode, making F-keys work regardless of the laptop's default behavior (some laptops send brightness/volume instead of F1-F12).
 
 ### How It Works
 

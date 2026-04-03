@@ -554,7 +554,6 @@ if HAS_PYTEST:
             assert result.count("●") == 1 and "thousands" in result
 
         def test_very_large_number_abacus(self, evaluator):
-            result = evaluator.evaluate("9999")
             # 9+9+9+9 = 36 dots across 4 rows
             assert evaluator.evaluate("9999").count("●") == 36
 
@@ -1127,7 +1126,6 @@ class TestTextWithExpression:
     def test_text_with_parens_math(self, evaluator):
         # "what is (2 + 2) cats" -> parens imply computation, show label
         result = evaluator.evaluate("what is (2 + 2) cats")
-        plain = strip_markup(result)
         lines = result.split("\n")
         assert len(lines) == 2
         assert "🐱" in lines[0] and "4" in strip_markup(lines[0])
@@ -1530,7 +1528,7 @@ class TestColorMappingConsistency:
         from purple_tui.rooms.art_room import get_key_color, KEY_COLORS
         from purple_tui.rooms.play_room import SimpleEvaluator
 
-        evaluator = SimpleEvaluator()
+        SimpleEvaluator()
         for char in "abcdefghijklmnopqrstuvwxyz":
             # Play uses get_key_color (imported from art_room) in _format_text_as_color_blocks
             play_color = get_key_color(char)
@@ -1758,7 +1756,7 @@ class TestFuzzyCorrections:
         assert evaluator.content.pop_correction() is None
 
     def test_exact_color_no_correction(self, evaluator):
-        result = evaluator.evaluate("red")
+        evaluator.evaluate("red")
         assert evaluator.content.pop_correction() is None
 
     def test_typo_emoji_multiplication(self, evaluator):

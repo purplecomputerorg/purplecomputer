@@ -14,6 +14,7 @@ See guides/keyboard-architecture.md for details.
 
 import asyncio
 import logging
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -101,6 +102,9 @@ class KeyCode:
     KEY_LEFT = 105
     KEY_RIGHT = 106
     KEY_DOWN = 108
+
+    # Modifier keys
+    KEY_RIGHTCTRL = 97
 
     # Media keys (hardware volume buttons)
     KEY_MUTE = 113
@@ -253,6 +257,11 @@ class EvdevReader:
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
         self._tasks: list[asyncio.Task] = []
 
+        # Emergency VT switch: Ctrl+\ held for 3s → chvt 2
+        self._ctrl_held = False
+        self._ctrl_backslash_start: float | None = None
+        self._vt_switch_fired = False
+
     @property
     def _device(self):
         """Primary device (for backward compat with logging)."""
@@ -390,11 +399,33 @@ class EvdevReader:
                 # Process key events: 0=up, 1=down, 2=repeat
                 if event.type == EV_KEY and event.value in (0, 1, 2):
                     keycode = event.code
+                    is_down = event.value in (1, 2)
+
+                    # Emergency VT switch: Ctrl+\ held 3s → chvt 2
+                    # Runs at evdev level so it works even when Textual is hung.
+                    if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
+                        self._ctrl_held = is_down
+                        if not is_down:
+                            self._ctrl_backslash_start = None
+                            self._vt_switch_fired = False
+                    if keycode == KeyCode.KEY_BACKSLASH:
+                        if is_down and self._ctrl_held and not self._vt_switch_fired:
+                            if self._ctrl_backslash_start is None:
+                                self._ctrl_backslash_start = time.monotonic()
+                            elif time.monotonic() - self._ctrl_backslash_start >= 3.0:
+                                self._vt_switch_fired = True
+                                self._ctrl_backslash_start = None
+                                logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
+                                subprocess.Popen(["sudo", "chvt", "2"])
+                        if not is_down:
+                            self._ctrl_backslash_start = None
+                            self._vt_switch_fired = False
+
                     scancode = self._pending_scancodes.pop(dev_path, 0)
 
                     raw_event = RawKeyEvent(
                         keycode=keycode,
-                        is_down=(event.value in (1, 2)),  # down or repeat
+                        is_down=is_down,
                         timestamp=event.timestamp(),
                         scancode=scancode,
                         is_repeat=(event.value == 2),

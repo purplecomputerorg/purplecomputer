@@ -19,7 +19,6 @@ freqs = list(NOTE_FREQUENCIES.values())[:NUM_NOTES]
 for dur in [0.55, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25]:
     # Re-import with different duration by calling directly
     from scripts.generate_sounds import generate_marimba
-    import types
 
     # Generate all notes at this duration
     all_samples = []

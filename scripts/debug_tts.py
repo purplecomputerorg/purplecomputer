@@ -11,7 +11,6 @@ Usage:
 """
 
 import hashlib
-import sys
 import tempfile
 import wave
 import array

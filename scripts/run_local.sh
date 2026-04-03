@@ -97,7 +97,7 @@ fi
 
 echo ""
 echo_info "Starting Purple Computer TUI..."
-echo_info "F1-F3: Switch modes | Ctrl+V: Cycle views | F12: Theme"
+echo_info "Tap Escape: room picker | Hold Escape 1s: parent menu | Hold \\ 3s: parent menu"
 echo ""
 
 # Set environment variables

@@ -1,7 +1,6 @@
 """Tests for code_runner command splitting, fuzzy matching, and resolution."""
 
 import asyncio
-from unittest.mock import MagicMock, patch
 
 import pytest
 

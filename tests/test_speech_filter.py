@@ -58,34 +58,34 @@ class TestBlockedWords:
     @pytest.mark.parametrize("word", _DIRECT_WORDS)
     def test_direct_blocked(self, word):
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == "", "should be blocked"
 
     @pytest.mark.parametrize("word", _CASE_VARS)
     def test_case_variations_blocked(self, word):
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == "", "should be blocked"
 
     @pytest.mark.parametrize("word", _SPACED)
     def test_spaced_out_blocked(self, word):
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == "", "should be blocked"
 
     @pytest.mark.parametrize("word", _VARIANTS)
     def test_spelling_variants_blocked(self, word):
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == "", "should be blocked"
 
     @pytest.mark.parametrize("word", _LEET)
     def test_leet_speak_passes_through(self, word):
         # Leet-speak passes through because TTS pronounces digits as numbers,
         # so "f4ck" sounds like "f four c k", not the blocked word
         result = filter_speech(word)
-        assert result == word, f"leet-speak should pass through TTS filter"
+        assert result == word, "leet-speak should pass through TTS filter"
 
     @pytest.mark.parametrize("word", _SUFFIXED)
     def test_suffixed_forms_blocked(self, word):
         result = filter_speech(word)
-        assert result == "", f"should be blocked"
+        assert result == "", "should be blocked"
 
     def test_sentence_with_blocked_word_scrubbed(self):
         # "say the <blocked> word" → scrubbed to "saytheword" (long enough)

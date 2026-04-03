@@ -11,10 +11,8 @@ Run with: pytest tests/test_install_reboot.py -v
 
 import os
 import subprocess
-import sys
 import threading
 import time
-from pathlib import Path
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,6 @@ ensures identical input always produces identical WAV output.
 import array
 import hashlib
 import re
-import shutil
 import subprocess
 import sys
 import tempfile

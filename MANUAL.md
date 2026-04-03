@@ -299,32 +299,15 @@ This ensures kids can't accidentally click around or get confused by trackpad ge
 
 #### Parent Menu
 
-Hold Escape for ~1 second to open the Parent Menu. Navigation uses explicit key handling (no focus system):
+Hold Escape for ~1 second to open the Parent Menu. Alternatively, hold the backslash key (`\`) for 3 seconds, which works on all keyboards including Macs where Escape may be unreliable.
+
+Navigation uses explicit key handling (no focus system):
 
 | Key | Action |
 |-----|--------|
 | **↑/↓** | Move selection |
 | **Enter** | Activate selected item |
 | **Escape** | Close menu |
-
-#### F-Key Setup
-
-Purple Computer uses the top-row keys (F1-F12) for switching between modes. On first boot, keyboard setup runs automatically. Just press each F-key when prompted.
-
-**How it works:**
-
-The keyboard normalizer identifies physical keys by their internal codes (scancodes), which stay the same regardless of what the laptop decides each key should do. This means:
-- Physical F1 key → always works as F1 in Purple Computer
-- No need to hold extra keys or remember special combinations
-- Works on any laptop
-
-**Re-running setup:**
-
-If you need to reconfigure (e.g., different keyboard), run from parent shell:
-
-```bash
-sudo python3 /opt/purple/keyboard_normalizer.py --calibrate
-```
 
 ---
 
@@ -743,7 +726,7 @@ The installer couldn't find an internal disk. Causes:
 - Disk is USB-connected (shows as removable)
 - NVMe not detected (rare with Ubuntu kernel)
 
-**Solution:** Check tty2 (Alt+F2) for emergency shell, then:
+**Solution:** Switch to tty2 for an emergency shell (see below), then:
 ```bash
 lsblk  # List all disks
 cat /sys/block/*/removable  # Check removable flags
@@ -765,6 +748,20 @@ sudo badblocks -v /dev/sda
 # Check SMART status
 sudo smartctl -a /dev/sda
 ```
+
+### Switching to a Debug Shell (VT Switch)
+
+Purple Computer runs on tty1. To get a root shell on tty2 for debugging:
+
+**From the keyboard (emergency escape hatch):** Hold **Ctrl+\\** (Ctrl+Backslash) for 3 seconds. This runs `chvt 2` directly from the evdev input thread, so it works even when the TUI is completely frozen.
+
+**From SSH:** `sudo chvt 2`
+
+**Why Ctrl+Alt+F2 doesn't work:** Alacritty sets the VT keyboard mode to `K_OFF` on tty1, which disables the kernel's built-in Ctrl+Alt+Fn VT switching. The Ctrl+Backslash escape hatch bypasses this by calling `chvt` via subprocess instead of relying on the kernel.
+
+**Returning to Purple Computer:** From tty2, press Ctrl+Alt+F1 (this works because tty2 is in normal `K_UNICODE` mode).
+
+**Checking VT keyboard mode:** `sudo kbd_mode -C /dev/tty1` (will show "unknown" due to `K_OFF`).
 
 ### Post-Install Issues
 
@@ -801,19 +798,9 @@ xrandr --output HDMI-1 --mode 1920x1080
 echo "xrandr --output HDMI-1 --mode 1920x1080" >> ~/.xprofile
 ```
 
-**F-keys (F1-F12) not working**
+**Can't open parent menu**
 
-Keyboard setup should have run on first boot. To re-run it, use the Parent Menu (hold Escape 1 second), then use Up/Down arrows to select "Recalibrate Keyboard" and press Enter.
-
-Or from a terminal:
-```bash
-python3 /opt/purple/keyboard_normalizer.py --calibrate
-```
-
-Or delete the config and reboot:
-```bash
-rm ~/.config/purple/keyboard-map.json
-```
+Hold Escape for 1 second. If Escape doesn't work (e.g., Touch Bar Macs), try the backtick key (`` ` ``, top-left corner) which acts as an Escape alias. As a last resort, hold the backslash key (`\`) for 3 seconds.
 
 ---
 

@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Hold backslash (`\`) for 3 seconds to open parent menu. Alternative to Escape long-hold for keyboards where Escape is unreliable.
+- Install failure screen now shows the specific error and "Press Enter for technical details" to view the last 10 log lines (photographable for support).
 - Post-install reboot: after install completes, Textual exits and a plain-text screen shows "All done! You can remove the USB drive now. Press Enter to restart." Runs from a static binary on tmpfs so it works even after USB removal.
 - Parent menu and terminal mode now show whether Purple Computer is running from USB or installed on the computer.
 - Art room: movement commands accept trailing color ("down 5 blue", "go 10 red"). Color-then-number draws forward ("blue 5" = 5 blue squares). Direction + text writes/paints in that direction ("left hello" writes "hello" going left). Turn/spin accept a distance ("turn 5" = spin then go 5, "turn left 10" = face left then go 10). Removed numeric angle support (90/180/270) from turn.

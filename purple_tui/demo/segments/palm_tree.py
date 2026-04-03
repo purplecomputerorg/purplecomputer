@@ -1,7 +1,7 @@
 """Art room demo: intro text + palm tree drawing."""
 
 from ..script import (
-    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment,
+    PressKey, SwitchRoom, Pause, MoveSequence, Comment,
     SetSpeed, TypeText, ClearArt, ZoomIn, ZoomOut,
 )
 

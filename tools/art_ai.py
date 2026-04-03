@@ -3254,7 +3254,7 @@ Rules:
         # Parse JSON from response
         adjustments = parse_json_robust(text)
         if not isinstance(adjustments, dict):
-            print(f"[Bounds] AI returned unexpected format, no changes applied")
+            print("[Bounds] AI returned unexpected format, no changes applied")
             return library.composition
 
         # Apply adjustments to composition
@@ -3376,7 +3376,6 @@ def judge_components_human(
             full_images.append((cand_img, cand_label))
 
     go_to_components = False
-    chosen_candidate_idx = None
 
     if full_images and library_full_image:
         composite = _build_side_by_side(full_images, font)
@@ -3407,7 +3406,6 @@ def judge_components_human(
                     print("[Human Judge] Keeping library for all components.")
                     break
                 elif choice == 'n' and num_candidates == 1:
-                    chosen_candidate_idx = 0
                     for name in pairs:
                         if name not in results and name in all_candidate_crops[0][1]:
                             results[name] = {
@@ -3425,13 +3423,12 @@ def judge_components_human(
                                 "scores_candidate": None,
                                 "scores_library": None,
                             }
-                    print(f"[Human Judge] Accepting all components from candidate.")
+                    print("[Human Judge] Accepting all components from candidate.")
                     break
                 elif choice.startswith('n') and len(choice) > 1 and num_candidates > 1:
                     try:
                         idx = int(choice[1:]) - 1
                         if 0 <= idx < num_candidates:
-                            chosen_candidate_idx = idx
                             label = all_candidate_crops[idx][0]
                             crops = all_candidate_crops[idx][1]
                             for name in pairs:

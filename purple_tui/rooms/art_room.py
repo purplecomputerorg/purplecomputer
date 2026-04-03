@@ -26,7 +26,7 @@ from textual import events
 from rich.segment import Segment
 from rich.style import Style
 
-from ..color_mixing import mix_colors_paint, hex_to_rgb, rgb_to_hex
+from ..color_mixing import mix_colors_paint, hex_to_rgb
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
 )

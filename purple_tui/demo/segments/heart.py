@@ -1,7 +1,7 @@
 """AI-generated drawing demo."""
 
 from purple_tui.demo.script import (
-    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment, TypeText,
+    PressKey, SwitchRoom, Pause, MoveSequence, Comment, TypeText,
     ClearArt,
 )
 

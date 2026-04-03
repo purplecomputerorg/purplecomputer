@@ -14,7 +14,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -24,8 +24,6 @@ from purple_tui.input import (
     EvdevReader,
     KeyCode,
     PowerButtonReader,
-    PowerButtonEvent,
-    RawKeyEvent,
 )
 
 

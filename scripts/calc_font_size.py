@@ -72,7 +72,7 @@ def main():
         print(f"Screen: {screen[0]}x{screen[1]}")
         print(f"Grid: {REQUIRED_COLS}x{REQUIRED_ROWS}")
         print(f"Cell ratio: {CELL_WIDTH_PER_PT:.3f}w x {CELL_HEIGHT_PER_PT:.3f}h px/pt")
-        print(f"Fill: 100% (max font that fits grid)")
+        print("Fill: 100% (max font that fits grid)")
         print(f"Font: {font:.1f}pt")
         return
 

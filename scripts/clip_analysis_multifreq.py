@@ -15,7 +15,7 @@ INTERVAL = 0.03  # 30ms between hits (fast mashing)
 # Use the actual note frequencies mapped to keys
 freqs = list(NOTE_FREQUENCIES.values())[:10]
 
-print(f"Multi-frequency overlap analysis (10 different marimba notes)")
+print("Multi-frequency overlap analysis (10 different marimba notes)")
 print(f"set_volume={SET_VOLUME}, interval={INTERVAL*1000:.0f}ms")
 print(f"Frequencies: {[f'{f:.0f}Hz' for f in freqs]}")
 print("=" * 70)

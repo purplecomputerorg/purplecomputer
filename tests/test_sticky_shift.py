@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from purple_tui.keyboard import KeyboardStateMachine, CharacterAction, ShiftAction, CapsLockAction
+from purple_tui.keyboard import KeyboardStateMachine, CharacterAction, CapsLockAction
 from purple_tui.input import RawKeyEvent, KeyCode
 
 

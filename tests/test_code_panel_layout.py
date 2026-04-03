@@ -3,7 +3,6 @@
 import asyncio
 import os
 
-import pytest
 
 # Set environment before app imports
 os.environ['PURPLE_NO_EVDEV'] = '1'
@@ -13,7 +12,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-from purple_tui.purple_tui import PurpleApp, Room
+from purple_tui.purple_tui import PurpleApp
 from purple_tui.constants import REQUIRED_TERMINAL_ROWS
 
 APP_SIZE = (146, REQUIRED_TERMINAL_ROWS)

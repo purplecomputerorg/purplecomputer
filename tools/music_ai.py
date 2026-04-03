@@ -360,11 +360,11 @@ def sections_to_code(sections: list[dict]) -> str:
                 sequence_items.append(f"'{item}'")
 
         sequence_str = ", ".join(sequence_items)
-        code_lines.append(f"    PlayKeys(")
+        code_lines.append("    PlayKeys(")
         code_lines.append(f"        sequence=[{sequence_str}],")
         code_lines.append(f"        seconds_between={secs},")
         code_lines.append(f"        pause_after={pause},")
-        code_lines.append(f"    ),")
+        code_lines.append("    ),")
         code_lines.append("")
 
     return "\n".join(code_lines)
@@ -527,7 +527,7 @@ SEGMENT = [
             segment_path.write_text(content)
             append_to_demo_json(args.save)
             print(f"Saved segment: {segment_path}")
-            print(f"Added to demo.json")
+            print("Added to demo.json")
 
 
 if __name__ == "__main__":

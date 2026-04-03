@@ -185,7 +185,7 @@ After installing, run:
         append_to_demo_json(args.save, speed=speed_arg)
 
         print(f"\nSaved segment: {segment_path}")
-        print(f"  Added to demo.json")
+        print("  Added to demo.json")
     else:
         # Legacy behavior: write to ai_generated_script.py
         output_content = demo_code + "\n\n"

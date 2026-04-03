@@ -39,7 +39,7 @@ from ..code_input import (
     AutocompleteHint, RecallHint, ExampleHint,
 )
 from ..keyboard import (
-    SHIFT_MAP, KeyRepeatSuppressor, HoldOrTap,
+    KeyRepeatSuppressor, HoldOrTap,
     CharacterAction, NavigationAction, ControlAction,
 )
 from ..color_mixing import mix_colors_paint, get_color_name_approximation

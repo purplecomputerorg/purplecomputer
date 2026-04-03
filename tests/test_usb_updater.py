@@ -33,7 +33,6 @@ from purple_tui.usb_updater import (
     verify_signature,
     apply_update,
     process_usb_update,
-    USB_UPDATE_SIGNAL_FILE,
 )
 
 # Import create_usb_update helpers (tools/ isn't a package, so add to path)

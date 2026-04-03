@@ -3,7 +3,6 @@
 import asyncio
 
 from purple_tui.code_runner import MusicCodeRunner
-from purple_tui.music_constants import INSTRUMENTS, INSTRUMENT_ALIASES
 
 
 class TestResolveInstrument:

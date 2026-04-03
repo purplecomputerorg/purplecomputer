@@ -11,7 +11,6 @@ Downloads a ukulele single-note sample from Freesound, then measures:
 Output: concrete numbers we can plug into generate_ukulele().
 """
 
-import sys
 import wave
 import math
 import struct
@@ -127,7 +126,7 @@ def analyze_note(samples: list[float], rate: int, fundamental: float,
             decay = -math.log(amps[-1] / amps[0]) / (t2 - t1)
             print(f" | {decay:.1f}/s")
         else:
-            print(f" | (too quiet)")
+            print(" | (too quiet)")
 
     # Relative amplitudes at early sustain (characteristic timbre)
     print("\n\nRelative amplitudes (early sustain, 50-150ms):")

@@ -55,6 +55,10 @@ test:
 test-install:
     .venv/bin/python -m pytest tests/test_install_reboot.py -v
 
+# Test the purple-reboot C binary (fallback chain, messages)
+test-reboot:
+    gcc -DTESTING -include tools/test_purple_reboot.c -o "${TMPDIR:-/tmp}/test_purple_reboot" tools/purple-reboot.c && "${TMPDIR:-/tmp}/test_purple_reboot"
+
 # Run linter
 lint:
     .venv/bin/ruff check purple_tui/ tools/ scripts/ tests/

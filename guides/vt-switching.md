@@ -107,6 +107,12 @@ Two methods:
 
 2. **Ctrl+\\** held 3 seconds: The app's evdev handler (which still reads events without grab while away) detects this and calls `chvt 1` + reacquires grab.
 
+### chvt race guard
+
+`chvt` is spawned via `Popen` (non-blocking) so the evdev handler doesn't block. But this creates a race: key-up events from the Ctrl+Alt+F2 combo arrive before `chvt` completes, and `_is_on_tty1()` still returns True, causing the handler to immediately reacquire the grab. By the time `chvt 2` finishes, the grab is back and tty2 can't receive input.
+
+Fix: a 500ms cooldown after setting `_vt_away` before checking `_is_on_tty1()`. This gives `chvt` time to complete. See `input.py` `_read_loop()`, the `_vt_away_time` field.
+
 ## SSH access
 
 `sudo chvt 2` from SSH switches the display but does NOT release the evdev grab, so the keyboard still sends to the app. Use the keyboard combos instead. (SSH users who need keyboard access on tty2 can also `sudo evdev-ungrab` or restart the app.)
@@ -115,9 +121,31 @@ Two methods:
 
 The debug ISO additionally enables SysRq (`kernel.sysrq=1`), which provides a kernel-level escape hatch: Alt+PrtSc+R releases the evdev grab, then Ctrl+Alt+F2 works at the kernel level. See `guides/debug-shell-escape.md`. This is disabled in production so kids can't accidentally trigger SysRq sequences.
 
+## Post-install reboot failure fallback
+
+After install completes, Python `execv`s into `purple-reboot` (a static C binary on tmpfs). This binary shows "Press Enter to restart", waits for input, then calls `reboot(2)`. At this point:
+
+- The Python process and evdev handler are gone (replaced by `execv`)
+- X11 is still running with `K_OFF` on tty1 (no kernel VT switching)
+- The standalone watcher may have SIGBUS'd if the USB was removed
+- Normal VT switch mechanisms are unavailable
+
+If `reboot()` fails (setuid issue, security module, etc.), the binary would otherwise exit, causing xinitrc to restart the app as a purple screen with no escape.
+
+`purple-reboot` handles this with a fallback chain:
+
+1. Retry `reboot()` after 1 second
+2. Try sysrq 'b' (hard reboot via `/proc/sysrq-trigger`)
+3. If still alive: switch to tty2 via `VT_ACTIVATE` ioctl and print a message telling the user to hold the power button, with the support email
+
+The tty2 switch works because `/dev/console` and `/dev/tty2` are on devtmpfs (survive USB removal), the `VT_ACTIVATE` ioctl bypasses `K_OFF`, and tty2 is in `K_UNICODE` mode so the user can type. The binary then loops on `pause()` so the message stays visible until the user power-cycles.
+
+**File:** `tools/purple-reboot.c`, tests in `tools/test_purple_reboot.c` (`just test-reboot`)
+
 ## Key files
 
 - `purple_tui/input.py`: `EvdevReader` class, VT switch detection in `_read_loop()`, grab management
 - `scripts/purple-vt-switch.py`: Standalone early-boot watcher
+- `tools/purple-reboot.c`: Static reboot binary with fallback chain
 - `config/xinit/xinitrc`: Watcher startup
 - `build-scripts/00-build-golden-image.sh`: Installs watcher to `/opt/purple/`

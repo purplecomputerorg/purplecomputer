@@ -269,6 +269,7 @@ class EvdevReader:
         self._ctrl_backslash_start: float | None = None
         self._vt_switch_fired = False
         self._vt_away = False  # True while switched away to another VT
+        self._vt_away_time: float = 0  # When _vt_away was set (for chvt race guard)
 
     @property
     def _device(self):
@@ -434,6 +435,7 @@ class EvdevReader:
                         if not self._vt_away:
                             self._vt_switch_fired = True
                             self._vt_away = True
+                            self._vt_away_time = time.monotonic()
                             self.release_grab()
                             logger.warning("Emergency VT switch: Ctrl+Alt+F2, switching to tty2")
                             subprocess.Popen(["sudo", "chvt", "2"])
@@ -461,6 +463,7 @@ class EvdevReader:
                                 else:
                                     logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
                                     self._vt_away = True
+                                    self._vt_away_time = time.monotonic()
                                     self.release_grab()
                                     subprocess.Popen(["sudo", "chvt", "2"])
                         if not is_down:
@@ -471,7 +474,12 @@ class EvdevReader:
                     # returned to tty1 (via Ctrl+Alt+F1 on tty2). Reacquire
                     # grab and resume normal operation.
                     if self._vt_away:
-                        if self._is_on_tty1():
+                        # Guard: chvt is async (Popen), so key-up events from
+                        # the switch combo arrive before chvt completes. Without
+                        # this cooldown, _is_on_tty1() returns True (still on
+                        # tty1), causing an immediate grab reacquire that blocks
+                        # tty2 input once chvt finishes.
+                        if time.monotonic() - self._vt_away_time > 0.5 and self._is_on_tty1():
                             logger.info("VT switch: back on tty1, reacquiring grab")
                             self._vt_away = False
                             self.reacquire_grab()

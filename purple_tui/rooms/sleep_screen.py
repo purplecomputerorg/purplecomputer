@@ -353,7 +353,7 @@ class LiveBootSplash(Screen):
         self.dismiss()
 
 
-FIRST_BOOT_MARKER = Path("/var/lib/purple/first-boot-done")
+FIRST_BOOT_MARKER = Path.home() / ".config" / "purple" / "first-boot-done"
 
 
 class FirstBootWelcome(Screen):

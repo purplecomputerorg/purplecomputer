@@ -288,7 +288,6 @@ SOURCES
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/calc_font_size.py "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
-    cp /purple-src/scripts/purple-vt-switch.py "$MOUNT_DIR/opt/purple/"
 
     # Copy on-device scripts (everything in scripts/on-device/)
     # These are available on the image for debugging from the parent menu terminal

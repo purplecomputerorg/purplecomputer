@@ -21,9 +21,9 @@ Meanwhile, the app reads keyboard input via evdev (`EVIOCGRAB`), bypassing the t
 
 So switching to tty2 requires two things: (1) calling `chvt 2` since the kernel won't do it, and (2) releasing the evdev grab so tty2 can receive input.
 
-## Three Layers of Coverage
+## Two Layers of Coverage
 
-The VT switch must work any time the user sees a purple screen. Three independent mechanisms ensure there are no gaps:
+The VT switch works any time the app's evdev handler is running. There is a brief gap (a few seconds) between X starting and the app grabbing evdev where VT switching is unavailable. A standalone watcher script (`purple-vt-switch.py`) was previously used to cover this gap, but it caused a VT switch loop on some Macs that prevented the app from ever starting. The gap is short and acceptable.
 
 ### Layer 1: Kernel VT switching (boot until X11 starts)
 
@@ -31,21 +31,7 @@ During early boot (initramfs splash, systemd splash, GPU wait), tty1 is in norma
 
 **Covers:** Power on through `startx` launching X11.
 
-### Layer 2: Standalone watcher (`purple-vt-switch.py`)
-
-A lightweight Python script started as the first thing in xinitrc. Reads evdev directly (no grab, no X11 dependency). Detects Ctrl+Alt+F2 and Ctrl+\\ and calls `chvt`.
-
-- Starts before Alacritty, before the app, before anything else in xinitrc
-- Reads without grab, so it coexists with normal input processing
-- Once the app grabs evdev, the watcher stops receiving events naturally
-- If the app crashes and releases the grab, the watcher resumes (safety net)
-- Near-zero CPU when idle (sleeps in `select()` with 60s timeout)
-
-**Covers:** X11 start (K_OFF set) through app's evdev handler initialization. Also covers app crashes.
-
-**File:** `scripts/purple-vt-switch.py`, installed to `/opt/purple/purple-vt-switch.py`
-
-### Layer 3: App's evdev handler (`EvdevReader` in `input.py`)
+### Layer 2: App's evdev handler (`EvdevReader` in `input.py`)
 
 The main app's keyboard read loop includes VT switch detection at the evdev level, before any Textual processing. This means it works even when the Textual UI is frozen or hung.
 
@@ -149,7 +135,6 @@ The tty2 switch works because `/dev/console` and `/dev/tty2` are on devtmpfs (su
 ## Key files
 
 - `purple_tui/input.py`: `EvdevReader` class, VT switch detection in `_read_loop()`, grab management
-- `scripts/purple-vt-switch.py`: Standalone early-boot watcher
 - `tools/purple-reboot.c`: Static reboot binary with fallback chain
-- `config/xinit/xinitrc`: Watcher startup
-- `build-scripts/00-build-golden-image.sh`: Installs watcher to `/opt/purple/`
+- `config/xinit/xinitrc`: X11 startup
+- `build-scripts/00-build-golden-image.sh`: Golden image build

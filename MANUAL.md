@@ -757,7 +757,7 @@ Purple Computer runs on tty1. To get a root shell on tty2 for debugging:
 - **Ctrl+Alt+F2**: Immediate switch (standard Linux VT switching, reimplemented via evdev since the kernel's built-in version is disabled by Alacritty's K_OFF mode)
 - **Ctrl+\\** (Ctrl+Backslash) held for 3 seconds: Same effect, alternative combo
 
-Both release the evdev grab so tty2 receives keyboard input. Both work even when the TUI is completely frozen, and even during the early loading screen before the app starts (via a standalone watcher process).
+Both release the evdev grab so tty2 receives keyboard input. Both work even when the TUI is completely frozen. Note: these only work once the app's evdev handler has started (a few seconds after the purple screen appears).
 
 **From SSH:** `sudo chvt 2` (note: this does not release the evdev grab, so keyboard input will still go to the app. Use the keyboard methods instead.)
 

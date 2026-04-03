@@ -18,7 +18,10 @@ ExecStartPre=/usr/local/bin/purple-wait-display
 ExecStartPre=-/bin/rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 ExecStart=/usr/bin/startx /home/purple/.xinitrc -- vt1
 User=purple
-PAMName=login
+# No PAMName=login: the minbase golden image lacks PAM modules (pam_lastlog.so)
+# and /etc/default/locale. These cause errors on the installed system (masked on
+# live USB by Casper's overlay). User= handles privilege drop; LANG set here.
+Environment=LANG=C.UTF-8
 TTYPath=/dev/tty1
 StandardInput=tty
 StandardOutput=tty

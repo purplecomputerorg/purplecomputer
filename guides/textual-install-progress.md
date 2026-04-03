@@ -95,6 +95,13 @@ The only thing that reliably runs after USB removal is a statically linked binar
 4. User removes USB drive whenever they want
 5. User presses Enter. Binary calls `sync()` then `reboot(RB_AUTOBOOT)`. Machine reboots.
 
+If `reboot()` fails (setuid issue, security module, hardware quirk), the binary falls back through:
+1. Retry `reboot()` after 1 second
+2. sysrq 'b' (hard reboot via `/proc/sysrq-trigger`)
+3. Switch to tty2 via `VT_ACTIVATE` ioctl, print a message telling the user to hold the power button and providing the support email, then loop on `pause()` so the message stays visible
+
+The tty2 fallback works even with X11's `K_OFF` on tty1 because `VT_ACTIVATE` is a kernel ioctl that bypasses keyboard mode. `/dev/console` and `/dev/tty2` are on devtmpfs, so they survive USB removal. Without this fallback, a failed `reboot()` causes the binary to exit, xinitrc restarts the app, and the user is stuck on a purple screen with no way to escape.
+
 ### Why a dedicated tmpfs mount
 
 Ubuntu mounts `/run` with `nosuid,noexec`. systemd manages it and resists remounting. So `install.sh` creates its own tmpfs at `/run/purple-reboot-mount` with `exec,suid` flags for the setuid reboot binary.
@@ -177,7 +184,8 @@ Run with: `just test`, or `pytest tests/test_install_reboot.py -v`
 | `purple_tui/power_manager.py` | `PowerManager.shutdown()`, always-on shutdown logging |
 | `build-scripts/install.sh` | Copies setuid reboot binary to `/run`, writes sentinel |
 | `build-scripts/00-build-golden-image.sh` | Compiles static reboot binary during image build |
-| `tools/purple-reboot.c` | Source for static reboot binary |
+| `tools/purple-reboot.c` | Source for static reboot binary (fallback chain, tty2 escape) |
+| `tools/test_purple_reboot.c` | C tests for reboot binary (`just test-reboot`) |
 | `config/xinit/xinitrc` | Squashfs tmpfs copy (replaces page cache warmup) |
 | `tests/test_install_progress.py` | Documents and tests the pipe-hang fix |
 | `tests/test_install_reboot.py` | Tests the reboot flow and sentinel detection |

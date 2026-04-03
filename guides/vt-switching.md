@@ -130,9 +130,13 @@ After install completes, Python `execv`s into `purple-reboot` (a static C binary
 - The standalone watcher may have SIGBUS'd if the USB was removed
 - Normal VT switch mechanisms are unavailable
 
-If `reboot()` fails (setuid issue, security module, etc.), the binary would otherwise exit, causing xinitrc to restart the app as a purple screen with no escape.
+### Signal safety
 
-`purple-reboot` handles this with a fallback chain:
+The binary ignores terminal signals (SIGHUP, SIGQUIT, SIGINT, SIGTSTP) at startup. This is critical for surviving USB removal: when the USB is ejected, Alacritty SIGBUSes on dead overlayfs code pages and dies. The pty master side closes, and the kernel sends SIGHUP to the binary (foreground process on the slave pty). Without ignoring SIGHUP, the binary dies before reaching `reboot()`, xinitrc tries to restart, and the user is stuck on a blank purple screen (the X root window). SIGQUIT/SIGINT/SIGTSTP are also ignored so Ctrl+\, Ctrl+C, and Ctrl+Z from the pty can't kill it.
+
+### Reboot fallback chain
+
+If `reboot()` fails (setuid issue, security module, etc.):
 
 1. Retry `reboot()` after 1 second
 2. Try sysrq 'b' (hard reboot via `/proc/sysrq-trigger`)

@@ -81,7 +81,7 @@ static const char WAIT_MSG[] =
     "  Press Enter to restart.\n"
     "\n";
 
-static const char TTY2_MSG[] =
+static const char FAIL_MSG[] =
     "\033[2J\033[H"  /* clear screen, cursor home */
     "\n"
     "  Purple Computer was installed successfully,\n"
@@ -111,26 +111,49 @@ static void try_sysrq_reboot(void) {
     }
 }
 
-/* Switch to tty2 and print a troubleshooting message.
- * This is the last resort when reboot fails entirely. */
-static void fallback_to_tty2(void) {
-    int console_fd, tty2_fd;
+/* Show reboot-failed message via every available channel.
+ *
+ * The user might be looking at:
+ *   (a) Alacritty on tty1 (X11) — if it's still alive, stdout works
+ *   (b) The X11 root window (purple) — if Alacritty died
+ *   (c) A text VT — unlikely but possible
+ *
+ * Strategy: write to stdout first (covers case a, the most common),
+ * then try to switch to tty2 and write there (covers case b).
+ * SIGPIPE is already ignored so stdout writes are safe even if
+ * Alacritty is dead. */
+static void show_reboot_failed(void) {
+    int fd;
 
-    /* Switch display to tty2 via VT_ACTIVATE ioctl */
-    console_fd = pr_open("/dev/console", O_RDWR);
-    if (console_fd < 0)
-        console_fd = pr_open("/dev/tty0", O_RDWR);
-    if (console_fd >= 0) {
-        pr_ioctl(console_fd, VT_ACTIVATE, 2);
-        pr_ioctl(console_fd, VT_WAITACTIVE, 2);
-        pr_close(console_fd);
+    /* 1. Write to stdout (Alacritty PTY, if still alive).
+     *    This is the most likely way the user will see the message:
+     *    they just pressed Enter, Alacritty is probably still up. */
+    pr_write(STDOUT_FILENO, FAIL_MSG, strlen(FAIL_MSG));
+
+    /* 2. Try to switch to tty2 and write there too.
+     *    If stdout failed (Alacritty dead), this is the fallback.
+     *    Try multiple device paths for the VT switch ioctl. */
+    int switched = 0;
+    static const char *console_paths[] = {
+        "/dev/console", "/dev/tty0", "/dev/tty", NULL
+    };
+    for (const char **p = console_paths; *p && !switched; p++) {
+        fd = pr_open(*p, O_RDWR);
+        if (fd >= 0) {
+            if (pr_ioctl(fd, VT_ACTIVATE, 2) == 0)
+                switched = 1;
+            pr_ioctl(fd, VT_WAITACTIVE, 2);
+            pr_close(fd);
+        }
     }
 
-    /* Write message directly to tty2 */
-    tty2_fd = pr_open("/dev/tty2", O_WRONLY);
-    if (tty2_fd >= 0) {
-        pr_write(tty2_fd, TTY2_MSG, strlen(TTY2_MSG));
-        pr_close(tty2_fd);
+    /* Write message to tty2 regardless of whether VT switch worked.
+     * If we switched, user sees it. If not, it's there for when they
+     * eventually get to tty2 (e.g., via SSH or hardware reset). */
+    fd = pr_open("/dev/tty2", O_WRONLY);
+    if (fd >= 0) {
+        pr_write(fd, FAIL_MSG, strlen(FAIL_MSG));
+        pr_close(fd);
     }
 
     /* Stay alive so the message remains visible.
@@ -145,6 +168,18 @@ int main(int argc, char **argv) {
 int purple_reboot_main(int argc, char **argv) {
 #endif
     timed_out = 0;
+
+    /* Ignore terminal signals. After execv from the Python app, the evdev
+     * grab is released and keypresses flow through X → Alacritty → pty.
+     * Without these, USB removal kills us: Alacritty SIGBUSes on dead
+     * overlayfs → pty master closes → kernel sends SIGHUP → we die before
+     * reaching reboot(). Ctrl+\ (SIGQUIT) and Ctrl+C (SIGINT) from the
+     * pty would also kill us. */
+    pr_signal(SIGHUP, SIG_IGN);
+    pr_signal(SIGPIPE, SIG_IGN);
+    pr_signal(SIGQUIT, SIG_IGN);
+    pr_signal(SIGINT, SIG_IGN);
+    pr_signal(SIGTSTP, SIG_IGN);
 
     if (argc > 1 && strcmp(argv[1], "--wait") == 0) {
         pr_write(STDOUT_FILENO, WAIT_MSG, strlen(WAIT_MSG));
@@ -175,9 +210,9 @@ int purple_reboot_main(int argc, char **argv) {
     pr_sleep(1);
     try_sysrq_reboot();
 
-    /* Still alive: give up on reboot, show manual instructions on tty2 */
+    /* Still alive: give up on reboot, show manual instructions */
     pr_sleep(2);
-    fallback_to_tty2();
+    show_reboot_failed();
 
     return 1;
 }

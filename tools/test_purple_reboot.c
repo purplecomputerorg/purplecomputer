@@ -50,6 +50,9 @@ static struct {
 
     int console_open_fails;
     int reached_pause_loop;
+
+    int ignored_signals[MAX_CALLS];
+    int ignored_signal_count;
 } mock;
 
 static void mock_reset(void) {
@@ -75,7 +78,8 @@ int test_open(const char *path, int flags) {
     if (mock.open_count < MAX_CALLS)
         strncpy(mock.opened_paths[mock.open_count++], path, 255);
     if (mock.console_open_fails &&
-        (strcmp(path, "/dev/console") == 0 || strcmp(path, "/dev/tty0") == 0))
+        (strcmp(path, "/dev/console") == 0 || strcmp(path, "/dev/tty0") == 0 ||
+         strcmp(path, "/dev/tty") == 0))
         return -1;
     return 42; /* fake fd */
 }
@@ -124,7 +128,8 @@ void test_pause(void) {
 }
 
 void test_signal(int sig, void (*handler)(int)) {
-    (void)sig; (void)handler;
+    if (handler == SIG_IGN && mock.ignored_signal_count < MAX_CALLS)
+        mock.ignored_signals[mock.ignored_signal_count++] = sig;
 }
 
 void test_alarm(unsigned int sec) {
@@ -264,12 +269,22 @@ static int test_sysrq_writes_correct_commands(void) {
     return 1;
 }
 
+static int test_fallback_writes_to_stdout(void) {
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(find_write_containing(STDOUT_FILENO, "installed successfully"),
+           "should write failure message to stdout (Alacritty)");
+    ASSERT(find_write_containing(STDOUT_FILENO, "power button"),
+           "stdout message should say to use power button");
+    return 1;
+}
+
 static int test_fallback_switches_to_tty2(void) {
     char *argv[] = {"purple-reboot", NULL};
     run_main(1, argv);
-    ASSERT(mock.reached_pause_loop, "should reach tty2 fallback");
-    ASSERT(was_opened("/dev/console") || was_opened("/dev/tty0"),
-           "should open console for VT switch");
+    ASSERT(mock.reached_pause_loop, "should reach pause loop");
+    ASSERT(was_opened("/dev/console") || was_opened("/dev/tty0") || was_opened("/dev/tty"),
+           "should open console device for VT switch");
     ASSERT(was_opened("/dev/tty2"), "should open /dev/tty2");
     return 1;
 }
@@ -308,12 +323,13 @@ static int test_fallback_chain_sleep_order(void) {
     return 1;
 }
 
-static int test_console_fallback_to_tty0(void) {
+static int test_console_fallback_paths(void) {
     mock.console_open_fails = 1;
     char *argv[] = {"purple-reboot", NULL};
     run_main(1, argv);
     ASSERT(was_opened("/dev/console"), "should try /dev/console first");
-    ASSERT(was_opened("/dev/tty0"), "should fall back to /dev/tty0");
+    ASSERT(was_opened("/dev/tty0"), "should try /dev/tty0 second");
+    ASSERT(was_opened("/dev/tty"), "should try /dev/tty third");
     return 1;
 }
 
@@ -329,6 +345,24 @@ static int test_vt_activate_with_tty2(void) {
     }
     ASSERT(found_activate, "should VT_ACTIVATE to tty2");
     ASSERT(found_waitactive, "should VT_WAITACTIVE for tty2");
+    return 1;
+}
+
+static int was_signal_ignored(int sig) {
+    for (int i = 0; i < mock.ignored_signal_count; i++)
+        if (mock.ignored_signals[i] == sig)
+            return 1;
+    return 0;
+}
+
+static int test_ignores_terminal_signals(void) {
+    char *argv[] = {"purple-reboot", "--wait", NULL};
+    run_main(2, argv);
+    ASSERT(was_signal_ignored(SIGHUP),  "should ignore SIGHUP (pty hangup on USB removal)");
+    ASSERT(was_signal_ignored(SIGPIPE), "should ignore SIGPIPE (write to dead pty)");
+    ASSERT(was_signal_ignored(SIGQUIT), "should ignore SIGQUIT (Ctrl+\\)");
+    ASSERT(was_signal_ignored(SIGINT),  "should ignore SIGINT (Ctrl+C)");
+    ASSERT(was_signal_ignored(SIGTSTP), "should ignore SIGTSTP (Ctrl+Z)");
     return 1;
 }
 
@@ -354,13 +388,15 @@ int main(void) {
     RUN_TEST(test_fallback_retries_reboot);
     RUN_TEST(test_fallback_tries_sysrq);
     RUN_TEST(test_sysrq_writes_correct_commands);
+    RUN_TEST(test_fallback_writes_to_stdout);
     RUN_TEST(test_fallback_switches_to_tty2);
     RUN_TEST(test_tty2_message_has_support_email);
     RUN_TEST(test_tty2_message_confirms_install);
     RUN_TEST(test_tty2_message_says_power_button);
     RUN_TEST(test_fallback_chain_sleep_order);
-    RUN_TEST(test_console_fallback_to_tty0);
+    RUN_TEST(test_console_fallback_paths);
     RUN_TEST(test_vt_activate_with_tty2);
+    RUN_TEST(test_ignores_terminal_signals);
     RUN_TEST(test_sync_before_every_reboot);
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);

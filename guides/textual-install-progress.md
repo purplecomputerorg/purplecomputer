@@ -91,9 +91,10 @@ The only thing that reliably runs after USB removal is a statically linked binar
    - `/run/purple-reboot-mount/purple-reboot`: static setuid binary that calls `reboot(2)` directly
    - `/run/purple-install-complete`: sentinel (written last)
 2. Python detects the sentinel, exits Textual, calls `os.execv` on the binary with `--wait`
-3. The binary (on tmpfs, statically linked) shows "press Enter to restart" and waits
-4. User removes USB drive whenever they want
-5. User presses Enter. Binary calls `sync()` then `reboot(RB_AUTOBOOT)`. Machine reboots.
+3. The binary ignores terminal signals (SIGHUP, SIGQUIT, SIGINT, SIGTSTP) so it survives pty hangup when Alacritty dies after USB removal
+4. The binary (on tmpfs, statically linked) shows "press Enter to restart" and waits
+5. User removes USB drive whenever they want. Alacritty SIGBUSes on dead overlayfs and its pty closes, but the binary survives (SIGHUP ignored, code on tmpfs)
+6. User presses Enter (or read() returns EOF from dead pty). Binary calls `sync()` then `reboot(RB_AUTOBOOT)`. Machine reboots.
 
 If `reboot()` fails (setuid issue, security module, hardware quirk), the binary falls back through:
 1. Retry `reboot()` after 1 second
@@ -147,7 +148,7 @@ All shutdown and reboot paths on Purple Computer:
 | Power button tap+confirm | `ByeScreen.on_mount()` | `pm.shutdown()` |
 | Power button hold 3s | `ByeScreen.on_mount()` | `pm.shutdown()` |
 | Parent menu "Shut Down" | `ParentMenu._shutdown()` | `pm.shutdown()` |
-| Post-install Enter | Shell script on `/run` | `execv` into `/run/purple-reboot.sh` → setuid binary |
+| Post-install Enter | `InstallProgressScreen._on_install_complete()` | `execv` into static reboot binary on tmpfs |
 
 `pm.shutdown()` uses `sudo systemctl poweroff --force` with a two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq 'o' (direct kernel poweroff via ACPI). The watchdog runs in a detached process group so it survives TUI death.
 

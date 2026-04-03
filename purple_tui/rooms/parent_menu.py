@@ -960,6 +960,26 @@ class InstallProgressScreen(ModalScreen):
                             self._handle_line,
                             line.decode('utf-8', errors='replace'),
                         )
+        # Drain any remaining stderr (error messages from pipeline failures
+        # may still be buffered after the process exits).
+        try:
+            remaining = proc.stderr.read()
+            if remaining:
+                buf += remaining
+        except Exception:
+            pass
+        # Process any remaining buffered lines.
+        while b'\n' in buf:
+            line, buf = buf.split(b'\n', 1)
+            self.app.call_from_thread(
+                self._handle_line,
+                line.decode('utf-8', errors='replace'),
+            )
+        if buf.strip():
+            self.app.call_from_thread(
+                self._handle_line,
+                buf.decode('utf-8', errors='replace'),
+            )
         # install.sh writes sentinel + reboot binary to /run as root before exit.
         success = _SENTINEL.exists() or proc.poll() == 0
         self.app.call_from_thread(self._on_install_complete, success)

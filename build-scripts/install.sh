@@ -32,6 +32,10 @@ error() {
     exit 1
 }
 
+# Catch unexpected exits (e.g. pipeline failures from USB removal) and emit
+# a tagged error so the UI can display it.
+trap '_rc=$?; if [ $_rc -ne 0 ]; then echo -e "${RED}[ERROR]${NC} Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
+
 # Golden image path - set by hook via PURPLE_PAYLOAD_DIR
 GOLDEN_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os.img.zst"
 

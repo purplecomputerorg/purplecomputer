@@ -93,7 +93,12 @@ class KeyCode:
     KEY_SLASH = 53
     KEY_RIGHTSHIFT = 54
 
+    # Function keys
+    KEY_F1 = 59
+    KEY_F2 = 60
+
     # Spacebar and modifiers
+    KEY_LEFTALT = 56
     KEY_SPACE = 57
     KEY_CAPSLOCK = 58
 
@@ -105,6 +110,7 @@ class KeyCode:
 
     # Modifier keys
     KEY_RIGHTCTRL = 97
+    KEY_RIGHTALT = 100
 
     # Media keys (hardware volume buttons)
     KEY_MUTE = 113
@@ -257,10 +263,12 @@ class EvdevReader:
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
         self._tasks: list[asyncio.Task] = []
 
-        # Emergency VT switch: Ctrl+\ held for 3s → chvt 2
+        # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
         self._ctrl_held = False
+        self._alt_held = False
         self._ctrl_backslash_start: float | None = None
         self._vt_switch_fired = False
+        self._vt_away = False  # True while switched away to another VT
 
     @property
     def _device(self):
@@ -339,6 +347,15 @@ class EvdevReader:
 
         logger.info("EvdevReader: stopped")
 
+    @staticmethod
+    def _is_on_tty1() -> bool:
+        """Check if tty1 is the active virtual terminal."""
+        try:
+            with open("/sys/class/tty/tty0/active") as f:
+                return f.read().strip() == "tty1"
+        except Exception:
+            return True  # Assume tty1 if we can't tell
+
     def release_grab(self) -> None:
         """
         Temporarily release the keyboard grab.
@@ -401,13 +418,34 @@ class EvdevReader:
                     keycode = event.code
                     is_down = event.value in (1, 2)
 
-                    # Emergency VT switch: Ctrl+\ held 3s → chvt 2
+                    # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
                     # Runs at evdev level so it works even when Textual is hung.
                     if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
                         self._ctrl_held = is_down
                         if not is_down:
                             self._ctrl_backslash_start = None
                             self._vt_switch_fired = False
+                    if keycode in (KeyCode.KEY_LEFTALT, KeyCode.KEY_RIGHTALT):
+                        self._alt_held = is_down
+
+                    # Ctrl+Alt+F2: immediate VT switch (standard Linux combo)
+                    # Ctrl+Alt+F1: immediate switch back
+                    if keycode == KeyCode.KEY_F2 and is_down and self._ctrl_held and self._alt_held:
+                        if not self._vt_away:
+                            self._vt_switch_fired = True
+                            self._vt_away = True
+                            self.release_grab()
+                            logger.warning("Emergency VT switch: Ctrl+Alt+F2, switching to tty2")
+                            subprocess.Popen(["sudo", "chvt", "2"])
+                    if keycode == KeyCode.KEY_F1 and is_down and self._ctrl_held and self._alt_held:
+                        if self._vt_away:
+                            self._vt_switch_fired = True
+                            logger.warning("Emergency VT switch: Ctrl+Alt+F1, switching back to tty1")
+                            subprocess.Popen(["sudo", "chvt", "1"])
+                            self._vt_away = False
+                            self.reacquire_grab()
+
+                    # Ctrl+\ held 3s: toggle VT switch
                     if keycode == KeyCode.KEY_BACKSLASH:
                         if is_down and self._ctrl_held and not self._vt_switch_fired:
                             if self._ctrl_backslash_start is None:
@@ -415,11 +453,30 @@ class EvdevReader:
                             elif time.monotonic() - self._ctrl_backslash_start >= 3.0:
                                 self._vt_switch_fired = True
                                 self._ctrl_backslash_start = None
-                                logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
-                                subprocess.Popen(["sudo", "chvt", "2"])
+                                if self._vt_away:
+                                    logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching back to tty1")
+                                    subprocess.Popen(["sudo", "chvt", "1"])
+                                    self._vt_away = False
+                                    self.reacquire_grab()
+                                else:
+                                    logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
+                                    self._vt_away = True
+                                    self.release_grab()
+                                    subprocess.Popen(["sudo", "chvt", "2"])
                         if not is_down:
                             self._ctrl_backslash_start = None
                             self._vt_switch_fired = False
+
+                    # While switched away to another VT, check if user
+                    # returned to tty1 (via Ctrl+Alt+F1 on tty2). Reacquire
+                    # grab and resume normal operation.
+                    if self._vt_away:
+                        if self._is_on_tty1():
+                            logger.info("VT switch: back on tty1, reacquiring grab")
+                            self._vt_away = False
+                            self.reacquire_grab()
+                        else:
+                            continue  # Don't forward events while away
 
                     scancode = self._pending_scancodes.pop(dev_path, 0)
 

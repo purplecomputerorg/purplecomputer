@@ -20,6 +20,13 @@ fi
 
 xlog "=== xinitrc started ==="
 
+# Early VT switch watcher: provides Ctrl+\ and Ctrl+Alt+F2 switching before the
+# app's evdev handler starts. Reads without grab, so the main app takes over
+# naturally when it grabs. Also acts as safety net if the app crashes.
+# Must start ASAP: X sets K_OFF which kills kernel VT switching.
+pkill -f 'purple-vt-switch\.py' 2>/dev/null || true
+python3 /opt/purple/purple-vt-switch.py &
+
 # Wait for X to initialize
 sleep 1
 xlog "X server ready (after 1s wait)"

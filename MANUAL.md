@@ -753,13 +753,15 @@ sudo smartctl -a /dev/sda
 
 Purple Computer runs on tty1. To get a root shell on tty2 for debugging:
 
-**From the keyboard (emergency escape hatch):** Hold **Ctrl+\\** (Ctrl+Backslash) for 3 seconds. This runs `chvt 2` directly from the evdev input thread, so it works even when the TUI is completely frozen.
+**From the keyboard (emergency escape hatch):** Two options:
+- **Ctrl+Alt+F2**: Immediate switch (standard Linux VT switching, reimplemented via evdev since the kernel's built-in version is disabled by Alacritty's K_OFF mode)
+- **Ctrl+\\** (Ctrl+Backslash) held for 3 seconds: Same effect, alternative combo
 
-**From SSH:** `sudo chvt 2`
+Both release the evdev grab so tty2 receives keyboard input. Both work even when the TUI is completely frozen, and even during the early loading screen before the app starts (via a standalone watcher process).
 
-**Why Ctrl+Alt+F2 doesn't work:** Alacritty sets the VT keyboard mode to `K_OFF` on tty1, which disables the kernel's built-in Ctrl+Alt+Fn VT switching. The Ctrl+Backslash escape hatch bypasses this by calling `chvt` via subprocess instead of relying on the kernel.
+**From SSH:** `sudo chvt 2` (note: this does not release the evdev grab, so keyboard input will still go to the app. Use the keyboard methods instead.)
 
-**Returning to Purple Computer:** From tty2, press Ctrl+Alt+F1 (this works because tty2 is in normal `K_UNICODE` mode).
+**Returning to Purple Computer:** Either press Ctrl+Alt+F1 (works because tty2 is in normal `K_UNICODE` mode), or hold Ctrl+Backslash for 3 seconds again. Both methods reacquire the evdev grab automatically when the app detects it is back on tty1.
 
 **Checking VT keyboard mode:** `sudo kbd_mode -C /dev/tty1` (will show "unknown" due to `K_OFF`).
 

@@ -512,6 +512,29 @@ Uploads ISOs to Cloudflare R2 and updates redirect rules so `/download.iso` poin
 
 **Cloudflare setup (one-time):** `setup-cloudflare-rules.sh` configures cache rules (aggressive caching for `/releases/*`, bypass for `/download*`) and redirect rules. It runs automatically as part of `release-iso.sh`, or can be run standalone to set up cache rules without releasing.
 
+### Uploading the Download Page and PDFs
+
+**Scripts:** `upload-early-access.sh`, `upload-pdfs.sh`
+
+The download page (`early-access.html`) and guide PDFs are uploaded separately from ISO releases.
+
+```bash
+just upload-early-access   # Upload page + PDFs, purge cache
+just upload-pdfs           # Upload just the PDFs, purge cache
+```
+
+`upload-early-access` extracts installation (pages 1-2) and guide (page 3) PDFs from `cards/purple.pdf`, uploads everything, then purges the Cloudflare cache for `index.html` and both PDFs.
+
+`upload-pdfs` does the same extraction and upload for just the PDFs, for when you update the cards without touching the page.
+
+### Caching Strategy
+
+ISOs use versioned paths (`releases/{version}/standard.iso`), so each release has a unique URL that can be cached aggressively (1 day edge TTL). The `/download.iso` shortcut is a Cloudflare 302 redirect to the current version, with cache bypassed so it always resolves to the latest release.
+
+`index.html` and PDFs don't have versioned filenames, so the upload scripts purge the Cloudflare cache after each upload. If the purge fails (e.g., missing CF credentials), a warning is printed but the upload still succeeds. Visitors may see stale content briefly until the cache expires naturally.
+
+Both upload scripts share common helpers from `r2-helpers.sh` (env loading, R2 upload, PDF extraction, cache purge).
+
 ---
 
 ## Installation

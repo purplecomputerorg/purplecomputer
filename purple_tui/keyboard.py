@@ -667,6 +667,7 @@ class KeyboardStateMachine:
     # Timing thresholds
     ESCAPE_HOLD_THRESHOLD = 1.0  # seconds for parent mode
     STICKY_SHIFT_GRACE = 8.0     # seconds sticky shift stays active
+    BACKSLASH_HOLD_THRESHOLD = 3.0  # seconds for backslash parent menu
 
     def __init__(self):
         # Key press state: keycode -> timestamp
@@ -696,6 +697,10 @@ class KeyboardStateMachine:
         # Long-hold tracking for Escape
         self._escape_hold_triggered = False
         self._escape_press_time: float | None = None  # time.time() when escape pressed
+
+        # Backslash hold tracking for parent menu
+        self._backslash_press_time: float | None = None
+        self._backslash_hold_triggered = False
 
     def on_sticky_shift_change(self, callback: Callable[[bool], None]) -> None:
         """Register callback for sticky shift state changes."""
@@ -763,6 +768,11 @@ class KeyboardStateMachine:
                 self._escape_press_time = time.time()  # Use wall clock for consistent timing
             actions.append(ControlAction(action='escape', is_down=True, is_repeat=is_repeat))
             return actions
+
+        # Track backslash hold for parent menu (3s hold)
+        if keycode == KeyCode.KEY_BACKSLASH and not is_repeat:
+            self._backslash_press_time = time.time()
+            self._backslash_hold_triggered = False
 
         # Handle Space
         if keycode == KeyCode.KEY_SPACE:
@@ -920,6 +930,11 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='backspace', is_down=False))
             return actions
 
+        # Clear backslash hold tracking on release
+        if keycode == KeyCode.KEY_BACKSLASH:
+            self._backslash_press_time = None
+            self._backslash_hold_triggered = False
+
         return actions
 
     def _apply_shift(self, char: str) -> str:
@@ -980,6 +995,20 @@ class KeyboardStateMachine:
     def space_held(self) -> bool:
         """Check if space is currently held."""
         return self._space_held
+
+    @property
+    def backslash_held(self) -> bool:
+        """True when backslash key is physically held."""
+        return self._backslash_press_time is not None
+
+    def check_backslash_hold(self) -> bool:
+        """Check if backslash is held past threshold. Returns True once."""
+        if self._backslash_press_time is None or self._backslash_hold_triggered:
+            return False
+        if time.time() - self._backslash_press_time >= self.BACKSLASH_HOLD_THRESHOLD:
+            self._backslash_hold_triggered = True
+            return True
+        return False
 
     @property
     def shift_held(self) -> bool:

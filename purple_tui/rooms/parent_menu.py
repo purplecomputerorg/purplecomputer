@@ -877,6 +877,8 @@ class InstallProgressScreen(ModalScreen):
         self._progress = 0
         self._status = "Starting..."
         self._phase = "installing"  # "installing", "success", "error"
+        self._log_lines: list[str] = []  # All stderr lines for error diagnostics
+        self._showing_details = False
 
     def refresh_caps(self) -> None:
         """Re-apply caps mode to all text in this modal."""
@@ -909,12 +911,23 @@ class InstallProgressScreen(ModalScreen):
 
         if self._phase == "error":
             title_w.update(caps("Something went wrong"))
-            status_w.update(
-                "Setup did not finish.\n\n"
-                f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
-            )
-            bar_w.update("")
-            hint_w.update("Hold the power button to turn off.")
+            if self._showing_details:
+                # Show last 10 log lines for parent to photograph
+                tail = self._log_lines[-10:]
+                status_w.update("\n".join(tail) if tail else "No log output.")
+                bar_w.update("")
+                hint_w.update("Press Enter to go back.")
+            else:
+                error_summary = self._get_error_summary()
+                status_w.update(
+                    f"Setup did not finish.\n\n{error_summary}\n\n"
+                    f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
+                )
+                bar_w.update("")
+                hint_w.update(
+                    "Press Enter for technical details.\n"
+                    "Hold the power button to turn off."
+                )
         else:
             title_w.update(caps("Installing Purple Computer"))
             status_w.update(self._status)
@@ -967,6 +980,8 @@ class InstallProgressScreen(ModalScreen):
 
     def _handle_line(self, text: str) -> None:
         clean = _ANSI_ESCAPE.sub('', text).strip()
+        if clean:
+            self._log_lines.append(clean)
         if not clean.startswith('[PURPLE]'):
             return
         msg = clean[8:].strip()
@@ -977,12 +992,34 @@ class InstallProgressScreen(ModalScreen):
                 self._update_ui()
                 return
 
+    def _get_error_summary(self) -> str:
+        """Extract last ERROR or WARN line as a short summary."""
+        for line in reversed(self._log_lines):
+            if '[ERROR]' in line or '[PURPLE ERROR]' in line:
+                # Strip prefix tags to get the message
+                for prefix in ('[PURPLE ERROR] ', '[ERROR] '):
+                    if prefix in line:
+                        return f"(Technical: {line.split(prefix, 1)[-1]})"
+                return f"(Technical: {line})"
+        for line in reversed(self._log_lines):
+            if '[WARN]' in line or '[PURPLE WARN]' in line:
+                for prefix in ('[PURPLE WARN] ', '[WARN] '):
+                    if prefix in line:
+                        return f"(Technical: {line.split(prefix, 1)[-1]})"
+                return f"(Technical: {line})"
+        return ""
+
     async def _on_key(self, event) -> None:
         event.stop()
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        pass  # All input ignored during install; reboot is handled by shell script
+        if self._phase == "error" and isinstance(action, ControlAction):
+            if action.action == 'enter' and action.is_down:
+                self._showing_details = not self._showing_details
+                self._update_ui()
+                return
+        # All other input ignored during install
 
 
 class ParentMenuItem(Static):

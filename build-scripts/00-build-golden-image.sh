@@ -128,6 +128,11 @@ main() {
     chroot "$MOUNT_DIR" apt-get update
     chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
 
+    # Prevent debconf from prompting interactively inside the chroot.
+    # Without this, packages like console-setup fail when their postinst
+    # falls back to the Teletype frontend and gets empty answers.
+    export DEBIAN_FRONTEND=noninteractive
+
     # Configure system
     log_info "Configuring PurpleOS..."
 
@@ -167,6 +172,10 @@ SOURCES
 
     chroot "$MOUNT_DIR" apt-get update
 
+    # Preseed console-setup so its postinst doesn't prompt (it's pulled in by kbd/casper).
+    chroot "$MOUNT_DIR" bash -c 'echo "console-setup console-setup/charmap47 select UTF-8" | debconf-set-selections'
+    chroot "$MOUNT_DIR" bash -c 'echo "console-setup console-setup/codeset47 select Guess optimal character set" | debconf-set-selections'
+
     # Install pip, SDL libraries for pygame, audio support, and X11/GUI stack (requires universe repository)
     # NOTE: We deliberately omit xserver-xorg-video-all to use the modesetting driver
     # built into xserver-xorg-core. This avoids xf86EnableIO errors from legacy drivers
@@ -199,7 +208,10 @@ SOURCES
         xkbset \
         unclutter \
         casper \
-        zstd
+        zstd \
+        kbd \
+        evtest \
+        strace
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.

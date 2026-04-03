@@ -2,7 +2,7 @@
 # Set up Cloudflare cache and redirect rules for ISO downloads.
 #
 # Requires CF_API_TOKEN and CF_ZONE_ID in .env (or environment).
-# CF_API_TOKEN needs "Zone.Cache Rules", "Zone.Dynamic Redirect", and "Zone.Transform Rules" permissions.
+# CF_API_TOKEN needs "Zone.Cache Purge", "Zone.Cache Rules", "Zone.Dynamic Redirect", and "Zone.Transform Rules" permissions.
 #
 # What this creates:
 #   Cache rules:

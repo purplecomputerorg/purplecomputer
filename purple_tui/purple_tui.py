@@ -55,7 +55,7 @@ from .constants import (
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     USB_UPDATE_SIGNAL_FILE,
-    is_live_boot,
+    is_live_boot, is_debug,
 )
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -866,7 +866,7 @@ class PurpleApp(App):
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
             self._evdev_reader = EvdevReader(
                 callback=self._handle_raw_key_event,
-                grab=True,  # Grab keyboard exclusively in kiosk mode
+                grab=not is_debug(),  # No grab in debug: allows kernel VT switch
             )
             await self._evdev_reader.start()
         else:
@@ -1075,6 +1075,18 @@ class PurpleApp(App):
                 self._dev_log(f"[Evdev] action={action} (current_room={self.active_room.name})")
             await self._dispatch_keyboard_action(action)
 
+        # Backslash hold: start a 3s timer when backslash is first pressed
+        if self._keyboard_state_machine.backslash_held:
+            if not hasattr(self, '_backslash_hold_timer') or self._backslash_hold_timer is None:
+                self._backslash_hold_timer = self.set_timer(
+                    self._keyboard_state_machine.BACKSLASH_HOLD_THRESHOLD,
+                    self._check_backslash_hold,
+                )
+        else:
+            if hasattr(self, '_backslash_hold_timer') and self._backslash_hold_timer is not None:
+                self._backslash_hold_timer.stop()
+                self._backslash_hold_timer = None
+
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
         if isinstance(action, RoomAction):
@@ -1191,6 +1203,12 @@ class PurpleApp(App):
         if self._keyboard_state_machine.check_escape_hold():
             self._escape_triggered_long_hold = True  # Prevent picker on release
             self._cancel_escape_hold_timer()
+            self.action_parent_menu()
+
+    def _check_backslash_hold(self) -> None:
+        """Called by timer after 3s. Trigger parent menu if backslash still held."""
+        if self._keyboard_state_machine.check_backslash_hold():
+            self._backslash_hold_timer = None
             self.action_parent_menu()
 
     def _show_room_picker(self) -> None:

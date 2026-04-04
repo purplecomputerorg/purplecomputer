@@ -28,6 +28,7 @@ Usage:
 
 Actions (processed left to right):
     code_panel       Toggle the code panel on
+    parent_menu      Open the parent menu
     type:TEXT        Type text characters one at a time
     key:KEY          Press a key (enter, tab, space, up, down, left, right,
                      escape, backspace, delete, or a single character)
@@ -107,6 +108,10 @@ async def run_action(app, action_str: str) -> None:
         # Open the REPL panel in the current room
         room = app.active_room
         app._open_code_panel_in_room(room)
+        await asyncio.sleep(0.3)
+
+    elif action_str == "parent_menu":
+        app.action_parent_menu()
         await asyncio.sleep(0.3)
 
     elif action_str == "clear":

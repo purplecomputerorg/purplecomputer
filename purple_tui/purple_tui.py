@@ -49,8 +49,8 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
-    ICON_USB, ICON_USB_SAFE, ICON_HARDDISK, ICON_ROBOT, display_len,
-    USB_CACHE_MARKER,
+    ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
+    SQUASHFS_PATH, USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
@@ -546,6 +546,7 @@ class BootModeIndicator(Static):
         super().__init__(**kwargs)
         self._is_live = False
         self._is_cached = False
+        self._usb_removed = False
         self._blink_state = True
 
     def on_mount(self) -> None:
@@ -556,7 +557,9 @@ class BootModeIndicator(Static):
 
         if os.path.exists(USB_CACHE_MARKER):
             self._is_cached = True
+            self._usb_removed = not os.path.exists(SQUASHFS_PATH)
             self._push_to_title_bar()
+            self.set_interval(5.0, self._check_usb_removed)
             return
 
         self.set_interval(5.0, self._check_cache_done)
@@ -566,6 +569,13 @@ class BootModeIndicator(Static):
         if os.path.exists(USB_CACHE_MARKER):
             self._is_cached = True
             self._blink_state = True
+            self._push_to_title_bar()
+            self.set_interval(5.0, self._check_usb_removed)
+
+    def _check_usb_removed(self) -> None:
+        removed = not os.path.exists(SQUASHFS_PATH)
+        if removed != self._usb_removed:
+            self._usb_removed = removed
             self._push_to_title_bar()
 
     def _toggle_blink(self) -> None:
@@ -579,8 +589,13 @@ class BootModeIndicator(Static):
         safe_green = "#66bb6a"
         if not self._is_live:
             text, color = f"{ICON_HARDDISK} Installed", muted
+        elif self._is_cached and self._usb_removed:
+            text, color = f"{ICON_USB} Reinsert USB after restart", muted
         elif self._is_cached:
-            text, color = f"{ICON_USB} USB \u00b7 {ICON_USB_SAFE} Remove OK", safe_green
+            text, color = (
+                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u00b7 Reinsert USB after restart",
+                safe_green,
+            )
         elif self._blink_state:
             text, color = f"{ICON_USB} USB", muted
         else:

@@ -25,7 +25,7 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL, USB_CACHE_MARKER, SQUASHFS_PATH
 
 
 # =============================================================================
@@ -506,6 +506,19 @@ def _flush_terminal_input() -> None:
         termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
     except (termios.error, OSError):
         pass  # Not a TTY or other error, ignore
+
+
+def _boot_mode_hint() -> str:
+    """Return a human-readable boot mode description for parent-facing UI."""
+    if not is_live_boot():
+        return "Installed on this computer."
+    cached = os.path.exists(USB_CACHE_MARKER)
+    usb_present = os.path.exists(SQUASHFS_PATH)
+    if cached and not usb_present:
+        return "Running from USB. Not yet installed.\nReinsert USB after restart. Install to keep it without the USB."
+    if cached:
+        return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart. Install to keep it without the USB."
+    return "Running from USB. Not yet installed.\nInstall to keep it without the USB."
 
 
 def _is_casper_boot() -> bool:
@@ -1096,7 +1109,7 @@ class ParentMenu(ModalScreen):
     }
 
     #parent-dialog {
-        width: 36;
+        width: 52;
         height: auto;
         padding: 1 2;
         background: $surface;
@@ -1154,16 +1167,10 @@ class ParentMenu(ModalScreen):
     def compose(self) -> ComposeResult:
         with Vertical(id="parent-dialog"):
             yield Static("Parent Menu", id="parent-title")
-            if is_live_boot():
-                yield Static(
-                    "Running from USB. Not yet installed.\nInstall to keep it without the USB.",
-                    id="parent-live-hint",
-                )
-            else:
-                yield Static(
-                    "Installed on this computer.",
-                    id="parent-live-hint",
-                )
+            yield Static(
+                _boot_mode_hint(),
+                id="parent-live-hint",
+            )
             with Vertical(id="parent-items"):
                 for item_id, label in self._menu_items:
                     item = ParentMenuItem(label, item_id)
@@ -1359,10 +1366,7 @@ class ParentMenu(ModalScreen):
             os.system('clear')
             print("=" * 60)
             print("Purple Computer - Terminal Mode")
-            if is_live_boot():
-                print("Running from USB (not yet installed)")
-            else:
-                print("Installed on this computer")
+            print(_boot_mode_hint())
             print("=" * 60)
             print()
             print("You are now in a bash shell.")

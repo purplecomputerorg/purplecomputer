@@ -418,56 +418,32 @@ GRUB_PURPLE
     # GRUB chains to our real config without any visible error.
     log_step "8/11: Patching EFI partition..."
 
+    # Build a fresh EFI image with latest signed binaries instead of patching the
+    # ISO's tiny original. This avoids size constraints and path-guessing fragility.
+    SIGNED_EFI="${BUILD_DIR}/signed-efi"
+    if [ ! -f "$SIGNED_EFI/BOOTX64.EFI" ] || [ ! -f "$SIGNED_EFI/grubx64.efi" ]; then
+        echo "ERROR: Signed EFI binaries not found in $SIGNED_EFI (golden image must be built first)"
+        exit 1
+    fi
+
+    # Size the image to fit contents + generous padding (FAT overhead + future growth)
+    EFI_CONTENT_KB=$(du -sk "$SIGNED_EFI" | cut -f1)
+    EFI_SIZE_KB=$(( (EFI_CONTENT_KB + 512 + 63) / 64 * 64 ))  # round up to 64KB
     EFI_IMG="$WORK_DIR/efi-patched.img"
+    dd if=/dev/zero of="$EFI_IMG" bs=1K count="$EFI_SIZE_KB" 2>/dev/null
+    mkfs.vfat -F 12 "$EFI_IMG" >/dev/null
 
-    # Extract EFI image: El Torito entry 2 (UEFI), get LBA and size from xorriso
-    EFI_INFO=$(xorriso -indev "$UBUNTU_ISO" -report_el_torito plain 2>&1 | grep "El Torito boot img :   2")
-    EFI_LBA=$(echo "$EFI_INFO" | awk '{print $NF}')
-    EFI_SECTORS=$(echo "$EFI_INFO" | awk '{print $(NF-1)}')
-    dd if="$UBUNTU_ISO" of="$EFI_IMG" bs=512 skip=$((EFI_LBA * 4)) count="$EFI_SECTORS" 2>/dev/null
-
-    # Mount, replace shim/GRUB with latest signed binaries, and add grub.cfg
     EFI_MNT="$WORK_DIR/efi-mount"
     mkdir -p "$EFI_MNT"
     mount -o loop "$EFI_IMG" "$EFI_MNT"
 
-    # Replace ISO's shim/GRUB with latest signed binaries (avoids SBAT revocation)
-    SIGNED_EFI="${BUILD_DIR}/signed-efi"
-    if [ ! -f "$SIGNED_EFI/BOOTX64.EFI" ] || [ ! -f "$SIGNED_EFI/grubx64.efi" ]; then
-        echo "ERROR: Signed EFI binaries not found in $SIGNED_EFI (golden image must be built first)"
-        umount "$EFI_MNT"
-        exit 1
-    fi
+    # Standard UEFI fallback path: /EFI/BOOT/
+    mkdir -p "$EFI_MNT/EFI/BOOT"
+    cp "$SIGNED_EFI/BOOTX64.EFI" "$EFI_MNT/EFI/BOOT/BOOTX64.EFI"
+    cp "$SIGNED_EFI/grubx64.efi" "$EFI_MNT/EFI/BOOT/grubx64.efi"
+    [ -f "$SIGNED_EFI/mmx64.efi" ] && cp "$SIGNED_EFI/mmx64.efi" "$EFI_MNT/EFI/BOOT/mmx64.efi"
 
-    # Verify EFI partition has enough space for new binaries + configs
-    EFI_FREE_KB=$(df --output=avail "$EFI_MNT" | tail -1)
-    EFI_NEEDED_KB=$(du -sk "$SIGNED_EFI" | cut -f1)
-    if [ "$EFI_FREE_KB" -lt "$((EFI_NEEDED_KB + 64))" ]; then
-        echo "ERROR: EFI partition too small (${EFI_FREE_KB}KB free, need ~${EFI_NEEDED_KB}KB)"
-        umount "$EFI_MNT"
-        exit 1
-    fi
-
-    # FAT is case-insensitive; find existing shim/GRUB and replace in-place
-    SHIM_DST=$(find "$EFI_MNT" -iname "bootx64.efi" | head -1)
-    GRUB_DST=$(find "$EFI_MNT" -iname "grubx64.efi" | head -1)
-    if [ -z "$SHIM_DST" ] || [ -z "$GRUB_DST" ]; then
-        echo "ERROR: Could not find shim/GRUB in EFI partition"
-        ls -laR "$EFI_MNT/EFI/"
-        umount "$EFI_MNT"
-        exit 1
-    fi
-    SHIM_DIR=$(dirname "$SHIM_DST")
-    cp "$SIGNED_EFI/BOOTX64.EFI" "$SHIM_DST"
-    cp "$SIGNED_EFI/grubx64.efi" "$GRUB_DST"
-    # MOK Manager must be alongside shim (shim loads it by relative path)
-    if [ -f "$SIGNED_EFI/mmx64.efi" ]; then
-        cp "$SIGNED_EFI/mmx64.efi" "$SHIM_DIR/mmx64.efi"
-    fi
-    log_info "Replaced EFI shim/GRUB with latest signed binaries"
-
-    # The signed GRUB has prefix=/EFI/ubuntu compiled in, so it loads
-    # /EFI/ubuntu/grub.cfg first. Also add /boot/grub/grub.cfg as fallback.
+    # Signed GRUB has prefix=/EFI/ubuntu compiled in. Also add /boot/grub/ as fallback.
     # Both chain to the ISO filesystem's real config.
     mkdir -p "$EFI_MNT/EFI/ubuntu" "$EFI_MNT/boot/grub"
     for cfg in "$EFI_MNT/EFI/ubuntu/grub.cfg" "$EFI_MNT/boot/grub/grub.cfg"; do
@@ -477,9 +453,10 @@ set prefix=($root)/boot/grub
 source $prefix/grub.cfg
 EFI_GRUB_EOF
     done
+
     umount "$EFI_MNT"
     rmdir "$EFI_MNT"
-    log_info "EFI partition patched (signed binaries + grub.cfg)"
+    log_info "Built fresh EFI image (${EFI_SIZE_KB}KB) with latest signed binaries"
 
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."

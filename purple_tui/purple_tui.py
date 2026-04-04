@@ -944,16 +944,11 @@ class PurpleApp(App):
             # Wait 2 seconds for FFmpeg to stabilize (trimmed from final video)
             self.set_timer(2.0, self.start_demo)
 
-        # Show live boot splash on first launch from USB,
-        # or first-boot welcome after installation
+        # Show live boot splash on first launch from USB
         if not os.environ.get("PURPLE_DEV_MODE") == "1":
             if is_live_boot():
                 from .rooms.sleep_screen import LiveBootSplash
                 self.push_screen(LiveBootSplash())
-            else:
-                from .rooms.sleep_screen import FIRST_BOOT_MARKER, FirstBootWelcome
-                if not FIRST_BOOT_MARKER.exists():
-                    self.push_screen(FirstBootWelcome())
 
         # In dev mode, check for screenshot and command trigger files (for AI tools)
         if os.environ.get("PURPLE_DEV_MODE") == "1":

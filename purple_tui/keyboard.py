@@ -715,7 +715,9 @@ class KeyboardStateMachine:
         """
         # Backtick (KEY_GRAVE) acts as Escape alias: top-left corner key,
         # covers Touch Bar Macs that lack a physical Escape key.
-        if event.keycode == KeyCode.KEY_GRAVE:
+        # KEY_102ND: some Apple keyboards report the grave key as this
+        # ISO keycode depending on firmware/driver state.
+        if event.keycode in (KeyCode.KEY_GRAVE, KeyCode.KEY_102ND):
             event = RawKeyEvent(
                 keycode=KeyCode.KEY_ESC,
                 timestamp=event.timestamp,

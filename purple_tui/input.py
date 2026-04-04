@@ -77,6 +77,7 @@ class KeyCode:
     KEY_SEMICOLON = 39
     KEY_APOSTROPHE = 40
     KEY_GRAVE = 41
+    KEY_102ND = 86  # ISO "non-US backslash"; some Apple keyboards send this for grave
 
     # Row 4: bottom row
     KEY_LEFTSHIFT = 42

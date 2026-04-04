@@ -61,6 +61,7 @@ from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
     RoomAction, ControlAction, CapsLockAction, LongHoldAction,
+    InputFloodGuard,
 )
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
 from .power_manager import get_power_manager
@@ -743,6 +744,7 @@ class PurpleApp(App):
         # Direct evdev keyboard input (replaces terminal on_key)
         self._keyboard_state_machine = KeyboardStateMachine()
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
+        self._input_flood_guard = InputFloodGuard()
         self._sticky_shift_timer = None
         self._evdev_reader: EvdevReader | None = None
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
@@ -1065,12 +1067,15 @@ class PurpleApp(App):
         if now - getattr(self, '_last_evdev_time', now) > 5.0:
             from . import tts
             tts.stop()
+            self._input_flood_guard.reset()
         self._last_evdev_time = now
 
         # Process through state machine
         actions = self._keyboard_state_machine.process(event)
 
         for action in actions:
+            if self._input_flood_guard.should_drop(action):
+                continue
             if os.environ.get("PURPLE_DEV_MODE") == "1":
                 self._dev_log(f"[Evdev] action={action} (current_room={self.active_room.name})")
             await self._dispatch_keyboard_action(action)

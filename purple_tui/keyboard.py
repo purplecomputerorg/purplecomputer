@@ -201,6 +201,86 @@ class KeyRepeatSuppressor:
 
 
 # ============================================================================
+# Input Flood Protection
+# ============================================================================
+
+
+class InputFloodGuard:
+    """
+    Token-bucket rate limiter for keyboard actions.
+
+    Drops CharacterAction and NavigationAction when input rate exceeds
+    the sustainable rendering rate. All other action types (modifiers,
+    control keys, room switches) always pass through.
+
+    Pure logic class with no I/O. Timestamp is injected for deterministic testing.
+
+    Usage:
+        guard = InputFloodGuard(rate=15.0, burst=5)
+        guard.should_drop(CharacterAction(char='a'), timestamp=0.0)  # False
+        # ... exhaust burst ...
+        guard.should_drop(CharacterAction(char='z'), timestamp=0.0)  # True (dropped)
+        guard.should_drop(ControlAction(action='enter'), timestamp=0.0)  # False (never dropped)
+    """
+
+    DEFAULT_RATE = 15.0   # actions per second
+    DEFAULT_BURST = 5     # initial burst allowance
+
+    def __init__(
+        self,
+        rate: float = DEFAULT_RATE,
+        burst: int = DEFAULT_BURST,
+    ):
+        self.rate = rate
+        self.burst = burst
+        self._tokens: float = float(burst)
+        self._last_time: float | None = None
+
+    def should_drop(self, action, timestamp: float | None = None) -> bool:
+        """
+        Check if this action should be dropped (over rate limit).
+
+        Only CharacterAction and NavigationAction are throttled.
+        All other action types always pass through.
+
+        Args:
+            action: A KeyAction instance
+            timestamp: Current time in seconds (uses time.time() if None)
+
+        Returns:
+            True if the action should be dropped, False if it should be dispatched.
+        """
+        # Import here to avoid circular import at module level
+        # (these classes are defined later in this file)
+        if not isinstance(action, (CharacterAction, NavigationAction)):
+            return False
+
+        if timestamp is None:
+            timestamp = time.time()
+
+        # Initialize on first call
+        if self._last_time is None:
+            self._last_time = timestamp
+
+        # Refill tokens based on elapsed time
+        elapsed = timestamp - self._last_time
+        self._last_time = timestamp
+        self._tokens = min(self.burst, self._tokens + elapsed * self.rate)
+
+        # Consume a token if available
+        if self._tokens >= 1.0:
+            self._tokens -= 1.0
+            return False
+
+        return True
+
+    def reset(self) -> None:
+        """Reset to full burst allowance."""
+        self._tokens = float(self.burst)
+        self._last_time = None
+
+
+# ============================================================================
 # Shift Strategies
 # ============================================================================
 

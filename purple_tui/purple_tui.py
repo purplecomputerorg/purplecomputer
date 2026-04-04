@@ -590,11 +590,11 @@ class BootModeIndicator(Static):
         if not self._is_live:
             text, color = f"{ICON_HARDDISK} Installed", muted
         elif self._is_cached and self._usb_removed:
-            text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} Reinsert after restart", safe_green
+            text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted 
         elif self._is_cached:
             text, color = (
-                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 Reinsert after restart",
-                safe_green,
+                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 If restart, reinsert",
+                muted,
             )
         elif self._blink_state:
             text, color = f"{ICON_USB} USB", muted

@@ -50,7 +50,7 @@ from .constants import (
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
-    SQUASHFS_PATH, USB_CACHE_MARKER,
+    is_usb_cached, is_usb_present,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
@@ -555,9 +555,9 @@ class BootModeIndicator(Static):
         if not self._is_live:
             return
 
-        if os.path.exists(USB_CACHE_MARKER):
+        if is_usb_cached():
             self._is_cached = True
-            self._usb_removed = not os.path.exists(SQUASHFS_PATH)
+            self._usb_removed = not is_usb_present()
             self._push_to_title_bar()
             self.set_interval(5.0, self._check_usb_removed)
             return
@@ -566,14 +566,14 @@ class BootModeIndicator(Static):
         self.set_interval(1.0, self._toggle_blink)
 
     def _check_cache_done(self) -> None:
-        if os.path.exists(USB_CACHE_MARKER):
+        if is_usb_cached():
             self._is_cached = True
             self._blink_state = True
             self._push_to_title_bar()
             self.set_interval(5.0, self._check_usb_removed)
 
     def _check_usb_removed(self) -> None:
-        removed = not os.path.exists(SQUASHFS_PATH)
+        removed = not is_usb_present()
         if removed != self._usb_removed:
             self._usb_removed = removed
             self._push_to_title_bar()

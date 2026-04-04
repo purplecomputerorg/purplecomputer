@@ -25,7 +25,7 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, SUPPORT_EMAIL, USB_CACHE_MARKER, SQUASHFS_PATH
+from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
 
 
 # =============================================================================
@@ -512,12 +512,10 @@ def _boot_mode_hint() -> str:
     """Return a human-readable boot mode description for parent-facing UI."""
     if not is_live_boot():
         return "Installed on this computer."
-    cached = os.path.exists(USB_CACHE_MARKER)
-    usb_present = os.path.exists(SQUASHFS_PATH)
-    if cached and not usb_present:
-        return "Running from USB. Not yet installed.\nReinsert USB after restart. Install to keep it without the USB."
-    if cached:
-        return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart. Install to keep it without the USB."
+    if is_usb_cached() and not is_usb_present():
+        return "Running from USB. Not yet installed.\nReinsert USB after restart.\nInstall to keep it without the USB."
+    if is_usb_cached():
+        return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
     return "Running from USB. Not yet installed.\nInstall to keep it without the USB."
 
 

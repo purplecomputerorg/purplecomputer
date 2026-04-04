@@ -3,6 +3,7 @@ Purple Computer - Shared Constants
 
 Central location for constants used across the app.
 """
+import os
 
 # =============================================================================
 # SUPPORT
@@ -134,19 +135,41 @@ def display_len(text: str) -> int:
 SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 
+# PURPLE_FAKE_USB env var simulates USB boot states for testing.
+# Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out)
+_FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")
+
 
 def is_live_boot() -> bool:
     """Check if running from a casper live boot (USB or otherwise).
 
     Reads /proc/cmdline once and caches the result (doesn't change at runtime).
+    Set PURPLE_FAKE_USB=caching|cached|removed to simulate in dev/test.
     """
     if not hasattr(is_live_boot, "_cached"):
-        try:
-            from pathlib import Path
-            is_live_boot._cached = "boot=casper" in Path("/proc/cmdline").read_text()
-        except Exception:
-            is_live_boot._cached = False
+        if _FAKE_USB:
+            is_live_boot._cached = True
+        else:
+            try:
+                from pathlib import Path
+                is_live_boot._cached = "boot=casper" in Path("/proc/cmdline").read_text()
+            except Exception:
+                is_live_boot._cached = False
     return is_live_boot._cached
+
+
+def is_usb_cached() -> bool:
+    """Check if the USB squashfs has been cached to RAM."""
+    if _FAKE_USB:
+        return _FAKE_USB in ("cached", "removed")
+    return os.path.exists(USB_CACHE_MARKER)
+
+
+def is_usb_present() -> bool:
+    """Check if the USB drive is still physically connected."""
+    if _FAKE_USB:
+        return _FAKE_USB != "removed"
+    return os.path.exists(SQUASHFS_PATH)
 
 # Room titles with icons (uses room name constants)
 ROOM_TITLES = {

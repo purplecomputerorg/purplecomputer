@@ -44,6 +44,8 @@ run-sleep-demo:
 
 # Headless UI preview: just preview [room] [actions...]
 # Examples: just preview art, just preview play type:hello, just preview music code_panel
+# Simulate USB states: PURPLE_FAKE_USB=caching|cached|removed just preview play
+# Also works with run/run-dev: PURPLE_FAKE_USB=cached just run-dev
 preview *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/preview.py {{args}}
 

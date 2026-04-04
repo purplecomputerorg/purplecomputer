@@ -924,6 +924,11 @@ class PurpleApp(App):
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
+        # Periodic toast cleanup: Textual's timer-based toast dismissal can
+        # drop callbacks during screen transitions or heavy evdev input,
+        # leaving toasts stuck on screen. Reap expired ones every 4 seconds.
+        self.set_interval(4.0, self._reap_stale_toasts)
+
         # Keyboard diagnostic mode: if no evdev input for 60 seconds, exit to
         # debug shell. Activated by purple.inputtest=1 kernel parameter.
         # This lets developers diagnose keyboard issues when the app can't
@@ -1579,6 +1584,13 @@ class PurpleApp(App):
         """
         if not self._debug_no_input_received:
             self.exit(return_code=0)
+
+    def _reap_stale_toasts(self) -> None:
+        """Remove toasts whose notifications have expired."""
+        from textual.widgets._toast import Toast
+        for toast in self.query(Toast):
+            if toast._notification.has_expired:
+                toast._expire()
 
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity.
@@ -2464,6 +2476,7 @@ class PurpleApp(App):
 
         if mode:
             self._code_panel_enabled = False
+            self._code_panel_active = False
         else:
             from .settings import get_code_panel
             self._code_panel_enabled = get_code_panel()
@@ -2480,10 +2493,12 @@ class PurpleApp(App):
                 if panel.is_open:
                     panel.close()
 
-            # Hide room indicator, show littles hint
+            # Hide room indicators, clear subtitle, show littles hint
             try:
                 self.query_one("#room-indicator", RoomIndicator).display = False
+                self.query_one("#compact-room-indicator", CompactRoomIndicator).display = False
                 self.query_one("#littles-hint", Static).display = True
+                self.query_one("#viewport").border_subtitle = ""
             except NoMatches:
                 pass
         else:

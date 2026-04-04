@@ -949,6 +949,9 @@ class MusicMode(Container, can_focus=True):
         """Space held long enough: toggle REPL."""
         if not getattr(self.app, '_code_panel_enabled', True):
             return
+        # Stop any active loop/playback so toggling code panel silences everything
+        self._stop_loop()
+        self.grid.cleanup_sounds()
         if self._repl_panel and not self._repl_panel.is_open:
             # Hide hint bar (REPL has its own hints) and pin grid height
             try:

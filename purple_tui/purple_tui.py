@@ -49,8 +49,8 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_CAPS_LOCK, ICON_SHIFT,
-    ICON_USB, ICON_USB_SAFE, ICON_ROBOT, display_len,
-    SQUASHFS_PATH, USB_CACHE_MARKER,
+    ICON_USB, ICON_USB_SAFE, ICON_HARDDISK, ICON_ROBOT, display_len,
+    USB_CACHE_MARKER,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
@@ -108,8 +108,8 @@ class TitleBar(Widget):
         self._shift_text = ""
         self._shift_active = False
         self._battery_text = ""
-        self._usb_text = ""
-        self._usb_safe = False
+        self._boot_text = ""
+        self._boot_color = ""
         self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
@@ -129,9 +129,9 @@ class TitleBar(Widget):
         self._battery_text = text
         self.refresh()
 
-    def set_usb(self, text: str, safe: bool) -> None:
-        self._usb_text = text
-        self._usb_safe = safe
+    def set_boot_mode(self, text: str, color: str) -> None:
+        self._boot_text = text
+        self._boot_color = color
         self.refresh()
 
     def render_line(self, y: int) -> Strip:
@@ -141,18 +141,20 @@ class TitleBar(Widget):
 
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
-        # Title (centered)
+        # Left indicator (boot mode: USB or Installed)
+        left_text = f"  {self._boot_text}" if self._boot_text else ""
+        left_len = display_len(left_text)
+
+        # Title (centered within full width)
         icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
         title = f"{icon}  {caps(label)}"
         title_start = max(0, (width - display_len(title)) // 2)
 
-        # Indicator segments (right-aligned)
+        # Right indicator segments (right-aligned)
         primary = "#9b7bc4"
         accent = "#6a3c90"
         muted = "#6a5a80"
         indicator_parts: list[tuple[str, str]] = []
-        if self._usb_text:
-            indicator_parts.append((self._usb_text + " ", "#66bb6a" if self._usb_safe else muted))
         if self._shift_text:
             indicator_parts.append((self._shift_text + " ", accent if self._shift_active else muted))
         caps_label = caps(f"{ICON_CAPS_LOCK} {'ABC' if self._caps_on else 'abc'}")
@@ -163,31 +165,38 @@ class TitleBar(Widget):
         indicator_total = sum(display_len(t) for t, _ in indicator_parts)
         indicator_start = max(0, width - indicator_total - 4)
 
-        # Build segments left to right, handling potential overlap
+        # Build segments left to right
         title_style = Style(color=primary, bold=True)
         title_end = min(width, title_start + display_len(title))
-        # If indicators overlap with title, truncate title
+        # Clamp title to not overlap left or right indicators
+        effective_title_start = max(title_start, left_len)
         effective_title_end = min(title_end, indicator_start)
 
         segments: list[Segment] = []
         pos = 0
 
-        # Leading space
-        if title_start > 0:
-            segments.append(Segment(" " * title_start))
-            pos = title_start
+        # Left indicator (boot mode)
+        if left_text:
+            segments.append(Segment(left_text, Style(color=self._boot_color)))
+            pos = left_len
+
+        # Gap between left indicator and title
+        if effective_title_start > pos:
+            segments.append(Segment(" " * (effective_title_start - pos)))
+            pos = effective_title_start
 
         # Title text (possibly truncated)
         if effective_title_end > pos:
-            segments.append(Segment(title[:effective_title_end - title_start], title_style))
+            title_offset = pos - title_start
+            segments.append(Segment(title[title_offset:title_offset + (effective_title_end - pos)], title_style))
             pos = effective_title_end
 
-        # Gap between title and indicators
+        # Gap between title and right indicators
         if indicator_start > pos:
             segments.append(Segment(" " * (indicator_start - pos)))
             pos = indicator_start
 
-        # Indicators
+        # Right indicators
         for text, color in indicator_parts:
             segments.append(Segment(text, Style(color=color)))
             pos += display_len(text)
@@ -519,39 +528,35 @@ class BatteryIndicator(Static):
         return ""
 
 
-class UsbIndicator(Static):
-    """
-    Shows USB caching status during live boot.
-    Only visible when booted from USB (squashfs exists).
-    Blinks a USB icon while caching, then shows an eject symbol when safe to remove.
+class BootModeIndicator(Static):
+    """Shows boot mode in title bar: USB (with eject status) or Installed.
+
+    Uses is_live_boot() (checks /proc/cmdline) rather than squashfs file
+    existence, since /cdrom may be unmounted after caching on some machines.
     """
 
     DEFAULT_CSS = """
-    UsbIndicator {
+    BootModeIndicator {
         width: auto;
         height: 1;
-        margin-right: 1;
-        color: $text-muted;
-    }
-    UsbIndicator.safe {
-        color: #66bb6a;
     }
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._is_live_boot = False
+        self._is_live = False
         self._is_cached = False
         self._blink_state = True
 
     def on_mount(self) -> None:
-        self._is_live_boot = os.path.exists(SQUASHFS_PATH)
-        if not self._is_live_boot:
+        self._is_live = is_live_boot()
+        self._push_to_title_bar()
+        if not self._is_live:
             return
 
         if os.path.exists(USB_CACHE_MARKER):
             self._is_cached = True
-            self.add_class("safe")
+            self._push_to_title_bar()
             return
 
         self.set_interval(5.0, self._check_cache_done)
@@ -570,15 +575,19 @@ class UsbIndicator(Static):
         self._push_to_title_bar()
 
     def _push_to_title_bar(self) -> None:
-        if not self._is_live_boot:
-            text, safe = "", False
+        muted = "#6a5a80"
+        safe_green = "#66bb6a"
+        if not self._is_live:
+            text, color = f"{ICON_HARDDISK} Installed", muted
         elif self._is_cached:
-            text, safe = ICON_USB_SAFE, True
+            text, color = f"{ICON_USB} USB \u00b7 {ICON_USB_SAFE} Remove OK", safe_green
+        elif self._blink_state:
+            text, color = f"{ICON_USB} USB", muted
         else:
-            text, safe = (ICON_USB if self._blink_state else " "), False
+            text, color = f"  USB", muted
         try:
             title_bar = self.app.query_one("#title-bar", TitleBar)
-            title_bar.set_usb(text, safe)
+            title_bar.set_boot_mode(text, color)
         except Exception:
             pass
 
@@ -635,7 +644,7 @@ class PurpleApp(App):
         margin-bottom: 1;
     }
 
-    #battery-indicator, #usb-indicator {
+    #battery-indicator, #boot-mode-indicator {
         display: none;
     }
 
@@ -808,7 +817,7 @@ class PurpleApp(App):
             yield CompactRoomIndicator(id="compact-room-indicator")
             # Hidden state-tracking widgets (push updates to TitleBar)
             yield BatteryIndicator(id="battery-indicator")
-            yield UsbIndicator(id="usb-indicator")
+            yield BootModeIndicator(id="boot-mode-indicator")
 
     async def on_mount(self) -> None:
         """Called when app starts"""

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Title bar shows boot mode on the left: "USB" (blinks while caching, then "USB · ⏏ Remove OK" when safe) or "Installed" with disk icon.
 - Hold backslash (`\`) for 3 seconds to open parent menu. Alternative to Escape long-hold for keyboards where Escape is unreliable.
 - Install failure screen now shows the specific error and "Press Enter for technical details" to view the last 10 log lines (photographable for support).
 - Post-install reboot: after install completes, Textual exits and a plain-text screen shows "All done! You can remove the USB drive now. Press Enter to restart." Runs from a static binary on tmpfs so it works even after USB removal.

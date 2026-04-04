@@ -109,9 +109,10 @@ ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
 ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
 ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
-# USB live boot indicator
-ICON_USB = "󰗘"              # nf-md-usb
+# USB / installed indicator
+ICON_USB = "\uf287"           # nf-fa-usb
 ICON_USB_SAFE = "⏏"          # eject symbol (safe to remove)
+ICON_HARDDISK = "󰋊"         # nf-md-harddisk (installed)
 
 
 def display_len(text: str) -> int:
@@ -130,7 +131,6 @@ def display_len(text: str) -> int:
 
 
 # Live boot squashfs caching
-SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 
 

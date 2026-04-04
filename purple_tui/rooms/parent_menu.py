@@ -513,10 +513,10 @@ def _boot_mode_hint() -> str:
     if not is_live_boot():
         return "Installed on this computer."
     if is_usb_cached() and not is_usb_present():
-        return "Running from USB. Not yet installed.\nReinsert USB after restart.\nInstall to keep it without the USB."
+        return "Running from USB. Not yet installed.\nReinsert after restart.\nInstall to keep it without the USB."
     if is_usb_cached():
         return "Running from USB. Not yet installed.\nOK to remove USB. Reinsert after restart.\nInstall to keep it without the USB."
-    return "Running from USB. Not yet installed.\nInstall to keep it without the USB."
+    return "Running from USB. Not yet installed.\n\nInstall to keep it without the USB."
 
 
 def _is_casper_boot() -> bool:

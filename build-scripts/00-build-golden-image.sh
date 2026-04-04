@@ -564,9 +564,10 @@ EOF
         [ -f "$deb" ] && dpkg -x "$deb" "$EXTRACT_DIR"
     done
 
-    # Find signed shim (follow symlinks, skip .previous versions)
+    # Find signed binaries (follow symlinks, skip .previous versions)
     SHIM_SRC=$(find "$EXTRACT_DIR" -name "shimx64.efi.signed*" ! -name "*.previous" 2>/dev/null | head -1)
     GRUB_SRC=$(find "$EXTRACT_DIR" -name "grubx64.efi.signed" 2>/dev/null | head -1)
+    MMX64_SRC=$(find "$EXTRACT_DIR" -iname "mmx64.efi*" ! -name "*.previous" 2>/dev/null | head -1)
 
     if [ -z "$SHIM_SRC" ] || [ -z "$GRUB_SRC" ]; then
         echo "ERROR: Could not find signed boot binaries"
@@ -580,8 +581,19 @@ EOF
     cp -L "$SHIM_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
     # grubx64.efi = signed GRUB (shim loads this from same directory)
     cp -L "$GRUB_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/grubx64.efi"
+    # mmx64.efi = MOK Manager (shim loads this for key enrollment if needed)
+    if [ -n "$MMX64_SRC" ]; then
+        cp -L "$MMX64_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/mmx64.efi"
+    fi
     log_info "  Shim: $(basename "$SHIM_SRC")"
     log_info "  GRUB: $(basename "$GRUB_SRC")"
+    log_info "  MOK:  $([ -n "$MMX64_SRC" ] && basename "$MMX64_SRC" || echo 'not found (optional)')"
+
+    # Save signed binaries for remaster script (ISO's EFI partition needs them too)
+    mkdir -p "$BUILD_DIR/signed-efi"
+    cp -L "$SHIM_SRC" "$BUILD_DIR/signed-efi/BOOTX64.EFI"
+    cp -L "$GRUB_SRC" "$BUILD_DIR/signed-efi/grubx64.efi"
+    [ -n "$MMX64_SRC" ] && cp -L "$MMX64_SRC" "$BUILD_DIR/signed-efi/mmx64.efi"
 
     # Create EFI search config at /EFI/ubuntu/ (where Ubuntu's signed GRUB expects it).
     # The signed GRUB binary has prefix=/EFI/ubuntu compiled in, so it loads

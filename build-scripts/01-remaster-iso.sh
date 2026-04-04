@@ -426,19 +426,60 @@ GRUB_PURPLE
     EFI_SECTORS=$(echo "$EFI_INFO" | awk '{print $(NF-1)}')
     dd if="$UBUNTU_ISO" of="$EFI_IMG" bs=512 skip=$((EFI_LBA * 4)) count="$EFI_SECTORS" 2>/dev/null
 
-    # Mount and add /boot/grub/grub.cfg that chains to the ISO's real config
+    # Mount, replace shim/GRUB with latest signed binaries, and add grub.cfg
     EFI_MNT="$WORK_DIR/efi-mount"
     mkdir -p "$EFI_MNT"
     mount -o loop "$EFI_IMG" "$EFI_MNT"
-    mkdir -p "$EFI_MNT/boot/grub"
-    cat > "$EFI_MNT/boot/grub/grub.cfg" << 'EFI_GRUB_EOF'
+
+    # Replace ISO's shim/GRUB with latest signed binaries (avoids SBAT revocation)
+    SIGNED_EFI="${BUILD_DIR}/signed-efi"
+    if [ ! -f "$SIGNED_EFI/BOOTX64.EFI" ] || [ ! -f "$SIGNED_EFI/grubx64.efi" ]; then
+        echo "ERROR: Signed EFI binaries not found in $SIGNED_EFI (golden image must be built first)"
+        umount "$EFI_MNT"
+        exit 1
+    fi
+
+    # Verify EFI partition has enough space for new binaries + configs
+    EFI_FREE_KB=$(df --output=avail "$EFI_MNT" | tail -1)
+    EFI_NEEDED_KB=$(du -sk "$SIGNED_EFI" | cut -f1)
+    if [ "$EFI_FREE_KB" -lt "$((EFI_NEEDED_KB + 64))" ]; then
+        echo "ERROR: EFI partition too small (${EFI_FREE_KB}KB free, need ~${EFI_NEEDED_KB}KB)"
+        umount "$EFI_MNT"
+        exit 1
+    fi
+
+    # FAT is case-insensitive; find existing shim/GRUB and replace in-place
+    SHIM_DST=$(find "$EFI_MNT" -iname "bootx64.efi" | head -1)
+    GRUB_DST=$(find "$EFI_MNT" -iname "grubx64.efi" | head -1)
+    if [ -z "$SHIM_DST" ] || [ -z "$GRUB_DST" ]; then
+        echo "ERROR: Could not find shim/GRUB in EFI partition"
+        ls -laR "$EFI_MNT/EFI/"
+        umount "$EFI_MNT"
+        exit 1
+    fi
+    SHIM_DIR=$(dirname "$SHIM_DST")
+    cp "$SIGNED_EFI/BOOTX64.EFI" "$SHIM_DST"
+    cp "$SIGNED_EFI/grubx64.efi" "$GRUB_DST"
+    # MOK Manager must be alongside shim (shim loads it by relative path)
+    if [ -f "$SIGNED_EFI/mmx64.efi" ]; then
+        cp "$SIGNED_EFI/mmx64.efi" "$SHIM_DIR/mmx64.efi"
+    fi
+    log_info "Replaced EFI shim/GRUB with latest signed binaries"
+
+    # The signed GRUB has prefix=/EFI/ubuntu compiled in, so it loads
+    # /EFI/ubuntu/grub.cfg first. Also add /boot/grub/grub.cfg as fallback.
+    # Both chain to the ISO filesystem's real config.
+    mkdir -p "$EFI_MNT/EFI/ubuntu" "$EFI_MNT/boot/grub"
+    for cfg in "$EFI_MNT/EFI/ubuntu/grub.cfg" "$EFI_MNT/boot/grub/grub.cfg"; do
+        cat > "$cfg" << 'EFI_GRUB_EOF'
 search --file --set=root /.disk/info
 set prefix=($root)/boot/grub
 source $prefix/grub.cfg
 EFI_GRUB_EOF
+    done
     umount "$EFI_MNT"
     rmdir "$EFI_MNT"
-    log_info "EFI partition patched (added /boot/grub/grub.cfg)"
+    log_info "EFI partition patched (signed binaries + grub.cfg)"
 
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."

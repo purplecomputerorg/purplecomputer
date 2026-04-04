@@ -302,10 +302,11 @@ main() {
                 warn "  Layer 1: signed boot files missing!"
             fi
 
-            # Layer 2: Vendor path for NVRAM entry (shim + GRUB)
+            # Layer 2: Vendor path for NVRAM entry (shim + GRUB + MOK Manager)
             mkdir -p /mnt/efi/EFI/purple
             cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/purple/shimx64.efi 2>/dev/null || true
             cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/purple/grubx64.efi 2>/dev/null || true
+            cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/purple/mmx64.efi 2>/dev/null || true
             log "  Layer 2: /EFI/purple/ shim + GRUB"
 
             # Layer 3: Microsoft path (Surface, HP need this)
@@ -323,6 +324,7 @@ main() {
                 mkdir -p /mnt/efi/EFI/Microsoft/Boot
                 cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
                 cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi
+                cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/Microsoft/Boot/mmx64.efi 2>/dev/null || true
                 log "  Layer 3: /EFI/Microsoft/Boot/ shim + GRUB"
             fi
 

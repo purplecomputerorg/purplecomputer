@@ -141,7 +141,7 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 
 Boot must work on diverse hardware (ThinkPads, Dells, Surface, etc.):
 - **UUID over labels** for root partition
-- **Signed boot chain:** shim → GRUB → kernel
+- **Signed boot chain:** shim → GRUB → kernel (+ mmx64.efi MOK Manager alongside shim)
 - **Multiple EFI paths:** `/EFI/BOOT/`, `/EFI/Microsoft/Boot/`, `/EFI/purple/`
 - **NVRAM entries are bonus:** create but don't depend on them
 

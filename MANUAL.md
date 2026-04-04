@@ -865,7 +865,8 @@ build-scripts/
 - USB (for installer boot)
 
 **Secure Boot:**
-- Works on most systems with shim + GRUB signed boot chain
+- Works on most systems: shim + GRUB + mmx64.efi signed boot chain
+- Binaries updated to latest Ubuntu versions at build time (avoids SBAT revocation)
 - No MOK enrollment required
 
 ### Size Reference

@@ -240,7 +240,7 @@ ThinkPads don't have a Novo button (they use F12 or the Enter key interrupt menu
 
 ### Does Purple Computer work with Secure Boot enabled?
 
-Yes, on most hardware. Purple Computer's USB uses Ubuntu's signed shim and GRUB bootloader, which are trusted by most UEFI firmware. Secure Boot can stay enabled.
+Yes, on most hardware. Purple Computer's USB uses the latest Ubuntu signed shim, GRUB, and MOK Manager binaries (updated at each build to avoid SBAT revocation). These are trusted by most UEFI firmware. Secure Boot can stay enabled.
 
 ### When Secure Boot causes problems
 

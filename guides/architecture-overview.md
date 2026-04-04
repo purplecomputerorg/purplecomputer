@@ -135,7 +135,7 @@ In live boot mode, `purple.install=1` is absent, so the hook is a no-op.
 | Casper internals | Inside initramfs | Live boot plumbing |
 | Boot configuration | EFI/MBR boot records | Boot on all hardware |
 
-We never modify the kernel, shim, GRUB binary, or casper's own scripts.
+We never modify the kernel or casper's own scripts. The shim, GRUB, and MOK Manager binaries in the ISO's EFI partition are replaced at build time with the latest Ubuntu signed versions to avoid SBAT revocation on machines with updated firmware.
 
 ---
 
@@ -202,7 +202,7 @@ debootstrap → full Purple root filesystem
 
 ```
 USB stick contains:
-├── Ubuntu's boot stack (shim, GRUB, kernel)
+├── Signed boot stack (latest shim, GRUB, mmx64.efi, Ubuntu kernel)
 ├── Modified initramfs (with install hook)
 ├── casper/
 │   ├── filesystem.squashfs  ← Purple Computer root filesystem

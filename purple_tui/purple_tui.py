@@ -593,7 +593,7 @@ class BootModeIndicator(Static):
             text, color = f"{ICON_USB} Reinsert after restart", muted
         elif self._is_cached:
             text, color = (
-                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u00b7 Reinsert after restart",
+                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 Reinsert after restart",
                 safe_green,
             )
         elif self._blink_state:

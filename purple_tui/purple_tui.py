@@ -142,7 +142,7 @@ class TitleBar(Widget):
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Left indicator (boot mode: USB or Installed), aligned with viewport border
-        left_text = f"     {self._boot_text}" if self._boot_text else ""
+        left_text = f"       {self._boot_text}" if self._boot_text else ""
         left_len = display_len(left_text)
 
         # Title (centered within full width)

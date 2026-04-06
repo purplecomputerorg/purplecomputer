@@ -181,6 +181,89 @@ if HAS_PYTEST:
 
 
 # =============================================================================
+# Friendly Time Formatting Tests
+# =============================================================================
+
+if HAS_PYTEST:
+    from purple_tui.rooms.sleep_screen import _friendly_time
+
+    class TestFriendlyTime:
+        """Test the _friendly_time() display function."""
+
+        def test_under_one_minute(self):
+            assert _friendly_time(59) == "soon"
+            assert _friendly_time(30) == "soon"
+            assert _friendly_time(0) == "soon"
+
+        def test_exact_minutes(self):
+            assert _friendly_time(60) == "1 min"
+            assert _friendly_time(5 * 60) == "5 min"
+            assert _friendly_time(9 * 60) == "9 min"
+
+        def test_mid_range(self):
+            assert _friendly_time(10 * 60) == "about 10 min"
+            assert _friendly_time(30 * 60) == "about 30 min"
+            assert _friendly_time(44 * 60) == "about 44 min"
+
+        def test_about_one_hour(self):
+            assert _friendly_time(45 * 60) == "about 1 hr"
+            assert _friendly_time(55 * 60) == "about 1 hr"
+            assert _friendly_time(60 * 60) == "about 1 hr"
+
+        def test_partial_minutes_truncate(self):
+            """90 seconds = 1 min (truncated, not rounded)."""
+            assert _friendly_time(90) == "1 min"
+            assert _friendly_time(119) == "1 min"
+            assert _friendly_time(11 * 60 + 30) == "about 11 min"
+
+    class TestSleepScreenStatus:
+        """Test that sleep screen status shows correct remaining time for each scenario."""
+
+        @pytest.fixture
+        def power_manager(self):
+            pm = PowerManager()
+            pm._charger_state = False
+            return pm
+
+        def test_battery_remaining_time(self, power_manager):
+            """On battery, remaining time should decrease as idle time grows."""
+            threshold = power_manager.get_idle_shutdown_threshold()
+            # Just entered sleep (2 min idle on battery, 8 min remaining)
+            remaining = threshold - (2 * 60)
+            assert _friendly_time(remaining) == "8 min"
+
+        def test_charger_remaining_time(self, power_manager):
+            """On charger, remaining time starts near 1 hr."""
+            power_manager._charger_state = True
+            threshold = power_manager.get_idle_shutdown_threshold()
+            # Just entered sleep (5 min idle on charger, 55 min remaining)
+            remaining = threshold - (5 * 60)
+            assert _friendly_time(remaining) == "about 1 hr"
+
+        def test_charger_remaining_after_long_idle(self, power_manager):
+            """On charger after 30 min idle, should show about 30 min."""
+            power_manager._charger_state = True
+            threshold = power_manager.get_idle_shutdown_threshold()
+            remaining = threshold - (30 * 60)
+            assert _friendly_time(remaining) == "about 30 min"
+
+        def test_lid_closed_remaining_time(self):
+            """Lid closed countdown uses LID_SHUTDOWN_DELAY."""
+            # Just closed (0s elapsed)
+            remaining = LID_SHUTDOWN_DELAY - 0
+            assert _friendly_time(remaining) == "about 10 min"
+            # 7 min elapsed
+            remaining = LID_SHUTDOWN_DELAY - (7 * 60)
+            assert _friendly_time(remaining) == "3 min"
+
+        def test_remaining_never_negative(self, power_manager):
+            """Even if idle exceeds threshold, remaining should be 'soon'."""
+            threshold = power_manager.get_idle_shutdown_threshold()
+            remaining = max(0, threshold - (threshold + 60))
+            assert _friendly_time(remaining) == "soon"
+
+
+# =============================================================================
 # App-level Activity Tracking Tests
 # =============================================================================
 

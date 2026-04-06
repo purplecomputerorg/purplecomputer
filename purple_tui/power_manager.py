@@ -9,7 +9,7 @@ Power states (2-tier):
   Sleep face: sleeping face shown, any key wakes
 
 Timing varies by charger and lid state:
-  On charger, lid open:  5 min idle -> sleep face, no auto-shutdown
+  On charger, lid open:  5 min idle -> sleep face, 60 min idle -> shutdown
   On battery, lid open:  2 min idle -> sleep face, 10 min idle -> shutdown
   Lid closed (any):      immediate sleep face, 10 min -> shutdown
 
@@ -77,7 +77,8 @@ def _get_timing(normal: int, demo: int) -> int:
 
 # On charger, lid open
 CHARGER_IDLE_SLEEP = _get_timing(5 * 60, 3)     # 5 min / 3 sec: show sleeping face
-# No auto-shutdown on charger with lid open
+# On charger, lid open: auto-shutdown after 60 min idle
+CHARGER_IDLE_SHUTDOWN = _get_timing(60 * 60, 15)  # 60 min / 15 sec: shutdown
 
 # On battery (or unknown), lid open
 BATTERY_IDLE_SLEEP = _get_timing(2 * 60, 2)     # 2 min / 2 sec: show sleeping face
@@ -309,13 +310,13 @@ class PowerManager:
             return CHARGER_IDLE_SLEEP
         return BATTERY_IDLE_SLEEP
 
-    def get_idle_shutdown_threshold(self) -> Optional[int]:
+    def get_idle_shutdown_threshold(self) -> int:
         """Get the idle seconds threshold for auto-shutdown.
 
-        Returns None if no auto-shutdown (on charger with lid open).
+        Longer timeout on charger (60 min) vs battery (10 min).
         """
         if self._charger_state is True:
-            return None  # No auto-shutdown on charger
+            return CHARGER_IDLE_SHUTDOWN
         return BATTERY_IDLE_SHUTDOWN
 
     def shutdown(self) -> bool:

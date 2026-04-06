@@ -17,8 +17,24 @@ from textual.screen import Screen
 from textual.widgets import Static
 from textual import events
 
-from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY, BATTERY_IDLE_SHUTDOWN
+from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY
 from ..constants import is_live_boot
+
+
+def _friendly_time(seconds: float) -> str:
+    """Format remaining seconds as friendly, rounded text for parents.
+
+    45+ min: 'about 1 hr', 10-44 min: 'about NN min',
+    1-9 min: 'N min', under 1 min: 'soon'.
+    """
+    minutes = int(seconds / 60)
+    if minutes >= 45:
+        return "about 1 hr"
+    if minutes >= 10:
+        return f"about {minutes} min"
+    if minutes >= 1:
+        return f"{minutes} min"
+    return "soon"
 
 # All lines SAME WIDTH for consistent bounding box
 _SLEEP_FACE = "\n".join([
@@ -42,8 +58,7 @@ class SleepScreen(Screen):
     Sleep screen shown when computer is idle or lid is closed.
 
     Press any key to wake up and return to normal operation.
-    Shuts down after extended idle (battery) or lid-closed timeout.
-    On charger with lid open, stays on sleep face indefinitely.
+    Shuts down after extended idle or lid-closed timeout.
     """
 
     DEFAULT_CSS = """
@@ -117,11 +132,13 @@ class SleepScreen(Screen):
             lines.append("💾 USB. Need it to restart.")
 
         if lid_close_time is not None:
-            lines.append(f"⏱️ Shuts off in {LID_SHUTDOWN_DELAY // 60} min.")
-        elif on_charger is True:
-            lines.append("🔌 Plugged in. Stays on.")
+            remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
+            lines.append(f"⏱️ Shuts off in {_friendly_time(remaining)}.")
         else:
-            lines.append(f"🔋 Battery. Shuts off in {BATTERY_IDLE_SHUTDOWN // 60} min.")
+            idle = pm.get_idle_seconds()
+            remaining = max(0, pm.get_idle_shutdown_threshold() - idle)
+            power_icon = "🔌 Plugged in." if on_charger is True else "🔋 Battery."
+            lines.append(f"{power_icon} Shuts off in {_friendly_time(remaining)}.")
 
         try:
             self.query_one("#sleep-status", Static).update("\n".join(lines))
@@ -129,7 +146,7 @@ class SleepScreen(Screen):
             pass
 
     def _check_idle_shutdown(self) -> None:
-        """Check if idle time has reached shutdown threshold (battery only)."""
+        """Check if idle time has reached shutdown threshold."""
         from ..power_manager import _power_log
         pm = get_power_manager()
 
@@ -138,7 +155,7 @@ class SleepScreen(Screen):
         shutdown_threshold = pm.get_idle_shutdown_threshold()
         if int(idle) % 30 == 0:
             _power_log(f"SLEEP_SCREEN TICK: idle={idle:.0f}s, shutdown_threshold={shutdown_threshold}, charger={charger}")
-        if shutdown_threshold is not None and idle >= shutdown_threshold:
+        if idle >= shutdown_threshold:
             _power_log(f"SLEEP_SCREEN SHUTDOWN: idle {idle:.0f}s >= {shutdown_threshold}s")
             self._do_shutdown()
 

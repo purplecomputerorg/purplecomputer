@@ -655,8 +655,7 @@ logind is configured to ignore the power button (`HandlePowerKey=ignore`). The T
 
 Closing the lid shows the sleep screen immediately and starts a 10-minute shutdown countdown. Opening the lid cancels the countdown but keeps the sleep screen visible, showing parents how long the lid was closed and when the computer will turn off. Any key press wakes back to normal.
 
-On charger: won't auto-shutdown (stays on sleep screen indefinitely).
-On battery: shuts down after 10 minutes of lid-closed time.
+Shuts down after 10 minutes of lid-closed time regardless of charger state.
 
 ### Idle Detection (Lid Open)
 
@@ -664,7 +663,7 @@ Timings depend on charger state:
 
 | Condition | Sleep Face | Auto Shutdown |
 |-----------|-----------|---------------|
-| On charger | 5 min idle | Never |
+| On charger | 5 min idle | 60 min idle |
 | On battery | 2 min idle | 10 min idle |
 
 The sleep screen shows a power status message so parents understand what's happening: charger state, elapsed time, and when auto-shutdown will occur. On live boot (USB), it also notes that the USB is needed to restart.

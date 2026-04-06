@@ -162,13 +162,13 @@ def predict_behavior(charger_raw, lid_state, is_demo):
 
     if is_demo:
         sleep_time = "3s" if on_charger else "2s"
-        shutdown_time = "never" if (on_charger and not lid_closed) else ("8s" if lid_closed else "10s")
+        shutdown_time = "8s" if lid_closed else ("15s" if on_charger else "10s")
     else:
         sleep_time = "5min" if on_charger else "2min"
         if lid_closed:
             shutdown_time = "10min (lid closed)"
         elif on_charger:
-            shutdown_time = "never (on charger, lid open)"
+            shutdown_time = "60min (on charger)"
         else:
             shutdown_time = "10min (battery)"
 

@@ -21,6 +21,7 @@ except ImportError:
 from purple_tui.power_manager import (
     PowerManager,
     CHARGER_IDLE_SLEEP,
+    CHARGER_IDLE_SHUTDOWN,
     BATTERY_IDLE_SLEEP,
     BATTERY_IDLE_SHUTDOWN,
     LID_SHUTDOWN_DELAY,
@@ -103,6 +104,10 @@ if HAS_PYTEST:
             """On battery, shutdown should happen after 10 minutes."""
             assert BATTERY_IDLE_SHUTDOWN == 10 * 60
 
+        def test_charger_shutdown_is_sixty_minutes(self):
+            """On charger, shutdown should happen after 60 minutes."""
+            assert CHARGER_IDLE_SHUTDOWN == 60 * 60
+
         def test_lid_shutdown_is_ten_minutes(self):
             """Lid close should wait 10 minutes before shutdown."""
             assert LID_SHUTDOWN_DELAY == 10 * 60
@@ -134,10 +139,10 @@ if HAS_PYTEST:
             power_manager._charger_state = False
             assert power_manager.get_idle_shutdown_threshold() == BATTERY_IDLE_SHUTDOWN
 
-        def test_on_charger_no_shutdown(self, power_manager):
-            """On charger with lid open, no auto-shutdown."""
+        def test_on_charger_shutdown_threshold(self, power_manager):
+            """On charger, shutdown threshold should be CHARGER_IDLE_SHUTDOWN (60 min)."""
             power_manager._charger_state = True
-            assert power_manager.get_idle_shutdown_threshold() is None
+            assert power_manager.get_idle_shutdown_threshold() == CHARGER_IDLE_SHUTDOWN
 
         def test_unknown_charger_shutdown_threshold(self, power_manager):
             """Unknown charger should use battery shutdown threshold."""

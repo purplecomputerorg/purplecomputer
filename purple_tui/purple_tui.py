@@ -934,14 +934,15 @@ class PurpleApp(App):
             self._idle_timer = None
         else:
             from .power_manager import (
-                CHARGER_IDLE_SLEEP, BATTERY_IDLE_SLEEP, BATTERY_IDLE_SHUTDOWN,
+                CHARGER_IDLE_SLEEP, CHARGER_IDLE_SHUTDOWN,
+                BATTERY_IDLE_SLEEP, BATTERY_IDLE_SHUTDOWN,
             )
 
             if os.environ.get("PURPLE_SLEEP_DEMO"):
                 check_interval = 1.0
                 self.notify(
                     f"Demo: sleep@{BATTERY_IDLE_SLEEP}s/{CHARGER_IDLE_SLEEP}s, "
-                    f"shutdown@{BATTERY_IDLE_SHUTDOWN}s",
+                    f"shutdown@{BATTERY_IDLE_SHUTDOWN}s/{CHARGER_IDLE_SHUTDOWN}s",
                     title="Sleep Demo",
                     timeout=5,
                 )
@@ -1675,9 +1676,9 @@ class PurpleApp(App):
                 self._show_sleep_screen()
                 return
 
-            # Idle shutdown (only on battery, never on charger with lid open)
+            # Idle shutdown (10 min battery, 60 min charger)
             shutdown_threshold = pm.get_idle_shutdown_threshold()
-            if shutdown_threshold is not None and idle >= shutdown_threshold:
+            if idle >= shutdown_threshold:
                 _power_log(f"IDLE SHUTDOWN: idle {idle:.0f}s >= {shutdown_threshold}s, charger={charger}")
                 self._show_bye_screen()
         except Exception:

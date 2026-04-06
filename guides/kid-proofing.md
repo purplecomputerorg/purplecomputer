@@ -149,12 +149,12 @@ Two power states: awake and sleep face. Timers adapt to charger and lid:
 | Power button hold (3s) | Shows "Bye!" screen and shuts down immediately. |
 | Power button hold (10s) | Hardware forced off (ACPI, cannot be changed). |
 | Lid close | Sleep face immediately. Shuts down after 10 min. Lid reopen resets everything. |
-| Idle (on charger) | 5 min: sleep face. No auto-shutdown. |
+| Idle (on charger) | 5 min: sleep face. 60 min: shutdown. |
 | Idle (on battery) | 2 min: sleep face. 10 min: shutdown. |
 
 Charger detection scans `/sys/class/power_supply/` for `type == "Mains"` with smoothing (2 consecutive reads). Falls back to battery timers if charger state is unknown.
 
-**Why this design:** A 3-year-old mashing the power button sees a cute sleeping face (not scary) and can press any key to get back. A parent who wants to turn it off holds power for 3 seconds (phone-like, intuitive). No suspend/hibernate (unreliable on old laptops). Closing the lid to carry the laptop is safe for 10 minutes. Plugged in machines stay alive longer since battery drain is not a concern.
+**Why this design:** A 3-year-old mashing the power button sees a cute sleeping face (not scary) and can press any key to get back. A parent who wants to turn it off holds power for 3 seconds (phone-like, intuitive). No suspend/hibernate (unreliable on old laptops). Closing the lid to carry the laptop is safe for 10 minutes. Plugged in machines get more time (60 min) but nothing runs forever.
 
 The 10-second forced power-off is a **hardware feature** (ACPI) that bypasses the OS. This cannot be changed and serves as the ultimate escape hatch.
 

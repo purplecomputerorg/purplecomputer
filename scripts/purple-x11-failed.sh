@@ -7,39 +7,27 @@
 [ "$SERVICE_RESULT" = "success" ] && exit 0
 
 DEBUG_FLAG=/opt/purple/debug
+TTY=/dev/tty1
+DIAG=/tmp/purple-diag.txt
 
 # Paint tty1 purple background
-printf '\033]P02d1b4e\033[H\033[2J' > /dev/tty1 2>/dev/null
+printf '\033]P02d1b4e\033[H\033[2J' > "$TTY" 2>/dev/null
 
-if [ -f "$DEBUG_FLAG" ]; then
-    # Debug mode: dump diagnostics to screen in auto-paged sections with pauses,
-    # so a parent can just point a phone camera and record a video.
-    # Full output also saved to /tmp/purple-diag.txt for tty2 access.
-    DIAG=/tmp/purple-diag.txt
-    TTY=/dev/tty1
-    PAUSE=5
+# Xorg runs rootless (no xserver-xorg-legacy), so it logs to the user's home
+XORG_LOG=""
+for candidate in /home/purple/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log; do
+    [ -f "$candidate" ] && XORG_LOG="$candidate" && break
+done
 
-    # Xorg runs rootless (no xserver-xorg-legacy), so it logs to the user's home
-    XORG_LOG=""
-    for candidate in /home/purple/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log; do
-        [ -f "$candidate" ] && XORG_LOG="$candidate" && break
-    done
-
-    # show_section: clear screen, show a section, pause for video capture
-    show_section() {
-        printf '\033[H\033[2J' > "$TTY" 2>/dev/null
-        cat > "$TTY" 2>/dev/null
-        sleep "$PAUSE"
-    }
-
-    # Also save everything to the diag file
+# Collect diagnostics into a file, then slowly scroll it on screen.
+# Scrolls at ~4 lines/sec so each line stays visible for ~7s on a 30-row console,
+# plenty for a phone video to capture. No interaction needed after Enter.
+show_diagnostics() {
     : > "$DIAG"
 
-    # --- Section 1: Header + hardware ---
     {
         echo ""
         echo "  Purple Computer could not start the display."
-        echo "  Recording? Each screen pauses ${PAUSE}s then auto-advances."
         echo ""
         echo "  === DRM connectors ==="
         for f in /sys/class/drm/card*-*/status; do
@@ -51,10 +39,6 @@ if [ -f "$DEBUG_FLAG" ]; then
         echo ""
         echo "  === Kernel command line ==="
         cat /proc/cmdline 2>/dev/null | sed 's/^/    /'
-    } | tee -a "$DIAG" | show_section
-
-    # --- Section 2: Xorg log (the most important one) ---
-    {
         echo ""
         echo "  === Xorg log (last 40 lines) ==="
         echo "  Path: ${XORG_LOG:-(not found)}"
@@ -64,37 +48,38 @@ if [ -f "$DEBUG_FLAG" ]; then
         else
             echo "    (no Xorg log found)"
         fi
-    } | tee -a "$DIAG" | show_section
-
-    # --- Section 3: xinitrc + boot log ---
-    {
         echo ""
         echo "  === xinitrc log (last 20 lines) ==="
         tail -20 /tmp/xinitrc.log 2>/dev/null | sed 's/^/    /' || echo "    (no xinitrc log)"
         echo ""
         echo "  === boot log ==="
         cat /tmp/purple-boot.log 2>/dev/null | sed 's/^/    /' || echo "    (no boot log)"
-    } | tee -a "$DIAG" | show_section
-
-    # --- Section 4: systemd journal for this service ---
-    {
         echo ""
         echo "  === purple-x11 journal (last 30 lines) ==="
         sudo journalctl -u purple-x11 -b --no-pager -n 30 2>/dev/null | sed 's/^/    /' \
             || echo "    (no journal entries)"
-    } | tee -a "$DIAG" | show_section
+        echo ""
+        echo "  === Done ==="
+        echo ""
+    } > "$DIAG"
 
-    # --- Final screen: stays up ---
+    # Clear screen then scroll the diag file line by line
     printf '\033[H\033[2J' > "$TTY" 2>/dev/null
-    cat > "$TTY" 2>/dev/null <<MSG
+    while IFS= read -r line; do
+        printf '%s\n' "$line" > "$TTY" 2>/dev/null
+        sleep 0.25
+    done < "$DIAG"
 
-  Done. All diagnostics saved to /tmp/purple-diag.txt
-  Shell: Ctrl+Alt+F2
+    # Keep the last screenful visible
+    sleep 3
+}
 
-MSG
+if [ -f "$DEBUG_FLAG" ]; then
+    # Debug mode: show diagnostics immediately
+    show_diagnostics
 else
-    # Production: kid/parent-friendly message
-    cat > /dev/tty1 2>/dev/null <<'MSG'
+    # Production: friendly message with option to show details for support
+    cat > "$TTY" 2>/dev/null <<'MSG'
 
   Something went wrong starting Purple Computer.
 
@@ -103,5 +88,12 @@ else
   If this keeps happening, contact us at
   support@purplecomputer.org
 
+  If support asks, press Enter to show details,
+  then record a video of the screen.
+
 MSG
+    # Wait for Enter. read from tty1 so it works even though stdin may be closed.
+    # If nobody presses Enter, this just waits (the screen stays up with the
+    # friendly message, which is fine).
+    read dummy < "$TTY" 2>/dev/null && show_diagnostics
 fi

@@ -1,23 +1,30 @@
 #!/bin/sh
 # Shown on tty1 when X11 fails to start after multiple attempts.
 # Called as ExecStopPost by purple-x11.service.
-# Only shows the error screen on failure, not clean shutdown.
+# Only shows the error screen on the final failure, not during restarts.
 
 # Don't show error on clean stop (e.g. system shutdown)
 [ "$SERVICE_RESULT" = "success" ] && exit 0
 
-DEBUG_FLAG=/opt/purple/debug
 TTY=/dev/tty1
 DIAG=/tmp/purple-diag.txt
+FAIL_COUNT_FILE=/tmp/purple-x11-fail-count
+
+# Track failures. The service restarts up to StartLimitBurst times (3).
+# Only show the error screen on the final failure.
+count=$(cat "$FAIL_COUNT_FILE" 2>/dev/null || echo 0)
+count=$((count + 1))
+echo "$count" > "$FAIL_COUNT_FILE"
+if [ "$count" -lt 3 ]; then
+    exit 0
+fi
 
 # Paint tty1 purple background
 printf '\033]P02d1b4e\033[H\033[2J' > "$TTY" 2>/dev/null
 
-# Xorg runs rootless (no xserver-xorg-legacy), so it logs to the user's home
-XORG_LOG=""
-for candidate in /home/purple/.local/share/xorg/Xorg.0.log /var/log/Xorg.0.log; do
-    [ -f "$candidate" ] && XORG_LOG="$candidate" && break
-done
+# Find Xorg log wherever it landed. Rootless Xorg (no xserver-xorg-legacy) logs
+# to ~/.local/share/xorg/, root/setuid Xorg to /var/log/. Search both plus /tmp.
+XORG_LOG=$(find /home/purple/.local/share/xorg /var/log /tmp -name 'Xorg.*.log' 2>/dev/null | head -1)
 
 # Collect diagnostics into a file, then slowly scroll it on screen.
 # Scrolls at ~4 lines/sec so each line stays visible for ~7s on a 30-row console,
@@ -41,12 +48,13 @@ show_diagnostics() {
         cat /proc/cmdline 2>/dev/null | sed 's/^/    /'
         echo ""
         echo "  === Xorg log (last 40 lines) ==="
-        echo "  Path: ${XORG_LOG:-(not found)}"
-        echo ""
         if [ -n "$XORG_LOG" ]; then
+            echo "  Path: $XORG_LOG"
+            echo ""
             tail -40 "$XORG_LOG" 2>/dev/null | sed 's/^/    /'
         else
-            echo "    (no Xorg log found)"
+            echo "    (no Xorg log found, X may not have started)"
+            echo "    Searched: ~/.local/share/xorg/, /var/log/, /tmp/"
         fi
         echo ""
         echo "  === xinitrc log (last 20 lines) ==="
@@ -69,17 +77,10 @@ show_diagnostics() {
         printf '%s\n' "$line" > "$TTY" 2>/dev/null
         sleep 0.25
     done < "$DIAG"
-
-    # Keep the last screenful visible
-    sleep 3
 }
 
-if [ -f "$DEBUG_FLAG" ]; then
-    # Debug mode: show diagnostics immediately
-    show_diagnostics
-else
-    # Production: friendly message with option to show details for support
-    cat > "$TTY" 2>/dev/null <<'MSG'
+# Friendly message with option to show details for support
+cat > "$TTY" 2>/dev/null <<'MSG'
 
   Something went wrong starting Purple Computer.
 
@@ -92,8 +93,15 @@ else
   then record a video of the screen.
 
 MSG
-    # Wait for Enter. read from tty1 so it works even though stdin may be closed.
-    # If nobody presses Enter, this just waits (the screen stays up with the
-    # friendly message, which is fine).
-    read dummy < "$TTY" 2>/dev/null && show_diagnostics
-fi
+# Wait for Enter, then show diagnostics, then loop back to the prompt.
+# read from tty1 so it works even though stdin may be closed.
+while read dummy < "$TTY" 2>/dev/null; do
+    show_diagnostics
+    # After diagnostics finish scrolling, show the prompt again
+    printf '\033[H\033[2J' > "$TTY" 2>/dev/null
+    cat > "$TTY" 2>/dev/null <<'MSG'
+
+  Press Enter to show details again.
+
+MSG
+done

@@ -33,6 +33,15 @@ check_connected() {
     return 1
 }
 
+# Simulate X11 failure for testing the diagnostic error screen.
+# Triggered by purple.failx11=1 kernel parameter (debug ISO GRUB menu).
+# Failing here (ExecStartPre) prevents X from starting at all, so the service
+# hits its restart limit quickly and ExecStopPost shows the error screen.
+if grep -q "purple.failx11=1" /proc/cmdline 2>/dev/null; then
+    log "purple.failx11=1 set, failing ExecStartPre to trigger error screen"
+    exit 1
+fi
+
 log "Waiting for display (up to ${MAX_WAIT}s)..."
 
 waited=0

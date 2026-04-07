@@ -521,6 +521,12 @@ menuentry "Purple Computer (DEBUG, recovery shell)" {
     initrd /casper/initrd
 }
 
+menuentry "Purple Computer (DEBUG, test error screen)" {
+    set gfxpayload=keep
+    linux /casper/vmlinuz boot=casper systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failx11=1 ---
+    initrd /casper/initrd
+}
+
 menuentry "---" {
     true
 }

@@ -20,6 +20,13 @@ fi
 
 xlog "=== xinitrc started ==="
 
+# Simulate X11 failure for testing the diagnostic error screen.
+# Triggered by purple.failx11=1 kernel parameter (debug ISO GRUB menu).
+if grep -q "purple.failx11=1" /proc/cmdline 2>/dev/null; then
+    xlog "purple.failx11=1 set, simulating X11 failure"
+    exit 1
+fi
+
 # Wait for X to initialize
 sleep 1
 xlog "X server ready (after 1s wait)"

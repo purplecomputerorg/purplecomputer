@@ -358,6 +358,22 @@ class EvdevReader:
         except Exception:
             return True  # Assume tty1 if we can't tell
 
+    def _switch_to_tty2(self) -> None:
+        """Switch to tty2 with a usable bash shell.
+
+        Uses openvt (from kbd package) to spawn a clean login shell on
+        tty2. openvt handles terminal setup correctly, avoiding the
+        broken-echo / wrong-keymap issues that happen when manually
+        redirecting to /dev/tty2.
+        """
+        # openvt -s switches to the VT, -f forces even if VT is in use,
+        # -c 2 targets tty2, -- separates openvt args from the command.
+        # login -f skips password for the purple user.
+        subprocess.Popen(
+            ["sudo", "openvt", "-s", "-f", "-c", "2", "--",
+             "login", "-f", "purple"],
+        )
+
     def release_grab(self) -> None:
         """
         Temporarily release the keyboard grab.
@@ -439,7 +455,7 @@ class EvdevReader:
                             self._vt_away_time = time.monotonic()
                             self.release_grab()
                             logger.warning("Emergency VT switch: Ctrl+Alt+F2, switching to tty2")
-                            subprocess.Popen(["sudo", "chvt", "2"])
+                            self._switch_to_tty2()
                     if keycode == KeyCode.KEY_F1 and is_down and self._ctrl_held and self._alt_held:
                         if self._vt_away:
                             self._vt_switch_fired = True
@@ -466,7 +482,7 @@ class EvdevReader:
                                     self._vt_away = True
                                     self._vt_away_time = time.monotonic()
                                     self.release_grab()
-                                    subprocess.Popen(["sudo", "chvt", "2"])
+                                    self._switch_to_tty2()
                         if not is_down:
                             self._ctrl_backslash_start = None
                             self._vt_switch_fired = False

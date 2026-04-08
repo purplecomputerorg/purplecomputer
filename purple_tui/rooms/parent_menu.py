@@ -854,6 +854,13 @@ class InstallProgressScreen(ModalScreen):
         border: round $primary;
     }
 
+    #install-progress-dialog.diag-scroll {
+        width: 100%;
+        height: 100%;
+        padding: 1 2;
+        border: none;
+    }
+
     #ip-title {
         width: 100%;
         text-align: center;
@@ -867,6 +874,10 @@ class InstallProgressScreen(ModalScreen):
         text-align: center;
         color: $text;
         margin-bottom: 1;
+    }
+
+    .diag-scroll #ip-status {
+        text-align: left;
     }
 
     #ip-bar {
@@ -883,9 +894,11 @@ class InstallProgressScreen(ModalScreen):
     }
     """
 
-    # Lines per page in the diagnostic detail view.
-    # The dialog has ~20 usable rows after title/hint chrome.
-    _DIAG_PAGE_SIZE = 18
+    # Seconds between lines during diagnostic scroll (0.25 = 4 lines/sec,
+    # same as purple-x11-failed.sh boot error screen).
+    _SCROLL_DELAY = 0.25
+    # Max visible lines in the scroll window (leaves room for title + hint)
+    _SCROLL_VISIBLE = 25
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -894,7 +907,9 @@ class InstallProgressScreen(ModalScreen):
         self._phase = "installing"  # "installing", "success", "error"
         self._log_lines: list[str] = []  # All stderr lines for error diagnostics
         self._diag_lines: list[str] = []  # Full diagnostic report (built on error)
-        self._diag_page = -1  # -1 = summary, 0+ = diagnostic page index
+        self._diag_scroll_pos = 0  # Current line in auto-scroll
+        self._scroll_timer = None  # Timer for auto-scroll
+        self._scrolling = False  # True while auto-scrolling
 
     def refresh_caps(self) -> None:
         """Re-apply caps mode to all text in this modal."""
@@ -926,16 +941,18 @@ class InstallProgressScreen(ModalScreen):
             return
 
         if self._phase == "error":
-            title_w.update(caps("Something went wrong"))
-            if self._diag_page >= 0:
-                # Paginated diagnostic view
-                page_start = self._diag_page * self._DIAG_PAGE_SIZE
-                page_lines = self._diag_lines[page_start:page_start + self._DIAG_PAGE_SIZE]
-                total_pages = max(1, (len(self._diag_lines) + self._DIAG_PAGE_SIZE - 1) // self._DIAG_PAGE_SIZE)
-                page_num = self._diag_page + 1
-                status_w.update("\n".join(page_lines) if page_lines else "No diagnostic output.")
-                bar_w.update(f"Page {page_num}/{total_pages}")
-                hint_w.update("Press Enter for next page.\nRecord a video of all pages for support.")
+            if self._scrolling or self._diag_lines:
+                # Diagnostic scroll view (full screen)
+                title_w.update(
+                    f"Please record this with your phone and send to {SUPPORT_EMAIL}\n"
+                    "Esc: go back   Enter: replay"
+                )
+                end = self._diag_scroll_pos if self._scrolling else len(self._diag_lines)
+                start = max(0, end - self._SCROLL_VISIBLE)
+                visible = self._diag_lines[start:end]
+                status_w.update("\n".join(visible) if visible else "")
+                bar_w.update("")
+                hint_w.update("")
             else:
                 error_summary = self._get_error_summary()
                 status_w.update(
@@ -1176,25 +1193,70 @@ class InstallProgressScreen(ModalScreen):
         event.stop()
         event.prevent_default()
 
+    def _start_diag_scroll(self) -> None:
+        """Collect diagnostics and start auto-scrolling them."""
+        self._stop_diag_scroll()
+        self._diag_lines = self._collect_diagnostics()
+        self._diag_scroll_pos = 0
+        self._scrolling = True
+        # Switch to full-screen layout
+        try:
+            self.query_one("#install-progress-dialog").add_class("diag-scroll")
+        except Exception:
+            pass
+        self._scroll_timer = self.set_interval(
+            self._SCROLL_DELAY, self._scroll_tick,
+        )
+        self._update_ui()
+
+    def _scroll_tick(self) -> None:
+        """Advance one line in the diagnostic scroll."""
+        self._diag_scroll_pos += 1
+        if self._diag_scroll_pos > len(self._diag_lines):
+            self._stop_diag_scroll()
+        self._update_ui()
+
+    def _stop_diag_scroll(self) -> None:
+        """Stop the auto-scroll timer."""
+        if self._scroll_timer is not None:
+            self._scroll_timer.stop()
+            self._scroll_timer = None
+        self._scrolling = False
+
+    def _exit_diag_view(self) -> None:
+        """Leave diagnostic view, return to error summary."""
+        self._stop_diag_scroll()
+        self._diag_lines = []
+        # Restore normal dialog layout
+        try:
+            self.query_one("#install-progress-dialog").remove_class("diag-scroll")
+        except Exception:
+            pass
+        self._update_ui()
+
     async def handle_keyboard_action(self, action) -> None:
         if self._phase == "error" and isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                if self._diag_page < 0:
-                    # First press: build diagnostics and show page 0
-                    self._diag_lines = self._collect_diagnostics()
-                    self._diag_page = 0
-                else:
-                    # Advance to next page, wrap to summary
-                    total_pages = max(1, (len(self._diag_lines) + self._DIAG_PAGE_SIZE - 1) // self._DIAG_PAGE_SIZE)
-                    if self._diag_page + 1 >= total_pages:
-                        self._diag_page = -1  # Back to summary
-                    else:
-                        self._diag_page += 1
+            if self._scrolling:
+                # Any key stops the scroll
+                self._stop_diag_scroll()
                 self._update_ui()
                 return
-            if action.action == 'escape':
-                self.dismiss()
-                return
+            if self._diag_lines:
+                # Scroll finished: Enter restarts, Esc goes back to summary
+                if action.action == 'enter':
+                    self._start_diag_scroll()
+                    return
+                if action.action == 'escape':
+                    self._exit_diag_view()
+                    return
+            else:
+                # Error summary: Enter starts diagnostics, Esc dismisses
+                if action.action == 'enter':
+                    self._start_diag_scroll()
+                    return
+                if action.action == 'escape':
+                    self.dismiss()
+                    return
         # All other input ignored during install
 
 

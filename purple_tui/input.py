@@ -540,17 +540,65 @@ class EvdevReader:
 
         except asyncio.CancelledError:
             self._diag(f"Read loop cancelled: {dev_path}")
+            return  # Clean shutdown, no reconnect
         except OSError as e:
             if self._running:
-                # Unexpected device loss (e.g. USB reset during heavy I/O).
-                # The read loop dies silently without this log, making
-                # "tilde stopped working" impossible to diagnose.
                 self._diag(f"Read loop LOST DEVICE: {dev_path}: {e}")
             else:
                 self._diag(f"Read loop stopped: {dev_path}")
+                return  # Clean shutdown, no reconnect
         except Exception as e:
             self._diag(f"Read loop ERROR: {dev_path}: {e}")
             logger.error(f"EvdevReader error on {dev_path}: {e}")
+
+        # Device lost while we're still supposed to be running: try to
+        # reconnect. USB devices can briefly disappear during bus resets
+        # or heavy I/O. The kernel re-creates the device node quickly.
+        if self._running:
+            # Remove the dead device
+            self._devices = [d for d in self._devices if d.path != dev_path]
+            try:
+                device.close()
+            except Exception:
+                pass
+            asyncio.ensure_future(self._reconnect(dev_path))
+
+    async def _reconnect(self, lost_path: str) -> None:
+        """Scan for keyboards and restart read loops on new devices.
+
+        Called when a read loop exits unexpectedly. Retries every second
+        for up to 30 seconds, which covers USB bus resets (typically
+        ~1-2 seconds) and slower device re-enumeration.
+        """
+        active_paths = {d.path for d in self._devices}
+
+        for attempt in range(30):
+            if not self._running:
+                return
+            await asyncio.sleep(1)
+
+            found = self._find_keyboards()
+            new_devices = [d for d in found if d.path not in active_paths]
+
+            # Close devices we didn't need (already being read)
+            for d in found:
+                if d.path in active_paths:
+                    d.close()
+
+            if new_devices:
+                for dev in new_devices:
+                    self._diag(f"Reconnected: {dev.path} ({dev.name})")
+                    if self._grab:
+                        try:
+                            dev.grab()
+                        except IOError as e:
+                            self._diag(f"Reconnect grab failed: {dev.path}: {e}")
+                    self._devices.append(dev)
+                    active_paths.add(dev.path)
+                    self._tasks.append(asyncio.create_task(self._read_loop(dev)))
+                return
+
+        self._diag(f"Reconnect gave up after 30s (lost {lost_path})")
 
     def _find_keyboards(self):
         """Find all real keyboard input devices.

@@ -77,6 +77,28 @@ The fix mirrors what was done for the power button: `_find_keyboard()` became `_
 
 This ensures keyboard input works regardless of which evdev device delivers the actual key events, across all laptop hardware and USB configurations.
 
+## The Fix (Phase 3: Device Reconnection)
+
+The multi-device read loops silently died on `OSError` when a device disconnected, with no recovery. This was observed on a Touch Bar MacBook where the keyboard stopped responding after a failed install attempt (heavy NVMe I/O may cause USB bus resets on Apple hardware where the internal keyboard connects via USB).
+
+Symptoms: typing works initially, then after some event (install, heavy I/O), escape-related features stop working. The evdev read loop exited, keys fell through to the terminal, and evdev-only features (tilde-as-escape, backslash hold) broke.
+
+The fix: when a read loop exits unexpectedly (`_running` is still True), it schedules `_reconnect()` which re-scans for keyboards every second for up to 30 seconds. If the device reappears (possibly on a different event node), it's grabbed and a new read loop starts. This matches how libinput and other serious evdev consumers handle hotplug.
+
+Diagnostic log (`/tmp/evdev-diag.log`) for a reconnection event:
+```
+Read loop LOST DEVICE: /dev/input/event3: [Errno 19] No such device
+Reconnected: /dev/input/event5 (Apple Internal Keyboard)
+Read loop started: /dev/input/event5 (Apple Internal Keyboard)
+```
+
+The log also records:
+- First occurrence of the grave/escape remap firing (confirms tilde works)
+- Any unrecognized keycodes with their scancodes (catches keys sending unexpected codes)
+- Read loop start/stop for each device
+
+To access the log when the keyboard is misbehaving: hold Ctrl+\\ for 3 seconds to switch to tty2, then `cat /tmp/evdev-diag.log`.
+
 ---
 
 ## Devices That Can Fool a Loose Keyboard Detector

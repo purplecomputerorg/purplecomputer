@@ -263,6 +263,7 @@ class EvdevReader:
         self._running = False
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
         self._tasks: list[asyncio.Task] = []
+        self._logged_keycodes: set = set()  # Keycodes logged to diag (first-occurrence)
 
         # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
         self._ctrl_held = False
@@ -277,19 +278,21 @@ class EvdevReader:
         """Primary device (for backward compat with logging)."""
         return self._devices[0] if self._devices else None
 
+    @staticmethod
+    def _diag(msg):
+        """Write to /tmp/evdev-diag.log (readable from recovery shell via Ctrl+\\)."""
+        try:
+            with open("/tmp/evdev-diag.log", "a") as f:
+                f.write(f"{msg}\n")
+        except Exception:
+            pass
+        logger.info(msg)
+
     async def start(self) -> None:
         """Start reading keyboard events in background."""
         from evdev import InputDevice
 
-        def _diag(msg):
-            try:
-                with open("/tmp/evdev-diag.log", "a") as f:
-                    f.write(f"{msg}\n")
-            except Exception:
-                pass
-            logger.info(msg)
-
-        _diag("EvdevReader.start() called")
+        self._diag("EvdevReader.start() called")
 
         # Find or open devices
         if self._device_path:
@@ -298,7 +301,7 @@ class EvdevReader:
             self._devices = self._find_keyboards()
 
         if not self._devices:
-            _diag("ERROR: no keyboard found")
+            self._diag("ERROR: no keyboard found")
             raise RuntimeError(
                 "Could not find your keyboard.\n"
                 "Please make sure a keyboard is connected.\n\n"
@@ -306,7 +309,7 @@ class EvdevReader:
             )
 
         for dev in self._devices:
-            _diag(f"EvdevReader: using {dev.path} ({dev.name})")
+            self._diag(f"EvdevReader: using {dev.path} ({dev.name})")
 
         # Grab devices if requested
         if self._grab:
@@ -421,6 +424,7 @@ class EvdevReader:
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one keyboard device."""
         dev_path = device.path
+        self._diag(f"Read loop started: {dev_path} ({device.name})")
         try:
             async for event in device.async_read_loop():
                 if not self._running:
@@ -435,6 +439,25 @@ class EvdevReader:
                 if event.type == EV_KEY and event.value in (0, 1, 2):
                     keycode = event.code
                     is_down = event.value in (1, 2)
+
+                    # Log first occurrence of each keycode for diagnostics.
+                    # Unrecognized keycodes are logged with scancode to help
+                    # debug keys that send unexpected codes (e.g. tilde on
+                    # some Apple keyboards).
+                    if is_down and keycode not in self._logged_keycodes:
+                        self._logged_keycodes.add(keycode)
+                        if keycode in (KeyCode.KEY_GRAVE, KeyCode.KEY_102ND):
+                            scancode = self._pending_scancodes.get(dev_path, 0)
+                            self._diag(
+                                f"Grave/escape remap: keycode={keycode} "
+                                f"scancode=0x{scancode:x} on {dev_path}"
+                            )
+                        elif keycode not in KEYCODE_TO_CHAR and keycode not in KEYCODE_TO_NAME:
+                            scancode = self._pending_scancodes.get(dev_path, 0)
+                            self._diag(
+                                f"Unmapped keycode={keycode} "
+                                f"scancode=0x{scancode:x} on {dev_path}"
+                            )
 
                     # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
                     # Runs at evdev level so it works even when Textual is hung.
@@ -516,11 +539,17 @@ class EvdevReader:
                     await self._callback(raw_event)
 
         except asyncio.CancelledError:
-            pass
-        except OSError:
-            # Device was closed (normal during shutdown)
-            pass
+            self._diag(f"Read loop cancelled: {dev_path}")
+        except OSError as e:
+            if self._running:
+                # Unexpected device loss (e.g. USB reset during heavy I/O).
+                # The read loop dies silently without this log, making
+                # "tilde stopped working" impossible to diagnose.
+                self._diag(f"Read loop LOST DEVICE: {dev_path}: {e}")
+            else:
+                self._diag(f"Read loop stopped: {dev_path}")
         except Exception as e:
+            self._diag(f"Read loop ERROR: {dev_path}: {e}")
             logger.error(f"EvdevReader error on {dev_path}: {e}")
 
     def _find_keyboards(self):
@@ -541,14 +570,7 @@ class EvdevReader:
         import evdev
         from evdev import InputDevice
 
-        def _diag(msg):
-            """Write diagnostic to a file readable from recovery shell."""
-            try:
-                with open("/tmp/evdev-diag.log", "a") as f:
-                    f.write(f"{msg}\n")
-            except Exception:
-                pass
-            logger.info(msg)
+        _diag = self._diag
 
         # Minimum keys a real keyboard must have (not vendor-specific)
         letter_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))

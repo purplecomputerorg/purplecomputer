@@ -8,6 +8,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
 IMAGE_NAME="purple-installer-builder"
 FAST_BUILD=0
 
@@ -54,14 +55,14 @@ main() {
     docker run --rm --privileged \
         -v "$SCRIPT_DIR:/build" \
         -v "$PROJECT_DIR:/purple-src" \
-        -v "/opt/purple-installer:/opt/purple-installer" \
+        -v "$INSTALLER_BASE:$INSTALLER_BASE" \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 
     log_info "Build complete!"
-    log_info "Output in: /opt/purple-installer/output/"
+    log_info "Output in: $OUTPUT_DIR/"
 }
 
 main "$@"

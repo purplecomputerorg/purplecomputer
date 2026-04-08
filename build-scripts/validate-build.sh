@@ -4,7 +4,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="/opt/purple-installer/build"
+source "$SCRIPT_DIR/config.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -191,7 +191,7 @@ check_ubuntu_iso() {
 check_final_iso() {
     info "Checking final ISO (if exists)..."
 
-    local ISO_DIR="/opt/purple-installer/output"
+    local ISO_DIR="$OUTPUT_DIR"
     local ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | head -1)
 
     if [ -z "$ISO" ] || [ ! -f "$ISO" ]; then

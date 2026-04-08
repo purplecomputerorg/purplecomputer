@@ -76,15 +76,6 @@ build-packs:
     cd packs/core-definitions && tar -czvf ../core-definitions.purplepack manifest.json content/
     @echo "✓ Packs built"
 
-# Build bootable ISO for installation
-build-iso:
-    @echo "Building Purple Computer ISO..."
-    @echo "This will download Ubuntu Server ISO (~1.4GB) and create a bootable image"
-    @echo ""
-    ./autoinstall/build-iso.sh
-    @echo ""
-    @echo "✓ ISO built: purple-computer.iso"
-
 # Remove test environment
 clean:
     @echo "Cleaning local test environment..."
@@ -92,44 +83,6 @@ clean:
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     @echo "✓ Test environment removed"
 
-# Release loop devices, mounts, and kpartx mappings from an interrupted build (keeps output ISOs and Docker image)
-clean-build:
-    @echo "Releasing build resources..."
-    @# Unmount everything under /opt/purple-installer in reverse order
-    @for i in 1 2 3; do \
-        mount | grep /opt/purple-installer | awk '{print $$3}' | sort -r | while read -r m; do \
-            echo "  Unmounting $$m"; \
-            sudo umount -f "$$m" 2>/dev/null || true; \
-        done; \
-    done
-    @# Remove kpartx device-mapper entries
-    @for mapping in $(ls /dev/mapper/loop* 2>/dev/null); do \
-        echo "  Removing mapping $$mapping"; \
-        sudo dmsetup remove "$$mapping" 2>/dev/null || true; \
-    done
-    @# Detach loop devices tied to the build
-    @for loop in $(sudo losetup -a 2>/dev/null | grep -E 'purple-installer|purple-os\.img|\(deleted\)' | cut -d: -f1); do \
-        echo "  Detaching $$loop"; \
-        sudo losetup -d "$$loop" 2>/dev/null || true; \
-    done
-    @# Remove build working directory only (not output/)
-    @if [ -d /opt/purple-installer/build ]; then \
-        sudo rm -rf /opt/purple-installer/build; \
-        sudo mkdir -p /opt/purple-installer/build; \
-        echo "  Build dir reset"; \
-    fi
-    @echo "✓ Build resources released"
-
-# Remove ISO build artifacts
-clean-iso:
-    @echo "Cleaning ISO build artifacts..."
-    rm -rf autoinstall/build/
-    rm -f purple-computer.iso
-    @echo "✓ ISO build artifacts removed"
-
-# Remove everything
-clean-all: clean clean-iso
-    @echo "✓ All cleaned"
 
 # Install screen recording tools (VM only)
 recording-setup:
@@ -213,6 +166,10 @@ upload-pdfs:
 # Delete old releases from Cloudflare R2, keeping only the current version
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}
+
+# Delete local ISOs older than N days (default: 7). E.g., just clean-isos 3, just clean-isos --dry-run
+clean-isos *args:
+    ./build-scripts/clean-old-isos.sh {{args}}
 
 # Flash ISO to USB drive
 flash *args:

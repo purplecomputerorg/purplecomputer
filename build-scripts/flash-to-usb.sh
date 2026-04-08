@@ -6,7 +6,7 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-OUTPUT_DIR="/opt/purple-installer/output"
+source "$SCRIPT_DIR/config.sh"
 CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
 
 RED='\033[0;31m'

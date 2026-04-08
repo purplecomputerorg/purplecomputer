@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="/opt/purple-installer/build"
+source "$SCRIPT_DIR/config.sh"
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
 IMAGE_SIZE_MB=8192
@@ -211,7 +211,8 @@ SOURCES
         zstd \
         kbd \
         evtest \
-        strace
+        strace \
+        parted
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.

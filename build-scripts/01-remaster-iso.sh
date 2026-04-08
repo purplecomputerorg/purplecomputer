@@ -12,7 +12,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="/opt/purple-installer/build"
+source "$SCRIPT_DIR/config.sh"
 WORK_DIR="${BUILD_DIR}/remaster"
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img.zst"
 
@@ -145,7 +145,7 @@ main() {
 
     # Setup directories
     mkdir -p "$WORK_DIR"
-    mkdir -p /opt/purple-installer/output
+    mkdir -p "$OUTPUT_DIR"
 
     # Step 1: Download Ubuntu Server ISO if needed
     log_step "1/11: Checking Ubuntu Server ISO..."
@@ -461,7 +461,7 @@ EFI_GRUB_EOF
     # Step 9: Build normal ISO
     log_step "9/11: Building normal ISO..."
 
-    OUTPUT_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
+    OUTPUT_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
 
     # Remove existing ISOs (xorriso can't overwrite)
     rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256"
@@ -487,7 +487,7 @@ EFI_GRUB_EOF
     # purple.debug=1 flag triggers debug mode in casper hook and .bashrc
     log_step "10/11: Building debug ISO..."
 
-    DEBUG_ISO="/opt/purple-installer/output/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
+    DEBUG_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
     rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256"
 
     # Save normal GRUB config and write debug version

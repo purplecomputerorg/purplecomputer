@@ -172,7 +172,43 @@ main() {
         error "Golden image not found: $GOLDEN_IMAGE"
     fi
 
-    # Write golden image directly to disk
+    # Determine partition device naming convention
+    case "$TARGET" in
+        nvme*|mmcblk*) PART_PREFIX="/dev/${TARGET}p" ;;
+        *)             PART_PREFIX="/dev/${TARGET}" ;;
+    esac
+
+    # ======================================================================
+    # PRE-WRITE CLEANUP
+    # Clear old partition state so the kernel doesn't hold stale references.
+    # Without this, blockdev --rereadpt fails with EBUSY after dd because
+    # the kernel thinks old partitions (e.g. macOS APFS) are still in use.
+    # ======================================================================
+    log "Preparing disk..."
+
+    # Unmount any existing partitions on the target disk
+    for part in $(lsblk -ln -o NAME "/dev/$TARGET" 2>/dev/null | tail -n +2); do
+        umount "/dev/$part" 2>/dev/null || true
+    done
+
+    # Remove device-mapper entries (APFS, LVM) that reference this disk
+    if command -v dmsetup >/dev/null 2>&1; then
+        for dm in $(dmsetup ls --target linear 2>/dev/null | awk '{print $1}'); do
+            dmsetup remove "$dm" 2>/dev/null || true
+        done
+    fi
+
+    # Wipe filesystem signatures (APFS, HFS+, ext4, etc.) so the kernel
+    # releases old partition references. wipefs calls BLKRRPART internally,
+    # which clears the kernel's partition table cache for this disk.
+    wipefs -a "/dev/$TARGET" 2>/dev/null || true
+
+    # Let udev finish processing the wipe before we start writing
+    udevadm settle --timeout=5 2>/dev/null || true
+
+    # ======================================================================
+    # WRITE GOLDEN IMAGE
+    # ======================================================================
     log "Writing Purple Computer to disk..."
     log "  Source: $GOLDEN_IMAGE"
     log "  Target: /dev/$TARGET"
@@ -197,12 +233,12 @@ main() {
             | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
     fi
 
-    # Force kernel to re-read partition table from the new image
+    # ======================================================================
+    # POST-WRITE VERIFICATION
+    # ======================================================================
     log "Reloading partition table..."
     sync
 
-    # Post-write verification: read back from disk and compare to what we wrote.
-    # This catches silent write failures (bad sectors, firmware lies, etc.).
     if [ -f "$WRITE_SHA256_FILE" ] && [ -s "$WRITE_SHA256_FILE" ] && [ -f "$WRITE_SIZE_FILE" ] && [ -s "$WRITE_SIZE_FILE" ]; then
         WRITE_SHA256=$(cat "$WRITE_SHA256_FILE")
         WRITE_SIZE=$(cat "$WRITE_SIZE_FILE" | tr -d ' ')
@@ -230,26 +266,45 @@ main() {
         warn "Could not capture write checksum, skipping verification"
     fi
 
-    # Retry partition re-read: the kernel sometimes needs a moment after dd
-    for attempt in 1 2 3 4 5; do
-        blockdev --rereadpt /dev/$TARGET 2>/dev/null && break
-        log "  Partition re-read attempt $attempt/5, retrying..."
-        sleep 2
-    done
-
-    # Wait for partition devices to appear
+    # ======================================================================
+    # PARTITION DETECTION
+    # Uses partprobe (BLKPG ioctl) which adds partitions individually and
+    # succeeds even when udev briefly holds a different partition open.
+    # blockdev --rereadpt uses BLKRRPART which fails if ANY partition is
+    # held open. This is what Ubuntu Curtin and Calamares do.
+    # ======================================================================
     log "Waiting for partition devices..."
-    for attempt in 1 2 3 4 5 6; do
-        case "$TARGET" in
-            nvme*|mmcblk*) PROBE_PART="/dev/${TARGET}p1" ;;
-            *)             PROBE_PART="/dev/${TARGET}1" ;;
-        esac
-        [ -b "$PROBE_PART" ] && break
-        log "  Waiting for $PROBE_PART (attempt $attempt/6)..."
-        sleep 2
+    udevadm settle --timeout=5 2>/dev/null || true
+
+    PROBE_PART="${PART_PREFIX}1"
+    PARTITION_FOUND=false
+
+    for attempt in $(seq 1 20); do
+        # partprobe (from parted) uses BLKPG ioctl: adds/deletes partitions
+        # individually, only fails if the specific partition being modified is
+        # in use. blockdev --rereadpt uses BLKRRPART which fails if ANY partition
+        # is held open (common with leftover macOS/APFS references).
+        partprobe "/dev/$TARGET" 2>/dev/null
+
+        # Brief pause for kernel to create device nodes, then let udev settle
+        sleep 0.2
+        udevadm trigger --subsystem-match=block 2>/dev/null || true
+        udevadm settle --timeout=5 2>/dev/null || true
+
+        if [ -b "$PROBE_PART" ]; then
+            PARTITION_FOUND=true
+            break
+        fi
+        log "  Waiting for $PROBE_PART (attempt $attempt/20)..."
+        sleep 1
     done
 
-    if [ ! -b "$PROBE_PART" ]; then
+    if [ "$PARTITION_FOUND" != "true" ]; then
+        warn "Partition devices did not appear."
+        warn "  lsblk output:"
+        lsblk "/dev/$TARGET" 2>&1 | while read -r line; do warn "    $line"; done
+        warn "  /proc/partitions:"
+        grep "$TARGET" /proc/partitions 2>/dev/null | while read -r line; do warn "    $line"; done
         error "Partition devices did not appear after writing disk image. The install may have failed."
     fi
 
@@ -270,17 +325,9 @@ main() {
 
     log "Setting up UEFI boot..."
 
-    # Determine partition device names
-    case "$TARGET" in
-        nvme*|mmcblk*)
-            EFI_PART="/dev/${TARGET}p1"
-            ROOT_PART="/dev/${TARGET}p2"
-            ;;
-        *)
-            EFI_PART="/dev/${TARGET}1"
-            ROOT_PART="/dev/${TARGET}2"
-            ;;
-    esac
+    # Partition device names (PART_PREFIX set earlier during pre-write cleanup)
+    EFI_PART="${PART_PREFIX}1"
+    ROOT_PART="${PART_PREFIX}2"
 
     # Get root UUID for deterministic boot (critical fix for multi-disk systems)
     ROOT_UUID=$(blkid -s UUID -o value "$ROOT_PART" 2>/dev/null || true)

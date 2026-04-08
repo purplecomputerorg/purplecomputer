@@ -9,9 +9,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUILD_DIR="/opt/purple-installer/build"
-OUTPUT_DIR="/opt/purple-installer/output"
-TEST_DIR="/opt/purple-installer/test-results"
+source "$SCRIPT_DIR/config.sh"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

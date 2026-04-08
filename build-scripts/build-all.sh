@@ -8,6 +8,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -54,12 +55,12 @@ main() {
 
     print_banner
     log_done "Build complete!"
-    log_done "ISO ready at: /opt/purple-installer/output/"
+    log_done "ISO ready at: $OUTPUT_DIR/"
     echo
-    ls -lh /opt/purple-installer/output/*.iso 2>/dev/null || true
+    ls -lh "$OUTPUT_DIR"/*.iso 2>/dev/null || true
     echo
     log_info "Write to USB stick with:"
-    log_info "  sudo dd if=/opt/purple-installer/output/purple-installer-*.iso of=/dev/sdX bs=4M status=progress"
+    log_info "  sudo dd if=$OUTPUT_DIR/purple-installer-*.iso of=/dev/sdX bs=4M status=progress"
 }
 
 main "$@"

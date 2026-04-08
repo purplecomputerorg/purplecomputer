@@ -144,6 +144,39 @@ main() {
     log "=================================="
     log ""
 
+    # Test mode: simulate a realistic install that fails (purple.failinstall=1)
+    # Exercises the progress UI, error screen, and diagnostics collection
+    # without touching any disk. Boot the debug ISO's "test install failure" entry.
+    if grep -q 'purple\.failinstall=1' /proc/cmdline 2>/dev/null; then
+        log "TEST MODE: simulating install failure"
+        log "Detecting internal disk..."
+        sleep 1
+        log "  Found internal disk: test0 (fake)"
+        log "Target disk: /dev/test0 (128GB)"
+        sleep 1
+        log "Writing Purple Computer to disk..."
+        log "  Source: /cdrom/purple/purple-os.img.zst"
+        log "  Target: /dev/test0"
+        for pct in 5 12 25 40 55 70 85; do
+            sleep 1
+            log "  Progress: ${pct}%"
+        done
+        sleep 1
+        log "Reloading partition table..."
+        log "Disk verification passed (SHA256 match)"
+        log "Waiting for partition devices..."
+        for attempt in 1 2 3 4 5 6; do
+            log "  Waiting for /dev/test0p1 (attempt $attempt/6)..."
+            sleep 1
+        done
+        warn "Partition devices did not appear."
+        warn "  lsblk output:"
+        warn "    test0  128G  disk"
+        warn "  /proc/partitions:"
+        warn "    (no partitions found)"
+        error "Partition devices did not appear after writing disk image. The install may have failed."
+    fi
+
     # Find target disk
     TARGET=$(find_target) || error "No target disk found. Is there an internal disk?"
 

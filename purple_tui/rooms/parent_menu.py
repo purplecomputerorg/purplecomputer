@@ -883,13 +883,18 @@ class InstallProgressScreen(ModalScreen):
     }
     """
 
+    # Lines per page in the diagnostic detail view.
+    # The dialog has ~20 usable rows after title/hint chrome.
+    _DIAG_PAGE_SIZE = 18
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._progress = 0
         self._status = "Starting..."
         self._phase = "installing"  # "installing", "success", "error"
         self._log_lines: list[str] = []  # All stderr lines for error diagnostics
-        self._showing_details = False
+        self._diag_lines: list[str] = []  # Full diagnostic report (built on error)
+        self._diag_page = -1  # -1 = summary, 0+ = diagnostic page index
 
     def refresh_caps(self) -> None:
         """Re-apply caps mode to all text in this modal."""
@@ -922,12 +927,15 @@ class InstallProgressScreen(ModalScreen):
 
         if self._phase == "error":
             title_w.update(caps("Something went wrong"))
-            if self._showing_details:
-                # Show last 10 log lines for parent to photograph
-                tail = self._log_lines[-10:]
-                status_w.update("\n".join(tail) if tail else "No log output.")
-                bar_w.update("")
-                hint_w.update("Press Enter to go back.")
+            if self._diag_page >= 0:
+                # Paginated diagnostic view
+                page_start = self._diag_page * self._DIAG_PAGE_SIZE
+                page_lines = self._diag_lines[page_start:page_start + self._DIAG_PAGE_SIZE]
+                total_pages = max(1, (len(self._diag_lines) + self._DIAG_PAGE_SIZE - 1) // self._DIAG_PAGE_SIZE)
+                page_num = self._diag_page + 1
+                status_w.update("\n".join(page_lines) if page_lines else "No diagnostic output.")
+                bar_w.update(f"Page {page_num}/{total_pages}")
+                hint_w.update("Press Enter for next page.\nRecord a video of all pages for support.")
             else:
                 error_summary = self._get_error_summary()
                 status_w.update(
@@ -1027,7 +1035,6 @@ class InstallProgressScreen(ModalScreen):
         """Extract last ERROR or WARN line as a short summary."""
         for line in reversed(self._log_lines):
             if '[ERROR]' in line or '[PURPLE ERROR]' in line:
-                # Strip prefix tags to get the message
                 for prefix in ('[PURPLE ERROR] ', '[ERROR] '):
                     if prefix in line:
                         return f"(Technical: {line.split(prefix, 1)[-1]})"
@@ -1040,6 +1047,131 @@ class InstallProgressScreen(ModalScreen):
                 return f"(Technical: {line})"
         return ""
 
+    def _collect_diagnostics(self) -> list[str]:
+        """Collect comprehensive diagnostics for install failure.
+
+        Covers every failure mode: USB issues, disk I/O, partitions,
+        EFI boot setup, memory, and kernel state. Parent records a video
+        of the pages for support. Also saved to /tmp/purple-install-diag.txt.
+        """
+        lines: list[str] = []
+
+        def section(title: str) -> None:
+            lines.append("")
+            lines.append(f"=== {title} ===")
+
+        def cmd(label: str, command: str, max_lines: int = 20) -> None:
+            try:
+                result = subprocess.run(
+                    command, shell=True, capture_output=True,
+                    text=True, timeout=5,
+                )
+                output = (result.stdout + result.stderr).strip()
+                if output:
+                    for line in output.splitlines()[:max_lines]:
+                        lines.append(f"  {line}")
+                else:
+                    lines.append(f"  ({label}: no output)")
+            except Exception:
+                lines.append(f"  ({label}: failed)")
+
+        def file_info(label: str, path: str) -> None:
+            try:
+                p = Path(path)
+                if p.exists():
+                    if p.is_file():
+                        size = p.stat().st_size
+                        lines.append(f"  {label}: {path} ({size} bytes)")
+                    elif p.is_dir():
+                        lines.append(f"  {label}: {path} (directory)")
+                else:
+                    lines.append(f"  {label}: {path} NOT FOUND")
+            except Exception:
+                lines.append(f"  {label}: {path} (check failed)")
+
+        # Install script output (most important, always first)
+        section("Install log (last 40 lines)")
+        for line in self._log_lines[-40:]:
+            lines.append(f"  {line}")
+        if not self._log_lines:
+            lines.append("  (no log output captured)")
+
+        # USB / source media state
+        section("USB / source media")
+        file_info("Golden image", "/cdrom/purple/purple-os.img.zst")
+        file_info("Install script", "/cdrom/purple/install.sh")
+        file_info("/cdrom mount", "/cdrom")
+        cmd("cdrom contents", "ls /cdrom/purple/ 2>&1", max_lines=10)
+        cmd("USB device", "blkid -L PURPLE_INSTALLER 2>&1", max_lines=3)
+
+        # Memory (dd + zstd need RAM, OOM kills are possible)
+        section("Memory")
+        cmd("meminfo", "free -h 2>&1", max_lines=5)
+
+        # Block devices and disk state
+        section("Block devices")
+        cmd("lsblk", "lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINT 2>&1")
+
+        section("Partition IDs")
+        cmd("blkid", "blkid 2>&1")
+
+        section("/proc/partitions")
+        cmd("partitions", "cat /proc/partitions 2>&1")
+
+        # Device-mapper (APFS, LVM leftovers that block partition re-read)
+        section("Device-mapper")
+        cmd("dmsetup", "dmsetup ls 2>&1")
+
+        # Mount state (what's holding disks open?)
+        section("Mounts (non-virtual)")
+        cmd("mounts", (
+            "mount | grep -v"
+            " -e 'type proc' -e 'type sys' -e 'type devpts'"
+            " -e 'type tmpfs' -e 'type cgroup' -e 'type securityfs'"
+            " -e 'type debugfs' -e 'type pstore' -e 'type fusectl'"
+            " -e 'type configfs' -e 'type bpf' -e 'type efivarfs'"
+            " -e 'type hugetlbfs' -e 'type mqueue' -e 'type tracefs'"
+            " 2>&1"
+        ))
+
+        # EFI boot state (did NVRAM entry creation work? what's there?)
+        section("EFI boot entries")
+        cmd("efibootmgr", "efibootmgr -v 2>&1", max_lines=15)
+
+        # EFI partition contents (if mounted/mountable)
+        section("EFI partition contents")
+        cmd("efi-ls", (
+            "for d in /mnt/efi /boot/efi; do"
+            "  [ -d \"$d/EFI\" ] && find \"$d/EFI\" -type f 2>&1 && break;"
+            "done || echo '  (EFI partition not mounted)'"
+        ), max_lines=15)
+
+        # Kernel info
+        section("Kernel")
+        cmd("uname", "uname -r 2>&1", max_lines=3)
+        cmd("cmdline", "cat /proc/cmdline 2>&1", max_lines=5)
+
+        # Input devices (for tilde/keyboard debugging)
+        section("Input devices")
+        cmd("evdev-diag", "cat /tmp/evdev-diag.log 2>&1", max_lines=10)
+
+        # Kernel messages: I/O errors, USB disconnects, NVMe, OOM
+        section("Kernel messages (errors)")
+        cmd("dmesg-errors", (
+            "dmesg | grep -iE"
+            " 'error|fail|oom|kill|nvme|usb.*disconnect|I/O|blk|reset'"
+            " | tail -25 2>&1"
+        ), max_lines=25)
+
+        # Write to file for recovery shell access
+        try:
+            diag_path = Path("/tmp/purple-install-diag.txt")
+            diag_path.write_text("\n".join(lines) + "\n")
+        except Exception:
+            pass
+
+        return lines
+
     async def _on_key(self, event) -> None:
         event.stop()
         event.prevent_default()
@@ -1047,7 +1179,17 @@ class InstallProgressScreen(ModalScreen):
     async def handle_keyboard_action(self, action) -> None:
         if self._phase == "error" and isinstance(action, ControlAction):
             if action.action == 'enter' and action.is_down:
-                self._showing_details = not self._showing_details
+                if self._diag_page < 0:
+                    # First press: build diagnostics and show page 0
+                    self._diag_lines = self._collect_diagnostics()
+                    self._diag_page = 0
+                else:
+                    # Advance to next page, wrap to summary
+                    total_pages = max(1, (len(self._diag_lines) + self._DIAG_PAGE_SIZE - 1) // self._DIAG_PAGE_SIZE)
+                    if self._diag_page + 1 >= total_pages:
+                        self._diag_page = -1  # Back to summary
+                    else:
+                        self._diag_page += 1
                 self._update_ui()
                 return
         # All other input ignored during install

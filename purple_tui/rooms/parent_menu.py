@@ -945,7 +945,7 @@ class InstallProgressScreen(ModalScreen):
                 bar_w.update("")
                 hint_w.update(
                     "Press Enter for technical details.\n"
-                    "Hold the power button to turn off."
+                    "Esc to go back. Power button to turn off."
                 )
         else:
             title_w.update(caps("Installing Purple Computer"))
@@ -1177,8 +1177,8 @@ class InstallProgressScreen(ModalScreen):
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        if self._phase == "error" and isinstance(action, ControlAction):
-            if action.action == 'enter' and action.is_down:
+        if self._phase == "error" and isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
                 if self._diag_page < 0:
                     # First press: build diagnostics and show page 0
                     self._diag_lines = self._collect_diagnostics()
@@ -1191,6 +1191,9 @@ class InstallProgressScreen(ModalScreen):
                     else:
                         self._diag_page += 1
                 self._update_ui()
+                return
+            if action.action == 'escape':
+                self.dismiss()
                 return
         # All other input ignored during install
 

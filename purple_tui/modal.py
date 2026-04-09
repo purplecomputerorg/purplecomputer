@@ -13,7 +13,7 @@ class PurpleModal(ModalScreen):
     Content-specific widgets use their own IDs.
     """
 
-    CSS = """
+    DEFAULT_CSS = """
     PurpleModal {
         align: center middle;
     }

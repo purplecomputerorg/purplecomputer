@@ -52,9 +52,11 @@ Always `just python` instead of `.venv/bin/python`.
 just preview play                              # Default Play room
 just preview art code_panel                    # Art with code panel open
 just preview play type:5+3 key:enter           # Type and submit in Play
+just preview play parent_menu                  # Parent menu modal
+just preview play room_picker                  # Room picker modal
 ```
 
-Output: PNG at `/tmp/screenshots/`. See `guides/headless-preview.md` for full reference.
+Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). See `guides/headless-preview.md` for full reference.
 
 **Visual/layout tests:** `app.run_test()` verifies widget sizes and positions headlessly. See `tests/test_code_panel_layout.py`.
 
@@ -69,6 +71,14 @@ Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPO
 ---
 
 ## Textual Framework Workarounds
+
+### CSS Scoping (IMPORTANT)
+
+`CSS` is **scoped** to the defining class. A base class's `CSS` rules won't apply inside subclass instances. Use `DEFAULT_CSS` for inheritable styles (lower specificity, subclass `CSS` overrides cleanly).
+
+### Modal Dialogs
+
+All modals inherit from `PurpleModal` (`purple_tui/modal.py`), which provides shared `DEFAULT_CSS` for centering, dialog background, title, and hint styling. Use standard IDs: `#modal-dialog`, `#modal-title`, `#modal-hint`. Content-specific widgets use their own IDs. Each subclass sets its own width, padding, and border via `CSS`.
 
 ### Background Colors (Textual 0.67.0)
 

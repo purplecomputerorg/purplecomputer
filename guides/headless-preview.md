@@ -60,6 +60,22 @@ just preview art code_panel              # Art room with code panel
 just preview music code_panel            # Music room with code panel
 ```
 
+### `parent_menu`
+
+Opens the parent menu modal.
+
+```bash
+just preview play parent_menu            # Parent menu over Play room
+```
+
+### `room_picker`
+
+Opens the room picker modal.
+
+```bash
+just preview play room_picker            # Room picker over Play room
+```
+
 ### `clear`
 
 Clears the art canvas.
@@ -106,6 +122,8 @@ Key environment variables set automatically:
 - `PURPLE_NO_EVDEV=1`: skips hardware keyboard detection
 - `SDL_AUDIODRIVER=dummy`: prevents pygame audio init failures
 - `PURPLE_DEV_MODE=1`: enables dev command infrastructure
+
+Set `PURPLE_SCREENSHOT_DIR` to override the default `/tmp/screenshots/` output directory.
 
 SVG screenshots are taken via Textual's `save_screenshot()`, then converted to PNG using `rsvg-convert` (pulled via `nix-shell -p librsvg`).
 

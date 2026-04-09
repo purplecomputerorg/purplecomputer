@@ -69,7 +69,7 @@ from purple_tui.constants import ROOM_PLAY, ROOM_MUSIC, ROOM_ART  # noqa: E402
 sys.stdout = _real_stdout
 sys.stderr = _real_stderr
 
-SCREENSHOT_DIR = "/tmp/screenshots"
+SCREENSHOT_DIR = os.environ.get("PURPLE_SCREENSHOT_DIR", "/tmp/screenshots")
 ROOM_MAP = {
     "play": ROOM_PLAY[0],
     "music": ROOM_MUSIC[0],
@@ -112,6 +112,10 @@ async def run_action(app, action_str: str) -> None:
 
     elif action_str == "parent_menu":
         app.action_parent_menu()
+        await asyncio.sleep(0.3)
+
+    elif action_str == "room_picker":
+        app._show_room_picker()
         await asyncio.sleep(0.3)
 
     elif action_str == "clear":

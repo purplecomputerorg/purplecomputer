@@ -1167,8 +1167,8 @@ class PurpleApp(App):
                         return
             # Don't return - let escape events propagate to modes for other uses
 
-        # Handle global volume controls (media keys or room picker)
-        if isinstance(action, ControlAction) and action.is_down:
+        # Handle global volume/brightness controls (blocked in Littles Mode)
+        if isinstance(action, ControlAction) and action.is_down and not self._littles_mode:
             if action.action == 'volume_mute':
                 self.action_volume_mute()
                 return

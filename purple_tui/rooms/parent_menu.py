@@ -354,12 +354,16 @@ _LITTLES_EXIT = "exit"        # Exit littles mode
 _LITTLES_GO_BACK = "go_back"  # Return to littles mode
 _LITTLES_PARENT = "parent"    # Open the full parent menu (keep littles on)
 
+# CodePanelScreen dismiss value
+_CODE_PANEL_CANCELLED = object()
 
-class LittlesExitScreen(PurpleModal):
-    """
-    Shown when parent long-holds Escape while in Littles Mode.
 
-    Three options: exit littles mode, go back, or open the parent menu.
+class PickerModal(PurpleModal):
+    """Base class for modal option pickers with up/down navigation.
+
+    Subclasses set TITLE, OPTIONS, and default_selected. Each option is
+    (value, label) or (value, label, description). Enter dismisses with the
+    selected value, Escape dismisses with escape_value.
     """
 
     CSS = """
@@ -372,7 +376,14 @@ class LittlesExitScreen(PurpleModal):
         color: $primary;
     }
 
-    .exit-option {
+    #modal-desc {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin-bottom: 1;
+    }
+
+    .picker-option {
         width: 100%;
         height: 3;
         content-align: center middle;
@@ -381,7 +392,7 @@ class LittlesExitScreen(PurpleModal):
         margin: 0 1;
     }
 
-    .exit-option.selected {
+    .picker-option.selected {
         border: heavy $accent;
         background: $primary;
         color: $background;
@@ -389,24 +400,31 @@ class LittlesExitScreen(PurpleModal):
     }
     """
 
-    OPTIONS = [
-        (_LITTLES_EXIT, "Yes, exit"),
-        (_LITTLES_GO_BACK, "No, go back"),
-        (_LITTLES_PARENT, "Parent Menu"),
-    ]
+    TITLE: str = ""
+    DESCRIPTION: str = ""
+    OPTIONS: list = []
+    default_selected: int = 0
+    escape_value = None  # What to dismiss with on Escape
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._selected = 1  # Default to "No, go back"
+        self._selected = self.default_selected
+
+    def _option_label(self, option) -> str:
+        if len(option) == 3:
+            return f"{option[1]}\n{option[2]}"
+        return option[1]
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
-            yield Static("Exit Littles Mode?", id="modal-title")
-            for i, (value, label) in enumerate(self.OPTIONS):
+            yield Static(self.TITLE, id="modal-title")
+            if self.DESCRIPTION:
+                yield Static(self.DESCRIPTION, id="modal-desc")
+            for i, opt in enumerate(self.OPTIONS):
                 yield Static(
-                    label,
-                    id=f"exit-opt-{i}",
-                    classes="exit-option",
+                    self._option_label(opt),
+                    id=f"picker-opt-{i}",
+                    classes="picker-option",
                 )
             yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
 
@@ -416,7 +434,7 @@ class LittlesExitScreen(PurpleModal):
     def _update_selection(self) -> None:
         for i in range(len(self.OPTIONS)):
             try:
-                widget = self.query_one(f"#exit-opt-{i}", Static)
+                widget = self.query_one(f"#picker-opt-{i}", Static)
                 if i == self._selected:
                     widget.add_class("selected")
                 else:
@@ -440,118 +458,70 @@ class LittlesExitScreen(PurpleModal):
 
         if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == 'enter':
-                self.dismiss(self.OPTIONS[self._selected][0])
+                self._on_confirm(self.OPTIONS[self._selected][0])
             elif action.action == 'escape':
-                self.dismiss(_LITTLES_GO_BACK)
+                self.dismiss(self.escape_value)
+
+    def _on_confirm(self, value):
+        self.dismiss(value)
 
 
-class LittlesModeScreen(PurpleModal):
-    """
-    Pick a Littles Mode: lock the app into a single activity for young kids.
+class LittlesExitScreen(PickerModal):
+    """Shown when parent long-holds Escape while in Littles Mode."""
 
-    Options: Off, Music, Art. Uses up/down navigation, Enter to confirm.
-    """
+    TITLE = "Exit Littles Mode?"
+    OPTIONS = [
+        (_LITTLES_EXIT, "Yes, exit"),
+        (_LITTLES_GO_BACK, "No, go back"),
+        (_LITTLES_PARENT, "Parent Menu"),
+    ]
+    default_selected = 1
+    escape_value = _LITTLES_GO_BACK
 
-    CSS = """
-    #modal-dialog {
-        width: 50;
-        padding: 1 2;
-    }
 
-    #modal-title {
-        color: $primary;
-    }
+class LittlesModeScreen(PickerModal):
+    """Pick a Littles Mode: lock the app into a single activity for young kids."""
 
-    #modal-desc {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
-    .littles-option {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    .littles-option.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
-
+    TITLE = "Littles Mode"
+    DESCRIPTION = "One activity, no menus, no switching"
     OPTIONS = [
         (None, "Off", "All rooms, full experience"),
         ("music", "Music", "Every key plays a sound and shows a color"),
         ("music_noscreen", "No-Screen Music", "Sounds only, screen stays dark"),
         ("art", "Art", "Every key puts color on the canvas"),
     ]
+    escape_value = _LITTLES_CANCELLED
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from ..settings import get_littles_mode
         current = get_littles_mode()
-        # Find current selection index
-        self._selected = 0
-        for i, (value, _, _) in enumerate(self.OPTIONS):
+        for i, (value, *_) in enumerate(self.OPTIONS):
             if value == current:
                 self._selected = i
                 break
 
-    def compose(self) -> ComposeResult:
-        with Vertical(id="modal-dialog"):
-            yield Static("Littles Mode", id="modal-title")
-            yield Static("One activity, no menus, no switching", id="modal-desc")
-            for i, (value, label, desc) in enumerate(self.OPTIONS):
-                yield Static(
-                    f"{label}\n{desc}",
-                    id=f"littles-opt-{i}",
-                    classes="littles-option",
-                )
-            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
+    def _on_confirm(self, value):
+        from ..settings import set_littles_mode
+        set_littles_mode(value)
+        self.dismiss(value)
 
-    def on_mount(self) -> None:
-        self._update_selection()
 
-    def _update_selection(self) -> None:
-        for i in range(len(self.OPTIONS)):
-            try:
-                widget = self.query_one(f"#littles-opt-{i}", Static)
-                if i == self._selected:
-                    widget.add_class("selected")
-                else:
-                    widget.remove_class("selected")
-            except Exception:
-                pass
+class CodePanelScreen(PickerModal):
+    """Toggle the code panel setting."""
 
-    def on_key(self, event: events.Key) -> None:
-        event.stop()
-        event.prevent_default()
+    TITLE = "Allow Code Panel"
+    DESCRIPTION = "Let kids open a code panel with Space"
+    OPTIONS = [
+        (True, "Yes"),
+        (False, "No"),
+    ]
+    escape_value = _CODE_PANEL_CANCELLED
 
-    async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, NavigationAction):
-            if action.direction == 'up':
-                self._selected = (self._selected - 1) % len(self.OPTIONS)
-                self._update_selection()
-            elif action.direction == 'down':
-                self._selected = (self._selected + 1) % len(self.OPTIONS)
-                self._update_selection()
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                from ..settings import set_littles_mode
-                value = self.OPTIONS[self._selected][0]
-                set_littles_mode(value)
-                self.dismiss(value)
-            elif action.action == 'escape':
-                self.dismiss(_LITTLES_CANCELLED)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_code_panel
+        self._selected = 0 if get_code_panel() else 1
 
 
 
@@ -1490,7 +1460,7 @@ class ParentMenu(PurpleModal):
         if item_id == "menu-littles":
             self._open_littles_mode()
         elif item_id == "menu-code-panel":
-            self._toggle_code_panel()
+            self._open_code_panel()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -1508,11 +1478,19 @@ class ParentMenu(PurpleModal):
         elif item_id == "menu-exit":
             self.dismiss()
 
-    def _toggle_code_panel(self) -> None:
-        """Toggle the code panel setting and update the menu label."""
-        from ..settings import get_code_panel, set_code_panel
+    def _open_code_panel(self) -> None:
+        """Open the code panel picker modal."""
+        def on_result(result):
+            if result is _CODE_PANEL_CANCELLED:
+                return
+            self._apply_code_panel(result)
+
+        self.app.push_screen(CodePanelScreen(), callback=on_result)
+
+    def _apply_code_panel(self, new_value: bool) -> None:
+        """Apply a code panel setting change."""
+        from ..settings import set_code_panel
         from ..constants import ICON_ROBOT
-        new_value = not get_code_panel()
         set_code_panel(new_value)
         self.app._code_panel_enabled = new_value
         # Fully close code panel mode if disabling

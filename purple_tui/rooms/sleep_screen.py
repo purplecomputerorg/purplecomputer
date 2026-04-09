@@ -64,7 +64,7 @@ class SleepScreen(Screen):
     DEFAULT_CSS = """
     SleepScreen {
         align: center middle;
-        background: $background;
+        background: #140a22;
     }
 
     SleepFace {

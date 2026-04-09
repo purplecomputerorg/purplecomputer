@@ -438,7 +438,7 @@ class LittlesExitScreen(PurpleModal):
                 self._update_selection()
             return
 
-        if isinstance(action, ControlAction) and action.is_down:
+        if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == 'enter':
                 self.dismiss(self.OPTIONS[self._selected][0])
             elif action.action == 'escape':

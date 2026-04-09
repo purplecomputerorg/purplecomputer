@@ -784,14 +784,9 @@ class InstallProgressScreen(PurpleModal):
     """
 
     CSS = """
-    InstallProgressScreen {
-        background: $background;
-    }
-
     #modal-dialog {
         width: 60;
         padding: 2 3;
-        border: round $primary;
     }
 
     #modal-dialog.diag-scroll {
@@ -1241,15 +1236,10 @@ class ParentMenu(PurpleModal):
     No focus system used (keyboard-only design).
     """
 
-    CSS = """
-    ParentMenu {
-        background: rgba(0, 0, 0, 0.7);
-    }
-
+    DEFAULT_CSS = """
     #modal-dialog {
         width: 52;
         padding: 1 2;
-        border: round $primary;
     }
 
     #modal-title {

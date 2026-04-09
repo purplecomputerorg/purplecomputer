@@ -123,7 +123,6 @@ class ConfirmFreshScreen(PurpleModal):
         width: 50;
         max-height: 22;
         padding: 2 3;
-        border: heavy $warning;
     }
 
     #modal-desc {
@@ -212,7 +211,6 @@ class RoomPickerScreen(PurpleModal):
     #modal-dialog {
         width: 100;
         padding: 2 3;
-        border: heavy $primary;
     }
 
     #picker-options {
@@ -443,7 +441,6 @@ class VolumeModal(PurpleModal):
     #modal-dialog {
         width: 50;
         padding: 2 3;
-        border: heavy $primary;
     }
 
     #volume-display {

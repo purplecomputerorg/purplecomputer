@@ -21,6 +21,7 @@ class PurpleModal(ModalScreen):
     #modal-dialog {
         height: auto;
         background: $surface;
+        border: heavy $primary;
     }
 
     #modal-title {

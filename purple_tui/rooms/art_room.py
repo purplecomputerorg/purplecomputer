@@ -1437,7 +1437,6 @@ class ArtPromptScreen(PurpleModal):
     #modal-dialog {
         width: 60;
         padding: 2 4;
-        border: heavy $primary;
     }
 
     #modal-title {

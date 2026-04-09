@@ -21,7 +21,7 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.strip import Strip
 from textual.message import Message
-from textual.screen import ModalScreen
+from ..modal import PurpleModal
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
@@ -1425,7 +1425,7 @@ class ArtMode(Container):
 # ART PROMPT SCREEN
 # =============================================================================
 
-class ArtPromptScreen(ModalScreen):
+class ArtPromptScreen(PurpleModal):
     """
     Modal screen shown when entering Art room with existing content.
 
@@ -1434,22 +1434,13 @@ class ArtPromptScreen(ModalScreen):
     """
 
     CSS = """
-    ArtPromptScreen {
-        align: center middle;
-    }
-
-    #art-prompt-dialog {
+    #modal-dialog {
         width: 60;
-        height: auto;
         padding: 2 4;
-        background: $surface;
         border: heavy $primary;
     }
 
-    #art-prompt-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
+    #modal-title {
         margin-bottom: 2;
     }
 
@@ -1480,8 +1471,8 @@ class ArtPromptScreen(ModalScreen):
         self._selected_index = 0  # 0 = Keep, 1 = New
 
     def compose(self) -> ComposeResult:
-        with Container(id="art-prompt-dialog"):
-            yield Static("Your drawing is still here!", id="art-prompt-title")
+        with Container(id="modal-dialog"):
+            yield Static("Your drawing is still here!", id="modal-title")
             with Horizontal(id="art-prompt-buttons"):
                 yield Button("Keep drawing", id="btn-keep", variant="success")
                 yield Button("New drawing", id="btn-new", variant="primary")

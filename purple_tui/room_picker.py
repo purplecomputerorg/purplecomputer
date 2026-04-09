@@ -7,7 +7,7 @@ selection, V opens volume, C clears rooms, Enter selects, Escape cancels.
 Any unrecognized key dismisses gracefully.
 """
 
-from textual.screen import ModalScreen
+from .modal import PurpleModal
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Static
 from textual.app import ComposeResult
@@ -111,7 +111,7 @@ class ExtraOption(Static):
         return caps(f"\n{self._icon}  {self._label}  {self._icon}\n{hint}")
 
 
-class ConfirmFreshScreen(ModalScreen):
+class ConfirmFreshScreen(PurpleModal):
     """Are you sure? confirmation for Clear Rooms.
 
     Uses vertical layout (up/down navigation) consistent with
@@ -119,27 +119,14 @@ class ConfirmFreshScreen(ModalScreen):
     """
 
     CSS = """
-    ConfirmFreshScreen {
-        align: center middle;
-    }
-
-    #confirm-dialog {
+    #modal-dialog {
         width: 50;
-        height: auto;
         max-height: 22;
         padding: 2 3;
-        background: $surface;
         border: heavy $warning;
     }
 
-    #confirm-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
-    }
-
-    #confirm-subtitle {
+    #modal-desc {
         width: 100%;
         text-align: center;
         color: $text-muted;
@@ -161,13 +148,6 @@ class ConfirmFreshScreen(ModalScreen):
         color: $background;
         text-style: bold;
     }
-
-    #confirm-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
-    }
     """
 
     def __init__(self, **kwargs):
@@ -176,13 +156,13 @@ class ConfirmFreshScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        with Container(id="confirm-dialog"):
-            yield Static(caps("Are you sure?"), id="confirm-title")
-            yield Static(caps("This will clear everything."), id="confirm-subtitle")
+        with Container(id="modal-dialog"):
+            yield Static(caps("Are you sure?"), id="modal-title")
+            yield Static(caps("This will clear everything."), id="modal-desc")
             with Vertical(id="confirm-buttons"):
                 yield Static(caps("Yes, clear rooms"), id="btn-yes", classes="confirm-btn")
                 yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
-            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="confirm-hint")
+            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="modal-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
@@ -219,7 +199,7 @@ class ConfirmFreshScreen(ModalScreen):
         event.prevent_default()
 
 
-class RoomPickerScreen(ModalScreen):
+class RoomPickerScreen(PurpleModal):
     """
     Modal screen for selecting rooms with arrow key navigation.
 
@@ -229,23 +209,10 @@ class RoomPickerScreen(ModalScreen):
     """
 
     CSS = """
-    RoomPickerScreen {
-        align: center middle;
-    }
-
-    #picker-dialog {
+    #modal-dialog {
         width: 100;
-        height: auto;
         padding: 2 3;
-        background: $surface;
         border: heavy $primary;
-    }
-
-    #picker-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
     }
 
     #picker-options {
@@ -271,13 +238,6 @@ class RoomPickerScreen(ModalScreen):
 
     #opt-code-toggle {
         width: 52;
-    }
-
-    #picker-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
     }
     """
 
@@ -312,8 +272,8 @@ class RoomPickerScreen(ModalScreen):
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
 
-        with Container(id="picker-dialog"):
-            yield Static(caps("Pick a Room"), id="picker-title")
+        with Container(id="modal-dialog"):
+            yield Static(caps("Pick a Room"), id="modal-title")
 
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
@@ -330,7 +290,7 @@ class RoomPickerScreen(ModalScreen):
                     else:
                         yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
 
-            yield Static(caps("Arrow keys move   Enter pick"), id="picker-hint")
+            yield Static(caps("Arrow keys move   Enter pick"), id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -473,30 +433,17 @@ class RoomPickerScreen(ModalScreen):
         event.prevent_default()
 
 
-class VolumeModal(ModalScreen):
+class VolumeModal(PurpleModal):
     """Simple volume adjustment modal.
 
     Shows current volume level. Up/down arrows adjust. Enter/Esc to close.
     """
 
     CSS = """
-    VolumeModal {
-        align: center middle;
-    }
-
-    #volume-dialog {
+    #modal-dialog {
         width: 50;
-        height: auto;
         padding: 2 3;
-        background: $surface;
         border: heavy $primary;
-    }
-
-    #volume-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
-        margin-bottom: 1;
     }
 
     #volume-display {
@@ -505,19 +452,17 @@ class VolumeModal(ModalScreen):
         margin-bottom: 1;
     }
 
-    #volume-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
+    #modal-hint {
+        margin-top: 0;
     }
     """
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        with Container(id="volume-dialog"):
-            yield Static(caps("Volume"), id="volume-title")
+        with Container(id="modal-dialog"):
+            yield Static(caps("Volume"), id="modal-title")
             yield Static("", id="volume-display")
-            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close"), id="volume-hint")
+            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close"), id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_display()

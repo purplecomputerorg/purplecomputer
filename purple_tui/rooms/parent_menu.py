@@ -11,7 +11,7 @@ Up/Down arrows move selection, Enter activates, Escape exits.
 from textual.widgets import Static
 from textual.containers import Vertical, Horizontal
 from textual.app import ComposeResult
-from textual.screen import ModalScreen
+from ..modal import PurpleModal
 from textual import events
 import subprocess
 import os
@@ -197,7 +197,7 @@ def apply_saved_display_settings() -> None:
     apply_display_settings(settings["brightness"], settings["contrast"])
 
 
-class DisplaySettingsScreen(ModalScreen):
+class DisplaySettingsScreen(PurpleModal):
     """
     Modal for adjusting display brightness and contrast.
 
@@ -206,25 +206,13 @@ class DisplaySettingsScreen(ModalScreen):
     """
 
     CSS = """
-    DisplaySettingsScreen {
-        align: center middle;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
-    #display-dialog {
+    #modal-dialog {
         width: 50;
-        height: auto;
         padding: 1 2;
-        background: $surface;
-        border: round $primary;
     }
 
-    #display-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
+    #modal-title {
         color: $primary;
-        margin-bottom: 1;
     }
 
     .setting-row {
@@ -248,13 +236,6 @@ class DisplaySettingsScreen(ModalScreen):
         text-align: left;
         padding-left: 1;
     }
-
-    #display-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
-    }
     """
 
     FOCUS_AREAS = ["brightness", "contrast"]
@@ -271,8 +252,8 @@ class DisplaySettingsScreen(ModalScreen):
         return self.FOCUS_AREAS[self._focus_index]
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="display-dialog"):
-            yield Static("Adjust Display", id="display-title")
+        with Vertical(id="modal-dialog"):
+            yield Static("Adjust Display", id="modal-title")
             with Horizontal(classes="setting-row"):
                 yield Static("Brightness:", classes="setting-label")
                 yield Static("", id="brightness-bar", classes="setting-bar")
@@ -281,7 +262,7 @@ class DisplaySettingsScreen(ModalScreen):
                 yield Static("Contrast:", classes="setting-label")
                 yield Static("", id="contrast-bar", classes="setting-bar")
                 yield Static("", id="contrast-value", classes="setting-value")
-            yield Static("\u2190 \u2192 adjust   \u25b2 \u25bc switch   Esc done", id="display-hint")
+            yield Static("\u2190 \u2192 adjust   \u25b2 \u25bc switch   Esc done", id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_display()
@@ -369,7 +350,7 @@ class DisplaySettingsScreen(ModalScreen):
 _LITTLES_CANCELLED = object()  # Sentinel: user pressed Escape without choosing
 
 
-class LittlesModeScreen(ModalScreen):
+class LittlesModeScreen(PurpleModal):
     """
     Pick a Littles Mode: lock the app into a single activity for young kids.
 
@@ -377,28 +358,16 @@ class LittlesModeScreen(ModalScreen):
     """
 
     CSS = """
-    LittlesModeScreen {
-        align: center middle;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
-    #littles-dialog {
+    #modal-dialog {
         width: 50;
-        height: auto;
         padding: 1 2;
-        background: $surface;
-        border: round $primary;
     }
 
-    #littles-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
+    #modal-title {
         color: $primary;
-        margin-bottom: 1;
     }
 
-    #littles-desc {
+    #modal-desc {
         width: 100%;
         text-align: center;
         color: $text-muted;
@@ -419,13 +388,6 @@ class LittlesModeScreen(ModalScreen):
         background: $primary;
         color: $background;
         text-style: bold;
-    }
-
-    #littles-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
     }
     """
 
@@ -448,16 +410,16 @@ class LittlesModeScreen(ModalScreen):
                 break
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="littles-dialog"):
-            yield Static("Littles Mode", id="littles-title")
-            yield Static("One activity, no menus, no switching", id="littles-desc")
+        with Vertical(id="modal-dialog"):
+            yield Static("Littles Mode", id="modal-title")
+            yield Static("One activity, no menus, no switching", id="modal-desc")
             for i, (value, label, desc) in enumerate(self.OPTIONS):
                 yield Static(
                     f"{label}\n{desc}",
                     id=f"littles-opt-{i}",
                     classes="littles-option",
                 )
-            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="littles-hint")
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -685,30 +647,18 @@ def _get_menu_items() -> list:
     return items
 
 
-class InstallConfirmScreen(ModalScreen):
+class InstallConfirmScreen(PurpleModal):
     """Confirmation dialog before installing Purple Computer to the internal disk."""
 
     CSS = """
-    InstallConfirmScreen {
-        align: center middle;
-        background: rgba(0, 0, 0, 0.7);
-    }
-
-    #install-dialog {
+    #modal-dialog {
         width: 50;
-        height: auto;
-        max-height: 22;
         padding: 1 2;
-        background: $surface;
-        border: round $primary;
+        max-height: 22;
     }
 
-    #install-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
+    #modal-title {
         color: $primary;
-        margin-bottom: 1;
     }
 
     #install-warning {
@@ -736,13 +686,6 @@ class InstallConfirmScreen(ModalScreen):
         color: $background;
         text-style: bold;
     }
-
-    #install-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
-    }
     """
 
     def __init__(self, **kwargs):
@@ -751,8 +694,8 @@ class InstallConfirmScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        with Vertical(id="install-dialog"):
-            yield Static(caps("Install Purple Computer"), id="install-title")
+        with Vertical(id="modal-dialog"):
+            yield Static(caps("Install Purple Computer"), id="modal-title")
             yield Static(
                 "This will set up Purple Computer\n"
                 "on this laptop.\n"
@@ -764,16 +707,16 @@ class InstallConfirmScreen(ModalScreen):
             with Vertical(id="install-buttons"):
                 yield Static(caps("Yes, install"), id="btn-install", classes="install-btn")
                 yield Static(caps("No, go back"), id="btn-cancel-install", classes="install-btn selected")
-            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="install-hint")
+            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="modal-hint")
 
     def refresh_caps(self) -> None:
         """Re-apply caps mode to all text in this modal."""
         caps = getattr(self.app, 'caps_text', lambda x: x)
         try:
-            self.query_one("#install-title").update(caps("Install Purple Computer"))
+            self.query_one("#modal-title").update(caps("Install Purple Computer"))
             self.query_one("#btn-install").update(caps("Yes, install"))
             self.query_one("#btn-cancel-install").update(caps("No, go back"))
-            self.query_one("#install-hint").update(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"))
+            self.query_one("#modal-hint").update(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"))
         except Exception:
             pass
         self._update_buttons()
@@ -832,7 +775,7 @@ _INSTALL_STAGES = [
 _REBOOT_BIN = '/run/purple-reboot-mount/purple-reboot'
 
 
-class InstallProgressScreen(ModalScreen):
+class InstallProgressScreen(PurpleModal):
     """Install progress modal. Stays in Textual the whole time.
 
     Runs install.sh as an async subprocess, streams [PURPLE] log lines to
@@ -842,31 +785,24 @@ class InstallProgressScreen(ModalScreen):
 
     CSS = """
     InstallProgressScreen {
-        align: center middle;
         background: $background;
     }
 
-    #install-progress-dialog {
+    #modal-dialog {
         width: 60;
-        height: auto;
         padding: 2 3;
-        background: $surface;
         border: round $primary;
     }
 
-    #install-progress-dialog.diag-scroll {
+    #modal-dialog.diag-scroll {
         width: 100%;
         height: 100%;
         padding: 1 2;
         border: none;
     }
 
-    #ip-title {
-        width: 100%;
-        text-align: center;
-        text-style: bold;
+    #modal-title {
         color: $primary;
-        margin-bottom: 1;
     }
 
     #ip-status {
@@ -887,10 +823,8 @@ class InstallProgressScreen(ModalScreen):
         margin-bottom: 1;
     }
 
-    #ip-hint {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
+    #modal-hint {
+        margin-top: 0;
     }
     """
 
@@ -916,11 +850,11 @@ class InstallProgressScreen(ModalScreen):
         self._update_ui()
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="install-progress-dialog"):
-            yield Static("", id="ip-title")
+        with Vertical(id="modal-dialog"):
+            yield Static("", id="modal-title")
             yield Static("", id="ip-status")
             yield Static("", id="ip-bar")
-            yield Static("", id="ip-hint")
+            yield Static("", id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_ui()
@@ -933,10 +867,10 @@ class InstallProgressScreen(ModalScreen):
     def _update_ui(self) -> None:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         try:
-            title_w = self.query_one("#ip-title")
+            title_w = self.query_one("#modal-title")
             status_w = self.query_one("#ip-status")
             bar_w = self.query_one("#ip-bar")
-            hint_w = self.query_one("#ip-hint")
+            hint_w = self.query_one("#modal-hint")
         except Exception:
             return
 
@@ -1201,7 +1135,7 @@ class InstallProgressScreen(ModalScreen):
         self._scrolling = True
         # Switch to full-screen layout
         try:
-            self.query_one("#install-progress-dialog").add_class("diag-scroll")
+            self.query_one("#modal-dialog").add_class("diag-scroll")
         except Exception:
             pass
         self._scroll_timer = self.set_interval(
@@ -1229,7 +1163,7 @@ class InstallProgressScreen(ModalScreen):
         self._diag_lines = []
         # Restore normal dialog layout
         try:
-            self.query_one("#install-progress-dialog").remove_class("diag-scroll")
+            self.query_one("#modal-dialog").remove_class("diag-scroll")
         except Exception:
             pass
         self._update_ui()
@@ -1295,7 +1229,7 @@ class ParentMenuItem(Static):
         self.label = label
 
 
-class ParentMenu(ModalScreen):
+class ParentMenu(PurpleModal):
     """
     Parent Mode - Admin menu for parents/guardians.
 
@@ -1307,27 +1241,20 @@ class ParentMenu(ModalScreen):
     No focus system used (keyboard-only design).
     """
 
-    DEFAULT_CSS = """
+    CSS = """
     ParentMenu {
-        align: center middle;
         background: rgba(0, 0, 0, 0.7);
     }
 
-    #parent-dialog {
+    #modal-dialog {
         width: 52;
-        height: auto;
         padding: 1 2;
-        background: $surface;
         border: round $primary;
     }
 
-    #parent-title {
-        width: 100%;
+    #modal-title {
         height: 1;
-        text-align: center;
-        text-style: bold;
         color: $primary;
-        margin-bottom: 1;
     }
 
     #parent-items {
@@ -1335,12 +1262,8 @@ class ParentMenu(ModalScreen):
         height: auto;
     }
 
-    #parent-hint {
-        width: 100%;
+    #modal-hint {
         height: 1;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
     }
 
     #parent-version {
@@ -1370,8 +1293,8 @@ class ParentMenu(ModalScreen):
         self._usb_remount_attempted = False
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="parent-dialog"):
-            yield Static("Parent Menu", id="parent-title")
+        with Vertical(id="modal-dialog"):
+            yield Static("Parent Menu", id="modal-title")
             yield Static(
                 _boot_mode_hint(),
                 id="parent-live-hint",
@@ -1382,7 +1305,7 @@ class ParentMenu(ModalScreen):
                     if item_id == "menu-install" and not _is_usb_payload_available():
                         item.add_class("disabled")
                     yield item
-            yield Static("\u25b2 \u25bc   Enter   Esc", id="parent-hint")
+            yield Static("\u25b2 \u25bc   Enter   Esc", id="modal-hint")
             version = _get_version_label()
             if version:
                 yield Static(version, id="parent-version")

@@ -2476,18 +2476,30 @@ class PurpleApp(App):
 
     def action_parent_menu(self) -> None:
         """Enter parent mode. Shows admin menu for parents."""
-        from .rooms.parent_menu import ParentMenu
         # Cancel escape hold timer and reset state
         self._cancel_escape_hold_timer()
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
-        # Auto-exit littles mode when parent opens the menu
+        # In littles mode, show the exit screen instead of the parent menu
         if self._littles_mode:
+            from .rooms.parent_menu import LittlesExitScreen
+            self.push_screen(LittlesExitScreen(), callback=self._on_littles_exit_dismissed)
+            return
+        from .rooms.parent_menu import ParentMenu
+        self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
+
+    def _on_littles_exit_dismissed(self, result) -> None:
+        """Handle littles exit screen dismiss."""
+        from .rooms.parent_menu import (
+            _LITTLES_EXIT, _LITTLES_PARENT, ParentMenu,
+        )
+        if result == _LITTLES_EXIT:
             from .settings import set_littles_mode
             set_littles_mode(None)
             self._apply_littles_mode(None)
-        self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
+        elif result == _LITTLES_PARENT:
+            self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
 
     def _on_parent_menu_dismissed(self, result) -> None:
         """Handle parent menu dismiss, applying any setting changes."""

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Littles mode: long-hold Escape now shows a dedicated "Exit Littles Mode?" screen instead of silently exiting and opening the parent menu. Options: Yes exit, No go back (default), Parent Menu.
 - On charger with lid open, computer now shuts down after 60 minutes idle instead of staying on forever. Battery (10 min) and lid-closed (10 min) timers unchanged.
 - Title bar shows boot mode on the left: "USB" (blinks while caching, then "USB · ⏏ Remove OK" when safe) or "Installed" with disk icon.
 - Hold backslash (`\`) for 3 seconds to open parent menu. Alternative to Escape long-hold for keyboards where Escape is unreliable.

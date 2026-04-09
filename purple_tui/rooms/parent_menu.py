@@ -349,6 +349,101 @@ class DisplaySettingsScreen(PurpleModal):
 
 _LITTLES_CANCELLED = object()  # Sentinel: user pressed Escape without choosing
 
+# LittlesExitScreen dismiss values
+_LITTLES_EXIT = "exit"        # Exit littles mode
+_LITTLES_GO_BACK = "go_back"  # Return to littles mode
+_LITTLES_PARENT = "parent"    # Open the full parent menu (keep littles on)
+
+
+class LittlesExitScreen(PurpleModal):
+    """
+    Shown when parent long-holds Escape while in Littles Mode.
+
+    Three options: exit littles mode, go back, or open the parent menu.
+    """
+
+    CSS = """
+    #modal-dialog {
+        width: 50;
+        padding: 1 2;
+    }
+
+    #modal-title {
+        color: $primary;
+    }
+
+    .exit-option {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    .exit-option.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    OPTIONS = [
+        (_LITTLES_EXIT, "Yes, exit"),
+        (_LITTLES_GO_BACK, "No, go back"),
+        (_LITTLES_PARENT, "Parent Menu"),
+    ]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._selected = 1  # Default to "No, go back"
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="modal-dialog"):
+            yield Static("Exit Littles Mode?", id="modal-title")
+            for i, (value, label) in enumerate(self.OPTIONS):
+                yield Static(
+                    label,
+                    id=f"exit-opt-{i}",
+                    classes="exit-option",
+                )
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
+
+    def on_mount(self) -> None:
+        self._update_selection()
+
+    def _update_selection(self) -> None:
+        for i in range(len(self.OPTIONS)):
+            try:
+                widget = self.query_one(f"#exit-opt-{i}", Static)
+                if i == self._selected:
+                    widget.add_class("selected")
+                else:
+                    widget.remove_class("selected")
+            except Exception:
+                pass
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self._selected = (self._selected - 1) % len(self.OPTIONS)
+                self._update_selection()
+            elif action.direction == 'down':
+                self._selected = (self._selected + 1) % len(self.OPTIONS)
+                self._update_selection()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            if action.action == 'enter':
+                self.dismiss(self.OPTIONS[self._selected][0])
+            elif action.action == 'escape':
+                self.dismiss(_LITTLES_GO_BACK)
+
 
 class LittlesModeScreen(PurpleModal):
     """

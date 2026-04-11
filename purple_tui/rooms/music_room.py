@@ -492,7 +492,7 @@ class MusicGrid(Widget):
             text_style = Style(bgcolor=bg_color, color=text_color, bold=True)
 
             letter_line = mid_line - 1
-            note_line = mid_line + 1
+            note_line = mid_line
             if line_in_cell == letter_line:
                 # Center the key character
                 display_key = caps(key)

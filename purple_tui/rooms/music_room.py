@@ -443,7 +443,7 @@ class MusicGrid(Widget):
         if self._layout_ready and width >= 10 and height >= 4:
             # Calculate and cache cell dimensions
             cell_width = width // 10
-            cell_height = height // 4
+            cell_height = min(height // 4, 5)
             grid_width = cell_width * 10
             grid_height = cell_height * 4
             margin_left = (width - grid_width) // 2

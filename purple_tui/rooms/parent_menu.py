@@ -511,7 +511,7 @@ class CodePanelScreen(PickerModal):
     """Toggle the code panel setting."""
 
     TITLE = "Allow Code Panel"
-    DESCRIPTION = "Let kids open a code panel with Space"
+    DESCRIPTION = "Allow older kids to write code in Music and Art by holding the space button"
     OPTIONS = [
         (True, "Yes"),
         (False, "No"),

@@ -1437,22 +1437,19 @@ class PurpleApp(App):
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
             compact = self.query_one("#compact-room-indicator", CompactRoomIndicator)
-            title_bar = self.query_one("#title-bar")
             with self.batch_update():
                 if active:
                     indicator.display = False
                     compact.update_room(self.active_room)
                     compact.display = True
-                    # Full indicator(4) → compact(1) frees 3 rows;
-                    # title-bar margin-bottom removed frees 1 more row.
-                    # Total 4 extra rows so REPL(5) fits with pinned canvas
-                    # after hint bar(1) hidden.
-                    title_bar.styles.margin = (0, 0, 0, 0)
-                    viewport.styles.height = VIEWPORT_HEIGHT + 4
+                    # Full indicator(4) → compact(1) frees 3 rows.
+                    # Grow viewport by exactly 3 so the top edge stays put.
+                    # Inside, hiding the hint bar(1) frees 1 more row for
+                    # the REPL(5): pinned canvas + REPL fits in +3 internal.
+                    viewport.styles.height = VIEWPORT_HEIGHT + 3
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
-                    title_bar.styles.margin = (0, 0, 1, 0)
                     compact.display = False
                     indicator.display = True
                     if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:

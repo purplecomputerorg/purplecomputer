@@ -492,7 +492,8 @@ class MusicGrid(Widget):
             text_style = Style(bgcolor=bg_color, color=text_color, bold=True)
 
             letter_line = mid_line
-            note_line = mid_line + 1
+            note_above = mid_line - 1
+            note_below = mid_line + 1
             if line_in_cell == letter_line:
                 # Center the key character
                 display_key = caps(key)
@@ -501,7 +502,7 @@ class MusicGrid(Widget):
                 segments.append(Segment(" " * pad_left, cell_bg_style))
                 segments.append(Segment(display_key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
-            elif line_in_cell == note_line and key in self._note_labels:
+            elif line_in_cell in (note_above, note_below) and key in self._note_labels:
                 # Flash note/percussion name, centered in cell
                 if key.isdigit():
                     label = caps(PERCUSSION_NAMES.get(key, ""))

@@ -145,7 +145,7 @@ class ReplPanel(Vertical):
         width: 100%;
         height: auto;
         display: none;
-        padding: 0 1 0 1;
+        padding: 1 1 0 1;
         background: $surface;
     }
 

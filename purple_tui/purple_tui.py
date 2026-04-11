@@ -1442,11 +1442,11 @@ class PurpleApp(App):
                     indicator.display = False
                     compact.update_room(self.active_room)
                     compact.display = True
-                    # Full indicator(4) → compact(1) frees 3 rows.
-                    # Grow viewport by exactly 3 so the top edge stays put.
-                    # Inside, hiding the hint bar(1) frees 1 more row for
-                    # the REPL(5): pinned canvas + REPL fits in +3 internal.
-                    viewport.styles.height = VIEWPORT_HEIGHT + 3
+                    # Full indicator(4) → compact(1) frees 3 rows; the 4th
+                    # row comes from VIEWPORT_HEIGHT being 1 below terminal
+                    # budget. REPL(5) fits with pinned canvas after hint
+                    # bar(1) hidden.
+                    viewport.styles.height = VIEWPORT_HEIGHT + 4
                     viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT

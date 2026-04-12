@@ -31,6 +31,34 @@ xlog() {
 
 xlog "=== xinitrc started ===  debug_flag=$([ -f "$DEBUG_FLAG" ] && echo yes || echo no)"
 
+# keyd diagnostics: recorded on every boot so that when someone reports
+# "Ctrl+Alt+RightAlt doesn't reach tty2" we can tell from the log whether
+# the problem is keyd not running, not installed, wrong config, or
+# Purple's side. None of these commands need root.
+if [ -f /etc/keyd/default.conf ]; then
+    xlog "keyd config present ($(wc -l < /etc/keyd/default.conf 2>/dev/null || echo ?) lines)"
+else
+    xlog "keyd config MISSING at /etc/keyd/default.conf"
+fi
+if command -v keyd >/dev/null 2>&1; then
+    xlog "keyd binary: $(keyd -v 2>&1 | head -1)"
+else
+    xlog "keyd binary MISSING from PATH"
+fi
+keyd_pid=$(pgrep -x keyd || true)
+if [ -n "$keyd_pid" ]; then
+    xlog "keyd process running (pid=$keyd_pid)"
+else
+    xlog "keyd process NOT running"
+fi
+# List evdev devices so we can see whether the virtual keyboard exists yet.
+# $(< file) and ${dev##*/} are bash builtins -- no fork per iteration.
+for dev in /dev/input/event*; do
+    [ -e "$dev" ] || continue
+    name=$(< "/sys/class/input/${dev##*/}/device/name") 2>/dev/null || name="?"
+    xlog "  evdev: $dev ($name)"
+done
+
 # Wait for X to initialize
 sleep 1
 xlog "X server ready (after 1s wait)"

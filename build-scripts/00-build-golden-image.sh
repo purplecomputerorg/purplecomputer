@@ -284,14 +284,15 @@ SOURCES
 
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
-    # Pre-create the boot-log directory so the first write doesn't have to.
-    # On the debug ISO, casper mounts the USB's ext4 writable partition on
-    # /var/log, so /var/log/purple/boot.log survives reboot (critical for
-    # diagnosing boot hangs: the prior boot's trace is readable from the
-    # next boot). On the standard ISO, /var/log is tmpfs and the directory
-    # is just a normal tmpfs path -- same code path, same log format.
-    # See: purple_tui/boot_log.py, guides/boot-hang-debugging.md
+    # Pre-create the boot-log directory owned by the purple user. The launcher,
+    # xinitrc, and boot_log.py all run as purple and must be able to write here;
+    # root:root 755 (mkdir default) would silently break all three. On the
+    # debug ISO, casper mounts an ext4 writable partition on /var/log so
+    # boot.log.prev survives reboot; on the standard ISO it's the casper
+    # overlay tmpfs. Same code path either way.
     mkdir -p "$MOUNT_DIR/var/log/purple"
+    chroot "$MOUNT_DIR" chown purple:purple /var/log/purple
+    chmod 0755 "$MOUNT_DIR/var/log/purple"
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
@@ -350,6 +351,18 @@ SOURCES
     chroot "$MOUNT_DIR" tar -xzf /tmp/keyd.tar.gz -C /tmp
     chroot "$MOUNT_DIR" bash -c "cd /tmp/keyd-${KEYD_VERSION} && make && make install PREFIX=/usr FORCE_SYSTEMD=1"
     rm -rf "$MOUNT_DIR/tmp/keyd.tar.gz" "$MOUNT_DIR/tmp/keyd-${KEYD_VERSION}"
+    # Sanity-check the install BEFORE leaving this block. A silent failure
+    # here (keyd built but unit file not installed, or binary missing) would
+    # turn into a confusing "systemctl enable keyd.service" failure later,
+    # or worse, a build that ships without keyd but with the config file.
+    if [ ! -x "$MOUNT_DIR/usr/bin/keyd" ]; then
+        echo "ERROR: /usr/bin/keyd missing after build" >&2
+        exit 1
+    fi
+    if [ ! -f "$MOUNT_DIR/usr/lib/systemd/system/keyd.service" ]; then
+        echo "ERROR: /usr/lib/systemd/system/keyd.service missing after make install (FORCE_SYSTEMD=1 did not take effect)" >&2
+        exit 1
+    fi
     log_info "keyd installed: $(chroot "$MOUNT_DIR" /usr/bin/keyd -v 2>&1 || echo 'keyd -v failed')"
 
     # Remove build deps (only needed for compilation).
@@ -374,28 +387,36 @@ SOURCES
     # launcher, the python interpreter startup, or purple_tui's imports.
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
+# Silence this script's own stderr for the duration of shell work below.
+# The launcher runs inside alacritty on tty1 before Textual takes over, so
+# any shell error message would be user-visible. Per-command `2>/dev/null`
+# is NOT sufficient: bash reports redirection-setup failures ("no such file
+# or directory" when a log dir is missing) BEFORE applying the per-command
+# stderr redirect, so the error leaks. A script-level `exec 2>` silences
+# all of it. Stderr is explicitly restored to /dev/tty before exec'ing
+# python so Textual's UI (which writes to stderr) renders correctly.
+exec 2>/dev/null
+
 cd /opt/purple
 
 BOOT_LOG_TMP=/tmp/purple-boot.log
 BOOT_LOG_PERSIST=/var/log/purple/boot.log
-mkdir -p /var/log/purple 2>/dev/null || true
 _log() {
     local msg="[$(date '+%H:%M:%S.%3N')] [launcher] $1"
-    echo "$msg" >> "$BOOT_LOG_TMP" 2>/dev/null || true
-    echo "$msg" >> "$BOOT_LOG_PERSIST" 2>/dev/null || true
-    logger -t purple-boot -- "$msg" 2>/dev/null || true
+    echo "$msg" >> "$BOOT_LOG_TMP" || true
+    echo "$msg" >> "$BOOT_LOG_PERSIST" || true
+    logger -t purple-boot -- "$msg" || true
 }
 
 _log "launcher entered pid=$$"
 
-# PYTHONUNBUFFERED: ensure stdio writes flush immediately so any late stderr
-# errors reach alacritty before a hang. PYTHONFAULTHANDLER: on SIGSEGV/SIGFPE
-# dump Python traceback to stderr -- useful on real crashes (our watchdog
-# handles soft hangs separately via boot_log).
 export PYTHONUNBUFFERED=1
 export PYTHONFAULTHANDLER=1
 
 _log "exec python3 -m purple_tui.purple_tui"
+# Restore stderr to tty before exec'ing python so Textual's UI renders
+# correctly -- Textual writes its screen to stderr.
+exec 2>/dev/tty
 exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"

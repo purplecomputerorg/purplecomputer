@@ -111,7 +111,7 @@ Physical Keyboard → keyd (EVIOCGRAB + uinput) → keyd virtual keyboard
                                                → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
 ```
 
-**keyd** (`config/keyd/default.conf`) runs as a systemd service on the golden image and does the grave/tilde→Escape and RightAlt→F2 remaps at the kernel level, so they work before Purple starts and at rescue shells. `purple_tui/input.py` prefers the keyd virtual device; physical devices are fallback only (dev/VM). Do NOT add application-level grave/tilde remaps — they'd duplicate keyd and only work while Purple is running. See `guides/boot-hang-debugging.md#keyd`.
+**keyd** (`config/keyd/default.conf`, built from source in `00-build-golden-image.sh`) runs as a systemd service on the golden image and does the grave/tilde→Escape and RightAlt→F2 remaps at the kernel level, so they work before Purple starts and at rescue shells. `purple_tui/input.py` uses keyd's virtual device alongside any physicals keyd didn't grab. Do NOT add application-level grave/tilde remaps — they'd duplicate keyd and only work while Purple is running. Full rationale (why keyd not systemd-hwdb, Apple SPI driver constraint): `guides/keyboard-architecture.md#remap-layer-choice`.
 
 **Key files:** `purple_tui/input.py`, `purple_tui/keyboard.py`. See `guides/keyboard-architecture.md`.
 

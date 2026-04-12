@@ -753,6 +753,7 @@ class PurpleApp(App):
         self._lid_was_closed_for: float = 0  # How long lid was closed (for sleep screen status)
         self._bye_screen_active = False
         self._app_suspended = False  # True while shell is open via parent menu
+        self._idle_inhibitors: set[str] = set()  # Reasons currently suppressing idle sleep/shutdown
 
         # Keyboard state for caps lock tracking and mode detection
         self.keyboard = create_keyboard_state(
@@ -1624,6 +1625,19 @@ class PurpleApp(App):
             if toast._notification.has_expired:
                 toast._expire()
 
+    def inhibit_idle(self, reason: str) -> None:
+        """Suppress idle sleep/shutdown while a long-running operation is active.
+
+        Reason-based so multiple inhibitors compose without stomping on each other.
+        Callers MUST pair every inhibit_idle() with an uninhibit_idle() with the
+        same reason (typically in on_mount/on_unmount).
+        """
+        self._idle_inhibitors.add(reason)
+
+    def uninhibit_idle(self, reason: str) -> None:
+        """Release an idle inhibitor previously added by inhibit_idle()."""
+        self._idle_inhibitors.discard(reason)
+
     def _check_idle_state(self) -> None:
         """Check if we should enter sleep mode due to inactivity.
 
@@ -1668,6 +1682,12 @@ class PurpleApp(App):
                 return  # Don't also check idle while lid is closed
 
             if self._is_sleep_or_bye_active():
+                return
+
+            # Idle sleep/shutdown can be suppressed while long-running modal
+            # operations are in progress (e.g. install). Lid handling above
+            # still runs so closing the lid still shuts down.
+            if self._idle_inhibitors:
                 return
 
             idle = pm.get_idle_seconds()

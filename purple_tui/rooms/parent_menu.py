@@ -917,8 +917,21 @@ class InstallProgressScreen(PurpleModal):
             yield Static("", id="modal-hint")
 
     def on_mount(self) -> None:
+        # Suppress idle sleep/shutdown for the duration of the install. The
+        # install takes 10-15 minutes with no keyboard activity; without this
+        # the sleep screen would overlay the progress modal mid-install.
+        try:
+            self.app.inhibit_idle("install")
+        except Exception:
+            pass
         self._update_ui()
         threading.Thread(target=self._run_install_thread, daemon=True).start()
+
+    def on_unmount(self) -> None:
+        try:
+            self.app.uninhibit_idle("install")
+        except Exception:
+            pass
 
     def _render_bar(self, pct: int) -> str:
         filled = int(36 * pct / 100)

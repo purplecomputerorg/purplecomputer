@@ -224,16 +224,13 @@ main() {
         umount "/dev/$part" 2>/dev/null || true
     done
 
-    # Remove device-mapper entries (APFS, LVM) that reference this disk
-    if command -v dmsetup >/dev/null 2>&1; then
-        for dm in $(dmsetup ls --target linear 2>/dev/null | awk '{print $1}'); do
-            dmsetup remove "$dm" 2>/dev/null || true
-        done
-    fi
-
     # Wipe filesystem signatures (APFS, HFS+, ext4, etc.) so the kernel
     # releases old partition references. wipefs calls BLKRRPART internally,
     # which clears the kernel's partition table cache for this disk.
+    # (Note: dmsetup-based APFS/LVM cleanup is intentionally not done here.
+    # libdevmapper in the live environment is version-mismatched with the
+    # kernel and silently fails. The post-write GPT rebuild and wipefs
+    # together cover the cases that mattered.)
     wipefs -a "/dev/$TARGET" 2>/dev/null || true
 
     # Let udev finish processing the wipe before we start writing
@@ -300,6 +297,39 @@ main() {
     fi
 
     # ======================================================================
+    # REBUILD PARTITION TABLE
+    # The golden image's GPT was written assuming 512-byte logical sectors.
+    # On drives with non-512B logical sectors (e.g. Apple NVMe in MacBook
+    # 2016/2017 TouchBar models, which use 4096B sectors), the kernel can't
+    # find the GPT header at LBA 1 and partprobe fails. The filesystem data
+    # was written at correct *byte* offsets via dd, so only the GPT metadata
+    # needs to be rewritten for the actual sector size.
+    #
+    # We do this unconditionally on every install (one code path = robust):
+    #   - On 512B drives: effectively re-asserts the same layout (cheap).
+    #   - On 4K drives: writes a valid GPT for the actual sector size.
+    #   - On any drive larger than the golden image: places the backup GPT
+    #     header at the real end of the disk (instead of mid-disk where the
+    #     image left it) and extends root to span the full drive.
+    #
+    # Layout MUST match 00-build-golden-image.sh exactly:
+    #   ESP  fat32  1MiB - 513MiB
+    #   root ext4   513MiB - 100%
+    # parted uses byte-based offsets (MiB), so the same commands produce
+    # correct LBAs regardless of the device's logical sector size.
+    # ======================================================================
+    SECTOR_SIZE=$(cat /sys/block/$TARGET/queue/logical_block_size 2>/dev/null || echo 512)
+    PHYS_SECTOR_SIZE=$(cat /sys/block/$TARGET/queue/physical_block_size 2>/dev/null || echo 512)
+    log "Disk sector size: logical=${SECTOR_SIZE}B physical=${PHYS_SECTOR_SIZE}B"
+
+    log "Rebuilding partition table for this disk..."
+    parted -s "/dev/$TARGET" mklabel gpt
+    parted -s "/dev/$TARGET" mkpart ESP fat32 1MiB 513MiB
+    parted -s "/dev/$TARGET" set 1 esp on
+    parted -s "/dev/$TARGET" mkpart primary ext4 513MiB 100%
+    sync
+
+    # ======================================================================
     # PARTITION DETECTION
     # Uses partprobe (BLKPG ioctl) which adds partitions individually and
     # succeeds even when udev briefly holds a different partition open.
@@ -311,13 +341,11 @@ main() {
 
     PROBE_PART="${PART_PREFIX}1"
     PARTITION_FOUND=false
+    PARTPROBE_STDERR=""
 
     for attempt in $(seq 1 20); do
-        # partprobe (from parted) uses BLKPG ioctl: adds/deletes partitions
-        # individually, only fails if the specific partition being modified is
-        # in use. blockdev --rereadpt uses BLKRRPART which fails if ANY partition
-        # is held open (common with leftover macOS/APFS references).
-        partprobe "/dev/$TARGET" 2>/dev/null
+        # Capture partprobe stderr so we can report it on final failure.
+        PARTPROBE_STDERR=$(partprobe "/dev/$TARGET" 2>&1 >/dev/null) || true
 
         # Brief pause for kernel to create device nodes, then let udev settle
         sleep 0.2
@@ -334,14 +362,34 @@ main() {
 
     if [ "$PARTITION_FOUND" != "true" ]; then
         warn "Partition devices did not appear."
+        warn "  sector size: logical=${SECTOR_SIZE}B physical=${PHYS_SECTOR_SIZE}B"
         warn "  lsblk output:"
         lsblk "/dev/$TARGET" 2>&1 | while read -r line; do warn "    $line"; done
         warn "  /proc/partitions:"
         grep "$TARGET" /proc/partitions 2>/dev/null | while read -r line; do warn "    $line"; done
+        if [ -n "$PARTPROBE_STDERR" ]; then
+            warn "  last partprobe stderr:"
+            echo "$PARTPROBE_STDERR" | while read -r line; do warn "    $line"; done
+        fi
         error "Partition devices did not appear after writing disk image. The install may have failed."
     fi
 
     log "Partitions ready."
+
+    # ======================================================================
+    # GROW ROOT FILESYSTEM TO FILL PARTITION
+    # The golden image's ext4 was sized to the image, not the target disk.
+    # After the GPT rebuild above, the root partition spans 513MiB to end of
+    # disk, but the filesystem inside is still at image size. resize2fs
+    # extends it to fill the partition. e2fsck -fy is required by resize2fs
+    # before an offline grow; -y is safe because we just verified the dd
+    # write byte-for-byte.
+    # ======================================================================
+    ROOT_PART_TMP="${PART_PREFIX}2"
+    log "Checking root filesystem..."
+    e2fsck -fy "$ROOT_PART_TMP" || warn "e2fsck reported issues (continuing)"
+    log "Growing root filesystem to fill disk..."
+    resize2fs "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
 
     # ==========================================================================
     # UEFI BOOT SETUP - See CLAUDE.md "UEFI Boot and Hardware Compatibility"

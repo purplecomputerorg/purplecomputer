@@ -10,39 +10,44 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 """
 
 import json
+from functools import cache
 from pathlib import Path
 from typing import Optional
 
-import inflect
-from typeguard import suppress_type_checks
 
-# Shared inflect engine for singular/plural conversion
-_inflect_engine = inflect.engine()
+@cache
+def _inflect_engine():
+    # Lazy: `import inflect` triggers ~3s of typeguard AST rewriting, so we
+    # defer it off the boot path. Do not move this import to module scope.
+    import inflect
+    return inflect.engine()
+
+
+def warm_inflect_engine() -> None:
+    """Trigger lazy-load of the inflect engine (for background warmup)."""
+    _inflect_engine()
 
 
 def singularize(word: str) -> str | None:
-    """Convert a plural word to singular using inflect.
+    """Convert a plural word to singular.
 
     Returns the singular form as a plain str, or None if the word is not plural.
     Handles irregular plurals like tomatoes->tomato, cherries->cherry, wolves->wolf.
     """
-    # inflect's type annotations expect its Word type but accept str at runtime.
-    # Suppress typeguard's strict runtime checking for this call.
+    from typeguard import suppress_type_checks
     with suppress_type_checks():
-        result = _inflect_engine.singular_noun(word)
-    if result:
-        return str(result)
-    return None
+        result = _inflect_engine().singular_noun(word)
+    return str(result) if result else None
 
 
 def pluralize(word: str) -> str:
-    """Convert a singular word to plural using inflect.
+    """Convert a singular word to plural.
 
     Handles irregular plurals like wolf->wolves, tomato->tomatoes, cherry->cherries.
     """
+    from typeguard import suppress_type_checks
     with suppress_type_checks():
-        result = _inflect_engine.plural(word)
-    return str(result)
+        return str(_inflect_engine().plural(word))
 
 
 class ContentManager:

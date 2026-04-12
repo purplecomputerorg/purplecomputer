@@ -1005,10 +1005,16 @@ class PurpleApp(App):
             self._command_timer = self.set_interval(0.1, self._check_command_trigger)
             self._dev_log("[Mount] Dev mode timers started")
 
-        # Startup complete from purple_tui's perspective. Disarm the
-        # boot-log watchdog: if we got here, we are not hung.
         boot_log.heartbeat("PurpleApp.on_mount complete")
         boot_log.mark_first_render()
+
+        # Warm inflect in the background so the first REPL plural is instant.
+        import threading
+        def _warm():
+            from .content import warm_inflect_engine
+            warm_inflect_engine()
+            boot_log.heartbeat("inflect engine warmed")
+        threading.Thread(target=_warm, daemon=True, name="inflect-warmup").start()
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""

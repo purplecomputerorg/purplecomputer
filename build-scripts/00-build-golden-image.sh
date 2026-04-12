@@ -284,15 +284,14 @@ SOURCES
 
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
-    # Pre-create the boot-log directory owned by the purple user. The launcher,
-    # xinitrc, and boot_log.py all run as purple and must be able to write here;
-    # root:root 755 (mkdir default) would silently break all three. On the
-    # debug ISO, casper mounts an ext4 writable partition on /var/log so
-    # boot.log.prev survives reboot; on the standard ISO it's the casper
-    # overlay tmpfs. Same code path either way.
-    mkdir -p "$MOUNT_DIR/var/log/purple"
-    chroot "$MOUNT_DIR" chown purple:purple /var/log/purple
-    chmod 0755 "$MOUNT_DIR/var/log/purple"
+    # Create /var/log/purple at every boot via systemd-tmpfiles. A build-time
+    # mkdir in the squashfs is hidden by casper's /var/log mount (tmpfs on
+    # standard ISO, ext4 on debug ISO), so it has to happen at runtime AFTER
+    # the mount -- which is exactly what systemd-tmpfiles-setup.service does.
+    mkdir -p "$MOUNT_DIR/etc/tmpfiles.d"
+    cat > "$MOUNT_DIR/etc/tmpfiles.d/purple.conf" <<'TMPFILES'
+d /var/log/purple 0755 purple purple -
+TMPFILES
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"

@@ -8,6 +8,10 @@
 
 **DRY is king.** Never duplicate logic. When you see the same pattern in two places, extract it. Before adding code, check if existing code already handles the case or can be extended to. Reuse relentlessly: every copy-pasted block is a future bug. Prefer one clear code path over branching into similar-but-slightly-different flows. Minimize LOC, if-else sprawl, and surface area for bugs. Keep functions short and single-purpose. No spaghetti: if a function has more than 3 levels of nesting or 5+ early returns, restructure it.
 
+**Comments: brief or absent.** Default is NO comment. Add one only when the WHY is non-obvious (hidden constraint, subtle invariant, workaround for a specific bug). Never explain WHAT the code does — well-named identifiers already do that. Never narrate the change, the task, or the caller. One line, not a paragraph. Multi-paragraph docstrings are almost always wrong. If you're tempted to write a design-decision essay, put it in a guide under `guides/` and link to it.
+
+**Imports: no heavy work at module scope.** A new pip dep whose cold `import` takes >100ms must be lazy-loaded. Runtime-type-check packages (`typeguard`, `beartype`, etc.) do AST rewriting at decoration time — audit them carefully. Rule + case study: `guides/boot-hang-debugging.md#rule-dont-do-heavy-work-at-module-import-time`.
+
 ---
 
 ## Sensitive Files (DO NOT READ)

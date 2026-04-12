@@ -132,11 +132,79 @@ On laptops with real function keys (or Touch Bar Macs with a USB keyboard attach
 | `stdlib imports done; importing textual` (nothing after) | first-time bytecode compilation of textual/rich, or the rich module doing something at import |
 | `constants imported; importing keyboard + input` (nothing after) | `from .input import ...` — check for module-level evdev opens |
 | `keyboard + input imported; importing power_manager` (nothing after) | power_manager's imports (dbus, upower, subprocess calls at import?) |
+| `power_manager imported; importing demo + rooms + repl` (nothing after) | one of `demo/`, `rooms/`, `room_picker`, `repl_panel`. **Historical cause:** `rooms/__init__` → `play_room` → `content` → `inflect` → `typeguard` AST rewriting at ~3s of CPU; see "Case study" below. Check first if a new import somewhere in this chain pulls a package that decorates with `typeguard.@typechecked`. |
 | `PurpleApp.__init__ begin` (nothing after) | App() superclass, CSS parsing, Textual App setup |
 | `PurpleApp.__init__ after App.__init__` (nothing after) | our `__init__` — keyboard state machine, `detect_keyboard_mode()` which opens evdev, power_manager, evdev readers |
 | `PurpleApp.on_mount begin` (nothing after) | theme, `apply_saved_display_settings`, `set_logind_power_key`, settings file read, `_load_room_content` |
 
 The **watchdog dump** narrows this further: it shows the exact line of Python the main thread is parked on.
+
+---
+
+## Case study: the 2016 Touch Bar MBP "hang" was inflect
+
+**Symptom (April 2026).** Purple's boot log ended at `power_manager imported; importing demo + rooms + repl` and never advanced. `ps` showed the Python process alive at ~5% CPU, slowly accumulating CPU time without making progress. The user saw a blank purple screen for minutes.
+
+**Root cause.** `rooms/__init__` imports `play_room`, which imports `content.py`, which did `import inflect` at module scope. `inflect` is a pluralization library that decorates its internals with `typeguard.@typechecked`. At import time, `typeguard` parses each decorated function's AST, rewrites it to inject runtime type checks, and compiles it back to bytecode. This is ~3 seconds of pure CPU work on a fast dev machine. On the 2016 MBP's USB-C-attached live USB, it ballooned into minutes because:
+
+1. Python had to read `inflect`'s many small files from the slow USB
+2. xinitrc's concurrent squashfs-to-tmpfs copy was contending for the same USB bandwidth
+3. The 5% CPU measurement reflected "mostly blocked on `read()`, occasional AST work" — looked like a hang but wasn't
+
+The 2015 MBP didn't exhibit the hang because its Intel USB 3.0 controller was fast enough to finish the squashfs cp before Python needed to read any inflect files, so Python read from tmpfs (memory speed) and the ~3s cost was tolerable.
+
+**How we found it.** `cProfile` around the import of `rooms.art_room` in a dev-machine REPL:
+
+```python
+import cProfile, pstats, io
+pr = cProfile.Profile()
+pr.enable()
+from purple_tui.rooms.art_room import ColorLegend
+pr.disable()
+pstats.Stats(pr).sort_stats('cumulative').print_stats(30)
+```
+
+The profile showed ~2.9s cumulative in `inflect/__init__.py` → `typeguard/_decorators.py:typechecked` → `ast.visit` / `fix_missing_locations` / `compile`.
+
+**The fix.** `purple_tui/content.py` now lazy-loads `inflect` via a `@functools.cache`-decorated zero-arg factory (`_inflect_engine`), and `PurpleApp.on_mount` spawns a daemon thread that calls `warm_inflect_engine()` after `mark_first_render()`. First REPL plural lookup is instant because the engine is already warm by the time a kid types anything; boot time drops by ~1.4s on every machine.
+
+---
+
+## Rule: don't do heavy work at module import time
+
+This bug was latent for months before the 2016 MBP surfaced it. Similar bugs will keep showing up unless we audit imports. The rule:
+
+1. **Module bodies should only contain imports, class definitions, function definitions, and cheap constants.** No calls to anything expensive at module scope.
+2. **Be especially suspicious of third-party packages that decorate with `@typechecked`, `@beartype`, `@validate_call`, or any runtime-type-check library.** These typically do AST rewriting at decoration time, which runs at import time of the decorating module.
+3. **Before adding a new pip dependency, measure its cold import time.** Any new package whose import takes >100ms on a fast machine should be imported lazily.
+
+**One-liner to measure an import:**
+
+```
+.venv/bin/python3 -c "import time; t=time.monotonic(); import PACKAGE; print(f'{PACKAGE}: {time.monotonic()-t:.3f}s')"
+```
+
+Or profile what's inside the import:
+
+```
+.venv/bin/python3 -X importtime -c "import PACKAGE" 2>&1 | sort -t'|' -k2 -n | tail -20
+```
+
+**If a heavy package is unavoidable, lazy-load it:**
+
+```python
+from functools import cache
+
+@cache
+def _thing():
+    import expensive_package
+    return expensive_package.make_thing()
+
+def public_api(x):
+    return _thing().do(x)
+```
+
+And if first-call latency matters, warm the cache from a daemon thread after first render (pattern in `purple_tui.py` `on_mount`).
 
 ---
 

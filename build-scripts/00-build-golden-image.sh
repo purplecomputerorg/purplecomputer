@@ -284,6 +284,14 @@ SOURCES
 
     # Copy application files (project root is mounted at /purple-src)
     mkdir -p "$MOUNT_DIR/opt/purple"
+    # Pre-create the boot-log directory so the first write doesn't have to.
+    # On the debug ISO, casper mounts the USB's ext4 writable partition on
+    # /var/log, so /var/log/purple/boot.log survives reboot (critical for
+    # diagnosing boot hangs: the prior boot's trace is readable from the
+    # next boot). On the standard ISO, /var/log is tmpfs and the directory
+    # is just a normal tmpfs path -- same code path, same log format.
+    # See: purple_tui/boot_log.py, guides/boot-hang-debugging.md
+    mkdir -p "$MOUNT_DIR/var/log/purple"
     cp -r /purple-src/purple_tui "$MOUNT_DIR/opt/purple/"
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
@@ -344,10 +352,33 @@ SOURCES
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
+    # The launcher writes timestamped markers to the boot log before and
+    # around the python exec so we can tell whether a hang is in the shell
+    # launcher, the python interpreter startup, or purple_tui's imports.
     cat > "$MOUNT_DIR/usr/local/bin/purple" <<'LAUNCHER'
 #!/bin/bash
 cd /opt/purple
 
+BOOT_LOG_TMP=/tmp/purple-boot.log
+BOOT_LOG_PERSIST=/var/log/purple/boot.log
+mkdir -p /var/log/purple 2>/dev/null || true
+_log() {
+    local msg="[$(date '+%H:%M:%S.%3N')] [launcher] $1"
+    echo "$msg" >> "$BOOT_LOG_TMP" 2>/dev/null || true
+    echo "$msg" >> "$BOOT_LOG_PERSIST" 2>/dev/null || true
+    logger -t purple-boot -- "$msg" 2>/dev/null || true
+}
+
+_log "launcher entered pid=$$"
+
+# PYTHONUNBUFFERED: ensure stdio writes flush immediately so any late stderr
+# errors reach alacritty before a hang. PYTHONFAULTHANDLER: on SIGSEGV/SIGFPE
+# dump Python traceback to stderr -- useful on real crashes (our watchdog
+# handles soft hangs separately via boot_log).
+export PYTHONUNBUFFERED=1
+export PYTHONFAULTHANDLER=1
+
+_log "exec python3 -m purple_tui.purple_tui"
 exec python3 -m purple_tui.purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"

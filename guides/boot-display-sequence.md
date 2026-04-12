@@ -2,6 +2,8 @@
 
 What the user sees from power-on to the TUI, what controls each stage, and what we learned getting here.
 
+**Debugging a hang during live boot?** See `boot-hang-debugging.md` for the always-on boot log (`/var/log/purple/boot.log`) and the Python startup watchdog that dumps thread stacks on stuck starts.
+
 ---
 
 ## The Boot Stages

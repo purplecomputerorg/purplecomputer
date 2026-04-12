@@ -6,19 +6,34 @@
 exec >> /tmp/xinitrc.log 2>&1
 
 DEBUG_FLAG=/opt/purple/debug
+BOOT_LOG_TMP=/tmp/purple-boot.log
+BOOT_LOG_PERSIST=/var/log/purple/boot.log
 
-# Timestamped logging: only active in debug mode
-if [ -f "$DEBUG_FLAG" ]; then
-    xlog() {
-        local msg="[$(date '+%H:%M:%S')] [xinitrc] $1"
-        echo "$msg"
-        echo "$msg" >> /tmp/purple-boot.log 2>/dev/null
-    }
-else
-    xlog() { :; }
+# Ensure persistent log dir exists. /var/log is tmpfs on standard ISO and the
+# casper "writable" ext4 partition on the debug ISO. This mkdir is a no-op on
+# the former, which is fine -- the tmpfs write still works for the current boot.
+mkdir -p /var/log/purple 2>/dev/null || true
+
+# Boot logging is ALWAYS on. These timestamps are the only evidence we have
+# when a customer reports a slow or hung live boot. The `dd` to rotate is a
+# one-time cost on xinitrc entry and only happens if the previous log exists.
+# We rotate here (not in purple-wait-display) because xinitrc runs once per
+# boot attempt; wait-display runs before but the rotation would erase its own
+# entries from the current boot.
+if [ -f "$BOOT_LOG_PERSIST" ]; then
+    # Preserve previous boot's log so it's readable after a hang+reboot.
+    mv -f "$BOOT_LOG_PERSIST" "${BOOT_LOG_PERSIST}.prev" 2>/dev/null || true
 fi
 
-xlog "=== xinitrc started ==="
+xlog() {
+    local msg="[$(date '+%H:%M:%S.%3N')] [xinitrc] $1"
+    echo "$msg"
+    echo "$msg" >> "$BOOT_LOG_TMP" 2>/dev/null || true
+    echo "$msg" >> "$BOOT_LOG_PERSIST" 2>/dev/null || true
+    logger -t purple-boot -- "$msg" 2>/dev/null || true
+}
+
+xlog "=== xinitrc started ===  debug_flag=$([ -f "$DEBUG_FLAG" ] && echo yes || echo no)"
 
 # Wait for X to initialize
 sleep 1

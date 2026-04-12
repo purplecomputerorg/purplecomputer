@@ -19,6 +19,12 @@ Keyboard controls:
 - Caps Lock key: Remapped to Shift
 """
 
+# Boot log heartbeat + startup watchdog. Imported FIRST, before anything else,
+# so we have timestamps and a deadlocked-thread dumper armed from the earliest
+# possible moment if a later import hangs. See purple_tui/boot_log.py.
+from . import boot_log
+boot_log.heartbeat("purple_tui entry: beginning stdlib imports")
+
 # Suppress ONNX runtime warnings early (before any imports that might load it)
 import os
 from pathlib import Path
@@ -27,6 +33,7 @@ os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 import asyncio
 import time
+boot_log.heartbeat("stdlib imports done; importing textual")
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical, Horizontal
@@ -40,6 +47,7 @@ from textual import events
 from rich.segment import Segment
 from rich.style import Style
 from enum import Enum
+boot_log.heartbeat("textual/rich imports done; importing purple_tui.constants")
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
@@ -57,6 +65,7 @@ from .constants import (
     USB_UPDATE_SIGNAL_FILE,
     is_live_boot, is_debug,
 )
+boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
@@ -64,12 +73,15 @@ from .keyboard import (
     InputFloodGuard,
 )
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
+boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
+boot_log.heartbeat("power_manager imported; importing demo + rooms + repl")
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
 from .rooms.art_room import ColorLegend, PaintModeChanged
 from .rooms.parent_menu import apply_saved_display_settings
 from .room_picker import RoomPickerScreen
 from .repl_panel import ReplCommandSubmitted, ReplPanelClosed, ReplPanelToggleRequested, ReplPanel
+boot_log.heartbeat("all purple_tui imports done")
 
 
 class Room(Enum):
@@ -736,7 +748,9 @@ class PurpleApp(App):
 
 
     def __init__(self):
+        boot_log.heartbeat("PurpleApp.__init__ begin")
         super().__init__()
+        boot_log.heartbeat("PurpleApp.__init__ after App.__init__")
         self.active_room = Room.PLAY
         self.active_view = View.SCREEN
         self.active_theme = "purple-dark"
@@ -837,6 +851,7 @@ class PurpleApp(App):
 
     async def on_mount(self) -> None:
         """Called when app starts"""
+        boot_log.heartbeat("PurpleApp.on_mount begin")
         self._apply_theme()
         apply_saved_display_settings()
 
@@ -989,6 +1004,11 @@ class PurpleApp(App):
             self._screenshot_timer = self.set_interval(0.2, self._check_screenshot_trigger)
             self._command_timer = self.set_interval(0.1, self._check_command_trigger)
             self._dev_log("[Mount] Dev mode timers started")
+
+        # Startup complete from purple_tui's perspective. Disarm the
+        # boot-log watchdog: if we got here, we are not hung.
+        boot_log.heartbeat("PurpleApp.on_mount complete")
+        boot_log.mark_first_render()
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""

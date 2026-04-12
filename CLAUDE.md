@@ -22,6 +22,20 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 ---
 
+## Logging Policy
+
+**Instrumentation can ship in the standard (+debug) ISO only if it's non-visual, non-expensive, and non-interfering.** Otherwise it's debug-only (gated on `/opt/purple/debug`).
+
+- **Non-visual** = file descriptors only. Never write to stdout/stderr — Textual owns stderr for its UI, so any stray write corrupts the screen.
+- **Non-expensive** = cheap appends, no subprocess spawns at runtime, no fsync/flush cascades.
+- **Non-interfering** = no EVIOCGRAB, no terminal mode changes, no signal handlers that paint.
+
+**Exception:** user-facing error/diagnostic screens (e.g. `purple-x11-failed` scroll) ship in standard even though they're visual, because diagnosing failures matters more than hiding them.
+
+Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log.py` is the always-on heartbeat + watchdog; log lives at `/tmp/purple-boot.log` and persistently at `/var/log/purple/boot.log` on the debug ISO (casper writable partition).
+
+---
+
 ## Target Audience
 
 **Kids 4-7** (fun for 2-8+) and their **non-technical parents**.
@@ -106,13 +120,7 @@ Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_
 
 ### Code Panel Architecture
 
-**State:** `_code_panel_active` (bool on app) persists across room switches. `ReplPanel.is_open` is per-room runtime state.
-
-**Room switch:** When active, switching to Music/Art auto-opens REPL. Play shows compact indicator. Mode ends on explicit close.
-
-**Canvas sizing:** Space-hold (user-initiated) pins canvas height. Room switch keeps `1fr`. Viewport grows by 4 when code panel opens: 3 from indicator swap (4-row → 1-row) + 1 extra for REPL after hint bar hidden.
-
-**Write mode + space buffering:** Space-down starts hold timer, doesn't type immediately. Repeats suppressed while pending. Tap sends space, `on_other_key()` True flushes before new key.
+`_code_panel_active` (app-level, persists across rooms) vs `ReplPanel.is_open` (per-room). Space-hold pins canvas height; viewport grows by 4 on open. Write-mode space is buffered by `HoldOrTap`: tap flushes the space before the next key via `on_other_key()` returning True.
 
 ---
 
@@ -141,11 +149,9 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
 
-**Post-install reboot:** When install finishes, Python exits Textual and `execv`s into `/run/purple-reboot-mount/purple-reboot` (own tmpfs with `exec,suid` since Ubuntu's `/run` is `nosuid,noexec`). The binary ignores terminal signals (SIGHUP, SIGQUIT, SIGINT, SIGTSTP) so it survives pty hangup when Alacritty dies after USB removal. It calls `reboot(2)` directly, no shared libs. With `--wait` it shows a message and waits for Enter before rebooting.
+**Post-install reboot:** `purple-reboot` static binary on its own `exec,suid` tmpfs (Ubuntu's `/run` is `nosuid,noexec`). Ignores pty signals so it survives Alacritty dying after USB removal. Calls `reboot(2)` directly.
 
-**Casper shutdown prompt** (`casper-stop`) shows "remove media, press enter" on reboot/poweroff and hangs when USB is removed. Suppressed two ways:
-- `touch /run/casper-no-prompt` before reboot (runtime, in `parent_menu.py`)
-- `casper-stop` neutered to `exit 0` at image build time (`00-build-golden-image.sh`)
+**Casper shutdown prompt** suppressed by touching `/run/casper-no-prompt` (runtime) + neutering `casper-stop` to `exit 0` at image build time.
 
 ### UEFI Boot (Installed System)
 

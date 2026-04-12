@@ -210,6 +210,7 @@ SOURCES
         casper \
         zstd \
         kbd \
+        keyd \
         evtest \
         strace \
         parted
@@ -511,6 +512,11 @@ TIMEOUTS
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chroot "$MOUNT_DIR" systemctl enable purple-x11.service
+
+    # keyd: kernel keymap daemon. See config/keyd/default.conf for rationale.
+    mkdir -p "$MOUNT_DIR/etc/keyd"
+    cp /purple-src/config/keyd/default.conf "$MOUNT_DIR/etc/keyd/default.conf"
+    chroot "$MOUNT_DIR" systemctl enable keyd.service
 
     # Copy Alacritty config from project config (shared with dev environment)
     mkdir -p "$MOUNT_DIR/etc/purple"

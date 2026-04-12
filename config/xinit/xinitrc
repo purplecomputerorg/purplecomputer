@@ -14,16 +14,12 @@ BOOT_LOG_PERSIST=/var/log/purple/boot.log
 # the former, which is fine -- the tmpfs write still works for the current boot.
 mkdir -p /var/log/purple 2>/dev/null || true
 
-# Boot logging is ALWAYS on. These timestamps are the only evidence we have
-# when a customer reports a slow or hung live boot. The `dd` to rotate is a
-# one-time cost on xinitrc entry and only happens if the previous log exists.
-# We rotate here (not in purple-wait-display) because xinitrc runs once per
-# boot attempt; wait-display runs before but the rotation would erase its own
-# entries from the current boot.
-if [ -f "$BOOT_LOG_PERSIST" ]; then
-    # Preserve previous boot's log so it's readable after a hang+reboot.
-    mv -f "$BOOT_LOG_PERSIST" "${BOOT_LOG_PERSIST}.prev" 2>/dev/null || true
-fi
+# Boot log rotation is done by purple-wait-display.sh (ExecStartPre of
+# purple-x11.service), NOT here. xinitrc re-execs itself after every normal
+# Purple restart (see exec "$0" at the bottom of this file), so rotating
+# here would lose the original-boot log on the second Purple restart. We
+# want boot.log.prev to mean "the previous boot" not "the previous Purple
+# launch within the same boot."
 
 xlog() {
     local msg="[$(date '+%H:%M:%S.%3N')] [xinitrc] $1"

@@ -11,8 +11,8 @@ directly from evdev, bypassing the terminal. See:
   guides/keyboard-architecture.md
 
 Keyboard controls:
-- Backtick/Escape (tap): Room picker (1-3 for rooms, arrows to navigate/volume)
-- Backtick/Escape (long hold): Parent menu
+- Escape (tap): Room picker (1-3 for rooms, arrows to navigate/volume)
+- Escape (long hold): Parent menu
 - Media keys: Volume mute/down/up
 - Shift (tap): Sticky shift for one character
 - Shift (double-tap): Toggle caps lock

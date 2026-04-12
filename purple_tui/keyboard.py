@@ -793,18 +793,6 @@ class KeyboardStateMachine:
         Most events produce 0-1 actions, but some (like character with
         double-tap) may produce multiple.
         """
-        # Backtick (KEY_GRAVE) acts as Escape alias: top-left corner key,
-        # covers Touch Bar Macs that lack a physical Escape key.
-        # KEY_102ND: some Apple keyboards report the grave key as this
-        # ISO keycode depending on firmware/driver state.
-        if event.keycode in (KeyCode.KEY_GRAVE, KeyCode.KEY_102ND):
-            event = RawKeyEvent(
-                keycode=KeyCode.KEY_ESC,
-                timestamp=event.timestamp,
-                is_down=event.is_down,
-                is_repeat=event.is_repeat,
-            )
-
         actions = []
 
         if event.is_down:

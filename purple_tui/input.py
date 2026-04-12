@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# keyd integration
+# =============================================================================
+# keyd is a kernel keymap daemon shipped in the golden image. It grabs every
+# matching physical keyboard via EVIOCGRAB and re-emits remapped events
+# through a single uinput virtual device. See config/keyd/default.conf.
+
+KEYD_VIRTUAL_NAME = "keyd virtual keyboard"
+KEYD_CONFIG_PATH = Path("/etc/keyd/default.conf")
+KEYD_WAIT_SECS = 2.0
+
+
+# =============================================================================
 # Key Codes (subset of Linux input-event-codes.h)
 # =============================================================================
 
@@ -440,19 +452,11 @@ class EvdevReader:
                     keycode = event.code
                     is_down = event.value in (1, 2)
 
-                    # Log first occurrence of each keycode for diagnostics.
-                    # Unrecognized keycodes are logged with scancode to help
-                    # debug keys that send unexpected codes (e.g. tilde on
-                    # some Apple keyboards).
+                    # Log first occurrence of each unmapped keycode with its
+                    # scancode to help debug keys that send unexpected codes.
                     if is_down and keycode not in self._logged_keycodes:
                         self._logged_keycodes.add(keycode)
-                        if keycode in (KeyCode.KEY_GRAVE, KeyCode.KEY_102ND):
-                            scancode = self._pending_scancodes.get(dev_path, 0)
-                            self._diag(
-                                f"Grave/escape remap: keycode={keycode} "
-                                f"scancode=0x{scancode:x} on {dev_path}"
-                            )
-                        elif keycode not in KEYCODE_TO_CHAR and keycode not in KEYCODE_TO_NAME:
+                        if keycode not in KEYCODE_TO_CHAR and keycode not in KEYCODE_TO_NAME:
                             scancode = self._pending_scancodes.get(dev_path, 0)
                             self._diag(
                                 f"Unmapped keycode={keycode} "
@@ -620,7 +624,6 @@ class EvdevReader:
 
         _diag = self._diag
 
-        # Minimum keys a real keyboard must have (not vendor-specific)
         letter_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))
         required_keys = letter_keys | {
             KeyCode.KEY_ENTER,
@@ -629,84 +632,96 @@ class EvdevReader:
         }
 
         def _is_real_keyboard(dev):
-            """Check if a device is a real keyboard, not a USB drive HID interface."""
             caps = dev.capabilities()
             key_caps = set(caps.get(evdev.ecodes.EV_KEY, []))
+            return required_keys.issubset(key_caps) and evdev.ecodes.EV_REP in caps
 
-            # Must have all required keys
-            if not required_keys.issubset(key_caps):
-                return False
+        def _has_letter_keys(dev):
+            return letter_keys.issubset(set(dev.capabilities().get(evdev.ecodes.EV_KEY, [])))
 
-            # Must support auto-repeat (real keyboards do, USB drive HID doesn't)
-            if evdev.ecodes.EV_REP not in caps:
-                return False
+        def _gather(predicate, label):
+            """Iterate by-id first (stable names), then all event nodes.
 
-            return True
+            Returns every device passing `predicate`. The keyd virtual keyboard
+            is matched by the same strict predicate as any physical keyboard,
+            so there is no keyd-specific branch here. Devices keyd has grabbed
+            via EVIOCGRAB emit no events to other readers, so opening them
+            alongside the virtual device is harmless: no key press can emerge
+            from two paths at once.
+            """
+            found = []
+            seen_paths = set()
 
-        found = []
-        seen_paths = set()  # Avoid duplicates from by-id symlinks
-
-        # Check by-id paths first (stable names across reboots)
-        by_id = Path("/dev/input/by-id")
-        if by_id.exists():
-            for path in sorted(by_id.iterdir()):
-                name = path.name.lower()
-                if "kbd" in name or "keyboard" in name:
+            by_id = Path("/dev/input/by-id")
+            if by_id.exists():
+                for link in sorted(by_id.iterdir()):
+                    name = link.name.lower()
+                    if "kbd" not in name and "keyboard" not in name:
+                        continue
                     try:
-                        real_path = str(path.resolve())
+                        real_path = str(link.resolve())
                         if real_path in seen_paths:
                             continue
                         dev = InputDevice(real_path)
-                        if _is_real_keyboard(dev):
-                            _diag(f"KBD SCAN: found via by-id: {real_path} ({dev.name})")
-                            found.append(dev)
-                            seen_paths.add(real_path)
-                        else:
-                            dev.close()
                     except (PermissionError, OSError):
                         continue
+                    if predicate(dev):
+                        _diag(f"KBD SCAN: {label} via by-id: {real_path} ({dev.name})")
+                        found.append(dev)
+                        seen_paths.add(real_path)
+                    else:
+                        dev.close()
 
-        # Also scan all devices (catches keyboards without by-id entries)
-        for dev_path in sorted(evdev.list_devices()):
-            if dev_path in seen_paths:
-                continue
-            try:
-                dev = InputDevice(dev_path)
-                if _is_real_keyboard(dev):
-                    _diag(f"KBD SCAN: found via scan: {dev_path} ({dev.name})")
+            for dev_path in sorted(evdev.list_devices()):
+                if dev_path in seen_paths:
+                    continue
+                try:
+                    dev = InputDevice(dev_path)
+                except (PermissionError, OSError):
+                    continue
+                if predicate(dev):
+                    _diag(f"KBD SCAN: {label} via scan: {dev_path} ({dev.name})")
                     found.append(dev)
                     seen_paths.add(dev_path)
                 else:
                     dev.close()
-            except (PermissionError, OSError):
-                continue
 
+            return found
+
+        def _keyd_virtual_present():
+            for p in evdev.list_devices():
+                try:
+                    dev = InputDevice(p)
+                except (PermissionError, OSError):
+                    continue
+                try:
+                    if KEYD_VIRTUAL_NAME in dev.name.lower():
+                        return True
+                finally:
+                    dev.close()
+            return False
+
+        # purple-x11.service has After=keyd.service, but keyd is Type=simple,
+        # so "started" means "forked", not "uinput device ready". Without this
+        # poll we race keyd's device creation at cold boot and pick up a
+        # physical keyboard keyd grabs a moment later -> silent input.
+        if KEYD_CONFIG_PATH.exists():
+            deadline = time.monotonic() + KEYD_WAIT_SECS
+            while not _keyd_virtual_present() and time.monotonic() < deadline:
+                time.sleep(0.1)
+
+        found = _gather(_is_real_keyboard, "strict")
         if found:
             _diag(f"KBD SCAN: listening on {len(found)} keyboard device(s)")
             return found
 
-        # Last resort: accept any device with letter keys (weaker check,
-        # but better than no keyboard at all)
+        # Loose fallback: some keyboards (e.g. Apple SPI in Touch Bar Macs)
+        # lack EV_REP but are still the user's only keyboard.
         _diag("KBD SCAN: no strict matches, falling back to loose match")
         logger.warning("No keyboard passed strict check, falling back to loose match")
-        for dev_path in sorted(evdev.list_devices()):
-            if dev_path in seen_paths:
-                continue
-            try:
-                dev = InputDevice(dev_path)
-                key_caps = set(dev.capabilities().get(evdev.ecodes.EV_KEY, []))
-                if letter_keys.issubset(key_caps):
-                    _diag(f"KBD SCAN: loose match: {dev_path} ({dev.name})")
-                    found.append(dev)
-                    seen_paths.add(dev_path)
-                else:
-                    dev.close()
-            except (PermissionError, OSError):
-                continue
-
+        found = _gather(_has_letter_keys, "loose")
         if found:
             _diag(f"KBD SCAN: {len(found)} device(s) via loose match")
-
         return found
 
 

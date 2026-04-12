@@ -102,13 +102,16 @@ All modals inherit from `PurpleModal` (`purple_tui/modal.py`), which provides sh
 
 When widget height changes, Textual renders intermediate sizes causing flicker. Fix: `_layout_ready = False` before change, cache last good dimensions in `_cached_layout`, render with cached values during reflow. `on_resize` debounces 50ms then sets `_layout_ready = True`.
 
-### Keyboard Input (evdev)
+### Keyboard Input (evdev + keyd)
 
 Input via evdev (`/dev/input/event*`), bypassing the terminal. Alacritty is display-only.
 
 ```
-Physical Keyboard → evdev → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
+Physical Keyboard → keyd (EVIOCGRAB + uinput) → keyd virtual keyboard
+                                               → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
 ```
+
+**keyd** (`config/keyd/default.conf`) runs as a systemd service on the golden image and does the grave/tilde→Escape and RightAlt→F2 remaps at the kernel level, so they work before Purple starts and at rescue shells. `purple_tui/input.py` prefers the keyd virtual device; physical devices are fallback only (dev/VM). Do NOT add application-level grave/tilde remaps — they'd duplicate keyd and only work while Purple is running. See `guides/boot-hang-debugging.md#keyd`.
 
 **Key files:** `purple_tui/input.py`, `purple_tui/keyboard.py`. See `guides/keyboard-architecture.md`.
 

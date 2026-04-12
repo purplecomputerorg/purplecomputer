@@ -21,6 +21,32 @@ MAX_WAIT=15
 # casper "writable" ext4 partition, so this survives reboot.
 mkdir -p /var/log/purple 2>/dev/null || true
 
+# Rotate boot.log -> boot.log.prev ONCE per real (kernel) boot.
+#
+# Three restart layers can re-enter this script and each would double-rotate
+# and lose information if we rotated unconditionally:
+#   1. Purple-internal restart: xinitrc does `exec "$0"` on every Purple exit.
+#      (Handled: xinitrc does not rotate at all; only this script does.)
+#   2. purple-x11.service restart: Restart=on-failure + StartLimitBurst=3
+#      means this ExecStartPre runs up to 3 times per boot. We must not
+#      rotate on attempts 2 and 3 or we lose attempt 1's log, which is
+#      usually the most interesting one when diagnosing a hang.
+#   3. Actual kernel reboot: rotate exactly once, moving the previous boot's
+#      accumulated log to .prev.
+#
+# /proc/sys/kernel/random/boot_id is a unique 128-bit value per kernel boot.
+# We stash the current boot_id in a sibling file; we only rotate when the
+# stored id differs from the current one (or there's no stored id yet).
+BOOT_ID_FILE=/var/log/purple/boot_id
+CURRENT_BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo "unknown")
+STORED_BOOT_ID=$(cat "$BOOT_ID_FILE" 2>/dev/null || echo "")
+if [ "$CURRENT_BOOT_ID" != "$STORED_BOOT_ID" ]; then
+    if [ -f "$BOOT_LOG_PERSIST" ]; then
+        mv -f "$BOOT_LOG_PERSIST" "${BOOT_LOG_PERSIST}.prev" 2>/dev/null || true
+    fi
+    echo "$CURRENT_BOOT_ID" > "$BOOT_ID_FILE" 2>/dev/null || true
+fi
+
 log() {
     local msg="[$(date '+%H:%M:%S.%3N')] [wait-display] $1"
     echo "$msg" >> "$BOOT_LOG_TMP" 2>/dev/null || true

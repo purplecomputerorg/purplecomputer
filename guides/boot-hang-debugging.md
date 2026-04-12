@@ -152,26 +152,59 @@ When adding new instrumentation, ask: "is this write-to-fd, cheap, and invisible
 
 ---
 
-## Planned: keyd remapping
+## keyd: kernel-level remapping
 
-The current Python-side grave/tilde → Escape remap only exists while Purple is running. On a boot hang, there is no Escape key. On Touch Bar MacBooks, there are no F-keys at all. Both problems have the same shape and same fix: `keyd` as a systemd service, grabbing the keyboard via `EVIOCGRAB` and re-emitting through `uinput`, so remaps exist **before and independent of** Purple.
+### Why
 
-Config shape (`/etc/keyd/default.conf`):
+The old Python-side grave/tilde → Escape remap in `keyboard.py` only worked while Purple was running. If Purple hung on startup, there was no Escape key. And on Touch Bar MacBooks there are no F-keys at all, so `Ctrl+Alt+F2` to reach tty2 was physically impossible without a USB keyboard.
+
+Both problems have the same fix: a keymap daemon that sits below every application. `keyd` runs as a systemd service, grabs every matching keyboard via `EVIOCGRAB`, and re-emits remapped events through a uinput virtual device. Because it runs at the kernel level, the remaps work at a rescue shell, in systemd emergency mode, at a getty, inside Purple, *and before Purple even starts*.
+
+### Config
+
+`/etc/keyd/default.conf` (shipped from `config/keyd/default.conf` in the repo):
+
 ```
 [ids]
 *
 
 [main]
 grave = esc
+102nd = esc
 rightalt = f2
 ```
 
-This gets us: (a) tilde/grave always acts as Escape, even during boot hangs, even at a bare shell; (b) `Ctrl + Alt + RightAlt` acts as `Ctrl + Alt + F2` and reliably switches to tty2 on any keyboard including touchbar-only Macs. Deleting the Python-side grave remap in `keyboard.py` is a nice simplification once keyd lands.
+- `grave = esc` / `102nd = esc` — tilde/grave (and the ISO non-US backslash scancode some Apple keyboards emit for that key) act as Escape always. Covers both PC and Mac layouts in one config.
+- `rightalt = f2` — makes `Ctrl+Alt+RightAlt` act as `Ctrl+Alt+F2`, the standard Linux tty2 switch chord. Left Alt is untouched, so normal Alt combos still work.
 
-Work items for the keyd PR (not done yet):
-- Add `keyd` to the live ISO package list
-- Ship `/etc/keyd/default.conf` with the remap config
-- Enable `keyd.service` in `00-build-golden-image.sh`
-- Update `purple_tui/input.py` device selection to prefer the keyd virtual device (otherwise keyd and Purple fight over the same evdev node)
-- Delete the Python-side grave/tilde → Escape mapping from `keyboard.py`
-- Test on Touch Bar MBP, ThinkPad (real F-keys), and at least one VM
+### How Purple's keyboard reader cooperates
+
+When keyd is running, the physical `/dev/input/event*` keyboard nodes are `EVIOCGRAB`'d and return zero events to any other reader. If Purple opened *only* a grabbed device it would see a silent keyboard. But there's also an inverse failure: if we used *only* keyd's virtual device and keyd had failed to grab some exotic physical keyboard (Apple SPI, etc.), we'd have no real keyboard behind the virtual device and input would also be dead.
+
+`purple_tui/input.py:_find_keyboards()` handles both failure modes by **adding keyd's virtual device to the keyboard list and then still falling through to the existing physical-device scan**. The result:
+
+- If keyd grabbed every physical keyboard: virtual device delivers all events, physicals emit nothing (grabbed), no doubling.
+- If keyd grabbed some but not all: virtual device delivers events for the grabbed ones, ungrabbed physicals deliver their own events. No key press can come out of both paths at once.
+- If keyd is not running / config absent: physical keyboards work as before, same code path as dev machines and VMs.
+
+The function also **polls briefly for the keyd virtual device at startup** (up to 2 seconds) when `/etc/keyd/default.conf` exists. This closes a startup race: `purple-x11.service` has `After=keyd.service`, but `keyd.service` is `Type=simple`, so systemd considers it "started" the moment its main process forks — before keyd has actually enumerated inputs and created its uinput device. Without the poll, Purple could scan past keyd's startup, pick up physicals, and then have keyd grab them a moment later, leaving Purple with a silent keyboard until the next reconnect. The poll is skipped entirely if `/etc/keyd/default.conf` is absent, so dev machines pay zero cost.
+
+`purple-x11.service` has `After=keyd.service` (advisory, not `Requires=`) so Purple still boots on machines where keyd is disabled or fails to start. The poll plus the add-don't-replace device selection mean keyd being broken, slow, or missing some keyboards all degrade gracefully instead of bricking input.
+
+### Verifying keyd is doing its job
+
+On a running debug ISO, get to a shell (tty2 via `Ctrl+Alt+RightAlt`, or the parent-menu shell) and run:
+
+```
+systemctl status keyd
+ls -la /dev/input/by-id/ | grep -i keyd
+sudo keyd monitor             # shows events as keyd sees them
+```
+
+You should see `keyd.service` active and a `keyd-virtual-keyboard` device. `keyd monitor` lets you press keys and confirm the remaps are firing.
+
+Inside Purple, `/tmp/purple-boot.log` will contain a line like `KBD SCAN: found keyd virtual keyboard: /dev/input/event23 (keyd virtual keyboard)` and `KBD SCAN: using keyd virtual keyboard exclusively; skipping physical device scan`. If you see `KBD SCAN: found via by-id` or `found via scan` *instead*, keyd is either not running or its virtual device hasn't appeared yet — check `systemctl status keyd` and the `After=keyd.service` ordering in `purple-x11.service`.
+
+### When keyd is NOT running (dev, VMs)
+
+Purple falls through to the existing physical-keyboard scan. The grave/tilde → Escape remap does NOT happen in this case — in dev mode you just use the Escape key directly. The Touch Bar F2 workaround also doesn't apply in dev (you have real F-keys on your development machine).

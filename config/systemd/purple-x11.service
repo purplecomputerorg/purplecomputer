@@ -6,6 +6,12 @@ Description=Purple Computer X11 Session
 # rendering). The wait-display script polls for 15s and proceeds either way.
 After=systemd-user-sessions.service
 After=purple-splash.service
+# keyd creates the "keyd virtual keyboard" uinput device that purple_tui's
+# EvdevReader prefers. If X starts before keyd, Purple may open a physical
+# device that keyd is about to grab, leading to a silent-keyboard race.
+# After= is advisory (not Requires=) because on a VM or dev machine keyd
+# may be disabled and Purple must still boot fine from physical keyboards.
+After=keyd.service
 # Keep the boot splash visible while we wait for the GPU
 Requires=purple-splash.service
 # Don't start in installer mode

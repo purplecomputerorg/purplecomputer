@@ -210,7 +210,6 @@ SOURCES
         casper \
         zstd \
         kbd \
-        keyd \
         evtest \
         strace \
         parted
@@ -320,10 +319,9 @@ SOURCES
         log_info "  Run 'just keygen' to generate a key pair."
     fi
 
-    # Install build deps for compiling Python C extensions.
-    # evdev needs gcc + linux/input.h. Previously pulled in as Recommends,
-    # now needed explicitly with --no-install-recommends. Removed after pip install.
-    chroot "$MOUNT_DIR" apt-get install -y gcc linux-libc-dev python3-dev
+    # Install build deps for compiling Python C extensions + keyd + purple-reboot.
+    # evdev needs gcc + linux/input.h. keyd needs gcc + make. All removed after.
+    chroot "$MOUNT_DIR" apt-get install -y gcc make linux-libc-dev python3-dev
 
     # Install Python dependencies from requirements.txt
     chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
@@ -336,12 +334,30 @@ SOURCES
     rm -f "$MOUNT_DIR/tmp/purple-reboot.c"
     log_info "Compiled static reboot binary: $(chroot "$MOUNT_DIR" file /opt/purple/bin/purple-reboot)"
 
+    # Build keyd from source. Ubuntu 24.04 noble doesn't package keyd (landed
+    # in 24.10). keyd upstream ships only source tarballs, no prebuilt debs.
+    # FORCE_SYSTEMD=1 is required because keyd's Makefile install target
+    # gates the systemd unit install on `[ -e /run/systemd/system ]`, which
+    # doesn't exist inside the build chroot. Without FORCE_SYSTEMD the unit
+    # file would be silently skipped and the later systemctl enable would
+    # fail. PREFIX=/usr puts the unit in /usr/lib/systemd/system/ (a path
+    # systemd actually searches) rather than /usr/local/lib/systemd/system/.
+    # See config/keyd/default.conf for why we need keyd.
+    log_info "Building keyd from source..."
+    KEYD_VERSION=2.6.0
+    curl -fsSL "https://github.com/rvaiya/keyd/archive/refs/tags/v${KEYD_VERSION}.tar.gz" \
+        -o "$MOUNT_DIR/tmp/keyd.tar.gz"
+    chroot "$MOUNT_DIR" tar -xzf /tmp/keyd.tar.gz -C /tmp
+    chroot "$MOUNT_DIR" bash -c "cd /tmp/keyd-${KEYD_VERSION} && make && make install PREFIX=/usr FORCE_SYSTEMD=1"
+    rm -rf "$MOUNT_DIR/tmp/keyd.tar.gz" "$MOUNT_DIR/tmp/keyd-${KEYD_VERSION}"
+    log_info "keyd installed: $(chroot "$MOUNT_DIR" /usr/bin/keyd -v 2>&1 || echo 'keyd -v failed')"
+
     # Remove build deps (only needed for compilation).
     # --no-auto-remove prevents apt from cascading into unrelated packages.
     log_info "Packages apt will remove with build deps:"
-    chroot "$MOUNT_DIR" apt-get remove --purge -y -s gcc linux-libc-dev python3-dev 2>/dev/null | grep "^Remv" || true
+    chroot "$MOUNT_DIR" apt-get remove --purge -y -s gcc make linux-libc-dev python3-dev 2>/dev/null | grep "^Remv" || true
 
-    chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc linux-libc-dev python3-dev 2>/dev/null || true
+    chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc make linux-libc-dev python3-dev 2>/dev/null || true
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
     log_info "Downloading Piper TTS voice model..."

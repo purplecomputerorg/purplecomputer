@@ -92,3 +92,4 @@ update-key.pub
 pytest-of-*/
 
 .ai_ux_last_args.json
+.ai_ux_hunt/

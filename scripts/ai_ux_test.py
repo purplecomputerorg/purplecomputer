@@ -155,7 +155,7 @@ TOOLS = [
     },
     {
         "name": "report_bug",
-        "description": "Report unexpected behavior or confusing UX.",
+        "description": "Report broken behavior: something crashed, showed wrong output, or didn't work as expected.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -165,6 +165,21 @@ TOOLS = [
                 "steps": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["title", "description", "severity", "steps"],
+        },
+    },
+    {
+        "name": "report_confusion",
+        "description": "Report a moment of confusion: you didn't know what to do, couldn't figure out how something works, felt lost, or found something misleading. This is for UX problems, not functional bugs.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "What was confusing"},
+                "what_i_tried": {"type": "string", "description": "What you were trying to do"},
+                "what_happened": {"type": "string", "description": "What the app showed or did"},
+                "what_i_expected": {"type": "string", "description": "What you thought would happen or what would have helped"},
+                "severity": {"type": "string", "enum": ["minor", "stuck", "lost"], "description": "minor=briefly puzzled, stuck=couldn't figure it out for a while, lost=had no idea what to do"},
+            },
+            "required": ["title", "what_i_tried", "what_happened", "what_i_expected", "severity"],
         },
     },
     {
@@ -239,6 +254,7 @@ class AppHarness:
         self._log_dir: Path | None = None
         self._step = 0
         self._bugs: list[dict] = []
+        self._confusions: list[dict] = []
 
     async def start(self, room: str = "play"):
         self.app = PurpleApp()
@@ -460,6 +476,19 @@ async def execute_tool(harness: AppHarness, name: str, input_data: dict) -> list
         harness._bugs.append(bug)
         return [{"type": "text", "text": f"Bug #{len(harness._bugs)} recorded: {bug['title']}"}]
 
+    elif name == "report_confusion":
+        confusion = {
+            "step": harness._step,
+            "title": input_data.get("title", "Untitled"),
+            "what_i_tried": input_data.get("what_i_tried", ""),
+            "what_happened": input_data.get("what_happened", ""),
+            "what_i_expected": input_data.get("what_i_expected", ""),
+            "severity": input_data.get("severity", "minor"),
+            "timestamp": datetime.now().isoformat(),
+        }
+        harness._confusions.append(confusion)
+        return [{"type": "text", "text": f"Confusion #{len(harness._confusions)} recorded: {confusion['title']}"}]
+
     elif name == "done":
         return [{"type": "text", "text": "Session complete."}]
 
@@ -481,7 +510,11 @@ Screen text is extracted from SVG and has known limitations:
 - "Hold Space: close code" in the bottom bar is expected when the code panel is active.
 - Use screenshot to verify visual issues before reporting them as bugs.
 
-Do NOT generate commentary or narration. Only use tools and report_bug. Call done when finished.
+Report TWO kinds of findings:
+- report_bug: something is broken, crashes, or shows wrong output.
+- report_confusion: you felt lost, didn't know what to do next, couldn't figure out how something works, or found the UI misleading. These are just as valuable as bugs.
+
+Do NOT generate commentary or narration. Only use tools. Call done when finished.
 
 {persona}"""
 
@@ -491,12 +524,23 @@ async def run_agent(
     room: str = "play",
     max_steps: int = DEFAULT_MAX_STEPS,
     model: str = DEFAULT_MODEL,
+    mission: str | None = None,
+    log_dir: Path | None = None,
+    known_bugs: list[str] | None = None,
 ):
-    log_dir = Path(f"/tmp/purple_ux_test/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{persona_name}")
+    if log_dir is None:
+        log_dir = Path(f"/tmp/purple_ux_test/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{persona_name}")
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    persona_text = PERSONAS.get(persona_name, PERSONAS["explorer"])
-    system = SYSTEM_PROMPT.format(persona=persona_text)
+    if mission:
+        system = SYSTEM_PROMPT.format(persona=mission)
+    else:
+        persona_text = PERSONAS.get(persona_name, PERSONAS["explorer"])
+        system = SYSTEM_PROMPT.format(persona=persona_text)
+
+    if known_bugs:
+        bug_list = "\n".join(f"- {b}" for b in known_bugs)
+        system += f"\n\nThese bugs are already known. Do NOT re-report them:\n{bug_list}"
 
     print(f"Starting AI UX test: persona={persona_name}, room={room}, max_steps={max_steps}")
     print(f"Logs: {log_dir}")
@@ -627,13 +671,16 @@ async def run_agent(
                     elif tool_name == "report_bug":
                         summary = f"BUG: {tool_input.get('title', '?')}"
                         print(f"  [{step+1}] *** {summary} ***")
+                    elif tool_name == "report_confusion":
+                        summary = f"CONFUSED: {tool_input.get('title', '?')}"
+                        print(f"  [{step+1}] *** {summary} ***")
                     elif tool_name == "screenshot":
                         summary = "screenshot"
                     elif tool_name == "done":
                         done = True
                         summary = f"done: {tool_input.get('summary', '')[:80]}"
 
-                    if tool_name != "report_bug":
+                    if tool_name not in ("report_bug", "report_confusion"):
                         print(f"  [{step+1}] {summary}")
 
                     log_entry["result_text"] = " | ".join(
@@ -650,15 +697,20 @@ async def run_agent(
         await harness.stop()
 
         # Always write report, even on crash
+        actual_cost = estimate_cost(total_input_tokens, total_output_tokens, model)
         report = {
             "persona": persona_name,
+            "mission": mission,
             "start_room": room,
             "model": model,
             "steps": len(action_log),
             "max_steps": max_steps,
             "bugs": harness._bugs,
             "bug_count": len(harness._bugs),
+            "confusions": harness._confusions,
+            "confusion_count": len(harness._confusions),
             "tokens": {"input": total_input_tokens, "output": total_output_tokens},
+            "actual_cost": actual_cost,
             "action_log": action_log,
         }
 
@@ -666,11 +718,11 @@ async def run_agent(
         with open(report_path, "w") as f:
             json.dump(report, f, indent=2)
 
-        if harness._bugs:
-            _append_bug_log(harness._bugs, persona_name, model)
+        if harness._bugs or harness._confusions:
+            _append_findings_log(harness._bugs, harness._confusions, persona_name, model)
 
         print()
-        print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs found")
+        print(f"Session complete: {len(action_log)} actions, {len(harness._bugs)} bugs, {len(harness._confusions)} confusions")
         total_cost = estimate_cost(total_input_tokens, total_output_tokens, model)
         print(f"Tokens: {total_input_tokens:,} in / {total_output_tokens:,} out (${total_cost:.4f})")
         if harness._bugs:
@@ -679,6 +731,12 @@ async def run_agent(
             for i, bug in enumerate(harness._bugs, 1):
                 print(f"  {i}. [{bug['severity']}] {bug['title']}")
                 print(f"     {bug['description'][:100]}")
+        if harness._confusions:
+            print()
+            print("Confusions found:")
+            for i, c in enumerate(harness._confusions, 1):
+                print(f"  {i}. [{c['severity']}] {c['title']}")
+                print(f"     Tried: {c['what_i_tried'][:80]}")
         print(f"\nFull report: {report_path}")
 
     return report
@@ -687,20 +745,20 @@ async def run_agent(
 BUG_LOG_PATH = Path(__file__).resolve().parent.parent / "AI_UX_BUGS.md"
 
 
-def _append_bug_log(bugs: list[dict], persona: str, model: str):
-    """Append bugs to the repo-level markdown bug log."""
+def _append_findings_log(bugs: list[dict], confusions: list[dict], persona: str, model: str):
+    """Append bugs and confusions to the repo-level markdown log."""
     date = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    # Create file with header if it doesn't exist
     if not BUG_LOG_PATH.exists():
         BUG_LOG_PATH.write_text(
-            "# AI UX Test Bugs\n\n"
-            "Bugs discovered by automated AI UX testing (`just ux`). "
-            "Mark fixed bugs with ~~strikethrough~~ or delete them.\n\n"
+            "# AI UX Test Findings\n\n"
+            "Bugs and UX confusions discovered by automated AI UX testing (`just ux`). "
+            "Mark resolved items with ~~strikethrough~~ or delete them.\n\n"
         )
 
     lines = []
     lines.append(f"## {date} ({persona}, {model})\n\n")
+
     for bug in bugs:
         severity = bug["severity"].upper()
         lines.append(f"### [{severity}] {bug['title']}\n\n")
@@ -710,6 +768,13 @@ def _append_bug_log(bugs: list[dict], persona: str, model: str):
             for i, step in enumerate(bug["steps"], 1):
                 lines.append(f"{i}. {step}\n")
             lines.append("\n")
+
+    for confusion in confusions:
+        severity = confusion["severity"].upper()
+        lines.append(f"### [CONFUSION: {severity}] {confusion['title']}\n\n")
+        lines.append(f"**Tried:** {confusion['what_i_tried']}\n\n")
+        lines.append(f"**What happened:** {confusion['what_happened']}\n\n")
+        lines.append(f"**Expected:** {confusion['what_i_expected']}\n\n")
 
     with open(BUG_LOG_PATH, "a") as f:
         f.writelines(lines)

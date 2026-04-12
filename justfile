@@ -211,6 +211,10 @@ flash-debug *args:
 ux *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/ai_ux_runner.py {{args}}
 
+# AI UX bug hunt: autonomous budget-aware bug hunting (default $10)
+hunt *args:
+    @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/ai_ux_hunt.py {{args}}
+
 # Run Python with venv (e.g., just python script.py, just python -c 'print(1)')
 python *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python3 {{args}}

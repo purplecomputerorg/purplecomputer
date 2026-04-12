@@ -21,9 +21,9 @@ Meanwhile, the app reads keyboard input via evdev (`EVIOCGRAB`), bypassing the t
 
 So switching to tty2 requires two things: (1) calling `chvt 2` since the kernel won't do it, and (2) releasing the evdev grab so tty2 can receive input.
 
-## Two Layers of Coverage
+## Three Layers of Coverage
 
-The VT switch works any time the app's evdev handler is running. There is a brief gap (a few seconds) between X starting and the app grabbing evdev where VT switching is unavailable. A standalone watcher script (`purple-vt-switch.py`) was previously used to cover this gap, but it caused a VT switch loop on some Macs that prevented the app from ever starting. The gap is short and acceptable.
+Ctrl+Alt+F2 is available from power-on through app shutdown via three distinct mechanisms, each covering a different window:
 
 ### Layer 1: Kernel VT switching (boot until X11 starts)
 
@@ -31,7 +31,13 @@ During early boot (initramfs splash, systemd splash, GPU wait), tty1 is in norma
 
 **Covers:** Power on through `startx` launching X11.
 
-### Layer 2: App's evdev handler (`EvdevReader` in `input.py`)
+### Layer 2: X server VT switch (X running, app not yet grabbing)
+
+X handles Ctrl+Alt+F2 via its default xkb VT-switch binding, reading evdev through libinput and issuing a `VT_ACTIVATE` ioctl. Requires `DontVTSwitch` to be unset in `config/xorg/10-modesetting.conf` (it is). This is the critical path when Purple hangs during Python startup: Layer 3 isn't running yet, so Layer 2 is the only non-power-button escape.
+
+**Covers:** X startup through `EvdevReader.start()` (called in `PurpleApp.on_mount`).
+
+### Layer 3: App's evdev handler (`EvdevReader` in `input.py`)
 
 The main app's keyboard read loop includes VT switch detection at the evdev level, before any Textual processing. This means it works even when the Textual UI is frozen or hung.
 

@@ -85,16 +85,15 @@ touch /root/home/purple/.hushlogin
 chown 1000:1000 /root/home/purple/.hushlogin
 purple_log "Restored dotfiles from /etc/purple/"
 
-# Debug mode: create flag file and enable SysRq + verbose logging
+# Debug mode: create flag file and enable SysRq + verbose logging.
+# getty@tty2 is enabled at build time for both ISOs (00-build-golden-image.sh).
 if grep -q "purple.debug=1" /proc/cmdline 2>/dev/null; then
     touch /root/opt/purple/debug
     cat > /root/etc/sysctl.d/99-purple-zzz-debug.conf << 'SYSCTL_EOF'
 kernel.printk = 7 4 1 7
 kernel.sysrq = 1
 SYSCTL_EOF
-    # Enable a login shell on tty2 so Ctrl+Alt+F2 can escape a frozen TUI
-    ln -sf /lib/systemd/system/getty@.service /root/etc/systemd/system/getty.target.wants/getty@tty2.service
-    purple_log "DEBUG MODE: created /opt/purple/debug, enabled SysRq, verbose logging, getty@tty2"
+    purple_log "DEBUG MODE: created /opt/purple/debug, enabled SysRq, verbose logging"
 fi
 
 # Show boot splash on tty1: purple background with friendly message.

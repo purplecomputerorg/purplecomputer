@@ -576,13 +576,14 @@ TIMEOUTS
     echo "$build_version" > "$MOUNT_DIR/etc/purple-version"
     log_info "Version stamp: $build_version"
 
-    # Configure auto-login on tty2 as well (for debugging - no X11, just bash)
+    # tty2: autologin as purple, always enabled. Escape hatch when Purple hangs.
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
+    chroot "$MOUNT_DIR" systemctl enable getty@tty2.service
 
     # Use Ubuntu's signed boot chain (shim → GRUB → kernel) for Secure Boot compatibility.
     # We download the signed binaries and set them up manually, rather than running

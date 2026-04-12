@@ -31,23 +31,21 @@ Purple Computer disables all of these.
 
 ---
 
-## X11 Level: DontZap and DontVTSwitch
+## X11 Level: DontZap
 
 **File:** `config/xorg/10-modesetting.conf`
 
 ```
 Section "ServerFlags"
     Option "DontZap" "true"
-    Option "DontVTSwitch" "true"
 EndSection
 ```
 
 | Shortcut | Normal behavior | With hardening |
 |----------|-----------------|----------------|
 | Ctrl+Alt+Backspace | Kills X server instantly | Ignored |
-| Ctrl+Alt+F1-F12 | Switch to different TTY | Ignored |
 
-These are the most common accidental escapes. DontVTSwitch is critical because switching TTYs leaves kids at a login prompt or blank screen.
+**`DontVTSwitch` is intentionally NOT set.** Ctrl+Alt+F2 reaches an autologin bash shell on tty2 (enabled on both ISOs). 4-7 year olds won't accidentally chord three keys, and if they did they'd land on a harmless unprivileged shell — Ctrl+Alt+F1 returns to Purple. Keeping the escape hatch is worth more than the theoretical accidental-press risk.
 
 ---
 

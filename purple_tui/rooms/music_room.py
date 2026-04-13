@@ -69,19 +69,52 @@ def _suppress_alsa_output():
     except Exception:
         pass
 
-_suppress_alsa_output()
+# Lazy: pygame.mixer.init() blocks in C code holding the GIL on some machines
+# (seen on 2016 MBP). Keep it off the boot path. Warmed from a background
+# thread in purple_tui.on_mount and ensured again from MusicMode.on_mount.
+# See guides/boot-hang-debugging.md.
+pygame = None  # populated by _ensure_mixer()
+_MIXER_READY: bool | None = None
 
-# Suppress pygame welcome message (must be set before import)
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-import pygame.mixer
 
-# Initialize mixer at module load time (before UI shows) to avoid click later
-try:
-    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-    pygame.mixer.set_num_channels(16)
-    _MIXER_READY = True
-except pygame.error:
-    _MIXER_READY = False
+def _ensure_mixer() -> bool:
+    global pygame, _MIXER_READY
+    if _MIXER_READY is not None:
+        return _MIXER_READY
+    _suppress_alsa_output()
+    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+    import pygame as _pg
+    import pygame.mixer  # noqa: F401  (populate submodule)
+    pygame = _pg
+    try:
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+        pygame.mixer.set_num_channels(16)
+        _MIXER_READY = True
+    except pygame.error:
+        _MIXER_READY = False
+    return _MIXER_READY
+
+
+def warm_mixer(timeout_seconds: float = 5.0) -> bool:
+    """Lazy-load pygame + run mixer.init with a hard timeout.
+
+    SDL2's audio open blocks in C (holding the GIL) on some hardware
+    (T2 Macs, Surfaces, newer AMD laptops). Running it on an inner thread
+    with a join timeout lets us give up and mark mixer unavailable instead
+    of stalling the UI forever. The stuck inner thread leaks as a daemon.
+    """
+    global _MIXER_READY
+    import threading
+    done = threading.Event()
+    def _run():
+        try:
+            _ensure_mixer()
+        finally:
+            done.set()
+    threading.Thread(target=_run, daemon=True, name="mixer-init").start()
+    if not done.wait(timeout=timeout_seconds) and _MIXER_READY is None:
+        _MIXER_READY = False
+    return bool(_MIXER_READY)
 
 
 def reinit_mixer() -> None:
@@ -92,6 +125,8 @@ def reinit_mixer() -> None:
     invalid after quit(), so callers must clear their sound caches.
     """
     global _MIXER_READY
+    if not _ensure_mixer():
+        return
     try:
         pygame.mixer.quit()
     except Exception:
@@ -102,7 +137,6 @@ def reinit_mixer() -> None:
         _MIXER_READY = True
     except pygame.error:
         _MIXER_READY = False
-    # Reset TTS state so it picks up the fresh mixer
     from . import tts
     tts._mixer_initialized = False
     tts._current_channel = None
@@ -641,6 +675,10 @@ class MusicMode(Container, can_focus=True):
         return getattr(self.app, '_littles_mode', None) == 'music_noscreen'
 
     def on_mount(self) -> None:
+        if not warm_mixer() and not getattr(self.app, "_audio_warned", False):
+            self.app._audio_warned = True
+            from ..modal import AudioUnavailableModal
+            self.app.push_screen(AudioUnavailableModal())
         self.focus()
         self._update_hint()
         if self._is_noscreen:

@@ -809,6 +809,11 @@ EOF
     done
     # Intel misc firmware (includes SOF audio firmware for newer laptop speakers)
     [ -d "$FIRMWARE_DIR/intel" ] && mv "$FIRMWARE_DIR/intel" "$FIRMWARE_KEEP/"
+    # Cirrus / Realtek audio codec blobs (T2 Macs, many ThinkPads/Dells/HPs).
+    # Missing these makes the audio probe path slow or blocking on some hardware.
+    for dir in cirrus realtek; do
+        [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
+    done
     # Keep loose files in firmware root (some drivers expect files here)
     find "$FIRMWARE_DIR" -maxdepth 1 -type f -exec mv {} "$FIRMWARE_KEEP/" \;
 

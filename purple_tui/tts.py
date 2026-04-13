@@ -25,8 +25,27 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ['ORT_LOGGING_LEVEL'] = '3'
 # Also suppress TensorFlow/transformers warnings if they leak through
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-import pygame.mixer
 from contextlib import contextmanager
+
+# Lazy: pygame.mixer drags in numpy (~120ms) and mixer.init() can block in C.
+# Kept out of module scope so importing tts is cheap. _ensure_pygame() is
+# called by every function that actually needs the mixer.
+pygame = None  # populated by _ensure_pygame()
+
+
+def _ensure_pygame():
+    global pygame
+    if pygame is not None:
+        return pygame
+    import pygame as _pg
+    import pygame.mixer  # noqa: F401
+    pygame = _pg
+    return pygame
+
+
+def warm_pygame() -> None:
+    """Trigger lazy load of pygame (for background warmup)."""
+    _ensure_pygame()
 
 
 @contextmanager
@@ -445,12 +464,10 @@ def _ensure_mixer() -> bool:
     global _mixer_initialized
     if _mixer_initialized:
         return True
-    # Check if mixer is already initialized (by music mode)
+    _ensure_pygame()
     if pygame.mixer.get_init():
         _mixer_initialized = True
         return True
-    # Try to initialize with standard settings
-    # Use larger buffer (1024) to prevent audio clipping at start
     try:
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
         pygame.mixer.set_num_channels(16)

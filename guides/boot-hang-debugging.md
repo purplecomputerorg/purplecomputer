@@ -194,12 +194,38 @@ The profile showed ~2.9s cumulative in `inflect/__init__.py` → `typeguard/_dec
 
 ---
 
+## Case study: the same MBP *also* hung on pygame.mixer.init
+
+After the inflect fix, the same 2016 MBP still hung at boot. The log ended on `.demo imported; importing rooms.art_room` with no watchdog deadlines written at all. `dump-purple` (SIGUSR1) showed:
+
+- **Main thread**: deep inside `importlib._bootstrap` executing `rooms/music_room.py` at `<module>` scope, reached via `rooms/__init__.py` when we imported `rooms.art_room`.
+- **No watchdog output** in the log: the watchdog is a Python thread and needs the GIL to run. The stuck thread was inside a C call that held the GIL.
+- **SIGUSR1 still worked** because signals are delivered into the main thread's own C frame, bypassing the GIL.
+
+Root cause: `music_room.py` did `import pygame.mixer` + `pygame.mixer.init(...)` at module scope. `pygame.mixer.init()` calls SDL2 → PulseAudio/PipeWire/ALSA, which talks to the kernel audio driver. On the 2016/2017 Touch Bar MBPs the audio codec is Cirrus **CS8409** routed through the T1 chip over SPI — a path whose Linux driver is new, slow to probe, and sometimes blocks forever in `snd_pcm_open()`. On a 2015 MacBook Air (plain Intel HDA + CS4208) the same call returns in milliseconds, which is why the bug never surfaced on older hardware.
+
+**The fix.** `rooms/music_room.py` now lazy-loads pygame inside `_ensure_mixer()`. `warm_mixer(timeout=5s)` runs that on an inner daemon thread with a hard join timeout; if SDL2 blocks, the outer call returns `False` and the stuck inner thread leaks harmlessly. `PurpleApp.on_mount` warms the mixer from the post-render daemon thread alongside inflect. `MusicMode.on_mount` also calls `warm_mixer()`; if it returns False, it shows `AudioUnavailableModal` (one-shot per session) telling the parent to email support. Boot is ~160 ms faster on every machine as a side effect of keeping numpy+pygame off the boot path.
+
+### Known audio-risk hardware
+
+Machines where the audio probe path is known to be slow or blocking, so the lazy-mixer / warmup-timeout / modal fallback matters:
+
+- **All T1/T2 Macs** — 2016+ MBP, 2018+ MBA, iMac Pro, 2018+ Mac mini, 2020 iMac. CS8409 via Apple T1/T2 SPI.
+- **Surface Pro / Surface Laptop** — SoundWire + Surface Aggregator. Probe can stall for seconds.
+- **Newer Intel laptops using SOF** — Dell XPS 13 (9300+), Lenovo X1 Carbon 9th gen+, Framework 13/16, most 2021+ thin-and-lights. Needs `intel/sof*` firmware (kept) and `cirrus/`/`realtek/` codec amp blobs (also kept) — both preserved in `00-build-golden-image.sh`'s firmware prune whitelist.
+- **AMD laptops with ACP** — ThinkPad Z13, Yoga 7/9 AMD, EliteBook G9 AMD, Framework AMD. Young driver, flaky init.
+
+Plain Intel HDA codec laptops (pre-2020 ThinkPads/Dells/HPs) don't need per-codec firmware and don't hit this path.
+
+---
+
 ## Rule: don't do heavy work at module import time
 
 This bug was latent for months before the 2016 MBP surfaced it. Similar bugs will keep showing up unless we audit imports. The rule:
 
 1. **Module bodies should only contain imports, class definitions, function definitions, and cheap constants.** No calls to anything expensive at module scope.
 2. **Be especially suspicious of third-party packages that decorate with `@typechecked`, `@beartype`, `@validate_call`, or any runtime-type-check library.** These typically do AST rewriting at decoration time, which runs at import time of the decorating module.
+2b. **Also suspicious: C extensions that open hardware, sockets, or daemons at import or module-scope `init()`.** pygame/SDL, pyaudio, sounddevice, cv2 (with GStreamer), pyserial on a port, any ML runtime that probes GPUs. These can block in C while holding the GIL, starving Python threads (including our boot watchdog). Lazy-load them and run any `init()` on a daemon thread with a timeout.
 3. **Before adding a new pip dependency, measure its cold import time.** Any new package whose import takes >100ms on a fast machine should be imported lazily.
 
 **One-liner to measure an import:**

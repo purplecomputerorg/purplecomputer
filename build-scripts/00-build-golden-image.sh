@@ -448,6 +448,26 @@ exec sudo chvt 1
 BACK
     chmod +x "$MOUNT_DIR/usr/local/bin/back"
 
+    # dump-purple: send SIGUSR1 to the running purple python process so
+    # boot_log's faulthandler dumps every thread's stack to the boot log.
+    # Use from tty2 when python looks hung: `dump-purple` then tail the log.
+    cat > "$MOUNT_DIR/usr/local/bin/dump-purple" <<'DUMP'
+#!/bin/bash
+set -e
+pid=$(pgrep -f 'purple_tui.purple_tui' | head -1)
+if [ -z "$pid" ]; then
+    echo "no purple_tui process found" >&2
+    exit 1
+fi
+echo "dumping threads for pid=$pid"
+sudo kill -USR1 "$pid"
+echo "dump written to /var/log/purple/boot.log (and /tmp/purple-boot.log)"
+echo "--- tail ---"
+sleep 0.2
+sudo tail -40 /var/log/purple/boot.log 2>/dev/null || sudo tail -40 /tmp/purple-boot.log
+DUMP
+    chmod +x "$MOUNT_DIR/usr/local/bin/dump-purple"
+
     # Shrink tty2's reported size so shell output stays inside the visible
     # framebuffer area (Mac Retina panels clip the bottom of the fb console).
     cat > "$MOUNT_DIR/etc/profile.d/purple-tty2.sh" <<'TTY2'

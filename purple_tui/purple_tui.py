@@ -75,11 +75,15 @@ from .keyboard import (
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
 boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
-boot_log.heartbeat("power_manager imported; importing demo + rooms + repl")
+boot_log.heartbeat("power_manager imported; importing .demo")
 from .demo import DemoPlayer, get_demo_script, get_speed_multiplier
+boot_log.heartbeat(".demo imported; importing rooms.art_room")
 from .rooms.art_room import ColorLegend, PaintModeChanged
+boot_log.heartbeat("rooms.art_room imported; importing rooms.parent_menu")
 from .rooms.parent_menu import apply_saved_display_settings
+boot_log.heartbeat("rooms.parent_menu imported; importing room_picker")
 from .room_picker import RoomPickerScreen
+boot_log.heartbeat("room_picker imported; importing repl_panel")
 from .repl_panel import ReplCommandSubmitted, ReplPanelClosed, ReplPanelToggleRequested, ReplPanel
 boot_log.heartbeat("all purple_tui imports done")
 

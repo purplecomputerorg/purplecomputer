@@ -46,7 +46,11 @@ A normal successful boot produces something like:
 [HH:MM:SS.mmm] [+ 0.520s] [python] textual/rich imports done; importing purple_tui.constants
 [HH:MM:SS.mmm] [+ 0.540s] [python] constants imported; importing keyboard + input
 [HH:MM:SS.mmm] [+ 0.612s] [python] keyboard + input imported; importing power_manager
-[HH:MM:SS.mmm] [+ 0.623s] [python] power_manager imported; importing demo + rooms + repl
+[HH:MM:SS.mmm] [+ 0.623s] [python] power_manager imported; importing .demo
+[HH:MM:SS.mmm] [+ 0.640s] [python] .demo imported; importing rooms.art_room
+[HH:MM:SS.mmm] [+ 0.660s] [python] rooms.art_room imported; importing rooms.parent_menu
+[HH:MM:SS.mmm] [+ 0.675s] [python] rooms.parent_menu imported; importing room_picker
+[HH:MM:SS.mmm] [+ 0.690s] [python] room_picker imported; importing repl_panel
 [HH:MM:SS.mmm] [+ 0.701s] [python] all purple_tui imports done
 [HH:MM:SS.mmm] [+ 0.712s] [python] PurpleApp.__init__ begin
 [HH:MM:SS.mmm] [+ 0.984s] [python] PurpleApp.__init__ after App.__init__
@@ -61,7 +65,7 @@ If the log ends abruptly, **the last phase line is where the hang happened.** Th
 
 ## The startup watchdog
 
-A daemon thread started in `boot_log.py` at module import time. It sleeps in 1-second increments, checking a `_first_render_done` flag. At deadlines **30s, 60s, 120s** from process start, if first render hasn't happened, the watchdog calls `faulthandler.dump_traceback(all_threads=True)` against the boot log file.
+A daemon thread started in `boot_log.py` at module import time. It sleeps in 1-second increments, checking a `_first_render_done` flag. At deadlines **10s, 20s, 40s, 80s** from process start, if first render hasn't happened, the watchdog calls `faulthandler.dump_traceback(all_threads=True)` against the boot log file.
 
 The dump is a full Python stack for every thread: main thread, Textual's render thread, evdev reader threads, asyncio loop, etc. Example of what a hang in `detect_keyboard_mode` would look like in the log:
 
@@ -76,7 +80,27 @@ Thread 0x00007f... (most recent call first):
 
 When `PurpleApp.on_mount` finishes, it calls `boot_log.mark_first_render()` which sets the flag; the watchdog wakes, sees the flag, and exits. Zero overhead after startup.
 
-**Why three deadlines and not one?** A progression tells you what kind of hang it is. If the 30s dump shows thread A blocked on lock L and the 60s dump shows it still there on the same line, it's truly wedged. If 60s shows it moved, it's slow but progressing.
+**Why four deadlines and not one?** A progression tells you what kind of hang it is. If the 10s dump shows thread A blocked on lock L and the 20s dump shows it still there on the same line, it's truly wedged. If 20s shows it moved, it's slow but progressing.
+
+---
+
+## On-demand thread dump (`dump-purple`)
+
+When you suspect a hang *right now* and don't want to wait for the next watchdog deadline, trigger a dump manually from tty2:
+
+```
+dump-purple
+```
+
+The helper (installed at `/usr/local/bin/dump-purple`) finds the running `purple_tui.purple_tui` process, sends it SIGUSR1, and tails the boot log. `boot_log.py` registers `faulthandler` on SIGUSR1 at startup, so every thread's stack lands in `/var/log/purple/boot.log` without killing the process. You can dump repeatedly to watch a deadlock evolve (or not).
+
+Use this to distinguish:
+
+- **Futex wait in main thread + a C-ext thread blocked on a socket** → classic audio/IPC init deadlock (pygame, pulse, pipewire).
+- **Main thread in `_find_and_load` / `_call_with_frames_removed`** → blocked inside an import, usually on disk I/O or a decorator doing AST rewriting at module scope.
+- **Main thread waiting on its own lock + no other thread making progress** → Python import-lock + thread-started-during-import race.
+
+SIGUSR1 is passive (zero cost until fired), so this ships in both ISOs.
 
 **Dump destination:** `faulthandler` requires a persistent file descriptor. We open `/var/log/purple/boot.log` (falling back to `/tmp/purple-boot.log`) and keep the fd open for the life of the process. The faulthandler is also armed for signals (SIGSEGV/SIGFPE/SIGBUS/SIGILL) against the same file, so a segfault during startup lands in the log instead of Textual's stderr.
 

@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import faulthandler
 import os
+import signal
 import sys
 import threading
 import time
@@ -201,13 +202,21 @@ def _install_watchdog() -> None:
     except Exception:
         pass
 
+    # SIGUSR1 → on-demand thread dump. From tty2: `sudo kill -USR1 <pid>`
+    # (or the `dump-purple` helper) and every thread's stack lands in the
+    # boot log. Lets us inspect a live hang without killing the process.
+    try:
+        faulthandler.register(signal.SIGUSR1, file=_fault_fd, all_threads=True, chain=False)
+    except Exception:
+        pass
+
     # Deadlines: 30s is "this should have been done by now on any machine",
     # 60s is "definitely stuck", 120s is "last chance before we stop dumping".
     # Three dumps give us a progression (is it making progress? is it a
     # lock that eventually resolves? or is it truly wedged?).
     thread = threading.Thread(
         target=_watchdog_target,
-        args=((30, 60, 120),),
+        args=((10, 20, 40, 80),),
         name="purple-boot-watchdog",
         daemon=True,
     )

@@ -442,6 +442,22 @@ printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\
 SPLASH
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-splash"
 
+    cat > "$MOUNT_DIR/usr/local/bin/back" <<'BACK'
+#!/bin/bash
+exec sudo chvt 1
+BACK
+    chmod +x "$MOUNT_DIR/usr/local/bin/back"
+
+    # Shrink tty2's reported size so shell output stays inside the visible
+    # framebuffer area (Mac Retina panels clip the bottom of the fb console).
+    cat > "$MOUNT_DIR/etc/profile.d/purple-tty2.sh" <<'TTY2'
+if [ "$(tty)" = /dev/tty2 ]; then
+    rows=$(tput lines 2>/dev/null || echo 30)
+    cols=$(tput cols 2>/dev/null || echo 80)
+    stty rows $(( rows * 4 / 5 )) cols "$cols" 2>/dev/null || true
+fi
+TTY2
+
     cat > "$MOUNT_DIR/etc/systemd/system/purple-splash.service" <<'SPLASHUNIT'
 [Unit]
 Description=Purple Computer Boot Splash

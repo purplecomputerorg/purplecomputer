@@ -20,6 +20,8 @@ from rich.style import Style
 from pathlib import Path
 import asyncio
 import os
+import subprocess
+import sys
 import time
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap
 from ..music_constants import (
@@ -69,52 +71,67 @@ def _suppress_alsa_output():
     except Exception:
         pass
 
-# Lazy: pygame.mixer.init() blocks in C code holding the GIL on some machines
-# (seen on 2016 MBP). Keep it off the boot path. Warmed from a background
-# thread in purple_tui.on_mount and ensured again from MusicMode.on_mount.
+# pygame.mixer.init() blocks in C code holding the GIL on broken audio hw
+# (T2 Macs, some Surfaces/AMDs). A stuck call wedges the whole interpreter
+# — Textual stops rendering, evdev grab stays held, only a power cycle
+# recovers. So we probe in a subprocess first (subprocess wait releases the
+# GIL; SIGKILL on timeout), and only init in-process after the probe passes.
 # See guides/boot-hang-debugging.md.
-pygame = None  # populated by _ensure_mixer()
-_MIXER_READY: bool | None = None
+pygame = None  # populated by warm_mixer() once pygame is safe to import
+_MIXER_READY: bool | None = None  # None = untested, True/False = cached result
 
+import threading as _threading
+_MIXER_LOCK = _threading.Lock()
 
-def _ensure_mixer() -> bool:
-    global pygame, _MIXER_READY
-    if _MIXER_READY is not None:
-        return _MIXER_READY
-    _suppress_alsa_output()
-    os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-    import pygame as _pg
-    import pygame.mixer  # noqa: F401  (populate submodule)
-    pygame = _pg
-    try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-        pygame.mixer.set_num_channels(16)
-        _MIXER_READY = True
-    except pygame.error:
-        _MIXER_READY = False
-    return _MIXER_READY
+_PROBE_SCRIPT = (
+    "import os; os.environ['PYGAME_HIDE_SUPPORT_PROMPT']='1'; "
+    "import pygame.mixer; "
+    "pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048); "
+    "pygame.mixer.quit()"
+)
 
 
 def warm_mixer(timeout_seconds: float = 5.0) -> bool:
-    """Lazy-load pygame + run mixer.init with a hard timeout.
+    """Probe mixer in a subprocess, then init in-process if it passed.
 
-    SDL2's audio open blocks in C (holding the GIL) on some hardware
-    (T2 Macs, Surfaces, newer AMD laptops). Running it on an inner thread
-    with a join timeout lets us give up and mark mixer unavailable instead
-    of stalling the UI forever. The stuck inner thread leaks as a daemon.
+    Called from both the post-boot warmup thread and MusicMode.on_mount.
+    The lock serialises them so the probe runs at most once per process;
+    a late caller waits for the early caller's result.
     """
-    global _MIXER_READY
-    import threading
-    done = threading.Event()
-    def _run():
+    global pygame, _MIXER_READY
+    with _MIXER_LOCK:
+        if _MIXER_READY is not None:
+            return _MIXER_READY
         try:
-            _ensure_mixer()
-        finally:
-            done.set()
-    threading.Thread(target=_run, daemon=True, name="mixer-init").start()
-    if not done.wait(timeout=timeout_seconds) and _MIXER_READY is None:
-        _MIXER_READY = False
-    return bool(_MIXER_READY)
+            r = subprocess.run(
+                [sys.executable, "-c", _PROBE_SCRIPT],
+                timeout=timeout_seconds,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            probe_ok = r.returncode == 0
+        except Exception:
+            probe_ok = False
+        if not probe_ok:
+            _MIXER_READY = False
+            return False
+        _suppress_alsa_output()
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+        import pygame as _pg
+        import pygame.mixer  # noqa: F401
+        pygame = _pg
+        try:
+            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+            pygame.mixer.set_num_channels(16)
+            _MIXER_READY = True
+        except pygame.error:
+            _MIXER_READY = False
+        return _MIXER_READY
+
+
+def _ensure_mixer() -> bool:
+    """Backward-compatible alias for callers that don't pass a timeout."""
+    return warm_mixer()
 
 
 def reinit_mixer() -> None:

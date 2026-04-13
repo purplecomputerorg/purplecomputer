@@ -1828,11 +1828,11 @@ class SimpleEvaluator:
         return None
 
     def _get_emoji(self, word: str) -> str | None:
-        """Get emoji (content.get_emoji handles plurals via inflect)."""
+        """Get emoji (content.get_emoji handles plurals via the precomputed lookup)."""
         return self.content.get_emoji(word)
 
     def _get_color(self, word: str) -> str | None:
-        """Get color hex (content.get_color handles plurals via inflect)."""
+        """Get color hex (content.get_color handles plurals via the precomputed lookup)."""
         return self.content.get_color(word)
 
     def _lookup(self, word: str) -> str | None:

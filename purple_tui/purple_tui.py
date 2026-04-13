@@ -1012,17 +1012,17 @@ class PurpleApp(App):
         boot_log.heartbeat("PurpleApp.on_mount complete")
         boot_log.mark_first_render()
 
-        # Background warmup: lazy-loaded heavy modules. Kept out of the boot
-        # path so boot stays fast; warmed here so first use is instant.
+        # Background warmup: subprocess-probe + init the pygame mixer so
+        # MusicRoom entry is instant (and we know early if audio is broken).
+        # This must run in a thread because warm_mixer() blocks on subprocess
+        # wait; but it doesn't hold the GIL (subprocess.run releases around
+        # wait()), so Textual keeps running.
         import threading
         def _warm():
-            from .content import warm_inflect_engine
-            warm_inflect_engine()
-            boot_log.heartbeat("inflect warmed")
             from .rooms.music_room import warm_mixer
             warm_mixer()
-            boot_log.heartbeat("music mixer warmed")
-        threading.Thread(target=_warm, daemon=True, name="purple-warmup").start()
+            boot_log.heartbeat("music mixer warmup complete")
+        threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""

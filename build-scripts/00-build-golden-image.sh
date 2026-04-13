@@ -326,6 +326,13 @@ TMPFILES
     # Install Python dependencies from requirements.txt
     chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
 
+    # Precompile every .py into .pyc so boot doesn't pay cold-compile cost off
+    # USB. Saves ~1-2s per cold boot on slow machines where bytecode generation
+    # is noticeable. -f forces overwrite, -q stays quiet, -j 0 uses all cores.
+    log_info "Precompiling Python bytecode..."
+    chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /opt/purple/purple_tui || true
+    chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /usr/lib/python3 || true
+
     # Compile static reboot binary (used after install for USB-safe reboot).
     # Must happen before gcc is removed. Static linking = zero overlay dependency.
     mkdir -p "$MOUNT_DIR/opt/purple/bin"
@@ -468,15 +475,18 @@ sudo tail -40 /var/log/purple/boot.log 2>/dev/null || sudo tail -40 /tmp/purple-
 DUMP
     chmod +x "$MOUNT_DIR/usr/local/bin/dump-purple"
 
-    # Shrink tty2's reported size so shell output stays inside the visible
-    # framebuffer area (Mac Retina panels clip the bottom of the fb console).
-    cat > "$MOUNT_DIR/etc/profile.d/purple-tty2.sh" <<'TTY2'
-if [ "$(tty)" = /dev/tty2 ]; then
-    rows=$(tput lines 2>/dev/null || echo 30)
-    cols=$(tput cols 2>/dev/null || echo 80)
-    stty rows $(( rows * 4 / 5 )) cols "$cols" 2>/dev/null || true
-fi
-TTY2
+    # Shrink reported size on any fbcon tty (tty2, recovery shell, rescue)
+    # so shell output stays inside the visible framebuffer area. Mac Retina
+    # panels clip the bottom of the fb console.
+    cat > "$MOUNT_DIR/etc/profile.d/purple-tty2.sh" <<'TTYFB'
+case "$(tty)" in
+    /dev/tty[0-9]*)
+        rows=$(tput lines 2>/dev/null || echo 30)
+        cols=$(tput cols 2>/dev/null || echo 80)
+        stty rows $(( rows * 4 / 5 )) cols "$cols" 2>/dev/null || true
+        ;;
+esac
+TTYFB
 
     cat > "$MOUNT_DIR/etc/systemd/system/purple-splash.service" <<'SPLASHUNIT'
 [Unit]

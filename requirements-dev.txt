@@ -1,0 +1,3 @@
+# Build-time only dependencies. NOT installed in the golden image.
+# Used by scripts that generate precomputed data shipped in the image.
+inflect>=7.0.0  # scripts/build_plural_tables.py

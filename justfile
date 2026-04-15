@@ -76,6 +76,10 @@ build-packs:
     cd packs/core-definitions && tar -czvf ../core-definitions.purplepack manifest.json content/
     @echo "✓ Packs built"
 
+# Regenerate the precomputed plural/singular lookup tables (after vocabulary changes)
+build-plurals:
+    @.venv/bin/python3 scripts/build_plural_tables.py
+
 # Remove test environment
 clean:
     @echo "Cleaning local test environment..."
@@ -206,6 +210,10 @@ flash *args:
 # Flash debug ISO to USB drive
 flash-debug *args:
     ./build-scripts/flash-to-usb.sh --debug {{args}}
+
+# Flash the cached stock Ubuntu ISO (for isolating Purple vs kernel issues on target hardware)
+flash-ubuntu *args:
+    ./build-scripts/flash-to-usb.sh {{args}} /opt/purple-installer/build/ubuntu-24.04.1-live-server-amd64.iso
 
 # AI UX testing: let a Claude agent explore the app as a simulated kid
 ux *args:

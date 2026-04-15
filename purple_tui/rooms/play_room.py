@@ -1408,6 +1408,11 @@ class SimpleEvaluator:
                 current_colors = []
         if current_colors:
             groups.append({'colors': current_colors, 'item': None})
+        if (len(groups) >= 2
+                and groups[-1]['item'] is None
+                and not groups[-2]['colors']):
+            groups[-2]['colors'] = groups[-1]['colors']
+            groups.pop()
         return groups
 
     def _render_adjective_groups(self, groups: list[dict]) -> str | None:

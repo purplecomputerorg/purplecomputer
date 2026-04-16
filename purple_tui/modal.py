@@ -16,6 +16,7 @@ class PurpleModal(ModalScreen):
     DEFAULT_CSS = """
     PurpleModal {
         align: center middle;
+        background: $background;
     }
 
     #modal-dialog {

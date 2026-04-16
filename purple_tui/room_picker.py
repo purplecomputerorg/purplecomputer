@@ -103,9 +103,9 @@ class ExtraOption(Static):
     }
 
     ExtraOption.disabled.selected {
-        background: $surface;
+        background: $surface-lighten-1;
         color: $text-muted;
-        border: heavy $surface-lighten-1;
+        border: heavy $accent-darken-2;
     }
     """
 

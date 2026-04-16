@@ -10,6 +10,7 @@ GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
 IMAGE_SIZE_MB=8192
 MOUNT_DIR="${BUILD_DIR}/mnt-golden"
+UBUNTU_MIRROR="http://mirrors.edge.kernel.org/ubuntu"
 
 # Colors
 GREEN='\033[0;32m'
@@ -110,7 +111,7 @@ main() {
         --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
         noble \
         "$MOUNT_DIR" \
-        http://archive.ubuntu.com/ubuntu
+        "$UBUNTU_MIRROR"
 
     # Mount virtual filesystems for chroot operations (required by apt-get, systemd, etc.)
     log_info "Mounting virtual filesystems for chroot..."
@@ -158,11 +159,10 @@ FSTAB
     log_info "Installing Purple Computer application..."
 
     # Setup apt sources for universe repository (needed for pip)
-    # Using us.archive for better mirror sync reliability
-    cat > "$MOUNT_DIR/etc/apt/sources.list" <<'SOURCES'
-deb http://us.archive.ubuntu.com/ubuntu noble main universe
-deb http://us.archive.ubuntu.com/ubuntu noble-updates main universe
-deb http://security.ubuntu.com/ubuntu noble-security main universe
+    cat > "$MOUNT_DIR/etc/apt/sources.list" <<SOURCES
+deb $UBUNTU_MIRROR noble main universe
+deb $UBUNTU_MIRROR noble-updates main universe
+deb $UBUNTU_MIRROR noble-security main universe
 SOURCES
 
     # Don't install Recommended packages. This is an appliance, not a desktop.

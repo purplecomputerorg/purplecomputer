@@ -375,10 +375,16 @@ class RoomPickerScreen(PurpleModal):
                     self._update_selection()
                 elif self._active_row == ROW_EXTRAS:
                     self._active_row = ROW_ROOMS
+                    # Map extras column back to nearest room:
+                    # extras 0 -> room 0, extras 1 -> room 2
+                    self._room_index = 0 if self._extra_index == 0 else 2
                     self._update_selection()
             elif action.direction == 'down':
                 if self._active_row == ROW_ROOMS:
                     self._active_row = ROW_EXTRAS
+                    # Map room column to closest extras column:
+                    # rooms 0,1 (left/center) -> extras 0, room 2 (right) -> extras 1
+                    self._extra_index = 0 if self._room_index <= 1 else 1
                     self._update_selection()
                 elif self._active_row == ROW_EXTRAS and self._show_code_row:
                     self._active_row = ROW_CODE

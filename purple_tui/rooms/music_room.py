@@ -79,6 +79,7 @@ def _suppress_alsa_output():
 # See guides/boot-hang-debugging.md.
 pygame = None  # populated by warm_mixer() once pygame is safe to import
 _MIXER_READY: bool | None = None  # None = untested, True/False = cached result
+_PROBE_TIMED_OUT = False  # True = probe hung (hw is broken, don't retry)
 
 import threading as _threading
 _MIXER_LOCK = _threading.Lock()
@@ -102,7 +103,7 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     The lock serialises them so the probe runs at most once per process;
     a late caller waits for the early caller's result.
     """
-    global pygame, _MIXER_READY
+    global pygame, _MIXER_READY, _PROBE_TIMED_OUT
     with _MIXER_LOCK:
         if _MIXER_READY is not None:
             return _MIXER_READY
@@ -114,6 +115,9 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
                 stderr=subprocess.DEVNULL,
             )
             probe_ok = r.returncode == 0
+        except subprocess.TimeoutExpired:
+            probe_ok = False
+            _PROBE_TIMED_OUT = True
         except Exception:
             probe_ok = False
         if not probe_ok:
@@ -138,11 +142,16 @@ def _ensure_mixer() -> bool:
     return warm_mixer()
 
 
-def _reset_mixer_state() -> None:
-    """Clear cached probe result so warm_mixer() retries on next call."""
+def _reset_mixer_state() -> bool:
+    """Clear cached probe result so warm_mixer() retries on next call.
+
+    Returns False if the probe timed out (hardware is broken, don't retry).
+    """
     global _MIXER_READY
-    with _MIXER_LOCK:
-        _MIXER_READY = None
+    if _PROBE_TIMED_OUT:
+        return False
+    _MIXER_READY = None
+    return True
 
 
 def reinit_mixer() -> None:

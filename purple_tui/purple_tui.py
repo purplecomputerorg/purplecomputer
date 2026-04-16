@@ -1013,18 +1013,22 @@ class PurpleApp(App):
         import time as _time
         def _warm():
             from .rooms.music_room import warm_mixer, _reset_mixer_state
-            delays = [1, 2, 4]
-            for attempt in range(len(delays) + 1):
+            if warm_mixer():
+                self.audio_ok = True
+                boot_log.heartbeat("mixer ok (attempt 1)")
+                return
+            for delay in [1, 2, 4]:
+                if not _reset_mixer_state():
+                    boot_log.heartbeat("mixer probe timed out (hw broken)")
+                    break
+                boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
+                _time.sleep(delay)
                 if warm_mixer():
                     self.audio_ok = True
-                    boot_log.heartbeat(f"mixer ok (attempt {attempt + 1})")
+                    boot_log.heartbeat("mixer ok (retry)")
                     return
-                boot_log.heartbeat(f"mixer probe failed (attempt {attempt + 1})")
-                if attempt < len(delays):
-                    _reset_mixer_state()
-                    _time.sleep(delays[attempt])
             self.audio_ok = False
-            boot_log.heartbeat("music mixer warmup complete (failed)")
+            boot_log.heartbeat("mixer warmup failed")
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
 
     async def on_unmount(self) -> None:

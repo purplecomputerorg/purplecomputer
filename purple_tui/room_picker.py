@@ -114,14 +114,13 @@ class ExtraOption(Static):
         self._icon = icon
         self._label = label
         self._key_hint = key_hint
-        self._disabled = disabled
         self.add_class("caps-sensitive")
         if disabled:
             self.add_class("disabled")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
-        if self._disabled:
+        if self.has_class("disabled"):
             return caps(f"\n{self._icon}  {self._label}  {self._icon}\n")
         hint = f"Press {self._key_hint} or Enter" if self.has_class("selected") else f"Press {self._key_hint}"
         return caps(f"\n{self._icon}  {self._label}  {self._icon}\n{hint}")

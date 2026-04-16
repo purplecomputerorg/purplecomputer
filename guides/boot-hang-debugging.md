@@ -196,15 +196,34 @@ The profile showed ~2.9s cumulative in `inflect/__init__.py` → `typeguard/_dec
 
 ## Case study: the same MBP *also* hung on pygame.mixer.init
 
-After the inflect fix, the same 2016 MBP still hung at boot. The log ended on `.demo imported; importing rooms.art_room` with no watchdog deadlines written at all. `dump-purple` (SIGUSR1) showed:
+After the inflect fix, the same 2016 MBP still hung at boot. Root cause: `pygame.mixer.init()` calls SDL2 → PulseAudio/ALSA → kernel audio driver. On T1/T2 MBPs the Cirrus CS8409 codec blocks forever in `snd_pcm_open()`. On a 2015 MacBook Air (plain Intel HDA + CS4208) the same call returns in milliseconds.
 
-- **Main thread**: deep inside `importlib._bootstrap` executing `rooms/music_room.py` at `<module>` scope, reached via `rooms/__init__.py` when we imported `rooms.art_room`.
-- **No watchdog output** in the log: the watchdog is a Python thread and needs the GIL to run. The stuck thread was inside a C call that held the GIL.
-- **SIGUSR1 still worked** because signals are delivered into the main thread's own C frame, bypassing the GIL.
+**The fix (current architecture).** `rooms/music_room.py` lazy-loads pygame. `warm_mixer()` runs a **subprocess probe**: it spawns a fresh Python process that attempts `mixer.init()` + `mixer.quit()`, with a 10-second timeout. If the subprocess exits 0, the in-process `mixer.init()` follows (safe because the subprocess proved the hardware works). If it times out, `_PROBE_TIMED_OUT` is set and the mixer is marked as broken.
 
-Root cause: `music_room.py` did `import pygame.mixer` + `pygame.mixer.init(...)` at module scope. `pygame.mixer.init()` calls SDL2 → PulseAudio/PipeWire/ALSA, which talks to the kernel audio driver. On the 2016/2017 Touch Bar MBPs the audio codec is Cirrus **CS8409** routed through the T1 chip over SPI — a path whose Linux driver is new, slow to probe, and sometimes blocks forever in `snd_pcm_open()`. On a 2015 MacBook Air (plain Intel HDA + CS4208) the same call returns in milliseconds, which is why the bug never surfaced on older hardware.
+**Retry logic** (in `purple_tui.py:_start_mixer_warmup`): PulseAudio/ALSA may still be initializing at boot, so a fast failure (exit code ≠ 0, not a timeout) triggers retries with delays of 1s, 2s, 4s. `_reset_mixer_state()` clears the cached failure between retries but refuses to reset after a timeout (returns False), so broken hardware stops after one 10s attempt.
 
-**The fix.** `rooms/music_room.py` now lazy-loads pygame inside `_ensure_mixer()`. `warm_mixer(timeout=5s)` runs that on an inner daemon thread with a hard join timeout; if SDL2 blocks, the outer call returns `False` and the stuck inner thread leaks harmlessly. `PurpleApp.on_mount` warms the mixer from the post-render daemon thread alongside inflect. `MusicMode.on_mount` also calls `warm_mixer()`; if it returns False, it shows `AudioUnavailableModal` (one-shot per session) telling the parent to email support. Boot is ~160 ms faster on every machine as a side effect of keeping numpy+pygame off the boot path.
+**Timing in practice:**
+
+| Scenario | What happens | Time to result |
+|---|---|---|
+| Audio works immediately (most hw) | Probe succeeds on attempt 1 | ~1s |
+| PulseAudio slow at boot (MacBookAir7,2) | Attempt 1 fails fast, retry after 1s succeeds | ~2s |
+| PulseAudio very slow (worst case) | All retries needed (1+2+4s delays) | ~9s |
+| Hardware broken/hanging (CS8209 MBP) | Probe hangs, killed at 10s timeout, no retry | ~10s |
+| `PURPLE_NO_AUDIO=1` (testing) | No probe, no thread | 0s |
+
+During the retry window, `audio_ok` is `None`. The splash screen shows no audio warning (only appears after confirmed failure). The room picker shows normal "Volume" button. Once `audio_ok` becomes `False`, the splash shows the 🔇 warning and the room picker shows disabled "No Sound."
+
+**Boot log lines to look for:**
+
+```
+mixer ok (attempt 1)              # happy path
+mixer probe failed, retrying in 1s  # PulseAudio not ready, will retry
+mixer ok (retry)                  # retry succeeded
+mixer probe timed out (hw broken) # CS8209-style hang, gave up
+mixer warmup failed               # all retries exhausted
+mixer disabled (PURPLE_NO_AUDIO=1) # env var override
+```
 
 ### Known audio-risk hardware
 

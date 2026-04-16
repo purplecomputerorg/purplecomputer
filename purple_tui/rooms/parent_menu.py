@@ -663,7 +663,7 @@ def _get_menu_items() -> list:
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
-    items.append(("menu-support", "Support info"))
+    items.append(("menu-support", "Support Info"))
     items.append(("menu-shutdown", "Shut Down"))
     items.append(("menu-exit", "Exit Parent Menu"))
     return items

@@ -1,9 +1,14 @@
 # USB Drive Whitelist for flash-to-usb.sh
-# Add one drive serial number per line.
+#
+# Entry formats:
+#   1. Serial match — put the drive's exact serial on a line by itself.
+#   2. Vendor/Model match — `model:VENDOR/MODEL [max=NG] [min=NG]`
+#      Matches ANY drive with that vendor+model within the size range.
+#      Use this to whitelist a whole product line (e.g. buy a pack of 10).
+#
 # Run './build-scripts/flash-to-usb.sh --list' to see connected drives.
+# Only drives matching an entry here will be offered as targets.
 #
-# Only drives with serials listed here will be offered as targets.
-# This prevents accidentally writing to the wrong drive.
-#
-# Example:
+# Examples:
 # ABC123456789
+# model:Verbatim/STORE N GO max=20G

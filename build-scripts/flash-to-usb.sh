@@ -20,8 +20,51 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
-# Maximum size in GB for safety (reject anything larger)
+# Global safety cap: reject anything larger regardless of per-entry max
 MAX_SIZE_GB=256
+
+# Convert lsblk SIZE string (e.g. "14.5G", "5.5T", "512M") to integer GB.
+parse_size_to_gb() {
+    local size="$1"
+    local num unit
+    num=$(echo "$size" | sed 's/[^0-9.]//g')
+    unit=$(echo "$size" | sed 's/[0-9.]//g')
+    case "$unit" in
+        T) awk -v n="$num" 'BEGIN { printf "%.0f", n * 1024 }' ;;
+        G) awk -v n="$num" 'BEGIN { printf "%.0f", n }' ;;
+        *) echo 0 ;;
+    esac
+}
+
+# Test whether a whitelist rule matches a drive.
+# Rule formats:
+#   <serial>                              exact serial match
+#   model:<VENDOR>/<MODEL> [max=NG] [min=NG]   match any drive of that vendor+model in size range
+rule_matches() {
+    local rule="$1" vendor="$2" model="$3" serial="$4" size_gb="$5"
+    local rule_max=$MAX_SIZE_GB rule_min=0
+
+    if [[ "$rule" == model:* ]]; then
+        local spec="${rule#model:}"
+        while [[ "$spec" =~ ^(.*[^[:space:]])[[:space:]]+(max|min)=([0-9]+)G?$ ]]; do
+            spec="${BASH_REMATCH[1]}"
+            if [[ "${BASH_REMATCH[2]}" == max ]]; then
+                rule_max="${BASH_REMATCH[3]}"
+            else
+                rule_min="${BASH_REMATCH[3]}"
+            fi
+        done
+        [[ "$vendor" != "${spec%%/*}" ]] && return 1
+        [[ "$model" != "${spec#*/}" ]] && return 1
+    else
+        [[ "$serial" != "$rule" ]] && return 1
+    fi
+
+    [[ $size_gb -gt $rule_max ]] && return 1
+    [[ $size_gb -lt $rule_min ]] && return 1
+    [[ $size_gb -gt $MAX_SIZE_GB ]] && return 1
+    return 0
+}
 
 find_latest_iso() {
     # Find most recent ISO in output directory (exclude .debug.iso)
@@ -60,24 +103,27 @@ usage() {
 list_usb_drives() {
     echo -e "${BOLD}Connected USB drives:${NC}"
     echo ""
-    printf "%-10s %-10s %-30s %-25s %s\n" "DEVICE" "SIZE" "MODEL" "SERIAL" "REMOVABLE"
-    echo "--------------------------------------------------------------------------------------------"
+    printf "%-10s %-8s %-12s %-22s %-25s %s\n" "DEVICE" "SIZE" "VENDOR" "MODEL" "SERIAL" "RM"
+    echo "----------------------------------------------------------------------------------------------------"
 
     while IFS= read -r line; do
-        # Parse KEY="VALUE" format from lsblk -P
         eval "$line"
 
         [[ "$TRAN" != "usb" ]] && continue
         [[ -z "$NAME" ]] && continue
 
+        local vendor
+        vendor=$(echo "$VENDOR" | xargs)
         rm_text="no"
         [[ "$RM" == "1" ]] && rm_text="yes"
 
-        printf "%-10s %-10s %-30s %-25s %s\n" "/dev/$NAME" "$SIZE" "$MODEL" "$SERIAL" "$rm_text"
-    done < <(lsblk -d -n -o NAME,SIZE,TRAN,MODEL,RM,SERIAL -P 2>/dev/null)
+        printf "%-10s %-8s %-12s %-22s %-25s %s\n" "/dev/$NAME" "$SIZE" "$vendor" "$MODEL" "$SERIAL" "$rm_text"
+    done < <(lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,RM,SERIAL -P 2>/dev/null)
 
     echo ""
-    echo "To whitelist a drive, add its SERIAL to: $CONFIG_FILE"
+    echo "To whitelist a drive, add to $CONFIG_FILE:"
+    echo "  - the SERIAL on its own line (exact match), OR"
+    echo "  - 'model:VENDOR/MODEL max=20G' (matches any drive of that vendor+model)"
 }
 
 load_whitelist() {
@@ -113,37 +159,22 @@ find_whitelisted_drives() {
     FOUND_DRIVES=()
 
     while IFS= read -r line; do
-        # Parse KEY="VALUE" format from lsblk -P
         eval "$line"
 
-        # Must be USB
         [[ "$TRAN" != "usb" ]] && continue
         [[ -z "$SERIAL" ]] && continue
 
-        # Check if serial is whitelisted
-        for ws in "${WHITELIST[@]}"; do
-            if [[ "$SERIAL" == "$ws" ]]; then
-                # Parse size and check against max
-                size_num=$(echo "$SIZE" | sed 's/[^0-9.]//g')
-                size_unit=$(echo "$SIZE" | sed 's/[0-9.]//g')
+        local vendor size_gb
+        vendor=$(echo "$VENDOR" | xargs)
+        size_gb=$(parse_size_to_gb "$SIZE")
 
-                size_gb=0
-                case "$size_unit" in
-                    G) size_gb=$(echo "$size_num" | awk '{printf "%.0f", $1}') ;;
-                    T) size_gb=$(echo "$size_num" | awk '{printf "%.0f", $1 * 1024}') ;;
-                    M) size_gb=0 ;;  # Less than 1GB is fine
-                esac
-
-                if [[ $size_gb -gt $MAX_SIZE_GB ]]; then
-                    log_warn "Skipping /dev/$NAME ($SIZE) - exceeds ${MAX_SIZE_GB}GB safety limit"
-                    continue
-                fi
-
+        for rule in "${WHITELIST[@]}"; do
+            if rule_matches "$rule" "$vendor" "$MODEL" "$SERIAL" "$size_gb"; then
                 FOUND_DRIVES+=("/dev/$NAME|$SIZE|$MODEL|$SERIAL")
                 break
             fi
         done
-    done < <(lsblk -d -n -o NAME,SIZE,TRAN,MODEL,SERIAL -P 2>/dev/null)
+    done < <(lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,SERIAL -P 2>/dev/null)
 }
 
 select_drive() {

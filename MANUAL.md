@@ -530,8 +530,11 @@ The `flash-to-usb.sh` script provides safe USB writing with verification:
 
 ```bash
 # One-time setup: whitelist your USB drive
-./build-scripts/flash-to-usb.sh --list    # Find your drive's serial number
+./build-scripts/flash-to-usb.sh --list    # Find your drive's serial/vendor/model
 echo 'YOUR_SERIAL' >> .flash-drives.conf  # Add to whitelist
+
+# Or whitelist a whole vendor+model (handy when you have several of the same kind):
+echo 'model:Verbatim/STORE N GO max=20G' >> .flash-drives.conf
 
 # Flash the latest ISO
 ./build-scripts/flash-to-usb.sh

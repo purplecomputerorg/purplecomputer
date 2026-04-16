@@ -2,7 +2,8 @@
 # Architecture: Live boot + optional install
 FROM ubuntu:24.04
 
-RUN apt-get update && \
+RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.edge.kernel.org|g' /etc/apt/sources.list.d/ubuntu.sources && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     # Golden image building
     debootstrap \

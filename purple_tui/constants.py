@@ -189,12 +189,6 @@ ROOM_TITLES = {
 # Note: "input" focuses on the Play room input area (bottom portion of viewport).
 
 # =============================================================================
-# USB UPDATE
-# =============================================================================
-
-USB_UPDATE_SIGNAL_FILE = "/tmp/purple-update-applied"
-
-# =============================================================================
 # ZOOM REGIONS FOR DEMO RECORDING
 # =============================================================================
 ZOOM_REGIONS = {

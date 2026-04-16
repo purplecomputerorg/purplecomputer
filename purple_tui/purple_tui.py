@@ -62,7 +62,6 @@ from .constants import (
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
-    USB_UPDATE_SIGNAL_FILE,
     is_live_boot, is_debug,
 )
 boot_log.heartbeat("constants imported; importing keyboard + input")
@@ -727,21 +726,6 @@ class PurpleApp(App):
         display: none;
     }
 
-    /* Update dialog */
-    #update-dialog {
-        width: 60;
-        height: auto;
-        padding: 2 4;
-        background: $surface;
-        border: heavy $primary;
-    }
-
-    #update-dialog Label {
-        width: 100%;
-        text-align: center;
-        margin-bottom: 1;
-    }
-
     """.replace("__VIEWPORT_WIDTH__", str(VIEWPORT_WIDTH)).replace("__VIEWPORT_BORDER_WIDTH__", str(VIEWPORT_WIDTH + 2)).replace("__VIEWPORT_HEIGHT__", str(VIEWPORT_HEIGHT)).replace("__LEGEND_TOP_MARGIN__", str(VIEWPORT_HEIGHT - 5))  # align legend near viewport bottom
 
     # Note: These bindings are for fallback only; evdev handles actual keyboard input
@@ -987,9 +971,6 @@ class PurpleApp(App):
                 self.set_timer(60.0, self._debug_exit_on_no_input)
         except Exception:
             pass
-
-        # Poll for USB update signal file (written by systemd usb_updater service)
-        self._usb_update_timer = self.set_interval(2.0, self._check_usb_update_signal)
 
         # Auto-start demo if requested (for recording)
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
@@ -1581,50 +1562,6 @@ class PurpleApp(App):
             viewport.styles.border = ("heavy", Color.parse(primary_color))
         except Exception:
             pass
-
-    def _check_usb_update_signal(self) -> None:
-        """Poll for USB update signal file. Written by the systemd usb_updater service."""
-        if not os.path.exists(USB_UPDATE_SIGNAL_FILE):
-            return
-
-        # Remove signal file so we don't prompt again
-        try:
-            os.unlink(USB_UPDATE_SIGNAL_FILE)
-        except OSError:
-            pass
-
-        # Stop polling
-        if self._usb_update_timer:
-            self._usb_update_timer.stop()
-
-        self._show_usb_update_restart()
-
-    def _show_usb_update_restart(self) -> None:
-        """Show a friendly modal prompting for restart after USB update."""
-        from textual.widgets import Label
-        from textual.screen import ModalScreen
-
-        class UsbUpdateScreen(ModalScreen):
-            """Modal screen for USB update restart prompt."""
-
-            def compose(self):
-                with Container(id="update-dialog"):
-                    yield Label("New update ready!")
-                    yield Label("")
-                    yield Label("Press Enter to restart.")
-
-            async def handle_keyboard_action(self, action) -> None:
-                """Handle keyboard actions from evdev."""
-                if isinstance(action, ControlAction) and action.is_down:
-                    if action.action == 'enter':
-                        self.dismiss(True)
-
-        def handle_restart(should_restart: bool) -> None:
-            if should_restart:
-                import sys
-                os.execv(sys.executable, [sys.executable] + sys.argv)
-
-        self.push_screen(UsbUpdateScreen(), handle_restart)
 
     def _apply_theme(self) -> None:
         """Apply the current color theme"""

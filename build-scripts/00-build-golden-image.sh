@@ -306,19 +306,6 @@ TMPFILES
         cp /purple-src/scripts/on-device/*.sh "$MOUNT_DIR/opt/purple/scripts/" 2>/dev/null || true
     fi
 
-    # Copy USB update config (udev rule + systemd service)
-    cp /purple-src/config/udev/99-purple-update.rules "$MOUNT_DIR/etc/udev/rules.d/"
-    cp /purple-src/config/systemd/purple-usb-update@.service "$MOUNT_DIR/etc/systemd/system/"
-
-    # Copy USB update public key (if it exists, for signature verification)
-    if [ -f /purple-src/update-key.pub ]; then
-        cp /purple-src/update-key.pub "$MOUNT_DIR/opt/purple/"
-        log_info "  USB update public key installed"
-    else
-        log_info "  Warning: update-key.pub not found. USB updates will not work."
-        log_info "  Run 'just keygen' to generate a key pair."
-    fi
-
     # Install build deps for compiling Python C extensions + keyd + purple-reboot.
     # evdev needs gcc + linux/input.h. keyd needs gcc + make. All removed after.
     chroot "$MOUNT_DIR" apt-get install -y gcc make linux-libc-dev python3-dev

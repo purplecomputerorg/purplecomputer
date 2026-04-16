@@ -76,16 +76,6 @@ on live boot contain no NVRAM or EFI writes.
 
 ---
 
-## What About the USB Update Service?
-
-Purple Computer includes a USB update mechanism (`purple-usb-update@.service`) that
-triggers when a USB labeled `PURPLE_UPDATE` is inserted. If this were inserted during
-a live boot session, the updater would write to `/opt/purple/`, which during live
-boot is inside the RAM overlay. Nothing touches the internal disk. The USB update
-drive is also completely separate from the install USB (different volume label).
-
----
-
 ## Dual-Boot and Windows Machines
 
 When installing to a machine that already has Windows:
@@ -106,5 +96,3 @@ This only applies during an explicit install, not during live boot.
 | `build-scripts/01-remaster-iso.sh` | Builds the ISO, sets GRUB params, creates boot hook |
 | `build-scripts/install.sh` | Runs only on explicit install, handles disk detection and EFI setup |
 | `purple_tui/rooms/parent_menu.py` | Install UI, confirmation dialogs, casper detection |
-| `config/systemd/purple-usb-update@.service` | USB update service (writes to overlayfs only during live boot) |
-| `config/udev/99-purple-update.rules` | Triggers USB update service on `PURPLE_UPDATE` label |

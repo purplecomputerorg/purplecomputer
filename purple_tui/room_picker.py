@@ -96,17 +96,33 @@ class ExtraOption(Static):
         color: $background;
         text-style: bold;
     }
+
+    ExtraOption.disabled {
+        color: $text-muted;
+        border: round $surface-darken-1;
+    }
+
+    ExtraOption.disabled.selected {
+        background: $surface;
+        color: $text-muted;
+        border: heavy $surface-lighten-1;
+    }
     """
 
-    def __init__(self, icon: str, label: str, key_hint: str, **kwargs):
+    def __init__(self, icon: str, label: str, key_hint: str, disabled: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._icon = icon
         self._label = label
         self._key_hint = key_hint
+        self._disabled = disabled
         self.add_class("caps-sensitive")
+        if disabled:
+            self.add_class("disabled")
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
+        if self._disabled:
+            return caps(f"\n{self._icon}  {self._label}  {self._icon}\n")
         hint = f"Press {self._key_hint} or Enter" if self.has_class("selected") else f"Press {self._key_hint}"
         return caps(f"\n{self._icon}  {self._label}  {self._icon}\n{hint}")
 
@@ -280,7 +296,7 @@ class RoomPickerScreen(PurpleModal):
             with Horizontal(id="picker-extras"):
                 audio_ok = getattr(self.app, "audio_ok", None)
                 if audio_ok is False:
-                    yield ExtraOption(ICON_VOLUME_OFF, "No Sound", "", id="opt-volume")
+                    yield ExtraOption(ICON_VOLUME_OFF, "No Sound", "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")

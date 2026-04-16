@@ -841,7 +841,6 @@ class PurpleApp(App):
         """Called when app starts"""
         boot_log.heartbeat("PurpleApp.on_mount begin")
         self._apply_theme()
-        apply_saved_display_settings()
 
         # Ensure logind ignores power button (TUI handles it).
         # Defensive: a previous crash or logind-mediated shutdown during a
@@ -992,6 +991,11 @@ class PurpleApp(App):
 
         boot_log.heartbeat("PurpleApp.on_mount complete")
         boot_log.mark_first_render()
+
+        # Apply saved display brightness/contrast after first render so the
+        # xrandr probe (~0.2-1s) doesn't delay time-to-first-frame. The
+        # settings apply on the next event loop tick, imperceptible to users.
+        self.call_later(apply_saved_display_settings)
 
         # Background warmup: subprocess-probe + init the pygame mixer so
         # MusicRoom entry is instant (and we know early if audio is broken).

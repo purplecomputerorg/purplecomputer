@@ -33,8 +33,10 @@ MAX_ATTEMPTS = 5
 MIN_FONT = 8.0
 MAX_FONT = 48.0
 
-# Brief pause after setting font size for terminal to resize
-SETTLE_DELAY = 0.3
+# Max wait after setting font size for terminal to resize.
+# Polls every 20ms instead of sleeping the full duration.
+SETTLE_TIMEOUT = 0.3
+SETTLE_POLL = 0.02
 
 
 def _get_config_path() -> str | None:
@@ -142,8 +144,13 @@ def ensure_terminal_size() -> None:
 
         current_font = new_font
 
-        # Wait for terminal to resize
-        time.sleep(SETTLE_DELAY)
+        # Poll until terminal resizes or timeout (typically ~50-100ms)
+        deadline = time.monotonic() + SETTLE_TIMEOUT
+        while time.monotonic() < deadline:
+            c, r = os.get_terminal_size()
+            if c >= REQUIRED_TERMINAL_COLS and r >= REQUIRED_TERMINAL_ROWS:
+                break
+            time.sleep(SETTLE_POLL)
 
     # Clear loading message before Textual takes over
     print("\033[2J\033[H", end="", flush=True)

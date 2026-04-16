@@ -58,7 +58,7 @@ On shutdown, `ExecStop` repaints the splash so systemd teardown messages aren't 
 
 `purple-x11.service` starts. `ExecStartPre` runs `purple-wait-display`, which polls `/sys/class/drm/card*-*/status` for a connected display. This handles i915's async initialization on older hardware (MacBook 2014 took several seconds to report a connected display).
 
-Once a display is found (or 15s timeout), X11 starts. The xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI.
+Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI.
 
 **What the user sees:** Purple "Starting up..." screen holds until the TUI appears.
 
@@ -93,6 +93,28 @@ One transition: vendor logo to purple. Purple holds steady until the TUI is read
 - **VT palette trick:** `\033]P02d1b4e` redefines VT color 0 (normally black) to purple. Clearing the screen then fills it with "black" = purple. Works on all Linux framebuffer consoles. 24-bit RGB escapes (`\033[48;2;...`) do NOT work on VT consoles.
 - **Kernel params:** `vt.default_red=0x2d,...` sets the palette before any scripts run.
 - **X11:** `xsetroot -solid '#2d1b4e'` sets the root window. Alacritty background matches.
+
+---
+
+## Boot Speed Optimizations (April 2026)
+
+Audited the full boot path for unnecessary delays. Changes made:
+
+**Removed `sleep 1` in xinitrc (X readiness).** xinit uses a SIGUSR1 handshake + XOpenDisplay polling to guarantee X is accepting connections before running the client script. This has been standard behavior since X11R5 (early 1990s), unchanged in Ubuntu 24.04's xinit 1.4.1. The sleep was pure waste. Saves 1.0s every boot.
+
+**Faster font sizing poll.** `font_sizer.py` sleeps 0.3s per iteration waiting for Alacritty to resize after a font change. Replaced with 20ms polling of `os.get_terminal_size()` with the same 0.3s timeout. Typically resolves in 50-100ms, saving ~0.2s per iteration.
+
+**Deferred display settings probe.** `apply_saved_display_settings()` runs two xrandr subprocesses (~0.2-1s) to probe display control. Moved to `call_later()` after `mark_first_render()` so it doesn't block time-to-first-frame.
+
+### Investigated but left alone
+
+**`sleep 0.5` after matchbox-window-manager.** Could be replaced by polling `_NET_SUPPORTING_WM_CHECK` via `xprop`, but `xprop` requires `x11-utils` which isn't installed. Adding a package for 0.4s isn't worth the image size tradeoff.
+
+**`purple-wait-display.sh` (15s max poll).** Already fast on real hardware (exits on first connected connector, usually <0.5s). The 15s timeout protects against VMs and hardware with slow display enumeration. Reducing it risks black screens on edge-case hardware.
+
+**Apple logo time.** Entirely firmware. We can't control EFI initialization speed. GRUB is already instant (timeout=0).
+
+**Systemd boot chain.** Already very lean: minbase image, no networking/snapd/cloud-init/bluetooth services. casper-md5check masked. No further services to cut.
 
 ---
 

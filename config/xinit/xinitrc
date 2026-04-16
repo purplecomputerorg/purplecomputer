@@ -59,9 +59,9 @@ for dev in /dev/input/event*; do
     xlog "  evdev: $dev ($name)"
 done
 
-# Wait for X to initialize
-sleep 1
-xlog "X server ready (after 1s wait)"
+# xinit guarantees X is ready before running this script (SIGUSR1 handshake +
+# XOpenDisplay polling). No sleep needed. See guides/boot-display-sequence.md.
+xlog "X server ready (xinit handshake)"
 
 # Hide the mouse cursor permanently (keyboard-only UI, no mouse needed).
 # unclutter -idle 0 hides immediately; -root avoids event interference.

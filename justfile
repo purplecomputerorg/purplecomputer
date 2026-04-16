@@ -5,6 +5,22 @@
 default:
     @just --list
 
+# Show environment variables for testing
+env:
+    @echo "PURPLE_NO_AUDIO=1       Force audio off (test no-sound UX)"
+    @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use terminal keyboard)"
+    @echo "PURPLE_DEV_MODE=1       Dev shortcuts, screenshots, debug keys"
+    @echo "PURPLE_SLEEP_DEMO=1     Accelerated sleep/power timings"
+    @echo "PURPLE_FAKE_USB=STATE   Simulate USB: caching|cached|removed"
+    @echo "PURPLE_TEST_BATTERY=1   Show battery icon"
+    @echo "PURPLE_DEMO_AUTOSTART=1 Auto-run demo sequence"
+    @echo "PURPLE_DEMO_SEGMENT=X   Run specific demo segment"
+    @echo "PURPLE_TTS_CACHE=path   Override TTS cache dir"
+    @echo "PURPLE_SCREENSHOT_DIR=X Override screenshot output dir"
+    @echo "PURPLE_POWER_LOG=1      Force power manager logging"
+    @echo ""
+    @echo "Example: PURPLE_NO_AUDIO=1 just run"
+
 # Install dependencies and build packs
 setup:
     @echo "Setting up Purple Computer development environment..."

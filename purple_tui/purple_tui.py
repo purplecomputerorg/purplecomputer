@@ -1002,6 +1002,13 @@ class PurpleApp(App):
         # Retries on failure: PulseAudio/ALSA may still be initializing at
         # boot, so the first probe can fail even on working hardware.
         self.audio_ok = None  # None = probing, True/False = probed result
+        if os.environ.get("PURPLE_NO_AUDIO") == "1":
+            self.audio_ok = False
+            boot_log.heartbeat("mixer disabled (PURPLE_NO_AUDIO=1)")
+        else:
+            self._start_mixer_warmup()
+
+    def _start_mixer_warmup(self) -> None:
         import threading
         import time as _time
         def _warm():

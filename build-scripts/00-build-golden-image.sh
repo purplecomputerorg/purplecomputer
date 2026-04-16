@@ -145,7 +145,7 @@ main() {
     cat > "$MOUNT_DIR/etc/fstab" <<'FSTAB'
 # PurpleOS filesystem table
 LABEL=PURPLE_ROOT  /         ext4  defaults,errors=remount-ro  0 1
-LABEL=PURPLE_EFI   /boot/efi vfat  umask=0077                  0 1
+LABEL=PURPLE_EFI   /boot/efi vfat  umask=0077,nofail           0 1
 tmpfs              /tmp      tmpfs defaults,nosuid,nodev       0 0
 FSTAB
 
@@ -608,14 +608,16 @@ TIMEOUTS
     echo "$build_version" > "$MOUNT_DIR/etc/purple-version"
     log_info "Version stamp: $build_version"
 
-    # tty2: autologin as purple, always enabled. Escape hatch when Purple hangs.
+    # tty2: autologin as purple, starts at sysinit.target (not getty.target).
+    # This gives us a debug shell even when something blocks multi-user.target.
     mkdir -p "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d"
     cat > "$MOUNT_DIR/etc/systemd/system/getty@tty2.service.d/autologin.conf" <<'AUTOLOGIN'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin purple --skip-login --noclear --noissue --nohostname %I $TERM
 AUTOLOGIN
-    chroot "$MOUNT_DIR" systemctl enable getty@tty2.service
+    mkdir -p "$MOUNT_DIR/etc/systemd/system/sysinit.target.wants"
+    ln -sf /lib/systemd/system/getty@.service "$MOUNT_DIR/etc/systemd/system/sysinit.target.wants/getty@tty2.service"
 
     # Use Ubuntu's signed boot chain (shim → GRUB → kernel) for Secure Boot compatibility.
     # We download the signed binaries and set them up manually, rather than running
@@ -632,7 +634,7 @@ set default=0
 
 menuentry "PurpleOS" {
     search --no-floppy --label PURPLE_ROOT --set=root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
+    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
     initrd /boot/initrd.img
 }
 

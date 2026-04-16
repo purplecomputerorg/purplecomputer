@@ -601,7 +601,6 @@ class BootModeIndicator(Static):
 
     def _push_to_title_bar(self) -> None:
         muted = "#6a5a80"
-        safe_green = "#66bb6a"
         if not self._is_live:
             text, color = f"{ICON_HARDDISK} Installed", muted
         elif self._is_cached and self._usb_removed:
@@ -614,7 +613,7 @@ class BootModeIndicator(Static):
         elif self._blink_state:
             text, color = f"{ICON_USB} USB", muted
         else:
-            text, color = f"  USB", muted
+            text, color = "  USB", muted
         try:
             title_bar = self.app.query_one("#title-bar", TitleBar)
             title_bar.set_boot_mode(text, color)

@@ -629,52 +629,8 @@ def _is_dev_environment() -> bool:
 
 
 def _get_version_label() -> str:
-    """Read /etc/purple-version and format it for display.
-
-    Semver (v1.0, v1.2.3) shows as "Version 1.0".
-    Date-time (v2026.03.30-1430) shows as "Build: Mar 30, 2026".
-    Dev builds (build-abc1234-20260330) show as "Dev build: abc1234".
-    Returns empty string if no version file found.
-    """
-    version_file = Path("/etc/purple-version")
-    if not version_file.exists():
-        # Fall back to git short hash for dev/VM environments
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--short", "HEAD"],
-                capture_output=True, text=True, timeout=2,
-                cwd=Path(__file__).parent,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                return f"Dev: {result.stdout.strip()}"
-        except Exception:
-            pass
-        return ""
-    version = version_file.read_text().strip()
-    if not version:
-        return ""
-
-    # Semver: v1.0 or v1.2.3 (with optional pre-release)
-    if re.match(r'^v?\d+\.\d+(\.\d+)?$', version):
-        return f"Version {version.lstrip('v')}"
-
-    # Date-time release: v2026.03.30-1430
-    m = re.match(r'^v?(\d{4})\.(\d{2})\.(\d{2})-(\d{4})$', version)
-    if m:
-        year, month, day, time = m.groups()
-        month_names = [
-            "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        ]
-        mon = month_names[int(month)] if 1 <= int(month) <= 12 else month
-        return f"Build: {mon} {int(day)}, {year}"
-
-    # Dev build: build-abc1234-20260330
-    m = re.match(r'^build-([a-f0-9]+)-', version)
-    if m:
-        return f"Dev build: {m.group(1)}"
-
-    return version
+    from ..diagnostics import get_version_label
+    return get_version_label()
 
 
 def _get_menu_items() -> list:
@@ -707,6 +663,7 @@ def _get_menu_items() -> list:
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
+    items.append(("menu-support", "Support info"))
     items.append(("menu-shutdown", "Shut Down"))
     items.append(("menu-exit", "Exit Parent Menu"))
     return items
@@ -1368,7 +1325,10 @@ class ParentMenu(PurpleModal):
                 id="parent-live-hint",
             )
             with Vertical(id="parent-items"):
+                audio_ok = getattr(self.app, "audio_ok", None)
                 for item_id, label in self._menu_items:
+                    if item_id == "menu-support" and audio_ok is False:
+                        label = f"{label}   (audio not working)"
                     item = ParentMenuItem(label, item_id)
                     if item_id == "menu-install" and not _is_usb_payload_available():
                         item.add_class("disabled")
@@ -1486,6 +1446,8 @@ class ParentMenu(PurpleModal):
             self._exit_to_bash()
         elif item_id == "menu-system":
             self._exit_to_system()
+        elif item_id == "menu-support":
+            self._open_support_info()
         elif item_id == "menu-shutdown":
             self._shutdown()
         elif item_id == "menu-exit":
@@ -1551,6 +1513,11 @@ class ParentMenu(PurpleModal):
                 self.app.call_later(lambda: self.app.push_screen(InstallProgressScreen()))
 
         self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
+
+    def _open_support_info(self) -> None:
+        """Open the Support info modal."""
+        from .support_info import SupportInfoScreen
+        self.app.push_screen(SupportInfoScreen())
 
     def _open_shell(self) -> None:
         """Open a bash shell, suspending the TUI"""

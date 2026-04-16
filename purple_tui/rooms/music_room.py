@@ -155,7 +155,6 @@ def reinit_mixer() -> None:
     except pygame.error:
         _MIXER_READY = False
     from . import tts
-    tts._mixer_initialized = False
     tts._current_channel = None
 
 
@@ -692,10 +691,7 @@ class MusicMode(Container, can_focus=True):
         return getattr(self.app, '_littles_mode', None) == 'music_noscreen'
 
     def on_mount(self) -> None:
-        if not warm_mixer() and not getattr(self.app, "_audio_warned", False):
-            self.app._audio_warned = True
-            from ..modal import AudioUnavailableModal
-            self.app.push_screen(AudioUnavailableModal())
+        warm_mixer()
         self.focus()
         self._update_hint()
         if self._is_noscreen:

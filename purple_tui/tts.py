@@ -27,25 +27,11 @@ os.environ['ORT_LOGGING_LEVEL'] = '3'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 from contextlib import contextmanager
 
-# Lazy: pygame.mixer drags in numpy (~120ms) and mixer.init() can block in C.
-# Kept out of module scope so importing tts is cheap. _ensure_pygame() is
-# called by every function that actually needs the mixer.
-pygame = None  # populated by _ensure_pygame()
-
-
-def _ensure_pygame():
-    global pygame
-    if pygame is not None:
-        return pygame
-    import pygame as _pg
-    import pygame.mixer  # noqa: F401
-    pygame = _pg
-    return pygame
-
-
-def warm_pygame() -> None:
-    """Trigger lazy load of pygame (for background warmup)."""
-    _ensure_pygame()
+# Lazy: pygame.mixer drags in numpy (~120ms) and mixer.init() can block
+# forever in C on broken audio hardware. Actual init happens via
+# music_room.warm_mixer(), which runs a subprocess probe first. This module
+# reuses whatever pygame module that call populated.
+pygame = None  # populated by _ensure_mixer() after warm_mixer() succeeds
 
 
 @contextmanager
@@ -456,110 +442,23 @@ def _get_piper_voice():
         return None
 
 
-_mixer_initialized = False
-
-
 def _ensure_mixer() -> bool:
-    """Check if pygame mixer is available (don't initialize, let music mode do it)"""
-    global _mixer_initialized
-    if _mixer_initialized:
-        return True
-    _ensure_pygame()
-    if pygame.mixer.get_init():
-        _mixer_initialized = True
-        return True
-    try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
-        pygame.mixer.set_num_channels(16)
-        _mixer_initialized = True
-        return True
-    except pygame.error:
-        return False
+    """Return True iff the pygame mixer is safely available.
 
-
-_init_done = False
-
-
-def init() -> None:
-    """Pre-initialize TTS (load voice model and mixer). Call when speech is enabled."""
-    global _init_done
-    if _init_done:
-        return
-    _init_done = True
-    thread = threading.Thread(target=_init_sync, daemon=True)
-    thread.start()
-
-
-def _init_sync() -> None:
-    """Initialize in background thread, then pre-generate common phrases."""
-    _get_piper_voice()
-    _ensure_mixer()
-    # Pre-generate in a separate thread so init completes quickly
-    thread = threading.Thread(target=_pregenerate_cache, daemon=True)
-    thread.start()
-
-
-def _pregenerate_cache() -> None:
-    """Pre-generate cached audio for common utterances in the background.
-
-    Covers letters, numbers, colors, all emoji words, and play mode words.
-    Runs at low priority so it doesn't block normal usage.
+    Delegates to music_room.warm_mixer(), which runs the subprocess probe
+    exactly once per session and caches the result. Never initializes
+    pygame.mixer in-process directly — that call can hang forever in
+    snd_pcm_open() on broken audio hardware while holding the GIL.
     """
-    voice = _get_piper_voice()
-    if voice is None:
-        return
-
-    phrases = []
-
-    # All 26 letters
-    for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-        phrases.append(letter)
-
-    # Digits 0-20
-    number_words = [
-        "zero", "one", "two", "three", "four", "five", "six", "seven",
-        "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
-        "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty",
-    ]
-    phrases.extend(number_words)
-
-    # Math words
-    phrases.extend(["plus", "equals", "times", "minus"])
-
-    # System color words
-    phrases.extend(SYSTEM_COLORS)
-
-    # All emoji words (cat, dog, rocket, etc.)
-    try:
-        from .content import get_content
-        content = get_content()
-        for word in content.emojis:
-            # Skip emoticon-style entries like ":)" or "<3"
-            if word.isalpha() or " " in word:
-                phrases.append(word)
-    except Exception:
-        pass
-
-    # Music mode recognized words (cat, dog, mom, dad, etc.)
-    try:
-        from .music_words import WORDS
-        phrases.extend(WORDS)
-    except Exception:
-        pass
-
-    # Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for phrase in phrases:
-        key = phrase.lower()
-        if key not in seen:
-            seen.add(key)
-            unique.append(phrase)
-
-    for phrase in unique:
-        prepared = _prepare_text(phrase)
-        if _get_cached(prepared) is None:
-            _synthesize_to_cache(voice, prepared)
+    global pygame
+    from .rooms.music_room import warm_mixer
+    if not warm_mixer():
+        return False
+    if pygame is None:
+        import pygame as _pg
+        import pygame.mixer  # noqa: F401
+        pygame = _pg
+    return True
 
 
 def _make_synth_config():

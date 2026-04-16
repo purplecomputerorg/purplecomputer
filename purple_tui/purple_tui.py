@@ -1017,10 +1017,11 @@ class PurpleApp(App):
         # This must run in a thread because warm_mixer() blocks on subprocess
         # wait; but it doesn't hold the GIL (subprocess.run releases around
         # wait()), so Textual keeps running.
+        self.audio_ok = None  # None = probing, True/False = probed result
         import threading
         def _warm():
             from .rooms.music_room import warm_mixer
-            warm_mixer()
+            self.audio_ok = warm_mixer()
             boot_log.heartbeat("music mixer warmup complete")
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
 
@@ -2883,15 +2884,6 @@ def main():
         sys.exit(1)
 
     app.run(mouse=False)  # Purple Computer is keyboard-only
-
-    # Belt-and-suspenders: ensure pygame mixer is shut down after app.run()
-    # returns, in case on_unmount didn't fire or was skipped.
-    try:
-        import pygame.mixer
-        if pygame.mixer.get_init():
-            pygame.mixer.quit()
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

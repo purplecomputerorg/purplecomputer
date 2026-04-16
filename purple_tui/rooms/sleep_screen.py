@@ -10,8 +10,6 @@ Two power states: awake and sleep face. No DPMS screen-off state.
 Timers adapt to charger status and lid position.
 """
 
-from pathlib import Path
-
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Static
@@ -324,7 +322,9 @@ class LiveBootSplash(Screen):
     Welcome screen shown once on first launch during live boot (USB).
 
     Tells the parent that Purple is running from USB and will be gone
-    after shutdown unless installed. Dismissed by any key press.
+    after shutdown unless installed. When audio is detected as broken,
+    appends a one-line warning pointing at Support info + USB adapter.
+    Dismissed by any key press.
     """
 
     DEFAULT_CSS = """
@@ -339,25 +339,54 @@ class LiveBootSplash(Screen):
         margin-bottom: 2;
     }
 
+    #splash-audio-warning {
+        content-align: center middle;
+        color: $warning;
+        margin-bottom: 2;
+    }
+
     #splash-hint {
         content-align: center middle;
         color: $text-muted;
     }
     """
 
+    _BASE_MESSAGE = (
+        "Purple Computer is running from USB.\n"
+        "\n"
+        "You can keep using it, but if the computer\n"
+        "turns off, you'll need the USB to start\n"
+        "Purple again.\n"
+        "\n"
+        "To install Purple permanently,\n"
+        "visit the Parent Menu."
+    )
+
+    _AUDIO_WARNING = (
+        "Sound is not working on this computer.\n"
+        "Plug in a USB audio adapter, or open the\n"
+        "Parent Menu to see Support info."
+    )
+
     def compose(self) -> ComposeResult:
-        yield Static(
-            "Purple Computer is running from USB.\n"
-            "\n"
-            "You can keep using it, but if the computer\n"
-            "turns off, you'll need the USB to start\n"
-            "Purple again.\n"
-            "\n"
-            "To install Purple permanently,\n"
-            "visit the Parent Menu.",
-            id="splash-message",
-        )
+        yield Static(self._BASE_MESSAGE, id="splash-message")
+        yield Static("", id="splash-audio-warning")
         yield Static("Press any key to start", id="splash-hint")
+
+    def on_mount(self) -> None:
+        # Audio probe runs on a background thread started from on_mount
+        # of PurpleApp. By the time the user finishes reading the splash,
+        # app.audio_ok is almost always set. Poll briefly in case it isn't.
+        self._refresh_audio_warning()
+        self.set_interval(0.25, self._refresh_audio_warning)
+
+    def _refresh_audio_warning(self) -> None:
+        audio_ok = getattr(self.app, "audio_ok", None)
+        try:
+            warning = self.query_one("#splash-audio-warning", Static)
+        except Exception:
+            return
+        warning.update(self._AUDIO_WARNING if audio_ok is False else "")
 
     def on_key(self, event: events.Key) -> None:
         """Any key dismisses the splash."""

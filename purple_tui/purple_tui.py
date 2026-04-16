@@ -999,15 +999,25 @@ class PurpleApp(App):
 
         # Background warmup: subprocess-probe + init the pygame mixer so
         # MusicRoom entry is instant (and we know early if audio is broken).
-        # This must run in a thread because warm_mixer() blocks on subprocess
-        # wait; but it doesn't hold the GIL (subprocess.run releases around
-        # wait()), so Textual keeps running.
+        # Retries on failure: PulseAudio/ALSA may still be initializing at
+        # boot, so the first probe can fail even on working hardware.
         self.audio_ok = None  # None = probing, True/False = probed result
         import threading
+        import time as _time
         def _warm():
-            from .rooms.music_room import warm_mixer
-            self.audio_ok = warm_mixer()
-            boot_log.heartbeat("music mixer warmup complete")
+            from .rooms.music_room import warm_mixer, _reset_mixer_state
+            delays = [1, 2, 4]
+            for attempt in range(len(delays) + 1):
+                if warm_mixer():
+                    self.audio_ok = True
+                    boot_log.heartbeat(f"mixer ok (attempt {attempt + 1})")
+                    return
+                boot_log.heartbeat(f"mixer probe failed (attempt {attempt + 1})")
+                if attempt < len(delays):
+                    _reset_mixer_state()
+                    _time.sleep(delays[attempt])
+            self.audio_ok = False
+            boot_log.heartbeat("music mixer warmup complete (failed)")
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
 
     async def on_unmount(self) -> None:

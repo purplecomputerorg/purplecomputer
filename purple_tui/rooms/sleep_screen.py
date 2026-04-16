@@ -363,7 +363,7 @@ class LiveBootSplash(Screen):
     )
 
     _AUDIO_WARNING = (
-        "Sound is not working on this computer.\n"
+        "\U0001f507 Sound is not working on this computer.\n"
         "Plug in a USB audio adapter, or open the\n"
         "Parent Menu to see Support info."
     )

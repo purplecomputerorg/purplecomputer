@@ -91,8 +91,12 @@ _PROBE_SCRIPT = (
 )
 
 
-def warm_mixer(timeout_seconds: float = 5.0) -> bool:
+def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     """Probe mixer in a subprocess, then init in-process if it passed.
+
+    Timeout must cover cold Python startup + pygame/numpy import + mixer
+    init, so 10s gives margin for older hardware. True hangs (CS8209)
+    block forever, so 10s cleanly separates working from broken.
 
     Called from both the post-boot warmup thread and MusicMode.on_mount.
     The lock serialises them so the probe runs at most once per process;
@@ -132,6 +136,13 @@ def warm_mixer(timeout_seconds: float = 5.0) -> bool:
 def _ensure_mixer() -> bool:
     """Backward-compatible alias for callers that don't pass a timeout."""
     return warm_mixer()
+
+
+def _reset_mixer_state() -> None:
+    """Clear cached probe result so warm_mixer() retries on next call."""
+    global _MIXER_READY
+    with _MIXER_LOCK:
+        _MIXER_READY = None
 
 
 def reinit_mixer() -> None:

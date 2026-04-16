@@ -14,7 +14,7 @@ from textual.app import ComposeResult
 from textual.message import Message
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
     ICON_BROOM, ICON_CODE,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
@@ -278,7 +278,11 @@ class RoomPickerScreen(PurpleModal):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
             with Horizontal(id="picker-extras"):
-                yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
+                audio_ok = getattr(self.app, "audio_ok", None)
+                if audio_ok is False:
+                    yield ExtraOption(ICON_VOLUME_OFF, "No Sound", "", id="opt-volume")
+                else:
+                    yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
 
             if self._show_code_row:
@@ -422,7 +426,9 @@ class RoomPickerScreen(PurpleModal):
         self.app.push_screen(ConfirmFreshScreen(), on_confirm)
 
     def _open_volume(self) -> None:
-        """Open the volume modal."""
+        """Open the volume modal (skip if audio is broken)."""
+        if getattr(self.app, "audio_ok", None) is False:
+            return
         self.app.push_screen(VolumeModal())
 
     async def _on_key(self, event) -> None:

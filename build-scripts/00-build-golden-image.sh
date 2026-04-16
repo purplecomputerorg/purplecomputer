@@ -319,6 +319,7 @@ TMPFILES
     log_info "Precompiling Python bytecode..."
     chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /opt/purple/purple_tui || true
     chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /usr/lib/python3 || true
+    chroot "$MOUNT_DIR" python3 -m compileall -f -q -j 0 /usr/local/lib/python3 || true
 
     # Compile static reboot binary (used after install for USB-safe reboot).
     # Must happen before gcc is removed. Static linking = zero overlay dependency.

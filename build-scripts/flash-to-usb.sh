@@ -235,12 +235,22 @@ confirm_write() {
 }
 
 write_iso() {
+    # Prompt for sudo once up front so a slow dd doesn't hit a mid-op password
+    # prompt (with oflag=sync the write can take several minutes).
+    sudo -v
+
     log_info "Unmounting any partitions on $TARGET_DEV..."
     for part in "${TARGET_DEV}"*; do
-        if mountpoint -q "$part" 2>/dev/null || mount | grep -q "^$part "; then
-            sudo umount "$part" 2>/dev/null || true
-        fi
+        sudo umount "$part" 2>/dev/null || true
     done
+
+    # Block udev rule execution (incl. udisks2 auto-mount) during the flash.
+    # Without this, udisks mounts FAT/ISO9660 partitions from the freshly-
+    # written ISO between write and readback; mount-time FAT metadata writes
+    # then corrupt the bytes our verification reads. trap guarantees udev is
+    # re-enabled on any exit path.
+    sudo udevadm control --stop-exec-queue 2>/dev/null || true
+    trap 'sudo udevadm control --start-exec-queue 2>/dev/null || true' EXIT INT TERM
 
     # Get ISO details
     local iso_filename iso_size_human iso_size_bytes iso_modified iso_sha256
@@ -249,31 +259,30 @@ write_iso() {
     iso_size_bytes="$(stat -c '%s' "$ISO_PATH")"
     iso_modified="$(stat -c '%y' "$ISO_PATH" | cut -d'.' -f1)"
 
-    # Get or calculate source SHA256
-    log_info "Calculating source ISO checksum..."
-    if [[ -f "${ISO_PATH}.sha256" ]]; then
-        iso_sha256="$(cat "${ISO_PATH}.sha256" | awk '{print $1}')"
-        log_info "Using cached checksum from ${iso_filename}.sha256"
-    else
-        iso_sha256="$(sha256sum "$ISO_PATH" | awk '{print $1}')"
-    fi
+    # Always compute source SHA256 fresh. A stale cached .sha256 from a
+    # previous build would produce confusing "checksum mismatch" failures
+    # that are actually just a stale hash file, not a bad write.
+    log_info "Computing source ISO checksum..."
+    iso_sha256="$(sha256sum "$ISO_PATH" | awk '{print $1}')"
 
     echo ""
     log_info "Writing ISO to $TARGET_DEV..."
     echo ""
 
-    # Use dd with progress
-    sudo dd if="$ISO_PATH" of="$TARGET_DEV" bs=4M status=progress conv=fsync
+    # oflag=sync: each write() is synchronous to the block layer, so data
+    # is committed per-block instead of buffered and flushed as a burst at
+    # end. Significantly more reliable on cheap USB drives whose firmware
+    # buffers can lie about fast completions.
+    sudo dd if="$ISO_PATH" of="$TARGET_DEV" bs=4M status=progress conv=fsync oflag=sync
 
     log_info "Syncing..."
     sync
-    # Flush the USB drive's hardware write cache (the drive's internal buffer,
-    # not the kernel page cache). Without this, the drive firmware may report
-    # "done" while data is still in its NAND write buffer, causing readback
-    # verification to see stale data.
+    # BLKFLSBUF flushes kernel block-device buffers and, on modern kernels,
+    # issues a device-level flush. We don't call hdparm -F: it sends ATA
+    # commands that USB mass-storage bridges don't pass through, so it's a
+    # silent no-op on USB drives.
     sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
-    sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
-    sleep 5
+    sleep 10
 
     # Verification: read back from USB and compare SHA256.
     # On mismatch, retry once with a longer flush delay before failing.
@@ -286,14 +295,18 @@ write_iso() {
             log_info "Verifying write (reading back from USB)..."
         else
             log_warn "First verification failed, retrying with extended flush..."
-            # Extended flush: give the drive more time, then re-flush
             sudo blockdev --flushbufs "$TARGET_DEV" 2>/dev/null || true
-            sudo hdparm -F "$TARGET_DEV" 2>/dev/null || true
-            sleep 10
+            sleep 15
         fi
         echo ""
 
-        # Drop kernel page cache
+        # Defense in depth: re-unmount anything that slipped past the udev
+        # block (e.g. an event queued before stop-exec-queue took effect).
+        for part in "${TARGET_DEV}"*; do
+            sudo umount "$part" 2>/dev/null || true
+        done
+
+        # Drop kernel page cache so readback hits the device, not RAM.
         sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
 
         # Read back with O_DIRECT to bypass page cache entirely.
@@ -332,7 +345,29 @@ write_iso() {
         echo ""
         echo -e "  ${BOLD}Target:${NC}       $TARGET_DEV ($TARGET_MODEL)"
         echo ""
-        log_info "You can safely remove $TARGET_DEV"
+
+        # Re-enable udev now that verification is done. udisksctl below needs
+        # a running udisks2 daemon, which is driven by udev events.
+        sudo udevadm control --start-exec-queue 2>/dev/null || true
+        trap - EXIT INT TERM
+
+        # Power-cycle the drive: kernel re-reads partition table, then udisks
+        # detaches the device. Some USB controllers (e.g. Verbatim) won't boot
+        # unless they re-enumerate fresh on next plug-in; this is what GNOME's
+        # "safely eject" and balenaEtcher do at the end of a flash.
+        sudo blockdev --rereadpt "$TARGET_DEV" 2>/dev/null || true
+        sudo partprobe "$TARGET_DEV" 2>/dev/null || true
+        sudo udevadm settle
+        if sudo udisksctl power-off --block-device "$TARGET_DEV" 2>/dev/null; then
+            log_info "Drive ejected."
+        elif sudo eject "$TARGET_DEV" 2>/dev/null; then
+            log_info "Drive ejected."
+        else
+            log_warn "Could not power-off or eject (udisksctl/eject unavailable)."
+        fi
+        echo ""
+        echo -e "  ${BOLD}${YELLOW}→ Unplug $TARGET_DEV now.${NC}"
+        echo -e "    To flash another drive, plug it back in first (or a different drive)."
     else
         echo -e "${BOLD}${RED}╔════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${BOLD}${RED}║                 VERIFICATION FAILED                        ║${NC}"
@@ -345,6 +380,46 @@ write_iso() {
         echo ""
         echo -e "  ${RED}${BOLD}✗ CHECKSUMS DO NOT MATCH${NC}"
         echo ""
+
+        # Diagnostics to localize the failure. Each check produces a distinct
+        # signature: prefix mismatch = write is fundamentally broken; prefix
+        # matches but full doesn't = timing/race/auto-mount corruption; I/O
+        # errors in dmesg = hardware or USB-bus trouble.
+        log_warn "Running diagnostics..."
+        echo ""
+
+        local iso_1mb_sha usb_1mb_sha_direct usb_1mb_sha_buffered
+        iso_1mb_sha="$(head -c 1048576 "$ISO_PATH" | sha256sum | awk '{print $1}')"
+        sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+        usb_1mb_sha_direct="$(sudo dd if="$TARGET_DEV" bs=1M count=1 iflag=direct status=none 2>/dev/null | sha256sum | awk '{print $1}')"
+        sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+        usb_1mb_sha_buffered="$(sudo dd if="$TARGET_DEV" bs=1M count=1 status=none 2>/dev/null | sha256sum | awk '{print $1}')"
+
+        echo -e "  ${BOLD}First-1MB comparison:${NC}"
+        echo -e "    ISO:              $iso_1mb_sha"
+        echo -e "    USB (O_DIRECT):   $usb_1mb_sha_direct"
+        echo -e "    USB (buffered):   $usb_1mb_sha_buffered"
+        if [[ "$iso_1mb_sha" == "$usb_1mb_sha_direct" ]]; then
+            echo -e "    ${GREEN}→ First 1MB MATCHES${NC} (write started correctly; divergence is later)"
+        elif [[ "$usb_1mb_sha_direct" != "$usb_1mb_sha_buffered" ]]; then
+            echo -e "    ${YELLOW}→ O_DIRECT and buffered reads DIFFER${NC} (cache/coherence issue)"
+        else
+            echo -e "    ${RED}→ First 1MB DIFFERS${NC} (write fundamentally broken or wrong device)"
+        fi
+        echo ""
+
+        echo -e "  ${BOLD}Drive info:${NC}"
+        lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,SERIAL,PHY-SEC,LOG-SEC "$TARGET_DEV" 2>&1 | sed 's/^/    /'
+        echo ""
+
+        echo -e "  ${BOLD}Current mounts on ${TARGET_DEV}*:${NC}"
+        findmnt -rn -o TARGET,SOURCE,FSTYPE 2>/dev/null | awk -v d="$TARGET_DEV" '$2 ~ d {print "    " $0}' || echo "    (none)"
+        echo ""
+
+        echo -e "  ${BOLD}Recent kernel messages for $(basename "$TARGET_DEV"):${NC}"
+        sudo dmesg -T 2>/dev/null | grep -iE "$(basename "$TARGET_DEV")|usb.*(error|reset|disconnect)" | tail -10 | sed 's/^/    /' || echo "    (none)"
+        echo ""
+
         log_error "The USB drive may be faulty or the write failed."
         log_error "Do NOT use this drive for installation."
         exit 1
@@ -412,6 +487,16 @@ main() {
 
     find_whitelisted_drives
     select_drive
+
+    # Post-eject drives linger in /dev as media-less nodes until re-plugged.
+    # Catch this here so we fail with a useful message instead of a cryptic
+    # "No medium found" partway through dd.
+    if ! sudo blockdev --getsize64 "$TARGET_DEV" >/dev/null 2>&1; then
+        log_error "$TARGET_DEV has no medium."
+        log_error "The drive was ejected by a previous flash. Unplug it and plug it back in, then re-run."
+        exit 1
+    fi
+
     if [[ "$skip_confirm" != true ]]; then
         confirm_write
     fi

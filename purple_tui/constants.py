@@ -99,6 +99,7 @@ ICON_SHIFT = "⇧"             # Unicode upward arrow (shift indicator)
 ICON_SHIFT_ACTIVE = "⬆"       # Unicode upward arrow (shift active, filled)
 ICON_CODE = "󰚩"               # nf-md-robot (code room)
 ICON_KEYBOARD = "󰌌"          # nf-md-keyboard (key capture indicator)
+ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
 ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
 

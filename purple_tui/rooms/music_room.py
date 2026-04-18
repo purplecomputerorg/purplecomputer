@@ -29,7 +29,7 @@ from ..music_constants import (
 )
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
-from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE
+from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -251,7 +251,7 @@ class MusicRoomHeader(Static):
         letters_inner = f" {letters_label} "
         modes = f"{music_part}  {letters_part}"
         modes_w = len(music_inner) + 2 + len(letters_inner)
-        hint = caps("↹ Tab to switch")
+        hint = caps(f"{ICON_TAB} Tab to switch")
         hint_w = len(hint)
         width = self.size.width or 134
         left_pad = max(0, (width - modes_w) // 2)

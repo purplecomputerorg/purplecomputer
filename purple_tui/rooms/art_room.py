@@ -27,6 +27,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb
+from ..constants import ICON_TAB
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
 )
@@ -1216,7 +1217,7 @@ class CanvasHeader(Static):
 
         modes = f"{paint_part}  {write_part}"
         modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
-        hint = caps("↹ Tab to switch")
+        hint = caps(f"{ICON_TAB} Tab to switch")
         hint_w = len(hint)
         width = self.size.width or 134
         left_pad = max(0, (width - modes_w) // 2)

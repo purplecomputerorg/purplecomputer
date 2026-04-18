@@ -1212,7 +1212,7 @@ class CanvasHeader(Static):
             else:
                 return f"{write_part}"
 
-        return caps(f"{paint_part}  [dim]Tab[/]  {write_part}")
+        return caps(f"{paint_part}  {write_part}  [dim]· Tab to switch between painting and typing[/]")
 
 
 # =============================================================================
@@ -1240,7 +1240,7 @@ class ArtHintBar(Static):
         caps = getattr(self.app, 'caps_text', lambda x: x)
         if getattr(self.app, '_littles_mode', None):
             return caps("  Type to paint!  ")
-        return caps("  Press Tab to switch tools. Type to paint.  ")
+        return caps("  Type to paint.  ")
 
 
 # =============================================================================

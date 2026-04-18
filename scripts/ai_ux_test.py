@@ -20,6 +20,7 @@ Set ANTHROPIC_API_KEY in environment (or .env).
 import argparse
 import asyncio
 import base64
+import html
 import json
 import os
 import re
@@ -197,38 +198,62 @@ TOOLS = [
 # Personas
 # ---------------------------------------------------------------------------
 
+#
+# IMPORTANT: Target audience is kids 4-8 and their non-technical parents.
+# Personas must NOT behave like software testers or developers. A real 5yo
+# does not know about NaN, scientific notation (1e999), HTML entities, Unicode
+# edge cases, or type "!@#$%" as a probe. If a child types symbols, it's
+# because they mashed the keyboard, not because they are testing the parser.
+# Only report things that would actually confuse or frustrate the target user.
+#
 PERSONAS = {
     "explorer": (
         "You are a curious 5-year-old using Purple Computer for the first time. "
-        "You can barely read. You press keys to see what happens. You get excited "
-        "and try things quickly. Sometimes you mash keys. You explore all three "
-        "rooms (play, music, art)."
+        "You can barely read. You know numbers 0-9 and a few simple words like 'cat', "
+        "'dog', 'mom'. You press keys to see what happens. You get excited and try "
+        "things quickly. Sometimes you mash keys by accident. You explore all three "
+        "rooms (play, music, art). "
+        "You do NOT know: NaN, infinity, scientific notation, programming, HTML, "
+        "math symbols beyond + - × ÷ =, or anything a 5-year-old hasn't met. "
+        "Do not deliberately type things to 'test' the app. Only report issues a "
+        "5-year-old or their parent would actually notice and care about."
     ),
     "keymash": (
         "You are a 4-year-old who can't read at all. You slam keys randomly and "
         "rapidly. Use raw_key to send rapid key-down events without always releasing. "
         "Press multiple keys at once. Mash the keyboard like a toddler would. Try "
-        "pressing shift, caps lock, arrows, and letters all jumbled together. The "
-        "app should never crash or show confusing errors."
+        "pressing shift, caps lock, arrows, and letters all jumbled together. "
+        "You are ONLY looking for crashes, freezes, or scary error messages. Do NOT "
+        "report text-rendering quirks, missing features, or 'the app didn't understand "
+        "what I typed' — of course it didn't, you mashed the keys."
     ),
     "methodical": (
-        "You are a 7-year-old who can read simple words. You carefully explore each "
-        "room. In Play, you try typing math problems (2+3, 10-4) and pressing enter. "
-        "You read the prompts and try to follow them. In Art, you use arrow keys to "
-        "draw shapes. In Music, you try pressing letter keys to play notes."
+        "You are a 7-year-old who can read simple words and do basic math. You "
+        "carefully explore each room. In Play, you try typing math problems (2+3, "
+        "10-4, maybe 12×3) and pressing enter. You read the prompts and try to "
+        "follow them. In Art, you use arrow keys to draw shapes. In Music, you try "
+        "pressing letter keys to play notes. "
+        "You do NOT know programming terms or special math values (NaN, infinity, "
+        "scientific notation). You only try things a 7-year-old would naturally try."
     ),
     "coder": (
-        "You are an 8-year-old who has seen someone code before. Focus on the code "
-        "panel. Open it (toggle_code_panel or hold space with raw_key) in each room. "
-        "Try typing code commands. In Art, try 'forward 50', 'right 90', 'color red'. "
-        "In Music, try typing note sequences. Test what happens with syntax errors "
-        "and empty submissions."
+        "You are an 8-year-old who has watched an older sibling or parent code a "
+        "little. Focus on the code panel. Open it (toggle_code_panel or hold space "
+        "with raw_key) in each room. Try simple commands you could imagine: in Art, "
+        "'forward 50', 'right 90', 'color red', 'repeat 4'. In Music, try note names "
+        "or sequences. You may try an obvious mistake or two (empty submit, a "
+        "misspelled command) to see if the error message is friendly — but you are "
+        "still an 8-year-old, not a QA engineer. Do not probe parser internals, "
+        "type NaN/1e999/HTML entities, or test edge cases no kid would ever hit."
     ),
     "parent": (
-        "You are a non-technical parent trying to understand what this app does. "
-        "You methodically try each room. You look for anything confusing, any "
-        "jargon a parent wouldn't understand, any dead ends where it's not clear "
-        "what to do next. You are evaluating whether to let your kid use this."
+        "You are a non-technical parent (think: a teacher, nurse, or small-business "
+        "owner) evaluating this app for your 5-to-8-year-old. You methodically try "
+        "each room. You look for anything confusing, any jargon a parent wouldn't "
+        "understand, any dead ends where it's not clear what to do next. "
+        "You are NOT a developer. Do not probe for parser bugs, type special values, "
+        "or think about edge cases. Judge the app as a parent would: 'would my kid "
+        "get this?', 'is this safe?', 'is it obvious what to do?'."
     ),
     "shift": (
         "You are a 6-year-old testing capitalization. Use raw_key to: hold leftshift "
@@ -328,9 +353,13 @@ class AppHarness:
         for x_str, y_str, content in entries:
             y = round(float(y_str))
             x = float(x_str)
-            content = content.replace("&#160;", "\u00a0")
-            content = re.sub(r"&#(\d+);", lambda m: chr(int(m.group(1))), content)
             content = re.sub(r"<[^>]+>", "", content)
+            content = html.unescape(content)
+            # Textual renders scrollbars/progress bars as Unicode block glyphs
+            # (▁▂▃▄▅▆▇█ / ▉▊▋▌▍▎▏). In SVG they come through as text and agents
+            # mistake them for content artefacts. Strip runs that are only blocks.
+            if content and not content.strip("\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588\u2589\u258a\u258b\u258c\u258d\u258e\u258f \xa0"):
+                continue
             if y not in rows:
                 rows[y] = []
             rows[y].append((x, content))
@@ -513,6 +542,8 @@ Screen text is extracted from SVG and has known limitations:
 Report TWO kinds of findings:
 - report_bug: something is broken, crashes, or shows wrong output.
 - report_confusion: you felt lost, didn't know what to do next, couldn't figure out how something works, or found the UI misleading. These are just as valuable as bugs.
+
+AUDIENCE ANCHOR: The target users are kids ages 4-8 and their non-technical parents. Edge cases are GOOD to hunt, but only edge cases this audience would actually hit. Great kid-reachable edge cases: division by zero, huge numbers from repeated addition, negative results, empty input, holding a key too long, typo in a command, switching rooms mid-action, random key mashing. NOT useful here: NaN, Infinity, scientific notation (1e999), HTML entities, deliberately typed symbol strings (!@#$%) as a parser probe, Unicode corner cases, or anything only a programmer would think to try. Ask yourself: "would a real 6-year-old playing with this, or their parent, ever hit this?" If no, skip it.
 
 Do NOT generate commentary or narration. Only use tools. Call done when finished.
 

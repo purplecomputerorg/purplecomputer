@@ -123,12 +123,14 @@ Your job: given a budget, what's been tested, and what's been found, plan the SI
 
 Think about:
 - What areas/interactions haven't been tested yet?
-- What edge cases might be hiding bugs?
+- What edge cases a KID (4-8) would actually hit might be hiding bugs?
 - Where might the UX be confusing for a 5-year-old or a non-technical parent?
 - Are there dead ends, missing affordances, or unclear next steps?
 - Where did previous sessions see "almost-bugs" or unexpected behavior worth deeper investigation?
 - Cheap models (Haiku) for broad sweeps and crash testing; expensive models (Opus) for subtle UX/confusion issues.
 - Alternate between bug-hunting and confusion-hunting missions. Both matter equally.
+
+AUDIENCE CONSTRAINT (critical): Target users are kids 4-8 and their non-technical parents. Edge cases are great to hunt — but only edge cases this audience would actually reach. Good kid-reachable edges: divide by zero, huge/negative numbers from repeated ops, empty input, typos, long holds, rapid room switching, key mashing, sticky/caps shift weirdness, two-digit math, out-of-order operators. Off-limits (no kid would ever type these): NaN, Infinity, 1e999 / scientific notation, HTML entities, deliberate "!@#$%"-style parser probes, Unicode corner cases. Frame missions as "act like a kid doing X" or "act like a parent trying Y", not "stress-test the parser".
 
 Respond with ONLY a JSON object (no markdown fencing):
 {

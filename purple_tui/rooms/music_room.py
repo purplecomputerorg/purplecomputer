@@ -245,8 +245,8 @@ class MusicRoomHeader(Static):
             music_part = f"[{sel}] {ICON_MUSIC} {instrument_label} [/]"
             letters_part = f"[{unsel}] {letters_label} [/]"
 
-        tab_label = caps("Tab")
-        return f"{music_part}  [{unsel}]{tab_label}[/]  {letters_part}"
+        hint = caps("· Tab to switch between music and letter sounds")
+        return f"{music_part}  {letters_part}  [{unsel}]{hint}[/]"
 
 
 class MusicGrid(Widget):

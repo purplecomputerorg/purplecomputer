@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Art/Music: mode indicator in top bar now reads "paint  write  · Tab to switch between painting and typing" (and the Music equivalent), so the "Tab" hint is clearly the switch key, not a third mode. Art's bottom hint simplified to "Type to paint." since the Tab instruction moved up.
 - Play: division by zero now shows 🤷 instead of silently echoing the expression.
 - Play: rounded results prefix with ≈ (e.g. 321111/321120 → ≈ 1) so near-integers aren't mistaken for exact answers.
 - Play: leading zeros in numbers are stripped (01 → 1) so expressions like `321132 / 01` evaluate instead of being treated as text.

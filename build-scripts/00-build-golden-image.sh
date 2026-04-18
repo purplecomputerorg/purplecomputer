@@ -212,7 +212,8 @@ SOURCES
         kbd \
         evtest \
         strace \
-        parted
+        parted \
+        efibootmgr
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.

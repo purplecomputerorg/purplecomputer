@@ -1913,7 +1913,9 @@ class SimpleEvaluator:
         # "divided by" and typos (divded, dividd, etc.)
         result = re.sub(r'div\w+\s+by\b', '/', result)
         # x between digits → * (avoid replacing in words like "fox")
-        return re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
+        result = re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
+        # Strip leading zeros from number tokens (Python 3 rejects "01" as a literal)
+        return re.sub(r'\b0+(\d)', r'\1', result)
 
     def _fuzzy_normalize_operators(self, text: str) -> str:
         """Replace fuzzy operator words that appear between digits."""
@@ -1980,10 +1982,13 @@ class SimpleEvaluator:
             return None
 
     def _format_number(self, num: int | float) -> str:
-        """Format number (up to 3 decimals)."""
+        """Format number (up to 3 decimals). Prefix ≈ when rounding loses precision."""
         if isinstance(num, int) or num == int(num):
             return str(int(num))
-        return str(round(num, 3)).rstrip('0').rstrip('.')
+        s = str(round(num, 3)).rstrip('0').rstrip('.')
+        if float(s) != num:
+            return f"≈ {s}"
+        return s
 
     # Colors for abacus rows, from ones up (supports up to 1 billion)
     ABACUS_COLORS = [

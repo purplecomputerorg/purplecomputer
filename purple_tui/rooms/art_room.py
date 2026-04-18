@@ -1157,7 +1157,6 @@ class CanvasHeader(Static):
     CanvasHeader {
         height: 1;
         dock: top;
-        text-align: center;
         color: $text-muted;
         background: $surface;
     }
@@ -1178,6 +1177,9 @@ class CanvasHeader(Static):
 
     def set_code_mode(self, code_mode: bool) -> None:
         self._code_mode = code_mode
+        self.refresh()
+
+    def on_resize(self, event) -> None:
         self.refresh()
 
     def _get_contrast_color(self, color: str) -> str:
@@ -1212,7 +1214,15 @@ class CanvasHeader(Static):
             else:
                 return f"{write_part}"
 
-        return caps(f"{paint_part}  {write_part}  [dim]· Tab to switch between painting and typing[/]")
+        modes = f"{paint_part}  {write_part}"
+        modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
+        hint = caps("↹ Tab to switch")
+        hint_w = len(hint)
+        width = self.size.width or 134
+        left_pad = max(0, (width - modes_w) // 2)
+        right_area = max(0, width - left_pad - modes_w)
+        hint_left_pad = max(1, (right_area - hint_w) // 2)
+        return f"{' ' * left_pad}{modes}{' ' * hint_left_pad}[dim]{hint}[/]"
 
 
 # =============================================================================
@@ -1234,13 +1244,20 @@ class ArtHintBar(Static):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._is_painting = True
         self.add_class("caps-sensitive")
+
+    def update_state(self, is_painting: bool) -> None:
+        self._is_painting = is_painting
+        self.refresh()
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         if getattr(self.app, '_littles_mode', None):
             return caps("  Type to paint!  ")
-        return caps("  Type to paint.  ")
+        if self._is_painting:
+            return caps("  Type to paint! Every letter is a color, mix them together. Arrow keys move.  ")
+        return caps("  Type to write! Arrow keys move. Enter for a new line.  ")
 
 
 # =============================================================================
@@ -1304,6 +1321,8 @@ class ArtMode(Container):
         """Update header when paint mode changes."""
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
+        hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
+        hint_bar.update_state(event.is_painting)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""

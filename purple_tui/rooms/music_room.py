@@ -198,7 +198,6 @@ class MusicRoomHeader(Static):
     MusicRoomHeader {
         height: 1;
         dock: top;
-        text-align: center;
         color: $text-muted;
         background: $surface;
     }
@@ -223,6 +222,9 @@ class MusicRoomHeader(Static):
         self._code_mode = code_mode
         self.refresh()
 
+    def on_resize(self, event) -> None:
+        self.refresh()
+
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         instrument_label = caps(self._instrument_name)
@@ -245,8 +247,17 @@ class MusicRoomHeader(Static):
             music_part = f"[{sel}] {ICON_MUSIC} {instrument_label} [/]"
             letters_part = f"[{unsel}] {letters_label} [/]"
 
-        hint = caps("· Tab to switch between music and letter sounds")
-        return f"{music_part}  {letters_part}  [{unsel}]{hint}[/]"
+        music_inner = f" {ICON_MUSIC} {instrument_label} "
+        letters_inner = f" {letters_label} "
+        modes = f"{music_part}  {letters_part}"
+        modes_w = len(music_inner) + 2 + len(letters_inner)
+        hint = caps("↹ Tab to switch")
+        hint_w = len(hint)
+        width = self.size.width or 134
+        left_pad = max(0, (width - modes_w) // 2)
+        right_area = max(0, width - left_pad - modes_w)
+        hint_left_pad = max(1, (right_area - hint_w) // 2)
+        return f"{' ' * left_pad}{modes}{' ' * hint_left_pad}[{unsel}]{hint}[/]"
 
 
 class MusicGrid(Widget):

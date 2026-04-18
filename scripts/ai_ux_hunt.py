@@ -19,7 +19,9 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -186,51 +188,75 @@ def _build_orchestrator_prompt(state: dict) -> str:
     return "\n".join(parts)
 
 
-def plan_next_session(state: dict) -> dict | None:
+def _extract_text(response) -> str:
+    text = "".join(b.text for b in response.content if hasattr(b, "text")).strip()
+    if text.startswith("```"):
+        text = "\n".join(text.split("\n")[1:])
+    if text.endswith("```"):
+        text = "\n".join(text.split("\n")[:-1])
+    return text.strip()
+
+
+def _try_parse_json(text: str):
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as e:
+        # Fallback: escape literal newlines/tabs inside string values.
+        repaired = re.sub(
+            r'"((?:[^"\\]|\\.)*)"',
+            lambda m: '"' + m.group(1).replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + '"',
+            text,
+            flags=re.DOTALL,
+        )
+        try:
+            return json.loads(repaired), None
+        except json.JSONDecodeError:
+            return None, str(e)
+
+
+def plan_next_session(state: dict, max_attempts: int = 3) -> dict | None:
     """Ask the orchestrator to plan the next test session. Returns mission dict or None if done."""
     remaining = state["budget"] - state["actual_cost_total"] - state["orchestrator_cost_total"]
     if remaining < 0.10:
         return None
 
     client = anthropic.Anthropic()
-    prompt = _build_orchestrator_prompt(state)
+    messages = [{"role": "user", "content": _build_orchestrator_prompt(state)}]
+    plan = None
+    last_err = None
 
-    try:
-        response = client.messages.create(
-            model=ORCHESTRATOR_MODEL,
-            max_tokens=500,
-            system=ORCHESTRATOR_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = client.messages.create(
+                model=ORCHESTRATOR_MODEL,
+                max_tokens=500,
+                system=ORCHESTRATOR_SYSTEM,
+                messages=messages,
+            )
+        except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:
+            print(f"  {YELLOW}Orchestrator API error (attempt {attempt}/{max_attempts}): {e}{RESET}")
+            time.sleep(2 * attempt)
+            continue
+
+        state["orchestrator_cost_total"] += estimate_cost(
+            response.usage.input_tokens, response.usage.output_tokens, ORCHESTRATOR_MODEL
         )
-    except (anthropic.APIStatusError, anthropic.APIConnectionError) as e:
-        print(f"  {RED}Orchestrator API error: {e}{RESET}")
-        return None
 
-    # Track orchestrator cost
-    orch_cost = estimate_cost(
-        response.usage.input_tokens, response.usage.output_tokens, ORCHESTRATOR_MODEL
-    )
-    state["orchestrator_cost_total"] += orch_cost
+        text = _extract_text(response)
+        plan, last_err = _try_parse_json(text)
+        if plan is not None:
+            break
 
-    # Parse response
-    text = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            text += block.text
-
-    # Strip markdown fencing if present
-    text = text.strip()
-    if text.startswith("```"):
-        text = "\n".join(text.split("\n")[1:])
-    if text.endswith("```"):
-        text = "\n".join(text.split("\n")[:-1])
-    text = text.strip()
-
-    try:
-        plan = json.loads(text)
-    except json.JSONDecodeError:
-        print(f"  {RED}Orchestrator returned invalid JSON:{RESET}")
+        print(f"  {YELLOW}Invalid JSON (attempt {attempt}/{max_attempts}): {last_err}{RESET}")
         print(f"  {DIM}{text[:200]}{RESET}")
+        messages.append({"role": "assistant", "content": text})
+        messages.append({
+            "role": "user",
+            "content": f"That wasn't valid JSON ({last_err}). Respond with ONLY a valid JSON object. Escape newlines inside strings as \\n.",
+        })
+
+    if plan is None:
+        print(f"  {RED}Orchestrator failed to produce valid JSON after {max_attempts} attempts.{RESET}")
         return None
 
     # Validate and cap cost
@@ -334,8 +360,15 @@ async def run_hunt(budget: float = 10.0, resume: bool = False):
 
         plan = plan_next_session(state)
         if plan is None:
-            print(f"  {YELLOW}Orchestrator couldn't plan a session. Stopping.{RESET}")
-            break
+            state["planning_failures"] = state.get("planning_failures", 0) + 1
+            save_state(state)
+            if state["planning_failures"] >= 5:
+                print(f"  {RED}5 consecutive planning failures. Stopping.{RESET}")
+                break
+            print(f"  {YELLOW}Planning failed ({state['planning_failures']}/5). Retrying in 30s...{RESET}")
+            time.sleep(30)
+            continue
+        state["planning_failures"] = 0
 
         save_state(state)  # save orchestrator cost
 

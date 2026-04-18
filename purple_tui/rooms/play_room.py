@@ -1076,6 +1076,8 @@ class SimpleEvaluator:
         # Try pure math
         normalized = self._normalize_math(text)
         if (math_result := self._eval_math(normalized)) is not None:
+            if isinstance(math_result, str):
+                return math_result
             # If input is just a bare number, skip the label (Ask line already shows it)
             is_bare_number = re.match(r'^\d+$', text.strip())
             # Bare negative numbers (e.g. "-5") aren't useful as math, show as colored text
@@ -1180,6 +1182,8 @@ class SimpleEvaluator:
         # Try pure math (returns with dots visualization)
         normalized = self._normalize_math(text)
         if (math_result := self._eval_math(normalized)) is not None:
+            if isinstance(math_result, str):
+                return math_result
             return self._format_number_with_dots(math_result, expression=normalized)
 
         # Try single word lookup
@@ -1252,6 +1256,8 @@ class SimpleEvaluator:
             # Bare number or math expression (e.g., "3 * 4")
             normalized = self._normalize_math(part)
             if (math_result := self._eval_math(normalized)) is not None:
+                if isinstance(math_result, str):
+                    return math_result
                 val = int(math_result) if isinstance(math_result, float) and math_result.is_integer() else math_result
                 pending_nums.append(val)
                 continue
@@ -1961,13 +1967,15 @@ class SimpleEvaluator:
 
         return result
 
-    def _eval_math(self, text: str) -> float | int | None:
-        """Safely evaluate math expression."""
+    def _eval_math(self, text: str) -> float | int | str | None:
+        """Safely evaluate math expression. Returns '🤷' for undefined (e.g. x/0)."""
         if not re.match(self.MATH_CHARS_PATTERN, text):
             return None
         try:
             result = eval(text, {"__builtins__": {}}, {})
             return int(result) if isinstance(result, float) and result.is_integer() else result
+        except ZeroDivisionError:
+            return "🤷"
         except Exception:
             return None
 

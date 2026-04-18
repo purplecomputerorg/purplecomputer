@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play: division by zero now shows 🤷 instead of silently echoing the expression.
 - Boot speed: removed 1s sleep in xinitrc (xinit already guarantees X readiness), faster font size polling (20ms intervals instead of fixed 300ms sleep), deferred display brightness probe to after first frame. Total savings ~1.2-1.5s.
 - Parent menu: new "Support info" item shows Purple version, device summary, and audio status, with scrollable Device info and Audio info sub-screens for diagnostics. When audio is detected as broken at boot, the entry label gains "(audio not working)" and the live-boot splash adds a matching one-line warning.
 - Littles mode: long-hold Escape now shows a dedicated "Exit Littles Mode?" screen instead of silently exiting and opening the parent menu. Options: Yes exit, No go back (default), Parent Menu.

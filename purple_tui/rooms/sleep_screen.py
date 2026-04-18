@@ -131,7 +131,7 @@ class SleepScreen(Screen):
 
         if lid_close_time is not None:
             remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
-            lines.append(f"⏱️ Shuts off in {_friendly_time(remaining)}.")
+            lines.append(f"⏳ Shuts off in {_friendly_time(remaining)}.")
         else:
             idle = pm.get_idle_seconds()
             remaining = max(0, pm.get_idle_shutdown_threshold() - idle)

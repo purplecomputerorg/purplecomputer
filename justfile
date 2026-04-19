@@ -219,6 +219,10 @@ flash *args:
 flash-debug *args:
     ./build-scripts/flash-to-usb.sh --debug {{args}}
 
+# Flash ISO to ALL whitelisted USB drives in parallel
+flash-all *args:
+    ./build-scripts/flash-all.sh {{args}}
+
 # Flash the cached stock Ubuntu ISO (for isolating Purple vs kernel issues on target hardware)
 flash-ubuntu *args:
     ./build-scripts/flash-to-usb.sh {{args}} /opt/purple-installer/build/ubuntu-24.04.1-live-server-amd64.iso

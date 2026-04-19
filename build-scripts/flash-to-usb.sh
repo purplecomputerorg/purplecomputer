@@ -7,6 +7,7 @@ set -eo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/config.sh"
+source "$SCRIPT_DIR/flash-lib.sh"
 CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
 
 RED='\033[0;31m'
@@ -19,66 +20,6 @@ NC='\033[0m'
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-
-# Global safety cap: reject anything larger regardless of per-entry max
-MAX_SIZE_GB=256
-
-# Convert lsblk SIZE string (e.g. "14.5G", "5.5T", "512M") to integer GB.
-parse_size_to_gb() {
-    local size="$1"
-    local num unit
-    num=$(echo "$size" | sed 's/[^0-9.]//g')
-    unit=$(echo "$size" | sed 's/[0-9.]//g')
-    case "$unit" in
-        T) awk -v n="$num" 'BEGIN { printf "%.0f", n * 1024 }' ;;
-        G) awk -v n="$num" 'BEGIN { printf "%.0f", n }' ;;
-        *) echo 0 ;;
-    esac
-}
-
-# Test whether a whitelist rule matches a drive.
-# Rule formats:
-#   <serial>                              exact serial match
-#   model:<VENDOR>/<MODEL> [max=NG] [min=NG]   match any drive of that vendor+model in size range
-rule_matches() {
-    local rule="$1" vendor="$2" model="$3" serial="$4" size_gb="$5"
-    local rule_max=$MAX_SIZE_GB rule_min=0
-
-    if [[ "$rule" == model:* ]]; then
-        local spec="${rule#model:}"
-        while [[ "$spec" =~ ^(.*[^[:space:]])[[:space:]]+(max|min)=([0-9]+)G?$ ]]; do
-            spec="${BASH_REMATCH[1]}"
-            if [[ "${BASH_REMATCH[2]}" == max ]]; then
-                rule_max="${BASH_REMATCH[3]}"
-            else
-                rule_min="${BASH_REMATCH[3]}"
-            fi
-        done
-        [[ "$vendor" != "${spec%%/*}" ]] && return 1
-        [[ "$model" != "${spec#*/}" ]] && return 1
-    else
-        [[ "$serial" != "$rule" ]] && return 1
-    fi
-
-    [[ $size_gb -gt $rule_max ]] && return 1
-    [[ $size_gb -lt $rule_min ]] && return 1
-    [[ $size_gb -gt $MAX_SIZE_GB ]] && return 1
-    return 0
-}
-
-find_latest_iso() {
-    # Find most recent ISO in output directory (exclude .debug.iso)
-    if [[ -d "$OUTPUT_DIR" ]]; then
-        ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v '\.debug\.iso$' | head -1
-    fi
-}
-
-find_latest_debug_iso() {
-    # Find most recent debug ISO in output directory
-    if [[ -d "$OUTPUT_DIR" ]]; then
-        ls -t "$OUTPUT_DIR"/purple-*.debug.iso 2>/dev/null | head -1
-    fi
-}
 
 usage() {
     echo "Usage: $0 [options] [iso-path]"
@@ -94,10 +35,12 @@ usage() {
     echo "  Run '$0 --list' to see connected USB drives and their serials."
     echo ""
     echo "Options:"
-    echo "  --debug     Flash the debug ISO (.debug.iso) instead"
-    echo "  --yes       Skip the confirmation prompt"
-    echo "  --list      List all USB drives (for finding serial numbers)"
-    echo "  --help      Show this help"
+    echo "  --debug          Flash the debug ISO (.debug.iso) instead"
+    echo "  --yes            Skip the confirmation prompt"
+    echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
+    echo "  --no-udev-gate   Skip udev stop/start (caller manages the gate; used by flash-all)"
+    echo "  --list           List all USB drives (for finding serial numbers)"
+    echo "  --help           Show this help"
 }
 
 list_usb_drives() {
@@ -126,58 +69,20 @@ list_usb_drives() {
     echo "  - 'model:VENDOR/MODEL max=20G' (matches any drive of that vendor+model)"
 }
 
-load_whitelist() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        log_error "Config file not found: $CONFIG_FILE"
-        echo ""
-        echo "Create this file with one drive serial per line."
-        echo "Example:"
-        echo "  echo 'YOUR_DRIVE_SERIAL' > $CONFIG_FILE"
-        echo ""
-        echo "Run '$0 --list' to see connected drives and their serials."
-        exit 1
-    fi
-
-    # Read non-empty, non-comment lines
-    WHITELIST=()
-    while IFS= read -r line; do
-        # Skip empty lines and comments
-        [[ -z "$line" ]] && continue
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        # Trim whitespace
-        line=$(echo "$line" | xargs)
-        [[ -n "$line" ]] && WHITELIST+=("$line")
-    done < "$CONFIG_FILE"
-
-    if [[ ${#WHITELIST[@]} -eq 0 ]]; then
-        log_error "No drive serials found in $CONFIG_FILE"
-        exit 1
-    fi
-}
-
-find_whitelisted_drives() {
-    FOUND_DRIVES=()
-
-    while IFS= read -r line; do
-        eval "$line"
-
-        [[ "$TRAN" != "usb" ]] && continue
-        [[ -z "$SERIAL" ]] && continue
-
-        local vendor size_gb
-        vendor=$(echo "$VENDOR" | xargs)
-        size_gb=$(parse_size_to_gb "$SIZE")
-
-        for rule in "${WHITELIST[@]}"; do
-            if rule_matches "$rule" "$vendor" "$MODEL" "$SERIAL" "$size_gb"; then
-                FOUND_DRIVES+=("/dev/$NAME|$SIZE|$MODEL|$SERIAL")
-                break
+select_drive() {
+    if [[ -n "$FORCE_DEVICE" ]]; then
+        for entry in "${FOUND_DRIVES[@]}"; do
+            IFS='|' read -r dev _ _ _ <<< "$entry"
+            if [[ "$dev" == "$FORCE_DEVICE" ]]; then
+                SELECTED="$entry"
+                IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL <<< "$SELECTED"
+                return
             fi
         done
-    done < <(lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,SERIAL -P 2>/dev/null)
-}
+        log_error "$FORCE_DEVICE is not a whitelisted USB drive."
+        exit 1
+    fi
 
-select_drive() {
     if [[ ${#FOUND_DRIVES[@]} -eq 0 ]]; then
         log_error "No whitelisted USB drives found!"
         echo ""
@@ -249,8 +154,10 @@ write_iso() {
     # written ISO between write and readback; mount-time FAT metadata writes
     # then corrupt the bytes our verification reads. trap guarantees udev is
     # re-enabled on any exit path.
-    sudo udevadm control --stop-exec-queue 2>/dev/null || true
-    trap 'sudo udevadm control --start-exec-queue 2>/dev/null || true' EXIT INT TERM
+    if [[ "$MANAGE_UDEV" == true ]]; then
+        sudo udevadm control --stop-exec-queue 2>/dev/null || true
+        trap 'sudo udevadm control --start-exec-queue 2>/dev/null || true' EXIT INT TERM
+    fi
 
     # Get ISO details
     local iso_filename iso_size_human iso_size_bytes iso_modified iso_sha256
@@ -348,8 +255,10 @@ write_iso() {
 
         # Re-enable udev now that verification is done. udisksctl below needs
         # a running udisks2 daemon, which is driven by udev events.
-        sudo udevadm control --start-exec-queue 2>/dev/null || true
-        trap - EXIT INT TERM
+        if [[ "$MANAGE_UDEV" == true ]]; then
+            sudo udevadm control --start-exec-queue 2>/dev/null || true
+            trap - EXIT INT TERM
+        fi
 
         # Power-cycle the drive: kernel re-reads partition table, then udisks
         # detaches the device. Some USB controllers (e.g. Verbatim) won't boot
@@ -430,6 +339,8 @@ main() {
     # Handle options
     local use_debug=false
     local skip_confirm=false
+    FORCE_DEVICE=""
+    MANAGE_UDEV=true
     while [[ -n "${1:-}" ]]; do
         case "$1" in
             --help|-h)
@@ -448,6 +359,14 @@ main() {
                 skip_confirm=true
                 shift
                 ;;
+            --device)
+                FORCE_DEVICE="$2"
+                shift 2
+                ;;
+            --no-udev-gate)
+                MANAGE_UDEV=false
+                shift
+                ;;
             *)
                 break
                 ;;
@@ -458,7 +377,7 @@ main() {
     if [[ -n "${1:-}" ]]; then
         ISO_PATH="$1"
     elif [[ "$use_debug" == true ]]; then
-        ISO_PATH="$(find_latest_debug_iso)"
+        ISO_PATH="$(find_latest_iso debug)"
         if [[ -z "$ISO_PATH" ]]; then
             log_error "No debug ISO found in $OUTPUT_DIR"
             echo "Run build-in-docker.sh first to generate a .debug.iso."

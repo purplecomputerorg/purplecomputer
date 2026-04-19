@@ -541,6 +541,10 @@ kernel.sysrq = 0
 # Format: console_loglevel default_message_loglevel minimum_console_loglevel default_console_loglevel
 # Level 1 = only KERN_ALERT and KERN_EMERG reach the console.
 kernel.printk = 1 1 1 1
+
+# Allow unprivileged dmesg so the Support/diagnostics panel can show kernel audio
+# messages without sudo. Ubuntu defaults this to 1 (restricted).
+kernel.dmesg_restrict = 0
 SYSCTL
 
     # Reduce systemd's default stop timeout from 90s to 15s.

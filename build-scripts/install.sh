@@ -312,15 +312,11 @@ main() {
     #     header at the real end of the disk (instead of mid-disk where the
     #     image left it) and extends root to span the full drive.
     #
-    # ESP and root byte offsets MUST match 00-build-golden-image.sh exactly:
-    #   p1 ESP       fat32       1MiB    - 513MiB        (from golden image)
-    #   p2 root      ext4        513MiB  - (end - 2MiB)  (from golden image, grown by resize2fs)
-    #   p3 bios_grub (unformat)  last 2MiB               (NEW, populated by grub-install)
-    #
-    # The bios_grub partition lives in the post-image zero region on disk (golden
-    # image data ends well before the 2MiB end region on any target disk we support).
-    # It is written by `grub-install --target=i386-pc` during Layer 6 below.
-    # Placing it last avoids shifting p1/p2 numbering or changing golden image layout.
+    # Layout MUST match 00-build-golden-image.sh exactly:
+    #   ESP  fat32  1MiB - 513MiB
+    #   root ext4   513MiB - 100%
+    # parted uses byte-based offsets (MiB), so the same commands produce
+    # correct LBAs regardless of the device's logical sector size.
     # ======================================================================
     SECTOR_SIZE=$(cat /sys/block/$TARGET/queue/logical_block_size 2>/dev/null || echo 512)
     PHYS_SECTOR_SIZE=$(cat /sys/block/$TARGET/queue/physical_block_size 2>/dev/null || echo 512)
@@ -330,9 +326,7 @@ main() {
     parted -s "/dev/$TARGET" mklabel gpt
     parted -s "/dev/$TARGET" mkpart ESP fat32 1MiB 513MiB
     parted -s "/dev/$TARGET" set 1 esp on
-    parted -s "/dev/$TARGET" mkpart primary ext4 513MiB -2MiB
-    parted -s "/dev/$TARGET" mkpart primary -2MiB 100%
-    parted -s "/dev/$TARGET" set 3 bios_grub on
+    parted -s "/dev/$TARGET" mkpart primary ext4 513MiB 100%
     sync
 
     # ======================================================================
@@ -385,9 +379,8 @@ main() {
     # ======================================================================
     # GROW ROOT FILESYSTEM TO FILL PARTITION
     # The golden image's ext4 was sized to the image, not the target disk.
-    # After the GPT rebuild above, the root partition spans 513MiB to 2MiB
-    # before end of disk (last 2MiB is the bios_grub partition), but the
-    # filesystem inside is still at image size. resize2fs
+    # After the GPT rebuild above, the root partition spans 513MiB to end of
+    # disk, but the filesystem inside is still at image size. resize2fs
     # extends it to fill the partition. e2fsck -fy is required by resize2fs
     # before an offline grow; -y is safe because we just verified the dd
     # write byte-for-byte.
@@ -399,21 +392,19 @@ main() {
     resize2fs "$ROOT_PART_TMP" || warn "resize2fs failed (install will use golden-image size)"
 
     # ==========================================================================
-    # HYBRID BOOT SETUP (UEFI + BIOS) - See guides/nvram-boot-entry.md
+    # UEFI BOOT SETUP - See CLAUDE.md "UEFI Boot and Hardware Compatibility"
     # ==========================================================================
-    # UEFI chain: shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel
-    # BIOS chain: MBR boot.img → core.img (in bios_grub partition) → grub.cfg → kernel
-    #
-    # UEFI paths for hardware compatibility:
+    # Signed boot chain: shim (Microsoft-signed) → GRUB (Canonical-signed) → kernel
+    # Multiple EFI paths for hardware compatibility:
     # 1. /EFI/BOOT/BOOTX64.EFI (shim) + grubx64.efi - UEFI spec fallback
     # 2. /EFI/Microsoft/Boot/bootmgfw.efi (shim) + grubx64.efi - Surface, HP
     # 3. /EFI/purple/shimx64.efi + grubx64.efi - vendor path for NVRAM entry
     # 4. NVRAM Boot#### entry - bonus for compliant firmware
-    # 5. grub.cfg UUID rewrite for deterministic boot (both EFI and root copies)
-    # 6. BIOS MBR + core.img in bios_grub partition - legacy/CSM firmware path
+    # Plus: /EFI/ubuntu/grub.cfg has search config (signed GRUB's prefix)
+    # Plus: Update grub.cfg with actual UUID for deterministic boot
     # ==========================================================================
 
-    log "Setting up boot (UEFI + BIOS)..."
+    log "Setting up UEFI boot..."
 
     # Partition device names (PART_PREFIX set earlier during pre-write cleanup)
     EFI_PART="${PART_PREFIX}1"
@@ -501,42 +492,20 @@ main() {
             warn "Could not mount EFI partition"
         fi
 
-        if mount "$ROOT_PART" /mnt/root 2>/dev/null; then
-            # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
-            if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
-                sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
-                log "  Layer 5: Updated root grub.cfg with UUID"
-            fi
-
-            # Layer 6: BIOS boot (MBR + core.img in the bios_grub partition).
-            # Lets legacy/CSM firmwares boot Purple directly from "Internal HDD"
-            # without the user needing F12 → UEFI, or a BIOS setting change.
-            # No regression for UEFI machines: MBR boot code is ignored when
-            # firmware is in UEFI mode. grub-install auto-detects the bios_grub
-            # partition on the GPT disk and writes core.img there.
-            if command -v grub-install >/dev/null 2>&1; then
-                if grub-install --target=i386-pc \
-                                --boot-directory=/mnt/root/boot \
-                                --no-floppy \
-                                --recheck \
-                                "/dev/$TARGET" >/tmp/grub-bios.log 2>&1; then
-                    log "  Layer 6: BIOS boot installed (MBR + core.img)"
-                else
-                    warn "  Layer 6: BIOS grub-install failed (UEFI still works):"
-                    while IFS= read -r ln; do warn "    $ln"; done < /tmp/grub-bios.log
+        # Layer 5 (root part): Update grub.cfg with UUID
+        if [ -n "$ROOT_UUID" ]; then
+            if mount "$ROOT_PART" /mnt/root 2>/dev/null; then
+                if [ -f /mnt/root/boot/grub/grub.cfg ]; then
+                    sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                    sed -i "s|search --no-floppy --label PURPLE_ROOT|search --no-floppy --fs-uuid $ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg
+                    log "  Layer 5: Updated root grub.cfg with UUID"
                 fi
-            else
-                warn "  Layer 6: grub-install not available; legacy BIOS boot disabled"
+                umount /mnt/root 2>/dev/null || true
             fi
-
-            umount /mnt/root 2>/dev/null || true
-        else
-            warn "Could not mount root partition for Layer 5/6"
         fi
 
         rmdir /mnt/efi /mnt/root 2>/dev/null || true
-        log "Boot setup complete (UEFI + BIOS)"
+        log "UEFI boot setup complete"
     else
         error "EFI partition not found at $EFI_PART. Cannot set up boot."
     fi

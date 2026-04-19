@@ -213,8 +213,7 @@ SOURCES
         evtest \
         strace \
         parted \
-        efibootmgr \
-        grub-pc-bin
+        efibootmgr
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.

@@ -120,8 +120,28 @@ for i in "${!PIDS[@]}"; do
 done
 
 echo
+# Lift the gate before ejecting so udevadm settle can drain.
+sudo udevadm control --start-exec-queue 2>/dev/null || true
+
+# Re-enumerate and eject each verified drive (same pass single flashes do).
+for i in "${!DEVS[@]}"; do
+    dev="${DEVS[$i]}"
+    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
+    sudo blockdev --rereadpt "$dev" 2>/dev/null || true
+    sudo partprobe "$dev" 2>/dev/null || true
+done
+sudo udevadm settle 2>/dev/null || true
+for i in "${!DEVS[@]}"; do
+    dev="${DEVS[$i]}"
+    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
+    sudo udisksctl power-off --block-device "$dev" 2>/dev/null \
+        || sudo eject "$dev" 2>/dev/null \
+        || true
+done
+
+echo
 if [[ ${#FAILED[@]} -eq 0 ]]; then
-    echo -e "${BOLD}${GREEN}All ${#FOUND_DRIVES[@]} drives flashed and verified.${NC}"
+    echo -e "${BOLD}${GREEN}All ${#FOUND_DRIVES[@]} drives flashed and verified. Unplug them now.${NC}"
     exit 0
 else
     echo -e "${BOLD}${RED}${#FAILED[@]} of ${#FOUND_DRIVES[@]} drive(s) failed: ${FAILED[*]}${NC}"

@@ -264,19 +264,24 @@ write_iso() {
         # detaches the device. Some USB controllers (e.g. Verbatim) won't boot
         # unless they re-enumerate fresh on next plug-in; this is what GNOME's
         # "safely eject" and balenaEtcher do at the end of a flash.
-        sudo blockdev --rereadpt "$TARGET_DEV" 2>/dev/null || true
-        sudo partprobe "$TARGET_DEV" 2>/dev/null || true
-        sudo udevadm settle
-        if sudo udisksctl power-off --block-device "$TARGET_DEV" 2>/dev/null; then
-            log_info "Drive ejected."
-        elif sudo eject "$TARGET_DEV" 2>/dev/null; then
-            log_info "Drive ejected."
-        else
-            log_warn "Could not power-off or eject (udisksctl/eject unavailable)."
+        # Skipped when the caller owns the udev gate: settle would deadlock
+        # against the still-paused exec queue, and the parent orchestrator
+        # handles re-enumeration after all children finish.
+        if [[ "$MANAGE_UDEV" == true ]]; then
+            sudo blockdev --rereadpt "$TARGET_DEV" 2>/dev/null || true
+            sudo partprobe "$TARGET_DEV" 2>/dev/null || true
+            sudo udevadm settle
+            if sudo udisksctl power-off --block-device "$TARGET_DEV" 2>/dev/null; then
+                log_info "Drive ejected."
+            elif sudo eject "$TARGET_DEV" 2>/dev/null; then
+                log_info "Drive ejected."
+            else
+                log_warn "Could not power-off or eject (udisksctl/eject unavailable)."
+            fi
+            echo ""
+            echo -e "  ${BOLD}${YELLOW}→ Unplug $TARGET_DEV now.${NC}"
+            echo -e "    To flash another drive, plug it back in first (or a different drive)."
         fi
-        echo ""
-        echo -e "  ${BOLD}${YELLOW}→ Unplug $TARGET_DEV now.${NC}"
-        echo -e "    To flash another drive, plug it back in first (or a different drive)."
     else
         echo -e "${BOLD}${RED}╔════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${BOLD}${RED}║                 VERIFICATION FAILED                        ║${NC}"

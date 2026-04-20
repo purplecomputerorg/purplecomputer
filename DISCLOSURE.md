@@ -4,6 +4,8 @@ In short, my role has been:
 * Product Manager
 * Engineering Manager
 * UX Designer
+* UX Researcher
+* Release Engineer
 * Marketing
 
 Claude Code's role has been:

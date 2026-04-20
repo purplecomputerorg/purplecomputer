@@ -215,22 +215,28 @@ SOURCES
         parted \
         efibootmgr \
         grub-pc-bin \
-        grub-common
+        grub2-common
 
     # Verify the boot-setup tools install.sh Layer 4/6 depend on actually landed.
-    # grub-pc-bin alone doesn't hard-depend on grub-common on Noble, and with
-    # APT::Install-Recommends=0 a missing Recommends can silently leave
-    # `grub-install` absent — producing a blinking-cursor Legacy boot later.
+    # On Noble: `grub-install` ships in `grub2-common` (NOT `grub-common` — that's
+    # a different, transitional package that does not provide grub-install).
+    # `grub-pc-bin` provides the i386-pc modules. With APT::Install-Recommends=0
+    # a Recommends-only relationship can silently leave tools absent, producing
+    # a blinking-cursor Legacy boot. Fail the build loudly if anything is off.
     log_info "Verifying boot tooling is present in the golden image..."
-    for tool in /usr/sbin/grub-install /usr/sbin/efibootmgr; do
-        if ! chroot "$MOUNT_DIR" test -x "$tool"; then
-            echo "ERROR: required boot tool missing: $tool"
-            echo "       (check that its package is in the apt install list and dep-closed)"
-            exit 1
-        fi
+    MISSING=""
+    for cmd in grub-install efibootmgr; do
+        chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
-    if ! chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc; then
-        echo "ERROR: /usr/lib/grub/i386-pc missing — grub-pc-bin did not populate modules"
+    chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc || MISSING="$MISSING /usr/lib/grub/i386-pc"
+    if [ -n "$MISSING" ]; then
+        echo "ERROR: required boot tooling missing from golden image:$MISSING"
+        echo ""
+        echo "Diagnostic dump:"
+        echo "--- installed grub/efibootmgr packages ---"
+        chroot "$MOUNT_DIR" dpkg -l 2>/dev/null | grep -iE 'grub|efibootmgr' || echo "(none)"
+        echo "--- binaries matching grub* or efibootmgr (anywhere under /) ---"
+        chroot "$MOUNT_DIR" bash -c 'find / -xdev \( -name "grub*" -o -name "efibootmgr" \) -type f 2>/dev/null | head -40' || true
         exit 1
     fi
     log_info "  grub-install, efibootmgr, and i386-pc modules all present"

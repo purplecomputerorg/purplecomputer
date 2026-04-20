@@ -214,7 +214,26 @@ SOURCES
         strace \
         parted \
         efibootmgr \
-        grub-pc-bin
+        grub-pc-bin \
+        grub-common
+
+    # Verify the boot-setup tools install.sh Layer 4/6 depend on actually landed.
+    # grub-pc-bin alone doesn't hard-depend on grub-common on Noble, and with
+    # APT::Install-Recommends=0 a missing Recommends can silently leave
+    # `grub-install` absent — producing a blinking-cursor Legacy boot later.
+    log_info "Verifying boot tooling is present in the golden image..."
+    for tool in /usr/sbin/grub-install /usr/sbin/efibootmgr; do
+        if ! chroot "$MOUNT_DIR" test -x "$tool"; then
+            echo "ERROR: required boot tool missing: $tool"
+            echo "       (check that its package is in the apt install list and dep-closed)"
+            exit 1
+        fi
+    done
+    if ! chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc; then
+        echo "ERROR: /usr/lib/grub/i386-pc missing — grub-pc-bin did not populate modules"
+        exit 1
+    fi
+    log_info "  grub-install, efibootmgr, and i386-pc modules all present"
 
     # If apt upgraded the kernel (noble-updates has newer versions), install
     # modules-extra for the new version too, then rebuild initrd.

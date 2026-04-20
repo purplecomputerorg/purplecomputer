@@ -517,19 +517,40 @@ main() {
             # No regression for UEFI machines: MBR boot code is ignored when
             # firmware is in UEFI mode. grub-install auto-detects the bios_grub
             # partition on the GPT disk and writes core.img there.
+            # Persist the Layer 6 outcome to /var/log/purple/grub-bios-install.log
+            # on the installed system so blinking-cursor-in-Legacy regressions are
+            # diagnosable after the fact without re-running install.
+            mkdir -p /mnt/root/var/log/purple
+            PERSIST_LOG="/mnt/root/var/log/purple/grub-bios-install.log"
+            {
+                echo "=== Layer 6 BIOS grub-install attempt ==="
+                echo "Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                echo "Target disk: /dev/$TARGET"
+                echo "grub-install available: $(command -v grub-install || echo NO)"
+                echo ""
+            } > "$PERSIST_LOG"
+
             if command -v grub-install >/dev/null 2>&1; then
-                if grub-install --target=i386-pc \
-                                --boot-directory=/mnt/root/boot \
-                                --no-floppy \
-                                --recheck \
-                                "/dev/$TARGET" >/tmp/grub-bios.log 2>&1; then
+                GRUB_RC=0
+                grub-install --target=i386-pc \
+                             --boot-directory=/mnt/root/boot \
+                             --no-floppy \
+                             --recheck \
+                             "/dev/$TARGET" >/tmp/grub-bios.log 2>&1 || GRUB_RC=$?
+                if [ "$GRUB_RC" -eq 0 ]; then
                     log "  Layer 6: BIOS boot installed (MBR + core.img)"
+                    echo "RESULT: success" >> "$PERSIST_LOG"
                 else
-                    warn "  Layer 6: BIOS grub-install failed (UEFI still works):"
+                    warn "  Layer 6: BIOS grub-install failed (exit $GRUB_RC; UEFI still works):"
                     while IFS= read -r ln; do warn "    $ln"; done < /tmp/grub-bios.log
+                    echo "RESULT: failed (exit $GRUB_RC)" >> "$PERSIST_LOG"
                 fi
+                echo "" >> "$PERSIST_LOG"
+                echo "--- grub-install output ---" >> "$PERSIST_LOG"
+                cat /tmp/grub-bios.log >> "$PERSIST_LOG" 2>/dev/null || true
             else
                 warn "  Layer 6: grub-install not available; legacy BIOS boot disabled"
+                echo "RESULT: skipped (grub-install not in live env — golden image missing grub-common/grub-pc-bin)" >> "$PERSIST_LOG"
             fi
 
             umount /mnt/root 2>/dev/null || true

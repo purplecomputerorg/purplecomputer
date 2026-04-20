@@ -1,3 +1,5 @@
+> This file is AI-generated with a human heavily involved. Human involvement varies across this repo; see DISCLOSURE.md.
+
 # Purple Computer
 
 **Give them a first computer you can feel good about.**

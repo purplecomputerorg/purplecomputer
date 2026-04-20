@@ -1,4 +1,4 @@
-This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see (DISCLOSURE.md)[/DISCLOSURE.md].
+This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/DISCLOSURE.md).
 
 # Purple Computer
 

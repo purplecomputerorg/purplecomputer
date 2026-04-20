@@ -77,6 +77,10 @@ test-install:
 test-reboot:
     gcc -DTESTING -include tools/test_purple_reboot.c -o "${TMPDIR:-/tmp}/test_purple_reboot" tools/purple-reboot.c && "${TMPDIR:-/tmp}/test_purple_reboot"
 
+# Test install.sh partition layout + BIOS grub-install against a loop-backed fake disk (needs sudo)
+test-partitioning:
+    sudo build-scripts/test-install-partitioning.sh
+
 # Run linter
 lint:
     .venv/bin/ruff check purple_tui/ tools/ scripts/ tests/

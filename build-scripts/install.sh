@@ -330,8 +330,10 @@ main() {
     parted -s "/dev/$TARGET" mklabel gpt
     parted -s "/dev/$TARGET" mkpart ESP fat32 1MiB 513MiB
     parted -s "/dev/$TARGET" set 1 esp on
-    parted -s "/dev/$TARGET" mkpart primary ext4 513MiB -2MiB
-    parted -s "/dev/$TARGET" mkpart primary -2MiB 100%
+    # `--` stops parted's option parsing so `-2MiB` is treated as a negative
+    # end offset (from end of disk) instead of getopt flags `-2 -M -i -B`.
+    parted -s "/dev/$TARGET" -- mkpart primary ext4 513MiB -2MiB
+    parted -s "/dev/$TARGET" -- mkpart primary -2MiB 100%
     parted -s "/dev/$TARGET" set 3 bios_grub on
     sync
 

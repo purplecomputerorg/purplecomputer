@@ -30,21 +30,27 @@ def test_pulseaudio_user_socket_enabled_globally():
     ), "pulseaudio.socket not enabled via systemctl --global"
 
 
-def test_module_switch_on_connect_dropin_present():
+def test_no_duplicate_switch_on_connect_dropin():
+    """The build must NOT write a module-switch-on-connect drop-in into
+    /etc/pulse/default.pa.d/. Ubuntu's stock default.pa already loads it,
+    and a second load causes Pulse to refuse startup ('Module should be
+    loaded once at most'), wedging audio entirely. Regression guard for
+    the Surface-post-install audio failure."""
     src = _build_source()
-    assert "/etc/pulse/default.pa.d" in src, "pulse drop-in dir not created"
-    assert "module-switch-on-connect" in src, "module-switch-on-connect drop-in missing"
+    assert "cat > \"$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa\"" not in src, \
+        "build is writing a Pulse drop-in again; stock default.pa already loads module-switch-on-connect"
+    assert "load-module module-switch-on-connect" not in src, \
+        "build is injecting a duplicate load of module-switch-on-connect"
 
 
 def test_audio_pipeline_verification_block():
-    """The verification block must check pulseaudio and the drop-in, and
-    must exit 1 on failure so the build fails loudly."""
+    """The verification block must check pulseaudio and the user socket,
+    guard against the duplicate-load drop-in, and exit 1 on failure."""
     src = _build_source()
-    # Look for the verification block that checks for missing audio pieces.
     assert re.search(r"AUDIO_MISSING", src), "audio verification block not found"
     assert re.search(r'command -v pulseaudio', src), "pulseaudio command check missing"
-    assert re.search(r"10-purple\.pa", src), "drop-in path not verified"
-    # Must exit on failure (same pattern as other verification blocks).
+    assert re.search(r"stale-10-purple\.pa-dropin-present", src), \
+        "verification does not guard against the duplicate-load drop-in regression"
     assert re.search(r"AUDIO_MISSING.*\n.*exit 1", src, re.DOTALL), \
         "audio verification does not exit on failure"
 

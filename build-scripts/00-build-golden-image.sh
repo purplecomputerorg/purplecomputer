@@ -622,18 +622,11 @@ TIMEOUTS
     # `--global` installs the symlink under /etc/systemd/user, applying to all users.
     chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket pulseaudio.service
 
-    # module-switch-on-connect: when a USB speaker is plugged in mid-session,
-    # Pulse automatically makes it the default sink, so pygame's stream follows.
-    # Ubuntu's default config usually loads this, but it's too important to
-    # assume. Drop-in file survives pulseaudio package updates.
-    mkdir -p "$MOUNT_DIR/etc/pulse/default.pa.d"
-    cat > "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" <<'PULSE'
-# Purple Computer: route newly-connected sinks (USB speakers, adapters)
-# to become default so playback follows the plug event without restart.
-.ifexists module-switch-on-connect.so
-load-module module-switch-on-connect
-.endif
-PULSE
+    # Ubuntu's stock /etc/pulse/default.pa already loads module-switch-on-connect,
+    # so no drop-in is needed for USB hotplug to follow to the new sink. A
+    # previous iteration dropped a second load-module line into default.pa.d/,
+    # which caused Pulse to abort on startup with "Module should be loaded once
+    # at most. Refusing to load" and wedged audio entirely.
 
     # Verify the audio pipeline is installed and configured correctly.
     # Mirrors the grub-install / efibootmgr verification pattern above.
@@ -641,13 +634,16 @@ PULSE
     AUDIO_MISSING=""
     chroot "$MOUNT_DIR" bash -c "command -v pulseaudio >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio"
     [ -f "$MOUNT_DIR/usr/lib/systemd/user/pulseaudio.socket" ] || AUDIO_MISSING="$AUDIO_MISSING pulseaudio.socket"
-    [ -f "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" ]    || AUDIO_MISSING="$AUDIO_MISSING 10-purple.pa"
     [ -L "$MOUNT_DIR/etc/systemd/user/sockets.target.wants/pulseaudio.socket" ] || AUDIO_MISSING="$AUDIO_MISSING pulseaudio.socket-global-enable"
+    # Guard against the duplicate-load footgun ever coming back.
+    if [ -f "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" ]; then
+        AUDIO_MISSING="$AUDIO_MISSING stale-10-purple.pa-dropin-present"
+    fi
     if [ -n "$AUDIO_MISSING" ]; then
         echo "ERROR: audio pipeline incomplete in golden image:$AUDIO_MISSING"
         exit 1
     fi
-    log_info "  pulseaudio + user socket + module-switch-on-connect drop-in verified"
+    log_info "  pulseaudio + user socket verified; stock default.pa handles switch-on-connect"
 
     # keyd: kernel keymap daemon. See config/keyd/default.conf for rationale.
     mkdir -p "$MOUNT_DIR/etc/keyd"

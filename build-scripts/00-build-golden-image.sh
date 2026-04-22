@@ -614,6 +614,31 @@ TIMEOUTS
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chroot "$MOUNT_DIR" systemctl enable purple-x11.service
 
+    # Persistent journald on installed systems (no-op on live, where the
+    # overlay is tmpfs anyway). Enables `journalctl -b -1` for cross-reboot
+    # post-mortems of Pulse/keyd/systemd failures. Size-capped so it can't
+    # eat the SSD on long-running kid machines.
+    mkdir -p "$MOUNT_DIR/var/log/journal"
+    mkdir -p "$MOUNT_DIR/etc/systemd/journald.conf.d"
+    cat > "$MOUNT_DIR/etc/systemd/journald.conf.d/purple.conf" <<'JOURNAL'
+# Purple Computer journald caps. See guides/audio-pipeline.md and the
+# "holistic journald" discussion for rationale.
+[Journal]
+SystemMaxUse=100M
+SystemKeepFree=500M
+MaxRetentionSec=4week
+JOURNAL
+
+    # Post-boot audio diagnostic dump: writes a snapshot to
+    # /var/log/purple/audio-*.log 12s after purple-x11 starts so broken-boot
+    # audio failures can be post-mortemed from the installed system without
+    # live shells. Read-only; uses `pactl --no-autospawn` and does not touch
+    # any audio state.
+    cp /purple-src/scripts/purple-audio-dump.sh "$MOUNT_DIR/usr/local/bin/purple-audio-dump"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-dump"
+    cp /purple-src/config/systemd/purple-audio-dump.service "$MOUNT_DIR/etc/systemd/system/"
+    chroot "$MOUNT_DIR" systemctl enable purple-audio-dump.service
+
     # PulseAudio: enable per-user socket activation so Pulse comes up when the
     # purple user's logind session starts (purple-x11.service uses PAMName=login).
     # Without this, pygame/SDL (set to SDL_AUDIODRIVER=pulseaudio via the service

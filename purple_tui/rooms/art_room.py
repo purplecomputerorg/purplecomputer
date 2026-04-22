@@ -91,7 +91,7 @@ BOX_CHARS = {
 }
 
 # Keyboard rows for colors (full rows including symbols)
-QWERTY_ROW = list("qwertyuiop[]\\")   # Red family (top letter row + brackets + backslash)
+QWERTY_ROW = list("qwertyuiop[]")     # Red family (top letter row + brackets)
 ASDF_ROW = list("asdfghjkl;'")        # Yellow family (home row + semicolon + quote)
 ZXCV_ROW = list("zxcvbnm,./")         # Blue family (bottom row + comma + period + slash)
 

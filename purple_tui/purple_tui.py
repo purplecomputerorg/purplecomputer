@@ -1016,7 +1016,7 @@ class PurpleApp(App):
                 self.audio_ok = True
                 boot_log.heartbeat("mixer ok (attempt 1)")
             else:
-                for delay in [1, 2, 4]:
+                for delay in [0.5, 1, 2]:
                     if not _reset_mixer_state():
                         boot_log.heartbeat("mixer probe timed out (hw broken)")
                         break

@@ -1,0 +1,21 @@
+[Unit]
+Description=Purple Computer post-boot audio diagnostic dump
+# Fire after purple-x11 is up so the dump reflects the steady-state audio
+# chain (Pulse socket-activated or not, pygame warmup done, retry poll first
+# tick landed). Runs as root to read the purple user's --user journal.
+After=purple-x11.service
+Wants=purple-x11.service
+# Skip in installer mode — nothing to diagnose there.
+ConditionKernelCommandLine=!purple.install=1
+
+[Service]
+Type=oneshot
+# Wait long enough for: purple-x11 startup (~1-2s) + mixer warmup+retry chain
+# (0.5+1+2=3.5s) + first retry-poll tick (5s) + buffer. 12s total.
+ExecStart=/bin/bash -c 'sleep 12 && /usr/local/bin/purple-audio-dump'
+# Never fail the boot on a dump hiccup.
+SuccessExitStatus=0 1 2
+TimeoutStartSec=30
+
+[Install]
+WantedBy=graphical.target

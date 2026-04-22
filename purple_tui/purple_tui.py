@@ -1033,6 +1033,7 @@ class PurpleApp(App):
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.
             self._start_audio_hotplug()
+            self._start_audio_retry_poll()
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
 
     def _start_audio_hotplug(self) -> None:
@@ -1048,6 +1049,28 @@ class PurpleApp(App):
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
 
         audio_hotplug.start(_on_event)
+
+    def _start_audio_retry_poll(self) -> None:
+        # Kernel sound-subsystem hotplug doesn't fire when Pulse itself
+        # transitions from dead to alive (the card was there the whole time),
+        # so a first-boot Pulse crash-loop that later recovers would leave
+        # audio_ok=False forever. Poll cheaply every few seconds while
+        # audio_ok is False; flip to True the moment a probe succeeds.
+        import threading
+        import time as _time
+
+        def _poll() -> None:
+            from .rooms.music_room import reinit_mixer_after_hotplug
+            while True:
+                _time.sleep(5)
+                if self.audio_ok:
+                    return
+                if reinit_mixer_after_hotplug():
+                    self.call_from_thread(setattr, self, "audio_ok", True)
+                    boot_log.heartbeat("audio retry poll: mixer came up")
+                    return
+
+        threading.Thread(target=_poll, daemon=True, name="audio-retry-poll").start()
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""

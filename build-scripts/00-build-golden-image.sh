@@ -620,7 +620,11 @@ TIMEOUTS
     # Environment=) can't find a Pulse server and audio falls through to "not
     # working" even on machines where audio would otherwise be fine.
     # `--global` installs the symlink under /etc/systemd/user, applying to all users.
-    chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket pulseaudio.service
+    # Enable ONLY pulseaudio.socket, not pulseaudio.service: the service is
+    # socket-activated on demand. Enabling the service eagerly makes Pulse race
+    # logind's user-runtime-dir setup, lose, exit with a pid file on disk, and
+    # crash-loop the socket until start-limit-hit — wedging audio permanently.
+    chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket
 
     # Ubuntu's stock /etc/pulse/default.pa already loads module-switch-on-connect,
     # so no drop-in is needed for USB hotplug to follow to the new sink. A

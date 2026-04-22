@@ -1015,20 +1015,39 @@ class PurpleApp(App):
             if warm_mixer():
                 self.audio_ok = True
                 boot_log.heartbeat("mixer ok (attempt 1)")
-                return
-            for delay in [1, 2, 4]:
-                if not _reset_mixer_state():
-                    boot_log.heartbeat("mixer probe timed out (hw broken)")
-                    break
-                boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
-                _time.sleep(delay)
-                if warm_mixer():
-                    self.audio_ok = True
-                    boot_log.heartbeat("mixer ok (retry)")
-                    return
-            self.audio_ok = False
-            boot_log.heartbeat("mixer warmup failed")
+            else:
+                for delay in [1, 2, 4]:
+                    if not _reset_mixer_state():
+                        boot_log.heartbeat("mixer probe timed out (hw broken)")
+                        break
+                    boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
+                    _time.sleep(delay)
+                    if warm_mixer():
+                        self.audio_ok = True
+                        boot_log.heartbeat("mixer ok (retry)")
+                        break
+                else:
+                    self.audio_ok = False
+                    boot_log.heartbeat("mixer warmup failed")
+            # After the initial probe lands either way, start the hotplug listener
+            # so USB speaker plug-in works without a restart. Started here (not at
+            # app startup) so we don't race the warmup probe.
+            self._start_audio_hotplug()
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
+
+    def _start_audio_hotplug(self) -> None:
+        from . import audio_hotplug
+
+        def _on_event(action: str) -> None:
+            boot_log.heartbeat(f"audio hotplug: {action}")
+            from .rooms.music_room import reinit_mixer_after_hotplug
+            ok = reinit_mixer_after_hotplug()
+            # Flip audio_ok on the main thread so the parent menu indicator
+            # updates without a Purple restart.
+            self.call_from_thread(setattr, self, "audio_ok", ok)
+            boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
+
+        audio_hotplug.start(_on_event)
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""

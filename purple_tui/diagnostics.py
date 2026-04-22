@@ -95,7 +95,7 @@ def get_audio_status_line(audio_ok) -> str:
     if audio_ok is True:
         return "Audio: working"
     if audio_ok is False:
-        return "Audio: not working. Try a USB audio adapter."
+        return "Audio not working. Plug in a USB speaker or USB audio adapter. Sound should start within a few seconds."
     return "Audio: checking..."
 
 

@@ -174,8 +174,34 @@ def reinit_mixer() -> None:
         _MIXER_READY = True
     except pygame.error:
         _MIXER_READY = False
-    from . import tts
+    from .. import tts
     tts._current_channel = None
+
+
+def reinit_mixer_after_hotplug() -> bool:
+    """Full re-probe after audio hardware changed (USB plug/unplug).
+
+    Unlike reinit_mixer() (which assumes the mixer was working and just lost
+    its connection), this resets the timeout flag too so a machine that
+    failed at boot gets a fresh chance when a USB adapter is plugged in.
+    Returns True iff the mixer is working after reinit.
+    """
+    global _MIXER_READY, _PROBE_TIMED_OUT
+    with _MIXER_LOCK:
+        if pygame is not None:
+            try:
+                if pygame.mixer.get_init():
+                    pygame.mixer.quit()
+            except Exception:
+                pass
+        _MIXER_READY = None
+        _PROBE_TIMED_OUT = False
+    try:
+        from .. import tts
+        tts._current_channel = None
+    except Exception:
+        pass
+    return warm_mixer()
 
 
 # Default backgrounds (dark and light themes)
@@ -373,33 +399,35 @@ class MusicGrid(Widget):
 
     def play_sound(self, key: str) -> None:
         """Play instrument or percussion sound for a key."""
+        from ..audio import play_safe
         if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         if key.isdigit():
             self._ensure_percussion_loaded()
             if key in self._percussion_sounds:
-                self._percussion_sounds[key].play()
+                play_safe(self._percussion_sounds[key])
         else:
             inst_id = INSTRUMENTS[self._instrument_index][0]
             self._ensure_instrument_loaded(inst_id)
             sounds = self._instrument_sounds.get(inst_id, {})
             if key in sounds:
-                sounds[key].play()
+                play_safe(sounds[key])
 
     def play_sound_with_instrument(self, key: str, instrument_index: int) -> None:
         """Play a sound using a specific instrument (for loop playback)."""
+        from ..audio import play_safe
         if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         if key.isdigit():
             self._ensure_percussion_loaded()
             if key in self._percussion_sounds:
-                self._percussion_sounds[key].play()
+                play_safe(self._percussion_sounds[key])
         else:
             inst_id = INSTRUMENTS[instrument_index][0]
             self._ensure_instrument_loaded(inst_id)
             sounds = self._instrument_sounds.get(inst_id, {})
             if key in sounds:
-                sounds[key].play()
+                play_safe(sounds[key])
 
     def set_instrument(self, index: int) -> None:
         """Set the current instrument index."""
@@ -449,11 +477,12 @@ class MusicGrid(Widget):
 
     def play_letter(self, key: str) -> None:
         """Play the letter name clip for a key (respects app volume setting)."""
+        from ..audio import play_safe
         if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         self._ensure_letter_sounds_loaded()
         if key in self._letter_sounds:
-            self._letter_sounds[key].play()
+            play_safe(self._letter_sounds[key])
 
     def cleanup_sounds(self) -> None:
         """Stop all currently playing sounds and clear loaded sounds."""

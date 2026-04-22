@@ -56,7 +56,9 @@ if HAS_PYTEST:
             assert result.startswith("= 4\n") and result.count("●") == 4
 
         def test_division_decimal(self, evaluator):
-            assert evaluator.evaluate("2 / 3") == "= 0.667"
+            # Rounded (non-exact) decimals are prefixed with ≈ so kids don't
+            # mistake a rounded display for an exact result. See UX_LOG.
+            assert evaluator.evaluate("2 / 3") == "= ≈ 0.667"
 
         def test_division_clean(self, evaluator):
             assert evaluator.evaluate("1 / 4") == "= 0.25"
@@ -329,7 +331,8 @@ if HAS_PYTEST:
             assert evaluator._format_number(3.0) == "3"
 
         def test_float_decimal(self, evaluator):
-            assert evaluator._format_number(3.14159) == "3.142"
+            # Rounded floats get the ≈ prefix (see UX_LOG).
+            assert evaluator._format_number(3.14159) == "≈ 3.142"
 
         def test_float_short_decimal(self, evaluator):
             assert evaluator._format_number(0.5) == "0.5"

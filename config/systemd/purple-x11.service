@@ -18,6 +18,13 @@ Requires=purple-splash.service
 ConditionKernelCommandLine=!purple.install=1
 
 [Service]
+# Route pygame/SDL audio through PulseAudio instead of direct ALSA.
+# Direct ALSA latches onto the first-enumerated card, which on multi-card
+# machines (e.g. Dell E6420: NVIDIA HDMI as card 0 with no monitor, Intel
+# PCH as card 1 with real speakers) picks the wrong output and plays to
+# nowhere. PulseAudio handles default-sink selection and USB speaker
+# hotplug as first-class features. See guides/audio-pipeline.md.
+Environment=SDL_AUDIODRIVER=pulseaudio
 # Poll for a connected display connector (handles i915 async init)
 ExecStartPre=/usr/local/bin/purple-wait-display
 # Clean stale X lock files from previous crashes

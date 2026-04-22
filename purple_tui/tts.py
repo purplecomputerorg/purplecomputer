@@ -664,7 +664,8 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
             return False
 
         sound = pygame.mixer.Sound(str(clip_path))
-        channel = sound.play()
+        from .audio import play_safe
+        channel = play_safe(sound)
         _current_channel = channel
 
         if on_playing:

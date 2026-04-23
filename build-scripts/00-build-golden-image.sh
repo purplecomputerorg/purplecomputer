@@ -651,8 +651,13 @@ JOURNAL
     # .service startup race, both spawn a daemon, one writes the pid file,
     # the other dies on "Daemon already running / pa_pid_file_create failed",
     # systemd retries, hits start-limit, and audio is wedged for the session.
+    # Enable the socket, then unconditionally remove the service symlink.
+    # Using `systemctl --global disable pulseaudio.service` tears the socket
+    # symlink down too (pulseaudio.service has `Also=pulseaudio.socket` in
+    # [Install], and disable propagates). Brute-force rm the one symlink we
+    # don't want, leaving the socket in place.
     chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket
-    chroot "$MOUNT_DIR" systemctl --global disable pulseaudio.service
+    rm -f "$MOUNT_DIR/etc/systemd/user/default.target.wants/pulseaudio.service"
 
     # Ubuntu's stock /etc/pulse/default.pa already loads module-switch-on-connect,
     # so no drop-in is needed for USB hotplug to follow to the new sink. A

@@ -47,7 +47,7 @@ SHIFT_SYMBOLS = {
 }
 
 # Print-shop spec.
-CUT_GAP_IN     = 0.25   # minimum distance between any two cut paths
+CUT_GAP_IN     = 0.30   # distance between cut paths (printer min: 0.25")
 BLEED_IN       = 0.125  # color extends this far past each cut path
 CUT_STROKE_PT  = 1.0    # 1pt magenta stroke on cut paths
 
@@ -99,13 +99,9 @@ def panel_placements(origin_x_in: float, rows, align_right: bool):
     grid_w = COLS * STICKER_SIZE_IN + (COLS - 1) * CUT_GAP_IN
     grid_h = ROWS * STICKER_SIZE_IN + (ROWS - 1) * CUT_GAP_IN
 
-    if align_right:
-        # Left panel: grid hugs the outer edge, gutter grows toward the fold.
-        x0 = origin_x_in + OUTER_MARGIN_IN
-    else:
-        # Right panel: grid hugs the outer edge on the far side.
-        x0 = origin_x_in + panel_w - OUTER_MARGIN_IN - grid_w
-
+    # Center the grid horizontally within its panel -> equal outer and fold
+    # margins, so neither side feels crowded.
+    x0 = origin_x_in + (panel_w - grid_w) / 2
     y0 = (PAGE_H_IN - grid_h) / 2
 
     for r_idx, row in enumerate(rows):
@@ -190,17 +186,57 @@ def cut_rect(cx_in: float, cy_in: float, size_in: float) -> str:
                  stroke="#FF00FF", stroke_w_pt=CUT_STROKE_PT)
 
 
+def wordmark() -> str:
+    """Light-purple branding text in the empty lower-right grid cells of
+    the right panel (m,./ row, cols 4-5)."""
+    grid_w = COLS * STICKER_SIZE_IN + (COLS - 1) * CUT_GAP_IN
+    grid_h = ROWS * STICKER_SIZE_IN + (ROWS - 1) * CUT_GAP_IN
+    x0 = FOLD_X_IN + (FOLD_X_IN - grid_w) / 2
+    y0 = (PAGE_H_IN - grid_h) / 2
+    step = STICKER_SIZE_IN + CUT_GAP_IN
+    # Bounding box spans cols 4-5 of row 3.
+    box_x = x0 + 4 * step
+    box_y = y0 + 3 * step
+    box_w = 2 * STICKER_SIZE_IN + CUT_GAP_IN
+    box_h = STICKER_SIZE_IN
+    cx = box_x + box_w / 2
+    cy = box_y + box_h / 2
+    title_px = 17
+    url_px   = 13
+    return (
+        f'<text x="{IN(cx):.3f}" y="{IN(cy):.3f}" fill="#F2E8FA" '
+        f'font-family="Helvetica, Arial, sans-serif" font-weight="bold" '
+        f'font-size="{title_px}" text-anchor="middle" '
+        f'dominant-baseline="central" dy="-0.7em">Purple Computer</text>'
+        f'<text x="{IN(cx):.3f}" y="{IN(cy):.3f}" fill="#F2E8FA" '
+        f'font-family="Helvetica, Arial, sans-serif" '
+        f'font-size="{url_px}" text-anchor="middle" '
+        f'dominant-baseline="central" dy="1.2em">purplecomputer.org</text>'
+    )
+
+
 def build_svg() -> str:
     placements = list(panel_placements(0.0, LEFT_ROWS, align_right=True))
     placements.extend(panel_placements(FOLD_X_IN, RIGHT_ROWS, align_right=False))
 
-    art  = "\n    ".join(sticker_art(k, x, y, s) for k, x, y, s in placements)
+    sheet_bg = (
+        f'<rect x="0" y="0" width="{IN(PAGE_W_IN)}" height="{IN(PAGE_H_IN)}" '
+        f'fill="{PURPLE_HEX}"/>'
+    )
+    art  = sheet_bg + "\n    " + "\n    ".join(
+        sticker_art(k, x, y, s) for k, x, y, s in placements
+    ) + "\n    " + wordmark()
     cuts = "\n    ".join(cut_rect(x, y, s)        for _, x, y, s in placements)
 
     fold_guide = (
         f'<line x1="{IN(FOLD_X_IN)}" y1="0" '
         f'x2="{IN(FOLD_X_IN)}" y2="{IN(PAGE_H_IN)}" '
         f'stroke="#CCCCCC" stroke-width="0.5" stroke-dasharray="4,4"/>'
+    )
+    page_border = (
+        f'<rect x="0.5" y="0.5" '
+        f'width="{IN(PAGE_W_IN)-1}" height="{IN(PAGE_H_IN)-1}" '
+        f'fill="none" stroke="#CCCCCC" stroke-width="1"/>'
     )
 
     return f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -209,6 +245,7 @@ def build_svg() -> str:
      width="{PAGE_W_IN}in" height="{PAGE_H_IN}in"
      viewBox="0 0 {IN(PAGE_W_IN)} {IN(PAGE_H_IN)}">
   <g inkscape:groupmode="layer" inkscape:label="guides" id="guides">
+    {page_border}
     {fold_guide}
   </g>
   <g inkscape:groupmode="layer" inkscape:label="art" id="art">

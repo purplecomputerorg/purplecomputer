@@ -9,28 +9,28 @@
   <g inkscape:groupmode="layer" inkscape:label="art" id="art">
     <rect x="12.000" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="28.320" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#FFFFFF" stroke="none"/>
-    <text x="56.736" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">1</text>
-    <text x="36.672" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">!</text>
+    <text x="57.792" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">1</text>
+    <text x="39.840" y="72.576" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="20.33" text-anchor="middle" dominant-baseline="central">!</text>
     <rect x="88.800" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="105.120" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#E8E8E8" stroke="none"/>
-    <text x="133.536" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">2</text>
-    <text x="113.472" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">@</text>
+    <text x="134.592" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">2</text>
+    <text x="114.528" y="72.576" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="15.10" text-anchor="middle" dominant-baseline="central">@</text>
     <rect x="165.600" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="181.920" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#D0D0D0" stroke="none"/>
-    <text x="210.336" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">3</text>
-    <text x="190.272" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">#</text>
+    <text x="211.392" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">3</text>
+    <text x="191.328" y="72.576" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">#</text>
     <rect x="242.400" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="258.720" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#B8B8B8" stroke="none"/>
-    <text x="287.136" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">4</text>
-    <text x="267.072" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">$</text>
+    <text x="288.192" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">4</text>
+    <text x="268.128" y="72.576" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">$</text>
     <rect x="319.200" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="335.520" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#A0A0A0" stroke="none"/>
-    <text x="363.936" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">5</text>
-    <text x="343.872" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">%</text>
+    <text x="364.992" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">5</text>
+    <text x="344.928" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="15.10" text-anchor="middle" dominant-baseline="central">%</text>
     <rect x="396.000" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="412.320" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#888888" stroke="none"/>
-    <text x="440.736" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">6</text>
-    <text x="420.672" y="76.800" fill="#000000" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">^</text>
+    <text x="441.792" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">6</text>
+    <text x="421.728" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">^</text>
     <rect x="12.000" y="115.200" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="28.320" y="131.520" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#E86262" stroke="none"/>
     <text x="50.400" y="153.600" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">Q</text>
@@ -87,20 +87,20 @@
     <text x="434.400" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">N</text>
     <rect x="679.200" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="695.520" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#707070" stroke="none"/>
-    <text x="723.936" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">7</text>
-    <text x="703.872" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">&amp;</text>
+    <text x="724.992" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">7</text>
+    <text x="704.928" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">&amp;</text>
     <rect x="756.000" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="772.320" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#585858" stroke="none"/>
-    <text x="800.736" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">8</text>
-    <text x="780.672" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">×</text>
+    <text x="801.792" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">8</text>
+    <text x="781.728" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">×</text>
     <rect x="832.800" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="849.120" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#404040" stroke="none"/>
-    <text x="877.536" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">9</text>
-    <text x="857.472" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">(</text>
+    <text x="878.592" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">9</text>
+    <text x="858.528" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">(</text>
     <rect x="909.600" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="925.920" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#282828" stroke="none"/>
-    <text x="954.336" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">0</text>
-    <text x="934.272" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">)</text>
+    <text x="955.392" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">0</text>
+    <text x="935.328" y="72.576" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">)</text>
     <rect x="986.400" y="38.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="1002.720" y="54.720" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#101010" stroke="none"/>
     <text x="1024.800" y="76.800" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">-</text>
@@ -136,12 +136,12 @@
     <text x="871.200" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">L</text>
     <rect x="909.600" y="192.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="925.920" y="208.320" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#958015" stroke="none"/>
-    <text x="954.336" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">;</text>
-    <text x="934.272" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">:</text>
+    <text x="955.392" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">;</text>
+    <text x="935.328" y="226.176" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">:</text>
     <rect x="986.400" y="192.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="1002.720" y="208.320" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#857213" stroke="none"/>
-    <text x="1031.136" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">'</text>
-    <text x="1011.072" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">"</text>
+    <text x="1032.192" y="230.400" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">'</text>
+    <text x="1012.128" y="226.176" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="24.68" text-anchor="middle" dominant-baseline="central">"</text>
     <rect x="679.200" y="268.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="695.520" y="285.120" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#1A4FB9" stroke="none"/>
     <text x="717.600" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">M</text>
@@ -153,8 +153,8 @@
     <text x="871.200" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">.</text>
     <rect x="909.600" y="268.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="925.920" y="285.120" width="44.160" height="44.160" rx="4.320" ry="4.320" fill="#133985" stroke="none"/>
-    <text x="954.336" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">÷</text>
-    <text x="934.272" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="17.42" text-anchor="middle" dominant-baseline="central">?</text>
+    <text x="955.392" y="307.200" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="29.04" text-anchor="middle" dominant-baseline="central">÷</text>
+    <text x="935.328" y="302.976" fill="#FFFFFF" font-family="Helvetica, Arial, sans-serif" font-weight="bold" font-size="20.33" text-anchor="middle" dominant-baseline="central">?</text>
   </g>
   <g inkscape:groupmode="layer" inkscape:label="cut" id="cut">
     <rect x="24.000" y="50.400" width="52.800" height="52.800" rx="8.640" ry="8.640" fill="none" stroke="#FF00FF" stroke-width="1.0"/>

@@ -68,8 +68,11 @@ ROWS = 4
 
 DISPLAY = {"=": "+", "/": "÷"}  # kid-math global remaps
 
-# Per-key text color overrides (mid-gray number stickers read better as black).
-TEXT_OVERRIDE = {"5": TEXT_DARK, "6": TEXT_DARK}
+# Per-key shift-symbol size multiplier (default 0.6 of digit size).
+# Double-quote needs more glyph area to read as a pair of marks.
+SHIFT_SIZE_OVERRIDE = {"'": 0.85, "5": 0.52, "2": 0.52, "1": 0.70, "/": 0.70}
+# Per-key horizontal offset for the shift symbol (fraction of sticker size).
+SHIFT_X_OVERRIDE = {"1": 0.30}
 
 
 def luminance(hex_color: str) -> float:
@@ -143,7 +146,7 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     inner_r = max(CORNER_R_IN - BORDER_VISIBLE_IN, 0.01)
 
     bg = KEY_COLORS.get(key, "#AAAAAA")
-    fg = TEXT_OVERRIDE.get(key, text_color_for(bg))
+    fg = text_color_for(bg)
     label = DISPLAY.get(key, key.upper())
 
     font_px = IN(size_in) * 0.55
@@ -151,7 +154,7 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     # If there's a shift symbol, slide the digit right so the symbol has
     # room on the left; otherwise keep the main glyph centered.
     if shift is not None:
-        tx = cx_in + size_in * 0.62
+        tx = cx_in + size_in * 0.64
     else:
         tx = cx_in + size_in / 2
     ty = cy_in + size_in / 2
@@ -168,9 +171,10 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     ]
 
     if shift is not None:
-        shift_px = font_px * 0.6
-        shift_x = cx_in + size_in * 0.24
-        shift_y = cy_in + size_in / 2
+        shift_scale = SHIFT_SIZE_OVERRIDE.get(key, 0.6)
+        shift_px = font_px * shift_scale
+        shift_x = cx_in + size_in * SHIFT_X_OVERRIDE.get(key, 0.26)
+        shift_y = cy_in + size_in * 0.42
         parts.append(
             f'<text x="{IN(shift_x):.3f}" y="{IN(shift_y):.3f}" '
             f'fill="{fg}" font-family="Helvetica, Arial, sans-serif" '

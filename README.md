@@ -279,6 +279,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 Purple Computer includes code from the following open-source projects:
 
 - **[spectral.js](https://github.com/rvanwijnen/spectral.js)** by Ronald van Wijnen (MIT License): Spectral reflectance data and CIE color matching functions, used for Beer-Lambert paint-like color mixing (yellow + blue = green, red + blue = purple)
+- **[Twemoji](https://github.com/jdecked/twemoji)** by Twitter and contributors ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)): source artwork for the T-Rex sticker (emoji U+1F996), recolored to Purple Computer shades in `cards/make_trex_sticker.py`.
 
 ---
 

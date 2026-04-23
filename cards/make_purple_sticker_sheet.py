@@ -17,9 +17,9 @@ import sys
 from pathlib import Path as FsPath
 
 import numpy as np
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
-from svgelements import SVG, Path as SvgPath, Circle as SvgCircle
+from svgelements import SVG, Path as SvgPath, Circle as SvgCircle, SimpleLine
 from svgpathtools import parse_path as parse_d
 
 CARDS = FsPath(__file__).parent
@@ -49,13 +49,18 @@ PURPLE_RAMP = ["#1e1033", "#3b1a5c", "#5c2d91", "#9b59d0", "#ebe2fd"]
 # Per-path sampling density (points per continuous subpath).
 SAMPLES_PER_SUBPATH = 400
 
+ROOT = CARDS.parent
+
+BRAND_FONT = "Nunito, Helvetica, Arial, sans-serif"
+
 # Stickers: (name, source-svg, center (in, in), max cut-bbox dimension in).
 STICKERS = [
-    ("trex",   CARDS / "trex-source.svg",    (1.0, 1.0), 1.60),
-    ("planet", CARDS / "twemoji-1fa90.svg",  (3.0, 1.0), 1.60),
-    ("earth",  CARDS / "twemoji-1f30e.svg",  (1.0, 2.9), 1.40),
-    ("sun",    CARDS / "twemoji-1f31e.svg",  (3.0, 2.9), 1.40),
-    ("turtle", CARDS / "twemoji-1f422.svg",  (2.0, 4.75), 2.50),
+    ("trex",   CARDS / "trex-source.svg",    (1.0, 1.1), 1.55),
+    ("planet", CARDS / "twemoji-1fa90.svg",  (3.0, 1.1), 1.55),
+    ("earth",  CARDS / "twemoji-1f30e.svg",  (1.0, 3.0), 1.45),
+    ("sun",    CARDS / "twemoji-1f31e.svg",  (3.0, 3.0), 1.45),
+    ("turtle", CARDS / "twemoji-1f422.svg",  (1.0, 4.7), 1.55),
+    ("bot",    ROOT  / "logo.svg",           (3.0, 4.9), 1.55),
 ]
 
 
@@ -105,15 +110,25 @@ def build_silhouette(src_path: FsPath):
                     (cx + r*math.cos(t), cy + r*math.sin(t))
                     for t in np.linspace(0, 2*math.pi, 65)
                 ]))
+        elif isinstance(el, SimpleLine):
+            # Stroked line -> buffered LineString (captures antenna stems etc.)
+            sw = float(el.stroke_width or 1.0)
+            line = LineString([(float(el.x1), float(el.y1)),
+                               (float(el.x2), float(el.y2))])
+            polys.append(line.buffer(sw / 2, resolution=16, cap_style="round"))
     return unary_union(polys)
 
 
 def poly_to_svg_path(poly) -> str:
-    coords = list(poly.exterior.coords)
-    parts = [f"M {coords[0][0]:.3f} {coords[0][1]:.3f}"]
-    for x, y in coords[1:]:
-        parts.append(f"L {x:.3f} {y:.3f}")
-    parts.append("Z")
+    """Serialize a Polygon or MultiPolygon's exterior(s) to SVG 'd'."""
+    geoms = list(poly.geoms) if poly.geom_type == "MultiPolygon" else [poly]
+    parts = []
+    for g in geoms:
+        coords = list(g.exterior.coords)
+        parts.append(f"M {coords[0][0]:.3f} {coords[0][1]:.3f}")
+        for x, y in coords[1:]:
+            parts.append(f"L {x:.3f} {y:.3f}")
+        parts.append("Z")
     return " ".join(parts)
 
 
@@ -190,6 +205,20 @@ def build_svg() -> str:
 
     bg = (f'<rect x="0" y="0" width="{IN(SHEET_W_IN)}" height="{IN(SHEET_H_IN)}" '
           f'fill="{SHEET_PURPLE}"/>')
+
+    # Wordmark tucked in the bottom-left, below the turtle.
+    wm_cx_in = 1.0
+    wm_title_y = 5.62
+    wm_url_y   = 5.78
+    wordmark = (
+        f'<text x="{IN(wm_cx_in):.2f}" y="{IN(wm_title_y):.2f}" fill="#F2E8FA" '
+        f'font-family="{BRAND_FONT}" font-weight="800" font-size="14" '
+        f'text-anchor="middle" dominant-baseline="central">Purple Computer</text>'
+        f'<text x="{IN(wm_cx_in):.2f}" y="{IN(wm_url_y):.2f}" '
+        f'fill="#F2E8FA" font-family="{BRAND_FONT}" font-weight="500" '
+        f'font-size="10" text-anchor="middle" '
+        f'dominant-baseline="central">purplecomputer.org</text>'
+    )
     page_border = (f'<rect x="0.5" y="0.5" '
                    f'width="{IN(SHEET_W_IN)-1:.3f}" '
                    f'height="{IN(SHEET_H_IN)-1:.3f}" '
@@ -207,6 +236,7 @@ def build_svg() -> str:
     {bg}
     {"".join(halos)}
     {"".join(arts)}
+    {wordmark}
   </g>
   <g inkscape:groupmode="layer" inkscape:label="cut" id="cut">
     {"".join(cuts)}
@@ -227,7 +257,7 @@ def main() -> None:
     print(f"  halo   : pad {PAD_IN:.3f}\" + bleed {HALO_OUT_IN:.3f}\"")
 
     if args.pdf:
-        cmd = ["inkscape", str(OUT_SVG), f"--export-filename={OUT_PDF}"]
+        cmd = ["inkscape", str(OUT_SVG), "--export-text-to-path", f"--export-filename={OUT_PDF}"]
         try:
             subprocess.run(cmd, check=True)
             print(f"Wrote {OUT_PDF}")

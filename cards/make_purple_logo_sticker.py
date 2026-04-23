@@ -115,7 +115,7 @@ def build_svg() -> str:
 <circle cx="115" cy="160" r="10" fill="{BOT_LIGHT}"/>
 <!-- URL arc -->
 <defs><path id="url-arc" d="M 63.76 126.92 A 40 40 0 0 0 136.24 126.92"/></defs>
-<text fill="{FACE_BG}" font-family="Helvetica, Arial, sans-serif"
+<text fill="{FACE_BG}" font-family="Nunito, Helvetica, Arial, sans-serif"
       font-weight="700" font-size="7" letter-spacing="0.9">
   <textPath href="#url-arc" startOffset="50%" text-anchor="middle">purplecomputer.org</textPath>
 </text>
@@ -150,7 +150,7 @@ def main() -> None:
     print(f"  padding        : {PAD_IN:.3f}\" (~{PAD_IN*25.4:.1f}mm)")
 
     if args.pdf:
-        cmd = ["inkscape", str(OUT_SVG), f"--export-filename={OUT_PDF}"]
+        cmd = ["inkscape", str(OUT_SVG), "--export-text-to-path", f"--export-filename={OUT_PDF}"]
         try:
             subprocess.run(cmd, check=True)
             print(f"Wrote {OUT_PDF}")

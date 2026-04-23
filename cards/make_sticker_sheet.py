@@ -153,15 +153,16 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
         tx = cx_in + size_in * 0.64
     else:
         tx = cx_in + size_in / 2
-    ty = cy_in + size_in / 2
+    # Nunito glyphs ride high in the em box; nudge down so they read centered.
+    ty = cy_in + size_in * 0.55
 
     parts = [
         rrect(outer_x, outer_y, outer_s, outer_s, outer_r, fill=PURPLE_HEX),
         rrect(inner_x, inner_y, inner_s, inner_s, inner_r, fill=bg),
         (
             f'<text x="{IN(tx):.3f}" y="{IN(ty):.3f}" '
-            f'fill="{fg}" font-family="Helvetica, Arial, sans-serif" '
-            f'font-weight="bold" font-size="{font_px:.2f}" '
+            f'fill="{fg}" font-family="Nunito, Helvetica, Arial, sans-serif" '
+            f'font-weight="800" font-size="{font_px:.2f}" '
             f'text-anchor="middle" dominant-baseline="central">{xml_escape(label)}</text>'
         ),
     ]
@@ -170,11 +171,11 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
         shift_scale = SHIFT_SIZE_OVERRIDE.get(key, 0.6)
         shift_px = font_px * shift_scale
         shift_x = cx_in + size_in * SHIFT_X_OVERRIDE.get(key, 0.26)
-        shift_y = cy_in + size_in * 0.42
+        shift_y = cy_in + size_in * 0.47
         parts.append(
             f'<text x="{IN(shift_x):.3f}" y="{IN(shift_y):.3f}" '
-            f'fill="{fg}" font-family="Helvetica, Arial, sans-serif" '
-            f'font-weight="bold" font-size="{shift_px:.2f}" '
+            f'fill="{fg}" font-family="Nunito, Helvetica, Arial, sans-serif" '
+            f'font-weight="800" font-size="{shift_px:.2f}" '
             f'text-anchor="middle" dominant-baseline="central">{xml_escape(shift)}</text>'
         )
 
@@ -205,13 +206,13 @@ def wordmark() -> str:
     url_px   = 13
     return (
         f'<text x="{IN(cx):.3f}" y="{IN(cy):.3f}" fill="#F2E8FA" '
-        f'font-family="Helvetica, Arial, sans-serif" font-weight="bold" '
+        f'font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="bold" '
         f'font-size="{title_px}" text-anchor="middle" '
-        f'dominant-baseline="central" dy="-0.7em">Purple Computer</text>'
+        f'dominant-baseline="central" dy="-0.45em">Purple Computer</text>'
         f'<text x="{IN(cx):.3f}" y="{IN(cy):.3f}" fill="#F2E8FA" '
-        f'font-family="Helvetica, Arial, sans-serif" '
+        f'font-family="Nunito, Helvetica, Arial, sans-serif" '
         f'font-size="{url_px}" text-anchor="middle" '
-        f'dominant-baseline="central" dy="1.2em">purplecomputer.org</text>'
+        f'dominant-baseline="central" dy="0.75em">purplecomputer.org</text>'
     )
 
 
@@ -272,7 +273,7 @@ def main() -> None:
     print(f"  purple border: {BORDER_VISIBLE_IN:.3f}\" visible + {BLEED_IN:.3f}\" bleed")
 
     if args.pdf:
-        cmd = ["inkscape", str(OUT_SVG), f"--export-filename={OUT_PDF}"]
+        cmd = ["inkscape", str(OUT_SVG), "--export-text-to-path", f"--export-filename={OUT_PDF}"]
         try:
             subprocess.run(cmd, check=True)
             print(f"Wrote {OUT_PDF}")

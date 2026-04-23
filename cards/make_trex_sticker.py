@@ -174,7 +174,7 @@ def main() -> None:
     print(f"  bg             : {BG_COLOR or 'transparent'}")
 
     if args.pdf:
-        cmd = ["inkscape", str(OUT_SVG), f"--export-filename={OUT_PDF}"]
+        cmd = ["inkscape", str(OUT_SVG), "--export-text-to-path", f"--export-filename={OUT_PDF}"]
         try:
             subprocess.run(cmd, check=True)
             print(f"Wrote {OUT_PDF}")

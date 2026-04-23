@@ -25,7 +25,7 @@
 <circle cx="115" cy="160" r="10" fill="#9b59d0"/>
 <!-- URL arc -->
 <defs><path id="url-arc" d="M 63.76 126.92 A 40 40 0 0 0 136.24 126.92"/></defs>
-<text fill="#ebe2fd" font-family="Helvetica, Arial, sans-serif"
+<text fill="#ebe2fd" font-family="Nunito, Helvetica, Arial, sans-serif"
       font-weight="700" font-size="7" letter-spacing="0.9">
   <textPath href="#url-arc" startOffset="50%" text-anchor="middle">purplecomputer.org</textPath>
 </text>

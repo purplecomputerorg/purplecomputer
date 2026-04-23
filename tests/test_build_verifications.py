@@ -22,12 +22,25 @@ def test_pulseaudio_is_in_apt_list():
     assert re.search(r"\bpulseaudio\b", src), "pulseaudio not in apt install list"
 
 
-def test_pulseaudio_user_socket_enabled_globally():
+def test_pulseaudio_systemd_units_are_disabled():
+    """Pulse must come up via client-side autospawn only, not systemd socket
+    activation or eager service start. If pulseaudio.socket is enabled at
+    boot it binds /run/user/1000/pulse/native, and Pulse's stock default.pa
+    (module-native-protocol-unix) then fails to bind the same path, crash-
+    looping until start-limit-hit. Regression guard for that whole saga."""
     src = _build_source()
     assert re.search(
-        r"systemctl\s+--global\s+enable[^\n]*pulseaudio\.socket",
+        r'rm\s+-f\s+"\$MOUNT_DIR/etc/systemd/user/sockets\.target\.wants/pulseaudio\.socket"',
         src,
-    ), "pulseaudio.socket not enabled via systemctl --global"
+    ), "build does not remove the pulseaudio.socket enable symlink"
+    assert re.search(
+        r'rm\s+-f\s+"\$MOUNT_DIR/etc/systemd/user/default\.target\.wants/pulseaudio\.service"',
+        src,
+    ), "build does not remove the pulseaudio.service enable symlink"
+    assert not re.search(
+        r"systemctl\s+--global\s+enable[^\n]*pulseaudio",
+        src,
+    ), "build is re-enabling pulseaudio via systemctl --global; must stay autospawn-only"
 
 
 def test_no_duplicate_switch_on_connect_dropin():
@@ -44,19 +57,18 @@ def test_no_duplicate_switch_on_connect_dropin():
 
 
 def test_audio_pipeline_verification_block():
-    """The verification block must check pulseaudio and the user socket,
-    guard against the duplicate-load drop-in, and exit 1 on failure."""
+    """The verification block must check pulseaudio is installed, guard
+    against the duplicate-load drop-in, guard against either systemd unit
+    being enabled, and exit 1 on failure."""
     src = _build_source()
     assert re.search(r"AUDIO_MISSING", src), "audio verification block not found"
     assert re.search(r'command -v pulseaudio', src), "pulseaudio command check missing"
     assert re.search(r"stale-10-purple\.pa-dropin-present", src), \
         "verification does not guard against the duplicate-load drop-in regression"
-    assert re.search(r"pulseaudio\.service-still-in-default\.target\.wants", src), \
-        "verification does not guard against the eager pulseaudio.service regression"
-    assert re.search(
-        r'rm\s+-f\s+"\$MOUNT_DIR/etc/systemd/user/default\.target\.wants/pulseaudio\.service"',
-        src,
-    ), "build does not remove the default.target.wants/pulseaudio.service symlink"
+    assert re.search(r"pulseaudio\.socket-still-enabled", src), \
+        "verification does not guard against pulseaudio.socket being enabled"
+    assert re.search(r"pulseaudio\.service-still-enabled", src), \
+        "verification does not guard against pulseaudio.service being enabled"
     assert re.search(r"AUDIO_MISSING.*\n.*exit 1", src, re.DOTALL), \
         "audio verification does not exit on failure"
 

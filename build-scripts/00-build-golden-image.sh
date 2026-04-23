@@ -644,19 +644,18 @@ JOURNAL
     # Without this, pygame/SDL (set to SDL_AUDIODRIVER=pulseaudio via the service
     # Environment=) can't find a Pulse server and audio falls through to "not
     # working" even on machines where audio would otherwise be fine.
-    # `--global` installs the symlink under /etc/systemd/user, applying to all users.
-    # Enable ONLY pulseaudio.socket, not pulseaudio.service. The Ubuntu
-    # pulseaudio package ships a user-preset that enables the service, so we
-    # must EXPLICITLY disable it — otherwise socket activation and eager
-    # .service startup race, both spawn a daemon, one writes the pid file,
-    # the other dies on "Daemon already running / pa_pid_file_create failed",
-    # systemd retries, hits start-limit, and audio is wedged for the session.
-    # Enable the socket, then unconditionally remove the service symlink.
-    # Using `systemctl --global disable pulseaudio.service` tears the socket
-    # symlink down too (pulseaudio.service has `Also=pulseaudio.socket` in
-    # [Install], and disable propagates). Brute-force rm the one symlink we
-    # don't want, leaving the socket in place.
-    chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket
+    # Disable BOTH systemd-managed Pulse units so startup is handled purely
+    # by libpulse's client-side autospawn (the Ubuntu-supported happy path).
+    # Why not socket activation: stock /etc/pulse/default.pa loads
+    # module-native-protocol-unix unconditionally, which tries to create the
+    # socket file /run/user/1000/pulse/native. If pulseaudio.socket already
+    # bound that path, Pulse's module init fails with EADDRINUSE, Pulse
+    # exits, the pid file is left, systemd retries forever. Autospawn
+    # avoids the collision entirely: no Pulse until a client connects, at
+    # which point Pulse owns the socket cleanly.
+    # Use `rm -f` rather than `systemctl disable` because the latter
+    # propagates via [Install] Also= and removes the wrong things.
+    rm -f "$MOUNT_DIR/etc/systemd/user/sockets.target.wants/pulseaudio.socket"
     rm -f "$MOUNT_DIR/etc/systemd/user/default.target.wants/pulseaudio.service"
 
     # Ubuntu's stock /etc/pulse/default.pa already loads module-switch-on-connect,
@@ -670,23 +669,25 @@ JOURNAL
     log_info "Verifying audio pipeline is configured..."
     AUDIO_MISSING=""
     chroot "$MOUNT_DIR" bash -c "command -v pulseaudio >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio"
-    [ -f "$MOUNT_DIR/usr/lib/systemd/user/pulseaudio.socket" ] || AUDIO_MISSING="$AUDIO_MISSING pulseaudio.socket"
-    [ -L "$MOUNT_DIR/etc/systemd/user/sockets.target.wants/pulseaudio.socket" ] || AUDIO_MISSING="$AUDIO_MISSING pulseaudio.socket-global-enable"
     # Guard against the duplicate-load footgun ever coming back.
     if [ -f "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" ]; then
         AUDIO_MISSING="$AUDIO_MISSING stale-10-purple.pa-dropin-present"
     fi
-    # Guard against the eager-.service footgun ever coming back. The service
-    # must NOT be in default.target.wants; socket activation is the only
-    # allowed start trigger.
+    # Guard against socket-activation footguns: NEITHER the socket nor the
+    # service may be enabled. Pulse must come up via client-side autospawn
+    # only, otherwise module-native-protocol-unix fights the systemd-bound
+    # socket at /run/user/1000/pulse/native and crash-loops.
+    if [ -L "$MOUNT_DIR/etc/systemd/user/sockets.target.wants/pulseaudio.socket" ]; then
+        AUDIO_MISSING="$AUDIO_MISSING pulseaudio.socket-still-enabled"
+    fi
     if [ -L "$MOUNT_DIR/etc/systemd/user/default.target.wants/pulseaudio.service" ]; then
-        AUDIO_MISSING="$AUDIO_MISSING pulseaudio.service-still-in-default.target.wants"
+        AUDIO_MISSING="$AUDIO_MISSING pulseaudio.service-still-enabled"
     fi
     if [ -n "$AUDIO_MISSING" ]; then
         echo "ERROR: audio pipeline incomplete in golden image:$AUDIO_MISSING"
         exit 1
     fi
-    log_info "  pulseaudio + user socket verified; stock default.pa handles switch-on-connect"
+    log_info "  pulseaudio installed; autospawn-only (no systemd enable); stock default.pa handles switch-on-connect"
 
     # keyd: kernel keymap daemon. See config/keyd/default.conf for rationale.
     mkdir -p "$MOUNT_DIR/etc/keyd"

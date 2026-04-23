@@ -51,6 +51,10 @@ def test_audio_pipeline_verification_block():
     assert re.search(r'command -v pulseaudio', src), "pulseaudio command check missing"
     assert re.search(r"stale-10-purple\.pa-dropin-present", src), \
         "verification does not guard against the duplicate-load drop-in regression"
+    assert re.search(r"pulseaudio\.service-still-in-default\.target\.wants", src), \
+        "verification does not guard against the eager pulseaudio.service regression"
+    assert re.search(r"systemctl\s+--global\s+disable\s+pulseaudio\.service", src), \
+        "build does not explicitly disable pulseaudio.service (undoing Ubuntu preset)"
     assert re.search(r"AUDIO_MISSING.*\n.*exit 1", src, re.DOTALL), \
         "audio verification does not exit on failure"
 

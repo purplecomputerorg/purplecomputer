@@ -76,14 +76,15 @@ section "user journal for pulseaudio.service PREVIOUS boot (if persistent)"
 sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
     journalctl --user -u pulseaudio.service -b -1 --no-pager 2>&1
 
-section "pactl info (purple user, no autospawn)"
-# --no-autospawn: never start a new daemon just to query. We want to see the
-# real state, not accidentally fix it.
+section "pactl info (purple user)"
+# If Pulse is already running we see its state; if it's dead, pactl's
+# autospawn attempt will also fail (same stale-pid path) and the error
+# gets captured here. Either way, we don't accidentally "fix" anything.
 sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
-    pactl --no-autospawn info 2>&1
+    pactl info 2>&1
 section "pactl list short sinks"
 sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
-    pactl --no-autospawn list short sinks 2>&1
+    pactl list short sinks 2>&1
 
 section "purple boot heartbeat (audio-related)"
 grep -iE 'mixer|audio|pulse|hotplug' /var/log/purple/boot.log 2>/dev/null | tail -40

@@ -645,11 +645,14 @@ JOURNAL
     # Environment=) can't find a Pulse server and audio falls through to "not
     # working" even on machines where audio would otherwise be fine.
     # `--global` installs the symlink under /etc/systemd/user, applying to all users.
-    # Enable ONLY pulseaudio.socket, not pulseaudio.service: the service is
-    # socket-activated on demand. Enabling the service eagerly makes Pulse race
-    # logind's user-runtime-dir setup, lose, exit with a pid file on disk, and
-    # crash-loop the socket until start-limit-hit — wedging audio permanently.
+    # Enable ONLY pulseaudio.socket, not pulseaudio.service. The Ubuntu
+    # pulseaudio package ships a user-preset that enables the service, so we
+    # must EXPLICITLY disable it — otherwise socket activation and eager
+    # .service startup race, both spawn a daemon, one writes the pid file,
+    # the other dies on "Daemon already running / pa_pid_file_create failed",
+    # systemd retries, hits start-limit, and audio is wedged for the session.
     chroot "$MOUNT_DIR" systemctl --global enable pulseaudio.socket
+    chroot "$MOUNT_DIR" systemctl --global disable pulseaudio.service
 
     # Ubuntu's stock /etc/pulse/default.pa already loads module-switch-on-connect,
     # so no drop-in is needed for USB hotplug to follow to the new sink. A
@@ -667,6 +670,12 @@ JOURNAL
     # Guard against the duplicate-load footgun ever coming back.
     if [ -f "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" ]; then
         AUDIO_MISSING="$AUDIO_MISSING stale-10-purple.pa-dropin-present"
+    fi
+    # Guard against the eager-.service footgun ever coming back. The service
+    # must NOT be in default.target.wants; socket activation is the only
+    # allowed start trigger.
+    if [ -L "$MOUNT_DIR/etc/systemd/user/default.target.wants/pulseaudio.service" ]; then
+        AUDIO_MISSING="$AUDIO_MISSING pulseaudio.service-still-in-default.target.wants"
     fi
     if [ -n "$AUDIO_MISSING" ]; then
         echo "ERROR: audio pipeline incomplete in golden image:$AUDIO_MISSING"

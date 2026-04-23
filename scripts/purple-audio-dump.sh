@@ -66,15 +66,23 @@ section "pulseaudio.service status (purple user)"
 sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
     systemctl --user status pulseaudio.service --no-pager 2>&1
 
-section "user journal for pulseaudio.service this boot"
-sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
-    journalctl --user -u pulseaudio.service -b --no-pager 2>&1
+section "journal for pulseaudio.service/socket this boot (as root, _UID=1000)"
+# Run as root. `sudo -u purple journalctl --user` hits permission issues on
+# recent Ubuntu where user-journals aren't readable even by the owning user
+# unless they're in systemd-journal group. Root bypasses all of that; the
+# --user-unit filter plus _UID=1000 narrows to the purple user's Pulse events.
+journalctl _UID=1000 --user-unit=pulseaudio.service --user-unit=pulseaudio.socket \
+    -b --no-pager 2>&1
 
-section "user journal for pulseaudio.service PREVIOUS boot (if persistent)"
-# Requires /var/log/journal to exist (enabled in the golden image). On live
-# boots the overlay is tmpfs, so -b -1 just returns nothing. That's fine.
-sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
-    journalctl --user -u pulseaudio.service -b -1 --no-pager 2>&1
+section "journal PREVIOUS boot (if persistent)"
+journalctl _UID=1000 --user-unit=pulseaudio.service --user-unit=pulseaudio.socket \
+    -b -1 --no-pager 2>&1
+
+section "systemd journal for pulseaudio (all fields, last 40 lines)"
+# Catch-all in case the _UID filter excludes early session-manager lines
+# that triggered the start. -o cat strips timestamps; we want raw messages.
+journalctl -b --no-pager SYSLOG_IDENTIFIER=pulseaudio SYSLOG_IDENTIFIER=systemd \
+    | grep -iE 'pulseaudio' | tail -40 2>&1
 
 section "pactl info (purple user)"
 # If Pulse is already running we see its state; if it's dead, pactl's

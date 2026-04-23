@@ -1265,10 +1265,14 @@ class PurpleApp(App):
                 self._show_brightness_hint()
                 return
 
-        # Remap = key to + (more useful for kids: math, color mixing, emoji combining)
-        if isinstance(action, CharacterAction) and action.char == '=':
+        # Kid-friendly math-symbol remaps: = -> +, / -> ÷, * -> ×.
+        # Shifted forms (?, *) still flow through unchanged because CharacterAction
+        # carries the produced char, not the physical key.
+        _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
+        if isinstance(action, CharacterAction) and action.char in _KID_MATH_REMAP:
             action = CharacterAction(
-                char='+', shifted=action.shifted, shift_held=action.shift_held,
+                char=_KID_MATH_REMAP[action.char],
+                shifted=action.shifted, shift_held=action.shift_held,
                 is_repeat=action.is_repeat, arrow_held=action.arrow_held,
             )
 

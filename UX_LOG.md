@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Global key remap: `/` now produces `÷` and `*` now produces `×` everywhere (joining the existing `=` → `+` remap), so kids see math symbols directly on their keys.
 - Audio diagnostics: when audio fails, the message now tells parents to plug in a USB speaker or USB audio adapter and notes that sound should start within a few seconds, so they know a reboot isn't needed.
 - Art/Music: mode indicators now centered in the top bar with a dim "↹ Tab to switch" hint to the right, so Tab no longer reads as a third mode.
 - Art: bottom hint is now mode-aware: "Type to paint! Every letter is a color, mix them together. Arrow keys move." in paint mode, "Type to write! Arrow keys move. Enter for a new line." in write mode.

@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from purple_tui.rooms.art_room import KEY_COLORS
 
-OUT_SVG = Path(__file__).parent / "sticker-sheet.svg"
-OUT_PDF = Path(__file__).parent / "sticker-sheet.pdf"
+OUT_SVG = Path(__file__).parent / "keyboard-sticker-sheet.svg"
+OUT_PDF = Path(__file__).parent / "keyboard-sticker-sheet.pdf"
 
 PX = 96.0  # SVG user units per inch
 def IN(x: float) -> float:

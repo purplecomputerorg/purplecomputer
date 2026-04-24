@@ -53,7 +53,7 @@ CUT_STROKE_PT  = 1.0    # 1pt magenta stroke on cut paths
 
 # Visual design.
 STICKER_SIZE_IN   = 0.55   # ~14mm: fits 15-17mm keycaps universally
-BORDER_VISIBLE_IN = 0.045  # purple ring width visible INSIDE the cut
+BORDER_VISIBLE_IN = 0.125  # purple ring inside the cut; meets print wobble tolerance
 CORNER_R_IN       = 0.09   # cut-path corner radius
 PURPLE_HEX        = "#6633AA"  # border ring + bleed
 TEXT_LIGHT        = "#FFFFFF"
@@ -130,7 +130,7 @@ def rrect(x_in, y_in, w_in, h_in, r_in, fill=None, stroke=None, stroke_w_pt=None
 
 
 def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
-    """Build the two nested rounded rects + label for one sticker."""
+    """Build the bleed rect, inner color tile, and label for one sticker."""
     outer_x = cx_in - BLEED_IN
     outer_y = cy_in - BLEED_IN
     outer_s = size_in + 2 * BLEED_IN
@@ -139,22 +139,24 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     inner_x = cx_in + BORDER_VISIBLE_IN
     inner_y = cy_in + BORDER_VISIBLE_IN
     inner_s = size_in - 2 * BORDER_VISIBLE_IN
-    inner_r = max(CORNER_R_IN - BORDER_VISIBLE_IN, 0.01)
+    inner_r = CORNER_R_IN * (inner_s / size_in)
 
     bg = KEY_COLORS.get(key, "#AAAAAA")
     fg = text_color_for(bg)
     label = DISPLAY.get(key, key.upper())
 
-    font_px = IN(size_in) * 0.55
     shift = SHIFT_SYMBOLS.get(key)
-    # If there's a shift symbol, slide the digit right so the symbol has
-    # room on the left; otherwise keep the main glyph centered.
+    # Font sized against the inner tile so glyphs fit the color area.
+    # Shift-symbol keys get a tighter size to make room for two glyphs.
+    font_px = IN(inner_s) * (0.72 if shift is not None else 0.88)
+    inner_cx = inner_x + inner_s / 2
     if shift is not None:
-        tx = cx_in + size_in * 0.64
+        tx = inner_x + inner_s * 0.73
     else:
-        tx = cx_in + size_in / 2
+        tx = inner_cx
     # Nunito glyphs ride high in the em box; nudge down so they read centered.
-    ty = cy_in + size_in * 0.55
+    ty_frac = 0.54 if key in ("[", "]") else 0.60
+    ty = inner_y + inner_s * ty_frac
 
     parts = [
         rrect(outer_x, outer_y, outer_s, outer_s, outer_r, fill=PURPLE_HEX),
@@ -170,8 +172,8 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     if shift is not None:
         shift_scale = SHIFT_SIZE_OVERRIDE.get(key, 0.6)
         shift_px = font_px * shift_scale
-        shift_x = cx_in + size_in * SHIFT_X_OVERRIDE.get(key, 0.26)
-        shift_y = cy_in + size_in * 0.47
+        shift_x = inner_x + inner_s * SHIFT_X_OVERRIDE.get(key, 0.27)
+        shift_y = inner_y + inner_s * 0.40
         parts.append(
             f'<text x="{IN(shift_x):.3f}" y="{IN(shift_y):.3f}" '
             f'fill="{fg}" font-family="Nunito, Helvetica, Arial, sans-serif" '

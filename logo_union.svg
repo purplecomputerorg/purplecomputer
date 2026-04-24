@@ -15,16 +15,13 @@
   <!-- Happy smile (stroke converted to filled path) -->
   <path d="M 86.72 118.86 Q 100 126 113.28 118.86 L 114.72 121.14 Q 100 130 85.28 121.14 Z" fill="#5c2d91"/>
 
-  <!-- Left antenna: capsule stem + ball merged (dark stem, light ball) -->
+  <!-- Left antenna: capsule stem drawn first, ball on top (dark stem, light ball) -->
   <path d="M 82.5 50 A 2.5 2.5 0 0 1 87.5 50 L 87.5 68 A 2.5 2.5 0 0 1 82.5 68 Z" fill="#5c2d91"/>
   <circle cx="85" cy="47" r="6" fill="#9b59d0"/>
-  <!-- Safety bridge so ball + stem visually/geometrically touch even if RIP mis-scales -->
-  <path d="M 82.5 47 L 87.5 47 L 87.5 52 L 82.5 52 Z" fill="#5c2d91"/>
 
-  <!-- Right antenna: capsule stem + ball merged (light stem, dark ball) -->
+  <!-- Right antenna (light stem, dark ball) -->
   <path d="M 112.5 50 A 2.5 2.5 0 0 1 117.5 50 L 117.5 68 A 2.5 2.5 0 0 1 112.5 68 Z" fill="#9b59d0"/>
   <circle cx="115" cy="47" r="6" fill="#5c2d91"/>
-  <path d="M 112.5 47 L 117.5 47 L 117.5 52 L 112.5 52 Z" fill="#9b59d0"/>
 
   <!-- Feet -->
   <circle cx="85" cy="160" r="10" fill="#5c2d91"/>

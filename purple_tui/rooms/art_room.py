@@ -174,6 +174,11 @@ KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top le
 KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
 KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
 
+# Display aliases for kid-math remaps in purple_tui._KID_MATH_REMAP: keys arrive
+# at paint handlers as the displayed glyph, not the source key.
+KEY_COLORS["÷"] = KEY_COLORS["/"]
+KEY_COLORS["×"] = KEY_COLORS.get("*", KEY_COLORS["/"])
+
 
 def get_key_color(char: str) -> str:
     """Get the color for a key, or white if not mapped."""

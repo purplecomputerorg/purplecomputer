@@ -37,55 +37,55 @@
     <rect x="69.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#F2A5A5" stroke="none"/>
     <text x="84.000" y="154.080" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">Q</text>
     <rect x="127.200" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="151.200" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EF9191" stroke="none"/>
+    <rect x="151.200" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EE8D8D" stroke="none"/>
     <text x="165.600" y="154.080" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">W</text>
     <rect x="208.800" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="232.800" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EC7D7D" stroke="none"/>
+    <rect x="232.800" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EB7575" stroke="none"/>
     <text x="247.200" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">E</text>
     <rect x="290.400" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="314.400" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E96868" stroke="none"/>
+    <rect x="314.400" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E75C5C" stroke="none"/>
     <text x="328.800" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">R</text>
     <rect x="372.000" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="396.000" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E65454" stroke="none"/>
+    <rect x="396.000" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E44444" stroke="none"/>
     <text x="410.400" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">T</text>
     <rect x="453.600" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="477.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E34040" stroke="none"/>
+    <rect x="477.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E02C2C" stroke="none"/>
     <text x="492.000" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">Y</text>
     <rect x="45.600" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="69.600" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#F2E5A5" stroke="none"/>
     <text x="84.000" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">A</text>
     <rect x="127.200" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="151.200" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EFDF8F" stroke="none"/>
+    <rect x="151.200" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EEDD8A" stroke="none"/>
     <text x="165.600" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">S</text>
     <rect x="208.800" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="232.800" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EBD879" stroke="none"/>
+    <rect x="232.800" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#EAD670" stroke="none"/>
     <text x="247.200" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">D</text>
     <rect x="290.400" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="314.400" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E8D262" stroke="none"/>
+    <rect x="314.400" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E6CE55" stroke="none"/>
     <text x="328.800" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">F</text>
     <rect x="372.000" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="396.000" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E5CC4C" stroke="none"/>
+    <rect x="396.000" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E2C63A" stroke="none"/>
     <text x="410.400" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">G</text>
     <rect x="453.600" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="477.600" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E2C536" stroke="none"/>
+    <rect x="477.600" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#DFBF1F" stroke="none"/>
     <text x="492.000" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">H</text>
     <rect x="45.600" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="69.600" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#A5BFF2" stroke="none"/>
     <text x="84.000" y="317.280" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">Z</text>
     <rect x="127.200" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="151.200" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#8CADEE" stroke="none"/>
+    <rect x="151.200" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#88A9EE" stroke="none"/>
     <text x="165.600" y="317.280" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">X</text>
     <rect x="208.800" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="232.800" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#749BEB" stroke="none"/>
+    <rect x="232.800" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#6A94E9" stroke="none"/>
     <text x="247.200" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">C</text>
     <rect x="290.400" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="314.400" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#5B8AE7" stroke="none"/>
+    <rect x="314.400" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#4C7FE5" stroke="none"/>
     <text x="328.800" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">V</text>
     <rect x="372.000" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="396.000" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#4278E4" stroke="none"/>
+    <rect x="396.000" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#2E6AE1" stroke="none"/>
     <text x="410.400" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">B</text>
     <rect x="453.600" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="477.600" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#2966E0" stroke="none"/>
+    <rect x="477.600" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#1D59D0" stroke="none"/>
     <text x="492.000" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">N</text>
     <rect x="621.600" y="31.200" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="645.600" y="55.200" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#707070" stroke="none"/>
@@ -110,51 +110,51 @@
     <rect x="1053.600" y="55.200" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#000000" stroke="none"/>
     <text x="1068.000" y="72.480" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">+</text>
     <rect x="621.600" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="645.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#E02C2C" stroke="none"/>
+    <rect x="645.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#D21E1E" stroke="none"/>
     <text x="660.000" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">U</text>
     <rect x="703.200" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="727.200" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#D71E1E" stroke="none"/>
+    <rect x="727.200" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#BA1A1A" stroke="none"/>
     <text x="741.600" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">I</text>
     <rect x="784.800" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="808.800" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#C21B1B" stroke="none"/>
+    <rect x="808.800" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#A21717" stroke="none"/>
     <text x="823.200" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">O</text>
     <rect x="866.400" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="890.400" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#AE1818" stroke="none"/>
+    <rect x="890.400" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#891313" stroke="none"/>
     <text x="904.800" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">P</text>
     <rect x="948.000" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="972.000" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#9A1616" stroke="none"/>
+    <rect x="972.000" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#711010" stroke="none"/>
     <text x="986.400" y="152.352" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">[</text>
     <rect x="1029.600" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="1053.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#851313" stroke="none"/>
+    <rect x="1053.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#590C0C" stroke="none"/>
     <text x="1068.000" y="152.352" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">]</text>
     <rect x="621.600" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="645.600" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#DFBF1F" stroke="none"/>
-    <text x="660.000" y="235.680" fill="#000000" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">J</text>
+    <rect x="645.600" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#C4A81C" stroke="none"/>
+    <text x="660.000" y="235.680" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">J</text>
     <rect x="703.200" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="727.200" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#C8AC1C" stroke="none"/>
+    <rect x="727.200" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#A99118" stroke="none"/>
     <text x="741.600" y="235.680" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">K</text>
     <rect x="784.800" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="808.800" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#B29919" stroke="none"/>
+    <rect x="808.800" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#8E7A14" stroke="none"/>
     <text x="823.200" y="235.680" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">L</text>
     <rect x="866.400" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="890.400" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#9C8516" stroke="none"/>
+    <rect x="890.400" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#746310" stroke="none"/>
     <text x="911.424" y="235.680" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="20.74" text-anchor="middle" dominant-baseline="central">;</text>
     <text x="898.176" y="229.920" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="12.44" text-anchor="middle" dominant-baseline="central">:</text>
     <rect x="948.000" y="194.400" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="972.000" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#857213" stroke="none"/>
+    <rect x="972.000" y="218.400" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#594C0C" stroke="none"/>
     <text x="993.024" y="235.680" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="20.74" text-anchor="middle" dominant-baseline="central">'</text>
     <text x="979.776" y="229.920" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="17.63" text-anchor="middle" dominant-baseline="central">"</text>
     <rect x="621.600" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="645.600" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#1D59D0" stroke="none"/>
+    <rect x="645.600" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#194CB2" stroke="none"/>
     <text x="660.000" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">M</text>
     <rect x="703.200" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="727.200" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#1A4EB7" stroke="none"/>
+    <rect x="727.200" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#153F94" stroke="none"/>
     <text x="741.600" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">,</text>
     <rect x="784.800" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="808.800" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#16439E" stroke="none"/>
+    <rect x="808.800" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#103277" stroke="none"/>
     <text x="823.200" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">.</text>
     <rect x="866.400" y="276.000" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
-    <rect x="890.400" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#133985" stroke="none"/>
+    <rect x="890.400" y="300.000" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#0C2659" stroke="none"/>
     <text x="911.424" y="317.280" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="20.74" text-anchor="middle" dominant-baseline="central">÷</text>
     <text x="898.176" y="311.520" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="14.52" text-anchor="middle" dominant-baseline="central">?</text>
     <text x="1027.200" y="314.400" fill="#F2E8FA" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="bold" font-size="17" text-anchor="middle" dominant-baseline="central" dy="-0.45em">Purple Computer</text><text x="1027.200" y="314.400" fill="#F2E8FA" font-family="Nunito, Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" dominant-baseline="central" dy="0.75em">purplecomputer.org</text>

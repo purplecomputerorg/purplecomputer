@@ -162,7 +162,7 @@ def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
     result = {}
     count = len(keys)
     for i, key in enumerate(keys):
-        lightness = 0.80 - (i / max(count - 1, 1)) * 0.50
+        lightness = 0.80 - (i / max(count - 1, 1)) * 0.60
         result[key] = hsl_to_hex(hue, 0.75, lightness)
     return result
 

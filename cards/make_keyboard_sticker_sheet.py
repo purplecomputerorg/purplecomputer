@@ -58,7 +58,6 @@ CORNER_R_IN       = 0.09   # cut-path corner radius
 PURPLE_HEX        = "#6633AA"  # border ring + bleed
 TEXT_LIGHT        = "#FFFFFF"
 TEXT_DARK         = "#000000"
-TEXT_LIGHT_THRESH = 0.65       # bg luminance below this -> use TEXT_LIGHT
 
 # Page layout.
 OUTER_MARGIN_IN = 0.25     # must be >= BLEED so bleed stays on page
@@ -75,13 +74,21 @@ SHIFT_SIZE_OVERRIDE = {"'": 0.85, "5": 0.52, "2": 0.52, "1": 0.70, "/": 0.70}
 SHIFT_X_OVERRIDE = {"1": 0.30}
 
 
-def luminance(hex_color: str) -> float:
+def _rel_luminance(hex_color: str) -> float:
+    """WCAG relative luminance (sRGB, gamma-corrected)."""
     h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-    return (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    def ch(v: int) -> float:
+        s = v / 255
+        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
+    r, g, b = ch(int(h[0:2], 16)), ch(int(h[2:4], 16)), ch(int(h[4:6], 16))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 def text_color_for(bg_hex: str) -> str:
-    return TEXT_DARK if luminance(bg_hex) > TEXT_LIGHT_THRESH else TEXT_LIGHT
+    """Pick whichever of black/white has the higher WCAG contrast ratio."""
+    l_bg = _rel_luminance(bg_hex)
+    contrast_white = 1.05 / (l_bg + 0.05)
+    contrast_black = (l_bg + 0.05) / 0.05
+    return TEXT_LIGHT if contrast_white >= contrast_black else TEXT_DARK
 
 def xml_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

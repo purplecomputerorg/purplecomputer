@@ -34,7 +34,7 @@ def IN(x: float) -> float:
 SHEET_W_IN  = 4.0
 SHEET_H_IN  = 6.0
 CUT_GAP_IN  = 0.25          # printer minimum between cut paths
-PAD_IN      = 0.07          # silhouette -> cut line
+PAD_IN      = 0.125         # silhouette -> cut line; print safety margin
 HALO_OUT_IN = 0.10          # cut line -> outer edge of white halo (bleed)
 CUT_STROKE_PX = 1.0
 

@@ -155,7 +155,12 @@ def sticker_art(key: str, cx_in: float, cy_in: float, size_in: float) -> str:
     else:
         tx = inner_cx
     # Nunito glyphs ride high in the em box; nudge down so they read centered.
-    ty_frac = 0.54 if key in ("[", "]") else 0.60
+    if key in ("[", "]"):
+        ty_frac = 0.54
+    elif key == "=":
+        ty_frac = 0.55
+    else:
+        ty_frac = 0.60
     ty = inner_y + inner_s * ty_frac
 
     parts = [

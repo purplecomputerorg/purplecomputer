@@ -108,7 +108,7 @@
     <text x="986.400" y="72.480" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">-</text>
     <rect x="1029.600" y="31.200" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="1053.600" y="55.200" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#000000" stroke="none"/>
-    <text x="1068.000" y="72.480" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">+</text>
+    <text x="1068.000" y="71.040" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">+</text>
     <rect x="621.600" y="112.800" width="76.800" height="76.800" rx="20.640" ry="20.640" fill="#6633AA" stroke="none"/>
     <rect x="645.600" y="136.800" width="28.800" height="28.800" rx="4.713" ry="4.713" fill="#D21E1E" stroke="none"/>
     <text x="660.000" y="154.080" fill="#FFFFFF" font-family="Nunito, Helvetica, Arial, sans-serif" font-weight="800" font-size="25.34" text-anchor="middle" dominant-baseline="central">U</text>

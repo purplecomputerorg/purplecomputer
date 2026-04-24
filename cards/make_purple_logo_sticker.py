@@ -25,7 +25,7 @@ def IN(x: float) -> float:
 
 # Target: sticker is STICKER_H_IN tall overall (cut line to cut line).
 STICKER_H_IN   = 3.0
-PAD_IN         = 0.08   # min safe buffer for kiss-cut (~2mm) — max bot size
+PAD_IN         = 0.125  # silhouette -> cut line; print safety margin
 PAGE_MARGIN_IN = 0.0    # page = cut/bleed bbox; no wasted whitespace
 CUT_STROKE_PX  = 1.0    # printer spec: 1-pixel stroke on cut paths
 BLEED_IN       = 0.125  # required when BG_COLOR is set (color extending to cut)

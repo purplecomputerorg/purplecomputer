@@ -57,6 +57,52 @@ NOTE_NAMES = {
     'N': 'E', 'M': 'F#', ',': 'G', '.': 'A', '/': 'B',
 }
 
+# --- Chromatic / key-shift support -----------------------------------------
+#
+# The grid plays a major scale starting from a chosen root note. The kid can
+# shift root note (Left/Right) and octave (Up/Down) at runtime. Pre-rendered
+# samples cover every reachable pitch.
+
+CHROMATIC_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#',
+                         'G', 'G#', 'A', 'A#', 'B']
+
+# Major scale: semitone offsets from the root for scale degrees 0..6
+MAJOR_SCALE_SEMITONES = [0, 2, 4, 5, 7, 9, 11]
+
+# Five "no wrong notes" keys cycled by Left/Right. Stored as semitone indices
+# (0=C, 2=D, 5=F, 7=G, 9=A). G is the default for backward compatibility with
+# the original NOTE_FREQUENCIES table above.
+FRIENDLY_KEYS = [0, 2, 5, 7, 9]
+DEFAULT_ROOT_INDEX = FRIENDLY_KEYS.index(7)  # G
+
+# Vertical row → base octave for scale degree 0 in that row (G major default
+# already maps row 0 to G4, row 1 to G3, row 2 to G2).
+ROW_OCTAVE_BASE = {0: 4, 1: 3, 2: 2}
+
+
+def pitch_filename(note_name: str, octave: int) -> str:
+    """Pitch-based sample filename, e.g. ('C#', 4) -> 'cs4'.
+
+    Uses 's' instead of '#' so filenames are shell-safe.
+    """
+    return note_name.lower().replace('#', 's') + str(octave)
+
+
+def pitch_for(row: int, col: int, root: int, octave_shift: int) -> tuple[str, int]:
+    """Return (note_name, octave) for the cell at (row, col) given current state.
+
+    row: 0=top (Q-P), 1=middle (A-;), 2=bottom (Z-/)
+    col: 0..9 (scale degree, with col 7..9 wrapping into next octave)
+    root: 0..11 semitone index (0=C, 7=G default)
+    octave_shift: integer offset applied to all rows (typically -1, 0, +1)
+    """
+    row_octave = ROW_OCTAVE_BASE[row] + octave_shift
+    deg = col
+    semitone_offset = MAJOR_SCALE_SEMITONES[deg % 7] + 12 * (deg // 7)
+    abs_st = root + 12 * row_octave + semitone_offset
+    return CHROMATIC_NOTE_NAMES[abs_st % 12], abs_st // 12
+
+
 # Percussion display names for number row cells
 PERCUSSION_NAMES = {
     '1': 'kick', '2': 'snare', '3': 'hat', '4': 'clap', '5': 'bell',

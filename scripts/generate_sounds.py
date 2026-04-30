@@ -23,7 +23,13 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.music_constants import NOTE_FREQUENCIES
+from purple_tui.music_constants import CHROMATIC_NOTE_NAMES, pitch_filename
+
+# Chromatic sample range. Covers every cell reachable from any FRIENDLY_KEYS
+# root × octave_shift ∈ {-1, 0, +1} × scale_degree 0..9.
+# Lowest reachable: row=2 (oct base 2), shift=-1, root=C, deg=0 → C1.
+# Highest reachable: row=0 (oct base 4), shift=+1, root=A, deg=9 → C#7.
+CHROMATIC_OCTAVE_RANGE = range(1, 8)  # octaves 1..7 inclusive
 
 
 def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,
@@ -645,9 +651,21 @@ def main():
 
     for inst_dir, generator in instruments:
         print(f"{inst_dir} tones:")
-        for letter, freq in NOTE_FREQUENCIES.items():
-            samples = generator(freq)
-            write_sound(f"{letter.lower()}.wav", samples, subdir=inst_dir)
+        inst_path = SOUNDS_DIR / inst_dir
+        # Wipe stale per-key files (q.ogg, a.ogg, etc.) from the previous
+        # naming scheme so the runtime can't fall back to them.
+        if inst_path.exists():
+            for old in inst_path.glob("*.ogg"):
+                old.unlink()
+        for octave in CHROMATIC_OCTAVE_RANGE:
+            for note_idx, note_name in enumerate(CHROMATIC_NOTE_NAMES):
+                # MIDI: C0=12, so semitone = 12*(octave+1) + note_idx
+                # We use scientific pitch (A4=440) → freq = 440 * 2^((midi-69)/12)
+                midi = 12 * (octave + 1) + note_idx
+                freq = 440.0 * (2 ** ((midi - 69) / 12))
+                samples = generator(freq)
+                fname = pitch_filename(note_name, octave) + ".wav"
+                write_sound(fname, samples, subdir=inst_dir)
         print()
 
     print("Percussion (0-9):")

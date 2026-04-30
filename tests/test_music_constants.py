@@ -3,6 +3,7 @@
 import math
 from purple_tui.music_constants import (
     NOTE_FREQUENCIES, NOTE_NAMES, INSTRUMENTS, PERCUSSION_NAMES, GRID_KEYS,
+    pitch_for, pitch_filename, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
 )
 
 # Standard A440 tuning reference frequencies across octaves
@@ -71,3 +72,36 @@ def test_instruments_have_display_names():
     for inst_id, display_name in INSTRUMENTS:
         assert inst_id, "Empty instrument ID"
         assert display_name, f"Empty display name for {inst_id}"
+
+
+def test_pitch_for_default_g_major():
+    """Default state (root=G, shift=0) reproduces the legacy G-major mapping."""
+    g_root = FRIENDLY_KEYS[DEFAULT_ROOT_INDEX]
+    assert pitch_for(0, 0, g_root, 0) == ('G', 4)   # Q
+    assert pitch_for(0, 7, g_root, 0) == ('G', 5)   # I (octave up)
+    assert pitch_for(0, 9, g_root, 0) == ('B', 5)   # P (top)
+    assert pitch_for(1, 0, g_root, 0) == ('G', 3)   # A
+    assert pitch_for(2, 0, g_root, 0) == ('G', 2)   # Z (lowest)
+
+
+def test_pitch_for_d_major_shift():
+    """Shifting root to D (semitone 2) plays a D-major scale."""
+    d_root = 2
+    assert pitch_for(0, 0, d_root, 0) == ('D', 4)
+    assert pitch_for(0, 2, d_root, 0) == ('F#', 4)
+    assert pitch_for(0, 7, d_root, 0) == ('D', 5)
+
+
+def test_pitch_for_octave_shift():
+    """Octave shift adjusts every cell by ±12 semitones."""
+    g_root = 7
+    assert pitch_for(0, 0, g_root, +1) == ('G', 5)
+    assert pitch_for(0, 0, g_root, -1) == ('G', 3)
+    assert pitch_for(2, 0, g_root, -1) == ('G', 1)
+
+
+def test_pitch_filename_shell_safe():
+    """Sharps become 's' (shell-safe filenames)."""
+    assert pitch_filename('C', 4) == 'c4'
+    assert pitch_filename('C#', 4) == 'cs4'
+    assert pitch_filename('F#', 5) == 'fs5'

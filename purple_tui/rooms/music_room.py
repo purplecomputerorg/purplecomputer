@@ -23,9 +23,11 @@ import os
 import subprocess
 import sys
 import time
-from ..keyboard import CharacterAction, ControlAction, HoldOrTap
+from ..keyboard import CharacterAction, ControlAction, NavigationAction, HoldOrTap
 from ..music_constants import (
-    GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, NOTE_NAMES, PERCUSSION_NAMES,
+    GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, PERCUSSION_NAMES,
+    CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
+    pitch_for, pitch_filename,
 )
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
@@ -214,6 +216,15 @@ LIGHT_COLORS: set[str] = set()
 # Keys that get spoken in Letters mode (A-Z and 0-9)
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 
+# Reverse lookup: melodic key -> (row, col) in GRID_KEYS, used to map a key
+# press to a pitch via music_constants.pitch_for(...).
+_KEY_TO_RC: dict[str, tuple[int, int]] = {
+    GRID_KEYS[r][c]: (r, c)
+    for r in range(len(GRID_KEYS))
+    for c in range(len(GRID_KEYS[r]))
+    if not GRID_KEYS[r][c].isdigit()
+}
+
 class MusicRoomHeader(Static):
     """Shows current mode with both options visible, current highlighted.
 
@@ -234,7 +245,14 @@ class MusicRoomHeader(Static):
         self._letters_mode = False
         self._instrument_name = INSTRUMENTS[0][1]
         self._code_mode = False
+        self._root_index = DEFAULT_ROOT_INDEX
+        self._octave_shift = 0
         self.add_class("caps-sensitive")
+
+    def update_pitch(self, root_index: int, octave_shift: int) -> None:
+        self._root_index = root_index
+        self._octave_shift = octave_shift
+        self.refresh()
 
     def update_mode(self, letters_mode: bool) -> None:
         self._letters_mode = letters_mode
@@ -250,6 +268,15 @@ class MusicRoomHeader(Static):
 
     def on_resize(self, event) -> None:
         self.refresh()
+
+    def _pitch_tag(self) -> tuple[str, int]:
+        """Return (markup, visible_width) for the key+octave indicator."""
+        root_name = CHROMATIC_NOTE_NAMES[FRIENDLY_KEYS[self._root_index]]
+        # 3 horizontal dots; lit one shows octave shift (-1, 0, +1)
+        slot = self._octave_shift + 1  # 0..2
+        dots = "".join("●" if i == slot else "○" for i in range(3))
+        plain = f"{root_name} {dots}"
+        return f"[dim]{plain}[/]", len(plain)
 
     def render(self) -> str:
         caps = getattr(self.app, 'caps_text', lambda x: x)
@@ -279,11 +306,18 @@ class MusicRoomHeader(Static):
         modes_w = len(music_inner) + 2 + len(letters_inner)
         hint = caps(f"{ICON_TAB} Tab to switch")
         hint_w = len(hint)
+        pitch_markup, pitch_w = self._pitch_tag()
         width = self.size.width or 134
         left_pad = max(0, (width - modes_w) // 2)
+        # Pitch tag lives at the very left, inside the left padding.
+        pitch_lead = 2  # gutter from the screen edge
+        if left_pad >= pitch_w + pitch_lead + 1:
+            left_prefix = " " * pitch_lead + pitch_markup + " " * (left_pad - pitch_w - pitch_lead)
+        else:
+            left_prefix = " " * left_pad
         right_area = max(0, width - left_pad - modes_w)
         hint_left_pad = max(1, (right_area - hint_w) // 2)
-        return f"{' ' * left_pad}{modes}{' ' * hint_left_pad}[{unsel}]{hint}[/]"
+        return f"{left_prefix}{modes}{' ' * hint_left_pad}[{unsel}]{hint}[/]"
 
 
 class MusicGrid(Widget):
@@ -301,7 +335,12 @@ class MusicGrid(Widget):
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._instrument_index: int = 0
-        # Per-instrument sound cache: instrument_id -> {key -> Sound}
+        # Pitch state: which root note + octave shift the grid is currently in.
+        # Driven by Left/Right and Up/Down arrow keys (set via set_pitch_state).
+        self._root_index: int = DEFAULT_ROOT_INDEX  # index into FRIENDLY_KEYS
+        self._octave_shift: int = 0
+        # Per-instrument sound cache: instrument_id -> {pitch_name -> Sound}.
+        # Pitch names are the lowercase filename stems (e.g. 'g4', 'cs5').
         self._instrument_sounds: dict[str, dict[str, pygame.mixer.Sound]] = {}
         # Percussion sounds (shared across instruments)
         self._percussion_sounds: dict[str, pygame.mixer.Sound] = {}
@@ -357,24 +396,23 @@ class MusicGrid(Widget):
         return None
 
     def _ensure_instrument_loaded(self, instrument_id: str) -> None:
-        """Load instrument sounds if not already cached."""
+        """Load instrument sounds if not already cached.
+
+        Loads every pitch-named .ogg in the instrument directory (e.g.
+        'c4.ogg', 'cs5.ogg') keyed by the filename stem. Lookup at play
+        time uses pitch_for(...) to compute the right stem.
+        """
         if instrument_id in self._instrument_sounds or not _MIXER_READY:
             return
         sounds_path = self._get_sounds_path()
         inst_path = sounds_path / instrument_id
-        names = {';': 'semicolon', ',': 'comma', '.': 'period', '/': 'slash'}
         cache: dict[str, pygame.mixer.Sound] = {}
-        for key in ALL_KEYS:
-            if key.isdigit():
-                continue
-            name = names.get(key, key.lower())
-            # Try subdirectory first, fall back to flat files
-            path = self._find_sound(inst_path, name) or self._find_sound(sounds_path, name)
-            if path:
+        if inst_path.exists():
+            for path in inst_path.glob("*.ogg"):
                 try:
                     sound = pygame.mixer.Sound(str(path))
                     sound.set_volume(0.4)
-                    cache[key] = sound
+                    cache[path.stem] = sound
                 except pygame.error:
                     pass
         self._instrument_sounds[instrument_id] = cache
@@ -397,21 +435,19 @@ class MusicGrid(Widget):
                     pass
         self._percussion_loaded = True
 
+    def _pitch_stem_for_key(self, key: str) -> str | None:
+        """Filename stem (e.g. 'g4') for a melodic key under current state."""
+        rc = _KEY_TO_RC.get(key)
+        if rc is None:
+            return None
+        row, col = rc
+        root = FRIENDLY_KEYS[self._root_index]
+        note, octave = pitch_for(row, col, root, self._octave_shift)
+        return pitch_filename(note, octave)
+
     def play_sound(self, key: str) -> None:
         """Play instrument or percussion sound for a key."""
-        from ..audio import play_safe
-        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
-            return
-        if key.isdigit():
-            self._ensure_percussion_loaded()
-            if key in self._percussion_sounds:
-                play_safe(self._percussion_sounds[key])
-        else:
-            inst_id = INSTRUMENTS[self._instrument_index][0]
-            self._ensure_instrument_loaded(inst_id)
-            sounds = self._instrument_sounds.get(inst_id, {})
-            if key in sounds:
-                play_safe(sounds[key])
+        self.play_sound_with_instrument(key, self._instrument_index)
 
     def play_sound_with_instrument(self, key: str, instrument_index: int) -> None:
         """Play a sound using a specific instrument (for loop playback)."""
@@ -422,16 +458,25 @@ class MusicGrid(Widget):
             self._ensure_percussion_loaded()
             if key in self._percussion_sounds:
                 play_safe(self._percussion_sounds[key])
-        else:
-            inst_id = INSTRUMENTS[instrument_index][0]
-            self._ensure_instrument_loaded(inst_id)
-            sounds = self._instrument_sounds.get(inst_id, {})
-            if key in sounds:
-                play_safe(sounds[key])
+            return
+        stem = self._pitch_stem_for_key(key)
+        if stem is None:
+            return
+        inst_id = INSTRUMENTS[instrument_index][0]
+        self._ensure_instrument_loaded(inst_id)
+        sounds = self._instrument_sounds.get(inst_id, {})
+        if stem in sounds:
+            play_safe(sounds[stem])
 
     def set_instrument(self, index: int) -> None:
         """Set the current instrument index."""
         self._instrument_index = index
+
+    def set_pitch_state(self, root_index: int, octave_shift: int) -> None:
+        """Update root note + octave shift; refresh visuals."""
+        self._root_index = root_index
+        self._octave_shift = octave_shift
+        self.refresh()
 
     def flash_note(self, key: str) -> None:
         """Briefly show the note/percussion name in a key's cell for ~1 second."""
@@ -589,10 +634,30 @@ class MusicGrid(Widget):
         if margin_left > 0:
             segments.append(Segment(" " * margin_left, bg_style))
 
+        # Pre-compute melodic row state for home-note highlight + dynamic
+        # note labels. row_idx 0 is the percussion (digit) row in GRID_KEYS;
+        # rows 1..3 are the three melodic rows (Q-P, A-;, Z-/).
+        is_melodic_row = row_idx >= 1
+        melodic_row = row_idx - 1 if is_melodic_row else None
+        root_semitone = FRIENDLY_KEYS[self._root_index]
+        root_name = CHROMATIC_NOTE_NAMES[root_semitone]
+
         # Grid cells. All equal width
         for col_idx in range(10):
             key = GRID_KEYS[row_idx][col_idx]
             bg_color = self.get_color(key)
+            cell_note_name: str | None = None
+            is_home = False
+            if is_melodic_row:
+                cell_note_name, _ = pitch_for(
+                    melodic_row, col_idx, root_semitone, self._octave_shift,
+                )
+                is_home = cell_note_name == root_name
+                # Subtle accent for home-note cells when the cell is at rest
+                # (color_state == -1). Lets the stripe slide visibly when
+                # Left/Right shifts the root.
+                if is_home and self.color_state[key] == -1:
+                    bg_color = "#3d2657"  # slightly brighter than DEFAULT_BG_DARK
 
             # Determine text color based on background brightness
             light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT}
@@ -617,7 +682,7 @@ class MusicGrid(Widget):
                 if key.isdigit():
                     label = caps(PERCUSSION_NAMES.get(key, ""))
                 else:
-                    label = caps(NOTE_NAMES.get(key, ""))
+                    label = caps(cell_note_name or "")
                 if label:
                     decorated = f"{ICON_MUSIC_NOTE} {label} {ICON_MUSIC_NOTE}"
                     decorated_width = len(decorated)
@@ -722,6 +787,8 @@ class MusicMode(Container, can_focus=True):
         self._loop = LoopStation()
         self._letters_mode = False
         self._instrument_index = 0
+        self._root_index = DEFAULT_ROOT_INDEX
+        self._octave_shift = 0
         self._loop_task: asyncio.Task | None = None
         self._recording_timer = None
         self._loop_progress_timer = None
@@ -828,9 +895,12 @@ class MusicMode(Container, can_focus=True):
         self._stop_loop()
         self._instrument_index = 0
         self._letters_mode = False
+        self._root_index = DEFAULT_ROOT_INDEX
+        self._octave_shift = 0
         if self.grid:
             self.grid.reset_colors()
             self.grid.set_instrument(0)
+            self.grid.set_pitch_state(self._root_index, self._octave_shift)
         if self._header:
             self._header.update_instrument(INSTRUMENTS[0][1])
             self._header.update_mode(False)
@@ -1181,6 +1251,24 @@ class MusicMode(Container, can_focus=True):
                     self.app.clear_notifications()
                     self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
                     return
+
+        # Arrow keys: shift key (Left/Right) and octave (Up/Down).
+        # No notification toast — visible feedback (home-stripe slide, label
+        # rotation, octave dot) carries the change.
+        if isinstance(action, NavigationAction):
+            self._space_hold.on_other_key()
+            d = action.direction
+            if d in ('left', 'right'):
+                step = 1 if d == 'right' else -1
+                self._root_index = (self._root_index + step) % len(FRIENDLY_KEYS)
+            elif d in ('up', 'down'):
+                step = 1 if d == 'up' else -1
+                self._octave_shift = max(-1, min(1, self._octave_shift + step))
+            if self.grid:
+                self.grid.set_pitch_state(self._root_index, self._octave_shift)
+            if self._header:
+                self._header.update_pitch(self._root_index, self._octave_shift)
+            return
 
         # Character keys: play sound, cycle color, record into loop if active
         if isinstance(action, CharacterAction):

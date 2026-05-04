@@ -87,6 +87,7 @@ ICON_LOAD = "󰈔"             # nf-md-file_import
 ICON_PALETTE = "󰏘"          # nf-md-palette
 ICON_MUSIC = "\uf001"       # nf-fa-music
 ICON_MUSIC_NOTE = "\U000f0387"  # nf-md-music_note_outline (single note for flash)
+ICON_LOOP = ""        # nf-fa-repeat (looping indicator)
 ICON_CHAT = "󰭹"             # nf-md-chat_question
 ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night

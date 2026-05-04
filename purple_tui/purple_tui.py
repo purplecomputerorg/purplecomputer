@@ -1594,10 +1594,12 @@ class PurpleApp(App):
                     # bar(1) hidden.
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
                     if kind == 'loop':
-                        active_hint = f"{ICON_MUSIC} Hold Enter: stop loop {ICON_MUSIC}"
+                        active_hint = f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}"
                     else:
                         active_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
-                    viewport.border_subtitle = _spanning_subtitle(active_hint, None, self.active_theme)
+                    # Right-anchor the active hint so it lines up with the
+                    # idle right-anchored hint position.
+                    viewport.border_subtitle = _spanning_subtitle(None, active_hint, self.active_theme)
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False

@@ -10,6 +10,8 @@ from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import Static
 
+from .constants import ICON_LOOP
+
 
 class LoopPanelToggleRequested(Message, bubble=True):
     """Posted by the music room when the loop panel opens or closes so the
@@ -89,8 +91,8 @@ class LoopPanel(Vertical):
         bar = "█" * filled + "░" * empty
         self._set_lines(
             head=f"[bold red]● Recording, {remaining_secs}s left[/]",
-            bar=f"[bold red]{bar}[/]",
-            action="Play any keys    Hold Enter when done    Esc to cancel",
+            bar=bar,
+            action="Play any keys    Space: play it back    Hold Enter: close",
         )
 
     def set_looping(self, progress: float) -> None:
@@ -101,9 +103,9 @@ class LoopPanel(Vertical):
             bar_chars[pos] = "█"
         bar = "".join(bar_chars)
         self._set_lines(
-            head="[bold red]↻ Looping and recording[/]",
-            bar=f"[bold red]{bar}[/]",
-            action="Play on top    Hold Enter to stop    Tab or Esc to exit",
+            head=f"[bold red]{ICON_LOOP} Looping and recording[/]",
+            bar=bar,
+            action="Play on top    Hold Enter: close looping",
         )
 
     def _set_lines(self, *, head: str, bar: str, action: str) -> None:

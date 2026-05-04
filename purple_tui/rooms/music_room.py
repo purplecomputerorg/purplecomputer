@@ -1198,17 +1198,41 @@ class MusicMode(Container, can_focus=True):
         if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
 
-    def _on_enter_hold_fired(self) -> None:
-        """Enter held long enough: advance loop state.
+    def _on_space_tap(self) -> None:
+        """Space tap.
 
-        While the code panel is open, Enter belongs to the REPL — ignore the
-        hold-fire here so it doesn't spawn a loop on top of code.
+        While recording: finish recording and start looping playback (so
+        the kid can "stop the loop and play it back" without hold-Enter
+        which is reserved for closing the panel).
+
+        Otherwise: toggle note name labels in every melodic cell.
+        """
+        if getattr(self.app, '_littles_mode', None):
+            return
+        if self._loop.state == RECORDING:
+            self._advance_loop_state()  # recording → looping
+            return
+        if self.grid is not None:
+            self.grid._show_labels = not self.grid._show_labels
+            self.grid.refresh()
+
+    def _on_enter_hold_fired(self) -> None:
+        """Enter held long enough.
+
+        From idle: start recording. From recording or looping: close the
+        loop panel completely (full stop). Space (tap) is the gesture that
+        advances recording into playback — Enter is reserved for "exit."
+
+        While the code panel is open, Enter belongs to the REPL — ignore.
         """
         if getattr(self.app, '_littles_mode', None):
             return
         if self._repl_panel and self._repl_panel.is_open:
             return
-        self._advance_loop_state()
+        if self._loop.state == IDLE:
+            self._advance_loop_state()  # idle → recording
+        else:
+            self._stop_loop()  # any non-idle → close panel
 
     def _on_space_hold_fired(self) -> None:
         """Space held long enough: toggle REPL.
@@ -1303,9 +1327,7 @@ class MusicMode(Container, can_focus=True):
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:
                     if self._space_hold.on_up():
-                        if self.grid and not getattr(self.app, '_littles_mode', None):
-                            self.grid._show_labels = not self.grid._show_labels
-                            self.grid.refresh()
+                        self._on_space_tap()
                 return
 
             if action.action == 'enter':

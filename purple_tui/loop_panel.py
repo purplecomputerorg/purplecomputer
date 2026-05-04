@@ -7,7 +7,16 @@ visual — it shows current state, a progress bar, and the next-action hint.
 """
 
 from textual.containers import Vertical
+from textual.message import Message
 from textual.widgets import Static
+
+
+class LoopPanelToggleRequested(Message, bubble=True):
+    """Posted by the music room when the loop panel opens or closes so the
+    app can grow/shrink the viewport (mirrors ReplPanelToggleRequested)."""
+    def __init__(self, opened: bool):
+        super().__init__()
+        self.opened = opened
 
 
 # Number of blocks in the progress bar — mirrors music_room.PROGRESS_BLOCKS so

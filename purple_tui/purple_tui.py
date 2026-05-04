@@ -84,30 +84,16 @@ boot_log.heartbeat("rooms.parent_menu imported; importing room_picker")
 from .room_picker import RoomPickerScreen
 boot_log.heartbeat("room_picker imported; importing repl_panel")
 from .repl_panel import ReplCommandSubmitted, ReplPanelClosed, ReplPanelToggleRequested, ReplPanel
+from .loop_panel import LoopPanelToggleRequested
 boot_log.heartbeat("all purple_tui imports done")
 
 
 def _viewport_subtitle(room: 'Room', code_panel_enabled: bool) -> str:
-    """Build the bottom-border hint text for the viewport.
-
-    Music room shows two hints anchored to opposite edges: "Hold Enter:
-    record a loop" on the left, "Hold Space: write code!" on the right.
-    Art room shows only the right (code) hint, with a leading pad so it
-    still lands at the right edge under the global left-aligned subtitle.
-
-    Interior width = VIEWPORT_WIDTH - 2 (border) - 2 (subtitle padding).
-    """
+    """Right-aligned bottom-border hint text for music/art rooms."""
     if not code_panel_enabled:
         return ""
-    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
-    interior = VIEWPORT_WIDTH - 2 - 2
-    if room == Room.MUSIC:
-        left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
-        gap = max(2, interior - display_len(left) - display_len(right))
-        return left + " " * gap + right
-    if room == Room.ART:
-        gap = max(0, interior - display_len(right))
-        return " " * gap + right
+    if room in (Room.MUSIC, Room.ART):
+        return f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
     return ""
 
 
@@ -706,7 +692,6 @@ class PurpleApp(App):
         height: __VIEWPORT_HEIGHT__;
         border: heavy $primary;
         background: $surface;
-        border-subtitle-align: left;
     }
 
     #room-indicator {
@@ -1509,6 +1494,10 @@ class PurpleApp(App):
         # Panel already closed itself; restore viewport
         self._close_repl_panel()
 
+    def on_loop_panel_toggle_requested(self, message: LoopPanelToggleRequested) -> None:
+        """Mirror the REPL toggle: grow viewport on open, shrink on close."""
+        self._apply_code_panel_ui(active=message.opened, kind='loop')
+
     def on_repl_panel_toggle_requested(self, message: ReplPanelToggleRequested) -> None:
         """Handle REPL toggle from room: resize viewport and hide/show indicator."""
         room_id = f"room-{message.room}"
@@ -1543,8 +1532,13 @@ class PurpleApp(App):
         except Exception:
             pass
 
-    def _apply_code_panel_ui(self, active: bool) -> None:
-        """Toggle viewport size and indicator between code-panel and normal mode."""
+    def _apply_code_panel_ui(self, active: bool, kind: str = 'code') -> None:
+        """Toggle viewport size and indicator between expanded-panel and normal.
+
+        kind: 'code' (REPL) or 'loop' (LoopPanel) — controls only the bottom
+        border subtitle. Resize/indicator behavior is identical for both so
+        the LoopPanel reuses this exact path.
+        """
         try:
             viewport = self.query_one("#viewport")
             indicator = self.query_one("#room-indicator", RoomIndicator)
@@ -1556,12 +1550,13 @@ class PurpleApp(App):
                     compact.display = True
                     # Full indicator(4) → compact(1) frees 3 rows; the 4th
                     # row comes from VIEWPORT_HEIGHT being 1 below terminal
-                    # budget. REPL(5) fits with pinned canvas after hint
+                    # budget. Panel(5) fits with pinned grid after hint
                     # bar(1) hidden.
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
-                    close_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
-                    pad = max(0, VIEWPORT_WIDTH - 4 - display_len(close_hint))
-                    viewport.border_subtitle = " " * pad + close_hint
+                    if kind == 'loop':
+                        viewport.border_subtitle = f"{ICON_MUSIC} Hold Enter: stop loop {ICON_MUSIC}"
+                    else:
+                        viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False

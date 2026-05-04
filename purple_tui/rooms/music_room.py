@@ -31,7 +31,7 @@ from ..music_constants import (
 )
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
-from ..loop_panel import LoopPanel
+from ..loop_panel import LoopPanel, LoopPanelToggleRequested
 from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
@@ -857,8 +857,6 @@ class MusicMode(Container, can_focus=True):
         # Space hold REPL toggle; Enter hold loop-state advance.
         self._space_hold = HoldOrTap(hold_seconds=0.5)
         self._enter_hold = HoldOrTap(hold_seconds=0.5)
-        # Auto-cancel timer for "started recording but no notes pressed."
-        self._record_idle_timer: asyncio.TimerHandle | None = None
         self._repl_panel = None
         self._loop_panel: LoopPanel | None = None
         self._noscreen_dot_timer = None
@@ -984,13 +982,11 @@ class MusicMode(Container, can_focus=True):
         if state == IDLE:
             self._loop.start_recording()
             self._start_recording_timer()
-            self._start_record_idle_timer()
             self._update_hint()
             self.app.clear_notifications()
             self.app.notify(self.app.caps_text("Recording!"), timeout=1.5)
 
         elif state == RECORDING:
-            self._cancel_record_idle_timer()
             events, _duration = self._loop.finish_recording()
             self._stop_recording_timer()
             if events:
@@ -1008,26 +1004,6 @@ class MusicMode(Container, can_focus=True):
             self.app.clear_notifications()
             self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
 
-    def _start_record_idle_timer(self) -> None:
-        """Schedule a 2s check: if recording started but no notes pressed,
-        revert to idle so an accidental hold-Enter doesn't strand the kid."""
-        self._cancel_record_idle_timer()
-        try:
-            loop = asyncio.get_running_loop()
-            self._record_idle_timer = loop.call_later(2.0, self._record_idle_check)
-        except RuntimeError:
-            pass
-
-    def _cancel_record_idle_timer(self) -> None:
-        if self._record_idle_timer is not None:
-            self._record_idle_timer.cancel()
-            self._record_idle_timer = None
-
-    def _record_idle_check(self) -> None:
-        self._record_idle_timer = None
-        if self._loop.state == RECORDING and not self._loop.has_recording_events():
-            self._stop_loop()
-
     def _handle_escape(self) -> bool:
         """Escape stops loop from any non-idle state. Returns True if consumed."""
         if self._loop.state == IDLE:
@@ -1042,7 +1018,6 @@ class MusicMode(Container, can_focus=True):
         self._loop.stop()
         self._stop_recording_timer()
         self._stop_loop_progress_timer()
-        self._cancel_record_idle_timer()
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
@@ -1146,8 +1121,7 @@ class MusicMode(Container, can_focus=True):
         Text is stored raw (without caps). MusicExampleHint.render()
         applies caps at render time so it responds to caps changes immediately.
         """
-        # Idle hint: terse single-line, kid-friendly. The Hold Enter / Hold
-        # Space affordances are also mirrored on the viewport border subtitle.
+        # Idle hint: single-line affordance line under the grid.
         try:
             hint = self.query_one("#example-hint", MusicExampleHint)
         except Exception:
@@ -1156,30 +1130,59 @@ class MusicMode(Container, can_focus=True):
             if getattr(self.app, '_littles_mode', None):
                 hint.set_hint("[dim]Try pressing letters and numbers![/]")
             else:
-                text = "Try pressing letters and numbers!"
                 space_hint = "Space: show notes"
                 arrows_hint = "Arrows: switch key"
                 enter_hint = "Enter: instrument"
-                hint.set_hint(f"[dim]{text}    {space_hint}    {arrows_hint}    {enter_hint}[/]")
+                loop_hint = "Hold Enter: record a loop"
+                hint.set_hint(f"[dim]{space_hint}    {arrows_hint}    {enter_hint}    {loop_hint}[/]")
 
         # Loop panel: opens when recording/looping, closes back to idle.
+        # Mirrors the REPL open/close: hides the inline hint, pins the grid
+        # so it doesn't reflow under the panel, and posts a toggle message
+        # so the app grows / shrinks the viewport.
         state = self._loop.state
         if self._loop_panel is None:
             return
+        was_open = self._loop_panel.is_open
         if state == IDLE:
-            if self._loop_panel.is_open:
-                self._loop_panel.close()
-        elif state == RECORDING:
-            if not self._loop_panel.is_open:
-                self._loop_panel.open()
-            self._loop_panel.set_recording(
-                self._loop.recording_progress(),
-                int(self._loop.recording_remaining()),
-            )
-        elif state == LOOPING:
-            if not self._loop_panel.is_open:
-                self._loop_panel.open()
-            self._loop_panel.set_looping(self._loop.loop_progress())
+            if was_open:
+                self._close_loop_panel_layout()
+        else:
+            if not was_open:
+                self._open_loop_panel_layout()
+            if state == RECORDING:
+                self._loop_panel.set_recording(
+                    self._loop.recording_progress(),
+                    int(self._loop.recording_remaining()),
+                )
+            elif state == LOOPING:
+                self._loop_panel.set_looping(self._loop.loop_progress())
+
+    def _open_loop_panel_layout(self) -> None:
+        """Hide the inline hint, pin grid height, open the loop panel."""
+        try:
+            self.query_one("#example-hint", MusicExampleHint).display = False
+        except Exception:
+            pass
+        grid = self.query_one(MusicGrid)
+        grid.styles.height = grid.size.height
+        self._loop_panel.open()
+        self.post_message(LoopPanelToggleRequested(opened=True))
+
+    def _close_loop_panel_layout(self) -> None:
+        """Restore inline hint, unpin grid, close the loop panel."""
+        self._loop_panel.close()
+        self.post_message(LoopPanelToggleRequested(opened=False))
+        try:
+            self.query_one("#example-hint", MusicExampleHint).display = True
+        except Exception:
+            pass
+        try:
+            grid = self.query_one(MusicGrid)
+            grid._layout_ready = False
+            grid.styles.height = "1fr"
+        except Exception:
+            pass
 
     # -- Core key handling ---------------------------------------------------
 
@@ -1204,17 +1207,27 @@ class MusicMode(Container, can_focus=True):
             self.grid.play_letter(key)
 
     def _on_enter_hold_fired(self) -> None:
-        """Enter held long enough: advance loop state."""
+        """Enter held long enough: advance loop state.
+
+        While the code panel is open, Enter belongs to the REPL — ignore the
+        hold-fire here so it doesn't spawn a loop on top of code.
+        """
         if getattr(self.app, '_littles_mode', None):
+            return
+        if self._repl_panel and self._repl_panel.is_open:
             return
         self._advance_loop_state()
 
     def _on_space_hold_fired(self) -> None:
-        """Space held long enough: toggle REPL."""
+        """Space held long enough: toggle REPL.
+
+        While the loop panel is open, Space belongs to the loop — ignore the
+        hold-fire so the loop panel isn't yanked out from under the kid.
+        """
         if not getattr(self.app, '_code_panel_enabled', True):
             return
-        # Stop any active loop/playback so toggling code panel silences everything
-        self._stop_loop()
+        if self._loop_panel and self._loop_panel.is_open:
+            return
         self.grid.cleanup_sounds()
         if self._repl_panel and not self._repl_panel.is_open:
             # Hide hint bar (REPL has its own hints) and pin grid height

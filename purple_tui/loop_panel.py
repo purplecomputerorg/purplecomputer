@@ -87,10 +87,9 @@ class LoopPanel(Vertical):
         filled = int(progress * PROGRESS_BLOCKS)
         empty = PROGRESS_BLOCKS - filled
         bar = "█" * filled + "░" * empty
-        color = "bold dark_orange" if remaining_secs <= 5 else "bold red"
         self._set_lines(
-            head=f"[{color}]● Recording, {remaining_secs}s left[/]",
-            bar=f"[{color}]{bar}[/]",
+            head=f"[bold red]● Recording, {remaining_secs}s left[/]",
+            bar=f"[bold red]{bar}[/]",
             action="Play any keys    Hold Enter when done    Esc to cancel",
         )
 
@@ -102,7 +101,7 @@ class LoopPanel(Vertical):
             bar_chars[pos] = "█"
         bar = "".join(bar_chars)
         self._set_lines(
-            head="[bold red]🔁 Looping and recording[/]",
+            head="[bold red]↻ Looping and recording[/]",
             bar=f"[bold red]{bar}[/]",
             action="Play on top    Hold Enter to stop    Tab or Esc to exit",
         )

@@ -1355,15 +1355,12 @@ class MusicMode(Container, can_focus=True):
                     self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                     return
 
-        # Arrows: shift key (Left/Right). Up/Down unbound. While a loop is
-        # active, any arrow stops the loop instead — the easy-out for kids
-        # who got stuck.
+        # Arrows: shift key (Left/Right). Up/Down unbound. Arrows DO NOT
+        # close the loop panel — the kid can shift key while looping. Tab
+        # and Esc remain the easy-outs.
         if isinstance(action, NavigationAction):
             self._space_hold.on_other_key()
             self._enter_hold.on_other_key()
-            if self._loop.state != IDLE:
-                self._stop_loop()
-                return
             d = action.direction
             if d in ('left', 'right'):
                 step = 1 if d == 'right' else -1

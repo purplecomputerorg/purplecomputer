@@ -128,15 +128,29 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     return "".join(parts)
 
 
-def _viewport_subtitle(room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> str:
-    """Bottom-border hints for music/art rooms with bar-fill spacers."""
+def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active_theme: str) -> None:
+    """Apply bottom-border hints, picking alignment so single-hint cases let
+    Textual fill the rest of the border naturally (no visible color seam)."""
+    if left and right:
+        viewport.styles.border_subtitle_align = "left"
+        viewport.border_subtitle = _spanning_subtitle(left, right, active_theme)
+    elif left:
+        viewport.styles.border_subtitle_align = "left"
+        viewport.border_subtitle = left
+    elif right:
+        viewport.styles.border_subtitle_align = "right"
+        viewport.border_subtitle = right
+    else:
+        viewport.border_subtitle = ""
+
+
+def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> None:
+    """Idle (no panel open) bottom-border hints for music/art rooms."""
     right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}" if code_panel_enabled else None
     left = None
     if room == Room.MUSIC and music_looping_enabled:
         left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
-    if left is None and right is None:
-        return ""
-    return _spanning_subtitle(left, right, active_theme)
+    _set_viewport_hints(viewport, left=left, right=right, active_theme=active_theme)
 
 
 class Room(Enum):
@@ -921,7 +935,7 @@ class PurpleApp(App):
         # Set viewport border subtitle for music/art rooms
         try:
             viewport = self.query_one("#viewport")
-            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
+            _apply_room_subtitle(viewport, self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
         except NoMatches:
             pass
 
@@ -1600,16 +1614,14 @@ class PurpleApp(App):
                     # bar(1) hidden.
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
                     if kind == 'loop':
-                        active_hint = f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}"
-                        viewport.border_subtitle = _spanning_subtitle(active_hint, None, self.active_theme)
+                        _set_viewport_hints(viewport, left=f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}", right=None, active_theme=self.active_theme)
                     else:
-                        active_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
-                        viewport.border_subtitle = _spanning_subtitle(None, active_hint, self.active_theme)
+                        _set_viewport_hints(viewport, left=None, right=f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}", active_theme=self.active_theme)
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False
                     indicator.display = True
-                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
+                    _apply_room_subtitle(viewport, self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
         except NoMatches:
             pass
 
@@ -2133,7 +2145,7 @@ class PurpleApp(App):
             self._close_repl_panel()
             try:
                 viewport = self.query_one("#viewport")
-                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
+                _apply_room_subtitle(viewport, new_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
             except NoMatches:
                 pass
 

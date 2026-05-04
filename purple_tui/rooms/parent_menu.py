@@ -357,6 +357,9 @@ _LITTLES_PARENT = "parent"    # Open the full parent menu (keep littles on)
 # CodePanelScreen dismiss value
 _CODE_PANEL_CANCELLED = object()
 
+# MusicLoopingScreen dismiss value
+_MUSIC_LOOPING_CANCELLED = object()
+
 
 class PickerModal(PurpleModal):
     """Base class for modal option pickers with up/down navigation.
@@ -524,6 +527,23 @@ class CodePanelScreen(PickerModal):
         self._selected = 0 if get_code_panel() else 1
 
 
+class MusicLoopingScreen(PickerModal):
+    """Toggle the music looping setting."""
+
+    TITLE = "Allow Music Looping"
+    DESCRIPTION = "Allow recording loops in Music by holding the enter button"
+    OPTIONS = [
+        (True, "Yes"),
+        (False, "No"),
+    ]
+    escape_value = _MUSIC_LOOPING_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_music_looping
+        self._selected = 0 if get_music_looping() else 1
+
+
 
 
 
@@ -635,7 +655,7 @@ def _get_version_label() -> str:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode, get_code_panel
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping
 
     items = []
 
@@ -652,6 +672,8 @@ def _get_menu_items() -> list:
     if not littles:
         code_label = "Allow Code Panel: Yes" if get_code_panel() else "Allow Code Panel: No"
         items.append(("menu-code-panel", code_label))
+        looping_label = "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"
+        items.append(("menu-music-looping", looping_label))
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -1434,6 +1456,8 @@ class ParentMenu(PurpleModal):
             self._open_littles_mode()
         elif item_id == "menu-code-panel":
             self._open_code_panel()
+        elif item_id == "menu-music-looping":
+            self._open_music_looping()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -1486,6 +1510,54 @@ class ParentMenu(PurpleModal):
         label = "Allow Code Panel: Yes" if new_value else "Allow Code Panel: No"
         try:
             widget = self.query_one("#menu-code-panel", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_music_looping(self) -> None:
+        """Open the music looping picker modal."""
+        def on_result(result):
+            if result is _MUSIC_LOOPING_CANCELLED:
+                return
+            self._apply_music_looping(result)
+
+        self.app.push_screen(MusicLoopingScreen(), callback=on_result)
+
+    def _apply_music_looping(self, new_value: bool) -> None:
+        """Apply a music looping setting change."""
+        from ..settings import set_music_looping
+        set_music_looping(new_value)
+        self.app._music_looping_enabled = new_value
+        # If disabling and a music room loop panel is open, stop it.
+        if not new_value:
+            try:
+                from .music_room import MusicMode
+                room = getattr(self.app, '_music_room', None)
+                if room is None:
+                    for mode in self.app.query(MusicMode):
+                        room = mode
+                        break
+                if room is not None and hasattr(room, '_stop_loop'):
+                    room._stop_loop()
+            except Exception:
+                pass
+        # Refresh viewport subtitle so the "Hold Enter: record a loop" hint
+        # appears or disappears immediately.
+        try:
+            from ..purple_tui import _viewport_subtitle
+            viewport = self.app.query_one("#viewport")
+            viewport.border_subtitle = _viewport_subtitle(
+                self.app.active_room,
+                self.app._code_panel_enabled,
+                self.app.active_theme,
+                self.app._music_looping_enabled,
+            )
+        except Exception:
+            pass
+        # Update menu label
+        label = "Allow Music Looping: Yes" if new_value else "Allow Music Looping: No"
+        try:
+            widget = self.query_one("#menu-music-looping", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

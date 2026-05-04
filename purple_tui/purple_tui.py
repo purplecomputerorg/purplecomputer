@@ -123,17 +123,15 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     return "".join(parts)
 
 
-def _viewport_subtitle(room: 'Room', code_panel_enabled: bool, active_theme: str) -> str:
+def _viewport_subtitle(room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> str:
     """Bottom-border hints for music/art rooms with bar-fill spacers."""
-    if not code_panel_enabled:
-        return ""
-    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
-    if room == Room.MUSIC:
+    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}" if code_panel_enabled else None
+    left = None
+    if room == Room.MUSIC and music_looping_enabled:
         left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
-        return _spanning_subtitle(left, right, active_theme)
-    if room == Room.ART:
-        return _spanning_subtitle(None, right, active_theme)
-    return ""
+    if left is None and right is None:
+        return ""
+    return _spanning_subtitle(left, right, active_theme)
 
 
 class Room(Enum):
@@ -831,6 +829,7 @@ class PurpleApp(App):
         self._littles_mode: str | None = None  # None, "music", or "art"
         self._code_panel_enabled: bool = True
         self._code_panel_active: bool = False  # True when code panel mode is on (persists across rooms)
+        self._music_looping_enabled: bool = True
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -897,15 +896,17 @@ class PurpleApp(App):
         from .power_manager import set_logind_power_key
         set_logind_power_key("ignore")
 
-        from .settings import get_littles_mode, get_code_panel
+        from .settings import get_littles_mode, get_code_panel, get_music_looping
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
             self._code_panel_enabled = False
+            self._music_looping_enabled = False
             room_map = {"music": Room.MUSIC, "music_noscreen": Room.MUSIC, "art": Room.ART}
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
         else:
             self._code_panel_enabled = get_code_panel()
+            self._music_looping_enabled = get_music_looping()
 
         self._load_room_content()
 
@@ -915,7 +916,7 @@ class PurpleApp(App):
         # Set viewport border subtitle for music/art rooms
         try:
             viewport = self.query_one("#viewport")
-            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme)
+            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
         except NoMatches:
             pass
 
@@ -1604,7 +1605,7 @@ class PurpleApp(App):
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False
                     indicator.display = True
-                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme)
+                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
         except NoMatches:
             pass
 
@@ -2128,7 +2129,7 @@ class PurpleApp(App):
             self._close_repl_panel()
             try:
                 viewport = self.query_one("#viewport")
-                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled, self.active_theme)
+                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
             except NoMatches:
                 pass
 
@@ -2657,9 +2658,11 @@ class PurpleApp(App):
         if mode:
             self._code_panel_enabled = False
             self._code_panel_active = False
+            self._music_looping_enabled = False
         else:
-            from .settings import get_code_panel
+            from .settings import get_code_panel, get_music_looping
             self._code_panel_enabled = get_code_panel()
+            self._music_looping_enabled = get_music_looping()
 
         if mode:
             # Switch to the locked room

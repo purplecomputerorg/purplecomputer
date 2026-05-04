@@ -1230,6 +1230,8 @@ class MusicMode(Container, can_focus=True):
         if self._repl_panel and self._repl_panel.is_open:
             return
         if self._loop.state == IDLE:
+            if not getattr(self.app, '_music_looping_enabled', True):
+                return
             self._advance_loop_state()  # idle → recording
         else:
             self._stop_loop()  # any non-idle → close panel

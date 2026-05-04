@@ -13,6 +13,7 @@ SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 _defaults = {
     "littles_mode": None,        # None = off, "music", "music_noscreen", or "art"
     "code_panel": True,          # Whether the code panel can be opened (space hold)
+    "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
 }
 
 
@@ -61,6 +62,17 @@ def get_code_panel() -> bool:
 def set_code_panel(enabled: bool) -> None:
     settings = load_settings()
     settings["code_panel"] = enabled
+    save_settings(settings)
+
+
+def get_music_looping() -> bool:
+    """Whether music room looping is enabled."""
+    return load_settings()["music_looping"]
+
+
+def set_music_looping(enabled: bool) -> None:
+    settings = load_settings()
+    settings["music_looping"] = enabled
     save_settings(settings)
 
 

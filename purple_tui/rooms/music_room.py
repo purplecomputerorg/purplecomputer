@@ -339,6 +339,8 @@ class MusicGrid(Widget):
         # start_time, direction (+1 right, -1 left), prev_root_index.
         self._pitch_transition: dict | None = None
         self._pitch_transition_timer = None
+        # Show note names in every melodic cell (Up arrow on, Down off).
+        self._show_labels: bool = False
         # Per-instrument sound cache: instrument_id -> {pitch_name -> Sound}.
         # Pitch names are the lowercase filename stems (e.g. 'g4', 'cs5').
         self._instrument_sounds: dict[str, dict[str, pygame.mixer.Sound]] = {}
@@ -701,22 +703,15 @@ class MusicGrid(Widget):
             key = GRID_KEYS[row_idx][col_idx]
             bg_color = self.get_color(key)
             cell_note_name: str | None = None
-            is_home = False
             at_wavefront = False
             if is_melodic_row:
                 effective_root_idx, at_wavefront = self._transition_state_for_col(col_idx)
                 effective_root = FRIENDLY_KEYS[effective_root_idx]
-                effective_root_name = CHROMATIC_NOTE_NAMES[effective_root]
                 cell_note_name, _ = pitch_for(
                     melodic_row, col_idx, effective_root, 0,
                 )
-                is_home = cell_note_name == effective_root_name
-                # Home-note tint at rest. Lets the home stripe slide visibly
-                # as a key shift wave passes through.
-                if is_home and self.color_state[key] == -1:
-                    bg_color = "#3d2657"
-                # Wave-front pulse: brighten cells the wave is currently
-                # passing through. Visual scaffolding for the slide.
+                # Wave-front pulse: brighten cells the slide is currently
+                # passing through. Visual scaffolding for the key shift.
                 if at_wavefront and self.color_state[key] == -1:
                     bg_color = "#5a3875"
 
@@ -741,6 +736,7 @@ class MusicGrid(Widget):
             elif line_in_cell in (note_above, note_below) and (
                 key in self._note_labels
                 or (is_melodic_row and self._pitch_transition is not None)
+                or (is_melodic_row and self._show_labels)
             ):
                 # Flash note/percussion name, centered in cell. During a key
                 # shift, all melodic cells show their note name so the swap
@@ -966,6 +962,7 @@ class MusicMode(Container, can_focus=True):
             self.grid.set_instrument(0)
             self.grid._root_index = self._root_index
             self.grid._pitch_transition = None
+            self.grid._show_labels = False
             self.grid.refresh()
         if self._header:
             self._header.update_instrument(INSTRUMENTS[0][1])
@@ -1318,9 +1315,8 @@ class MusicMode(Container, can_focus=True):
                     self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
                     return
 
-        # Left/Right: cycle key. Visible feedback (label slide + home stripe
-        # sliding across the grid) carries the change — no toast.
-        # Up/Down: unbound. The 3 grid rows already provide bass/mid/treble.
+        # Left/Right: cycle key (animated slide). Up: toggle note name
+        # labels on/off. Down: unbound.
         if isinstance(action, NavigationAction):
             self._space_hold.on_other_key()
             d = action.direction
@@ -1331,6 +1327,9 @@ class MusicMode(Container, can_focus=True):
                     self.grid.shift_root(self._root_index, step)
                 if self._header:
                     self._header.update_pitch(self._root_index)
+            elif d in ('up', 'down') and self.grid:
+                self.grid._show_labels = not self.grid._show_labels
+                self.grid.refresh()
             return
 
         # Character keys: play sound, cycle color, record into loop if active

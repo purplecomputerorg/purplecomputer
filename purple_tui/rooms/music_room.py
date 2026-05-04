@@ -216,10 +216,12 @@ LIGHT_COLORS: set[str] = set()
 # Keys that get spoken in Letters mode (A-Z and 0-9)
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 
-# Reverse lookup: melodic key -> (row, col) in GRID_KEYS, used to map a key
-# press to a pitch via music_constants.pitch_for(...).
+# Reverse lookup: melodic key -> (melodic_row, col) where melodic_row is
+# 0 (Q-P), 1 (A-;), 2 (Z-/) — the index pitch_for(...) expects. GRID_KEYS
+# row 0 is the digit row (percussion); melodic rows are GRID_KEYS rows 1..3,
+# so melodic_row = grid_row - 1.
 _KEY_TO_RC: dict[str, tuple[int, int]] = {
-    GRID_KEYS[r][c]: (r, c)
+    GRID_KEYS[r][c]: (r - 1, c)
     for r in range(len(GRID_KEYS))
     for c in range(len(GRID_KEYS[r]))
     if not GRID_KEYS[r][c].isdigit()

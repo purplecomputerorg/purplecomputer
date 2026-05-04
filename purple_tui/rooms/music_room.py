@@ -977,14 +977,15 @@ class MusicMode(Container, can_focus=True):
 
     def _advance_loop_state(self) -> None:
         """Hold-Enter advances the loop state machine linearly:
-        IDLE → RECORDING → LOOPING → IDLE. Same gesture every time."""
+        IDLE → RECORDING → LOOPING → IDLE. Same gesture every time.
+
+        No toasts: the loop panel itself shows the current state.
+        """
         state = self._loop.state
         if state == IDLE:
             self._loop.start_recording()
             self._start_recording_timer()
             self._update_hint()
-            self.app.clear_notifications()
-            self.app.notify(self.app.caps_text("Recording!"), timeout=1.5)
 
         elif state == RECORDING:
             events, _duration = self._loop.finish_recording()
@@ -993,24 +994,18 @@ class MusicMode(Container, can_focus=True):
                 self._start_loop_playback()
                 self._start_loop_progress_timer()
                 self._update_hint()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Looping! Play on top!"), timeout=2.0)
             else:
                 self._loop.stop()
                 self._update_hint()
 
         elif state == LOOPING:
             self._stop_loop()
-            self.app.clear_notifications()
-            self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
 
     def _handle_escape(self) -> bool:
         """Escape stops loop from any non-idle state. Returns True if consumed."""
         if self._loop.state == IDLE:
             return False
         self._stop_loop()
-        self.app.clear_notifications()
-        self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
         return True
 
     def _stop_loop(self) -> None:
@@ -1088,8 +1083,6 @@ class MusicMode(Container, can_focus=True):
             self._stop_recording_timer()
             if events:
                 self._start_loop_playback()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Loop full! Playing..."), timeout=2.0)
             else:
                 self._loop.stop()
             self._update_hint()
@@ -1133,8 +1126,7 @@ class MusicMode(Container, can_focus=True):
                 space_hint = "Space: show notes"
                 arrows_hint = "Arrows: switch key"
                 enter_hint = "Enter: instrument"
-                loop_hint = "Hold Enter: record a loop"
-                hint.set_hint(f"[dim]{space_hint}    {arrows_hint}    {enter_hint}    {loop_hint}[/]")
+                hint.set_hint(f"[dim]{space_hint}    {arrows_hint}    {enter_hint}[/]")
 
         # Loop panel: opens when recording/looping, closes back to idle.
         # Mirrors the REPL open/close: hides the inline hint, pins the grid
@@ -1353,8 +1345,6 @@ class MusicMode(Container, can_focus=True):
                 if action.action == 'tab':
                     if self._loop.state != IDLE:
                         self._stop_loop()
-                        self.app.clear_notifications()
-                        self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
                         return
                     self._letters_mode = not self._letters_mode
                     if self._header:
@@ -1373,8 +1363,6 @@ class MusicMode(Container, can_focus=True):
             self._enter_hold.on_other_key()
             if self._loop.state != IDLE:
                 self._stop_loop()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
                 return
             d = action.direction
             if d in ('left', 'right'):

@@ -88,12 +88,51 @@ from .loop_panel import LoopPanelToggleRequested
 boot_log.heartbeat("all purple_tui imports done")
 
 
-def _viewport_subtitle(room: 'Room', code_panel_enabled: bool) -> str:
-    """Right-aligned bottom-border hint text for music/art rooms."""
+def _border_bar_color(active_theme: str) -> str:
+    """Hex of the viewport border colour for the active theme. Used to tint
+    the heavy-line spacers inside the bottom-border subtitle so the border
+    looks visually continuous between the left- and right-anchored hints."""
+    return "#9b7bc4" if active_theme == "purple-dark" else "#7a4ca0"
+
+
+def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -> str:
+    """Build a left-aligned bottom-border subtitle that spans the border.
+
+    Gaps are filled with `━` characters tinted to match the border, so the
+    border line keeps reading as continuous between the visible hints. The
+    viewport CSS sets `border-subtitle-align: left` so the string anchors
+    at the left edge.
+    """
+    bar_color = _border_bar_color(active_theme)
+    interior = VIEWPORT_WIDTH - 2 - 2  # border (2) + subtitle padding (1 each side)
+    parts: list[str] = []
+    used = 0
+    if left:
+        parts.append(left)
+        used += display_len(left)
+    if right:
+        right_w = display_len(right)
+        gap = max(0, interior - used - right_w)
+        if gap:
+            parts.append(f"[{bar_color}]{'━' * gap}[/]")
+        parts.append(right)
+    elif left:
+        gap = max(0, interior - used)
+        if gap:
+            parts.append(f"[{bar_color}]{'━' * gap}[/]")
+    return "".join(parts)
+
+
+def _viewport_subtitle(room: 'Room', code_panel_enabled: bool, active_theme: str) -> str:
+    """Bottom-border hints for music/art rooms with bar-fill spacers."""
     if not code_panel_enabled:
         return ""
-    if room in (Room.MUSIC, Room.ART):
-        return f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+    if room == Room.MUSIC:
+        left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
+        return _spanning_subtitle(left, right, active_theme)
+    if room == Room.ART:
+        return _spanning_subtitle(None, right, active_theme)
     return ""
 
 
@@ -692,6 +731,7 @@ class PurpleApp(App):
         height: __VIEWPORT_HEIGHT__;
         border: heavy $primary;
         background: $surface;
+        border-subtitle-align: left;
     }
 
     #room-indicator {
@@ -875,7 +915,7 @@ class PurpleApp(App):
         # Set viewport border subtitle for music/art rooms
         try:
             viewport = self.query_one("#viewport")
-            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled)
+            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme)
         except NoMatches:
             pass
 
@@ -1554,14 +1594,15 @@ class PurpleApp(App):
                     # bar(1) hidden.
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
                     if kind == 'loop':
-                        viewport.border_subtitle = f"{ICON_MUSIC} Hold Enter: stop loop {ICON_MUSIC}"
+                        active_hint = f"{ICON_MUSIC} Hold Enter: stop loop {ICON_MUSIC}"
                     else:
-                        viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+                        active_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+                    viewport.border_subtitle = _spanning_subtitle(active_hint, None, self.active_theme)
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False
                     indicator.display = True
-                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled)
+                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled, self.active_theme)
         except NoMatches:
             pass
 
@@ -2085,7 +2126,7 @@ class PurpleApp(App):
             self._close_repl_panel()
             try:
                 viewport = self.query_one("#viewport")
-                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled)
+                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled, self.active_theme)
             except NoMatches:
                 pass
 

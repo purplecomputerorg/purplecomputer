@@ -977,10 +977,11 @@ class PurpleApp(App):
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
-        # Periodic toast cleanup: Textual's timer-based toast dismissal can
-        # drop callbacks during screen transitions or heavy evdev input,
-        # leaving toasts stuck on screen. Reap expired ones every 4 seconds.
-        self.set_interval(4.0, self._reap_stale_toasts)
+        # Periodic toast cleanup: Textual's per-toast timer can drop callbacks
+        # during screen transitions or heavy evdev input, and App.query only
+        # walks the active screen — so toasts on backgrounded screens (e.g.
+        # under a pushed modal) never get reaped by their own timer view.
+        self.set_interval(1.0, self._reap_stale_toasts)
 
         # Keyboard diagnostic mode: if no evdev input for 60 seconds, exit to
         # debug shell. Activated by purple.inputtest=1 kernel parameter.
@@ -1684,11 +1685,26 @@ class PurpleApp(App):
             self.exit(return_code=0)
 
     def _reap_stale_toasts(self) -> None:
-        """Remove toasts whose notifications have expired."""
-        from textual.widgets._toast import Toast
-        for toast in self.query(Toast):
-            if toast._notification.has_expired:
-                toast._expire()
+        """Remove toasts whose notifications have expired.
+
+        Walks every screen in the stack, not just the active one — App.query
+        only sees the current screen, which misses toasts on backgrounded
+        screens (e.g. under a pushed modal).
+        """
+        from textual.widgets._toast import Toast, ToastHolder
+        for screen in self.screen_stack:
+            for toast in screen.query(Toast):
+                if not toast._notification.has_expired:
+                    continue
+                try:
+                    self._unnotify(toast._notification, refresh=False)
+                except Exception:
+                    pass
+                holder = toast.parent if isinstance(toast.parent, ToastHolder) else toast
+                try:
+                    holder.remove()
+                except Exception:
+                    pass
 
     def inhibit_idle(self, reason: str) -> None:
         """Suppress idle sleep/shutdown while a long-running operation is active.

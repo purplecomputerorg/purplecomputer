@@ -92,20 +92,22 @@ def _viewport_subtitle(room: 'Room', code_panel_enabled: bool) -> str:
 
     Music room shows two hints anchored to opposite edges: "Hold Enter:
     record a loop" on the left, "Hold Space: write code!" on the right.
-    Art room shows only the right (code) hint.
+    Art room shows only the right (code) hint, with a leading pad so it
+    still lands at the right edge under the global left-aligned subtitle.
+
+    Interior width = VIEWPORT_WIDTH - 2 (border) - 2 (subtitle padding).
     """
     if not code_panel_enabled:
         return ""
     right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+    interior = VIEWPORT_WIDTH - 2 - 2
     if room == Room.MUSIC:
         left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
-        # Border subtitle is left-aligned in viewport CSS; pad between the
-        # two hints so the right one lands at the far edge of the border.
-        # Interior width = VIEWPORT_WIDTH - 2 (border) - 2 (subtitle padding).
-        gap = max(2, VIEWPORT_WIDTH - 2 - 2 - display_len(left) - display_len(right))
+        gap = max(2, interior - display_len(left) - display_len(right))
         return left + " " * gap + right
     if room == Room.ART:
-        return right
+        gap = max(0, interior - display_len(right))
+        return " " * gap + right
     return ""
 
 
@@ -1556,7 +1558,9 @@ class PurpleApp(App):
                     # budget. REPL(5) fits with pinned canvas after hint
                     # bar(1) hidden.
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
-                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+                    close_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+                    pad = max(0, VIEWPORT_WIDTH - 4 - display_len(close_hint))
+                    viewport.border_subtitle = " " * pad + close_hint
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False

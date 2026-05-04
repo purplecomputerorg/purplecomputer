@@ -31,6 +31,7 @@ from ..music_constants import (
 )
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
+from ..loop_panel import LoopPanel
 from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
@@ -272,7 +273,7 @@ class MusicRoomHeader(Static):
     def _pitch_tag(self) -> tuple[str, int]:
         """Return (markup, visible_width) for the current-key indicator."""
         root_name = CHROMATIC_NOTE_NAMES[FRIENDLY_KEYS[self._root_index]]
-        plain = f"Key {root_name}"
+        plain = f"← Key {root_name} →"
         return f"[dim]{plain}[/]", len(plain)
 
     def render(self) -> str:
@@ -828,14 +829,9 @@ class MusicMode(Container, can_focus=True):
 
     #example-hint {
         dock: bottom;
-        height: auto;
+        height: 1;
         text-align: center;
         color: $text-muted;
-    }
-
-    #example-hint.loop-active {
-        background: $surface-lighten-1;
-        padding: 0 1;
     }
 
     #noscreen-label {
@@ -864,6 +860,7 @@ class MusicMode(Container, can_focus=True):
         # Auto-cancel timer for "started recording but no notes pressed."
         self._record_idle_timer: asyncio.TimerHandle | None = None
         self._repl_panel = None
+        self._loop_panel: LoopPanel | None = None
         self._noscreen_dot_timer = None
 
     @property
@@ -878,6 +875,8 @@ class MusicMode(Container, can_focus=True):
         self.grid = MusicGrid()
         yield self.grid
         yield MusicExampleHint(id="example-hint")
+        self._loop_panel = LoopPanel(id="music-loop-panel")
+        yield self._loop_panel
         self._repl_panel = ReplPanel(room="music", id="music-repl")
         yield self._repl_panel
 
@@ -1147,46 +1146,40 @@ class MusicMode(Container, can_focus=True):
         Text is stored raw (without caps). MusicExampleHint.render()
         applies caps at render time so it responds to caps changes immediately.
         """
+        # Idle hint: terse single-line, kid-friendly. The Hold Enter / Hold
+        # Space affordances are also mirrored on the viewport border subtitle.
         try:
             hint = self.query_one("#example-hint", MusicExampleHint)
         except Exception:
-            return
-        state = self._loop.state
-        hint.set_class(state != IDLE, "loop-active")
-
-        if state == IDLE:
-            text = "Try pressing letters and numbers!"
+            hint = None
+        if hint is not None:
             if getattr(self.app, '_littles_mode', None):
-                hint.set_hint(f"[dim]{text}[/]")
-                return
-            space_hint = "Space: show notes"
-            enter_hint = "Enter: instrument    Hold Enter: record a loop"
-            hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
+                hint.set_hint("[dim]Try pressing letters and numbers![/]")
+            else:
+                text = "Try pressing letters and numbers!"
+                space_hint = "Space: show notes"
+                arrows_hint = "Arrows: switch key"
+                enter_hint = "Enter: instrument"
+                hint.set_hint(f"[dim]{text}    {space_hint}    {arrows_hint}    {enter_hint}[/]")
 
+        # Loop panel: opens when recording/looping, closes back to idle.
+        state = self._loop.state
+        if self._loop_panel is None:
+            return
+        if state == IDLE:
+            if self._loop_panel.is_open:
+                self._loop_panel.close()
         elif state == RECORDING:
-            progress = self._loop.recording_progress()
-            remaining = self._loop.recording_remaining()
-            filled = int(progress * PROGRESS_BLOCKS)
-            empty = PROGRESS_BLOCKS - filled
-            bar = "█" * filled + "░" * empty
-            secs = int(remaining)
-            color = "bold dark_orange" if remaining <= 5 else "bold red"
-            head = f"[{color}]● Recording, {secs}s left[/]"
-            mid = f"[{color}]{bar}[/]"
-            tail = "[dim]Play any keys    Hold Enter when done    Esc to cancel[/]"
-            hint.set_hint(f"{head}\n{mid}\n{tail}")
-
+            if not self._loop_panel.is_open:
+                self._loop_panel.open()
+            self._loop_panel.set_recording(
+                self._loop.recording_progress(),
+                int(self._loop.recording_remaining()),
+            )
         elif state == LOOPING:
-            progress = self._loop.loop_progress()
-            pos = int(progress * PROGRESS_BLOCKS)
-            bar_chars = list("░" * PROGRESS_BLOCKS)
-            if pos < PROGRESS_BLOCKS:
-                bar_chars[pos] = "█"
-            bar = "".join(bar_chars)
-            head = "[bold red]🔁 Looping and recording[/]"
-            mid = f"[bold red]{bar}[/]"
-            tail = "[dim]Play on top    Hold Enter to stop    Tab or Esc to exit[/]"
-            hint.set_hint(f"{head}\n{mid}\n{tail}")
+            if not self._loop_panel.is_open:
+                self._loop_panel.open()
+            self._loop_panel.set_looping(self._loop.loop_progress())
 
     # -- Core key handling ---------------------------------------------------
 

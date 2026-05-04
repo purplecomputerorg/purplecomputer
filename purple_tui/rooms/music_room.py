@@ -246,12 +246,10 @@ class MusicRoomHeader(Static):
         self._instrument_name = INSTRUMENTS[0][1]
         self._code_mode = False
         self._root_index = DEFAULT_ROOT_INDEX
-        self._octave_shift = 0
         self.add_class("caps-sensitive")
 
-    def update_pitch(self, root_index: int, octave_shift: int) -> None:
+    def update_pitch(self, root_index: int) -> None:
         self._root_index = root_index
-        self._octave_shift = octave_shift
         self.refresh()
 
     def update_mode(self, letters_mode: bool) -> None:
@@ -270,12 +268,9 @@ class MusicRoomHeader(Static):
         self.refresh()
 
     def _pitch_tag(self) -> tuple[str, int]:
-        """Return (markup, visible_width) for the key+octave indicator."""
+        """Return (markup, visible_width) for the current-key indicator."""
         root_name = CHROMATIC_NOTE_NAMES[FRIENDLY_KEYS[self._root_index]]
-        # 3 horizontal dots; lit one shows octave shift (-1, 0, +1)
-        slot = self._octave_shift + 1  # 0..2
-        dots = "".join("●" if i == slot else "○" for i in range(3))
-        plain = f"{root_name} {dots}"
+        plain = f"Key {root_name}"
         return f"[dim]{plain}[/]", len(plain)
 
     def render(self) -> str:
@@ -335,10 +330,13 @@ class MusicGrid(Widget):
         # Color state for each key: -1 = default, 0+ = index into COLORS
         self.color_state: dict[str, int] = {k: -1 for k in ALL_KEYS}
         self._instrument_index: int = 0
-        # Pitch state: which root note + octave shift the grid is currently in.
-        # Driven by Left/Right and Up/Down arrow keys (set via set_pitch_state).
+        # Pitch state: which root note the grid is currently in.
+        # Driven by Left/Right arrow keys (set via set_pitch_state).
         self._root_index: int = DEFAULT_ROOT_INDEX  # index into FRIENDLY_KEYS
-        self._octave_shift: int = 0
+        # Key-shift slide animation. None = idle. When set: dict with
+        # start_time, direction (+1 right, -1 left), prev_root_index.
+        self._pitch_transition: dict | None = None
+        self._pitch_transition_timer = None
         # Per-instrument sound cache: instrument_id -> {pitch_name -> Sound}.
         # Pitch names are the lowercase filename stems (e.g. 'g4', 'cs5').
         self._instrument_sounds: dict[str, dict[str, pygame.mixer.Sound]] = {}
@@ -442,7 +440,7 @@ class MusicGrid(Widget):
             return None
         row, col = rc
         root = FRIENDLY_KEYS[self._root_index]
-        note, octave = pitch_for(row, col, root, self._octave_shift)
+        note, octave = pitch_for(row, col, root, 0)
         return pitch_filename(note, octave)
 
     def play_sound(self, key: str) -> None:
@@ -472,11 +470,67 @@ class MusicGrid(Widget):
         """Set the current instrument index."""
         self._instrument_index = index
 
-    def set_pitch_state(self, root_index: int, octave_shift: int) -> None:
-        """Update root note + octave shift; refresh visuals."""
-        self._root_index = root_index
-        self._octave_shift = octave_shift
+    # Pitch slide animation: ~250ms wave that crosses the grid in the arrow's
+    # direction. Each column adopts the new key as the wave passes; cells at
+    # the wave-front pulse for a single tick. Sound at the new key plays
+    # immediately on press; the animation is purely visual scaffolding.
+    PITCH_TRANSITION_DURATION = 0.25
+    PITCH_TRANSITION_TICK = 0.03
+
+    def shift_root(self, new_root_index: int, direction: int) -> None:
+        """Shift the root and start the slide animation in the given direction."""
+        prev = self._root_index
+        self._root_index = new_root_index
+        self._pitch_transition = {
+            "start": time.monotonic(),
+            "direction": direction,  # +1 = right (right arrow), -1 = left
+            "prev_root_index": prev,
+        }
+        # Stop any in-flight tick interval and start a fresh one.
+        if self._pitch_transition_timer is not None:
+            self._pitch_transition_timer.stop()
+        self._pitch_transition_timer = self.set_interval(
+            self.PITCH_TRANSITION_TICK, self._on_pitch_transition_tick,
+        )
         self.refresh()
+
+    def _on_pitch_transition_tick(self) -> None:
+        if self._pitch_transition is None:
+            if self._pitch_transition_timer is not None:
+                self._pitch_transition_timer.stop()
+                self._pitch_transition_timer = None
+            return
+        elapsed = time.monotonic() - self._pitch_transition["start"]
+        if elapsed >= self.PITCH_TRANSITION_DURATION:
+            self._pitch_transition = None
+            if self._pitch_transition_timer is not None:
+                self._pitch_transition_timer.stop()
+                self._pitch_transition_timer = None
+        self.refresh()
+
+    def _transition_state_for_col(self, col: int) -> tuple[int, bool]:
+        """Return (effective_root_index, is_at_wavefront) for a given column.
+
+        Wave travels in the arrow's direction across cols 0..9. Columns the
+        wave has already passed show the new root; columns ahead of it show
+        the previous root (until the wave reaches them). The cell currently
+        at the wave-front pulses for one tick.
+        """
+        t = self._pitch_transition
+        if t is None:
+            return self._root_index, False
+        elapsed = time.monotonic() - t["start"]
+        progress = max(0.0, min(1.0, elapsed / self.PITCH_TRANSITION_DURATION))
+        # Wave position in column space (0..10).
+        wavefront = progress * 10.0
+        if t["direction"] >= 0:
+            passed = col < wavefront
+            at_front = abs(col - wavefront) < 0.6
+        else:
+            passed = col > (9 - wavefront)
+            at_front = abs((9 - col) - wavefront) < 0.6
+        effective = self._root_index if passed else t["prev_root_index"]
+        return effective, at_front
 
     def flash_note(self, key: str) -> None:
         """Briefly show the note/percussion name in a key's cell for ~1 second."""
@@ -639,8 +693,6 @@ class MusicGrid(Widget):
         # rows 1..3 are the three melodic rows (Q-P, A-;, Z-/).
         is_melodic_row = row_idx >= 1
         melodic_row = row_idx - 1 if is_melodic_row else None
-        root_semitone = FRIENDLY_KEYS[self._root_index]
-        root_name = CHROMATIC_NOTE_NAMES[root_semitone]
 
         # Grid cells. All equal width
         for col_idx in range(10):
@@ -648,16 +700,23 @@ class MusicGrid(Widget):
             bg_color = self.get_color(key)
             cell_note_name: str | None = None
             is_home = False
+            at_wavefront = False
             if is_melodic_row:
+                effective_root_idx, at_wavefront = self._transition_state_for_col(col_idx)
+                effective_root = FRIENDLY_KEYS[effective_root_idx]
+                effective_root_name = CHROMATIC_NOTE_NAMES[effective_root]
                 cell_note_name, _ = pitch_for(
-                    melodic_row, col_idx, root_semitone, self._octave_shift,
+                    melodic_row, col_idx, effective_root, 0,
                 )
-                is_home = cell_note_name == root_name
-                # Subtle accent for home-note cells when the cell is at rest
-                # (color_state == -1). Lets the stripe slide visibly when
-                # Left/Right shifts the root.
+                is_home = cell_note_name == effective_root_name
+                # Home-note tint at rest. Lets the home stripe slide visibly
+                # as a key shift wave passes through.
                 if is_home and self.color_state[key] == -1:
-                    bg_color = "#3d2657"  # slightly brighter than DEFAULT_BG_DARK
+                    bg_color = "#3d2657"
+                # Wave-front pulse: brighten cells the wave is currently
+                # passing through. Visual scaffolding for the slide.
+                if at_wavefront and self.color_state[key] == -1:
+                    bg_color = "#5a3875"
 
             # Determine text color based on background brightness
             light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT}
@@ -677,8 +736,13 @@ class MusicGrid(Widget):
                 segments.append(Segment(" " * pad_left, cell_bg_style))
                 segments.append(Segment(display_key, text_style))
                 segments.append(Segment(" " * pad_right, cell_bg_style))
-            elif line_in_cell in (note_above, note_below) and key in self._note_labels:
-                # Flash note/percussion name, centered in cell
+            elif line_in_cell in (note_above, note_below) and (
+                key in self._note_labels
+                or (is_melodic_row and self._pitch_transition is not None)
+            ):
+                # Flash note/percussion name, centered in cell. During a key
+                # shift, all melodic cells show their note name so the swap
+                # is visible as the wave passes through.
                 if key.isdigit():
                     label = caps(PERCUSSION_NAMES.get(key, ""))
                 else:
@@ -788,7 +852,6 @@ class MusicMode(Container, can_focus=True):
         self._letters_mode = False
         self._instrument_index = 0
         self._root_index = DEFAULT_ROOT_INDEX
-        self._octave_shift = 0
         self._loop_task: asyncio.Task | None = None
         self._recording_timer = None
         self._loop_progress_timer = None
@@ -896,11 +959,12 @@ class MusicMode(Container, can_focus=True):
         self._instrument_index = 0
         self._letters_mode = False
         self._root_index = DEFAULT_ROOT_INDEX
-        self._octave_shift = 0
         if self.grid:
             self.grid.reset_colors()
             self.grid.set_instrument(0)
-            self.grid.set_pitch_state(self._root_index, self._octave_shift)
+            self.grid._root_index = self._root_index
+            self.grid._pitch_transition = None
+            self.grid.refresh()
         if self._header:
             self._header.update_instrument(INSTRUMENTS[0][1])
             self._header.update_mode(False)
@@ -1252,22 +1316,19 @@ class MusicMode(Container, can_focus=True):
                     self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
                     return
 
-        # Arrow keys: shift key (Left/Right) and octave (Up/Down).
-        # No notification toast — visible feedback (home-stripe slide, label
-        # rotation, octave dot) carries the change.
+        # Left/Right: cycle key. Visible feedback (label slide + home stripe
+        # sliding across the grid) carries the change — no toast.
+        # Up/Down: unbound. The 3 grid rows already provide bass/mid/treble.
         if isinstance(action, NavigationAction):
             self._space_hold.on_other_key()
             d = action.direction
             if d in ('left', 'right'):
                 step = 1 if d == 'right' else -1
                 self._root_index = (self._root_index + step) % len(FRIENDLY_KEYS)
-            elif d in ('up', 'down'):
-                step = 1 if d == 'up' else -1
-                self._octave_shift = max(-1, min(1, self._octave_shift + step))
-            if self.grid:
-                self.grid.set_pitch_state(self._root_index, self._octave_shift)
-            if self._header:
-                self._header.update_pitch(self._root_index, self._octave_shift)
+                if self.grid:
+                    self.grid.shift_root(self._root_index, step)
+                if self._header:
+                    self._header.update_pitch(self._root_index)
             return
 
         # Character keys: play sound, cycle color, record into loop if active

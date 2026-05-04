@@ -2,7 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
-- Music room: arrow keys shift key (Left/Right cycles C/D/F/G/A) and octave (Up/Down ±1). Home-note cells get a brighter tint that slides as the root changes; cell labels update to the new key; header shows root letter + 3 dots for octave position.
+- Music room: Left/Right arrows cycle through 5 friendly keys (C, D, F, G, A) with an animated horizontal "slide" — note labels appear and swap as a wave passes across the grid, home-note tint stripe slides to the new column. Diatonic only, so every cell still sounds in-scale (3yo-mash safe). Header shows current key. Up/Down intentionally unbound — the 3 grid rows already give bass/mid/treble.
 - Global key remap: `/` now produces `÷` and `*` now produces `×` everywhere (joining the existing `=` → `+` remap), so kids see math symbols directly on their keys.
 - Audio diagnostics: when audio fails, the message now tells parents to plug in a USB speaker or USB audio adapter and notes that sound should start within a few seconds, so they know a reboot isn't needed.
 - Art/Music: mode indicators now centered in the top bar with a dim "↹ Tab to switch" hint to the right, so Tab no longer reads as a third mode.

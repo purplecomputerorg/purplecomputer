@@ -74,8 +74,8 @@ SHIFT_SIZE_OVERRIDE = {"'": 0.85, "5": 0.52, "2": 0.52, "1": 0.70, "/": 0.70}
 SHIFT_X_OVERRIDE = {"1": 0.30}
 
 
+
 def _rel_luminance(hex_color: str) -> float:
-    """WCAG relative luminance (sRGB, gamma-corrected)."""
     h = hex_color.lstrip("#")
     def ch(v: int) -> float:
         s = v / 255
@@ -85,10 +85,9 @@ def _rel_luminance(hex_color: str) -> float:
 
 def text_color_for(bg_hex: str) -> str:
     """Pick whichever of black/white has the higher WCAG contrast ratio."""
-    l_bg = _rel_luminance(bg_hex)
-    contrast_white = 1.05 / (l_bg + 0.05)
-    contrast_black = (l_bg + 0.05) / 0.05
-    return TEXT_LIGHT if contrast_white >= contrast_black else TEXT_DARK
+    l = _rel_luminance(bg_hex)
+    return TEXT_LIGHT if 1.05 / (l + 0.05) >= (l + 0.05) / 0.05 else TEXT_DARK
+
 
 def xml_escape(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

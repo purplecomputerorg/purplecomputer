@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music room: Space tap toggles note labels on/off; loop control moved off Space to hold-Enter (linear advance: idle → recording → looping → stop). Tap Enter still cycles instruments; hold Space still opens code panel. Tab/Esc/any arrow exits a loop early. Recording auto-cancels if no notes are pressed within 2s. 3yo can mash freely without falling into loop mode.
 - Music room: Left/Right arrows cycle through 5 friendly keys (C, D, F, G, A) with an animated horizontal "slide" — note labels appear and swap as a wave passes across the grid, home-note tint stripe slides to the new column. Diatonic only, so every cell still sounds in-scale (3yo-mash safe). Header shows current key. Up/Down intentionally unbound — the 3 grid rows already give bass/mid/treble.
 - Global key remap: `/` now produces `÷` and `*` now produces `×` everywhere (joining the existing `=` → `+` remap), so kids see math symbols directly on their keys.
 - Audio diagnostics: when audio fails, the message now tells parents to plug in a USB speaker or USB audio adapter and notes that sound should start within a few seconds, so they know a reboot isn't needed.

@@ -853,9 +853,11 @@ class MusicMode(Container, can_focus=True):
         self._loop_task: asyncio.Task | None = None
         self._recording_timer = None
         self._loop_progress_timer = None
-        self._last_loop_space_time: float = 0.0
-        # Space hold REPL toggle
+        # Space hold REPL toggle; Enter hold loop-state advance.
         self._space_hold = HoldOrTap(hold_seconds=0.5)
+        self._enter_hold = HoldOrTap(hold_seconds=0.5)
+        # Auto-cancel timer for "started recording but no notes pressed."
+        self._record_idle_timer: asyncio.TimerHandle | None = None
         self._repl_panel = None
         self._noscreen_dot_timer = None
 
@@ -971,18 +973,21 @@ class MusicMode(Container, can_focus=True):
 
     # -- Loop station controls -----------------------------------------------
 
-    def _handle_space(self) -> None:
-        """Space key state machine: idle → recording → looping/stop."""
+    def _advance_loop_state(self) -> None:
+        """Hold-Enter advances the loop state machine linearly:
+        IDLE → RECORDING → LOOPING → IDLE. Same gesture every time."""
         state = self._loop.state
         if state == IDLE:
             self._loop.start_recording()
             self._start_recording_timer()
+            self._start_record_idle_timer()
             self._update_hint()
             self.app.clear_notifications()
             self.app.notify(self.app.caps_text("Recording!"), timeout=1.5)
 
         elif state == RECORDING:
-            events, duration = self._loop.finish_recording()
+            self._cancel_record_idle_timer()
+            events, _duration = self._loop.finish_recording()
             self._stop_recording_timer()
             if events:
                 self._start_loop_playback()
@@ -991,21 +996,33 @@ class MusicMode(Container, can_focus=True):
                 self.app.clear_notifications()
                 self.app.notify(self.app.caps_text("Looping! Play on top!"), timeout=2.0)
             else:
-                # No notes recorded, go back to idle
                 self._loop.stop()
                 self._update_hint()
 
         elif state == LOOPING:
-            now = time.monotonic()
-            if now - self._last_loop_space_time < 2.0:
-                # Double-tap space: stop the loop
-                self._stop_loop()
-                self.app.clear_notifications()
-                self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
-                self._last_loop_space_time = 0.0
-            else:
-                # First tap: ignore but remember the time
-                self._last_loop_space_time = now
+            self._stop_loop()
+            self.app.clear_notifications()
+            self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+
+    def _start_record_idle_timer(self) -> None:
+        """Schedule a 2s check: if recording started but no notes pressed,
+        revert to idle so an accidental hold-Enter doesn't strand the kid."""
+        self._cancel_record_idle_timer()
+        try:
+            loop = asyncio.get_running_loop()
+            self._record_idle_timer = loop.call_later(2.0, self._record_idle_check)
+        except RuntimeError:
+            pass
+
+    def _cancel_record_idle_timer(self) -> None:
+        if self._record_idle_timer is not None:
+            self._record_idle_timer.cancel()
+            self._record_idle_timer = None
+
+    def _record_idle_check(self) -> None:
+        self._record_idle_timer = None
+        if self._loop.state == RECORDING and not self._loop.has_recording_events():
+            self._stop_loop()
 
     def _handle_escape(self) -> bool:
         """Escape stops loop from any non-idle state. Returns True if consumed."""
@@ -1021,10 +1038,10 @@ class MusicMode(Container, can_focus=True):
         self._loop.stop()
         self._stop_recording_timer()
         self._stop_loop_progress_timer()
+        self._cancel_record_idle_timer()
         if self._loop_task and not self._loop_task.done():
             self._loop_task.cancel()
         self._loop_task = None
-        self._last_loop_space_time = 0.0
         self._update_hint()
 
     def _start_loop_playback(self) -> None:
@@ -1136,8 +1153,8 @@ class MusicMode(Container, can_focus=True):
             if getattr(self.app, '_littles_mode', None):
                 hint.set_hint(f"[dim]{text}[/]")
                 return
-            space_hint = "Space: record a loop"
-            enter_hint = "Enter: change instrument"
+            space_hint = "Space: show notes"
+            enter_hint = "Enter: instrument  ·  Hold Enter: record a loop"
             hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
 
         elif state == RECORDING:
@@ -1147,14 +1164,9 @@ class MusicMode(Container, can_focus=True):
             empty = PROGRESS_BLOCKS - filled
             bar = "█" * filled + "░" * empty
             secs = int(remaining)
-            if remaining <= 5:
-                label = f"Recording  {secs}s left"
-                action = "Almost full!"
-                hint.set_hint(f"[bold dark_orange]● {label}[/]  {bar}  [dim]{action}[/]")
-            else:
-                label = f"Recording  {secs}s left"
-                action = "Space: loop it!"
-                hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{action}[/]")
+            color = "bold dark_orange" if remaining <= 5 else "bold red"
+            action = "Hold Enter to play it back  ·  Esc to cancel"
+            hint.set_hint(f"[{color}]● RECORDING  {secs}s left[/]  {bar}  [dim]{action}[/]")
 
         elif state == LOOPING:
             progress = self._loop.loop_progress()
@@ -1163,10 +1175,8 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            label = "Looping and recording"
-            play = "Play on top"
-            stop = "Esc: stop"
-            hint.set_hint(f"[bold red]● {label}[/]  {bar}  [dim]{play}    {stop}[/]")
+            action = "Play any keys to layer in  ·  Hold Enter to stop"
+            hint.set_hint(f"[bold red]🔁 LOOPING[/]  {bar}  [dim]{action}[/]")
 
     # -- Core key handling ---------------------------------------------------
 
@@ -1189,6 +1199,12 @@ class MusicMode(Container, can_focus=True):
             self.grid.play_sound(key)
         if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
             self.grid.play_letter(key)
+
+    def _on_enter_hold_fired(self) -> None:
+        """Enter held long enough: advance loop state."""
+        if getattr(self.app, '_littles_mode', None):
+            return
+        self._advance_loop_state()
 
     def _on_space_hold_fired(self) -> None:
         """Space held long enough: toggle REPL."""
@@ -1269,7 +1285,8 @@ class MusicMode(Container, can_focus=True):
 
         if isinstance(action, ControlAction):
             if action.action == 'space':
-                # After hold fired (panel just opened/closed), suppress until release
+                # Space tap toggles note labels; space hold opens code panel.
+                # After hold fired, suppress until release.
                 if self._space_hold.fired:
                     if not action.is_down:
                         self._space_hold.on_up()
@@ -1278,13 +1295,37 @@ class MusicMode(Container, can_focus=True):
                     self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
                 elif not action.is_down:
                     if self._space_hold.on_up():
-                        if not getattr(self.app, '_littles_mode', None):
-                            self._handle_space()
+                        if self.grid and not getattr(self.app, '_littles_mode', None):
+                            self.grid._show_labels = not self.grid._show_labels
+                            self.grid.refresh()
+                return
+
+            if action.action == 'enter':
+                # Enter tap cycles instrument; enter hold advances loop state.
+                if self._enter_hold.fired:
+                    if not action.is_down:
+                        self._enter_hold.on_up()
+                    return
+                if action.is_down and not action.is_repeat:
+                    self._space_hold.on_other_key()
+                    self._enter_hold.on_down(self.set_timer, self._on_enter_hold_fired)
+                elif not action.is_down:
+                    if self._enter_hold.on_up():
+                        # Tap: cycle instrument
+                        self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
+                        _inst_id, inst_name = INSTRUMENTS[self._instrument_index]
+                        if self.grid:
+                            self.grid.set_instrument(self._instrument_index)
+                        if self._header:
+                            self._header.update_instrument(inst_name)
+                        self.app.clear_notifications()
+                        self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
                 return
 
             if action.is_down:
-                # Any other control key: cancel space hold
+                # Any other control key: cancel pending holds
                 self._space_hold.on_other_key()
+                self._enter_hold.on_other_key()
 
                 # Escape: stop loop if active
                 if action.action == 'escape':
@@ -1292,8 +1333,13 @@ class MusicMode(Container, can_focus=True):
                         self.app._escape_consumed_by_mode = True
                     return
 
-                # Tab switches mode
+                # Tab: stop loop if active, otherwise switch mode
                 if action.action == 'tab':
+                    if self._loop.state != IDLE:
+                        self._stop_loop()
+                        self.app.clear_notifications()
+                        self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+                        return
                     self._letters_mode = not self._letters_mode
                     if self._header:
                         self._header.update_mode(self._letters_mode)
@@ -1303,22 +1349,17 @@ class MusicMode(Container, can_focus=True):
                     self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                     return
 
-                # Enter cycles instruments
-                if action.action == 'enter':
-                    self._instrument_index = (self._instrument_index + 1) % len(INSTRUMENTS)
-                    inst_id, inst_name = INSTRUMENTS[self._instrument_index]
-                    if self.grid:
-                        self.grid.set_instrument(self._instrument_index)
-                    if self._header:
-                        self._header.update_instrument(inst_name)
-                    self.app.clear_notifications()
-                    self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
-                    return
-
-        # Left/Right: cycle key (animated slide). Up: toggle note name
-        # labels on/off. Down: unbound.
+        # Arrows: shift key (Left/Right). Up/Down unbound. While a loop is
+        # active, any arrow stops the loop instead — the easy-out for kids
+        # who got stuck.
         if isinstance(action, NavigationAction):
             self._space_hold.on_other_key()
+            self._enter_hold.on_other_key()
+            if self._loop.state != IDLE:
+                self._stop_loop()
+                self.app.clear_notifications()
+                self.app.notify(self.app.caps_text("Loop stopped"), timeout=1.0)
+                return
             d = action.direction
             if d in ('left', 'right'):
                 step = 1 if d == 'right' else -1
@@ -1327,9 +1368,6 @@ class MusicMode(Container, can_focus=True):
                     self.grid.shift_root(self._root_index, step)
                 if self._header:
                     self._header.update_pitch(self._root_index)
-            elif d in ('up', 'down') and self.grid:
-                self.grid._show_labels = not self.grid._show_labels
-                self.grid.refresh()
             return
 
         # Character keys: play sound, cycle color, record into loop if active

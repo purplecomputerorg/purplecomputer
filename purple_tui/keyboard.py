@@ -995,6 +995,12 @@ class KeyboardStateMachine:
             actions.append(ControlAction(action='space', is_down=False))
             return actions
 
+        # Handle Enter release (needed by music room's hold-Enter loop control).
+        # All other enter consumers gate on action.is_down.
+        if keycode == KeyCode.KEY_ENTER:
+            actions.append(ControlAction(action='enter', is_down=False))
+            return actions
+
         # Handle other control key releases
         if keycode == KeyCode.KEY_BACKSPACE:
             actions.append(ControlAction(action='backspace', is_down=False))

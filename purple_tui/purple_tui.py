@@ -104,7 +104,14 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     at the left edge.
     """
     bar_color = _border_bar_color(active_theme)
-    interior = VIEWPORT_WIDTH - 2 - 2  # border (2) + subtitle padding (1 each side)
+    # Textual draws: corner(1) + pad(1) + subtitle + pad(1) + corner(1) on each
+    # row, leaving (width - 4) cells of subtitle space. PUA glyphs render as
+    # 2 terminal cells but Rich measures them as 1, so use display_len for
+    # gap math AND subtract one extra cell per icon used so the rendered
+    # string never exceeds the available subtitle span.
+    interior = VIEWPORT_WIDTH - 4
+    excess = (display_len(left or "") - len(left or "")) + (display_len(right or "") - len(right or ""))
+    interior -= excess
     parts: list[str] = []
     used = 0
     if left:
@@ -112,14 +119,12 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
         used += display_len(left)
     if right:
         right_w = display_len(right)
-        gap = max(0, interior - used - right_w)
-        if gap:
-            parts.append(f"[{bar_color}]{'━' * gap}[/]")
+        gap = max(1, interior - used - right_w)
+        parts.append(f"[{bar_color}]{'━' * gap}[/]")
         parts.append(right)
     elif left:
-        gap = max(0, interior - used)
-        if gap:
-            parts.append(f"[{bar_color}]{'━' * gap}[/]")
+        gap = max(1, interior - used)
+        parts.append(f"[{bar_color}]{'━' * gap}[/]")
     return "".join(parts)
 
 
@@ -1596,11 +1601,10 @@ class PurpleApp(App):
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
                     if kind == 'loop':
                         active_hint = f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}"
+                        viewport.border_subtitle = _spanning_subtitle(active_hint, None, self.active_theme)
                     else:
                         active_hint = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
-                    # Right-anchor the active hint so it lines up with the
-                    # idle right-anchored hint position.
-                    viewport.border_subtitle = _spanning_subtitle(None, active_hint, self.active_theme)
+                        viewport.border_subtitle = _spanning_subtitle(None, active_hint, self.active_theme)
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False

@@ -828,9 +828,14 @@ class MusicMode(Container, can_focus=True):
 
     #example-hint {
         dock: bottom;
-        height: 1;
+        height: auto;
         text-align: center;
         color: $text-muted;
+    }
+
+    #example-hint.loop-active {
+        background: $surface-lighten-1;
+        padding: 0 1;
     }
 
     #noscreen-label {
@@ -1147,6 +1152,7 @@ class MusicMode(Container, can_focus=True):
         except Exception:
             return
         state = self._loop.state
+        hint.set_class(state != IDLE, "loop-active")
 
         if state == IDLE:
             text = "Try pressing letters and numbers!"
@@ -1154,7 +1160,7 @@ class MusicMode(Container, can_focus=True):
                 hint.set_hint(f"[dim]{text}[/]")
                 return
             space_hint = "Space: show notes"
-            enter_hint = "Enter: instrument  ·  Hold Enter: record a loop"
+            enter_hint = "Enter: instrument    Hold Enter: record a loop"
             hint.set_hint(f"[dim]{text}    {space_hint}    {enter_hint}[/]")
 
         elif state == RECORDING:
@@ -1165,8 +1171,10 @@ class MusicMode(Container, can_focus=True):
             bar = "█" * filled + "░" * empty
             secs = int(remaining)
             color = "bold dark_orange" if remaining <= 5 else "bold red"
-            action = "Hold Enter to play it back  ·  Esc to cancel"
-            hint.set_hint(f"[{color}]● RECORDING  {secs}s left[/]  {bar}  [dim]{action}[/]")
+            head = f"[{color}]● Recording, {secs}s left[/]"
+            mid = f"[{color}]{bar}[/]"
+            tail = "[dim]Play any keys    Hold Enter when done    Esc to cancel[/]"
+            hint.set_hint(f"{head}\n{mid}\n{tail}")
 
         elif state == LOOPING:
             progress = self._loop.loop_progress()
@@ -1175,8 +1183,10 @@ class MusicMode(Container, can_focus=True):
             if pos < PROGRESS_BLOCKS:
                 bar_chars[pos] = "█"
             bar = "".join(bar_chars)
-            action = "Play any keys to layer in  ·  Hold Enter to stop"
-            hint.set_hint(f"[bold red]🔁 LOOPING[/]  {bar}  [dim]{action}[/]")
+            head = "[bold red]🔁 Looping and recording[/]"
+            mid = f"[bold red]{bar}[/]"
+            tail = "[dim]Play on top    Hold Enter to stop    Tab or Esc to exit[/]"
+            hint.set_hint(f"{head}\n{mid}\n{tail}")
 
     # -- Core key handling ---------------------------------------------------
 

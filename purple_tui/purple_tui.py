@@ -87,6 +87,28 @@ from .repl_panel import ReplCommandSubmitted, ReplPanelClosed, ReplPanelToggleRe
 boot_log.heartbeat("all purple_tui imports done")
 
 
+def _viewport_subtitle(room: 'Room', code_panel_enabled: bool) -> str:
+    """Build the bottom-border hint text for the viewport.
+
+    Music room shows two hints anchored to opposite edges: "Hold Enter:
+    record a loop" on the left, "Hold Space: write code!" on the right.
+    Art room shows only the right (code) hint.
+    """
+    if not code_panel_enabled:
+        return ""
+    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+    if room == Room.MUSIC:
+        left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
+        # Border subtitle is left-aligned in viewport CSS; pad between the
+        # two hints so the right one lands at the far edge of the border.
+        # Interior width = VIEWPORT_WIDTH - 2 (border) - 2 (subtitle padding).
+        gap = max(2, VIEWPORT_WIDTH - 2 - 2 - display_len(left) - display_len(right))
+        return left + " " * gap + right
+    if room == Room.ART:
+        return right
+    return ""
+
+
 class Room(Enum):
     """The 3 core rooms of Purple Computer"""
     PLAY = 1     # Math and emoji REPL
@@ -682,6 +704,7 @@ class PurpleApp(App):
         height: __VIEWPORT_HEIGHT__;
         border: heavy $primary;
         background: $surface;
+        border-subtitle-align: left;
     }
 
     #room-indicator {
@@ -865,8 +888,7 @@ class PurpleApp(App):
         # Set viewport border subtitle for music/art rooms
         try:
             viewport = self.query_one("#viewport")
-            if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
-                viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
+            viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled)
         except NoMatches:
             pass
 
@@ -1539,10 +1561,7 @@ class PurpleApp(App):
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False
                     indicator.display = True
-                    if self.active_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
-                        viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
-                    else:
-                        viewport.border_subtitle = ""
+                    viewport.border_subtitle = _viewport_subtitle(self.active_room, self._code_panel_enabled)
         except NoMatches:
             pass
 
@@ -2051,10 +2070,7 @@ class PurpleApp(App):
             self._close_repl_panel()
             try:
                 viewport = self.query_one("#viewport")
-                if new_room in (Room.MUSIC, Room.ART) and self._code_panel_enabled:
-                    viewport.border_subtitle = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
-                else:
-                    viewport.border_subtitle = ""
+                viewport.border_subtitle = _viewport_subtitle(new_room, self._code_panel_enabled)
             except NoMatches:
                 pass
 

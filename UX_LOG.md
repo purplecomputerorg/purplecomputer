@@ -334,3 +334,4 @@ Brief descriptions of user experience changes, newest first.
 - **Arrow held behavior**: When an arrow is held, don't auto-advance in other direction when painting
 - **Rename modes**: Renamed modes for clarity (Music, Play, Paint)
 - **Add gutter**: Added gutter around canvas so cursor ring can extend to edges
+- **Loop panel exit hint**: Show "Esc: exit" in music room loop panel during recording and looping

@@ -92,7 +92,7 @@ class LoopPanel(Vertical):
         self._set_lines(
             head=f"[bold red]● Recording, {remaining_secs}s left[/]",
             bar=bar,
-            action="Play any keys    Space: play it back",
+            action="Play any keys    Space: play it back    Esc: exit",
         )
 
     def set_looping(self, progress: float) -> None:
@@ -105,7 +105,7 @@ class LoopPanel(Vertical):
         self._set_lines(
             head=f"[bold red]{ICON_LOOP} Looping and recording[/]",
             bar=bar,
-            action="Play on top",
+            action="Play on top    Esc: exit",
         )
 
     def _set_lines(self, *, head: str, bar: str, action: str) -> None:

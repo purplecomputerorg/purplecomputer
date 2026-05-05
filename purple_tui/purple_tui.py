@@ -126,8 +126,10 @@ def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, activ
     terminal cells but Rich measures them as 1, leaving the right hint
     offset from the corner relative to single-hint cases.
     """
-    right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}" if code_panel_enabled else None
+    right = None
     left = None
+    if room in (Room.MUSIC, Room.ART) and code_panel_enabled:
+        right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}"
     if room == Room.MUSIC and music_looping_enabled:
         left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
     _set_viewport_hints(viewport, left=left, right=right, active_theme=active_theme)

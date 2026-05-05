@@ -722,7 +722,7 @@ class MusicGrid(Widget):
                 )
                 # Wave-front pulse: brighten cells the slide is currently
                 # passing through. Visual scaffolding for the key shift.
-                if at_wavefront and self.color_state[key] == -1:
+                if at_wavefront:
                     bg_color = "#5a3875"
 
             # Determine text color via WCAG black-or-white contrast against bg.

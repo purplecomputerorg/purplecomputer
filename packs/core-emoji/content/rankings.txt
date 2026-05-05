@@ -204,7 +204,6 @@ no
 wave
 hug
 clown
-poop
 lightning
 eye
 skull

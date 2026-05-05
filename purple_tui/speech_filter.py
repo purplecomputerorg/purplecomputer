@@ -153,9 +153,22 @@ def filter_speech(text: str) -> str:
                         if not any(bw in aw for aw in allowed_in_input)]
         if real_blocked:
             scrubbed = _scrub(normalized, real_blocked)
-            if len(scrubbed) >= _MIN_SCRUBBED_LEN:
-                return scrubbed
-            return ""
+            if len(scrubbed) < _MIN_SCRUBBED_LEN:
+                return ""
+            # Try removing blocked words from the original text (case-insensitive)
+            # so spacing/punctuation are preserved. This works for the normal
+            # case "say my name is <blocked>" → "say my name is".
+            scrubbed_text = text
+            for bw in real_blocked:
+                scrubbed_text = re.sub(
+                    re.escape(bw), "", scrubbed_text, flags=re.IGNORECASE
+                )
+            # If in-place removal eliminated the offending content, return it
+            # with whitespace tidied. Otherwise the blocked word spanned word
+            # boundaries (e.g. "s h i t") — fall back to the spaceless form.
+            if _normalize(scrubbed_text) == scrubbed:
+                return re.sub(r"\s+", " ", scrubbed_text).strip()
+            return scrubbed
 
     # Check individual words (for multi-word input like "say <blocked>")
     words = re.split(r"[^a-zA-Z]+", text.lower())

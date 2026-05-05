@@ -4,7 +4,7 @@ Generate fun sounds for Purple Computer Music Mode
 
 Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
-- Xylophone: bright, clear, sparkly
+- Organ: sustained, drawbar additive synthesis
 - Ukulele: warm, plucky, cheerful
 - Music Box: sparkly, bell-like, magical
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
@@ -64,8 +64,41 @@ def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,
     print(f"  Created {label}")
 
 
-def finalize_samples(samples: list[float], peak_level: float = 0.75) -> list[int]:
-    """Normalize and convert to int16."""
+def loudness_compensated_peak(freq: float, base: float = 0.7) -> float:
+    """Push low-pitched samples closer to digital ceiling.
+
+    The ear is much less sensitive below ~500Hz (Fletcher-Munson / ISO 226).
+    Even on good speakers, a 100Hz note at the same digital level as a
+    1kHz note sounds substantially quieter. Compensate by letting low
+    samples normalize hotter — up to ~+2.5dB at the lowest octaves.
+    """
+    if freq >= 500:
+        return base
+    boost = 1.0 + 0.4 * (1 - max(freq, 80) / 500)
+    return min(0.95, base * boost)
+
+
+def low_freq_partial_boost(freq: float) -> float:
+    """Scale upper-partial amplitudes for low-pitched notes.
+
+    A low note's upper partials sit in the ear's most sensitive band
+    (1–4kHz). Boosting them adds perceived loudness without changing pitch
+    or smearing the fundamental. Returns 1.0 for notes above 250Hz.
+    """
+    if freq >= 250:
+        return 1.0
+    return min(2.5, 250 / max(freq, 80))
+
+
+def finalize_samples(samples: list[float], peak_level: float = 0.75,
+                     freq: float | None = None) -> list[int]:
+    """Normalize and convert to int16.
+
+    If freq is provided, scale peak_level via loudness_compensated_peak so
+    low-frequency samples normalize hotter to offset ear insensitivity.
+    """
+    if freq is not None:
+        peak_level = loudness_compensated_peak(freq, base=peak_level)
     peak = max(abs(s) for s in samples) or 1
     return [int(s / peak * peak_level * 32767) for s in samples]
 
@@ -128,11 +161,15 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
 
-    # (ratio, amp, decay_rate). 4.0 is the defining marimba partial.
+    # (ratio, amp, decay_rate). 4.0 is the defining marimba partial — the
+    # woody "knock" that makes a marimba sound like itself rather than a
+    # low sine. For low-pitched notes the upper partials get extra gain
+    # because the fundamental sits below the ear's sensitive band.
+    boost = low_freq_partial_boost(frequency)
     bar_partials = [
         (1.0, 1.0, 5.5),
-        (4.0, 0.35, 11.0),
-        (9.2, 0.08, 18.0),
+        (4.0, 0.5 * boost, 11.0),
+        (9.2, 0.08 * boost, 18.0),
     ]
 
     samples = []
@@ -176,56 +213,63 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.7)
+    return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
-def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
+def generate_organ(frequency: float, duration: float = 0.55) -> list[int]:
     """
-    Bright, clear xylophone. Hard mallet on wooden/synthetic bars.
-    Sharp attack, prominent high partials, quick decay.
+    Drawbar organ (Hammond-style additive synthesis).
+
+    A real Hammond builds tones by mixing nine sine "drawbars" at fixed
+    pitch ratios (sub-octave, fifth, fundamental, octave, etc.). We use a
+    smaller drawbar set tuned for clarity at small volumes, plus a very
+    light Leslie-style tremolo for life. Sustained envelope (no decay
+    during the note, smooth release at the tail) is the key contrast
+    against the percussive marimba/musicbox/uke samples.
     """
     sample_rate = 44100
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
     samples = []
-    fade_out_duration = 0.1
+    fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
 
-    # Xylophone bar partials (slightly inharmonic, brighter than marimba)
-    bar_partials = [
-        (1.0, 1.0, 4.0),      # fundamental, strong, moderate decay
-        (3.0, 0.45, 6.0),     # 3rd partial prominent (characteristic of xylophone)
-        (6.0, 0.2, 10.0),     # high partial for brightness
-        (9.9, 0.08, 16.0),    # sparkle partial, decays fast
+    # (ratio, amp). Classic drawbar registration: sub-fifth dropped,
+    # fundamental + octave dominant, fifth and octave-up for color, top
+    # octaves for sparkle. Sums to <1 before normalization.
+    drawbars = [
+        (0.5, 0.35),   # 16': sub-octave warmth
+        (1.0, 1.0),    # 8':  fundamental
+        (1.5, 0.25),   # 5⅓': fifth
+        (2.0, 0.7),    # 4':  octave
+        (3.0, 0.18),   # 2⅔': octave + fifth
+        (4.0, 0.35),   # 2':  two octaves
+        (6.0, 0.10),   # 1⅓': two octaves + fifth
+        (8.0, 0.18),   # 1':  three octaves
     ]
+
+    # Leslie-style amplitude tremolo, ~5.5 Hz, gentle depth.
+    leslie_rate = 5.5
+    leslie_depth = 0.06
 
     for i in range(num_samples):
         t = i / sample_rate
-        sample = 0
+        sample = 0.0
 
-        # Very sharp mallet attack with bright click
-        if t < 0.003:
-            attack = t / 0.003
-        elif t < 0.015:
-            # Brief overshoot for hard-mallet "click"
-            attack = 1.0 + 0.25 * math.exp(-(t - 0.003) * 300)
+        # Sustained attack: 25ms ramp, no decay during the note.
+        if t < 0.025:
+            attack = t / 0.025
         else:
             attack = 1.0
 
-        for ratio, amp, decay_rate in bar_partials:
+        for ratio, amp in drawbars:
             f = frequency * ratio
             if f >= nyquist:
                 continue
-            partial_decay = math.exp(-t * decay_rate)
-            sample += amp * partial_decay * math.sin(2 * math.pi * f * t)
+            sample += amp * math.sin(2 * math.pi * f * t)
 
-        # High-frequency click transient (mallet impact)
-        click_freq = frequency * 12
-        if click_freq < nyquist:
-            click = 0.15 * math.exp(-t * 80) * math.sin(2 * math.pi * click_freq * t)
-            sample += click
-
-        sample *= attack
+        leslie = 1.0 + leslie_depth * math.sin(2 * math.pi * leslie_rate * t)
+        sample *= attack * leslie
 
         if t > fade_out_start:
             fade_progress = (t - fade_out_start) / fade_out_duration
@@ -233,7 +277,7 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.7)
+    return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
 def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
@@ -363,7 +407,7 @@ def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
         progress = (i - fade_start_sample) / fade_samples
         samples[i] *= 0.5 * (1 + math.cos(math.pi * progress))
 
-    return finalize_samples(samples, peak_level=0.7)
+    return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
 def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
@@ -381,12 +425,14 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
     # Inharmonic partials of a music-box comb tooth. Real comb teeth: the
     # fundamental rings, the inharmonic upper partials die within ~100ms,
     # which is what gives a music box its "ping then pure tone" character.
-    # (ratio, amp, decay_rate)
+    # (ratio, amp, decay_rate). Upper-partial amps scale up for low notes
+    # so the comb's mid-range "sparkle" carries the perceived loudness.
+    boost = low_freq_partial_boost(frequency)
     box_partials = [
         (1.0, 1.0, 3.5),
-        (2.76, 0.4, 12.0),
-        (5.4, 0.2, 18.0),
-        (8.93, 0.1, 24.0),
+        (2.76, 0.4 * boost, 12.0),
+        (5.4, 0.2 * boost, 18.0),
+        (8.93, 0.1 * boost, 24.0),
     ]
     sparkle_ratio = 12.1
 
@@ -421,7 +467,7 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
 
         samples.append(sample)
 
-    return finalize_samples(samples, peak_level=0.7)
+    return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
@@ -676,7 +722,7 @@ def main():
     # Instrument generators: (directory_name, generator_function)
     instruments = [
         ("marimba", generate_marimba),
-        ("xylophone", generate_xylophone),
+        ("organ", generate_organ),
         ("ukulele", generate_ukulele),
         ("musicbox", generate_music_box),
     ]

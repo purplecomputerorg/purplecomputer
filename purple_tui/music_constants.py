@@ -25,7 +25,7 @@ COLORS = [COLOR_KEYCAP, "#5a3875", None]
 # Enter cycles through these in Music mode
 INSTRUMENTS = [
     ("marimba", "Marimba"),
-    ("xylophone", "Xylophone"),
+    ("organ", "Organ"),
     ("ukulele", "Ukulele"),
     ("musicbox", "Music Box"),
 ]

@@ -25,7 +25,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import math
-from scripts.generate_sounds import generate_marimba, generate_xylophone, generate_ukulele, generate_music_box, finalize_samples
+from scripts.generate_sounds import generate_marimba, generate_organ, generate_ukulele, generate_music_box, finalize_samples
 
 FREQ = 261.63  # Middle C
 
@@ -73,7 +73,7 @@ def main():
 
     # Generate raw samples for each instrument
     raw_marimba = generate_marimba(FREQ)
-    raw_xylo = generate_xylophone(FREQ)
+    raw_organ = generate_organ(FREQ)
     raw_uke = generate_ukulele(FREQ)
     raw_mbox = generate_music_box(FREQ)
 
@@ -109,8 +109,8 @@ def main():
     tests.append((ogg, "Marimba OGG q3 (peak 0.5) [ORIGINAL]"))
 
     # Other instruments at current settings
-    _, ogg = make_pair("xylo_0.7_q3", raw_xylo, 0.7, 3)
-    tests.append((ogg, "Xylophone OGG q3 (peak 0.7)"))
+    _, ogg = make_pair("organ_0.7_q3", raw_organ, 0.7, 3)
+    tests.append((ogg, "Organ OGG q3 (peak 0.7)"))
 
     _, ogg = make_pair("uke_0.7_q3", raw_uke, 0.7, 3)
     tests.append((ogg, "Ukulele OGG q3 (peak 0.7)"))
@@ -179,7 +179,7 @@ def main():
 
     # Load all 4 instruments as OGG for mixed test
     inst_oggs = {}
-    for name, gen_func in [("marimba", generate_marimba), ("xylophone", generate_xylophone),
+    for name, gen_func in [("marimba", generate_marimba), ("organ", generate_organ),
                            ("ukulele", generate_ukulele), ("musicbox", generate_music_box)]:
         notes = []
         for note, freq in [("C", 261.63), ("E", 329.63), ("G", 392.00), ("A", 440.00)]:

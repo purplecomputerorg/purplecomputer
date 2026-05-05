@@ -68,7 +68,7 @@ boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
-    RoomAction, ControlAction, CapsLockAction, LongHoldAction,
+    RoomAction, ControlAction, CapsLockAction,
     InputFloodGuard,
 )
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
@@ -1284,12 +1284,6 @@ class PurpleApp(App):
             self.keyboard.handle_caps_lock_press()
             return
 
-        if isinstance(action, LongHoldAction):
-            if action.key == 'escape':
-                # Long-hold escape handled via RoomAction('parent')
-                pass
-            return
-
         # Handle escape key for long-hold detection and tap-to-pick
         # Only start timer on fresh press, not on repeat events (which would restart the timer)
         if isinstance(action, ControlAction) and action.action == 'escape':
@@ -1386,10 +1380,16 @@ class PurpleApp(App):
             self._escape_hold_timer = None
 
     def _check_escape_hold(self) -> None:
-        """Called by timer after 1s. Trigger parent mode if escape still held."""
+        """Called by timer after 1s. Trigger parent mode if escape still held.
+
+        If the room picker is currently open, dismiss it first so parent menu
+        replaces it cleanly instead of stacking on top.
+        """
         if self._keyboard_state_machine.check_escape_hold():
-            self._escape_triggered_long_hold = True  # Prevent picker on release
+            self._escape_triggered_long_hold = True  # Prevent picker open/close on release
             self._cancel_escape_hold_timer()
+            if len(self.screen_stack) > 1 and isinstance(self.screen, RoomPickerScreen):
+                self.screen.dismiss(None)
             self.action_parent_menu()
 
     def _check_backslash_hold(self) -> None:

@@ -1412,6 +1412,9 @@ class MusicMode(Container, can_focus=True):
                     self.grid.shift_root(self._root_index, step)
                 if self._header:
                     self._header.update_pitch(self._root_index)
+                root_name = CHROMATIC_NOTE_NAMES[FRIENDLY_KEYS[self._root_index]]
+                self.app.clear_notifications()
+                self.app.notify(f"{ICON_MUSIC} Key {root_name}", timeout=1.5)
             return
 
         # Character keys: play sound, cycle color, record into loop if active.

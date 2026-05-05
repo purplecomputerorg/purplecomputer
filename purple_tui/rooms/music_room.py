@@ -289,7 +289,10 @@ class MusicRoomHeader(Static):
             return ""
 
         if getattr(self.app, '_littles_mode', None):
-            return f"[bold]{ICON_MUSIC} {instrument_label}[/]"
+            inner = f" {ICON_MUSIC} {instrument_label} "
+            width = self.size.width or 134
+            left_pad = max(0, (width - len(inner)) // 2)
+            return f"{' ' * left_pad}[bold]{inner}[/]"
 
         letters_label = "Letters"
 
@@ -1136,7 +1139,7 @@ class MusicMode(Container, can_focus=True):
             hint = None
         if hint is not None:
             if getattr(self.app, '_littles_mode', None):
-                hint.set_hint("[dim]Try pressing letters and numbers![/]")
+                hint.set_hint("")
             else:
                 space_hint = "Space: show notes"
                 arrows_hint = "Arrows: switch key"
@@ -1352,6 +1355,8 @@ class MusicMode(Container, can_focus=True):
 
             if action.action == 'enter':
                 # Enter tap cycles instrument; enter hold advances loop state.
+                if getattr(self.app, '_littles_mode', None):
+                    return
                 if self._enter_hold.fired:
                     if not action.is_down:
                         self._enter_hold.on_up()
@@ -1401,6 +1406,8 @@ class MusicMode(Container, can_focus=True):
         # and Esc remain the easy-outs.
         if isinstance(action, NavigationAction):
             if action.is_repeat:
+                return
+            if getattr(self.app, '_littles_mode', None):
                 return
             self._space_hold.on_other_key()
             self._enter_hold.on_other_key()

@@ -19,6 +19,7 @@ import sys
 import select
 import threading
 import termios
+import time
 import json
 from pathlib import Path
 
@@ -691,6 +692,171 @@ def _get_menu_items() -> list:
     return items
 
 
+# InstallNameScreen dismiss values
+_INSTALL_NAME_CANCELLED = object()  # User pressed Esc
+
+_NAME_MAX = 24  # Max characters persisted (keeps title bar from overflowing)
+
+
+class InstallNameScreen(PurpleModal):
+    """Optional name prompt shown before the install confirmation.
+
+    Returns the trimmed name (possibly empty for Skip) or _INSTALL_NAME_CANCELLED.
+    Empty string means "proceed without a name".
+    """
+
+    CSS = """
+    #modal-dialog {
+        width: 50;
+        padding: 1 2;
+        max-height: 22;
+    }
+
+    #modal-title {
+        color: $primary;
+    }
+
+    #install-name-desc {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin: 1 0;
+    }
+
+    #install-name-field {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 1 0;
+    }
+
+    #install-name-field.focused {
+        border: heavy $accent;
+    }
+
+    .install-btn {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 1 1 0 1;
+    }
+
+    .install-btn.selected {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._name = ""
+        self._focus_index = 0  # 0 = input, 1 = Done, 2 = Skip
+
+    def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        with Vertical(id="modal-dialog"):
+            yield Static(caps("Name this computer"), id="modal-title")
+            yield Static(
+                "Optional. e.g. Mia's Computer",
+                id="install-name-desc",
+            )
+            yield Static("", id="install-name-field")
+            yield Static(caps("Done"), id="btn-name-done", classes="install-btn")
+            yield Static(caps("Skip"), id="btn-name-skip", classes="install-btn")
+            yield Static(caps("Type a name. ▲ ▼ switch. Enter confirm. Esc cancel."), id="modal-hint")
+
+    def on_mount(self) -> None:
+        self._update_ui()
+
+    def _update_ui(self) -> None:
+        try:
+            field = self.query_one("#install-name-field", Static)
+            done_btn = self.query_one("#btn-name-done", Static)
+            skip_btn = self.query_one("#btn-name-skip", Static)
+        except Exception:
+            return
+
+        # Show input value with a cursor when focused.
+        cursor = "█" if self._focus_index == 0 else " "
+        field.update(self._name + cursor if self._name or self._focus_index == 0 else "(no name)")
+        if self._focus_index == 0:
+            field.add_class("focused")
+        else:
+            field.remove_class("focused")
+
+        if self._focus_index == 1:
+            done_btn.add_class("selected")
+        else:
+            done_btn.remove_class("selected")
+        if self._focus_index == 2:
+            skip_btn.add_class("selected")
+        else:
+            skip_btn.remove_class("selected")
+
+    def _confirm_done(self) -> None:
+        self.dismiss(self._name.strip()[:_NAME_MAX])
+
+    def _confirm_skip(self) -> None:
+        self.dismiss("")
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'down':
+                self._focus_index = (self._focus_index + 1) % 3
+                self._update_ui()
+            elif action.direction == 'up':
+                self._focus_index = (self._focus_index - 1) % 3
+                self._update_ui()
+            return
+
+        if isinstance(action, ControlAction) and action.is_down:
+            key = action.action
+            if key == 'escape':
+                self.dismiss(_INSTALL_NAME_CANCELLED)
+                return
+            if key == 'enter':
+                if self._focus_index == 2:
+                    self._confirm_skip()
+                else:
+                    # Input row or Done button: treat empty as Skip, otherwise Done.
+                    if self._name.strip():
+                        self._confirm_done()
+                    else:
+                        self._confirm_skip()
+                return
+            if key == 'backspace' and self._focus_index == 0 and self._name:
+                self._name = self._name[:-1]
+                self._update_ui()
+                return
+            if key == 'space' and self._focus_index == 0:
+                if len(self._name) < _NAME_MAX:
+                    self._name += " "
+                    self._update_ui()
+                return
+            return
+
+        if isinstance(action, CharacterAction):
+            if action.is_repeat:
+                return
+            if self._focus_index != 0:
+                return
+            char = action.char
+            if not char or len(self._name) >= _NAME_MAX:
+                return
+            self._name += char
+            self._update_ui()
+
+
 class InstallConfirmScreen(PurpleModal):
     """Confirmation dialog before installing Purple Computer to the internal disk."""
 
@@ -873,7 +1039,7 @@ class InstallProgressScreen(PurpleModal):
     # Max visible lines in the scroll window (leaves room for title + hint)
     _SCROLL_VISIBLE = 25
 
-    def __init__(self, **kwargs):
+    def __init__(self, computer_name: str = "", **kwargs):
         super().__init__(**kwargs)
         self._progress = 0
         self._status = "Starting..."
@@ -883,6 +1049,8 @@ class InstallProgressScreen(PurpleModal):
         self._diag_scroll_pos = 0  # Current line in auto-scroll
         self._scroll_timer = None  # Timer for auto-scroll
         self._scrolling = False  # True while auto-scrolling
+        self._computer_name = computer_name
+        self._start_time: float | None = None
 
     def refresh_caps(self) -> None:
         """Re-apply caps mode to all text in this modal."""
@@ -903,6 +1071,7 @@ class InstallProgressScreen(PurpleModal):
             self.app.inhibit_idle("install")
         except Exception:
             pass
+        self._start_time = time.monotonic()
         self._update_ui()
         threading.Thread(target=self._run_install_thread, daemon=True).start()
 
@@ -911,6 +1080,18 @@ class InstallProgressScreen(PurpleModal):
             self.app.uninhibit_idle("install")
         except Exception:
             pass
+
+    def _eta_hint(self) -> str:
+        """Rolling ETA based on elapsed time and current progress."""
+        if self._progress < 15 or self._start_time is None:
+            return "Usually under 10 minutes."
+        if self._progress >= 95:
+            return "Almost done."
+        elapsed = time.monotonic() - self._start_time
+        remaining = elapsed / self._progress * (100 - self._progress)
+        minutes = max(1, round(remaining / 60))
+        unit = "minute" if minutes == 1 else "minutes"
+        return f"About {minutes} {unit} left."
 
     def _render_bar(self, pct: int) -> str:
         filled = int(36 * pct / 100)
@@ -954,7 +1135,7 @@ class InstallProgressScreen(PurpleModal):
             title_w.update(caps("Installing Purple Computer"))
             status_w.update(self._status)
             bar_w.update(self._render_bar(self._progress))
-            hint_w.update("This takes about 10-15 minutes.")
+            hint_w.update(self._eta_hint())
 
     def _run_install_thread(self) -> None:
         """Run install.sh in a daemon thread, streaming progress to the UI.
@@ -967,7 +1148,11 @@ class InstallProgressScreen(PurpleModal):
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
             stderr=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
-            env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"},
+            env={
+                **os.environ,
+                "PURPLE_PAYLOAD_DIR": "/cdrom/purple",
+                "PURPLE_COMPUTER_NAME": self._computer_name,
+            },
         )
         buf = b""
         while proc.poll() is None and not _SENTINEL.exists():
@@ -1024,6 +1209,19 @@ class InstallProgressScreen(PurpleModal):
         clean = _ANSI_ESCAPE.sub('', text).strip()
         if clean:
             self._log_lines.append(clean)
+        if clean.startswith('[PURPLE-PV]'):
+            try:
+                pv_pct = int(clean[len('[PURPLE-PV]'):].strip())
+            except ValueError:
+                return
+            # pv emits 0-100 over the whole write phase. Map to the 12-80% span
+            # of overall progress so verify/UEFI stages still have room above.
+            display_pct = 12 + int(max(0, min(100, pv_pct)) * 0.68)
+            if display_pct > self._progress:
+                self._progress = display_pct
+                self._status = "Setting up Purple Computer..."
+                self._update_ui()
+            return
         if not clean.startswith('[PURPLE]'):
             return
         msg = clean[8:].strip()
@@ -1578,13 +1776,22 @@ class ParentMenu(PurpleModal):
         self.app.push_screen(DisplaySettingsScreen())
 
     def _install_to_disk(self) -> None:
-        """Show install confirmation, then push the progress screen."""
-        def on_confirm(confirmed: bool) -> None:
-            if confirmed:
-                self.dismiss()  # Close parent menu
-                self.app.call_later(lambda: self.app.push_screen(InstallProgressScreen()))
+        """Prompt for name, confirm, then push the progress screen."""
+        def on_name(name) -> None:
+            if name is _INSTALL_NAME_CANCELLED:
+                return  # Back to parent menu
+            chosen_name = name or ""
 
-        self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
+            def on_confirm(confirmed: bool) -> None:
+                if confirmed:
+                    self.dismiss()
+                    self.app.call_later(
+                        lambda: self.app.push_screen(InstallProgressScreen(computer_name=chosen_name))
+                    )
+
+            self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
+
+        self.app.push_screen(InstallNameScreen(), callback=on_name)
 
     def _open_support_info(self) -> None:
         """Open the Support info modal."""

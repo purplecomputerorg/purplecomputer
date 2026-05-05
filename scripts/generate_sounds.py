@@ -425,8 +425,17 @@ def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
-def generate_glockenspiel(frequency: float, duration: float = 0.7) -> list[int]:
-    """Glockenspiel: bright, metallic, inharmonic bell with long ring.
+def generate_glockenspiel(frequency: float, duration: float = 1.2) -> list[int]:
+    """Glockenspiel: bright metal bell with long shimmery ring.
+
+    Distinguishes from marimba by three things:
+    1. Long sustain — fundamental decays slowly so notes ring out for a
+       full second+ rather than the marimba's ~0.5s woody knock.
+    2. Weak fundamental, dominant 2nd partial — real glock bars are too
+       small to vibrate strongly at the fundamental, so the 2.8x partial
+       carries the perceived "bell" character.
+    3. Bright metallic ping at onset — short ~4kHz sine burst suggests a
+       hard mallet on metal, vs marimba's woody noise thock.
 
     Tuning note: the 2.8x inharmonic partial creates a false autocorrelation
     peak ~85 cents below the fundamental. The fundamental itself is correct
@@ -435,17 +444,21 @@ def generate_glockenspiel(frequency: float, duration: float = 0.7) -> list[int]:
     sample_rate = 44100
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
-    fade_out = 0.12
+    fade_out = 0.18
     fade_start = duration - fade_out
     boost = low_freq_partial_boost(frequency)
-    # Bell-like inharmonic ratios; long rings on lower partials.
+    # Inharmonic ratios with the 2nd partial louder than the fundamental.
+    # Decay rates roughly halved vs the older marimba-shaped version so the
+    # bell rings out instead of knocking.
     partials = [
-        (1.0, 1.0, 2.5),
-        (2.8, 0.55 * boost, 4.0),
-        (5.42, 0.3 * boost, 6.0),
-        (8.6, 0.18 * boost, 10.0),
-        (11.7, 0.1 * boost, 14.0),
+        (1.0, 0.6, 0.8),
+        (2.8, 0.9 * boost, 2.0),
+        (5.42, 0.45 * boost, 3.0),
+        (8.6, 0.22 * boost, 5.0),
+        (11.7, 0.12 * boost, 7.0),
     ]
+    ping_freq = 4000.0
+    ping_duration = 0.005
     samples = []
     for i in range(num_samples):
         t = i / sample_rate
@@ -459,6 +472,9 @@ def generate_glockenspiel(frequency: float, duration: float = 0.7) -> list[int]:
             if f >= nyquist:
                 continue
             s += amp * math.exp(-t * dec) * math.sin(2 * math.pi * f * t)
+        if t < ping_duration and ping_freq < nyquist:
+            ping_env = math.exp(-t / (ping_duration / 4))
+            s += 0.35 * ping_env * math.sin(2 * math.pi * ping_freq * t)
         s *= attack
         if t > fade_start:
             p = (t - fade_start) / fade_out

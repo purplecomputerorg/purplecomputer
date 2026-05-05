@@ -31,7 +31,17 @@ if [ -z "$(git status --short)" ]; then
   exit 0
 fi
 
-git add -A
+# Stage tracked changes, then add untracked files while skipping character/block
+# devices. Bubblewrap-style sandboxes (e.g. Claude Code's) bind /dev/null over
+# protected paths inside their mount namespace, which surfaces as untracked
+# device-node entries that git refuses to add.
+git add -u
+while IFS= read -r f; do
+  if [ -c "$f" ] || [ -b "$f" ]; then
+    continue
+  fi
+  git add -- "$f"
+done < <(git ls-files --others --exclude-standard)
 
 git commit -m "$MSG"
 

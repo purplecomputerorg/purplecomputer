@@ -137,6 +137,11 @@ PAINT_STRENGTH = 0.7
 # Hold duration for backspace clear (in seconds)
 BACKSPACE_HOLD_CLEAR_TIME = 1.0
 
+# After this many consecutive same-direction arrow repeats, snap the cursor
+# to that edge instead of stepping. Lets a held arrow escape a corner without
+# the kid having to know how many times to tap.
+ARROW_HOLD_REPEAT_THRESHOLD = 5
+
 # Gutter size (cells around content where cursor ring can extend)
 GUTTER = 1
 
@@ -300,6 +305,18 @@ class ArtCanvas(Widget, can_focus=True):
         self._line_cache: dict[int, Strip] = {}
         self._dirty_lines: set[int] = set()
         self._all_dirty = True  # Start fully dirty
+
+        # Smart up/down: column the most recent stamp was placed at, so a
+        # subsequent ↑/↓ can return to it (lets `a, ↓, a, ↓, a` draw a
+        # vertical line instead of a diagonal). Cleared by any non-stamp,
+        # non-↑↓ action.
+        self._post_stamp_x: int | None = None
+
+        # Hold-arrow-to-edge: track consecutive same-direction repeats and
+        # snap to the edge once threshold passes.
+        self._arrow_repeat_dir: str | None = None
+        self._arrow_repeat_count: int = 0
+        self._arrow_hold_snapped: bool = False
 
     def on_mount(self) -> None:
         """Start cursor blinking when canvas is mounted."""
@@ -703,6 +720,32 @@ class ArtCanvas(Widget, can_focus=True):
         if self._cursor_y < self.canvas_height - 1:
             self._cursor_y += 1
 
+    def _advance_after_stamp(self, direction: str) -> None:
+        """Advance cursor after stamping a character or paint blob.
+
+        Wraps at the right edge to column 0 of the next row so kids can
+        keep typing past the right side without getting stuck. Records the
+        stamp column so a subsequent ↑/↓ can snap back to it (smart vertical
+        line drawing).
+        """
+        stamp_x = self._cursor_x
+        if direction == 'right' and self._cursor_x >= self.canvas_width - 1:
+            self._carriage_return()
+        else:
+            self._move_in_direction(direction)
+        self._post_stamp_x = stamp_x
+
+    def _snap_to_edge(self, direction: str) -> None:
+        """Jump cursor to the edge in the given direction (hold-arrow-to-edge)."""
+        if direction == 'left':
+            self._cursor_x = 0
+        elif direction == 'right':
+            self._cursor_x = self.canvas_width - 1
+        elif direction == 'up':
+            self._cursor_y = 0
+        elif direction == 'down':
+            self._cursor_y = self.canvas_height - 1
+
     def execute_logo_command(self, action: str, direction: str, distance: int) -> None:
         """Execute a Logo-style command: move or paint N steps in a direction."""
         self._mark_cursor_dirty()
@@ -779,14 +822,14 @@ class ArtCanvas(Widget, can_focus=True):
         """Paint a colored block for a character (like interactive paint mode).
 
         Sets the key's color as both fg and bg with BRUSH_CHAR, then advances
-        in the given direction. Stops at canvas edges (no wrapping).
+        in the given direction. Wraps at the right edge to the next row.
         Used by the code runner when paint mode is on.
         """
         self._mark_cursor_dirty()
         self._last_key_char = char.lower()
         self._last_key_color = get_key_color(char)
         self._paint_at_cursor()
-        self._move_in_direction(direction)
+        self._advance_after_stamp(direction)
         self._mark_cursor_dirty()
         self.refresh()
 
@@ -809,8 +852,8 @@ class ArtCanvas(Widget, can_focus=True):
             text_fg = self._get_text_fg()
         self._set_cell(pos, char, text_fg, new_bg)
 
-        # Move cursor in the specified direction (stop at edge, no wrapping)
-        self._move_in_direction(direction)
+        # Move cursor in the specified direction (right wraps to next row)
+        self._advance_after_stamp(direction)
 
         self._mark_cursor_dirty()  # New cursor position
         self._restart_blink()
@@ -910,6 +953,13 @@ class ArtCanvas(Widget, can_focus=True):
         This receives high-level actions (CharacterAction, NavigationAction, etc.)
         instead of raw key events. Key up/down detection works reliably via evdev.
         """
+        # Smart ↑/↓ uses the column of the most recent stamp; this is the
+        # only place that reads it. Clear up front so any path that doesn't
+        # explicitly set it (most actions) invalidates the snap. Stamp paths
+        # re-set it via _advance_after_stamp.
+        prior_post_stamp_x = self._post_stamp_x
+        self._post_stamp_x = None
+
         # Handle control actions (space, tab, backspace, enter, escape)
         if isinstance(action, ControlAction):
             if action.action == 'space':
@@ -921,7 +971,7 @@ class ArtCanvas(Widget, can_focus=True):
                         self._start_space_down()
                         # If an arrow key is held, advance in that direction after stamping
                         if action.arrow_held:
-                            self._move_in_direction(action.arrow_held)
+                            self._advance_after_stamp(action.arrow_held)
                         self._mark_cursor_dirty()
                         self._restart_blink()
                         self.refresh()
@@ -930,7 +980,7 @@ class ArtCanvas(Widget, can_focus=True):
                         pos = (self._cursor_x, self._cursor_y)
                         existing_bg = self._get_cell_bg(pos)
                         self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
-                        self._move_cursor_right()
+                        self._advance_after_stamp('right')
                         self._mark_cursor_dirty()
                         self._restart_blink()
                         self.refresh()
@@ -945,12 +995,13 @@ class ArtCanvas(Widget, can_focus=True):
                 return
 
             if action.action == 'enter' and action.is_down:
-                # Move down one line, keeping column position (for vertical drawing)
-                self._mark_cursor_dirty()
-                self._move_cursor_down()
-                self._mark_cursor_dirty()
-                self._restart_blink()
-                self.refresh()
+                # Enter is an alias for the down arrow so kids who reach for
+                # the big labeled key get the same smart-snap behavior as ↓.
+                self._post_stamp_x = prior_post_stamp_x
+                await self.handle_keyboard_action(NavigationAction(
+                    direction='down',
+                    is_repeat=action.is_repeat,
+                ))
                 return
 
             if action.action == 'backspace':
@@ -979,6 +1030,16 @@ class ArtCanvas(Widget, can_focus=True):
         if isinstance(action, NavigationAction):
             self._mark_cursor_dirty()  # Old position
 
+            # Track consecutive same-direction repeats for hold-to-edge snap.
+            # Fresh press (is_repeat=False) resets the counter and re-arms
+            # snapping. Counts only repeats so a quick tap never snaps.
+            if action.is_repeat and action.direction == self._arrow_repeat_dir:
+                self._arrow_repeat_count += 1
+            else:
+                self._arrow_repeat_dir = action.direction
+                self._arrow_repeat_count = 1 if action.is_repeat else 0
+                self._arrow_hold_snapped = False
+
             # When a character key is held while arrowing in paint mode,
             # paint at the current position BEFORE moving. This avoids a
             # one-cell gap: the CharacterAction already painted and advanced
@@ -997,6 +1058,34 @@ class ArtCanvas(Widget, can_focus=True):
                         self._last_key_color = color
                         self.post_message(PaintModeChanged(True, self._last_key_color))
                 self._paint_at_cursor()
+
+            # Smart ↑/↓: the auto-advance after a stamp pushed the cursor one
+            # cell right; pulling it back to the stamp column lets `a, ↓, a`
+            # draw a vertical line at the original column. Skip when char_held
+            # (existing fill-the-gap diagonal mechanic owns that case).
+            if (action.direction in ('up', 'down')
+                    and prior_post_stamp_x is not None
+                    and not action.char_held):
+                self._cursor_x = prior_post_stamp_x
+
+            # Hold-to-edge: once a held arrow has repeated past threshold,
+            # snap to that edge instead of stepping. Stays snapped until the
+            # kid releases or changes direction.
+            if self._arrow_hold_snapped:
+                # Already snapped this hold; suppress further movement.
+                self._mark_cursor_dirty()
+                self._restart_blink()
+                self.refresh()
+                return
+            if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD:
+                self._snap_to_edge(action.direction)
+                self._arrow_hold_snapped = True
+                if self._paint_mode and (self._space_down or action.space_held):
+                    self._paint_at_cursor()
+                self._mark_cursor_dirty()
+                self._restart_blink()
+                self.refresh()
+                return
 
             # Collect all directions to move (primary + any other held arrows)
             directions_to_move = [action.direction]
@@ -1041,7 +1130,7 @@ class ArtCanvas(Widget, can_focus=True):
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
                     self._paint_at_cursor()
-                    self._move_in_direction(advance_direction)
+                    self._advance_after_stamp(advance_direction)
                     self.post_message(PaintModeChanged(True, self._last_key_color))
                     self._mark_cursor_dirty()  # New position
                     self._restart_blink()
@@ -1056,7 +1145,7 @@ class ArtCanvas(Widget, can_focus=True):
                         if not action.shift_held:
                             # No shift: stamp and advance in arrow direction (or right by default)
                             self._paint_at_cursor()
-                            self._move_in_direction(advance_direction)
+                            self._advance_after_stamp(advance_direction)
                         # Shift held: just select brush, no stamp
                         self._mark_cursor_dirty()  # New position
                         self._restart_blink()

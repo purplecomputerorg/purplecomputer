@@ -974,18 +974,11 @@ class KeyboardStateMachine:
             actions.append(ShiftAction(is_down=False))
             return actions
 
-        # Handle Escape release (check for long-hold)
-        # Uses dedicated _escape_press_time (wall clock) instead of _pressed dict (evdev timestamp)
-        # to avoid race conditions with the timer-based check in check_escape_hold().
-        # Both mechanisms now use time.time() consistently.
+        # Handle Escape release. Long-hold detection lives entirely in the
+        # app-level timer (purple_tui._check_escape_hold) so there's a single
+        # source of truth — the release path just clears press state.
         if keycode == KeyCode.KEY_ESC:
-            if self._escape_press_time is not None:
-                hold_duration = time.time() - self._escape_press_time
-                if hold_duration >= self.ESCAPE_HOLD_THRESHOLD and not self._escape_hold_triggered:
-                    self._escape_hold_triggered = True
-                    actions.append(LongHoldAction(key='escape'))
-                    actions.append(RoomAction(room='parent'))
-                self._escape_press_time = None  # Clear on release
+            self._escape_press_time = None
             actions.append(ControlAction(action='escape', is_down=False))
             return actions
 

@@ -410,6 +410,17 @@ class RoomPickerScreen(PurpleModal):
                 self.dismiss(None)
             return
 
+        # Escape dismisses on release, not press. The app runs a 1s long-hold
+        # timer on every escape press; if we dismissed on press the picker
+        # would close instantly, leaving the long-hold timer to open the
+        # parent menu 1s later (visible flicker / two-step transition).
+        # Releasing-side dismiss means a tap closes the picker, while a hold
+        # leaves the picker up until the timer fires and dismisses it itself
+        # in _check_escape_hold().
+        if isinstance(action, ControlAction) and action.action == 'escape' and not action.is_down:
+            self.dismiss(None)
+            return
+
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
                 if self._active_row == ROW_ROOMS:
@@ -429,8 +440,6 @@ class RoomPickerScreen(PurpleModal):
                     self.dismiss({"close_code": True})
                 else:
                     self.dismiss({"open_code": True})
-            elif action.action == 'escape':
-                self.dismiss(None)
             elif action.action == 'volume_mute':
                 self.app.action_volume_mute()
             elif action.action == 'volume_down':

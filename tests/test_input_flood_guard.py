@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from purple_tui.keyboard import (
     InputFloodGuard,
     CharacterAction, NavigationAction, ControlAction,
-    ShiftAction, CapsLockAction, RoomAction, LongHoldAction,
+    ShiftAction, RoomAction, LongHoldAction,
 )
 
 
@@ -79,11 +79,6 @@ class TestInputFloodGuard:
         guard = InputFloodGuard(burst=0)
         assert guard.should_drop(ShiftAction(is_down=True), timestamp=0.0) is False
         assert guard.should_drop(ShiftAction(is_down=False), timestamp=0.0) is False
-
-    def test_never_drops_caps_lock_action(self):
-        """CapsLockAction should never be dropped."""
-        guard = InputFloodGuard(burst=0)
-        assert guard.should_drop(CapsLockAction(), timestamp=0.0) is False
 
     def test_never_drops_room_action(self):
         """RoomAction should never be dropped."""

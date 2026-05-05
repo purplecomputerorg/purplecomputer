@@ -69,12 +69,10 @@ class RoomOption(Static):
         self.icon = icon
         self.label = label
         self.number = number
-        self.add_class("caps-sensitive")
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         enter_hint = "\nor Enter" if self.has_class("selected") else ""
-        return caps(f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n")
+        return f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n"
 
 
 class ExtraOption(Static):
@@ -114,16 +112,14 @@ class ExtraOption(Static):
         self._icon = icon
         self._label = label
         self._key_hint = key_hint
-        self.add_class("caps-sensitive")
         if disabled:
             self.add_class("disabled")
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         if self.has_class("disabled"):
-            return caps(f"\n{self._icon}  {self._label}  {self._icon}\n")
+            return f"\n{self._icon}  {self._label}  {self._icon}\n"
         hint = f"Press {self._key_hint} or Enter" if self.has_class("selected") else f"Press {self._key_hint}"
-        return caps(f"\n{self._icon}  {self._label}  {self._icon}\n{hint}")
+        return f"\n{self._icon}  {self._label}  {self._icon}\n{hint}"
 
 
 class ConfirmFreshScreen(PurpleModal):
@@ -169,14 +165,13 @@ class ConfirmFreshScreen(PurpleModal):
         self._selected = 1  # Default to "No, go back" (safer)
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         with Container(id="modal-dialog"):
-            yield Static(caps("Are you sure?"), id="modal-title")
-            yield Static(caps("This will clear everything."), id="modal-desc")
+            yield Static("Are you sure?", id="modal-title")
+            yield Static("This will clear everything.", id="modal-desc")
             with Vertical(id="confirm-buttons"):
-                yield Static(caps("Yes, clear rooms"), id="btn-yes", classes="confirm-btn")
-                yield Static(caps("No, go back"), id="btn-no", classes="confirm-btn selected")
-            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="modal-hint")
+                yield Static("Yes, clear rooms", id="btn-yes", classes="confirm-btn")
+                yield Static("No, go back", id="btn-no", classes="confirm-btn selected")
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
@@ -283,10 +278,8 @@ class RoomPickerScreen(PurpleModal):
         return 0
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-
         with Container(id="modal-dialog"):
-            yield Static(caps("Pick a Room"), id="modal-title")
+            yield Static("Pick a Room", id="modal-title")
 
             with Horizontal(id="picker-options"):
                 for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
@@ -307,7 +300,7 @@ class RoomPickerScreen(PurpleModal):
                     else:
                         yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
 
-            yield Static(caps("Arrow keys move   Enter pick"), id="modal-hint")
+            yield Static("Arrow keys move   Enter pick", id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_selection()
@@ -491,11 +484,10 @@ class VolumeModal(PurpleModal):
     """
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         with Container(id="modal-dialog"):
-            yield Static(caps("Volume"), id="modal-title")
+            yield Static("Volume", id="modal-title")
             yield Static("", id="volume-display")
-            yield Static(caps("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close"), id="modal-hint")
+            yield Static("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close", id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_display()

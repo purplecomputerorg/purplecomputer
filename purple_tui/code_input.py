@@ -178,12 +178,11 @@ class CodeInput(Input):
         if not self.autocomplete_matches:
             return ""
 
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         shown = self.autocomplete_matches[:5]
         parts = []
 
         for word, color_hex, emoji in shown:
-            display = f"[dim]{caps(word)}[/]"
+            display = f"[dim]{word}[/]"
             if emoji:
                 display += f" {emoji}"
             if color_hex:
@@ -191,7 +190,7 @@ class CodeInput(Input):
             parts.append(display)
 
         hint = "   ".join(parts)
-        return caps(f"{hint}   [dim]\U000f0312 Tab[/]")
+        return f"{hint}   [dim]\U000f0312 Tab[/]"
 
 
 class InputPrompt(Static):
@@ -207,12 +206,10 @@ class InputPrompt(Static):
 
     def __init__(self, label: str = "Ask", **kwargs):
         super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
         self._label = label
 
     def render(self) -> str:
-        text = self.app.caps_text(self._label) if hasattr(self.app, 'caps_text') else self._label
-        return f"[bold #c4a0e8]{text} \u2192[/]"
+        return f"[bold #c4a0e8]{self._label} \u2192[/]"
 
 
 class AutocompleteHint(Static):
@@ -226,9 +223,6 @@ class AutocompleteHint(Static):
     }
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
 
 
 class RecallHint(Static):
@@ -246,7 +240,6 @@ class RecallHint(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
         self._last_command: str = ""
         self._visible = False
         self._correction: tuple[str, str] | None = None
@@ -268,18 +261,17 @@ class RecallHint(Static):
     def render(self) -> str:
         if not self._visible or not self._last_command:
             return ""
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         if self._correction:
             orig, corr = self._correction
             self._correction = None  # show once
             display = f"{orig} \u2192 {corr}"
             if len(display) > self.MAX_RECALL_LEN:
                 display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"
-            return f"[dim]{caps(display)}[/]"
+            return f"[dim]{display}[/]"
         display = self._last_command
         if len(display) > self.MAX_RECALL_LEN:
             display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"
-        return f"[dim]{caps(f'Enter to try again: {display}')}[/]"
+        return f"[dim]Enter to try again: {display}[/]"
 
 
 class ExampleHint(Static):
@@ -301,7 +293,6 @@ class ExampleHint(Static):
 
     def __init__(self, hints: list[str] | None = None, **kwargs):
         super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
         self.HINTS = hints or self.DEFAULT_HINTS
         self._hint_index = 0
 
@@ -317,6 +308,5 @@ class ExampleHint(Static):
         self._next_hint()
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         hint = self.HINTS[self._hint_index]
-        return f"[dim]{caps(hint)}[/]"
+        return f"[dim]{hint}[/]"

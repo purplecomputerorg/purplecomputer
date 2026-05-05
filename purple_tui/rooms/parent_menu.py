@@ -361,6 +361,9 @@ _CODE_PANEL_CANCELLED = object()
 # MusicLoopingScreen dismiss value
 _MUSIC_LOOPING_CANCELLED = object()
 
+# AllCapsScreen dismiss value
+_ALL_CAPS_CANCELLED = object()
+
 
 class PickerModal(PurpleModal):
     """Base class for modal option pickers with up/down navigation.
@@ -528,6 +531,23 @@ class CodePanelScreen(PickerModal):
         self._selected = 0 if get_code_panel() else 1
 
 
+class AllCapsScreen(PickerModal):
+    """Toggle the all-caps display setting."""
+
+    TITLE = "ALL CAPS"
+    DESCRIPTION = "Render every letter the app shows in uppercase"
+    OPTIONS = [
+        (True, "On"),
+        (False, "Off"),
+    ]
+    escape_value = _ALL_CAPS_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_all_caps
+        self._selected = 0 if get_all_caps() else 1
+
+
 class MusicLoopingScreen(PickerModal):
     """Toggle the music looping setting."""
 
@@ -656,7 +676,7 @@ def _get_version_label() -> str:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_all_caps
 
     items = []
 
@@ -675,6 +695,9 @@ def _get_menu_items() -> list:
         items.append(("menu-code-panel", code_label))
         looping_label = "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"
         items.append(("menu-music-looping", looping_label))
+
+    caps_label = "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"
+    items.append(("menu-all-caps", caps_label))
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -903,9 +926,8 @@ class InstallConfirmScreen(PurpleModal):
         self._selected_button = 1  # Default to Cancel (safer)
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         with Vertical(id="modal-dialog"):
-            yield Static(caps("Install Purple Computer"), id="modal-title")
+            yield Static("Install Purple Computer", id="modal-title")
             yield Static(
                 "This will set up Purple Computer\n"
                 "on this laptop.\n"
@@ -915,21 +937,9 @@ class InstallConfirmScreen(PurpleModal):
                 id="install-warning"
             )
             with Vertical(id="install-buttons"):
-                yield Static(caps("Yes, install"), id="btn-install", classes="install-btn")
-                yield Static(caps("No, go back"), id="btn-cancel-install", classes="install-btn selected")
-            yield Static(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"), id="modal-hint")
-
-    def refresh_caps(self) -> None:
-        """Re-apply caps mode to all text in this modal."""
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        try:
-            self.query_one("#modal-title").update(caps("Install Purple Computer"))
-            self.query_one("#btn-install").update(caps("Yes, install"))
-            self.query_one("#btn-cancel-install").update(caps("No, go back"))
-            self.query_one("#modal-hint").update(caps("\u25b2 \u25bc choose   Enter confirm   Esc cancel"))
-        except Exception:
-            pass
-        self._update_buttons()
+                yield Static("Yes, install", id="btn-install", classes="install-btn")
+                yield Static("No, go back", id="btn-cancel-install", classes="install-btn selected")
+            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
 
     def _update_buttons(self):
         try:
@@ -1052,10 +1062,6 @@ class InstallProgressScreen(PurpleModal):
         self._computer_name = computer_name
         self._start_time: float | None = None
 
-    def refresh_caps(self) -> None:
-        """Re-apply caps mode to all text in this modal."""
-        self._update_ui()
-
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
             yield Static("", id="modal-title")
@@ -1098,7 +1104,6 @@ class InstallProgressScreen(PurpleModal):
         return "█" * filled + "░" * (36 - filled) + f"  {pct}%"
 
     def _update_ui(self) -> None:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         try:
             title_w = self.query_one("#modal-title")
             status_w = self.query_one("#ip-status")
@@ -1132,7 +1137,7 @@ class InstallProgressScreen(PurpleModal):
                     "Esc to go back. Power button to turn off."
                 )
         else:
-            title_w.update(caps("Installing Purple Computer"))
+            title_w.update("Installing Purple Computer")
             status_w.update(self._status)
             bar_w.update(self._render_bar(self._progress))
             hint_w.update(self._eta_hint())
@@ -1656,6 +1661,8 @@ class ParentMenu(PurpleModal):
             self._open_code_panel()
         elif item_id == "menu-music-looping":
             self._open_music_looping()
+        elif item_id == "menu-all-caps":
+            self._open_all_caps()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -1756,6 +1763,33 @@ class ParentMenu(PurpleModal):
         label = "Allow Music Looping: Yes" if new_value else "Allow Music Looping: No"
         try:
             widget = self.query_one("#menu-music-looping", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_all_caps(self) -> None:
+        def on_result(result):
+            if result is _ALL_CAPS_CANCELLED:
+                return
+            self._apply_all_caps(result)
+        self.app.push_screen(AllCapsScreen(), callback=on_result)
+
+    def _apply_all_caps(self, new_value: bool) -> None:
+        from ..settings import set_all_caps
+        from .. import caps as caps_module
+        set_all_caps(new_value)
+        caps_module.set_enabled(new_value)
+        # Force a full repaint so already-rendered Strips get reissued through the patched ctor.
+        try:
+            for screen in list(self.app.screen_stack):
+                for widget in screen.query("*"):
+                    widget.refresh()
+                screen.refresh(repaint=True, layout=True)
+        except Exception:
+            pass
+        label = "ALL CAPS: On" if new_value else "ALL CAPS: Off"
+        try:
+            widget = self.query_one("#menu-all-caps", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

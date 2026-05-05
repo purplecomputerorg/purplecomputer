@@ -122,7 +122,6 @@ class HistoryLine(Static):
         self.line_type = line_type  # "ask" or "answer"
         self.speaking = speaking
         self.speech_state = self.SPEECH_GENERATING if speaking else self.SPEECH_NONE
-        self.add_class("caps-sensitive")
         if line_type == "ask":
             self.add_class("ask")
 
@@ -196,18 +195,17 @@ class HistoryLine(Static):
         return '\n'.join(lines)
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         dark = self._is_dark()
         if self.line_type == "code_header":
             # Code results header: no "Ask →" prefix, just bold text
             # Extra newline above for visual separation from previous output
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
-            prefix = f"{ICON_ROBOT}  [{answer_color}]→[/] [bold {answer_color}]{caps(self.text)}[/] "
+            prefix = f"{ICON_ROBOT}  [{answer_color}]→[/] [bold {answer_color}]{self.text}[/] "
             return f"\n{prefix}"
         elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "
-            return self._wrap_with_arrows(rich_escape(caps(self.text)), prefix, ask_color)
+            return self._wrap_with_arrows(rich_escape(self.text), prefix, ask_color)
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')

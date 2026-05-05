@@ -253,7 +253,6 @@ class ArtCanvas(Widget, can_focus=True):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        # NOT caps-sensitive: caps only affects new input, not existing canvas content
         # Grid: dict[(x, y)] = (char, fg_color, bg_color)
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         # Positions that have been deliberately painted (vs text tint bg)
@@ -431,12 +430,6 @@ class ArtCanvas(Widget, can_focus=True):
         dy = y - self._cursor_y
         # In the 3x3 area but not the center
         return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
-
-    def _caps_char(self, char: str) -> str:
-        """Transform character based on caps mode."""
-        if hasattr(self.app, 'caps_mode') and self.app.caps_mode and char.isalpha():
-            return char.upper()
-        return char
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the canvas.
@@ -785,7 +778,6 @@ class ArtCanvas(Widget, can_focus=True):
 
     def type_char(self, char: str, direction: str = 'right') -> None:
         """Type a character at cursor position, advancing in direction."""
-        char = self._caps_char(char)
         self._mark_cursor_dirty()  # Old cursor position
         pos = (self._cursor_x, self._cursor_y)
 
@@ -1173,7 +1165,6 @@ class CanvasHeader(Static):
         self._is_painting = True
         self._last_color = "#FFFFFF"
         self._code_mode = False
-        self.add_class("caps-sensitive")
 
     def update_state(self, is_painting: bool, last_color: str) -> None:
         """Update displayed state."""
@@ -1198,8 +1189,6 @@ class CanvasHeader(Static):
 
     def render(self) -> str:
         """Render header showing both tools with current highlighted."""
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-
         # Symbols: ABC for Write, colored squares for Paint
         write_icon = "ABC"
         paint_icon = "[#DF7070]■[/][#DFC070]■[/][#7090DF]■[/]"
@@ -1222,7 +1211,7 @@ class CanvasHeader(Static):
 
         modes = f"{paint_part}  {write_part}"
         modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
-        hint = caps(f"{ICON_TAB} Tab to switch")
+        hint = f"{ICON_TAB} Tab to switch"
         hint_w = len(hint)
         width = self.size.width or 134
         left_pad = max(0, (width - modes_w) // 2)
@@ -1251,19 +1240,17 @@ class ArtHintBar(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._is_painting = True
-        self.add_class("caps-sensitive")
 
     def update_state(self, is_painting: bool) -> None:
         self._is_painting = is_painting
         self.refresh()
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         if getattr(self.app, '_littles_mode', None):
-            return caps("  Type to paint!  ")
+            return "  Type to paint!  "
         if self._is_painting:
-            return caps("  Type to paint! Every letter is a color, mix them together. Arrow keys move.  ")
-        return caps("  Type to write! Arrow keys move. Enter for a new line.  ")
+            return "  Type to paint! Every letter is a color, mix them together. Arrow keys move.  "
+        return "  Type to write! Arrow keys move. Enter for a new line.  "
 
 
 # =============================================================================

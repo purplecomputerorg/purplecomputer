@@ -342,41 +342,6 @@ class ShiftState:
 
 
 # ============================================================================
-# Caps Lock
-# ============================================================================
-
-@dataclass
-class CapsState:
-    """
-    Caps lock state tracking.
-
-    Detected directly from hardware via evdev.
-    """
-    caps_lock_on: bool = False
-
-    # Callbacks to notify when caps changes
-    _on_change: Optional[Callable[[bool], None]] = None
-
-    def toggle(self) -> bool:
-        """Toggle caps lock state. Returns new state."""
-        self.caps_lock_on = not self.caps_lock_on
-        if self._on_change:
-            self._on_change(self.caps_lock_on)
-        return self.caps_lock_on
-
-    def set(self, on: bool) -> None:
-        """Set caps lock state explicitly."""
-        if on != self.caps_lock_on:
-            self.caps_lock_on = on
-            if self._on_change:
-                self._on_change(self.caps_lock_on)
-
-    def on_change(self, callback: Callable[[bool], None]) -> None:
-        """Register callback for caps lock changes."""
-        self._on_change = callback
-
-
-# ============================================================================
 # Long-Hold Detection
 # ============================================================================
 
@@ -537,7 +502,6 @@ class KeyboardState:
     Requires evdev (Linux) for proper keyboard handling.
     """
     shift: ShiftState = field(default_factory=ShiftState)
-    caps: CapsState = field(default_factory=CapsState)
     escape_hold: HoldState = field(default_factory=lambda: HoldState(threshold=1.0))
     mode: KeyboardMode = KeyboardMode.LINUX_EVDEV
 
@@ -560,15 +524,7 @@ class KeyboardState:
             self.shift.consume_sticky()  # Use up sticky shift
             return SHIFT_MAP[char]
 
-        # For letters, apply caps lock
-        if char.isalpha() and self.caps.caps_lock_on:
-            return char.upper()
-
         return char
-
-    def handle_caps_lock_press(self) -> None:
-        """Handle caps lock key press."""
-        self.caps.toggle()
 
     def handle_sticky_shift_press(self) -> bool:
         """Handle sticky shift toggle key. Returns new sticky state."""
@@ -709,12 +665,6 @@ class ShiftAction(KeyAction):
 
 
 @dataclass
-class CapsLockAction(KeyAction):
-    """Caps lock toggled."""
-    pass
-
-
-@dataclass
 class LongHoldAction(KeyAction):
     """Long hold threshold reached."""
     key: str  # e.g., 'escape'
@@ -755,7 +705,6 @@ class KeyboardStateMachine:
 
         # Modifier state
         self._shift_held = False
-        self._caps_lock_on = False
         self._space_held = False
 
         # Sticky shift
@@ -815,13 +764,6 @@ class KeyboardStateMachine:
 
         # Handle modifiers (only on fresh press)
         if not is_repeat:
-            if keycode == KeyCode.KEY_CAPSLOCK:
-                # Caps Lock toggles caps on single press (like a normal keyboard)
-                self._caps_lock_on = not self._caps_lock_on
-                # Any non-shift key interrupts shift double-tap
-                self._shift_double_tap.reset()
-                actions.append(CapsLockAction())
-                return actions
             if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
                 self._shift_held = True
                 actions.append(ShiftAction(is_down=True))
@@ -946,29 +888,18 @@ class KeyboardStateMachine:
             self._held_char = None
             self._held_char_keycode = None
 
-        # Caps Lock release: no-op (toggle already happened on key down)
-        if keycode == KeyCode.KEY_CAPSLOCK:
-            return actions
-
         # Handle modifier releases (Shift keys)
         if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):
-            # Check for sticky shift or double-tap caps lock (quick tap, only if shift wasn't used for a character)
+            # Check for sticky shift activation (quick tap, only if shift wasn't used for a character)
             if press_time and not self._shift_used_for_char:
                 hold_duration = event.timestamp - press_time
                 if hold_duration < 0.3:  # Quick tap
-                    if self._shift_double_tap.check('shift', event.timestamp):
-                        # Double-tap shift: toggle caps lock
-                        self._sticky_shift_active = False
-                        if self._on_sticky_shift_change:
-                            self._on_sticky_shift_change(False)
-                        self._caps_lock_on = not self._caps_lock_on
-                        actions.append(CapsLockAction())
-                    else:
-                        # Single tap: activate sticky shift
-                        self._sticky_shift_active = True
-                        self._sticky_shift_time = time.time()
-                        if self._on_sticky_shift_change:
-                            self._on_sticky_shift_change(True)
+                    # Single tap: activate sticky shift. Double-tap is no
+                    # longer wired to anything (ALL CAPS is a parent setting).
+                    self._sticky_shift_active = True
+                    self._sticky_shift_time = time.time()
+                    if self._on_sticky_shift_change:
+                        self._on_sticky_shift_change(True)
             self._shift_held = False
             self._shift_used_for_char = False  # Reset for next shift press
             actions.append(ShiftAction(is_down=False))
@@ -1022,10 +953,6 @@ class KeyboardStateMachine:
 
         if should_shift and char in SHIFT_MAP:
             return SHIFT_MAP[char]
-
-        # Apply caps lock to letters
-        if char.isalpha() and self._caps_lock_on:
-            return char.upper()
 
         return char
 
@@ -1085,11 +1012,6 @@ class KeyboardStateMachine:
         return self._shift_held
 
     @property
-    def caps_lock_on(self) -> bool:
-        """Check if caps lock is on."""
-        return self._caps_lock_on
-
-    @property
     def held_arrow_direction(self) -> str | None:
         """Get the currently held arrow direction, if any."""
         arrow_keys = [
@@ -1121,7 +1043,6 @@ class KeyboardStateMachine:
         """Reset all state."""
         self._pressed.clear()
         self._shift_held = False
-        self._caps_lock_on = False
         self._space_held = False
         self._sticky_shift_active = False
         self._shift_double_tap.reset()

@@ -13,7 +13,6 @@ which reads directly from evdev. This gives us true key release detection.
 """
 
 import colorsys
-import time
 
 from textual.widgets import Static, Button
 from textual.containers import Container, Horizontal
@@ -134,13 +133,12 @@ CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
 # Paint color strength when holding space
 PAINT_STRENGTH = 0.7
 
-# Hold duration for backspace clear (in seconds)
-BACKSPACE_HOLD_CLEAR_TIME = 1.0
-
-# After this many consecutive same-direction arrow repeats, snap the cursor
-# to that edge instead of stepping. Lets a held arrow escape a corner without
-# the kid having to know how many times to tap.
-ARROW_HOLD_REPEAT_THRESHOLD = 5
+# Hold-to-accelerate: after this many consecutive same-direction repeats on
+# arrows or backspace, each repeat does HOLD_ACCEL_MULTIPLIER steps instead of
+# one. Threshold is high enough that a kid moving 3-4 cells never accelerates,
+# but a sustained hold escapes a corner or erases a streak quickly.
+ARROW_HOLD_REPEAT_THRESHOLD = 8
+HOLD_ACCEL_MULTIPLIER = 4
 
 # Gutter size (cells around content where cursor ring can extend)
 GUTTER = 1
@@ -297,8 +295,6 @@ class ArtCanvas(Widget, can_focus=True):
         self._heading = 'right'
         self._use_heading_cursor = False  # Show directional cursor during code run
 
-        # Backspace hold state
-        self._backspace_start_time: float | None = None
         self._clear_animation_active = False
 
         # Line-level render cache: y -> Strip (avoids recomputing unchanged lines)
@@ -312,11 +308,12 @@ class ArtCanvas(Widget, can_focus=True):
         # non-↑↓ action.
         self._post_stamp_x: int | None = None
 
-        # Hold-arrow-to-edge: track consecutive same-direction repeats and
-        # snap to the edge once threshold passes.
+        # Hold-to-accelerate: count consecutive same-direction arrow repeats
+        # and consecutive backspace repeats. Past threshold, each repeat does
+        # 4 steps instead of 1.
         self._arrow_repeat_dir: str | None = None
         self._arrow_repeat_count: int = 0
-        self._arrow_hold_snapped: bool = False
+        self._backspace_repeat_count: int = 0
 
     def on_mount(self) -> None:
         """Start cursor blinking when canvas is mounted."""
@@ -735,17 +732,6 @@ class ArtCanvas(Widget, can_focus=True):
             self._move_in_direction(direction)
         self._post_stamp_x = stamp_x
 
-    def _snap_to_edge(self, direction: str) -> None:
-        """Jump cursor to the edge in the given direction (hold-arrow-to-edge)."""
-        if direction == 'left':
-            self._cursor_x = 0
-        elif direction == 'right':
-            self._cursor_x = self.canvas_width - 1
-        elif direction == 'up':
-            self._cursor_y = 0
-        elif direction == 'down':
-            self._cursor_y = self.canvas_height - 1
-
     def execute_logo_command(self, action: str, direction: str, distance: int) -> None:
         """Execute a Logo-style command: move or paint N steps in a direction."""
         self._mark_cursor_dirty()
@@ -1006,21 +992,17 @@ class ArtCanvas(Widget, can_focus=True):
 
             if action.action == 'backspace':
                 if action.is_down:
-                    current_time = time.time()
-
-                    if self._backspace_start_time is None:
-                        self._backspace_start_time = current_time
-
-                    # Check for hold-to-clear
-                    hold_duration = current_time - self._backspace_start_time
-                    if hold_duration >= BACKSPACE_HOLD_CLEAR_TIME:
-                        self._clear_canvas()
-                        self._backspace_start_time = None
+                    if action.is_repeat:
+                        self._backspace_repeat_count += 1
                     else:
+                        self._backspace_repeat_count = 0
+                    erase_count = (HOLD_ACCEL_MULTIPLIER
+                                   if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
+                                   else 1)
+                    for _ in range(erase_count):
                         self._backspace()
                 else:
-                    # Backspace release: reset timer
-                    self._backspace_start_time = None
+                    self._backspace_repeat_count = 0
                 return
 
             # Escape is handled by the main app (parent mode)
@@ -1030,15 +1012,13 @@ class ArtCanvas(Widget, can_focus=True):
         if isinstance(action, NavigationAction):
             self._mark_cursor_dirty()  # Old position
 
-            # Track consecutive same-direction repeats for hold-to-edge snap.
-            # Fresh press (is_repeat=False) resets the counter and re-arms
-            # snapping. Counts only repeats so a quick tap never snaps.
+            # Track consecutive same-direction repeats so a sustained hold
+            # accelerates movement. Fresh press (is_repeat=False) resets.
             if action.is_repeat and action.direction == self._arrow_repeat_dir:
                 self._arrow_repeat_count += 1
             else:
                 self._arrow_repeat_dir = action.direction
                 self._arrow_repeat_count = 1 if action.is_repeat else 0
-                self._arrow_hold_snapped = False
 
             # When a character key is held while arrowing in paint mode,
             # paint at the current position BEFORE moving. This avoids a
@@ -1068,43 +1048,31 @@ class ArtCanvas(Widget, can_focus=True):
                     and not action.char_held):
                 self._cursor_x = prior_post_stamp_x
 
-            # Hold-to-edge: once a held arrow has repeated past threshold,
-            # snap to that edge instead of stepping. Stays snapped until the
-            # kid releases or changes direction.
-            if self._arrow_hold_snapped:
-                # Already snapped this hold; suppress further movement.
-                self._mark_cursor_dirty()
-                self._restart_blink()
-                self.refresh()
-                return
-            if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD:
-                self._snap_to_edge(action.direction)
-                self._arrow_hold_snapped = True
-                if self._paint_mode and (self._space_down or action.space_held):
-                    self._paint_at_cursor()
-                self._mark_cursor_dirty()
-                self._restart_blink()
-                self.refresh()
-                return
-
             # Collect all directions to move (primary + any other held arrows)
             directions_to_move = [action.direction]
             if action.other_arrows_held:
                 directions_to_move.extend(action.other_arrows_held)
 
+            # Accelerate after sustained hold: each repeat takes multiple steps.
+            # Painting (space-held) draws at every intermediate cell so a fast
+            # held arrow leaves a streak instead of dotted gaps.
+            step_count = (HOLD_ACCEL_MULTIPLIER
+                          if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
+                          else 1)
+            paint_each_step = (self._paint_mode
+                               and (self._space_down or action.space_held))
+
             any_moved = False
             for direction in directions_to_move:
-                moved = self._move_in_direction(direction)
-                if moved:
+                for _ in range(step_count):
+                    if not self._move_in_direction(direction):
+                        break
                     any_moved = True
+                    if paint_each_step:
+                        self._paint_at_cursor()
 
             if not any_moved:
                 self._on_edge_hit()
-
-            # Space held: paint after moving (space doesn't auto-advance)
-            if self._paint_mode:
-                if self._space_down or action.space_held:
-                    self._paint_at_cursor()
 
             self._mark_cursor_dirty()  # New position
             self._restart_blink()
@@ -1113,8 +1081,7 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Handle character actions (printable characters)
         if isinstance(action, CharacterAction):
-            # Reset backspace timer on character input
-            self._backspace_start_time = None
+            self._backspace_repeat_count = 0
 
             char = action.char
             # When an arrow is held, advance in that direction after stamping.

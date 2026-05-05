@@ -88,10 +88,9 @@ class TestBlockedWords:
         assert result == "", "should be blocked"
 
     def test_sentence_with_blocked_word_scrubbed(self):
-        # "say the <blocked> word" → scrubbed to "saytheword" (long enough)
+        # "say the <blocked> word" → blocked word removed, spacing preserved
         result = filter_speech(_SENTENCES[0])
-        assert result != ""
-        assert result == "saytheword"
+        assert result == "say the word"
 
     def test_short_sentence_with_blocked_word_replaced(self):
         # "say <blocked>" → per-word check catches the blocked word

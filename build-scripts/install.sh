@@ -251,10 +251,11 @@ main() {
     WRITE_SHA256_FILE="/tmp/purple-write-sha256"
     WRITE_SIZE_FILE="/tmp/purple-write-size"
     if command -v pv >/dev/null 2>&1; then
+        IMAGE_SIZE=$(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G")
         zstd -dc "$GOLDEN_IMAGE" \
             | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
             | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | pv -s $(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G") \
+            | pv -n -s "$IMAGE_SIZE" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
             | dd of=/dev/$TARGET bs=4M conv=fsync
     else
         zstd -dc "$GOLDEN_IMAGE" \
@@ -504,6 +505,20 @@ main() {
         fi
 
         if mount "$ROOT_PART" /mnt/root 2>/dev/null; then
+            # Persist the parent-supplied computer name (optional, shown in title bar).
+            # Trim whitespace and cap at 24 chars so the title bar doesn't overflow.
+            if [ -n "$PURPLE_COMPUTER_NAME" ]; then
+                TRIMMED_NAME=$(echo -n "$PURPLE_COMPUTER_NAME" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | cut -c1-24)
+                if [ -n "$TRIMMED_NAME" ]; then
+                    mkdir -p /mnt/root/opt/purple
+                    if printf '%s' "$TRIMMED_NAME" > /mnt/root/opt/purple/computer_name.txt 2>/dev/null; then
+                        log "  Computer name set: $TRIMMED_NAME"
+                    else
+                        warn "Could not write computer name file"
+                    fi
+                fi
+            fi
+
             # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
             if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
                 sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg

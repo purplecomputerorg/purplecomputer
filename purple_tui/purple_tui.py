@@ -591,6 +591,24 @@ class BatteryIndicator(Static):
         return ""
 
 
+_COMPUTER_NAME_CACHE: str | None = None
+_COMPUTER_NAME_LOADED = False
+
+
+def _read_computer_name() -> str | None:
+    """Return the parent-supplied computer name, or None. File written by install.sh."""
+    global _COMPUTER_NAME_CACHE, _COMPUTER_NAME_LOADED
+    if _COMPUTER_NAME_LOADED:
+        return _COMPUTER_NAME_CACHE
+    _COMPUTER_NAME_LOADED = True
+    try:
+        name = Path("/opt/purple/computer_name.txt").read_text().strip()
+        _COMPUTER_NAME_CACHE = name or None
+    except OSError:
+        _COMPUTER_NAME_CACHE = None
+    return _COMPUTER_NAME_CACHE
+
+
 class BootModeIndicator(Static):
     """Shows boot mode in title bar: USB (with eject status) or Installed.
 
@@ -650,7 +668,8 @@ class BootModeIndicator(Static):
     def _push_to_title_bar(self) -> None:
         muted = "#6a5a80"
         if not self._is_live:
-            text, color = f"{ICON_HARDDISK} Installed", muted
+            label = _read_computer_name() or "Installed"
+            text, color = f"{ICON_HARDDISK} {label}", muted
         elif self._is_cached and self._usb_removed:
             text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted 
         elif self._is_cached:

@@ -14,6 +14,16 @@
 
 ---
 
+## Git Commits
+
+Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These use `.claude/skills/swarm-monitor/scripts/checkpoint.sh`.
+
+Commit messages: **one line, max two short sentences.** No bullet-list body. No `Co-Authored-By` trailer. No `lane(...)` prefix — the script handles whatever prefixing is needed. Never use the default verbose Claude Code commit format.
+
+If you're unsure what message to use, propose one and ask the user to confirm before committing.
+
+---
+
 ## Sensitive Files (DO NOT READ)
 
 Never read `.env` files, `credentials.json`, or `secrets.yaml`.

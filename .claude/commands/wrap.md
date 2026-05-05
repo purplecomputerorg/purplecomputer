@@ -13,13 +13,14 @@ Steps:
 2. If there are no changes, say so and stop.
 3. Run `git diff` (and `git diff --cached` if anything is staged) to read the actual changes. For huge diffs, sample the most informative hunks.
 4. Draft a 1-2 sentence commit message:
+   - One line, max two short sentences. No bullet-list body.
    - Focus on the WHY or the user-visible effect, not a file list.
    - Imperative mood ("add X", "fix Y").
-   - No trailing period for a single sentence is fine.
-   - Do NOT prefix with `lane(...)` — the script does that.
-5. Show the message to the user and call:
-   `.claude/skills/swarm-monitor/scripts/checkpoint.sh "<your message>"`
-6. Print the resulting `git log --oneline -5`.
+   - Do NOT prefix with `lane(...)`. Do NOT add `Co-Authored-By`.
+5. Show the proposed message to the user and ask them to confirm or edit it.
+6. Once confirmed, call:
+   `.claude/skills/swarm-monitor/scripts/checkpoint.sh "<final message>"`
+7. Print the resulting `git log --oneline -5`.
 
 Rules:
 - Do not push.

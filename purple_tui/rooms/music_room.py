@@ -453,19 +453,26 @@ class MusicGrid(Widget):
         note, octave = pitch_for(row, col, root, 0)
         return pitch_filename(note, octave)
 
-    def play_sound(self, key: str) -> None:
+    def play_sound(self, key: str, volume_scale: float = 1.0) -> None:
         """Play instrument or percussion sound for a key."""
-        self.play_sound_with_instrument(key, self._instrument_index)
+        self.play_sound_with_instrument(key, self._instrument_index, volume_scale)
 
-    def play_sound_with_instrument(self, key: str, instrument_index: int) -> None:
-        """Play a sound using a specific instrument (for loop playback)."""
+    def play_sound_with_instrument(self, key: str, instrument_index: int,
+                                   volume_scale: float = 1.0) -> None:
+        """Play a sound using a specific instrument (for loop playback).
+
+        volume_scale < 1.0 ducks the instrument so a layered sound (e.g. the
+        spoken letter clip in letters mode) stays intelligible.
+        """
         from ..audio import play_safe
         if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
             return
         if key.isdigit():
             self._ensure_percussion_loaded()
             if key in self._percussion_sounds:
-                play_safe(self._percussion_sounds[key])
+                ch = play_safe(self._percussion_sounds[key])
+                if ch is not None and volume_scale != 1.0:
+                    ch.set_volume(volume_scale)
             return
         stem = self._pitch_stem_for_key(key)
         if stem is None:
@@ -474,7 +481,9 @@ class MusicGrid(Widget):
         self._ensure_instrument_loaded(inst_id)
         sounds = self._instrument_sounds.get(inst_id, {})
         if stem in sounds:
-            play_safe(sounds[stem])
+            ch = play_safe(sounds[stem])
+            if ch is not None and volume_scale != 1.0:
+                ch.set_volume(volume_scale)
 
     def set_instrument(self, index: int) -> None:
         """Set the current instrument index."""
@@ -1197,11 +1206,15 @@ class MusicMode(Container, can_focus=True):
         If instrument is provided, play with that instrument instead of the
         current one (used by loop playback to preserve each layer's sound).
         """
+        # Duck the instrument under the spoken letter clip so the letter is
+        # the foreground sound in letters mode.
+        is_letters_layer = mode == MODE_LETTERS and key in _SPEAKABLE_KEYS
+        volume_scale = 0.4 if is_letters_layer else 1.0
         if instrument is not None:
-            self.grid.play_sound_with_instrument(key, instrument)
+            self.grid.play_sound_with_instrument(key, instrument, volume_scale)
         else:
-            self.grid.play_sound(key)
-        if mode == MODE_LETTERS and key in _SPEAKABLE_KEYS:
+            self.grid.play_sound(key, volume_scale)
+        if is_letters_layer:
             self.grid.play_letter(key)
 
     def _on_space_tap(self) -> None:
@@ -1399,8 +1412,13 @@ class MusicMode(Container, can_focus=True):
                     self._header.update_pitch(self._root_index)
             return
 
-        # Character keys: play sound, cycle color, record into loop if active
+        # Character keys: play sound, cycle color, record into loop if active.
+        # Piano semantics: a held key plays one note, not a stream of repeats.
+        # Tapping fast still produces overlapping notes because each fresh
+        # press is is_repeat=False.
         if isinstance(action, CharacterAction):
+            if action.is_repeat:
+                return
             # Any key press: cancel space hold
             self._space_hold.on_other_key()
 

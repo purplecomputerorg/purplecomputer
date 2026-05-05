@@ -4,7 +4,7 @@ Generate fun sounds for Purple Computer Music Mode
 
 Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
-- Organ: sustained, drawbar additive synthesis
+- Accordion: sustained, two detuned reed voices with gentle tremolo
 - Ukulele: warm, plucky, cheerful
 - Music Box: sparkly, bell-like, magical
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
@@ -216,16 +216,17 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
-def generate_organ(frequency: float, duration: float = 0.55) -> list[int]:
+def generate_accordion(frequency: float, duration: float = 0.55) -> list[int]:
     """
-    Drawbar organ (Hammond-style additive synthesis).
+    Accordion: two detuned reed voices summed, with a gentle tremolo.
 
-    A real Hammond builds tones by mixing nine sine "drawbars" at fixed
-    pitch ratios (sub-octave, fifth, fundamental, octave, etc.). We use a
-    smaller drawbar set tuned for clarity at small volumes, plus a very
-    light Leslie-style tremolo for life. Sustained envelope (no decay
-    during the note, smooth release at the tail) is the key contrast
-    against the percussive marimba/musicbox/uke samples.
+    Real accordions sound the way they do because each note plays through
+    *two* reeds tuned slightly apart — that's what produces the swimmy
+    "musette" beating. Each reed is close to a sawtooth waveform (rich in
+    harmonics) but rolled off at the top so it reads as reedy rather than
+    buzzy. We synthesize two band-limited sawtooths a few cents apart,
+    sum them, and modulate the amplitude at ~6Hz to suggest the bellows
+    breathing in and out.
     """
     sample_rate = 44100
     nyquist = sample_rate / 2
@@ -234,48 +235,49 @@ def generate_organ(frequency: float, duration: float = 0.55) -> list[int]:
     fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
 
-    # (ratio, amp). Classic drawbar registration: sub-fifth dropped,
-    # fundamental + octave dominant, fifth and octave-up for color, top
-    # octaves for sparkle. Sums to <1 before normalization.
-    drawbars = [
-        (0.5, 0.35),   # 16': sub-octave warmth
-        (1.0, 1.0),    # 8':  fundamental
-        (1.5, 0.25),   # 5⅓': fifth
-        (2.0, 0.7),    # 4':  octave
-        (3.0, 0.18),   # 2⅔': octave + fifth
-        (4.0, 0.35),   # 2':  two octaves
-        (6.0, 0.10),   # 1⅓': two octaves + fifth
-        (8.0, 0.18),   # 1':  three octaves
-    ]
+    # Two reeds, ~8 cents apart. The chorus beat rate at low pitch is a
+    # few Hz, which is what gives accordion its characteristic "wobble."
+    detune_cents = 8.0
+    f1 = frequency
+    f2 = frequency * (2 ** (detune_cents / 1200.0))
 
-    # Leslie-style amplitude tremolo, ~5.5 Hz, gentle depth.
-    leslie_rate = 5.5
-    leslie_depth = 0.06
+    # Band-limited sawtooth via Fourier series. Cap harmonics at Nyquist
+    # *and* at a fixed count so generation stays cheap. Roll off above
+    # 5kHz so the reed reads as warm/reedy rather than razor-bright.
+    rolloff_hz = 5000.0
+    harmonic_cap = 20
+    max_n = min(harmonic_cap, int(nyquist / max(frequency, 1.0)))
+
+    trem_rate = 6.0
+    trem_depth = 0.08
 
     for i in range(num_samples):
         t = i / sample_rate
-        sample = 0.0
-
-        # Sustained attack: 25ms ramp, no decay during the note.
-        if t < 0.025:
-            attack = t / 0.025
+        # 30ms attack — bellows take a moment to engage.
+        if t < 0.03:
+            attack = t / 0.03
         else:
             attack = 1.0
 
-        for ratio, amp in drawbars:
-            f = frequency * ratio
-            if f >= nyquist:
-                continue
-            sample += amp * math.sin(2 * math.pi * f * t)
+        s = 0.0
+        for f in (f1, f2):
+            for n in range(1, max_n + 1):
+                fn = f * n
+                if fn >= nyquist:
+                    break
+                amp = 1.0 / n
+                if fn > rolloff_hz:
+                    amp *= rolloff_hz / fn
+                s += amp * math.sin(2 * math.pi * fn * t)
 
-        leslie = 1.0 + leslie_depth * math.sin(2 * math.pi * leslie_rate * t)
-        sample *= attack * leslie
+        trem = 1.0 + trem_depth * math.sin(2 * math.pi * trem_rate * t)
+        s *= attack * trem
 
         if t > fade_out_start:
             fade_progress = (t - fade_out_start) / fade_out_duration
-            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
+            s *= 0.5 * (1 + math.cos(math.pi * fade_progress))
 
-        samples.append(sample)
+        samples.append(s)
 
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
@@ -722,7 +724,7 @@ def main():
     # Instrument generators: (directory_name, generator_function)
     instruments = [
         ("marimba", generate_marimba),
-        ("organ", generate_organ),
+        ("accordion", generate_accordion),
         ("ukulele", generate_ukulele),
         ("musicbox", generate_music_box),
     ]

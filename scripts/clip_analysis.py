@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.generate_sounds import (
-    generate_marimba, generate_organ, generate_ukulele, generate_music_box
+    generate_marimba, generate_accordion, generate_ukulele, generate_music_box
 )
 
 SET_VOLUME = 0.5
@@ -16,7 +16,7 @@ NUM_NOTES = 12
 
 instruments = {
     'marimba': generate_marimba,
-    'organ': generate_organ,
+    'accordion': generate_accordion,
     'ukulele': generate_ukulele,
     'musicbox': generate_music_box,
 }

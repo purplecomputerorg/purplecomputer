@@ -157,9 +157,11 @@ def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
                 continue
             sample += amp * math.exp(-t * decay_rate) * math.sin(2 * math.pi * f * t)
 
-        # Tuned tube resonator: fundamental only, slow attack, longer decay.
-        tube_env = (1 - math.exp(-t * 30)) * math.exp(-t * 4.0)
-        sample += 0.45 * tube_env * math.sin(2 * math.pi * frequency * t)
+        # Tuned tube resonator: fundamental only, slow attack, fast decay.
+        # Quieter and shorter than the bar so it adds body without smearing
+        # pitch into the bar's own fundamental.
+        tube_env = (1 - math.exp(-t * 30)) * math.exp(-t * 6.0)
+        sample += 0.25 * tube_env * math.sin(2 * math.pi * frequency * t)
 
         # Mallet "thock": noise burst, ~6ms, lowpassed by the bar.
         if t < 0.01:
@@ -376,12 +378,15 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
     fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
 
-    # Inharmonic partials of a music-box comb tooth.
+    # Inharmonic partials of a music-box comb tooth. Real comb teeth: the
+    # fundamental rings, the inharmonic upper partials die within ~100ms,
+    # which is what gives a music box its "ping then pure tone" character.
+    # (ratio, amp, decay_rate)
     box_partials = [
-        (1.0, 1.0),
-        (2.76, 0.4),
-        (5.4, 0.2),
-        (8.93, 0.1),
+        (1.0, 1.0, 3.5),
+        (2.76, 0.4, 12.0),
+        (5.4, 0.2, 18.0),
+        (8.93, 0.1, 24.0),
     ]
     sparkle_ratio = 12.1
 
@@ -397,19 +402,18 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
         else:
             attack = 1.0
 
-        for ratio, amp in box_partials:
+        for ratio, amp, decay_rate in box_partials:
             f = frequency * ratio
             if f >= nyquist:
                 continue
-            sample += amp * math.sin(2 * math.pi * f * t)
+            sample += amp * math.exp(-t * decay_rate) * math.sin(2 * math.pi * f * t)
 
         sparkle_freq = frequency * sparkle_ratio
         if sparkle_freq < nyquist:
             sample += 0.15 * math.sin(2 * math.pi * sparkle_freq * t) * math.exp(-t * 20)
 
-        # Moderate decay, not too long
-        envelope = math.exp(-t * 3.5)
-        sample *= envelope * attack
+        # Per-partial decay above already shapes the overall envelope.
+        sample *= attack
 
         if t > fade_out_start:
             fade_progress = (t - fade_out_start) / fade_out_duration

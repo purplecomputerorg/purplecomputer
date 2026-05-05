@@ -25,12 +25,12 @@ import sys
 import time
 from ..keyboard import CharacterAction, ControlAction, NavigationAction, HoldOrTap
 from ..music_constants import (
-    GRID_KEYS, ALL_KEYS, COLORS, COLOR_KEYCAP, COLOR_OPPOSITE,
+    GRID_KEYS, ALL_KEYS, COLORS, COLOR_KEYCAP,
     INSTRUMENTS, PERCUSSION_NAMES,
     CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
     pitch_for, pitch_filename,
 )
-from .art_room import KEY_COLORS, KEY_OPPOSITES, text_color_for
+from .art_room import KEY_COLORS, text_color_for
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
 from ..loop_panel import LoopPanel, LoopPanelToggleRequested
@@ -216,6 +216,13 @@ DEFAULT_BG_LIGHT = "#e8daf0"
 
 # Keys that get spoken in Letters mode (A-Z and 0-9)
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
+
+# Kid-math remap aliases: app-level remap turns '/'->'÷' and '*'->'×' before
+# events reach the music room, but the grid is keyed by '/' and '*'. Reverse
+# the remap on input. Cell labels use the same map to show the symbol that
+# matches the physical sticker.
+_KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
+_KID_MATH_DISPLAY = {"/": "÷", "*": "×"}
 
 # Reverse lookup: melodic key -> (melodic_row, col) where melodic_row is
 # 0 (Q-P), 1 (A-;), 2 (Z-/) — the index pitch_for(...) expects. GRID_KEYS
@@ -622,7 +629,7 @@ class MusicGrid(Widget):
 
         Args:
             key: The key to set (e.g., 'A', '5')
-            index: Color index: 0=keycap, 1=opposite, 2=purple, -1=off
+            index: Color index: 0=keycap, 1=purple, -1=off
         """
         if key in self.color_state:
             self.color_state[key] = index
@@ -637,7 +644,7 @@ class MusicGrid(Widget):
             return DEFAULT_BG_DARK
 
     def get_color(self, key: str) -> str:
-        """Get current color for a key, resolving keycap/opposite sentinels."""
+        """Get current color for a key, resolving the keycap sentinel."""
         idx = self.color_state[key]
         if idx < 0:
             return self._get_default_bg()
@@ -646,8 +653,6 @@ class MusicGrid(Widget):
             return self._get_default_bg()
         if state == COLOR_KEYCAP:
             return KEY_COLORS.get(key.lower(), self._get_default_bg())
-        if state == COLOR_OPPOSITE:
-            return KEY_OPPOSITES.get(key.lower(), self._get_default_bg())
         return state
 
     def render_line(self, y: int) -> Strip:
@@ -732,7 +737,7 @@ class MusicGrid(Widget):
             note_below = mid_line + 1
             if line_in_cell == letter_line:
                 # Center the key character
-                display_key = key
+                display_key = _KID_MATH_DISPLAY.get(key, key)
                 pad_left = (cell_width - 1) // 2
                 pad_right = cell_width - pad_left - 1
                 segments.append(Segment(" " * pad_left, cell_bg_style))
@@ -1403,7 +1408,7 @@ class MusicMode(Container, can_focus=True):
             if not char:
                 return
 
-            lookup = char.upper() if char.isalpha() else char
+            lookup = char.upper() if char.isalpha() else _KID_MATH_UNREMAP.get(char, char)
 
             if lookup in ALL_KEYS:
                 mode = self._current_mode()

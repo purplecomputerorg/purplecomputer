@@ -15,13 +15,11 @@ GRID_KEYS = [
 # All keys in a flat list for indexing
 ALL_KEYS = [key for row in GRID_KEYS for key in row]
 
-# Color cycle: keycap (sticker color) -> opposite (RYB complement) -> purple -> off.
-# "keycap" / "opposite" are sentinel values; MusicGrid.get_color() resolves them
-# per-key via art_room.KEY_COLORS / KEY_OPPOSITES so what you see on the screen
-# matches the physical sticker on the keycap.
+# Color cycle: keycap (sticker color) -> purple -> off.
+# "keycap" is a sentinel; MusicGrid.get_color() resolves it per-key via
+# art_room.KEY_COLORS so what you see on the screen matches the physical sticker.
 COLOR_KEYCAP = "keycap"
-COLOR_OPPOSITE = "opposite"
-COLORS = [COLOR_KEYCAP, COLOR_OPPOSITE, "#5a3875", None]
+COLORS = [COLOR_KEYCAP, "#5a3875", None]
 
 # Instruments: (directory_name, display_name)
 # Enter cycles through these in Music mode

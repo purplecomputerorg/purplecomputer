@@ -179,28 +179,6 @@ KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (botto
 KEY_COLORS["÷"] = KEY_COLORS["/"]
 KEY_COLORS["×"] = KEY_COLORS.get("*", KEY_COLORS["/"])
 
-# Per-row "opposite" colors used by Music room's color cycle. RYB-complementary
-# pairing (red↔green, yellow↔magenta, blue↔orange); yellow's opposite shifted
-# toward magenta (300) instead of true purple (270) so it stays visually
-# distinct from the universal purple state in the Music cycle. Grayscale row
-# inverts lightness (white↔black).
-def _invert_grayscale(grayscale: dict[str, str]) -> dict[str, str]:
-    out = {}
-    for k, hex_color in grayscale.items():
-        h = hex_color.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        out[k] = f"#{255 - r:02X}{255 - g:02X}{255 - b:02X}"
-    return out
-
-KEY_OPPOSITES: dict[str, str] = {}
-KEY_OPPOSITES.update(_invert_grayscale(GRAYSCALE))
-KEY_OPPOSITES.update(generate_row_gradient(120, QWERTY_ROW))  # Green
-KEY_OPPOSITES.update(generate_row_gradient(300, ASDF_ROW))    # Magenta
-KEY_OPPOSITES.update(generate_row_gradient(25, ZXCV_ROW))     # Orange
-KEY_OPPOSITES["÷"] = KEY_OPPOSITES["/"]
-KEY_OPPOSITES["×"] = KEY_OPPOSITES.get("*", KEY_OPPOSITES["/"])
-
-
 def _rel_luminance(hex_color: str) -> float:
     h = hex_color.lstrip("#")
     def ch(v: int) -> float:

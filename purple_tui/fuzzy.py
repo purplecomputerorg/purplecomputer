@@ -32,27 +32,26 @@ def damerau_levenshtein(s1: str, s2: str) -> int:
 def fuzzy_match(word: str, vocabulary: list[str], min_len: int = 5) -> str | None:
     """Find the closest vocabulary match using Damerau-Levenshtein distance.
 
-    Args:
-        word: input word to match
-        vocabulary: list of valid words to match against
-        min_len: minimum word length to attempt fuzzy matching (default 5
-                 for content lookups, use 3 for small curated vocabularies)
-
-    Returns:
-        Best matching word, or None if no match within threshold.
-        Threshold: DL distance <= 1 (single typo: one insertion, deletion,
-        substitution, or transposition). Conservative to avoid false positives
-        like "yellow" matching "hello" (DL=2).
+    Threshold: DL distance <= 1 (single typo). Candidates must share the
+    input's first character — first-char typos are far rarer than middle/
+    trailing slips, and dropping this constraint causes confusions like
+    "yello" resolving to "hello" (synonym for 👋) instead of "yellow".
+    Trade-off: dropped-first-letter typos (e.g. "ello"→"hello") aren't
+    corrected, which is acceptable for kid typing.
     """
     if len(word) < min_len:
         return None
     max_dist = 1
-    best, best_dist = None, max_dist + 1
     word_lower = word.lower()
+    first = word_lower[0]
+    best, best_dist = None, max_dist + 1
     for v in vocabulary:
         if abs(len(v) - len(word)) > max_dist:
             continue
-        d = damerau_levenshtein(word_lower, v.lower())
+        v_lower = v.lower()
+        if v_lower[0] != first:
+            continue
+        d = damerau_levenshtein(word_lower, v_lower)
         if d < best_dist:
             best, best_dist = v, d
     return best if best_dist <= max_dist else None

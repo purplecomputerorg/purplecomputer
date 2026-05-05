@@ -770,7 +770,6 @@ class PurpleApp(App):
     Toast {
         width: 32;
         max-width: 32;
-        padding: 0 1;
     }
 
     /* View-specific styles */

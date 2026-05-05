@@ -19,9 +19,9 @@ if [ "$CURRENT" = "$LANE" ]; then
   exit 1
 fi
 
-if [ -n "$(git status --short)" ]; then
-  echo "Working tree is dirty on $CURRENT. Commit or stash before merging."
-  git status --short
+if [ -n "$(git status --short --untracked-files=no)" ]; then
+  echo "Working tree has tracked modifications on $CURRENT. Commit or stash before merging."
+  git status --short --untracked-files=no
   exit 1
 fi
 

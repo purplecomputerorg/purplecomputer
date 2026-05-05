@@ -767,6 +767,12 @@ class PurpleApp(App):
         height: 100%;
     }
 
+    Toast {
+        width: 32;
+        max-width: 32;
+        padding: 0 1;
+    }
+
     /* View-specific styles */
     .view-line #viewport {
         height: 3;

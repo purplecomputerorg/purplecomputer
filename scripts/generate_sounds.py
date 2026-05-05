@@ -6,8 +6,7 @@ Creates vibrant, kid-friendly sounds:
 - Marimba: warm, woody, percussive (default)
 - Accordion: sustained, two detuned reed voices with gentle tremolo
 - Ukulele: warm, plucky, cheerful
-- Music Box: sparkly, bell-like, magical
-- Flute, Kalimba, Glockenspiel, Harp, Synth: TEMPORARY A/B candidates
+- Glockenspiel: bright, metallic, inharmonic bell with long ring
 - Percussion: kick, snare, hi-hat, etc. (shared across instruments)
 """
 
@@ -24,13 +23,26 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 SOUNDS_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content"
 
 sys.path.insert(0, str(PROJECT_ROOT))
-from purple_tui.music_constants import CHROMATIC_NOTE_NAMES, pitch_filename
+from purple_tui.music_constants import (
+    CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, pitch_filename, pitch_for,
+)
 
-# Chromatic sample range. Covers every cell reachable from any FRIENDLY_KEYS
-# root × octave_shift ∈ {-1, 0, +1} × scale_degree 0..9.
-# Lowest reachable: row=2 (oct base 2), shift=-1, root=C, deg=0 → C1.
-# Highest reachable: row=0 (oct base 4), shift=+1, root=A, deg=9 → C#7.
-CHROMATIC_OCTAVE_RANGE = range(1, 8)  # octaves 1..7 inclusive
+
+def reachable_pitches() -> list[tuple[str, int]]:
+    """Every (note_name, octave) the grid can actually play.
+
+    Enumerates all (row, col, root, octave_shift) cells and unions the
+    pitch_for outputs. Skips chromatic samples that are never requested
+    (e.g. D# in any octave — the 5 friendly roots × major scale geometry
+    never produces it; or 11 of 12 notes in octave 7).
+    """
+    seen = set()
+    for row in (0, 1, 2):
+        for col in range(10):
+            for root in FRIENDLY_KEYS:
+                for shift in (-1, 0, 1):
+                    seen.add(pitch_for(row, col, root, shift))
+    return sorted(seen, key=lambda p: (p[1], CHROMATIC_NOTE_NAMES.index(p[0])))
 
 
 def write_sound(filename: str, samples: list[int], sample_rate: int = 44100,
@@ -238,19 +250,19 @@ def generate_accordion(frequency: float, duration: float = 0.55) -> list[int]:
 
     # Two reeds, ~8 cents apart. The chorus beat rate at low pitch is a
     # few Hz, which is what gives accordion its characteristic "wobble."
-    detune_cents = 8.0
+    detune_cents = 4.0
     f1 = frequency
     f2 = frequency * (2 ** (detune_cents / 1200.0))
 
-    # Band-limited sawtooth via Fourier series. Cap harmonics at Nyquist
-    # *and* at a fixed count so generation stays cheap. Roll off above
-    # 5kHz so the reed reads as warm/reedy rather than razor-bright.
-    rolloff_hz = 5000.0
+    # Band-limited sawtooth via Fourier series. Lower rolloff (2kHz) tames
+    # the buzzy reed edge — pushes the timbre toward harmonium/shruti box
+    # rather than carnival accordion.
+    rolloff_hz = 2000.0
     harmonic_cap = 20
     max_n = min(harmonic_cap, int(nyquist / max(frequency, 1.0)))
 
     trem_rate = 6.0
-    trem_depth = 0.08
+    trem_depth = 0.04
 
     for i in range(num_samples):
         t = i / sample_rate
@@ -280,7 +292,7 @@ def generate_accordion(frequency: float, duration: float = 0.55) -> list[int]:
 
         samples.append(s)
 
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
+    return finalize_samples(samples, peak_level=0.55, freq=frequency)
 
 
 def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
@@ -413,142 +425,13 @@ def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
-def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
-    """
-    Sparkly, bell-like music box. Inharmonic partials from metal comb physics.
-    Bright "ping" attack, clear and punchy.
-    """
-    sample_rate = 44100
-    nyquist = sample_rate / 2
-    num_samples = int(sample_rate * duration)
-    samples = []
-    fade_out_duration = 0.12
-    fade_out_start = duration - fade_out_duration
-
-    # Inharmonic partials of a music-box comb tooth. Real comb teeth: the
-    # fundamental rings, the inharmonic upper partials die within ~100ms,
-    # which is what gives a music box its "ping then pure tone" character.
-    # (ratio, amp, decay_rate). Upper-partial amps scale up for low notes
-    # so the comb's mid-range "sparkle" carries the perceived loudness.
-    boost = low_freq_partial_boost(frequency)
-    box_partials = [
-        (1.0, 1.0, 3.5),
-        (2.76, 0.4 * boost, 12.0),
-        (5.4, 0.2 * boost, 18.0),
-        (8.93, 0.1 * boost, 24.0),
-    ]
-    sparkle_ratio = 12.1
-
-    for i in range(num_samples):
-        t = i / sample_rate
-        sample = 0
-
-        # Snappy ping attack
-        if t < 0.002:
-            attack = t / 0.002
-        elif t < 0.01:
-            attack = 1.0 + 0.3 * math.exp(-(t - 0.002) * 200)
-        else:
-            attack = 1.0
-
-        for ratio, amp, decay_rate in box_partials:
-            f = frequency * ratio
-            if f >= nyquist:
-                continue
-            sample += amp * math.exp(-t * decay_rate) * math.sin(2 * math.pi * f * t)
-
-        sparkle_freq = frequency * sparkle_ratio
-        if sparkle_freq < nyquist:
-            sample += 0.15 * math.sin(2 * math.pi * sparkle_freq * t) * math.exp(-t * 20)
-
-        # Per-partial decay above already shapes the overall envelope.
-        sample *= attack
-
-        if t > fade_out_start:
-            fade_progress = (t - fade_out_start) / fade_out_duration
-            sample *= 0.5 * (1 + math.cos(math.pi * fade_progress))
-
-        samples.append(sample)
-
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
-
-
-# --- TEMPORARY: extra instruments for A/B testing -----------------------
-# These are candidates added to find a softer counterpoint to accordion.
-# Trim down to favorites and remove the rest.
-
-def generate_flute(frequency: float, duration: float = 0.6) -> list[int]:
-    """Soft flute: near-pure sine + breath noise + subtle vibrato."""
-    sample_rate = 44100
-    nyquist = sample_rate / 2
-    num_samples = int(sample_rate * duration)
-    fade_out = 0.12
-    fade_start = duration - fade_out
-    vib_rate = 5.0
-    vib_depth = 0.005  # 0.5% pitch wobble
-
-    random.seed(int(frequency * 1000))
-    samples = []
-    for i in range(num_samples):
-        t = i / sample_rate
-        if t < 0.05:
-            attack = t / 0.05
-        else:
-            attack = 1.0
-
-        vib = 1.0 + vib_depth * math.sin(2 * math.pi * vib_rate * t)
-        f = frequency * vib
-        s = math.sin(2 * math.pi * f * t)
-        if 2 * f < nyquist:
-            s += 0.12 * math.sin(2 * math.pi * 2 * f * t)
-        if 3 * f < nyquist:
-            s += 0.04 * math.sin(2 * math.pi * 3 * f * t)
-        breath = (random.random() * 2 - 1) * 0.06 * math.exp(-t * 4)
-        s = (s + breath) * attack
-
-        if t > fade_start:
-            p = (t - fade_start) / fade_out
-            s *= 0.5 * (1 + math.cos(math.pi * p))
-        samples.append(s)
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
-
-
-def generate_kalimba(frequency: float, duration: float = 0.5) -> list[int]:
-    """Kalimba (thumb piano): warm fundamental, faint inharmonic 2nd, fast decay."""
-    sample_rate = 44100
-    nyquist = sample_rate / 2
-    num_samples = int(sample_rate * duration)
-    fade_out = 0.1
-    fade_start = duration - fade_out
-    boost = low_freq_partial_boost(frequency)
-    partials = [
-        (1.0, 1.0, 4.0),
-        (3.1, 0.18 * boost, 14.0),
-        (6.4, 0.05 * boost, 22.0),
-    ]
-    samples = []
-    for i in range(num_samples):
-        t = i / sample_rate
-        if t < 0.004:
-            attack = t / 0.004
-        else:
-            attack = 1.0
-        s = 0.0
-        for ratio, amp, dec in partials:
-            f = frequency * ratio
-            if f >= nyquist:
-                continue
-            s += amp * math.exp(-t * dec) * math.sin(2 * math.pi * f * t)
-        s *= attack
-        if t > fade_start:
-            p = (t - fade_start) / fade_out
-            s *= 0.5 * (1 + math.cos(math.pi * p))
-        samples.append(s)
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
-
-
 def generate_glockenspiel(frequency: float, duration: float = 0.7) -> list[int]:
-    """Glockenspiel: bright, metallic, longer ring than music box. Inharmonic."""
+    """Glockenspiel: bright, metallic, inharmonic bell with long ring.
+
+    Tuning note: the 2.8x inharmonic partial creates a false autocorrelation
+    peak ~85 cents below the fundamental. The fundamental itself is correct
+    (verify with DFT, not autocorrelation).
+    """
     sample_rate = 44100
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
@@ -583,84 +466,6 @@ def generate_glockenspiel(frequency: float, duration: float = 0.7) -> list[int]:
         samples.append(s)
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
-
-def generate_harp(frequency: float, duration: float = 1.0) -> list[int]:
-    """Harp: Karplus-Strong with brighter feedback than ukulele — clean glassy pluck."""
-    sample_rate = 44100
-    num_samples = int(sample_rate * duration)
-    fade_out = 0.18
-    fade_start = duration - fade_out
-    period = sample_rate / frequency
-    N = int(period)
-    frac = period - N
-    allpass_coeff = (1 - frac) / (1 + frac)
-
-    random.seed(int(frequency * 1000) + 7)
-    delay_line = [random.random() * 2 - 1 for _ in range(N)]
-    # One smoothing pass: brighter than uke (which uses 3).
-    for j in range(1, N):
-        delay_line[j] = 0.5 * delay_line[j] + 0.5 * delay_line[j - 1]
-
-    samples = [0.0] * num_samples
-    buf = delay_line[:]
-    write_pos = 0
-    ap_pi = ap_po = 0.0
-    damping = 0.998  # longer ring than uke
-    blend = 0.65     # brighter than uke (0.4)
-    prev = 0.0
-
-    for i in range(num_samples):
-        out = buf[write_pos]
-        filt = blend * out + (1 - blend) * prev
-        prev = filt
-        ap_out = allpass_coeff * filt + ap_pi - allpass_coeff * ap_po
-        ap_pi = filt
-        ap_po = ap_out
-        buf[write_pos] = ap_out * damping
-        write_pos = (write_pos + 1) % N
-        samples[i] = out
-
-    fade_start_i = int(fade_start * sample_rate)
-    fade_n = int(fade_out * sample_rate)
-    for i in range(fade_start_i, num_samples):
-        p = (i - fade_start_i) / fade_n
-        samples[i] *= 0.5 * (1 + math.cos(math.pi * p))
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
-
-
-def generate_synth(frequency: float, duration: float = 0.5) -> list[int]:
-    """Retro chiptune square-wave lead with simple AD envelope."""
-    sample_rate = 44100
-    nyquist = sample_rate / 2
-    num_samples = int(sample_rate * duration)
-    fade_out = 0.08
-    fade_start = duration - fade_out
-    # Band-limited square via odd harmonics, capped + rolled off.
-    rolloff = 4500.0
-    max_n = min(15, int(nyquist / max(frequency, 1.0)))
-    samples = []
-    for i in range(num_samples):
-        t = i / sample_rate
-        if t < 0.01:
-            attack = t / 0.01
-        else:
-            attack = 1.0
-        s = 0.0
-        for n in range(1, max_n + 1, 2):  # odd harmonics only
-            fn = frequency * n
-            if fn >= nyquist:
-                break
-            amp = 1.0 / n
-            if fn > rolloff:
-                amp *= rolloff / fn
-            s += amp * math.sin(2 * math.pi * fn * t)
-        # Mild decay so it doesn't sound flat.
-        s *= attack * math.exp(-t * 1.5)
-        if t > fade_start:
-            p = (t - fade_start) / fade_out
-            s *= 0.5 * (1 + math.cos(math.pi * p))
-        samples.append(s)
-    return finalize_samples(samples, peak_level=0.65, freq=frequency)
 
 
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
@@ -917,13 +722,7 @@ def main():
         ("marimba", generate_marimba),
         ("accordion", generate_accordion),
         ("ukulele", generate_ukulele),
-        ("musicbox", generate_music_box),
-        # TEMPORARY: extra instruments for A/B testing
-        ("flute", generate_flute),
-        ("kalimba", generate_kalimba),
         ("glockenspiel", generate_glockenspiel),
-        ("harp", generate_harp),
-        ("synth", generate_synth),
     ]
 
     for inst_dir, generator in instruments:
@@ -934,15 +733,15 @@ def main():
         if inst_path.exists():
             for old in inst_path.glob("*.ogg"):
                 old.unlink()
-        for octave in CHROMATIC_OCTAVE_RANGE:
-            for note_idx, note_name in enumerate(CHROMATIC_NOTE_NAMES):
-                # MIDI: C0=12, so semitone = 12*(octave+1) + note_idx
-                # We use scientific pitch (A4=440) → freq = 440 * 2^((midi-69)/12)
-                midi = 12 * (octave + 1) + note_idx
-                freq = 440.0 * (2 ** ((midi - 69) / 12))
-                samples = generator(freq)
-                fname = pitch_filename(note_name, octave) + ".wav"
-                write_sound(fname, samples, subdir=inst_dir)
+        for note_name, octave in reachable_pitches():
+            # MIDI: C0=12, so semitone = 12*(octave+1) + note_idx
+            # We use scientific pitch (A4=440) → freq = 440 * 2^((midi-69)/12)
+            note_idx = CHROMATIC_NOTE_NAMES.index(note_name)
+            midi = 12 * (octave + 1) + note_idx
+            freq = 440.0 * (2 ** ((midi - 69) / 12))
+            samples = generator(freq)
+            fname = pitch_filename(note_name, octave) + ".wav"
+            write_sound(fname, samples, subdir=inst_dir)
         print()
 
     print("Percussion (0-9):")

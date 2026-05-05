@@ -27,13 +27,7 @@ INSTRUMENTS = [
     ("marimba", "Marimba"),
     ("accordion", "Accordion"),
     ("ukulele", "Ukulele"),
-    ("musicbox", "Music Box"),
-    # TEMPORARY: extra instruments for A/B comparison; pick favorites then trim.
-    ("flute", "Flute"),
-    ("kalimba", "Kalimba"),
     ("glockenspiel", "Glockenspiel"),
-    ("harp", "Harp"),
-    ("synth", "Synth"),
 ]
 
 # Common short names that map to instrument IDs

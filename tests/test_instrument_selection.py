@@ -23,8 +23,8 @@ class TestResolveInstrument:
     def test_prefix_acc(self):
         assert MusicCodeRunner._resolve_instrument("acc") is not None
 
-    def test_prefix_music(self):
-        assert MusicCodeRunner._resolve_instrument("music") is not None
+    def test_prefix_glock(self):
+        assert MusicCodeRunner._resolve_instrument("glock") is not None
 
     def test_nonexistent(self):
         assert MusicCodeRunner._resolve_instrument("guitar") is None

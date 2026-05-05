@@ -25,10 +25,12 @@ import sys
 import time
 from ..keyboard import CharacterAction, ControlAction, NavigationAction, HoldOrTap
 from ..music_constants import (
-    GRID_KEYS, ALL_KEYS, COLORS, INSTRUMENTS, PERCUSSION_NAMES,
+    GRID_KEYS, ALL_KEYS, COLORS, COLOR_KEYCAP, COLOR_OPPOSITE,
+    INSTRUMENTS, PERCUSSION_NAMES,
     CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, DEFAULT_ROOT_INDEX,
     pitch_for, pitch_filename,
 )
+from .art_room import KEY_COLORS, KEY_OPPOSITES, text_color_for
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
 from ..loop_panel import LoopPanel, LoopPanelToggleRequested
@@ -211,8 +213,6 @@ def reinit_mixer_after_hotplug() -> bool:
 DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
-# Light colors need dark text (tinted palette is all dark, so none listed)
-LIGHT_COLORS: set[str] = set()
 
 # Keys that get spoken in Letters mode (A-Z and 0-9)
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
@@ -624,7 +624,7 @@ class MusicGrid(Widget):
 
         Args:
             key: The key to set (e.g., 'A', '5')
-            index: Color index: 0=purple, 1=blue, 2=red, -1=off
+            index: Color index: 0=keycap, 1=opposite, 2=purple, -1=off
         """
         if key in self.color_state:
             self.color_state[key] = index
@@ -639,11 +639,18 @@ class MusicGrid(Widget):
             return DEFAULT_BG_DARK
 
     def get_color(self, key: str) -> str:
-        """Get current color for a key."""
+        """Get current color for a key, resolving keycap/opposite sentinels."""
         idx = self.color_state[key]
-        if idx < 0 or COLORS[idx] is None:
+        if idx < 0:
             return self._get_default_bg()
-        return COLORS[idx]
+        state = COLORS[idx]
+        if state is None:
+            return self._get_default_bg()
+        if state == COLOR_KEYCAP:
+            return KEY_COLORS.get(key.lower(), self._get_default_bg())
+        if state == COLOR_OPPOSITE:
+            return KEY_OPPOSITES.get(key.lower(), self._get_default_bg())
+        return state
 
     def render_line(self, y: int) -> Strip:
         """Render a single line of the grid."""
@@ -716,9 +723,9 @@ class MusicGrid(Widget):
                 if at_wavefront and self.color_state[key] == -1:
                     bg_color = "#5a3875"
 
-            # Determine text color based on background brightness
-            light_backgrounds = LIGHT_COLORS | {DEFAULT_BG_LIGHT}
-            text_color = "#1e1033" if bg_color in light_backgrounds else "white"
+            # Determine text color via WCAG black-or-white contrast against bg.
+            text_color = text_color_for(bg_color)
+            on_light_bg = text_color == "#000000"
 
             cell_bg_style = Style(bgcolor=bg_color)
             text_style = Style(bgcolor=bg_color, color=text_color, bold=True)
@@ -749,7 +756,7 @@ class MusicGrid(Widget):
                 if label:
                     decorated = f"{ICON_MUSIC_NOTE} {label} {ICON_MUSIC_NOTE}"
                     decorated_width = len(decorated)
-                    muted_color = "#6a5a7a" if bg_color in light_backgrounds else "#887799"
+                    muted_color = "#6a5a7a" if on_light_bg else "#887799"
                     dim_style = Style(bgcolor=bg_color, color=muted_color)
                     pad_left = (cell_width - decorated_width) // 2
                     if pad_left < 0:
@@ -1053,7 +1060,7 @@ class MusicMode(Container, can_focus=True):
                     if flash:
                         self.grid.flash_note(key)
                     if self._is_noscreen:
-                        self._noscreen_flash(COLORS[self.grid.color_state[key]])
+                        self._noscreen_flash(self.grid.get_color(key))
 
                 # Wait for remaining loop duration
                 elapsed = asyncio.get_event_loop().time() - cycle_start
@@ -1418,6 +1425,6 @@ class MusicMode(Container, can_focus=True):
                 if flash:
                     self.grid.flash_note(lookup)
                 if self._is_noscreen:
-                    self._noscreen_flash(COLORS[self.grid.color_state[lookup]])
+                    self._noscreen_flash(self.grid.get_color(lookup))
             return
 

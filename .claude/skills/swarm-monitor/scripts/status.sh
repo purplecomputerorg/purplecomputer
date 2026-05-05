@@ -26,7 +26,7 @@ git worktree list --porcelain | awk '
   echo
 
   echo "Latest commits:"
-  git -C "$path" log --oneline "$BASE..HEAD" -5 || true
+  git -C "$path" --no-pager log --oneline "$BASE..HEAD" -5 || true
   echo
 
   if [ -f "$path/.claude-lane-status.md" ]; then

@@ -33,9 +33,9 @@ fi
 
 git add -A
 
-git commit -m "lane($BRANCH): $MSG"
+git commit -m "$MSG"
 
 echo
 echo "Checkpoint created on $BRANCH"
 echo
-git log --oneline -5
+git --no-pager log --oneline -5

@@ -26,6 +26,6 @@ git worktree list --porcelain | awk '
   echo
 
   echo "Latest lane commits:"
-  git -C "$path" log --oneline "$BASE..HEAD" -5 || true
+  git -C "$path" --no-pager log --oneline "$BASE..HEAD" -5 || true
   echo
 done

@@ -2,9 +2,10 @@
 set -euo pipefail
 
 LANE="${1:-}"
+ORIG="$LANE"
 
 if [ -z "$LANE" ]; then
-  echo "usage: merge-lane.sh <lane-branch>"
+  echo "usage: merge-lane.sh <lane-name>"
   exit 1
 fi
 
@@ -62,7 +63,7 @@ echo "Merging $LANE into $CURRENT"
 echo "  $LANE is $AHEAD commit(s) ahead, $BEHIND behind."
 echo
 echo "Lane commits to be merged:"
-git log --oneline "$CURRENT..$LANE" || true
+git --no-pager log --oneline "$CURRENT..$LANE" || true
 echo
 
 if [ "$AHEAD" = "0" ]; then
@@ -70,11 +71,12 @@ if [ "$AHEAD" = "0" ]; then
   exit 0
 fi
 
-git merge --no-ff --no-edit "$LANE"
+SHORT="${ORIG#worktree-}"
+git merge --no-ff -m "merge: $SHORT" "$LANE"
 
 echo
 echo "Merge complete on $CURRENT."
 echo "Latest:"
-git log --oneline -5
+git --no-pager log --oneline -5
 echo
 echo "Next: run your tests. Nothing has been pushed. The lane worktree/branch is untouched."

@@ -21,7 +21,8 @@ from .keyboard import CharacterAction, NavigationAction, ControlAction
 # Keywords per room for autocomplete and underlining
 ROOM_KEYWORDS: dict[str, list[str]] = {
     'music': ['choose', 'select', 'use', 'play', 'instrument', 'fast', 'slow', 'letters',
-              'repeat', 'marimba', 'accordion', 'ukulele', 'uke', 'musicbox'],
+              'repeat', 'marimba', 'accordion', 'ukulele', 'uke', 'musicbox',
+              'flute', 'kalimba', 'glockenspiel', 'harp', 'synth'],
     'art': ['left', 'right', 'up', 'down', 'forward', 'go', 'move', 'walk', 'step',
             'turn', 'color', 'paint', 'write', 'lift', 'pen', 'penup', 'pendown',
             'repeat'],
@@ -54,7 +55,8 @@ ROOM_HINTS: dict[str, list[str]] = {
 
 
 # Instrument names for autocomplete after "choose"/"select"/"play"/"instrument"
-_INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'musicbox']
+_INSTRUMENT_NAMES = ['marimba', 'accordion', 'ukulele', 'uke', 'musicbox',
+                     'flute', 'kalimba', 'glockenspiel', 'harp', 'synth']
 _INSTRUMENT_PREFIX = re.compile(
     r'.*\b(?:choose|select|use|play|instrument)\s+\S*$', re.IGNORECASE
 )

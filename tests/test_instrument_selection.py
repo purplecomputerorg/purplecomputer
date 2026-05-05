@@ -20,8 +20,8 @@ class TestResolveInstrument:
     def test_prefix_mar(self):
         assert MusicCodeRunner._resolve_instrument("mar") is not None
 
-    def test_prefix_org(self):
-        assert MusicCodeRunner._resolve_instrument("org") is not None
+    def test_prefix_acc(self):
+        assert MusicCodeRunner._resolve_instrument("acc") is not None
 
     def test_prefix_music(self):
         assert MusicCodeRunner._resolve_instrument("music") is not None
@@ -36,8 +36,8 @@ class TestResolveInstrument:
         assert MusicCodeRunner._resolve_instrument("MARIMBA") is not None
         assert MusicCodeRunner._resolve_instrument("UKE") is not None
 
-    def test_fuzzy_organn(self):
-        assert MusicCodeRunner._resolve_instrument("organn") is not None
+    def test_fuzzy_accordian(self):
+        assert MusicCodeRunner._resolve_instrument("accordian") is not None
 
     def test_fuzzy_marimab(self):
         assert MusicCodeRunner._resolve_instrument("marimab") is not None
@@ -61,7 +61,7 @@ class TestCodeRunnerInstrumentChange:
             play_key_fn=lambda k, m: None,
             set_instrument_fn=lambda name: instruments.append(name),
         )
-        asyncio.run(runner.run(["instrument organ"]))
+        asyncio.run(runner.run(["instrument accordion"]))
         assert len(instruments) == 1
 
     def test_play_instrument(self):

@@ -27,6 +27,26 @@ case "$cmd" in
     exec "$SKILL/lanes.sh" "${1:-main}"
     ;;
   merge)
+    if [ $# -eq 0 ]; then
+      CURRENT="$(git branch --show-current)"
+      echo "Available lanes to merge into $CURRENT:"
+      echo
+      printf "  %-30s %8s %8s\n" "LANE" "AHEAD" "BEHIND"
+      git worktree list --porcelain | awk '
+        /^worktree / { p=$2 }
+        /^branch /   { b=$2; sub("refs/heads/", "", b)
+                       nb=p; sub(".*/","",nb)
+                       print nb "\t" b }
+      ' | while IFS=$'\t' read -r short branch; do
+        [ "$branch" = "$CURRENT" ] && continue
+        ahead="$(git rev-list --count "$CURRENT..$branch" 2>/dev/null || echo 0)"
+        behind="$(git rev-list --count "$branch..$CURRENT" 2>/dev/null || echo 0)"
+        printf "  %-30s %8s %8s\n" "$short" "$ahead" "$behind"
+      done
+      echo
+      echo "Run: cw merge <lane>"
+      exit 0
+    fi
     exec "$SKILL/merge-lane.sh" "$@"
     ;;
   help|-h|--help|"")

@@ -88,52 +88,24 @@ from .loop_panel import LoopPanelToggleRequested
 boot_log.heartbeat("all purple_tui imports done")
 
 
-def _border_bar_color(active_theme: str) -> str:
-    """Hex of the viewport border colour for the active theme. Used to tint
-    the heavy-line spacers inside the bottom-border subtitle so the border
-    looks visually continuous between the left- and right-anchored hints."""
-    return "#9b7bc4" if active_theme == "purple-dark" else "#7a4ca0"
-
-
-def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -> str:
-    """Build a left-aligned bottom-border subtitle that spans the border.
-
-    Gaps are filled with `━` characters tinted to match the border, so the
-    border line keeps reading as continuous between the visible hints. The
-    viewport CSS sets `border-subtitle-align: left` so the string anchors
-    at the left edge.
-    """
-    bar_color = _border_bar_color(active_theme)
-    # Textual draws: corner(1) + pad(1) + subtitle + pad(1) + corner(1) on each
-    # row, leaving (width - 4) cells of subtitle space. PUA glyphs render as
-    # 2 terminal cells but Rich measures them as 1, so use display_len for
-    # gap math AND subtract one extra cell per icon used so the rendered
-    # string never exceeds the available subtitle span.
-    interior = VIEWPORT_WIDTH - 4
-    excess = (display_len(left or "") - len(left or "")) + (display_len(right or "") - len(right or ""))
-    interior -= excess
-    parts: list[str] = []
-    used = 0
-    if left:
-        parts.append(left)
-        used += display_len(left)
-    if right:
-        right_w = display_len(right)
-        gap = max(1, interior - used - right_w)
-        parts.append(f"[{bar_color}]{'━' * gap}[/]")
-        parts.append(right)
-    elif left:
-        gap = max(1, interior - used)
-        parts.append(f"[{bar_color}]{'━' * gap}[/]")
-    return "".join(parts)
-
-
 def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active_theme: str) -> None:
-    """Apply bottom-border hints, picking alignment so single-hint cases let
-    Textual fill the rest of the border naturally (no visible color seam)."""
+    """Apply bottom-border hints. With one hint set, Textual fills the rest
+    of the border with native ━ chars (clean corners). With both hints set,
+    we build a left+bars+right string ourselves so both anchor to their
+    edges. Rich's PUA cell-width table is patched at package init so
+    nerd-font glyphs count as 2 cells everywhere — math just works.
+    """
+    del active_theme
     if left and right:
-        viewport.styles.border_subtitle_align = "left"
-        viewport.border_subtitle = _spanning_subtitle(left, right, active_theme)
+        # Right-align so the right hint lands at the same column as in the
+        # single-hint right-aligned case (the 2 cells of natural ━ fill go
+        # before the left hint, not after the right hint).
+        viewport.styles.border_subtitle_align = "right"
+        from rich.cells import cell_len
+        # Textual's render_border_label gets (width - 2) and then reserves
+        # 2 cells per corner = 4, leaving width - 6 for the label content.
+        gap = max(1, VIEWPORT_WIDTH - 6 - cell_len(left) - cell_len(right))
+        viewport.border_subtitle = f"{left}{'━' * gap}{right}"
     elif left:
         viewport.styles.border_subtitle_align = "left"
         viewport.border_subtitle = left
@@ -142,10 +114,16 @@ def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active
         viewport.border_subtitle = right
     else:
         viewport.border_subtitle = ""
+    viewport.border_title = ""
 
 
 def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> None:
-    """Idle (no panel open) bottom-border hints for music/art rooms."""
+    """Idle (no panel open) bottom-border hints for music/art rooms.
+
+    Hints are plain text (no nerd-font icons): icons would render at 2
+    terminal cells but Rich measures them as 1, leaving the right hint
+    offset from the corner relative to single-hint cases.
+    """
     right = f"{ICON_ROBOT} Hold Space: write code! {ICON_ROBOT}" if code_panel_enabled else None
     left = None
     if room == Room.MUSIC and music_looping_enabled:

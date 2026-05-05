@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Music room: holding a key plays one note (piano semantics) instead of repeating at the OS key-repeat rate. Tapping fast still overlaps notes. In letters mode the instrument is ducked under the spoken letter clip so the letter is foreground. Marimba retuned (dropped sub-octave rumble that smeared pitch); xylophone and music-box high partials gated below Nyquist so top-octave samples stop aliasing; percussion peak-normalized to match instrument loudness.
 - Install: optional name prompt before confirmation (e.g. "Mia's Computer", capped 24 chars), shown afterward in the title bar in place of "Installed". Progress bar now moves smoothly during the long write phase (pv-driven %) instead of jumping 12 → 82, and the "10-15 minutes" hint is replaced by a rolling ETA based on actual elapsed time.
 - Parent menu: Added "Allow Music Looping" toggle (mirrors "Allow Code Panel"). When off, hold-Enter no longer starts recording and the "Hold Enter: record a loop" hint disappears from the music room border.
 - Music room: Space tap toggles note labels on/off; loop control moved off Space to hold-Enter (linear advance: idle → recording → looping → stop). Tap Enter still cycles instruments; hold Space still opens code panel. Tab/Esc/any arrow exits a loop early. Recording auto-cancels if no notes are pressed within 2s. 3yo can mash freely without falling into loop mode.

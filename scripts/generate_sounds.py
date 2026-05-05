@@ -116,49 +116,55 @@ def generate_piano_tone(frequency: float, duration: float = 0.4) -> list[int]:
 
 def generate_marimba(frequency: float, duration: float = 0.55) -> list[int]:
     """
-    Full, resonant marimba with tube resonator simulation.
-    Bar vibration + resonator tube = rich, room-filling sound.
+    Crisp marimba: rosewood bar + tuned tube resonator at the fundamental.
+
+    Real marimba bars are tuned so the second mode lands ~2 octaves above the
+    fundamental (4:1) — that's the woody character. The tube resonator
+    reinforces only the fundamental. Earlier versions stacked a 0.5x
+    sub-octave sine and three tube partials, which produced a muddy clash
+    against the bar fundamental and a low rumble that smeared the pitch.
     """
     sample_rate = 44100
+    nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
 
+    # (ratio, amp, decay_rate). 4.0 is the defining marimba partial.
     bar_partials = [
-        (1.0, 1.0, 5.0),
-        (3.9, 0.15, 10.5),
-        (9.2, 0.05, 19.5),
-    ]
-
-    tube_modes = [
-        (1.0, 0.7, 4.5),
-        (2.0, 0.3, 6.0),
-        (3.0, 0.12, 7.5),
+        (1.0, 1.0, 5.5),
+        (4.0, 0.35, 11.0),
+        (9.2, 0.08, 18.0),
     ]
 
     samples = []
     fade_out_duration = 0.18
     fade_out_start = duration - fade_out_duration
 
+    # Soft mallet noise burst — adds the "thock" without muddying sustain.
+    random.seed(int(frequency * 1000))
+
     for i in range(num_samples):
         t = i / sample_rate
-        sample = 0
+        sample = 0.0
 
-        if t < 0.012:
-            attack = t / 0.012
-        elif t < 0.06:
-            attack = 1.0 + 0.2 * math.sin(math.pi * (t - 0.012) / 0.048)
+        if t < 0.008:
+            attack = t / 0.008
         else:
             attack = 1.0
 
         for ratio, amp, decay_rate in bar_partials:
-            partial_decay = math.exp(-t * decay_rate)
-            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
+            f = frequency * ratio
+            if f >= nyquist:
+                continue
+            sample += amp * math.exp(-t * decay_rate) * math.sin(2 * math.pi * f * t)
 
-        for ratio, amp, decay_rate in tube_modes:
-            tube_env = (1 - math.exp(-t * 25)) * math.exp(-t * decay_rate)
-            sample += amp * tube_env * math.sin(2 * math.pi * frequency * ratio * t)
+        # Tuned tube resonator: fundamental only, slow attack, longer decay.
+        tube_env = (1 - math.exp(-t * 30)) * math.exp(-t * 4.0)
+        sample += 0.45 * tube_env * math.sin(2 * math.pi * frequency * t)
 
-        sub_bass = 0.3 * math.exp(-t * 5.0) * math.sin(2 * math.pi * frequency * 0.5 * t)
-        sample += sub_bass
+        # Mallet "thock": noise burst, ~6ms, lowpassed by the bar.
+        if t < 0.01:
+            mallet = (random.random() * 2 - 1) * 0.25 * math.exp(-t * 400)
+            sample += mallet
 
         sample *= attack
 
@@ -177,6 +183,7 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
     Sharp attack, prominent high partials, quick decay.
     """
     sample_rate = 44100
+    nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
     samples = []
     fade_out_duration = 0.1
@@ -204,12 +211,17 @@ def generate_xylophone(frequency: float, duration: float = 0.5) -> list[int]:
             attack = 1.0
 
         for ratio, amp, decay_rate in bar_partials:
+            f = frequency * ratio
+            if f >= nyquist:
+                continue
             partial_decay = math.exp(-t * decay_rate)
-            sample += amp * partial_decay * math.sin(2 * math.pi * frequency * ratio * t)
+            sample += amp * partial_decay * math.sin(2 * math.pi * f * t)
 
         # High-frequency click transient (mallet impact)
-        click = 0.15 * math.exp(-t * 80) * math.sin(2 * math.pi * frequency * 12 * t)
-        sample += click
+        click_freq = frequency * 12
+        if click_freq < nyquist:
+            click = 0.15 * math.exp(-t * 80) * math.sin(2 * math.pi * click_freq * t)
+            sample += click
 
         sample *= attack
 
@@ -358,10 +370,20 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
     Bright "ping" attack, clear and punchy.
     """
     sample_rate = 44100
+    nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
     samples = []
     fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
+
+    # Inharmonic partials of a music-box comb tooth.
+    box_partials = [
+        (1.0, 1.0),
+        (2.76, 0.4),
+        (5.4, 0.2),
+        (8.93, 0.1),
+    ]
+    sparkle_ratio = 12.1
 
     for i in range(num_samples):
         t = i / sample_rate
@@ -375,15 +397,15 @@ def generate_music_box(frequency: float, duration: float = 0.55) -> list[int]:
         else:
             attack = 1.0
 
-        # Inharmonic partials (metal comb physics)
-        sample += 1.0 * math.sin(2 * math.pi * frequency * 1.0 * t)
-        sample += 0.4 * math.sin(2 * math.pi * frequency * 2.76 * t)
-        sample += 0.2 * math.sin(2 * math.pi * frequency * 5.4 * t)
-        sample += 0.1 * math.sin(2 * math.pi * frequency * 8.93 * t)
+        for ratio, amp in box_partials:
+            f = frequency * ratio
+            if f >= nyquist:
+                continue
+            sample += amp * math.sin(2 * math.pi * f * t)
 
-        # High sparkle partial that decays fast
-        sparkle = 0.15 * math.sin(2 * math.pi * frequency * 12.1 * t) * math.exp(-t * 20)
-        sample += sparkle
+        sparkle_freq = frequency * sparkle_ratio
+        if sparkle_freq < nyquist:
+            sample += 0.15 * math.sin(2 * math.pi * sparkle_freq * t) * math.exp(-t * 20)
 
         # Moderate decay, not too long
         envelope = math.exp(-t * 3.5)
@@ -435,6 +457,12 @@ def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
     return finalize_samples(samples)
 
 
+# Percussion is peak-normalized through finalize_samples just like the
+# pitched instruments, so a runtime set_volume(0.4) lands every sample at
+# the same perceived loudness.
+PERCUSSION_PEAK = 0.7
+
+
 def generate_kick_drum() -> list[int]:
     """Punchy kick drum - tuned for laptop speakers"""
     sample_rate = 44100
@@ -458,9 +486,9 @@ def generate_kick_drum() -> list[int]:
         else:
             fade = 1.0
 
-        samples.append(int(sample * envelope * fade * 0.5 * 32767))
+        samples.append(sample * envelope * fade)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_snare() -> list[int]:
     """Crispy snare drum"""
@@ -476,9 +504,9 @@ def generate_snare() -> list[int]:
         noise = (random.random() * 2 - 1) * math.exp(-t * 15)
         sample = tone * 0.4 + noise * 0.6
         envelope = math.exp(-t * 10)
-        samples.append(int(sample * envelope * 0.5 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_hihat() -> list[int]:
     """Bright hi-hat cymbal"""
@@ -495,9 +523,9 @@ def generate_hihat() -> list[int]:
         tone += math.sin(2 * math.pi * 10000 * t) * 0.2
         sample = noise * 0.7 + tone
         envelope = math.exp(-t * 30)
-        samples.append(int(sample * envelope * 0.35 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_gong() -> list[int]:
     """Deep gong hit"""
@@ -516,9 +544,9 @@ def generate_gong() -> list[int]:
         wobble = 1 + 0.1 * math.sin(2 * math.pi * 3 * t)
         sample *= wobble
         envelope = math.exp(-t * 2)
-        samples.append(int(sample * envelope * 0.4 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_cowbell() -> list[int]:
     """Classic cowbell - more cowbell!"""
@@ -535,9 +563,9 @@ def generate_cowbell() -> list[int]:
         sample += 0.7 * math.sin(2 * math.pi * freq2 * t)
         sample += 0.3 * math.sin(2 * math.pi * freq1 * 2 * t)
         envelope = math.exp(-t * 8)
-        samples.append(int(sample * envelope * 0.4 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_clap() -> list[int]:
     """Hand clap sound"""
@@ -555,9 +583,9 @@ def generate_clap() -> list[int]:
         bursts = burst1 + burst2 * 0.8 + burst3 * 0.6
         noise = (random.random() * 2 - 1) * bursts
         envelope = math.exp(-t * 15)
-        samples.append(int(noise * envelope * 0.5 * 32767))
+        samples.append(noise * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_woodblock() -> list[int]:
     """Hollow wood block tick"""
@@ -573,9 +601,9 @@ def generate_woodblock() -> list[int]:
         sample += 0.5 * math.sin(2 * math.pi * freq * 2.3 * t)
         sample += 0.3 * math.sin(2 * math.pi * freq * 4.1 * t)
         envelope = math.exp(-t * 25)
-        samples.append(int(sample * envelope * 0.45 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_triangle() -> list[int]:
     """Triangle ding"""
@@ -593,9 +621,9 @@ def generate_triangle() -> list[int]:
         vibrato = 1 + 0.002 * math.sin(2 * math.pi * 6 * t)
         sample *= vibrato
         envelope = math.exp(-t * 4)
-        samples.append(int(sample * envelope * 0.35 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_tambourine() -> list[int]:
     """Jingly tambourine shake"""
@@ -613,9 +641,9 @@ def generate_tambourine() -> list[int]:
         jingle += math.sin(2 * math.pi * 11000 * t) * 0.1
         sample = noise * 0.5 + jingle
         envelope = math.exp(-t * 12)
-        samples.append(int(sample * envelope * 0.4 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def generate_bongo() -> list[int]:
     """Bongo drum hit"""
@@ -630,9 +658,9 @@ def generate_bongo() -> list[int]:
         sample = math.sin(2 * math.pi * freq * t)
         sample += 0.4 * math.sin(2 * math.pi * freq * 1.5 * t)
         envelope = math.exp(-t * 15)
-        samples.append(int(sample * envelope * 0.45 * 32767))
+        samples.append(sample * envelope)
 
-    return samples
+    return finalize_samples(samples, peak_level=PERCUSSION_PEAK)
 
 def main():
     """Generate all sounds"""

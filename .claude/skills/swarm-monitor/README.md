@@ -1,47 +1,64 @@
 # swarm-monitor
 
-Coordinate multiple independent Claude Code instances running in the same repo, usually on separate git worktrees.
+Run multiple Claude Code instances in parallel on the same repo, each in its own git worktree (a **lane**). This skill helps you start, watch, save, and merge them locally. Nothing here pushes to GitHub.
 
-A **lane** is one Claude Code instance working in one worktree/branch. Each lane has its own commits, status, and optional `.claude-lane-status.md` handoff file. GitHub is publication, not coordination — everything here is local.
-
-## Start a lane
+## The one thing to remember
 
 ```
-./scripts/cw feat-auth
+cw help
 ```
 
-Launches `claude --worktree feat-auth` (extra args forwarded to `claude`).
+That prints the full cheat sheet. Below is the same thing organized by what you're trying to do.
 
-## Slash commands
+## Workflow at a glance
 
-Run inside any lane:
+### 1. Start a lane (from the main worktree, in your shell)
 
-| Command | Purpose |
+```
+cw start feat-auth         # launches Claude Code in worktree "feat-auth"
+```
+
+### 2. Work inside the lane (slash commands inside Claude)
+
+| Want to... | Use |
 | --- | --- |
-| `/handoff` | Write/update `.claude-lane-status.md` in the current worktree. |
-| `/checkpoint <msg>` | Lane-local commit prefixed `lane(BRANCH): <msg>`. No push, no amend, no squash. |
+| Save progress, you write the message | `/checkpoint added validation` |
+| Save progress, Claude writes the message | `/wrap` |
+| Update human-readable handoff notes | `/handoff` |
 
-Run from any lane (read-only across all lanes):
+### 3. Look around (works inside Claude or from the shell)
 
-| Command | Purpose |
+| Want to... | Inside Claude | From shell |
+| --- | --- | --- |
+| Status + overlap across all lanes | `/monitor` | `cw monitor` |
+| Commit history for all lanes | `/log-lanes` | `cw log` |
+| Inspect one lane | `/lane feat-auth` | — |
+| List worktrees/branches | — | `cw lanes` |
+
+### 4. Bring a lane home
+
+| Want to... | Use |
 | --- | --- |
-| `/monitor` | Status + overlap summary across all lanes. |
-| `/lane <name>` | Inspect one lane (status, diff vs main, handoff, merge risk). |
-| `/log-lanes` | Commit history for every lane. |
-| `/integrate-next` | Recommend the safest next lane to integrate into `ai/integration`. |
+| "Which lane should I merge next?" | `/integrate-next` |
+| Actually merge a lane into the current branch | `/merge-lane feat-auth` or `cw merge feat-auth` |
 
-## Underlying scripts
+`/merge-lane` uses `--no-ff` so the lane shows up as a unit in history. It refuses if your working tree is dirty. It does not push, squash, or delete the lane.
 
-In `.claude/skills/swarm-monitor/scripts/`:
+## When-to-use cheat sheet
 
-- `lanes.sh [base]` — list worktrees and lane-like branches.
-- `status.sh [base]` — per-lane status, diff vs base, recent commits, handoff.
-- `overlap.sh [base]` — exact file and directory overlaps between lanes.
-- `log-lanes.sh [base]` — commits ahead of base for each lane.
-- `checkpoint.sh "<msg>"` — safe commit in the current worktree.
+- **Just want to save state?** `/wrap` (lazy) or `/checkpoint <msg>` (you write it).
+- **About to step away?** `/handoff` writes a markdown summary other lanes can read.
+- **Curious what other lanes are doing?** `/monitor`.
+- **Ready to integrate?** `/integrate-next` to pick the safest one, then `/merge-lane <name>`.
+- **Forgot everything?** `cw help`.
 
-Default base branch is `main`.
+## Files
+
+- `scripts/cw` — shell dispatcher (this is what you type in a terminal).
+- `.claude/commands/*.md` — slash commands (what you type inside Claude Code).
+- `.claude/skills/swarm-monitor/scripts/*.sh` — the underlying scripts both layers call.
+- `.claude/skills/swarm-monitor/SKILL.md` — instructions Claude follows when coordinating lanes.
 
 ## Safety
 
-The skill never pushes, merges, or deletes worktrees/branches without explicit instruction.
+The skill never pushes to GitHub, never squashes, never deletes worktrees or branches without you saying so. Merging is local only.

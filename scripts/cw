@@ -1,13 +1,77 @@
 #!/usr/bin/env bash
+# cw = claude worktree. Dispatcher for swarm-monitor.
 set -euo pipefail
 
-LANE="${1:-}"
+ROOT="$(git rev-parse --show-toplevel)"
+SKILL="$ROOT/.claude/skills/swarm-monitor/scripts"
 
-if [ -z "$LANE" ]; then
-  echo "usage: ./scripts/cw LANE_NAME [extra claude args...]"
-  exit 1
-fi
-
+cmd="${1:-help}"
 shift || true
 
-exec claude --worktree "$LANE" "$@"
+case "$cmd" in
+  start)
+    lane="${1:-}"
+    [ -z "$lane" ] && { echo "usage: cw start <lane>"; exit 1; }
+    shift || true
+    exec claude --worktree "$lane" "$@"
+    ;;
+  monitor)
+    "$SKILL/status.sh" "${1:-main}"
+    echo
+    "$SKILL/overlap.sh" "${1:-main}"
+    ;;
+  log)
+    exec "$SKILL/log-lanes.sh" "${1:-main}"
+    ;;
+  lanes)
+    exec "$SKILL/lanes.sh" "${1:-main}"
+    ;;
+  merge)
+    exec "$SKILL/merge-lane.sh" "$@"
+    ;;
+  help|-h|--help|"")
+    cat <<'EOF'
+cw — claude worktree dispatcher
+
+WHERE ARE YOU?
+
+  Outside any lane (in main worktree)
+    cw start <lane>      Launch Claude Code in a worktree (creates if needed)
+    cw monitor           Status + overlap across all lanes
+    cw log               Commit history for every lane
+    cw lanes             List worktrees and lane branches
+    cw merge <lane>      Merge a finished lane into the current branch
+
+  Inside a Claude Code lane (slash commands)
+    While working
+      /handoff           Update .claude-lane-status.md (handoff notes)
+      /checkpoint <msg>  Commit current changes with your message
+      /wrap              Auto-write a 1-2 sentence message and commit
+
+    Looking around (read-only)
+      /monitor           Status + overlap across all lanes
+      /lane <name>       Inspect one lane in detail
+      /log-lanes         Commit history for every lane
+
+    Wrapping up
+      /integrate-next    Recommend the safest lane to merge next
+      /merge-lane <name> Actually merge a lane into the current branch
+
+WHEN TO USE WHAT
+
+  Starting fresh         cw start feat-foo
+  Mid-work save          /checkpoint "added validation"   (you write the msg)
+  Mid-work, lazy         /wrap                            (Claude writes the msg)
+  "What's everyone up to" /monitor   or   cw monitor
+  "Am I done?"           /handoff   then   /integrate-next
+  Bring a lane home      /merge-lane feat-foo   or   cw merge feat-foo
+
+Nothing here pushes to GitHub or deletes worktrees.
+EOF
+    ;;
+  *)
+    echo "unknown subcommand: $cmd"
+    echo "run: cw help"
+    exit 1
+    ;;
+esac

@@ -10,6 +10,18 @@ cw help
 
 That prints the full cheat sheet. Below is the same thing organized by what you're trying to do.
 
+## Lane names: short name vs branch
+
+Refer to a lane by its **short name** — the worktree directory name (e.g. `esc`, `feat-auth`). That's what you type into every command here.
+
+The underlying git branch is `worktree-<name>` (Claude Code's `--worktree` flag picks that prefix; we don't control it). You'll see the branch in `git log` and in `/monitor` output rendered as:
+
+```
+Lane: esc    (branch: worktree-esc)
+```
+
+Tooling accepts either form, so don't worry about it.
+
 ## Workflow at a glance
 
 ### 1. Start a lane (from the main worktree, in your shell)

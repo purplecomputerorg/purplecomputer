@@ -11,8 +11,9 @@ git worktree list --porcelain | awk '
     print path "|" branch
   }
 ' | while IFS='|' read -r path branch; do
+  short="${path##*/}"
   echo "========================================"
-  echo "Lane: $branch"
+  echo "Lane: $short    (branch: $branch)"
   echo "Path: $path"
   echo
 

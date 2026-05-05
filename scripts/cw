@@ -57,6 +57,12 @@ WHERE ARE YOU?
       /integrate-next    Recommend the safest lane to merge next
       /merge-lane <name> Actually merge a lane into the current branch
 
+LANE NAMES
+
+  Refer to lanes by their short name (the worktree dir): "esc", "feat-auth".
+  The git branch is "worktree-<name>" (Claude Code's convention) — tooling
+  resolves either form, so you almost never type the branch name.
+
 WHEN TO USE WHAT
 
   Starting fresh         cw start feat-foo

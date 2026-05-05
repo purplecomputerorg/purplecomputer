@@ -1400,6 +1400,8 @@ class MusicMode(Container, can_focus=True):
         # close the loop panel — the kid can shift key while looping. Tab
         # and Esc remain the easy-outs.
         if isinstance(action, NavigationAction):
+            if action.is_repeat:
+                return
             self._space_hold.on_other_key()
             self._enter_hold.on_other_key()
             d = action.direction

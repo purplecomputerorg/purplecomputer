@@ -25,7 +25,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import math
-from scripts.generate_sounds import generate_marimba, generate_accordion, generate_ukulele, generate_music_box, finalize_samples
+from scripts.generate_sounds import generate_marimba, generate_accordion, generate_ukulele, generate_glockenspiel, finalize_samples
 
 FREQ = 261.63  # Middle C
 
@@ -75,7 +75,7 @@ def main():
     raw_marimba = generate_marimba(FREQ)
     raw_accord = generate_accordion(FREQ)
     raw_uke = generate_ukulele(FREQ)
-    raw_mbox = generate_music_box(FREQ)
+    raw_glock = generate_glockenspiel(FREQ)
 
     # Helper to make both WAV and OGG versions
     def make_pair(name, samples, peak_level, ogg_quality=3):
@@ -115,8 +115,8 @@ def main():
     _, ogg = make_pair("uke_0.7_q3", raw_uke, 0.7, 3)
     tests.append((ogg, "Ukulele OGG q3 (peak 0.7)"))
 
-    _, ogg = make_pair("mbox_0.7_q3", raw_mbox, 0.7, 3)
-    tests.append((ogg, "Music Box OGG q3 (peak 0.7)"))
+    _, ogg = make_pair("glock_0.7_q3", raw_glock, 0.7, 3)
+    tests.append((ogg, "Glockenspiel OGG q3 (peak 0.7)"))
 
     # Existing repo file
     existing = PROJECT_ROOT / "packs/core-sounds/content/marimba/c.ogg"
@@ -180,7 +180,7 @@ def main():
     # Load all 4 instruments as OGG for mixed test
     inst_oggs = {}
     for name, gen_func in [("marimba", generate_marimba), ("accordion", generate_accordion),
-                           ("ukulele", generate_ukulele), ("musicbox", generate_music_box)]:
+                           ("ukulele", generate_ukulele), ("glockenspiel", generate_glockenspiel)]:
         notes = []
         for note, freq in [("C", 261.63), ("E", 329.63), ("G", 392.00), ("A", 440.00)]:
             raw = gen_func(freq)

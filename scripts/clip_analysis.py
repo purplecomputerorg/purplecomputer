@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.generate_sounds import (
-    generate_marimba, generate_accordion, generate_ukulele, generate_music_box
+    generate_marimba, generate_accordion, generate_ukulele, generate_glockenspiel
 )
 
 SET_VOLUME = 0.5
@@ -18,7 +18,7 @@ instruments = {
     'marimba': generate_marimba,
     'accordion': generate_accordion,
     'ukulele': generate_ukulele,
-    'musicbox': generate_music_box,
+    'glockenspiel': generate_glockenspiel,
 }
 
 FREQ = 261.63  # Middle C

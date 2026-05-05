@@ -249,7 +249,6 @@ class MusicRoomHeader(Static):
         self._instrument_name = INSTRUMENTS[0][1]
         self._code_mode = False
         self._root_index = DEFAULT_ROOT_INDEX
-        self.add_class("caps-sensitive")
 
     def update_pitch(self, root_index: int) -> None:
         self._root_index = root_index
@@ -277,8 +276,7 @@ class MusicRoomHeader(Static):
         return f"[dim]{plain}[/]", len(plain)
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        instrument_label = caps(self._instrument_name)
+        instrument_label = self._instrument_name
 
         if self._code_mode:
             return ""
@@ -286,7 +284,7 @@ class MusicRoomHeader(Static):
         if getattr(self.app, '_littles_mode', None):
             return f"[bold]{ICON_MUSIC} {instrument_label}[/]"
 
-        letters_label = caps("Letters")
+        letters_label = "Letters"
 
         sel = "bold #1e1033 on #9b7bc4"
         unsel = "dim"
@@ -302,7 +300,7 @@ class MusicRoomHeader(Static):
         letters_inner = f" {letters_label} "
         modes = f"{music_part}  {letters_part}"
         modes_w = len(music_inner) + 2 + len(letters_inner)
-        hint = caps(f"{ICON_TAB} Tab to switch")
+        hint = f"{ICON_TAB} Tab to switch"
         hint_w = len(hint)
         pitch_markup, pitch_w = self._pitch_tag()
         width = self.size.width or 134
@@ -671,7 +669,6 @@ class MusicGrid(Widget):
 
         default_bg = self._get_default_bg()
         bg_style = Style(bgcolor=default_bg)
-        caps = getattr(self.app, 'caps_text', lambda x: x)
 
         # Above or below the grid?
         if y < margin_top or y >= margin_top + grid_height:
@@ -728,7 +725,7 @@ class MusicGrid(Widget):
             note_below = mid_line + 1
             if line_in_cell == letter_line:
                 # Center the key character
-                display_key = caps(key)
+                display_key = key
                 pad_left = (cell_width - 1) // 2
                 pad_right = cell_width - pad_left - 1
                 segments.append(Segment(" " * pad_left, cell_bg_style))
@@ -743,9 +740,9 @@ class MusicGrid(Widget):
                 # shift, all melodic cells show their note name so the swap
                 # is visible as the wave passes through.
                 if key.isdigit():
-                    label = caps(PERCUSSION_NAMES.get(key, ""))
+                    label = PERCUSSION_NAMES.get(key, "")
                 else:
-                    label = caps(cell_note_name or "")
+                    label = cell_note_name or ""
                 if label:
                     decorated = f"{ICON_MUSIC_NOTE} {label} {ICON_MUSIC_NOTE}"
                     decorated_width = len(decorated)
@@ -780,23 +777,20 @@ PROGRESS_BLOCKS = 20  # number of blocks in the recording progress bar
 class MusicExampleHint(Static):
     """Shows context-sensitive hint for current loop station state.
 
-    Stores raw markup and applies caps in render() so the caps-sensitive
-    refresh pattern works (same as every other hint widget).
+    Stores raw markup and renders it as-is; uppercasing happens at the
+    Strip render-time chokepoint.
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_class("caps-sensitive")
         self._raw_markup: str = ""
 
     def set_hint(self, markup: str) -> None:
-        """Set the hint markup (without caps). Caps applied at render time."""
         self._raw_markup = markup
         self.refresh()
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        return caps(self._raw_markup)
+        return self._raw_markup
 
 
 class MusicMode(Container, can_focus=True):
@@ -1311,8 +1305,7 @@ class MusicMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
-                raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
-                label = self.app.caps_text(raw_label)
+                label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                 self.app.clear_notifications()
                 self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
             return
@@ -1351,7 +1344,7 @@ class MusicMode(Container, can_focus=True):
                         if self._header:
                             self._header.update_instrument(inst_name)
                         self.app.clear_notifications()
-                        self.app.notify(f"{ICON_MUSIC} {self.app.caps_text(inst_name)}", timeout=1.5)
+                        self.app.notify(f"{ICON_MUSIC} {inst_name}", timeout=1.5)
                 return
 
             if action.is_down:
@@ -1373,8 +1366,7 @@ class MusicMode(Container, can_focus=True):
                     self._letters_mode = not self._letters_mode
                     if self._header:
                         self._header.update_mode(self._letters_mode)
-                    raw_label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
-                    label = self.app.caps_text(raw_label)
+                    label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                     self.app.clear_notifications()
                     self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                     return

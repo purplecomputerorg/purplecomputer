@@ -56,7 +56,7 @@ from .constants import (
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-    ICON_CAPS_LOCK, ICON_SHIFT,
+    ICON_SHIFT,
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
     is_usb_cached, is_usb_present,
     VOLUME_LEVELS, VOLUME_DEFAULT,
@@ -68,10 +68,11 @@ boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
     KeyboardStateMachine, CharacterAction, NavigationAction,
-    RoomAction, ControlAction, CapsLockAction,
+    RoomAction, ControlAction,
     InputFloodGuard,
 )
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
+from . import caps as _caps_chokepoint  # installs Strip render-time uppercase patch on import
 boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
 boot_log.heartbeat("power_manager imported; importing .demo")
@@ -167,20 +168,14 @@ class TitleBar(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.mode = ROOM_PLAY[0]
-        self._caps_on = False
         self._shift_text = ""
         self._shift_active = False
         self._battery_text = ""
         self._boot_text = ""
         self._boot_color = ""
-        self.add_class("caps-sensitive")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
-        self.refresh()
-
-    def set_caps(self, on: bool) -> None:
-        self._caps_on = on
         self.refresh()
 
     def set_shift(self, text: str, active: bool) -> None:
@@ -202,15 +197,13 @@ class TitleBar(Widget):
         if width <= 0 or y != 0:
             return Strip([])
 
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-
         # Left indicator (boot mode: USB or Installed), aligned with viewport border
         left_text = f"       {self._boot_text}" if self._boot_text else ""
         left_len = display_len(left_text)
 
         # Title (centered within full width)
         icon, label = ROOM_TITLES.get(self.mode, ("", self.mode.title()))
-        title = f"{icon}  {caps(label)}"
+        title = f"{icon}  {label}"
         title_start = max(0, (width - display_len(title)) // 2)
 
         # Right indicator segments (right-aligned)
@@ -220,8 +213,6 @@ class TitleBar(Widget):
         indicator_parts: list[tuple[str, str]] = []
         if self._shift_text:
             indicator_parts.append((self._shift_text + " ", accent if self._shift_active else muted))
-        caps_label = caps(f"{ICON_CAPS_LOCK} {'ABC' if self._caps_on else 'abc'}")
-        indicator_parts.append((caps_label, accent if self._caps_on else muted))
         if self._battery_text:
             indicator_parts.append((" " + self._battery_text, primary))
 
@@ -319,11 +310,9 @@ class RoomBadge(KeyBadge):
         super().__init__(text="", **kwargs)
         self._icon = icon
         self._room_name = room_name
-        self.add_class("caps-sensitive")
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
-        return f"{self._icon} {caps(self._room_name)}"
+        return f"{self._icon} {self._room_name}"
 
 
 class RoomIndicator(Horizontal):
@@ -432,14 +421,12 @@ class CompactRoomIndicator(Static):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._current_room = Room.PLAY
-        self.add_class("caps-sensitive")
 
     def update_room(self, room: Room) -> None:
         self._current_room = room
         self.refresh()
 
     def render(self) -> str:
-        caps = getattr(self.app, 'caps_text', lambda x: x)
         rooms = [
             (Room.PLAY, ICON_CHAT, "Play"),
             (Room.MUSIC, ICON_MUSIC, "Music"),
@@ -448,9 +435,9 @@ class CompactRoomIndicator(Static):
         parts = []
         for room, icon, name in rooms:
             if room == self._current_room:
-                parts.append(f"[bold $accent]{icon} {caps(name)}[/]")
+                parts.append(f"[bold $accent]{icon} {name}[/]")
             else:
-                parts.append(f"[dim]{icon} {caps(name)}[/]")
+                parts.append(f"[dim]{icon} {name}[/]")
         return f"Esc {ICON_MENU}  " + "  ".join(parts)
 
 
@@ -813,9 +800,6 @@ class PurpleApp(App):
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
             self.keyboard.mode = detect_keyboard_mode()
 
-        # Register callback for caps lock changes
-        self.keyboard.caps.on_change(self._on_caps_change)
-
         # Direct evdev keyboard input (replaces terminal on_key)
         self._keyboard_state_machine = KeyboardStateMachine()
         self._keyboard_state_machine.on_sticky_shift_change(self._on_sticky_shift_change)
@@ -897,7 +881,9 @@ class PurpleApp(App):
         from .power_manager import set_logind_power_key
         set_logind_power_key("ignore")
 
-        from .settings import get_littles_mode, get_code_panel, get_music_looping
+        from .settings import get_littles_mode, get_code_panel, get_music_looping, get_all_caps
+        from . import caps as caps_module
+        caps_module.set_enabled(get_all_caps())
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
@@ -1260,10 +1246,6 @@ class PurpleApp(App):
             else:
                 # Room switching (used by playback/demo system)
                 self.action_switch_room(action.room)
-            return
-
-        if isinstance(action, CapsLockAction):
-            self.keyboard.handle_caps_lock_press()
             return
 
         # Handle escape key for long-hold detection and tap-to-pick
@@ -2568,19 +2550,6 @@ class PurpleApp(App):
             self.speech_enabled = not self.speech_enabled
             return self.speech_enabled
 
-    def _on_caps_change(self, caps_on: bool) -> None:
-        """Called when caps lock state changes"""
-        self._refresh_caps_sensitive_widgets()
-        try:
-            title_bar = self.query_one("#title-bar", TitleBar)
-            title_bar.set_caps(caps_on)
-        except NoMatches:
-            pass
-        # Notify modal screens that may have baked-in caps text
-        top_screen = self.screen
-        if hasattr(top_screen, 'refresh_caps'):
-            top_screen.refresh_caps()
-
     def _update_shift_indicator(self) -> None:
         """Update the shift icon in the title bar based on sticky shift state."""
         sm = self._keyboard_state_machine
@@ -2884,42 +2853,6 @@ class PurpleApp(App):
         # Suppress all terminal keyboard events since we handle via evdev
         event.stop()
         event.prevent_default()
-
-    def _refresh_caps_sensitive_widgets(self) -> None:
-        """Refresh all widgets that change based on caps mode.
-
-        Widgets opt-in by adding the 'caps-sensitive' CSS class.
-        """
-        for widget in self.query(".caps-sensitive"):
-            widget.refresh()
-
-    @property
-    def caps_mode(self) -> bool:
-        """Whether caps lock is on"""
-        return self.keyboard.caps.caps_lock_on
-
-    def caps_text(self, text: str) -> str:
-        """Return text in caps if caps mode is on.
-
-        Only uppercases text outside Rich markup tags (e.g. [bold], [on #hex]),
-        since Rich tags are case-sensitive and .upper() breaks them.
-        """
-        if not self.caps_mode:
-            return text
-        result = []
-        i = 0
-        while i < len(text):
-            if text[i] == '[':
-                # Find closing bracket, preserve tag as-is
-                end = text.find(']', i)
-                if end != -1:
-                    result.append(text[i:end + 1])
-                    i = end + 1
-                    continue
-            result.append(text[i].upper())
-            i += 1
-        return ''.join(result)
-
 
 def main():
     """Entry point for Purple Computer"""

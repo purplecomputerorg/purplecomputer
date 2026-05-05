@@ -92,7 +92,6 @@ ICON_CHAT = "󰭹"             # nf-md-chat_question
 ICON_DOCUMENT = "󰏫"         # nf-md-file_document
 ICON_MOON = "󰖙"             # nf-md-weather_night
 ICON_SUN = "󰖨"              # nf-md-weather_sunny
-ICON_CAPS_LOCK = "󰬈"        # nf-md-caps_lock
 ICON_MENU = "󰀻"             # nf-md-apps (grid icon for room picker)
 ICON_PENCIL = "󰏪"           # nf-md-pencil (write mode)
 ICON_BRUSH = "󰏘"            # nf-md-brush (paint mode - same as palette)

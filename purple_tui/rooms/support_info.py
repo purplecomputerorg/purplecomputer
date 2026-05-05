@@ -49,12 +49,11 @@ class _ScrollablePage(PurpleModal):
         raise NotImplementedError
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, "caps_text", lambda x: x)
         with Vertical(id="modal-dialog"):
-            yield Static(caps(self.TITLE), id="modal-title")
+            yield Static(self.TITLE, id="modal-title")
             with ScrollableContainer(id="info-scroll"):
                 yield Static(self._collect_text(), id="info-body")
-            yield Static(caps("\u25b2 \u25bc scroll   Esc back"), id="modal-hint")
+            yield Static("\u25b2 \u25bc scroll   Esc back", id="modal-hint")
 
     async def _on_key(self, event) -> None:
         event.stop()
@@ -142,15 +141,14 @@ class SupportInfoScreen(PurpleModal):
         self._selected = 0
 
     def compose(self) -> ComposeResult:
-        caps = getattr(self.app, "caps_text", lambda x: x)
         with Vertical(id="modal-dialog"):
-            yield Static(caps("Support info"), id="modal-title")
-            yield Static(caps(self._summary_text()), id="support-summary")
+            yield Static("Support info", id="modal-title")
+            yield Static(self._summary_text(), id="support-summary")
             for i, (btn_id, label, _) in enumerate(_SUB_SCREENS):
                 classes = "support-btn" + (" selected" if i == self._selected else "")
-                yield Static(caps(label), id=btn_id, classes=classes)
-            yield Static(caps(f"Contact: {SUPPORT_EMAIL}"), id="support-email")
-            yield Static(caps("\u25b2 \u25bc choose   Enter open   Esc back"), id="modal-hint")
+                yield Static(label, id=btn_id, classes=classes)
+            yield Static(f"Contact: {SUPPORT_EMAIL}", id="support-email")
+            yield Static("\u25b2 \u25bc choose   Enter open   Esc back", id="modal-hint")
 
     def _summary_text(self) -> str:
         version = diagnostics.get_version_label() or "Dev build"

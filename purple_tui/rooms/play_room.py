@@ -218,11 +218,11 @@ class HistoryLine(Static):
             else:
                 speaker = "   "
             first_prefix = f"{speaker} [{answer_color}]→[/] "
-            result = [self._wrap_with_arrows(caps(lines[0]), first_prefix, answer_color)]
+            result = [self._wrap_with_arrows(lines[0], first_prefix, answer_color)]
             for line in lines[1:]:
                 if line.strip():
                     cont_prefix = f"    [{answer_color}]→[/] "
-                    result.append(self._wrap_with_arrows(caps(line), cont_prefix, answer_color))
+                    result.append(self._wrap_with_arrows(line, cont_prefix, answer_color))
                 else:
                     result.append("")
             return '\n'.join(result)

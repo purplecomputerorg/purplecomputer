@@ -65,8 +65,8 @@ run-sleep-demo:
 preview *args:
     @PYTHONPATH={{justfile_directory()}} .venv/bin/python scripts/preview.py {{args}}
 
-# Run tests
-test:
+# Run tests (lint runs first; static checks catch undefined-name bugs before pytest spins up)
+test: lint
     .venv/bin/python -m pytest tests/ -v
 
 # Test the install/reboot flow in isolation (no hardware needed)

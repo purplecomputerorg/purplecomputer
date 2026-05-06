@@ -72,7 +72,7 @@ from .keyboard import (
     InputFloodGuard,
 )
 from .input import EvdevReader, RawKeyEvent, PowerButtonReader, PowerButtonEvent, LidSwitchReader, LidSwitchEvent, check_evdev_available
-from . import caps as _caps_chokepoint  # installs Strip render-time uppercase patch on import
+from . import caps as _caps_chokepoint  # noqa: F401  # side-effect: installs Strip render-time uppercase patch
 boot_log.heartbeat("keyboard + input imported; importing power_manager")
 from .power_manager import get_power_manager
 boot_log.heartbeat("power_manager imported; importing .demo")

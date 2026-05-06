@@ -27,7 +27,7 @@ from ..keyboard import CharacterAction, ControlAction, NavigationAction, HoldOrT
 from ..music_constants import (
     GRID_KEYS, ALL_KEYS, COLORS, COLOR_KEYCAP,
     INSTRUMENTS, PERCUSSION_NAMES,
-    CHROMATIC_NOTE_NAMES, FRIENDLY_KEYS, FRIENDLY_KEY_NAMES, DEFAULT_ROOT_INDEX,
+    FRIENDLY_KEYS, FRIENDLY_KEY_NAMES, DEFAULT_ROOT_INDEX,
     pitch_for, pitch_filename,
 )
 from .art_room import KEY_COLORS, text_color_for

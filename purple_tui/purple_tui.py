@@ -2893,7 +2893,26 @@ class PurpleApp(App):
         event.stop()
         event.prevent_default()
 
+    def _handle_exception(self, error: Exception) -> None:
+        _write_crash(f"textual {type(error).__name__}", type(error), error, error.__traceback__)
+        super()._handle_exception(error)
+
 _CRASH_LOG_PATHS = ("/var/log/purple/crash.log", "/tmp/purple-crash.log")
+
+
+def _write_crash(header: str, exc_type, exc_value, exc_tb):
+    import traceback
+    from datetime import datetime
+    text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    stamp = datetime.now().isoformat(timespec="seconds")
+    body = f"\n===== {stamp} {header} =====\n{text}"
+    for path in _CRASH_LOG_PATHS:
+        try:
+            with open(path, "a") as f:
+                f.write(body)
+            return
+        except OSError:
+            continue
 
 
 def _install_crash_logger():
@@ -2905,25 +2924,11 @@ def _install_crash_logger():
     """
     import sys
     import threading
-    import traceback
-    from datetime import datetime
-
-    def _write(header: str, exc_type, exc_value, exc_tb):
-        text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
-        stamp = datetime.now().isoformat(timespec="seconds")
-        body = f"\n===== {stamp} {header} =====\n{text}"
-        for path in _CRASH_LOG_PATHS:
-            try:
-                with open(path, "a") as f:
-                    f.write(body)
-                break
-            except OSError:
-                continue
 
     prev_excepthook = sys.excepthook
 
     def _excepthook(exc_type, exc_value, exc_tb):
-        _write("uncaught exception", exc_type, exc_value, exc_tb)
+        _write_crash("uncaught exception", exc_type, exc_value, exc_tb)
         prev_excepthook(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _excepthook
@@ -2931,7 +2936,7 @@ def _install_crash_logger():
     prev_thread_hook = threading.excepthook
 
     def _thread_excepthook(args):
-        _write(f"thread {args.thread.name if args.thread else '?'}", args.exc_type, args.exc_value, args.exc_traceback)
+        _write_crash(f"thread {args.thread.name if args.thread else '?'}", args.exc_type, args.exc_value, args.exc_traceback)
         prev_thread_hook(args)
 
     threading.excepthook = _thread_excepthook

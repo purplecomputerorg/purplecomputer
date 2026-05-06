@@ -2878,12 +2878,58 @@ class PurpleApp(App):
         event.stop()
         event.prevent_default()
 
+_CRASH_LOG_PATHS = ("/var/log/purple/crash.log", "/tmp/purple-crash.log")
+
+
+def _install_crash_logger():
+    """Persist uncaught exceptions to disk.
+
+    Textual renders to stderr, so an unhandled exception flashes for a frame
+    before xinitrc re-execs the launcher and the traceback is gone. Append
+    it to a file so we can read it after the fact.
+    """
+    import sys
+    import threading
+    import traceback
+    from datetime import datetime
+
+    def _write(header: str, exc_type, exc_value, exc_tb):
+        text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        stamp = datetime.now().isoformat(timespec="seconds")
+        body = f"\n===== {stamp} {header} =====\n{text}"
+        for path in _CRASH_LOG_PATHS:
+            try:
+                with open(path, "a") as f:
+                    f.write(body)
+                break
+            except OSError:
+                continue
+
+    prev_excepthook = sys.excepthook
+
+    def _excepthook(exc_type, exc_value, exc_tb):
+        _write("uncaught exception", exc_type, exc_value, exc_tb)
+        prev_excepthook(exc_type, exc_value, exc_tb)
+
+    sys.excepthook = _excepthook
+
+    prev_thread_hook = threading.excepthook
+
+    def _thread_excepthook(args):
+        _write(f"thread {args.thread.name if args.thread else '?'}", args.exc_type, args.exc_value, args.exc_traceback)
+        prev_thread_hook(args)
+
+    threading.excepthook = _thread_excepthook
+
+
 def main():
     """Entry point for Purple Computer"""
     import sys
     import os
     import signal
     import atexit
+
+    _install_crash_logger()
 
     # Verify evdev is available before anything else
     # Purple Computer requires Linux with evdev for keyboard input

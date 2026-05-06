@@ -32,9 +32,9 @@ def reachable_pitches() -> list[tuple[str, int]]:
     """Every (note_name, octave) the grid can actually play.
 
     Enumerates all (row, col, root, octave_shift) cells and unions the
-    pitch_for outputs. Skips chromatic samples that are never requested
-    (e.g. D# in any octave — the 5 friendly roots × major scale geometry
-    never produces it; or 11 of 12 notes in octave 7).
+    pitch_for outputs. The 5 FRIENDLY_KEYS × major scale geometry covers
+    11 of 12 chromatic notes; the missing one depends on which roots are
+    in the cycle.
     """
     seen = set()
     for row in (0, 1, 2):

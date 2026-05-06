@@ -74,14 +74,15 @@ def test_instruments_have_display_names():
         assert display_name, f"Empty display name for {inst_id}"
 
 
-def test_pitch_for_default_g_major():
-    """Default state (root=G, shift=0) reproduces the legacy G-major mapping."""
-    g_root = FRIENDLY_KEYS[DEFAULT_ROOT_INDEX]
-    assert pitch_for(0, 0, g_root, 0) == ('G', 4)   # Q
-    assert pitch_for(0, 7, g_root, 0) == ('G', 5)   # I (octave up)
-    assert pitch_for(0, 9, g_root, 0) == ('B', 5)   # P (top)
-    assert pitch_for(1, 0, g_root, 0) == ('G', 3)   # A
-    assert pitch_for(2, 0, g_root, 0) == ('G', 2)   # Z (lowest)
+def test_pitch_for_default_c_major():
+    """Default state (root=C, shift=0) plays a C-major scale at singing range."""
+    c_root = FRIENDLY_KEYS[DEFAULT_ROOT_INDEX]
+    assert c_root == 0
+    assert pitch_for(0, 0, c_root, 0) == ('C', 4)   # Q (middle C)
+    assert pitch_for(0, 7, c_root, 0) == ('C', 5)   # I (octave up)
+    assert pitch_for(0, 9, c_root, 0) == ('E', 5)   # P (top)
+    assert pitch_for(1, 0, c_root, 0) == ('C', 3)   # A
+    assert pitch_for(2, 0, c_root, 0) == ('C', 2)   # Z (lowest)
 
 
 def test_pitch_for_d_major_shift():

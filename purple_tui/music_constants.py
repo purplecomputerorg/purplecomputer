@@ -71,14 +71,17 @@ CHROMATIC_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#',
 # Major scale: semitone offsets from the root for scale degrees 0..6
 MAJOR_SCALE_SEMITONES = [0, 2, 4, 5, 7, 9, 11]
 
-# Five "no wrong notes" keys cycled by Left/Right. Stored as semitone indices
-# (0=C, 2=D, 5=F, 7=G, 9=A). G is the default for backward compatibility with
-# the original NOTE_FREQUENCIES table above.
-FRIENDLY_KEYS = [0, 2, 5, 7, 9]
-DEFAULT_ROOT_INDEX = FRIENDLY_KEYS.index(7)  # G
+# Five "no wrong notes" keys cycled by Left/Right, ordered around the circle
+# of fifths and centered on C: B♭ (10) ← F (5) ← C (0) → G (7) → D (2). Each
+# Right step adds a sharp (brighter), each Left step adds a flat (warmer).
+FRIENDLY_KEYS = [10, 5, 0, 7, 2]
+# Display names that respect circle-of-fifths convention: flat-side keys use
+# flat names (B♭, not A♯), sharp-side keys use sharp names. CHROMATIC_NOTE_NAMES
+# alone can't express this since 10 is ambiguous (A♯/B♭).
+FRIENDLY_KEY_NAMES = ["B♭", "F", "C", "G", "D"]
+DEFAULT_ROOT_INDEX = FRIENDLY_KEYS.index(0)  # C
 
-# Vertical row → base octave for scale degree 0 in that row (G major default
-# already maps row 0 to G4, row 1 to G3, row 2 to G2).
+# Vertical row → base octave for scale degree 0 in that row.
 ROW_OCTAVE_BASE = {0: 4, 1: 3, 2: 2}
 
 

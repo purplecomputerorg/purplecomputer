@@ -201,6 +201,7 @@ class _FakeCanvas:
     def _restart_blink(self): pass
     def refresh(self): pass
     def _set_paint_mode(self, on): self._paint_mode = on
+    def _post_paint_mode_changed(self): pass
     def _move_in_direction(self, d):
         if d == 'right': return self._move_cursor_right()
         if d == 'left': return self._move_cursor_left()

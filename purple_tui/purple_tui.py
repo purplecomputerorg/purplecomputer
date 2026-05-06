@@ -1728,24 +1728,33 @@ class PurpleApp(App):
             self.exit(return_code=0)
 
     def _reap_stale_toasts(self) -> None:
-        """Remove toasts whose notifications have expired.
+        """Wall-clock watchdog: kill any Toast that's been on screen longer
+        than its own timeout, regardless of Textual's notification state.
 
-        Walks every screen in the stack, not just the active one — App.query
-        only sees the current screen, which misses toasts on backgrounded
-        screens (e.g. under a pushed modal).
+        Stamps each Toast on first sight and removes it once age exceeds
+        timeout + grace. We don't trust notification.has_expired — if that
+        flag ever fails to flip (re-stamped raised_at, missed refresh, etc.)
+        the toast would hang forever. Walks every screen in the stack so
+        toasts under a pushed modal still get reaped.
         """
         from textual.widgets._toast import Toast, ToastHolder
+        now = time.monotonic()
         for screen in self.screen_stack:
             for toast in screen.query(Toast):
-                if not toast._notification.has_expired:
+                first_seen = getattr(toast, "_purple_first_seen", None)
+                if first_seen is None:
+                    toast._purple_first_seen = now
                     continue
-                try:
-                    self._unnotify(toast._notification, refresh=False)
-                except Exception:
-                    pass
+                timeout = getattr(toast._notification, "timeout", 3.0) or 3.0
+                if now - first_seen < timeout + 0.5:
+                    continue
                 holder = toast.parent if isinstance(toast.parent, ToastHolder) else toast
                 try:
                     holder.remove()
+                except Exception:
+                    pass
+                try:
+                    self._unnotify(toast._notification, refresh=False)
                 except Exception:
                     pass
 

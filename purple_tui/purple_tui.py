@@ -1152,11 +1152,18 @@ class PurpleApp(App):
             self._lid_switch_reader = None
 
         # Shut down pygame mixer to prevent SDL audio thread hang on exit.
-        # Especially important in VMs with virtualized audio devices.
+        # Bounded timeout: on healthy systems quit() returns well under 1s and
+        # the join completes immediately. On systems where SDL wedges against
+        # the audio device (UTM/QEMU virt audio, flaky USB/Bluetooth audio on
+        # real hardware), we don't block shutdown -- the process is exiting
+        # anyway and the OS reaps the daemon thread.
         try:
             import pygame.mixer
+            import threading
             if pygame.mixer.get_init():
-                pygame.mixer.quit()
+                t = threading.Thread(target=pygame.mixer.quit, daemon=True)
+                t.start()
+                t.join(timeout=1.0)
         except Exception:
             pass
 

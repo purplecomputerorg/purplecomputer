@@ -138,7 +138,7 @@ PAINT_STRENGTH = 0.7
 # one. Threshold is high enough that a kid moving 3-4 cells never accelerates,
 # but a sustained hold escapes a corner or erases a streak quickly.
 ARROW_HOLD_REPEAT_THRESHOLD = 8
-HOLD_ACCEL_MULTIPLIER = 4
+HOLD_ACCEL_MULTIPLIER = 6
 
 # Gutter size (cells around content where cursor ring can extend)
 GUTTER = 1
@@ -725,10 +725,9 @@ class ArtCanvas(Widget, can_focus=True):
         return False
 
     def _carriage_return(self) -> None:
-        """Move to start of next line."""
+        """Move to start of next line, wrapping from the last row back to the top."""
         self._cursor_x = 0
-        if self._cursor_y < self.canvas_height - 1:
-            self._cursor_y += 1
+        self._cursor_y = (self._cursor_y + 1) % self.canvas_height
 
     def _advance_after_stamp(self, direction: str) -> None:
         """Advance cursor after stamping a character or paint blob.

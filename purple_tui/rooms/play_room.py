@@ -1344,9 +1344,9 @@ class SimpleEvaluator:
 
             return result
 
-        # Same-emoji expressions: collapse to abacus when total > 10
+        # Same-emoji expressions: collapse to abacus when total > 20
         # (small counts like "2 + 3 cats" keep grouped inline display)
-        if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > 10:
+        if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > 20:
             e = emoji_items[0][0]
             return self._format_emoji_label(e, total_count)
 
@@ -1360,7 +1360,7 @@ class SimpleEvaluator:
         for item_type, value in items:
             if item_type == 'emoji':
                 e, c, w = value
-                if c > 10:
+                if c > 20:
                     result_parts.append(self._format_emoji_label(e, c))
                 else:
                     result_parts.append(e * c)
@@ -1561,7 +1561,7 @@ class SimpleEvaluator:
     def _format_color_label(self, hex_color: str, count: int) -> str:
         """Format color multiplication with label and abacus visualization."""
         block = f"[on {hex_color}]  [/]"
-        if count <= 10:
+        if count <= 20:
             return block * count
         viz = self._format_number_with_dots(count, show_label=False, bead=block)
         return f"= {count} {block}\n{viz}"
@@ -1733,7 +1733,7 @@ class SimpleEvaluator:
         if emoji_data := self._parse_emoji(t_lower):
             e, c, w = emoji_data
             # Show label+abacus for explicit operators OR large counts
-            if c > 1 and (has_operator or c > 10):
+            if c > 1 and (has_operator or c > 20):
                 expr = ""
                 if has_operator and (m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+', t_lower)):
                     expr = f"{m.group(1)}*{m.group(2)}"
@@ -2027,8 +2027,8 @@ class SimpleEvaluator:
             n = int(num)
             if n >= 1:
                 color = self.ABACUS_COLORS[0]
-                # ≤ 10: plain dots/beads (with grouping for simple math)
-                if n <= 10:
+                # ≤ 20: plain dots/beads (with grouping for simple math)
+                if n <= 20:
                     grouped = self._format_grouped_dots(n, expression, color, bead=bead)
                     if grouped:
                         content = grouped if is_emoji_bead else f"[{color}]{grouped}[/]"
@@ -2041,7 +2041,7 @@ class SimpleEvaluator:
                         return f"{label}\n{content}"
                     return content
 
-                # > 10 but within abacus range
+                # > 20 but within abacus range
                 num_digits = len(str(n))
                 if num_digits <= len(self.ABACUS_COLORS):
                     # Build all rows from highest place down to ones

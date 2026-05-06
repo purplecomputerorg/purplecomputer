@@ -1301,7 +1301,7 @@ class CanvasHeader(Static):
 
         modes = f"{paint_part}  {write_part}"
         modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
-        hint = f"{ICON_TAB} Tab to switch"
+        hint = f"{ICON_TAB} Tab to {'write' if self._is_painting else 'paint'}"
         hint_w = len(hint)
         width = self.size.width or 134
         left_pad = max(0, (width - modes_w) // 2)

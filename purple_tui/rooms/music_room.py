@@ -310,7 +310,7 @@ class MusicRoomHeader(Static):
         letters_inner = f" {letters_label} "
         modes = f"{music_part}  {letters_part}"
         modes_w = len(music_inner) + 2 + len(letters_inner)
-        hint = f"{ICON_TAB} Tab to switch"
+        hint = f"{ICON_TAB} Tab to turn {'off' if self._letters_mode else 'on'} letters"
         hint_w = len(hint)
         pitch_markup, pitch_w = self._pitch_tag()
         width = self.size.width or 134
@@ -1142,7 +1142,8 @@ class MusicMode(Container, can_focus=True):
             if getattr(self.app, '_littles_mode', None):
                 hint.set_hint("")
             else:
-                space_hint = "Space: show notes"
+                labels_shown = bool(self.grid and getattr(self.grid, '_show_labels', False))
+                space_hint = "Space: hide notes" if labels_shown else "Space: show notes"
                 arrows_hint = "Arrows: switch key"
                 enter_hint = "Enter: instrument"
                 hint.set_hint(f"[dim]{space_hint}    {arrows_hint}    {enter_hint}[/]")
@@ -1235,9 +1236,15 @@ class MusicMode(Container, can_focus=True):
         if self._loop.state == RECORDING:
             self._advance_loop_state()  # recording → looping
             return
+        if self._loop.state == LOOPING:
+            # Restart the cycle from the top without changing the track length.
+            self._loop.start_new_cycle()
+            self._update_hint()
+            return
         if self.grid is not None:
             self.grid._show_labels = not self.grid._show_labels
             self.grid.refresh()
+            self._update_hint()
 
     def _on_enter_hold_fired(self) -> None:
         """Enter held long enough.

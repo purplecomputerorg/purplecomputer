@@ -54,6 +54,8 @@ class LoopPanel(Vertical):
     #loop-bar {
         height: 1;
         text-align: center;
+        margin-top: 1;
+        margin-bottom: 1;
     }
 
     #loop-action {

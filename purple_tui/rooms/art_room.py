@@ -315,6 +315,19 @@ class ArtCanvas(Widget, can_focus=True):
         self._arrow_repeat_count: int = 0
         self._backspace_repeat_count: int = 0
 
+        # Last (paint_mode, color) we broadcast via PaintModeChanged. Streaks
+        # of the same key would otherwise fire identical messages per stamp,
+        # each triggering a DOM walk + refresh of legend/header/hint/shift.
+        self._last_posted_paint_state: tuple[bool, str] | None = None
+
+    def _post_paint_mode_changed(self) -> None:
+        """Post PaintModeChanged only if (paint_mode, color) changed since last post."""
+        state = (self._paint_mode, self._last_key_color)
+        if state == self._last_posted_paint_state:
+            return
+        self._last_posted_paint_state = state
+        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
+
     def on_mount(self) -> None:
         """Start cursor blinking when canvas is mounted."""
         self._start_blink()
@@ -378,7 +391,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._space_down = False
 
         self._mark_cursor_dirty()
-        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
+        self._post_paint_mode_changed()
         self.refresh()
 
     def set_code_mode(self, code_mode: bool) -> None:
@@ -1029,14 +1042,14 @@ class ArtCanvas(Widget, can_focus=True):
                 if char in GRAYSCALE:
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
-                    self.post_message(PaintModeChanged(True, self._last_key_color))
+                    self._post_paint_mode_changed()
                 elif char.isalpha() or char in KEY_COLORS:
                     lower = char.lower()
                     color = get_key_color(lower)
                     if color != "#AAAAAA":
                         self._last_key_char = lower
                         self._last_key_color = color
-                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                        self._post_paint_mode_changed()
                 self._paint_at_cursor()
 
             # Smart ↑/↓: the auto-advance after a stamp pushed the cursor one
@@ -1098,7 +1111,7 @@ class ArtCanvas(Widget, can_focus=True):
                     self._last_key_color = GRAYSCALE[char]
                     self._paint_at_cursor()
                     self._advance_after_stamp(advance_direction)
-                    self.post_message(PaintModeChanged(True, self._last_key_color))
+                    self._post_paint_mode_changed()
                     self._mark_cursor_dirty()  # New position
                     self._restart_blink()
                     self.refresh()
@@ -1108,7 +1121,7 @@ class ArtCanvas(Widget, can_focus=True):
                     if color != "#AAAAAA":  # Only if it's a mapped color
                         self._last_key_char = lower
                         self._last_key_color = color
-                        self.post_message(PaintModeChanged(True, self._last_key_color))
+                        self._post_paint_mode_changed()
                         if not action.shift_held:
                             # No shift: stamp and advance in arrow direction (or right by default)
                             self._paint_at_cursor()
@@ -1155,12 +1168,17 @@ class ColorLegend(Widget):
 
     def set_visible(self, visible: bool) -> None:
         """Show or hide the legend."""
+        if self._visible == visible:
+            return
         self._visible = visible
         self.refresh()
 
     def set_active_color(self, color: str) -> None:
         """Set the active row based on the current brush color."""
-        self._active_row = get_legend_row_from_color(color)
+        row = get_legend_row_from_color(color)
+        if row == self._active_row:
+            return
+        self._active_row = row
         self.refresh()
 
     def set_active_row(self, row: int) -> None:
@@ -1238,6 +1256,8 @@ class CanvasHeader(Static):
 
     def update_state(self, is_painting: bool, last_color: str) -> None:
         """Update displayed state."""
+        if self._is_painting == is_painting and self._last_color == last_color:
+            return
         self._is_painting = is_painting
         self._last_color = last_color
         self.refresh()
@@ -1312,6 +1332,8 @@ class ArtHintBar(Static):
         self._is_painting = True
 
     def update_state(self, is_painting: bool) -> None:
+        if self._is_painting == is_painting:
+            return
         self._is_painting = is_painting
         self.refresh()
 

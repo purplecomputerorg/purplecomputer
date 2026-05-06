@@ -1692,7 +1692,9 @@ class SimpleEvaluator:
         if emoji:
             return self._format_emoji_pattern(sequence, emoji)
         else:
-            return self._format_number_pattern(sequence)
+            gaps = re.findall(r'\d( +)(?=-?\d)', left)
+            sep = gaps[0] if gaps else " "
+            return self._format_number_pattern(sequence, sep)
 
     def _format_emoji_pattern(self, sequence: list[int], emoji: str) -> str:
         """Render emoji sequence as rows (one per count)."""
@@ -1704,12 +1706,8 @@ class SimpleEvaluator:
                 lines.append(" ")
         return "\n".join(lines)
 
-    def _format_number_pattern(self, sequence: list[int]) -> str:
-        """Render number sequence with dot visualization for the final value."""
-        seq_str = "  ".join(str(n) for n in sequence)
-        last = sequence[-1]
-        dots = self._format_number_with_dots(last, show_label=False)
-        return f"{seq_str}\n{dots}"
+    def _format_number_pattern(self, sequence: list[int], sep: str = " ") -> str:
+        return sep.join(str(n) for n in sequence)
 
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""

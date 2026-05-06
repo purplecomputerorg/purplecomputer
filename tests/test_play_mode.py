@@ -1673,15 +1673,15 @@ class TestColorMappingConsistency:
         def test_countdown_numbers(self, evaluator):
             result = evaluator.evaluate("5 4 3 ...")
             # Should contain the full countdown sequence
-            assert "5  4  3  2  1" in result
+            assert "5 4 3 2 1" in result
 
         def test_countup_numbers(self, evaluator):
             result = evaluator.evaluate("2 4 6 ... 20")
-            assert "2  4  6  8  10  12  14  16  18  20" in result
+            assert "2 4 6 8 10 12 14 16 18 20" in result
 
         def test_countup_by_tens(self, evaluator):
             result = evaluator.evaluate("10 20 30 ...")
-            assert "10  20  30  40" in result
+            assert "10 20 30 40" in result
 
         def test_countdown_emoji(self, evaluator):
             result = evaluator.evaluate("5 cats ...")
@@ -1708,21 +1708,21 @@ class TestColorMappingConsistency:
         def test_no_pattern_without_dots(self, evaluator):
             # "5 4 3" without ... should NOT trigger pattern
             result = evaluator.evaluate("5 4 3")
-            assert "5  4  3  2  1" not in result
+            assert "5 4 3 2 1" not in result
 
         def test_two_dots_also_works(self, evaluator):
             result = evaluator.evaluate("5 4 3 ..")
-            assert "5  4  3  2  1" in result
+            assert "5 4 3 2 1" in result
 
         def test_odd_numbers(self, evaluator):
             result = evaluator.evaluate("1 3 5 ... 15")
-            assert "1  3  5  7  9  11  13  15" in result
+            assert "1 3 5 7 9 11 13 15" in result
 
         def test_non_arithmetic_returns_none(self, evaluator):
             # 1, 2, 4 is not arithmetic (diffs: 1, 2)
             result = evaluator.evaluate("1 2 4 ...")
             # Should fall through to normal eval, not crash
-            assert "1  2  4  8" not in result
+            assert "1 2 4 8" not in result
 
         def test_no_space_before_dots(self, evaluator):
             result = evaluator.evaluate("5cats...10")
@@ -1733,6 +1733,23 @@ class TestColorMappingConsistency:
             result = evaluator.evaluate("5cats...")
             lines = result.split("\n")
             assert len(lines) == 5  # 5, 4, 3, 2, 1
+
+        def test_double_space_input_mirrored(self, evaluator):
+            result = evaluator.evaluate("1  2  3  4...")
+            assert "1  2  3  4  5  6  7  8  9  10" in result
+
+        def test_triple_space_input_mirrored(self, evaluator):
+            result = evaluator.evaluate("2   4   6...")
+            assert "2   4   6   8" in result
+
+        def test_single_space_input_mirrored(self, evaluator):
+            result = evaluator.evaluate("1 2 3 4...")
+            assert "1 2 3 4 5 6 7 8 9 10" in result
+
+        def test_no_dots_visualization(self, evaluator):
+            # Number patterns should NOT include the dot visualization line
+            result = evaluator.evaluate("1 2 3 4...")
+            assert "●" not in result  # bead/dot char
 
 
 class TestFuzzyCorrections:

@@ -1520,8 +1520,7 @@ class PurpleApp(App):
                 # Canvas paint_mode determines default: paint vs write
                 await runner.run(lines, paint=canvas._paint_mode)
                 # Sync header with canvas state after code finishes
-                from .rooms.art_room import PaintModeChanged
-                canvas.post_message(PaintModeChanged(canvas._paint_mode, canvas._last_key_color))
+                canvas._post_paint_mode_changed()
                 # Show correction feedback if the runner interpreted anything
                 if runner.corrections:
                     orig, corrected = runner.corrections[-1]

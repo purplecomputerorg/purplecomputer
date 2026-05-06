@@ -833,6 +833,5 @@ class ArtCodeRunner:
         self._paint_on = True
         self._write_on = False
         self.canvas._mark_cursor_dirty()
-        from .rooms.art_room import PaintModeChanged
-        self.canvas.post_message(PaintModeChanged(True, hex_color))
+        self.canvas._post_paint_mode_changed()
         self.canvas.refresh()

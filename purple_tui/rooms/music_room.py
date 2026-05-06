@@ -1213,7 +1213,7 @@ class MusicMode(Container, can_focus=True):
         # Duck the instrument under the spoken letter clip so the letter is
         # the foreground sound in letters mode.
         is_letters_layer = mode == MODE_LETTERS and key in _SPEAKABLE_KEYS
-        volume_scale = 0.4 if is_letters_layer else 1.0
+        volume_scale = 0.2 if is_letters_layer else 1.0
         if instrument is not None:
             self.grid.play_sound_with_instrument(key, instrument, volume_scale)
         else:

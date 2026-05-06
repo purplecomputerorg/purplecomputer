@@ -487,54 +487,6 @@ def generate_glockenspiel(frequency: float, duration: float = 1.5) -> list[int]:
 
 
 
-def generate_rhodes(frequency: float, duration: float = 1.1) -> list[int]:
-    """Rhodes electric piano: warm sine fundamental + bell-like tine bark.
-
-    A real Rhodes hammer strikes a metal tine next to a tonebar; the pickup
-    captures both the tine's quick bell-bark (high partial, fast decay) and
-    the tonebar's warm sustained body (near-sine fundamental, long decay).
-    A slow tremolo at ~5Hz suggests the classic amp wobble.
-    """
-    sample_rate = 44100
-    nyquist = sample_rate / 2
-    num_samples = int(sample_rate * duration)
-    fade_out = 0.3
-    fade_start = duration - fade_out
-
-    boost = low_freq_partial_boost(frequency)
-    # (ratio, amp, decay). The 6x partial is the "tine bark": short, bright,
-    # gives the Rhodes its bell-like attack without dominating the sustain.
-    partials = [
-        (1.0, 1.0, 2.2),
-        (2.0, 0.22, 3.8),
-        (3.0, 0.10, 5.2),
-        (6.0, 0.40 * boost, 13.0),
-    ]
-    trem_rate = 5.0
-    trem_depth = 0.05
-
-    samples = []
-    for i in range(num_samples):
-        t = i / sample_rate
-        if t < 0.005:
-            attack = t / 0.005
-        else:
-            attack = 1.0
-        s = 0.0
-        for ratio, amp, dec in partials:
-            f = frequency * ratio
-            if f >= nyquist:
-                continue
-            s += amp * math.exp(-t * dec) * math.sin(2 * math.pi * f * t)
-        trem = 1.0 + trem_depth * math.sin(2 * math.pi * trem_rate * t)
-        s *= attack * trem
-        if t > fade_start:
-            p = (t - fade_start) / fade_out
-            s *= 0.5 * (1 + math.cos(math.pi * p))
-        samples.append(s)
-    return finalize_samples(samples, peak_level=0.7, freq=frequency)
-
-
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
     """
     Bright, playful tone - like a toy piano or xylophone.
@@ -790,7 +742,6 @@ def main():
         ("accordion", generate_accordion),
         ("ukulele", generate_ukulele),
         ("glockenspiel", generate_glockenspiel),
-        ("electric_piano", generate_rhodes),
     ]
 
     for inst_dir, generator in instruments:

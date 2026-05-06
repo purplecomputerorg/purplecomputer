@@ -28,15 +28,11 @@ INSTRUMENTS = [
     ("ukulele", "Ukulele"),
     ("accordion", "Accordion"),
     ("glockenspiel", "Glockenspiel"),
-    ("electric_piano", "Electric Piano"),
 ]
 
 # Common short names that map to instrument IDs
 INSTRUMENT_ALIASES = {
     "uke": "ukulele",
-    "piano": "electric_piano",
-    "epiano": "electric_piano",
-    "rhodes": "electric_piano",
 }
 
 # Musical frequencies (G major scale across 3 octaves)

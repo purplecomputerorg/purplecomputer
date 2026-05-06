@@ -248,27 +248,28 @@ def generate_accordion(frequency: float, duration: float = 0.55) -> list[int]:
     fade_out_duration = 0.12
     fade_out_start = duration - fade_out_duration
 
-    # Two reeds, ~8 cents apart. The chorus beat rate at low pitch is a
-    # few Hz, which is what gives accordion its characteristic "wobble."
-    detune_cents = 4.0
+    # Two reeds, only ~2 cents apart. Tighter detune than a real musette —
+    # leans further toward harmonium/shruti box, with just enough beat to
+    # stay alive instead of sounding like a single sine.
+    detune_cents = 2.0
     f1 = frequency
     f2 = frequency * (2 ** (detune_cents / 1200.0))
 
-    # Band-limited sawtooth via Fourier series. Lower rolloff (2kHz) tames
-    # the buzzy reed edge — pushes the timbre toward harmonium/shruti box
-    # rather than carnival accordion.
-    rolloff_hz = 2000.0
-    harmonic_cap = 20
+    # Band-limited sawtooth via Fourier series. Aggressive rolloff and a
+    # tight harmonic cap kill most of the buzzy reed edge — the result
+    # reads as a soft reed organ rather than a carnival accordion.
+    rolloff_hz = 1000.0
+    harmonic_cap = 10
     max_n = min(harmonic_cap, int(nyquist / max(frequency, 1.0)))
 
-    trem_rate = 6.0
-    trem_depth = 0.04
+    trem_rate = 5.0
+    trem_depth = 0.015
 
     for i in range(num_samples):
         t = i / sample_rate
-        # 30ms attack — bellows take a moment to engage.
-        if t < 0.03:
-            attack = t / 0.03
+        # 80ms attack — slow swell, no bellows "punch" at note-start.
+        if t < 0.08:
+            attack = t / 0.08
         else:
             attack = 1.0
 
@@ -292,7 +293,7 @@ def generate_accordion(frequency: float, duration: float = 0.55) -> list[int]:
 
         samples.append(s)
 
-    return finalize_samples(samples, peak_level=0.55, freq=frequency)
+    return finalize_samples(samples, peak_level=0.4, freq=frequency)
 
 
 def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
@@ -425,7 +426,7 @@ def generate_ukulele(frequency: float, duration: float = 0.9) -> list[int]:
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
-def generate_glockenspiel(frequency: float, duration: float = 1.2) -> list[int]:
+def generate_glockenspiel(frequency: float, duration: float = 1.5) -> list[int]:
     """Glockenspiel: bright metal bell with long shimmery ring.
 
     Distinguishes from marimba by three things:
@@ -444,18 +445,20 @@ def generate_glockenspiel(frequency: float, duration: float = 1.2) -> list[int]:
     sample_rate = 44100
     nyquist = sample_rate / 2
     num_samples = int(sample_rate * duration)
-    fade_out = 0.18
+    fade_out = 0.7
     fade_start = duration - fade_out
     boost = low_freq_partial_boost(frequency)
     # Inharmonic ratios with the 2nd partial louder than the fundamental.
-    # Decay rates roughly halved vs the older marimba-shaped version so the
-    # bell rings out instead of knocking.
+    # Decay rates faster than the previous version so the bell tapers
+    # naturally instead of holding full volume until the cosine cutoff —
+    # combined with a much longer fade, this avoids the "loud loud done"
+    # chop and lands closer to a true bell ring-out.
     partials = [
-        (1.0, 0.6, 0.8),
-        (2.8, 0.9 * boost, 2.0),
-        (5.42, 0.45 * boost, 3.0),
-        (8.6, 0.22 * boost, 5.0),
-        (11.7, 0.12 * boost, 7.0),
+        (1.0, 0.6, 1.4),
+        (2.8, 0.9 * boost, 2.8),
+        (5.42, 0.45 * boost, 4.2),
+        (8.6, 0.22 * boost, 6.5),
+        (11.7, 0.12 * boost, 9.0),
     ]
     ping_freq = 4000.0
     ping_duration = 0.005
@@ -482,6 +485,54 @@ def generate_glockenspiel(frequency: float, duration: float = 1.2) -> list[int]:
         samples.append(s)
     return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
+
+
+def generate_rhodes(frequency: float, duration: float = 1.1) -> list[int]:
+    """Rhodes electric piano: warm sine fundamental + bell-like tine bark.
+
+    A real Rhodes hammer strikes a metal tine next to a tonebar; the pickup
+    captures both the tine's quick bell-bark (high partial, fast decay) and
+    the tonebar's warm sustained body (near-sine fundamental, long decay).
+    A slow tremolo at ~5Hz suggests the classic amp wobble.
+    """
+    sample_rate = 44100
+    nyquist = sample_rate / 2
+    num_samples = int(sample_rate * duration)
+    fade_out = 0.3
+    fade_start = duration - fade_out
+
+    boost = low_freq_partial_boost(frequency)
+    # (ratio, amp, decay). The 6x partial is the "tine bark": short, bright,
+    # gives the Rhodes its bell-like attack without dominating the sustain.
+    partials = [
+        (1.0, 1.0, 2.2),
+        (2.0, 0.22, 3.8),
+        (3.0, 0.10, 5.2),
+        (6.0, 0.40 * boost, 13.0),
+    ]
+    trem_rate = 5.0
+    trem_depth = 0.05
+
+    samples = []
+    for i in range(num_samples):
+        t = i / sample_rate
+        if t < 0.005:
+            attack = t / 0.005
+        else:
+            attack = 1.0
+        s = 0.0
+        for ratio, amp, dec in partials:
+            f = frequency * ratio
+            if f >= nyquist:
+                continue
+            s += amp * math.exp(-t * dec) * math.sin(2 * math.pi * f * t)
+        trem = 1.0 + trem_depth * math.sin(2 * math.pi * trem_rate * t)
+        s *= attack * trem
+        if t > fade_start:
+            p = (t - fade_start) / fade_out
+            s *= 0.5 * (1 + math.cos(math.pi * p))
+        samples.append(s)
+    return finalize_samples(samples, peak_level=0.7, freq=frequency)
 
 
 def generate_rich_tone(frequency: float, duration: float = 0.5) -> list[int]:
@@ -739,6 +790,7 @@ def main():
         ("accordion", generate_accordion),
         ("ukulele", generate_ukulele),
         ("glockenspiel", generate_glockenspiel),
+        ("electric_piano", generate_rhodes),
     ]
 
     for inst_dir, generator in instruments:

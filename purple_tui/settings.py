@@ -14,6 +14,7 @@ _defaults = {
     "littles_mode": None,        # None = off, "music", "music_noscreen", or "art"
     "code_panel": True,          # Whether the code panel can be opened (space hold)
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
+    "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "all_caps": False,           # Whether all rendered text is uppercased at render time
 }
 
@@ -74,6 +75,17 @@ def get_music_looping() -> bool:
 def set_music_looping(enabled: bool) -> None:
     settings = load_settings()
     settings["music_looping"] = enabled
+    save_settings(settings)
+
+
+def get_music_key_switching() -> bool:
+    """Whether music room key switching (arrows) is enabled."""
+    return load_settings()["music_key_switching"]
+
+
+def set_music_key_switching(enabled: bool) -> None:
+    settings = load_settings()
+    settings["music_key_switching"] = enabled
     save_settings(settings)
 
 

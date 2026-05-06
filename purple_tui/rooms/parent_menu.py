@@ -361,6 +361,9 @@ _CODE_PANEL_CANCELLED = object()
 # MusicLoopingScreen dismiss value
 _MUSIC_LOOPING_CANCELLED = object()
 
+# MusicKeySwitchingScreen dismiss value
+_MUSIC_KEY_SWITCHING_CANCELLED = object()
+
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
 
@@ -565,6 +568,23 @@ class MusicLoopingScreen(PickerModal):
         self._selected = 0 if get_music_looping() else 1
 
 
+class MusicKeySwitchingScreen(PickerModal):
+    """Toggle the music key switching setting."""
+
+    TITLE = "Allow Music Key Switching"
+    DESCRIPTION = "Allow switching musical keys in Music with the arrow buttons"
+    OPTIONS = [
+        (True, "Yes"),
+        (False, "No"),
+    ]
+    escape_value = _MUSIC_KEY_SWITCHING_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_music_key_switching
+        self._selected = 0 if get_music_key_switching() else 1
+
+
 
 
 
@@ -676,7 +696,7 @@ def _get_version_label() -> str:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_all_caps
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps
 
     items = []
 
@@ -695,6 +715,8 @@ def _get_menu_items() -> list:
         items.append(("menu-code-panel", code_label))
         looping_label = "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"
         items.append(("menu-music-looping", looping_label))
+        key_switch_label = "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"
+        items.append(("menu-music-key-switching", key_switch_label))
 
     caps_label = "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"
     items.append(("menu-all-caps", caps_label))
@@ -1661,6 +1683,8 @@ class ParentMenu(PurpleModal):
             self._open_code_panel()
         elif item_id == "menu-music-looping":
             self._open_music_looping()
+        elif item_id == "menu-music-key-switching":
+            self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
         elif item_id == "menu-display":
@@ -1763,6 +1787,36 @@ class ParentMenu(PurpleModal):
         label = "Allow Music Looping: Yes" if new_value else "Allow Music Looping: No"
         try:
             widget = self.query_one("#menu-music-looping", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_music_key_switching(self) -> None:
+        """Open the music key switching picker modal."""
+        def on_result(result):
+            if result is _MUSIC_KEY_SWITCHING_CANCELLED:
+                return
+            self._apply_music_key_switching(result)
+
+        self.app.push_screen(MusicKeySwitchingScreen(), callback=on_result)
+
+    def _apply_music_key_switching(self, new_value: bool) -> None:
+        """Apply a music key switching setting change."""
+        from ..settings import set_music_key_switching
+        set_music_key_switching(new_value)
+        self.app._music_key_switching_enabled = new_value
+        # Refresh the music room hint bar so "Arrows: switch key" appears/disappears.
+        try:
+            from .music_room import MusicMode
+            for mode in self.app.query(MusicMode):
+                if hasattr(mode, '_update_hint'):
+                    mode._update_hint()
+        except Exception:
+            pass
+        # Update menu label
+        label = "Allow Music Key Switching: Yes" if new_value else "Allow Music Key Switching: No"
+        try:
+            widget = self.query_one("#menu-music-key-switching", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

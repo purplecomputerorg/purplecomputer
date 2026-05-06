@@ -1144,9 +1144,12 @@ class MusicMode(Container, can_focus=True):
             else:
                 labels_shown = bool(self.grid and getattr(self.grid, '_show_labels', False))
                 space_hint = "Space: hide notes" if labels_shown else "Space: show notes"
-                arrows_hint = "Arrows: switch key"
                 enter_hint = "Enter: instrument"
-                hint.set_hint(f"[dim]{space_hint}    {arrows_hint}    {enter_hint}[/]")
+                parts = [space_hint]
+                if getattr(self.app, '_music_key_switching_enabled', True):
+                    parts.append("Arrows: switch key")
+                parts.append(enter_hint)
+                hint.set_hint("[dim]" + "    ".join(parts) + "[/]")
 
         # Loop panel: opens when recording/looping, closes back to idle.
         # Mirrors the REPL open/close: hides the inline hint, pins the grid
@@ -1416,6 +1419,8 @@ class MusicMode(Container, can_focus=True):
             if action.is_repeat:
                 return
             if getattr(self.app, '_littles_mode', None):
+                return
+            if not getattr(self.app, '_music_key_switching_enabled', True):
                 return
             self._space_hold.on_other_key()
             self._enter_hold.on_other_key()

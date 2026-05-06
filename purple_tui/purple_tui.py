@@ -839,6 +839,7 @@ class PurpleApp(App):
         self._code_panel_enabled: bool = True
         self._code_panel_active: bool = False  # True when code panel mode is on (persists across rooms)
         self._music_looping_enabled: bool = True
+        self._music_key_switching_enabled: bool = True
 
         # Demo playback (dev mode only)
         self._demo_player: DemoPlayer | None = None
@@ -905,7 +906,7 @@ class PurpleApp(App):
         from .power_manager import set_logind_power_key
         set_logind_power_key("ignore")
 
-        from .settings import get_littles_mode, get_code_panel, get_music_looping, get_all_caps
+        from .settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
         saved_littles = get_littles_mode()
@@ -913,11 +914,13 @@ class PurpleApp(App):
             self._littles_mode = saved_littles
             self._code_panel_enabled = False
             self._music_looping_enabled = False
+            self._music_key_switching_enabled = False
             room_map = {"music": Room.MUSIC, "music_noscreen": Room.MUSIC, "art": Room.ART}
             self.active_room = room_map.get(saved_littles, Room.MUSIC)
         else:
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
+            self._music_key_switching_enabled = get_music_key_switching()
 
         self._load_room_content()
 
@@ -2665,10 +2668,12 @@ class PurpleApp(App):
             self._code_panel_enabled = False
             self._code_panel_active = False
             self._music_looping_enabled = False
+            self._music_key_switching_enabled = False
         else:
-            from .settings import get_code_panel, get_music_looping
+            from .settings import get_code_panel, get_music_looping, get_music_key_switching
             self._code_panel_enabled = get_code_panel()
             self._music_looping_enabled = get_music_looping()
+            self._music_key_switching_enabled = get_music_key_switching()
 
         if mode:
             # Switch to the locked room

@@ -16,7 +16,7 @@
 
 ## Git Commits
 
-Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These use `.claude/skills/swarm-monitor/scripts/checkpoint.sh`.
+Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These come from the [`lanes`](https://github.com/tavinathanson/lanes) tool installed at `~/.claude/`.
 
 Commit messages: **one line, max two short sentences.** No bullet-list body. No `Co-Authored-By` trailer. No `lane(...)` prefix — the script handles whatever prefixing is needed. Never use the default verbose Claude Code commit format.
 

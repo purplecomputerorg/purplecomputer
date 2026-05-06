@@ -990,6 +990,7 @@ class MusicMode(Container, can_focus=True):
             self._header.update_instrument(INSTRUMENTS[0][1])
             self._header.update_mode(False)
             self._header.set_code_mode(False)
+            self._header.update_pitch(self._root_index)
 
     # -- Loop station controls -----------------------------------------------
 

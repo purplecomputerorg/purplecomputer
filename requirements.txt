@@ -1,5 +1,5 @@
 textual>=0.40.0
-rich>=13.0.0
+rich>=14.3.0
 wcwidth>=0.2.0
 numpy>=1.24,<2
 pygame>=2.5.0

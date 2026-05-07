@@ -151,8 +151,11 @@ def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active
         viewport.border_subtitle = left + " "
     elif right:
         viewport.styles.border_subtitle_align = "right"
-        # Leading space, same reason on the other side.
-        viewport.border_subtitle = " " + right
+        # No leading space: the right hint's first icon paints rightward
+        # into its own next char, never backward into Textual's ━ filler,
+        # so a leading buffer would just show as an empty cell where the
+        # border line should continue.
+        viewport.border_subtitle = right
     else:
         viewport.border_subtitle = ""
 

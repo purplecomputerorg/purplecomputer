@@ -105,27 +105,30 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     at the left edge.
     """
     bar_color = _border_bar_color(active_theme)
-    # Textual draws: corner(1) + pad(1) + subtitle + pad(1) + corner(1) on each
-    # row, leaving (width - 4) cells of subtitle space. PUA glyphs render as
-    # 2 terminal cells but Rich measures them as 1, so use display_len for
-    # gap math AND subtract one extra cell per icon used so the rendered
-    # string never exceeds the available subtitle span.
+    # Textual draws: corner(1) + pad(1) + subtitle + pad(1) + corner(1) on
+    # each row, leaving (width - 4) Rich-cells for the subtitle. We size
+    # the string to *exactly* fill that slot in Rich-cell terms (== char
+    # count, since Rich measures every PUA glyph as 1 cell). That makes
+    # the rightmost icon sit at the last subtitle column, so its 2nd
+    # painted cell lands on the trailing pad — same place the rightmost
+    # icon sits in the single-hint right-align case. If we under-filled
+    # in Rich cells (e.g. by reasoning in display cells), Textual would
+    # add native ━ filler at the right end and visually shove the right
+    # hint away from the corner.
     #
-    # Pad a literal space between every hint edge and the ━ filler (or the
-    # corner). The 2nd painted cell of a trailing/leading icon glyph would
-    # otherwise overlap the adjacent ━ — visually a dash slicing through
-    # the icon — because Rich placed the next character one cell after the
-    # icon while the terminal painted the icon two cells wide.
+    # Pad a literal space between every hint edge and the ━ filler. The
+    # 2nd painted cell of a trailing/leading icon would otherwise overlap
+    # the adjacent ━ — a dash slicing through the icon — because Rich
+    # placed the next character one cell after the icon while the
+    # terminal painted the icon two cells wide.
     interior = VIEWPORT_WIDTH - 4
-    excess = (display_len(left or "") - len(left or "")) + (display_len(right or "") - len(right or ""))
-    interior -= excess
     parts: list[str] = []
     used = 0
     if left:
         parts.append(left + " ")
-        used += display_len(left) + 1
+        used += len(left) + 1
     if right:
-        right_w = display_len(right) + 1  # leading space
+        right_w = len(right) + 1  # leading space
         gap = max(1, interior - used - right_w)
         parts.append(f"[{bar_color}]{'━' * gap}[/]")
         parts.append(" " + right)

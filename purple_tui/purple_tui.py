@@ -121,7 +121,7 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     # the adjacent ━ — a dash slicing through the icon — because Rich
     # placed the next character one cell after the icon while the
     # terminal painted the icon two cells wide.
-    interior = VIEWPORT_WIDTH - 4
+    interior = VIEWPORT_WIDTH - 6
     parts: list[str] = []
     used = 0
     if left:

@@ -118,3 +118,36 @@ def test_music_room_renders():
             await _settle(pilot)
             _check(app)
     _run(go())
+
+
+def test_music_loop_panel_open_close_renders():
+    """Open the loop record panel (Hold Enter), then close it. Exercises
+    the dual-hint and single-hint bottom-border subtitle paths."""
+    async def go():
+        app = _make_app()
+        async with app.run_test(size=APP_SIZE) as pilot:
+            await _settle(pilot)
+            await _switch(app, pilot, "music")
+            app._apply_code_panel_ui(active=True, kind='loop')
+            await _settle(pilot)
+            _check(app)
+            app._apply_code_panel_ui(active=False, kind='loop')
+            await _settle(pilot)
+            _check(app)
+    _run(go())
+
+
+def test_music_code_panel_open_close_renders():
+    """Open the code (REPL) panel via Hold Space, then close it."""
+    async def go():
+        app = _make_app()
+        async with app.run_test(size=APP_SIZE) as pilot:
+            await _settle(pilot)
+            await _switch(app, pilot, "music")
+            app._apply_code_panel_ui(active=True, kind='code')
+            await _settle(pilot)
+            _check(app)
+            app._apply_code_panel_ui(active=False, kind='code')
+            await _settle(pilot)
+            _check(app)
+    _run(go())

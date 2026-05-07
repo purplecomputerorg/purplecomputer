@@ -110,19 +110,25 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
     # 2 terminal cells but Rich measures them as 1, so use display_len for
     # gap math AND subtract one extra cell per icon used so the rendered
     # string never exceeds the available subtitle span.
+    #
+    # Pad a literal space between every hint edge and the ━ filler (or the
+    # corner). The 2nd painted cell of a trailing/leading icon glyph would
+    # otherwise overlap the adjacent ━ — visually a dash slicing through
+    # the icon — because Rich placed the next character one cell after the
+    # icon while the terminal painted the icon two cells wide.
     interior = VIEWPORT_WIDTH - 4
     excess = (display_len(left or "") - len(left or "")) + (display_len(right or "") - len(right or ""))
     interior -= excess
     parts: list[str] = []
     used = 0
     if left:
-        parts.append(left)
-        used += display_len(left)
+        parts.append(left + " ")
+        used += display_len(left) + 1
     if right:
-        right_w = display_len(right)
+        right_w = display_len(right) + 1  # leading space
         gap = max(1, interior - used - right_w)
         parts.append(f"[{bar_color}]{'━' * gap}[/]")
-        parts.append(right)
+        parts.append(" " + right)
     elif left:
         gap = max(1, interior - used)
         parts.append(f"[{bar_color}]{'━' * gap}[/]")
@@ -137,10 +143,13 @@ def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active
         viewport.border_subtitle = _spanning_subtitle(left, right, active_theme)
     elif left:
         viewport.styles.border_subtitle_align = "left"
-        viewport.border_subtitle = left
+        # Trailing space stops the trailing icon's 2nd painted cell from
+        # overlapping Textual's native ━ filler.
+        viewport.border_subtitle = left + " "
     elif right:
         viewport.styles.border_subtitle_align = "right"
-        viewport.border_subtitle = right
+        # Leading space, same reason on the other side.
+        viewport.border_subtitle = " " + right
     else:
         viewport.border_subtitle = ""
 

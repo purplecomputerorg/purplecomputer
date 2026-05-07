@@ -302,7 +302,7 @@ class RoomBadge(KeyBadge):
 
     DEFAULT_CSS = """
     RoomBadge {
-        width: 12;
+        width: 11;
     }
     """
 

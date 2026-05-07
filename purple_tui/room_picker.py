@@ -46,7 +46,7 @@ class RoomOption(Static):
 
     DEFAULT_CSS = """
     RoomOption {
-        width: 18;
+        width: 16;
         height: 8;
         content-align: center middle;
         text-align: center;

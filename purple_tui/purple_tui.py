@@ -139,15 +139,22 @@ def _spanning_subtitle(left: str | None, right: str | None, active_theme: str) -
 
 
 def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active_theme: str) -> None:
-    """Apply bottom-border hints. Always routes through _spanning_subtitle
-    so we control the full border line and Textual never gets a chance to
-    truncate or right-align with mismatched cell math (the single-hint
-    right path used to drop a `…` mid-string)."""
-    if not left and not right:
+    """Apply bottom-border hints, picking alignment so single-hint cases let
+    Textual fill the rest of the border naturally (no visible color seam)."""
+    if left and right:
+        viewport.styles.border_subtitle_align = "left"
+        viewport.border_subtitle = _spanning_subtitle(left, right, active_theme)
+    elif left:
+        viewport.styles.border_subtitle_align = "left"
+        # Trailing space stops the trailing icon's 2nd painted cell from
+        # overlapping Textual's native ━ filler.
+        viewport.border_subtitle = left + " "
+    elif right:
+        viewport.styles.border_subtitle_align = "right"
+        # Leading space, same reason on the other side.
+        viewport.border_subtitle = " " + right
+    else:
         viewport.border_subtitle = ""
-        return
-    viewport.styles.border_subtitle_align = "left"
-    viewport.border_subtitle = _spanning_subtitle(left, right, active_theme)
 
 
 def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> None:

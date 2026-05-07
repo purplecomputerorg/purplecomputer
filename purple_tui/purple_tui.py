@@ -90,25 +90,22 @@ boot_log.heartbeat("all purple_tui imports done")
 
 
 def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active_theme: str) -> None:
-    """Apply bottom-border hints.
-
-    With a single hint set we anchor it to its side and let Textual fill
-    the rest of the border with native ━ chars (clean corners always).
-
-    With both hints set we build a left+bars+right string. The bar count
-    uses display_len (2 cells per nerd-font icon) so the visible string
-    fits the slot. Right-align so the trailing edge matches the
-    single-hint right-aligned case; the small natural ━ fill that
-    Textual adds to reach Rich's measurement goes before the left hint
-    rather than after the right hint.
+    """Apply bottom-border hints. With one hint set, Textual fills the rest
+    of the border with native ━ chars (clean corners). With both hints set,
+    we build a left+bars+right string ourselves so both anchor to their
+    edges. Rich's PUA cell-width table is patched at package init so
+    nerd-font glyphs count as 2 cells everywhere — math just works.
     """
     del active_theme
     if left and right:
+        # Right-align so the right hint lands at the same column as in the
+        # single-hint right-aligned case (the 2 cells of natural ━ fill go
+        # before the left hint, not after the right hint).
         viewport.styles.border_subtitle_align = "right"
-        # display_len treats nerd-font icons as 2 cells (their actual
-        # rendered width). Rich's PUA table is patched at package init
-        # to match, so the gap math fits exactly with no truncation.
-        gap = max(1, VIEWPORT_WIDTH - 6 - display_len(left) - display_len(right))
+        from rich.cells import cell_len
+        # Textual's render_border_label gets (width - 2) and then reserves
+        # 2 cells per corner = 4, leaving width - 6 for the label content.
+        gap = max(1, VIEWPORT_WIDTH - 6 - cell_len(left) - cell_len(right))
         viewport.border_subtitle = f"{left}{'━' * gap}{right}"
     elif left:
         viewport.styles.border_subtitle_align = "left"
@@ -118,6 +115,7 @@ def _set_viewport_hints(viewport, *, left: str | None, right: str | None, active
         viewport.border_subtitle = right
     else:
         viewport.border_subtitle = ""
+    viewport.border_title = ""
 
 
 def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, active_theme: str, music_looping_enabled: bool = True) -> None:

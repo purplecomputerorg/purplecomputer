@@ -278,8 +278,12 @@ class MusicRoomHeader(Static):
 
     def _pitch_tag(self) -> tuple[str, int]:
         """Return (markup, visible_width) for the current-key indicator."""
-        root_name = FRIENDLY_KEY_NAMES[self._root_index]
-        plain = f"← Key {root_name} →"
+        if getattr(self.app, '_music_key_switching_enabled', True):
+            root_name = FRIENDLY_KEY_NAMES[self._root_index]
+            plain = f"← Key {root_name} →"
+        else:
+            root_name = FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]
+            plain = f"Key {root_name}"
         return f"[dim]{plain}[/]", len(plain)
 
     def render(self) -> str:

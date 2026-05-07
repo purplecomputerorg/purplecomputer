@@ -1806,11 +1806,22 @@ class ParentMenu(PurpleModal):
         set_music_key_switching(new_value)
         self.app._music_key_switching_enabled = new_value
         # Refresh the music room hint bar so "Arrows: switch key" appears/disappears.
+        # When disabling, reset the current key back to the default so playback
+        # and the header indicator match what the kid sees.
         try:
-            from .music_room import MusicMode
+            from .music_room import MusicMode, DEFAULT_ROOT_INDEX
             for mode in self.app.query(MusicMode):
+                if not new_value:
+                    mode._root_index = DEFAULT_ROOT_INDEX
+                    if mode.grid:
+                        mode.grid._root_index = DEFAULT_ROOT_INDEX
+                        mode.grid.refresh()
+                    if mode._header:
+                        mode._header.update_pitch(DEFAULT_ROOT_INDEX)
                 if hasattr(mode, '_update_hint'):
                     mode._update_hint()
+                if mode._header:
+                    mode._header.refresh()
         except Exception:
             pass
         # Update menu label

@@ -203,6 +203,10 @@ release *args:
 upload-early-access:
     ./build-scripts/upload-early-access.sh
 
+# Upload just the early-access HTML to Cloudflare R2 (no PDFs)
+upload-early-access-html:
+    ./build-scripts/upload-early-access-html.sh
+
 # Upload just the PDFs to Cloudflare R2
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh

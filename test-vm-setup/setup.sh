@@ -119,6 +119,18 @@ if [ ! -f "$UINPUT_FILE" ] || ! grep -qF "$UINPUT_RULE" "$UINPUT_FILE"; then
     sudo udevadm trigger
 fi
 
+# Passwordless sudo for shutdown/reboot, so the parent menu's exit doesn't
+# hang waiting for a password. Matches the commands power_manager.py invokes.
+# (Golden image grants purple full NOPASSWD; test VM stays narrowly scoped.)
+SUDOERS_FILE="/etc/sudoers.d/purple-test-shutdown"
+SUDOERS_RULE="$USER ALL=(root) NOPASSWD: /bin/systemctl poweroff *, /usr/bin/systemctl poweroff *, /sbin/poweroff, /usr/sbin/poweroff, /bin/systemctl reboot *, /usr/bin/systemctl reboot *, /sbin/reboot, /usr/sbin/reboot"
+if [ ! -f "$SUDOERS_FILE" ] || ! grep -qF "$SUDOERS_RULE" "$SUDOERS_FILE"; then
+    echo "  Granting passwordless sudo for shutdown/reboot..."
+    echo "$SUDOERS_RULE" | sudo tee "$SUDOERS_FILE" > /dev/null
+    sudo chmod 440 "$SUDOERS_FILE"
+    sudo visudo -c -f "$SUDOERS_FILE"
+fi
+
 # X permissions for non-root users
 sudo tee /etc/X11/Xwrapper.config > /dev/null << 'XWRAP'
 allowed_users=anybody

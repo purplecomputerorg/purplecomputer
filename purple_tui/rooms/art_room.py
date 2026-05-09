@@ -1082,6 +1082,11 @@ class ArtCanvas(Widget, can_focus=True):
                     any_moved = True
                     if paint_each_step:
                         self._paint_at_cursor()
+                        # Intermediate rows during accelerated vertical paint
+                        # are otherwise outside the cursor's 3-row dirty ring,
+                        # so their cached strips never re-render until a later
+                        # cursor pass marks them dirty.
+                        self._dirty_lines.add(self._cursor_y)
 
             if not any_moved:
                 self._on_edge_hit()

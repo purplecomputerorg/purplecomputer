@@ -756,7 +756,7 @@ class InstallNameScreen(PurpleModal):
     #modal-dialog {
         width: 50;
         padding: 1 2;
-        max-height: 22;
+        max-height: 14;
     }
 
     #modal-title {
@@ -770,137 +770,100 @@ class InstallNameScreen(PurpleModal):
         margin: 1 0;
     }
 
+    #install-name-desc.error {
+        color: $error;
+    }
+
     #install-name-field {
         width: 100%;
         height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
+        content-align: left middle;
+        text-align: left;
+        padding: 0 1;
+        border: heavy $accent;
         margin: 1 0;
     }
-
-    #install-name-field.focused {
-        border: heavy $accent;
-    }
-
-    .install-btn {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 1 1 0 1;
-    }
-
-    .install-btn.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
     """
+
+    _MIN_LEN = 3
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._name = ""
-        self._focus_index = 0  # 0 = input, 1 = Done, 2 = Skip
+        self._blink_on = True
+        self._error = ""
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         with Vertical(id="modal-dialog"):
             yield Static(caps("Name this computer"), id="modal-title")
-            yield Static(
-                "Optional. e.g. Mia's Computer",
-                id="install-name-desc",
-            )
+            yield Static("Optional. e.g. Mia's Computer", id="install-name-desc")
             yield Static("", id="install-name-field")
-            yield Static(caps("Done"), id="btn-name-done", classes="install-btn")
-            yield Static(caps("Skip"), id="btn-name-skip", classes="install-btn")
-            yield Static(caps("Type a name. ▲ ▼ switch. Enter confirm. Esc cancel."), id="modal-hint")
+            yield Static(caps("Enter  Esc"), id="modal-hint")
 
     def on_mount(self) -> None:
+        self._update_ui()
+        self.set_interval(0.5, self._toggle_blink)
+
+    def _toggle_blink(self) -> None:
+        self._blink_on = not self._blink_on
         self._update_ui()
 
     def _update_ui(self) -> None:
         try:
             field = self.query_one("#install-name-field", Static)
-            done_btn = self.query_one("#btn-name-done", Static)
-            skip_btn = self.query_one("#btn-name-skip", Static)
+            desc = self.query_one("#install-name-desc", Static)
         except Exception:
             return
-
-        # Show input value with a cursor when focused.
-        cursor = "█" if self._focus_index == 0 else " "
-        field.update(self._name + cursor if self._name or self._focus_index == 0 else "(no name)")
-        if self._focus_index == 0:
-            field.add_class("focused")
+        cursor = "█" if self._blink_on else " "
+        field.update(self._name + cursor)
+        if self._error:
+            desc.update(self._error)
+            desc.add_class("error")
         else:
-            field.remove_class("focused")
-
-        if self._focus_index == 1:
-            done_btn.add_class("selected")
-        else:
-            done_btn.remove_class("selected")
-        if self._focus_index == 2:
-            skip_btn.add_class("selected")
-        else:
-            skip_btn.remove_class("selected")
-
-    def _confirm_done(self) -> None:
-        self.dismiss(self._name.strip()[:_NAME_MAX])
-
-    def _confirm_skip(self) -> None:
-        self.dismiss("")
+            desc.update("Optional. e.g. Mia's Computer")
+            desc.remove_class("error")
 
     def on_key(self, event: events.Key) -> None:
         event.stop()
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, NavigationAction):
-            if action.direction == 'down':
-                self._focus_index = (self._focus_index + 1) % 3
-                self._update_ui()
-            elif action.direction == 'up':
-                self._focus_index = (self._focus_index - 1) % 3
-                self._update_ui()
-            return
-
         if isinstance(action, ControlAction) and action.is_down:
             key = action.action
             if key == 'escape':
                 self.dismiss(_INSTALL_NAME_CANCELLED)
                 return
             if key == 'enter':
-                if self._focus_index == 2:
-                    self._confirm_skip()
+                trimmed = self._name.strip()
+                if not self._name:
+                    self.dismiss("")
+                elif len(trimmed) < self._MIN_LEN:
+                    self._error = f"Use {self._MIN_LEN}+ letters or leave blank."
+                    self._update_ui()
                 else:
-                    # Input row or Done button: treat empty as Skip, otherwise Done.
-                    if self._name.strip():
-                        self._confirm_done()
-                    else:
-                        self._confirm_skip()
+                    self.dismiss(trimmed[:_NAME_MAX])
                 return
-            if key == 'backspace' and self._focus_index == 0 and self._name:
+            if key == 'backspace' and self._name:
                 self._name = self._name[:-1]
+                self._error = ""
                 self._update_ui()
                 return
-            if key == 'space' and self._focus_index == 0:
-                if len(self._name) < _NAME_MAX:
-                    self._name += " "
-                    self._update_ui()
+            if key == 'space' and len(self._name) < _NAME_MAX:
+                self._name += " "
+                self._error = ""
+                self._update_ui()
                 return
             return
 
         if isinstance(action, CharacterAction):
             if action.is_repeat:
                 return
-            if self._focus_index != 0:
-                return
             char = action.char
             if not char or len(self._name) >= _NAME_MAX:
                 return
             self._name += char
+            self._error = ""
             self._update_ui()
 
 

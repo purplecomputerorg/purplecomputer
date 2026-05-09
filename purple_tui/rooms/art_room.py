@@ -29,6 +29,7 @@ from ..color_mixing import mix_colors_paint, hex_to_rgb
 from ..constants import ICON_TAB
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
+    UNSHIFT_MAP,
 )
 
 
@@ -1101,21 +1102,27 @@ class ArtCanvas(Widget, can_focus=True):
             self._backspace_repeat_count = 0
 
             char = action.char
+            # When shift is held, fold to the unshifted key so number-row
+            # shifted symbols (Shift+9='(', Shift+0=')', Shift+-='_',
+            # Shift+= remapped to '+') resolve to a grayscale shade. Mirrors
+            # the .lower() the alpha branch uses for shifted letters.
+            if action.shift_held and char in UNSHIFT_MAP:
+                char = UNSHIFT_MAP[char]
             # When an arrow is held, advance in that direction after stamping.
             # This lets you type "leftward" or "downward" by holding an arrow while typing.
             advance_direction = action.arrow_held if action.arrow_held else 'right'
             if self._paint_mode:
                 self._mark_cursor_dirty()  # Old position
                 # In paint mode:
-                # - Lowercase letters: select color, stamp, advance (direction from held arrow, or right)
-                # - Uppercase (shift) letters: just select color (no stamp, no advance)
-                # - Number keys: select grayscale, stamp, advance (direction from held arrow, or right)
+                # - Lowercase letters / unshifted numbers: select color, stamp, advance
+                # - Shift held: just select color (no stamp, no advance)
                 if char in GRAYSCALE:
                     self._last_key_char = char
                     self._last_key_color = GRAYSCALE[char]
-                    self._paint_at_cursor()
-                    self._advance_after_stamp(advance_direction)
                     self._post_paint_mode_changed()
+                    if not action.shift_held:
+                        self._paint_at_cursor()
+                        self._advance_after_stamp(advance_direction)
                     self._mark_cursor_dirty()  # New position
                     self._restart_blink()
                     self.refresh()

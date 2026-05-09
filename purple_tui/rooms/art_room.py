@@ -1102,16 +1102,17 @@ class ArtCanvas(Widget, can_focus=True):
             self._backspace_repeat_count = 0
 
             char = action.char
-            # When shift is held, fold to the unshifted key so number-row
-            # shifted symbols (Shift+9='(', Shift+0=')', Shift+-='_',
-            # Shift+= remapped to '+') resolve to a grayscale shade. Mirrors
-            # the .lower() the alpha branch uses for shifted letters.
-            if action.shift_held and char in UNSHIFT_MAP:
-                char = UNSHIFT_MAP[char]
             # When an arrow is held, advance in that direction after stamping.
             # This lets you type "leftward" or "downward" by holding an arrow while typing.
             advance_direction = action.arrow_held if action.arrow_held else 'right'
             if self._paint_mode:
+                # Paint mode only: fold shifted number-row symbols back to the
+                # bare key so Shift+9='(' etc. resolve to a grayscale shade,
+                # mirroring how the alpha branch uses .lower() for letters.
+                # Write mode below keeps the shifted char so '?' '#' etc. type
+                # correctly, matching play mode.
+                if action.shift_held and char in UNSHIFT_MAP:
+                    char = UNSHIFT_MAP[char]
                 self._mark_cursor_dirty()  # Old position
                 # In paint mode:
                 # - Lowercase letters / unshifted numbers: select color, stamp, advance

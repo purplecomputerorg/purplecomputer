@@ -727,6 +727,10 @@ def _get_menu_items() -> list:
         items.append(("menu-display", "Adjust Display"))
     if _is_casper_boot():
         items.append(("menu-install", "Install on this computer" if _is_usb_payload_available() else "Install (re-insert USB)"))
+    else:
+        from ..purple_tui import _read_computer_name
+        rename_label = "Rename this computer" if _read_computer_name() else "Name this computer"
+        items.append(("menu-rename", rename_label))
     items.append(("menu-shell", "Open Terminal"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
@@ -739,17 +743,17 @@ def _get_menu_items() -> list:
     return items
 
 
-# InstallNameScreen dismiss values
+# ComputerNameScreen dismiss values
 _INSTALL_NAME_CANCELLED = object()  # User pressed Esc
 
 _NAME_MAX = 24  # Max characters persisted (keeps title bar from overflowing)
 
 
-class InstallNameScreen(PurpleModal):
-    """Optional name prompt shown before the install confirmation.
+class ComputerNameScreen(PurpleModal):
+    """Prompt for a computer name. Used both during install and for renaming.
 
-    Returns the trimmed name (possibly empty for Skip) or _INSTALL_NAME_CANCELLED.
-    Empty string means "proceed without a name".
+    Returns the trimmed name (possibly empty) or _INSTALL_NAME_CANCELLED.
+    Empty string means "no name".
     """
 
     CSS = """
@@ -786,18 +790,23 @@ class InstallNameScreen(PurpleModal):
     """
 
     _MIN_LEN = 3
+    _PLACEHOLDER = "Mia's Computer"
 
-    def __init__(self, **kwargs):
+    def __init__(self, title: str = "Name this computer",
+                 description: str = "Optional. Leave blank to skip.",
+                 initial: str = "", **kwargs):
         super().__init__(**kwargs)
-        self._name = ""
+        self._title = title
+        self._description = description
+        self._name = initial
         self._blink_on = True
         self._error = ""
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
         with Vertical(id="modal-dialog"):
-            yield Static(caps("Name this computer"), id="modal-title")
-            yield Static("Optional. e.g. Mia's Computer", id="install-name-desc")
+            yield Static(caps(self._title), id="modal-title")
+            yield Static(self._description, id="install-name-desc")
             yield Static("", id="install-name-field")
             yield Static(caps("Enter  Esc"), id="modal-hint")
 
@@ -816,12 +825,15 @@ class InstallNameScreen(PurpleModal):
         except Exception:
             return
         cursor = "█" if self._blink_on else " "
-        field.update(self._name + cursor)
+        if self._name:
+            field.update(self._name + cursor)
+        else:
+            field.update(f"{cursor} [dim]{self._PLACEHOLDER}[/dim]")
         if self._error:
             desc.update(self._error)
             desc.add_class("error")
         else:
-            desc.update("Optional. e.g. Mia's Computer")
+            desc.update(self._description)
             desc.remove_class("error")
 
     def on_key(self, event: events.Key) -> None:
@@ -865,6 +877,10 @@ class InstallNameScreen(PurpleModal):
             self._name += char
             self._error = ""
             self._update_ui()
+
+
+# Back-compat alias for the install flow.
+InstallNameScreen = ComputerNameScreen
 
 
 class InstallConfirmScreen(PurpleModal):
@@ -1658,6 +1674,8 @@ class ParentMenu(PurpleModal):
             self._open_display_settings()
         elif item_id == "menu-install":
             self._install_to_disk()
+        elif item_id == "menu-rename":
+            self._rename_computer()
         elif item_id == "menu-shell":
             self._open_shell()
         elif item_id == "menu-demo":
@@ -1857,7 +1875,28 @@ class ParentMenu(PurpleModal):
 
             self.app.push_screen(InstallConfirmScreen(), callback=on_confirm)
 
-        self.app.push_screen(InstallNameScreen(), callback=on_name)
+        self.app.push_screen(ComputerNameScreen(), callback=on_name)
+
+    def _rename_computer(self) -> None:
+        """Prompt for a new computer name and persist it. Refreshes the title bar."""
+        from ..purple_tui import _read_computer_name, write_computer_name, BootModeIndicator
+        current = _read_computer_name() or ""
+        title = "Rename this computer" if current else "Name this computer"
+        description = "Leave blank to remove the name." if current else "Optional. Leave blank to skip."
+
+        def on_name(name) -> None:
+            if name is _INSTALL_NAME_CANCELLED:
+                return
+            write_computer_name(name or "")
+            try:
+                self.app.query_one(BootModeIndicator)._push_to_title_bar()
+            except Exception:
+                pass
+
+        self.app.push_screen(
+            ComputerNameScreen(title=title, description=description, initial=current),
+            callback=on_name,
+        )
 
     def _open_support_info(self) -> None:
         """Open the Support info modal."""

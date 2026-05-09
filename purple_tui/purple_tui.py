@@ -616,19 +616,37 @@ class BatteryIndicator(Static):
 _COMPUTER_NAME_CACHE: str | None = None
 _COMPUTER_NAME_LOADED = False
 
+# User-writable override for the computer name. Lets the parent rename without
+# sudo after install. install.sh seeds /opt/purple/computer_name.txt; the
+# override wins if present (even if empty, meaning "no name").
+_COMPUTER_NAME_USER_PATH = Path.home() / ".purple" / "computer_name.txt"
+_COMPUTER_NAME_SYSTEM_PATH = Path("/opt/purple/computer_name.txt")
+
 
 def _read_computer_name() -> str | None:
-    """Return the parent-supplied computer name, or None. File written by install.sh."""
+    """Return the computer name, or None. User override wins over install-time value."""
     global _COMPUTER_NAME_CACHE, _COMPUTER_NAME_LOADED
     if _COMPUTER_NAME_LOADED:
         return _COMPUTER_NAME_CACHE
     _COMPUTER_NAME_LOADED = True
-    try:
-        name = Path("/opt/purple/computer_name.txt").read_text().strip()
-        _COMPUTER_NAME_CACHE = name or None
-    except OSError:
-        _COMPUTER_NAME_CACHE = None
+    for path in (_COMPUTER_NAME_USER_PATH, _COMPUTER_NAME_SYSTEM_PATH):
+        try:
+            name = path.read_text().strip()
+            _COMPUTER_NAME_CACHE = name or None
+            return _COMPUTER_NAME_CACHE
+        except OSError:
+            continue
+    _COMPUTER_NAME_CACHE = None
     return _COMPUTER_NAME_CACHE
+
+
+def write_computer_name(name: str) -> None:
+    """Persist a user-supplied computer name and refresh the cached value."""
+    global _COMPUTER_NAME_CACHE, _COMPUTER_NAME_LOADED
+    _COMPUTER_NAME_USER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _COMPUTER_NAME_USER_PATH.write_text(name)
+    _COMPUTER_NAME_CACHE = name.strip() or None
+    _COMPUTER_NAME_LOADED = True
 
 
 class BootModeIndicator(Static):
@@ -690,7 +708,7 @@ class BootModeIndicator(Static):
     def _push_to_title_bar(self) -> None:
         muted = "#6a5a80"
         if not self._is_live:
-            label = _read_computer_name() or "Installed"
+            label = _read_computer_name() or "My Purple Computer"
             text, color = f"{ICON_HARDDISK} {label}", muted
         elif self._is_cached and self._usb_removed:
             text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted 

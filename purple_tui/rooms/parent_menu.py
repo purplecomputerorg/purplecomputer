@@ -1610,6 +1610,8 @@ class ParentMenu(PurpleModal):
             usb_available = _try_remount_usb(dev)
         else:
             usb_available = False
+        if os.environ.get("PURPLE_FAKE_USB", "") in ("caching", "cached"):
+            usb_available = True
         for i, (item_id, old_label) in enumerate(self._menu_items):
             if item_id == "menu-install":
                 if usb_available:

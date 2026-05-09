@@ -665,6 +665,8 @@ def _is_usb_payload_available() -> bool:
     Checks device presence first to avoid stat-ing a potentially stale /cdrom
     mount when the USB has been physically removed.
     """
+    if os.environ.get("PURPLE_FAKE_USB", "") in ("caching", "cached"):
+        return True
     dev = _find_usb_device()
     if dev is None:
         return False

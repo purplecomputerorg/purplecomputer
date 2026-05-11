@@ -406,21 +406,21 @@ class InlineInput(CodeInput):
 
 
 PLAY_HINTS = [
-    "Try: cat  \u2022  5 + 3  \u2022  red + blue",
-    "Try: 12 x 12 dinos  \u2022  light red dog",
-    "Try: asdfghjkl  \u2022  hello there!  (add ! to speak out loud)",
-    "Try: 5 sharks...  \u2022  say 2 carrots + 5 broccoli",
-    "Try: dark green frog  \u2022  20 19 18 17 16 15...",
-    "Try: red + yellow  \u2022  cat times 3  \u2022  100",
-    "Try: say 582  \u2022  bright blue whale!",
-    "Try: 3 dogs + 2 cats  \u2022  red + 2 blues",
-    "Try: 2 4 6 8...  \u2022  (2 + 3) x 4  \u2022  1000",
-    "Try: 5 x 5 apples  \u2022  say red plus blue",
-    "Try: red + yellow + blue  \u2022  10 cats...",
-    "Try: say hello!  \u2022  repeat 3 cat, dog",
-    "Try: repeat 3: 2 green & 3 periwinkle",
-    "Try: 99 fish  \u2022  1 apple 2 apples 3 apples...",
-    "Try: repeat 5 rainbow  \u2022  dark purple whale!",
+    "Try: cat  \u2022  2 + 2  \u2022  trex",
+    "Try: say hi  \u2022  hello!  (say and ! both speak out loud)",
+    "Try: red + blue  \u2022  5 dinos",
+    "Try: asdfghjkl  \u2022  yellow + blue",
+    "Try: three cats  \u2022  pink fish",
+    "Try: 10 - 3  \u2022  red + yellow",
+    "Try: I love trex  \u2022  blue frog!",
+    "Try: say purple!  \u2022  4 birds + 2 owls  (say speaks out loud)",
+    "Try: cat times 5  \u2022  light pink unicorn!",
+    "Try: I have 5 dinos  \u2022  5 x 5 ducks",
+    "Try: pink + purple  \u2022  dark green trex!",
+    "Try: say wow!  \u2022  2 red, 3 blue",
+    "Try: orange + white  \u2022  rainbow mermaid!  (end with ! to speak it)",
+    "Try: 20 19 18 17...  \u2022  bright blue dinosaur!",
+    "Try: dinos ... 5  \u2022  2 4 6 8...",
 ]
 
 

@@ -1885,13 +1885,21 @@ class ParentMenu(PurpleModal):
         description = "Leave blank to remove the name." if current else "Optional. Leave blank to skip."
 
         def on_name(name) -> None:
+            from ..boot_log import heartbeat
             if name is _INSTALL_NAME_CANCELLED:
+                heartbeat("rename: cancelled")
                 return
+            heartbeat(f"rename: writing name={name!r}")
             write_computer_name(name or "")
+            heartbeat(f"rename: after write, cache=read={_read_computer_name()!r}")
             try:
-                self.app.screen_stack[0].query_one(BootModeIndicator)._push_to_title_bar()
-            except Exception:
-                pass
+                base = self.app.screen_stack[0]
+                heartbeat(f"rename: base screen type={type(base).__name__}")
+                indicator = base.query_one(BootModeIndicator)
+                heartbeat(f"rename: indicator id(class)={id(type(indicator))} is_live={indicator._is_live}")
+                indicator._push_to_title_bar()
+            except Exception as e:
+                heartbeat(f"rename: refresh failed: {e!r}")
 
         self.app.push_screen(
             ComputerNameScreen(title=title, description=description, initial=current),

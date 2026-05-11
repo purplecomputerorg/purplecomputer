@@ -706,12 +706,13 @@ class BootModeIndicator(Static):
         self._push_to_title_bar()
 
     def _push_to_title_bar(self) -> None:
+        from .boot_log import heartbeat
         muted = "#6a5a80"
         if not self._is_live:
             label = _read_computer_name() or "My Purple Computer"
             text, color = f"{ICON_HARDDISK} {label}", muted
         elif self._is_cached and self._usb_removed:
-            text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted 
+            text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted
         elif self._is_cached:
             text, color = (
                 f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 If restart, reinsert",
@@ -721,11 +722,14 @@ class BootModeIndicator(Static):
             text, color = f"{ICON_USB} USB", muted
         else:
             text, color = "  USB", muted
+        heartbeat(f"push: is_live={self._is_live} text={text!r} screen={type(self.screen).__name__}")
         try:
             title_bar = self.screen.query_one("#title-bar")
+            heartbeat(f"push: found title_bar={type(title_bar).__name__} id={getattr(title_bar, 'id', '?')}")
             title_bar.set_boot_mode(text, color)
-        except Exception:
-            pass
+            heartbeat(f"push: set_boot_mode done; new _boot_text={getattr(title_bar, '_boot_text', '?')!r}")
+        except Exception as e:
+            heartbeat(f"push: failed: {e!r}")
 
     def render(self) -> str:
         return ""

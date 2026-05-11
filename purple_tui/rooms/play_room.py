@@ -1515,6 +1515,19 @@ class SimpleEvaluator:
         while i < len(words):
             lower = words[i].lower()
 
+            if i + 2 < len(words) and words[i + 1].lower() in ('x', '×', '*', 'times'):
+                a, b = words[i], words[i + 2]
+                if a.isdigit() and not b.isdigit():
+                    noun = b.lower()
+                elif b.isdigit() and not a.isdigit():
+                    noun = a.lower()
+                else:
+                    noun = None
+                if noun and self._get_emoji(noun):
+                    groups.append(f"{a} {words[i + 1]} {b}")
+                    i += 3
+                    continue
+
             # Adjectives (dark, bright, ...) attach to the next word
             if lower in COLOR_ADJECTIVES:
                 chunk = [words[i]]

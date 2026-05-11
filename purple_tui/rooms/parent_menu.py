@@ -1889,7 +1889,7 @@ class ParentMenu(PurpleModal):
                 return
             write_computer_name(name or "")
             try:
-                self.app.query_one(BootModeIndicator)._push_to_title_bar()
+                self.app.screen_stack[0].query_one(BootModeIndicator)._push_to_title_bar()
             except Exception:
                 pass
 

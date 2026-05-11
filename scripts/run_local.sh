@@ -136,7 +136,7 @@ export PURPLE_DEMO_SYNC_FILE="${PURPLE_DEMO_SYNC_FILE:-}"
 export PURPLE_DEMO_SEGMENT="${PURPLE_DEMO_SEGMENT:-}"
 export PURPLE_ALACRITTY_CONFIG="$ALACRITTY_CONFIG"
 cd "$PROJECT_ROOT"
-python -m purple_tui.purple_tui
+python -m purple_tui
 EOF
     chmod +x "$LAUNCHER"
 
@@ -156,7 +156,7 @@ EOF
     rm -f "$LAUNCHER"
 else
     sleep 1
-    python -m purple_tui.purple_tui
+    python -m purple_tui
 fi
 
 echo ""

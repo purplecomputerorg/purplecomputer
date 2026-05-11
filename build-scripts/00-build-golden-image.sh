@@ -434,11 +434,11 @@ _log "launcher entered pid=$$"
 export PYTHONUNBUFFERED=1
 export PYTHONFAULTHANDLER=1
 
-_log "exec python3 -m purple_tui.purple_tui"
+_log "exec python3 -m purple_tui"
 # Restore stderr to tty before exec'ing python so Textual's UI renders
 # correctly -- Textual writes its screen to stderr.
 exec 2>/dev/tty
-exec python3 -m purple_tui.purple_tui "$@"
+exec python3 -m purple_tui "$@"
 LAUNCHER
     chmod +x "$MOUNT_DIR/usr/local/bin/purple"
 
@@ -476,7 +476,7 @@ BACK
     cat > "$MOUNT_DIR/usr/local/bin/dump-purple" <<'DUMP'
 #!/bin/bash
 set -e
-pid=$(pgrep -f 'purple_tui.purple_tui' | head -1)
+pid=$(pgrep -f 'python.* -m purple_tui' | head -1)
 if [ -z "$pid" ]; then
     echo "no purple_tui process found" >&2
     exit 1

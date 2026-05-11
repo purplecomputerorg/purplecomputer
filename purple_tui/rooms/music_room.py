@@ -34,7 +34,7 @@ from .art_room import KEY_COLORS, text_color_for
 from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
 from ..loop_panel import LoopPanel, LoopPanelToggleRequested
-from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB
+from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB, HOLD_OR_TAP_THRESHOLD
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -877,8 +877,8 @@ class MusicMode(Container, can_focus=True):
         self._recording_timer = None
         self._loop_progress_timer = None
         # Space hold REPL toggle; Enter hold loop-state advance.
-        self._space_hold = HoldOrTap(hold_seconds=0.5)
-        self._enter_hold = HoldOrTap(hold_seconds=0.5)
+        self._space_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
+        self._enter_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
         self._repl_panel = None
         self._loop_panel: LoopPanel | None = None
         self._noscreen_dot_timer = None

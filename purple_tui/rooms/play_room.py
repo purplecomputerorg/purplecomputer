@@ -30,7 +30,7 @@ from rich.segment import Segment
 from rich.style import Style
 import re
 
-from ..constants import ICON_ROBOT
+from ..constants import ICON_ROBOT, HOLD_OR_TAP_THRESHOLD
 from ..content import singularize
 
 from ..content import get_content
@@ -490,7 +490,7 @@ class PlayMode(Vertical):
         # Track last command for recall (Enter on empty)
         self._last_input_text: str = ""
         # Space hold: tap inserts space, hold is no-op (consistent with other rooms)
-        self._space_hold = HoldOrTap(hold_seconds=0.5)
+        self._space_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
 
     def compose(self) -> ComposeResult:
         yield KeyboardOnlyScroll(id="history-scroll")

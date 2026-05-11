@@ -26,7 +26,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb
-from ..constants import ICON_TAB
+from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
     UNSHIFT_MAP,
@@ -1396,7 +1396,7 @@ class ArtMode(Container):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._repl_panel = None
-        self._space_hold = HoldOrTap(hold_seconds=0.5)
+        self._space_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
 
     def compose(self) -> ComposeResult:
         from ..repl_panel import ReplPanel

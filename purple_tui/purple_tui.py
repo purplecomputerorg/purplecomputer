@@ -613,6 +613,8 @@ class BatteryIndicator(Static):
         return ""
 
 
+DEFAULT_COMPUTER_NAME = "My Purple Computer"
+
 _COMPUTER_NAME_CACHE: str | None = None
 _COMPUTER_NAME_LOADED = False
 
@@ -708,7 +710,7 @@ class BootModeIndicator(Static):
     def _push_to_title_bar(self) -> None:
         muted = "#6a5a80"
         if not self._is_live:
-            label = _read_computer_name() or "My Purple Computer"
+            label = _read_computer_name() or DEFAULT_COMPUTER_NAME
             text, color = f"{ICON_HARDDISK} {label}", muted
         elif self._is_cached and self._usb_removed:
             text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted

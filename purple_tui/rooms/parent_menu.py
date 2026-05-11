@@ -790,7 +790,6 @@ class ComputerNameScreen(PurpleModal):
     """
 
     _MIN_LEN = 3
-    _PLACEHOLDER = "Mia's Computer"
 
     def __init__(self, title: str = "Name this computer",
                  description: str = "Optional. Leave blank to skip.",
@@ -819,6 +818,7 @@ class ComputerNameScreen(PurpleModal):
         self._update_ui()
 
     def _update_ui(self) -> None:
+        from ..purple_tui import DEFAULT_COMPUTER_NAME
         try:
             field = self.query_one("#install-name-field", Static)
             desc = self.query_one("#install-name-desc", Static)
@@ -828,7 +828,7 @@ class ComputerNameScreen(PurpleModal):
         if self._name:
             field.update(self._name + cursor)
         else:
-            field.update(f"{cursor} [dim]{self._PLACEHOLDER}[/dim]")
+            field.update(f"{cursor} [dim]{DEFAULT_COMPUTER_NAME}[/dim]")
         if self._error:
             desc.update(self._error)
             desc.add_class("error")

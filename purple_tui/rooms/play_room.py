@@ -407,13 +407,13 @@ class InlineInput(CodeInput):
 
 PLAY_HINTS = [
     "Try: cat  \u2022  2 + 2  \u2022  trex",
-    "Try: say hi  \u2022  hello!  (say and ! both speak out loud)",
+    "Try: say hi  (or hello!, both speak aloud)  \u2022  red sun",
     "Try: red + blue  \u2022  5 dinos",
     "Try: asdfghjkl  \u2022  yellow + blue",
     "Try: three cats  \u2022  pink fish",
     "Try: 10 - 3  \u2022  red + yellow",
     "Try: I love trex  \u2022  blue frog!",
-    "Try: say purple!  \u2022  4 birds + 2 owls  (say speaks out loud)",
+    "Try: 4 birds + 2 owls  \u2022  say purple  (speaks out loud)",
     "Try: cat times 5  \u2022  light pink unicorn!",
     "Try: I have 5 dinos  \u2022  5 x 5 ducks",
     "Try: pink + purple  \u2022  dark green trex!",

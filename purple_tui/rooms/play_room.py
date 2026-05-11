@@ -1546,6 +1546,8 @@ class SimpleEvaluator:
         """Normalize multiplication operators (x, times, ×) to *."""
         result = text.replace('×', '*')
         result = re.sub(r'\btimes\b', '*', result, flags=re.IGNORECASE)
+        # Digit-x-digit (e.g. "5x5") has no word boundary, so handle it before \bx\b.
+        result = re.sub(r'(?<=\d)\s*x\s*(?=\d)', ' * ', result, flags=re.IGNORECASE)
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
@@ -1733,8 +1735,11 @@ class SimpleEvaluator:
             # Show label+abacus for explicit operators OR large counts
             if c > 1 and (has_operator or c > 20):
                 expr = ""
-                if has_operator and (m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+', t_lower)):
-                    expr = f"{m.group(1)}*{m.group(2)}"
+                if has_operator:
+                    for pat in (r'^(\d+)\s*\*\s*(\d+)(?:\s+|[a-z])', r'^[a-z]+\s*(\d+)\s*\*\s*(\d+)$'):
+                        if m := re.match(pat, t_lower):
+                            expr = f"{m.group(1)}*{m.group(2)}"
+                            break
                 return self._format_emoji_label(e, c, expression=expr)
             return e * c
 
@@ -1795,32 +1800,29 @@ class SimpleEvaluator:
 
         return None
 
+    _EMOJI_PATTERNS = (
+        re.compile(r'^(?P<n1>\d+)(?:\s*\*\s*(?P<n2>\d+))?\s*(?P<word>[a-z]\w*)$'),
+        re.compile(r'^(?P<word>[a-z]+)\s*(?P<n1>\d+)(?:\s*\*\s*(?P<n2>\d+))?$'),
+    )
+
     def _parse_emoji(self, term: str) -> tuple[str, int, str] | None:
-        """Parse emoji term -> (emoji_char, count, word)."""
+        """Parse emoji term -> (emoji_char, count, word). Accepts label with
+        leading or trailing count, optional N*M multiplier, optional space."""
         term = self._normalize_mult(term.strip()).lower()
 
-        # "N * M word" (e.g., "3 * 4 cats")
-        if m := re.match(r'^(\d+)\s*\*\s*(\d+)\s+(\w+)$', term):
-            n1, n2, word = int(m.group(1)), int(m.group(2)), m.group(3)
-            count = n1 * n2
-            if e := self._get_emoji(word):
-                return (e, count, word)
+        for pattern in self._EMOJI_PATTERNS:
+            if m := pattern.match(term):
+                word, n1, n2 = m['word'], m['n1'], m['n2']
+                if e := self._get_emoji(word):
+                    return (e, int(n1) * (int(n2) if n2 else 1), word)
 
-        # "N * word" or "word * N"
+        # Word doubles as factor and label, e.g. "3 * cat", "cat * 3"
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', term):
-            word = m.group(2)
-            if e := self._get_emoji(word):
-                return (e, int(m.group(1)), word)
+            if e := self._get_emoji(m.group(2)):
+                return (e, int(m.group(1)), m.group(2))
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
-            word = m.group(1)
-            if e := self._get_emoji(word):
-                return (e, int(m.group(2)), word)
-
-        # "N word" or "Nword"
-        if m := re.match(r'^(\d+)\s*(\w+)$', term):
-            word = m.group(2)
-            if e := self._get_emoji(word):
-                return (e, int(m.group(1)), word)
+            if e := self._get_emoji(m.group(1)):
+                return (e, int(m.group(2)), m.group(1))
 
         # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)
         if singular := singularize(term):
@@ -1908,8 +1910,8 @@ class SimpleEvaluator:
         result = self._fuzzy_normalize_operators(result)
         # "divided by" and typos (divded, dividd, etc.)
         result = re.sub(r'div\w+\s+by\b', '/', result)
-        # x between digits → * (avoid replacing in words like "fox")
-        result = re.sub(r'(\d)\s*x\s*(\d)', r'\1*\2', result)
+        # x between digits → * (zero-width lookarounds so chained "2x3x4" works)
+        result = re.sub(r'(?<=\d)\s*x\s*(?=\d)', '*', result)
         # Strip leading zeros from number tokens (Python 3 rejects "01" as a literal)
         return re.sub(r'\b0+(\d)', r'\1', result)
 

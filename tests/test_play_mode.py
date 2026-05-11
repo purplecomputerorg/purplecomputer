@@ -1187,6 +1187,69 @@ class TestXOperator:
         result = evaluator.evaluate("fox")
         assert "🦊" in result
 
+    @pytest.mark.parametrize("text", [
+        "5x5 apples", "5x5apples", "apples 5x5", "apples5x5",
+    ])
+    def test_x_with_label(self, evaluator, text):
+        assert evaluator.evaluate(text).startswith("= 25 🍎\n")
+
+    @pytest.mark.parametrize("text", ["apples 5", "apples5"])
+    def test_leading_label_plain_count(self, evaluator, text):
+        assert evaluator.evaluate(text) == "🍎🍎🍎🍎🍎"
+
+    def test_ambiguous_label_middle_number_falls_through(self, evaluator):
+        # Number in the middle is ambiguous; must not parse as leading-label.
+        assert not evaluator.evaluate("apples 5 green").startswith("= ")
+
+
+class TestKidsTyping:
+    """Inputs kids 4-7 actually type: caps, sticky keys, extra/missing spaces,
+    punctuation, typos. Each must parse smartly or fall through gracefully."""
+
+    @pytest.mark.parametrize("text", [
+        "5X5 apples", "5 X 5 apples", "5x5 APPLES", "APPLES 5x5", "Apples5X5",
+        "5  x  5 apples", "   5x5 apples   ", "5x5    apples",
+        "5×5 apples", "5×5apples", "5*5 apples", "5*5apples",
+        "5 times 5 apples", "five x five apples",
+        "5x5 apple",
+    ])
+    def test_all_roads_to_25_apples(self, evaluator, text):
+        assert evaluator.evaluate(text).startswith("= 25 🍎\n")
+
+    def test_three_apples(self, evaluator):
+        assert evaluator.evaluate("three apples") == "🍎🍎🍎"
+
+    def test_one_apple_singular(self, evaluator):
+        assert evaluator.evaluate("1 apple") == "🍎"
+
+    def test_bare_plural_count_two(self, evaluator):
+        assert evaluator.evaluate("apples") == "🍎🍎"
+
+    def test_xapples_no_count_on_left(self, evaluator):
+        # Too ambiguous to claim 5 apples
+        result = evaluator.evaluate("5xapples")
+        assert "= 5 🍎" not in result and result != "🍎🍎🍎🍎🍎"
+
+    @pytest.mark.parametrize("text", [
+        "5 x", "x 5", "apples x",
+        "5x5 apples?", "5x5 apples!",
+        "5xx5 apples", "5x5 appless",
+        "0 apples", "0x5 apples",
+    ])
+    def test_no_crash(self, evaluator, text):
+        assert isinstance(evaluator.evaluate(text), str)
+
+    @pytest.mark.parametrize("text", ["", "   "])
+    def test_empty(self, evaluator, text):
+        assert evaluator.evaluate(text) == ""
+
+    def test_three_factors_no_label(self, evaluator):
+        assert "24" in evaluator.evaluate("2x3x4")
+
+    @pytest.mark.parametrize("text", ["5x5", "5X5"])
+    def test_bare_mult(self, evaluator, text):
+        assert evaluator.evaluate(text).startswith("= 25")
+
 
 class TestNumberWordsAndCommas:
     """Test number word conversion and comma-separated counting."""

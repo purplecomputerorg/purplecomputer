@@ -604,7 +604,7 @@ class BatteryIndicator(Static):
             capacity, charging = status
             text = self._get_battery_icon(capacity, charging)
         try:
-            title_bar = self.app.query_one("#title-bar", TitleBar)
+            title_bar = self.screen.query_one("#title-bar", TitleBar)
             title_bar.set_battery(text)
         except Exception:
             pass
@@ -722,7 +722,7 @@ class BootModeIndicator(Static):
         else:
             text, color = "  USB", muted
         try:
-            title_bar = self.app.query_one("#title-bar", TitleBar)
+            title_bar = self.screen.query_one("#title-bar", TitleBar)
             title_bar.set_boot_mode(text, color)
         except Exception:
             pass

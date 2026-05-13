@@ -60,7 +60,7 @@ from .constants import (
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
     is_usb_cached, is_usb_present,
     VOLUME_LEVELS, VOLUME_DEFAULT,
-    VIEWPORT_WIDTH, VIEWPORT_HEIGHT,
+    VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WRAPPER_REFERENCE_ROWS,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     is_live_boot, is_debug,
 )
@@ -751,7 +751,7 @@ class PurpleApp(App):
     #outer-container {
         width: 100%;
         height: 100%;
-        align: center middle;
+        align: center top;
         background: $background;
     }
 
@@ -954,6 +954,8 @@ class PurpleApp(App):
         """Called when app starts"""
         boot_log.heartbeat("PurpleApp.on_mount begin")
         self._apply_theme()
+        # Pin wrapper top so code/loop mode growth doesn't shift the border 1 row on odd-height terminals.
+        self.query_one("#viewport-wrapper").styles.margin = (max(0, (self.size.height - WRAPPER_REFERENCE_ROWS) // 2), 0, 0, 0)
 
         # Ensure logind ignores power button (TUI handles it).
         # Defensive: a previous crash or logind-mediated shutdown during a

@@ -57,6 +57,8 @@ _TITLE_ROWS = 2               # Title row + margin-bottom
 _VIEWPORT_ROWS = VIEWPORT_HEIGHT + 2  # Content + heavy border
 _INDICATOR_ROWS = 4            # margin-top(1) + height(3)
 REQUIRED_TERMINAL_ROWS = _TITLE_ROWS + _VIEWPORT_ROWS + _INDICATOR_ROWS
+# Centering reference for #viewport-wrapper: rows below the title bar in normal mode.
+WRAPPER_REFERENCE_ROWS = _VIEWPORT_ROWS + _INDICATOR_ROWS
 
 # =============================================================================
 # TIMING

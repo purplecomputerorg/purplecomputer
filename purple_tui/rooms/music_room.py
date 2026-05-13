@@ -35,54 +35,6 @@ from ..music_session import MODE_MUSIC, MODE_LETTERS
 from ..loop_station import LoopStation, IDLE, RECORDING, LOOPING
 from ..loop_panel import LoopPanel, LoopPanelToggleRequested
 from ..constants import ICON_MUSIC, ICON_MUSIC_NOTE, ICON_TAB, HOLD_OR_TAP_THRESHOLD
-from .. import boot_log
-
-
-def _snapshot_music_shift(app, label: str) -> None:
-    """Temporary diagnostic: log music grid + panel dimensions to /tmp/purple-boot.log."""
-    try:
-        try:
-            term = os.get_terminal_size()
-            term_str = f"{term.columns}x{term.lines}"
-        except Exception:
-            term_str = "?"
-        viewport = app.query_one("#viewport")
-        content_area = app.query_one("#content-area")
-        music = content_area.query_one("#room-music")
-        grid = music.query_one(MusicGrid)
-        header = music.query_one(MusicRoomHeader)
-        hint = music.query_one("#example-hint")
-        from ..repl_panel import ReplPanel
-        repl = music.query_one(ReplPanel)
-        loop = music.query_one(LoopPanel)
-        h = grid.size.height
-        cell_h = min(h // 4, 5) if h >= 4 else 0
-        gh = cell_h * 4
-        mt = (h - gh) // 2 if h >= 4 else 0
-        boot_log.heartbeat(
-            f"music-shift[{label}] "
-            f"term={term_str} viewport={viewport.size.height} content={content_area.size.height} "
-            f"music={music.size.height} header={header.size.height}(d={header.display}) "
-            f"grid={grid.size.height} grid.styles.height={grid.styles.height} "
-            f"hint={hint.size.height}(d={hint.display}) "
-            f"repl={repl.size.height}(d={repl.display},open={repl.is_open}) "
-            f"loop={loop.size.height}(d={loop.display},open={loop._open}) "
-            f"computed: cell_h={cell_h} gh={gh} margin_top={mt} cached={grid._cached_layout}"
-        )
-    except Exception as e:
-        try:
-            boot_log.heartbeat(f"music-shift[{label}] SNAPSHOT_ERR: {e!r}")
-        except Exception:
-            pass
-
-
-def _schedule_snapshot(app, label: str, delay: float = 0.2) -> None:
-    """Snapshot after the layout settles (past ReplPanel's 50ms display defer)."""
-    try:
-        loop = asyncio.get_running_loop()
-        loop.call_later(delay, _snapshot_music_shift, app, label)
-    except RuntimeError:
-        _snapshot_music_shift(app, label)
 
 # Suppress ALSA error/log messages before pygame imports ALSA.
 # These corrupt Textual's stderr-based UI. Install null handlers for both paths.
@@ -1227,7 +1179,6 @@ class MusicMode(Container, can_focus=True):
 
     def _open_loop_panel_layout(self) -> None:
         """Hide the inline hint, pin grid height, open the loop panel."""
-        _snapshot_music_shift(self.app, "loop-open:before")
         try:
             self.query_one("#example-hint", MusicExampleHint).display = False
         except Exception:
@@ -1236,11 +1187,9 @@ class MusicMode(Container, can_focus=True):
         grid.styles.height = grid.size.height
         self._loop_panel.open()
         self.post_message(LoopPanelToggleRequested(opened=True))
-        _schedule_snapshot(self.app, "loop-open:after")
 
     def _close_loop_panel_layout(self) -> None:
         """Restore inline hint, unpin grid, close the loop panel."""
-        _snapshot_music_shift(self.app, "loop-close:before")
         self._loop_panel.close()
         self.post_message(LoopPanelToggleRequested(opened=False))
         try:
@@ -1253,7 +1202,6 @@ class MusicMode(Container, can_focus=True):
             grid.styles.height = "1fr"
         except Exception:
             pass
-        _schedule_snapshot(self.app, "loop-close:after")
 
     # -- Core key handling ---------------------------------------------------
 
@@ -1337,7 +1285,6 @@ class MusicMode(Container, can_focus=True):
             return
         self.grid.cleanup_sounds()
         if self._repl_panel and not self._repl_panel.is_open:
-            _snapshot_music_shift(self.app, "code-open:before")
             # Hide hint bar (REPL has its own hints) and pin grid height
             try:
                 self.query_one("#example-hint", MusicExampleHint).display = False
@@ -1350,9 +1297,7 @@ class MusicMode(Container, can_focus=True):
             self._repl_panel.open()
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
-            _schedule_snapshot(self.app, "code-open:after")
         elif self._repl_panel and self._repl_panel.is_open:
-            _snapshot_music_shift(self.app, "code-close:before")
             self._repl_panel.close()
             # Sync instrument state back from grid
             self._instrument_index = self.grid._instrument_index
@@ -1368,7 +1313,6 @@ class MusicMode(Container, can_focus=True):
             grid.styles.height = "1fr"
             from ..repl_panel import ReplPanelToggleRequested
             self.post_message(ReplPanelToggleRequested("music"))
-            _schedule_snapshot(self.app, "code-close:after")
 
     async def _flush_space_tap_to_repl(self) -> None:
         """Insert a space character into the REPL panel."""

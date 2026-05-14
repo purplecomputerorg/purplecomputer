@@ -34,7 +34,11 @@ logger = logging.getLogger(__name__)
 
 KEYD_VIRTUAL_NAME = "keyd virtual keyboard"
 KEYD_CONFIG_PATH = Path("/etc/keyd/default.conf")
-KEYD_WAIT_SECS = 2.0
+KEYD_WAIT_SECS = 10.0
+
+# Diag log paths. /var/log/purple is on the writable partition of the installed
+# system (same convention as purple_tui/boot_log.py) and survives reboot.
+DIAG_LOG_PATHS = ("/tmp/evdev-diag.log", "/var/log/purple/evdev.log")
 
 
 # =============================================================================
@@ -276,6 +280,8 @@ class EvdevReader:
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
         self._tasks: list[asyncio.Task] = []
         self._logged_keycodes: set = set()  # Keycodes logged to diag (first-occurrence)
+        self._got_first_event = False
+        self._watchdog_task: Optional[asyncio.Task] = None
 
         # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
         self._ctrl_held = False
@@ -292,12 +298,13 @@ class EvdevReader:
 
     @staticmethod
     def _diag(msg):
-        """Write to /tmp/evdev-diag.log (readable from recovery shell via Ctrl+\\)."""
-        try:
-            with open("/tmp/evdev-diag.log", "a") as f:
-                f.write(f"{msg}\n")
-        except Exception:
-            pass
+        """Append to tmpfs + persistent log so silent-keyboard reports survive reboot."""
+        for path in DIAG_LOG_PATHS:
+            try:
+                with open(path, "a") as f:
+                    f.write(f"{msg}\n")
+            except Exception:
+                pass
         logger.info(msg)
 
     async def start(self) -> None:
@@ -335,10 +342,19 @@ class EvdevReader:
         self._running = True
         for dev in self._devices:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
+        self._watchdog_task = asyncio.create_task(self._watchdog())
 
     async def stop(self) -> None:
         """Stop reading and release all devices."""
         self._running = False
+
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            try:
+                await asyncio.wait_for(self._watchdog_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            self._watchdog_task = None
 
         # Close all devices first to unblock async_read_loop() immediately.
         # Virtual devices (UTM, QEMU) may not wake up on cancel alone.
@@ -449,6 +465,7 @@ class EvdevReader:
 
                 # Process key events: 0=up, 1=down, 2=repeat
                 if event.type == EV_KEY and event.value in (0, 1, 2):
+                    self._got_first_event = True
                     keycode = event.code
                     is_down = event.value in (1, 2)
 
@@ -566,6 +583,18 @@ class EvdevReader:
             except Exception:
                 pass
             asyncio.ensure_future(self._reconnect(dev_path))
+
+    async def _watchdog(self) -> None:
+        """Rescan once if no key event in 30s: Surface Type Cover / slow keyd
+        can enumerate after the boot scan."""
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            return
+        if not self._running or self._got_first_event:
+            return
+        self._diag("WATCHDOG: no key events 30s after start, rescanning")
+        await self._reconnect("watchdog")
 
     async def _reconnect(self, lost_path: str) -> None:
         """Scan for keyboards and restart read loops on new devices.

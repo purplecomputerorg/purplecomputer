@@ -754,19 +754,17 @@ class PlayMode(Vertical):
 
             char = action.char
 
-            # Math operators: auto-space for readability and substitute display chars
+            # Math operators: auto-space for readability
             if char in play_input.MATH_OPERATORS:
-                display_char = play_input.MATH_DISPLAY.get(char, char)
                 pos = play_input.cursor_position
                 before = play_input.value[:pos]
 
-                # Add spaces around operator only if there's an operand before (binary operation)
-                # No spaces if preceded by space, operator, or open paren (allows negative numbers)
-                has_operand_before = before and before[-1] not in ' +-×÷*/('
+                # No spaces if preceded by space, operator, or open paren (allows leading negatives)
+                has_operand_before = before and before[-1] not in play_input.MATH_OPERATORS and before[-1] not in ' ('
                 if has_operand_before:
-                    insert = f" {display_char} "
+                    insert = f" {char} "
                 else:
-                    insert = display_char
+                    insert = char
 
                 play_input.value = before + insert + play_input.value[pos:]
                 play_input.cursor_position = pos + len(insert)

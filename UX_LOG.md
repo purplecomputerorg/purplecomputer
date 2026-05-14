@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play: `*` and `/` now auto-space to ` × ` and ` ÷ ` as you type (matching the existing `+` and `-` behavior), so `5*3` becomes `5 × 3` instead of `5×3`.
 - Color + noun multiplication: "red dino x 5" (also "red 5 x dinos", "red dino × 5") now produces 5 red dinos instead of treating "x" as a literal label.
 - Hold thresholds: bumped Space-hold (code panel) and Enter-hold (loop mode) from 0.5s to 0.8s so kids leaning on Enter to switch instruments or Space between notes don't accidentally fall into a power feature. Intentional holds still feel responsive.
 - Art room: typing past the right edge now wraps to the next row (was: stopped at edge — kids got stuck in the corner). Pressing ↓ or ↑ right after a stamp returns to the stamp column, so `a, ↓, a, ↓, a` makes a vertical line instead of a diagonal. Enter is now an alias for ↓ so the big labeled key gets the same smart-snap. Holding an arrow past ~8 repeats accelerates the cursor to 4 cells per repeat (smooth, can stop anywhere) instead of teleporting. Holding backspace also accelerates to 4 cells per repeat — the previous "hold 1s clears the whole canvas" behavior is gone, since kids were accidentally nuking their drawings. Parents can still clear via the parent menu.

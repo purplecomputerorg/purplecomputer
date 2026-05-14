@@ -57,12 +57,8 @@ class CodeInput(Input):
             self.value = value
             super().__init__()
 
-    # Math display substitutions (only used when math_mode=True)
-    MATH_DISPLAY = {
-        '*': '\u00d7',   # Multiplication sign
-        '/': '\u00f7',   # Division sign
-    }
-    MATH_OPERATORS = {'+', '-', '*', '/'}
+    # Math operators after the global *->\u00d7, /->\u00f7 remap in _dispatch_keyboard_action
+    MATH_OPERATORS = {'+', '-', '\u00d7', '\u00f7'}
 
     def __init__(self, autocomplete_fn: Callable[[str], list[tuple[str, str, str]]] | None = None,
                  math_mode: bool = False, context_autocomplete: bool = False, **kwargs):

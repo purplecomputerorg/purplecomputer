@@ -1045,9 +1045,10 @@ class TestComputedLabels:
         assert "tens" not in result
 
     def test_label_on_large_multiplication(self, evaluator):
-        # 12 * 3 cats = 36 cats (>10, emoji abacus)
-        result = evaluator.evaluate("12 * 3 cats")
-        assert result.startswith("= 36 🐱\n")
+        # 30 * 12 cats = 360 cats (> INLINE_MAX, switches to emoji abacus)
+        result = evaluator.evaluate("30 * 12 cats")
+        assert result.startswith("= 360 🐱\n")
+        assert "hundreds" in result
         assert "tens" in result
         assert "ones" in result
 

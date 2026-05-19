@@ -947,6 +947,9 @@ class SimpleEvaluator:
     # Speech prefixes: trigger TTS for one line, stripped from input
     SPEAK_PREFIXES = {'say', 'talk', 'speak'}
 
+    # Largest count shown inline (dots/emoji/color blocks); above this, switch to abacus.
+    INLINE_MAX = 299
+
     # Math operators: symbols and their word equivalents
     MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}
     WORD_TO_SYMBOL = {'times': '*', 'plus': '+', 'minus': '-', 'x': '*'}
@@ -1342,9 +1345,9 @@ class SimpleEvaluator:
 
             return result
 
-        # Same-emoji expressions: collapse to abacus when total > 20
+        # Same-emoji expressions: collapse to abacus when total exceeds INLINE_MAX
         # (small counts like "2 + 3 cats" keep grouped inline display)
-        if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > 20:
+        if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > self.INLINE_MAX:
             e = emoji_items[0][0]
             return self._format_emoji_label(e, total_count)
 
@@ -1358,7 +1361,7 @@ class SimpleEvaluator:
         for item_type, value in items:
             if item_type == 'emoji':
                 e, c, w = value
-                if c > 20:
+                if c > self.INLINE_MAX:
                     result_parts.append(self._format_emoji_label(e, c))
                 else:
                     result_parts.append(e * c)
@@ -1574,7 +1577,7 @@ class SimpleEvaluator:
     def _format_color_label(self, hex_color: str, count: int) -> str:
         """Format color multiplication with label and abacus visualization."""
         block = f"[on {hex_color}]  [/]"
-        if count <= 20:
+        if count <= self.INLINE_MAX:
             return block * count
         viz = self._format_number_with_dots(count, show_label=False, bead=block)
         return f"= {count} {block}\n{viz}"
@@ -1744,7 +1747,7 @@ class SimpleEvaluator:
         if emoji_data := self._parse_emoji(t_lower):
             e, c, w = emoji_data
             # Show label+abacus for explicit operators OR large counts
-            if c > 1 and (has_operator or c > 20):
+            if c > 1 and (has_operator or c > self.INLINE_MAX):
                 expr = ""
                 if has_operator:
                     for pat in (r'^(\d+)\s*\*\s*(\d+)(?:\s+|[a-z])', r'^[a-z]+\s*(\d+)\s*\*\s*(\d+)$'):
@@ -2038,8 +2041,8 @@ class SimpleEvaluator:
             n = int(num)
             if n >= 1:
                 color = self.ABACUS_COLORS[0]
-                # ≤ 20: plain dots/beads (with grouping for simple math)
-                if n <= 20:
+                # ≤ INLINE_MAX: plain dots/beads (with grouping for simple math)
+                if n <= self.INLINE_MAX:
                     grouped = self._format_grouped_dots(n, expression, color, bead=bead)
                     if grouped:
                         content = grouped if is_emoji_bead else f"[{color}]{grouped}[/]"
@@ -2052,7 +2055,7 @@ class SimpleEvaluator:
                         return f"{label}\n{content}"
                     return content
 
-                # > 20 but within abacus range
+                # > INLINE_MAX but within abacus range
                 num_digits = len(str(n))
                 if num_digits <= len(self.ABACUS_COLORS):
                     # Build all rows from highest place down to ones

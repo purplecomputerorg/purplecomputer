@@ -580,13 +580,14 @@ if HAS_PYTEST:
             assert "●" not in evaluator.evaluate("0 - 5")
 
         def test_abacus_place_values(self, evaluator):
-            result = evaluator.evaluate("345")
-            # 3+4+5 = 12 abacus dots
-            assert result.count("●") == 12
+            result = evaluator.evaluate("1345")
+            # 1+3+4+5 = 13 abacus dots
+            assert result.count("●") == 13
             # Bare number: no label line, ones row is at bottom
             assert "ones  ● ● ● ● ●" in result     # 5 ones
             assert "tens  ● ● ● ●" in result        # 4 tens
             assert "hundreds  ● ● ●" in result      # 3 hundreds
+            assert "thousands  ●" in result         # 1 thousand
 
 
 # =============================================================================
@@ -1045,9 +1046,9 @@ class TestComputedLabels:
         assert "tens" not in result
 
     def test_label_on_large_multiplication(self, evaluator):
-        # 30 * 12 cats = 360 cats (> INLINE_MAX, switches to emoji abacus)
-        result = evaluator.evaluate("30 * 12 cats")
-        assert result.startswith("= 360 🐱\n")
+        # 50 * 12 cats = 600 cats (> INLINE_MAX, switches to emoji abacus)
+        result = evaluator.evaluate("50 * 12 cats")
+        assert result.startswith("= 600 🐱\n")
         assert "hundreds" in result
         assert "tens" in result
         assert "ones" in result

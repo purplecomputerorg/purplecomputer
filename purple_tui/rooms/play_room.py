@@ -29,6 +29,12 @@ from rich.markup import escape as rich_escape
 from rich.segment import Segment
 from rich.style import Style
 import re
+import unicodedata
+
+
+def _cell_width(ch: str) -> int:
+    """Visual cell width of one char in a monospace terminal (1 or 2)."""
+    return 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
 
 from ..constants import ICON_ROBOT, HOLD_OR_TAP_THRESHOLD
 from ..content import singularize
@@ -135,57 +141,69 @@ class HistoryLine(Static):
     def _tokenize_markup(text: str) -> list[tuple[str, int]]:
         """Split Rich markup into (token, visual_width) pairs.
 
-        Each token is either a complete markup block like '[#000 on #FFF] x [/]'
-        or a single plain character.
+        Markup blocks with non-whitespace inner content are split at whitespace
+        so a long colored span (e.g. 300 dots inside one [purple]...[/]) wraps
+        at bead boundaries. All-whitespace blocks (color swatches like
+        '[on #ABC]  [/]') stay intact.
         """
         tokens = []
         i = 0
         while i < len(text):
-            # Check for Rich markup block: [tag]content[/]
             if text[i] == '[':
-                # Find the closing [/] for this block
                 end = text.find('[/]', i)
                 if end != -1:
-                    token = text[i:end + 3]
-                    # Visual width = length of content between tags
-                    inner = re.sub(r'\[[^\]]*\]', '', token)
-                    width = sum(2 if ord(c) > 127 else 1 for c in inner)
-                    tokens.append((token, width))
-                    i = end + 3
-                    continue
-            # Plain character
+                    block = text[i:end + 3]
+                    m = re.match(r'(\[[^\]]*\])(.*)\[/\]$', block, re.DOTALL)
+                    if m:
+                        open_tag, inner = m.group(1), m.group(2)
+                        if inner.strip() == '':
+                            width = sum(_cell_width(c) for c in inner)
+                            tokens.append((block, width))
+                        else:
+                            for part in re.split(r'(\s+)', inner):
+                                if not part:
+                                    continue
+                                width = sum(_cell_width(c) for c in part)
+                                tokens.append((f"{open_tag}{part}[/]", width))
+                        i = end + 3
+                        continue
             ch = text[i]
-            width = 2 if ord(ch) > 127 else 1
+            width = _cell_width(ch)
             tokens.append((ch, width))
             i += 1
         return tokens
 
     def _wrap_with_arrows(self, text: str, prefix: str, arrow_color: str) -> str:
-        """Wrap text with arrow-indented continuation lines.
+        """Wrap text under a prefix; continuation lines are indented (no arrow).
 
-        Breaks at token boundaries so colored blocks don't get split.
+        Breaks at token boundaries; leading whitespace on a wrapped line is dropped.
+        `arrow_color` is kept for API compatibility but no longer used.
         """
         width = self.size.width
         if width <= 0:
             width = 108  # fallback
 
-        prefix_len = sum(2 if ord(c) > 127 else 1 for c in re.sub(r'\[[^\]]*\]', '', prefix))
-        # Build continuation prefix to match the visual width of the original prefix.
-        # The arrow (→) takes 2 cells, plus a trailing space = 3 cells for "→ ".
-        pad_spaces = max(0, prefix_len - 3)  # 3 = arrow (2) + trailing space (1)
-        cont_prefix = f"{' ' * pad_spaces}[{arrow_color}]→[/] "
+        prefix_len = sum(_cell_width(c) for c in re.sub(r'\[[^\]]*\]', '', prefix))
+        cont_prefix = ' ' * prefix_len
         cont_len = prefix_len
 
         tokens = self._tokenize_markup(text)
         lines = []
         current_line = prefix
         current_width = prefix_len
+        just_wrapped = False
 
         for token, tw in tokens:
+            if just_wrapped and token.strip() == '':
+                continue
+            just_wrapped = False
             if current_width + tw > width and current_width > (prefix_len if not lines else cont_len):
                 lines.append(current_line)
                 current_line = cont_prefix
                 current_width = cont_len
+                just_wrapped = True
+                if token.strip() == '':
+                    continue
             current_line += token
             current_width += tw
 
@@ -948,7 +966,7 @@ class SimpleEvaluator:
     SPEAK_PREFIXES = {'say', 'talk', 'speak'}
 
     # Largest count shown inline (dots/emoji/color blocks); above this, switch to abacus.
-    INLINE_MAX = 299
+    INLINE_MAX = 500
 
     # Math operators: symbols and their word equivalents
     MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}

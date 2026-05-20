@@ -859,6 +859,7 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
+        self._silent_mode = False  # Parent silence lock; volume keys disabled while True
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
 
         # Power management
@@ -963,9 +964,12 @@ class PurpleApp(App):
         from .power_manager import set_logind_power_key
         set_logind_power_key("ignore")
 
-        from .settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps
+        from .settings import (get_littles_mode, get_code_panel, get_music_looping,
+                               get_music_key_switching, get_all_caps, get_volume_level, get_silent_mode)
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
+        self.volume_level = get_volume_level()
+        self._silent_mode = get_silent_mode()
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
@@ -981,8 +985,10 @@ class PurpleApp(App):
 
         self._load_room_content()
 
-        # Set system volume to match app volume (default 100%)
+        # Set system volume to match the effective volume (0 while silent mode is locked on)
         self._apply_volume_system()
+        from . import tts
+        tts.set_muted(self._effective_volume() == 0)
 
         # Set viewport border subtitle for music/art rooms
         try:
@@ -2286,6 +2292,8 @@ class PurpleApp(App):
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off"""
+        if self._silent_mode:
+            return
         if self.volume_level > 0:
             # Mute: save current level and set to 0
             self._volume_before_mute = self.volume_level
@@ -2297,6 +2305,8 @@ class PurpleApp(App):
 
     def action_volume_down(self) -> None:
         """Decrease volume"""
+        if self._silent_mode:
+            return
         # Find current position in VOLUME_LEVELS and go down
         current_idx = 0
         for i, level in enumerate(VOLUME_LEVELS):
@@ -2308,6 +2318,8 @@ class PurpleApp(App):
 
     def action_volume_up(self) -> None:
         """Increase volume"""
+        if self._silent_mode:
+            return
         # Find current position in VOLUME_LEVELS and go up
         current_idx = len(VOLUME_LEVELS) - 1
         for i, level in enumerate(VOLUME_LEVELS):
@@ -2565,8 +2577,12 @@ class PurpleApp(App):
 
         return None
 
+    def _effective_volume(self) -> int:
+        """Volume actually applied to playback: 0 while the parent silence lock is on."""
+        return 0 if self._silent_mode else self.volume_level
+
     def _apply_volume_system(self) -> None:
-        """Set system volume via ALSA to match app volume_level (non-blocking).
+        """Set system volume via ALSA to match the effective volume (non-blocking).
 
         Maps app volume (0-100) onto 0-SYSTEM_VOLUME_MAX to avoid pushing
         the analog amplifier into its noisy range on real hardware.
@@ -2574,7 +2590,7 @@ class PurpleApp(App):
         try:
             import subprocess
             from .constants import SYSTEM_VOLUME_MAX
-            system_vol = round(self.volume_level * SYSTEM_VOLUME_MAX / 100)
+            system_vol = round(self._effective_volume() * SYSTEM_VOLUME_MAX / 100)
             subprocess.Popen(
                 ["amixer", "sset", "Master", f"{system_vol}%"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -2594,34 +2610,38 @@ class PurpleApp(App):
     def _apply_volume(self) -> None:
         """Apply volume level to TTS, system mixer, and update UI."""
         from . import tts
-        tts.set_muted(self.volume_level == 0)
+        if not self._silent_mode:
+            from .settings import set_volume_level
+            set_volume_level(self.volume_level)
+        vol = self._effective_volume()
+        tts.set_muted(vol == 0)
         self._apply_volume_system()
 
         # Update volume indicator badge
         try:
             indicator = self.query_one("#room-indicator", RoomIndicator)
-            indicator.update_volume_indicator(self.volume_level)
+            indicator.update_volume_indicator(vol)
         except NoMatches:
             pass
 
         # Build volume feedback message (6 levels: 0, 15, 35, 60, 85, 100)
-        if self.volume_level == 0:
+        if vol == 0:
             icon = ICON_VOLUME_OFF
             label = "Sound Off"
             bars = "░░░░░░░░░░"
-        elif self.volume_level <= 15:
+        elif vol <= 15:
             icon = ICON_VOLUME_LOW
             label = "Whisper"
             bars = "██░░░░░░░░"
-        elif self.volume_level <= 35:
+        elif vol <= 35:
             icon = ICON_VOLUME_LOW
             label = "Quiet"
             bars = "████░░░░░░"
-        elif self.volume_level <= 60:
+        elif vol <= 60:
             icon = ICON_VOLUME_MED
             label = "Medium"
             bars = "██████░░░░"
-        elif self.volume_level <= 85:
+        elif vol <= 85:
             icon = ICON_VOLUME_HIGH
             label = "Loud"
             bars = "████████░░"

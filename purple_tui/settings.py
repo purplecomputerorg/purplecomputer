@@ -8,6 +8,8 @@ Stored in ~/.config/purple/settings.json alongside display.json.
 import json
 from pathlib import Path
 
+from .constants import VOLUME_DEFAULT
+
 SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 
 _defaults = {
@@ -16,6 +18,8 @@ _defaults = {
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "all_caps": False,           # Whether all rendered text is uppercased at render time
+    "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
+    "silent_mode": False,        # Parent lock: all sound off, volume keys disabled, until a parent turns it back on
 }
 
 
@@ -97,6 +101,28 @@ def get_all_caps() -> bool:
 def set_all_caps(enabled: bool) -> None:
     settings = load_settings()
     settings["all_caps"] = enabled
+    save_settings(settings)
+
+
+def get_volume_level() -> int:
+    """Last volume level the kid set (0-100)."""
+    return load_settings()["volume_level"]
+
+
+def set_volume_level(level: int) -> None:
+    settings = load_settings()
+    settings["volume_level"] = level
+    save_settings(settings)
+
+
+def get_silent_mode() -> bool:
+    """Whether the parent silence lock is on (all sound off, volume keys disabled)."""
+    return load_settings()["silent_mode"]
+
+
+def set_silent_mode(enabled: bool) -> None:
+    settings = load_settings()
+    settings["silent_mode"] = enabled
     save_settings(settings)
 
 

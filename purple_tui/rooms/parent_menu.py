@@ -367,6 +367,9 @@ _MUSIC_KEY_SWITCHING_CANCELLED = object()
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
 
+# SilentModeScreen dismiss value
+_SILENT_MODE_CANCELLED = object()
+
 
 class PickerModal(PurpleModal):
     """Base class for modal option pickers with up/down navigation.
@@ -551,6 +554,23 @@ class AllCapsScreen(PickerModal):
         self._selected = 0 if get_all_caps() else 1
 
 
+class SilentModeScreen(PickerModal):
+    """Toggle the parent silence lock."""
+
+    TITLE = "Silent Mode"
+    DESCRIPTION = "Turn off all sound. The volume buttons stay off until you turn this back on."
+    OPTIONS = [
+        (True, "On"),
+        (False, "Off"),
+    ]
+    escape_value = _SILENT_MODE_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_silent_mode
+        self._selected = 0 if get_silent_mode() else 1
+
+
 class MusicLoopingScreen(PickerModal):
     """Toggle the music looping setting."""
 
@@ -698,7 +718,7 @@ def _get_version_label() -> str:
 
 def _get_menu_items() -> list:
     """Get menu items, including dev-only items when appropriate."""
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_silent_mode
 
     items = []
 
@@ -722,6 +742,9 @@ def _get_menu_items() -> list:
 
     caps_label = "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"
     items.append(("menu-all-caps", caps_label))
+
+    silent_label = "Silent Mode: On" if get_silent_mode() else "Silent Mode: Off"
+    items.append(("menu-silent", silent_label))
 
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -1670,6 +1693,8 @@ class ParentMenu(PurpleModal):
             self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
+        elif item_id == "menu-silent":
+            self._open_silent_mode()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-install":
@@ -1840,6 +1865,25 @@ class ParentMenu(PurpleModal):
         label = "ALL CAPS: On" if new_value else "ALL CAPS: Off"
         try:
             widget = self.query_one("#menu-all-caps", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_silent_mode(self) -> None:
+        def on_result(result):
+            if result is _SILENT_MODE_CANCELLED:
+                return
+            self._apply_silent_mode(result)
+        self.app.push_screen(SilentModeScreen(), callback=on_result)
+
+    def _apply_silent_mode(self, new_value: bool) -> None:
+        from ..settings import set_silent_mode
+        set_silent_mode(new_value)
+        self.app._silent_mode = new_value
+        self.app._apply_volume()
+        label = "Silent Mode: On" if new_value else "Silent Mode: Off"
+        try:
+            widget = self.query_one("#menu-silent", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

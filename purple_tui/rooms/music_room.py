@@ -472,7 +472,7 @@ class MusicGrid(Widget):
         spoken letter clip in letters mode) stays intelligible.
         """
         from ..audio import play_safe
-        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
+        if hasattr(self.app, 'volume_level') and (self.app.volume_level == 0 or getattr(self.app, '_silent_mode', False)):
             return
         if key.isdigit():
             self._ensure_percussion_loaded()
@@ -603,7 +603,7 @@ class MusicGrid(Widget):
     def play_letter(self, key: str) -> None:
         """Play the letter name clip for a key (respects app volume setting)."""
         from ..audio import play_safe
-        if hasattr(self.app, 'volume_level') and self.app.volume_level == 0:
+        if hasattr(self.app, 'volume_level') and (self.app.volume_level == 0 or getattr(self.app, '_silent_mode', False)):
             return
         self._ensure_letter_sounds_loaded()
         if key in self._letter_sounds:

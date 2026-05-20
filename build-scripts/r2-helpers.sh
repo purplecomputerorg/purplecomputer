@@ -53,9 +53,9 @@ install.insert_pdf(doc, from_page=0, to_page=1)
 install.save("cards/purple-installation.pdf")
 print("Extracted pages 1-2 → cards/purple-installation.pdf")
 guide = fitz.open()
-guide.insert_pdf(doc, from_page=2, to_page=2)
+guide.insert_pdf(doc, from_page=2, to_page=3)
 guide.save("cards/purple-guide.pdf")
-print("Extracted page 3 → cards/purple-guide.pdf")
+print("Extracted pages 3-4 → cards/purple-guide.pdf")
 EOF
 
     local cards_dir="$R2_HELPERS_DIR/../cards"

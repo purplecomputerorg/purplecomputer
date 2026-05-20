@@ -506,7 +506,7 @@ just upload-early-access   # Upload page + PDFs, purge cache
 just upload-pdfs           # Upload just the PDFs, purge cache
 ```
 
-`upload-early-access` extracts installation (pages 1-2) and guide (page 3) PDFs from `cards/purple.pdf`, uploads everything, then purges the Cloudflare cache for `index.html` and both PDFs.
+`upload-early-access` extracts installation (pages 1-2) and guide (pages 3-4) PDFs from `cards/purple.pdf`, uploads everything, then purges the Cloudflare cache for `index.html` and both PDFs.
 
 `upload-pdfs` does the same extraction and upload for just the PDFs, for when you update the cards without touching the page.
 

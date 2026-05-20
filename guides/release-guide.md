@@ -76,7 +76,7 @@ This uploads `build-scripts/early-access.html` as `index.html`, extracts and upl
 just upload-pdfs
 ```
 
-Extracts installation (pages 1-2) and guide (page 3) from `cards/purple.pdf`, uploads them, and purges the Cloudflare cache. Use this when you update the cards without changing the download page.
+Extracts installation (pages 1-2) and guide (pages 3-4) from `cards/purple.pdf`, uploads them, and purges the Cloudflare cache. Use this when you update the cards without changing the download page.
 
 ---
 

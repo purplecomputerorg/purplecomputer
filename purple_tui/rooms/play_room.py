@@ -1251,61 +1251,20 @@ class SimpleEvaluator:
             if not part:
                 continue
 
-            # Color term: emit individual color items (adjective model)
-            # Pending numbers add extra copies of this color
-            if hexes := self._parse_color(part):
-                if pending_nums:
-                    hexes = [hexes[0]] * int(sum(pending_nums)) + hexes
-                    pending_nums = []
-                for h in hexes:
-                    items.append(('color', h))
+            handled = self._ingest_part(part, items, pending_nums)
+            if isinstance(handled, str):
+                return handled
+            if handled:
                 continue
 
-            # Emoji term (each pending number becomes a separate group)
-            if emoji_data := self._parse_emoji(part):
-                emoji, count, word = emoji_data
-                for p in pending_nums:
-                    items.append(('emoji', (emoji, int(p), word)))
-                items.append(('emoji', (emoji, count, word)))
-                pending_nums = []
-                continue
-
-            # Bare number or math expression (e.g., "3 * 4")
-            normalized = self._normalize_math(part)
-            if (math_result := self._eval_math(normalized)) is not None:
-                if isinstance(math_result, str):
-                    return math_result
-                val = int(math_result) if isinstance(math_result, float) and math_result.is_integer() else math_result
-                pending_nums.append(val)
-                continue
-
-            # Emoji string (from parens)
-            if self._is_emoji_str(part):
-                chars = [c for c in part if ord(c) > 127]
-                pending_sum = int(sum(pending_nums)) if pending_nums else 0
-                if chars and all(c == chars[0] for c in chars):
-                    for p in pending_nums:
-                        items.append(('emoji', (chars[0], int(p), None)))
-                    items.append(('emoji', (chars[0], len(chars), None)))
-                else:
-                    items.append(('emoji', (part, 1 + pending_sum, None)))
-                pending_nums = []
-                continue
-
-            # Unknown: try emoji substitution, pass through
-            remaining = part
-            if m := re.match(r'^(\d+)\s+(\w+)\s+(.+)$', remaining):
-                num, word, rest = int(m.group(1)), m.group(2).lower(), m.group(3)
-                if emoji := self._get_emoji(word):
-                    items.append(('emoji', (emoji, num, word.rstrip('s') if word.endswith('s') else word)))
-                    remaining = rest
-            if m := re.match(r'^(.+?)\s+(\d+)$', remaining):
-                text_part, num = m.group(1), int(m.group(2))
-                if text_part.strip():
-                    items.append(('text', self._substitute_emojis(text_part)))
-                pending_nums.append(num)
-            elif remaining.strip():
-                items.append(('text', self._substitute_emojis(remaining)))
+            # Multi-word part the fast paths missed (e.g. "2 bright red dogs"):
+            # decompose into semantic units via the shared chunker and ingest each.
+            for chunk in self._chunk_words(part.split()):
+                r = self._ingest_part(chunk, items, pending_nums)
+                if isinstance(r, str):
+                    return r
+                if not r and chunk.strip():
+                    items.append(('text', self._substitute_emojis(chunk)))
 
         # Attach remaining pending to last emoji or color
         if pending_nums:
@@ -1395,6 +1354,55 @@ class SimpleEvaluator:
             label = ' '.join(label_parts)
             result = f"{label}\n{result}"
         return result
+
+    def _ingest_part(self, part: str, items: list, pending_nums: list):
+        """Turn one term into items for a + expression.
+
+        Returns True if recognized, a str to short-circuit the whole
+        expression (math error/special), or False if unrecognized.
+        Colors emit per-color items (adjective model); a pending number
+        binds to the next emoji, or multiplies a color when no emoji follows.
+        """
+        part = part.strip()
+        if not part:
+            return True
+
+        # Colors act as adjectives: a pending number passes through to the next
+        # emoji (e.g. "3 + 2 bright red dogs" -> 5 red dogs). Leftover pending on
+        # a color-only expression is multiplied by the trailing-pending logic.
+        if hexes := self._parse_color(part):
+            items.extend(('color', h) for h in hexes)
+            return True
+
+        if emoji_data := self._parse_emoji(part):
+            emoji, count, word = emoji_data
+            for p in pending_nums:
+                items.append(('emoji', (emoji, int(p), word)))
+            items.append(('emoji', (emoji, count, word)))
+            pending_nums.clear()
+            return True
+
+        normalized = self._normalize_math(part)
+        if (math_result := self._eval_math(normalized)) is not None:
+            if isinstance(math_result, str):
+                return math_result
+            val = int(math_result) if isinstance(math_result, float) and math_result.is_integer() else math_result
+            pending_nums.append(val)
+            return True
+
+        if self._is_emoji_str(part):
+            chars = [c for c in part if ord(c) > 127]
+            pending_sum = int(sum(pending_nums)) if pending_nums else 0
+            if chars and all(c == chars[0] for c in chars):
+                for p in pending_nums:
+                    items.append(('emoji', (chars[0], int(p), None)))
+                items.append(('emoji', (chars[0], len(chars), None)))
+            else:
+                items.append(('emoji', (part, 1 + pending_sum, None)))
+            pending_nums.clear()
+            return True
+
+        return False
 
     def _estimate_visual_width(self, markup: str) -> int:
         """Estimate visual width of Rich markup text.
@@ -1526,53 +1534,73 @@ class SimpleEvaluator:
         if any(w in ('&', ',', ';') for w in words):
             return None
 
+        groups = self._chunk_words(words)
+        if len(groups) < 2:
+            return None
+
+        return self._eval_plus_expr(" + ".join(groups))
+
+    def _chunk_words(self, words: list[str]) -> list[str]:
+        """Single source of truth for grouping space-separated words into
+        semantic units. A unit is [count] [adjective... color]* [noun]: the
+        count binds to the noun if present, else multiplies the trailing color.
+        Color modifiers are emitted before their noun so the color-as-adjective
+        renderer can attach them ("2 bright red dogs" -> ["bright red", "2 dogs"]).
+        """
         from ..color_mixing import COLOR_ADJECTIVES
 
-        # Build groups: each group is a string that stays together
-        groups = []
-        i = 0
-        while i < len(words):
-            lower = words[i].lower()
+        def is_color_word(w: str) -> bool:
+            return bool(self._get_color(w)) and not self._get_emoji(w)
 
-            if i + 2 < len(words) and words[i + 1].lower() in ('x', '×', '*', 'times'):
+        groups: list[str] = []
+        i, n = 0, len(words)
+        while i < n:
+            # "N x noun" multiplication stays together
+            if i + 2 < n and words[i + 1].lower() in ('x', '×', '*', 'times'):
                 a, b = words[i], words[i + 2]
-                if a.isdigit() and not b.isdigit():
-                    noun = b.lower()
-                elif b.isdigit() and not a.isdigit():
-                    noun = a.lower()
-                else:
-                    noun = None
+                noun = b.lower() if a.isdigit() and not b.isdigit() else (
+                    a.lower() if b.isdigit() and not a.isdigit() else None)
                 if noun and self._get_emoji(noun):
                     groups.append(f"{a} {words[i + 1]} {b}")
                     i += 3
                     continue
 
-            # Adjectives (dark, bright, ...) attach to the next word
-            if lower in COLOR_ADJECTIVES:
-                chunk = [words[i]]
+            j = i
+            count = words[j] if words[j].isdigit() else None
+            if count:
+                j += 1
+
+            color_chunks: list[str] = []
+            while j < n:
+                k = j
+                while k < n and words[k].lower() in COLOR_ADJECTIVES:
+                    k += 1
+                if k < n and is_color_word(words[k].lower()):
+                    color_chunks.append(" ".join(words[j:k + 1]))
+                    j = k + 1
+                else:
+                    break
+
+            noun = None
+            if j < n and self._get_emoji(words[j].lower()):
+                noun = words[j]
+                j += 1
+
+            if j == i:  # nothing matched, pass the word through unchanged
+                groups.append(words[i])
                 i += 1
-                while i < len(words) and words[i].lower() in COLOR_ADJECTIVES:
-                    chunk.append(words[i])
-                    i += 1
-                if i < len(words):
-                    chunk.append(words[i])
-                    i += 1
-                groups.append(" ".join(chunk))
                 continue
 
-            # Number attaches to the next word ("2 blues" stays together)
-            if lower.isdigit() and i + 1 < len(words):
-                groups.append(f"{words[i]} {words[i+1]}")
-                i += 2
-                continue
+            groups.extend(color_chunks)
+            if noun:
+                groups.append(f"{count} {noun}" if count else noun)
+            elif count and color_chunks:
+                groups[-1] = f"{count} {color_chunks[-1]}"
+            elif count:
+                groups.append(count)
+            i = j
 
-            groups.append(words[i])
-            i += 1
-
-        if len(groups) < 2:
-            return None
-
-        return self._eval_plus_expr(" + ".join(groups))
+        return groups
 
     def _normalize_mult(self, text: str) -> str:
         """Normalize multiplication operators (x, times, ×) to *."""

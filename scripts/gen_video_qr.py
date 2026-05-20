@@ -18,7 +18,7 @@ OUT = Path(__file__).resolve().parent.parent / "purple_tui" / "qr_data.py"
 
 
 def main() -> None:
-    qr = qrcode.QRCode(error_correction=ERROR_CORRECT_H, border=4)
+    qr = qrcode.QRCode(error_correction=ERROR_CORRECT_H, border=2)
     qr.add_data(VIDEO_URL)
     qr.make(fit=True)
     rows = ["".join("1" if cell else "0" for cell in row) for row in qr.get_matrix()]

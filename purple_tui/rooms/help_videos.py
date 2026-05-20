@@ -46,7 +46,7 @@ class HelpVideosScreen(PurpleModal):
     CSS = """
     #modal-dialog {
         width: auto;
-        padding: 1 1;
+        padding: 1 3;
     }
 
     #help-intro {
@@ -57,6 +57,7 @@ class HelpVideosScreen(PurpleModal):
 
     #help-qr {
         width: auto;
+        margin: 0 1;
     }
 
     #help-url {

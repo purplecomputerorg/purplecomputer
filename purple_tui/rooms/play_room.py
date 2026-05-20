@@ -1085,6 +1085,10 @@ class SimpleEvaluator:
                 result = self._maybe_add_label(result, had_parens)
                 return result
 
+        # Try division/subtraction applied to a noun: "6/2 dogs", "5 - 2 cats"
+        if op_noun := self._eval_op_noun(text):
+            return self._maybe_add_label(op_noun, had_parens)
+
         # Try multiplication: "3 * cat", "cat times 5", etc.
         if mult := self._eval_mult(text):
             result = self._maybe_add_label(mult, had_parens)
@@ -1555,23 +1559,28 @@ class SimpleEvaluator:
 
         return self._eval_plus_expr(" + ".join(groups))
 
-    _COUNT_TOKEN = re.compile(r'\d+([x×*]\d+)*', re.IGNORECASE)
+    _COUNT_OPS = ('x', '×', '*', 'times', '/', '÷', '-')
+    _COUNT_TOKEN = re.compile(r'\d+([x×*/÷-]\d+)*', re.IGNORECASE)
 
     def _take_count(self, words: list[str], i: int) -> tuple[str | None, int]:
-        """Consume a leading count starting at i: a number or a multiplicative
-        expression ("3", "3x2", "3 × 2"). Returns (count_str_or_None, next_index).
-        The count binds to the following noun, so "3x2 dogs" -> 6 dogs.
+        """Consume a leading count starting at i: a number or an arithmetic
+        expression ("3", "3x2", "3 × 2", "6 / 2", "5 - 2"). The expression is
+        evaluated so the count binds to the following noun: "6/2 dogs" -> 3 dogs.
+        Returns (count_str_or_None, next_index); '+' is excluded (it means
+        "combine groups", handled by the plus path).
         """
         n = len(words)
         if i >= n or not self._COUNT_TOKEN.fullmatch(words[i]):
             return None, i
-        toks = [words[i]]
         j = i + 1
-        while j + 1 < n and words[j].lower() in ('x', '×', '*', 'times') \
+        while j + 1 < n and words[j].lower() in self._COUNT_OPS \
                 and self._COUNT_TOKEN.fullmatch(words[j + 1]):
-            toks.extend([words[j], words[j + 1]])
             j += 2
-        return " ".join(toks), j
+        val = self._eval_math(self._normalize_math(" ".join(words[i:j])))
+        if isinstance(val, (int, float)) and not isinstance(val, bool) \
+                and float(val).is_integer() and val >= 0:
+            return str(int(val)), j
+        return None, i
 
     def _chunk_words(self, words: list[str]) -> list[str]:
         """Single source of truth for grouping space-separated words into
@@ -1801,6 +1810,28 @@ class SimpleEvaluator:
 
     def _format_number_pattern(self, sequence: list[int], sep: str = " ") -> str:
         return sep.join(str(n) for n in sequence)
+
+    def _eval_op_noun(self, text: str) -> str | None:
+        """Division/subtraction of a count applied to a single noun or color,
+        the analogue of _eval_mult: "6/2 dogs" -> 3 dogs, "5 - 2 reds" -> 3 red
+        boxes, "10 - 3 - 2 dogs" -> 5 dogs. Multiplication stays in _eval_mult
+        (it renders the abacus grouping), so this only fires when the consumed
+        expression actually contains a division or subtraction operator.
+        """
+        words = text.strip().split()
+        count_str, j = self._take_count(words, 0)
+        if count_str is None or len(words) - j != 1:
+            return None
+        consumed = " ".join(words[:j])
+        if not any(op in consumed for op in ('/', '÷', '-')):
+            return None
+        count = int(count_str)
+        word = words[j].lower()
+        if e := self._get_emoji(word):
+            return self._format_emoji_label(e, count) if count > 1 else e * count
+        if h := self._get_color(word):
+            return self._format_color_label(h, count)
+        return None
 
     def _eval_mult(self, text: str) -> str | None:
         """Evaluate multiplication: '3 * cat', '5 x 2 cats', 'cat times 5', '3 cats', 'cats', '🐱🐶 * 2'."""

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Play: division and subtraction now count a noun the same way multiplication does, e.g. `6/2 dogs` and `5 - 2 dogs` show 3 dogs, and `6/2 red dogs` shows 3 red dogs. `+` still combines groups (`2 + 3 dogs` shows the two groups summing to 5).
 - Play: count plus color plus noun now works everywhere, e.g. `2 red dogs` and `3 + 2 bright red dogs` render colored dogs instead of stray letter blocks and swatches. The count binds to the noun and the color tints it, and in `2 + 3 dark red dogs` the color carries to all 5 dogs (a different emoji stops the carry, so `red dog cat` leaves the cat untinted).
 - Play: `*` and `/` now auto-space to ` × ` and ` ÷ ` as you type (matching the existing `+` and `-` behavior), so `5*3` becomes `5 × 3` instead of `5×3`.
 - Color + noun multiplication: "red dino x 5" (also "red 5 x dinos", "red dino × 5") now produces 5 red dinos instead of treating "x" as a literal label.

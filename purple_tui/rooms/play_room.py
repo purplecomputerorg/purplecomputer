@@ -1555,6 +1555,24 @@ class SimpleEvaluator:
 
         return self._eval_plus_expr(" + ".join(groups))
 
+    _COUNT_TOKEN = re.compile(r'\d+([x×*]\d+)*', re.IGNORECASE)
+
+    def _take_count(self, words: list[str], i: int) -> tuple[str | None, int]:
+        """Consume a leading count starting at i: a number or a multiplicative
+        expression ("3", "3x2", "3 × 2"). Returns (count_str_or_None, next_index).
+        The count binds to the following noun, so "3x2 dogs" -> 6 dogs.
+        """
+        n = len(words)
+        if i >= n or not self._COUNT_TOKEN.fullmatch(words[i]):
+            return None, i
+        toks = [words[i]]
+        j = i + 1
+        while j + 1 < n and words[j].lower() in ('x', '×', '*', 'times') \
+                and self._COUNT_TOKEN.fullmatch(words[j + 1]):
+            toks.extend([words[j], words[j + 1]])
+            j += 2
+        return " ".join(toks), j
+
     def _chunk_words(self, words: list[str]) -> list[str]:
         """Single source of truth for grouping space-separated words into
         semantic units. A unit is [count] [adjective... color]* [noun]: the
@@ -1581,9 +1599,7 @@ class SimpleEvaluator:
                     continue
 
             j = i
-            count = words[j] if words[j].isdigit() else None
-            if count:
-                j += 1
+            count, j = self._take_count(words, i)
 
             color_chunks: list[str] = []
             while j < n:

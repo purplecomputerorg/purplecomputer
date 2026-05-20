@@ -1,8 +1,11 @@
 """Bake the video-guide QR matrix into purple_tui/qr_data.py.
 
 Dev-time only: the `qrcode` package is NOT a runtime dependency. Purple ships
-the pre-computed matrix so the Help screen renders it with no import cost. Keep
-the URL and error-correction level in sync with landing/scripts/generate-qr.sh.
+the pre-computed matrix so the Help screen renders it with no import cost.
+
+The in-app screen has room, so this uses the full URL at ECC_H for robustness.
+The small print flyer uses a denser, uppercase variant: see
+landing/scripts/generate-qr.sh.
 
 Usage:
     just python scripts/gen_video_qr.py

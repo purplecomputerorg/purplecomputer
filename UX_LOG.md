@@ -346,3 +346,4 @@ Brief descriptions of user experience changes, newest first.
 - **Silent Mode**: New parent-menu toggle that turns off all sound and disables the volume keys until a parent turns it back on. The Volume button in the room switcher is greyed out and labeled "Silent" while it's on, reusing the same disabled path as when audio isn't working. Volume level now also persists across restarts.
 - **Rename to Code Space**: Parent-menu toggle now reads "Allow Code Space" instead of "Allow Code Panel".
 - **Test battery in VM**: PURPLE_TEST_BATTERY=1 again shows the battery icon when no real battery exists, fixing a regression from the title bar refactor.
+- **Help & Videos**: New parent-menu item showing a scannable QR code and the plain URL (purplecomputer.org/video) for video guides. The room switcher hint now also says "Hold Esc for grown-ups" so parents can find the parent menu.

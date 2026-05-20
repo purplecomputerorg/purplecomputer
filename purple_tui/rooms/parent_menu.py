@@ -541,7 +541,7 @@ class AllCapsScreen(PickerModal):
     """Toggle the all-caps display setting."""
 
     TITLE = "ALL CAPS"
-    DESCRIPTION = "Render every letter the app shows in uppercase"
+    DESCRIPTION = "Show every letter as a capital letter"
     OPTIONS = [
         (True, "On"),
         (False, "Off"),

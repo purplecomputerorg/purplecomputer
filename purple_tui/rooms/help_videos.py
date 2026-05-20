@@ -19,6 +19,10 @@ from ..qr_data import VIDEO_QR_MATRIX, VIDEO_QR_URL
 
 _UPPER_HALF = "▀"  # ▀ : foreground paints top module, background the bottom one
 
+# Brand-purple QR. Keep the dark/light luminance gap wide so phones still scan it.
+_QR_DARK = "#3a1d63"
+_QR_LIGHT = "#f3eefb"
+
 
 def _render_qr() -> Text:
     rows = [[c == "1" for c in row] for row in VIDEO_QR_MATRIX]
@@ -28,8 +32,8 @@ def _render_qr() -> Text:
         top_row = rows[top]
         bot_row = rows[top + 1] if top + 1 < len(rows) else blank
         for x in range(len(top_row)):
-            fg = "black" if top_row[x] else "white"
-            bg = "black" if bot_row[x] else "white"
+            fg = _QR_DARK if top_row[x] else _QR_LIGHT
+            bg = _QR_DARK if bot_row[x] else _QR_LIGHT
             text.append(_UPPER_HALF, style=f"{fg} on {bg}")
         if top + 2 < len(rows):
             text.append("\n")

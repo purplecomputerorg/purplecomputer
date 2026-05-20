@@ -722,6 +722,8 @@ def _get_menu_items() -> list:
 
     items = []
 
+    items.append(("menu-help", "Help & Videos"))
+
     # Littles Mode
     littles = get_littles_mode()
     if littles:
@@ -760,7 +762,6 @@ def _get_menu_items() -> list:
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
-    items.append(("menu-help", "Help & Videos"))
     items.append(("menu-support", "Support Info"))
     items.append(("menu-shutdown", "Shut Down"))
     items.append(("menu-exit", "Exit Parent Menu"))
@@ -1572,10 +1573,8 @@ class ParentMenu(PurpleModal):
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
             yield Static("Parent Menu", id="modal-title")
-            yield Static(
-                _boot_mode_hint(),
-                id="parent-live-hint",
-            )
+            if is_live_boot():
+                yield Static(_boot_mode_hint(), id="parent-live-hint")
             with Vertical(id="parent-items"):
                 audio_ok = getattr(self.app, "audio_ok", None)
                 for item_id, label in self._menu_items:

@@ -529,7 +529,7 @@ class BatteryIndicator(Static):
     def on_mount(self) -> None:
         """Find battery and start periodic updates"""
         self._find_battery()
-        if self._battery_available:
+        if self._battery_available or os.environ.get("PURPLE_TEST_BATTERY"):
             self._update_battery()  # Push initial state
             self._update_timer = self.set_interval(30, self._update_battery)
 

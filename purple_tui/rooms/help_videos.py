@@ -46,7 +46,7 @@ class HelpVideosScreen(PurpleModal):
     CSS = """
     #modal-dialog {
         width: auto;
-        padding: 1 3;
+        padding: 1 1;
     }
 
     #help-intro {
@@ -57,7 +57,6 @@ class HelpVideosScreen(PurpleModal):
 
     #help-qr {
         width: auto;
-        margin: 0 1;
     }
 
     #help-url {
@@ -73,7 +72,7 @@ class HelpVideosScreen(PurpleModal):
             yield Static("Help & Videos", id="modal-title")
             yield Static("Scan to watch video guides:", id="help-intro")
             yield Static(_render_qr(), id="help-qr")
-            yield Static(VIDEO_QR_URL, id="help-url")
+            yield Static(VIDEO_QR_URL.split("://", 1)[-1], id="help-url")
             yield Static(f"Questions? {SUPPORT_EMAIL}", id="modal-hint")
 
     async def _on_key(self, event) -> None:

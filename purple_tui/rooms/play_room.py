@@ -1423,22 +1423,37 @@ class SimpleEvaluator:
         """Group word_info items by color-as-adjective model.
 
         Colors attach to the next non-color item. Consecutive colors before
-        the same item mix together. Trailing colors with no item after them
-        form a group with item=None.
+        the same item mix together. A color's tint also carries to following
+        groups of the *same* emoji, so "2 + 3 dark red dogs" colors all 5 dogs
+        (the count is split by addition but it's one colored noun). A different
+        emoji or a new color stops the carry. Trailing colors with no item
+        after them form a group with item=None.
 
         Input: list of ('color', hex) | ('emoji', emoji, count) | ('text', word)
-        Output: list of {'colors': [hex...], 'item': info_tuple_or_None}
+        Output: list of {'colors': [hex...], 'tint': hex_or_None, 'item': info}.
+        'colors' drives the input swatches (shown once); 'tint' colors the result.
         """
         groups = []
         current_colors = []
+        carry_tint = None
+        carry_emoji = None
         for info in word_info:
             if info[0] == 'color':
                 current_colors.append(info[1])
+                continue
+            colors = list(current_colors)
+            current_colors = []
+            if colors:
+                tint = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+            elif info[0] == 'emoji' and info[1] == carry_emoji:
+                tint = carry_tint
             else:
-                groups.append({'colors': list(current_colors), 'item': info})
-                current_colors = []
+                tint = None
+            carry_emoji = info[1] if info[0] == 'emoji' and tint else None
+            carry_tint = tint if carry_emoji else None
+            groups.append({'colors': colors, 'tint': tint, 'item': info})
         if current_colors:
-            groups.append({'colors': current_colors, 'item': None})
+            groups.append({'colors': current_colors, 'tint': None, 'item': None})
         if (len(groups) >= 2
                 and groups[-1]['item'] is None
                 and not groups[-2]['colors']):
@@ -1480,7 +1495,7 @@ class SimpleEvaluator:
                     result_parts.append(f"[on {c}]  [/]")
                 continue
 
-            mixed = mix_colors_paint(colors) if len(colors) > 1 else (colors[0] if colors else None)
+            mixed = g['tint']
 
             # Build input representation for colors
             for c in colors:

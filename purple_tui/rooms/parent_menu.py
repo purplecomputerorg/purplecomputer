@@ -523,7 +523,7 @@ class LittlesModeScreen(PickerModal):
 class CodePanelScreen(PickerModal):
     """Toggle the code panel setting."""
 
-    TITLE = "Allow Code Panel"
+    TITLE = "Allow Code Space"
     DESCRIPTION = "Allow older kids to write code in Music and Art by holding the space button"
     OPTIONS = [
         (True, "Yes"),
@@ -733,7 +733,7 @@ def _get_menu_items() -> list:
 
     # Code Panel toggle (only show when not in littles mode, since littles always disables it)
     if not littles:
-        code_label = "Allow Code Panel: Yes" if get_code_panel() else "Allow Code Panel: No"
+        code_label = "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"
         items.append(("menu-code-panel", code_label))
         looping_label = "Allow Music Looping: Yes" if get_music_looping() else "Allow Music Looping: No"
         items.append(("menu-music-looping", looping_label))

@@ -286,9 +286,9 @@ class RoomPickerScreen(PurpleModal):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
             with Horizontal(id="picker-extras"):
-                audio_ok = getattr(self.app, "audio_ok", None)
-                if audio_ok is False:
-                    yield ExtraOption(ICON_VOLUME_OFF, "No Sound", "", disabled=True, id="opt-volume")
+                if getattr(self.app, "volume_locked", False):
+                    label = "Silent" if getattr(self.app, "_silent_mode", False) else "No Sound"
+                    yield ExtraOption(ICON_VOLUME_OFF, label, "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
@@ -449,8 +449,8 @@ class RoomPickerScreen(PurpleModal):
         self.app.push_screen(ConfirmFreshScreen(), on_confirm)
 
     def _open_volume(self) -> None:
-        """Open the volume modal (skip if audio is broken)."""
-        if getattr(self.app, "audio_ok", None) is False:
+        """Open the volume modal (skip when volume is locked: no audio, or silent mode)."""
+        if getattr(self.app, "volume_locked", False):
             return
         self.app.push_screen(VolumeModal())
 

@@ -2581,6 +2581,11 @@ class PurpleApp(App):
         """Volume actually applied to playback: 0 while the parent silence lock is on."""
         return 0 if self._silent_mode else self.volume_level
 
+    @property
+    def volume_locked(self) -> bool:
+        """Volume controls should be hidden/disabled: audio isn't working, or the parent silence lock is on."""
+        return self.audio_ok is False or self._silent_mode
+
     def _apply_volume_system(self) -> None:
         """Set system volume via ALSA to match the effective volume (non-blocking).
 

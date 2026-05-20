@@ -343,5 +343,5 @@ Brief descriptions of user experience changes, newest first.
 - **Add gutter**: Added gutter around canvas so cursor ring can extend to edges
 - **Loop panel exit hint**: Show "Esc: exit" in music room loop panel during recording and looping
 - **Allow Music Key Switching**: New parent-menu toggle to disable arrow-key musical key switching in Music Room (mirrors Allow Music Looping)
-- **Silent Mode**: New parent-menu toggle that turns off all sound and disables the volume keys until a parent turns it back on. Volume level now also persists across restarts.
+- **Silent Mode**: New parent-menu toggle that turns off all sound and disables the volume keys until a parent turns it back on. The Volume button in the room switcher is greyed out and labeled "Silent" while it's on, reusing the same disabled path as when audio isn't working. Volume level now also persists across restarts.
 - **Rename to Code Space**: Parent-menu toggle now reads "Allow Code Space" instead of "Allow Code Panel".

@@ -760,6 +760,7 @@ def _get_menu_items() -> list:
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
+    items.append(("menu-help", "Help & Videos"))
     items.append(("menu-support", "Support Info"))
     items.append(("menu-shutdown", "Shut Down"))
     items.append(("menu-exit", "Exit Parent Menu"))
@@ -1709,6 +1710,8 @@ class ParentMenu(PurpleModal):
             self._exit_to_bash()
         elif item_id == "menu-system":
             self._exit_to_system()
+        elif item_id == "menu-help":
+            self._open_help_videos()
         elif item_id == "menu-support":
             self._open_support_info()
         elif item_id == "menu-shutdown":
@@ -1941,6 +1944,10 @@ class ParentMenu(PurpleModal):
             ComputerNameScreen(title=title, description=description, initial=current),
             callback=on_name,
         )
+
+    def _open_help_videos(self) -> None:
+        from .help_videos import HelpVideosScreen
+        self.app.push_screen(HelpVideosScreen())
 
     def _open_support_info(self) -> None:
         """Open the Support info modal."""

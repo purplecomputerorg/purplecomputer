@@ -118,6 +118,11 @@ async def run_action(app, action_str: str) -> None:
         app._show_room_picker()
         await asyncio.sleep(0.3)
 
+    elif action_str == "help_videos":
+        from purple_tui.rooms.help_videos import HelpVideosScreen
+        app.push_screen(HelpVideosScreen())
+        await asyncio.sleep(0.3)
+
     elif action_str == "clear":
         await app._execute_dev_command({"action": "clear"})
         await asyncio.sleep(0.1)

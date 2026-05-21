@@ -211,6 +211,10 @@ upload-early-access-html:
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
+# Add print bleed to the postcard PDF for Vistaprint (cards/purple.pdf -> cards/purple-bleed.pdf)
+print-card *args:
+    @.venv/bin/python cards/add_bleed.py {{args}}
+
 # Delete old releases from Cloudflare R2, keeping only the current version
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}

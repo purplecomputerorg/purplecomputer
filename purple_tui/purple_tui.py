@@ -390,18 +390,33 @@ class RoomIndicator(Horizontal):
     #keys-spacer-right {
         width: 1fr;
         height: 3;
+        align: right middle;
+    }
+
+    #art-arrow-hint {
+        width: auto;
+        height: auto;
+        color: __TITLE_MUTED__;
     }
 
     #keys-right {
         width: auto;
         height: 3;
-        margin-right: 2;
+        content-align: right middle;
     }
     """.replace("__TITLE_MUTED__", TITLE_MUTED)
+
+    _ARROW_KEYS_BOTTOM = "Arrows move  [←][↓][→]"
+    ARROW_KEYS_HINT = (
+        " " * _ARROW_KEYS_BOTTOM.index("[↓]") + "[↑]\n" + _ARROW_KEYS_BOTTOM
+    )
 
     def __init__(self, current_room: Room, **kwargs):
         super().__init__(**kwargs)
         self.current_room = current_room
+
+    def _arrow_hint_for(self, room: Room) -> str:
+        return self.ARROW_KEYS_HINT if room == Room.ART else ""
 
     def compose(self) -> ComposeResult:
         yield Static(f"{ICON_KEYBOARD}  Purple is always keyboard only", id="keys-spacer-left")
@@ -425,7 +440,8 @@ class RoomIndicator(Horizontal):
                     badge.add_class("dim")
                 yield badge
 
-        yield Static("", id="keys-spacer-right")
+        with Container(id="keys-spacer-right"):
+            yield Static(self._arrow_hint_for(self.current_room), id="art-arrow-hint")
 
         with Horizontal(id="keys-right"):
             mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
@@ -435,6 +451,10 @@ class RoomIndicator(Horizontal):
 
     def update_room(self, room: Room) -> None:
         self.current_room = room
+        try:
+            self.query_one("#art-arrow-hint", Static).update(self._arrow_hint_for(room))
+        except NoMatches:
+            pass
         for m in [Room.PLAY, Room.MUSIC, Room.ART]:
             try:
                 badge = self.query_one(f"#key-{m.name.lower()}", RoomBadge)
@@ -979,9 +999,20 @@ class PurpleApp(App):
         try:
             wrapper = self.query_one("#viewport-wrapper")
             spacer = self.query_one("#keys-spacer-left", Static)
+            keys_right = self.query_one("#keys-right", Horizontal)
         except NoMatches:
             return
         spacer.styles.padding = (0, 0, 0, wrapper.region.x + 7)
+        # Anchor the mute slot to the right viewport border, mirroring the
+        # left hint's offset. The arrow hint right-aligns in its spacer up to
+        # keys-right's left edge, so it sits against the border when mute is
+        # hidden and slides left of the badge (with a gap) when it shows.
+        right_gap = max(0, self.size.width - wrapper.region.right)
+        try:
+            mute_shown = self.query_one("#key-mute", KeyBadge).display
+        except NoMatches:
+            mute_shown = False
+        keys_right.styles.margin = (0, right_gap + 6, 0, 2 if mute_shown else 0)
 
     def on_resize(self, event: events.Resize) -> None:
         self.call_after_refresh(self._align_footer_to_viewport)
@@ -2708,6 +2739,7 @@ class PurpleApp(App):
         try:
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.update_volume_indicator(vol)
+            self._align_footer_to_viewport()
         except NoMatches:
             pass
 

@@ -186,6 +186,7 @@ class View(Enum):
 
 
 TITLE_MUTED = "#6a5a80"  # soft purple used for the title-bar status text and computer name
+TITLE_PRIMARY = "#9b7bc4"  # brighter purple used for the centered room title
 
 CODE_PANEL_CLOSE_HINT_TEXT = "Hold Space: close code"
 CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} {CODE_PANEL_CLOSE_HINT_TEXT} {ICON_ROBOT}"
@@ -256,7 +257,7 @@ class TitleBar(Widget):
         title_start = max(0, (width - display_len(title)) // 2)
 
         # Right indicator segments (right-aligned)
-        primary = "#9b7bc4"
+        primary = TITLE_PRIMARY
         accent = "#6a3c90"
         muted = TITLE_MUTED
         indicator_parts: list[tuple[str, str]] = []
@@ -419,8 +420,15 @@ class RoomIndicator(Horizontal):
         super().__init__(**kwargs)
         self.current_room = current_room
 
-    def _arrow_hint_for(self, room: Room) -> str:
-        return self.ARROW_KEYS_HINT if room == Room.ART else ""
+    def _arrow_hint_for(self, room: Room):
+        if room != Room.ART:
+            return ""
+        from rich.text import Text
+        text = Text(self.ARROW_KEYS_HINT)
+        for i, ch in enumerate(self.ARROW_KEYS_HINT):
+            if ch in "←↑↓→":
+                text.stylize(TITLE_PRIMARY, i, i + 1)
+        return text
 
     def compose(self) -> ComposeResult:
         yield Static(f"{ICON_KEYBOARD}  Purple is always keyboard only", id="keys-spacer-left")

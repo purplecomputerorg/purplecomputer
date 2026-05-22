@@ -1741,10 +1741,11 @@ class PurpleApp(App):
                 _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
             return
         lit = self._close_hint_pulse_remaining % 2 == 0
-        # Highlight only the inner words, leaving the double-width robot glyphs
-        # outside the background so they can't smear it or shift right-alignment.
+        # Highlight only the words, leaving the double-width robot glyphs and the
+        # spaces around them outside the background so they can't smear it or shift
+        # right-alignment.
         hint = (
-            f"{ICON_ROBOT}[{CLOSE_HINT_PULSE_MARKUP}] {CODE_PANEL_CLOSE_HINT_TEXT} [/]{ICON_ROBOT}"
+            f"{ICON_ROBOT} [{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT_TEXT}[/] {ICON_ROBOT}"
             if lit else CODE_PANEL_CLOSE_HINT
         )
         _set_viewport_hints(viewport, left=None, right=hint, active_theme=self.active_theme)

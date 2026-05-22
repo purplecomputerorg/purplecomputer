@@ -187,14 +187,16 @@ class View(Enum):
 
 TITLE_MUTED = "#6a5a80"  # soft purple used for the title-bar status text and computer name
 
-CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+CODE_PANEL_CLOSE_HINT_TEXT = "Hold Space: close code"
+CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} {CODE_PANEL_CLOSE_HINT_TEXT} {ICON_ROBOT}"
 # Pulse the close-code hint when a kid presses arrows in code mode (a "how do I
 # get out?" signal). Gentle highlight, then settle: not a strobe. Left/right
 # arrows already navigate, so they blink once; up/down blink twice.
 CLOSE_HINT_PULSES_HORIZONTAL = 1
 CLOSE_HINT_PULSES_VERTICAL = 2
 CLOSE_HINT_PULSE_RATE = 0.32
-CLOSE_HINT_PULSE_MARKUP = "on #6a3f9e"
+# Same bg/text as the selected "ABC" mode tab so the highlight reads as "this is active".
+CLOSE_HINT_PULSE_MARKUP = "#1e1033 on #9070C0"
 
 
 class TitleBar(Widget):
@@ -1739,8 +1741,12 @@ class PurpleApp(App):
                 _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
             return
         lit = self._close_hint_pulse_remaining % 2 == 0
-        # Trailing space widens the background to cover the double-width robot glyph.
-        hint = f"[{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT} [/]" if lit else CODE_PANEL_CLOSE_HINT
+        # Highlight only the inner words, leaving the double-width robot glyphs
+        # outside the background so they can't smear it or shift right-alignment.
+        hint = (
+            f"{ICON_ROBOT}[{CLOSE_HINT_PULSE_MARKUP}] {CODE_PANEL_CLOSE_HINT_TEXT} [/]{ICON_ROBOT}"
+            if lit else CODE_PANEL_CLOSE_HINT
+        )
         _set_viewport_hints(viewport, left=None, right=hint, active_theme=self.active_theme)
         self._close_hint_pulse_remaining -= 1
 
@@ -2213,13 +2219,14 @@ class PurpleApp(App):
             if self.active_room == Room.ART:
                 self._reset_viewport_border()
 
-            # Auto-clear music mode when leaving (ephemeral mode)
+            # Silence music when leaving but keep the grid: visuals persist like Art,
+            # so a loop never bleeds into another room with no visible source.
             if self.active_room == Room.MUSIC:
                 try:
                     content_area = self.query_one("#content-area")
                     music_widget = content_area.query_one(f"#room-{ROOM_MUSIC[0]}")
-                    if hasattr(music_widget, 'reset_state'):
-                        music_widget.reset_state()
+                    if hasattr(music_widget, 'stop_sound'):
+                        music_widget.stop_sound()
                 except NoMatches:
                     pass
 

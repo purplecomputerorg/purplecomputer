@@ -977,6 +977,10 @@ class MusicMode(Container, can_focus=True):
         if self.grid:
             self.grid.cleanup_sounds()
 
+    def stop_sound(self) -> None:
+        """Silence the room without clearing it: visuals persist across a room switch."""
+        self._stop_loop()
+
     def reset_state(self) -> None:
         """Reset music mode to defaults (colors, loop, instrument, letters mode)."""
         self._stop_loop()

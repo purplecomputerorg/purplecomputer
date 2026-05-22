@@ -185,6 +185,9 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
+TITLE_MUTED = "#6a5a80"  # soft purple used for the title-bar status text and computer name
+
+
 class TitleBar(Widget):
     """Renders centered room title with right-aligned status indicators.
 
@@ -244,7 +247,7 @@ class TitleBar(Widget):
         # Right indicator segments (right-aligned)
         primary = "#9b7bc4"
         accent = "#6a3c90"
-        muted = "#6a5a80"
+        muted = TITLE_MUTED
         indicator_parts: list[tuple[str, str]] = []
         if self._shift_text:
             indicator_parts.append((self._shift_text + " ", accent if self._shift_active else muted))
@@ -365,7 +368,7 @@ class RoomIndicator(Horizontal):
         height: 3;
         content-align: left middle;
         padding-left: 7;
-        color: $text-disabled;
+        color: __TITLE_MUTED__;
     }
 
     #keys-center {
@@ -383,14 +386,14 @@ class RoomIndicator(Horizontal):
         height: 3;
         margin-right: 2;
     }
-    """
+    """.replace("__TITLE_MUTED__", TITLE_MUTED)
 
     def __init__(self, current_room: Room, **kwargs):
         super().__init__(**kwargs)
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{ICON_KEYBOARD}  Purple is keyboard only!", id="keys-spacer-left")
+        yield Static(f"{ICON_KEYBOARD}  Purple is always keyboard only", id="keys-spacer-left")
 
         with Horizontal(id="keys-center"):
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
@@ -711,7 +714,7 @@ class BootModeIndicator(Static):
         self._push_to_title_bar()
 
     def _push_to_title_bar(self) -> None:
-        muted = "#6a5a80"
+        muted = TITLE_MUTED
         if not self._is_live:
             label = _read_computer_name() or DEFAULT_COMPUTER_NAME
             text, color = f"{ICON_HARDDISK} {label}", muted

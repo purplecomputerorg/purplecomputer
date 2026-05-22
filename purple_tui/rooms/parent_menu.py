@@ -353,6 +353,7 @@ _LITTLES_CANCELLED = object()  # Sentinel: user pressed Escape without choosing
 # LittlesExitScreen dismiss values
 _LITTLES_EXIT = "exit"        # Exit littles mode
 _LITTLES_GO_BACK = "go_back"  # Return to littles mode
+_LITTLES_SWITCH = "switch"    # Open the littles mode picker to switch activity
 _LITTLES_PARENT = "parent"    # Open the full parent menu (keep littles on)
 
 # CodePanelScreen dismiss value
@@ -486,6 +487,7 @@ class LittlesExitScreen(PickerModal):
     OPTIONS = [
         (_LITTLES_EXIT, "Yes, exit"),
         (_LITTLES_GO_BACK, "No, go back"),
+        (_LITTLES_SWITCH, "Switch activity"),
         (_LITTLES_PARENT, "Parent Menu"),
     ]
     default_selected = 1
@@ -1544,20 +1546,24 @@ class ParentMenu(PurpleModal):
         height: 1;
     }
 
-    #parent-version {
-        width: 100%;
-        height: 1;
-        text-align: center;
-        color: $text-muted;
-        margin-top: 1;
-    }
-
-    #parent-live-hint {
+    .parent-footer {
         width: 100%;
         height: auto;
         text-align: center;
         color: $text-muted;
+    }
+
+    #parent-version {
+        height: 1;
+        margin-top: 1;
+    }
+
+    #parent-live-hint {
         margin-bottom: 1;
+    }
+
+    #parent-keyboard-note {
+        margin-top: 1;
     }
     """
 
@@ -1574,7 +1580,7 @@ class ParentMenu(PurpleModal):
         with Vertical(id="modal-dialog"):
             yield Static("Parent Menu", id="modal-title")
             if is_live_boot():
-                yield Static(_boot_mode_hint(), id="parent-live-hint")
+                yield Static(_boot_mode_hint(), id="parent-live-hint", classes="parent-footer")
             with Vertical(id="parent-items"):
                 audio_ok = getattr(self.app, "audio_ok", None)
                 for item_id, label in self._menu_items:
@@ -1585,9 +1591,16 @@ class ParentMenu(PurpleModal):
                         item.add_class("disabled")
                     yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="modal-hint")
+            yield Static(
+                "Purple is keyboard only, on purpose. There's no mouse, "
+                "trackpad, or touch, so kids explore by typing instead of "
+                "getting lost clicking around.",
+                id="parent-keyboard-note",
+                classes="parent-footer",
+            )
             version = _get_version_label()
             if version:
-                yield Static(version, id="parent-version")
+                yield Static(version, id="parent-version", classes="parent-footer")
 
     def on_mount(self) -> None:
         """Highlight the first menu item"""

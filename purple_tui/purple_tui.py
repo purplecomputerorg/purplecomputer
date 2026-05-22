@@ -50,7 +50,7 @@ from enum import Enum
 boot_log.heartbeat("textual/rich imports done; importing purple_tui.constants")
 
 from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU,
+    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_MENU, ICON_KEYBOARD,
     ROOM_TITLES,
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
@@ -363,6 +363,10 @@ class RoomIndicator(Horizontal):
     #keys-spacer-left {
         width: 1fr;
         height: 3;
+        content-align: left middle;
+        padding-left: 2;
+        color: $text-muted;
+        text-style: italic;
     }
 
     #keys-center {
@@ -387,7 +391,7 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="keys-spacer-left")
+        yield Static(f"{ICON_KEYBOARD}  Keyboard only · no trackpad or touch", id="keys-spacer-left")
 
         with Horizontal(id="keys-center"):
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")
@@ -2722,14 +2726,23 @@ class PurpleApp(App):
     def _on_littles_exit_dismissed(self, result) -> None:
         """Handle littles exit screen dismiss."""
         from .rooms.parent_menu import (
-            _LITTLES_EXIT, _LITTLES_PARENT, ParentMenu,
+            _LITTLES_EXIT, _LITTLES_SWITCH, _LITTLES_PARENT,
+            LittlesModeScreen, ParentMenu,
         )
         if result == _LITTLES_EXIT:
             from .settings import set_littles_mode
             set_littles_mode(None)
             self._apply_littles_mode(None)
+        elif result == _LITTLES_SWITCH:
+            self.push_screen(LittlesModeScreen(), callback=self._on_littles_mode_picked)
         elif result == _LITTLES_PARENT:
             self.push_screen(ParentMenu(), callback=self._on_parent_menu_dismissed)
+
+    def _on_littles_mode_picked(self, mode) -> None:
+        """Apply a littles mode chosen from the switch-activity picker."""
+        from .rooms.parent_menu import _LITTLES_CANCELLED
+        if mode is not _LITTLES_CANCELLED:
+            self._apply_littles_mode(mode)
 
     def _on_parent_menu_dismissed(self, result) -> None:
         """Handle parent menu dismiss, applying any setting changes."""
@@ -2798,9 +2811,11 @@ class PurpleApp(App):
 
         # Refresh headers/hints so they pick up the new littles state
         try:
-            from .rooms.music_room import MusicRoomHeader
+            from .rooms.music_room import MusicRoomHeader, MusicMode
             for h in self.query(MusicRoomHeader):
                 h.refresh()
+            for m in self.query(MusicMode):
+                m._update_hint()
         except (NoMatches, Exception):
             pass
         try:

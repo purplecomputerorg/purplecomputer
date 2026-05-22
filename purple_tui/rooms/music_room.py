@@ -949,7 +949,7 @@ class MusicMode(Container, can_focus=True):
         except Exception:
             pass
 
-    _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold ` or Esc: parent menu[/]"
+    _NOSCREEN_TEXT = "[dim]No-screen music mode\nPress keys to play sounds\n\nHold Esc to exit[/]"
 
     def _noscreen_flash(self, color: str) -> None:
         """Show a colored circle briefly in no-screen mode."""
@@ -1131,6 +1131,10 @@ class MusicMode(Container, can_focus=True):
 
     # -- Hint bar ------------------------------------------------------------
 
+    def refresh_hint(self) -> None:
+        """Public entry point for refreshing the hint after a mode change."""
+        self._update_hint()
+
     def _update_hint(self) -> None:
         """Update the bottom hint bar based on loop station state.
 
@@ -1144,7 +1148,7 @@ class MusicMode(Container, can_focus=True):
             hint = None
         if hint is not None:
             if getattr(self.app, '_littles_mode', None):
-                hint.set_hint("")
+                hint.set_hint("[dim]Enter: instrument[/]")
             else:
                 labels_shown = bool(self.grid and getattr(self.grid, '_show_labels', False))
                 space_hint = "Space: hide notes" if labels_shown else "Space: show notes"
@@ -1369,9 +1373,8 @@ class MusicMode(Container, can_focus=True):
                 return
 
             if action.action == 'enter':
-                # Enter tap cycles instrument; enter hold advances loop state.
-                if getattr(self.app, '_littles_mode', None):
-                    return
+                # Tap cycles instrument; hold advances loop state. Littles mode
+                # allows the tap but no-ops the hold (in _on_enter_hold_fired).
                 if self._enter_hold.fired:
                     if not action.is_down:
                         self._enter_hold.on_up()

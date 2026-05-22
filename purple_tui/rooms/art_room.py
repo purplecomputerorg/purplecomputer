@@ -26,7 +26,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb
-from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD
+from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD, VIEWPORT_WIDTH
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
     UNSHIFT_MAP,
@@ -1306,16 +1306,17 @@ class CanvasHeader(Static):
             write_part = f"[{APP_BG_DARK} on #9070C0] {write_icon} [/]"
 
         if getattr(self.app, '_littles_mode', None):
-            if self._is_painting:
-                return f"{paint_part}"
-            else:
-                return f"{write_part}"
+            part = paint_part if self._is_painting else write_part
+            part_w = 3 + 2  # " ■■■ " or " ABC "
+            width = self.size.width or VIEWPORT_WIDTH
+            left_pad = max(0, (width - part_w) // 2)
+            return f"{' ' * left_pad}{part}"
 
         modes = f"{paint_part}  {write_part}"
         modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
         hint = f"{ICON_TAB} Tab to {'write' if self._is_painting else 'paint'}"
         hint_w = len(hint)
-        width = self.size.width or 134
+        width = self.size.width or VIEWPORT_WIDTH
         left_pad = max(0, (width - modes_w) // 2)
         right_area = max(0, width - left_pad - modes_w)
         hint_left_pad = max(1, (right_area - hint_w) // 2)

@@ -358,6 +358,9 @@ class LiveBootSplash(Screen):
         "turns off, you'll need the USB to start\n"
         "Purple again.\n"
         "\n"
+        "Purple uses just the keyboard, on purpose.\n"
+        "No mouse, trackpad, or touch needed.\n"
+        "\n"
         "To install Purple permanently,\n"
         "visit the Parent Menu."
     )

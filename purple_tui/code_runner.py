@@ -353,19 +353,37 @@ class MusicCodeRunner:
             return True
         return None
 
+    def _resolve_leading_instrument(self, words: list[str]) -> tuple[str | None, int]:
+        """Resolve an instrument from the first word. Instrument names and
+        aliases are single words, so anything after the first word is notes to
+        play, mirroring how the Art room peels a leading color off a line."""
+        if not words:
+            return None, 0
+        resolved = self._resolve_instrument(words[0])
+        return (resolved, 1) if resolved else (None, 0)
+
     async def _do_instrument(self, m) -> bool | None:
-        name = m.group(1).strip()
-        resolved = self._resolve_instrument(name)
-        if resolved and self.set_instrument:
-            keyword = m.group(0).split()[0]
-            if resolved.lower() != name.lower():
-                self._correction_final = f'{keyword} {resolved.lower()}'
-                if not self._suppress_handler_corrections:
-                    self.corrections.append((self._original_text, self._correction_final))
-            self.set_instrument(name)
-            await asyncio.sleep(0.1)
-            return True
-        return None
+        keyword = m.group(0).split()[0]
+        words = m.group(1).split()
+        resolved, used = self._resolve_leading_instrument(words)
+        if not (resolved and self.set_instrument):
+            return None
+        if resolved.lower() != words[0].lower():
+            self._correction_final = f'{keyword} {resolved.lower()}'
+            if not self._suppress_handler_corrections:
+                self.corrections.append((self._original_text, self._correction_final))
+        self.set_instrument(resolved.lower())
+        await asyncio.sleep(0.1)
+        remainder = " ".join(words[used:])
+        if remainder:
+            # Re-dispatch resets the per-line correction fields, so save and
+            # restore them for the caller (stage 2 reads _correction_final).
+            saved = (self._original_text, self._correction_final,
+                     self._suppress_handler_corrections)
+            await self._dispatch(remainder)
+            (self._original_text, self._correction_final,
+             self._suppress_handler_corrections) = saved
+        return True
 
     async def _do_play(self, m) -> bool | None:
         arg = m.group(1).strip()
@@ -375,7 +393,7 @@ class MusicCodeRunner:
                 self._correction_final = f'play {resolved.lower()}'
                 if not self._suppress_handler_corrections:
                     self.corrections.append((self._original_text, self._correction_final))
-            self.set_instrument(arg)
+            self.set_instrument(resolved.lower())
             await asyncio.sleep(0.1)
             return True
         # Not an instrument: play as notes

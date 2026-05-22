@@ -73,6 +73,15 @@ class TestCodeRunnerInstrumentChange:
         asyncio.run(runner.run(["play ukulele"]))
         assert len(instruments) == 1
 
+    def test_play_misspelled_instrument_actually_switches(self):
+        instruments = []
+        runner = MusicCodeRunner(
+            play_key_fn=lambda k, m: None,
+            set_instrument_fn=lambda name: instruments.append(name),
+        )
+        asyncio.run(runner.run(["play marimab"]))
+        assert instruments == ["marimba"]
+
     def test_play_notes(self):
         played = []
         runner = MusicCodeRunner(
@@ -81,16 +90,18 @@ class TestCodeRunnerInstrumentChange:
         asyncio.run(runner.run(["play qwe"]))
         assert played == ['Q', 'W', 'E']
 
-    def test_choose_with_junk_argument_plays_no_notes(self):
+    def test_choose_instrument_then_plays_trailing_notes(self):
+        # Like the Art room ("green forward 10"), the instrument command peels
+        # off the leading instrument word and plays the rest as notes.
         played = []
         instruments = []
         runner = MusicCodeRunner(
             play_key_fn=lambda k, m: played.append(k),
             set_instrument_fn=lambda name: instruments.append(name),
         )
-        asyncio.run(runner.run(["choose uke fdasfdsa"]))
-        assert played == []
-        assert instruments == []
+        asyncio.run(runner.run(["choose uke asdf"]))
+        assert instruments == ["ukulele"]
+        assert played == ["A", "S", "D", "F"]
 
     def test_letters_with_bad_argument_plays_no_notes(self):
         played = []
@@ -121,6 +132,12 @@ class TestDispatchClaimsKeywords:
             asyncio.run(runner.run([f"{keyword} zzzqqq"]))
             assert state["played"] == [], keyword
             assert state["instruments"] == [], keyword
+
+    def test_misspelled_instrument_then_plays_trailing_notes(self):
+        runner, state = _make_runner()
+        asyncio.run(runner.run(["choose glockenppiel asdf"]))
+        assert state["instruments"] == ["glockenspiel"]
+        assert state["played"] == ["A", "S", "D", "F"]
 
     def test_play_with_junk_still_plays_notes(self):
         # `play` is intentionally dual-purpose: an unresolved argument plays as

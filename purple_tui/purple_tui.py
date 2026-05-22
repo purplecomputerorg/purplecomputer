@@ -726,7 +726,7 @@ class BootModeIndicator(Static):
         elif self._blink_state:
             text, color = f"{ICON_USB} USB", muted
         else:
-            text, color = "  USB", muted
+            text, color = "   USB", muted
         try:
             title_bar = self.screen.query_one("#title-bar")
             title_bar.set_boot_mode(text, color)

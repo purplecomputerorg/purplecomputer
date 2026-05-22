@@ -348,3 +348,4 @@ Brief descriptions of user experience changes, newest first.
 - **Test battery in VM**: PURPLE_TEST_BATTERY=1 again shows the battery icon when no real battery exists, fixing a regression from the title bar refactor.
 - **Help & Videos**: New parent-menu item showing a scannable QR code and the plain URL (purplecomputer.org/video) for video guides. The room switcher hint now also says "Hold Esc for grown-ups" so parents can find the parent menu.
 - **Keyboard-only hint**: Persistent bottom-left note in the room switcher ("Keyboard only · no trackpad or touch"), a line on the live-boot splash, and a longer explanation in the Parent Menu, so parents and kids learn up front that mouse/trackpad/touch are off on purpose.
+- **USB blink no longer jitters**: The blinking USB icon's off-state now pads to match the double-wide icon width, so the room title and battery indicator stay put instead of shifting one cell with each blink.

@@ -18,6 +18,7 @@ from .constants import (
     ICON_BROOM, ICON_CODE,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
+from .hints import arrow_keys_text
 
 
 # Room options: (id, icon, label, result)
@@ -184,6 +185,18 @@ class RoomPickerScreen(PurpleModal):
     #opt-code-toggle {
         width: 52;
     }
+
+    #picker-arrows {
+        width: 100%;
+        height: auto;
+        align: center middle;
+    }
+
+    #picker-arrow-hint {
+        width: auto;
+        height: auto;
+        color: $text-muted;
+    }
     """
 
     class RoomSelected(Message, bubble=True):
@@ -237,7 +250,9 @@ class RoomPickerScreen(PurpleModal):
                     else:
                         yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
 
-            yield Static("Arrow keys move   Enter pick   Hold Esc for grown-ups", id="modal-hint")
+            yield Static("Enter pick   Hold Esc for grown-ups", id="modal-hint")
+            with Container(id="picker-arrows"):
+                yield Static(arrow_keys_text(), id="picker-arrow-hint")
 
     def on_mount(self) -> None:
         self._update_selection()

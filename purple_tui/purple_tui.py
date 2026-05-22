@@ -970,12 +970,29 @@ class PurpleApp(App):
             yield BatteryIndicator(id="battery-indicator")
             yield BootModeIndicator(id="boot-mode-indicator")
 
+    def _align_footer_to_viewport(self) -> None:
+        """Match the footer's left text to the title bar's left column so the
+        keyboard hint lines up with the viewport border regardless of how wide
+        the terminal is. The footer spans the full screen width while the
+        viewport sits in a horizontally-centered wrapper, so a fixed padding
+        only aligns when the terminal is exactly viewport-width."""
+        try:
+            wrapper = self.query_one("#viewport-wrapper")
+            spacer = self.query_one("#keys-spacer-left", Static)
+        except NoMatches:
+            return
+        spacer.styles.padding = (0, 0, 0, wrapper.region.x + 7)
+
+    def on_resize(self, event: events.Resize) -> None:
+        self.call_after_refresh(self._align_footer_to_viewport)
+
     async def on_mount(self) -> None:
         """Called when app starts"""
         boot_log.heartbeat("PurpleApp.on_mount begin")
         self._apply_theme()
         # Pin wrapper top so code/loop mode growth doesn't shift the border 1 row on odd-height terminals.
         self.query_one("#viewport-wrapper").styles.margin = (max(0, (self.size.height - WRAPPER_REFERENCE_ROWS) // 2), 0, 0, 0)
+        self.call_after_refresh(self._align_footer_to_viewport)
 
         # Ensure logind ignores power button (TUI handles it).
         # Defensive: a previous crash or logind-mediated shutdown during a

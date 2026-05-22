@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Code mode: pressing any arrow key now briefly pulses the "Hold Space: close code" border hint (a few gentle flashes, then settles), nudging a kid who is reaching for a way out toward the real exit.
 - Music room: the "Letters" mode label now reads "Say Letters" in the top bar and notifications, and the Tab hint reads "Tab to say letters" / "Tab to stop saying letters" so it's clear what the mode does.
 
 - Play: division and subtraction now count a noun the same way multiplication does, e.g. `6/2 dogs` and `5 - 2 dogs` show 3 dogs, and `6/2 red dogs` shows 3 red dogs. `+` still combines groups (`2 + 3 dogs` shows the two groups summing to 5).

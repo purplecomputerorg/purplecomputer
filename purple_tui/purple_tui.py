@@ -187,6 +187,13 @@ class View(Enum):
 
 TITLE_MUTED = "#6a5a80"  # soft purple used for the title-bar status text and computer name
 
+CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
+# Pulse the close-code hint when a kid presses arrows in code mode (a "how do I
+# get out?" signal). Gentle highlight, a few cycles, then settle: not a strobe.
+CLOSE_HINT_PULSES = 3
+CLOSE_HINT_PULSE_RATE = 0.32
+CLOSE_HINT_PULSE_MARKUP = "#2a1640 on #ffcc66"
+
 
 class TitleBar(Widget):
     """Renders centered room title with right-aligned status indicators.
@@ -900,6 +907,8 @@ class PurpleApp(App):
         self._littles_mode: str | None = None  # None, "music", or "art"
         self._code_panel_enabled: bool = True
         self._code_panel_active: bool = False  # True when code panel mode is on (persists across rooms)
+        self._close_hint_pulse_timer = None  # Pulses the "close code" hint when a stuck kid presses arrows
+        self._close_hint_pulse_remaining: int = 0
         self._music_looping_enabled: bool = True
         self._music_key_switching_enabled: bool = True
 
@@ -1415,6 +1424,10 @@ class PurpleApp(App):
                 await active_screen.handle_keyboard_action(action)
             return
 
+        # Arrows in code mode: a kid reaching for a way out. Pulse the close hint.
+        if self._code_panel_active and isinstance(action, NavigationAction):
+            self._pulse_close_code_hint()
+
         # Block tab in Littles Mode (prevents sub-mode switching in music/art)
         if self._littles_mode and isinstance(action, ControlAction) and action.action == 'tab':
             return
@@ -1685,7 +1698,7 @@ class PurpleApp(App):
                     if kind == 'loop':
                         _set_viewport_hints(viewport, left=f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}", right=None, active_theme=self.active_theme)
                     else:
-                        _set_viewport_hints(viewport, left=None, right=f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}", active_theme=self.active_theme)
+                        _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
                 else:
                     viewport.styles.height = VIEWPORT_HEIGHT
                     compact.display = False
@@ -1693,6 +1706,39 @@ class PurpleApp(App):
                     _apply_room_subtitle(viewport, self.active_room, self._code_panel_enabled, self.active_theme, self._music_looping_enabled)
         except NoMatches:
             pass
+
+    def _pulse_close_code_hint(self) -> None:
+        """Briefly highlight the 'Hold Space: close code' hint a few times.
+
+        Triggered by any arrow press in code mode: arrows are a kid's instinct
+        to navigate out, so we nudge them toward the real exit. Re-pressing
+        just refreshes the cycle count rather than stacking timers.
+        """
+        if not self._code_panel_active:
+            return
+        self._close_hint_pulse_remaining = CLOSE_HINT_PULSES * 2
+        if self._close_hint_pulse_timer is None:
+            self._close_hint_pulse_timer = self.set_interval(
+                CLOSE_HINT_PULSE_RATE, self._step_close_code_pulse
+            )
+
+    def _step_close_code_pulse(self) -> None:
+        try:
+            viewport = self.query_one("#viewport")
+        except NoMatches:
+            return
+        done = self._close_hint_pulse_remaining <= 0 or not self._code_panel_active
+        if done:
+            if self._close_hint_pulse_timer is not None:
+                self._close_hint_pulse_timer.stop()
+                self._close_hint_pulse_timer = None
+            if self._code_panel_active:
+                _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
+            return
+        lit = self._close_hint_pulse_remaining % 2 == 0
+        hint = f"[{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT}[/]" if lit else CODE_PANEL_CLOSE_HINT
+        _set_viewport_hints(viewport, left=None, right=hint, active_theme=self.active_theme)
+        self._close_hint_pulse_remaining -= 1
 
     def _restore_room_code_state(self) -> None:
         """Reset art canvas and music grid from code mode."""

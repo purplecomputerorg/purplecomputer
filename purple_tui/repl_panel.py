@@ -31,20 +31,29 @@ ROOM_KEYWORDS: dict[str, list[str]] = {
 ROOM_HINTS: dict[str, list[str]] = {
     'music': [
         "Try: abcdefg",
+        "Try: cdefgagf",
         "Try: choose ukulele",
+        "Try: choose piano",
         "Try: slow asdf",
+        "Try: fast cdefga",
+        "Try: letters on",
         "Try: fast abcdefg slow asdf",
         "Try: repeat 3 abcdefg",
-        "Try: letters on",
+        "Try: repeat 4 cdefgagf",
     ],
     'art': [
         "Try: red",
         "Try: green 10",
         "Try: spin",
         "Try: down 5",
+        "Try: go 20",
+        "Try: turn left",
+        "Try: paint hello",
         "Try: red forward 10 spin",
+        "Try: up 5 down 5",
         "Try: forward 10 turn left forward 10",
         "Try: repeat 4 forward 20 spin",
+        "Try: repeat 36 forward 5 spin",
     ],
 }
 

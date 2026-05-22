@@ -1592,9 +1592,7 @@ class ParentMenu(PurpleModal):
                     yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="modal-hint")
             yield Static(
-                "Purple is keyboard only, on purpose. There's no mouse, "
-                "trackpad, or touch, so kids explore by typing instead of "
-                "getting lost clicking around.",
+                "Purple is keyboard only, on purpose! Kids explore by typing.",
                 id="parent-keyboard-note",
                 classes="parent-footer",
             )

@@ -364,7 +364,7 @@ class RoomIndicator(Horizontal):
         width: 1fr;
         height: 3;
         content-align: left middle;
-        padding-left: 2;
+        padding-left: 7;
         color: $text-muted;
         text-style: italic;
     }
@@ -391,7 +391,7 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def compose(self) -> ComposeResult:
-        yield Static(f"{ICON_KEYBOARD}  Keyboard only · no trackpad or touch", id="keys-spacer-left")
+        yield Static(f"{ICON_KEYBOARD}  Purple is keyboard only!", id="keys-spacer-left")
 
         with Horizontal(id="keys-center"):
             esc_badge = KeyBadge(f"Esc {ICON_MENU}", id="key-esc")

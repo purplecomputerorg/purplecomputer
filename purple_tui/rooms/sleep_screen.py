@@ -352,17 +352,16 @@ class LiveBootSplash(Screen):
     """
 
     _BASE_MESSAGE = (
-        "Purple Computer is running from USB.\n"
+        "Welcome to Purple Computer!\n"
         "\n"
-        "You can keep using it, but if the computer\n"
-        "turns off, you'll need the USB to start\n"
-        "Purple again.\n"
+        "Purple is keyboard only, on purpose!\n"
+        "Kids explore by typing.\n"
         "\n"
-        "Purple uses just the keyboard, on purpose.\n"
-        "No mouse, trackpad, or touch needed.\n"
+        "You're running from USB. If the computer\n"
+        "turns off, you'll need the USB to start again.\n"
         "\n"
-        "To install Purple permanently,\n"
-        "visit the Parent Menu."
+        "To install Purple and keep it, hold the Esc\n"
+        "key to open the Parent Menu."
     )
 
     _AUDIO_WARNING = (

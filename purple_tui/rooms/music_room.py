@@ -298,7 +298,7 @@ class MusicRoomHeader(Static):
             left_pad = max(0, (width - len(inner)) // 2)
             return f"{' ' * left_pad}[bold]{inner}[/]"
 
-        letters_label = "Letters"
+        letters_label = "Say Letters"
 
         sel = "bold #1e1033 on #9b7bc4"
         unsel = "dim"
@@ -314,7 +314,7 @@ class MusicRoomHeader(Static):
         letters_inner = f" {letters_label} "
         modes = f"{music_part}  {letters_part}"
         modes_w = len(music_inner) + 2 + len(letters_inner)
-        hint = f"{ICON_TAB} Tab to turn {'off' if self._letters_mode else 'on'} letters"
+        hint = f"{ICON_TAB} Tab to {'stop saying' if self._letters_mode else 'say'} letters"
         hint_w = len(hint)
         pitch_markup, pitch_w = self._pitch_tag()
         width = self.size.width or 134
@@ -1352,7 +1352,7 @@ class MusicMode(Container, can_focus=True):
                 self._letters_mode = not self._letters_mode
                 if self._header:
                     self._header.update_mode(self._letters_mode)
-                label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                label = "Say Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                 self.app.clear_notifications()
                 self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
             return
@@ -1414,7 +1414,7 @@ class MusicMode(Container, can_focus=True):
                     self._letters_mode = not self._letters_mode
                     if self._header:
                         self._header.update_mode(self._letters_mode)
-                    label = "Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
+                    label = "Say Letters" if self._letters_mode else INSTRUMENTS[self._instrument_index][1]
                     self.app.clear_notifications()
                     self.app.notify(f"{ICON_MUSIC} {label}" if not self._letters_mode else label, timeout=1.5)
                     return

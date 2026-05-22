@@ -492,7 +492,10 @@ class ArtCodeRunner:
 
     async def run(self, lines: list[str], paint: bool = True) -> None:
         """Run art code. Corrections are stored in self.corrections."""
-        cmds = parse_lines(lines)
+        expanded = []
+        for line in lines:
+            expanded.extend(self._peel_color_before_repeat(line))
+        cmds = parse_lines(expanded)
         flat = flatten_commands(cmds)
         self._paint_on = paint
         self._write_on = not paint
@@ -506,6 +509,16 @@ class ArtCodeRunner:
                 raise
             except Exception:
                 log.debug("Art command failed: %s", cmd['text'], exc_info=True)
+
+    def _peel_color_before_repeat(self, line: str) -> list[str]:
+        """Split a leading color off when it precedes `repeat` so the loop body
+        paints in that color: "purple repeat 4 forward 8 spin". `repeat` is only
+        a loop at the start of a line, so the color must become its own line."""
+        words = line.split()
+        _, used = self._resolve_leading_color(words)
+        if used and used < len(words) and words[used].lower() == 'repeat':
+            return [" ".join(words[:used]), " ".join(words[used:])]
+        return [line]
 
     async def _dispatch(self, text: str, _resolving: bool = False) -> None:
         """Try command table, then resolution pipeline."""
@@ -717,7 +730,7 @@ class ArtCodeRunner:
                 else:
                     self.corrections.append((text, f"{color_text}, {remainder}"))
                     asyncio.ensure_future(self._dispatch(remainder))
-            else:
+            elif text != color_text:
                 self.corrections.append((text, color_text))
             return True
 

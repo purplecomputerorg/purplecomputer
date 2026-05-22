@@ -41,7 +41,7 @@ ROOM_HINTS: dict[str, list[str]] = {
         "Try: green down 5 right 5  •  pink turn left forward 8",
         "Try: yellow forward 8 spin forward 8  •  paint hello",
         "Try: purple repeat 4 forward 8 spin",
-        "Try: orange repeat 4 right 4 up 4",
+        "Try: orange repeat 4 right 4 down 4",
         "Try: repeat 36 forward 5 spin",
     ],
 }

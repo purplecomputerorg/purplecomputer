@@ -415,6 +415,26 @@ class TestArtCodeRunnerTurtle:
         assert canvas._cursor_x == 0
         assert canvas._cursor_y == 0
 
+    def test_color_before_repeat_draws_colored_square(self, canvas):
+        """A color before `repeat` paints the looped shape in that color, instead
+        of typing the letters of "repeat" (regression: repeat is only a loop at
+        the start of a line, so the color must be peeled onto its own line)."""
+        from purple_tui.code_runner import ArtCodeRunner
+        from purple_tui.content import get_content
+        purple = get_content().get_color('purple')
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["purple repeat 4 forward 8 spin"]))
+        assert canvas._cursor_x == 0 and canvas._cursor_y == 0  # square closed
+        assert canvas._grid  # something was painted
+        assert all(cell[1] == purple for cell in canvas._grid.values())
+
+    def test_color_before_repeat_no_spurious_correction(self, canvas):
+        """Peeling the color off must not surface a no-op "purple -> purple" hint."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["purple repeat 4 forward 8 spin"]))
+        assert all(orig != corr for orig, corr in runner.corrections)
+
     def test_back_command(self, canvas):
         """back 3 from heading right should move left."""
         from purple_tui.code_runner import ArtCodeRunner

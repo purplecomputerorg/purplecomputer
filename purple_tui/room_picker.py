@@ -7,8 +7,8 @@ selection, V opens volume, C clears a room, Enter selects, Escape cancels.
 Any unrecognized key dismisses gracefully.
 """
 
-from .modal import PurpleModal
-from textual.containers import Container, Horizontal, Vertical
+from .modal import PurpleModal, PickerModal
+from textual.containers import Container, Horizontal
 from textual.widgets import Static
 from textual.app import ComposeResult
 from textual.message import Message
@@ -124,100 +124,25 @@ class ExtraOption(Static):
         return f"\n{self._icon}  {self._label}  {self._icon}\n{hint}"
 
 
-class ConfirmFreshScreen(PurpleModal):
-    """Clear-room chooser: this room, all rooms, or go back (default).
+class ConfirmFreshScreen(PickerModal):
+    """Clear-room chooser: go back (default, on top), this room, or all rooms.
 
-    Uses vertical layout (up/down navigation) consistent with
-    the brightness/contrast adjustment dialogs. Dismisses with the
-    id of the room to clear ("play"/"music"/"art"), "all", or None
-    to cancel. Defaults to "Go Back" for safety.
+    Dismisses with the id of the room to clear ("play"/"music"/"art"), "all",
+    or None to cancel. Go Back is on top and pre-selected so a stray Enter
+    never wipes a kid's work, while the likely action is one press away.
     """
 
-    CSS = """
-    #modal-dialog {
-        width: 50;
-        max-height: 26;
-        padding: 2 3;
-    }
-
-    #modal-desc {
-        width: 100%;
-        text-align: center;
-        color: $text-muted;
-        margin-bottom: 1;
-    }
-
-    .confirm-btn {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 1 1 0 1;
-    }
-
-    .confirm-btn.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
+    TITLE = "Clear a Room"
+    DESCRIPTION = "Pick what to clear."
 
     def __init__(self, current_room: str = "play", **kwargs):
-        super().__init__(**kwargs)
-        self._current_room = current_room
-        # (result, label): "back" cancels and is the default for safety.
         room_name = ROOM_DISPLAY_NAMES.get(current_room, "This")
-        self._options = [
+        self.OPTIONS = [
+            (None, "Go Back"),
             (current_room, f"Clear {room_name} Room"),
             ("all", "Clear All Rooms"),
-            ("back", "Go Back"),
         ]
-        self._selected = len(self._options) - 1
-
-    def compose(self) -> ComposeResult:
-        with Container(id="modal-dialog"):
-            yield Static("Clear a Room", id="modal-title")
-            yield Static("Pick what to clear.", id="modal-desc")
-            with Vertical(id="confirm-buttons"):
-                for i, (result, label) in enumerate(self._options):
-                    classes = "confirm-btn selected" if i == self._selected else "confirm-btn"
-                    yield Static(label, id=f"btn-{result}", classes=classes)
-            yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
-
-    async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, NavigationAction):
-            if action.direction == 'up':
-                self._selected = max(0, self._selected - 1)
-                self._update_selection()
-            elif action.direction == 'down':
-                self._selected = min(len(self._options) - 1, self._selected + 1)
-                self._update_selection()
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                result = self._options[self._selected][0]
-                self.dismiss(None if result == "back" else result)
-            elif action.action == 'escape':
-                self.dismiss(None)
-            return
-
-        if isinstance(action, CharacterAction):
-            self.dismiss(None)
-
-    def _update_selection(self) -> None:
-        for i, (result, _) in enumerate(self._options):
-            try:
-                btn = self.query_one(f"#btn-{result}")
-                btn.set_class(i == self._selected, "selected")
-            except Exception:
-                pass
-
-    async def _on_key(self, event) -> None:
-        event.stop()
-        event.prevent_default()
+        super().__init__(**kwargs)
 
 
 class RoomPickerScreen(PurpleModal):

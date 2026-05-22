@@ -427,7 +427,7 @@ class RoomIndicator(Horizontal):
         text = Text(self.ARROW_KEYS_HINT)
         for i, ch in enumerate(self.ARROW_KEYS_HINT):
             if ch in "←↑↓→":
-                text.stylize(TITLE_PRIMARY, i, i + 1)
+                text.stylize(f"bold {TITLE_PRIMARY}", i, i + 1)
         return text
 
     def compose(self) -> ComposeResult:

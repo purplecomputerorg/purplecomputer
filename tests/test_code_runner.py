@@ -287,6 +287,22 @@ class TestSmartResolution:
         assert canvas._last_key_color != "#FF0000"
         assert len(runner.corrections) > 0
 
+    def test_real_words_paint_not_coerced_to_color(self, canvas):
+        """Real words must paint as letters, not be coerced into a lookalike color."""
+        from purple_tui.code_runner import ArtCodeRunner
+        for word in ("tree", "school", "apple"):
+            canvas = _FakeCanvas()
+            runner = ArtCodeRunner(canvas)
+            self._run(runner.run([word]))
+            assert canvas._painted_chars == list(word)
+
+    def test_real_word_not_coerced_to_command(self, canvas):
+        """'tree' must paint, not fuzzy-match the 'repeat' keyword."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(canvas)
+        self._run(runner.run(["tree"]))
+        assert canvas._painted_chars == list("tree")
+
     def test_no_match_paints_chars(self, canvas):
         """Unrecognized text in paint mode should paint each character."""
         from purple_tui.code_runner import ArtCodeRunner

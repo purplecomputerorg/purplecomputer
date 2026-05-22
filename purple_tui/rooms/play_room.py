@@ -382,13 +382,18 @@ def _play_validator(word: str) -> bool:
 
 
 def _play_autocomplete(last_word: str, full_text: str = "") -> list[tuple[str, str, str]]:
-    """Search emoji/color words for autocomplete suggestions."""
+    """Search emoji/color words for autocomplete suggestions.
+
+    A resolvable word is shown the way it will actually render (exact-first), so
+    the hint for "white" is a color swatch, not the fuzzy ✍️ emoji. Otherwise
+    fall back to ranked prefix matches.
+    """
     content = get_content()
-    # Include exact match as first result if valid
-    if content.is_valid_word(last_word):
-        emoji = content.get_emoji(last_word) or ""
-        color = content.get_color(last_word) or ""
-        return [(last_word, color, emoji)]
+    r = content.resolve(last_word)
+    if r.kind == "color":
+        return [(last_word, r.value, "")]
+    if r.kind == "emoji":
+        return [(last_word, "", r.value)]
     return [(w, c, e) for w, c, e in content.search_words(last_word)]
 
 
@@ -1959,19 +1964,34 @@ class SimpleEvaluator:
         return None
 
     def _get_emoji(self, word: str) -> str | None:
-        """Get emoji (content.get_emoji handles plurals via the precomputed lookup)."""
-        return self.content.get_emoji(word)
+        """Emoji for a word. An exact color blocks a fuzzy emoji match, so
+        "white" (exact color) is never read as fuzzy emoji "write" ✍️."""
+        if e := self.content.exact_emoji(word):
+            return e
+        if self.content.exact_color(word):
+            return None
+        return self.content.fuzzy_emoji(word)
 
     def _get_color(self, word: str) -> str | None:
-        """Get color hex (content.get_color handles plurals via the precomputed lookup)."""
-        return self.content.get_color(word)
+        """Color hex for a word. An exact emoji blocks a fuzzy color match, so
+        "tree" (exact emoji) is never read as fuzzy color "green"."""
+        if h := self.content.exact_color(word):
+            return h
+        if self.content.exact_emoji(word):
+            return None
+        return self.content.fuzzy_color(word)
 
     def _lookup(self, word: str) -> str | None:
-        """Look up word as emoji or color box."""
-        if e := self._get_emoji(word):
-            return e
-        if h := self._get_color(word):
-            return f"[on {h}]  [/]"
+        """Look up a bare word as emoji glyph or color box, exact-first.
+
+        Exact match in either dictionary beats a fuzzy match in the other, so
+        "white" stays the color and isn't hijacked by fuzzy emoji "write".
+        """
+        r = self.content.resolve(word)
+        if r.kind == "emoji":
+            return r.value
+        if r.kind == "color":
+            return f"[on {r.value}]  [/]"
         return None
 
     def _eval_modified_color(self, text: str) -> str | None:
@@ -2304,10 +2324,8 @@ class SimpleEvaluator:
                 while j < len(text) and text[j].isalpha():
                     j += 1
                 word = text[i:j].lower()
-                if emoji := self._get_emoji(word):
-                    result.append(emoji)
-                elif color_hex := self._get_color(word):
-                    result.append(f"[on {color_hex}]  [/]")
+                if rendered := self._lookup(word):
+                    result.append(rendered)
                 elif colorize_unknown:
                     result.append(self._format_text_as_color_blocks(text[i:j]))
                 else:

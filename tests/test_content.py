@@ -146,5 +146,41 @@ class TestFuzzyColor:
         assert content._last_correction is None  # exact match, no fuzzy
 
 
+class TestResolve:
+    """resolve(): exact match in either dictionary beats any fuzzy match."""
+
+    def test_exact_color_beats_fuzzy_emoji(self, content):
+        # "white" is an exact color but a fuzzy emoji ("write"); color must win.
+        r = content.resolve("white")
+        assert r.kind == "color"
+        r = content.resolve("copper")  # fuzzy emoji "copter"
+        assert r.kind == "color"
+
+    def test_real_word_resolves_to_its_emoji_not_a_lookalike_color(self, content):
+        for word in ("school", "tree", "apple", "house", "star"):
+            assert content.resolve(word).kind == "emoji"
+
+    def test_dual_keys_prefer_emoji(self, content):
+        for word in ("orange", "lemon", "peach", "rose", "chocolate"):
+            assert content.resolve(word).kind == "emoji"
+
+    def test_fuzzy_emoji_when_no_exact(self, content):
+        r = content.resolve("chocolat")  # 1 edit from emoji "chocolate"
+        assert r.kind == "emoji"
+        assert r.correction == ("chocolat", "chocolate")
+
+    def test_fuzzy_color_when_no_exact(self, content):
+        r = content.resolve("yelow")  # 1 edit from color "yellow"
+        assert r.kind == "color"
+        assert r.correction == ("yelow", "yellow")
+
+    def test_real_word_not_coerced_to_short_color(self, content):
+        # "tell" must not become color "teal"; bare short fuzzy is off by design.
+        assert content.resolve("tell").kind is None
+
+    def test_unresolved(self, content):
+        assert content.resolve("zxqw").kind is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

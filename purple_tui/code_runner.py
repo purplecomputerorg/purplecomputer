@@ -725,7 +725,7 @@ class ArtCodeRunner:
         #    on a real word: "tree" overlaps "repeat" enough to fool difflib, so
         #    a known emoji word must be painted, not coerced into a command.
         first = words[0].lower()
-        corrected_kw = None if get_content().get_emoji(first) else \
+        corrected_kw = None if get_content().exact_emoji(first) else \
             fuzzy_match_small(first, _COMMAND_VOCAB)
         if corrected_kw and corrected_kw != first:
             corrected_text = corrected_kw + (" " + " ".join(words[1:]) if len(words) > 1 else "")
@@ -756,7 +756,7 @@ class ArtCodeRunner:
         # Try exact color on the word after adjectives
         if adj_count < len(words):
             color_word = words[adj_count].lower()
-            hex_color = content.get_color(color_word)
+            hex_color = content.exact_color(color_word)
             if hex_color:
                 if adj_count > 0:
                     mod = content.get_modified_color(" ".join(words[:adj_count + 1]))
@@ -764,17 +764,15 @@ class ArtCodeRunner:
                         return mod[0], adj_count + 1
                 return hex_color, adj_count + 1
 
-        # Try fuzzy color on the first non-adjective word, but never on a real
-        # word: "tree"/"hello" overlap "green"/"yellow" enough to fool difflib,
-        # so a known emoji word must be painted, not coerced into a color.
+        # Tight fuzzy color (DL distance), but never on a real word: an exact
+        # emoji word ("tree", "school") must be painted as letters, not coerced
+        # into a color it merely shares letters with. Loose matching for bare
+        # words is intentionally absent here; it lives in the `color X` command.
         if adj_count < len(words):
             color_word = words[adj_count].lower()
-            if not content.get_emoji(color_word):
-                corrected = fuzzy_match_small(color_word, list(content.colors.keys()))
-                if corrected:
-                    hex_color = content.get_color(corrected)
-                    if hex_color:
-                        return hex_color, adj_count + 1
+            if not content.exact_emoji(color_word):
+                if hex_color := content.fuzzy_color(color_word):
+                    return hex_color, adj_count + 1
 
         return None, 0
 

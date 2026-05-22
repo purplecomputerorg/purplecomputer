@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- Word matching: typing a word now prefers an exact match over a fuzzy guess everywhere. `white` makes a white swatch (was the ✍️ emoji), `copper` makes copper (was 🚁), and real words like `tree`, `school`, `apple` keep their emoji in Play and paint as letters in Art (were silently coerced into lookalike colors like green/brown). Misspelled colors still autocorrect (`yelow` → yellow), and `orange`/`rose` still mix as colors in expressions while showing as fruit/flower on their own. Loose typo-guessing is now limited to the explicit `color X` command, so it can never silently swap a word you meant to paint.
 - Code mode: pressing any arrow key now briefly pulses the "Hold Space: close code" border hint (a few gentle flashes, then settles), nudging a kid who is reaching for a way out toward the real exit.
 - Music room: the "Letters" mode label now reads "Say Letters" in the top bar and notifications, and the Tab hint reads "Tab to say letters" / "Tab to stop saying letters" so it's clear what the mode does.
 

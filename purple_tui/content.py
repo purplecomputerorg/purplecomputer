@@ -10,9 +10,22 @@ Purplepacks are content-only (JSON + assets) - NO executable Python code.
 """
 
 import json
+from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 from typing import Optional
+
+
+@dataclass
+class Resolution:
+    """Result of resolving a bare word: an emoji glyph or a color hex, or nothing.
+
+    kind is "emoji", "color", or None. correction is (typed, matched) when a
+    fuzzy match fired, else None.
+    """
+    kind: Optional[str]
+    value: Optional[str]
+    correction: Optional[tuple[str, str]] = None
 
 
 # Precomputed plural/singular lookup tables for Purple's closed vocabulary
@@ -262,24 +275,30 @@ class ContentManager:
 
     # Public API for modes
 
-    def get_emoji(self, word: str) -> Optional[str]:
-        """Get emoji for a word, handling plurals and typos.
-
-        Lookup order: exact → singular → fuzzy (DL distance, min 5 chars).
-        """
+    def exact_emoji(self, word: str) -> Optional[str]:
+        """Emoji for a word by exact or singular/plural match only (no fuzzy)."""
         word = word.lower().strip()
-        # Try exact match first
         if emoji := self.emojis.get(word):
             return emoji
-        # Try singular form (handles tomatoes->tomato, cherries->cherry, wolves->wolf, etc.)
         if (singular := singularize(word)) and (emoji := self.emojis.get(singular)):
             return emoji
-        # Fuzzy fallback (min 5 chars to avoid short-word false positives)
+        return None
+
+    def fuzzy_emoji(self, word: str) -> Optional[str]:
+        """Emoji for a word by fuzzy match only (DL distance, min 5 chars).
+
+        Records the correction so callers can surface it. The emoji dict is
+        large (400+), so the min-5 floor avoids 3-4 char keymash collisions.
+        """
         from .fuzzy import fuzzy_match
-        if match := fuzzy_match(word, list(self.emojis.keys())):
-            self._last_correction = (word, match)
+        if match := fuzzy_match(word.lower().strip(), list(self.emojis.keys())):
+            self._last_correction = (word.lower().strip(), match)
             return self.emojis[match]
         return None
+
+    def get_emoji(self, word: str) -> Optional[str]:
+        """Get emoji for a word: exact/singular, then fuzzy (DL distance, min 5)."""
+        return self.exact_emoji(word) or self.fuzzy_emoji(word)
 
     def emoji_to_word(self, emoji: str) -> Optional[str]:
         """Reverse lookup: get word for an emoji character"""
@@ -391,24 +410,52 @@ class ContentManager:
             (w, e) for w, _c, e in self.search_words(prefix) if e is not None
         ]
 
-    def get_color(self, word: str) -> Optional[str]:
-        """Get hex color code for a color name, handling plurals and typos.
-
-        Lookup order: exact → singular → fuzzy (DL distance, min 5 chars).
-        """
+    def exact_color(self, word: str) -> Optional[str]:
+        """Hex color for a name by exact or singular/plural match only (no fuzzy)."""
         word = word.lower().strip()
-        # Try exact match first
         if color := self.colors.get(word):
             return color
-        # Try singular form
         if (singular := singularize(word)) and (color := self.colors.get(singular)):
             return color
-        # Fuzzy fallback (min 5 chars to avoid short-word false positives)
+        return None
+
+    def fuzzy_color(self, word: str) -> Optional[str]:
+        """Hex color for a name by fuzzy match only (DL distance, min 5 chars).
+
+        Records the correction. Min 5 chars: shorter floors are unsafe even
+        though the color dict is small, because common English words collide
+        with short color names at distance 1 (e.g. "tell"->"teal"). Forgiveness
+        for short slips like "bleu" lives in the explicit `color X` command
+        (loose match) and in autocomplete, not in bare-word resolution.
+        """
         from .fuzzy import fuzzy_match
-        if match := fuzzy_match(word, list(self.colors.keys())):
-            self._last_correction = (word, match)
+        if match := fuzzy_match(word.lower().strip(), list(self.colors.keys())):
+            self._last_correction = (word.lower().strip(), match)
             return self.colors[match]
         return None
+
+    def get_color(self, word: str) -> Optional[str]:
+        """Get hex color: exact/singular, then fuzzy (DL distance, min 4)."""
+        return self.exact_color(word) or self.fuzzy_color(word)
+
+    def resolve(self, word: str) -> Resolution:
+        """Classify a bare word, exact-first across both dictionaries.
+
+        Order: exact emoji → exact color → fuzzy emoji → fuzzy color. An exact
+        match in either dictionary always beats a fuzzy match in the other, so
+        "white" (exact color) is never hijacked by fuzzy emoji "write". This is
+        the standalone classifier; contextual grammar (color mixing, count +
+        noun) still calls the category-specific lookups directly.
+        """
+        if e := self.exact_emoji(word):
+            return Resolution("emoji", e)
+        if c := self.exact_color(word):
+            return Resolution("color", c)
+        if e := self.fuzzy_emoji(word):
+            return Resolution("emoji", e, self._last_correction)
+        if c := self.fuzzy_color(word):
+            return Resolution("color", c, self._last_correction)
+        return Resolution(None, None)
 
     def pop_correction(self) -> tuple[str, str] | None:
         """Retrieve and clear the last fuzzy correction, if any."""

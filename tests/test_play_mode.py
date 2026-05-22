@@ -768,6 +768,38 @@ class TestHintRendering:
         assert "[#1CAC78]" in result and "🍇" in result
 
 
+class TestExactBeatsFuzzy:
+    """Standalone words resolve exact-first: an exact color is never hijacked
+    by a fuzzy emoji lookalike, and real words keep their emoji."""
+
+    def test_white_is_a_swatch_not_write_emoji(self, evaluator):
+        result = evaluator.evaluate("white")
+        assert result.startswith("[on ")  # color swatch
+        assert "✍" not in result
+
+    def test_copper_is_a_swatch_not_helicopter(self, evaluator):
+        result = evaluator.evaluate("copper")
+        assert result.startswith("[on ")
+        assert "🚁" not in result
+
+    def test_white_count_makes_swatches(self, evaluator):
+        result = evaluator.evaluate("white * 3")
+        assert result.count("[on ") == 3
+        assert "✍" not in result
+
+    def test_dual_keys_still_emoji_standalone(self, evaluator):
+        assert evaluator.evaluate("orange") == "🍊"
+        assert evaluator.evaluate("rose") == "🌹"
+
+    def test_dual_keys_still_mix_as_colors(self, evaluator):
+        assert evaluator.evaluate("orange + red").startswith("COLOR_RESULT:")
+        assert evaluator.evaluate("rose + white").startswith("COLOR_RESULT:")
+
+    def test_real_word_keeps_emoji(self, evaluator):
+        assert evaluator.evaluate("tree") == "🌲"
+        assert evaluator.evaluate("school") == "🏫"
+
+
 class TestColorMixing:
     """Test color mixing behavior."""
 

@@ -190,6 +190,7 @@ class RoomPickerScreen(PurpleModal):
         width: 100%;
         height: auto;
         align: center middle;
+        margin-top: 1;
     }
 
     #picker-arrow-hint {

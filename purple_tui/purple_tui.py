@@ -1505,9 +1505,12 @@ class PurpleApp(App):
             self._open_code_panel_in_room(self.active_room)
             return
 
-        # Start fresh: clear all rooms
+        # Clear rooms: all, or just one
         if result.get("start_fresh"):
             self._start_fresh()
+            return
+        if result.get("clear_room"):
+            self._start_fresh(result["clear_room"])
             return
 
     _code_run_task: asyncio.Task | None = None
@@ -2249,33 +2252,31 @@ class PurpleApp(App):
         # Refresh shift banner hint (different rooms show different hints)
         self._update_shift_indicator()
 
-    def _start_fresh(self) -> None:
-        """Clear all rooms: art canvas, music colors, play history, code buffers."""
+    def _start_fresh(self, room: str | None = None) -> None:
+        """Clear rooms. room=None clears all; otherwise just that one room."""
         from .rooms.art_room import ArtMode
         from .rooms.music_room import MusicMode
 
-        # Clear art canvas
-        try:
-            art = self.query_one(ArtMode)
-            art.clear_canvas()
-        except Exception:
-            pass
+        if room in (None, "art"):
+            try:
+                self.query_one(ArtMode).clear_canvas()
+            except Exception:
+                pass
 
-        # Reset music colors and loop
-        try:
-            music = self.query_one(MusicMode)
-            music.reset_state()
-        except Exception:
-            pass
+        if room in (None, "music"):
+            try:
+                self.query_one(MusicMode).reset_state()
+            except Exception:
+                pass
 
-        # Clear play history
-        try:
-            content_area = self.query_one("#content-area")
-            play = content_area.query_one("#room-play")
-            if hasattr(play, 'clear_history'):
-                play.clear_history()
-        except Exception:
-            pass
+        if room in (None, "play"):
+            try:
+                content_area = self.query_one("#content-area")
+                play = content_area.query_one("#room-play")
+                if hasattr(play, 'clear_history'):
+                    play.clear_history()
+            except Exception:
+                pass
 
     def _show_art_prompt(self) -> None:
         """Show prompt when entering Art mode with existing content."""

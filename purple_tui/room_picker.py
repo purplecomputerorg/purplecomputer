@@ -1,9 +1,9 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Rooms
+Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Room
 side by side. Arrow keys navigate, number keys 1-3 for direct room
-selection, V opens volume, C clears rooms, Enter selects, Escape cancels.
+selection, V opens volume, C clears a room, Enter selects, Escape cancels.
 Any unrecognized key dismisses gracefully.
 """
 
@@ -27,6 +27,8 @@ ROOM_OPTIONS = [
     ("art", ICON_PALETTE, "Art", {"room": "art"}),
 ]
 
+ROOM_DISPLAY_NAMES = {opt_id: label for opt_id, _, label, _ in ROOM_OPTIONS}
+
 # Map number keys to room indices
 NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
 
@@ -35,7 +37,7 @@ ROW_ROOMS = 0
 ROW_EXTRAS = 1
 ROW_CODE = 2
 
-# Extras columns: 0 = volume, 1 = clear rooms
+# Extras columns: 0 = volume, 1 = clear room
 COL_VOLUME = 0
 COL_CLEAR = 1
 NUM_EXTRA_COLS = 2
@@ -76,7 +78,7 @@ class RoomOption(Static):
 
 
 class ExtraOption(Static):
-    """Half-width action button for the extras row (volume, clear rooms)."""
+    """Half-width action button for the extras row (volume, clear room)."""
 
     DEFAULT_CSS = """
     ExtraOption {
@@ -123,16 +125,18 @@ class ExtraOption(Static):
 
 
 class ConfirmFreshScreen(PurpleModal):
-    """Are you sure? confirmation for Clear Rooms.
+    """Clear-room chooser: this room, all rooms, or go back (default).
 
     Uses vertical layout (up/down navigation) consistent with
-    the brightness/contrast adjustment dialogs.
+    the brightness/contrast adjustment dialogs. Dismisses with the
+    id of the room to clear ("play"/"music"/"art"), "all", or None
+    to cancel. Defaults to "Go Back" for safety.
     """
 
     CSS = """
     #modal-dialog {
         width: 50;
-        max-height: 22;
+        max-height: 26;
         padding: 2 3;
     }
 
@@ -160,48 +164,56 @@ class ConfirmFreshScreen(PurpleModal):
     }
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, current_room: str = "play", **kwargs):
         super().__init__(**kwargs)
-        self._selected = 1  # Default to "No, go back" (safer)
+        self._current_room = current_room
+        # (result, label): "back" cancels and is the default for safety.
+        room_name = ROOM_DISPLAY_NAMES.get(current_room, "This")
+        self._options = [
+            (current_room, f"Clear {room_name} Room"),
+            ("all", "Clear All Rooms"),
+            ("back", "Go Back"),
+        ]
+        self._selected = len(self._options) - 1
 
     def compose(self) -> ComposeResult:
         with Container(id="modal-dialog"):
-            yield Static("Are you sure?", id="modal-title")
-            yield Static("This will clear everything.", id="modal-desc")
+            yield Static("Clear a Room", id="modal-title")
+            yield Static("Pick what to clear.", id="modal-desc")
             with Vertical(id="confirm-buttons"):
-                yield Static("Yes, clear rooms", id="btn-yes", classes="confirm-btn")
-                yield Static("No, go back", id="btn-no", classes="confirm-btn selected")
+                for i, (result, label) in enumerate(self._options):
+                    classes = "confirm-btn selected" if i == self._selected else "confirm-btn"
+                    yield Static(label, id=f"btn-{result}", classes=classes)
             yield Static("\u25b2 \u25bc choose   Enter confirm   Esc cancel", id="modal-hint")
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction in ('up', 'down'):
-                self._selected = 1 - self._selected
+            if action.direction == 'up':
+                self._selected = max(0, self._selected - 1)
+                self._update_selection()
+            elif action.direction == 'down':
+                self._selected = min(len(self._options) - 1, self._selected + 1)
                 self._update_selection()
             return
 
         if isinstance(action, ControlAction) and action.is_down:
             if action.action == 'enter':
-                self.dismiss(self._selected == 0)
+                result = self._options[self._selected][0]
+                self.dismiss(None if result == "back" else result)
             elif action.action == 'escape':
-                self.dismiss(False)
+                self.dismiss(None)
             return
 
         if isinstance(action, CharacterAction):
-            self.dismiss(False)
+            self.dismiss(None)
 
     def _update_selection(self) -> None:
-        try:
-            yes_btn = self.query_one("#btn-yes")
-            no_btn = self.query_one("#btn-no")
-            if self._selected == 0:
-                yes_btn.add_class("selected")
-                no_btn.remove_class("selected")
-            else:
-                yes_btn.remove_class("selected")
-                no_btn.add_class("selected")
-        except Exception:
-            pass
+        for i, (result, _) in enumerate(self._options):
+            try:
+                btn = self.query_one(f"#btn-{result}")
+                btn.set_class(i == self._selected, "selected")
+            except Exception:
+                pass
 
     async def _on_key(self, event) -> None:
         event.stop()
@@ -214,7 +226,7 @@ class RoomPickerScreen(PurpleModal):
 
     Layout (2 navigable rows):
       [1 Play]  [2 Music]  [3 Art]          <- room row
-      [Volume  V]  [Clear Rooms  C]          <- extras row (50/50)
+      [Volume  V]  [Clear Room  C]          <- extras row (50/50)
     """
 
     CSS = """
@@ -291,7 +303,7 @@ class RoomPickerScreen(PurpleModal):
                     yield ExtraOption(ICON_VOLUME_OFF, label, "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
-                yield ExtraOption(ICON_BROOM, "Clear Rooms", "C", id="opt-clear-rooms")
+                yield ExtraOption(ICON_BROOM, "Clear Room", "C", id="opt-clear-rooms")
 
             if self._show_code_row:
                 with Horizontal(id="picker-code-row"):
@@ -393,7 +405,7 @@ class RoomPickerScreen(PurpleModal):
                 self._update_selection()
                 self._open_volume()
             elif action.char.lower() == 'c':
-                # Jump to clear rooms and activate
+                # Jump to clear room and activate
                 self._active_row = ROW_EXTRAS
                 self._extra_index = COL_CLEAR
                 self._update_selection()
@@ -441,12 +453,14 @@ class RoomPickerScreen(PurpleModal):
                 self.app.action_volume_up()
 
     def _confirm_clear_rooms(self) -> None:
-        """Show confirmation before clearing all rooms."""
-        def on_confirm(confirmed: bool) -> None:
-            if confirmed:
+        """Let the parent choose to clear just this room or all rooms."""
+        def on_confirm(result: str | None) -> None:
+            if result == "all":
                 self.dismiss({"start_fresh": True})
+            elif result:
+                self.dismiss({"clear_room": result})
 
-        self.app.push_screen(ConfirmFreshScreen(), on_confirm)
+        self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)
 
     def _open_volume(self) -> None:
         """Open the volume modal (skip when volume is locked: no audio, or silent mode)."""

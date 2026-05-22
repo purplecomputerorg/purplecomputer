@@ -415,26 +415,6 @@ class TestArtCodeRunnerTurtle:
         assert canvas._cursor_x == 0
         assert canvas._cursor_y == 0
 
-    def test_color_before_repeat_draws_colored_square(self, canvas):
-        """A color before `repeat` paints the looped shape in that color, instead
-        of typing the letters of "repeat" (regression: repeat is only a loop at
-        the start of a line, so the color must be peeled onto its own line)."""
-        from purple_tui.code_runner import ArtCodeRunner
-        from purple_tui.content import get_content
-        purple = get_content().get_color('purple')
-        runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["purple repeat 4 forward 8 spin"]))
-        assert canvas._cursor_x == 0 and canvas._cursor_y == 0  # square closed
-        assert canvas._grid  # something was painted
-        assert all(cell[1] == purple for cell in canvas._grid.values())
-
-    def test_color_before_repeat_no_spurious_correction(self, canvas):
-        """Peeling the color off must not surface a no-op "purple -> purple" hint."""
-        from purple_tui.code_runner import ArtCodeRunner
-        runner = ArtCodeRunner(canvas)
-        self._run(runner.run(["purple repeat 4 forward 8 spin"]))
-        assert all(orig != corr for orig, corr in runner.corrections)
-
     def test_back_command(self, canvas):
         """back 3 from heading right should move left."""
         from purple_tui.code_runner import ArtCodeRunner
@@ -643,6 +623,63 @@ class TestFreeOrderArgs:
         assert c._cursor_y == 5
         assert c._cursor_x == 3
         assert c._last_key_color == BLUE
+
+
+class TestColorBeforeRepeat:
+    """A color before `repeat` must paint the loop in that color instead of
+    typing the letters of "repeat" (regression guards for _peel_color_before_repeat)."""
+
+    def _run(self, lines):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = FakeCanvas()
+        asyncio.run(ArtCodeRunner(canvas).run(lines))
+        return canvas
+
+    def test_misspelled_color_before_repeat_applies_and_loops(self):
+        """'purpl repeat ...' fuzzy-resolves to purple, applied synchronously
+        before the loop body runs (guards against deferred color application)."""
+        from purple_tui.content import get_content
+        purple = get_content().get_color('purple')
+        c = self._run(["purpl repeat 4 forward 8 spin"])
+        assert c._cursor_x == 0 and c._cursor_y == 0  # square closed: loop ran 4x
+        assert c._grid and all(cell[1] == purple for cell in c._grid.values())
+
+    def test_multiword_color_before_repeat(self):
+        """A multi-word color ('dark blue') peels as one unit before repeat."""
+        c = self._run(["dark blue repeat 4 forward 8 spin"])
+        assert c._cursor_x == 0 and c._cursor_y == 0
+        assert c._grid and all(cell[1] == DARK_BLUE for cell in c._grid.values())
+
+    def test_color_before_repeat_no_spurious_correction(self):
+        """Peeling the color off must not surface a no-op 'purple -> purple' hint."""
+        from purple_tui.code_runner import ArtCodeRunner
+        runner = ArtCodeRunner(FakeCanvas())
+        asyncio.run(runner.run(["purple repeat 4 forward 8 spin"]))
+        assert all(orig != corr for orig, corr in runner.corrections)
+
+    def test_standalone_repeat_unaffected_by_peel(self):
+        """No leading color: the line is passed through unchanged and loops."""
+        c = self._run(["repeat 4 forward 8 spin"])
+        assert c._cursor_x == 0 and c._cursor_y == 0
+        assert len(c._painted_positions) > 0
+
+    def test_staircase_hint_descends(self):
+        """The 'orange repeat 4 right 4 down 4' hint must descend, not clip to a
+        flat top row (the reason the hint uses 'down' rather than 'up')."""
+        c = self._run(["orange repeat 4 right 4 down 4"])
+        ys = {p[1] for p in c._painted_positions}
+        assert max(ys) > 0  # actually went down, not stuck at row 0
+
+    def test_peel_leaves_plain_lines_alone(self):
+        """_peel only splits a leading color directly before 'repeat'."""
+        from purple_tui.code_runner import ArtCodeRunner
+        r = ArtCodeRunner(FakeCanvas())
+        assert r._peel_color_before_repeat("forward 10 spin") == ["forward 10 spin"]
+        assert r._peel_color_before_repeat("repeat 4 forward 8") == ["repeat 4 forward 8"]
+        assert r._peel_color_before_repeat("blue forward 8") == ["blue forward 8"]
+        assert r._peel_color_before_repeat("") == [""]
+        assert r._peel_color_before_repeat("purple repeat 4 forward 8") == \
+            ["purple", "repeat 4 forward 8"]
 
 
 # ---------------------------------------------------------------------------

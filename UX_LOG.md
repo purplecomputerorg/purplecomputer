@@ -352,3 +352,4 @@ Brief descriptions of user experience changes, newest first.
 - **Keyboard-only hint**: Persistent bottom-left note in the room switcher ("Keyboard only · no trackpad or touch"), a line on the live-boot splash, and a longer explanation in the Parent Menu, so parents and kids learn up front that mouse/trackpad/touch are off on purpose.
 - **USB blink no longer jitters**: The blinking USB icon's off-state now pads to match the double-wide icon width, so the room title and battery indicator stay put instead of shifting one cell with each blink.
 - **Clear Room (was Clear Rooms)**: The room-switcher action is now "Clear Room". Activating it asks what to clear, offering "Clear [Room] Room" (e.g. "Clear Art Room"), "Clear All Rooms", and "Go Back". It defaults to "Go Back" for safety; arrow up reaches the clear options.
+- **Keyboard-only hint dialed back**: The bottom-left "keyboard only" note is now dimmer and no longer italicized, so it stands out less.

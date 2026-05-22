@@ -365,8 +365,7 @@ class RoomIndicator(Horizontal):
         height: 3;
         content-align: left middle;
         padding-left: 7;
-        color: $text-muted;
-        text-style: italic;
+        color: $text-disabled;
     }
 
     #keys-center {

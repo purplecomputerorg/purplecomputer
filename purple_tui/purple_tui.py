@@ -393,16 +393,20 @@ class RoomIndicator(Horizontal):
         align: right middle;
     }
 
+    #keys-right-group {
+        width: auto;
+        height: 3;
+        align: right middle;
+    }
+
     #art-arrow-hint {
         width: auto;
         height: auto;
         color: __TITLE_MUTED__;
     }
 
-    #keys-right {
-        width: auto;
-        height: 3;
-        content-align: right middle;
+    #key-mute {
+        margin: 0 0 0 2;
     }
     """.replace("__TITLE_MUTED__", TITLE_MUTED)
 
@@ -441,13 +445,12 @@ class RoomIndicator(Horizontal):
                 yield badge
 
         with Container(id="keys-spacer-right"):
-            yield Static(self._arrow_hint_for(self.current_room), id="art-arrow-hint")
-
-        with Horizontal(id="keys-right"):
-            mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
-            mute_badge.add_class("dim")
-            mute_badge.display = False
-            yield mute_badge
+            with Horizontal(id="keys-right-group"):
+                yield Static(self._arrow_hint_for(self.current_room), id="art-arrow-hint")
+                mute_badge = KeyBadge(ICON_VOLUME_OFF, id="key-mute")
+                mute_badge.add_class("dim")
+                mute_badge.display = False
+                yield mute_badge
 
     def update_room(self, room: Room) -> None:
         self.current_room = room
@@ -999,20 +1002,16 @@ class PurpleApp(App):
         try:
             wrapper = self.query_one("#viewport-wrapper")
             spacer = self.query_one("#keys-spacer-left", Static)
-            keys_right = self.query_one("#keys-right", Horizontal)
+            right_spacer = self.query_one("#keys-spacer-right", Container)
         except NoMatches:
             return
         spacer.styles.padding = (0, 0, 0, wrapper.region.x + 7)
-        # Anchor the mute slot to the right viewport border, mirroring the
-        # left hint's offset. The arrow hint right-aligns in its spacer up to
-        # keys-right's left edge, so it sits against the border when mute is
-        # hidden and slides left of the badge (with a gap) when it shows.
+        # Mirror the offset against the right viewport border with padding (not
+        # margin) so the 1fr spacer keeps its width and the center group stays
+        # centered. The arrow hint right-aligns to the border; the mute badge,
+        # nested in the same spacer, takes the border spot when shown.
         right_gap = max(0, self.size.width - wrapper.region.right)
-        try:
-            mute_shown = self.query_one("#key-mute", KeyBadge).display
-        except NoMatches:
-            mute_shown = False
-        keys_right.styles.margin = (0, right_gap + 6, 0, 2 if mute_shown else 0)
+        right_spacer.styles.padding = (0, right_gap + 6, 0, 0)
 
     def on_resize(self, event: events.Resize) -> None:
         self.call_after_refresh(self._align_footer_to_viewport)
@@ -1056,6 +1055,10 @@ class PurpleApp(App):
         self._apply_volume_system()
         from . import tts
         tts.set_muted(self._effective_volume() == 0)
+        try:
+            self.query_one("#room-indicator", RoomIndicator).update_volume_indicator(self._effective_volume())
+        except NoMatches:
+            pass
 
         # Set viewport border subtitle for music/art rooms
         try:
@@ -2739,7 +2742,6 @@ class PurpleApp(App):
         try:
             indicator = self.query_one("#room-indicator", RoomIndicator)
             indicator.update_volume_indicator(vol)
-            self._align_footer_to_viewport()
         except NoMatches:
             pass
 

@@ -189,10 +189,12 @@ TITLE_MUTED = "#6a5a80"  # soft purple used for the title-bar status text and co
 
 CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} Hold Space: close code {ICON_ROBOT}"
 # Pulse the close-code hint when a kid presses arrows in code mode (a "how do I
-# get out?" signal). Gentle highlight, a few cycles, then settle: not a strobe.
-CLOSE_HINT_PULSES = 3
+# get out?" signal). Gentle highlight, then settle: not a strobe. Left/right
+# arrows already navigate, so they blink once; up/down blink twice.
+CLOSE_HINT_PULSES_HORIZONTAL = 1
+CLOSE_HINT_PULSES_VERTICAL = 2
 CLOSE_HINT_PULSE_RATE = 0.32
-CLOSE_HINT_PULSE_MARKUP = "#2a1640 on #ffcc66"
+CLOSE_HINT_PULSE_MARKUP = "on #6a3f9e"
 
 
 class TitleBar(Widget):
@@ -1426,7 +1428,7 @@ class PurpleApp(App):
 
         # Arrows in code mode: a kid reaching for a way out. Pulse the close hint.
         if self._code_panel_active and isinstance(action, NavigationAction):
-            self._pulse_close_code_hint()
+            self._pulse_close_code_hint(action.direction)
 
         # Block tab in Littles Mode (prevents sub-mode switching in music/art)
         if self._littles_mode and isinstance(action, ControlAction) and action.action == 'tab':
@@ -1707,7 +1709,7 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-    def _pulse_close_code_hint(self) -> None:
+    def _pulse_close_code_hint(self, direction: str) -> None:
         """Briefly highlight the 'Hold Space: close code' hint a few times.
 
         Triggered by any arrow press in code mode: arrows are a kid's instinct
@@ -1716,7 +1718,8 @@ class PurpleApp(App):
         """
         if not self._code_panel_active:
             return
-        self._close_hint_pulse_remaining = CLOSE_HINT_PULSES * 2
+        pulses = CLOSE_HINT_PULSES_HORIZONTAL if direction in ('left', 'right') else CLOSE_HINT_PULSES_VERTICAL
+        self._close_hint_pulse_remaining = pulses * 2
         if self._close_hint_pulse_timer is None:
             self._close_hint_pulse_timer = self.set_interval(
                 CLOSE_HINT_PULSE_RATE, self._step_close_code_pulse
@@ -1736,7 +1739,8 @@ class PurpleApp(App):
                 _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
             return
         lit = self._close_hint_pulse_remaining % 2 == 0
-        hint = f"[{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT}[/]" if lit else CODE_PANEL_CLOSE_HINT
+        # Trailing space widens the background to cover the double-width robot glyph.
+        hint = f"[{CLOSE_HINT_PULSE_MARKUP}]{CODE_PANEL_CLOSE_HINT} [/]" if lit else CODE_PANEL_CLOSE_HINT
         _set_viewport_hints(viewport, left=None, right=hint, active_theme=self.active_theme)
         self._close_hint_pulse_remaining -= 1
 

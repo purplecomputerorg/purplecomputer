@@ -81,6 +81,41 @@ Edge cases
   fuzzy_match_small which also won't match at min 3 chars (hello
   is not in the command vocabulary).
 
+Argument ordering (free-order motion args)
+------------------------------------------
+
+  Design principle (same as above): always do the best-guess reasonable
+  thing. A 4-7 year old types a verb plus a bag of words and expects the
+  computer to figure it out, regardless of order. "down blue 5",
+  "down 5 blue", and "blue down 5" all mean the same thing to them.
+
+  Mental model: a line is split into command chunks at command-keyword
+  boundaries (see _split_commands), so each chunk has exactly one motion
+  verb. Within a chunk, the remaining tokens are an unordered bag of:
+    - a distance (any bare-number token)
+    - a color (a color word, optionally preceded by adjectives like
+      "dark"/"light"; may appear anywhere, not just first or last)
+    - leftover text (anything else)
+
+  Resolution order inside a chunk:
+    1. Apply the color if one is present (reusing _resolve_leading_color,
+       which already handles "dark blue").
+    2. Move the distance if one is present.
+    3. If leftover non-color text remains, write/paint it in the verb's
+       direction (this preserves "down hello" = write "hello" downward).
+       "down 5 hello" therefore moves down 5, then writes "hello".
+
+  Why this is DRY: color handling previously lived in three places (a
+  leading peel in _resolve, a trailing-color regex group copy-pasted into
+  every motion handler, and _do_direction_text). Free-order parsing folds
+  all three into one shared _parse_motion_args helper, so color is matched
+  in exactly one spot and the combinatorial motion regex table collapses
+  to one "verb + rest" pattern per family.
+
+  Cross-chunk ordering (e.g. "blue down 5", where the color is its own
+  leading chunk) is handled separately by the leading-color peel in
+  _resolve, which applies the color and re-dispatches the remainder.
+
 Adding new commands
 -------------------
 

@@ -23,6 +23,8 @@ class FakeCanvas:
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         self._painted_positions: set[tuple[int, int]] = set()
         self._last_key_color = "#FF0000"
+        self._paint_mode = False
+        self._typed: list[str] = []
         self._width = width
         self._height = height
 
@@ -88,6 +90,22 @@ class FakeCanvas:
         pos = (self._cursor_x, self._cursor_y)
         self._grid[pos] = ("█", self._last_key_color, self._last_key_color)
         self._painted_positions.add(pos)
+
+    def _set_paint_mode(self, painting):
+        self._paint_mode = painting
+
+    def _post_paint_mode_changed(self):
+        pass
+
+    def type_char(self, ch, direction=None):
+        self._typed.append(ch)
+        if direction:
+            self._move_in_direction(direction)
+
+    def paint_char(self, ch, direction=None):
+        self._paint_at_cursor()
+        if direction:
+            self._move_in_direction(direction)
 
     # Use the real methods from ArtCanvas
     execute_logo_command = ArtCanvas.execute_logo_command
@@ -539,6 +557,72 @@ class TestArtCodeRunnerTurtle:
         canvas.turn = flaky_turn
         self._run(runner.run(["turn up", "turn down"]))
         assert call_count[0] == 2
+
+
+# ---------------------------------------------------------------------------
+# Free-order motion args: distance and color in any order within a chunk.
+# See guides/smart-command-resolution.md ("Argument ordering").
+# ---------------------------------------------------------------------------
+
+BLUE = "#1F75FE"
+DARK_BLUE = "#013D9C"
+
+
+class TestFreeOrderArgs:
+    @pytest.fixture
+    def canvas(self):
+        return FakeCanvas()
+
+    def _run(self, lines):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = FakeCanvas()
+        asyncio.run(ArtCodeRunner(canvas).run(lines))
+        return canvas
+
+    def test_color_and_distance_order_invariant(self):
+        """down blue 5 == down 5 blue: same heading, move, and color."""
+        a = self._run(["down blue 5"])
+        b = self._run(["down 5 blue"])
+        for c in (a, b):
+            assert c._heading == 'down'
+            assert c._cursor_y == 5
+            assert c._last_key_color == BLUE
+
+    def test_color_in_middle_moves(self):
+        """The original bug: 'down blue 5' must move 5, not drop the number."""
+        c = self._run(["paint off", "down blue 5"])
+        assert c._cursor_y == 5
+        assert c._last_key_color == BLUE
+
+    def test_multiword_color_any_position(self):
+        c = self._run(["down dark blue 5"])
+        assert c._cursor_y == 5
+        assert c._last_key_color == DARK_BLUE
+
+    def test_turn_arg_then_free_color_distance(self):
+        """turn left 3 blue: face left, move 3, color blue."""
+        c = self._run(["turn left 3 blue"])
+        assert c._heading == 'left'
+        assert c._last_key_color == BLUE
+
+    def test_direction_text_still_writes(self):
+        """down dog: face down and write the text (no color, no number)."""
+        c = self._run(["write on", "down dog"])
+        assert c._heading == 'down'
+        assert "".join(c._typed) == "dog"
+
+    def test_distance_then_text_moves_then_writes(self):
+        """down 5 dog: move down 5, then write 'dog'."""
+        c = self._run(["write on", "down 5 dog"])
+        assert c._cursor_y == 5 + len("dog")
+        assert "".join(c._typed) == "dog"
+
+    def test_chaining_preserved_with_trailing_color(self):
+        """down 5 right 3 blue splits into two moves; color applies to the run."""
+        c = self._run(["paint off", "down 5 right 3 blue"])
+        assert c._cursor_y == 5
+        assert c._cursor_x == 3
+        assert c._last_key_color == BLUE
 
 
 # ---------------------------------------------------------------------------

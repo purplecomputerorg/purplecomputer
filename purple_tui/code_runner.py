@@ -443,6 +443,21 @@ _DIRECTION_VOCAB = ['left', 'right', 'up', 'down']
 _TOGGLE_VOCAB = ['on', 'off']
 _OPPOSITE = {'right': 'left', 'left': 'right', 'up': 'down', 'down': 'up'}
 
+# Self-directed motion verbs: the verb itself determines how the heading turns
+# (None = leave heading as-is). turn/face are handled separately because they
+# take a direction argument. back/backward additionally move opposite the
+# heading; every other verb moves along it.
+_VERB_TURN = {
+    'forward': None, 'go': None, 'move': None, 'walk': None, 'step': None,
+    'back': None, 'backward': None,
+    'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
+    'spin': 'spin', 'rotate': 'spin',
+}
+_MOTION_VERBS = '|'.join(list(_VERB_TURN) + ['turn', 'face'])
+# Translate verbs move one step when given no distance and no text; rotation
+# (spin/rotate) and turn/face only move when a distance is supplied.
+_DEFAULT_MOVE_VERBS = frozenset(_VERB_TURN) - {'spin', 'rotate'}
+
 
 class ArtCodeRunner:
     """Run code in the Art room context.
@@ -464,23 +479,7 @@ class ArtCodeRunner:
         (re.compile(r'^lift\s*$', re.I), '_do_lift'),
         (re.compile(r'^(?:pen\s*up|penup)\s*$', re.I), '_do_pen_up'),
         (re.compile(r'^(?:pen\s*down|pendown)\s*$', re.I), '_do_pen_down'),
-        (re.compile(r'^(?:spin|rotate)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_spin'),
-        (re.compile(r'^(?:spin|rotate)\s+(\d+)\s*$', re.I), '_do_spin'),
-        (re.compile(r'^(?:spin|rotate)\s*$', re.I), '_do_spin'),
-        (re.compile(r'^face\s+(\S+)\s*$', re.I), '_do_face'),
-        (re.compile(r'^turn\s+(\d+)\s+(.+?)\s*$', re.I), '_do_turn_n'),
-        (re.compile(r'^turn\s+(\S+)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_turn'),
-        (re.compile(r'^turn\s+(\S+)\s+(\d+)\s*$', re.I), '_do_turn'),
-        (re.compile(r'^turn\s+(\S+)\s*$', re.I), '_do_turn'),
-        (re.compile(r'^turn\s*$', re.I), '_do_spin'),
-        (re.compile(r'^(?:forward|go|move|walk|step)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_forward'),
-        (re.compile(r'^(?:forward|go|move|walk|step)\s*(\d*)\s*$', re.I), '_do_forward'),
-        (re.compile(r'^(?:back|backward)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_back'),
-        (re.compile(r'^(?:back|backward)\s*(\d*)\s*$', re.I), '_do_back'),
-        (re.compile(r'^(left|right|up|down)\s+(\d+)\s+(.+?)\s*$', re.I), '_do_direction'),
-        (re.compile(r'^(left|right|up|down)\s+(\d+)\s*$', re.I), '_do_direction'),
-        (re.compile(r'^(left|right|up|down)\s+(\D.+?)\s*$', re.I), '_do_direction_text'),
-        (re.compile(r'^(left|right|up|down)\s*$', re.I), '_do_direction'),
+        (re.compile(rf'^({_MOTION_VERBS})\b\s*(.*)$', re.I), '_do_motion'),
     ]
 
     def __init__(self, canvas):
@@ -520,10 +519,7 @@ class ArtCodeRunner:
 
         # Stage 2: write mode types characters (that's its purpose)
         if self._write_on:
-            heading = self.canvas._heading
-            for ch in text:
-                self.canvas.type_char(ch, direction=heading)
-                await asyncio.sleep(0.02)
+            await self._emit_text(text, paint=False)
             return
 
         # Stage 3: resolution pipeline (only on first pass)
@@ -534,10 +530,7 @@ class ArtCodeRunner:
 
         # Stage 4: paint mode paints each character (like interactive mode)
         if self._paint_on:
-            heading = self.canvas._heading
-            for ch in text:
-                self.canvas.paint_char(ch, direction=heading)
-                await asyncio.sleep(0.02)
+            await self._emit_text(text, paint=True)
 
     # ------------------------------------------------------------------
     # Command handlers (return True if handled, None to pass)
@@ -560,13 +553,7 @@ class ArtCodeRunner:
             self.canvas.paint_char('█', direction=self.canvas._heading)
             await asyncio.sleep(0.05)
             return True
-        heading = self.canvas._heading
-        for ch in arg:
-            if ch == ' ':
-                self.canvas.type_char(ch, direction=heading)
-            else:
-                self.canvas.paint_char(ch, direction=heading)
-            await asyncio.sleep(0.02)
+        await self._emit_text(arg, paint=True)
         return True
 
     async def _do_write_toggle(self, m) -> bool | None:
@@ -578,10 +565,7 @@ class ArtCodeRunner:
 
     async def _do_write_inline(self, m) -> bool | None:
         """write <text>: type each character as text at cursor."""
-        heading = self.canvas._heading
-        for ch in m.group(1):
-            self.canvas.type_char(ch, direction=heading)
-            await asyncio.sleep(0.02)
+        await self._emit_text(m.group(1), paint=False)
         return True
 
     async def _do_color(self, m) -> bool | None:
@@ -619,151 +603,94 @@ class ArtCodeRunner:
         self._paint_on = True
         return True
 
-    async def _do_spin(self, m) -> bool | None:
-        """spin/rotate [N] [color]: spin 90 CW, optionally move forward N."""
-        self.canvas.turn('spin')
-        distance = int(m.group(1)) if m.lastindex >= 1 and m.group(1) else 0
-        if distance:
-            distance = min(distance, 200)
-            if m.lastindex >= 2 and m.group(2):
-                color_hex, _ = self._resolve_leading_color(m.group(2).split())
-                if color_hex:
-                    self._apply_color(color_hex)
-            action = "paint" if self._paint_on else "move"
-            self.canvas._use_heading_cursor = True
-            self.canvas.execute_logo_command(action, self.canvas._heading, distance)
-        await asyncio.sleep(0.05)
-        return True
+    async def _do_motion(self, m) -> bool | None:
+        """Any motion verb: change heading, move N, write leftover text.
 
-    async def _do_face(self, m) -> bool | None:
-        """face <direction>: set heading absolutely."""
-        arg = m.group(1).lower()
-        if arg in _DIRECTION_VOCAB:
-            self.canvas.turn(arg)
-            await asyncio.sleep(0.05)
-            return True
-        corrected = fuzzy_match_small(arg, _DIRECTION_VOCAB)
-        if corrected:
-            self.corrections.append((f'face {arg}', f'face {corrected}'))
-            self.canvas.turn(corrected)
-            await asyncio.sleep(0.05)
-            return True
-        return None
-
-    async def _do_turn_n(self, m) -> bool | None:
-        """turn N [color]: spin 90 CW then forward N."""
-        distance = min(int(m.group(1)), 200)
-        if m.lastindex >= 2 and m.group(2):
-            color_hex, _ = self._resolve_leading_color(m.group(2).split())
-            if color_hex:
-                self._apply_color(color_hex)
-        self.canvas.turn('spin')
-        action = "paint" if self._paint_on else "move"
-        self.canvas._use_heading_cursor = True
-        self.canvas.execute_logo_command(action, self.canvas._heading, distance)
-        await asyncio.sleep(0.05)
-        return True
-
-    async def _do_turn(self, m) -> bool | None:
-        """turn <dir> [N] [color]: turn then optionally move forward N."""
-        arg = m.group(1).lower()
-        distance = int(m.group(2)) if m.lastindex >= 2 and m.group(2) else 0
-        distance = min(distance, 200)
-
-        # "turn 10" → spin + forward 10 (matched when no color follows)
-        if arg.isdigit():
-            return await self._do_turn_n(m)
-
-        valid = ('left', 'right', 'up', 'down', 'back', 'backward', 'around')
-        if arg not in valid:
-            corrected = fuzzy_match_small(arg, _TURN_VOCAB)
-            if not corrected:
-                return None
-            self.corrections.append((f'turn {arg}', f'turn {corrected}'))
-            arg = corrected
-        self.canvas.turn(arg)
-
-        if distance:
-            if m.lastindex >= 3 and m.group(3):
-                color_hex, _ = self._resolve_leading_color(m.group(3).split())
-                if color_hex:
-                    self._apply_color(color_hex)
-            action = "paint" if self._paint_on else "move"
-            self.canvas._use_heading_cursor = True
-            self.canvas.execute_logo_command(action, self.canvas._heading, distance)
-        await asyncio.sleep(0.05)
-        return True
-
-    async def _do_forward(self, m) -> bool | None:
-        distance = int(m.group(1)) if m.group(1) else 1
-        distance = min(distance, 200)
-        if m.lastindex >= 2 and m.group(2):
-            color_hex, _ = self._resolve_leading_color(m.group(2).split())
-            if color_hex:
-                self._apply_color(color_hex)
-        action = "paint" if self._paint_on else "move"
-        self.canvas._use_heading_cursor = True
-        self.canvas.execute_logo_command(action, self.canvas._heading, distance)
-        await asyncio.sleep(0.05)
-        return True
-
-    async def _do_back(self, m) -> bool | None:
-        """back/backward [N]: move opposite to current heading."""
-        distance = int(m.group(1)) if m.group(1) else 1
-        distance = min(distance, 200)
-        if m.lastindex >= 2 and m.group(2):
-            color_hex, _ = self._resolve_leading_color(m.group(2).split())
-            if color_hex:
-                self._apply_color(color_hex)
-        opposite = _OPPOSITE[self.canvas._heading]
-        action = "paint" if self._paint_on else "move"
-        self.canvas._use_heading_cursor = True
-        self.canvas.execute_logo_command(action, opposite, distance)
-        await asyncio.sleep(0.05)
-        return True
-
-    async def _do_direction_text(self, m) -> bool | None:
-        """left/right/up/down <text>: face direction, then write/paint text."""
-        direction = m.group(1).lower()
-        text = m.group(2)
-        if self.canvas._heading != direction:
-            self.canvas._heading = direction
-            self.canvas._mark_cursor_dirty()
-            self.canvas.refresh()
-        # Try as color first
-        color_hex, _ = self._resolve_leading_color(text.split())
+        Distance and color may appear in any order; "down blue 5", "down 5
+        blue", and "down dark blue 5" all mean the same thing. Leftover text
+        is written/painted in the heading direction ("down hello", or "down 5
+        hello" = move then write).
+        """
+        verb = m.group(1).lower()
+        turn_arg, move_opposite, words = self._heading_plan(verb, m.group(2).split())
+        distance, color_hex, leftover = self._parse_motion_args(words)
+        if distance is None and not leftover and verb in _DEFAULT_MOVE_VERBS:
+            distance = 1
         if color_hex:
             self._apply_color(color_hex)
-            await asyncio.sleep(0.05)
-            return True
-        # Otherwise write/paint the text in that direction
-        for ch in text:
-            if self._write_on:
-                self.canvas.type_char(ch, direction=direction)
-            elif self._paint_on:
-                self.canvas.paint_char(ch, direction=direction)
-            await asyncio.sleep(0.02)
-        return True
-
-    async def _do_direction(self, m) -> bool | None:
-        """left/right/up/down [N] [color]: face direction + move N."""
-        direction = m.group(1).lower()
-        distance = int(m.group(2)) if m.lastindex >= 2 and m.group(2) else 1
-        distance = min(distance, 200)
-        # Optional trailing color (e.g. "down 5 blue")
-        if m.lastindex >= 3 and m.group(3):
-            color_hex, _ = self._resolve_leading_color(m.group(3).split())
-            if color_hex:
-                self._apply_color(color_hex)
-        if self.canvas._heading != direction:
-            self.canvas._heading = direction
-            self.canvas._mark_cursor_dirty()
-            self.canvas.refresh()
-        self.canvas._use_heading_cursor = True
-        action = "paint" if self._paint_on else "move"
-        self.canvas.execute_logo_command(action, direction, distance)
+        if turn_arg:
+            self.canvas.turn(turn_arg)
+        if distance:
+            heading = self.canvas._heading
+            move_dir = _OPPOSITE[heading] if move_opposite else heading
+            self.canvas._use_heading_cursor = True
+            action = "paint" if self._paint_on else "move"
+            self.canvas.execute_logo_command(action, move_dir, distance)
+        if leftover:
+            await self._emit_text(leftover, paint=self._paint_on)
         await asyncio.sleep(0.05)
         return True
+
+    def _heading_plan(self, verb: str, words: list[str]):
+        """Map a verb to (turn_arg | None, move_opposite, remaining_words).
+
+        turn/face take a direction argument; every other verb is self-directed
+        via _VERB_TURN. A bare or numeric "turn" spins 90 CW.
+        """
+        if verb in ('turn', 'face'):
+            direction = self._match_turn_dir(verb, words[0]) if words else None
+            if direction:
+                return direction, False, words[1:]
+            return ('spin' if verb == 'turn' else None), False, words
+        return _VERB_TURN[verb], verb in ('back', 'backward'), words
+
+    def _match_turn_dir(self, verb: str, word: str) -> str | None:
+        """Resolve a turn/face direction argument (exact or fuzzy). Digits and
+        unmatched words return None so they fall through to distance/color."""
+        word = word.lower()
+        if word.isdigit():
+            return None
+        vocab = _TURN_VOCAB if verb == 'turn' else _DIRECTION_VOCAB
+        if word in vocab:
+            return word
+        corrected = fuzzy_match_small(word, vocab)
+        if corrected:
+            self.corrections.append((f'{verb} {word}', f'{verb} {corrected}'))
+        return corrected
+
+    def _parse_motion_args(self, words: list[str]):
+        """Extract a distance and a color from a verb's args, in any order.
+
+        Returns (distance | None, color_hex | None, leftover_text). The color
+        may span adjectives ("dark blue") anywhere in the args; the first bare
+        number is the distance; everything else is leftover text.
+        """
+        color_hex, color_span = None, range(0)
+        for i in range(len(words)):
+            hex_c, used = self._resolve_leading_color(words[i:])
+            if hex_c:
+                color_hex, color_span = hex_c, range(i, i + used)
+                break
+        distance, leftover = None, []
+        for i, w in enumerate(words):
+            if i in color_span:
+                continue
+            if distance is None and w.isdigit():
+                distance = min(int(w), 200)
+            else:
+                leftover.append(w)
+        return distance, color_hex, " ".join(leftover)
+
+    async def _emit_text(self, text: str, paint: bool) -> None:
+        """Emit each character in the current heading direction. When painting,
+        spaces still advance without painting; when not, every char is typed."""
+        heading = self.canvas._heading
+        for ch in text:
+            if paint and ch != ' ':
+                self.canvas.paint_char(ch, direction=heading)
+            else:
+                self.canvas.type_char(ch, direction=heading)
+            await asyncio.sleep(0.02)
 
     # ------------------------------------------------------------------
     # Resolution pipeline (for unmatched text)
@@ -794,9 +721,13 @@ class ArtCodeRunner:
                 self.corrections.append((text, color_text))
             return True
 
-        # 2. Fuzzy command keyword (e.g. "forwrd 10" -> "forward 10")
-        corrected_kw = fuzzy_match_small(words[0].lower(), _COMMAND_VOCAB)
-        if corrected_kw and corrected_kw != words[0].lower():
+        # 2. Fuzzy command keyword (e.g. "forwrd 10" -> "forward 10"), but never
+        #    on a real word: "tree" overlaps "repeat" enough to fool difflib, so
+        #    a known emoji word must be painted, not coerced into a command.
+        first = words[0].lower()
+        corrected_kw = None if get_content().get_emoji(first) else \
+            fuzzy_match_small(first, _COMMAND_VOCAB)
+        if corrected_kw and corrected_kw != first:
             corrected_text = corrected_kw + (" " + " ".join(words[1:]) if len(words) > 1 else "")
             self.corrections.append((text, corrected_text))
             asyncio.ensure_future(self._dispatch(corrected_text, _resolving=True))
@@ -833,14 +764,17 @@ class ArtCodeRunner:
                         return mod[0], adj_count + 1
                 return hex_color, adj_count + 1
 
-        # Try fuzzy color on the first non-adjective word
+        # Try fuzzy color on the first non-adjective word, but never on a real
+        # word: "tree"/"hello" overlap "green"/"yellow" enough to fool difflib,
+        # so a known emoji word must be painted, not coerced into a color.
         if adj_count < len(words):
             color_word = words[adj_count].lower()
-            corrected = fuzzy_match_small(color_word, list(content.colors.keys()))
-            if corrected:
-                hex_color = content.get_color(corrected)
-                if hex_color:
-                    return hex_color, adj_count + 1
+            if not content.get_emoji(color_word):
+                corrected = fuzzy_match_small(color_word, list(content.colors.keys()))
+                if corrected:
+                    hex_color = content.get_color(corrected)
+                    if hex_color:
+                        return hex_color, adj_count + 1
 
         return None, 0
 

@@ -289,20 +289,31 @@ class MusicCodeRunner:
             except Exception:
                 log.debug("Music command failed: %s", cmd['text'], exc_info=True)
 
+    async def _run_command_table(self, text: str) -> bool:
+        """Run the first matching command handler. Returns True if a command
+        keyword matched, claiming the line, whether or not the handler could
+        act on its argument. Note playing is only a fallback for non-command
+        lines, so a recognized keyword is never sounded out letter by letter."""
+        for pattern, handler_name in self._COMMANDS:
+            m = pattern.match(text)
+            if m:
+                await getattr(self, handler_name)(m)
+                return True
+        return False
+
     async def _dispatch(self, text: str) -> None:
         self._original_text = text  # Track for correction display
         self._correction_final = ""  # Reset per-dispatch
         self._suppress_handler_corrections = False
 
-        # Stage 1: command table
-        for pattern, handler_name in self._COMMANDS:
-            m = pattern.match(text)
-            if m:
-                handler = getattr(self, handler_name)
-                if await handler(m):
-                    return
+        # Stage 1: a recognized command keyword claims the line.
+        if await self._run_command_table(text):
+            return
 
-        # Stage 2: fuzzy keyword correction (e.g., "chooze marimba")
+        # Stage 2: fuzzy-correct a misspelled keyword (e.g. "chooze marimba"),
+        # then retry the table. A keyword may correct to a speed word
+        # (fast/slow), which has no table entry; record the fix and let stage 3
+        # parse the speed prefix.
         words = text.strip().split(None, 1)
         if words and len(words[0]) >= 3:
             from .fuzzy import fuzzy_match_small
@@ -310,19 +321,12 @@ class MusicCodeRunner:
             if corrected_kw and corrected_kw != words[0].lower():
                 corrected = corrected_kw + (' ' + words[1] if len(words) > 1 else '')
                 self._suppress_handler_corrections = True
-                # Re-try with corrected text (command table only, no recursion)
-                for pattern, handler_name in self._COMMANDS:
-                    m = pattern.match(corrected)
-                    if m:
-                        handler = getattr(self, handler_name)
-                        if await handler(m):
-                            # Single correction: original → final (handler may have refined)
-                            self.corrections.append((text, self._build_final_correction(corrected)))
-                            return
-                # Keyword corrected but no handler matched: record keyword fix
+                if await self._run_command_table(corrected):
+                    self.corrections.append((text, self._build_final_correction(corrected)))
+                    return
                 self.corrections.append((text, corrected))
 
-        # Stage 3: speed prefix + play notes
+        # Stage 3: not a command, play the line as notes.
         await self._play_notes(text)
 
     # ------------------------------------------------------------------

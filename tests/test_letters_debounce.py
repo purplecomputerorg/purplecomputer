@@ -36,8 +36,8 @@ def test_first_press_always_accepted():
 def test_same_key_inside_window_dropped():
     s = _Stub()
     _drop(s, "A", 0.0)
-    # 100ms after — well inside 280ms same-key window
-    assert _drop(s, "A", 0.10) is True
+    # 200ms after — well inside 400ms same-key window
+    assert _drop(s, "A", 0.20) is True
     # State not updated by a dropped press
     assert s._last_letter_press_t == 0.0
 
@@ -45,22 +45,22 @@ def test_same_key_inside_window_dropped():
 def test_same_key_past_window_accepted():
     s = _Stub()
     _drop(s, "A", 0.0)
-    assert _drop(s, "A", 0.30) is False
-    assert s._last_letter_press_t == 0.30
+    assert _drop(s, "A", 0.42) is False
+    assert s._last_letter_press_t == 0.42
 
 
 def test_cross_key_inside_window_dropped():
     s = _Stub()
     _drop(s, "A", 0.0)
-    # 50ms gap — multi-finger mash, below 100ms cross-key floor
-    assert _drop(s, "B", 0.05) is True
+    # 100ms gap — multi-finger mash, below 200ms cross-key floor
+    assert _drop(s, "B", 0.10) is True
 
 
 def test_cross_key_past_window_accepted():
     s = _Stub()
     _drop(s, "A", 0.0)
-    # 120ms gap — deliberate drill rate
-    assert _drop(s, "B", 0.12) is False
+    # 250ms gap — deliberate drill rate (4/sec)
+    assert _drop(s, "B", 0.25) is False
     assert s._last_letter_key == "B"
 
 
@@ -73,33 +73,33 @@ def test_finger_mash_collapses_to_one_letter():
 
 
 def test_hammering_one_key_paces_out():
-    """Tapping A every 50ms: only presses 280ms+ apart get through."""
+    """Tapping A every 50ms: only presses 400ms+ apart get through."""
     s = _Stub()
     accepted = []
     for i in range(20):
         t = i * 0.05
         if not _drop(s, "A", t):
             accepted.append(t)
-    # 0.00, 0.30, 0.60, 0.90 — roughly clip-length spacing
-    assert accepted == pytest.approx([0.0, 0.30, 0.60, 0.90])
+    # 0.00, 0.40, 0.80 — roughly clip-length spacing
+    assert accepted == pytest.approx([0.0, 0.40, 0.80])
 
 
 def test_deliberate_drill_passes_through():
-    """A-B-C-D-E at 150ms each (≈7/sec) — all accepted."""
+    """A-B-C-D-E at 250ms each (4/sec) — all accepted."""
     s = _Stub()
-    presses = [("A", 0.00), ("B", 0.15), ("C", 0.30), ("D", 0.45), ("E", 0.60)]
+    presses = [("A", 0.00), ("B", 0.25), ("C", 0.50), ("D", 0.75), ("E", 1.00)]
     accepted = [k for k, t in presses if not _drop(s, k, t)]
     assert accepted == ["A", "B", "C", "D", "E"]
 
 
 def test_switch_then_repeat_uses_correct_threshold():
-    """A accepted, B accepted 200ms later (cross-key fine), then B 100ms
+    """A accepted, B accepted 250ms later (cross-key fine), then B 200ms
     after that is dropped (same-key window now)."""
     s = _Stub()
     assert _drop(s, "A", 0.00) is False
-    assert _drop(s, "B", 0.20) is False
-    # Now last_key == "B"; same-key threshold applies to next B
-    assert _drop(s, "B", 0.30) is True
-    # But A 100ms after the accepted B is cross-key → still dropped (under 100ms floor… exactly at it)
-    assert _drop(s, "A", 0.29) is True   # 90ms after B
-    assert _drop(s, "A", 0.31) is False  # 110ms after B
+    assert _drop(s, "B", 0.25) is False
+    # Now last_key == "B"; same-key threshold (400ms) applies to next B
+    assert _drop(s, "B", 0.45) is True
+    # Cross-key A 180ms after the accepted B → still dropped (under 200ms floor)
+    assert _drop(s, "A", 0.43) is True   # 180ms after B
+    assert _drop(s, "A", 0.46) is False  # 210ms after B

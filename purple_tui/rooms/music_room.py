@@ -866,12 +866,13 @@ class MusicMode(Container, can_focus=True):
     """
 
     # Letters mode debounce — two thresholds, picked from clip + finger-mash
-    # characteristics. Letter clips average ~0.34s.
-    #   Same key: 280ms so hammering "A" lets each "A" almost finish.
-    #   Different key: 100ms so simultaneous multi-finger mashes collapse
-    #   to one letter, while deliberate A-B-C-D drills (≤~5/sec) still pass.
-    LETTERS_SAME_KEY_DEBOUNCE_S = 0.28
-    LETTERS_CROSS_KEY_DEBOUNCE_S = 0.10
+    # characteristics. Letter clips average ~0.34s. Kids 4-7 don't type fast
+    # unless they're mashing, so thresholds are tuned aggressively.
+    #   Same key: 400ms so hammering "A" lets each clip finish with a beat.
+    #   Different key: 200ms so multi-finger mashes and frantic alternation
+    #   collapse, while deliberate A-B-C-D taps (≤~4/sec) still pass.
+    LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
+    LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)

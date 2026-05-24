@@ -96,12 +96,17 @@ def _split_commands(text: str) -> list[str]:
     return parts if parts else [text]
 
 
-def parse_lines(lines: list[str]) -> list[dict]:
+def parse_lines(lines: list[str], split_commands: bool = True) -> list[dict]:
     """Parse lines into a list of commands.
 
     Handles inline `repeat N cmd1, cmd2` syntax.
     Clause separators (, . ; |) split a line into multiple commands.
     Returns a flat list of command dicts with 'type' and params.
+
+    When `split_commands` is True (default, used by Music/Play), each clause is
+    further split at command-keyword boundaries. Art passes False so its
+    nearest-anchor classifier sees whole clauses and can bind colors between
+    motions to the right anchor.
     """
     result = []
     for line in lines:
@@ -121,15 +126,14 @@ def parse_lines(lines: list[str]) -> list[dict]:
         if m:
             count = max(1, min(count, 100))
             sub_lines = _split_clauses(body_text)
-            body_cmds = parse_lines(sub_lines)
+            body_cmds = parse_lines(sub_lines, split_commands=split_commands)
             result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
             continue
 
-        # Split on clause separators, then on command-keyword boundaries
         clauses = _split_clauses(line)
         parts = []
         for clause in clauses:
-            parts.extend(_split_commands(clause))
+            parts.extend(_split_commands(clause) if split_commands else [clause])
         if not parts:
             parts = [line]
         for part in parts:
@@ -453,7 +457,6 @@ _VERB_TURN = {
     'left': 'left', 'right': 'right', 'up': 'up', 'down': 'down',
     'spin': 'spin', 'rotate': 'spin',
 }
-_MOTION_VERBS = '|'.join(list(_VERB_TURN) + ['turn', 'face'])
 # Translate verbs move one step when given no distance and no text; rotation
 # (spin/rotate) and turn/face only move when a distance is supplied.
 _DEFAULT_MOVE_VERBS = frozenset(_VERB_TURN) - {'spin', 'rotate'}
@@ -468,8 +471,9 @@ class ArtCodeRunner:
     Corrections are tracked for UI feedback.
     """
 
-    # Command table: (compiled_regex, handler_method_name)
-    # Checked in order; first match wins.
+    # Explicit-command table: (compiled_regex, handler_method_name). Motion is
+    # handled by the bag-of-tokens classifier (`_classify_motion`) one stage
+    # later, so any text not matched here goes through that pipeline.
     _COMMANDS = [
         (re.compile(r'^paint\s+(on|off)\s*$', re.I), '_do_paint_toggle'),
         (re.compile(r'^paint\s+(.+?)\s*$', re.I), '_do_paint_inline'),
@@ -479,7 +483,6 @@ class ArtCodeRunner:
         (re.compile(r'^lift\s*$', re.I), '_do_lift'),
         (re.compile(r'^(?:pen\s*up|penup)\s*$', re.I), '_do_pen_up'),
         (re.compile(r'^(?:pen\s*down|pendown)\s*$', re.I), '_do_pen_down'),
-        (re.compile(rf'^({_MOTION_VERBS})\b\s*(.*)$', re.I), '_do_motion'),
     ]
 
     def __init__(self, canvas):
@@ -495,7 +498,7 @@ class ArtCodeRunner:
         expanded = []
         for line in lines:
             expanded.extend(self._peel_color_before_repeat(line))
-        cmds = parse_lines(expanded)
+        cmds = parse_lines(expanded, split_commands=False)
         flat = flatten_commands(cmds)
         self._paint_on = paint
         self._write_on = not paint
@@ -521,8 +524,8 @@ class ArtCodeRunner:
         return [line]
 
     async def _dispatch(self, text: str, _resolving: bool = False) -> None:
-        """Try command table, then resolution pipeline."""
-        # Stage 1: command table (exact + per-handler fuzzy)
+        """Try explicit commands, then motion classifier, then resolution."""
+        # Stage 1: explicit-command table (paint/write/color/lift/pen).
         for pattern, handler_name in self._COMMANDS:
             m = pattern.match(text)
             if m:
@@ -530,18 +533,28 @@ class ArtCodeRunner:
                 if await handler(m):
                     return
 
-        # Stage 2: write mode types characters (that's its purpose)
+        # Stage 2: motion classifier. Fires when the line has any direction or
+        # motion verb. Tokens (color, number, leftover text) are assigned to
+        # the nearest anchor — so "green 10 down", "10 green down", and
+        # "red down 5 blue right 5" all just work.
+        plans = self._classify_motion(text)
+        if plans:
+            await self._execute_motion_plans(plans)
+            return
+
+        # Stage 3: write mode types characters (that's its purpose).
         if self._write_on:
             await self._emit_text(text, paint=False)
             return
 
-        # Stage 3: resolution pipeline (only on first pass)
+        # Stage 4: resolution pipeline (only on first pass). Handles bare
+        # colors and `green 5`-style no-anchor lines via leading-color peel,
+        # plus fuzzy verb correction (`forwrd 10` → `forward 10`).
         if not _resolving:
-            resolved = self._resolve(text)
-            if resolved:
+            if self._resolve(text):
                 return
 
-        # Stage 4: paint mode paints each character (like interactive mode)
+        # Stage 5: paint mode paints each character (like interactive mode).
         if self._paint_on:
             await self._emit_text(text, paint=True)
 
@@ -616,50 +629,9 @@ class ArtCodeRunner:
         self._paint_on = True
         return True
 
-    async def _do_motion(self, m) -> bool | None:
-        """Any motion verb: change heading, move N, write leftover text.
-
-        Distance and color may appear in any order; "down blue 5", "down 5
-        blue", and "down dark blue 5" all mean the same thing. Leftover text
-        is written/painted in the heading direction ("down hello", or "down 5
-        hello" = move then write).
-        """
-        verb = m.group(1).lower()
-        turn_arg, move_opposite, words = self._heading_plan(verb, m.group(2).split())
-        distance, color_hex, leftover = self._parse_motion_args(words)
-        if distance is None and not leftover and verb in _DEFAULT_MOVE_VERBS:
-            distance = 1
-        if color_hex:
-            self._apply_color(color_hex)
-        if turn_arg:
-            self.canvas.turn(turn_arg)
-        if distance:
-            heading = self.canvas._heading
-            move_dir = _OPPOSITE[heading] if move_opposite else heading
-            self.canvas._use_heading_cursor = True
-            action = "paint" if self._paint_on else "move"
-            self.canvas.execute_logo_command(action, move_dir, distance)
-        if leftover:
-            await self._emit_text(leftover, paint=self._paint_on)
-        await asyncio.sleep(0.05)
-        return True
-
-    def _heading_plan(self, verb: str, words: list[str]):
-        """Map a verb to (turn_arg | None, move_opposite, remaining_words).
-
-        turn/face take a direction argument; every other verb is self-directed
-        via _VERB_TURN. A bare or numeric "turn" spins 90 CW.
-        """
-        if verb in ('turn', 'face'):
-            direction = self._match_turn_dir(verb, words[0]) if words else None
-            if direction:
-                return direction, False, words[1:]
-            return ('spin' if verb == 'turn' else None), False, words
-        return _VERB_TURN[verb], verb in ('back', 'backward'), words
-
     def _match_turn_dir(self, verb: str, word: str) -> str | None:
         """Resolve a turn/face direction argument (exact or fuzzy). Digits and
-        unmatched words return None so they fall through to distance/color."""
+        unmatched words return None so the word falls through to other roles."""
         word = word.lower()
         if word.isdigit():
             return None
@@ -671,28 +643,141 @@ class ArtCodeRunner:
             self.corrections.append((f'{verb} {word}', f'{verb} {corrected}'))
         return corrected
 
-    def _parse_motion_args(self, words: list[str]):
-        """Extract a distance and a color from a verb's args, in any order.
+    # ------------------------------------------------------------------
+    # Motion classifier: bag-of-tokens with nearest-anchor assignment
+    # ------------------------------------------------------------------
+    #
+    # The line is tokenized into typed tokens (anchor / color / number / text).
+    # Every motion verb or direction word becomes an "anchor"; each non-anchor
+    # token is assigned to the nearest anchor by token index (ties favor the
+    # earlier anchor). Consecutive text tokens form one phrase bound to the
+    # previous anchor (or the first anchor if the phrase precedes all of them).
+    # The result is one motion plan per anchor, executed in order.
 
-        Returns (distance | None, color_hex | None, leftover_text). The color
-        may span adjectives ("dark blue") anywhere in the args; the first bare
-        number is the distance; everything else is leftover text.
+    def _classify_motion(self, text: str) -> list[dict] | None:
+        """Return a list of motion plans for `text`, or None if no anchor."""
+        words = text.split()
+        if not words:
+            return None
+        tokens = self._tokenize_motion(words)
+        anchor_idxs = [j for j, t in enumerate(tokens) if t[0] == 'anchor']
+        if not anchor_idxs:
+            return None
+
+        plans = []
+        for a in anchor_idxs:
+            verb, direction = tokens[a][1]
+            plans.append({'verb': verb, 'dir': direction, 'dist': None,
+                          'color': None, '_leftover': []})
+
+        def nearest(j: int) -> int:
+            best, best_d = 0, None
+            for pi, a in enumerate(anchor_idxs):
+                d = abs(j - a)
+                if best_d is None or d < best_d:
+                    best, best_d = pi, d
+            return best
+
+        # First pass: numbers and colors → nearest anchor.
+        for j, tok in enumerate(tokens):
+            if tok[0] == 'number':
+                plan = plans[nearest(j)]
+                if plan['dist'] is None:
+                    plan['dist'] = tok[1]
+            elif tok[0] == 'color':
+                plans[nearest(j)]['color'] = tok[1]
+
+        # Second pass: consecutive text tokens become one phrase bound to the
+        # previous anchor (or the first if none precedes).
+        i = 0
+        while i < len(tokens):
+            if tokens[i][0] != 'text':
+                i += 1
+                continue
+            start = i
+            while i < len(tokens) and tokens[i][0] == 'text':
+                i += 1
+            prev = next((a for a in reversed(anchor_idxs) if a < start), anchor_idxs[0])
+            phrase = ' '.join(tokens[k][1] for k in range(start, i))
+            plans[anchor_idxs.index(prev)]['_leftover'].append((start, phrase))
+
+        for plan in plans:
+            parts = sorted(plan.pop('_leftover'), key=lambda x: x[0])
+            plan['leftover'] = ' '.join(p for _, p in parts)
+        return plans
+
+    def _tokenize_motion(self, words: list[str]) -> list[tuple]:
+        """Tokenize words into anchor / number / color / text tokens.
+
+        Anchor value is (verb, direction|None). `turn`/`face` greedily absorb
+        the next word as a direction when it resolves to one (else direction
+        stays None and falls through to spin/face-noop behavior in execute).
         """
-        color_hex, color_span = None, range(0)
-        for i in range(len(words)):
+        tokens: list[tuple] = []
+        i = 0
+        while i < len(words):
+            w = words[i].lower()
+            if w in ('turn', 'face'):
+                direction = None
+                if i + 1 < len(words):
+                    direction = self._match_turn_dir(w, words[i + 1])
+                if direction:
+                    tokens.append(('anchor', (w, direction)))
+                    i += 2
+                else:
+                    tokens.append(('anchor', (w, None)))
+                    i += 1
+                continue
+            if w in _VERB_TURN:
+                direction = w if w in _DIRECTION_VOCAB else _VERB_TURN[w]
+                tokens.append(('anchor', (w, direction)))
+                i += 1
+                continue
+            if w.isdigit():
+                tokens.append(('number', min(int(w), 200)))
+                i += 1
+                continue
             hex_c, used = self._resolve_leading_color(words[i:])
             if hex_c:
-                color_hex, color_span = hex_c, range(i, i + used)
-                break
-        distance, leftover = None, []
-        for i, w in enumerate(words):
-            if i in color_span:
+                tokens.append(('color', hex_c))
+                i += used
                 continue
-            if distance is None and w.isdigit():
-                distance = min(int(w), 200)
-            else:
-                leftover.append(w)
-        return distance, color_hex, " ".join(leftover)
+            tokens.append(('text', words[i]))
+            i += 1
+        return tokens
+
+    async def _execute_motion_plans(self, plans: list[dict]) -> None:
+        """Execute motion plans in order. Color is applied before the move so
+        the stroke paints in that color; brush color carries forward."""
+        for plan in plans:
+            verb = plan['verb']
+            direction = plan['dir']
+            distance = plan['dist']
+            leftover = plan['leftover']
+
+            # Bare `turn` with no direction spins 90; bare `face` is a no-op
+            # heading-wise (matches pre-refactor `_heading_plan`).
+            if verb == 'turn' and direction is None:
+                direction = 'spin'
+
+            move_opposite = verb in ('back', 'backward')
+
+            if distance is None and not leftover and verb in _DEFAULT_MOVE_VERBS:
+                distance = 1
+
+            if plan['color']:
+                self._apply_color(plan['color'])
+            if direction:
+                self.canvas.turn(direction)
+            if distance:
+                heading = self.canvas._heading
+                move_dir = _OPPOSITE[heading] if move_opposite else heading
+                self.canvas._use_heading_cursor = True
+                action = "paint" if self._paint_on else "move"
+                self.canvas.execute_logo_command(action, move_dir, distance)
+            if leftover:
+                await self._emit_text(leftover, paint=self._paint_on)
+            await asyncio.sleep(0.05)
 
     async def _emit_text(self, text: str, paint: bool) -> None:
         """Emit each character in the current heading direction. When painting,
@@ -720,7 +805,6 @@ class ArtCodeRunner:
         color_hex, words_used = self._resolve_leading_color(words)
         if color_hex:
             self._apply_color(color_hex)
-            color_text = " ".join(words[:words_used])
             remainder = " ".join(words[words_used:])
             if remainder:
                 # Bare number after color → forward N (e.g. "blue 5" → 5 blue squares).

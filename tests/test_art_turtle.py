@@ -683,6 +683,123 @@ class TestColorBeforeRepeat:
 
 
 # ---------------------------------------------------------------------------
+# Nearest-anchor motion classifier: any permutation of color/distance/direction
+# parses sensibly. Tokens between two motions bind to the nearest one.
+# ---------------------------------------------------------------------------
+
+class TestNearestAnchor:
+    """Bag-of-tokens classifier: color/number/text attach to the nearest
+    motion verb or direction in the line, ties favoring the earlier anchor."""
+
+    def _run(self, lines):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = FakeCanvas(width=30, height=30)  # roomy: motions of 10 fit
+        runner = ArtCodeRunner(canvas)
+        asyncio.run(runner.run(lines))
+        return canvas, runner
+
+    def _color(self, name):
+        from purple_tui.content import get_content
+        return get_content().get_color(name)
+
+    def test_color_distance_before_direction(self):
+        """green 10 down: parses as down 10 in green (was: painted '10 down' as chars)."""
+        c, _ = self._run(["paint off", "green 10 down"])
+        assert c._cursor_y == 10 and c._cursor_x == 0
+        assert c._heading == 'down'
+        assert c._last_key_color == self._color('green')
+
+    def test_distance_color_before_direction(self):
+        """10 green down: same outcome as 'green 10 down' (number-first)."""
+        c, _ = self._run(["paint off", "10 green down"])
+        assert c._cursor_y == 10 and c._cursor_x == 0
+        assert c._last_key_color == self._color('green')
+
+    def test_color_distance_after_direction_still_works(self):
+        """down 10 green: pre-refactor parser handled this; locks it in."""
+        c, _ = self._run(["paint off", "down 10 green"])
+        assert c._cursor_y == 10
+        assert c._last_key_color == self._color('green')
+
+    def test_color_before_direction_distance_after_still_works(self):
+        """green down 10: pre-refactor leading-color peel handled it; locks it in."""
+        c, _ = self._run(["paint off", "green down 10"])
+        assert c._cursor_y == 10
+        assert c._last_key_color == self._color('green')
+
+    def test_color_between_motions_binds_to_next(self):
+        """red down 5 blue right 5: blue is closer to right than to down,
+        so first motion paints red, second paints blue. THE NEW CASE."""
+        c, _ = self._run(["red down 5 blue right 5"])
+        assert c._cursor_y == 5 and c._cursor_x == 5
+        red, blue = self._color('red'), self._color('blue')
+        assert c._grid[(0, 2)][1] == red  # mid-down stretch
+        assert c._grid[(2, 5)][1] == blue  # mid-right stretch
+
+    def test_color_after_verb_locks_in_existing_behavior(self):
+        """red down 5 right blue 5: same outcome as above (blue closer to right)."""
+        c, _ = self._run(["red down 5 right blue 5"])
+        assert c._cursor_y == 5 and c._cursor_x == 5
+        red, blue = self._color('red'), self._color('blue')
+        assert c._grid[(0, 2)][1] == red
+        assert c._grid[(2, 5)][1] == blue
+
+    def test_single_motion_keeps_trailing_color(self):
+        """down 5 blue: only one anchor, so blue binds to down. Matches UX_LOG
+        ('down 5 blue = 5 blue squares going down')."""
+        c, _ = self._run(["down 5 blue"])
+        assert c._cursor_y == 5
+        blue = self._color('blue')
+        assert c._grid[(0, 0)][1] == blue
+        assert c._grid[(0, 4)][1] == blue
+
+    def test_text_phrase_between_motions_binds_to_previous(self):
+        """down hello world up: 'hello world' is one phrase bound to down,
+        then up moves once. Phrase is not split across the two motions."""
+        c, _ = self._run(["write on", "down hello world up"])
+        assert "".join(c._typed) == "hello world"
+        # Final heading is up (the second motion's direction).
+        assert c._heading == 'up'
+
+    def test_two_directions_same_line_now_two_motions(self):
+        """down 5 up 5: two real motions back to back. Pre-refactor this would
+        have written 'up 5' as text after moving down 5. Improvement."""
+        c, _ = self._run(["paint off", "down 5 up 5"])
+        assert c._cursor_y == 0
+        assert c._cursor_x == 0
+
+    def test_turn_left_with_distance(self):
+        """turn left 5: face left, then move 5."""
+        c, _ = self._run(["paint off", "turn left 5"])
+        # Start at (0,0); turn left and try to move 5 → clamped at left edge.
+        assert c._heading == 'left'
+        assert c._cursor_x == 0
+
+    def test_multiword_color_before_distance_direction(self):
+        """dark blue 10 down: the adjective+color span counts as one token
+        and attaches to down."""
+        c, _ = self._run(["paint off", "dark blue 10 down"])
+        assert c._cursor_y == 10
+        assert c._last_key_color == DARK_BLUE
+
+    def test_fuzzy_color_in_classifier(self):
+        """purpl 10 down: fuzzy color resolves to purple, applied as part of
+        the down motion plan. (Color-span fuzziness is silent today; the
+        explicit `color X` command surfaces corrections.)"""
+        c, _ = self._run(["paint off", "purpl 10 down"])
+        assert c._cursor_y == 10
+        assert c._last_key_color == self._color('purple')
+
+    def test_fuzzy_verb_falls_through_to_resolve(self):
+        """forwrd 10: classifier sees no anchor (forwrd isn't a verb), so
+        _resolve's fuzzy keyword fixes it and re-dispatches as 'forward 10'."""
+        c, runner = self._run(["paint off", "forwrd 10"])
+        assert c._cursor_x == 10
+        assert any('forwrd' in orig and 'forward' in corr
+                   for orig, corr in runner.corrections)
+
+
+# ---------------------------------------------------------------------------
 # Edge stop (no wrapping) tests
 # ---------------------------------------------------------------------------
 

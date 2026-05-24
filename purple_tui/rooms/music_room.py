@@ -865,12 +865,22 @@ class MusicMode(Container, can_focus=True):
     }
     """
 
+    # Letters mode debounce — two thresholds, picked from clip + finger-mash
+    # characteristics. Letter clips average ~0.34s.
+    #   Same key: 280ms so hammering "A" lets each "A" almost finish.
+    #   Different key: 100ms so simultaneous multi-finger mashes collapse
+    #   to one letter, while deliberate A-B-C-D drills (≤~5/sec) still pass.
+    LETTERS_SAME_KEY_DEBOUNCE_S = 0.28
+    LETTERS_CROSS_KEY_DEBOUNCE_S = 0.10
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.grid: MusicGrid | None = None
         self._header: MusicRoomHeader | None = None
         self._loop = LoopStation()
         self._letters_mode = False
+        self._last_letter_key: str | None = None
+        self._last_letter_press_t: float = float("-inf")
         self._instrument_index = 0
         self._root_index = DEFAULT_ROOT_INDEX
         self._loop_task: asyncio.Task | None = None
@@ -1216,6 +1226,24 @@ class MusicMode(Container, can_focus=True):
     def _current_mode(self) -> str:
         return MODE_LETTERS if self._letters_mode else MODE_MUSIC
 
+    def _letters_debounce_drop(self, lookup: str, now: float) -> bool:
+        """Return True if this letters-mode press should be dropped.
+
+        Same-letter repeats wait roughly a clip length; cross-letter
+        presses use a tighter floor so deliberate fast drills still pass.
+        Updates last-key/last-time state when the press is accepted.
+        """
+        threshold = (
+            self.LETTERS_SAME_KEY_DEBOUNCE_S
+            if lookup == self._last_letter_key
+            else self.LETTERS_CROSS_KEY_DEBOUNCE_S
+        )
+        if now - self._last_letter_press_t < threshold:
+            return True
+        self._last_letter_key = lookup
+        self._last_letter_press_t = now
+        return False
+
     def _play_key(self, key: str, mode: str, instrument: int | None = None) -> None:
         """Play audio for a key in the given mode.
 
@@ -1463,6 +1491,13 @@ class MusicMode(Container, can_focus=True):
                 return
 
             lookup = char.upper() if char.isalpha() else _KID_MATH_UNREMAP.get(char, char)
+
+            # Letters mode debounce: keep spoken clips from stacking, whether
+            # the kid is hammering one key or mashing many. Music mode stays
+            # un-debounced (piano semantics).
+            if self._letters_mode and lookup in ALL_KEYS:
+                if self._letters_debounce_drop(lookup, time.monotonic()):
+                    return
 
             if lookup in ALL_KEYS:
                 mode = self._current_mode()

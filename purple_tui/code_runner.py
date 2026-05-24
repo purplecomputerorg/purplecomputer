@@ -723,15 +723,13 @@ class ArtCodeRunner:
             color_text = " ".join(words[:words_used])
             remainder = " ".join(words[words_used:])
             if remainder:
-                # Bare number after color → forward N (e.g. "blue 5" → 5 blue squares)
+                # Bare number after color → forward N (e.g. "blue 5" → 5 blue squares).
+                # Splitting a color off its remainder is normalization, not a fix, so
+                # it records no correction; a real fix surfaces from the re-dispatch.
                 if re.match(r'^\d+$', remainder):
-                    self.corrections.append((text, f"color {color_text}, forward {remainder}"))
                     asyncio.ensure_future(self._dispatch(f"forward {remainder}"))
                 else:
-                    self.corrections.append((text, f"{color_text}, {remainder}"))
                     asyncio.ensure_future(self._dispatch(remainder))
-            elif text != color_text:
-                self.corrections.append((text, color_text))
             return True
 
         # 2. Fuzzy command keyword (e.g. "forwrd 10" -> "forward 10"), but never

@@ -611,14 +611,24 @@ def _get_version_label() -> str:
 
 
 def _get_menu_items() -> list:
-    """Get menu items, including dev-only items when appropriate."""
+    """Get menu items, including dev-only items when appropriate.
+
+    Items whose id starts with `sec-` are section headers: visual-only,
+    skipped by keyboard navigation, no action when activated.
+    """
     from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_silent_mode
 
     items = []
 
     items.append(("menu-help", "Help & Videos"))
+    if _is_casper_boot():
+        items.append(("menu-install", "Install on this Computer" if _is_usb_payload_available() else "Install (Reinsert USB)"))
+    else:
+        from ..purple_tui import _read_computer_name
+        rename_label = "Rename this Computer" if _read_computer_name() else "Name this Computer"
+        items.append(("menu-rename", rename_label))
 
-    # Littles Mode
+    items.append(("sec-kid", "Activities"))
     littles = get_littles_mode()
     if littles:
         display_names = {"music": "Music", "music_noscreen": "No-Screen Music", "art": "Art"}
@@ -626,8 +636,6 @@ def _get_menu_items() -> list:
     else:
         littles_label = "Littles Mode: Off"
     items.append(("menu-littles", littles_label))
-
-    # Code Panel toggle (only show when not in littles mode, since littles always disables it)
     if not littles:
         code_label = "Allow Code Space: Yes" if get_code_panel() else "Allow Code Space: No"
         items.append(("menu-code-panel", code_label))
@@ -635,28 +643,25 @@ def _get_menu_items() -> list:
         items.append(("menu-music-looping", looping_label))
         key_switch_label = "Allow Music Key Switching: Yes" if get_music_key_switching() else "Allow Music Key Switching: No"
         items.append(("menu-music-key-switching", key_switch_label))
-
     caps_label = "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"
     items.append(("menu-all-caps", caps_label))
 
+    items.append(("sec-av", "Sound & Display"))
     silent_label = "Silent Mode: On" if get_silent_mode() else "Silent Mode: Off"
     items.append(("menu-silent", silent_label))
-
+    items.append(("menu-volume", "Adjust Volume"))
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
-    if _is_casper_boot():
-        items.append(("menu-install", "Install on this computer" if _is_usb_payload_available() else "Install (re-insert USB)"))
-    else:
-        from ..purple_tui import _read_computer_name
-        rename_label = "Rename this computer" if _read_computer_name() else "Name this computer"
-        items.append(("menu-rename", rename_label))
+
+    items.append(("sec-advanced", "Advanced"))
     items.append(("menu-shell", "Open Terminal"))
+    items.append(("menu-support", "Support Info"))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-bash", "Exit to Bash"))
     if is_debug():
         items.append(("menu-system", "Exit to System"))
-    items.append(("menu-support", "Support Info"))
+
     items.append(("menu-shutdown", "Shut Down"))
     items.append(("menu-exit", "Exit Parent Menu"))
     return items
@@ -1438,6 +1443,19 @@ class ParentMenu(PurpleModal):
         height: 1;
     }
 
+    .menu-section {
+        width: 100%;
+        height: 1;
+        margin-top: 1;
+        padding: 0 2;
+        color: $text-muted;
+        text-style: italic;
+    }
+
+    #menu-shutdown {
+        margin-top: 1;
+    }
+
     .parent-footer {
         width: 100%;
         height: auto;
@@ -1462,11 +1480,23 @@ class ParentMenu(PurpleModal):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._menu_items = _get_menu_items()
-        self._selected_index = 0
+        self._selected_index = self._next_selectable(-1, 1)
         # Escape is always "tainted" since user held it to open this menu
         self._ignore_until_released = {'escape'}
         # Track USB remount attempts to avoid retrying every poll tick
         self._usb_remount_attempted = False
+
+    def _is_section(self, idx: int) -> bool:
+        return self._menu_items[idx][0].startswith("sec-")
+
+    def _next_selectable(self, start: int, direction: int) -> int:
+        n = len(self._menu_items)
+        idx = start
+        for _ in range(n):
+            idx = (idx + direction) % n
+            if not self._is_section(idx):
+                return idx
+        return 0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
@@ -1476,6 +1506,9 @@ class ParentMenu(PurpleModal):
             with Vertical(id="parent-items"):
                 audio_ok = getattr(self.app, "audio_ok", None)
                 for item_id, label in self._menu_items:
+                    if item_id.startswith("sec-"):
+                        yield Static(label, classes="menu-section")
+                        continue
                     if item_id == "menu-support" and audio_ok is False:
                         label = f"{label}   (audio not working)"
                     item = ParentMenuItem(label, item_id)
@@ -1520,9 +1553,9 @@ class ParentMenu(PurpleModal):
         for i, (item_id, old_label) in enumerate(self._menu_items):
             if item_id == "menu-install":
                 if usb_available:
-                    new_label = "Install on this computer"
+                    new_label = "Install on this Computer"
                 else:
-                    new_label = "Install (re-insert USB)"
+                    new_label = "Install (Reinsert USB)"
                 if new_label != old_label:
                     self._menu_items[i] = (item_id, new_label)
                     item = self.query_one(f"#{item_id}", ParentMenuItem)
@@ -1537,6 +1570,8 @@ class ParentMenu(PurpleModal):
     def _update_selection(self) -> None:
         """Update visual selection state"""
         for i, (item_id, _) in enumerate(self._menu_items):
+            if item_id.startswith("sec-"):
+                continue
             item = self.query_one(f"#{item_id}", ParentMenuItem)
             if i == self._selected_index:
                 item.add_class("selected")
@@ -1553,10 +1588,10 @@ class ParentMenu(PurpleModal):
         # Navigation always works immediately
         if isinstance(action, NavigationAction):
             if action.direction == 'up':
-                self._selected_index = (self._selected_index - 1) % len(self._menu_items)
+                self._selected_index = self._next_selectable(self._selected_index, -1)
                 self._update_selection()
             elif action.direction == 'down':
-                self._selected_index = (self._selected_index + 1) % len(self._menu_items)
+                self._selected_index = self._next_selectable(self._selected_index, 1)
                 self._update_selection()
             return
 
@@ -1600,6 +1635,8 @@ class ParentMenu(PurpleModal):
             self._open_silent_mode()
         elif item_id == "menu-display":
             self._open_display_settings()
+        elif item_id == "menu-volume":
+            self._open_volume()
         elif item_id == "menu-install":
             self._install_to_disk()
         elif item_id == "menu-rename":
@@ -1651,7 +1688,7 @@ class ParentMenu(PurpleModal):
             except Exception:
                 pass
         # Update menu label
-        label = "Allow Code Panel: Yes" if new_value else "Allow Code Panel: No"
+        label = "Allow Code Space: Yes" if new_value else "Allow Code Space: No"
         try:
             widget = self.query_one("#menu-code-panel", ParentMenuItem)
             widget.update(label)
@@ -1807,6 +1844,10 @@ class ParentMenu(PurpleModal):
     def _open_display_settings(self) -> None:
         """Open the display settings modal."""
         self.app.push_screen(DisplaySettingsScreen())
+
+    def _open_volume(self) -> None:
+        from ..room_picker import VolumeModal
+        self.app.push_screen(VolumeModal())
 
     def _install_to_disk(self) -> None:
         """Prompt for name, confirm, then push the progress screen."""

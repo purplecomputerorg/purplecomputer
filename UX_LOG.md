@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Room switcher shows "Locked" when volume is locked**: With a Volume Lock on, the room picker's Volume slot now reads "Locked" with a volume icon matching the locked level, instead of the misleading "No Sound" (which still appears only when audio actually isn't working). Silent Mode keeps its "Silent" label.
 - **Volume Lock shows bars, space tests the level**: The Volume Lock picker now lists each option as a 10-cell bar (e.g. `██████░░░░`) instead of a percentage, with "Off" still labeled. Pressing Space plays a short glockenspiel note at the selected level so a parent can hear how loud the lock will be before confirming. Cancelling restores the original speaker level. The parent menu line also reads "Volume Lock: ██████░░░░" instead of "Volume Lock: 60%".
 - Footer arrow hints: every room now shows an arrow-key hint at the bottom right, not just Art. Music gets `[←][→]` "Arrows change key" and Play gets stacked `[↑]`/`[↓]` "Arrows scroll". Art keeps its existing inverted-T "Arrows move".
 - Play room: typing a digit run flush against a letter run (or vice versa) now gets an automatic space at submit time, so `5x5 ducks` is heard as "5 times 5 ducks equals 25 ducks" again (was just "5 times 5 ducks", no result spoken), `5+5dinos!` says "dinos" cleanly instead of espeak fusing it into "deenos", and `say5+5` triggers speech the same as `say 5+5`. The "Ask →" history line shows the spaced form (e.g. `5 x 5 ducks`), which also matches the multiplication rendered just below it.

@@ -15,7 +15,7 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-    ICON_BROOM, ICON_CODE,
+    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .hints import arrow_keys_text
@@ -238,8 +238,8 @@ class RoomPickerScreen(PurpleModal):
 
             with Horizontal(id="picker-extras"):
                 if getattr(self.app, "volume_locked", False):
-                    label = "Silent" if getattr(self.app, "_silent_mode", False) else "No Sound"
-                    yield ExtraOption(ICON_VOLUME_OFF, label, "", disabled=True, id="opt-volume")
+                    icon, label = self._locked_volume_badge()
+                    yield ExtraOption(icon, label, "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Room", "C", id="opt-clear-rooms")
@@ -402,6 +402,21 @@ class RoomPickerScreen(PurpleModal):
                 self.dismiss({"clear_room": result})
 
         self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)
+
+    def _locked_volume_badge(self) -> tuple[str, str]:
+        """Pick the icon + label for the Volume slot when it's locked."""
+        if getattr(self.app, "_silent_mode", False):
+            return ICON_VOLUME_OFF, "Silent"
+        lock = getattr(self.app, "_volume_lock", None)
+        if lock is not None:
+            if lock <= 35:
+                icon = ICON_VOLUME_LOW
+            elif lock <= 60:
+                icon = ICON_VOLUME_MED
+            else:
+                icon = ICON_VOLUME_HIGH
+            return icon, "Locked"
+        return ICON_VOLUME_OFF, "No Sound"
 
     def _open_volume(self) -> None:
         """Open the volume modal (skip when volume is locked: no audio, or silent mode)."""

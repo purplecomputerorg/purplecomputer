@@ -551,7 +551,7 @@ class PinEntryScreen(PurpleModal):
     _LEN = 4
 
     def __init__(self, title: str = "Enter PIN",
-                 description: str = "Type 4 digits. Forgot it? Reinstall from USB to reset.",
+                 description: str = "Type 4 digits.\nForgot it? Reinstall from USB to reset.",
                  verify=None, error_message: str = "Wrong PIN, try again.",
                  ignore_held_escape: bool = False, **kwargs):
         super().__init__(**kwargs)

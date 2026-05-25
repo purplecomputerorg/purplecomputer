@@ -371,6 +371,17 @@ _ALL_CAPS_CANCELLED = object()
 # SilentModeScreen dismiss value
 _SILENT_MODE_CANCELLED = object()
 
+# VolumeLockScreen dismiss value
+_VOLUME_LOCK_CANCELLED = object()
+
+# PinEntryScreen dismiss value (Esc / cancel)
+_PIN_CANCELLED = object()
+
+# PinActionScreen dismiss values
+_PIN_ACTION_CANCELLED = object()
+_PIN_ACTION_CHANGE = "change"
+_PIN_ACTION_CLEAR = "clear"
+
 
 class LittlesExitScreen(PickerModal):
     """Shown when parent long-holds Escape while in Littles Mode."""
@@ -463,6 +474,164 @@ class SilentModeScreen(PickerModal):
         super().__init__(**kwargs)
         from ..settings import get_silent_mode
         self._selected = 0 if get_silent_mode() else 1
+
+
+class VolumeLockScreen(PickerModal):
+    """Lock playback at a fixed volume so the kid can't change it."""
+
+    TITLE = "Volume Lock"
+    DESCRIPTION = "Lock the volume here. The volume buttons stay off until you turn this back off."
+    OPTIONS = [
+        (None, "Off"),
+        (15, "15%"),
+        (35, "35%"),
+        (60, "60%"),
+        (85, "85%"),
+        (100, "100%"),
+    ]
+    escape_value = _VOLUME_LOCK_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_volume_lock
+        current = get_volume_lock()
+        for i, (value, *_) in enumerate(self.OPTIONS):
+            if value == current:
+                self._selected = i
+                break
+
+
+class PinActionScreen(PickerModal):
+    """Choose what to do with an existing PIN: change it or turn it off."""
+
+    TITLE = "Parent PIN"
+    OPTIONS = [
+        (_PIN_ACTION_CHANGE, "Change PIN"),
+        (_PIN_ACTION_CLEAR, "Turn Off"),
+    ]
+    escape_value = _PIN_ACTION_CANCELLED
+
+
+class PinEntryScreen(PurpleModal):
+    """Enter a 4-digit PIN. Returns the digit string or _PIN_CANCELLED."""
+
+    CSS = """
+    #modal-dialog {
+        width: 50;
+        padding: 1 2;
+        max-height: 14;
+    }
+
+    #modal-title {
+        color: $primary;
+    }
+
+    #pin-desc {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
+        margin: 1 0;
+    }
+
+    #pin-desc.error {
+        color: $error;
+    }
+
+    #pin-field {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        padding: 0 1;
+        border: heavy $accent;
+        margin: 1 0;
+    }
+    """
+
+    _LEN = 4
+
+    def __init__(self, title: str = "Enter PIN", description: str = "Type 4 digits", **kwargs):
+        super().__init__(**kwargs)
+        self._title = title
+        self._description = description
+        self._pin = ""
+        self._blink_on = True
+        self._error = ""
+
+    def compose(self) -> ComposeResult:
+        caps = getattr(self.app, 'caps_text', lambda x: x)
+        with Vertical(id="modal-dialog"):
+            yield Static(caps(self._title), id="modal-title")
+            yield Static(self._description, id="pin-desc")
+            yield Static("", id="pin-field")
+            yield Static(caps("Enter  Esc"), id="modal-hint")
+
+    def on_mount(self) -> None:
+        self._update_ui()
+        self.set_interval(0.5, self._toggle_blink)
+
+    def _toggle_blink(self) -> None:
+        self._blink_on = not self._blink_on
+        self._update_ui()
+
+    def _update_ui(self) -> None:
+        try:
+            field = self.query_one("#pin-field", Static)
+            desc = self.query_one("#pin-desc", Static)
+        except Exception:
+            return
+        filled = "● " * len(self._pin)
+        empty = "_ " * (self._LEN - len(self._pin))
+        cursor_on = self._blink_on and len(self._pin) < self._LEN
+        if cursor_on:
+            empty = "█ " + "_ " * max(0, self._LEN - len(self._pin) - 1)
+        field.update((filled + empty).rstrip())
+        if self._error:
+            desc.update(self._error)
+            desc.add_class("error")
+        else:
+            desc.update(self._description)
+            desc.remove_class("error")
+
+    def _submit(self) -> None:
+        if len(self._pin) == self._LEN:
+            self.dismiss(self._pin)
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+
+    async def handle_keyboard_action(self, action) -> None:
+        if isinstance(action, ControlAction) and action.is_down:
+            key = action.action
+            if key == 'escape':
+                self.dismiss(_PIN_CANCELLED)
+                return
+            if key == 'enter':
+                if len(self._pin) == self._LEN:
+                    self.dismiss(self._pin)
+                else:
+                    self._error = "Type 4 digits."
+                    self._update_ui()
+                return
+            if key == 'backspace' and self._pin:
+                self._pin = self._pin[:-1]
+                self._error = ""
+                self._update_ui()
+                return
+            return
+
+        if isinstance(action, CharacterAction):
+            if action.is_repeat:
+                return
+            char = action.char
+            if not char or not char.isdigit() or len(self._pin) >= self._LEN:
+                return
+            self._pin += char
+            self._error = ""
+            self._update_ui()
+            if len(self._pin) == self._LEN:
+                self._submit()
 
 
 class MusicLoopingScreen(PickerModal):
@@ -616,7 +785,7 @@ def _get_menu_items() -> list:
     Items whose id starts with `sec-` are section headers: visual-only,
     skipped by keyboard navigation, no action when activated.
     """
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_silent_mode
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_silent_mode, get_volume_lock, get_parent_pin
 
     items = []
 
@@ -649,11 +818,16 @@ def _get_menu_items() -> list:
     items.append(("sec-av", "Sound & Display"))
     silent_label = "Silent Mode: On" if get_silent_mode() else "Silent Mode: Off"
     items.append(("menu-silent", silent_label))
+    vol_lock = get_volume_lock()
+    vol_lock_label = f"Volume Lock: {vol_lock}%" if vol_lock is not None else "Volume Lock: Off"
+    items.append(("menu-volume-lock", vol_lock_label))
     items.append(("menu-volume", "Adjust Volume"))
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
 
     items.append(("sec-advanced", "Advanced"))
+    pin_label = "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"
+    items.append(("menu-parent-pin", pin_label))
     items.append(("menu-shell", "Open Terminal"))
     items.append(("menu-support", "Support Info"))
     if _is_dev_environment():
@@ -1633,6 +1807,10 @@ class ParentMenu(PurpleModal):
             self._open_all_caps()
         elif item_id == "menu-silent":
             self._open_silent_mode()
+        elif item_id == "menu-volume-lock":
+            self._open_volume_lock()
+        elif item_id == "menu-parent-pin":
+            self._open_parent_pin()
         elif item_id == "menu-display":
             self._open_display_settings()
         elif item_id == "menu-volume":
@@ -1822,10 +2000,110 @@ class ParentMenu(PurpleModal):
         from ..settings import set_silent_mode
         set_silent_mode(new_value)
         self.app._silent_mode = new_value
+        if new_value and self.app._volume_lock is not None:
+            self.app._volume_lock = None
+            self._refresh_volume_lock_label()
         self.app._apply_volume()
         label = "Silent Mode: On" if new_value else "Silent Mode: Off"
         try:
             widget = self.query_one("#menu-silent", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_volume_lock(self) -> None:
+        def on_result(result):
+            if result is _VOLUME_LOCK_CANCELLED:
+                return
+            self._apply_volume_lock(result)
+        self.app.push_screen(VolumeLockScreen(), callback=on_result)
+
+    def _apply_volume_lock(self, new_value) -> None:
+        from ..settings import set_volume_lock
+        set_volume_lock(new_value)
+        self.app._volume_lock = new_value
+        if new_value is not None and self.app._silent_mode:
+            self.app._silent_mode = False
+            try:
+                widget = self.query_one("#menu-silent", ParentMenuItem)
+                widget.update("Silent Mode: Off")
+            except Exception:
+                pass
+        self.app._apply_volume()
+        self._refresh_volume_lock_label()
+
+    def _refresh_volume_lock_label(self) -> None:
+        vol_lock = self.app._volume_lock
+        label = f"Volume Lock: {vol_lock}%" if vol_lock is not None else "Volume Lock: Off"
+        try:
+            widget = self.query_one("#menu-volume-lock", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_parent_pin(self) -> None:
+        from ..settings import get_parent_pin
+        current = get_parent_pin()
+        if current is None:
+            self._start_set_pin_flow()
+        else:
+            def on_verify(result):
+                if result is _PIN_CANCELLED or result != current:
+                    return
+                self._open_pin_action_picker()
+            self.app.push_screen(PinEntryScreen("Enter Current PIN"), callback=on_verify)
+
+    def _open_pin_action_picker(self) -> None:
+        def on_action(result):
+            if result is _PIN_ACTION_CANCELLED:
+                return
+            if result == _PIN_ACTION_CHANGE:
+                self._start_set_pin_flow()
+            elif result == _PIN_ACTION_CLEAR:
+                self._clear_pin()
+        self.app.push_screen(PinActionScreen(), callback=on_action)
+
+    def _start_set_pin_flow(self) -> None:
+        def on_first(first):
+            if first is _PIN_CANCELLED:
+                return
+            def on_second(second):
+                if second is _PIN_CANCELLED:
+                    return
+                if second != first:
+                    self.app.push_screen(
+                        PinEntryScreen("Enter New PIN", description="Didn't match, try again."),
+                        callback=lambda r: self._restart_set_pin(r),
+                    )
+                    return
+                self._save_pin(first)
+            self.app.push_screen(PinEntryScreen("Confirm New PIN"), callback=on_second)
+        self.app.push_screen(PinEntryScreen("Enter New PIN"), callback=on_first)
+
+    def _restart_set_pin(self, first) -> None:
+        if first is _PIN_CANCELLED:
+            return
+        def on_second(second):
+            if second is _PIN_CANCELLED or second != first:
+                return
+            self._save_pin(first)
+        self.app.push_screen(PinEntryScreen("Confirm New PIN"), callback=on_second)
+
+    def _save_pin(self, pin: str) -> None:
+        from ..settings import set_parent_pin
+        set_parent_pin(pin)
+        self._refresh_pin_label()
+
+    def _clear_pin(self) -> None:
+        from ..settings import set_parent_pin
+        set_parent_pin(None)
+        self._refresh_pin_label()
+
+    def _refresh_pin_label(self) -> None:
+        from ..settings import get_parent_pin
+        label = "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"
+        try:
+            widget = self.query_one("#menu-parent-pin", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

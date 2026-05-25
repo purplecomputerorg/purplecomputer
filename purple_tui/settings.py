@@ -20,6 +20,8 @@ _defaults = {
     "all_caps": False,           # Whether all rendered text is uppercased at render time
     "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
     "silent_mode": False,        # Parent lock: all sound off, volume keys disabled, until a parent turns it back on
+    "volume_lock": None,         # Parent lock: None = off, 0-100 = lock playback at that level; volume keys disabled
+    "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
 }
 
 
@@ -123,6 +125,32 @@ def get_silent_mode() -> bool:
 def set_silent_mode(enabled: bool) -> None:
     settings = load_settings()
     settings["silent_mode"] = enabled
+    if enabled:
+        settings["volume_lock"] = None
+    save_settings(settings)
+
+
+def get_volume_lock() -> int | None:
+    """Locked playback volume (0-100), or None if not locked."""
+    return load_settings()["volume_lock"]
+
+
+def set_volume_lock(level: int | None) -> None:
+    settings = load_settings()
+    settings["volume_lock"] = level
+    if level is not None:
+        settings["silent_mode"] = False
+    save_settings(settings)
+
+
+def get_parent_pin() -> str | None:
+    """Optional 4-digit parent menu PIN, or None if unset."""
+    return load_settings()["parent_pin"]
+
+
+def set_parent_pin(pin: str | None) -> None:
+    settings = load_settings()
+    settings["parent_pin"] = pin
     save_settings(settings)
 
 

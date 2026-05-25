@@ -1026,11 +1026,13 @@ class PurpleApp(App):
         set_logind_power_key("ignore")
 
         from .settings import (get_littles_mode, get_code_panel, get_music_looping,
-                               get_music_key_switching, get_all_caps, get_volume_level, get_silent_mode)
+                               get_music_key_switching, get_all_caps, get_volume_level, get_silent_mode,
+                               get_volume_lock)
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
         self.volume_level = get_volume_level()
         self._silent_mode = get_silent_mode()
+        self._volume_lock = get_volume_lock()
         saved_littles = get_littles_mode()
         if saved_littles:
             self._littles_mode = saved_littles
@@ -2403,7 +2405,7 @@ class PurpleApp(App):
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off"""
-        if self._silent_mode:
+        if self._silent_mode or self._volume_lock is not None:
             return
         if self.volume_level > 0:
             # Mute: save current level and set to 0
@@ -2416,7 +2418,7 @@ class PurpleApp(App):
 
     def action_volume_down(self) -> None:
         """Decrease volume"""
-        if self._silent_mode:
+        if self._silent_mode or self._volume_lock is not None:
             return
         # Find current position in VOLUME_LEVELS and go down
         current_idx = 0
@@ -2429,7 +2431,7 @@ class PurpleApp(App):
 
     def action_volume_up(self) -> None:
         """Increase volume"""
-        if self._silent_mode:
+        if self._silent_mode or self._volume_lock is not None:
             return
         # Find current position in VOLUME_LEVELS and go up
         current_idx = len(VOLUME_LEVELS) - 1
@@ -2689,13 +2691,17 @@ class PurpleApp(App):
         return None
 
     def _effective_volume(self) -> int:
-        """Volume actually applied to playback: 0 while the parent silence lock is on."""
-        return 0 if self._silent_mode else self.volume_level
+        """Volume actually applied to playback: 0 while the parent silence lock is on, locked level if volume lock is set."""
+        if self._silent_mode:
+            return 0
+        if self._volume_lock is not None:
+            return self._volume_lock
+        return self.volume_level
 
     @property
     def volume_locked(self) -> bool:
-        """Volume controls should be hidden/disabled: audio isn't working, or the parent silence lock is on."""
-        return self.audio_ok is False or self._silent_mode
+        """Volume controls should be hidden/disabled: audio isn't working, or a parent lock is on."""
+        return self.audio_ok is False or self._silent_mode or self._volume_lock is not None
 
     def _apply_volume_system(self) -> None:
         """Set system volume via ALSA to match the effective volume (non-blocking).
@@ -2822,7 +2828,20 @@ class PurpleApp(App):
         self.keyboard.escape_hold.reset()
         self._keyboard_state_machine.reset()  # Clear all pressed keys state
         self.clear_notifications()
-        # In littles mode, show the exit screen instead of the parent menu
+        from .settings import get_parent_pin
+        pin = get_parent_pin()
+        if pin:
+            from .rooms.parent_menu import PinEntryScreen, _PIN_CANCELLED
+            def after_pin(result):
+                if result is _PIN_CANCELLED or result != pin:
+                    return
+                self._open_parent_menu_after_pin()
+            self.push_screen(PinEntryScreen("Enter Parent PIN"), callback=after_pin)
+            return
+        self._open_parent_menu_after_pin()
+
+    def _open_parent_menu_after_pin(self) -> None:
+        """Push the actual parent menu (or littles exit) after any PIN gate has passed."""
         if self._littles_mode:
             from .rooms.parent_menu import LittlesExitScreen
             self.push_screen(LittlesExitScreen(), callback=self._on_littles_exit_dismissed)

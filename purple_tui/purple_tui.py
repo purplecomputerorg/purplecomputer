@@ -171,6 +171,21 @@ def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, activ
     _set_viewport_hints(viewport, left=left, right=right, active_theme=active_theme)
 
 
+def _volume_badge(vol: int) -> tuple[str, str, str]:
+    """Map a 0-100 volume level to (icon, 10-cell bars, label)."""
+    if vol == 0:
+        return ICON_VOLUME_OFF, "░░░░░░░░░░", "Sound Off"
+    if vol <= 15:
+        return ICON_VOLUME_LOW, "██░░░░░░░░", "Whisper"
+    if vol <= 35:
+        return ICON_VOLUME_LOW, "████░░░░░░", "Quiet"
+    if vol <= 60:
+        return ICON_VOLUME_MED, "██████░░░░", "Medium"
+    if vol <= 85:
+        return ICON_VOLUME_HIGH, "████████░░", "Loud"
+    return ICON_VOLUME_HIGH, "██████████", "Full"
+
+
 class Room(Enum):
     """The 3 core rooms of Purple Computer"""
     PLAY = 1     # Math and emoji REPL
@@ -2405,7 +2420,7 @@ class PurpleApp(App):
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off"""
-        if self._silent_mode or self._volume_lock is not None:
+        if self._notify_volume_lock_blocked():
             return
         if self.volume_level > 0:
             # Mute: save current level and set to 0
@@ -2418,7 +2433,7 @@ class PurpleApp(App):
 
     def action_volume_down(self) -> None:
         """Decrease volume"""
-        if self._silent_mode or self._volume_lock is not None:
+        if self._notify_volume_lock_blocked():
             return
         # Find current position in VOLUME_LEVELS and go down
         current_idx = 0
@@ -2431,7 +2446,7 @@ class PurpleApp(App):
 
     def action_volume_up(self) -> None:
         """Increase volume"""
-        if self._silent_mode or self._volume_lock is not None:
+        if self._notify_volume_lock_blocked():
             return
         # Find current position in VOLUME_LEVELS and go up
         current_idx = len(VOLUME_LEVELS) - 1
@@ -2746,34 +2761,26 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        # Build volume feedback message (6 levels: 0, 15, 35, 60, 85, 100)
-        if vol == 0:
-            icon = ICON_VOLUME_OFF
-            label = "Sound Off"
-            bars = "░░░░░░░░░░"
-        elif vol <= 15:
-            icon = ICON_VOLUME_LOW
-            label = "Whisper"
-            bars = "██░░░░░░░░"
-        elif vol <= 35:
-            icon = ICON_VOLUME_LOW
-            label = "Quiet"
-            bars = "████░░░░░░"
-        elif vol <= 60:
-            icon = ICON_VOLUME_MED
-            label = "Medium"
-            bars = "██████░░░░"
-        elif vol <= 85:
-            icon = ICON_VOLUME_HIGH
-            label = "Loud"
-            bars = "████████░░"
-        else:
-            icon = ICON_VOLUME_HIGH
-            label = "Full"
-            bars = "██████████"
-
+        icon, bars, label = _volume_badge(vol)
         self.clear_notifications()
         self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+
+    def _notify_volume_lock_blocked(self) -> bool:
+        """If a parent lock blocks volume changes, flash the current locked badge.
+
+        Returns True iff the press should be swallowed (lock or silent mode on),
+        so the volume key handlers can early-return without changing the level.
+        """
+        if self._silent_mode:
+            self.clear_notifications()
+            self.notify(f"{ICON_VOLUME_OFF}  ░░░░░░░░░░  Silent", timeout=1.5)
+            return True
+        if self._volume_lock is not None:
+            icon, bars, _ = _volume_badge(self._volume_lock)
+            self.clear_notifications()
+            self.notify(f"{icon}  {bars}  Locked", timeout=1.5)
+            return True
+        return False
 
     def action_cycle_view(self) -> None:
         """Cycle through views: Screen -> Line -> Ears -> Screen (Ctrl+V)"""

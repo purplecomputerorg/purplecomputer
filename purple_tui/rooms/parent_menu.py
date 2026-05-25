@@ -551,10 +551,13 @@ class PinEntryScreen(PurpleModal):
     _LEN = 4
 
     def __init__(self, title: str = "Enter PIN", description: str = "Type 4 digits",
+                 verify=None, error_message: str = "Wrong PIN, try again.",
                  ignore_held_escape: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._title = title
         self._description = description
+        self._verify = verify
+        self._error_message = error_message
         self._pin = ""
         self._blink_on = True
         self._error = ""
@@ -596,8 +599,16 @@ class PinEntryScreen(PurpleModal):
             desc.remove_class("error")
 
     def _submit(self) -> None:
-        if len(self._pin) == self._LEN:
-            self.dismiss(self._pin)
+        if len(self._pin) != self._LEN:
+            self._error = "Type 4 digits."
+            self._update_ui()
+            return
+        if self._verify is not None and not self._verify(self._pin):
+            self._pin = ""
+            self._error = self._error_message
+            self._update_ui()
+            return
+        self.dismiss(self._pin)
 
     def on_key(self, event: events.Key) -> None:
         event.stop()
@@ -613,19 +624,12 @@ class PinEntryScreen(PurpleModal):
                 return
             if key == 'escape':
                 self.dismiss(_PIN_CANCELLED)
-                return
-            if key == 'enter':
-                if len(self._pin) == self._LEN:
-                    self.dismiss(self._pin)
-                else:
-                    self._error = "Type 4 digits."
-                    self._update_ui()
-                return
-            if key == 'backspace' and self._pin:
+            elif key == 'enter':
+                self._submit()
+            elif key == 'backspace' and self._pin:
                 self._pin = self._pin[:-1]
                 self._error = ""
                 self._update_ui()
-                return
             return
 
         if isinstance(action, CharacterAction):
@@ -2053,62 +2057,55 @@ class ParentMenu(PurpleModal):
         current = get_parent_pin()
         if current is None:
             self._start_set_pin_flow()
-        else:
-            def on_verify(result):
-                if result is _PIN_CANCELLED or result != current:
-                    return
-                self._open_pin_action_picker()
-            self.app.push_screen(PinEntryScreen("Enter Current PIN"), callback=on_verify)
+            return
 
-    def _open_pin_action_picker(self) -> None:
         def on_action(result):
-            if result is _PIN_ACTION_CANCELLED:
-                return
             if result == _PIN_ACTION_CHANGE:
                 self._start_set_pin_flow()
             elif result == _PIN_ACTION_CLEAR:
-                self._clear_pin()
-        self.app.push_screen(PinActionScreen(), callback=on_action)
+                self._save_pin(None)
+
+        def on_verify(result):
+            if result is _PIN_CANCELLED:
+                return
+            self.app.push_screen(PinActionScreen(), callback=on_action)
+
+        self.app.push_screen(
+            PinEntryScreen("Enter Current PIN", verify=lambda p: p == current),
+            callback=on_verify,
+        )
 
     def _start_set_pin_flow(self) -> None:
         def on_first(first):
             if first is _PIN_CANCELLED:
                 return
-            def on_second(second):
+
+            def on_confirm(second):
                 if second is _PIN_CANCELLED:
                     return
-                if second != first:
-                    self.app.push_screen(
-                        PinEntryScreen("Enter New PIN", description="Didn't match, try again."),
-                        callback=lambda r: self._restart_set_pin(r),
-                    )
-                    return
                 self._save_pin(first)
-            self.app.push_screen(PinEntryScreen("Confirm New PIN"), callback=on_second)
-        self.app.push_screen(PinEntryScreen("Enter New PIN"), callback=on_first)
 
-    def _restart_set_pin(self, first) -> None:
-        if first is _PIN_CANCELLED:
-            return
-        def on_second(second):
-            if second is _PIN_CANCELLED or second != first:
-                return
-            self._save_pin(first)
-        self.app.push_screen(PinEntryScreen("Confirm New PIN"), callback=on_second)
+            self.app.push_screen(
+                PinEntryScreen(
+                    "Confirm New PIN",
+                    verify=lambda p: p == first,
+                    error_message="Didn't match, try again.",
+                ),
+                callback=on_confirm,
+            )
 
-    def _save_pin(self, pin: str) -> None:
+        self.app.push_screen(
+            PinEntryScreen(
+                "Enter New PIN",
+                description="Type 4 digits. Forgot it? Reinstall from USB to reset.",
+            ),
+            callback=on_first,
+        )
+
+    def _save_pin(self, pin: str | None) -> None:
         from ..settings import set_parent_pin
         set_parent_pin(pin)
-        self._refresh_pin_label()
-
-    def _clear_pin(self) -> None:
-        from ..settings import set_parent_pin
-        set_parent_pin(None)
-        self._refresh_pin_label()
-
-    def _refresh_pin_label(self) -> None:
-        from ..settings import get_parent_pin
-        label = "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"
+        label = "Parent PIN: On" if pin else "Parent PIN: Off"
         try:
             widget = self.query_one("#menu-parent-pin", ParentMenuItem)
             widget.update(label)

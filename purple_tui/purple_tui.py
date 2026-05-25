@@ -2833,10 +2833,17 @@ class PurpleApp(App):
         if pin:
             from .rooms.parent_menu import PinEntryScreen, _PIN_CANCELLED
             def after_pin(result):
-                if result is _PIN_CANCELLED or result != pin:
+                if result is _PIN_CANCELLED:
                     return
                 self._open_parent_menu_after_pin()
-            self.push_screen(PinEntryScreen("Enter Parent PIN", ignore_held_escape=True), callback=after_pin)
+            self.push_screen(
+                PinEntryScreen(
+                    "Enter Parent PIN",
+                    verify=lambda p: p == pin,
+                    ignore_held_escape=True,
+                ),
+                callback=after_pin,
+            )
             return
         self._open_parent_menu_after_pin()
 

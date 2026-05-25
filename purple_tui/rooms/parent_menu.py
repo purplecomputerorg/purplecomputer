@@ -550,7 +550,8 @@ class PinEntryScreen(PurpleModal):
 
     _LEN = 4
 
-    def __init__(self, title: str = "Enter PIN", description: str = "Type 4 digits",
+    def __init__(self, title: str = "Enter PIN",
+                 description: str = "Type 4 digits. Forgot it? Reinstall from USB to reset.",
                  verify=None, error_message: str = "Wrong PIN, try again.",
                  ignore_held_escape: bool = False, **kwargs):
         super().__init__(**kwargs)
@@ -2094,13 +2095,7 @@ class ParentMenu(PurpleModal):
                 callback=on_confirm,
             )
 
-        self.app.push_screen(
-            PinEntryScreen(
-                "Enter New PIN",
-                description="Type 4 digits. Forgot it? Reinstall from USB to reset.",
-            ),
-            callback=on_first,
-        )
+        self.app.push_screen(PinEntryScreen("Enter New PIN"), callback=on_first)
 
     def _save_pin(self, pin: str | None) -> None:
         from ..settings import set_parent_pin

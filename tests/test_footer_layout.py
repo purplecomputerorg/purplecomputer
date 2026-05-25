@@ -130,8 +130,8 @@ class TestArrowHintAlignment:
         _run(_test())
 
 
-class TestArrowHintArtOnly:
-    def test_present_in_art_absent_elsewhere(self):
+class TestArrowHintPerRoom:
+    def test_each_room_shows_its_arrow_hint(self):
         async def _test():
             app = PurpleApp()
             async with app.run_test(size=APP_SIZE) as pilot:
@@ -142,10 +142,10 @@ class TestArrowHintArtOnly:
                 assert "Arrows move" in str(hint.render())
 
                 await _switch_room(app, pilot, "play")
-                assert str(hint.render()) == ""
+                assert "Arrows scroll" in str(hint.render())
 
                 await _switch_room(app, pilot, "music")
-                assert str(hint.render()) == ""
+                assert "Arrows change key" in str(hint.render())
         _run(_test())
 
 

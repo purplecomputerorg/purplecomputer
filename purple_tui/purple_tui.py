@@ -185,7 +185,7 @@ class View(Enum):
     EARS = 3     # Screen off (blank)
 
 
-from .hints import TITLE_MUTED, TITLE_PRIMARY, arrow_keys_text
+from .hints import TITLE_MUTED, TITLE_PRIMARY, room_arrow_hint
 
 CODE_PANEL_CLOSE_HINT_TEXT = "Hold Space: close code"
 CODE_PANEL_CLOSE_HINT = f"{ICON_ROBOT} {CODE_PANEL_CLOSE_HINT_TEXT} {ICON_ROBOT}"
@@ -415,7 +415,7 @@ class RoomIndicator(Horizontal):
         self.current_room = current_room
 
     def _arrow_hint_for(self, room: Room):
-        return arrow_keys_text() if room == Room.ART else ""
+        return room_arrow_hint(room)
 
     def compose(self) -> ComposeResult:
         yield Static(f"{ICON_KEYBOARD}  Purple is always keyboard only", id="keys-spacer-left")

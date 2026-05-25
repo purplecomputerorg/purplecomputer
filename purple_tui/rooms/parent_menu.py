@@ -476,19 +476,29 @@ class SilentModeScreen(PickerModal):
         self._selected = 0 if get_silent_mode() else 1
 
 
+# Picker bar art for each lockable volume level (single source of truth).
+_VOLUME_LOCK_BARS = {
+    15:  "██░░░░░░░░",
+    35:  "████░░░░░░",
+    60:  "██████░░░░",
+    85:  "████████░░",
+    100: "██████████",
+}
+
+
+def _volume_lock_menu_label(level) -> str:
+    if level is None:
+        return "Volume Lock: Off"
+    return f"Volume Lock: {_VOLUME_LOCK_BARS.get(level, '')}"
+
+
 class VolumeLockScreen(PickerModal):
     """Lock playback at a fixed volume so the kid can't change it."""
 
     TITLE = "Volume Lock"
     DESCRIPTION = "Lock the volume here. The volume buttons stay off until you turn this back off."
-    OPTIONS = [
-        (None, "Off"),
-        (15, "15%"),
-        (35, "35%"),
-        (60, "60%"),
-        (85, "85%"),
-        (100, "100%"),
-    ]
+    OPTIONS = [(None, "Off")] + [(v, _VOLUME_LOCK_BARS[v]) for v in (15, 35, 60, 85, 100)]
+    HINT = "▲ ▼ choose   Space test   Enter confirm   Esc cancel"
     escape_value = _VOLUME_LOCK_CANCELLED
 
     def __init__(self, **kwargs):
@@ -499,6 +509,47 @@ class VolumeLockScreen(PickerModal):
             if value == current:
                 self._selected = i
                 break
+        self._test_sound = None
+
+    async def handle_keyboard_action(self, action) -> None:
+        if (isinstance(action, ControlAction) and action.action == 'space'
+                and action.is_down and not action.is_repeat):
+            self._play_test_sound()
+            return
+        await super().handle_keyboard_action(action)
+
+    def _play_test_sound(self) -> None:
+        value = self.OPTIONS[self._selected][0]
+        if value is None:
+            return
+        # Preview the speaker level: amixer to the lock value, ignoring
+        # current silent mode so the parent can hear the test.
+        try:
+            from ..constants import SYSTEM_VOLUME_MAX
+            system_vol = round(value * SYSTEM_VOLUME_MAX / 100)
+            subprocess.Popen(
+                ["amixer", "sset", "Master", f"{system_vol}%"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+        try:
+            from ..audio import play_safe
+            from .music_room import warm_mixer
+            if not warm_mixer():
+                return
+            import pygame.mixer
+            if self._test_sound is None:
+                sounds_path = (Path(__file__).parent.parent.parent
+                               / "packs" / "core-sounds" / "content")
+                test_path = sounds_path / "glockenspiel" / "c5.ogg"
+                if test_path.exists():
+                    self._test_sound = pygame.mixer.Sound(str(test_path))
+                    self._test_sound.set_volume(0.4)
+            if self._test_sound is not None:
+                play_safe(self._test_sound)
+        except Exception:
+            pass
 
 
 class PinActionScreen(PickerModal):
@@ -830,9 +881,7 @@ def _get_menu_items() -> list:
     items.append(("sec-av", "Sound & Display"))
     silent_label = "Silent Mode: On" if get_silent_mode() else "Silent Mode: Off"
     items.append(("menu-silent", silent_label))
-    vol_lock = get_volume_lock()
-    vol_lock_label = f"Volume Lock: {vol_lock}%" if vol_lock is not None else "Volume Lock: Off"
-    items.append(("menu-volume-lock", vol_lock_label))
+    items.append(("menu-volume-lock", _volume_lock_menu_label(get_volume_lock())))
     items.append(("menu-volume", "Adjust Volume"))
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
@@ -2026,6 +2075,8 @@ class ParentMenu(PurpleModal):
     def _open_volume_lock(self) -> None:
         def on_result(result):
             if result is _VOLUME_LOCK_CANCELLED:
+                # Space-to-test may have nudged the system mixer; restore.
+                self.app._apply_volume_system()
                 return
             self._apply_volume_lock(result)
         self.app.push_screen(VolumeLockScreen(), callback=on_result)
@@ -2045,8 +2096,7 @@ class ParentMenu(PurpleModal):
         self._refresh_volume_lock_label()
 
     def _refresh_volume_lock_label(self) -> None:
-        vol_lock = self.app._volume_lock
-        label = f"Volume Lock: {vol_lock}%" if vol_lock is not None else "Volume Lock: Off"
+        label = _volume_lock_menu_label(self.app._volume_lock)
         try:
             widget = self.query_one("#menu-volume-lock", ParentMenuItem)
             widget.update(label)

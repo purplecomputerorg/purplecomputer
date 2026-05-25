@@ -92,6 +92,7 @@ class PickerModal(PurpleModal):
     TITLE: str = ""
     DESCRIPTION: str = ""
     OPTIONS: list = []
+    HINT: str = "▲ ▼ choose   Enter confirm   Esc cancel"
     default_selected: int = 0
     escape_value = None  # What to dismiss with on Escape
 
@@ -115,7 +116,7 @@ class PickerModal(PurpleModal):
                     id=f"picker-opt-{i}",
                     classes="picker-option",
                 )
-            yield Static("▲ ▼ choose   Enter confirm   Esc cancel", id="modal-hint")
+            yield Static(self.HINT, id="modal-hint")
 
     def on_mount(self) -> None:
         self._update_selection()

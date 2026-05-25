@@ -1423,6 +1423,55 @@ class TestSpeakable:
         assert "2 dogs" in speak
         assert "🐱" not in speak
 
+    def test_5x5_speaks_equals(self, evaluator):
+        # After alnum-run normalization the submit handler passes "5 x 5"
+        result = evaluator.evaluate("5 x 5")
+        speak = evaluator._make_speakable("5 x 5", result)
+        assert speak == "5 times 5 equals 25"
+
+    def test_5x5_with_label_speaks_equals(self, evaluator):
+        result = evaluator.evaluate("5 x 5 ducks")
+        speak = evaluator._make_speakable("5 x 5 ducks", result)
+        assert speak == "5 times 5 ducks equals 25 ducks"
+
+    def test_joined_label_separated_in_speech(self, evaluator):
+        # "5+5dinos" -> normalized to "5+5 dinos" so TTS gets a standalone "dinos"
+        # instead of the fused token that espeak mispronounces.
+        normalized = SimpleEvaluator.split_alnum_runs("5+5dinos")
+        assert normalized == "5+5 dinos"
+        result = evaluator.evaluate(normalized)
+        speak = evaluator._make_speakable(normalized, result)
+        assert " dinos" in speak  # space before, not fused
+        assert "5dinos" not in speak
+        assert "equals" in speak
+
+
+class TestSplitAlnumRuns:
+    """Boundary normalization: digit<->letter runs get a space between them."""
+
+    def test_digit_letter(self):
+        assert SimpleEvaluator.split_alnum_runs("5dinos") == "5 dinos"
+
+    def test_letter_digit(self):
+        assert SimpleEvaluator.split_alnum_runs("say5") == "say 5"
+
+    def test_digit_letter_digit(self):
+        assert SimpleEvaluator.split_alnum_runs("5x5") == "5 x 5"
+
+    def test_already_spaced_unchanged(self):
+        assert SimpleEvaluator.split_alnum_runs("5 dinos") == "5 dinos"
+        assert SimpleEvaluator.split_alnum_runs("say 5+5") == "say 5+5"
+
+    def test_idempotent(self):
+        once = SimpleEvaluator.split_alnum_runs("say5x5dinos")
+        twice = SimpleEvaluator.split_alnum_runs(once)
+        assert once == twice == "say 5 x 5 dinos"
+
+    def test_pure_math_unchanged(self):
+        # No digit<->letter boundaries: nothing to split.
+        assert SimpleEvaluator.split_alnum_runs("5+5") == "5+5"
+        assert SimpleEvaluator.split_alnum_runs("5 * 5") == "5 * 5"
+
 
 class TestColorMixingLogic:
     """Test the actual color mixing behavior."""

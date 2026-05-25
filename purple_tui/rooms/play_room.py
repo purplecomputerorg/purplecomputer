@@ -821,7 +821,7 @@ class PlayMode(Vertical):
         # 1. "!" anywhere in text (strip it)
         # 2. "say" or "talk" prefix (strip it)
         force_speak = False
-        eval_text = input_text
+        eval_text = SimpleEvaluator.split_alnum_runs(input_text)
 
         # Check for ! anywhere
         if '!' in eval_text:
@@ -982,6 +982,14 @@ class SimpleEvaluator:
     PLUS_PATTERN = r'\+|(?<!\w)plus(?!\w)'
     # Regex for valid math expression characters
     MATH_CHARS_PATTERN = r'^[\d\s\+\-\*\/\(\)\.]+$'
+
+    # Split joined alphanumeric runs ("5dinos" -> "5 dinos", "say5" -> "say 5")
+    # so prefix detection and TTS see whitespace-delimited tokens. Idempotent.
+    _ALNUM_BOUNDARY = re.compile(r'(?<=\d)(?=[a-z])|(?<=[a-z])(?=\d)', re.IGNORECASE)
+
+    @classmethod
+    def split_alnum_runs(cls, text: str) -> str:
+        return cls._ALNUM_BOUNDARY.sub(' ', text)
 
     # Number words to digits (for kids: zero through twenty, decades, hundred)
     NUMBER_WORDS = {
@@ -2413,7 +2421,6 @@ class SimpleEvaluator:
         # Convert operators to spoken words
         def speakable_ops(text: str) -> str:
             t = text.lower()
-            t = re.sub(r'(\d)\s*x\s*(\d)', r'\1 times \2', t)
             t = re.sub(r'\bx\b', ' times ', t)
             return (t
                 .replace("×", " times ")

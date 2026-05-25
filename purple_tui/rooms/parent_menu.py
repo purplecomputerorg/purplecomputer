@@ -550,13 +550,15 @@ class PinEntryScreen(PurpleModal):
 
     _LEN = 4
 
-    def __init__(self, title: str = "Enter PIN", description: str = "Type 4 digits", **kwargs):
+    def __init__(self, title: str = "Enter PIN", description: str = "Type 4 digits",
+                 ignore_held_escape: bool = False, **kwargs):
         super().__init__(**kwargs)
         self._title = title
         self._description = description
         self._pin = ""
         self._blink_on = True
         self._error = ""
+        self._ignore_keys = {'escape'} if ignore_held_escape else set()
 
     def compose(self) -> ComposeResult:
         caps = getattr(self.app, 'caps_text', lambda x: x)
@@ -602,8 +604,13 @@ class PinEntryScreen(PurpleModal):
         event.prevent_default()
 
     async def handle_keyboard_action(self, action) -> None:
-        if isinstance(action, ControlAction) and action.is_down:
+        if isinstance(action, ControlAction):
             key = action.action
+            if not action.is_down:
+                self._ignore_keys.discard(key)
+                return
+            if key in self._ignore_keys:
+                return
             if key == 'escape':
                 self.dismiss(_PIN_CANCELLED)
                 return

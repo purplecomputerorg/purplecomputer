@@ -2836,7 +2836,7 @@ class PurpleApp(App):
                 if result is _PIN_CANCELLED or result != pin:
                     return
                 self._open_parent_menu_after_pin()
-            self.push_screen(PinEntryScreen("Enter Parent PIN"), callback=after_pin)
+            self.push_screen(PinEntryScreen("Enter Parent PIN", ignore_held_escape=True), callback=after_pin)
             return
         self._open_parent_menu_after_pin()
 

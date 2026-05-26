@@ -2111,8 +2111,7 @@ class ParentMenu(PurpleModal):
 
     def _open_parent_pin(self) -> None:
         from ..settings import get_parent_pin
-        current = get_parent_pin()
-        if current is None:
+        if get_parent_pin() is None:
             self._start_set_pin_flow()
             return
 
@@ -2122,15 +2121,7 @@ class ParentMenu(PurpleModal):
             elif result == _PIN_ACTION_CLEAR:
                 self._save_pin(None)
 
-        def on_verify(result):
-            if result is _PIN_CANCELLED:
-                return
-            self.app.push_screen(PinActionScreen(), callback=on_action)
-
-        self.app.push_screen(
-            PinEntryScreen("Enter Current PIN", verify=lambda p: p == current),
-            callback=on_verify,
-        )
+        self.app.push_screen(PinActionScreen(), callback=on_action)
 
     def _start_set_pin_flow(self) -> None:
         def on_first(first):

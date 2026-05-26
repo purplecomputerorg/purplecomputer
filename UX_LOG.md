@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Volume Lock modal wording, less confusing**: The first option now reads "No Lock" instead of "Off" so it isn't mistaken for "sound off", and the description now reads "Pin the volume at one level. The volume keys won't change it until you remove the lock." instead of the previous wording that overloaded "off" for both the volume keys and the lock state.
 - **Volume keys flash the lock state instead of doing nothing**: When Volume Lock or Silent Mode is on, pressing the volume up/down/mute media keys now briefly shows the locked bars with "Locked" (or empty bars with "Silent") in the corner notification, so a kid pressing the keys gets feedback that the keys aren't broken — they're locked. The level still doesn't change.
 - **Room switcher shows "Locked" when volume is locked**: With a Volume Lock on, the room picker's Volume slot now reads "Locked" with a volume icon matching the locked level, instead of the misleading "No Sound" (which still appears only when audio actually isn't working). Silent Mode keeps its "Silent" label.
 - **Volume Lock shows bars, space tests the level**: The Volume Lock picker now lists each option as a 10-cell bar (e.g. `██████░░░░`) instead of a percentage, with "Off" still labeled. Pressing Space plays a short glockenspiel note at the selected level so a parent can hear how loud the lock will be before confirming. Cancelling restores the original speaker level. The parent menu line also reads "Volume Lock: ██████░░░░" instead of "Volume Lock: 60%".

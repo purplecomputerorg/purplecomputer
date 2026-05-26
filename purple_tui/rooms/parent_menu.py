@@ -496,8 +496,8 @@ class VolumeLockScreen(PickerModal):
     """Lock playback at a fixed volume so the kid can't change it."""
 
     TITLE = "Volume Lock"
-    DESCRIPTION = "Lock the volume here. The volume buttons stay off until you turn this back off."
-    OPTIONS = [(None, "Off")] + [(v, _VOLUME_LOCK_BARS[v]) for v in (15, 35, 60, 85, 100)]
+    DESCRIPTION = "Pin the volume at one level. The volume keys won't change it until you remove the lock."
+    OPTIONS = [(None, "No Lock")] + [(v, _VOLUME_LOCK_BARS[v]) for v in (15, 35, 60, 85, 100)]
     HINT = "▲ ▼ choose   Space test   Enter confirm   Esc cancel"
     escape_value = _VOLUME_LOCK_CANCELLED
 

@@ -523,13 +523,16 @@ class VolumeLockScreen(PickerModal):
         if value is None:
             return
         # Preview the speaker level: amixer to the lock value, ignoring
-        # current silent mode so the parent can hear the test.
+        # current silent mode so the parent can hear the test. Use
+        # subprocess.run so the mixer change lands before sound.play() —
+        # otherwise the audio buffer can leave the device at the old level.
         try:
             from ..constants import SYSTEM_VOLUME_MAX
             system_vol = round(value * SYSTEM_VOLUME_MAX / 100)
-            subprocess.Popen(
+            subprocess.run(
                 ["amixer", "sset", "Master", f"{system_vol}%"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                check=False, timeout=2,
             )
         except Exception:
             pass
@@ -545,8 +548,11 @@ class VolumeLockScreen(PickerModal):
                 test_path = sounds_path / "glockenspiel" / "c5.ogg"
                 if test_path.exists():
                     self._test_sound = pygame.mixer.Sound(str(test_path))
-                    self._test_sound.set_volume(0.4)
+            # Scale per-sound volume too, so even on a system where amixer
+            # doesn't drive the perceived output the lower options stay
+            # quieter than the higher ones.
             if self._test_sound is not None:
+                self._test_sound.set_volume(value / 100)
                 play_safe(self._test_sound)
         except Exception:
             pass

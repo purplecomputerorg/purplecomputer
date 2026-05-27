@@ -909,7 +909,6 @@ class PurpleApp(App):
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
-        self._silent_mode = False  # Parent silence lock; volume keys disabled while True
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
 
         # Power management
@@ -1041,12 +1040,11 @@ class PurpleApp(App):
         set_logind_power_key("ignore")
 
         from .settings import (get_littles_mode, get_code_panel, get_music_looping,
-                               get_music_key_switching, get_all_caps, get_volume_level, get_silent_mode,
+                               get_music_key_switching, get_all_caps, get_volume_level,
                                get_volume_lock)
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
         self.volume_level = get_volume_level()
-        self._silent_mode = get_silent_mode()
         self._volume_lock = get_volume_lock()
         saved_littles = get_littles_mode()
         if saved_littles:
@@ -1063,7 +1061,7 @@ class PurpleApp(App):
 
         self._load_room_content()
 
-        # Set system volume to match the effective volume (0 while silent mode is locked on)
+        # Set system volume to match the effective volume (0 while a silent lock is on)
         self._apply_volume_system()
         from . import tts
         tts.set_muted(self._effective_volume() == 0)
@@ -2706,9 +2704,7 @@ class PurpleApp(App):
         return None
 
     def _effective_volume(self) -> int:
-        """Volume actually applied to playback: 0 while the parent silence lock is on, locked level if volume lock is set."""
-        if self._silent_mode:
-            return 0
+        """Volume actually applied to playback: the lock level if a parent lock is set (0 = silent), else the kid's level."""
         if self._volume_lock is not None:
             return self._volume_lock
         return self.volume_level
@@ -2716,7 +2712,7 @@ class PurpleApp(App):
     @property
     def volume_locked(self) -> bool:
         """Volume controls should be hidden/disabled: audio isn't working, or a parent lock is on."""
-        return self.audio_ok is False or self._silent_mode or self._volume_lock is not None
+        return self.audio_ok is False or self._volume_lock is not None
 
     def _apply_volume_system(self) -> None:
         """Set system volume via ALSA to match the effective volume (non-blocking).
@@ -2747,9 +2743,8 @@ class PurpleApp(App):
     def _apply_volume(self) -> None:
         """Apply volume level to TTS, system mixer, and update UI."""
         from . import tts
-        if not self._silent_mode:
-            from .settings import set_volume_level
-            set_volume_level(self.volume_level)
+        from .settings import set_volume_level
+        set_volume_level(self.volume_level)
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()
@@ -2768,17 +2763,15 @@ class PurpleApp(App):
     def _notify_volume_lock_blocked(self) -> bool:
         """If a parent lock blocks volume changes, flash the current locked badge.
 
-        Returns True iff the press should be swallowed (lock or silent mode on),
-        so the volume key handlers can early-return without changing the level.
+        Returns True iff the press should be swallowed (a lock is on), so the
+        volume key handlers can early-return without changing the level. A lock
+        at 0 is the unified "Silent" state.
         """
-        if self._silent_mode:
-            self.clear_notifications()
-            self.notify(f"{ICON_VOLUME_OFF}  ░░░░░░░░░░  Silent", timeout=1.5)
-            return True
         if self._volume_lock is not None:
             icon, bars, _ = _volume_badge(self._volume_lock)
+            label = "Silent" if self._volume_lock == 0 else "Locked"
             self.clear_notifications()
-            self.notify(f"{icon}  {bars}  Locked", timeout=1.5)
+            self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
             return True
         return False
 

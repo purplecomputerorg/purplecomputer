@@ -405,9 +405,9 @@ class RoomPickerScreen(PurpleModal):
 
     def _locked_volume_badge(self) -> tuple[str, str]:
         """Pick the icon + label for the Volume slot when it's locked."""
-        if getattr(self.app, "_silent_mode", False):
-            return ICON_VOLUME_OFF, "Silent"
         lock = getattr(self.app, "_volume_lock", None)
+        if lock == 0:
+            return ICON_VOLUME_OFF, "Silent"
         if lock is not None:
             if lock <= 35:
                 icon = ICON_VOLUME_LOW
@@ -419,7 +419,7 @@ class RoomPickerScreen(PurpleModal):
         return ICON_VOLUME_OFF, "No Sound"
 
     def _open_volume(self) -> None:
-        """Open the volume modal (skip when volume is locked: no audio, or silent mode)."""
+        """Open the kid's volume modal (skip when audio is off or a parent lock is on)."""
         if getattr(self.app, "volume_locked", False):
             return
         self.app.push_screen(VolumeModal())

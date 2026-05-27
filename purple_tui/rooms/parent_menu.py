@@ -368,12 +368,6 @@ _MUSIC_KEY_SWITCHING_CANCELLED = object()
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
 
-# SilentModeScreen dismiss value
-_SILENT_MODE_CANCELLED = object()
-
-# VolumeLockScreen dismiss value
-_VOLUME_LOCK_CANCELLED = object()
-
 # PinEntryScreen dismiss value (Esc / cancel)
 _PIN_CANCELLED = object()
 
@@ -459,76 +453,142 @@ class AllCapsScreen(PickerModal):
         self._selected = 0 if get_all_caps() else 1
 
 
-class SilentModeScreen(PickerModal):
-    """Toggle the parent silence lock."""
+class ParentVolumeModal(PurpleModal):
+    """Parent-facing volume modal: adjust + lock at current level + test sound.
 
-    TITLE = "Silent Mode"
-    DESCRIPTION = "Turn off all sound. The volume buttons stay off until you turn this back on."
-    OPTIONS = [
-        (True, "On"),
-        (False, "Off"),
-    ]
-    escape_value = _SILENT_MODE_CANCELLED
+    Slider snaps to VOLUME_LEVELS (0..100). Level 0 reads "Silent". A second
+    row toggles "Lock at this level": locking pins the kid's volume keys at
+    the slider's current value (lock=0 is the unified Silent state).
+
+    Controls:
+      ▲ ▼      switch focus between slider row and lock row
+      ◀ ▶      slider: adjust level; lock: toggle on/off
+      Space    play a test sound at the slider's current level
+      Enter    close
+      Esc      close
+    """
+
+    CSS = """
+    #modal-dialog {
+        width: 50;
+        padding: 1 2;
+    }
+
+    .vol-row {
+        width: 100%;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: round $surface-lighten-2;
+        margin: 0 1;
+    }
+
+    .vol-row.focused {
+        border: heavy $accent;
+        background: $primary;
+        color: $background;
+        text-style: bold;
+    }
+    """
+
+    _HINT_SLIDER = "▲▼ row   ◀▶ adjust   Space test"
+    _HINT_LOCK = "▲▼ row   ◀▶ toggle   Space test"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from ..settings import get_silent_mode
-        self._selected = 0 if get_silent_mode() else 1
-
-
-# Picker bar art for each lockable volume level (single source of truth).
-_VOLUME_LOCK_BARS = {
-    15:  "██░░░░░░░░",
-    35:  "████░░░░░░",
-    60:  "██████░░░░",
-    85:  "████████░░",
-    100: "██████████",
-}
-
-
-def _volume_lock_menu_label(level) -> str:
-    if level is None:
-        return "Volume Lock: Off"
-    return f"Volume Lock: {_VOLUME_LOCK_BARS.get(level, '')}"
-
-
-class VolumeLockScreen(PickerModal):
-    """Lock playback at a fixed volume so the kid can't change it."""
-
-    TITLE = "Volume Lock"
-    DESCRIPTION = "Pin the volume at one level. The volume keys won't change it until you remove the lock."
-    OPTIONS = [(None, "No Lock")] + [(v, _VOLUME_LOCK_BARS[v]) for v in (15, 35, 60, 85, 100)]
-    HINT = "▲ ▼ choose   Space test   Enter confirm   Esc cancel"
-    escape_value = _VOLUME_LOCK_CANCELLED
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        from ..settings import get_volume_lock
-        current = get_volume_lock()
-        for i, (value, *_) in enumerate(self.OPTIONS):
-            if value == current:
-                self._selected = i
-                break
+        self._focus_row = 'slider'
         self._test_sound = None
 
+    def compose(self) -> ComposeResult:
+        with Vertical(id="modal-dialog"):
+            yield Static("Volume", id="modal-title")
+            yield Static("", id="vol-slider", classes="vol-row")
+            yield Static("", id="vol-lock", classes="vol-row")
+            yield Static(self._HINT_SLIDER, id="modal-hint")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    def _refresh(self) -> None:
+        from ..purple_tui import _volume_badge
+        level = self.app.volume_level
+        icon, bars, label = _volume_badge(level)
+        if level == 0:
+            label = "Silent"
+        slider = self.query_one("#vol-slider", Static)
+        slider.update(f"{icon}  {bars}  {label}")
+        lock_widget = self.query_one("#vol-lock", Static)
+        locked = self.app._volume_lock is not None
+        lock_widget.update(f"Lock at this level: {'On' if locked else 'Off'}")
+        slider.set_class(self._focus_row == 'slider', "focused")
+        lock_widget.set_class(self._focus_row == 'lock', "focused")
+        hint = self._HINT_SLIDER if self._focus_row == 'slider' else self._HINT_LOCK
+        self.query_one("#modal-hint", Static).update(hint)
+
     async def handle_keyboard_action(self, action) -> None:
-        if (isinstance(action, ControlAction) and action.action == 'space'
-                and action.is_down and not action.is_repeat):
-            self._play_test_sound()
+        if isinstance(action, NavigationAction):
+            if action.direction == 'up':
+                self._focus_row = 'slider'
+                self._refresh()
+            elif action.direction == 'down':
+                self._focus_row = 'lock'
+                self._refresh()
+            elif action.direction in ('left', 'right'):
+                if self._focus_row == 'slider':
+                    self._adjust_slider(action.direction == 'right')
+                else:
+                    self._toggle_lock()
             return
-        await super().handle_keyboard_action(action)
+
+        if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
+            if action.action == 'space':
+                self._play_test_sound()
+                return
+            if action.action in ('enter', 'escape'):
+                # Test-sound may have nudged the system mixer; restore.
+                self.app._apply_volume_system()
+                self.dismiss(None)
+                return
+
+    def _adjust_slider(self, up: bool) -> None:
+        from ..constants import VOLUME_LEVELS
+        cur = self.app.volume_level
+        if up:
+            new_level = next((v for v in VOLUME_LEVELS if v > cur), cur)
+        else:
+            new_level = next((v for v in reversed(VOLUME_LEVELS) if v < cur), cur)
+        if new_level == cur:
+            self._refresh()
+            return
+        self.app.volume_level = new_level
+        if self.app._volume_lock is not None:
+            self._write_lock(new_level)
+        self.app._apply_volume()
+        self._refresh()
+
+    def _toggle_lock(self) -> None:
+        new_lock = None if self.app._volume_lock is not None else self.app.volume_level
+        self._write_lock(new_lock)
+        self.app._apply_volume()
+        self._refresh()
+
+    def _write_lock(self, level) -> None:
+        from ..settings import set_volume_lock
+        set_volume_lock(level)
+        self.app._volume_lock = level
 
     def _play_test_sound(self) -> None:
-        value = self.OPTIONS[self._selected][0]
-        if value is None:
+        """Play the glockenspiel test tone at the slider's current level.
+
+        Forces amixer to the slider level (ignoring any active lock) so the
+        parent can preview what the kid will hear before committing.
+        """
+        level = self.app.volume_level
+        if level == 0:
             return
-        # Preview the speaker level: amixer to the lock value, ignoring
-        # current silent mode so the parent can hear the test. Use
-        # subprocess.run so the mixer change lands before sound.play() —
-        # otherwise the audio buffer can leave the device at the old level.
         try:
             from ..constants import SYSTEM_VOLUME_MAX
-            system_vol = round(value * SYSTEM_VOLUME_MAX / 100)
+            system_vol = round(level * SYSTEM_VOLUME_MAX / 100)
             subprocess.run(
                 ["amixer", "sset", "Master", f"{system_vol}%"],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -548,11 +608,8 @@ class VolumeLockScreen(PickerModal):
                 test_path = sounds_path / "glockenspiel" / "c5.ogg"
                 if test_path.exists():
                     self._test_sound = pygame.mixer.Sound(str(test_path))
-            # Scale per-sound volume too, so even on a system where amixer
-            # doesn't drive the perceived output the lower options stay
-            # quieter than the higher ones.
             if self._test_sound is not None:
-                self._test_sound.set_volume(value / 100)
+                self._test_sound.set_volume(level / 100)
                 play_safe(self._test_sound)
         except Exception:
             pass
@@ -740,6 +797,15 @@ class MusicKeySwitchingScreen(PickerModal):
 
 
 
+def _volume_menu_label(lock) -> str:
+    """One-line state hint for the consolidated Volume entry in the parent menu."""
+    if lock == 0:
+        return "Volume: Silent"
+    if lock is not None:
+        return "Volume: Locked"
+    return "Volume"
+
+
 def _flush_terminal_input() -> None:
     """Flush any buffered terminal input to prevent stray characters."""
     try:
@@ -854,7 +920,7 @@ def _get_menu_items() -> list:
     Items whose id starts with `sec-` are section headers: visual-only,
     skipped by keyboard navigation, no action when activated.
     """
-    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_silent_mode, get_volume_lock, get_parent_pin
+    from ..settings import get_littles_mode, get_code_panel, get_music_looping, get_music_key_switching, get_all_caps, get_volume_lock, get_parent_pin
 
     items = []
 
@@ -885,10 +951,7 @@ def _get_menu_items() -> list:
     items.append(("menu-all-caps", caps_label))
 
     items.append(("sec-av", "Sound & Display"))
-    silent_label = "Silent Mode: On" if get_silent_mode() else "Silent Mode: Off"
-    items.append(("menu-silent", silent_label))
-    items.append(("menu-volume-lock", _volume_lock_menu_label(get_volume_lock())))
-    items.append(("menu-volume", "Adjust Volume"))
+    items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
     if display_control_available():
         items.append(("menu-display", "Adjust Display"))
 
@@ -1872,10 +1935,6 @@ class ParentMenu(PurpleModal):
             self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
-        elif item_id == "menu-silent":
-            self._open_silent_mode()
-        elif item_id == "menu-volume-lock":
-            self._open_volume_lock()
         elif item_id == "menu-parent-pin":
             self._open_parent_pin()
         elif item_id == "menu-display":
@@ -2056,59 +2115,6 @@ class ParentMenu(PurpleModal):
         except Exception:
             pass
 
-    def _open_silent_mode(self) -> None:
-        def on_result(result):
-            if result is _SILENT_MODE_CANCELLED:
-                return
-            self._apply_silent_mode(result)
-        self.app.push_screen(SilentModeScreen(), callback=on_result)
-
-    def _apply_silent_mode(self, new_value: bool) -> None:
-        from ..settings import set_silent_mode
-        set_silent_mode(new_value)
-        self.app._silent_mode = new_value
-        if new_value and self.app._volume_lock is not None:
-            self.app._volume_lock = None
-            self._refresh_volume_lock_label()
-        self.app._apply_volume()
-        label = "Silent Mode: On" if new_value else "Silent Mode: Off"
-        try:
-            widget = self.query_one("#menu-silent", ParentMenuItem)
-            widget.update(label)
-        except Exception:
-            pass
-
-    def _open_volume_lock(self) -> None:
-        def on_result(result):
-            if result is _VOLUME_LOCK_CANCELLED:
-                # Space-to-test may have nudged the system mixer; restore.
-                self.app._apply_volume_system()
-                return
-            self._apply_volume_lock(result)
-        self.app.push_screen(VolumeLockScreen(), callback=on_result)
-
-    def _apply_volume_lock(self, new_value) -> None:
-        from ..settings import set_volume_lock
-        set_volume_lock(new_value)
-        self.app._volume_lock = new_value
-        if new_value is not None and self.app._silent_mode:
-            self.app._silent_mode = False
-            try:
-                widget = self.query_one("#menu-silent", ParentMenuItem)
-                widget.update("Silent Mode: Off")
-            except Exception:
-                pass
-        self.app._apply_volume()
-        self._refresh_volume_lock_label()
-
-    def _refresh_volume_lock_label(self) -> None:
-        label = _volume_lock_menu_label(self.app._volume_lock)
-        try:
-            widget = self.query_one("#menu-volume-lock", ParentMenuItem)
-            widget.update(label)
-        except Exception:
-            pass
-
     def _open_parent_pin(self) -> None:
         from ..settings import get_parent_pin
         if get_parent_pin() is None:
@@ -2170,8 +2176,13 @@ class ParentMenu(PurpleModal):
         self.app.push_screen(DisplaySettingsScreen())
 
     def _open_volume(self) -> None:
-        from ..room_picker import VolumeModal
-        self.app.push_screen(VolumeModal())
+        def on_close(_):
+            try:
+                widget = self.query_one("#menu-volume", ParentMenuItem)
+                widget.update(_volume_menu_label(self.app._volume_lock))
+            except Exception:
+                pass
+        self.app.push_screen(ParentVolumeModal(), callback=on_close)
 
     def _install_to_disk(self) -> None:
         """Prompt for name, confirm, then push the progress screen."""

@@ -19,14 +19,17 @@ _defaults = {
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "all_caps": False,           # Whether all rendered text is uppercased at render time
     "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
-    "silent_mode": False,        # Parent lock: all sound off, volume keys disabled, until a parent turns it back on
-    "volume_lock": None,         # Parent lock: None = off, 0-100 = lock playback at that level; volume keys disabled
+    "volume_lock": None,         # Parent lock: None = unlocked, 0-100 = pin playback at that level (0 = silent); volume keys disabled while set
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
 }
 
 
 def load_settings() -> dict:
-    """Load settings from disk, falling back to defaults."""
+    """Load settings from disk, falling back to defaults.
+
+    Migrates the legacy `silent_mode: True` field to `volume_lock: 0`,
+    since silence is just a lock pinned at zero in the unified model.
+    """
     settings = dict(_defaults)
     try:
         if SETTINGS_FILE.exists():
@@ -34,6 +37,8 @@ def load_settings() -> dict:
             for key in _defaults:
                 if key in data:
                     settings[key] = data[key]
+            if data.get("silent_mode") and settings["volume_lock"] is None:
+                settings["volume_lock"] = 0
     except Exception:
         pass
     return settings
@@ -117,29 +122,14 @@ def set_volume_level(level: int) -> None:
     save_settings(settings)
 
 
-def get_silent_mode() -> bool:
-    """Whether the parent silence lock is on (all sound off, volume keys disabled)."""
-    return load_settings()["silent_mode"]
-
-
-def set_silent_mode(enabled: bool) -> None:
-    settings = load_settings()
-    settings["silent_mode"] = enabled
-    if enabled:
-        settings["volume_lock"] = None
-    save_settings(settings)
-
-
 def get_volume_lock() -> int | None:
-    """Locked playback volume (0-100), or None if not locked."""
+    """Locked playback volume (0-100), or None if not locked. 0 means Silent."""
     return load_settings()["volume_lock"]
 
 
 def set_volume_lock(level: int | None) -> None:
     settings = load_settings()
     settings["volume_lock"] = level
-    if level is not None:
-        settings["silent_mode"] = False
     save_settings(settings)
 
 

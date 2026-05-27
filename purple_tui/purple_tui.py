@@ -2769,7 +2769,7 @@ class PurpleApp(App):
         """
         if self._volume_lock is not None:
             icon, bars, _ = _volume_badge(self._volume_lock)
-            label = "Silent" if self._volume_lock == 0 else "Locked"
+            label = "Silent Mode" if self._volume_lock == 0 else "Locked"
             self.clear_notifications()
             self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
             return True

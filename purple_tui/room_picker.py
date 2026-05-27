@@ -407,7 +407,7 @@ class RoomPickerScreen(PurpleModal):
         """Pick the icon + label for the Volume slot when it's locked."""
         lock = getattr(self.app, "_volume_lock", None)
         if lock == 0:
-            return ICON_VOLUME_OFF, "Silent"
+            return ICON_VOLUME_OFF, "Silent Mode"
         if lock is not None:
             if lock <= 35:
                 icon = ICON_VOLUME_LOW

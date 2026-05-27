@@ -453,18 +453,26 @@ class AllCapsScreen(PickerModal):
         self._selected = 0 if get_all_caps() else 1
 
 
+_VOLUME_LEVEL_LABELS = {
+    0:   "Silent Mode",
+    15:  "Whisper",
+    35:  "Quiet",
+    60:  "Medium",
+    85:  "Loud",
+    100: "Full",
+}
+
+
 class ParentVolumeModal(PurpleModal):
-    """Parent-facing volume modal: adjust + lock at current level + test sound.
+    """Parent volume modal: adjust + lock at current level + test sound.
 
-    Slider snaps to VOLUME_LEVELS (0..100). Level 0 reads "Silent". A second
-    row toggles "Lock at this level": locking pins the kid's volume keys at
-    the slider's current value (lock=0 is the unified Silent state).
+    Visual style mirrors DisplaySettingsScreen (label / bar / value rows).
 
-    Controls:
-      ▲ ▼      switch focus between slider row and lock row
-      ◀ ▶      slider: adjust level; lock: toggle on/off
-      Space    play a test sound at the slider's current level
-      Enter    close
+    Controls (the hint line tells the parent which keys do what right now):
+      ▲ ▼      switch between the Volume and Lock rows
+      ← →      Volume row: change the level (level 0 reads "Silent Mode")
+      Enter    Lock row: turn the lock on or off at the current level
+      Space    play a test sound at the current level
       Esc      close
     """
 
@@ -474,75 +482,103 @@ class ParentVolumeModal(PurpleModal):
         padding: 1 2;
     }
 
-    .vol-row {
-        width: 100%;
-        height: 3;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
+    #modal-title {
+        color: $primary;
     }
 
-    .vol-row.focused {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
+    .vol-row {
+        width: 100%;
+        height: 1;
+        margin: 1 0;
+    }
+
+    .vol-label {
+        width: 10;
+        text-align: right;
+        padding-right: 1;
+    }
+
+    .vol-bar {
+        width: 18;
+    }
+
+    .vol-value {
+        width: 14;
+        text-align: left;
+        padding-left: 1;
+    }
+
+    .vol-hint {
+        width: 100%;
+        text-align: center;
+        color: $text-muted;
     }
     """
 
-    _HINT_SLIDER = "▲▼ row   ◀▶ adjust   Space test"
-    _HINT_LOCK = "▲▼ row   ◀▶ toggle   Space test"
+    _FOCUS_VOLUME = "volume"
+    _FOCUS_LOCK = "lock"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._focus_row = 'slider'
+        self._focus = self._FOCUS_VOLUME
         self._test_sound = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
             yield Static("Volume", id="modal-title")
-            yield Static("", id="vol-slider", classes="vol-row")
-            yield Static("", id="vol-lock", classes="vol-row")
-            yield Static(self._HINT_SLIDER, id="modal-hint")
+            with Horizontal(classes="vol-row"):
+                yield Static("Volume:", classes="vol-label")
+                yield Static("", id="vol-volume-bar", classes="vol-bar")
+                yield Static("", id="vol-volume-value", classes="vol-value")
+            with Horizontal(classes="vol-row"):
+                yield Static("Lock:", classes="vol-label")
+                yield Static("", id="vol-lock-bar", classes="vol-bar")
+                yield Static("", id="vol-lock-value", classes="vol-value")
+            yield Static("", id="vol-hint-row", classes="vol-hint")
+            yield Static("Space plays sound    Esc done", classes="vol-hint")
 
     def on_mount(self) -> None:
         self._refresh()
 
     def _refresh(self) -> None:
-        from ..purple_tui import _volume_badge
         level = self.app.volume_level
-        icon, bars, label = _volume_badge(level)
-        if level == 0:
-            label = "Silent"
-        slider = self.query_one("#vol-slider", Static)
-        slider.update(f"{icon}  {bars}  {label}")
-        lock_widget = self.query_one("#vol-lock", Static)
+        segments = 10
+        filled = round(level / 100 * segments)
+        bar = "█" * filled + "░" * (segments - filled)
+        vol_focused = self._focus == self._FOCUS_VOLUME
+        bar_text = f"[bold cyan]← {bar} →[/]" if vol_focused else f"  {bar}  "
+        self.query_one("#vol-volume-bar", Static).update(bar_text)
+        self.query_one("#vol-volume-value", Static).update(_VOLUME_LEVEL_LABELS.get(level, str(level)))
+
         locked = self.app._volume_lock is not None
-        lock_widget.update(f"Lock at this level: {'On' if locked else 'Off'}")
-        slider.set_class(self._focus_row == 'slider', "focused")
-        lock_widget.set_class(self._focus_row == 'lock', "focused")
-        hint = self._HINT_SLIDER if self._focus_row == 'slider' else self._HINT_LOCK
-        self.query_one("#modal-hint", Static).update(hint)
+        state = "On" if locked else "Off"
+        lock_focused = self._focus == self._FOCUS_LOCK
+        lock_text = f"[bold cyan]▶ {state}[/]" if lock_focused else f"  {state}"
+        self.query_one("#vol-lock-bar", Static).update("")
+        self.query_one("#vol-lock-value", Static).update(lock_text)
+
+        hint = "← → change    ▲ ▼ switch" if vol_focused else "Enter on/off    ▲ ▼ switch"
+        self.query_one("#vol-hint-row", Static).update(hint)
 
     async def handle_keyboard_action(self, action) -> None:
         if isinstance(action, NavigationAction):
-            if action.direction == 'up':
-                self._focus_row = 'slider'
+            d = action.direction
+            if d == 'down' and self._focus == self._FOCUS_VOLUME:
+                self._focus = self._FOCUS_LOCK
                 self._refresh()
-            elif action.direction == 'down':
-                self._focus_row = 'lock'
+            elif d == 'up' and self._focus == self._FOCUS_LOCK:
+                self._focus = self._FOCUS_VOLUME
                 self._refresh()
-            elif action.direction in ('left', 'right'):
-                if self._focus_row == 'slider':
-                    self._adjust_slider(action.direction == 'right')
-                else:
-                    self._toggle_lock()
+            elif d in ('left', 'right') and self._focus == self._FOCUS_VOLUME:
+                self._adjust_slider(d == 'right')
             return
 
         if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
             if action.action == 'space':
                 self._play_test_sound()
+                return
+            if action.action == 'enter' and self._focus == self._FOCUS_LOCK:
+                self._toggle_lock()
                 return
             if action.action in ('enter', 'escape'):
                 # Test-sound may have nudged the system mixer; restore.
@@ -800,7 +836,7 @@ class MusicKeySwitchingScreen(PickerModal):
 def _volume_menu_label(lock) -> str:
     """One-line state hint for the consolidated Volume entry in the parent menu."""
     if lock == 0:
-        return "Volume: Silent"
+        return "Volume: Silent Mode"
     if lock is not None:
         return "Volume: Locked"
     return "Volume"

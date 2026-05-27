@@ -254,7 +254,7 @@ class DisplaySettingsScreen(PurpleModal):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
-            yield Static("Adjust Display", id="modal-title")
+            yield Static("Display", id="modal-title")
             with Horizontal(classes="setting-row"):
                 yield Static("Brightness:", classes="setting-label")
                 yield Static("", id="brightness-bar", classes="setting-bar")
@@ -834,12 +834,12 @@ class MusicKeySwitchingScreen(PickerModal):
 
 
 def _volume_menu_label(lock) -> str:
-    """One-line state hint for the consolidated Volume entry in the parent menu."""
+    """One-line state hint for the consolidated Sound entry in the parent menu."""
     if lock == 0:
-        return "Volume: Silent Mode"
+        return "Sound: Silent Mode"
     if lock is not None:
-        return "Volume: Locked"
-    return "Volume"
+        return "Sound: Locked"
+    return "Sound"
 
 
 def _flush_terminal_input() -> None:
@@ -989,7 +989,7 @@ def _get_menu_items() -> list:
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
     if display_control_available():
-        items.append(("menu-display", "Adjust Display"))
+        items.append(("menu-display", "Display"))
 
     items.append(("sec-advanced", "Advanced"))
     pin_label = "Parent PIN: On" if get_parent_pin() else "Parent PIN: Off"

@@ -286,7 +286,11 @@ class DisplaySettingsScreen(PurpleModal):
             self._brightness, BRIGHTNESS_MIN, BRIGHTNESS_MAX,
             self._focus_area == "brightness"
         ))
-        bright_val.update(f"{int(self._brightness * 100)}%")
+        # Anchor at Normal (= full brightness); show signed step count when
+        # dimmer. Avoids the "0% should be off" expectation that a 0-100 label
+        # would set up against a software-gamma floor that never reaches black.
+        bright_offset = round((self._brightness - BRIGHTNESS_MAX) / BRIGHTNESS_STEP)
+        bright_val.update("Normal" if bright_offset == 0 else f"{bright_offset:+d}")
 
         # Contrast bar
         contrast_bar = self.query_one("#contrast-bar", Static)
@@ -295,13 +299,10 @@ class DisplaySettingsScreen(PurpleModal):
             self._contrast, CONTRAST_MIN, CONTRAST_MAX,
             self._focus_area == "contrast"
         ))
-        # Show contrast as a relative scale: 1.0 = "Normal"
-        if abs(self._contrast - 1.0) < 0.05:
-            contrast_text = "Normal"
-        elif self._contrast < 1.0:
-            contrast_text = "Low"
-        else:
-            contrast_text = "High"
+        # Show contrast as a signed offset from Normal so every step on the
+        # bar has a distinct label (no "two Highs" feel).
+        offset = round((self._contrast - 1.0) / CONTRAST_STEP)
+        contrast_text = "Normal" if offset == 0 else f"{offset:+d}"
         contrast_val.update(contrast_text)
 
     def _save_and_apply(self) -> None:

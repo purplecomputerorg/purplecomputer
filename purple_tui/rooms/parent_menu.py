@@ -20,6 +20,7 @@ import select
 import threading
 import termios
 import time
+import math
 import json
 from pathlib import Path
 
@@ -1246,17 +1247,25 @@ class InstallConfirmScreen(PurpleModal):
 
 _ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-# Maps substrings in [PURPLE] log output to (progress_percent, display_message).
-# Progress only moves forward; the writing stage dominates the clock.
+# Maps substrings in [PURPLE] log output to (percent, display_message, blind_secs).
+# Keywords must match the actual install.sh log strings. Progress only moves
+# forward. The write (10->70, driven by [PURPLE-PV]) and verify (72->85, driven
+# by [PURPLE-PV2]) phases get real byte-level progress, so their bands carry no
+# creep (blind_secs 0). Every other step is "blind": blind_secs is its nominal
+# duration on a reference machine, scaled at runtime by the measured disk speed.
 _INSTALL_STAGES = [
-    ("Detecting internal disk",   5,  "Getting started..."),
-    ("Found internal disk",       8,  "Getting started..."),
-    ("Writing Purple Computer",   12, "Setting up Purple Computer..."),
-    ("Reloading partition table", 82, "Double-checking everything..."),
-    ("Verifying disk write",      85, "Double-checking everything..."),
-    ("Disk verification passed",  90, "Double-checking everything..."),
-    ("Setting up UEFI boot",      92, "Almost ready..."),
-    ("UEFI boot setup complete",  97, "Almost ready..."),
+    ("Detecting internal disk",       5,  "Getting started...",           0),
+    ("Found internal disk",           8,  "Getting started...",           0),
+    ("Writing Purple Computer",       10, "Setting up Purple Computer...", 0),
+    ("Reloading partition table",     70, "Double-checking everything...", 8),
+    ("Verifying disk write",          72, "Double-checking everything...", 0),
+    ("Disk verification passed",      85, "Double-checking everything...", 2),
+    ("Rebuilding partition table",    86, "Almost ready...",               5),
+    ("Waiting for partition devices", 88, "Almost ready...",               8),
+    ("Checking root filesystem",      90, "Almost ready...",               15),
+    ("Growing root filesystem",       92, "Almost ready...",               20),
+    ("Setting up boot",               94, "Almost ready...",               40),
+    ("Boot setup complete",           98, "Almost ready...",               3),
 ]
 
 
@@ -1316,6 +1325,10 @@ class InstallProgressScreen(PurpleModal):
     _SCROLL_DELAY = 0.25
     # Max visible lines in the scroll window (leaves room for title + hint)
     _SCROLL_VISIBLE = 25
+    # Reference write time (seconds) for the 8 GiB image on a mid-range SATA SSD.
+    # The actual write time divided by this gives a per-machine "slowness factor"
+    # used to pace the creep timer through the blind boot-setup steps.
+    _NOMINAL_WRITE_SECS = 480.0
 
     def __init__(self, computer_name: str = "", **kwargs):
         super().__init__(**kwargs)
@@ -1329,6 +1342,16 @@ class InstallProgressScreen(PurpleModal):
         self._scrolling = False  # True while auto-scrolling
         self._computer_name = computer_name
         self._start_time: float | None = None
+        # Creep timer state: smoothly fills the current blind band [lo, hi)
+        # toward hi without reaching it, paced by _creep_tau.
+        self._creep_timer = None
+        self._creep_t0 = 0.0
+        self._creep_lo = 0
+        self._creep_hi = 0
+        self._creep_tau = 1.0
+        # Disk-speed calibration measured from the write phase.
+        self._write_t0: float | None = None
+        self._k = 1.0
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
@@ -1347,6 +1370,7 @@ class InstallProgressScreen(PurpleModal):
             pass
         self._start_time = time.monotonic()
         self._update_ui()
+        self._creep_timer = self.set_interval(0.5, self._creep_tick)
         threading.Thread(target=self._run_install_thread, daemon=True).start()
 
     def on_unmount(self) -> None:
@@ -1354,6 +1378,9 @@ class InstallProgressScreen(PurpleModal):
             self.app.uninhibit_idle("install")
         except Exception:
             pass
+        if self._creep_timer is not None:
+            self._creep_timer.stop()
+            self._creep_timer = None
 
     def _eta_hint(self) -> str:
         """Rolling ETA based on elapsed time and current progress."""
@@ -1366,6 +1393,33 @@ class InstallProgressScreen(PurpleModal):
         minutes = max(1, round(remaining / 60))
         unit = "minute" if minutes == 1 else "minutes"
         return f"About {minutes} {unit} left."
+
+    def _set_progress(self, pct: int, status: str) -> None:
+        """Single forward-only progress sink. PV, markers, and creep all funnel
+        here so progress never regresses and the bar repaints once per change."""
+        if pct > self._progress:
+            self._progress = pct
+            self._status = status
+            self._update_ui()
+
+    def _start_creep_band(self, lo: int, hi: int, nominal_secs: float) -> None:
+        """Begin filling [lo, hi) asymptotically. nominal_secs<=0 disables creep
+        (the band is driven by real pv progress instead)."""
+        self._creep_t0 = time.monotonic()
+        self._creep_lo = max(lo, self._progress)
+        self._creep_hi = hi if nominal_secs > 0 else self._creep_lo
+        # 3 time constants ~= 95% filled, so the band is visually near-full
+        # right around its expected (speed-scaled) duration.
+        self._creep_tau = max(0.5, nominal_secs * self._k / 3.0)
+
+    def _creep_tick(self) -> None:
+        if self._phase != "installing" or self._creep_hi <= self._creep_lo:
+            return
+        t = time.monotonic() - self._creep_t0
+        span = self._creep_hi - self._creep_lo
+        pct = self._creep_lo + int(span * (1.0 - math.exp(-t / self._creep_tau)))
+        if pct < self._creep_hi:
+            self._set_progress(pct, self._status)
 
     def _render_bar(self, pct: int) -> str:
         filled = int(36 * pct / 100)
@@ -1482,27 +1536,31 @@ class InstallProgressScreen(PurpleModal):
         clean = _ANSI_ESCAPE.sub('', text).strip()
         if clean:
             self._log_lines.append(clean)
-        if clean.startswith('[PURPLE-PV]'):
-            try:
-                pv_pct = int(clean[len('[PURPLE-PV]'):].strip())
-            except ValueError:
+        # Real byte-level progress from pv: write phase -> 10-70, verify -> 72-85.
+        for tag, lo, span in (('[PURPLE-PV]', 10, 60), ('[PURPLE-PV2]', 72, 13)):
+            if clean.startswith(tag):
+                try:
+                    pv_pct = max(0, min(100, int(clean[len(tag):].strip())))
+                except ValueError:
+                    return
+                self._set_progress(lo + int(pv_pct * span / 100), self._status)
                 return
-            # pv emits 0-100 over the whole write phase. Map to the 12-80% span
-            # of overall progress so verify/UEFI stages still have room above.
-            display_pct = 12 + int(max(0, min(100, pv_pct)) * 0.68)
-            if display_pct > self._progress:
-                self._progress = display_pct
-                self._status = "Setting up Purple Computer..."
-                self._update_ui()
-            return
         if not clean.startswith('[PURPLE]'):
             return
         msg = clean[8:].strip()
-        for keyword, pct, display in _INSTALL_STAGES:
+        for i, (keyword, pct, display, blind) in enumerate(_INSTALL_STAGES):
             if keyword in msg and pct > self._progress:
-                self._progress = pct
-                self._status = display
-                self._update_ui()
+                if keyword == "Writing Purple Computer":
+                    self._write_t0 = time.monotonic()
+                elif self._write_t0 is not None and pct >= 70:
+                    # First marker after the write: the elapsed write time is a
+                    # free per-machine disk benchmark. Scale all later creep bands.
+                    actual = time.monotonic() - self._write_t0
+                    self._k = min(6.0, max(0.25, actual / self._NOMINAL_WRITE_SECS))
+                    self._write_t0 = None
+                self._set_progress(pct, display)
+                hi = _INSTALL_STAGES[i + 1][1] if i + 1 < len(_INSTALL_STAGES) else 100
+                self._start_creep_band(pct, hi, blind)
                 return
 
     def _get_error_summary(self) -> str:

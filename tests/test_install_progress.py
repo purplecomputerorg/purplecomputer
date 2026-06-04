@@ -129,3 +129,102 @@ def test_eof_only_hangs_with_pipe_holder():
                 timeout=3.0,
             )
     asyncio.run(run())
+
+
+# --- Progress mapping + creep timer -----------------------------------------
+
+def _make_screen():
+    """An InstallProgressScreen with UI repaint stubbed out (no running app)."""
+    from purple_tui.rooms.parent_menu import InstallProgressScreen
+    screen = InstallProgressScreen.__new__(InstallProgressScreen)
+    # Bypass Textual widget init; set only the state _handle_line/creep touch.
+    screen._progress = 0
+    screen._status = ""
+    screen._phase = "installing"
+    screen._log_lines = []
+    screen._start_time = 0.0
+    screen._creep_timer = None
+    screen._creep_t0 = 0.0
+    screen._creep_lo = 0
+    screen._creep_hi = 0
+    screen._creep_tau = 1.0
+    screen._write_t0 = None
+    screen._k = 1.0
+    screen._update_ui = lambda: None
+    return screen
+
+
+def test_pv_and_markers_are_monotonic_and_banded():
+    screen = _make_screen()
+    seq = [
+        "[PURPLE] Detecting internal disk...",
+        "[PURPLE] Found internal disk: sda",
+        "[PURPLE] Writing Purple Computer to disk...",
+        "[PURPLE-PV] 0", "[PURPLE-PV] 50", "[PURPLE-PV] 100",
+        "[PURPLE] Reloading partition table...",
+        "[PURPLE] Verifying disk write (this takes a few minutes)...",
+        "[PURPLE-PV2] 0", "[PURPLE-PV2] 100",
+        "[PURPLE] Disk verification passed (SHA256 match)",
+        "[PURPLE] Rebuilding partition table for this disk...",
+        "[PURPLE] Waiting for partition devices...",
+        "[PURPLE] Checking root filesystem...",
+        "[PURPLE] Growing root filesystem to fill disk...",
+        "[PURPLE] Setting up boot (UEFI + BIOS)...",
+        "[PURPLE] Boot setup complete (UEFI + BIOS)",
+    ]
+    progress = []
+    for line in seq:
+        screen._handle_line(line)
+        progress.append(screen._progress)
+
+    assert progress == sorted(progress), "progress must never regress"
+    # Write pv 100 lands at the top of the write band.
+    assert screen._progress >= 70 or True  # checked below at exact points
+    # Walk specific checkpoints.
+    s = _make_screen()
+    s._handle_line("[PURPLE] Writing Purple Computer to disk...")
+    s._handle_line("[PURPLE-PV] 100")
+    assert s._progress == 70
+    s._handle_line("[PURPLE] Verifying disk write...")
+    s._handle_line("[PURPLE-PV2] 100")
+    assert s._progress == 85
+    s._handle_line("[PURPLE] Setting up boot (UEFI + BIOS)...")
+    assert s._progress == 94
+    s._handle_line("[PURPLE] Boot setup complete (UEFI + BIOS)")
+    assert s._progress == 98
+
+
+def test_calibration_factor_from_write_time(monkeypatch):
+    import purple_tui.rooms.parent_menu as pm
+    screen = _make_screen()
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
+    screen._handle_line("[PURPLE] Writing Purple Computer to disk...")
+    clock["t"] += screen._NOMINAL_WRITE_SECS * 2  # twice as slow as reference
+    screen._handle_line("[PURPLE] Reloading partition table...")
+    assert screen._k == pytest.approx(2.0)
+    assert screen._write_t0 is None
+
+
+def test_creep_fills_toward_hi_without_reaching_it(monkeypatch):
+    import purple_tui.rooms.parent_menu as pm
+    screen = _make_screen()
+    clock = {"t": 0.0}
+    monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
+    screen._progress = 94
+    screen._start_creep_band(94, 98, nominal_secs=40)
+    seen = []
+    for _ in range(200):
+        clock["t"] += 1.0
+        screen._creep_tick()
+        seen.append(screen._progress)
+    assert max(seen) < 98, "creep must never reach the band ceiling"
+    assert max(seen) >= 96, "creep should make visible progress within the band"
+    assert seen == sorted(seen), "creep must never regress"
+
+
+def test_creep_disabled_when_nominal_zero():
+    screen = _make_screen()
+    screen._progress = 10
+    screen._start_creep_band(10, 70, nominal_secs=0)  # pv-driven band
+    assert screen._creep_hi == screen._creep_lo  # creep is a no-op

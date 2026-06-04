@@ -209,6 +209,7 @@ SOURCES
         unclutter \
         casper \
         zstd \
+        pv \
         kbd \
         evtest \
         strace \
@@ -225,7 +226,7 @@ SOURCES
     # a blinking-cursor Legacy boot. Fail the build loudly if anything is off.
     log_info "Verifying boot tooling is present in the golden image..."
     MISSING=""
-    for cmd in grub-install efibootmgr; do
+    for cmd in grub-install efibootmgr pv; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
     chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc || MISSING="$MISSING /usr/lib/grub/i386-pc"
@@ -1004,6 +1005,10 @@ EOF
     # Compress golden image
     log_info "Compressing golden image..."
     zstd -${ZSTD_LEVEL} -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
+
+    # Stamp the exact decompressed byte size so install.sh can feed pv an
+    # accurate total (zstd -l output columns aren't a reliable byte count).
+    stat -c%s "$GOLDEN_IMAGE" > "${GOLDEN_COMPRESSED}.size"
 
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"

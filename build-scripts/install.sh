@@ -157,12 +157,17 @@ main() {
         log "Writing Purple Computer to disk..."
         log "  Source: /cdrom/purple/purple-os.img.zst"
         log "  Target: /dev/test0"
-        for pct in 5 12 25 40 55 70 85; do
+        for pct in 0 20 40 60 80 100; do
             sleep 1
-            log "  Progress: ${pct}%"
+            echo "[PURPLE-PV] $pct" >&2
         done
         sleep 1
         log "Reloading partition table..."
+        log "Verifying disk write (this takes a few minutes)..."
+        for pct in 0 50 100; do
+            sleep 1
+            echo "[PURPLE-PV2] $pct" >&2
+        done
         log "Disk verification passed (SHA256 match)"
         log "Waiting for partition devices..."
         for attempt in 1 2 3 4 5 6; do
@@ -251,7 +256,11 @@ main() {
     WRITE_SHA256_FILE="/tmp/purple-write-sha256"
     WRITE_SIZE_FILE="/tmp/purple-write-size"
     if command -v pv >/dev/null 2>&1; then
-        IMAGE_SIZE=$(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}' || echo "2G")
+        if [ -f "${GOLDEN_IMAGE}.size" ] && [ -s "${GOLDEN_IMAGE}.size" ]; then
+            IMAGE_SIZE=$(tr -dc '0-9' < "${GOLDEN_IMAGE}.size")
+        fi
+        [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}')
+        [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$((8192*1024*1024))
         zstd -dc "$GOLDEN_IMAGE" \
             | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
             | tee >(wc -c > "$WRITE_SIZE_FILE") \
@@ -282,7 +291,13 @@ main() {
 
         # Drop page cache, then read back with O_DIRECT
         echo 3 > /proc/sys/vm/drop_caches 2>/dev/null || true
-        DISK_SHA256=$(dd if=/dev/$TARGET bs=4M count="$WRITE_SIZE" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')
+        if command -v pv >/dev/null 2>&1; then
+            DISK_SHA256=$(dd if=/dev/$TARGET bs=4M count="$WRITE_SIZE" iflag=direct,count_bytes status=none 2>/dev/null \
+                | pv -n -s "$WRITE_SIZE" 2> >(while read p; do echo "[PURPLE-PV2] $p" >&2; done) \
+                | sha256sum | awk '{print $1}')
+        else
+            DISK_SHA256=$(dd if=/dev/$TARGET bs=4M count="$WRITE_SIZE" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')
+        fi
 
         if [ "$WRITE_SHA256" = "$DISK_SHA256" ]; then
             log "Disk verification passed (SHA256 match)"

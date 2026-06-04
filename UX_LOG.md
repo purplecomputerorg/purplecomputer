@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Install progress bar no longer looks frozen**: During install the bar used to sit at 12% for the whole disk write, then again at the verify and boot-setup steps, looking hung. Three causes are fixed: `pv` is now installed so the write shows real byte-level progress (10 to 70%), the disk verify read-back now reports progress too (72 to 85%), and the boot-setup stage markers (which never matched the log text) are corrected and fleshed out so every late step advances the bar. For the short steps with no measurable progress, a creep timer fills the gap smoothly, paced to how fast the write actually ran on this computer, so a slow disk creeps slowly and a fast one creeps quickly. The bar never reaches a step's ceiling until the real step finishes.
 - **Inaudible Mac codecs now say "plug in a USB speaker" instead of "Audio: working"**: On some MacBook Pros the CS8409 codec initializes cleanly but drives no speakers, so the mixer probe wrongly reported audio as working. Audio now checks the codec name: when a known-silent codec is the only output and no USB adapter is present, it reports not-working and points the parent to a USB speaker. Plugging one in clears it without a restart.
 
 - **Parent Menu version moves into the border**: The version line (e.g. "Version 1.0", "Dev build: abc1234") now renders centered in the modal's bottom border instead of as a separate footer line, reclaiming two rows (the version line and the blank margin above it) inside the dialog.

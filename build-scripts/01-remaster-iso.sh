@@ -376,6 +376,7 @@ SPLASH_EOF
     # Copy golden image
     log_info "Copying golden image (this takes a while)..."
     cp "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os.img.zst"
+    cp "${GOLDEN_IMAGE}.size" "$PAYLOAD_DIR/purple-os.img.zst.size" 2>/dev/null || true
 
     # Copy install script
     create_install_script "$PAYLOAD_DIR"

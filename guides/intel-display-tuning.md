@@ -68,6 +68,18 @@ This is the right lever precisely because the checkerboard is **not** a per-widg
 
 PSR/FBC off and TearFree are complementary: the first removes the corruption source, the second removes the partial-present that exposes it. Ship both; if you ever need to know which did the work, toggle one at a time on-device.
 
+## Diagnosing On-Device (when the shipped fixes don't seem to work)
+
+The artifact is at the scanout layer, so screenshots can't catch it and the screen alone won't tell you whether a mitigation actually took. `scripts/on-device/debug-display.sh` (ships to `/opt/purple/scripts/` on every ISO, run it from the parent-menu terminal) closes that gap:
+
+- **No args**: full state dump with a per-mitigation verdict. It cross-checks the kernel cmdline against the live `/sys/module/i915/parameters/*` values (so you catch the case where `i915.enable_psr=0` is on the cmdline but never reached the module), reads the FBC/PSR debugfs status, reads the panel bit-depth/dither state, and confirms TearFree from the running X server's output property (not the config file, which can be present yet not engaged).
+- **`repro`**: drives partial redraws of a few cells (the music-grid keystroke pattern) through the same Alacritty to X to scanout path, so you can trigger the artifact on demand instead of hunting for it.
+- **`toggle fbc|psr|tearfree on|off`**: flips each knob at runtime (sysfs/debugfs for FBC/PSR, the xrandr `TearFree` output property for TearFree). This collapses the multi-hour ISO-rebuild loop: toggle one knob, re-run `repro`, see which one actually changes the artifact.
+
+## A Different Suspect on Skylake (MacBookPro13,2): Panel Dither
+
+The guide above is written around pre-2016 Haswell/Broadwell. **MacBookPro13,2 is a 2016 Skylake machine**, and on these the likelier cause of "a brief checkerboard when a few cells change color" is **6-bit panel + dithering (FRC)**: the pipe outputs 8bpp into a 6bpc panel, i915 dithers the difference, and on a partial color change the dither pattern is recomputed for those cells, which reads as a one-frame checkerboard. PSR, FBC, and TearFree do not touch dither, which is exactly why it can survive all three. The `debug-display.sh` dump prints the pipe bpp / panel bpc / dither state for this reason. If that's the cause, the lever is the panel bit depth (force 8bpc / `max bpc`, or the i915 dither control), not the compression features.
+
 ## If the Checkerboard Persists, or Battery Matters More Later
 
 - **FBC-only.** Since a checkerboard is more characteristic of FBC than PSR, `i915.enable_fbc=0` alone may be enough. Costs an on-device round trip to confirm, which is why the shipped fix disables both in one shot.

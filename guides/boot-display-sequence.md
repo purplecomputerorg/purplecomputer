@@ -58,6 +58,8 @@ On shutdown, `ExecStop` repaints the splash so systemd teardown messages aren't 
 
 `purple-x11.service` starts. `ExecStartPre` runs `purple-wait-display`, which polls `/sys/class/drm/card*-*/status` for a connected display. This handles i915's async initialization on older hardware (MacBook 2014 took several seconds to report a connected display).
 
+Old Intel panels (pre-2016 MacBooks) also need `i915.enable_psr=0 i915.enable_fbc=0` on the kernel cmdline to stop a partial-redraw checkerboard artifact. See `intel-display-tuning.md` for what it fixes, why it's safe, and why it costs Purple almost no battery.
+
 Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI.
 
 **What the user sees:** Purple "Starting up..." screen holds until the TUI appears.

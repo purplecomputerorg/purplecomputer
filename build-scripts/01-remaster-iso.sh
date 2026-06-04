@@ -116,6 +116,37 @@ create_install_script() {
     chmod +x "$DEST/install.sh"
 }
 
+# Prepend a 64-bit check to a grub.cfg. On a 32-bit-only CPU, loading our
+# amd64 kernel silently hangs at "GRUB" (e.g. old Atom netbooks). Instead,
+# show a friendly "too old" message. If the cpuid module is missing the
+# check is skipped, so 64-bit machines are never wrongly blocked.
+prepend_longmode_guard() {
+    local cfg="$1"
+    local tmp="${cfg}.guard"
+    cat > "$tmp" << 'LONGMODE_GUARD'
+if insmod cpuid; then
+    if ! cpuid -l; then
+        clear
+        echo ""
+        echo "    Sorry, this computer is too old for Purple Computer."
+        echo ""
+        echo "    Purple needs a newer computer to run. Most laptops"
+        echo "    made in the last 15 years or so will work."
+        echo ""
+        echo "    Need help? Email support@purplecomputer.org"
+        echo ""
+        echo "    It is safe to turn this computer off now."
+        echo ""
+        sleep --interruptible 86400
+        halt
+    fi
+fi
+
+LONGMODE_GUARD
+    cat "$cfg" >> "$tmp"
+    mv "$tmp" "$cfg"
+}
+
 main() {
     log_step "Purple Computer ISO Remaster (Live Boot + Optional Install)"
     log_info "Architecture: Live boot default, install via GRUB menu option"
@@ -399,6 +430,7 @@ menuentry "UEFI Firmware Settings" {
 }
 GRUB_PURPLE
 
+        prepend_longmode_guard "$GRUB_CFG"
         log_info "GRUB config replaced (live boot default)"
     else
         log_info "WARNING: GRUB config not found at expected location"
@@ -550,6 +582,8 @@ menuentry "UEFI Firmware Settings" {
     fwsetup
 }
 GRUB_DEBUG
+
+    prepend_longmode_guard "$GRUB_CFG"
 
     xorriso -indev "$UBUNTU_ISO" \
         -outdev "$DEBUG_ISO" \

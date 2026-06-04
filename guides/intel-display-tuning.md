@@ -60,11 +60,20 @@ PSR and FBC bail out the instant anything changes and re-arm only after the fram
 
 The honest caveat: near zero, not exactly zero. There may be brief sub-second windows between blinks where they would have engaged. But that is a rounding error next to the real battery lever, an actual screen-off idle state, which is a product decision already made the other way (animated sleep face, no DPMS).
 
+## Second Lever: TearFree (the present path)
+
+Disabling PSR/FBC removes the scanout-compression source, but the artifact also depends on *partial* updates reaching the panel. The display only scans out a half-updated frame because the present path hands it one. `Option "TearFree" "true"` on the modesetting driver (`config/xorg/10-modesetting.conf`) forces every update through a fully composed back buffer and a single page flip, so the panel always scans out a complete, consistent frame. It is KMS-level and driver-agnostic (safe no-op risk on AMD/NVIDIA-KMS too), costs a little VRAM/bandwidth, negligible here.
+
+This is the right lever precisely because the checkerboard is **not** a per-widget or per-screen bug: opaque content (the music grid) flashes, and a single keystroke is a partial redraw you cannot full-repaint away without wrecking performance. TearFree fixes the whole class at the layer they share, every room, the parent menu, the power screen, boot transitions, in one config line. Chasing transparency per-screen is the wrong layer and a whack-a-mole.
+
+PSR/FBC off and TearFree are complementary: the first removes the corruption source, the second removes the partial-present that exposes it. Ship both; if you ever need to know which did the work, toggle one at a time on-device.
+
 ## If the Checkerboard Persists, or Battery Matters More Later
 
 - **FBC-only.** Since a checkerboard is more characteristic of FBC than PSR, `i915.enable_fbc=0` alone may be enough. Costs an on-device round trip to confirm, which is why the shipped fix disables both in one shot.
+- **Confirm the params took.** On the debug ISO, `sudo cat /sys/kernel/debug/dri/0/i915_fbc_status` and `.../i915_edp_psr_status`. If FBC still reads enabled, the cmdline isn't reaching i915 on that unit, which is the bug to chase, not a new artifact.
 - **Scope by hardware.** A small systemd unit could detect Apple/old-Intel via DMI and toggle PSR/FBC off only there (sysfs/debugfs at runtime), so newer devices keep both. More moving parts; only worth it if the global battery cost ever proves real, which per the analysis above it does not for this software.
-- **GL-layer render compression.** If the artifact were ever traced to Intel render compression rather than the display engine, that is an Alacritty/Mesa env knob in `xinitrc`, not a kernel param. Not the current diagnosis.
+- **GL-layer render compression is already ruled out.** `xinitrc` sets `LIBGL_ALWAYS_SOFTWARE=1`, so rendering goes through Mesa's software path (llvmpipe), not the Intel hardware driver. There is no hardware render/framebuffer compression (CCS) to disable: that knob is effectively already pulled. The artifact surviving software rendering is itself the proof that it lives in the display engine, not the renderer.
 
 ## Scope Note
 

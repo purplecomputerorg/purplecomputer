@@ -10,6 +10,7 @@ import subprocess
 import time
 
 from purple_tui.rooms import music_room
+from purple_tui.purple_tui import PurpleApp
 
 
 class _WedgedProc:
@@ -73,3 +74,33 @@ def test_warm_mixer_returns_promptly_against_a_real_hanging_probe(monkeypatch):
     assert result is False
     assert music_room._PROBE_TIMED_OUT is True
     assert elapsed < 10  # bounded by the timeout, not the child's 30s sleep
+
+
+class _FakeApp:
+    """Minimal stand-in to drive PurpleApp._start_mixer_warmup in isolation."""
+
+    audio_ok = None
+    _start_audio_hotplug = lambda self: None
+    _start_audio_retry_poll = lambda self: None
+
+    _start_mixer_warmup = PurpleApp._start_mixer_warmup
+
+
+def _run_warmup_and_wait(app):
+    app._start_mixer_warmup()
+    deadline = time.monotonic() + 5
+    while app.audio_ok is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+
+def test_known_silent_codec_sets_audio_ok_false_not_none(monkeypatch):
+    """A known-silent codec (CS8409) makes the first probe fail and
+    _reset_mixer_state veto retries, so the warmup loop breaks early. audio_ok
+    must land False ("not working"), never stay None ("Audio: checking...")."""
+    monkeypatch.setattr(music_room, "warm_mixer", lambda *a, **k: False)
+    monkeypatch.setattr(music_room, "_reset_mixer_state", lambda: False)
+
+    app = _FakeApp()
+    _run_warmup_and_wait(app)
+
+    assert app.audio_ok is False

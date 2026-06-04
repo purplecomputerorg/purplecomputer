@@ -2,6 +2,8 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Inaudible Mac codecs now say "plug in a USB speaker" instead of "Audio: working"**: On some MacBook Pros the CS8409 codec initializes cleanly but drives no speakers, so the mixer probe wrongly reported audio as working. Audio now checks the codec name: when a known-silent codec is the only output and no USB adapter is present, it reports not-working and points the parent to a USB speaker. Plugging one in clears it without a restart.
+
 - **Parent Menu version moves into the border**: The version line (e.g. "Version 1.0", "Dev build: abc1234") now renders centered in the modal's bottom border instead of as a separate footer line, reclaiming two rows (the version line and the blank margin above it) inside the dialog.
 - **Volume Lock modal wording, less confusing**: The first option now reads "No Lock" instead of "Off" so it isn't mistaken for "sound off", and the description now reads "Pin the volume at one level. The volume keys won't change it until you remove the lock." instead of the previous wording that overloaded "off" for both the volume keys and the lock state.
 - **Volume keys flash the lock state instead of doing nothing**: When Volume Lock or Silent Mode is on, pressing the volume up/down/mute media keys now briefly shows the locked bars with "Locked" (or empty bars with "Silent") in the corner notification, so a kid pressing the keys gets feedback that the keys aren't broken — they're locked. The level still doesn't change.

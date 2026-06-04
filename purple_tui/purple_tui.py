@@ -1226,7 +1226,7 @@ class PurpleApp(App):
             else:
                 for delay in [0.5, 1, 2]:
                     if not _reset_mixer_state():
-                        boot_log.heartbeat("mixer probe timed out (hw broken)")
+                        boot_log.heartbeat("mixer unusable, not retrying (hw broken or silent codec)")
                         break
                     boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
                     _time.sleep(delay)

@@ -236,6 +236,14 @@ Machines where the audio probe path is known to be slow or blocking, so the lazy
 
 Plain Intel HDA codec laptops (pre-2020 ThinkPads/Dells/HPs) don't need per-codec firmware and don't hit this path.
 
+### The silent-but-not-hanging case (CS8409 on newer kernels)
+
+The timeout guard above assumes broken audio *hangs*. That assumption broke once the mainline `snd_hda_codec_cs8409` driver matured: on some MacBook Pros it now binds the codec without blocking, runs a *generic* autoconfig (`speaker_outs=0`, no model quirk matched), and returns from `mixer.init()` in milliseconds. The probe passes, so the old code reported "Audio: working" while the speakers stayed dead. The CS8409 is only an HDA-to-I2C bridge; the real amp lives on an I2C side-channel the generic driver never powers on, so ALSA accepts frames into a dead amp.
+
+No software probe can observe this, because ALSA reports success whether or not the amp is alive. A test tone gives the same false confidence as `init()`. So detection gates on **codec identity**, not topology: `output_is_known_silent()` (in `rooms/music_room.py`) reads `/sys/class/sound/hwC*D*/chip_name`, and if a codec in `_SILENT_HDA_CODECS` is present with no USB audio adapter, `warm_mixer()` returns False up front (no probe, no retry) and `audio_ok` becomes False, so the parent gets the "plug in a USB speaker" path.
+
+Why not gate on `speaker_outs=0`? It both over- and under-fires: plenty of working machines (headphone/line-out-only, HDMI, USB) report `speaker_outs=0`, and on this very MBP the internal speaker pins were filed under `line_outs` anyway. It also only lives in privilege-gated dmesg. Codec name from sysfs is unprivileged and stable. A USB adapter clears the veto (it's a real output Pulse routes to), and the hotplug re-probe re-evaluates, so plugging a speaker in flips audio back on without a restart.
+
 ---
 
 ## Rule: don't do heavy work at module import time

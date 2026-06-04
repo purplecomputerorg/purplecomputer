@@ -85,6 +85,45 @@ def _suppress_alsa_output():
 pygame = None  # populated by warm_mixer() once pygame is safe to import
 _MIXER_READY: bool | None = None  # None = untested, True/False = cached result
 _PROBE_TIMED_OUT = False  # True = probe hung (hw is broken, don't retry)
+_KNOWN_SILENT = False  # True = output codec opens fine but is inaudible (don't retry)
+
+# Codecs that init cleanly but drive no speakers: the amp sits on an I2C
+# side-channel the generic HDA driver never powers on, so ALSA accepts frames
+# into a dead amp and mixer.init() "succeeds" while nothing is audible. No
+# software probe (not even a test tone) can observe this, so we gate on codec
+# identity. See guides/boot-hang-debugging.md.
+_SILENT_HDA_CODECS = ("CS8409",)
+
+
+def _has_usb_audio(sound_root: str = "/sys/class/sound") -> bool:
+    """True if any ALSA card is a USB device (a real output Pulse can route to)."""
+    for card in Path(sound_root).glob("card*"):
+        try:
+            if "usb" in os.path.realpath(card / "device").lower():
+                return True
+        except OSError:
+            pass
+    return False
+
+
+def output_is_known_silent(sound_root: str = "/sys/class/sound") -> bool:
+    """True when an HDA output codec is known to be inaudible and no USB audio
+    adapter is present to provide a real output.
+
+    A plugged-in USB device clears the veto: Pulse routes to it, so the silent
+    internal codec no longer matters. The hotplug re-probe re-evaluates this,
+    so plugging a speaker in flips audio back on without a restart.
+    """
+    if _has_usb_audio(sound_root):
+        return False
+    for chip in Path(sound_root).glob("hwC*D*/chip_name"):
+        try:
+            name = chip.read_text().strip()
+        except OSError:
+            continue
+        if any(silent in name for silent in _SILENT_HDA_CODECS):
+            return True
+    return False
 
 import threading as _threading
 _MIXER_LOCK = _threading.Lock()
@@ -108,10 +147,14 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     The lock serialises them so the probe runs at most once per process;
     a late caller waits for the early caller's result.
     """
-    global pygame, _MIXER_READY, _PROBE_TIMED_OUT
+    global pygame, _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT
     with _MIXER_LOCK:
         if _MIXER_READY is not None:
             return _MIXER_READY
+        if output_is_known_silent():
+            _KNOWN_SILENT = True
+            _MIXER_READY = False
+            return False
         try:
             r = subprocess.run(
                 [sys.executable, "-c", _PROBE_SCRIPT],
@@ -150,10 +193,11 @@ def _ensure_mixer() -> bool:
 def _reset_mixer_state() -> bool:
     """Clear cached probe result so warm_mixer() retries on next call.
 
-    Returns False if the probe timed out (hardware is broken, don't retry).
+    Returns False if the probe timed out or the codec is known-silent
+    (hardware can't produce sound, retrying won't help).
     """
     global _MIXER_READY
-    if _PROBE_TIMED_OUT:
+    if _PROBE_TIMED_OUT or _KNOWN_SILENT:
         return False
     _MIXER_READY = None
     return True
@@ -191,7 +235,7 @@ def reinit_mixer_after_hotplug() -> bool:
     failed at boot gets a fresh chance when a USB adapter is plugged in.
     Returns True iff the mixer is working after reinit.
     """
-    global _MIXER_READY, _PROBE_TIMED_OUT
+    global _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT
     with _MIXER_LOCK:
         if pygame is not None:
             try:
@@ -201,6 +245,7 @@ def reinit_mixer_after_hotplug() -> bool:
                 pass
         _MIXER_READY = None
         _PROBE_TIMED_OUT = False
+        _KNOWN_SILENT = False
     try:
         from .. import tts
         tts._current_channel = None

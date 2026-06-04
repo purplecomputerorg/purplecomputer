@@ -200,6 +200,8 @@ After the inflect fix, the same 2016 MBP still hung at boot. Root cause: `pygame
 
 **The fix (current architecture).** `rooms/music_room.py` lazy-loads pygame. `warm_mixer()` runs a **subprocess probe**: it spawns a fresh Python process that attempts `mixer.init()` + `mixer.quit()`, with a 10-second timeout. If the subprocess exits 0, the in-process `mixer.init()` follows (safe because the subprocess proved the hardware works). If it times out, `_PROBE_TIMED_OUT` is set and the mixer is marked as broken.
 
+**Why `subprocess.run` is wrong here, and `Popen` + abandon is right.** A genuinely wedged CS8409 leaves the probe child in uninterruptible **D-state** inside the kernel's `snd_pcm_open()`. SIGKILL cannot reap a D-state task. `subprocess.run(timeout=...)` reacts to a timeout by calling `kill()` then a **blocking `wait()`** to reap, and that `wait()` hangs forever on the unkillable child, so `warm_mixer()` never returns and `audio_ok` stays `None`: the screen shows "Audio: checking..." with no resolution (observed on a MacBookPro13,2). The hang is in a separate process, not ours, so the fix is to stop waiting on it: `Popen` + `proc.wait(timeout=...)` (which polls and always returns at the deadline), then on timeout `kill()` and **abandon** the child (a daemon `_reap_orphan` thread collects it if the kernel ever lets go). `_start_mixer_warmup`'s `_warm()` is also wrapped so any unexpected error fails safe to `audio_ok = False` rather than leaving it `None`.
+
 **Retry logic** (in `purple_tui.py:_start_mixer_warmup`): PulseAudio/ALSA may still be initializing at boot, so a fast failure (exit code ≠ 0, not a timeout) triggers retries with delays of 1s, 2s, 4s. `_reset_mixer_state()` clears the cached failure between retries but refuses to reset after a timeout (returns False), so broken hardware stops after one 10s attempt.
 
 **Timing in practice:**
@@ -209,7 +211,7 @@ After the inflect fix, the same 2016 MBP still hung at boot. Root cause: `pygame
 | Audio works immediately (most hw) | Probe succeeds on attempt 1 | ~1s |
 | PulseAudio slow at boot (MacBookAir7,2) | Attempt 1 fails fast, retry after 1s succeeds | ~2s |
 | PulseAudio very slow (worst case) | All retries needed (1+2+4s delays) | ~9s |
-| Hardware broken/hanging (CS8209 MBP) | Probe hangs, killed at 10s timeout, no retry | ~10s |
+| Hardware broken/hanging (CS8409 MBP) | Probe child wedges in D-state, abandoned at 10s timeout, no retry | ~10s |
 | `PURPLE_NO_AUDIO=1` (testing) | No probe, no thread | 0s |
 
 During the retry window, `audio_ok` is `None`. The splash screen shows no audio warning (only appears after confirmed failure). The room picker shows normal "Volume" button. Once `audio_ok` becomes `False`, the splash shows the 🔇 warning and the room picker shows disabled "No Sound."
@@ -220,7 +222,7 @@ During the retry window, `audio_ok` is `None`. The splash screen shows no audio 
 mixer ok (attempt 1)              # happy path
 mixer probe failed, retrying in 1s  # PulseAudio not ready, will retry
 mixer ok (retry)                  # retry succeeded
-mixer probe timed out (hw broken) # CS8209-style hang, gave up
+mixer probe timed out (hw broken) # CS8409-style hang, gave up
 mixer warmup failed               # all retries exhausted
 mixer disabled (PURPLE_NO_AUDIO=1) # env var override
 ```

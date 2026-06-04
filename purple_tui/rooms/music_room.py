@@ -128,6 +128,15 @@ def output_is_known_silent(sound_root: str = "/sys/class/sound") -> bool:
 import threading as _threading
 _MIXER_LOCK = _threading.Lock()
 
+
+def _reap_orphan(proc) -> None:
+    """Block until an abandoned probe child dies, so it doesn't linger as a
+    zombie if the kernel eventually releases its D-state. Daemon-threaded."""
+    try:
+        proc.wait()
+    except Exception:
+        pass
+
 _PROBE_SCRIPT = (
     "import os; os.environ['PYGAME_HIDE_SUPPORT_PROMPT']='1'; "
     "import pygame.mixer; "
@@ -140,7 +149,7 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     """Probe mixer in a subprocess, then init in-process if it passed.
 
     Timeout must cover cold Python startup + pygame/numpy import + mixer
-    init, so 10s gives margin for older hardware. True hangs (CS8209)
+    init, so 10s gives margin for older hardware. True hangs (CS8409)
     block forever, so 10s cleanly separates working from broken.
 
     Called from both the post-boot warmup thread and MusicMode.on_mount.
@@ -156,16 +165,32 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
             _MIXER_READY = False
             return False
         try:
-            r = subprocess.run(
+            proc = subprocess.Popen(
                 [sys.executable, "-c", _PROBE_SCRIPT],
-                timeout=timeout_seconds,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                start_new_session=True,
             )
-            probe_ok = r.returncode == 0
+        except Exception:
+            _MIXER_READY = False
+            return False
+        try:
+            probe_ok = proc.wait(timeout=timeout_seconds) == 0
         except subprocess.TimeoutExpired:
-            probe_ok = False
+            # A truly wedged codec (CS8409 on a T1/T2 Mac) leaves the child in
+            # uninterruptible D-state: SIGKILL can't reap it, and a blocking
+            # wait() would hang us forever, which is the "Audio: checking..."
+            # that never resolves. Signal and abandon it: it's a separate
+            # process so it can't wedge us, and a daemon reaper collects it if
+            # the kernel ever lets go. wait(timeout) polls, so it always returns
+            # at the deadline regardless of D-state.
             _PROBE_TIMED_OUT = True
+            probe_ok = False
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            _threading.Thread(target=_reap_orphan, args=(proc,), daemon=True).start()
         except Exception:
             probe_ok = False
         if not probe_ok:

@@ -1220,23 +1220,29 @@ class PurpleApp(App):
         import time as _time
         def _warm():
             from .rooms.music_room import warm_mixer, _reset_mixer_state
-            if warm_mixer():
-                self.audio_ok = True
-                boot_log.heartbeat("mixer ok (attempt 1)")
-            else:
-                for delay in [0.5, 1, 2]:
-                    if not _reset_mixer_state():
-                        boot_log.heartbeat("mixer unusable, not retrying (hw broken or silent codec)")
-                        break
-                    boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
-                    _time.sleep(delay)
-                    if warm_mixer():
-                        self.audio_ok = True
-                        boot_log.heartbeat("mixer ok (retry)")
-                        break
+            try:
+                if warm_mixer():
+                    self.audio_ok = True
+                    boot_log.heartbeat("mixer ok (attempt 1)")
                 else:
-                    self.audio_ok = False
-                    boot_log.heartbeat("mixer warmup failed")
+                    for delay in [0.5, 1, 2]:
+                        if not _reset_mixer_state():
+                            boot_log.heartbeat("mixer unusable, not retrying (hw broken or silent codec)")
+                            break
+                        boot_log.heartbeat(f"mixer probe failed, retrying in {delay}s")
+                        _time.sleep(delay)
+                        if warm_mixer():
+                            self.audio_ok = True
+                            boot_log.heartbeat("mixer ok (retry)")
+                            break
+                    else:
+                        self.audio_ok = False
+                        boot_log.heartbeat("mixer warmup failed")
+            except Exception as e:
+                # Never leave audio_ok stuck on None ("Audio: checking..."):
+                # fail safe to "not working" so the parent gets the USB-speaker path.
+                self.audio_ok = False
+                boot_log.heartbeat(f"mixer warmup error: {e!r}")
             # After the initial probe lands either way, start the hotplug listener
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.

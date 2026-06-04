@@ -42,7 +42,7 @@ def get_version_label() -> str:
 
     Semver (v1.0, v1.2.3) shows as "Version 1.0".
     Date-time (v2026.03.30-1430) shows as "Build: Mar 30, 2026".
-    Dev builds (build-abc1234-20260330) show as "Dev build: abc1234".
+    Git-hash builds (build-abc1234-20260330) show as "Version abc1234".
     Falls back to git short hash for dev/VM environments.
     Returns empty string if nothing is discoverable.
     """
@@ -55,7 +55,7 @@ def get_version_label() -> str:
                 cwd=Path(__file__).parent,
             )
             if r.returncode == 0 and r.stdout.strip():
-                return f"Dev: {r.stdout.strip()}"
+                return f"Version {r.stdout.strip()}"
         except Exception:
             pass
         return ""
@@ -77,7 +77,7 @@ def get_version_label() -> str:
 
     m = re.match(r'^build-([a-f0-9]+)-', version)
     if m:
-        return f"Dev build: {m.group(1)}"
+        return f"Version {m.group(1)}"
 
     return version
 

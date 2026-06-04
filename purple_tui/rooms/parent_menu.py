@@ -1768,6 +1768,8 @@ class ParentMenu(PurpleModal):
     #modal-dialog {
         width: 52;
         padding: 1 2;
+        border-subtitle-align: center;
+        border-subtitle-color: $text-muted;
     }
 
     #modal-title {
@@ -1802,11 +1804,6 @@ class ParentMenu(PurpleModal):
         height: auto;
         text-align: center;
         color: $text-muted;
-    }
-
-    #parent-version {
-        height: 1;
-        margin-top: 1;
     }
 
     #parent-live-hint {
@@ -1862,13 +1859,13 @@ class ParentMenu(PurpleModal):
                 id="parent-keyboard-note",
                 classes="parent-footer",
             )
-            version = _get_version_label()
-            if version:
-                yield Static(version, id="parent-version", classes="parent-footer")
 
     def on_mount(self) -> None:
         """Highlight the first menu item"""
         self._update_selection()
+        version = _get_version_label()
+        if version:
+            self.query_one("#modal-dialog").border_subtitle = f" {version} "
         # Poll for USB re-insertion/removal so the install item updates live
         if _is_casper_boot():
             self.set_interval(0.5, self._refresh_install_item)

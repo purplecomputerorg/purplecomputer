@@ -1247,26 +1247,48 @@ class InstallConfirmScreen(PurpleModal):
 
 _ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
-# Maps substrings in [PURPLE] log output to (percent, display_message, blind_secs).
+# Reference write time (seconds) for the 8 GiB image on a mid-range SATA SSD.
+# Used to derive a per-machine "slowness factor" (actual write / this) that
+# paces the creep timer through the blind boot-setup steps.
+_NOMINAL_WRITE_SECS = 420.0
+
+# Maps substrings in [PURPLE] log output to:
+#   (keyword, percent, display_message, nominal_secs, pv_driven)
 # Keywords must match the actual install.sh log strings. Progress only moves
-# forward. The write (10->70, driven by [PURPLE-PV]) and verify (72->85, driven
-# by [PURPLE-PV2]) phases get real byte-level progress, so their bands carry no
-# creep (blind_secs 0). Every other step is "blind": blind_secs is its nominal
-# duration on a reference machine, scaled at runtime by the measured disk speed.
+# forward. nominal_secs is the band's expected duration on a reference machine
+# (the band runs from this stage's percent to the next stage's). pv_driven bands
+# (write 10->70, verify 72->85) show real byte-level progress, so they get no
+# creep; the rest are "blind" and the creep timer fills them. nominal_secs feeds
+# both the creep pacing and the ETA's time-shape model.
 _INSTALL_STAGES = [
-    ("Detecting internal disk",       5,  "Getting started...",           0),
-    ("Found internal disk",           8,  "Getting started...",           0),
-    ("Writing Purple Computer",       10, "Setting up Purple Computer...", 0),
-    ("Reloading partition table",     70, "Double-checking everything...", 8),
-    ("Verifying disk write",          72, "Double-checking everything...", 0),
-    ("Disk verification passed",      85, "Double-checking everything...", 2),
-    ("Rebuilding partition table",    86, "Almost ready...",               5),
-    ("Waiting for partition devices", 88, "Almost ready...",               8),
-    ("Checking root filesystem",      90, "Almost ready...",               15),
-    ("Growing root filesystem",       92, "Almost ready...",               20),
-    ("Setting up boot",               94, "Almost ready...",               40),
-    ("Boot setup complete",           98, "Almost ready...",               3),
+    ("Detecting internal disk",       5,  "Getting started...",            4,   False),
+    ("Found internal disk",           8,  "Getting started...",            3,   False),
+    ("Writing Purple Computer",       10, "Setting up Purple Computer...", _NOMINAL_WRITE_SECS, True),
+    ("Reloading partition table",     70, "Double-checking everything...", 8,   False),
+    ("Verifying disk write",          72, "Double-checking everything...", 180, True),
+    ("Disk verification passed",      85, "Double-checking everything...", 3,   False),
+    ("Rebuilding partition table",    86, "Almost ready...",               8,   False),
+    ("Waiting for partition devices", 88, "Almost ready...",               10,  False),
+    ("Checking root filesystem",      90, "Almost ready...",               25,  False),
+    ("Growing root filesystem",       92, "Almost ready...",               25,  False),
+    ("Setting up boot",               94, "Almost ready...",               50,  False),
+    ("Boot setup complete",           98, "Almost ready...",               5,   False),
 ]
+
+# Cumulative reference seconds at each bar-% boundary, used to convert the
+# current bar position into an expected fraction of total time. The ETA reads
+# the *shape* from this (which percent ranges are slow) but calibrates absolute
+# speed from real elapsed time, so it self-adjusts to slow or fast disks.
+def _build_eta_curve():
+    pts = [(_INSTALL_STAGES[0][1], 0.0)]
+    cum = 0.0
+    for i, (_, pct, _disp, nominal, _pv) in enumerate(_INSTALL_STAGES):
+        cum += nominal
+        nxt = _INSTALL_STAGES[i + 1][1] if i + 1 < len(_INSTALL_STAGES) else 100
+        pts.append((nxt, cum))
+    return pts, cum
+
+_ETA_CURVE, _ETA_TOTAL_SECS = _build_eta_curve()
 
 
 _REBOOT_BIN = '/run/purple-reboot-mount/purple-reboot'
@@ -1325,10 +1347,6 @@ class InstallProgressScreen(PurpleModal):
     _SCROLL_DELAY = 0.25
     # Max visible lines in the scroll window (leaves room for title + hint)
     _SCROLL_VISIBLE = 25
-    # Reference write time (seconds) for the 8 GiB image on a mid-range SATA SSD.
-    # The actual write time divided by this gives a per-machine "slowness factor"
-    # used to pace the creep timer through the blind boot-setup steps.
-    _NOMINAL_WRITE_SECS = 480.0
 
     def __init__(self, computer_name: str = "", **kwargs):
         super().__init__(**kwargs)
@@ -1382,17 +1400,54 @@ class InstallProgressScreen(PurpleModal):
             self._creep_timer.stop()
             self._creep_timer = None
 
+    def _time_fraction(self, pct: int) -> float:
+        """Expected fraction of total install TIME elapsed at this bar percent.
+        Reads the non-linear time shape from _ETA_CURVE (the tail is slow even
+        though it's a thin slice of the bar)."""
+        if pct <= _ETA_CURVE[0][0]:
+            return 0.0
+        prev_p, prev_c = _ETA_CURVE[0]
+        for p, c in _ETA_CURVE[1:]:
+            if pct <= p:
+                cum = prev_c + (c - prev_c) * (pct - prev_p) / (p - prev_p)
+                return cum / _ETA_TOTAL_SECS
+            prev_p, prev_c = p, c
+        return 1.0
+
+    def _nominal_remaining_secs(self) -> float:
+        """Remaining time from the per-phase nominal durations, prorated for the
+        current band and scaled by the measured disk-speed factor. Used as a
+        floor so a creep-inflated bar can't make the ETA overpromise."""
+        total = 0.0
+        n = len(_INSTALL_STAGES)
+        for i, (_, pct, _disp, nominal, _pv) in enumerate(_INSTALL_STAGES):
+            hi = _INSTALL_STAGES[i + 1][1] if i + 1 < n else 100
+            if self._progress >= hi:
+                continue
+            if self._progress <= pct:
+                total += nominal
+            else:
+                total += nominal * (hi - self._progress) / (hi - pct)
+        return total * self._k
+
     def _eta_hint(self) -> str:
-        """Rolling ETA based on elapsed time and current progress."""
-        if self._progress < 15 or self._start_time is None:
-            return "Usually under 10 minutes."
-        if self._progress >= 95:
-            return "Almost done."
+        """Conservative ETA: calibrate absolute speed from real elapsed time,
+        distribute the remainder by the true per-phase time shape (so the slow
+        tail isn't under-counted), and floor it with the speed-scaled nominal
+        remaining. Rounds up; biased to never overpromise."""
+        # Below 20% the curve is too steep to estimate honestly; show a range.
+        if self._progress < 20 or self._start_time is None:
+            return "This usually takes 10 to 15 minutes"
+        f = self._time_fraction(self._progress)
+        if f <= 0:
+            return "This usually takes 10 to 15 minutes"
         elapsed = time.monotonic() - self._start_time
-        remaining = elapsed / self._progress * (100 - self._progress)
-        minutes = max(1, round(remaining / 60))
+        remaining = max(elapsed * (1 - f) / f, self._nominal_remaining_secs())
+        if self._progress >= 96 or remaining < 45:
+            return "Almost done"
+        minutes = max(1, math.ceil(remaining / 60))
         unit = "minute" if minutes == 1 else "minutes"
-        return f"About {minutes} {unit} left."
+        return f"About {minutes} {unit} left"
 
     def _set_progress(self, pct: int, status: str) -> None:
         """Single forward-only progress sink. PV, markers, and creep all funnel
@@ -1402,12 +1457,13 @@ class InstallProgressScreen(PurpleModal):
             self._status = status
             self._update_ui()
 
-    def _start_creep_band(self, lo: int, hi: int, nominal_secs: float) -> None:
-        """Begin filling [lo, hi) asymptotically. nominal_secs<=0 disables creep
-        (the band is driven by real pv progress instead)."""
+    def _start_creep_band(self, lo: int, hi: int, nominal_secs: float,
+                          pv_driven: bool) -> None:
+        """Begin filling [lo, hi) asymptotically. pv_driven bands show real
+        progress instead, so creep is disabled for them."""
         self._creep_t0 = time.monotonic()
         self._creep_lo = max(lo, self._progress)
-        self._creep_hi = hi if nominal_secs > 0 else self._creep_lo
+        self._creep_hi = self._creep_lo if pv_driven else hi
         # 3 time constants ~= 95% filled, so the band is visually near-full
         # right around its expected (speed-scaled) duration.
         self._creep_tau = max(0.5, nominal_secs * self._k / 3.0)
@@ -1422,8 +1478,10 @@ class InstallProgressScreen(PurpleModal):
             self._set_progress(pct, self._status)
 
     def _render_bar(self, pct: int) -> str:
+        # Fixed-width percent (3 digits) so the centered bar doesn't shift left
+        # as the number grows from 1 to 2 to 3 digits.
         filled = int(36 * pct / 100)
-        return "█" * filled + "░" * (36 - filled) + f"  {pct}%"
+        return "█" * filled + "░" * (36 - filled) + f"  {pct:>3d}%"
 
     def _update_ui(self) -> None:
         try:
@@ -1548,7 +1606,7 @@ class InstallProgressScreen(PurpleModal):
         if not clean.startswith('[PURPLE]'):
             return
         msg = clean[8:].strip()
-        for i, (keyword, pct, display, blind) in enumerate(_INSTALL_STAGES):
+        for i, (keyword, pct, display, nominal, pv_driven) in enumerate(_INSTALL_STAGES):
             if keyword in msg and pct > self._progress:
                 if keyword == "Writing Purple Computer":
                     self._write_t0 = time.monotonic()
@@ -1556,11 +1614,11 @@ class InstallProgressScreen(PurpleModal):
                     # First marker after the write: the elapsed write time is a
                     # free per-machine disk benchmark. Scale all later creep bands.
                     actual = time.monotonic() - self._write_t0
-                    self._k = min(6.0, max(0.25, actual / self._NOMINAL_WRITE_SECS))
+                    self._k = min(6.0, max(0.25, actual / _NOMINAL_WRITE_SECS))
                     self._write_t0 = None
                 self._set_progress(pct, display)
                 hi = _INSTALL_STAGES[i + 1][1] if i + 1 < len(_INSTALL_STAGES) else 100
-                self._start_creep_band(pct, hi, blind)
+                self._start_creep_band(pct, hi, nominal, pv_driven)
                 return
 
     def _get_error_summary(self) -> str:

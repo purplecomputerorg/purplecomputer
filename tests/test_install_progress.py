@@ -200,7 +200,7 @@ def test_calibration_factor_from_write_time(monkeypatch):
     clock = {"t": 1000.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
     screen._handle_line("[PURPLE] Writing Purple Computer to disk...")
-    clock["t"] += screen._NOMINAL_WRITE_SECS * 2  # twice as slow as reference
+    clock["t"] += pm._NOMINAL_WRITE_SECS * 2  # twice as slow as reference
     screen._handle_line("[PURPLE] Reloading partition table...")
     assert screen._k == pytest.approx(2.0)
     assert screen._write_t0 is None
@@ -212,7 +212,7 @@ def test_creep_fills_toward_hi_without_reaching_it(monkeypatch):
     clock = {"t": 0.0}
     monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
     screen._progress = 94
-    screen._start_creep_band(94, 98, nominal_secs=40)
+    screen._start_creep_band(94, 98, nominal_secs=40, pv_driven=False)
     seen = []
     for _ in range(200):
         clock["t"] += 1.0
@@ -223,8 +223,58 @@ def test_creep_fills_toward_hi_without_reaching_it(monkeypatch):
     assert seen == sorted(seen), "creep must never regress"
 
 
-def test_creep_disabled_when_nominal_zero():
+def test_creep_disabled_for_pv_driven_band():
     screen = _make_screen()
     screen._progress = 10
-    screen._start_creep_band(10, 70, nominal_secs=0)  # pv-driven band
+    screen._start_creep_band(10, 70, nominal_secs=420, pv_driven=True)
     assert screen._creep_hi == screen._creep_lo  # creep is a no-op
+
+
+def test_eta_does_not_overpromise_on_slow_tail(monkeypatch):
+    """A machine that crawls through the slow tail must not be told '1 minute'
+    while minutes of work remain."""
+    import purple_tui.rooms.parent_menu as pm
+    screen = _make_screen()
+    clock = {"t": 0.0}
+    monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
+    screen._start_time = 0.0
+    # Bar reaches 85% (verify done) but only after a slow 12 minutes of real time.
+    screen._progress = 85
+    clock["t"] = 12 * 60
+    hint = screen._eta_hint()
+    # At 85%, ~83% of expected time has passed, so ~2.4 min should remain -- the
+    # old linear model would have said well under a minute. Must not say "1 minute".
+    assert "1 minute left" not in hint
+    assert hint in ("Almost done",) or "minutes left" in hint
+
+
+def test_eta_shows_range_early_and_done_near_end(monkeypatch):
+    import purple_tui.rooms.parent_menu as pm
+    screen = _make_screen()
+    clock = {"t": 0.0}
+    monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
+    screen._start_time = 0.0
+    screen._progress = 12
+    clock["t"] = 30
+    assert screen._eta_hint() == "This usually takes 10 to 15 minutes"
+    screen._progress = 99
+    clock["t"] = 13 * 60
+    assert screen._eta_hint() == "Almost done"
+
+
+def test_eta_hints_have_no_trailing_period(monkeypatch):
+    import purple_tui.rooms.parent_menu as pm
+    screen = _make_screen()
+    clock = {"t": 0.0}
+    monkeypatch.setattr(pm.time, "monotonic", lambda: clock["t"])
+    screen._start_time = 0.0
+    for prog, t in ((10, 5), (50, 120), (85, 720), (99, 800)):
+        screen._progress = prog
+        clock["t"] = t
+        assert not screen._eta_hint().endswith("."), f"period at {prog}%"
+
+
+def test_render_bar_width_is_constant():
+    screen = _make_screen()
+    widths = {len(screen._render_bar(p)) for p in (0, 5, 12, 70, 100)}
+    assert len(widths) == 1, f"bar width must not change: {widths}"

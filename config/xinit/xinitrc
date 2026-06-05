@@ -142,8 +142,10 @@ xlog "matchbox-window-manager started"
 # Tear-free compositor. The modesetting driver has no TearFree option, so this
 # is what stops old Intel panels flashing a checkerboard of the old+new frame
 # during transitions. Guarded launcher: never blocks or fails the session.
+# Backgrounded so its liveness check + glx->xrender fallback don't delay boot;
+# picom attaches to existing windows, so it can come up a beat after Alacritty.
 # See guides/intel-display-tuning.md.
-xlog "compositor: $(purple-start-compositor 2>&1)"
+( xlog "compositor: $(purple-start-compositor 2>&1)" ) &
 
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0

@@ -201,6 +201,7 @@ SOURCES
         libgl1-mesa-dri \
         matchbox-window-manager \
         alacritty \
+        picom \
         ncurses-term \
         libxkbcommon-x11-0 \
         fontconfig \
@@ -611,8 +612,13 @@ TIMEOUTS
     cp /purple-src/config/systemd/purple-x11.service "$MOUNT_DIR/etc/systemd/system/"
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
+    cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
+    # Tear-free compositor config (modesetting has no TearFree option of its own)
+    mkdir -p "$MOUNT_DIR/etc/purple"
+    cp /purple-src/config/picom/picom.conf "$MOUNT_DIR/etc/purple/picom.conf"
     chroot "$MOUNT_DIR" systemctl enable purple-x11.service
 
     # Persistent journald on installed systems (no-op on live, where the

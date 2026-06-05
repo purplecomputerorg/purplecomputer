@@ -139,6 +139,12 @@ matchbox-window-manager -use_titlebar no &
 sleep 0.5
 xlog "matchbox-window-manager started"
 
+# Tear-free compositor. The modesetting driver has no TearFree option, so this
+# is what stops old Intel panels flashing a checkerboard of the old+new frame
+# during transitions. Guarded launcher: never blocks or fails the session.
+# See guides/intel-display-tuning.md.
+xlog "compositor: $(purple-start-compositor 2>&1)"
+
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
 

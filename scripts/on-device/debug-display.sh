@@ -2,17 +2,20 @@
 # debug-display.sh - Diagnose the old-Intel "checkerboard" scanout artifact.
 #
 # Run from the parent-menu terminal (Open Terminal) on any ISO:
-#   /opt/purple/scripts/debug-display.sh            # full state dump + verdict
-#   /opt/purple/scripts/debug-display.sh repro      # reproduce the artifact on demand
-#   /opt/purple/scripts/debug-display.sh toggle fbc off|on
-#   /opt/purple/scripts/debug-display.sh toggle psr off|on
-#   /opt/purple/scripts/debug-display.sh toggle tearfree off|on
+#   /opt/purple/scripts/debug-display.sh               # full state dump + verdict
+#   /opt/purple/scripts/debug-display.sh repro         # reproduce the artifact on demand
+#   /opt/purple/scripts/debug-display.sh compositor off|on|status   # the runtime A/B lever
 #
-# Why this exists: the checkerboard lives at the display-engine/scanout layer
-# (it survives LIBGL_ALWAYS_SOFTWARE=1), so screenshots can't catch it and you
-# can't tell from the screen whether a shipped mitigation actually took effect.
-# This confirms what's active, lets you A/B the knobs at runtime (no ISO
-# rebuild), and gives a reliable repro. See guides/intel-display-tuning.md.
+# What we learned (see guides/intel-display-tuning.md):
+#   - The artifact is a present-path TEAR: the panel scans out a half-updated
+#     frame (old content + new content) during transitions. It survives
+#     LIBGL_ALWAYS_SOFTWARE=1 because it's at scanout, not in the rendered frame.
+#   - PSR/FBC-off don't fix a tear, and the modesetting driver has NO TearFree
+#     option, so that mitigation was always a no-op. The fix is a vsync
+#     compositor (picom) that presents whole frames.
+#   - PSR/FBC are read-only kernel knobs at runtime (you can't toggle them from
+#     here without a rebuild), but the compositor is a plain user process: start
+#     and stop it freely, no root, to A/B the actual fix.
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[1;34m'; NC='\033[0m'
 pass() { echo -e "${GREEN}[ ACTIVE ]${NC} $1"; }
@@ -21,31 +24,31 @@ warn() { echo -e "${YELLOW}[   ?   ]${NC} $1"; }
 info() { echo "             $1"; }
 section() { echo; echo -e "${BLUE}--- $1 ---${NC}"; }
 
-# Passwordless sudo on the live boot; falls back cleanly if a read is denied.
-priv() { sudo cat "$1" 2>/dev/null; }
+# Passwordless sudo? Used only to read debugfs. Everything that drives the
+# verdict (module params, Xorg log, xrandr, the compositor) is readable without
+# it, so a no-sudo terminal still gives a trustworthy answer.
+sudo -n true 2>/dev/null && HAVE_SUDO=1 || HAVE_SUDO=0
+priv() { [ "$HAVE_SUDO" = 1 ] && sudo cat "$1" 2>/dev/null; }
+rd() { cat "$1" 2>/dev/null; }
 
-# Locate the i915 debugfs node (usually dri/0, but never assume the index).
 find_dri() {
     local d name
-    sudo mount -t debugfs none /sys/kernel/debug 2>/dev/null
+    [ "$HAVE_SUDO" = 1 ] && sudo mount -t debugfs none /sys/kernel/debug 2>/dev/null
     for d in /sys/kernel/debug/dri/*/; do
         [ -d "$d" ] || continue
-        name=$(priv "$d/name")
-        case "$name" in
-            *i915*) echo "${d%/}"; return 0 ;;
-        esac
+        case "$(priv "$d/name")" in *i915*) echo "${d%/}"; return 0 ;; esac
     done
     [ -d /sys/kernel/debug/dri/0 ] && echo /sys/kernel/debug/dri/0
 }
 
-# First connected output name, for xrandr toggles / property reads.
 primary_output() { xrandr 2>/dev/null | awk '/ connected/{print $1; exit}'; }
+compositor_pid() { pgrep -x picom; }
 
 # ---------------------------------------------------------------------------
 # State dump
 # ---------------------------------------------------------------------------
 dump() {
-    local cmdline psr_p fbc_p dri out tf
+    local cmdline psr_p fbc_p
     cmdline=$(cat /proc/cmdline)
     DRI=$(find_dri)
 
@@ -54,146 +57,127 @@ dump() {
     echo "==========================================================="
 
     section "Hardware"
-    info "Model:  $(cat /sys/class/dmi/id/sys_vendor 2>/dev/null) $(cat /sys/class/dmi/id/product_name 2>/dev/null)"
-    info "Board:  $(cat /sys/class/dmi/id/board_name 2>/dev/null)"
-    info "GPU:    $(lspci 2>/dev/null | grep -iE 'vga|display|3d' | sed 's/^/        /' | head -3)"
+    info "Model:  $(rd /sys/class/dmi/id/sys_vendor) $(rd /sys/class/dmi/id/product_name)"
+    info "Board:  $(rd /sys/class/dmi/id/board_name)"
+    info "GPU:    $(lspci 2>/dev/null | grep -iE 'vga|display|3d' | head -1)"
     if [ -d /sys/module/i915 ]; then
-        info "DRM:    i915 loaded (Intel; mitigations apply)"
+        info "DRM:    i915 loaded (Intel)"
     else
-        warn "i915 NOT loaded: this is not an Intel-GPU machine, the i915 mitigations are no-ops here."
+        warn "i915 NOT loaded: not an Intel-GPU machine, the i915 cmdline params are no-ops here."
     fi
 
     section "Verdict (is each mitigation actually live?)"
-    # PSR
-    psr_p=$(priv /sys/module/i915/parameters/enable_psr)
+    # Compositor: THE fix for the tear. A plain user process, always checkable.
+    if [ -n "$(compositor_pid)" ]; then
+        pass "Compositor running (picom): whole-frame vsync'd presentation, tear-free. $(ps -o args= -p "$(compositor_pid)" 2>/dev/null | grep -o -- '--backend [a-z]*')"
+    else
+        fail "No compositor: modesetting blits partial damage straight to scanout = tearing/checkerboard. Start it: $0 compositor on"
+    fi
+    # PSR / FBC: correct to have off, but they don't fix a tear. Module params
+    # are world-readable, so this is reliable with or without sudo.
+    psr_p=$(rd /sys/module/i915/parameters/enable_psr)
+    fbc_p=$(rd /sys/module/i915/parameters/enable_fbc)
     if echo "$cmdline" | grep -q 'i915.enable_psr=0' && [ "$psr_p" = "0" ]; then
         pass "PSR disabled (cmdline + module param both 0)"
-    elif echo "$cmdline" | grep -q 'i915.enable_psr=0'; then
-        warn "PSR: cmdline says 0 but module param reads '$psr_p' (param did NOT take)"
     else
-        fail "PSR not disabled (enable_psr=$psr_p, cmdline missing i915.enable_psr=0)"
+        warn "PSR: cmdline=$(echo "$cmdline" | grep -o 'i915.enable_psr=[0-9]'), module param='$psr_p'"
     fi
-    # FBC
-    fbc_p=$(priv /sys/module/i915/parameters/enable_fbc)
     if echo "$cmdline" | grep -q 'i915.enable_fbc=0' && [ "$fbc_p" = "0" ]; then
         pass "FBC disabled (cmdline + module param both 0)"
-    elif echo "$cmdline" | grep -q 'i915.enable_fbc=0'; then
-        warn "FBC: cmdline says 0 but module param reads '$fbc_p' (param did NOT take)"
     else
-        fail "FBC not disabled (enable_fbc=$fbc_p, cmdline missing i915.enable_fbc=0)"
+        warn "FBC: cmdline=$(echo "$cmdline" | grep -o 'i915.enable_fbc=[0-9]'), module param='$fbc_p'"
     fi
-    # TearFree (runtime property is the ground truth, not the config file)
-    out=$(primary_output)
-    tf=$(xrandr --verbose 2>/dev/null | awk -v o="$out" '$1==o{f=1} f&&/TearFree:/{print $2; exit}')
-    if [ "$tf" = "on" ]; then
-        pass "TearFree ON for $out (modesetting composed-flip path engaged)"
-    elif [ -n "$tf" ]; then
-        fail "TearFree property = '$tf' for $out (config did NOT engage)"
-    else
-        warn "TearFree property not exposed (old xserver, or driver isn't modesetting). Check Xorg log below."
-    fi
+    info "(modesetting has no TearFree option; that lever does not exist here)"
 
     section "Kernel cmdline"
     info "$cmdline"
 
     section "i915 module parameters (effective)"
     for p in enable_psr enable_fbc enable_dc enable_dpcd_backlight enable_psr2_sel_fetch; do
-        local v; v=$(priv "/sys/module/i915/parameters/$p")
+        local v; v=$(rd "/sys/module/i915/parameters/$p")
         [ -n "$v" ] && info "$p = $v"
     done
 
-    section "FBC status (debugfs)"
-    if [ -n "$DRI" ] && [ -e "$DRI/i915_fbc_status" ]; then
-        priv "$DRI/i915_fbc_status" | sed 's/^/        /'
-    else
-        info "(no i915_fbc_status node)"
+    section "FBC / PSR status (debugfs)"
+    if [ "$HAVE_SUDO" != 1 ]; then
+        info "(skipped: needs passwordless sudo; debugfs is root-only and the"
+        info " Purple terminal has no sudo. The verdict above does not rely on it.)"
+    elif [ -n "$DRI" ]; then
+        [ -e "$DRI/i915_fbc_status" ] && priv "$DRI/i915_fbc_status" | sed 's/^/   FBC: /'
+        local psr_node
+        psr_node=$(ls "$DRI"/i915_edp_psr_status "$DRI"/eDP-*/i915_psr_status 2>/dev/null | head -1)
+        [ -n "$psr_node" ] && priv "$psr_node" | sed 's/^/   PSR: /'
     fi
 
-    section "PSR status (debugfs)"
-    local psr_node
-    psr_node=$(ls "$DRI"/i915_edp_psr_status "$DRI"/eDP-*/i915_psr_status 2>/dev/null | head -1)
-    if [ -n "$psr_node" ]; then
-        priv "$psr_node" | sed 's/^/        /'
-    else
-        info "(no PSR status node)"
-    fi
+    section "Panel depth + dithering"
+    info "max bpc (connector): a low value (6) would point at panel dither; 8+ rules it out."
+    xrandr --verbose 2>/dev/null | grep -iE 'max bpc|Broadcast RGB' | sort -u | sed 's/^/        /'
 
-    section "Panel depth + dithering  (the Skylake/13,2 hypothesis)"
-    info "If the panel is 6bpc and the pipe is 8bpp, i915 dithers, and a brief"
-    info "checkerboard on color change can be DITHER, which PSR/FBC/TearFree do"
-    info "NOT fix. Look for 'bpp', 'dither', or a low 'bpc' below:"
-    if [ -n "$DRI" ] && [ -e "$DRI/i915_display_info" ]; then
-        priv "$DRI/i915_display_info" | grep -iE 'pipe |bpp|dither|bpc|active=yes' | sed 's/^/        /' | head -30
-    fi
-    info "max bpc (connector property):"
-    xrandr --verbose 2>/dev/null | grep -iE 'max bpc|Broadcast RGB' | sed 's/^/        /'
-
-    section "X driver + present path (did the right driver load?)"
+    section "X driver + present path"
     local xlog
-    for xlog in /var/log/Xorg.0.log /home/purple/.local/share/xorg/Xorg.0.log "$HOME/.local/share/xorg/Xorg.0.log"; do
-        if sudo test -r "$xlog" 2>/dev/null; then
+    for xlog in /home/purple/.local/share/xorg/Xorg.0.log "$HOME/.local/share/xorg/Xorg.0.log" /var/log/Xorg.0.log; do
+        if [ -r "$xlog" ] || { [ "$HAVE_SUDO" = 1 ] && sudo test -r "$xlog" 2>/dev/null; }; then
             info "log: $xlog"
-            priv "$xlog" | grep -iE 'using driver|modesetting|TearFree|Atomic|PageFlip|glamor' | sed 's/^/        /' | head -15
+            { [ -r "$xlog" ] && cat "$xlog" || priv "$xlog"; } \
+                | grep -iE 'using driver|modesetting|TearFree|glamor' | sed 's/^/        /' | head -12
             break
         fi
     done
-    info "GL renderer (expect llvmpipe; software render is intentional):"
-    glxinfo 2>/dev/null | grep -iE 'OpenGL renderer' | sed 's/^/        /' || info "(glxinfo not installed)"
+    info "('Option \"TearFree\" is not used' here is expected: modesetting has no such option.)"
 
     echo
     echo "==========================================================="
     echo "  Saved to $REPORT"
-    echo "  Next: try 'repro' to trigger it, then 'toggle ... off/on'"
-    echo "  one knob at a time and re-run 'repro' to see which fixes it."
+    echo "  A/B the fix (no root needed, no rebuild):"
+    echo "    $0 compositor off   # then trigger a transition: should TEAR"
+    echo "    $0 compositor on    # then trigger again: should be clean"
     echo "==========================================================="
 }
 
 # ---------------------------------------------------------------------------
-# Live A/B toggles (no ISO rebuild). Each takes effect on the next frame.
+# Compositor: the one runtime lever that works from the Purple terminal.
 # ---------------------------------------------------------------------------
-toggle() {
-    local knob="$1" state="$2"
-    case "$state" in on|off) ;; *) echo "Usage: toggle <fbc|psr|tearfree> <on|off>"; exit 1 ;; esac
-    DRI=$(find_dri)
-    case "$knob" in
-        fbc)
-            local v; [ "$state" = on ] && v=1 || v=0
-            echo "$v" | sudo tee /sys/module/i915/parameters/enable_fbc >/dev/null \
-                && echo "FBC enable_fbc -> $v (re-run 'repro' to compare)" \
-                || echo "Failed to write enable_fbc (param may be read-only on this kernel)."
-            ;;
-        psr)
-            # debugfs psr_debug: 0 = force-disable, 1 = follow default
-            local v; [ "$state" = on ] && v=1 || v=0
-            local node; node=$(ls "$DRI"/i915_edp_psr_debug "$DRI"/eDP-*/i915_psr_debug 2>/dev/null | head -1)
-            if [ -n "$node" ]; then
-                echo "$v" | sudo tee "$node" >/dev/null && echo "PSR debug -> $v via $node"
+compositor() {
+    case "$1" in
+        on)
+            if command -v purple-start-compositor >/dev/null 2>&1; then
+                purple-start-compositor
             else
-                echo "No PSR debug node found (PSR may already be fully off)."
+                # Resilient fallback if the launcher isn't on this image yet.
+                local conf=/etc/purple/picom.conf; [ -f "$conf" ] || conf=/dev/null
+                pkill -x picom 2>/dev/null
+                LIBGL_ALWAYS_SOFTWARE=0 picom --config "$conf" --backend glx \
+                    --log-file /tmp/purple-picom.log >/dev/null 2>&1 &
+                sleep 0.6
+                [ -n "$(compositor_pid)" ] && echo "compositor started (glx)" \
+                    || echo "compositor failed to start; see /tmp/purple-picom.log"
             fi
             ;;
-        tearfree)
-            local out; out=$(primary_output)
-            xrandr --output "$out" --set TearFree "$state" 2>&1 \
-                && echo "TearFree -> $state for $out (re-run 'repro' to compare)" \
-                || echo "Could not set TearFree (property not exposed by this driver/xserver)."
+        off)
+            pkill -x picom 2>/dev/null && echo "compositor stopped" || echo "compositor was not running"
             ;;
-        *) echo "Unknown knob '$knob'. Use fbc, psr, or tearfree." ; exit 1 ;;
+        status|"")
+            local pid; pid=$(compositor_pid)
+            if [ -n "$pid" ]; then
+                echo "RUNNING: $(ps -o args= -p "$pid")"
+            else
+                echo "NOT running. Start: $0 compositor on"
+            fi
+            ;;
+        *) echo "Usage: $0 compositor <on|off|status>" ;;
     esac
 }
 
 # ---------------------------------------------------------------------------
-# On-demand repro: drive partial redraws of a few cells, exactly the music-grid
-# keystroke pattern that exposes the artifact. Goes through the same
-# Alacritty -> X present -> scanout path as the app.
+# On-demand repro: drive partial redraws of a few cells, the same music-grid
+# keystroke pattern that exposes the tear. Same Alacritty -> X -> scanout path.
 # ---------------------------------------------------------------------------
 repro() {
     if [ ! -t 0 ]; then echo "repro needs an interactive terminal (run it from Open Terminal)."; exit 1; fi
-    local rows=14 cols=46 base=54   # base = a calm purple-ish 256-color
+    local rows=14 cols=46 base=54
     printf '\033[2J\033[?25l'
     printf '\033[1;1H\033[1;37mCheckerboard repro: flipping a few cells per frame (partial redraw).\033[0m'
     printf '\033[2;1H\033[0;37mWatch the cells as they change color. Press any key to stop.\033[0m'
-    # Initial solid fill so later flips are genuine partial updates.
     local r c
     for ((r=0; r<rows; r++)); do
         printf '\033[%d;1H' $((r+4))
@@ -203,8 +187,6 @@ repro() {
     trap 'printf "\033[0m\033[?25h\033[2J\033[1;1H"; exit 0' INT TERM
     local key
     while true; do
-        # Flip ~6 random cells to high-contrast colors: the worst case for a
-        # stale compressed/dithered block to flash through for one frame.
         for _ in 1 2 3 4 5 6; do
             r=$(( (RANDOM % rows) + 4 ))
             c=$(( (RANDOM % cols) * 2 + 1 ))
@@ -214,13 +196,13 @@ repro() {
         if read -rsn1 -t 0.07 key; then break; fi
     done
     printf '\033[0m\033[?25h\033[2J\033[1;1H'
-    echo "Repro stopped. Tip: toggle one knob off and re-run to A/B."
+    echo "Repro stopped. A/B it: '$0 compositor off', repro, then 'compositor on', repro."
 }
 
 REPORT=/tmp/purple-display-diag.txt
 case "${1:-dump}" in
-    dump|"") dump | tee "$REPORT" ;;
-    repro)   repro ;;
-    toggle)  shift; toggle "$@" ;;
-    *)       echo "Usage: $0 [dump|repro|toggle <fbc|psr|tearfree> <on|off>]" ;;
+    dump|"")    dump | tee "$REPORT" ;;
+    repro)      repro ;;
+    compositor) shift; compositor "$@" ;;
+    *)          echo "Usage: $0 [dump|repro|compositor <on|off|status>]" ;;
 esac

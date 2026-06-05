@@ -1,100 +1,77 @@
-# Intel Display Tuning: PSR/FBC and the Checkerboard Artifact
+# Intel Display Tuning: the Checkerboard Artifact
 
-Why the live boot passes `i915.enable_psr=0 i915.enable_fbc=0`, what it fixes, why it's safe, and why it costs Purple almost no battery.
+The "checkerboard" is a **present-path tear**, not a transparency or compression bug. The fix is a **vsync compositor (picom)**. This guide is the full story, including two earlier theories that turned out wrong, so nobody re-walks them.
 
 Part of the boot display story: see `boot-display-sequence.md` for the full power-on to TUI sequence and the GPU readiness wait.
 
 ---
 
+## TL;DR (the resolution)
+
+On old Intel MacBooks, transitions flash a brief checkerboard. We tried, in order:
+
+1. `i915.enable_psr=0 i915.enable_fbc=0` on the kernel cmdline. **Correct to keep, but not the fix** (disabling compression can't fix a tear). Verified live: both read disabled.
+2. `Option "TearFree" "true"` on the modesetting driver. **A no-op: the modesetting driver has no TearFree option** (only the `intel`/`amdgpu`/`ati` DDX drivers do). It silently logged `Option "TearFree" is not used` and did nothing, on every machine.
+3. Forcing all backgrounds opaque. Correct (a real, separate modal bug), but unrelated to this.
+
+The actual cause: with `modesetting`, partial-damage updates are blitted straight to the scanout buffer, so during a transition the panel scans out a frame that is part old-content, part new-content. That mixed frame, with compression-block residue at the boundaries, is the checkerboard. The fix is **whole-frame, vsync'd presentation**, which `modesetting` only gets from a compositor. We ship `picom` (`config/picom/picom.conf`, launched by `scripts/purple-start-compositor.sh` from `xinitrc`).
+
 ## The Symptom
 
-On pre-2016 Intel MacBooks (the 10-plus-year-old MacBook Pro class of target hardware), changing a single cell's background color flashes a brief checkerboard in the transition. The clearest repro is the music room: press a letter and the keycap cell cycles color, and for one frame a small checkerboard appears where the color changes. It only shows on partial redraws of a few cells, not on full-screen repaints.
+Changing a few cells' colors, or swapping screens, flashes a brief 2-color checkerboard during the transition, then settles to a correct frame. Clearest repros: pressing left/right in the music room (the per-column "wavefront" key-shift animation), and the power-button confirm screen appearing over a room (you momentarily see *both* screens at once). The two checker colors are always the old frame's color and the new frame's color.
 
-## What It Is (and Is Not)
+That last detail is the tell. A checker that mixes the **old and new frame** along a moving boundary is a torn present, not a static panel effect.
 
-It is **not** transparency. That distinction matters because the obvious first guess is wrong, and we already fixed a real transparency bug elsewhere that is easy to confuse with this one:
+## What It Is, and Three Things It Is Not
 
-- Commit `8fe4ca5` removed a genuine 60% alpha from Textual's `ModalScreen` (`background: $background 60%`) by forcing `PurpleModal` opaque. That was a real transparency artifact, and it was modal-only.
-- The music grid has zero transparency. `MusicGrid.render_line()` writes an explicit opaque `bgcolor` into every cell, and there is no `NN%` alpha background anywhere in the room. So the modal fix never applied here, which is why the checkerboard kept showing in music mode after modals were fixed.
+**Not transparency.** Easy to confuse, because there was a real, separate alpha bug: commit `8fe4ca5` removed a genuine 60% alpha from Textual's `ModalScreen` and `tests/test_no_alpha_backgrounds.py` keeps backgrounds opaque. But the music grid and the shutdown screen both render fully opaque (`MusicGrid.render_line()` writes solid `bgcolor`; `ShutdownConfirmScreen` has `background: $background`, pushed with no transition animation). So a *composed* frame can never contain both screens, yet the panel shows both. And it **settles** after the flicker, content can't settle; only a panel re-scan can. Both facts place it after rendering, at scanout.
 
-Once transparency is ruled out, a checkerboard that appears only on small partial redraws on an old Intel panel is the textbook signature of the display engine's compression features:
+**Not panel dither.** A plausible Skylake theory was a 6-bit panel dithering 8bpp content (FRC), recomputed per color change. Ruled out on the actual hardware: the diagnostic reported `max bpc: 12`, not a forced-6-bit panel. And dither is computed per static color, it would never blend the previous frame's color with the new one along a moving wipe.
 
-- **FBC (Framebuffer Compression)** compresses the scanout buffer. On a partial update it can scan out stale compressed blocks for a frame, which reads as a blocky checkerboard. This is the prime suspect for a checkerboard specifically.
-- **PSR (Panel Self Refresh)** lets the panel hold a frame from its own memory while the display engine idles. Its partial-update glitches usually read as flicker or trails more than a checkerboard, but it is the runner-up.
+**Not FBC/PSR alone.** FBC (framebuffer compression) and PSR (panel self-refresh) are real partial-update glitch sources on this Haswell-through-Skylake hardware, and we keep them disabled. But they are not *the* cause here: the artifact persisted with both verified off, because the underlying problem is the torn present, not the compression. The compression-block grid only shapes *how* the tear looks (blocky vs smooth).
 
-Both are Haswell/Broadwell-era Intel features that are notoriously buggy on exactly this hardware. The corruption happens at scanout, after the terminal has already drawn the frame correctly, which is why forcing software rendering (`LIBGL_ALWAYS_SOFTWARE=1`) would not fix it: that changes how Alacritty rasterizes, not how the panel refreshes.
+It survives `LIBGL_ALWAYS_SOFTWARE=1` because that only changes how Alacritty rasterizes, not how the X server presents to the panel.
 
-## The Fix
+## The Fix: a vsync compositor
 
-Disable both on the kernel command line, on every `boot=casper` line in `build-scripts/01-remaster-iso.sh` (normal ISO, debug menu entries, rescue):
+`modesetting` is the right driver for Purple (chosen to avoid legacy-DDX I/O-port problems, see `config/xorg/10-modesetting.conf`), but it has no TearFree. It page-flips full-window updates via the Present extension, but a TUI sends *partial* damage (a few changed cells), which `modesetting` blits directly to the scanout buffer with no vsync, hence the tear.
 
-```
-i915.enable_psr=0 i915.enable_fbc=0
-```
+A compositor fixes the whole class at the layer it shares. `picom` redirects every window into an offscreen buffer and presents the composited result on the vblank, so the panel only ever scans out a complete, consistent frame. It is driver-agnostic (helps any future tearing on AMD/PC targets too) and degrades safely (`scripts/purple-start-compositor.sh` is guarded: if `picom` can't start, the session continues uncomposited, never a black screen).
 
-These are Intel-only (`i915`) params. On AMD or NVIDIA hardware the module is not loaded and the params are ignored, so they are a safe no-op on every other target device.
+Two things that matter in `config/picom/picom.conf`:
 
-## Why Disabling Is Safe (and Not a Repeat of a Past Mistake)
+- **`unredir-if-possible = false`** is mandatory. Alacritty runs fullscreen, and picom's default is to *unredirect* fullscreen windows for performance, which hands Alacritty straight back to the tearing scanout path and undoes everything. Keep it redirected.
+- **Hardware GL for the compositor only.** The session exports `LIBGL_ALWAYS_SOFTWARE=1` (Alacritty renders via llvmpipe, robust on any GPU). The launcher starts picom with `LIBGL_ALWAYS_SOFTWARE=0` so the *compositor* uses the real GPU (glx backend) for fast vsync, with an `xrender` fallback for VMs / machines where hardware GL is unavailable.
 
-There is a precedent worth knowing: commit `2b9dc89` ("Add GPU readiness") **removed** `i915.enable_dpcd_backlight=1`, which had caused black screens on older hardware including the MacBook 2014 and some ThinkPads. The same hardware class we target here.
+## Why PSR/FBC Stay Disabled (kept, even though they're not the fix)
 
-The two changes point in opposite risk directions, which is the whole reason this one is safe:
+Disabled on every `boot=casper` line in `build-scripts/01-remaster-iso.sh` via `i915.enable_psr=0 i915.enable_fbc=0`. Intel-only params, a safe no-op on AMD/NVIDIA. We keep them off as defense-in-depth (they are genuinely buggy partial-update sources on this hardware) and because Purple gets ~no battery benefit from them anyway:
 
-- `i915.enable_dpcd_backlight=1` **forced a capability on**. Forcing DPCD backlight control onto a panel that does not support it kills the backlight: black screen. Genuinely dangerous, correctly removed.
-- `i915.enable_psr=0 i915.enable_fbc=0` **turn optional power features off**. No panel breaks because PSR or FBC is disabled; the worst case is marginally higher idle power. The kernel already disables PSR via quirks on many known-buggy panels, so this just makes that explicit.
+PSR/FBC only save power while the screen holds one unchanged frame, and Purple almost never does, Art and Play blink a cursor ~2x/sec, every keystroke repaints, and even the idle sleep screen animates the face on 1.0s/0.25s timers (no DPMS screen-off, by product decision). They'd churn in and out rather than stay resident, so the saving rounds to zero. Disabling is effectively free.
 
-These params also do not touch the two mechanisms that fixed the original black screen: the DRM-node readiness wait (`scripts/purple-wait-display.sh`) and the removal of the forced backlight param. Different subsystem, no regression.
+Safety precedent worth knowing: commit `2b9dc89` *removed* `i915.enable_dpcd_backlight=1`, which had black-screened older MacBooks/ThinkPads by **forcing a capability on**. `enable_psr=0/enable_fbc=0` do the opposite, they **turn optional features off**, which breaks no panel. Different risk direction, which is why this is safe.
 
-## Battery: Does Purple Actually Benefit from PSR/FBC?
+## Diagnosing On-Device
 
-Generically, PSR can save on the order of a watt on a static screen, and FBC saves some scanout memory bandwidth. The standard advice is "don't disable them, you lose battery." For Purple specifically, that advice mostly does not apply, because **PSR and FBC only save power while the screen holds a single unchanged frame, and Purple almost never does.**
+The artifact is at the scanout layer, so screenshots can't catch it (phone photos of the panel can; framebuffer grabs show the clean composed frame). `scripts/on-device/debug-display.sh` ships to `/opt/purple/scripts/` on every ISO; run it from the parent-menu terminal (Open Terminal):
 
-What keeps the screen moving:
+- **No args**: state dump + per-mitigation **verdict**. The verdict's headline line is whether a **compositor is running**, that is the fix. It also confirms PSR/FBC from the world-readable `/sys/module/i915/parameters/*` (reliable even with no sudo) and reads the panel `max bpc`. Note: debugfs status (FBC/PSR detail) needs root, and the Purple terminal has **no passwordless sudo**, so that section is honestly skipped rather than shown as empty/absent.
+- **`repro`**: drives the music-grid partial-redraw pattern through the real Alacritty to X to scanout path, to trigger the tear on demand.
+- **`compositor off|on|status`**: the one runtime A/B lever that works here. picom is a plain `purple`-user process, no root, so you can stop/start it freely and re-run `repro` to see the tear appear and disappear, no ISO rebuild.
 
-- **Art** runs an explicit blinking cursor (`_start_blink` / `_toggle_blink` on a timer), repainting roughly twice a second the whole time it is open.
-- **Play** (the default room) uses a Textual `Input` whose cursor blinks by default, same continuous repaint.
-- **Active use** of any room, music included, is a repaint per keystroke. Constant input is the entire point of the app.
-- **The idle state does not go static either.** The sleep screen (the walked-away state) runs timers at 1.0s and 0.25s and deliberately keeps animating the face, and there is intentionally no DPMS screen-off. So the one moment PSR normally earns its keep, a quiet idle screen, is animated by design.
-
-PSR and FBC bail out the instant anything changes and re-arm only after the frame is still again. A 0.5s cursor blink alone is enough to keep kicking them out, so on Purple they would churn in and out rather than stay resident. The savings they would collect here round to near zero, so disabling them is effectively free for this software.
-
-The honest caveat: near zero, not exactly zero. There may be brief sub-second windows between blinks where they would have engaged. But that is a rounding error next to the real battery lever, an actual screen-off idle state, which is a product decision already made the other way (animated sleep face, no DPMS).
-
-## Second Lever: TearFree (the present path)
-
-Disabling PSR/FBC removes the scanout-compression source, but the artifact also depends on *partial* updates reaching the panel. The display only scans out a half-updated frame because the present path hands it one. `Option "TearFree" "true"` on the modesetting driver (`config/xorg/10-modesetting.conf`) forces every update through a fully composed back buffer and a single page flip, so the panel always scans out a complete, consistent frame. It is KMS-level and driver-agnostic (safe no-op risk on AMD/NVIDIA-KMS too), costs a little VRAM/bandwidth, negligible here.
-
-This is the right lever precisely because the checkerboard is **not** a per-widget or per-screen bug: opaque content (the music grid) flashes, and a single keystroke is a partial redraw you cannot full-repaint away without wrecking performance. TearFree fixes the whole class at the layer they share, every room, the parent menu, the power screen, boot transitions, in one config line. Chasing transparency per-screen is the wrong layer and a whack-a-mole.
-
-PSR/FBC off and TearFree are complementary: the first removes the corruption source, the second removes the partial-present that exposes it. Ship both; if you ever need to know which did the work, toggle one at a time on-device.
-
-## Diagnosing On-Device (when the shipped fixes don't seem to work)
-
-The artifact is at the scanout layer, so screenshots can't catch it and the screen alone won't tell you whether a mitigation actually took. `scripts/on-device/debug-display.sh` (ships to `/opt/purple/scripts/` on every ISO, run it from the parent-menu terminal) closes that gap:
-
-- **No args**: full state dump with a per-mitigation verdict. It cross-checks the kernel cmdline against the live `/sys/module/i915/parameters/*` values (so you catch the case where `i915.enable_psr=0` is on the cmdline but never reached the module), reads the FBC/PSR debugfs status, reads the panel bit-depth/dither state, and confirms TearFree from the running X server's output property (not the config file, which can be present yet not engaged).
-- **`repro`**: drives partial redraws of a few cells (the music-grid keystroke pattern) through the same Alacritty to X to scanout path, so you can trigger the artifact on demand instead of hunting for it.
-- **`toggle fbc|psr|tearfree on|off`**: flips each knob at runtime (sysfs/debugfs for FBC/PSR, the xrandr `TearFree` output property for TearFree). This collapses the multi-hour ISO-rebuild loop: toggle one knob, re-run `repro`, see which one actually changes the artifact.
-
-## A Different Suspect on Skylake (MacBookPro13,2): Panel Dither
-
-The guide above is written around pre-2016 Haswell/Broadwell. **MacBookPro13,2 is a 2016 Skylake machine**, and on these the likelier cause of "a brief checkerboard when a few cells change color" is **6-bit panel + dithering (FRC)**: the pipe outputs 8bpp into a 6bpc panel, i915 dithers the difference, and on a partial color change the dither pattern is recomputed for those cells, which reads as a one-frame checkerboard. PSR, FBC, and TearFree do not touch dither, which is exactly why it can survive all three. The `debug-display.sh` dump prints the pipe bpp / panel bpc / dither state for this reason. If that's the cause, the lever is the panel bit depth (force 8bpc / `max bpc`, or the i915 dither control), not the compression features.
-
-## If the Checkerboard Persists, or Battery Matters More Later
-
-- **FBC-only.** Since a checkerboard is more characteristic of FBC than PSR, `i915.enable_fbc=0` alone may be enough. Costs an on-device round trip to confirm, which is why the shipped fix disables both in one shot.
-- **Confirm the params took.** On the debug ISO, `sudo cat /sys/kernel/debug/dri/0/i915_fbc_status` and `.../i915_edp_psr_status`. If FBC still reads enabled, the cmdline isn't reaching i915 on that unit, which is the bug to chase, not a new artifact.
-- **Scope by hardware.** A small systemd unit could detect Apple/old-Intel via DMI and toggle PSR/FBC off only there (sysfs/debugfs at runtime), so newer devices keep both. More moving parts; only worth it if the global battery cost ever proves real, which per the analysis above it does not for this software.
-- **GL-layer render compression is already ruled out.** `xinitrc` sets `LIBGL_ALWAYS_SOFTWARE=1`, so rendering goes through Mesa's software path (llvmpipe), not the Intel hardware driver. There is no hardware render/framebuffer compression (CCS) to disable: that knob is effectively already pulled. The artifact surviving software rendering is itself the proof that it lives in the display engine, not the renderer.
+Why the PSR/FBC/TearFree *toggles* were removed: PSR/FBC are read-only kernel knobs at runtime (writes are denied even with root, they're cmdline-only), and modesetting has no TearFree property to toggle. The compositor is the only thing that's both the real fix and runtime-flippable.
 
 ## Scope Note
 
-This covers the live-boot paths, which is the primary distribution model (pre-made USBs, live boot). Installed systems inherit Ubuntu's default kernel cmdline and have no single insertion point in the build, so they are not patched here. Add it to the golden image's `/etc/default/grub` if installed-disk units ever show the same artifact.
+Covers the live-boot paths (the primary distribution model: pre-made USBs). `picom` and its config are installed into the golden image, so they apply to installed systems too, since the compositor is started from `xinitrc`, not the kernel cmdline. The PSR/FBC cmdline params are live-boot only; add them to the golden image's `/etc/default/grub` if an installed unit ever shows compression glitches.
 
 ## Key Files and References
 
-- `build-scripts/01-remaster-iso.sh` (kernel cmdline, all `boot=casper` lines)
-- `scripts/purple-wait-display.sh` (DRM-node readiness wait, the other half of old-Intel display robustness)
-- `guides/boot-display-sequence.md` (full boot sequence, GPU readiness stage)
+- `config/picom/picom.conf` (the compositor config; `unredir-if-possible=false` is load-bearing)
+- `scripts/purple-start-compositor.sh` (guarded launcher, shared by xinitrc and the diagnostic)
+- `config/xinit/xinitrc` (starts the compositor after the WM)
+- `config/xorg/10-modesetting.conf` (why modesetting, and why TearFree isn't there)
+- `scripts/on-device/debug-display.sh` (verdict + repro + compositor A/B)
+- `build-scripts/01-remaster-iso.sh` (PSR/FBC kernel cmdline, all `boot=casper` lines)
 - Commit `8fe4ca5` (the unrelated modal transparency fix, easy to confuse with this)
 - Commit `2b9dc89` (removed the forced `i915.enable_dpcd_backlight=1`, the cautionary precedent)

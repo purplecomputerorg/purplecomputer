@@ -52,6 +52,14 @@ if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
     exit 1
 fi
 
+# Verify the ISO once against its build checksum before flashing every drive,
+# then hand the verified hash to children so they skip re-hashing 6GB apiece.
+log_info "Verifying ISO against build checksum..."
+VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
+export VERIFIED_ISO_SHA256
+init_manifest
+log_info "ISO checksum OK."
+
 load_whitelist
 find_whitelisted_drives
 
@@ -140,6 +148,7 @@ for i in "${!DEVS[@]}"; do
 done
 
 echo
+log_info "QA manifest: $(manifest_path)"
 if [[ ${#FAILED[@]} -eq 0 ]]; then
     echo -e "${BOLD}${GREEN}All ${#FOUND_DRIVES[@]} drives flashed and verified. Unplug them now.${NC}"
     exit 0

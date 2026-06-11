@@ -87,6 +87,50 @@ find_whitelisted_drives() {
     done < <(lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,SERIAL -P 2>/dev/null)
 }
 
+# Verify the ISO matches its build-time .sha256 sidecar, echoing the verified
+# hash on success. Returns 1 on mismatch; warns but succeeds when no sidecar
+# exists (e.g. a hand-specified ISO). This guards the highest-blast-radius
+# mistake: flashing many drives from a truncated or wrong-build ISO, which
+# passes every per-drive readback yet is wrong on every stick.
+verify_iso_checksum() {
+    local iso="$1" sidecar="$1.sha256" expected actual
+    actual="$(sha256sum "$iso" | awk '{print $1}')"
+    if [[ ! -f "$sidecar" ]]; then
+        echo "[WARN] No checksum sidecar ($sidecar); skipping ISO identity check." >&2
+        echo "$actual"
+        return 0
+    fi
+    expected="$(awk '{print $1}' "$sidecar")"
+    if [[ "$actual" != "$expected" ]]; then
+        echo "[ERROR] ISO does not match its build checksum (corrupt or wrong build)." >&2
+        echo "[ERROR]   expected: $expected" >&2
+        echo "[ERROR]   actual:   $actual" >&2
+        return 1
+    fi
+    echo "$actual"
+}
+
+# Append-only QA record of every drive flashed, for shipping traceability.
+# Lives next to .flash-drives.conf (gitignored).
+manifest_path() { echo "$PROJECT_DIR/flash-manifest.csv"; }
+
+# Create the header if the manifest doesn't exist yet. Call once from the
+# top-level invocation, before any parallel children, to avoid a header race.
+init_manifest() {
+    local m; m="$(manifest_path)"
+    [[ -f "$m" ]] || echo "timestamp,status,serial,model,size,iso,sha256,device" > "$m"
+}
+
+# Append one CSV row per drive. A single-line O_APPEND write stays under the
+# 4KB PIPE_BUF atomicity limit, so parallel flash-all children append safely
+# without locking. Model is quoted since it can contain spaces.
+record_manifest() {
+    local status="$1" device="$2" serial="$3" model="$4" size="$5" iso="$6" sha="$7"
+    printf '%s,%s,%s,"%s",%s,%s,%s,%s\n' \
+        "$(date -Iseconds)" "$status" "$serial" "$model" "$size" "$iso" "$sha" "$device" \
+        >> "$(manifest_path)"
+}
+
 # Resolve the most recent ISO in $OUTPUT_DIR. Pass "debug" for .debug.iso.
 find_latest_iso() {
     [[ -d "$OUTPUT_DIR" ]] || return 0

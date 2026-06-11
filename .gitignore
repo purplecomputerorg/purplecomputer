@@ -76,6 +76,8 @@ purple-computer-*.iso
 
 # USB flash drive whitelist (contains user-specific drive serials)
 .flash-drives.conf
+# Per-drive QA flash record (generated traceability log)
+flash-manifest.csv
 tools/.env
 
 # Recording artifacts (generated, not hand-edited)

@@ -166,11 +166,15 @@ write_iso() {
     iso_size_bytes="$(stat -c '%s' "$ISO_PATH")"
     iso_modified="$(stat -c '%y' "$ISO_PATH" | cut -d'.' -f1)"
 
-    # Always compute source SHA256 fresh. A stale cached .sha256 from a
-    # previous build would produce confusing "checksum mismatch" failures
-    # that are actually just a stale hash file, not a bad write.
-    log_info "Computing source ISO checksum..."
-    iso_sha256="$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+    # Reuse the hash verified at pre-flight (computed this run, checked against
+    # the build sidecar), or inherited from flash-all's one-time check, so we
+    # don't re-hash a 6GB ISO per drive. Fall back to computing it if unset.
+    if [[ -n "${VERIFIED_ISO_SHA256:-}" ]]; then
+        iso_sha256="$VERIFIED_ISO_SHA256"
+    else
+        log_info "Computing source ISO checksum..."
+        iso_sha256="$(sha256sum "$ISO_PATH" | awk '{print $1}')"
+    fi
 
     echo ""
     log_info "Writing ISO to $TARGET_DEV..."
@@ -235,6 +239,7 @@ write_iso() {
     echo ""
 
     if [[ "$verify_passed" == true ]]; then
+        record_manifest pass "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" "$iso_sha256"
         echo -e "${BOLD}${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
         echo -e "${BOLD}${GREEN}║                 FLASH COMPLETE - VERIFIED                  ║${NC}"
         echo -e "${BOLD}${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
@@ -334,6 +339,7 @@ write_iso() {
         sudo dmesg -T 2>/dev/null | grep -iE "$(basename "$TARGET_DEV")|usb.*(error|reset|disconnect)" | tail -10 | sed 's/^/    /' || echo "    (none)"
         echo ""
 
+        record_manifest fail "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" "$usb_sha256"
         log_error "The USB drive may be faulty or the write failed."
         log_error "Do NOT use this drive for installation."
         exit 1
@@ -404,6 +410,14 @@ main() {
     fi
 
     log_info "ISO: $ISO_PATH"
+
+    # Pre-flight ISO identity check. Skipped when run as a flash-all child
+    # (--no-udev-gate): the parent verifies once and passes the hash down via
+    # the exported VERIFIED_ISO_SHA256, so children don't re-hash 6GB apiece.
+    if [[ "$MANAGE_UDEV" == true ]]; then
+        VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
+        init_manifest
+    fi
 
     # Load whitelist and find drives
     load_whitelist

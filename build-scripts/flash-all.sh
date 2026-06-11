@@ -54,7 +54,6 @@ fi
 
 # Verify the ISO once against its build checksum before flashing every drive,
 # then hand the verified hash to children so they skip re-hashing 6GB apiece.
-log_info "Verifying ISO against build checksum..."
 VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
 export VERIFIED_ISO_SHA256
 init_manifest

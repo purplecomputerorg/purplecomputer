@@ -94,6 +94,9 @@ find_whitelisted_drives() {
 # passes every per-drive readback yet is wrong on every stick.
 verify_iso_checksum() {
     local iso="$1" sidecar="$1.sha256" expected actual
+    # Progress to stderr (stdout is the captured hash): a silent multi-GB
+    # sha256sum before the confirm prompt otherwise looks like a hang.
+    echo "[INFO] Verifying ISO against build checksum (hashing the full $(du -h "$iso" | cut -f1) ISO, please wait)..." >&2
     actual="$(sha256sum "$iso" | awk '{print $1}')"
     if [[ ! -f "$sidecar" ]]; then
         echo "[WARN] No checksum sidecar ($sidecar); skipping ISO identity check." >&2

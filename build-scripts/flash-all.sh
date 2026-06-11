@@ -52,13 +52,6 @@ if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
     exit 1
 fi
 
-# Verify the ISO once against its build checksum before flashing every drive,
-# then hand the verified hash to children so they skip re-hashing 6GB apiece.
-VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
-export VERIFIED_ISO_SHA256
-init_manifest
-log_info "ISO checksum OK."
-
 load_whitelist
 find_whitelisted_drives
 
@@ -80,6 +73,14 @@ if [[ "$SKIP_CONFIRM" != true ]]; then
     read -p "Type 'yes' to continue: " confirm
     [[ "$confirm" == "yes" ]] || { log_info "Aborted."; exit 0; }
 fi
+
+# Verify the ISO against its build checksum once the user commits, then hand the
+# verified hash to children so they skip re-hashing 6GB apiece. After the prompt
+# so it doesn't stall confirmation; still before any drive is written.
+VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
+export VERIFIED_ISO_SHA256
+init_manifest
+log_info "ISO checksum OK."
 
 # Prime sudo and keep the timestamp fresh for the duration of the run, so
 # children don't hit a password prompt mid-dd on long parallel flashes.

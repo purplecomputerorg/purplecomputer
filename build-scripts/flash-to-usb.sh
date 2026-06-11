@@ -411,14 +411,6 @@ main() {
 
     log_info "ISO: $ISO_PATH"
 
-    # Pre-flight ISO identity check. Skipped when run as a flash-all child
-    # (--no-udev-gate): the parent verifies once and passes the hash down via
-    # the exported VERIFIED_ISO_SHA256, so children don't re-hash 6GB apiece.
-    if [[ "$MANAGE_UDEV" == true ]]; then
-        VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
-        init_manifest
-    fi
-
     # Load whitelist and find drives
     load_whitelist
     log_info "Loaded ${#WHITELIST[@]} whitelisted serial(s) from config"
@@ -438,6 +430,16 @@ main() {
     if [[ "$skip_confirm" != true ]]; then
         confirm_write
     fi
+
+    # Verify ISO identity only after the user commits, so the prompt is instant
+    # rather than stalled behind a multi-GB hash. Still before any destructive
+    # write. Skipped for flash-all children (--no-udev-gate): the parent
+    # verifies once and passes the hash down via the exported VERIFIED_ISO_SHA256.
+    if [[ "$MANAGE_UDEV" == true ]]; then
+        VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
+        init_manifest
+    fi
+
     write_iso
 }
 

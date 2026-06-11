@@ -1965,8 +1965,12 @@ class ParentMenu(PurpleModal):
                         continue
                     if item_id == "menu-support" and audio_ok is False:
                         label = f"{label}   (audio not working)"
+                    if item_id == "menu-volume" and audio_ok is False:
+                        label = f"{label}   (audio not working)"
                     item = ParentMenuItem(label, item_id)
                     if item_id == "menu-install" and not _is_usb_payload_available():
+                        item.add_class("disabled")
+                    if item_id == "menu-volume" and audio_ok is False:
                         item.add_class("disabled")
                     yield item
             yield Static("\u25b2 \u25bc   Enter   Esc", id="modal-hint")

@@ -63,6 +63,7 @@ from .constants import (
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WRAPPER_REFERENCE_ROWS,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     is_live_boot, is_debug,
+    UI_READY_MARKER,
 )
 boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
@@ -1025,6 +1026,13 @@ class PurpleApp(App):
     def on_resize(self, event: events.Resize) -> None:
         self.call_after_refresh(self._align_footer_to_viewport)
 
+    def _mark_ui_ready(self) -> None:
+        # Signal xinitrc that first-paint is done so it can start the compositor.
+        try:
+            Path(UI_READY_MARKER).touch()
+        except OSError:
+            pass
+
     async def on_mount(self) -> None:
         """Called when app starts"""
         boot_log.heartbeat("PurpleApp.on_mount begin")
@@ -1032,6 +1040,7 @@ class PurpleApp(App):
         # Pin wrapper top so code/loop mode growth doesn't shift the border 1 row on odd-height terminals.
         self.query_one("#viewport-wrapper").styles.margin = (max(0, (self.size.height - WRAPPER_REFERENCE_ROWS) // 2), 0, 0, 0)
         self.call_after_refresh(self._align_footer_to_viewport)
+        self.call_after_refresh(self._mark_ui_ready)
 
         # Ensure logind ignores power button (TUI handles it).
         # Defensive: a previous crash or logind-mediated shutdown during a

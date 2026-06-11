@@ -142,10 +142,24 @@ xlog "matchbox-window-manager started"
 # Tear-free compositor. The modesetting driver has no TearFree option, so this
 # is what stops old Intel panels flashing a checkerboard of the old+new frame
 # during transitions. Guarded launcher: never blocks or fails the session.
-# Backgrounded so its liveness check + glx->xrender fallback don't delay boot;
-# picom attaches to existing windows, so it can come up a beat after Alacritty.
+# Backgrounded, and held until the TUI has painted its first frame (Purple
+# touches UI_READY_MARKER then). picom's GL-context init is its slowest step,
+# and on the oldest Intel target (the only machine slow enough to notice) it
+# otherwise contends with the Python/Textual/pygame import + first-paint crunch
+# and stretches time-to-interactive. The compositor only protects user-driven
+# transitions, which can't happen that early, so waiting costs nothing. The
+# marker beats a fixed sleep: it tracks the actual end of the crunch on any
+# hardware. Bounded wait with a fallback so a missing marker never strands us
+# uncomposited. picom attaches to existing windows, so coming up late is fine.
 # See guides/intel-display-tuning.md.
-( xlog "compositor: $(purple-start-compositor 2>&1)" ) &
+UI_READY_MARKER=/tmp/purple-ui-ready
+(
+    for _ in $(seq 1 60); do
+        [ -f "$UI_READY_MARKER" ] && break
+        sleep 0.25
+    done
+    xlog "compositor: $(purple-start-compositor 2>&1)"
+) &
 
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0

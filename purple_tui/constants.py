@@ -139,6 +139,11 @@ def display_len(text: str) -> int:
 SQUASHFS_PATH = "/cdrom/casper/filesystem.squashfs"
 USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 
+# Touched after the first frame paints. xinitrc waits for this before starting
+# the compositor, so picom's GL init lands after the import/first-paint crunch
+# instead of contending with it and slowing boot. See intel-display-tuning.md.
+UI_READY_MARKER = "/tmp/purple-ui-ready"
+
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
 # Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out)
 _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")

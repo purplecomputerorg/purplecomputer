@@ -13,7 +13,16 @@ CONF=/etc/purple/picom.conf
 
 command -v picom >/dev/null 2>&1 || { echo "picom not installed; continuing uncomposited"; exit 0; }
 [ -f "$CONF" ] || CONF=/dev/null
-pkill -x picom 2>/dev/null
+
+# Idempotent: a Purple restart re-execs xinitrc, but picom survives (it's
+# reparented, not a child of the new process), so don't kill and relaunch a
+# healthy compositor and flash the screen for nothing. To force a restart
+# (e.g. debug A/B), stop it first with `pkill -x picom`.
+running_pid=$(pgrep -x picom | head -1)
+if [ -n "$running_pid" ]; then
+    echo "compositor already running (pid=$running_pid)"
+    exit 0
+fi
 
 # Hardware GL for the compositor only; Alacritty stays software (the session
 # exports LIBGL_ALWAYS_SOFTWARE=1). glx gives reliable vsync; xrender is the

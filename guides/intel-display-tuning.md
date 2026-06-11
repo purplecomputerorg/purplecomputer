@@ -38,6 +38,14 @@ It survives `LIBGL_ALWAYS_SOFTWARE=1` because that only changes how Alacritty ra
 
 A compositor fixes the whole class at the layer it shares. `picom` redirects every window into an offscreen buffer and presents the composited result on the vblank, so the panel only ever scans out a complete, consistent frame. It is driver-agnostic (helps any future tearing on AMD/PC targets too) and degrades safely (`scripts/purple-start-compositor.sh` is guarded: if `picom` can't start, the session continues uncomposited, never a black screen).
 
+**Boot cost, and why the launch waits for the UI.** `picom`'s glx context init is its slowest step. On the oldest Intel target (a 2-core Skylake, the only machine slow enough to notice) that init contends with the Python/Textual/pygame import + first-paint crunch (the "Loading..." phase, printed before `App().run()`) and the squashfs->tmpfs copy, stretching time-to-interactive by up to ~1s. It's a one-time boot cost, not a steady-state slowdown (composited present adds one vblank, invisible for a TUI).
+
+The fix is to start picom *after* that crunch, but a fixed `sleep` would just be guessing where the crunch ends, and it ends at different times on different hardware. Instead the app touches `UI_READY_MARKER` (`/tmp/purple-ui-ready`) from `call_after_refresh` in `on_mount`, i.e. once the first frame has painted, and `xinitrc` waits for that marker (backgrounded, bounded ~15s with a fallback start so a missing marker never strands us uncomposited) before launching. The marker tracks the real end of the crunch on any machine. The tear only ever shows on user-driven transitions, which can't happen that early, so waiting is free. Trade-off: starting after the TUI has settled means picom's one-time window-redirect repaint is a brief visible flash on the home screen instead of being hidden in the boot churn.
+
+`purple-start-compositor` is idempotent (it exits early if a picom is already running): a Purple restart re-execs `xinitrc`, but picom is reparented and survives, so the restart finds it up and leaves it alone, no needless relaunch or flash. To force a restart (debug A/B), `pkill -x picom` first.
+
+We start everywhere rather than hardware-gating: waiting for the UI makes the cost ~free on fast machines, and gating would add DMI/i915 detection without helping the one machine that's actually slow. This is identical on live-boot and installed systems: both run the same `.xinitrc` and the same golden-image picom/launcher/config.
+
 Two things that matter in `config/picom/picom.conf`:
 
 - **`unredir-if-possible = false`** is mandatory. Alacritty runs fullscreen, and picom's default is to *unredirect* fullscreen windows for performance, which hands Alacritty straight back to the tearing scanout path and undoes everything. Keep it redirected.

@@ -1857,7 +1857,7 @@ class ParentMenuItem(Static):
     }
 
     ParentMenuItem.disabled.selected {
-        background: $surface;
+        background: $surface-lighten-2;
         color: $text-muted;
         text-style: italic;
     }

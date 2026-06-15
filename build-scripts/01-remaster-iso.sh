@@ -99,7 +99,7 @@ fi
 # Show boot splash on tty1: purple background with friendly message.
 # Console output goes to tty2, so tty1 is ours.
 # \033]P0 redefines VT palette color 0 (black) to our purple (#2d1b4e).
-printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[9;7H First time can take a minute or two. Faster next time!\033[0m' > /dev/tty1 2>/dev/null
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 
 log_end_msg
 exit 0
@@ -299,7 +299,7 @@ prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0;; esac
 # Redefine VT color 0 (black) to purple (#2d1b4e), clear tty1, show message.
 # This is the earliest point we control the screen after GRUB hands off.
-printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[9;7H First time can take a minute or two. Faster next time!\033[0m' > /dev/tty1 2>/dev/null
+printf '\033]P02d1b4e\033[H\033[2J\033[97m\033[5;7H Welcome to Purple Computer!\033[7;7H Starting up...\033[0m' > /dev/tty1 2>/dev/null
 SPLASH_EOF
     chmod +x "$MAIN_DIR/scripts/init-top/01_purple_splash"
 

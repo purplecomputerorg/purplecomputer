@@ -22,21 +22,25 @@ Usage: $0 [--debug] [--yes] [iso-path]
 Flash an ISO to every whitelisted USB drive currently plugged in, in parallel.
 
 Options:
-  --debug   Use the most recent .debug.iso
-  --yes     Skip the confirmation prompt
-  --help    Show this help
+  --debug       Use the most recent .debug.iso
+  --yes         Skip the confirmation prompt
+  --no-settle   Skip the post-flash settle window (faster, but the first
+                live boot on each drive will be slow)
+  --help        Show this help
 EOF
 }
 
 USE_DEBUG=false
 SKIP_CONFIRM=false
+SKIP_SETTLE=false
 ISO_PATH=""
 while [[ -n "${1:-}" ]]; do
     case "$1" in
-        --help|-h)  usage; exit 0 ;;
-        --debug|-d) USE_DEBUG=true; shift ;;
-        --yes|-y)   SKIP_CONFIRM=true; shift ;;
-        *)          ISO_PATH="$1"; shift ;;
+        --help|-h)    usage; exit 0 ;;
+        --debug|-d)   USE_DEBUG=true; shift ;;
+        --yes|-y)     SKIP_CONFIRM=true; shift ;;
+        --no-settle)  SKIP_SETTLE=true; shift ;;
+        *)            ISO_PATH="$1"; shift ;;
     esac
 done
 
@@ -130,6 +134,23 @@ done
 echo
 # Lift the gate before ejecting so udevadm settle can drain.
 sudo udevadm control --start-exec-queue 2>/dev/null || true
+
+# Settle window: cheap flash controllers do one-time background folding (SLC->
+# QLC/GC) after a big write. A drive unplugged before it finishes makes the
+# parent's FIRST live boot slow (then fast forever after). Hold the whole batch
+# powered and idle here so they all settle in parallel, on our bench instead of
+# on a kid's first boot. The verify pass just read every drive, so controllers
+# are warm right now. Tune with FLASH_SETTLE_SECONDS; set 0 to skip.
+SETTLE_SECONDS="${FLASH_SETTLE_SECONDS:-300}"
+[[ "$SKIP_SETTLE" == true ]] && SETTLE_SECONDS=0
+SETTLE_COUNT=0
+for i in "${!DEVS[@]}"; do
+    [[ " ${FAILED[*]} " == *" ${DEVS[$i]} "* ]] || SETTLE_COUNT=$((SETTLE_COUNT + 1))
+done
+if [[ $SETTLE_COUNT -gt 0 && $SETTLE_SECONDS -gt 0 ]]; then
+    log_info "Settling $SETTLE_COUNT drive(s) for ${SETTLE_SECONDS}s so the first boot is fast (FLASH_SETTLE_SECONDS=0 to skip). Walk away, no need to babysit."
+    sleep "$SETTLE_SECONDS"
+fi
 
 # Re-enumerate and eject each verified drive (same pass single flashes do).
 for i in "${!DEVS[@]}"; do

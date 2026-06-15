@@ -135,21 +135,35 @@ echo
 # Lift the gate before ejecting so udevadm settle can drain.
 sudo udevadm control --start-exec-queue 2>/dev/null || true
 
-# Settle window: cheap flash controllers do one-time background folding (SLC->
-# QLC/GC) after a big write. A drive unplugged before it finishes makes the
-# parent's FIRST live boot slow (then fast forever after). Hold the whole batch
-# powered and idle here so they all settle in parallel, on our bench instead of
-# on a kid's first boot. The verify pass just read every drive, so controllers
-# are warm right now. Tune with FLASH_SETTLE_SECONDS; set 0 to skip.
-SETTLE_SECONDS="${FLASH_SETTLE_SECONDS:-300}"
-[[ "$SKIP_SETTLE" == true ]] && SETTLE_SECONDS=0
-SETTLE_COUNT=0
+# Settle: pay each drive's one-time post-write read cost on the bench. Cheap
+# controllers leave freshly written cells in a slow-to-read state until the
+# FIRST read relocates/recalibrates them, and that slow first read is exactly
+# what drags a parent's first live boot (fast forever after). So we read each
+# drive here, in parallel, to absorb that cost ourselves. Pure idle did not do
+# it: reads are the trigger. Reads only the written ISO region (offset 0), with
+# O_DIRECT so it hits flash, not the page cache. Tune passes with
+# FLASH_SETTLE_PASSES; --no-settle skips entirely.
+SETTLE_PASSES="${FLASH_SETTLE_PASSES:-1}"
+[[ "$SKIP_SETTLE" == true ]] && SETTLE_PASSES=0
+SETTLE_BS=8388608
+SETTLE_COUNT=$(( ($(stat -c%s "$ISO_PATH") + SETTLE_BS - 1) / SETTLE_BS ))
+SETTLE_PIDS=()
 for i in "${!DEVS[@]}"; do
-    [[ " ${FAILED[*]} " == *" ${DEVS[$i]} "* ]] || SETTLE_COUNT=$((SETTLE_COUNT + 1))
+    dev="${DEVS[$i]}"
+    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
+    [[ $SETTLE_PASSES -gt 0 ]] || continue
+    (
+        for ((p = 0; p < SETTLE_PASSES; p++)); do
+            sudo dd if="$dev" of=/dev/null bs="$SETTLE_BS" count="$SETTLE_COUNT" \
+                iflag=direct status=none 2>/dev/null || exit 1
+        done
+    ) &
+    SETTLE_PIDS+=("$!")
 done
-if [[ $SETTLE_COUNT -gt 0 && $SETTLE_SECONDS -gt 0 ]]; then
-    log_info "Settling $SETTLE_COUNT drive(s) for ${SETTLE_SECONDS}s so the first boot is fast (FLASH_SETTLE_SECONDS=0 to skip). Walk away, no need to babysit."
-    sleep "$SETTLE_SECONDS"
+if [[ ${#SETTLE_PIDS[@]} -gt 0 ]]; then
+    log_info "Settling ${#SETTLE_PIDS[@]} drive(s): reading each ${SETTLE_PASSES}x to pay the first-boot read cost here (--no-settle to skip). Walk away, no need to babysit."
+    for pid in "${SETTLE_PIDS[@]}"; do wait "$pid" || true; done
+    log_info "Settle complete."
 fi
 
 # Re-enumerate and eject each verified drive (same pass single flashes do).

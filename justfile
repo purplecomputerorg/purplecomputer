@@ -157,6 +157,11 @@ record-demo-no-music:
     @echo "Recording demo (no background music)..."
     PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh
 
+# Record while you drive Purple yourself (no music, no scripted demo; stops after 60s idle)
+record-manual:
+    @echo "Recording (manual, no music)... exit Purple, or stop driving for 60s, to end."
+    PURPLE_NO_MUSIC=1 PURPLE_RECORD_MANUAL=1 ./recording-setup/record-demo.sh
+
 # Record 5s test clip (for testing recording pipeline)
 record-demo-test:
     ./recording-setup/record-demo.sh recordings/demo-test.mp4 5

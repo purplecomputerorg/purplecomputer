@@ -26,13 +26,21 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/recordings"
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
-MAX_DURATION="${2:-180}"  # Default 3 minutes max (palm tree painting has 1300+ tiny sleeps)
+if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
+    MAX_DURATION="${2:-36000}"  # No real cap: you drive it; idle_stop.py ends it. 10h safety backstop.
+else
+    MAX_DURATION="${2:-180}"  # Default 3 minutes max (palm tree painting has 1300+ tiny sleeps)
+fi
 if [ "$(printenv PURPLE_NO_MUSIC)" = "1" ]; then
     MUSIC_FILE=""
 else
     MUSIC_FILE="$SCRIPT_DIR/demo_music.mp3"
 fi
-ZOOM_EVENTS="$SCRIPT_DIR/zoom_events.json"
+if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
+    ZOOM_EVENTS=""  # No scripted zoom keyframes when you drive it yourself.
+else
+    ZOOM_EVENTS="$SCRIPT_DIR/zoom_events.json"
+fi
 
 # Ensure output directory exists
 mkdir -p "$OUTPUT_DIR"
@@ -314,8 +322,20 @@ else
 fi
 
 SYNC_FILE="$OUTPUT_DIR/.demo_start_epoch"
-timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 \
-    $ZOOM_ENV PURPLE_DEMO_SYNC_FILE="$SYNC_FILE" ./scripts/run_local.sh || true
+if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
+    IDLE_TIMEOUT="${PURPLE_IDLE_TIMEOUT:-60}"
+    echo "Manual mode: drive Purple yourself. Recording stops when you exit Purple or after ${IDLE_TIMEOUT}s idle."
+    setsid env PURPLE_TEST_BATTERY=1 PURPLE_FULLSCREEN=1 ./scripts/run_local.sh &
+    PURPLE_PGID=$!
+    "$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/idle_stop.py" \
+        --display "$DISPLAY" --size "$SCREEN_SIZE" \
+        --idle "$IDLE_TIMEOUT" --pid "$PURPLE_PGID" || true
+    kill -TERM -"$PURPLE_PGID" 2>/dev/null || true
+    wait "$PURPLE_PGID" 2>/dev/null || true
+else
+    timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 \
+        $ZOOM_ENV PURPLE_DEMO_SYNC_FILE="$SYNC_FILE" ./scripts/run_local.sh || true
+fi
 
 echo ""
 echo "Purple exited, stopping recording..."

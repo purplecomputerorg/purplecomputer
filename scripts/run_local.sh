@@ -143,7 +143,7 @@ EOF
     # Launch Alacritty with our config
     # Use fullscreen for demo recording to maximize viewport
     ALACRITTY_OPTS=""
-    if [ -n "$PURPLE_DEMO_AUTOSTART" ]; then
+    if [ -n "$PURPLE_DEMO_AUTOSTART" ] || [ -n "$PURPLE_FULLSCREEN" ]; then
         ALACRITTY_OPTS="-o window.startup_mode=\"Fullscreen\""
     fi
 

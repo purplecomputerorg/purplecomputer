@@ -9,6 +9,7 @@ Automatically extracts phrases from the demo script by looking for
 text with ! (which triggers speech in Play mode).
 """
 
+import os
 import sys
 import wave
 from pathlib import Path
@@ -237,26 +238,37 @@ def _stub_ui_modules():
         def __getattr__(self, name):
             return _StubClass
 
-    stub_modules = [
-        # textual
-        'textual', 'textual.widgets', 'textual.widget', 'textual.containers',
-        'textual.app', 'textual.events', 'textual.message', 'textual.strip',
-        'textual.reactive', 'textual.css', 'textual.css.query',
-        'textual.binding', 'textual.theme', 'textual.screen',
-        # rich
-        'rich', 'rich.segment', 'rich.style', 'rich.text', 'rich.highlighter',
-        # pygame
-        'pygame', 'pygame.mixer',
-    ]
+    import importlib.abc
+    import importlib.machinery
 
-    for mod_name in stub_modules:
-        if mod_name not in sys.modules:
-            if mod_name == 'pygame':
-                sys.modules[mod_name] = _PygameModule(mod_name)
-            elif mod_name == 'pygame.mixer':
-                sys.modules[mod_name] = _PygameMixer
-            else:
-                sys.modules[mod_name] = _StubModule(mod_name)
+    class _StubLoader(importlib.abc.Loader):
+        def create_module(self, spec):
+            return _StubModule(spec.name)
+
+        def exec_module(self, module):
+            pass
+
+    class _StubFinder(importlib.abc.MetaPathFinder):
+        """Stub any submodule of these UI packages on demand.
+
+        Enumerating submodules by hand kept breaking whenever a new one
+        (e.g. rich.markup) got imported, so match by top-level package.
+        """
+        _purple_stub = True
+        prefixes = ("textual", "rich")
+
+        def find_spec(self, name, path, target=None):
+            if name.split(".")[0] in self.prefixes:
+                return importlib.machinery.ModuleSpec(name, _StubLoader())
+            return None
+
+    if not any(getattr(f, "_purple_stub", False) for f in sys.meta_path):
+        sys.meta_path.insert(0, _StubFinder())
+
+    if "pygame" not in sys.modules:
+        sys.modules["pygame"] = _PygameModule("pygame")
+    if "pygame.mixer" not in sys.modules:
+        sys.modules["pygame.mixer"] = _PygameMixer
 
 
 def _collect_all_actions() -> list:
@@ -268,8 +280,9 @@ def _collect_all_actions() -> list:
 
     actions = []
 
-    # Try composition segments first (demo.json)
-    demo_json = PROJECT_ROOT / "purple_tui" / "demo" / "demo.json"
+    # Scan the active composition (PURPLE_DEMO_COMPOSITION selects ad.json etc.)
+    composition = os.environ.get("PURPLE_DEMO_COMPOSITION", "demo.json")
+    demo_json = PROJECT_ROOT / "purple_tui" / "demo" / composition
     if demo_json.exists():
         entries = json.loads(demo_json.read_text())
         for entry in entries:

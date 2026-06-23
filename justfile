@@ -157,6 +157,16 @@ record-demo-no-music:
     @echo "Recording demo (no background music)..."
     PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh
 
+# Record the short ad screen footage (no music; add your own in the editor)
+record-ad:
+    @echo "Generating voice clips (if needed)..."
+    {{venv}}/bin/python scripts/generate_voice_clips.py
+    @echo "Recording ad screen footage..."
+    @rm -f recordings/ad_zoom_events.json
+    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=ad.json \
+        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/ad_zoom_events.json" \
+        ./recording-setup/record-demo.sh recordings/ad.mp4 60
+
 # Record while you drive Purple yourself (no music, no scripted demo; stops after 60s idle)
 record-manual:
     @echo "Recording (manual, no music)... exit Purple, or stop driving for 60s, to end."

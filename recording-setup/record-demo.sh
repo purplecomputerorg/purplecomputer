@@ -39,7 +39,9 @@ fi
 if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
     ZOOM_EVENTS=""  # No scripted zoom keyframes when you drive it yourself.
 else
-    ZOOM_EVENTS="$SCRIPT_DIR/zoom_events.json"
+    # PURPLE_ZOOM_EVENTS_FILE lets a caller (e.g. record-ad) use a separate
+    # keyframe file so its inline zooms regenerate instead of reusing the demo's.
+    ZOOM_EVENTS="${PURPLE_ZOOM_EVENTS_FILE:-$SCRIPT_DIR/zoom_events.json}"
 fi
 
 # Ensure output directory exists

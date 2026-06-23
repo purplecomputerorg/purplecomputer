@@ -63,15 +63,25 @@ def _load_composition(path: Path) -> list:
     return script
 
 
+def _composition_path() -> Path:
+    """Path to the active composition json.
+
+    PURPLE_DEMO_COMPOSITION selects an alternate composition (e.g. "ad.json"
+    for the ad screen footage) without disturbing the default demo.json.
+    """
+    name = os.environ.get("PURPLE_DEMO_COMPOSITION", "demo.json")
+    return Path(__file__).parent / name
+
+
 def get_demo_script() -> list:
     """Get the demo script to run.
 
     Priority:
-    1. demo.json composition (if it exists)
+    1. composition json (if it exists)
     2. AI-generated script (ai_generated_script.py)
     3. Default hand-crafted demo
     """
-    demo_json = Path(__file__).parent / "demo.json"
+    demo_json = _composition_path()
     if demo_json.exists():
         return _load_composition(demo_json)
     try:
@@ -88,7 +98,7 @@ def get_speed_multiplier() -> float:
     per-segment via SetSpeed actions). Otherwise uses the AI-generated
     script's multiplier if available.
     """
-    demo_json = Path(__file__).parent / "demo.json"
+    demo_json = _composition_path()
     if demo_json.exists():
         return 1.0
     try:

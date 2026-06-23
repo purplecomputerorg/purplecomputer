@@ -60,9 +60,8 @@ class PlaybackPlayer:
           explicitly turn keys on/off
 
     Art Mode:
-        - Starts in TEXT MODE (typing letters)
-        - Press Tab to enter PAINT MODE
-        - In paint mode: letter keys select brush color and stamp
+        - Starts in PAINT MODE (letter keys select brush color and stamp)
+        - Press Tab to toggle to WRITE MODE (typing letters)
         - DrawPath automatically enters paint mode before drawing
     """
 

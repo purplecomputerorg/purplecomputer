@@ -7,10 +7,12 @@ moment (color, big count, speech, code, music), zoomed for phone screens.
 """
 
 from ..script import (
-    SwitchRoom, TypeText, PressKey, Pause, Clear, ClearArt,
+    SwitchRoom, TypeText, PressKey, Pause, ClearArt,
     PlayKeys, Comment, ZoomIn, ZoomOut,
 )
 
+# Results stack rather than clearing between beats: an Escape keypress (the
+# only "clear" Play has) cancels the running demo, so segments never clear.
 _TYPING = dict(delay_per_char=0.06, final_pause=0.1)
 
 _PLAY = [
@@ -20,13 +22,11 @@ _PLAY = [
 
     TypeText("red + blue", **_TYPING),
     PressKey("enter", pause_after=2.0),
-    Clear(),
 
     Comment("=== PLAY: big count floods the screen ==="),
     ZoomOut(duration=0.3),
     TypeText("100 sharks", **_TYPING),
     PressKey("enter", pause_after=2.2),
-    Clear(),
 
     Comment("=== PLAY: it talks (trailing ! speaks aloud) ==="),
     ZoomIn(region="input", zoom=2.5, duration=0.2),

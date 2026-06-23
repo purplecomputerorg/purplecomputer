@@ -1,39 +1,25 @@
-"""Art room demo (updated): intro + faster palm tree + draw-with-code beat.
+"""Art room demo (updated): intro + a centered palm tree + draw-with-code beat.
 
-The Art room now starts in paint mode, so the old palm intro's Tab parity is
-inverted (it assumed text mode first). This rebuilds the intro, cursor
-positioning, and music hand-off to match the current default, and reuses only
-the palm tree keystrokes from palm_tree.py (the part worth keeping).
-
-Cursor positioning is made absolute by first clamping to the top-left corner
-(over-long left+up runs that no-op at the edge), then offsetting. That keeps the
-palm and the text in the right place even though a code beat moves the cursor
-between the drawing and the hand-off.
+The palm is generated from a bitmap (see palm_art.py) and positioned absolutely,
+so it lands centered on the canvas with no clipping. Cursor moves are made
+absolute by first clamping to the top-left corner (over-long left+up runs that
+no-op at the edge), then offsetting.
 """
 
-from .palm_tree import SEGMENT as _PALM, _TYPING
 from ..script import (
     SwitchRoom, SetSpeed, Comment, PressKey, TypeText, MoveSequence,
     ClearArt, Pause, ZoomIn, ZoomOut,
 )
+from .palm_art import build_palm, centered_margins
 
-# Slice out just the palm drawing keystrokes, dropping the original's leading
-# reposition move (we position the cursor ourselves, absolutely).
-_draw_speed_idx = next(
-    i for i, a in enumerate(_PALM)
-    if isinstance(a, SetSpeed) and a.multiplier > 50
-)
-_bridge_idx = next(
-    i for i, a in enumerate(_PALM)
-    if isinstance(a, Comment) and "MUSIC ROOM INTRO TEXT" in a.text
-)
-_drawing_all = _PALM[_draw_speed_idx + 1:_bridge_idx]
-_first_move = next(i for i, a in enumerate(_drawing_all) if isinstance(a, MoveSequence))
-_DRAWING_BODY = _drawing_all[_first_move + 1:]
+_TYPING = dict(delay_per_char=0.05, final_pause=0.1)
 
-# Faster than the original 83.365 so the palm tree takes noticeably less time.
-_FAST_DRAW = 150.0
+# Canvas is a fixed ~132x25 inside the 134x29 viewport (see constants.py).
+_CANVAS_W = 132
+_CANVAS_H = 25
+_PALM_LEFT, _PALM_TOP = centered_margins(_CANVAS_W, _CANVAS_H)
 
+_FAST_DRAW = 200.0
 _CLAMP_TO_CORNER = ['left'] * 150 + ['up'] * 40
 
 _INTRO = [
@@ -58,10 +44,10 @@ _INTRO = [
     ClearArt(),
 ]
 
-_POSITION = [
-    Comment("Absolute-position the cursor at the palm tree start (48, 26)"),
-    MoveSequence(directions=_CLAMP_TO_CORNER, delay_per_step=0.004),
-    MoveSequence(directions=['right'] * 48 + ['down'] * 26, delay_per_step=0.004),
+_DRAW_PALM = [
+    Comment("=== PALM TREE (generated from palm_art bitmap, centered) ==="),
+    SetSpeed(_FAST_DRAW),
+    *build_palm(_PALM_LEFT, _PALM_TOP),
 ]
 
 _CODE_BEAT = [
@@ -103,13 +89,6 @@ _BRIDGE = [
     ClearArt(),
 ]
 
-SEGMENT = (
-    _INTRO
-    + [SetSpeed(_FAST_DRAW)]
-    + _POSITION
-    + _DRAWING_BODY
-    + _CODE_BEAT
-    + _BRIDGE
-)
+SEGMENT = _INTRO + _DRAW_PALM + _CODE_BEAT + _BRIDGE
 
 SPEED_MULTIPLIER = _FAST_DRAW

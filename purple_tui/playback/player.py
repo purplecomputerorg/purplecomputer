@@ -56,7 +56,7 @@ class PlaybackPlayer:
     Music Mode:
         - Keys CYCLE through colors on each press (purple -> blue -> red -> off)
         - Colors PERSIST until cycled again
-        - For demo "flash" effects, use set_play_key_color callback to
+        - For demo "flash" effects, use set_music_key_color callback to
           explicitly turn keys on/off
 
     Art Mode:
@@ -72,8 +72,8 @@ class PlaybackPlayer:
         speed_multiplier: float = 1.0,
         clear_all: Callable[[], None] | None = None,
         clear_art: Callable[[], None] | None = None,
-        set_play_key_color: Callable[[str, int], None] | None = None,
-        is_doodle_paint_mode: Callable[[], bool] | None = None,
+        set_music_key_color: Callable[[str, int], None] | None = None,
+        is_art_paint_mode: Callable[[], bool] | None = None,
         is_play_letters_mode: Callable[[], bool] | None = None,
         set_instrument: Callable[[str], None] | None = None,
         get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
@@ -87,9 +87,9 @@ class PlaybackPlayer:
             speed_multiplier: Speed up (>1) or slow down (<1) the playback
             clear_all: Optional function to clear all state at start
             clear_art: Optional function to clear doodle canvas and reset cursor
-            set_play_key_color: Optional function to set a Music room key's
+            set_music_key_color: Optional function to set a Music room key's
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
-            is_doodle_paint_mode: Optional function to check if Art room
+            is_art_paint_mode: Optional function to check if Art room
                 is in paint mode (vs text mode)
             is_play_letters_mode: Optional function to check if Music room
                 is in letters mode (vs music mode)
@@ -104,8 +104,8 @@ class PlaybackPlayer:
         self._speed = speed_multiplier
         self._clear_all = clear_all
         self._clear_art = clear_art
-        self._set_play_key_color = set_play_key_color
-        self._is_doodle_paint_mode = is_doodle_paint_mode
+        self._set_music_key_color = set_music_key_color
+        self._is_art_paint_mode = is_art_paint_mode
         self._is_play_letters_mode = is_play_letters_mode
         self._set_instrument = set_instrument
         self._get_cursor_position = get_cursor_position
@@ -285,14 +285,14 @@ class PlaybackPlayer:
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "paint":
             in_paint = (
-                self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+                self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if not in_paint:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "text":
             in_paint = (
-                self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+                self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if in_paint:
                 await self._dispatch(ControlAction(action='tab', is_down=True))
@@ -349,7 +349,7 @@ class PlaybackPlayer:
         Automatically switches to PAINT mode (via Tab) before drawing.
         """
         in_paint_mode = (
-            self._is_doodle_paint_mode and self._is_doodle_paint_mode()
+            self._is_art_paint_mode and self._is_art_paint_mode()
         )
         if not in_paint_mode:
             await self._dispatch(ControlAction(action='tab', is_down=True))

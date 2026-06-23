@@ -1,16 +1,15 @@
 [
   {
-    "segment": "greeting"
+    "segment": "greeting_updated"
   },
   {
-    "segment": "palm_tree"
+    "segment": "palm_updated"
   },
   {
-    "segment": "tune",
-    "duration": 8
+    "segment": "tune_updated"
   },
   {
-    "segment": "closing",
+    "segment": "closing_updated",
     "duration": 4
   }
 ]

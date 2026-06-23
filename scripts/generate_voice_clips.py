@@ -302,8 +302,9 @@ def _collect_all_actions() -> list:
 def extract_demo_phrases() -> list[str]:
     """Extract speakable phrases from demo segments and default script.
 
-    Looks for TypeText actions containing ! (speech trigger).
-    Evaluates the expression and converts to speakable text.
+    Mirrors the Play room's speech triggers: a "!" anywhere, or a
+    say/talk/speak prefix. Demo mode disables live TTS, so every spoken
+    line needs a matching pre-generated clip or it records silent.
     """
     sys.path.insert(0, str(PROJECT_ROOT))
     _stub_ui_modules()
@@ -318,14 +319,18 @@ def extract_demo_phrases() -> list[str]:
         if not isinstance(action, TypeText):
             continue
 
-        text = action.text
+        eval_text = action.text
 
-        # Check for ! anywhere (speech trigger)
-        if '!' not in text:
+        speaks = "!" in eval_text
+        eval_text = eval_text.replace("!", "")
+        words = eval_text.split(None, 1)
+        if words and words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES:
+            speaks = True
+            eval_text = words[1] if len(words) > 1 else ""
+
+        if not speaks:
             continue
-
-        # Strip ! and clean up
-        eval_text = text.replace('!', '').strip()
+        eval_text = eval_text.strip()
         if not eval_text:
             continue
 

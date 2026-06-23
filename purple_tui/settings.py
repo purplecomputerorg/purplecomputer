@@ -21,6 +21,7 @@ _defaults = {
     "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
     "volume_lock": None,         # Parent lock: None = unlocked, 0-100 = pin playback at that level (0 = silent); volume keys disabled while set
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
+    "kid_letters": False,        # VM-only: use the recorded kid-voice clips for A-Z letter names
 }
 
 
@@ -130,6 +131,17 @@ def get_volume_lock() -> int | None:
 def set_volume_lock(level: int | None) -> None:
     settings = load_settings()
     settings["volume_lock"] = level
+    save_settings(settings)
+
+
+def get_kid_letters() -> bool:
+    """Whether the recorded kid-voice clips are used for A-Z letter names."""
+    return load_settings()["kid_letters"]
+
+
+def set_kid_letters(enabled: bool) -> None:
+    settings = load_settings()
+    settings["kid_letters"] = enabled
     save_settings(settings)
 
 

@@ -655,13 +655,28 @@ class MusicGrid(Widget):
         self._letter_sounds_loaded = True
 
     def _load_letter_sounds(self) -> None:
-        """Load pregenerated letter and number name clips from the letters/ subdirectory."""
+        """Load pregenerated letter and number name clips from the letters/ subdirectory.
+
+        When the parent enables Kid Voice (VM-only), A-Z clips are sourced from
+        letters-kid/ first, falling back to the standard letters/ clip for any
+        key without a kid recording (e.g. the digits).
+        """
         sounds_path = self._get_sounds_path()
         letters_path = sounds_path / "letters"
         if not letters_path.exists():
             return
+        search_dirs = [letters_path]
+        from ..constants import is_vm
+        from ..settings import get_kid_letters
+        if is_vm() and get_kid_letters():
+            kid_path = sounds_path / "letters-kid"
+            if kid_path.exists():
+                search_dirs.insert(0, kid_path)
         for key in _SPEAKABLE_KEYS:
-            path = self._find_sound(letters_path, key.lower())
+            path = next(
+                (p for d in search_dirs if (p := self._find_sound(d, key.lower()))),
+                None,
+            )
             if path:
                 try:
                     sound = pygame.mixer.Sound(str(path))
@@ -678,6 +693,11 @@ class MusicGrid(Widget):
         self._ensure_letter_sounds_loaded()
         if key in self._letter_sounds:
             play_safe(self._letter_sounds[key])
+
+    def reset_letter_sounds(self) -> None:
+        """Drop cached letter clips so the next play reloads from the active source."""
+        self._letter_sounds.clear()
+        self._letter_sounds_loaded = False
 
     def cleanup_sounds(self) -> None:
         """Stop all currently playing sounds and clear loaded sounds."""

@@ -370,6 +370,9 @@ _MUSIC_KEY_SWITCHING_CANCELLED = object()
 # AllCapsScreen dismiss value
 _ALL_CAPS_CANCELLED = object()
 
+# KidLettersScreen dismiss value
+_KID_LETTERS_CANCELLED = object()
+
 # PinEntryScreen dismiss value (Esc / cancel)
 _PIN_CANCELLED = object()
 
@@ -453,6 +456,23 @@ class AllCapsScreen(PickerModal):
         super().__init__(**kwargs)
         from ..settings import get_all_caps
         self._selected = 0 if get_all_caps() else 1
+
+
+class KidLettersScreen(PickerModal):
+    """Toggle the recorded kid-voice letter clips (VM-only dev option)."""
+
+    TITLE = "Kid Voice Letters"
+    DESCRIPTION = "Use the recorded kid-voice clips for A-Z in Say Letters mode"
+    OPTIONS = [
+        (True, "On"),
+        (False, "Off"),
+    ]
+    escape_value = _KID_LETTERS_CANCELLED
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        from ..settings import get_kid_letters
+        self._selected = 0 if get_kid_letters() else 1
 
 
 _VOLUME_LEVEL_LABELS = {
@@ -987,6 +1007,11 @@ def _get_menu_items() -> list:
         items.append(("menu-music-key-switching", key_switch_label))
     caps_label = "ALL CAPS: On" if get_all_caps() else "ALL CAPS: Off"
     items.append(("menu-all-caps", caps_label))
+    from ..constants import is_vm
+    if is_vm():
+        from ..settings import get_kid_letters
+        kid_label = "Kid Voice Letters: On" if get_kid_letters() else "Kid Voice Letters: Off"
+        items.append(("menu-kid-letters", kid_label))
 
     items.append(("sec-av", "Sound & Display"))
     items.append(("menu-volume", _volume_menu_label(get_volume_lock())))
@@ -2089,6 +2114,8 @@ class ParentMenu(PurpleModal):
             self._open_music_key_switching()
         elif item_id == "menu-all-caps":
             self._open_all_caps()
+        elif item_id == "menu-kid-letters":
+            self._open_kid_letters()
         elif item_id == "menu-parent-pin":
             self._open_parent_pin()
         elif item_id == "menu-display":
@@ -2265,6 +2292,26 @@ class ParentMenu(PurpleModal):
         label = "ALL CAPS: On" if new_value else "ALL CAPS: Off"
         try:
             widget = self.query_one("#menu-all-caps", ParentMenuItem)
+            widget.update(label)
+        except Exception:
+            pass
+
+    def _open_kid_letters(self) -> None:
+        def on_result(result):
+            if result is _KID_LETTERS_CANCELLED:
+                return
+            self._apply_kid_letters(result)
+        self.app.push_screen(KidLettersScreen(), callback=on_result)
+
+    def _apply_kid_letters(self, new_value: bool) -> None:
+        from ..settings import set_kid_letters
+        from .music_room import MusicGrid
+        set_kid_letters(new_value)
+        for grid in self.app.query(MusicGrid):
+            grid.reset_letter_sounds()
+        label = "Kid Voice Letters: On" if new_value else "Kid Voice Letters: Off"
+        try:
+            widget = self.query_one("#menu-kid-letters", ParentMenuItem)
             widget.update(label)
         except Exception:
             pass

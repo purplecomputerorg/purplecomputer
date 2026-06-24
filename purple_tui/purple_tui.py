@@ -1189,8 +1189,12 @@ class PurpleApp(App):
 
         # Auto-start demo if requested (for recording)
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
-            # Wait 2 seconds for FFmpeg to stabilize (trimmed from final video)
-            self.set_timer(2.0, self.start_demo)
+            # Pre-roll before typing begins (trimmed from final video). Must
+            # outlast the terminal's time-to-first-frame, or early beats are
+            # dispatched onto a still-black screen and lost. Slow VMs need
+            # more; tune with PURPLE_DEMO_PREROLL.
+            preroll = float(os.environ.get("PURPLE_DEMO_PREROLL", "5"))
+            self.set_timer(preroll, self.start_demo)
 
         # Show live boot splash on first launch from USB
         if not os.environ.get("PURPLE_DEV_MODE") == "1":

@@ -17,37 +17,43 @@ _TYPING = dict(delay_per_char=0.045, final_pause=0.15)
 _TAP = dict(hold_duration=0.2)
 _HOLD = dict(hold_duration=1.0)
 
+def _play_beat(text, read):
+    """One Play beat: lean into the input to type, then pull back and pan up
+    to reveal the result. The input sits low (input region, cy~0.75) and
+    results stack from the top down, so zooming from "input" to the wider
+    "results" region (cy~0.5) both pans up and zooms out a bit. The wide
+    reveal keeps the result in frame whether it's one line or a tall abacus.
+    """
+    return [
+        ZoomIn(region="input", zoom=2.6, duration=0.35),
+        TypeText(text, **_TYPING),
+        PressKey("enter", pause_after=0.3),
+        ZoomIn(region="results", zoom=1.3, duration=0.5),
+        Pause(read),
+    ]
+
+
 _PLAY = [
     Comment("=== PLAY ==="),
     SwitchRoom("play", pause_after=0.3),
-    ZoomIn(region="input", zoom=2.5, duration=0.2),
+    ZoomIn(region="input", zoom=2.6, duration=0.2),
 
     Comment("Settle inside the recorded region so the first beat never lands "
             "on a not-yet-painted screen (the pre-roll timer alone wasn't "
             "enough on slow VMs). Trim this lead-in in the editor."),
     Pause(2.0),
 
-    TypeText("hello :)", **_TYPING),
-    PressKey("enter", pause_after=0.9),
-
-    TypeText("red + blue", **_TYPING),
-    PressKey("enter", pause_after=0.9),
-
+    *_play_beat("hello :)", read=0.9),
+    *_play_beat("red + blue", read=0.9),
     Comment("'say' speaks the words aloud (needs a pre-generated clip)"),
-    TypeText("say purple computer", **_TYPING),
-    PressKey("enter", pause_after=1.6),
-
-    TypeText("5 x 5 dinos", **_TYPING),
-    PressKey("enter", pause_after=1.1),
-
+    *_play_beat("say purple computer", read=1.6),
+    *_play_beat("5 x 5 dinos", read=1.1),
     Comment("Big number 98321 renders as the place-value abacus"),
-    ZoomOut(duration=0.3),
-    TypeText("98321 butterflies", **_TYPING),
-    PressKey("enter", pause_after=1.6),
-
+    *_play_beat("98321 butterflies", read=1.7),
     Comment("Trailing ... continues the counting sequence"),
-    TypeText("3 sun 6 sun 9 sun...", **_TYPING),
-    PressKey("enter", pause_after=1.6),
+    *_play_beat("3 sun 6 sun 9 sun...", read=1.7),
+
+    ZoomOut(duration=0.4),
 ]
 
 _ART = [

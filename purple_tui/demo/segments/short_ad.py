@@ -2,7 +2,8 @@
 
 Pure screen content for the short ad. No on-screen captions: text overlays
 go on in the editor. Results stack rather than clearing (an Escape keypress,
-Play's only "clear", cancels the running demo).
+Play's only "clear", cancels the running demo). Timings are kept snappy so
+the whole thing stays short.
 """
 
 from ..script import (
@@ -10,7 +11,7 @@ from ..script import (
     Comment, ZoomIn, ZoomOut,
 )
 
-_TYPING = dict(delay_per_char=0.07, final_pause=0.2)
+_TYPING = dict(delay_per_char=0.045, final_pause=0.15)
 
 _PLAY = [
     Comment("=== PLAY ==="),
@@ -18,45 +19,48 @@ _PLAY = [
     ZoomIn(region="input", zoom=2.5, duration=0.2),
 
     TypeText("hello :)", **_TYPING),
-    PressKey("enter", pause_after=1.8),
+    PressKey("enter", pause_after=0.9),
 
     TypeText("red + blue", **_TYPING),
-    PressKey("enter", pause_after=1.8),
+    PressKey("enter", pause_after=0.9),
 
     Comment("'say' speaks the words aloud (needs a pre-generated clip)"),
     TypeText("say purple computer", **_TYPING),
-    PressKey("enter", pause_after=2.6),
+    PressKey("enter", pause_after=1.6),
 
-    Comment("Big number 9321 renders as the place-value abacus"),
+    TypeText("5 x 5 dinos", **_TYPING),
+    PressKey("enter", pause_after=1.1),
+
+    Comment("Big number 98321 renders as the place-value abacus"),
     ZoomOut(duration=0.3),
-    TypeText("33 dinos and 9321 butterflies", **_TYPING),
-    PressKey("enter", pause_after=3.0),
+    TypeText("98321 butterflies", **_TYPING),
+    PressKey("enter", pause_after=1.6),
 
     Comment("Trailing ... continues the counting sequence"),
-    TypeText("3 dino 6 dino 9 dino...", **_TYPING),
-    PressKey("enter", pause_after=2.6),
-    Pause(0.4),
+    TypeText("3 sun 6 sun 9 sun...", **_TYPING),
+    PressKey("enter", pause_after=1.6),
 ]
 
 _ART = [
-    Comment("=== ART: paint a row, then mix colors over it ==="),
-    SwitchRoom("art", pause_after=0.4),
+    Comment("=== ART: two color rows, positioned down/right of the corner ==="),
+    SwitchRoom("art", pause_after=0.3),
     ClearArt(),
+    MoveSequence(directions=['down'] * 4 + ['right'] * 20, delay_per_step=0.02),
 
-    TypeText("asdfghjkl", **_TYPING),
-    Comment("Back to the 'a' position, then paint over it so the colors mix"),
-    MoveSequence(directions=['left'] * 9, delay_per_step=0.04),
-    TypeText("qwertyuiop", **_TYPING),
-    Pause(1.8),
+    TypeText("qwertyuio", **_TYPING),
+    MoveSequence(directions=['down'] + ['left'] * 9, delay_per_step=0.02),
+    TypeText("zxcvbnm,.", **_TYPING),
+    Pause(0.9),
 
-    Comment("=== ART: draw with code ==="),
-    PressKey("space", hold_duration=1.0, pause_after=0.7),
+    Comment("=== ART: draw with code below the rows ==="),
+    MoveSequence(directions=['down'] * 2, delay_per_step=0.04),
+    PressKey("space", hold_duration=1.0, pause_after=0.5),
 
-    TypeText("blue repeat 4 forward 10 turn", delay_per_char=0.06, final_pause=0.2),
-    PressKey("enter", pause_after=2.0),
-    TypeText("red right 100", delay_per_char=0.06, final_pause=0.2),
-    PressKey("enter", pause_after=2.8),
-    Pause(1.0),
+    TypeText("blue repeat 4 forward 10 turn", delay_per_char=0.04, final_pause=0.15),
+    PressKey("enter", pause_after=1.2),
+    TypeText("red right 100", delay_per_char=0.04, final_pause=0.15),
+    PressKey("enter", pause_after=1.8),
+    Pause(0.4),
 ]
 
 SEGMENT = _PLAY + _ART

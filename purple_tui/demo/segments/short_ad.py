@@ -82,13 +82,13 @@ _MUSIC = [
 
     Comment("Hold Enter to start recording the loop"),
     PressKey("enter", pause_after=0.4, **_HOLD),
-    Comment("A short riff keeps the loop under ~2s"),
-    PlayKeys(sequence=['q', 'e', 't', 'e'], seconds_between=0.22, pause_after=0.2),
+    Comment("Syncopated riff with rests; short enough to keep the loop under ~2s"),
+    PlayKeys(sequence=['t', None, 'y', 't', None, 'u'], seconds_between=0.2, pause_after=0.2),
     Comment("Tap Space to close the loop and start it playing back"),
     PressKey("space", pause_after=0.5, **_TAP),
 
     Comment("Layer a couple notes on top while it loops"),
-    PlayKeys(sequence=['y', None, 'u'], seconds_between=0.3, pause_after=0.2),
+    PlayKeys(sequence=['e', None, 'r'], seconds_between=0.3, pause_after=0.2),
     Pause(1.3),
 
     Comment("Tap Enter to change the instrument, then play in the new sound"),

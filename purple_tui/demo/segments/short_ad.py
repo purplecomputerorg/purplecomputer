@@ -42,13 +42,14 @@ _PLAY = [
 ]
 
 _ART = [
-    Comment("=== ART: two color rows, positioned down/right of the corner ==="),
+    Comment("=== ART: paint a row, then overwrite it to mix the colors ==="),
     SwitchRoom("art", pause_after=0.3),
     ClearArt(),
     MoveSequence(directions=['down'] * 4 + ['right'] * 20, delay_per_step=0.02),
 
+    Comment("Both rows are 9 chars; paint zxc... over qwe... in place to blend"),
     TypeText("qwertyuio", **_TYPING),
-    MoveSequence(directions=['down'] + ['left'] * 9, delay_per_step=0.02),
+    MoveSequence(directions=['left'] * 9, delay_per_step=0.02),
     TypeText("zxcvbnm,.", **_TYPING),
     Pause(0.9),
 

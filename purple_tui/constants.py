@@ -231,6 +231,14 @@ ZOOM_REGIONS = {
     # Play room results area (middle portion, for showing computation results)
     "results": (0.5, 0.5, 0.8, 0.5),
 
+    # Ad: Play content is left-aligned ("Ask ->" starts at the far left), so
+    # centered crops cut it off. These shift the center left (only x_center is
+    # used by the crop math) so the left edge stays in frame.
+    # "ad-input": tight on the input line for typing.
+    # "ad-reveal": wider pull-back to show the stacked result.
+    "ad-input": (0.18, 0.80, 0.4, 0.4),
+    "ad-reveal": (0.33, 0.50, 0.75, 0.75),
+
     # Art room center (center of canvas for drawing demos)
     "art-center": (0.5, 0.5, 0.6, 0.6),
 

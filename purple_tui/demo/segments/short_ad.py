@@ -19,16 +19,17 @@ _HOLD = dict(hold_duration=1.0)
 
 def _play_beat(text, read):
     """One Play beat: lean into the input to type, then pull back and pan up
-    to reveal the result. The input sits low (input region, cy~0.75) and
-    results stack from the top down, so zooming from "input" to the wider
-    "results" region (cy~0.5) both pans up and zooms out a bit. The wide
-    reveal keeps the result in frame whether it's one line or a tall abacus.
+    to reveal the result. Play content is left-aligned, so both regions are
+    shifted left (see ad-input / ad-reveal). The input sits low; results stack
+    from the top down, so going from "ad-input" to the wider "ad-reveal" both
+    pans up and zooms out a bit, keeping the result framed whether it's one
+    line or a tall abacus.
     """
     return [
-        ZoomIn(region="input", zoom=2.6, duration=0.35),
+        ZoomIn(region="ad-input", zoom=2.6, duration=0.35),
         TypeText(text, **_TYPING),
         PressKey("enter", pause_after=0.3),
-        ZoomIn(region="results", zoom=1.3, duration=0.5),
+        ZoomIn(region="ad-reveal", zoom=1.3, duration=0.5),
         Pause(read),
     ]
 
@@ -36,7 +37,7 @@ def _play_beat(text, read):
 _PLAY = [
     Comment("=== PLAY ==="),
     SwitchRoom("play", pause_after=0.3),
-    ZoomIn(region="input", zoom=2.6, duration=0.2),
+    ZoomIn(region="ad-input", zoom=2.6, duration=0.2),
 
     Comment("Settle inside the recorded region so the first beat never lands "
             "on a not-yet-painted screen (the pre-roll timer alone wasn't "
@@ -48,10 +49,10 @@ _PLAY = [
     Comment("'say' speaks the words aloud (needs a pre-generated clip)"),
     *_play_beat("say purple computer", read=1.6),
     *_play_beat("5 x 5 dinos", read=1.1),
-    Comment("Big number 98321 renders as the place-value abacus"),
-    *_play_beat("98321 butterflies", read=1.7),
-    Comment("Trailing ... continues the counting sequence"),
-    *_play_beat("3 sun 6 sun 9 sun...", read=1.7),
+    Comment("Colored counting with addition and color adjectives"),
+    *_play_beat("2 red cookies + 3 light green cookies", read=1.7),
+    Comment("Big number 9876 renders as the place-value abacus"),
+    *_play_beat("9876 butterflies", read=1.7),
 
     ZoomOut(duration=0.4),
 ]

@@ -177,6 +177,14 @@ record-short-ad:
         PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/short_ad_zoom_events.json" \
         ./recording-setup/record-demo.sh recordings/short_ad.mp4 60
 
+# Record one music loop-tune variant (n = 1, 2, or 3) to compare them
+record-loop n:
+    @echo "Recording loop variant {{n}}..."
+    @rm -f recordings/loop{{n}}_zoom_events.json
+    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=loop{{n}}.json \
+        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/loop{{n}}_zoom_events.json" \
+        ./recording-setup/record-demo.sh recordings/loop{{n}}.mp4 30
+
 # Record while you drive Purple yourself (no music, no scripted demo; stops after 60s idle)
 record-manual:
     @echo "Recording (manual, no music)... exit Purple, or stop driving for 60s, to end."

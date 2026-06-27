@@ -1,0 +1,12 @@
+[
+  {"time": 0.0,  "action": "zoom_in", "region": "viewport", "zoom": 1.25, "x": 0.24, "y": 0.45, "duration": 1.0},
+  {"time": 1.0,  "action": "pan_to",  "x": 0.24, "y": 0.54, "duration": 18.5},
+
+  {"time": 20.5, "action": "zoom_in", "region": "viewport", "zoom": 1.85, "x": 0.16, "y": 0.40, "duration": 1.5},
+  {"time": 22.0, "action": "pan_to",  "x": 0.17, "y": 0.44, "duration": 8.5},
+
+  {"time": 31.5, "action": "zoom_in", "region": "viewport", "zoom": 1.30, "x": 0.45, "y": 0.50, "duration": 1.5},
+  {"time": 33.0, "action": "zoom_in", "region": "viewport", "zoom": 1.36, "x": 0.45, "y": 0.50, "duration": 13.0},
+
+  {"time": 47.5, "action": "zoom_out", "duration": 0.8}
+]

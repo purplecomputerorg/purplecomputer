@@ -267,6 +267,10 @@ flash *args:
 flash-debug *args:
     ./build-scripts/flash-to-usb.sh --debug {{args}}
 
+# Refresh udev after an aborted/ejected flash so a re-plugged drive is seen again
+flash-clean:
+    ./build-scripts/flash-clean.sh
+
 # Flash ISO to ALL whitelisted USB drives in parallel
 flash-all *args:
     ./build-scripts/flash-all.sh {{args}}

@@ -177,6 +177,14 @@ record-short-ad:
         PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/short_ad_zoom_events.json" \
         ./recording-setup/record-demo.sh recordings/short_ad.mp4 60
 
+# Record the "Available now!" Art-room beat (no music, no voice)
+record-available-now:
+    @echo "Recording Available-now Art beat..."
+    @rm -f recordings/available_now_zoom_events.json
+    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=available_now.json \
+        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/available_now_zoom_events.json" \
+        ./recording-setup/record-demo.sh recordings/available_now.mp4 30
+
 # Record while you drive Purple yourself (no music, no scripted demo; stops after 60s idle)
 record-manual:
     @echo "Recording (manual, no music)... exit Purple, or stop driving for 60s, to end."

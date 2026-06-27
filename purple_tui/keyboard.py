@@ -631,6 +631,7 @@ class CharacterAction(KeyAction):
     shift_held: bool = False  # Was physical shift key held? (not caps lock)
     is_repeat: bool = False  # Is this a key repeat?
     arrow_held: str | None = None  # Arrow direction held when this action fired
+    ctrl_held: bool = False  # Was a Ctrl key held? (used only by the secret-menu unlock)
 
 
 @dataclass
@@ -705,6 +706,7 @@ class KeyboardStateMachine:
 
         # Modifier state
         self._shift_held = False
+        self._ctrl_held = False
         self._space_held = False
 
         # Sticky shift
@@ -761,6 +763,13 @@ class KeyboardStateMachine:
         # Track pressed state (only on fresh press, not repeat)
         if not is_repeat:
             self._pressed[keycode] = timestamp
+
+        # Ctrl is consumed silently here (no action emitted): it carries no app
+        # function of its own, only the held-state stamped onto CharacterAction
+        # for the secret-menu unlock.
+        if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
+            self._ctrl_held = True
+            return actions
 
         # Handle modifiers (only on fresh press)
         if not is_repeat:
@@ -861,6 +870,7 @@ class KeyboardStateMachine:
                 shift_held=self._shift_held,
                 is_repeat=is_repeat,
                 arrow_held=self.held_arrow_direction,
+                ctrl_held=self._ctrl_held,
             ))
 
             # Track if physical shift was used for this character (prevents sticky activation)
@@ -887,6 +897,10 @@ class KeyboardStateMachine:
         if keycode == self._held_char_keycode:
             self._held_char = None
             self._held_char_keycode = None
+
+        if keycode in (KeyCode.KEY_LEFTCTRL, KeyCode.KEY_RIGHTCTRL):
+            self._ctrl_held = False
+            return actions
 
         # Handle modifier releases (Shift keys)
         if keycode in (KeyCode.KEY_LEFTSHIFT, KeyCode.KEY_RIGHTSHIFT):

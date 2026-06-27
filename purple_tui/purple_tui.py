@@ -939,6 +939,8 @@ class PurpleApp(App):
         self._escape_hold_timer = None  # Timer for detecting escape long-hold
         self._escape_triggered_long_hold = False  # True if long-hold fired (avoid showing picker)
         self._modal_open_at_escape_press = False  # True if modal was open when ESC was pressed
+        from .secret import SecretKnock
+        self._secret_knock = SecretKnock()  # Ctrl+codeword gesture for the family secret menu
 
         # Littles Mode: locks into a single room with no switching
         self._littles_mode: str | None = None  # None, "music", or "art"
@@ -1445,6 +1447,15 @@ class PurpleApp(App):
                 # Room switching (used by playback/demo system)
                 self.action_switch_room(action.room)
             return
+
+        # Secret family-menu unlock. Ctrl+letter has no app function, so a
+        # Ctrl-held character is consumed here (silent gesture) after feeding
+        # the detector; non-Ctrl characters fall through to normal handling.
+        if isinstance(action, CharacterAction):
+            if self._secret_knock.feed(action):
+                self._unlock_secret_menu()
+            if action.ctrl_held:
+                return
 
         # Handle escape key for long-hold detection and tap-to-pick
         # Only start timer on fresh press, not on repeat events (which would restart the timer)
@@ -2841,6 +2852,13 @@ class PurpleApp(App):
         """Hide shift indicator after grace period."""
         self._sticky_shift_timer = None
         self._update_shift_indicator()
+
+    def _unlock_secret_menu(self) -> None:
+        """Flip the persistent secret-menu flag. Silent by design: the only
+        visible result is the new Secret Menu entry in the parent menu."""
+        from .settings import get_secret_unlocked, set_secret_unlocked
+        if not get_secret_unlocked():
+            set_secret_unlocked(True)
 
     def action_parent_menu(self) -> None:
         """Enter parent mode. Shows admin menu for parents."""

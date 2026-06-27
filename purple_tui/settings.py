@@ -21,7 +21,8 @@ _defaults = {
     "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
     "volume_lock": None,         # Parent lock: None = unlocked, 0-100 = pin playback at that level (0 = silent); volume keys disabled while set
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
-    "kid_letters": False,        # VM-only: use the recorded kid-voice clips for A-Z letter names
+    "kid_letters": False,        # Use the recorded kid-voice clips for A-Z letter names (gated behind the secret menu)
+    "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
 }
 
 
@@ -142,6 +143,17 @@ def get_kid_letters() -> bool:
 def set_kid_letters(enabled: bool) -> None:
     settings = load_settings()
     settings["kid_letters"] = enabled
+    save_settings(settings)
+
+
+def get_secret_unlocked() -> bool:
+    """Whether the family secret menu has been unlocked."""
+    return load_settings()["secret_unlocked"]
+
+
+def set_secret_unlocked(enabled: bool) -> None:
+    settings = load_settings()
+    settings["secret_unlocked"] = enabled
     save_settings(settings)
 
 

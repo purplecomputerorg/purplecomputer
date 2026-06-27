@@ -666,9 +666,8 @@ class MusicGrid(Widget):
         if not letters_path.exists():
             return
         search_dirs = [letters_path]
-        from ..constants import is_vm
         from ..settings import get_kid_letters
-        if is_vm() and get_kid_letters():
+        if get_kid_letters():
             kid_path = sounds_path / "letters-kid"
             if kid_path.exists():
                 search_dirs.insert(0, kid_path)

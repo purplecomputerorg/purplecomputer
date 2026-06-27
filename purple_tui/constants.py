@@ -20,26 +20,6 @@ def is_debug() -> bool:
     from pathlib import Path
     return Path(DEBUG_FLAG_PATH).exists()
 
-
-def is_vm() -> bool:
-    """Check if running inside a virtual machine (QEMU/UTM/VMware/VirtualBox/etc).
-
-    Reads the DMI sys_vendor/product_name once and caches it. Used to gate
-    dev-only conveniences that must never activate on real kids' laptops.
-    """
-    if not hasattr(is_vm, "_cached"):
-        from pathlib import Path
-        hints = ("qemu", "kvm", "vmware", "virtualbox", "vbox", "bochs",
-                 "innotek", "utm", "parallels", "virtual")
-        text = ""
-        for f in ("sys_vendor", "product_name", "board_vendor"):
-            try:
-                text += Path(f"/sys/class/dmi/id/{f}").read_text().lower()
-            except OSError:
-                pass
-        is_vm._cached = any(h in text for h in hints)
-    return is_vm._cached
-
 # =============================================================================
 # ROOM NAMES
 # =============================================================================

@@ -1,7 +1,8 @@
 """Standalone ad beat: write "This is Purple Computer. Available now!" centered
-in the Art room. Two lines, absolutely positioned (clamp to the top-left corner,
-then offset) so they land centered no matter where the cursor started. A long
-lead-in pause lets the recording warm up before any typing begins.
+in the Art room. ClearArt parks the cursor at (0,0), so line 1 offsets straight
+to its centered spot and line 2 makes a short relative hop from the end of line
+1: no visible trip back to the corner. A long lead-in pause lets the recording
+warm up before any typing begins.
 """
 
 from ..script import (
@@ -18,14 +19,14 @@ _ROW1 = 11
 _LEFT1 = (132 - len(_LINE1)) // 2
 _LEFT2 = (132 - len(_LINE2)) // 2
 
-# Over-long left+up runs no-op at the edges, parking the cursor at (0,0).
-_CLAMP_TO_CORNER = ['left'] * 150 + ['up'] * 40
+# After line 1 the cursor sits at its end; hop down one row and left to line 2.
+_HOP_LEFT = (_LEFT1 + len(_LINE1)) - _LEFT2
 
 SEGMENT = [
     Comment("=== AVAILABLE NOW (Art room) ==="),
     SwitchRoom("art"),  # starts in paint mode
     Pause(0.3),
-    ClearArt(),
+    ClearArt(),  # also parks the cursor at (0,0)
 
     Comment("Tab into write mode so keys are letters, not paint colors"),
     PressKey("tab", pause_after=0.1),
@@ -34,16 +35,14 @@ SEGMENT = [
             "rolling before any text appears. Trim this in the editor."),
     Pause(3.0),
 
-    Comment("Line 1, centered: clamp to corner, then offset right/down"),
-    MoveSequence(directions=_CLAMP_TO_CORNER, delay_per_step=0.004),
+    Comment("Line 1, centered: offset right/down straight from (0,0)"),
     MoveSequence(directions=['right'] * _LEFT1 + ['down'] * _ROW1,
                  delay_per_step=0.004),
     ZoomIn(region="art-center", zoom=2.0, duration=0.3),
     TypeText(_LINE1, **_TYPING),
 
-    Comment("Line 2, centered one row below"),
-    MoveSequence(directions=_CLAMP_TO_CORNER, delay_per_step=0.004),
-    MoveSequence(directions=['right'] * _LEFT2 + ['down'] * (_ROW1 + 1),
+    Comment("Line 2, centered one row below: short relative hop from line 1's end"),
+    MoveSequence(directions=['down'] + ['left'] * _HOP_LEFT,
                  delay_per_step=0.004),
     TypeText(_LINE2, **_TYPING),
 

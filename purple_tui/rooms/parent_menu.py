@@ -495,6 +495,7 @@ class SecretMenuScreen(PickerModal):
     DESCRIPTION = "Family only"
     OPTIONS = [
         ("kid-letters", "Kid Voice Letters"),
+        ("doodle", "Surprise Drawing"),
         (_SECRET_MENU_CLOSED, "Close"),
     ]
     escape_value = _SECRET_MENU_CLOSED
@@ -2326,7 +2327,13 @@ class ParentMenu(PurpleModal):
             pass
 
     def _open_secret_menu(self) -> None:
-        self.app.push_screen(SecretMenuScreen())
+        def on_result(result):
+            if result == "doodle":
+                from ..secret_doodle import paint_doodle
+                self.dismiss()
+                self.app.call_later(paint_doodle, self.app)
+
+        self.app.push_screen(SecretMenuScreen(), callback=on_result)
 
     def _open_parent_pin(self) -> None:
         from ..settings import get_parent_pin

@@ -60,33 +60,42 @@ def build_ops() -> list[tuple[int, int, str]]:
     pt(57, 12, 'f'); pt(61, 14, 'f')
     green(65, 16); pt(66, 16, 'r')
 
-    # 6. Top-center bar + red/yellow vertical line
-    h(3, 71, 77, 'f')
-    pt(71, 3, 'r'); pt(72, 3, 'z')
-    for x in range(74, 78):
-        v(x, 5, 6, 'z')
-    valt = ['r', 'r', 'f', 'r', 'r', 'f', 'r', 'r', 'f']
+    # 6. Head (top-right) + neck
+    pt(72, 1, '='); pt(73, 1, '=')                 # black drawing atop the head
+    pt(71, 2, 'r'); pt(72, 2, 'z'); pt(73, 2, 'f')  # face row: red, blue, yellow,
+    pt(74, 2, 'z'); pt(75, 2, 'f')                  #           blue, yellow
+    pt(71, 3, 'r'); pt(73, 3, '=')                  # red below-left, black cheek
+    v(74, 3, 4, 'z'); v(75, 3, 4, 'z')              # blue square
+    pt(74, 5, 'f')
+    v(72, 5, 6, 'z'); v(73, 5, 6, 'z'); pt(74, 6, 'z')  # wider blue block
+    valt = ['r', 'r', 'f', 'r', 'r', 'f', 'r', 'r', 'f', 'r']  # red/yellow neck
     for i, k in enumerate(valt):
-        pt(72, 8 + i, k)
-        pt(73, 8 + i, k)
-    pt(71, 16, 'r'); orange(67, 17); pt(68, 17, 'z')
+        pt(72, 7 + i, k)
+        pt(73, 7 + i, k)
 
-    # 7. Yellow table / bench
+    # 7. Body (the back / table top) + neck junction
+    green(64, 16)
+    h(16, 64, 101, 'f')
     h(17, 64, 101, 'f')
-    h(18, 64, 101, 'f')
-    orange(100, 18); pt(101, 18, 'r')
-    v(64, 18, 22, 'f')
-    v(65, 18, 22, 'f')
-    v(100, 19, 23, 'f')
-    h(22, 64, 100, 'f')
-    for x in range(69, 83):
-        orange(x, 22)
-    v(86, 21, 23, 'z')
+    orange(100, 17); pt(101, 17, 'r')
+    orange(70, 16); pt(71, 16, 'z')                 # neck meets the body
 
-    # 8. Junction / bottom-left cluster of the table
-    pt(62, 21, 'z'); pt(63, 21, '1'); pt(62, 22, 'r'); pt(63, 22, 'f')
-    pt(62, 23, 'z'); pt(63, 23, 'r')
-    h(23, 92, 95, 'f')
+    # 8. Legs hanging under the body, with feet
+    v(64, 18, 23, 'f'); v(65, 18, 23, 'f')          # front leg
+    v(99, 18, 23, 'f'); v(100, 18, 23, 'f')         # back leg
+    h(20, 65, 99, 'f')                              # belly stretcher
+    pt(66, 20, '='); pt(67, 20, '=')                # black on the belly
+    for x in range(68, 83):
+        orange(x, 20)                               # orange belly
+    pt(96, 19, 'z'); pt(96, 20, 'z')                # blue step up to back leg
+    # front foot: cyan / red / black / blue / yellow cluster
+    pt(63, 21, 'z'); pt(65, 21, 'z')
+    pt(63, 22, '='); pt(64, 22, 'r'); pt(65, 22, 'f')
+    pt(63, 23, 'z'); pt(64, 23, 'f'); pt(65, 23, 'r')
+    h(23, 63, 66, 'f')
+    # back foot
+    v(97, 21, 23, 'z')
+    h(23, 98, 101, 'f')
 
     return ops
 

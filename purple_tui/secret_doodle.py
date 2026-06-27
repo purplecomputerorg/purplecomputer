@@ -33,6 +33,7 @@ def build_ops() -> list[tuple[int, int, str]]:
     v(1, 0, 4, 'f')
     pt(1, 0, 'r')
     green(1, 4); pt(2, 4, 'r')
+    h(1, 11, 71, '=')          # black line across the top, bracket to head
 
     # 2. Long light-blue line
     h(5, 3, 34, 'z')

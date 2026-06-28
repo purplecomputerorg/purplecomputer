@@ -56,7 +56,9 @@ def main():
     while alive(a.pid):
         time.sleep(a.interval)
         cur = grab(a.display, a.size)
-        if cur is None or prev is None or cur.shape != getattr(prev, "shape", None):
+        if cur is None:
+            continue
+        if prev is None or cur.shape != prev.shape:
             prev = cur
             last_change = time.monotonic()
             continue

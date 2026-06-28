@@ -6,7 +6,7 @@ A Textual TUI application providing:
 - Music Room: Music and art grid
 - Write Mode: Simple text editor
 
-Designed for 4–7 and fun for 2–8+. Safe, calm, distraction-free.
+Designed for ages 3-10, from learning letters to writing code. Safe, calm, distraction-free.
 """
 
 # Suppress ONNX runtime warnings BEFORE any imports that might load it

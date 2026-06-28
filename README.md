@@ -4,7 +4,7 @@ This file is AI-generated with a [human](https://github.com/tavinathanson) heavi
 
 **Give them a first computer you can feel good about.**
 
-Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for 4–7 and fun for 2–8+.
+Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for ages 3-10, from learning letters to writing code.
 They explore, create, and put it down on their own.
 
 > **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.

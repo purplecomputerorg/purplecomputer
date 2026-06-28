@@ -4,7 +4,7 @@
 
 **A joyful, kid-safe creativity computer built from your old laptop.**
 
-Purple Computer is a calm, distraction-free computing environment for kids. Designed for 4–7 and fun for 2–8+. It transforms old laptops into magical creativity machines where every keystroke brings wonder and mistakes are impossible.
+Purple Computer is a calm, distraction-free computing environment for kids. Designed for ages 3-10, from learning letters to writing code. It transforms old laptops into magical creativity machines where every keystroke brings wonder and mistakes are impossible.
 
 ## The Vision
 
@@ -78,7 +78,7 @@ Purple uses a modular content pack system. Packs contain emojis, sounds, and def
 
 ## Who It's For
 
-- **Kids 4–7** (and fun for 2–8+) who are ready for screen time that sparks creativity
+- **Kids ages 3-10** (from learning letters to writing code) who are ready for screen time that sparks creativity
 - **Parents** who want safe, calm, educational screen time
 - **Families** with old laptops gathering dust
 - **Anyone** who believes computing can be joyful, accessible, and magical

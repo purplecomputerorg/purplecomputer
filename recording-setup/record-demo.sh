@@ -25,9 +25,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/recordings"
+FRAMERATE=30
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
 if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
-    MAX_DURATION="${2:-36000}"  # No real cap: you drive it; idle_stop.py ends it. 10h safety backstop.
+    MAX_DURATION="${2:-300}"  # You drive it; stops when you exit Purple, with a 5-minute safety cap.
 else
     MAX_DURATION="${2:-180}"  # Default 3 minutes max (palm tree painting has 1300+ tiny sleeps)
 fi
@@ -83,60 +84,19 @@ rm -f "$OUTPUT_FILE"
 rm -f "$CROPPED_FILE"
 rm -f "$ZOOMED_FILE"
 
-# Get default audio sink for capturing system audio
-AUDIO_SINK=$(pactl get-default-sink 2>/dev/null || echo "")
-
-# Start FFmpeg recording in background
-# Video: x11grab captures X11 display
-# Audio: pulse captures system audio via PulseAudio monitor
-# -y: overwrite output
-# -video_size: screen dimensions
-# -framerate: 30fps is smooth enough
-# -f x11grab: capture X11 display
-# -f pulse: capture PulseAudio
-# -c:v libx264: H.264 codec (widely compatible)
-# -c:a aac: AAC audio codec
-# -preset ultrafast: fast encoding (can re-encode later for smaller size)
-# -crf 18: high quality (lower = better, 18-23 is good)
-# -t: max duration
+# Start the screen capture in the background via the shared capture command.
+# capture.sh exec's ffmpeg, so $FFMPEG_PID is ffmpeg itself and the cleanup
+# trap's kill finalizes the file cleanly.
 echo "Starting recording..."
 TEMP_FILE="${OUTPUT_FILE%.mp4}_raw.mp4"
 
 # Record FFmpeg start time for sync with demo player
 date +%s.%N > "$OUTPUT_DIR/.rec_start_epoch"
 
-if [ -n "$AUDIO_SINK" ]; then
-    echo "Audio:      $AUDIO_SINK (system audio)"
-    ffmpeg -y \
-        -video_size "$SCREEN_SIZE" \
-        -framerate 30 \
-        -draw_mouse 0 \
-        -f x11grab \
-        -i "$DISPLAY" \
-        -f pulse \
-        -i "${AUDIO_SINK}.monitor" \
-        -c:v libx264 \
-        -c:a aac \
-        -preset ultrafast \
-        -crf 18 \
-        -t "$MAX_DURATION" \
-        "$TEMP_FILE" \
-        2>/dev/null &
-else
-    echo "Audio:      none (PulseAudio not available)"
-    ffmpeg -y \
-        -video_size "$SCREEN_SIZE" \
-        -framerate 30 \
-        -draw_mouse 0 \
-        -f x11grab \
-        -i "$DISPLAY" \
-        -c:v libx264 \
-        -preset ultrafast \
-        -crf 18 \
-        -t "$MAX_DURATION" \
-        "$TEMP_FILE" \
-        2>/dev/null &
-fi
+PURPLE_CAPTURE_SIZE="$SCREEN_SIZE" \
+PURPLE_CAPTURE_FRAMERATE="$FRAMERATE" \
+PURPLE_CAPTURE_MAX_DURATION="$MAX_DURATION" \
+    "$SCRIPT_DIR/capture.sh" "$TEMP_FILE" 2>/dev/null &
 
 FFMPEG_PID=$!
 
@@ -161,8 +121,19 @@ cleanup() {
 
     if [ -f "$TEMP_FILE" ]; then
         echo "Processing video (trimming + adding background music)..."
-        # Get duration and calculate trim points
-        DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
+        # x11grab tags frames with wall-clock PTS; an abrupt stop can leave a bogus
+        # final timestamp, so the container's reported duration is absurd (tiny file,
+        # hundreds of "hours"). Frame count stays accurate, so derive duration from it
+        # and rebuild every timeline below with -r "$FRAMERATE" before the input.
+        NB_FRAMES=$(ffprobe -v error -select_streams v:0 -show_entries stream=nb_frames -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
+        if ! [[ "$NB_FRAMES" =~ ^[0-9]+$ ]]; then
+            NB_FRAMES=$(ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1 "$TEMP_FILE" 2>/dev/null)
+        fi
+        if [[ "$NB_FRAMES" =~ ^[0-9]+$ ]] && [ "$NB_FRAMES" -gt 0 ]; then
+            DURATION=$(awk "BEGIN {printf \"%.2f\", $NB_FRAMES / $FRAMERATE}")
+        else
+            DURATION=""
+        fi
         if [ -n "$DURATION" ]; then
             # Compute dynamic trim: how far into the recording the demo actually started
             TRIM_START=2  # fallback if sync files are missing
@@ -194,7 +165,7 @@ print(f'{demo - rec:.2f}')
                 # - Music at 30% volume normally, app audio at full volume
                 # - amix combines them (duration=first keeps video length)
                 ffmpeg -y \
-                    -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -r "$FRAMERATE" -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
                     -stream_loop -1 -i "$MUSIC_FILE" \
                     -filter_complex "
                         [0:a]aformat=fltp:44100:stereo,asplit=2[app][sidechain];
@@ -210,7 +181,7 @@ print(f'{demo - rec:.2f}')
                 echo "Adding background music (no app audio to duck)..."
                 # No app audio, just add music at lower volume
                 ffmpeg -y \
-                    -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -r "$FRAMERATE" -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
                     -stream_loop -1 -i "$MUSIC_FILE" \
                     -filter_complex "[1:a]volume=0.25[music]" \
                     -map 0:v -map "[music]" \
@@ -220,7 +191,8 @@ print(f'{demo - rec:.2f}')
                     "$OUTPUT_FILE" 2>/dev/null
             else
                 echo "No music file found, trimming only..."
-                ffmpeg -y -i "$TEMP_FILE" -ss "$TRIM_START" -t "$TRIM_DURATION" -c copy "$OUTPUT_FILE" 2>/dev/null
+                ffmpeg -y -r "$FRAMERATE" -ss "$TRIM_START" -t "$TRIM_DURATION" -i "$TEMP_FILE" \
+                    -c:v libx264 -preset ultrafast -crf 18 -c:a copy "$OUTPUT_FILE" 2>/dev/null
             fi
             rm -f "$TEMP_FILE"
         else
@@ -325,15 +297,11 @@ fi
 
 SYNC_FILE="$OUTPUT_DIR/.demo_start_epoch"
 if [ "$(printenv PURPLE_RECORD_MANUAL)" = "1" ]; then
-    IDLE_TIMEOUT="${PURPLE_IDLE_TIMEOUT:-60}"
-    echo "Manual mode: drive Purple yourself. Recording stops when you exit Purple or after ${IDLE_TIMEOUT}s idle."
-    setsid env PURPLE_TEST_BATTERY=1 PURPLE_FULLSCREEN=1 ./scripts/run_local.sh &
-    PURPLE_PGID=$!
-    "$PROJECT_DIR/.venv/bin/python" "$SCRIPT_DIR/idle_stop.py" \
-        --display "$DISPLAY" --size "$SCREEN_SIZE" \
-        --idle "$IDLE_TIMEOUT" --pid "$PURPLE_PGID" || true
-    kill -TERM -"$PURPLE_PGID" 2>/dev/null || true
-    wait "$PURPLE_PGID" 2>/dev/null || true
+    echo "Manual mode: drive Purple yourself. Recording stops when you exit Purple or after ${MAX_DURATION}s."
+    # Manual mode writes no demo-start marker; drop any stale one so the trim
+    # falls back to a fixed 2s head instead of a bogus epoch difference.
+    rm -f "$SYNC_FILE"
+    timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_FULLSCREEN=1 ./scripts/run_local.sh || true
 else
     timeout "$MAX_DURATION" env PURPLE_TEST_BATTERY=1 PURPLE_DEMO_AUTOSTART=1 \
         $ZOOM_ENV PURPLE_DEMO_SYNC_FILE="$SYNC_FILE" ./scripts/run_local.sh || true

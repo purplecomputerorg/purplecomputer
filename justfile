@@ -185,9 +185,9 @@ record-available-now:
         PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/available_now_zoom_events.json" \
         ./recording-setup/record-demo.sh recordings/available_now.mp4 30
 
-# Record while you drive Purple yourself (no music, no scripted demo; stops after 60s idle)
+# Record while you drive Purple yourself (no music, no scripted demo; stops on exit or after 5 min)
 record-manual:
-    @echo "Recording (manual, no music)... exit Purple, or stop driving for 60s, to end."
+    @echo "Recording (manual, no music)... exit Purple to end, or it stops after 5 minutes."
     PURPLE_NO_MUSIC=1 PURPLE_RECORD_MANUAL=1 ./recording-setup/record-demo.sh
 
 # Record 5s test clip (for testing recording pipeline)

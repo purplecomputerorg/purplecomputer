@@ -27,7 +27,7 @@ from pathlib import Path
 import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
-from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, is_vm, SUPPORT_EMAIL
 
 
 # =============================================================================
@@ -999,6 +999,11 @@ def _is_dev_environment() -> bool:
     return (project_root / ".git").is_dir()
 
 
+def _record_menu_label() -> str:
+    from ..recorder import get_recorder
+    return "Stop Recording" if get_recorder().active else "Start Recording"
+
+
 def _get_version_label() -> str:
     from ..diagnostics import get_version_label
     return get_version_label()
@@ -1053,6 +1058,8 @@ def _get_menu_items() -> list:
     items.append(("menu-parent-pin", pin_label))
     items.append(("menu-shell", "Open Terminal"))
     items.append(("menu-support", "Support Info"))
+    if _is_dev_environment() or is_vm():
+        items.append(("menu-record", _record_menu_label()))
     if _is_dev_environment():
         items.append(("menu-demo", "Start Demo"))
         items.append(("menu-bash", "Exit to Bash"))
@@ -2158,6 +2165,8 @@ class ParentMenu(PurpleModal):
             self._rename_computer()
         elif item_id == "menu-shell":
             self._open_shell()
+        elif item_id == "menu-record":
+            self._toggle_recording()
         elif item_id == "menu-demo":
             self._start_demo()
         elif item_id == "menu-bash":
@@ -2530,6 +2539,22 @@ class ParentMenu(PurpleModal):
         _flush_terminal_input()
         os.system('stty sane')
         self.app.exit()
+
+    def _toggle_recording(self) -> None:
+        """Start or stop a screen recording (dev/VM only). Keeps the menu open
+        and flips the item label so you can start, Esc out, do things, then
+        reopen and Stop."""
+        from ..recorder import get_recorder
+        get_recorder().toggle()
+        label = _record_menu_label()
+        for i, (iid, _) in enumerate(self._menu_items):
+            if iid == "menu-record":
+                self._menu_items[i] = (iid, label)
+                break
+        try:
+            self.query_one("#menu-record", ParentMenuItem).update(label)
+        except Exception:
+            pass
 
     def _start_demo(self) -> None:
         """Start the demo playback (dev mode only)."""

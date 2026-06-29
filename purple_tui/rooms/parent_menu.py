@@ -2543,10 +2543,16 @@ class ParentMenu(PurpleModal):
     def _toggle_recording(self) -> None:
         """Start or stop a screen recording (dev/VM only). Keeps the menu open
         and flips the item label so you can start, Esc out, do things, then
-        reopen and Stop."""
+        reopen and Stop. Shows the save path on start, or the reason on failure."""
         from ..recorder import get_recorder
-        get_recorder().toggle()
+        rec = get_recorder()
+        was_active = rec.active
+        rec.toggle()
         label = _record_menu_label()
+        if rec.active:
+            label += f"   → {rec.path.name}" if rec.path else ""
+        elif not was_active and rec.last_error:
+            label += f"   ({rec.last_error})"
         for i, (iid, _) in enumerate(self._menu_items):
             if iid == "menu-record":
                 self._menu_items[i] = (iid, label)

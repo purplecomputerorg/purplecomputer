@@ -14,7 +14,15 @@ set -e
 
 OUTPUT="${1:?usage: capture.sh OUTPUT.mp4}"
 FRAMERATE="${PURPLE_CAPTURE_FRAMERATE:-30}"
-SIZE="${PURPLE_CAPTURE_SIZE:-$(xdpyinfo | awk '/dimensions/{print $2; exit}')}"
+SIZE="${PURPLE_CAPTURE_SIZE:-$(xdpyinfo 2>/dev/null | awk '/dimensions/{print $2; exit}')}"
+# xdpyinfo (x11-utils) isn't always installed; fall back to xrandr's current mode.
+if [ -z "$SIZE" ]; then
+    SIZE=$(xrandr 2>/dev/null | awk '/\*/{print $1; exit}')
+fi
+if [ -z "$SIZE" ]; then
+    echo "capture.sh: could not determine screen size (need xdpyinfo or xrandr)" >&2
+    exit 1
+fi
 
 args=(-y -video_size "$SIZE" -framerate "$FRAMERATE" -draw_mouse 0 -f x11grab -i "$DISPLAY")
 

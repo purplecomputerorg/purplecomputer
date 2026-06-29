@@ -6,6 +6,7 @@ the .mp4 is finalized. Also finalizes on interpreter exit, so leaving Purple
 """
 import atexit
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -14,6 +15,7 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).parent.parent
 _CAPTURE_SH = _PROJECT_ROOT / "recording-setup" / "capture.sh"
 _FRAMERATE = "30"
+_LOG_PATH = Path("/tmp/purple-recording.log")
 
 
 def _output_dir() -> Path:
@@ -34,11 +36,16 @@ class Recorder:
     def __init__(self) -> None:
         self._proc: subprocess.Popen | None = None
         self._path: Path | None = None
+        self.last_error: str | None = None
         atexit.register(self.stop)
 
     @property
     def active(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+    @property
+    def path(self) -> Path | None:
+        return self._path
 
     def toggle(self) -> bool:
         """Start if idle, stop if running. Returns True if now recording."""
@@ -48,21 +55,42 @@ class Recorder:
         return self.start() is not None
 
     def start(self) -> Path | None:
-        if self.active or not _CAPTURE_SH.exists():
+        """Launch the capture. Returns the output path, or None if it couldn't
+        start (sets last_error; details land in /tmp/purple-recording.log)."""
+        if self.active:
+            return self._path
+        if not _CAPTURE_SH.exists():
+            self.last_error = "capture.sh not found"
+            return None
+        if shutil.which("ffmpeg") is None:
+            self.last_error = "ffmpeg is not installed"
             return None
         stamp = time.strftime("%Y%m%d-%H%M%S")
         self._path = _output_dir() / f"purple-recording-{stamp}.mp4"
         try:
+            log = _LOG_PATH.open("w")
+        except OSError:
+            log = subprocess.DEVNULL
+        try:
             self._proc = subprocess.Popen(
                 ["bash", str(_CAPTURE_SH), str(self._path)],
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
                 env={**os.environ, "PURPLE_CAPTURE_FRAMERATE": _FRAMERATE},
             )
-        except OSError:
+        except OSError as e:
             self._proc = None
+            self.last_error = str(e)
             return None
+        # ffmpeg fails fast (bad display, missing tool): give it a moment, then
+        # confirm it's still alive so the menu label reflects reality.
+        time.sleep(0.4)
+        if self._proc.poll() is not None:
+            self._proc = None
+            self.last_error = f"capture exited immediately (see {_LOG_PATH})"
+            return None
+        self.last_error = None
         return self._path
 
     def stop(self) -> Path | None:

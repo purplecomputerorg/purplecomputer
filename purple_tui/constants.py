@@ -167,23 +167,6 @@ def is_live_boot() -> bool:
     return is_live_boot._cached
 
 
-def is_vm() -> bool:
-    """Check if running inside a virtual machine (QEMU/UTM/VirtualBox/etc).
-
-    Uses systemd-detect-virt, which returns 0 only for a recognized VM. Cached;
-    virtualization doesn't change at runtime.
-    """
-    if not hasattr(is_vm, "_cached"):
-        try:
-            import subprocess
-            is_vm._cached = subprocess.run(
-                ["systemd-detect-virt", "--vm", "--quiet"], timeout=5
-            ).returncode == 0
-        except Exception:
-            is_vm._cached = False
-    return is_vm._cached
-
-
 def is_usb_cached() -> bool:
     """Check if the USB squashfs has been cached to RAM."""
     if _FAKE_USB:

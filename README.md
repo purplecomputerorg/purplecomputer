@@ -2,7 +2,7 @@ This file is AI-generated with a [human](https://github.com/tavinathanson) heavi
 
 # Purple Computer
 
-**Give them a first computer you can feel good about.**
+**Give them a calm computer you can feel good about.**
 
 Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for ages 3-10, from learning letters to writing code.
 They explore, create, and put it down on their own.
@@ -41,8 +41,8 @@ Purple Computer requires Linux with evdev for keyboard input. macOS is not suppo
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
-make setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
-make run      # Launches in Alacritty with Purple theme
+just setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
+just run      # Launches in Alacritty with Purple theme
 ```
 
 Inside Purple Computer, try:
@@ -152,7 +152,7 @@ See `guides/keyboard-architecture.md` for technical details.
 
 ## Screen Size
 
-Purple Computer displays a **112×32 character viewport** (plus header and footer) that fills **80% of the screen**. Font size is automatically calculated to fit, clamped to 12-48pt. On typical old laptops (11-15"), this fills most of the screen with a visible purple border.
+Purple Computer displays a **134×29 character viewport** (plus header and footer). Font size is automatically calculated to fit the screen, clamped to 12-48pt. On typical old laptops (11-15"), this fills most of the screen with a visible purple border.
 
 **Minimum supported resolution:** 1024×768
 
@@ -163,7 +163,7 @@ Purple Computer displays a **112×32 character viewport** (plus header and foote
 ```
 purplecomputer/
 ├── purple_tui/           # Main Textual TUI application
-│   ├── modes/            # Play, Music, Art rooms
+│   ├── rooms/            # Play, Music, Art rooms (+ parent menu, sleep screen)
 │   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine
@@ -208,22 +208,18 @@ purplecomputer/
 
 There are **two separate systems** involved:
 
-1. **USB Installer** (temporary): A remastered Ubuntu Server ISO with a two-gate safety model.
-   - **Gate 1 (initramfs):** Checks for `purple.install=1` in kernel cmdline, writes runtime artifacts to `/run/`
-   - **Gate 2 (userspace):** Shows confirmation screen, requires user to press ENTER
-   - Ubuntu's boot stack (shim, GRUB, kernel) and squashfs are untouched
+1. **USB (live boot)** (temporary): A remastered Ubuntu Server ISO that boots straight into Purple. Ubuntu's boot stack (shim, GRUB, kernel) is untouched; we swap in our own squashfs. Installation is optional and is started from the parent menu inside the running TUI, not from GRUB.
 
-2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids actually use.
+2. **Installed System** (permanent): A pre-built Ubuntu 24.04 image created with debootstrap. This is what kids use once a parent installs to disk.
 
-The USB's only job is to copy the pre-built image to disk (after user confirmation). After reboot, the USB is never used again.
+When a parent chooses "Install on this Computer" from the (PIN-gated) parent menu and confirms the data-loss warning, `install.sh` copies the pre-built image to the internal disk. After reboot, the USB is no longer needed.
 
 **Why this design:**
 - Ubuntu's signed boot chain → Secure Boot works
 - Ubuntu's stock kernel → all hardware drivers included
 - No package installation during setup → fast, reliable, offline
-- Standard Ubuntu on the installed system → normal apt updates work
-- Initramfs hook writes to `/run/` → squashfs never modified
-- Two-gate safety → explicit user consent before disk writes
+- Same root filesystem for live boot and install → built once, packaged twice
+- Install consent lives in the TUI (PIN + confirmation) → explicit user consent before disk writes
 
 See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation of why this design exists and what alternatives we tried.
 

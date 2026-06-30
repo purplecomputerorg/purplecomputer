@@ -11,7 +11,7 @@ How to create, generate, and compose demo screencasts for Purple Computer.
   - [Removing a Segment](#removing-a-segment)
   - [Per-Segment Speed](#per-segment-speed)
 - [Generating Segments](#generating-segments)
-  - [Music Room Segment (play-ai)](#music-room-segment-play-ai)
+  - [Music Room Segment (music-ai)](#music-room-segment-music-ai)
   - [Art Segment (doodle-ai)](#art-segment-doodle-ai)
   - [Writing a Segment by Hand](#writing-a-segment-by-hand)
 - [Fallback Chain](#fallback-chain)
@@ -34,14 +34,14 @@ How to create, generate, and compose demo screencasts for Purple Computer.
 
 ```bash
 # Generate a Music Room segment
-./tools/play-ai "smiley face" --save smiley
+./tools/music-ai "smiley face" --save smiley
 
 # Generate an Art segment
 ./tools/doodle-ai --goal "palm tree"
 ./tools/install-doodle-demo --from doodle_ai_output/TIMESTAMP --save palm_tree
 
 # Run it
-make run-demo
+just run-demo
 ```
 
 Each `--save` creates a segment file in `purple_tui/demo/segments/` and adds it to `demo.json`. The demo plays all segments in order.
@@ -96,14 +96,14 @@ The player inserts a `SetSpeed` action before each segment, so different segment
 
 ## Generating Segments
 
-### Music Room Segment (play-ai)
+### Music Room Segment (music-ai)
 
 Generates a Music Room composition (music + colored grid art) from a text prompt:
 
 ```bash
-./tools/play-ai "smiley face" --save smiley
-./tools/play-ai "heart" --save heart
-./tools/play-ai "rainstorm" --save rainstorm --no-review
+./tools/music-ai "smiley face" --save smiley
+./tools/music-ai "heart" --save heart
+./tools/music-ai "rainstorm" --save rainstorm --no-review
 ```
 
 Options:
@@ -167,10 +167,10 @@ Create a Python file in `purple_tui/demo/segments/`:
 
 ```python
 # purple_tui/demo/segments/greeting.py
-from ..script import SwitchMode, TypeText, PressKey, Pause
+from ..script import SwitchRoom, TypeText, PressKey, Pause
 
 SEGMENT = [
-    SwitchMode("play"),
+    SwitchRoom("play"),
     TypeText("hello!"),
     PressKey("enter", pause_after=1.0),
     Pause(1.5),
@@ -179,7 +179,7 @@ SEGMENT = [
 
 Rules:
 - Export a `SEGMENT` list of `DemoAction` objects
-- Each segment should include its own `SwitchMode` at the start
+- Each segment should include its own `SwitchRoom` at the start
 - Optionally export `SPEED_MULTIPLIER` (float, default 1.0)
 
 Then add it to `demo.json` manually or with:
@@ -276,9 +276,9 @@ DemoPlayer(
 ### Music Room
 
 - 10x4 grid mapped to the keyboard
-- Each key press **cycles** the color: off -> purple -> blue -> red -> off
+- Each key press **cycles** the color: off -> keycap color -> purple -> off
 - Colors **persist** until cycled again
-- Every press plays a sound, so pressing a key 3x for red also plays 3 notes
+- Every press plays a sound, so pressing a key 2x for purple also plays 2 notes
 
 The grid:
 ```
@@ -291,9 +291,9 @@ Z X C V B N M , . /   (low marimba)
 Strategy: plan which keys to press to form a picture. Each key should be pressed exactly the right number of times for its target color.
 
 ```python
-PlayKeys(sequence=['e', None, 'i'], seconds_between=0.67)       # Eyes (purple, 1 press)
-PlayKeys(sequence=['a', None, 'l'], seconds_between=0.6)       # Corners (purple)
-PlayKeys(sequence=['c', 'v', 'b', 'n'], seconds_between=0.43)  # Smile (purple)
+PlayKeys(sequence=['e', None, 'i'], seconds_between=0.67)       # Eyes (keycap color, 1 press)
+PlayKeys(sequence=['a', None, 'l'], seconds_between=0.6)       # Corners (keycap color)
+PlayKeys(sequence=['c', 'v', 'b', 'n'], seconds_between=0.43)  # Smile (keycap color)
 ```
 
 ### Art Room
@@ -319,7 +319,7 @@ Drawing mechanics:
 Text input with results below. Just use `TypeText` + `PressKey("enter")`.
 
 ```python
-SwitchMode("play"),
+SwitchRoom("play"),
 TypeText("red + blue"),
 PressKey("enter", pause_after=1.5),
 ```
@@ -361,11 +361,11 @@ MoveSequence(directions=['right', 'right', 'down'], delay_per_step=0.01)
 ```
 Moves cursor without painting. For repositioning between draws.
 
-### SwitchMode
+### SwitchRoom
 ```python
-SwitchMode("music")    # F2
-SwitchMode("play")     # F1
-SwitchMode("art")      # F3
+SwitchRoom("music")
+SwitchRoom("play")
+SwitchRoom("art")
 ```
 
 ### Pause
@@ -389,13 +389,12 @@ Normally inserted automatically by the composition loader.
 ## Color Reference
 
 ### Music Room
-| Presses | Color  | Hex     |
-|---------|--------|---------|
-| 0       | Off    | default |
-| 1       | Purple | #da77f2 |
-| 2       | Blue   | #4dabf7 |
-| 3       | Red    | #ff6b6b |
-| 4       | Off    | cycles  |
+| Presses | Color         | Value           |
+|---------|---------------|-----------------|
+| 0       | Off           | default         |
+| 1       | Keycap color  | per-key (KEY_COLORS) |
+| 2       | Purple        | #5a3875         |
+| 3       | Off           | cycles          |
 
 ### Art Room Brushes
 | Row    | Keys                 | Colors       |
@@ -421,7 +420,7 @@ Overlapping paint strokes mix subtractively:
 Plan your key sequence on the grid first. Mark which keys form the picture before writing code.
 
 **Music room colors are wrong.**
-A key pressed N times lands on color (N % 4). Press once for purple, twice for blue, three times for red. Four presses cycle back to off.
+A key pressed N times lands on color (N % 3). Press once for the keycap color, twice for purple. Three presses cycle back to off.
 
 **Art room types letters instead of painting.**
 You're in text mode. Press Tab to switch to paint mode. `DrawPath` does this automatically, but manual `PressKey` sequences don't.

@@ -86,8 +86,8 @@ git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 
 # Then:
-make setup
-make run
+just setup
+just run
 ```
 
 ## What setup.sh Does
@@ -146,8 +146,8 @@ If virtiofs fails, make sure you selected "Virtualize" (Apple Virtualization), n
 
 **Emoji showing as outlines (not color):**
 ```bash
-# Run make setup to install fontconfig rule
-cd purplecomputer && make setup
+# Run just setup to install fontconfig rule
+cd purplecomputer && just setup
 # Then restart Alacritty
 ```
 
@@ -156,8 +156,8 @@ cd purplecomputer && make setup
 To record a screencast of the demo in the VM:
 
 ```bash
-make recording-setup   # One-time: installs FFmpeg
-make record-demo       # Records to recordings/demo.mp4
+just recording-setup   # One-time: installs FFmpeg
+just record-demo       # Records to recordings/demo.mp4
 ```
 
 See `recording-setup/README.md` for details.

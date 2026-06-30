@@ -55,7 +55,7 @@ TUI Process:
         - Keyboard input ignored
 ```
 
-evdev provides separate key down (`value=1`) and key up (`value=0`) events, precise timestamps, all keycodes, and scancodes for F-key remapping. keyd is a kernel-adjacent keymap daemon that sits between the physical devices and Purple so remaps apply even before Purple starts; see [Remap Layer Choice](#remap-layer-choice) below for why this specific tool.
+evdev provides separate key down (`value=1`) and key up (`value=0`) events, precise timestamps, all keycodes, and scancodes for debug logging of unrecognized keys. keyd is a kernel-adjacent keymap daemon that sits between the physical devices and Purple so remaps apply even before Purple starts; see [Remap Layer Choice](#remap-layer-choice) below for why this specific tool.
 
 ---
 
@@ -71,7 +71,7 @@ class RawKeyEvent:
     keycode: int        # Linux keycode (KEY_SPACE, KEY_A, etc.)
     is_down: bool       # True = press, False = release
     timestamp: float    # Monotonic time in seconds
-    scancode: int = 0   # Hardware scancode (for F-key remapping)
+    scancode: int = 0   # Hardware scancode, 0 if unavailable
 ```
 
 ### EvdevReader
@@ -111,10 +111,6 @@ class KeyboardStateMachine:
                 hold_duration = event.timestamp - press_time
                 # Check for long-press, etc.
 ```
-
-### F-Key Calibration
-
-`keyboard_normalizer.py --calibrate` prompts the user to press F1-F12 and saves scancode mappings to `~/.config/purple/keyboard-map.json`. The TUI loads this file on startup to remap F-keys correctly regardless of Fn Lock state.
 
 ---
 
@@ -236,10 +232,8 @@ See also: `config/keyd/default.conf` for the actual remap config, `build-scripts
 
 | File | Purpose |
 |------|---------|
-| `purple_tui/input.py` | RawKeyEvent, EvdevReader, TextualInputAdapter |
-| `purple_tui/keyboard.py` | KeyboardStateMachine (refactored from current) |
-| `keyboard_normalizer.py` | Calibration mode only |
-| `~/.config/purple/keyboard-map.json` | F-key scancode mapping |
+| `purple_tui/input.py` | RawKeyEvent, EvdevReader, PowerButtonReader, LidSwitchReader |
+| `purple_tui/keyboard.py` | KeyboardStateMachine |
 
 ---
 

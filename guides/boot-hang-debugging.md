@@ -133,11 +133,11 @@ mount /dev/sdb4 /mnt                   # casper writable is usually p4
 cat /mnt/var/log/purple/boot.log.prev
 ```
 
-### 3. Ctrl+Alt+F2 into tty2 (requires USB keyboard on Touch Bar Macs)
+### 3. Ctrl+Alt+F2 into tty2
 
-On laptops with real function keys (or Touch Bar Macs with a USB keyboard attached), `Ctrl+Alt+F2` switches to tty2. From there: `cat /var/log/purple/boot.log` for the currently-hung boot, or any of the other diagnostic commands.
+On laptops with real function keys, `Ctrl+Alt+F2` switches to tty2. From there: `cat /var/log/purple/boot.log` for the currently-hung boot, or any of the other diagnostic commands.
 
-**Touch Bar Macs without USB keyboard:** there is no key combo. F-keys don't exist as physical keys without the `apple-ib-tb` driver. Either use a USB keyboard or fall back to option 2. A planned fix uses `keyd` to remap a physical key (e.g. Right Alt) to F2 at the kernel level — see the "Planned: keyd remapping" section below.
+**Touch Bar Macs (no physical F-keys):** keyd remaps Right Alt to F2 at the kernel level (`config/keyd/default.conf`), so press `Ctrl+Alt+RightAlt` to reach tty2. No USB keyboard needed. See the "keyd at boot time" section below. If keyd is not running (dev, VMs, or a broken golden image), there is no F2 without a USB keyboard, so fall back to option 2.
 
 ---
 

@@ -5,14 +5,16 @@ A comprehensive guide to how each room works, including all the mechanics, trick
 ---
 
 ## Table of Contents
-1. [Music Room (F2)](#music-room-f2)
-2. [Art Room (F3)](#art-room-f3)
-3. [Play Room (F1)](#play-room-f1)
+1. [Music Room](#music-room)
+2. [Art Room](#art-room)
+3. [Play Room](#play-room)
 4. [Demo Scripting Reference](#demo-scripting-reference)
+
+Rooms are switched via the room picker (tap Escape), not F-keys.
 
 ---
 
-# Music Room (F2)
+# Music Room
 
 ## The Grid
 
@@ -27,27 +29,31 @@ Row 3:  Z   X   C   V   B   N   M   ,   .   /
 
 Each cell displays its key character and can be colored.
 
+## Other Controls
+
+- **Enter**: cycle the instrument (marimba, ukulele, accordion, glockenspiel).
+- **Tab**: toggle Letters mode, which names each pressed letter aloud.
+- **Left/Right**: shift the musical key (B♭ / F / C / G / D); **Up/Down**: shift octave.
+- **Space**: loop station (record, loop, layer, double-tap to stop).
+
 ## Color Cycling
 
-**Every key press cycles through 4 states:**
+**Every key press cycles through 3 states** (`COLORS` in `music_constants.py`):
 
-| Press # | Color  | Hex       | Index |
-|---------|--------|-----------|-------|
-| Start   | Off    | (default) | -1    |
-| 1st     | Purple | #da77f2   | 0     |
-| 2nd     | Blue   | #4dabf7   | 1     |
-| 3rd     | Red    | #ff6b6b   | 2     |
-| 4th     | Off    | (default) | -1    |
-| 5th     | Purple | (repeats) | 0     |
+| Press # | Color           | Value           | Index |
+|---------|-----------------|-----------------|-------|
+| Start   | Off             | (default)       | -1    |
+| 1st     | Keycap (sticker)| per-key, from KEY_COLORS | 0 |
+| 2nd     | Purple          | #5a3875         | 1     |
+| 3rd     | Off             | (default)       | -1    |
+| 4th     | Keycap (repeats)| per-key         | 0     |
 
-**Key insight**: Colors PERSIST. Press a key once = purple. Press again = blue. Press again = red. Press again = off.
+The first press lights the cell in its physical sticker color (resolved per-key
+from `art_room.KEY_COLORS`), the second turns it purple, the third turns it off.
 
-**To draw a picture**: Press each key exactly ONCE to make it purple. Avoid pressing the same key twice unless you want a different color.
+**Key insight**: Colors PERSIST. Press a key once = keycap color. Press again = purple. Press again = off.
 
-**To make multi-colored patterns**:
-- Press some keys once (purple)
-- Press other keys twice (blue)
-- Press other keys three times (red)
+**To draw a picture**: Press each key exactly ONCE to light it in its keycap color.
 
 ## Sound System
 
@@ -113,13 +119,14 @@ Col:  0 1 2 3 4 5 6 7 8 9
 
 Keys: `4`, `5`, `6`, `R`, `Y`, `F`, `G`, `H`, `V`, `B`, `N`
 
-Then press `B` twice more to make the door blue!
+Then press `B` once more to turn the door purple!
 
 ### Multi-Color Patterns
 
-To make alternating colors:
-- Press row 1 keys once (purple eyes)
-- Press row 3 keys twice each (blue smile)
+Each key has two lit looks: its keycap color (1st press) and purple (2nd press).
+To mix the two:
+- Press some keys once (keycap color)
+- Press other keys twice (purple)
 
 ### Musical Sequences
 
@@ -138,7 +145,7 @@ Switch away from the Music room and back, or use `ClearAll()` in demo script to 
 
 ---
 
-# Art Room (F3)
+# Art Room
 
 ## Two Sub-Modes
 
@@ -288,7 +295,7 @@ The 3×3 blinking ring shows:
 
 ---
 
-# Play Room (F1)
+# Play Room
 
 ## Input Types
 
@@ -360,7 +367,7 @@ Same Kubelka-Munk algorithm as the Art room:
 
 - Appears after typing 2+ characters
 - Shows matching emojis and colors
-- Press **Space** to accept suggestion
+- Press **Tab** to accept suggestion
 - Shows both emoji icon and color swatch for words like "orange" (both 🍊 and color)
 
 ## Demo Tricks for Play Room
@@ -403,8 +410,9 @@ Types characters one at a time. Works in any mode.
 ### PressKey
 ```python
 PressKey("enter", pause_after=0.5)
-PressKey("space", count=2)  # Toggle paint mode in Art
-PressKey("space")    # Accept autocomplete or type space
+PressKey("tab")      # Toggle paint mode (Art) or Letters mode (Music); accept autocomplete (Play)
+PressKey("space")    # Type a space
+PressKey("space", hold_duration=0.5)  # Hold to open Code Space (Music/Art)
 PressKey("up")       # Navigate/scroll
 ```
 
@@ -432,11 +440,11 @@ DrawPath(
 ```
 Automatically enters paint mode if needed.
 
-### SwitchMode
+### SwitchRoom
 ```python
-SwitchMode("music")   # F2
-SwitchMode("play")    # F1
-SwitchMode("art")     # F3
+SwitchRoom("music")
+SwitchRoom("play")
+SwitchRoom("art")
 ```
 
 ### Pause
@@ -490,14 +498,11 @@ The most impressive demos:
 
 To get different colors on different keys:
 ```python
-# First set of keys: press once (purple)
+# First set of keys: press once (keycap color)
 PlayKeys(sequence=['e', 'i'], seconds_between=0.6)
 
-# Second set: press twice (blue)
+# Second set: press twice (purple)
 PlayKeys(sequence=['a', 'a', 'l', 'l'], seconds_between=0.4)
-
-# Third set: press three times (red)
-PlayKeys(sequence=['c', 'c', 'c', 'n', 'n', 'n'], seconds_between=0.3)
 ```
 
 ### Art Room Color Mixing Demo
@@ -548,8 +553,6 @@ Blue + Yellow = Green
 ```
 Esc (tap): Open room picker (Play, Music, Art)
 Esc (hold 1s): Parent mode
-F1: Play room
-F2: Music room
-F3: Art room
 Tab (in Art): Toggle text/paint mode
+Tab (in Music): Toggle Letters mode
 ```

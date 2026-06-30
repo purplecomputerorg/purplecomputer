@@ -39,7 +39,7 @@ Layer 2: Per-room structural fuzzy (for keywords, operators)
 
   Music room:
   - Command keywords: "chooze" -> "choose", "lettrs" -> "letters"
-  - Instrument names: "xylaphone" -> "xylophone", "marimab" -> "marimba"
+  - Instrument names: "akordion" -> "accordion", "marimab" -> "marimba"
 
 Shared module: purple_tui/fuzzy.py
 -----------------------------------
@@ -85,7 +85,7 @@ Argument ordering (free-order motion args)
 ------------------------------------------
 
   Design principle (same as above): always do the best-guess reasonable
-  thing. A 4-7 year old types a verb plus a bag of words and expects the
+  thing. A young child types a verb plus a bag of words and expects the
   computer to figure it out, regardless of order. "down blue 5",
   "down 5 blue", and "blue down 5" all mean the same thing to them.
 

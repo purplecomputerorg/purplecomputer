@@ -11,7 +11,7 @@ For the high-level architecture, see [architecture-overview.md](architecture-ove
 The ISO serves two purposes from one USB stick:
 
 1. **Live boot (default)**: Boots directly into Purple Computer. No installation, no disk writes, no waiting. The child plays immediately from the USB.
-2. **Install (optional)**: A parent selects "Install Purple Computer" from the GRUB menu. The system is written to the internal disk permanently.
+2. **Install (optional)**: A parent opens the parent menu inside the running Purple Computer TUI and selects the Install option. The system is written to the internal disk permanently.
 
 Both paths use the same root filesystem, built once by debootstrap and packaged two ways:
 - **Squashfs** for live boot (casper mounts it read-only with an overlayfs on top)
@@ -209,28 +209,32 @@ The squashfs is created from the mounted root filesystem **before** unmounting, 
 3. Replace casper/filesystem.squashfs with our Purple squashfs
 4. Copy casper/filesystem.size
 5. Extract initramfs, add install hook to casper-bottom, repack
-6. Add /purple/ payload (golden image, install.sh, purple-confirm.sh)
+6. Add /purple/ payload (golden image, install.sh)
 7. Replace GRUB config (live boot default, install as option)
 8. Rebuild ISO with xorriso (preserves boot records)
 ```
 
 ### GRUB Configuration
 
-```
-"Purple Computer" (default, auto-selected after 5s)
-    boot=casper quiet console=tty1
-    systemd.mask=udisks2.service  ← prevents internal disk auto-mount
-    (no purple.install=1)         ← install hook does nothing
+The normal ISO boots straight into Purple with no visible menu. There is no GRUB
+install entry: installation is triggered later from the parent menu inside the
+running TUI (`parent_menu.py` runs `/cdrom/purple/install.sh`).
 
-"Install Purple Computer"
-    boot=casper console=tty1 console=ttyS0,115200
-    purple.install=1              ← triggers install hook
+```
+set timeout=0
+set timeout_style=hidden
+
+"Purple Computer" (default)
+    boot=casper quiet ... console=tty2
+    systemd.mask=udisks2.service  ← prevents internal disk auto-mount
 
 "Boot from next volume"           ← skips USB, tries next boot device
 "UEFI Firmware Settings"          ← enters BIOS/UEFI setup
 ```
 
-The timeout is 5 seconds (configurable via `GRUB_TIMEOUT` env var during build). Since the default action is safe (live boot, no disk writes), a short timeout is appropriate. Parents who want to install have 5 seconds to press the down arrow.
+`timeout=0` + `timeout_style=hidden` means the user never sees GRUB on a normal
+boot. The debug ISO uses a different config: `timeout=5` with a visible menu
+listing verbose and recovery boot options.
 
 ---
 
@@ -247,8 +251,7 @@ purple-installer.iso
 ├── EFI/                        ← Secure Boot chain (untouched)
 └── purple/                     ← Install payload
     ├── purple-os.img.zst       ← Golden image (compressed)
-    ├── install.sh              ← Installer script
-    └── purple-confirm.sh       ← Gate 2 confirmation script
+    └── install.sh              ← Installer script (run by the parent menu)
 ```
 
 ---

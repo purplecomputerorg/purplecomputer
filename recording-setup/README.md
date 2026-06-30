@@ -8,10 +8,10 @@ In your Ubuntu VM:
 
 ```bash
 # 1. Install recording tools (one-time)
-make recording-setup
+just recording-setup
 
 # 2. Record the demo
-make record-demo
+just record-demo
 ```
 
 The recording will be saved to `recordings/demo.mp4`.
@@ -48,7 +48,7 @@ The script uses simple actions:
 ```python
 TypeText("Hello World!")      # Type characters
 PressKey("enter")             # Press special keys
-SwitchMode("play")            # Switch to F2 mode
+SwitchRoom("play")           # Switch to the Play room
 PlayKeys(['q','w','e','r'])   # Play musical notes
 DrawPath(['right','down'])    # Draw with space+arrows
 Pause(1.0)                    # Wait between sections
@@ -64,7 +64,7 @@ If you want more control:
 
 # Or record manually while running demo
 ffmpeg -video_size 1920x1080 -framerate 30 -f x11grab -i :0 output.mp4 &
-make run-demo
+just run-demo
 # Press Ctrl+C to stop recording
 ```
 

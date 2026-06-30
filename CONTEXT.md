@@ -8,7 +8,7 @@ Purple Computer is a calm, distraction-free computing environment for kids. Desi
 
 ## The Vision
 
-Purple Computer is a creativity device, not an entertainment device. Kids write, draw, explore, type, and imagine—slowly and calmly. There are no videos, no ads, no app stores, no infinite feeds, no accounts, no tracking, no social media, and no algorithms.
+Purple Computer is a creativity device, not an entertainment device. Kids write, draw, explore, type, and imagine, slowly and calmly. There are no videos, no ads, no app stores, no infinite feeds, no accounts, no tracking, no social media, and no algorithms.
 
 **Screen time that feels like quiet time.**
 
@@ -18,63 +18,61 @@ For screen-skeptical parents: a computer kids can't break, and parents don't hav
 
 **Every Purple Laptop saves a device from the landfill.**
 
-Purple Computer runs on 2010-2020 era laptops—ThinkPads, Dell Latitudes, HP EliteBooks, Surfaces, MacBook Airs. These machines have years of life left but often sit in drawers or head to e-waste. Purple gives them new purpose as dedicated creativity tools for kids, extending their lifespan by 5-10 more years.
+Purple Computer runs on 2010-2020 era laptops: ThinkPads, Dell Latitudes, HP EliteBooks, Surfaces, MacBook Airs. These machines have years of life left but often sit in drawers or head to e-waste. Purple gives them new purpose as dedicated creativity tools for kids, extending their lifespan by 5-10 more years.
 
 Minimal requirements: 2GB RAM, 16GB storage, 1024×768 display, x86_64 processor. Old hardware runs it beautifully.
 
-## The Three Modes
+## The Three Rooms
 
-Purple Computer organizes around three simple modes, accessed by function keys:
+Purple Computer organizes around three simple rooms. Tap Escape to open the room picker and move between them.
 
-### F1: Ask
-A math and emoji playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. Type `cat + dog` and see 🐱🐶. Type `3 * rainbow` and see 🌈🌈🌈. Mix colors: `red + blue` shows purple. Every word becomes an opportunity for delight.
+### Play
+A math and word playground. Type `2 + 2` and see `4`. Type `cat` and see 🐱. Type `cat + dog` and see 🐱🐶. Type `3 * rainbow` and see 🌈🌈🌈. Mix colors: `red + blue` shows purple. Purple can read any word out loud. Every word becomes an opportunity for delight.
 
-### F2: Play
-A music and art grid mapped to the keyboard. Press any key to play a sound and paint a color. The number row plus three letter rows create a 10×4 grid. No wrong notes, just exploration.
+### Music
+Every letter plays a note. Record a loop with Space, then play along with it. Enter swaps instruments, Left/Right shift the musical key, Up/Down shift the octave, and Letters mode names each letter aloud as it's pressed. No wrong notes, just exploration.
 
-### F3: Write
-A simple text editor with large, friendly text. Double-tap or sticky shift makes capitals easy. Typing from different keyboard rows mixes colors like paint: top row adds red, middle adds blue, bottom adds yellow.
+### Art
+Draw or write anything with colors and letters. Every letter paints its own color, and you can mix them like real paint. Steer the paintbrush with the arrow keys, or just mash on the keys and see what happens.
+
+### Code Space
+When they're ready, real code. In Music or Art, hold Space to open Code Space and write Logo-turtle-style programs like `repeat 4: forward 10 green turn`.
 
 ## Key Design Principles
 
 - **No files to delete, no settings to break, no internet to worry about**
-- **No login required**—boots straight into the purple interface
-- **Offline by default**—works without network access
-- **One-handed typing friendly**—sticky shift and double-tap for capitals
-- **Parent mode** (hold Escape 1s)—opens admin menu for shell access
+- **No login required**: boots straight into the purple interface
+- **Offline by default**: works without network access
+- **One-handed typing friendly**: sticky shift and double-tap for capitals
+- **Parent mode** (hold Escape 1s): opens admin menu for shell access
 
 ## Getting a Purple Computer
 
-Purple Computer is designed to be dead simple for non-technical parents. Two paths:
+Purple Computer is designed to be dead simple for non-technical parents. You buy a Purple Key: a USB drive that turns your old laptop into Purple.
 
-### Option 1: DIY Installation
-If you have an old laptop lying around:
-1. Download the Purple Computer USB installer
-2. Boot from USB and follow the simple installation
-3. Hand it to your little one
+1. We mail you a Purple Key (and a few goodies like keyboard stickers).
+2. Plug it into your old laptop, restart, and pick Purple from the boot menu.
+3. Purple starts up right from the Purple Key. Hand it over.
 
-The installer handles everything—no terminal commands, no configuration, no technical knowledge required. It transforms any compatible laptop into a dedicated Purple Computer that boots directly into the purple interface.
+Nothing on your laptop is changed: Purple runs live from the Purple Key, so you can plug it in whenever you like. When you're ready, you can install it permanently from the parent menu. One purchase covers as many laptops as you like, now or later.
 
-### Option 2: Buy a Ready-to-Go Purple Laptop
-Don't have a spare laptop or don't want to deal with installation? Pre-configured Purple Laptops are available for purchase—refurbished machines with Purple Computer already installed. Power on and it just works.
-
-These are quality used laptops (ThinkPads, etc.) that have been tested, cleaned, and set up with Purple Computer. They arrive ready for a kid to start exploring immediately.
+Because Purple is open source, you can also build a Purple Key yourself from the source code instead of buying one.
 
 ## Technology
 
 Purple Computer is a custom Linux-based operating system built on Ubuntu 24.04 LTS. The interface is a fullscreen terminal application (Python + Textual) running in Alacritty with:
 
-- Large, kid-appropriate text sizing (auto-calculated to fill 80% of screen)
+- Large, kid-appropriate text sizing (auto-calculated to the largest font that fits the screen)
 - Text-to-speech for typed content (Piper TTS, works offline)
-- Custom keyboard handling for young typists (sticky shift, double-tap capitals, F-key calibration)
-- Kid-proof power: button tap shows sleep screen, hold 3s shuts down; lid close shuts down after 2 min
+- Custom keyboard handling for young typists (sticky shift, double-tap capitals), read directly from evdev with keyd remaps at the kernel level
+- Kid-proof power: button tap shows sleep screen, hold 3s shuts down; lid close shuts down after 10 min
 - Trackpad/mouse disabled (keyboard only)
 
-The entire experience fits in a 100×28 character viewport, filling most of the screen on typical 11-15" donated laptops.
+The entire experience fits in a 134×29 character viewport, filling most of the screen on typical 11-15" donated laptops.
 
 ## Content Packs
 
-Purple uses a modular content pack system. Packs contain emojis, sounds, and definitions—no executable code. The core pack includes 100+ emojis with kid-friendly short names.
+Purple uses a modular content pack system. Packs contain emojis, sounds, and definitions, no executable code. The core pack includes 350+ emojis with kid-friendly short names.
 
 ## Who It's For
 

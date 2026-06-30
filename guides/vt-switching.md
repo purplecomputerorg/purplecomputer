@@ -68,25 +68,25 @@ Systemd splash service
   v
 purple-x11.service starts, X11 initializes
   |  X sets K_OFF on tty1 -- kernel VT switching stops
-  |  Standalone watcher starts (first line of xinitrc)
+  |  X handles VT switching via xkb (DontVTSwitch unset)
   v
 xinitrc setup (PulseAudio, window manager, font calc...)
-  |  Standalone watcher handles VT switching
+  |  X handles VT switching via xkb
   v
 Alacritty launches, Python app starts loading
-  |  Standalone watcher handles VT switching
+  |  X handles VT switching via xkb
   v
 App's EvdevReader.start() grabs keyboards
-  |  App handler takes over (watcher stops receiving events)
+  |  App handler takes over (grab steals events from X)
   v
 Normal operation
   |  App handler handles VT switching
   v
 App crash / exit
-  |  Grab released, watcher resumes receiving events
+  |  Grab released, X handles VT switching again
   v
 xinitrc restarts (exec "$0")
-  |  Old watcher killed, new one started immediately
+  |  App re-grabs once it reaches EvdevReader.start()
   v
 (cycle repeats)
 ```
@@ -119,7 +119,7 @@ After install completes, Python `execv`s into `purple-reboot` (a static C binary
 
 - The Python process and evdev handler are gone (replaced by `execv`)
 - X11 is still running with `K_OFF` on tty1 (no kernel VT switching)
-- The standalone watcher may have SIGBUS'd if the USB was removed
+- X may have SIGBUS'd if the USB was removed
 - Normal VT switch mechanisms are unavailable
 
 ### Signal safety

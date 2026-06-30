@@ -10,9 +10,10 @@ This document captures learnings from developing the musical tones for the Music
 - **Organic**: Should feel like a real instrument, not a synthesizer
 - **Clean mixing**: No clipping/static when many keys pressed rapidly
 
-## Current Implementation: Marimba
+## Default Instrument: Marimba
 
-We chose marimba because it's:
+Marimba is the default of the four instruments (see Available Generator Functions
+below). We chose it as the default because it's:
 - Warm and woody (not harsh)
 - Full-bodied (resonator tubes add richness)
 - Playful (percussive attack is fun)
@@ -119,16 +120,22 @@ Bottom row (Z-/): 98 - 247 Hz    (rich low end)
 
 ## Available Generator Functions
 
-The codebase has multiple generators for comparison:
+Music Room now ships **four** instruments, cycled at runtime with Enter (the
+`INSTRUMENTS` list in `music_constants.py`). Each has its own generator in
+`scripts/generate_sounds.py`:
 
-1. **`generate_marimba()`** - Current, full resonant marimba (ACTIVE)
-2. **`generate_piano_tone()`** - Original bright piano with ADSR
-3. **`generate_rich_tone()`** - Xylophone-like, punchy attack
+1. **`generate_marimba()`** - default, full resonant marimba
+2. **`generate_ukulele()`** - plucked nylon string
+3. **`generate_accordion()`** - soft reed organ
+4. **`generate_glockenspiel()`** - bright metal bar, long shimmer
 
-Switch in `main()`:
-```python
-samples = generate_marimba(freq)  # or generate_piano_tone, generate_rich_tone
-```
+Two more generators remain for comparison only (not in the shipped set):
+
+- **`generate_piano_tone()`** - bright piano with ADSR
+- **`generate_rich_tone()`** - toy-piano/xylophone, punchy attack
+
+Samples for every instrument and pitch are pre-rendered by `generate_sounds.py`;
+the kid switches instruments live rather than editing code.
 
 ## Other Instruments Considered
 

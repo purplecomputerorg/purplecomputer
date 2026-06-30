@@ -17,6 +17,7 @@ ENV/
 .env
 .env.local
 .env.*
+!.env.example
 autoinstall/subiquity/
 
 # Test environments

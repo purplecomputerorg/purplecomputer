@@ -181,7 +181,7 @@ Autocomplete helps kids discover words:
 - **Triggers at 2+ characters** (e.g., "ca" suggests "cat")
 - **Common 2-letter words are excluded** to prevent unwanted completions
   - Excluded: am, an, as, at, be, by, do, go, he, if, in, is, it, me, my, no, of, on, or, so, to, up, us, we, hi, oh, ok
-- **Space accepts** the current suggestion
+- **Tab accepts** the current suggestion
 - **Exact matches don't show suggestions** (typing "cat" doesn't suggest "cat")
 
 ---

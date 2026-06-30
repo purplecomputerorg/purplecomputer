@@ -21,8 +21,8 @@ Required values: `R2_BUCKET`, `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_AC
 ### 1. Build the ISO
 
 ```bash
-just build-iso                          # standard build
-PURPLE_VERSION=v1.0 ./build-in-docker.sh  # stamp a specific version
+./build-scripts/build-in-docker.sh                      # standard build
+PURPLE_VERSION=v1.0 ./build-scripts/build-in-docker.sh  # stamp a specific version
 ```
 
 Output goes to `/opt/purple-installer/output/`. Both a standard and debug ISO are produced.
@@ -119,7 +119,7 @@ All scripts live in `build-scripts/`.
 
 | Script | Just command | Purpose |
 |--------|-------------|---------|
-| `build-all.sh` | `just build-iso` | Build standard + debug ISOs |
+| `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `release-iso.sh` | `just release` | Upload ISOs to R2, update redirects |
 | `upload-early-access.sh` | `just upload-early-access` | Upload download page + PDFs, purge cache |
 | `upload-pdfs.sh` | `just upload-pdfs` | Upload just the PDFs, purge cache |

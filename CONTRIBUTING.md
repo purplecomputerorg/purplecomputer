@@ -52,15 +52,15 @@ For those with permission to modify the code, here's the development workflow:
 ```bash
 git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
-make setup
-make run
+just setup
+just run
 ```
 
 See [README.md](README.md#quick-start) for details.
 
 ### Testing
 
-- **Local** (fast iteration): `make run`
+- **Local** (fast iteration): `just run`
 - **Hardware** (production testing): Build ISO and install on target laptop
 
 ### Code Structure

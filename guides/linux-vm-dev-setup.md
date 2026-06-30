@@ -8,14 +8,14 @@ Purple Computer requires Linux with evdev for keyboard input. This guide covers 
 
 ```bash
 # 1. Set up the dev environment
-make setup
+just setup
 
 # 2. Add yourself to the input group (required for evdev)
 sudo usermod -aG input $USER
 sudo reboot  # Required for group change
 
 # 3. Run Purple Computer
-make run
+just run
 ```
 
 ---
@@ -25,7 +25,7 @@ make run
 1. **Create VM**: Use UTM with Apple Virtualization, ARM64 guest, Ubuntu Server
 2. **Install Ubuntu Server**: Minimal install is fine
 3. **Install dependencies**: `sudo apt install gcc python3-dev python3-venv git`
-4. **Clone repo and run `make setup`**
+4. **Clone repo and run `just setup`**
 
 The virtual keyboard appears as `Apple Inc. Virtual USB Keyboard` and works with evdev.
 

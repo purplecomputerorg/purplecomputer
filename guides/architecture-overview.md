@@ -26,56 +26,55 @@ These are **not** the same system. They share the same root filesystem (built on
 The USB serves two purposes:
 
 1. **Live boot (default)**: Boot directly into Purple Computer from USB. No installation, no disk writes, no waiting. The child plays immediately.
-2. **Install (optional)**: A parent can select "Install Purple Computer" from the GRUB menu to write the system to the internal disk permanently.
+2. **Install (optional)**: A parent opens the parent menu inside the running TUI and chooses "Install on this Computer" to write the system to the internal disk permanently.
 
 ### Boot Flow
 
 ```
 Parent plugs in USB, presses boot key
 
-    GRUB menu (5s auto-boot):
-      > "Purple Computer" (default)        → live boot, no disk writes
-        "Install Purple Computer"          → install to internal disk
+    GRUB menu (hidden, auto-boots):
+      > "Purple Computer" (default)        → live boot
         "Boot from next volume"            → skip USB
         "UEFI Firmware Settings"           → BIOS/UEFI
 
     ┌─────────────────────────────────────────────────────────┐
-    │ LIVE BOOT PATH (default)                                │
+    │ LIVE BOOT (the only production path)                    │
     │                                                         │
     │ Kernel boots with: boot=casper quiet ...                │
-    │ (NO purple.install=1)                                   │
     │     ↓                                                   │
     │ casper mounts OUR squashfs + overlayfs                  │
     │     ↓                                                   │
-    │ Initramfs hook: no purple.install=1 → does nothing      │
+    │ casper-bottom hook (80_purple_installer):               │
+    │   restores dotfiles, sets debug mode, paints splash     │
+    │   (does NOT gate install)                               │
     │     ↓                                                   │
     │ systemd starts → getty@tty1 auto-login as 'purple'      │
     │     ↓                                                   │
-    │ .bashrc → startx → Alacritty → Purple TUI              │
+    │ purple-x11.service → Alacritty → Purple TUI            │
     │     ↓                                                   │
     │ Child plays. Internal disk never touched.               │
     └─────────────────────────────────────────────────────────┘
 
     ┌─────────────────────────────────────────────────────────┐
-    │ INSTALL PATH (parent selects from GRUB menu)            │
+    │ INSTALL (optional, from inside the running TUI)         │
     │                                                         │
-    │ Kernel boots with: boot=casper ... purple.install=1     │
+    │ Parent menu (hold Escape 1s, PIN-gated)                 │
+    │   → "Install on this Computer"                          │
     │     ↓                                                   │
-    │ casper mounts squashfs + overlayfs (same as live boot)  │
+    │ InstallProgressScreen runs /cdrom/purple/install.sh     │
+    │   (sudo, while the live system keeps running)           │
     │     ↓                                                   │
-    │ Gate 1: hook finds purple.install=1                     │
-    │   → Masks getty@tty1 (prevents auto-login/X11/Purple)  │
-    │   → Writes purple-confirm.service to /root/etc/systemd/ │
-    │   → Writes scripts to /run/purple/                      │
+    │ install.sh detects the internal disk, wipes it, and     │
+    │ writes the golden image (purple-os.img.zst), then       │
+    │ sets up UEFI boot                                       │
     │     ↓                                                   │
-    │ Gate 2: purple-confirm.service on tty1                  │
-    │   "This will erase all data. Press ENTER to continue."  │
-    │     ↓                                                   │
-    │ install.sh writes golden image to internal disk          │
-    │     ↓                                                   │
-    │ Reboot. USB can be removed.                             │
+    │ "Press ENTER to restart" → execv into purple-reboot.    │
+    │ USB can be removed after reboot.                        │
     └─────────────────────────────────────────────────────────┘
 ```
+
+There is no "Install Purple Computer" GRUB entry and no `purple.install=1` arming in production: consent happens in the PIN-gated parent menu and the install confirmation screen, inside the TUI. (`purple.install=1` survives only as a developer/test switch that suppresses X11 so the install path can be exercised on a tty; see `test-boot.sh --mode install` and the debug ISO's "test install failure" entry.)
 
 ---
 
@@ -85,7 +84,7 @@ Parent plugs in USB, presses boot key
 
 **The USB is an appliance (in live boot mode):**
 - Boot from USB
-- 5-second auto-boot to Purple Computer
+- Hidden GRUB menu, auto-boots to Purple Computer
 - No menus, no prompts, no configuration
 - Child plays immediately
 - USB can be removed after boot (see "USB Safe Removal" below)
@@ -93,27 +92,23 @@ Parent plugs in USB, presses boot key
 **The installed system is NOT an appliance:**
 - Normal Ubuntu 24.04 system
 - Has apt, systemd, X11
-- Receives updates from Ubuntu's servers
 - Auto-logins to Purple TUI application
+
+(Offline by design: there are no over-the-air updates. A newer version means re-flashing the Purple Key.)
 
 ---
 
-## Two-Gate Safety Model (Install Path Only)
+## Install Consent (Install Path Only)
 
-Installation requires passing **two independent safety gates**:
+Installation is wiping the internal disk, so it requires explicit consent, all inside the running TUI:
 
-| Gate | When | What | Purpose |
-|------|------|------|---------|
-| **Gate 1** | Initramfs (casper-bottom) | Check `purple.install=1` in cmdline | Design-time arming |
-| **Gate 2** | Userspace (systemd) | Show confirmation, require ENTER | Runtime user consent |
+| Step | Where | What |
+|------|-------|------|
+| **Open parent menu** | Hold Escape 1s | PIN-gated, so kids can't reach it |
+| **Choose install** | Parent menu | "Install on this Computer" |
+| **Confirm** | Install screen | Clear data-loss warning before anything is written |
 
-**Arming != Asking user.** Gate 1 is set by the GRUB menu selection. Gate 2 requires explicit human action.
-
-**Key insight:** The installer ONLY runs if:
-1. `purple.install=1` was in kernel cmdline (Gate 1, selected from GRUB menu)
-2. User pressed ENTER on confirmation screen (Gate 2)
-
-In live boot mode, `purple.install=1` is absent, so the hook is a no-op.
+There is no GRUB-level or kernel-cmdline arming in production: the old `purple.install=1` + `purple-confirm.service` two-gate model has been replaced by this in-TUI flow. `install.sh` only runs when a parent walks through all three steps.
 
 ---
 
@@ -122,9 +117,9 @@ In live boot mode, `purple.install=1` is absent, so the hook is a no-op.
 | Surface | What we do |
 |---------|------------|
 | **Squashfs** | Replace Ubuntu Server's squashfs with our Purple Computer squashfs |
-| **GRUB config** | Live boot default, install as menu option |
-| **Initramfs** | Add one hook script to `/scripts/casper-bottom/` |
-| **ISO filesystem** | Add `/purple/` directory with golden image payload |
+| **GRUB config** | Hidden auto-boot menu, single "Purple Computer" live-boot entry |
+| **Initramfs** | Add one casper-bottom hook (restores dotfiles, sets debug mode, paints splash) |
+| **ISO filesystem** | Add `/purple/` directory with golden image payload + install.sh |
 
 ### What stays identical to Ubuntu ISO
 
@@ -210,8 +205,7 @@ USB stick contains:
 ├── boot/grub/grub.cfg       ← Live boot default menu
 └── purple/
     ├── purple-os.img.zst    ← Golden image (for install only)
-    ├── install.sh
-    └── purple-confirm.sh
+    └── install.sh           ← Run by the parent menu's install option
 ```
 
 ### On the internal disk (after install)
@@ -230,77 +224,28 @@ Internal disk contains:
 
 ## Safety Design (Install Path)
 
-### Gate 1: Casper-Bottom Hook
+Install is gated entirely in the running TUI, not in the boot chain:
 
-The hook script `/scripts/casper-bottom/80_purple_installer`:
+1. **Parent menu is PIN-gated.** Reaching install means holding Escape for 1s and entering the PIN, so a child can't trigger it.
+2. **Explicit data-loss confirmation.** `InstallProgressScreen` shows a clear warning before `install.sh` writes anything.
+3. **`install.sh` self-protects.** It detects the internal disk while excluding USB/removable devices, so it won't wipe the Purple Key itself, and refuses to proceed if no safe target disk is found.
 
-1. Checks for `purple.install=1` in kernel cmdline
-2. If NOT found: exits immediately (live boot continues normally)
-3. If found: checks for payload at `/root/cdrom/purple/`
-4. If payload found: writes runtime artifacts, masks getty@tty1
-5. If no payload: exits, live boot continues
-
-### Gate 2: Confirmation Service
-
-The systemd service `purple-confirm.service`:
-
-1. Only runs if `/run/purple/armed` exists
-2. Shows large, clear warning about data erasure
-3. Waits for explicit user input (ENTER to proceed, ESC to cancel)
-4. Has timeout (5 minutes) to prevent stuck systems
-
-**What the confirmation screen shows:**
-```
-╔══════════════════════════════════════════╗
-║   WARNING: DATA LOSS AHEAD              ║
-╚══════════════════════════════════════════╝
-
-This will ERASE ALL DATA on this computer's internal drive.
-Everything currently on the hard drive will be permanently deleted.
-This action CANNOT be undone.
-
-Press ENTER to install Purple Computer
-Press ESC to cancel and reboot
-```
-
-### Fail-Open Behavior
-
-Every failure mode results in safe state (live boot, no installation):
-
-| Failure | Gate | Result |
-|---------|------|--------|
-| No `purple.install=1` | 1 | Live boot (normal) |
-| No payload found | 1 | Live boot (normal) |
-| No `/run/purple/armed` | 2 | Service doesn't run |
-| User presses ESC | 2 | Reboot, no install |
-| Input timeout (5 min) | 2 | Reboot, no install |
-| Keyboard disconnected | 2 | Show error, reboot |
-
-### Test Matrix
-
-| Scenario | Gate 1 | Gate 2 | Result |
-|----------|--------|--------|--------|
-| Live boot (default) | SKIP | N/A | Purple Computer from USB |
-| Normal install | PASS | PASS (ENTER) | Installs to disk |
-| User cancels | PASS | FAIL (ESC) | Reboots |
-| Broken payload | FAIL | N/A | Live boot |
-| USB removed mid-boot | FAIL | N/A | Live boot |
-| Keyboard unplugged | PASS | FAIL (error) | Reboots |
-| Input timeout | PASS | FAIL (timeout) | Reboots |
+Live boot never touches the internal disk: nothing runs `install.sh` unless a parent walks the menu flow above. The casper-bottom hook is not part of this path; it only restores dotfiles, sets debug mode, and paints the splash.
 
 ---
 
 ## Initramfs/Casper Debugging Notes
 
-Hard-won lessons from debugging the casper-bottom hook:
+General casper-bottom lessons that still apply when editing `80_purple_installer`:
 
 ### Path Confusion in Initramfs
 
+The hook runs before the real root is pivoted in, so paths are not what they look like:
+
 | What | Write to | Why |
 |------|----------|-----|
-| Systemd units | `/root/etc/systemd/system/` | Persists on root filesystem, becomes `/etc/systemd/system/` |
-| Runtime scripts | `/run/purple/` | The `/run` tmpfs is **moved** into new root |
-| Marker files | `/run/purple/armed` | Same reason: use `/run`, not `/root/run` |
+| Files for the booted system | `/root/...` (e.g. `/root/home/purple/`) | `/root` is the mounted live root, becomes `/` |
+| Runtime-only state | `/run/...` | The `/run` tmpfs is **moved** into the new root |
 | **NOT** | `/root/run/...` | Gets shadowed when `/run` tmpfs is moved on top |
 
 ### ORDER File
@@ -325,7 +270,7 @@ Casper-bottom scripts are NOT auto-discovered. The file `/scripts/casper-bottom/
 | **Squashfs** | Compressed read-only filesystem used by casper for live boot |
 | **Initramfs** | Early boot filesystem loaded by kernel, contains scripts that run before real root |
 | **Casper** | Ubuntu's scripts for live boot: mounts squashfs, sets up overlayfs |
-| **Hook script** | Our script in `/scripts/casper-bottom/` that checks for arming and writes runtime artifacts |
+| **Hook script** | Our script in `/scripts/casper-bottom/` (`80_purple_installer`) that restores dotfiles, sets debug mode, and paints the boot splash |
 | **Live boot** | Running Purple Computer directly from USB via casper + squashfs |
 
 ---
@@ -344,9 +289,9 @@ Casper-bottom scripts are NOT auto-discovered. The file `/scripts/casper-bottom/
 │   filesystem that becomes the golden image). casper handles     │
 │   all the live boot plumbing.                                   │
 │                                                                 │
-│   Installation is optional, accessed via GRUB menu:             │
-│     - Gate 1 (initramfs hook): checks purple.install=1         │
-│     - Gate 2 (systemd service): requires ENTER to proceed      │
+│   Installation is optional, started from the parent menu        │
+│   inside the running TUI (PIN-gated, with a data-loss           │
+│   confirmation) rather than from GRUB.                          │
 │                                                                 │
 │   Same root filesystem, two packages:                           │
 │     squashfs (live boot) + disk image (install)                 │

@@ -52,7 +52,7 @@ Boot hang diagnostics: see `guides/boot-hang-debugging.md`. `purple_tui/boot_log
 
 ## Target Audience
 
-**Kids 4-7** (fun for 2-8+) and their **non-technical parents**.
+**Kids 3-10** (from learning letters to writing code) and their **non-technical parents**.
 
 User-facing messages: simple, friendly, no jargon. Clear next steps, not error explanations. Add `(Technical: ...)` for known root causes. Use `SUPPORT_EMAIL` from `purple_tui/constants.py`.
 
@@ -94,7 +94,7 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). See 
 
 ## Terminal Layout Constants
 
-Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=30`, `REQUIRED_TERMINAL_ROWS=38`). Font size calc in `scripts/calc_font_size.py` imports from there.
+Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`). Font size calc in `scripts/calc_font_size.py` imports from there.
 
 ---
 

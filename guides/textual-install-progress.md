@@ -181,7 +181,7 @@ Run with: `just test`, or `pytest tests/test_install_reboot.py -v`
 
 | File | Role |
 |------|------|
-| `purple_tui/rooms/parent_menu.py` | `InstallProgressScreen`, `_trigger_reboot()` |
+| `purple_tui/rooms/parent_menu.py` | `InstallProgressScreen`, `_on_install_complete()` |
 | `purple_tui/power_manager.py` | `PowerManager.shutdown()`, always-on shutdown logging |
 | `build-scripts/install.sh` | Copies setuid reboot binary to `/run`, writes sentinel |
 | `build-scripts/00-build-golden-image.sh` | Compiles static reboot binary during image build |

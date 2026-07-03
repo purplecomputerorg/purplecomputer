@@ -10,7 +10,7 @@ GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
 IMAGE_SIZE_MB=8192
 MOUNT_DIR="${BUILD_DIR}/mnt-golden"
-UBUNTU_MIRROR="http://mirrors.edge.kernel.org/ubuntu"
+UBUNTU_MIRROR="${UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}"
 
 # Colors
 GREEN='\033[0;32m'

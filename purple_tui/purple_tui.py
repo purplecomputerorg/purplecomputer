@@ -2070,11 +2070,28 @@ class PurpleApp(App):
         except Exception:
             pass
 
+    def _silence_music(self) -> None:
+        """Stop looping music if the Music room is active, without clearing its grid.
+
+        Loops are an app-level async task, not pygame-native, so an overlay
+        screen (sleep/bye/shutdown) never stops them on its own.
+        """
+        if self.active_room != Room.MUSIC:
+            return
+        try:
+            content_area = self.query_one("#content-area")
+            music_widget = content_area.query_one(f"#room-{ROOM_MUSIC[0]}")
+            if hasattr(music_widget, 'stop_sound'):
+                music_widget.stop_sound()
+        except NoMatches:
+            pass
+
     def _show_sleep_screen(self) -> None:
         """Show the sleep screen overlay."""
         if self._is_sleep_or_bye_active():
             return
 
+        self._silence_music()
         try:
             from .rooms.sleep_screen import SleepScreen
             self.push_screen(SleepScreen())
@@ -2086,6 +2103,7 @@ class PurpleApp(App):
         if self._is_sleep_or_bye_active():
             return
 
+        self._silence_music()
         try:
             from .rooms.sleep_screen import ShutdownConfirmScreen
             self.push_screen(ShutdownConfirmScreen())
@@ -2176,6 +2194,7 @@ class PurpleApp(App):
         if self._evdev_reader:
             self._evdev_reader.release_grab()
 
+        self._silence_music()
         self._bye_screen_active = True
         self.push_screen(ByeScreen())
 
@@ -2315,14 +2334,7 @@ class PurpleApp(App):
 
             # Silence music when leaving but keep the grid: visuals persist like Art,
             # so a loop never bleeds into another room with no visible source.
-            if self.active_room == Room.MUSIC:
-                try:
-                    content_area = self.query_one("#content-area")
-                    music_widget = content_area.query_one(f"#room-{ROOM_MUSIC[0]}")
-                    if hasattr(music_widget, 'stop_sound'):
-                        music_widget.stop_sound()
-                except NoMatches:
-                    pass
+            self._silence_music()
 
             self._complete_room_switch(new_room)
 

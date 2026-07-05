@@ -26,7 +26,7 @@ from rich.segment import Segment
 from rich.style import Style
 
 from ..color_mixing import mix_colors_paint, hex_to_rgb
-from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD, VIEWPORT_WIDTH
+from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD, VIEWPORT_WIDTH, APP_BACKGROUND
 from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
     UNSHIFT_MAP,
@@ -113,7 +113,7 @@ DEFAULT_BG_DARK = "#2a1845"
 DEFAULT_BG_LIGHT = "#e8daf0"
 
 # App outer backgrounds (outside viewport, matches theme background)
-APP_BG_DARK = "#1e1033"
+APP_BG_DARK = APP_BACKGROUND
 APP_BG_LIGHT = "#f0e8f8"
 
 # Readable text foreground colors (dark and light themes)

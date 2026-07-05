@@ -58,6 +58,7 @@ from .constants import (
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_SHIFT,
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
+    APP_BACKGROUND,
     is_usb_cached, is_usb_present,
     VOLUME_LEVELS, VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WRAPPER_REFERENCE_ROWS,
@@ -236,8 +237,7 @@ class TitleBar(Widget):
         self._shift_text = ""
         self._shift_active = False
         self._battery_text = ""
-        self._boot_text = ""
-        self._boot_color = ""
+        self._boot_parts: list[tuple[str, str]] = []
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -252,9 +252,9 @@ class TitleBar(Widget):
         self._battery_text = text
         self.refresh()
 
-    def set_boot_mode(self, text: str, color: str) -> None:
-        self._boot_text = text
-        self._boot_color = color
+    def set_boot_mode(self, parts: list[tuple[str, str]]) -> None:
+        """parts: list of (text, color) segments for the left boot indicator."""
+        self._boot_parts = parts
         self.refresh()
 
     def render_line(self, y: int) -> Strip:
@@ -263,7 +263,8 @@ class TitleBar(Widget):
             return Strip([])
 
         # Left indicator (boot mode: USB or Installed), aligned with viewport border
-        left_text = f"       {self._boot_text}" if self._boot_text else ""
+        boot_text = "".join(t for t, _ in self._boot_parts)
+        left_text = f"       {boot_text}" if boot_text else ""
         left_len = display_len(left_text)
 
         # Title (centered within full width)
@@ -296,7 +297,9 @@ class TitleBar(Widget):
 
         # Left indicator (boot mode)
         if left_text:
-            segments.append(Segment(left_text, Style(color=self._boot_color)))
+            segments.append(Segment("       "))
+            for text, color in self._boot_parts:
+                segments.append(Segment(text, Style(color=color)))
             pos = left_len
 
         # Gap between left indicator and title
@@ -762,21 +765,22 @@ class BootModeIndicator(Static):
         muted = TITLE_MUTED
         if not self._is_live:
             label = _read_computer_name() or DEFAULT_COMPUTER_NAME
-            text, color = f"{ICON_HARDDISK} {label}", muted
+            parts = [(f"{ICON_HARDDISK} {label}", muted)]
         elif self._is_cached and self._usb_removed:
-            text, color = f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted
+            parts = [(f"{ICON_USB} USB {ICON_SIGN_OUT} If restart, reinsert", muted)]
         elif self._is_cached:
-            text, color = (
-                f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 If restart, reinsert",
-                muted,
-            )
-        elif self._blink_state:
-            text, color = f"{ICON_USB} USB", muted
+            parts = [
+                (f"{ICON_USB} USB {ICON_SIGN_OUT} OK to remove \u2022 If restart, reinsert", muted)
+            ]
         else:
-            text, color = "   USB", muted
+            # Blink by color only: swapping the icon for spaces changes the
+            # rendered width (Rich counts the PUA glyph as 1 cell) and made
+            # the centered title jitter sideways on every blink.
+            icon_color = muted if self._blink_state else APP_BACKGROUND
+            parts = [(f"{ICON_USB} ", icon_color), ("USB", muted)]
         try:
             title_bar = self.screen.query_one("#title-bar")
-            title_bar.set_boot_mode(text, color)
+            title_bar.set_boot_mode(parts)
         except Exception:
             pass
 

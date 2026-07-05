@@ -114,6 +114,8 @@ ICON_BATTERY_LOW = "󰁻"      # nf-md-battery_20 (10-29%)
 ICON_BATTERY_EMPTY = "󰂃"    # nf-md-battery_alert (<10%)
 ICON_BATTERY_CHARGING = "󰂄" # nf-md-battery_charging
 
+APP_BACKGROUND = "#1e1033"
+
 # USB / installed indicator
 ICON_USB = "\uf287"           # nf-fa-usb
 ICON_SIGN_OUT = "\uf08b"     # nf-fa-sign_out

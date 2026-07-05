@@ -2071,11 +2071,12 @@ class PurpleApp(App):
             pass
 
     def _silence_music(self) -> None:
-        """Stop looping music if the Music room is active, without clearing its grid.
+        """Stop running REPL code and looping music, without clearing the grid.
 
-        Loops are an app-level async task, not pygame-native, so an overlay
+        Both are app-level async tasks, not pygame-native, so an overlay
         screen (sleep/bye/shutdown) never stops them on its own.
         """
+        self._stop_code_execution()
         if self.active_room != Room.MUSIC:
             return
         try:

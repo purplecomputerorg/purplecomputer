@@ -776,7 +776,10 @@ class MusicGrid(Widget):
             grid_width = cell_width * 10
             grid_height = cell_height * 4
             margin_left = (width - grid_width) // 2
-            margin_top = (height - grid_height) // 2
+            # Cap the top margin at the canonical value (25-high box → 2) so a
+            # one-row-taller box (hint bar hidden or pinned mid-reflow on slow
+            # hardware) pushes slack below the grid instead of nudging it down.
+            margin_top = min((height - grid_height) // 2, 2)
             self._cached_layout = (cell_width, cell_height, margin_left, margin_top, grid_width, grid_height)
         elif self._cached_layout is not None:
             # Reflow in progress: reuse last good layout
@@ -1261,6 +1264,8 @@ class MusicMode(Container, can_focus=True):
                 if getattr(self.app, '_music_key_switching_enabled', True):
                     parts.append("Arrows: switch key")
                 parts.append(enter_hint)
+                if getattr(self.app, '_music_looping_enabled', True):
+                    parts.append("Hold Enter: loop")
                 hint.set_hint("[dim]" + "    ".join(parts) + "[/]")
 
         # Loop panel: opens when recording/looping, closes back to idle.

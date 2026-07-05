@@ -254,7 +254,7 @@ class ReplPanel(Vertical):
                     return "tab_fallthrough"
                 return
 
-            if action.action == 'enter' and action.is_down:
+            if action.action == 'enter' and action.is_down and not action.is_repeat:
                 line = code_input.value.strip()
                 if line:
                     # "exit" closes the code panel

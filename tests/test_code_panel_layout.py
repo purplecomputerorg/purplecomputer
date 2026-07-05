@@ -151,6 +151,34 @@ class TestMusicCodePanelLayout:
                 )
         _run(_test())
 
+    def test_grid_margin_immune_to_taller_box(self):
+        """A one-row-taller grid box (leaked hidden hint bar, then pinned by
+        panel open) must not nudge the grid content down. Seen on a MacBook
+        Air where the pinned 26-high box rendered the grid one row lower."""
+        async def _test():
+            app = PurpleApp()
+            async with app.run_test(size=APP_SIZE) as pilot:
+                await _setup(pilot)
+                await _switch_room(app, pilot, "music")
+
+                from purple_tui.rooms.music_room import MusicGrid, MusicExampleHint
+                grid = app.query_one(MusicGrid)
+                margin_before = grid._cached_layout[3]
+
+                app.query_one("#example-hint", MusicExampleHint).display = False
+                await asyncio.sleep(SETTLE)
+                await pilot.pause()
+                music = app.query_one("#room-music")
+                music._on_space_hold_fired()
+                await asyncio.sleep(SETTLE)
+                await pilot.pause()
+
+                margin_after = grid._cached_layout[3]
+                assert margin_after == margin_before, (
+                    f"Grid top margin moved: {margin_before} -> {margin_after}"
+                )
+        _run(_test())
+
     def test_grid_height_stable_while_typing(self):
         async def _test():
             app = PurpleApp()

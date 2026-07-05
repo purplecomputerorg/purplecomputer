@@ -60,6 +60,8 @@ This transforms Music Room from a toy piano into something closer to a loop stat
 
 **On not annoying parents:** the answer probably isn't limiting how long loops play, but making sure the sounds are pleasant enough that ambient looping in the other room isn't grating. The marimba and warm percussion already lean this way. That said, an inactivity timeout is smart: if nobody has pressed a key for 60 seconds or so, loops should fade out and stop. The kid walked away, the music shouldn't keep going.
 
+**Design decision (shipped): instrument is frozen per note, key is live.** Loop events store the instrument that was active when each note was recorded (`loop_station.py` events are `(key, mode, offset, instrument)`), so switching instruments mid-loop layers new sounds over the old ones without rewriting them. Key changes are the opposite: pitch is resolved at playback time from the current root (`_pitch_stem_for_key` in `music_room.py`), so arrowing to a new key transposes the whole loop. This asymmetry is intentional. Instruments are timbre, and mixed timbres layered together sound good. Key is harmony: if old notes kept their old root, the same button would produce clashing pitches against whatever the kid plays next, and the loop would sound broken in a way a kid can't diagnose. Transposing everything keeps the loop in tune and preserves the melody's shape. Freezing key per note would also mean storing a root per event and preloading samples for every root in the loop, extra state for a worse sound.
+
 ### Progressive Hint Text
 
 Music Room already shows hint text at the bottom ("Try pressing letters and numbers!"). This could evolve based on what the kid has done:

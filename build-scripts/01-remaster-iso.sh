@@ -241,6 +241,20 @@ SOURCES_EOF
 
     rm -rf "$SQEXT"
 
+    # Read back the build version baked into the image (build-<githash>-<date>,
+    # written to /etc/purple-version by 00-build-golden-image.sh). This is the
+    # authoritative "what's actually on the drive" version. We drop it beside the
+    # finished ISO as a .version sidecar so flashing tools report the commit the
+    # ISO was built from, not whatever happens to be checked out at flash time.
+    rm -rf "$WORK_DIR/sq-version"
+    BUILD_VERSION="unknown"
+    if unsquashfs -d "$WORK_DIR/sq-version" "$LIVE_SQUASHFS" etc/purple-version >/dev/null 2>&1 \
+        && [ -f "$WORK_DIR/sq-version/etc/purple-version" ]; then
+        BUILD_VERSION="$(cat "$WORK_DIR/sq-version/etc/purple-version")"
+    fi
+    rm -rf "$WORK_DIR/sq-version"
+    log_info "Build version (from image): $BUILD_VERSION"
+
     # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
     log_step "5/11: Modifying initramfs..."
 
@@ -501,7 +515,7 @@ EFI_GRUB_EOF
     OUTPUT_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
 
     # Remove existing ISOs (xorriso can't overwrite)
-    rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256"
+    rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256" "${OUTPUT_ISO}.version"
 
     # Use xorriso modify mode: load original, update files, replace EFI image
     xorriso -indev "$UBUNTU_ISO" \
@@ -511,8 +525,9 @@ EFI_GRUB_EOF
         -boot_image any replay \
         -append_partition 2 0xEF "$EFI_IMG"
 
-    # Generate checksum
+    # Generate checksum and record the build version beside the ISO
     sha256sum "$OUTPUT_ISO" > "${OUTPUT_ISO}.sha256"
+    echo "$BUILD_VERSION" > "${OUTPUT_ISO}.version"
 
     log_info "Normal ISO built successfully!"
     log_info "Output: $OUTPUT_ISO"
@@ -525,7 +540,7 @@ EFI_GRUB_EOF
     log_step "10/11: Building debug ISO..."
 
     DEBUG_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
-    rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256"
+    rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256" "${DEBUG_ISO}.version"
 
     # Save normal GRUB config and write debug version
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
@@ -599,6 +614,7 @@ GRUB_DEBUG
         -append_partition 2 0xEF "$EFI_IMG"
 
     sha256sum "$DEBUG_ISO" > "${DEBUG_ISO}.sha256"
+    echo "$BUILD_VERSION" > "${DEBUG_ISO}.version"
 
     log_info "Debug ISO built successfully!"
     log_info "Output: $DEBUG_ISO"

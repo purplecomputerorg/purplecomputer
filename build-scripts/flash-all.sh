@@ -175,16 +175,41 @@ log_info "QA manifest: $(manifest_path)"
 # checked-out commit (build-then-flash means HEAD matches the ISO).
 SUCCEEDED=$(( ${#DEVS[@]} - ${#FAILED[@]} ))
 if [[ $SUCCEEDED -gt 0 ]]; then
-    FLASH_SHORT="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
-    FLASH_FULL="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)"
-    FLASH_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+    # Prefer the version baked into the ISO (build-<hash>-<date>, from the .version
+    # sidecar 01-remaster-iso.sh writes next to the ISO): that's the commit the
+    # software was actually built from. Fall back to the checked-out commit only
+    # for older ISOs with no sidecar, which may be AHEAD of what's on the drive.
+    FLASH_VERSION=""; FLASH_SHORT=""; FLASH_FULL=""; FLASH_BRANCH=""; FLASH_SRC=""
+    if [[ -f "${ISO_PATH}.version" ]]; then
+        FLASH_VERSION="$(tr -d '[:space:]' < "${ISO_PATH}.version")"
+        FLASH_SRC="iso"
+        if [[ "$FLASH_VERSION" == build-*-* ]]; then
+            _v="${FLASH_VERSION#build-}"; FLASH_SHORT="${_v%-*}"  # strip build- prefix and -date suffix
+        else
+            FLASH_SHORT="$FLASH_VERSION"
+        fi
+        FLASH_FULL="$(git -C "$PROJECT_DIR" rev-parse "$FLASH_SHORT" 2>/dev/null || true)"
+    else
+        FLASH_SHORT="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+        FLASH_FULL="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)"
+        FLASH_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+        FLASH_VERSION="$FLASH_SHORT"
+        FLASH_SRC="head"
+    fi
     if [[ -n "$FLASH_SHORT" ]]; then
         echo
         echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${BOLD}  Flashed software: ${FLASH_SHORT}${NC}  (${FLASH_BRANCH}, ${SUCCEEDED} drive(s))"
-        echo -e "  full: ${FLASH_FULL}"
-        git -C "$PROJECT_DIR" diff --quiet HEAD 2>/dev/null || \
-            echo -e "  ${YELLOW}note: working tree is dirty, drives may not exactly match ${FLASH_SHORT}${NC}"
+        if [[ "$FLASH_SRC" == "iso" ]]; then
+            echo -e "${BOLD}  Flashed software: ${FLASH_SHORT}${NC}  (from ISO, ${SUCCEEDED} drive(s))"
+            echo -e "  build: ${FLASH_VERSION}"
+            [[ -n "$FLASH_FULL" ]] && echo -e "  full: ${FLASH_FULL}"
+        else
+            echo -e "${BOLD}  Flashed software: ${FLASH_SHORT}${NC}  (${FLASH_BRANCH}, ${SUCCEEDED} drive(s))"
+            echo -e "  full: ${FLASH_FULL}"
+            echo -e "  ${YELLOW}note: this ISO has no .version sidecar, so this is the checked-out commit, which may be ahead of what was built.${NC}"
+            git -C "$PROJECT_DIR" diff --quiet HEAD 2>/dev/null || \
+                echo -e "  ${YELLOW}note: working tree is dirty too.${NC}"
+        fi
         echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
         # Record this batch to the orders app (private flashes table) so the hash

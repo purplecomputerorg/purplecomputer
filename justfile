@@ -275,6 +275,10 @@ flash-clean:
 flash-all *args:
     ./build-scripts/flash-all.sh {{args}}
 
+# Manually record a flashed build into the orders app (backfill a batch): just record-flash <commit> [drives] [flashed_at]
+record-flash *args:
+    ./build-scripts/record-flash.sh {{args}}
+
 # Flash the cached stock Ubuntu ISO (for isolating Purple vs kernel issues on target hardware)
 flash-ubuntu *args:
     ./build-scripts/flash-to-usb.sh {{args}} /opt/purple-installer/build/ubuntu-24.04.1-live-server-amd64.iso

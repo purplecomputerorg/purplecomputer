@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Manually record a flashed build into the orders app's flashes table, for
 # backfilling batches flashed before/outside `just flash-all` (which records
-# automatically). Reads ADMIN_PASSWORD from build-scripts/.env, same convention
-# as flash-all.sh and release-iso.sh. Never prints the password.
+# automatically). Reads FLASH_LOG_URL and ADMIN_PASSWORD from build-scripts/.env,
+# same convention as flash-all.sh and release-iso.sh. Never prints the password.
 #
 # Usage: just record-flash <commit-ish> [drive_count] [flashed_at]
 #   just record-flash c0078cd 3
@@ -28,9 +28,10 @@ SHORT="$(git -C "$PROJECT_DIR" rev-parse --short "$COMMITISH" 2>/dev/null)" \
     || die "Not a known commit: $COMMITISH"
 FULL="$(git -C "$PROJECT_DIR" rev-parse "$COMMITISH" 2>/dev/null)"
 
-# Load the admin password (and optional URL override) without echoing them.
+# Load the endpoint URL and admin password from .env without echoing them. Both
+# live in build-scripts/.env so neither is hard-coded in this public repo.
 [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
-FLASH_LOG_URL="${FLASH_LOG_URL:-https://purplecomputer.org/api/admin/flashes}"
+[[ -n "${FLASH_LOG_URL:-}" ]] || die "FLASH_LOG_URL not set in $SCRIPT_DIR/.env"
 [[ -n "${ADMIN_PASSWORD:-}" ]] || die "ADMIN_PASSWORD not set in $SCRIPT_DIR/.env"
 
 # Include flashed_at only when given, so the server defaults it to now().

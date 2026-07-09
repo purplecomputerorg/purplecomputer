@@ -214,11 +214,11 @@ if [[ $SUCCEEDED -gt 0 ]]; then
 
         # Record this batch to the orders app (private flashes table) so the hash
         # shows in the software dropdown when stamping shipments. Best effort:
-        # never fails or delays the flash. Secrets live in build-scripts/.env
-        # (FLASH_LOG_URL optional, ADMIN_PASSWORD), same convention as release-iso.sh.
+        # never fails or delays the flash. The endpoint URL and password both come
+        # from build-scripts/.env (FLASH_LOG_URL, ADMIN_PASSWORD), same convention
+        # as release-iso.sh, so neither is hard-coded in this public repo.
         [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
-        FLASH_LOG_URL="${FLASH_LOG_URL:-https://purplecomputer.org/api/admin/flashes}"
-        if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
+        if [[ -n "${FLASH_LOG_URL:-}" && -n "${ADMIN_PASSWORD:-}" ]]; then
             FLASH_PAYLOAD="{\"git_hash\":\"$FLASH_SHORT\",\"git_full\":\"$FLASH_FULL\",\"branch\":\"$FLASH_BRANCH\",\"iso_name\":\"$(basename "$ISO_PATH")\",\"iso_sha256\":\"$VERIFIED_ISO_SHA256\",\"drive_count\":$SUCCEEDED,\"flashed_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
             if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" \
                     -H 'Content-Type: application/json' \
@@ -228,7 +228,7 @@ if [[ $SUCCEEDED -gt 0 ]]; then
                 echo -e "${YELLOW}Could not reach the orders app to record this flash. The hash above is still yours to use.${NC}"
             fi
         else
-            echo -e "${YELLOW}No ADMIN_PASSWORD in build-scripts/.env, so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"
+            echo -e "${YELLOW}FLASH_LOG_URL/ADMIN_PASSWORD not set in build-scripts/.env, so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"
         fi
     fi
 fi

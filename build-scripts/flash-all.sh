@@ -24,7 +24,7 @@ Flash an ISO to every whitelisted USB drive currently plugged in, in parallel.
 Options:
   --debug       Use the most recent .debug.iso
   --yes         Skip the confirmation prompt
-  --no-settle   Skip the post-flash settle window (faster, but the first
+  --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
   --help        Show this help
 EOF
@@ -135,51 +135,36 @@ echo
 # Lift the gate before ejecting so udevadm settle can drain.
 sudo udevadm control --start-exec-queue 2>/dev/null || true
 
-# Settle: pay each drive's one-time post-write read cost on the bench. Cheap
-# controllers leave freshly written cells in a slow-to-read state until the
-# FIRST read relocates/recalibrates them, and that slow first read is exactly
-# what drags a parent's first live boot (fast forever after). So we read each
-# drive here, in parallel, to absorb that cost ourselves. Pure idle did not do
-# it: reads are the trigger. Reads only the written ISO region (offset 0), with
-# O_DIRECT so it hits flash, not the page cache. Tune passes with
-# FLASH_SETTLE_PASSES; --no-settle skips entirely.
-SETTLE_PASSES="${FLASH_SETTLE_PASSES:-1}"
-[[ "$SKIP_SETTLE" == true ]] && SETTLE_PASSES=0
-SETTLE_BS=8388608
-SETTLE_COUNT=$(( ($(stat -c%s "$ISO_PATH") + SETTLE_BS - 1) / SETTLE_BS ))
+# Boot-settle: boot each verified drive once in QEMU, in parallel, so its
+# controller pays the one-time post-write cost here instead of on the parent's
+# first boot. A dd read pass did not clear that state; a real boot does (see
+# guides/production-checklist.md, "Slow First Boot After Flashing").
 SETTLE_PIDS=()
+SETTLE_DEVS=()
 for i in "${!DEVS[@]}"; do
     dev="${DEVS[$i]}"
     [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-    [[ $SETTLE_PASSES -gt 0 ]] || continue
-    (
-        for ((p = 0; p < SETTLE_PASSES; p++)); do
-            sudo dd if="$dev" of=/dev/null bs="$SETTLE_BS" count="$SETTLE_COUNT" \
-                iflag=direct status=none 2>/dev/null || exit 1
-        done
-    ) &
+    [[ "$SKIP_SETTLE" == true ]] && continue
+    boot_settle_drive "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
     SETTLE_PIDS+=("$!")
+    SETTLE_DEVS+=("$dev")
 done
 if [[ ${#SETTLE_PIDS[@]} -gt 0 ]]; then
-    log_info "Settling ${#SETTLE_PIDS[@]} drive(s): reading each ${SETTLE_PASSES}x to pay the first-boot read cost here (--no-settle to skip). Walk away, no need to babysit."
-    for pid in "${SETTLE_PIDS[@]}"; do wait "$pid" || true; done
-    log_info "Settle complete."
+    log_info "Boot-settling ${#SETTLE_PIDS[@]} drive(s) in QEMU so the first real boot is fast (--no-settle to skip). Takes a few minutes, walk away."
+    for i in "${!SETTLE_PIDS[@]}"; do
+        if wait "${SETTLE_PIDS[$i]}"; then
+            echo -e "${GREEN}✓${NC} ${SETTLE_DEVS[$i]}: boot-settled"
+        else
+            echo -e "${YELLOW}!${NC} ${SETTLE_DEVS[$i]}: boot settle incomplete, first real boot may be slow (log: $LOG_DIR/$(basename "${SETTLE_DEVS[$i]}").boot-settle.log)"
+        fi
+    done
 fi
 
 # Re-enumerate and eject each verified drive (same pass single flashes do).
 for i in "${!DEVS[@]}"; do
     dev="${DEVS[$i]}"
     [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-    sudo blockdev --rereadpt "$dev" 2>/dev/null || true
-    sudo partprobe "$dev" 2>/dev/null || true
-done
-sudo udevadm settle 2>/dev/null || true
-for i in "${!DEVS[@]}"; do
-    dev="${DEVS[$i]}"
-    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-    sudo udisksctl power-off --block-device "$dev" 2>/dev/null \
-        || sudo eject "$dev" 2>/dev/null \
-        || true
+    eject_drive "$dev" || true
 done
 
 echo

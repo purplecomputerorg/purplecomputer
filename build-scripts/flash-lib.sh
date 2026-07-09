@@ -134,6 +134,97 @@ record_manifest() {
         >> "$(manifest_path)"
 }
 
+# Boot a freshly flashed drive once in QEMU so its controller pays the
+# one-time post-write cost here instead of on a parent's first boot. A
+# sequential dd readback does not clear that state; a real boot's read
+# workload does (see guides/production-checklist.md, "Slow First Boot After
+# Flashing"). cache=none (O_DIRECT) so guest reads hit the flash, not the
+# host page cache. Boot completion is detected host-side from /sys/block
+# read counters: at least BOOT_SETTLE_MIN_MB read, then BOOT_SETTLE_QUIET_SECS
+# with no new reads. The drive then stays powered BOOT_SETTLE_HOLD_SECS so
+# the controller can finish background relocation. QEMU's own output goes to
+# $log for diagnosis. Returns 1 (without failing the flash) if QEMU is
+# missing, exits early, or the threshold isn't reached within
+# BOOT_SETTLE_TIMEOUT_SECS.
+boot_settle_drive() {
+    local dev="$1" log="$2"
+    local timeout="${BOOT_SETTLE_TIMEOUT_SECS:-600}"
+    local min_mb="${BOOT_SETTLE_MIN_MB:-200}"
+    local quiet_target="${BOOT_SETTLE_QUIET_SECS:-30}"
+    local hold="${BOOT_SETTLE_HOLD_SECS:-60}"
+    local stat
+    stat="/sys/block/$(basename "$dev")/stat"
+
+    if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
+        echo "[WARN] qemu-system-x86_64 not found; cannot boot-settle $dev" >&2
+        return 1
+    fi
+
+    local part
+    for part in "$dev"?*; do
+        sudo umount "$part" 2>/dev/null || true
+    done
+
+    local accel=()
+    if [[ -e /dev/kvm ]]; then
+        accel=(-enable-kvm -cpu host)
+    else
+        echo "[WARN] /dev/kvm not available; boot settle will be slow" >&2
+    fi
+
+    sudo qemu-system-x86_64 "${accel[@]}" -m 2048 \
+        -drive file="$dev",format=raw,cache=none \
+        -boot c -no-reboot -display none \
+        >"$log" 2>&1 &
+    local qpid=$!
+
+    local read0 last cur quiet=0 elapsed=0 booted=1
+    read0=$(awk '{print $3}' "$stat")
+    last=$read0
+    while (( elapsed < timeout )); do
+        sleep 5
+        elapsed=$((elapsed + 5))
+        [[ -d "/proc/$qpid" ]] || break
+        cur=$(awk '{print $3}' "$stat")
+        if (( cur != last )); then
+            quiet=0
+            last=$cur
+        else
+            quiet=$((quiet + 5))
+        fi
+        # /sys/block stat counts 512-byte sectors; /2048 converts to MB.
+        if (( (cur - read0) / 2048 >= min_mb && quiet >= quiet_target )); then
+            booted=0
+            break
+        fi
+    done
+
+    local mb=$(( (last - read0) / 2048 ))
+    if (( booted == 0 )); then
+        sleep "$hold"
+    elif [[ -d "/proc/$qpid" ]]; then
+        echo "[WARN] boot settle timed out for $dev after ${elapsed}s with ${mb}MB read (need ${min_mb}MB + ${quiet_target}s quiet)" >&2
+    else
+        echo "[WARN] QEMU exited early for $dev after ${elapsed}s with ${mb}MB read; see $log" >&2
+    fi
+    sudo kill "$qpid" 2>/dev/null || true
+    wait "$qpid" 2>/dev/null || true
+    return "$booted"
+}
+
+# Re-read the partition table, then power off the drive so it re-enumerates
+# fresh on next plug-in. Some USB controllers (e.g. Verbatim) won't boot
+# unless they re-enumerate; this is what GNOME's "safely eject" and
+# balenaEtcher do at the end of a flash.
+eject_drive() {
+    local dev="$1"
+    sudo blockdev --rereadpt "$dev" 2>/dev/null || true
+    sudo partprobe "$dev" 2>/dev/null || true
+    sudo udevadm settle 2>/dev/null || true
+    sudo udisksctl power-off --block-device "$dev" 2>/dev/null \
+        || sudo eject "$dev" 2>/dev/null
+}
+
 # Resolve the most recent ISO in $OUTPUT_DIR. Pass "debug" for .debug.iso.
 find_latest_iso() {
     [[ -d "$OUTPUT_DIR" ]] || return 0

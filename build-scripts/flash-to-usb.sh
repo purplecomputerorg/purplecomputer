@@ -38,6 +38,8 @@ usage() {
     echo "  --debug          Flash the debug ISO (.debug.iso) instead"
     echo "  --yes            Skip the confirmation prompt"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
+    echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
+    echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
     echo "  --no-udev-gate   Skip udev stop/start (caller manages the gate; used by flash-all)"
     echo "  --list           List all USB drives (for finding serial numbers)"
     echo "  --help           Show this help"
@@ -115,6 +117,17 @@ select_drive() {
     fi
 
     IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL <<< "$SELECTED"
+}
+
+run_boot_settle() {
+    local settle_log
+    settle_log="$(mktemp -t purple-boot-settle.XXXXXX.log)"
+    log_info "Boot-settling $TARGET_DEV in QEMU so the first real boot is fast (--no-settle to skip)..."
+    if boot_settle_drive "$TARGET_DEV" "$settle_log"; then
+        log_info "Boot settle complete."
+    else
+        log_warn "Boot settle incomplete; first real boot may be slow (QEMU log: $settle_log)"
+    fi
 }
 
 confirm_write() {
@@ -265,20 +278,20 @@ write_iso() {
             trap - EXIT INT TERM
         fi
 
-        # Power-cycle the drive: kernel re-reads partition table, then udisks
-        # detaches the device. Some USB controllers (e.g. Verbatim) won't boot
-        # unless they re-enumerate fresh on next plug-in; this is what GNOME's
-        # "safely eject" and balenaEtcher do at the end of a flash.
-        # Skipped when the caller owns the udev gate: settle would deadlock
-        # against the still-paused exec queue, and the parent orchestrator
-        # handles re-enumeration after all children finish.
+        # Boot the drive once in QEMU so its controller pays the one-time
+        # post-write cost here; otherwise the parent's first boot is slow.
+        # Skipped for flash-all children: the parent boot-settles all drives
+        # in parallel after its own udev gate lifts.
+        if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
+            run_boot_settle
+        fi
+
+        # Power-cycle so the drive re-enumerates fresh on next plug-in.
+        # Skipped when the caller owns the udev gate: udevadm settle would
+        # deadlock against the still-paused exec queue, and the parent
+        # orchestrator handles re-enumeration after all children finish.
         if [[ "$MANAGE_UDEV" == true ]]; then
-            sudo blockdev --rereadpt "$TARGET_DEV" 2>/dev/null || true
-            sudo partprobe "$TARGET_DEV" 2>/dev/null || true
-            sudo udevadm settle
-            if sudo udisksctl power-off --block-device "$TARGET_DEV" 2>/dev/null; then
-                log_info "Drive ejected."
-            elif sudo eject "$TARGET_DEV" 2>/dev/null; then
+            if eject_drive "$TARGET_DEV"; then
                 log_info "Drive ejected."
             else
                 log_warn "Could not power-off or eject (udisksctl/eject unavailable)."
@@ -352,6 +365,8 @@ main() {
     local skip_confirm=false
     FORCE_DEVICE=""
     MANAGE_UDEV=true
+    SKIP_SETTLE=false
+    SETTLE_ONLY=false
     while [[ -n "${1:-}" ]]; do
         case "$1" in
             --help|-h)
@@ -374,6 +389,14 @@ main() {
                 FORCE_DEVICE="$2"
                 shift 2
                 ;;
+            --no-settle)
+                SKIP_SETTLE=true
+                shift
+                ;;
+            --settle-only)
+                SETTLE_ONLY=true
+                shift
+                ;;
             --no-udev-gate)
                 MANAGE_UDEV=false
                 shift
@@ -384,32 +407,34 @@ main() {
         esac
     done
 
-    # Determine ISO path
-    if [[ -n "${1:-}" ]]; then
-        ISO_PATH="$1"
-    elif [[ "$use_debug" == true ]]; then
-        ISO_PATH="$(find_latest_iso debug)"
-        if [[ -z "$ISO_PATH" ]]; then
-            log_error "No debug ISO found in $OUTPUT_DIR"
-            echo "Run build-in-docker.sh first to generate a .debug.iso."
-            exit 1
+    # Determine ISO path (irrelevant when only settling an already-flashed drive)
+    if [[ "$SETTLE_ONLY" != true ]]; then
+        if [[ -n "${1:-}" ]]; then
+            ISO_PATH="$1"
+        elif [[ "$use_debug" == true ]]; then
+            ISO_PATH="$(find_latest_iso debug)"
+            if [[ -z "$ISO_PATH" ]]; then
+                log_error "No debug ISO found in $OUTPUT_DIR"
+                echo "Run build-in-docker.sh first to generate a .debug.iso."
+                exit 1
+            fi
+        else
+            ISO_PATH="$(find_latest_iso)"
+            if [[ -z "$ISO_PATH" ]]; then
+                log_error "No ISO found in $OUTPUT_DIR"
+                echo "Run build-in-docker.sh first, or specify path to ISO."
+                exit 1
+            fi
         fi
-    else
-        ISO_PATH="$(find_latest_iso)"
-        if [[ -z "$ISO_PATH" ]]; then
-            log_error "No ISO found in $OUTPUT_DIR"
+
+        if [[ ! -f "$ISO_PATH" ]]; then
+            log_error "ISO not found: $ISO_PATH"
             echo "Run build-in-docker.sh first, or specify path to ISO."
             exit 1
         fi
-    fi
 
-    if [[ ! -f "$ISO_PATH" ]]; then
-        log_error "ISO not found: $ISO_PATH"
-        echo "Run build-in-docker.sh first, or specify path to ISO."
-        exit 1
+        log_info "ISO: $ISO_PATH"
     fi
-
-    log_info "ISO: $ISO_PATH"
 
     # Load whitelist and find drives
     load_whitelist
@@ -425,6 +450,15 @@ main() {
         log_error "$TARGET_DEV has no medium."
         log_error "The drive was ejected by a previous flash. Unplug it and plug it back in, then re-run."
         exit 1
+    fi
+
+    if [[ "$SETTLE_ONLY" == true ]]; then
+        sudo -v
+        run_boot_settle
+        if eject_drive "$TARGET_DEV"; then
+            log_info "Drive ejected. Unplug $TARGET_DEV now."
+        fi
+        exit 0
     fi
 
     if [[ "$skip_confirm" != true ]]; then

@@ -43,7 +43,7 @@ Freshly flashed drives take much longer on their first boot than on every boot a
 
 Conclusion: the penalty is state on the USB drive (controller-level, likely post-write read recalibration or SLC cache folding), not per-machine UEFI caching. One boot on any machine clears it for all machines.
 
-The sequential dd "settle" read pass in `flash-all.sh` does NOT clear it; an actual boot does. Plan: automate a real boot per drive on the flash machine via QEMU with the physical USB device (USB passthrough, or raw `/dev/sdX` with `cache=none` so reads hit the drive rather than the host page cache), reusing the boot success markers from `test-boot.sh`.
+The sequential dd "settle" read pass in `flash-all.sh` did NOT clear it; an actual boot does. Fix: `boot_settle_drive` in `flash-lib.sh` boots each drive once in QEMU (raw `/dev/sdX` with `cache=none`, so guest reads hit the flash rather than the host page cache), detects boot completion from host-side `/sys/block` read counters, then keeps the drive powered briefly for background relocation. Used by both `flash-all.sh` (parallel) and standalone `flash-to-usb.sh`; skip with `--no-settle`, tune with `BOOT_SETTLE_*` env vars.
 
 ### Script Improvements Needed
 

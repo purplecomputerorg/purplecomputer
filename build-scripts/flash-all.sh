@@ -169,6 +169,45 @@ done
 
 echo
 log_info "QA manifest: $(manifest_path)"
+
+# Report which software build just went onto these drives, so I can tie a shipped
+# batch to a git hash without digging through the manifest. Uses the currently
+# checked-out commit (build-then-flash means HEAD matches the ISO).
+SUCCEEDED=$(( ${#DEVS[@]} - ${#FAILED[@]} ))
+if [[ $SUCCEEDED -gt 0 ]]; then
+    FLASH_SHORT="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+    FLASH_FULL="$(git -C "$PROJECT_DIR" rev-parse HEAD 2>/dev/null || true)"
+    FLASH_BRANCH="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+    if [[ -n "$FLASH_SHORT" ]]; then
+        echo
+        echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BOLD}  Flashed software: ${FLASH_SHORT}${NC}  (${FLASH_BRANCH}, ${SUCCEEDED} drive(s))"
+        echo -e "  full: ${FLASH_FULL}"
+        git -C "$PROJECT_DIR" diff --quiet HEAD 2>/dev/null || \
+            echo -e "  ${YELLOW}note: working tree is dirty, drives may not exactly match ${FLASH_SHORT}${NC}"
+        echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Record this batch to the orders app (private flashes table) so the hash
+        # shows in the software dropdown when stamping shipments. Best effort:
+        # never fails or delays the flash. Secrets live in build-scripts/.env
+        # (FLASH_LOG_URL optional, ADMIN_PASSWORD), same convention as release-iso.sh.
+        [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
+        FLASH_LOG_URL="${FLASH_LOG_URL:-https://purplecomputer.org/api/admin/flashes}"
+        if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
+            FLASH_PAYLOAD="{\"git_hash\":\"$FLASH_SHORT\",\"git_full\":\"$FLASH_FULL\",\"branch\":\"$FLASH_BRANCH\",\"iso_name\":\"$(basename "$ISO_PATH")\",\"iso_sha256\":\"$VERIFIED_ISO_SHA256\",\"drive_count\":$SUCCEEDED,\"flashed_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+            if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" \
+                    -H 'Content-Type: application/json' \
+                    -X POST "$FLASH_LOG_URL" -d "$FLASH_PAYLOAD" >/dev/null 2>&1; then
+                echo -e "${GREEN}Recorded to the orders app; it shows in the software dropdown now.${NC}"
+            else
+                echo -e "${YELLOW}Could not reach the orders app to record this flash. The hash above is still yours to use.${NC}"
+            fi
+        else
+            echo -e "${YELLOW}No ADMIN_PASSWORD in build-scripts/.env, so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"
+        fi
+    fi
+fi
+
 if [[ ${#FAILED[@]} -eq 0 ]]; then
     echo -e "${BOLD}${GREEN}All ${#FOUND_DRIVES[@]} drives flashed and verified. Unplug them now.${NC}"
     exit 0

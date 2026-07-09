@@ -37,6 +37,14 @@ Even with SHA256 verification passing, USB drives can fail to boot. In January 2
 - [ ] Use consistent hardware (same USB hub, same flash station)
 - [ ] Track batch numbers for recall purposes
 
+### Slow First Boot After Flashing (drive-side, confirmed 2026-07-08)
+
+Freshly flashed drives take much longer on their first boot than on every boot after. Experiment: a 2011 Mac took 3.5 minutes to first-boot a fresh flash, reproduced twice across reflashes (right-side USB port). After a third flash, the same drive first-booted on a 2014 Mac in 1 minute; then, with no reflash, the 2011 Mac booted it in 15 seconds instead of 3.5 minutes.
+
+Conclusion: the penalty is state on the USB drive (controller-level, likely post-write read recalibration or SLC cache folding), not per-machine UEFI caching. One boot on any machine clears it for all machines.
+
+The sequential dd "settle" read pass in `flash-all.sh` does NOT clear it; an actual boot does. Plan: automate a real boot per drive on the flash machine via QEMU with the physical USB device (USB passthrough, or raw `/dev/sdX` with `cache=none` so reads hit the drive rather than the host page cache), reusing the boot success markers from `test-boot.sh`.
+
 ### Script Improvements Needed
 
 The current `flash-to-usb.sh` does basic SHA256 verification. For production, add:

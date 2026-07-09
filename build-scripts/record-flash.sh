@@ -39,11 +39,17 @@ PAYLOAD="{\"git_hash\":\"$SHORT\",\"git_full\":\"$FULL\",\"drive_count\":$DRIVE_
 [[ -n "$FLASHED_AT" ]] && PAYLOAD+=",\"flashed_at\":\"$FLASHED_AT\""
 PAYLOAD+="}"
 
+# Cloudflare Access service-token headers, if the endpoint is behind Access
+# (both set in build-scripts/.env). Omitted headers just rely on Basic Auth.
+CF_HEADERS=()
+[[ -n "${CF_ACCESS_CLIENT_ID:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID")
+[[ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+
 echo "Recording $SHORT ($DRIVE_COUNT drive(s))${FLASHED_AT:+ at $FLASHED_AT} to $FLASH_LOG_URL"
-if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" \
+if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" "${CF_HEADERS[@]}" \
         -H 'Content-Type: application/json' \
         -X POST "$FLASH_LOG_URL" -d "$PAYLOAD" >/dev/null; then
     echo -e "${GREEN}Done. $SHORT now shows in the orders software dropdown.${NC}"
 else
-    die "POST failed (check ADMIN_PASSWORD and that the site is reachable)."
+    die "POST failed (check ADMIN_PASSWORD / service token, and that the site is reachable)."
 fi

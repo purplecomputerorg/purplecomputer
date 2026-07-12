@@ -1,12 +1,14 @@
 """Playback player that executes scripts by dispatching keyboard actions.
 
 The player converts playback script actions into KeyboardAction objects
-and dispatches them to the app's keyboard handler at human-like pace.
+and dispatches them to the app's keyboard handler, paced for watchable
+demo footage.
 """
 
 import asyncio
 import json
 import os
+import random
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Awaitable
@@ -24,6 +26,7 @@ from .script import (
     PlayKeys,
     DrawPath,
     MoveSequence,
+    SelectMenuItem,
     SetSpeed,
     Comment,
     ZoomIn,
@@ -36,6 +39,12 @@ from ..keyboard import (
     RoomAction,
     ControlAction,
 )
+
+
+def _control(key: str, is_down: bool = True, is_repeat: bool = False) -> ControlAction:
+    """Playback control actions are marked synthetic so app behaviors tied to
+    physical keys (like Escape stopping the demo) don't fire on scripted ones."""
+    return ControlAction(action=key, is_down=is_down, is_repeat=is_repeat, synthetic=True)
 
 if TYPE_CHECKING:
     pass
@@ -74,6 +83,7 @@ class PlaybackPlayer:
         set_music_key_color: Callable[[str, int], None] | None = None,
         is_art_paint_mode: Callable[[], bool] | None = None,
         is_play_letters_mode: Callable[[], bool] | None = None,
+        get_selected_menu_label: Callable[[], str | None] | None = None,
         set_instrument: Callable[[str], None] | None = None,
         get_cursor_position: Callable[[], tuple[float, float] | None] | None = None,
         zoom_events_file: str | Path | None = None,
@@ -92,6 +102,9 @@ class PlaybackPlayer:
                 is in paint mode (vs text mode)
             is_play_letters_mode: Optional function to check if Music room
                 is in letters mode (vs music mode)
+            get_selected_menu_label: Optional function returning the label of
+                the currently selected item on the open menu, for
+                SelectMenuItem actions
             get_cursor_position: Optional function returning (x_frac, y_frac)
                 viewport fractions for the current cursor position. Used to
                 emit cursor_at events for zoom post-processing.
@@ -106,11 +119,13 @@ class PlaybackPlayer:
         self._set_music_key_color = set_music_key_color
         self._is_art_paint_mode = is_art_paint_mode
         self._is_play_letters_mode = is_play_letters_mode
+        self._get_selected_menu_label = get_selected_menu_label
         self._set_instrument = set_instrument
         self._get_cursor_position = get_cursor_position
         self._zoom_events_file = Path(zoom_events_file) if zoom_events_file else None
         self._running = False
         self._cancelled = False
+        self._rng = random.Random(int(os.environ.get("PURPLE_DEMO_SEED", "42")))
         self._zoom_events: list[dict] = []
         self._start_time: float = 0.0
         self._zoomed_in = False
@@ -198,6 +213,9 @@ class PlaybackPlayer:
         elif isinstance(action, MoveSequence):
             await self._move_sequence(action)
 
+        elif isinstance(action, SelectMenuItem):
+            await self._select_menu_item(action)
+
         elif isinstance(action, ZoomIn):
             await self._zoom_in(action)
 
@@ -223,23 +241,34 @@ class PlaybackPlayer:
 
             self._emit_cursor_at()
 
-            await self._sleep(action.delay_per_char)
+            await self._sleep(self._char_delay(action, char))
 
         await self._sleep(action.final_pause)
+
+    def _char_delay(self, action: TypeText, char: str) -> float:
+        """Per-keystroke delay with seeded variation, so scripted typing is not metronomic."""
+        if action.jitter <= 0:
+            return action.delay_per_char
+        delay = self._rng.gauss(action.delay_per_char, action.delay_per_char * action.jitter)
+        if char in ' .,!?+':
+            delay *= 1.5
+        if self._rng.random() < 0.06:
+            delay += self._rng.uniform(0.1, 0.3)
+        return max(0.02, delay)
 
     async def _press_key(self, action: PressKey) -> None:
         """Press a special key."""
         key = action.key.lower()
 
         if key in ('up', 'down', 'left', 'right'):
-            await self._dispatch(NavigationAction(direction=key))
+            await self._dispatch(NavigationAction(direction=key, is_repeat=action.is_repeat))
 
         elif key in ('enter', 'backspace', 'escape', 'tab', 'space'):
-            await self._dispatch(ControlAction(action=key, is_down=True))
+            await self._dispatch(_control(key, is_repeat=action.is_repeat))
 
             if action.hold_duration > 0:
                 await self._sleep(action.hold_duration)
-                await self._dispatch(ControlAction(action=key, is_down=False))
+                await self._dispatch(_control(key, is_down=False))
 
         elif len(key) == 1:
             await self._dispatch(CharacterAction(char=key))
@@ -273,28 +302,28 @@ class PlaybackPlayer:
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if not in_letters:
-                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._dispatch(_control('tab'))
                 await self._sleep(0.05)
         elif main_room == "music" and mode == "music":
             in_letters = (
                 self._is_play_letters_mode and self._is_play_letters_mode()
             )
             if in_letters:
-                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._dispatch(_control('tab'))
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "paint":
             in_paint = (
                 self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if not in_paint:
-                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._dispatch(_control('tab'))
                 await self._sleep(0.05)
         elif main_room == "art" and mode == "text":
             in_paint = (
                 self._is_art_paint_mode and self._is_art_paint_mode()
             )
             if in_paint:
-                await self._dispatch(ControlAction(action='tab', is_down=True))
+                await self._dispatch(_control('tab'))
                 await self._sleep(0.05)
 
         # Set instrument if specified
@@ -305,7 +334,7 @@ class PlaybackPlayer:
 
     async def _clear(self, action: Clear) -> None:
         """Clear the current room's content."""
-        await self._dispatch(ControlAction(action='escape', is_down=True))
+        await self._dispatch(_control('escape'))
         await self._sleep(action.pause_after)
 
     async def _clear_all_state(self, action: ClearAll) -> None:
@@ -351,7 +380,7 @@ class PlaybackPlayer:
             self._is_art_paint_mode and self._is_art_paint_mode()
         )
         if not in_paint_mode:
-            await self._dispatch(ControlAction(action='tab', is_down=True))
+            await self._dispatch(_control('tab'))
             await self._sleep(0.1)
 
         if action.color_key:
@@ -361,22 +390,24 @@ class PlaybackPlayer:
             ))
             await self._sleep(0.1)
 
-        await self._dispatch(ControlAction(action='space', is_down=True))
+        await self._dispatch(_control('space'))
         await self._sleep(0.05)
 
         for direction in action.directions:
+            primary, _, extra = direction.partition('+')
             for _ in range(action.steps_per_direction):
                 if self._cancelled:
-                    await self._dispatch(ControlAction(action='space', is_down=False))
+                    await self._dispatch(_control('space', is_down=False))
                     return
 
                 await self._dispatch(NavigationAction(
-                    direction=direction,
+                    direction=primary,
                     space_held=True,
+                    other_arrows_held={extra} if extra else set(),
                 ))
                 await self._sleep(action.delay_per_step)
 
-        await self._dispatch(ControlAction(action='space', is_down=False))
+        await self._dispatch(_control('space', is_down=False))
         await self._sleep(action.pause_after)
 
     async def _move_sequence(self, action: MoveSequence) -> None:
@@ -388,9 +419,28 @@ class PlaybackPlayer:
             await self._dispatch(NavigationAction(
                 direction=direction,
                 space_held=False,
+                char_held=action.char_held,
             ))
             await self._sleep(action.delay_per_step)
 
+        await self._sleep(action.pause_after)
+
+    async def _select_menu_item(self, action: SelectMenuItem) -> None:
+        """Scroll down until the labeled menu item is selected."""
+        target = action.text.lower()
+        found = False
+        for _ in range(50):  # safety cap: longer than any real menu
+            if self._cancelled:
+                return
+            label = self._get_selected_menu_label and self._get_selected_menu_label()
+            if label and target in label.lower():
+                found = True
+                break
+            await self._dispatch(NavigationAction(direction='down'))
+            await self._sleep(action.delay_per_step)
+
+        if found and action.activate:
+            await self._dispatch(_control('enter'))
         await self._sleep(action.pause_after)
 
     def _emit_cursor_at(self) -> None:

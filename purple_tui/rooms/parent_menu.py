@@ -2128,6 +2128,11 @@ class ParentMenu(PurpleModal):
                     self.dismiss()
             return
 
+    def selected_item_label(self) -> str:
+        """Label of the currently selected item (used by demo playback to
+        find items by text instead of counting steps)."""
+        return self._menu_items[self._selected_index][1]
+
     def _activate_selected(self) -> None:
         """Activate the currently selected menu item"""
         item_id = self._menu_items[self._selected_index][0]
@@ -2489,8 +2494,13 @@ class ParentMenu(PurpleModal):
             # Get the user's default shell or fall back to bash
             shell = os.environ.get('SHELL', '/bin/bash')
 
-            # Run the shell interactively
-            subprocess.run([shell, '-i'])
+            if getattr(self.app, 'demo_running', False):
+                # Demo playback has nobody at the keyboard: show the real
+                # shell briefly, then return to Purple on its own.
+                subprocess.run([shell, '-i'], input='sleep 3\nexit\n', text=True)
+            else:
+                # Run the shell interactively
+                subprocess.run([shell, '-i'])
 
             # When shell exits, clean up before resuming
             print()

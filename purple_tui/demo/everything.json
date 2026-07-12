@@ -1,0 +1,9 @@
+[
+  { "segment": "everything_play" },
+  { "segment": "everything_music" },
+  { "segment": "everything_art" },
+  { "segment": "everything_code" },
+  { "segment": "everything_touches" },
+  { "segment": "everything_parent" },
+  { "segment": "everything_outro" }
+]

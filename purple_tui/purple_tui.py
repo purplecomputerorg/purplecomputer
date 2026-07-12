@@ -1467,8 +1467,10 @@ class PurpleApp(App):
             if action.is_down and not action.is_repeat:
                 self._escape_triggered_long_hold = False  # Reset on fresh press
                 self._escape_consumed_by_mode = False
-                # Stop demo/code playback if running (in any room)
-                if self.demo_running:
+                # Stop demo/code playback if running (in any room).
+                # Synthetic escapes come from the demo script itself (room
+                # picker, stopping a loop) and must not stop the demo.
+                if self.demo_running and not action.synthetic:
                     self.cancel_demo()
                     self._escape_consumed_by_mode = True
                 # Stop code space execution if running
@@ -3134,6 +3136,7 @@ class PurpleApp(App):
             clear_art=self._clear_art,
             set_music_key_color=self._set_music_key_color,
             is_art_paint_mode=self._is_art_paint_mode,
+            get_selected_menu_label=self._selected_menu_label,
             get_cursor_position=self._get_cursor_position,
             zoom_events_file=zoom_events_file,
         )
@@ -3154,6 +3157,21 @@ class PurpleApp(App):
                 self.exit()
 
         self._demo_task = asyncio.create_task(run_demo())
+
+        def _surface_demo_error(task: "asyncio.Task") -> None:
+            if not task.cancelled() and task.exception():
+                self.log(f"demo playback failed: {task.exception()!r}")
+
+        self._demo_task.add_done_callback(_surface_demo_error)
+
+    def _selected_menu_label(self) -> str | None:
+        """Label of the selected item on the topmost screen, if it has a menu.
+
+        Any modal can support demo playback's SelectMenuItem by exposing a
+        selected_item_label() method.
+        """
+        getter = getattr(self.screen, 'selected_item_label', None)
+        return getter() if getter else None
 
     def cancel_demo(self) -> None:
         """Cancel any running demo playback."""

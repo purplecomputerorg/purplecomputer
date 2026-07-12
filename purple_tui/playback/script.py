@@ -33,12 +33,17 @@ class TypeText(PlaybackAction):
 
     Args:
         text: The text to type
-        delay_per_char: Seconds between each character (default: human-like 0.08s)
+        delay_per_char: Seconds between each character (default: 0.08s)
         final_pause: Pause after typing completes (default: 0.3s)
+        jitter: Gaussian variation as a fraction of delay_per_char, plus
+            slightly longer gaps after spaces/punctuation and occasional
+            pauses, so scripted typing isn't metronomic on camera. 0 disables.
+            Seeded via PURPLE_DEMO_SEED, so renders are reproducible.
     """
     text: str
     delay_per_char: float = 0.08
     final_pause: float = 0.3
+    jitter: float = 0.35
 
 
 @dataclass
@@ -48,12 +53,18 @@ class PressKey(PlaybackAction):
     Args:
         key: Key name: 'enter', 'backspace', 'escape', 'space',
              'up', 'down', 'left', 'right', 'tab'
-        hold_duration: How long to hold the key (for long-press features)
+        hold_duration: How long to hold the key. IMPORTANT: control keys only
+            emit a release when this is > 0, and tap-vs-hold features
+            (instrument switch, note labels, code panel) split at
+            HOLD_OR_TAP_THRESHOLD (0.8s). Use ~0.1 for a tap, >= 1.0 for a hold.
         pause_after: Pause after the key press
+        is_repeat: Mark as a key-repeat event (drives hold-to-accelerate
+            behaviors like Art's fast erase after 8 consecutive repeats)
     """
     key: str
     hold_duration: float = 0.0
     pause_after: float = 0.2
+    is_repeat: bool = False
 
 
 @dataclass
@@ -61,10 +72,12 @@ class SwitchRoom(PlaybackAction):
     """Switch to a different room.
 
     Args:
-        room: 'play', 'music', or 'art'
+        room: 'play', 'music', 'art', or 'parent' (opens the parent menu;
+            injected escape-holds can't, since hold detection lives in the
+            evdev state machine that playback bypasses)
         pause_after: Pause after switching to let the room render
     """
-    room: Literal["play", "music", "art"]
+    room: Literal["play", "music", "art", "parent"]
     pause_after: float = 0.5
 
 
@@ -150,7 +163,9 @@ class DrawPath(PlaybackAction):
     """Draw a path in Art room (hold space + arrows).
 
     Args:
-        directions: List of arrow directions: 'up', 'down', 'left', 'right'
+        directions: List of arrow directions: 'up', 'down', 'left', 'right'.
+            A '+' combines held arrows for diagonals: 'right+down' moves
+            right then down in one step, painted, like holding both keys.
         steps_per_direction: How many cells to move in each direction
         delay_per_step: Seconds between each step
         color_key: Optional key to press first to set the color (e.g., 'r' for red row)
@@ -173,10 +188,36 @@ class MoveSequence(PlaybackAction):
         directions: List of arrow directions: 'up', 'down', 'left', 'right'
         delay_per_step: Seconds between each step (fast by default)
         pause_after: Pause after the sequence
+        char_held: Character key "held" during the moves. In Art's paint
+            mode each step stamps that key's color before moving, like
+            holding a letter and pressing arrows.
     """
     directions: list[str]
     delay_per_step: float = 0.01
     pause_after: float = 0.05
+    char_held: str | None = None
+
+
+@dataclass
+class SelectMenuItem(PlaybackAction):
+    """Scroll the open menu down, one visible step at a time, until the item
+    whose label contains `text` is selected (case-insensitive).
+
+    Menus vary by device and settings, so this matches by label instead of a
+    fixed number of steps. Works on any modal that exposes
+    selected_item_label(). If the item never appears, moves on without
+    activating.
+
+    Args:
+        text: Substring of the target item's label
+        delay_per_step: Seconds between scroll steps
+        activate: Press Enter on the item once selected
+        pause_after: Pause after finishing
+    """
+    text: str
+    delay_per_step: float = 0.9
+    activate: bool = False
+    pause_after: float = 0.5
 
 
 @dataclass
@@ -279,6 +320,9 @@ def segment_duration(actions: list[PlaybackAction]) -> float:
             total += 0.1 + 0.1 + 0.05 + total_steps * action.delay_per_step + action.pause_after
         elif isinstance(action, MoveSequence):
             total += len(action.directions) * action.delay_per_step + action.pause_after
+        elif isinstance(action, SelectMenuItem):
+            # Step count depends on the live menu; estimate a mid-menu landing.
+            total += 12 * action.delay_per_step + action.pause_after
         elif isinstance(action, (Clear, ClearAll, ClearArt)):
             total += action.pause_after
         elif isinstance(action, (ZoomIn, ZoomOut, ZoomTarget)):

@@ -657,6 +657,7 @@ class ControlAction(KeyAction):
     is_down: bool = True  # Key press (True) or release (False)
     arrow_held: str | None = None  # Arrow direction held when this action fired
     is_repeat: bool = False  # Is this a key repeat?
+    synthetic: bool = False  # Injected by demo playback, not a physical key
 
 
 @dataclass

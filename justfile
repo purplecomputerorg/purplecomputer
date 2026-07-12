@@ -157,6 +157,14 @@ record-demo-no-music:
     @echo "Recording demo (no background music)..."
     PURPLE_NO_MUSIC=1 ./recording-setup/record-demo.sh
 
+# Record the everything walkthrough footage (voiceover added later, no music)
+record-everything:
+    @echo "Generating voice clips (if needed)..."
+    PURPLE_DEMO_COMPOSITION=everything.json {{venv}}/bin/python scripts/generate_voice_clips.py
+    @echo "Recording everything walkthrough footage..."
+    PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=everything.json \
+        ./recording-setup/record-demo.sh recordings/everything.mp4 420
+
 # Record the ad screen footage (no music; add your own in the editor)
 record-ad:
     @echo "Generating voice clips (if needed)..."

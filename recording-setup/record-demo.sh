@@ -290,11 +290,12 @@ while [ ! -f "$READY_FILE" ]; do
 done
 
 echo "Purple UI is up, starting recording..."
+CAPTURE_LOG="$OUTPUT_DIR/.capture.log"
 PURPLE_CAPTURE_SIZE="$SCREEN_SIZE" \
 PURPLE_CAPTURE_FRAMERATE="$FRAMERATE" \
 PURPLE_CAPTURE_MAX_DURATION="$MAX_DURATION" \
 PURPLE_CAPTURE_PROGRESS_FILE="$PROGRESS_FILE" \
-    "$SCRIPT_DIR/capture.sh" "$TEMP_FILE" 2>/dev/null &
+    "$SCRIPT_DIR/capture.sh" "$TEMP_FILE" 2>"$CAPTURE_LOG" &
 FFMPEG_PID=$!
 
 # Wait for frames to be flowing before releasing the demo, so nothing lands on
@@ -309,7 +310,8 @@ frames_flowing() {
 SECONDS=0
 until frames_flowing; do
     if ! ffmpeg_alive; then
-        echo "Error: FFmpeg exited before capturing (check display/x11grab)"
+        echo "Error: FFmpeg exited before capturing. Last ffmpeg output:"
+        tail -15 "$CAPTURE_LOG" 2>/dev/null
         exit 1
     fi
     if [ "$SECONDS" -ge 20 ]; then

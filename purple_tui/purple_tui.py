@@ -1193,13 +1193,27 @@ class PurpleApp(App):
         except Exception:
             pass
 
+        # Recording handshake: tell the recorder the UI is up so it can start
+        # ffmpeg. The demo player then waits for the recorder's go-file.
+        ready_file = os.environ.get("PURPLE_RECORD_READY_FILE")
+        if ready_file:
+            def _write_ready() -> None:
+                try:
+                    Path(ready_file).write_text("ready")
+                except OSError:
+                    pass
+            self.call_after_refresh(_write_ready)
+
         # Auto-start demo if requested (for recording)
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
-            # Pre-roll before typing begins (trimmed from final video). Must
-            # outlast the terminal's time-to-first-frame, or early beats are
-            # dispatched onto a still-black screen and lost. Slow VMs need
-            # more; tune with PURPLE_DEMO_PREROLL.
-            preroll = float(os.environ.get("PURPLE_DEMO_PREROLL", "5"))
+            # With the recorder handshake, the go-file is the exact "frames
+            # are flowing" signal and the player waits on it, so no preroll
+            # is needed (set PURPLE_DEMO_PREROLL to hold the idle app on
+            # screen longer at the top of the video). Without it, the fixed
+            # preroll must outlast the terminal's time-to-first-frame, or
+            # early beats are dispatched onto a still-black screen and lost.
+            default_preroll = "0" if os.environ.get("PURPLE_RECORD_GO_FILE") else "5"
+            preroll = float(os.environ.get("PURPLE_DEMO_PREROLL", default_preroll))
             self.set_timer(preroll, self.start_demo)
 
         # Show live boot splash on first launch from USB
@@ -3152,7 +3166,8 @@ class PurpleApp(App):
             self._demo_task = None
             # Exit app if this was an auto-started demo (for recording)
             if exit_after:
-                # Wait 2 seconds before exit (trimmed from final video)
+                # Hold the final screen so the recorder (watching the demo
+                # done-file) stops capturing before the app exits.
                 await asyncio.sleep(2.0)
                 self.exit()
 

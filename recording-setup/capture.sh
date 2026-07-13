@@ -10,6 +10,8 @@
 #   PURPLE_CAPTURE_FRAMERATE     capture fps (default 30)
 #   PURPLE_CAPTURE_SIZE          WxH (default: full X display via xdpyinfo)
 #   PURPLE_CAPTURE_MAX_DURATION  optional hard cap in seconds (ffmpeg -t)
+#   PURPLE_CAPTURE_PROGRESS_FILE optional ffmpeg -progress output, so callers
+#                                can confirm frames are flowing before acting
 set -e
 
 OUTPUT="${1:?usage: capture.sh OUTPUT.mp4}"
@@ -39,6 +41,10 @@ args+=(-c:v libx264 -preset ultrafast -crf 18 -r "$FRAMERATE" -vsync cfr)
 
 if [ -n "${PURPLE_CAPTURE_MAX_DURATION:-}" ]; then
     args+=(-t "$PURPLE_CAPTURE_MAX_DURATION")
+fi
+
+if [ -n "${PURPLE_CAPTURE_PROGRESS_FILE:-}" ]; then
+    args+=(-progress "$PURPLE_CAPTURE_PROGRESS_FILE" -stats_period 0.1)
 fi
 
 exec ffmpeg "${args[@]}" "$OUTPUT"

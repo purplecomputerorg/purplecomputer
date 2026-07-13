@@ -139,15 +139,16 @@ class PlaybackPlayer:
         self._running = True
         self._cancelled = False
         self._zoom_events = []
-        self._start_time = time.monotonic()
 
-        # Write wall-clock start time for recording sync
-        sync_file = os.environ.get("PURPLE_DEMO_SYNC_FILE")
-        if sync_file:
-            try:
-                Path(sync_file).write_text(str(time.time()))
-            except OSError:
-                pass
+        # Recording handshake: the recorder touches the go-file once ffmpeg
+        # is confirmed capturing frames, so the script never runs unrecorded.
+        go_file = os.environ.get("PURPLE_RECORD_GO_FILE")
+        if go_file:
+            deadline = time.monotonic() + 30
+            while not Path(go_file).exists() and time.monotonic() < deadline:
+                await asyncio.sleep(0.05)
+
+        self._start_time = time.monotonic()
 
         try:
             for action in script:
@@ -157,6 +158,12 @@ class PlaybackPlayer:
         finally:
             self._running = False
             self._write_zoom_events()
+            done_file = os.environ.get("PURPLE_RECORD_DONE_FILE")
+            if done_file:
+                try:
+                    Path(done_file).write_text("done")
+                except OSError:
+                    pass
 
     def cancel(self) -> None:
         """Cancel the currently playing script."""

@@ -18,12 +18,12 @@ The recording will be saved to `recordings/demo.mp4`.
 
 ## How It Works
 
-1. **FFmpeg** captures the X11 display at 30fps (with system audio via PulseAudio)
-2. **Purple Computer** starts with `PURPLE_DEMO_AUTOSTART=1`
-3. The demo script (`purple_tui/demo/default_script.py`) plays automatically
-4. Recording stops when you exit Purple (Ctrl+C or demo finishes)
-5. The first and last 2 seconds are automatically trimmed (removes terminal visibility)
-6. **Background music** is mixed in with automatic ducking (music gets quieter when app sounds play)
+1. **Purple Computer** starts with `PURPLE_DEMO_AUTOSTART=1` and touches a ready-file once its UI has painted
+2. **FFmpeg** then captures the X11 display at 30fps (with system audio via PulseAudio); the recorder confirms frames are flowing before touching a go-file
+3. The demo script waits for the go-file, then plays; when it finishes it touches a done-file and recording stops immediately, while Purple is still on screen
+4. Nothing is trimmed or re-timed, so captured audio stays perfectly aligned with video
+5. **Background music** is mixed in with automatic ducking (music gets quieter when app sounds play); the video stream is stream-copied, never re-encoded
+6. Set `PURPLE_RECORD_NO_POSTFX=1` to skip the cropped and zoomed versions (used by `just record-everything`)
 
 ## Background Music
 

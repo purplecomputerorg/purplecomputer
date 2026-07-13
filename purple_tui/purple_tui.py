@@ -1214,7 +1214,9 @@ class PurpleApp(App):
             # early beats are dispatched onto a still-black screen and lost.
             default_preroll = "0" if os.environ.get("PURPLE_RECORD_GO_FILE") else "5"
             preroll = float(os.environ.get("PURPLE_DEMO_PREROLL", default_preroll))
-            self.set_timer(preroll, self.start_demo)
+            # set_timer(0) never fires (Textual divides by the interval), so
+            # clamp to a small positive delay.
+            self.set_timer(max(preroll, 0.1), self.start_demo)
 
         # Show live boot splash on first launch from USB
         if not os.environ.get("PURPLE_DEV_MODE") == "1":

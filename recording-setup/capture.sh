@@ -43,8 +43,10 @@ if [ -n "${PURPLE_CAPTURE_MAX_DURATION:-}" ]; then
     args+=(-t "$PURPLE_CAPTURE_MAX_DURATION")
 fi
 
+# -stats_period would give faster updates but needs ffmpeg 4.3+; plain
+# -progress already emits frame lines ~2x/sec on every version.
 if [ -n "${PURPLE_CAPTURE_PROGRESS_FILE:-}" ]; then
-    args+=(-progress "$PURPLE_CAPTURE_PROGRESS_FILE" -stats_period 0.1)
+    args+=(-progress "$PURPLE_CAPTURE_PROGRESS_FILE")
 fi
 
 exec ffmpeg "${args[@]}" "$OUTPUT"

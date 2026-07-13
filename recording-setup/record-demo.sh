@@ -297,15 +297,24 @@ PURPLE_CAPTURE_PROGRESS_FILE="$PROGRESS_FILE" \
     "$SCRIPT_DIR/capture.sh" "$TEMP_FILE" 2>/dev/null &
 FFMPEG_PID=$!
 
+# Wait for frames to be flowing before releasing the demo, so nothing lands on
+# a black screen. A growing capture file is proof frames are written even when
+# an older ffmpeg's -progress format doesn't match. If ffmpeg is alive but we
+# still can't confirm after the window, start anyway (a slightly early lead-in
+# beats no recording); only a dead ffmpeg is fatal.
+frames_flowing() {
+    grep -qE '^frame=[1-9]' "$PROGRESS_FILE" 2>/dev/null && return 0
+    [ -f "$TEMP_FILE" ] && [ "$(stat -c%s "$TEMP_FILE" 2>/dev/null || echo 0)" -gt 200000 ]
+}
 SECONDS=0
-until grep -qE '^frame=[1-9]' "$PROGRESS_FILE" 2>/dev/null; do
+until frames_flowing; do
     if ! ffmpeg_alive; then
-        echo "Error: FFmpeg failed to start"
+        echo "Error: FFmpeg exited before capturing (check display/x11grab)"
         exit 1
     fi
     if [ "$SECONDS" -ge 20 ]; then
-        echo "Error: timed out waiting for FFmpeg to capture frames"
-        exit 1
+        echo "Warning: could not confirm frames from ffmpeg; starting anyway"
+        break
     fi
     sleep 0.05
 done

@@ -33,8 +33,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/recordings"
 FRAMERATE=30
 OUTPUT_FILE="${1:-$OUTPUT_DIR/demo.mp4}"
-MANUAL="$(printenv PURPLE_RECORD_MANUAL)"
-NO_POSTFX="$(printenv PURPLE_RECORD_NO_POSTFX)"
+MANUAL="${PURPLE_RECORD_MANUAL:-}"
+NO_POSTFX="${PURPLE_RECORD_NO_POSTFX:-}"
 if [ "$MANUAL" = "1" ]; then
     MAX_DURATION="${2:-300}"  # You drive it; stops when you exit Purple, with a 5-minute safety cap.
 else

@@ -162,7 +162,9 @@ record-everything:
     @echo "Generating voice clips (if needed)..."
     PURPLE_DEMO_COMPOSITION=everything.json {{venv}}/bin/python scripts/generate_voice_clips.py
     @echo "Recording everything walkthrough footage..."
+    @rm -f recordings/everything_zoom_events.json
     PURPLE_NO_MUSIC=1 PURPLE_DEMO_COMPOSITION=everything.json \
+        PURPLE_ZOOM_EVENTS_FILE="$(pwd)/recordings/everything_zoom_events.json" \
         ./recording-setup/record-demo.sh recordings/everything.mp4 420
 
 # Record the ad screen footage (no music; add your own in the editor)

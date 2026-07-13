@@ -17,9 +17,13 @@ SEGMENT = [
     PressKey("escape", pause_after=1.4, **_TAP),
     PressKey("2", pause_after=1.0),
 
-    Comment("=== No wrong notes: scattered mashing still sounds good ==="),
-    PlayKeys(sequence=['d', 'u', 'x', 'e', 'k', 'q', 'v', 'i', 's', 'm', 't', 'c', 'g', 'o'],
-             seconds_between=0.13, pause_after=1.0),
+    Comment("=== No wrong notes: arpeggios up the octaves, then a tune ==="),
+    PlayKeys(sequence=['z', 'c', 'b'], seconds_between=0.18, pause_after=0.25),
+    PlayKeys(sequence=['a', 'd', 'g'], seconds_between=0.18, pause_after=0.25),
+    PlayKeys(sequence=['q', 'e', 't', 'u'], seconds_between=0.18, pause_after=0.6),
+    Comment("Mary Had a Little Lamb, first phrase"),
+    PlayKeys(sequence=['d', 's', 'a', 's', 'd', 'd', 'd', None, 's', 's', 's', None, 'd', 'g', 'g'],
+             seconds_between=0.32, pause_after=1.2),
 
     Comment("=== Tap Enter to change instruments ==="),
     Comment("-> Ukulele"),
@@ -42,6 +46,11 @@ SEGMENT = [
     PressKey("space", pause_after=0.8, **_TAP),
     PlayKeys(sequence=['q', 'w', 'e'], seconds_between=0.4, pause_after=1.0),
     PressKey("space", pause_after=0.5, **_TAP),
+
+    Comment("=== Tab: Say Letters mode, keys speak their letter ==="),
+    PressKey("tab", pause_after=0.8),
+    PlayKeys(sequence=['c', 'a', 't'], seconds_between=1.1, pause_after=1.2),
+    PressKey("tab", pause_after=0.8),
 
     Comment("=== Arrows change the musical key (watch the wave) ==="),
     PressKey("right", pause_after=1.3),

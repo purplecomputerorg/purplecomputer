@@ -7,7 +7,7 @@ Go Back on the confirm screen returns to the still-open picker, so the
 segment exits by picking Play.
 """
 
-from ..script import TypeText, PressKey, Comment, SetSpeed, type_and_enter
+from ..script import TypeText, PressKey, Pause, Comment, SetSpeed, SwitchRoom, type_and_enter
 
 _TAP = dict(hold_duration=0.2)
 
@@ -15,8 +15,8 @@ SEGMENT = [
     SetSpeed(1.0),
 
     Comment("Back to Play"),
-    PressKey("escape", pause_after=1.4, **_TAP),
-    PressKey("1", pause_after=1.0),
+    SwitchRoom("play"),
+    Pause(0.8),
 
     Comment("=== The big = key just means plus ==="),
     *type_and_enter("5 = 3", 2.0),

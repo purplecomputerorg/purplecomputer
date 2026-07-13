@@ -31,7 +31,11 @@ if [ -n "$AUDIO_SINK" ]; then
     args+=(-f pulse -i "${AUDIO_SINK}.monitor" -c:a aac)
 fi
 
-args+=(-c:v libx264 -preset ultrafast -crf 18)
+# Force constant frame rate at capture: if the encoder can't keep up with
+# the nominal fps, ffmpeg duplicates frames instead of silently producing
+# fewer, which would make the video timeline shorter than the audio and
+# drift out of sync over a long recording.
+args+=(-c:v libx264 -preset ultrafast -crf 18 -r "$FRAMERATE" -vsync cfr)
 
 if [ -n "${PURPLE_CAPTURE_MAX_DURATION:-}" ]; then
     args+=(-t "$PURPLE_CAPTURE_MAX_DURATION")

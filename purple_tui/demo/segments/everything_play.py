@@ -49,6 +49,6 @@ SEGMENT = [
 
     Comment("=== Odds and ends ==="),
     *type_and_enter("repeat 3 cat", 1.8),
-    Comment("Enter on an empty line repeats the last idea"),
-    PressKey("enter", pause_after=1.8),
+    Comment("Enter on an empty line repeats the last idea; let it land"),
+    PressKey("enter", pause_after=3.5),
 ]

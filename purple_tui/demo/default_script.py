@@ -106,7 +106,7 @@ DEMO_SCRIPT = [
     Comment("=== EMOJI FUN ==="),
     SwitchRoom("play"),
     Pause(0.2),
-    TypeText("3 + 2 cats"),
+    TypeText("3 + 2 bananas"),
     PressKey("enter", pause_after=1.5),
 
     # -------------------------------------------------------------------------

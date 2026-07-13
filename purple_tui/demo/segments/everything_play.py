@@ -12,17 +12,17 @@ SEGMENT = [
     Pause(0.6),
 
     Comment("=== Words and emojis ==="),
-    *type_and_enter("cat", 1.2),
-    *type_and_enter("kitty", 1.2),
-    *type_and_enter("3 cats", 1.4),
+    *type_and_enter("apple", 1.2),
+    *type_and_enter("kitties", 1.2),
+    *type_and_enter("3 bananas", 1.4),
     *type_and_enter("4 birds + 2 owls", 1.8),
-    *type_and_enter("I love cats", 1.6),
+    *type_and_enter("I love grapes", 1.6),
     *type_and_enter(":D", 1.2),
     Comment("Unknown words become colored letter blocks"),
     *type_and_enter("zibzab", 1.8),
 
     Comment("=== Reading out loud (wait for the speech) ==="),
-    *type_and_enter("cat!", 2.4),
+    *type_and_enter("strawberry!", 2.4),
     Comment("Backspace edits mid-line: type a typo, back up, fix it"),
     TypeText("I have 5 dinso"),
     PressKey("backspace", pause_after=0.15),
@@ -45,10 +45,10 @@ SEGMENT = [
 
     Comment("=== Patterns ==="),
     *type_and_enter("2 4 6 8...", 2.2),
-    *type_and_enter("5 cats ...", 2.2),
+    *type_and_enter("5 apples ...", 2.2),
 
     Comment("=== Odds and ends ==="),
-    *type_and_enter("repeat 3 cat", 1.8),
+    *type_and_enter("repeat 3 pizza", 1.8),
     Comment("Enter on an empty line repeats the last idea; let it land"),
     PressKey("enter", pause_after=3.5),
 ]

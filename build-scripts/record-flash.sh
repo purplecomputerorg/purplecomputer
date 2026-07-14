@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Manually record a flashed build into the orders app's flashes table, for
 # backfilling batches flashed before/outside `just flash-all` (which records
-# automatically). Reads FLASH_LOG_URL and ADMIN_PASSWORD from build-scripts/.env,
-# same convention as flash-all.sh and release-iso.sh. Never prints the password.
+# automatically). Reads FLASH_LOG_URL and ADMIN_PASSWORD_PROD from
+# build-scripts/.env (a symlink to ~/.purple-env, the single machine secrets
+# file), same convention as flash-all.sh. Never prints the password.
 #
 # Usage: just record-flash <commit-ish> [drive_count] [flashed_at]
 #   just record-flash c0078cd 3
@@ -32,7 +33,7 @@ FULL="$(git -C "$PROJECT_DIR" rev-parse "$COMMITISH" 2>/dev/null)"
 # live in build-scripts/.env so neither is hard-coded in this public repo.
 [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
 [[ -n "${FLASH_LOG_URL:-}" ]] || die "FLASH_LOG_URL not set in $SCRIPT_DIR/.env"
-[[ -n "${ADMIN_PASSWORD:-}" ]] || die "ADMIN_PASSWORD not set in $SCRIPT_DIR/.env"
+[[ -n "${ADMIN_PASSWORD_PROD:-}" ]] || die "ADMIN_PASSWORD_PROD not set in $SCRIPT_DIR/.env"
 
 # Include flashed_at only when given, so the server defaults it to now().
 PAYLOAD="{\"git_hash\":\"$SHORT\",\"git_full\":\"$FULL\",\"drive_count\":$DRIVE_COUNT"
@@ -46,10 +47,10 @@ CF_HEADERS=()
 [[ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
 
 echo "Recording $SHORT ($DRIVE_COUNT drive(s))${FLASHED_AT:+ at $FLASHED_AT} to $FLASH_LOG_URL"
-if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" "${CF_HEADERS[@]}" \
+if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" \
         -H 'Content-Type: application/json' \
         -X POST "$FLASH_LOG_URL" -d "$PAYLOAD" >/dev/null; then
     echo -e "${GREEN}Done. $SHORT now shows in the orders software dropdown.${NC}"
 else
-    die "POST failed (check ADMIN_PASSWORD / service token, and that the site is reachable)."
+    die "POST failed (check ADMIN_PASSWORD_PROD / service token, and that the site is reachable)."
 fi

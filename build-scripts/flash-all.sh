@@ -214,11 +214,12 @@ if [[ $SUCCEEDED -gt 0 ]]; then
 
         # Record this batch to the orders app (private flashes table) so the hash
         # shows in the software dropdown when stamping shipments. Best effort:
-        # never fails or delays the flash. The endpoint URL and password both come
-        # from build-scripts/.env (FLASH_LOG_URL, ADMIN_PASSWORD), same convention
-        # as release-iso.sh, so neither is hard-coded in this public repo.
+        # never fails or delays the flash. The endpoint URL and password come from
+        # build-scripts/.env (FLASH_LOG_URL, ADMIN_PASSWORD_PROD), which on the
+        # main machine is a symlink to ~/.purple-env, the single machine secrets
+        # file. Nothing sensitive is hard-coded in this public repo.
         [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
-        if [[ -n "${FLASH_LOG_URL:-}" && -n "${ADMIN_PASSWORD:-}" ]]; then
+        if [[ -n "${FLASH_LOG_URL:-}" && -n "${ADMIN_PASSWORD_PROD:-}" ]]; then
             FLASH_PAYLOAD="{\"git_hash\":\"$FLASH_SHORT\",\"git_full\":\"$FLASH_FULL\",\"branch\":\"$FLASH_BRANCH\",\"iso_name\":\"$(basename "$ISO_PATH")\",\"iso_sha256\":\"$VERIFIED_ISO_SHA256\",\"drive_count\":$SUCCEEDED,\"flashed_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
             # Cloudflare Access service-token headers, if the endpoint is behind
             # Access (both set in build-scripts/.env). Omitted headers just mean
@@ -226,7 +227,7 @@ if [[ $SUCCEEDED -gt 0 ]]; then
             CF_HEADERS=()
             [[ -n "${CF_ACCESS_CLIENT_ID:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID")
             [[ -n "${CF_ACCESS_CLIENT_SECRET:-}" ]] && CF_HEADERS+=(-H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
-            if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD" "${CF_HEADERS[@]}" \
+            if curl -fsS --max-time 15 -u ":$ADMIN_PASSWORD_PROD" "${CF_HEADERS[@]}" \
                     -H 'Content-Type: application/json' \
                     -X POST "$FLASH_LOG_URL" -d "$FLASH_PAYLOAD" >/dev/null 2>&1; then
                 echo -e "${GREEN}Recorded to the orders app; it shows in the software dropdown now.${NC}"
@@ -234,7 +235,7 @@ if [[ $SUCCEEDED -gt 0 ]]; then
                 echo -e "${YELLOW}Could not reach the orders app to record this flash. The hash above is still yours to use.${NC}"
             fi
         else
-            echo -e "${YELLOW}FLASH_LOG_URL/ADMIN_PASSWORD not set in build-scripts/.env, so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"
+            echo -e "${YELLOW}FLASH_LOG_URL/ADMIN_PASSWORD_PROD not set in build-scripts/.env (~/.purple-env), so this flash was not recorded to the orders app. Hash above is still yours to use.${NC}"
         fi
     fi
 fi

@@ -2,7 +2,7 @@
 # Manually record a flashed build into the orders app's flashes table, for
 # backfilling batches flashed before/outside `just flash-all` (which records
 # automatically). Reads FLASH_LOG_URL and ADMIN_PASSWORD_PROD from
-# build-scripts/.env (a symlink to ~/.purple-env, the single machine secrets
+# build-scripts/.env (a plain file or a symlink to a central machine secrets
 # file), same convention as flash-all.sh. Never prints the password.
 #
 # Usage: just record-flash <commit-ish> [drive_count] [flashed_at]

@@ -5,7 +5,7 @@ typo-and-fix shows backspace editing mid-line; the scripted misspelling
 shows the quiet spelling correction.
 """
 
-from ..script import TypeText, PressKey, Pause, Comment, SetSpeed, type_and_enter
+from ..script import PressKey, Pause, Comment, SetSpeed, type_and_enter
 
 SEGMENT = [
     SetSpeed(1.0),
@@ -14,26 +14,21 @@ SEGMENT = [
     Comment("=== Words and emojis ==="),
     *type_and_enter("apple", 1.2),
     *type_and_enter("kitties", 1.2),
-    *type_and_enter("3 bananas", 1.4),
+    *type_and_enter("3 dinos", 1.4),
     *type_and_enter("4 birds + 2 owls", 1.8),
-    *type_and_enter("I love grapes", 1.6),
-    *type_and_enter(":D", 1.2),
+    *type_and_enter("I love icecream", 1.6),
+    *type_and_enter(":)", 1.2),
     Comment("Unknown words become colored letter blocks"),
     *type_and_enter("zibzab", 1.8),
 
     Comment("=== Reading out loud (wait for the speech) ==="),
     *type_and_enter("strawberry!", 2.4),
-    Comment("Backspace edits mid-line: type a typo, back up, fix it"),
-    TypeText("I have 5 dinso"),
-    PressKey("backspace", pause_after=0.15),
-    PressKey("backspace", pause_after=0.3),
-    TypeText("os!"),
-    PressKey("enter", pause_after=3.2),
+    *type_and_enter("I used 4 crayons at school!", 2),
 
     Comment("=== Colors ==="),
     *type_and_enter("red + blue", 1.6),
-    *type_and_enter("yellow + blue", 1.6),
-    *type_and_enter("bright pink unicorn", 2.0),
+    *type_and_enter("yellow + 3 periwinkles", 1.6),
+    *type_and_enter("bright pink unicorn and dark blue giraffe", 2.0),
 
     Comment("=== Real math ==="),
     *type_and_enter("2 + 3", 1.8),
@@ -48,7 +43,7 @@ SEGMENT = [
     *type_and_enter("5 apples ...", 2.2),
 
     Comment("=== Odds and ends ==="),
-    *type_and_enter("repeat 3 pizza", 1.8),
+    *type_and_enter("repeat 3: pizza", 1.8),
     Comment("Enter on an empty line repeats the last idea; let it land"),
     PressKey("enter", pause_after=3.5),
 ]

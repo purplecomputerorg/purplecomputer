@@ -23,9 +23,9 @@ Two honest reasons:
 
 Maybe at some point there will be a way to share modifications, add-ons, and so on. In the meantime, I'd love to hear about modifications you make to your own version!
 
-## Why there's no dual-boot, VM, or app version
+## Why there's no dual-boot or app version
 
-People sometimes ask about running Purple in a dual-boot setup, in a VM, or as an app inside another OS. I've shied away from those for a few reasons:
+People sometimes ask about running Purple in a dual-boot setup or as an app inside another OS. I've shied away from those for a few reasons:
 
 - **Compatibility.** It was difficult getting things working across as many computers as possible, and dual-boot would add complexity and compatibility issues.
 - **Ownership.** The intended use is for kids to have full ownership of the machine. Dual-boot or running within an existing OS breaks that story a bit.

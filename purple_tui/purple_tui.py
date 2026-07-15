@@ -1460,6 +1460,9 @@ class PurpleApp(App):
 
     async def _dispatch_keyboard_action(self, action) -> None:
         """Dispatch a keyboard action to the appropriate handler."""
+        # Demo playback injects actions here directly (no evdev), so count
+        # dispatch as activity or recordings hit the idle sleep face.
+        self._record_user_activity()
         if isinstance(action, RoomAction):
             if action.room == 'parent':
                 self.action_parent_menu()

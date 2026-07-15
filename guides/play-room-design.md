@@ -293,6 +293,8 @@ Numbers attach to the **next term** (color or emoji). They accumulate until they
 
 Colors still mix together regardless of where they appear in the expression.
 
+This applies even when the number was typed next to unrecognized text: in "1 a + 2 apple", the "a" renders as a letter block and the orphaned 1 floats forward to the apples (1 + 2 = 3 apples). Deliberate: one consistent attachment rule, and typo'd emoji words ("2 aple") still get their count via fuzzy matching.
+
 ---
 
 ## Overlapping Words (Color + Emoji)

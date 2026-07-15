@@ -277,7 +277,7 @@ The `!` is stripped from display. Works anywhere in the text (beginning, middle,
 - Common 2-letter words excluded (by, my, go, to, etc.) to prevent unwanted completions
 - Space accepts the suggestion
 
-For the full design philosophy, see [guides/ask-mode-design.md](../guides/ask-mode-design.md).
+For the full design philosophy, see [guides/play-room-design.md](../guides/play-room-design.md).
 
 ---
 
@@ -830,7 +830,7 @@ Reboot → First Boot (Installed System)
 - **MANUAL.md:** This file (complete reference)
 - **guides/architecture-overview.md:** High-level explanation of the two-system design and design rationale
 - **guides/ubuntu-live-installer.md:** Technical deep-dive on ISO remaster architecture
-- **guides/ask-mode-design.md:** Ask mode evaluation philosophy and behavior reference
+- **guides/play-room-design.md:** Play room evaluation philosophy and behavior reference
 
 ---
 

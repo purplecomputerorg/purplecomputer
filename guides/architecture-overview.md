@@ -142,7 +142,7 @@ After booting from USB, the system caches the entire squashfs filesystem into RA
 
 The live boot uses casper's overlayfs: the squashfs (read-only, on USB) is the lower layer, and a tmpfs (writable, in RAM) is the upper layer. Normally this means the USB must stay inserted because reads go to the squashfs on the USB.
 
-At boot, a background process in xinitrc reads the entire squashfs file, which populates the kernel's page cache (RAM). Once every block has been read, all future filesystem reads are served from RAM, not from the USB. The USB is no longer needed.
+At boot, a background process in xinitrc copies the squashfs into a tmpfs (`/run/purple-squashfs`), so the pages are pinned in RAM (non-evictable) and survive memory pressure. If RAM is too low for the copy (squashfs size plus 1GB headroom), it falls back to the old page-cache warmup: reading the entire squashfs file so the kernel caches every block. Either way, once the background job finishes, the USB is no longer needed.
 
 **User-facing indicator:**
 
@@ -256,9 +256,9 @@ Casper-bottom scripts are NOT auto-discovered. The file `/scripts/casper-bottom/
 
 1. **Add verbose logging**: Use `echo "[PREFIX] message" >/dev/console` to see output during boot
 2. **Check serial console**: VM serial logs capture boot messages
-3. **Test live boot**: `sudo ./test-boot.sh` (default mode)
-4. **Test install**: `sudo ./test-boot.sh --mode install`
-5. **Interactive**: `sudo ./test-boot.sh --interactive` to see the boot screen
+3. **Test live boot**: `sudo ./build-scripts/test-boot.sh` (default mode)
+4. **Test install**: `sudo ./build-scripts/test-boot.sh --mode install`
+5. **Interactive**: `sudo ./build-scripts/test-boot.sh --interactive` to see the boot screen
 
 ---
 

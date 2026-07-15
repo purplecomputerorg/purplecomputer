@@ -63,7 +63,7 @@ Safety precedent worth knowing: commit `2b9dc89` *removed* `i915.enable_dpcd_bac
 
 The artifact is at the scanout layer, so screenshots can't catch it (phone photos of the panel can; framebuffer grabs show the clean composed frame). `scripts/on-device/debug-display.sh` ships to `/opt/purple/scripts/` on every ISO; run it from the parent-menu terminal (Open Terminal):
 
-- **No args**: state dump + per-mitigation **verdict**. The verdict's headline line is whether a **compositor is running**, that is the fix. It also confirms PSR/FBC from the world-readable `/sys/module/i915/parameters/*` (reliable even with no sudo) and reads the panel `max bpc`. Note: debugfs status (FBC/PSR detail) needs root, and the Purple terminal has **no passwordless sudo**, so that section is honestly skipped rather than shown as empty/absent.
+- **No args**: state dump + per-mitigation **verdict**. The verdict's headline line is whether a **compositor is running**, that is the fix. It also confirms PSR/FBC from the world-readable `/sys/module/i915/parameters/*` (reliable even with no sudo) and reads the panel `max bpc`. Note: debugfs status (FBC/PSR detail) needs root. The script probes for passwordless sudo (`sudo -n true`) and uses it when available; without it, that section is honestly skipped rather than shown as empty/absent. The verdict does not rely on it either way.
 - **`repro`**: drives the music-grid partial-redraw pattern through the real Alacritty to X to scanout path, to trigger the tear on demand.
 - **`compositor off|on|status`**: the one runtime A/B lever that works here. picom is a plain `purple`-user process, no root, so you can stop/start it freely and re-run `repro` to see the tear appear and disappear, no ISO rebuild.
 

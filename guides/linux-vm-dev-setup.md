@@ -43,13 +43,9 @@ sudo usermod -aG input $USER
 sudo reboot  # Logout isn't enough in VMs
 ```
 
-### Keyboard calibration (F-keys not working)
+### F-keys not working
 
-Run calibration from Parent Mode, or manually:
-
-```bash
-python keyboard_normalizer.py --calibrate
-```
+F-key and special-key remapping is handled at the kernel level by keyd (`config/keyd/default.conf`), not by the app. See `guides/keyboard-architecture.md`.
 
 ---
 
@@ -70,7 +66,8 @@ ssh username@vm-ip
 pkill -f purple_tui
 
 # Check logs
-cat /tmp/purple-debug.log
+cat /tmp/purple-boot.log
+cat /tmp/purple-power.log
 ```
 
 ---

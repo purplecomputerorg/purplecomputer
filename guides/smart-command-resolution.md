@@ -89,32 +89,29 @@ Argument ordering (free-order motion args)
   computer to figure it out, regardless of order. "down blue 5",
   "down 5 blue", and "blue down 5" all mean the same thing to them.
 
-  Mental model: a line is split into command chunks at command-keyword
-  boundaries (see _split_commands), so each chunk has exactly one motion
-  verb. Within a chunk, the remaining tokens are an unordered bag of:
-    - a distance (any bare-number token)
-    - a color (a color word, optionally preceded by adjectives like
-      "dark"/"light"; may appear anywhere, not just first or last)
-    - leftover text (anything else)
+  Mental model: bag-of-tokens with nearest-anchor assignment (see
+  _classify_motion in code_runner.py). The line is tokenized into typed
+  tokens (anchor / color / number / text). Every motion verb or direction
+  word becomes an "anchor"; each number or color token is assigned to the
+  nearest anchor by token index (ties favor the earlier anchor).
+  Consecutive text tokens form one phrase bound to the previous anchor.
+  The result is one motion plan per anchor, so a single line can carry
+  several motions: "red down 5 blue right 5" paints red going down,
+  then blue going right.
 
-  Resolution order inside a chunk:
-    1. Apply the color if one is present (reusing _resolve_leading_color,
-       which already handles "dark blue").
-    2. Move the distance if one is present.
-    3. If leftover non-color text remains, write/paint it in the verb's
-       direction (this preserves "down hello" = write "hello" downward).
-       "down 5 hello" therefore moves down 5, then writes "hello".
+  Execution (_execute_motion_plans): plans run in order. Within a plan,
+  color is applied before the move so the stroke paints in that color
+  (brush color carries forward), then the turn, then the move, then any
+  leftover text is written/painted in the verb's direction (this
+  preserves "down hello" = write "hello" downward; "down 5 hello" moves
+  down 5, then writes "hello").
 
   Why this is DRY: color handling previously lived in three places (a
   leading peel in _resolve, a trailing-color regex group copy-pasted into
-  every motion handler, and _do_direction_text). Free-order parsing folds
-  all three into one shared _parse_motion_args helper, so color is matched
-  in exactly one spot and the combinatorial motion regex table collapses
-  to one "verb + rest" pattern per family.
-
-  Cross-chunk ordering (e.g. "blue down 5", where the color is its own
-  leading chunk) is handled separately by the leading-color peel in
-  _resolve, which applies the color and re-dispatches the remainder.
+  every motion handler, and a per-direction text handler). The tokenizer
+  matches color in exactly one spot, reusing _resolve_leading_color
+  (which already handles "dark blue"), and the six motion handlers
+  collapsed into one data-driven executor.
 
 Adding new commands
 -------------------

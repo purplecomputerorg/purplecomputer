@@ -45,7 +45,7 @@ EndSection
 |----------|-----------------|----------------|
 | Ctrl+Alt+Backspace | Kills X server instantly | Ignored |
 
-**`DontVTSwitch` is intentionally NOT set.** Ctrl+Alt+F2 reaches an autologin bash shell on tty2 (enabled on both ISOs). 4-7 year olds won't accidentally chord three keys, and if they did they'd land on a harmless unprivileged shell — Ctrl+Alt+F1 returns to Purple. Keeping the escape hatch is worth more than the theoretical accidental-press risk.
+**`DontVTSwitch` is intentionally NOT set.** Ctrl+Alt+F2 reaches an autologin bash shell on tty2 (enabled on both ISOs). 4-7 year olds won't accidentally chord three keys, and if they did they'd land on a plain text shell (autologin as the `purple` user, which has passwordless sudo, so treat it as an escape hatch, not a sandbox); Ctrl+Alt+F1 returns to Purple. Keeping the escape hatch is worth more than the theoretical accidental-press risk.
 
 ---
 
@@ -133,6 +133,7 @@ HandlePowerKey=ignore
 HandlePowerKeyLongPress=ignore
 HandleLidSwitch=ignore
 HandleLidSwitchExternalPower=ignore
+HandleLidSwitchDocked=ignore
 HandleSuspendKey=ignore
 HandleHibernateKey=ignore
 ```
@@ -169,7 +170,7 @@ These are deliberately allowed:
 | Fn+Brightness | Annoying but harmless |
 | Fn+Volume | Annoying but harmless |
 | Power button tap | Shows sleep screen (harmless, any key wakes) |
-| Lid close | Delayed shutdown with 2-minute grace period |
+| Lid close | Sleep screen immediately, shutdown after 10 minutes |
 
 ---
 

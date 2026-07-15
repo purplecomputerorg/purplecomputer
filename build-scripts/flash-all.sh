@@ -138,7 +138,7 @@ sudo udevadm control --start-exec-queue 2>/dev/null || true
 # Boot-settle: boot each verified drive once in QEMU, in parallel, so its
 # controller pays the one-time post-write cost here instead of on the parent's
 # first boot. A dd read pass did not clear that state; a real boot does (see
-# guides/production-checklist.md, "Slow First Boot After Flashing").
+# guides/usb-flash-settle.md).
 SETTLE_PIDS=()
 SETTLE_DEVS=()
 for i in "${!DEVS[@]}"; do

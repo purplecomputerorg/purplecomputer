@@ -20,7 +20,7 @@ GRUB loads from the USB's EFI partition, runs its embedded config, finds our `gr
 
 **Key files:**
 - `build-scripts/01-remaster-iso.sh` (GRUB config, EFI partition patch)
-- `grubx64.efi` comes from the stock Ubuntu Server 24.04.1 ISO (not modified)
+- `grubx64.efi` is Ubuntu's signed GRUB, apt-downloaded at build time and copied into the ISO's EFI partition (see `guides/secure-boot.md`)
 
 **EFI partition patch:** Ubuntu's `grubx64.efi` has an embedded config that checks if `$prefix` (default: `/boot/grub` on the EFI partition) exists. On our ISO, the EFI partition only has `/EFI/boot/`, so this check prints `error: file '/boot/' not found` before falling back to a search. We fix this by adding `/boot/grub/grub.cfg` to the EFI FAT partition during the ISO build. That file chains to the real config:
 
@@ -32,7 +32,7 @@ source $prefix/grub.cfg
 
 ### 3. Kernel + Initramfs (1-3s)
 
-Kernel decompresses and starts. The VT palette is set to purple via kernel command line params (`vt.default_red`, etc.), so any console output would appear on a purple background. Console output goes to tty2 (`console=tty2`), keeping tty1 clean.
+Kernel decompresses and starts. The VT palette is set to purple via kernel command line params (`vt.default_red`, etc.), so any console output would appear on a purple background. Console output goes to tty63 (`console=tty63`), a scratch VT that is never foregrounded, keeping tty1 clean (tty2 keeps its recovery getty).
 
 **init-top splash:** The earliest script we can run. Redefines VT color 0 to purple (#2d1b4e), clears tty1, and shows "Welcome to Purple Computer! / Starting up..." in white text. This is what the user sees for most of the boot.
 
@@ -60,7 +60,7 @@ On shutdown, `ExecStop` repaints the splash so systemd teardown messages aren't 
 
 Old Intel panels (pre-2016 MacBooks) also need `i915.enable_psr=0 i915.enable_fbc=0` on the kernel cmdline to stop a partial-redraw checkerboard artifact. See `intel-display-tuning.md` for what it fixes, why it's safe, and why it costs Purple almost no battery.
 
-Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI.
+Once a display is found (or 15s timeout), X11 starts. xinit guarantees the X server is accepting connections before running xinitrc (SIGUSR1 handshake + XOpenDisplay polling, standard since X11R5). xinitrc clears the VT buffer under X (so nothing scary shows if X exits later), starts PulseAudio, launches Alacritty, and runs the Purple TUI. Once the TUI paints its first frame, xinitrc starts the picom compositor in the background (`scripts/purple-start-compositor.sh`, tear-free transitions on old Intel panels; see `intel-display-tuning.md`).
 
 **What the user sees:** Purple "Starting up..." screen holds until the TUI appears.
 

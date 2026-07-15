@@ -39,7 +39,9 @@ def _run_install_thread(self) -> None:
         ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
         stderr=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
-        env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple"},
+        env={**os.environ,
+             "PURPLE_PAYLOAD_DIR": "/cdrom/purple",
+             "PURPLE_COMPUTER_NAME": self._computer_name},
     )
     buf = b""
     while proc.poll() is None and not _SENTINEL.exists():
@@ -121,19 +123,24 @@ Ubuntu mounts `/run` with `nosuid,noexec`. systemd manages it and resists remoun
 `_handle_line()` matches `[PURPLE]`-prefixed log lines from `install.sh` against `_INSTALL_STAGES`:
 
 ```python
+# (keyword, percent, display_message, nominal_secs, pv_driven)
 _INSTALL_STAGES = [
-    ("Detecting internal disk",   5,  "Getting started..."),
-    ("Found internal disk",       8,  "Getting started..."),
-    ("Writing Purple Computer",   12, "Setting up Purple Computer..."),
-    ("Reloading partition table", 82, "Double-checking everything..."),
-    ("Verifying disk write",      85, "Double-checking everything..."),
-    ("Disk verification passed",  90, "Double-checking everything..."),
-    ("Setting up UEFI boot",      92, "Almost ready..."),
-    ("UEFI boot setup complete",  97, "Almost ready..."),
+    ("Detecting internal disk",       5,  "Getting started...",            4,   False),
+    ("Found internal disk",           8,  "Getting started...",            3,   False),
+    ("Writing Purple Computer",       10, "Setting up Purple Computer...", _NOMINAL_WRITE_SECS, True),
+    ("Reloading partition table",     70, "Double-checking everything...", 8,   False),
+    ("Verifying disk write",          72, "Double-checking everything...", 180, True),
+    ("Disk verification passed",      85, "Double-checking everything...", 3,   False),
+    ("Rebuilding partition table",    86, "Almost ready...",               8,   False),
+    ("Waiting for partition devices", 88, "Almost ready...",               10,  False),
+    ("Checking root filesystem",      90, "Almost ready...",               25,  False),
+    ("Growing root filesystem",       92, "Almost ready...",               25,  False),
+    ("Setting up boot",               94, "Almost ready...",               50,  False),
+    ("Boot setup complete",           98, "Almost ready...",               5,   False),
 ]
 ```
 
-Progress only moves forward (enforced by `pct > self._progress`). The friendly display strings are what the user sees, no technical jargon.
+Progress only moves forward. `pv_driven` bands (the image write at 10-70% and the verify at 72-85%) show real byte-level progress from `pv`; the rest are "blind" bands filled by a creep timer paced by `nominal_secs`, the band's expected duration on a reference machine (scaled by a per-machine slowness factor derived from the actual write time vs `_NOMINAL_WRITE_SECS`). The friendly display strings are what the user sees, no technical jargon.
 
 ---
 

@@ -62,7 +62,7 @@ The fix added `efibootmgr` + `grub-pc-bin` to the golden image, added a 2MiB `bi
 
 **Legacy/CSM-mode PCs (E6420 etc.):** previously broken at cold boot, now boot via MBR → `core.img` → `grub.cfg` → kernel. ✅ The core fix.
 
-**Windows dual-boot:** not a Purple scenario (we own the disk), but the `bootmgfw.efi` preservation logic (`install.sh:443-447`) is unchanged. User can reinstall Windows later from a USB installer — that path uses firmware's built-in USB boot menu, which doesn't need our NVRAM entries.
+**Windows dual-boot:** not a Purple scenario (we own the disk), but the `bootmgfw.efi` preservation logic in `install.sh` is unchanged. User can reinstall Windows later from a USB installer; that path uses firmware's built-in USB boot menu, which doesn't need our NVRAM entries.
 
 **Failure modes:** every new step is wrapped `2>/dev/null || true` or logs to a temp file and warns. If `efibootmgr`, `grub-install`, or NVRAM writes fail, install completes and the remaining layers still boot the machine.
 

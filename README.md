@@ -194,8 +194,8 @@ purplecomputer/
 │   └── generate_voice_clips.py     # TTS narration generation
 │
 ├── tools/                # AI-assisted content creation
-│   ├── doodle_ai.py               # AI art room drawing generation
-│   └── play_ai.py                 # AI music room content
+│   ├── art_ai.py                  # AI art room drawing generation
+│   └── music_ai.py                # AI music room content
 │
 ├── config/               # System configs (Alacritty, X11, fonts)
 ├── tests/                # Test suite
@@ -258,7 +258,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 - **[guides/sound-synthesis.md](guides/sound-synthesis.md):** Procedural sound generation
 - **[guides/mode-reference.md](guides/mode-reference.md):** Reference for all rooms and controls
 - **[guides/kid-proofing.md](guides/kid-proofing.md):** Kiosk lockdown and safety measures
-- **[guides/production-checklist.md](guides/production-checklist.md):** Pre-ship checklist
+- **[guides/usb-flash-settle.md](guides/usb-flash-settle.md):** Why freshly flashed drives get a one-time QEMU boot
 
 ---
 

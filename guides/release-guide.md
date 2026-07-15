@@ -122,6 +122,7 @@ All scripts live in `build-scripts/`.
 | `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `release-iso.sh` | `just release` | Upload ISOs to R2, update redirects |
 | `upload-early-access.sh` | `just upload-early-access` | Upload download page + PDFs, purge cache |
+| `upload-early-access-html.sh` | `just upload-early-access-html` | Upload just the landing page HTML, purge cache |
 | `upload-pdfs.sh` | `just upload-pdfs` | Upload just the PDFs, purge cache |
 | `clean-old-releases.sh` | `just clean-releases` | Delete old release versions from R2 |
 | `flash-to-usb.sh` | `just flash` | Write ISO to USB drive |

@@ -137,8 +137,8 @@ record_manifest() {
 # Boot a freshly flashed drive once in QEMU so its controller pays the
 # one-time post-write cost here instead of on a parent's first boot. A
 # sequential dd readback does not clear that state; a real boot's read
-# workload does (see guides/production-checklist.md, "Slow First Boot After
-# Flashing"). cache=none (O_DIRECT) so guest reads hit the flash, not the
+# workload does (see guides/usb-flash-settle.md). cache=none (O_DIRECT) so
+# guest reads hit the flash, not the
 # host page cache. Boot completion is detected host-side from /sys/block
 # read counters: at least BOOT_SETTLE_MIN_MB read, then BOOT_SETTLE_QUIET_SECS
 # with no new reads. The drive then stays powered BOOT_SETTLE_HOLD_SECS so

@@ -120,7 +120,7 @@ Internal displays work on M1 and M2 Macs via the DCP (Display Coprocessor) drive
 | MacBook Pro 14" | 3024x1964 | 1512x982 |
 | MacBook Pro 16" | 3456x2234 | 1728x1117 |
 
-These are all HiDPI Retina panels. At 100% scaling, everything is tiny. At 200% scaling, you get the "effective" resolution, which is still well above Purple Computer's 114x39 terminal minimum (`REQUIRED_TERMINAL_COLS` x `REQUIRED_TERMINAL_ROWS`).
+These are all HiDPI Retina panels. At 100% scaling, everything is tiny. At 200% scaling, you get the "effective" resolution, which is still well above Purple Computer's 146x37 terminal minimum (`REQUIRED_TERMINAL_COLS` x `REQUIRED_TERMINAL_ROWS`).
 
 The DCP driver is not yet upstream in mainline Linux. Asahi's patched kernel includes it.
 
@@ -150,9 +150,9 @@ The DSP chain is critical. Apple's speakers are driven hard and rely on software
 
 **Lid close:** triggers s2idle (freeze). Battery drain during sleep is approximately 2% per hour (50% overnight). Compare to macOS at 1-2% over 8 hours. This is because the hardware isn't properly powered down during suspend.
 
-**Purple Computer's workaround:** Purple already configures `HandleLidSwitch=poweroff` in logind (see `00-build-golden-image.sh` lines 204-220). Lid close triggers a full shutdown, not suspend. This sidesteps the battery drain problem entirely. The same configuration would apply on Apple Silicon.
+**Purple Computer's workaround:** logind ignores the lid entirely (`HandleLidSwitch=ignore`, configured in `00-build-golden-image.sh`); the TUI handles lid close itself (`purple_tui/power_manager.py`): immediate sleep face, shutdown after 10 minutes. Suspend is never used, which sidesteps the battery drain problem entirely. The same approach would apply on Apple Silicon.
 
-**Power button:** short press triggers shutdown (via logind configuration). Same as on Intel Purple Computer systems.
+**Power button:** logind ignores it; the TUI handles tap (sleep face) and 3-second hold (shutdown). Same as on Intel Purple Computer systems.
 
 **Battery life during use:** noticeably shorter than macOS. Expect 5-7 hours on an M1 Air vs 10+ on macOS. Adequate for a kid's computing session.
 
@@ -200,21 +200,21 @@ GOLDEN_PACKAGES="linux-image-generic grub-efi-arm64 systemd sudo"
 
 **`build-scripts/00-build-golden-image.sh`:**
 ```bash
-# Current
+# Current: BOOTX64.EFI is the signed shim, grubx64.efi the signed GRUB,
+# both apt-downloaded (shim-signed, grub-efi-amd64-signed); see guides/secure-boot.md
 debootstrap --arch=amd64 ...
-grub-mkstandalone --format=x86_64-efi --output=".../BOOTX64.EFI" ...
 
 # ARM64 variant
 debootstrap --arch=arm64 ...
-grub-mkstandalone --format=arm64-efi --output=".../BOOTAA64.EFI" ...
+# BOOTAA64.EFI: the arm64 shim-signed / grub-efi-arm64-signed equivalents
 ```
 
 **`build-scripts/install.sh`:**
 ```bash
-# Current EFI paths
+# Current EFI paths (shim + grubx64.efi at each)
 /EFI/BOOT/BOOTX64.EFI
 /EFI/Microsoft/Boot/bootmgfw.efi
-/EFI/purple/grubx64.efi
+/EFI/purple/shimx64.efi
 
 # ARM64 EFI paths
 /EFI/BOOT/BOOTAA64.EFI
@@ -348,7 +348,7 @@ Before considering Apple Silicon supported, verify each item on actual hardware:
 - [ ] Install Fedora Asahi Remix on M1 MacBook Air
 - [ ] Verify internal keyboard appears in `/dev/input/event*`
 - [ ] Verify `evtest` shows key-down and key-up events from internal keyboard
-- [ ] Verify scancodes from F1-F12 match expectations (run `keyboard_normalizer.py --calibrate`)
+- [ ] Verify scancodes from F1-F12 match expectations (`evtest`; remaps happen in keyd, see `config/keyd/default.conf`)
 - [ ] Verify Alacritty launches fullscreen at correct resolution
 - [ ] Verify Purple TUI starts and renders correctly
 

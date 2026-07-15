@@ -142,8 +142,9 @@ boot_test() {
         -no-reboot
     )
 
-    # For install mode, pass kernel cmdline with purple.install=1
-    # to simulate selecting "Install Purple Computer" from GRUB menu
+    # For install mode, pass kernel cmdline with purple.install=1, the
+    # developer/test switch that suppresses purple-x11 so the install path
+    # can be exercised on a tty (there is no GRUB install entry)
     if [ "$BOOT_MODE" = "install" ]; then
         QEMU_CMD+=(-append "boot=casper console=ttyS0,115200 cloud-init=disabled purple.install=1")
     fi

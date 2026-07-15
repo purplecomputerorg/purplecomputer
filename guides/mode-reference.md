@@ -69,7 +69,7 @@ from `art_room.KEY_COLORS`), the second turns it purple, the third turns it off.
 
 Within each row, left keys are lower pitch, right keys are higher:
 - `A` = 196 Hz (lowest on row)
-- `L` = 494 Hz (highest on row)
+- `;` = 494 Hz (highest on row; `L` = 440 Hz)
 
 **Sound character**: Full marimba with resonator tube harmonics, soft mallet attack.
 
@@ -167,37 +167,38 @@ Switch away from the Music room and back, or use `ClearAll()` in demo script to 
 
 | Row      | Keys                | Color Family | Tint (text mode) | Paint colors |
 |----------|---------------------|--------------|------------------|--------------|
-| Numbers  | 1 2 3 4 5 6 7 8 9 0 | **Grayscale**| None             | White → Black |
+| Numbers  | 1 2 3 4 5 6 7 8 9 0 - = | **Grayscale**| None         | White → Black |
 | QWERTY   | Q W E R T Y U I O P | **Red**      | Dark red         | Light red → Dark red |
 | ASDF     | A S D F G H J K L   | **Yellow**   | Gold/mustard     | Light gold → Dark gold |
 | ZXCV     | Z X C V B N M       | **Blue**     | Dark blue        | Light blue → Dark blue |
 
 ### Within Each Row: Light to Dark Gradient
 
-Left keys = lighter, right keys = darker:
+Left keys = lighter, right keys = darker. Exact values are computed by `generate_row_gradient()` in `art_room.py` (HSL, saturation 0.75, lightness 0.80 down to 0.20 across the row). Samples:
 
 **QWERTY (Red family)**:
-- `Q` = #BF6C6C (light salmon)
-- `T` = #A32C2C (medium red)
-- `P` = #801C1C (dark burgundy)
+- `Q` = #F2A5A5 (light red)
+- `T` = #E44444 (medium red)
+- `P` = #891313 (dark red)
 
 **ASDF (Yellow family)**:
-- `A` = #BFAF40 (light gold)
-- `F` = #AA7F40 (medium gold)
-- `L` = #875F40 (dark brown-gold)
+- `A` = #F2E5A5 (light gold)
+- `F` = #E6CE55 (medium gold)
+- `L` = #8E7A14 (dark gold)
 
 **ZXCV (Blue family)**:
-- `Z` = #6C8CBF (light periwinkle)
-- `V` = #3C5CAA (medium blue)
-- `M` = #1C3495 (dark navy)
+- `Z` = #A5BFF2 (light blue)
+- `V` = #4C7FE5 (medium blue)
+- `M` = #194CB2 (dark navy)
 
-**Number row (Grayscale)**:
+**Number row (Grayscale)** (`GRAYSCALE` in `art_room.py`; 1 = lightest, then darker rightward through `-` and `=`):
 ```
-1: #FFFFFF (white)     6: #606060
-2: #E0E0E0             7: #404040
-3: #C0C0C0             8: #202020
-4: #A0A0A0             9: #101010
-5: #808080 (gray)      0: #000000 (black)
+1: #FFFFFF (white)     6: #888888 (middle gray)
+2: #E8E8E8             7: #707070
+3: #D0D0D0             8: #585858
+4: #B8B8B8             9: #404040
+5: #A0A0A0             0: #282828
+-: #101010 (near black)   = and +: #000000 (pure black)
 ```
 
 ## Color Mixing
@@ -536,7 +537,7 @@ Z X C V B N M , . /   ← Low marimba (98-247 Hz)
 
 ### Art Room Color Keys
 ```
-1-0: Grayscale (white to black)
+1 through =: Grayscale (white to black)
 QWERTY: Red family (light to dark)
 ASDF: Yellow family (light to dark)
 ZXCV: Blue family (light to dark)

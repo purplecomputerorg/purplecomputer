@@ -1,4 +1,4 @@
-"""Shared utilities for AI tool scripts (play_ai, doodle_ai)."""
+"""Shared utilities for AI tool scripts (music_ai, art_ai)."""
 
 import json
 import os

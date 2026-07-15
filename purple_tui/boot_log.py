@@ -17,7 +17,7 @@ This module gives us two things instead:
 
 2. **Startup watchdog**: a background thread started at import time. If
    `mark_first_render()` has not been called within escalating deadlines
-   (30s / 60s / 120s from launcher start), the watchdog dumps every Python
+   (10s / 20s / 40s / 80s from launcher start), the watchdog dumps every Python
    thread's stack trace to the boot log using `faulthandler.dump_traceback`.
    The dump tells us the exact line of Python that is stuck.
 
@@ -210,10 +210,10 @@ def _install_watchdog() -> None:
     except Exception:
         pass
 
-    # Deadlines: 30s is "this should have been done by now on any machine",
-    # 60s is "definitely stuck", 120s is "last chance before we stop dumping".
-    # Three dumps give us a progression (is it making progress? is it a
-    # lock that eventually resolves? or is it truly wedged?).
+    # Deadlines: 10s is "this should have been done by now on any machine",
+    # 20s and 40s are "definitely stuck", 80s is "last chance before we stop
+    # dumping". Four dumps give us a progression (is it making progress? is it
+    # a lock that eventually resolves? or is it truly wedged?).
     thread = threading.Thread(
         target=_watchdog_target,
         args=((10, 20, 40, 80),),

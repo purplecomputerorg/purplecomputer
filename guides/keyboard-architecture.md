@@ -72,6 +72,7 @@ class RawKeyEvent:
     is_down: bool       # True = press, False = release
     timestamp: float    # Monotonic time in seconds
     scancode: int = 0   # Hardware scancode, 0 if unavailable
+    is_repeat: bool = False  # True for key repeat events (key held down)
 ```
 
 ### EvdevReader
@@ -218,7 +219,7 @@ keyd is the only option that satisfies every row *and* covers Apple Touch Bar. W
 
 ### How Purple cooperates with keyd
 
-`purple_tui/input.py:_find_keyboards()` has one keyd-specific behavior: when `/etc/keyd/default.conf` exists, it polls briefly (up to `KEYD_WAIT_SECS = 2.0`) for the `keyd virtual keyboard` device to appear before scanning. This closes a startup race: `purple-x11.service` has `After=keyd.service`, but `keyd.service` is `Type=simple` so systemd considers it "started" the moment its main process forks — *before* keyd has enumerated inputs and created its uinput device. Without the poll, Purple can scan past keyd's startup, pick up a physical keyboard, and then have keyd grab it a moment later, leaving Purple with a silent keyboard.
+`purple_tui/input.py:_find_keyboards()` has one keyd-specific behavior: when `/etc/keyd/default.conf` exists, it polls briefly (up to `KEYD_WAIT_SECS = 10.0`) for the `keyd virtual keyboard` device to appear before scanning. This closes a startup race: `purple-x11.service` has `After=keyd.service`, but `keyd.service` is `Type=simple` so systemd considers it "started" the moment its main process forks, *before* keyd has enumerated inputs and created its uinput device. Without the poll, Purple can scan past keyd's startup, pick up a physical keyboard, and then have keyd grab it a moment later, leaving Purple with a silent keyboard.
 
 The scan itself is not keyd-specific. The existing strict/loose predicates match keyd's virtual device the same way they match any real keyboard. Both the virtual device *and* any physical keyboards keyd did not grab end up in the returned list. This matters because keyd may successfully create its virtual device but fail to grab some exotic physical keyboard — in that case we still need to read from the physical. Grabbed physicals emit no events, so there is never a "double key press" from having both in the list.
 

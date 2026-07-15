@@ -1,0 +1,8 @@
+#!/bin/bash
+# Install an AI-generated art demo into Purple Computer
+# Usage: ./tools/install-art-demo --from art_ai_output/20260202_143022
+
+cd "$(dirname "$0")/.."
+source .venv/bin/activate
+
+exec python tools/install_art_demo.py "$@"

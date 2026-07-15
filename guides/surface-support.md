@@ -45,15 +45,9 @@ This tells the i915 driver to use DPCD registers for backlight control, which:
 
 ### Where to add it
 
-**In the golden image GRUB config** (`build-scripts/00-build-golden-image.sh`), append to the kernel command line:
+**Per-device only. Never add this to the golden image.** This parameter used to ship in the golden image GRUB config and was removed in commit `2b9dc89`: it forces DPCD backlight on instead of letting the driver detect it, and it black-screened older Intel MacBooks and ThinkPads. See `guides/intel-display-tuning.md` for the full precedent. Purple ships on diverse hardware, so a tweak that helps Surface panels cannot ride along globally.
 
-```
-linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro quiet splash console=tty0 console=ttyS0,115200n8 i915.enable_dpcd_backlight=1
-```
-
-This parameter is safe on non-Surface hardware: if the display doesn't support DPCD backlight, the driver falls back to its default behavior.
-
-**On a running system** (temporary test): edit `/boot/grub/grub.cfg` and add the parameter to the `linux` line, then reboot.
+**On a running Surface** (temporary test): edit `/boot/grub/grub.cfg` and add the parameter to the `linux` line, then reboot.
 
 ### Graceful degradation
 

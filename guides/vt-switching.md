@@ -1,6 +1,6 @@
 # VT Switching (Emergency TTY Access)
 
-How to switch from the Purple Computer UI to a root shell on tty2 for debugging, and how the implementation ensures it always works.
+How to switch from the Purple Computer UI to a shell on tty2 for debugging (autologin as the `purple` user, which has passwordless sudo), and how the implementation ensures it always works.
 
 ## Quick Reference
 
@@ -19,7 +19,7 @@ Standard Linux VT switching (Ctrl+Alt+Fn) relies on the kernel's keyboard handle
 
 Meanwhile, the app reads keyboard input via evdev (`EVIOCGRAB`), bypassing the terminal. When evdev has an exclusive grab, no other process (including tty2's console) receives key events.
 
-So switching to tty2 requires two things: (1) calling `chvt 2` since the kernel won't do it, and (2) releasing the evdev grab so tty2 can receive input.
+So switching to tty2 requires two things: (1) explicitly switching VTs since the kernel won't do it (the app spawns a tty2 login shell via `openvt -s`, which also performs the switch), and (2) releasing the evdev grab so tty2 can receive input.
 
 ## Three Layers of Coverage
 
@@ -44,7 +44,7 @@ The main app's keyboard read loop includes VT switch detection at the evdev leve
 On switch:
 1. Releases evdev grab (`release_grab()`)
 2. Sets `_vt_away` flag to suppress forwarding events to the app (no music playing while on tty2)
-3. Calls `chvt 2`
+3. Spawns a login shell on tty2 via `openvt -s -f -c 2 -- login -f purple` (openvt handles terminal setup correctly, avoiding the broken-echo and wrong-keymap issues of manually redirecting to `/dev/tty2`)
 
 On return (detected via `/sys/class/tty/tty0/active` check on each key event while away):
 1. Reacquires evdev grab
@@ -101,7 +101,7 @@ Two methods:
 
 ### chvt race guard
 
-`chvt` is spawned via `Popen` (non-blocking) so the evdev handler doesn't block. But this creates a race: key-up events from the Ctrl+Alt+F2 combo arrive before `chvt` completes, and `_is_on_tty1()` still returns True, causing the handler to immediately reacquire the grab. By the time `chvt 2` finishes, the grab is back and tty2 can't receive input.
+The VT switch (`openvt` outbound, `chvt` on return) is spawned via `Popen` (non-blocking) so the evdev handler doesn't block. But this creates a race: key-up events from the Ctrl+Alt+F2 combo arrive before the switch completes, and `_is_on_tty1()` still returns True, causing the handler to immediately reacquire the grab. By the time the switch finishes, the grab is back and tty2 can't receive input.
 
 Fix: a 500ms cooldown after setting `_vt_away` before checking `_is_on_tty1()`. This gives `chvt` time to complete. See `input.py` `_read_loop()`, the `_vt_away_time` field.
 

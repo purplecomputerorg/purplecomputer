@@ -98,7 +98,7 @@ Success: detects a login prompt (the system booted into our squashfs and reached
 sudo ./test-boot.sh --mode install
 ```
 
-Success: detects `[PURPLE]` or `Purple Computer Installer` in serial output (the initramfs hook fired and the confirmation service started).
+Success: detects `[PURPLE]` hook output or a login prompt in serial output. `--mode install` boots with `purple.install=1`, a developer/test switch that suppresses `purple-x11.service` so the system stays on a tty where the install path can be exercised by hand. There is no GRUB install entry to select.
 
 **Options:**
 
@@ -122,13 +122,12 @@ sudo ./test-boot.sh --interactive
 
 **What to verify visually:**
 
-1. GRUB menu appears with "Purple Computer" as the highlighted default
-2. 5-second countdown auto-selects "Purple Computer"
-3. Kernel boots (scrolling text, then quiet)
-4. Login prompt appears (or Purple TUI if X11 starts successfully in the VM)
-5. Internal disk is never touched (the QEMU target disk stays empty)
+1. No GRUB menu appears (the normal ISO hides it with `timeout=0` and auto-boots; the debug ISO shows a visible menu)
+2. Kernel boots (scrolling text, then quiet)
+3. Login prompt appears (or Purple TUI if X11 starts successfully in the VM)
+4. Internal disk is never touched (the QEMU target disk stays empty)
 
-To test the install path interactively, press the down arrow in GRUB within 5 seconds to select "Install Purple Computer", then verify the confirmation screen appears.
+To test the install path interactively, boot normally, open the parent menu (hold Escape 1 second, PIN-gated), and select "Install on this Computer". Verify the confirmation screen appears ("Everything on this computer will be erased"), with "No, go back" selected by default.
 
 ### Manual QEMU
 
@@ -158,8 +157,7 @@ Add `-snapshot` to avoid writing to the ISO or target disk (useful for repeated 
 
 | Check | How to verify | Expected |
 |-------|--------------|----------|
-| GRUB default | Watch GRUB menu | "Purple Computer" is entry 0, highlighted |
-| Auto-boot timeout | Wait 5 seconds | Boots automatically without input |
+| GRUB hidden | Watch screen at power-on | No menu on the normal ISO; boots straight into Purple (the debug ISO shows a menu) |
 | No disk writes | `lsblk` inside VM | Internal disk has no mounts |
 | Login prompt | Watch serial/screen | `purple-computer login:` appears |
 | Purple TUI starts | Interactive mode | Purple Computer app loads (if X11 works in VM) |
@@ -169,12 +167,11 @@ Add `-snapshot` to avoid writing to the ISO or target disk (useful for repeated 
 
 | Check | How to verify | Expected |
 |-------|--------------|----------|
-| GRUB entry | Arrow down in GRUB | "Install Purple Computer" is entry 1 |
-| Gate 1 fires | Serial output | `[PURPLE] ARMED: purple.install=1 found` |
-| Getty masked | Serial output | `[PURPLE] Masked interfering services` |
-| Gate 2 screen | Watch tty1 | "This will ERASE ALL DATA" confirmation appears |
-| ESC cancels | Press ESC at Gate 2 | System reboots without installing |
-| ENTER installs | Press ENTER at Gate 2 | Golden image written to target disk |
+| No GRUB install entry | Watch GRUB (debug ISO menu) | Only live boot entries; install lives inside the TUI |
+| Parent menu entry | Hold Escape 1s, enter PIN | "Install on this Computer" listed (or "Install (Reinsert USB)" if the payload is missing) |
+| Confirmation screen | Select the install entry | "Everything on this computer will be erased", with "No, go back" selected by default |
+| Cancel is safe | Press Esc or confirm "No, go back" | Returns to the menu, disk untouched |
+| Confirm installs | Select "Yes, install" | `InstallProgressScreen` runs `/cdrom/purple/install.sh`, golden image written to target disk |
 
 ---
 
@@ -208,9 +205,9 @@ The squashfs is created from the mounted root filesystem **before** unmounting, 
 2. Extract ISO contents via rsync
 3. Replace casper/filesystem.squashfs with our Purple squashfs
 4. Copy casper/filesystem.size
-5. Extract initramfs, add install hook to casper-bottom, repack
+5. Extract initramfs, add casper-bottom hook (dotfiles, debug mode, splash), repack
 6. Add /purple/ payload (golden image, install.sh)
-7. Replace GRUB config (live boot default, install as option)
+7. Replace GRUB config (hidden menu, live boot only)
 8. Rebuild ISO with xorriso (preserves boot records)
 ```
 
@@ -225,7 +222,7 @@ set timeout=0
 set timeout_style=hidden
 
 "Purple Computer" (default)
-    boot=casper quiet ... console=tty2
+    boot=casper quiet ... console=tty63
     systemd.mask=udisks2.service  ← prevents internal disk auto-mount
 
 "Boot from next volume"           ← skips USB, tries next boot device
@@ -245,7 +242,7 @@ purple-installer.iso
 ├── boot/grub/grub.cfg          ← Purple boot menu (live default)
 ├── casper/
 │   ├── vmlinuz                 ← Ubuntu kernel (untouched)
-│   ├── initrd                  ← Modified (install hook added)
+│   ├── initrd                  ← Modified (casper-bottom hook added)
 │   ├── filesystem.squashfs     ← Purple Computer root filesystem (REPLACED)
 │   └── filesystem.size
 ├── EFI/                        ← Secure Boot chain (untouched)
@@ -288,20 +285,11 @@ The `systemd.mask=udisks2.service` kernel parameter is missing from the live boo
 
 ### Install Issues
 
-**Install hook doesn't fire**
-Check serial output for `[PURPLE]` messages. If absent:
-- The initramfs hook wasn't added (check ORDER file)
-- `purple.install=1` is missing from the kernel cmdline
+**Casper hook doesn't fire**
+Check serial output for `[PURPLE]` messages. If absent, the initramfs hook wasn't added (check the ORDER file).
 
-**"Payload not found"**
-The hook can't find `/purple/install.sh` on the boot media. The ISO structure may be wrong. Mount the ISO and check that `/purple/install.sh` exists.
-
-**Gate 2 screen doesn't appear**
-The systemd service failed to start. Boot interactively and check:
-```bash
-systemctl status purple-confirm.service
-journalctl -u purple-confirm.service
-```
+**Parent menu shows "Install (Reinsert USB)"**
+The menu can't find `/cdrom/purple/install.sh` (`_PAYLOAD_PATH` in `parent_menu.py`). The ISO structure may be wrong. Mount the ISO and check that `/purple/install.sh` exists.
 
 ### QEMU-Specific Notes
 
@@ -328,9 +316,9 @@ sync
 ```
 
 Then boot a test laptop from USB and verify:
-1. GRUB menu shows "Purple Computer" as default
-2. Auto-boot reaches Purple TUI (full experience, not just login prompt)
+1. No GRUB menu appears; the USB auto-boots
+2. Boot reaches the Purple TUI (full experience, not just login prompt)
 3. Internal disk is untouched (check with `lsblk` from tty2: Ctrl+Alt+F2)
-4. Selecting "Install" from GRUB shows the confirmation screen
-5. Pressing ESC at confirmation reboots safely
-6. Pressing ENTER at confirmation writes the system to disk
+4. Parent menu (hold Escape 1s, PIN) → "Install on this Computer" shows the confirmation screen
+5. Backing out at the confirmation leaves the disk untouched
+6. Confirming writes the system to disk and ends at "Press ENTER to restart"

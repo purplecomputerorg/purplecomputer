@@ -1,5 +1,7 @@
 # Plan: Robust X11 Startup with GPU Readiness
 
+> **Status: IMPLEMENTED (historical).** This plan shipped in commit `2b9dc89` (March 2026): `purple-x11.service`, `scripts/purple-wait-display.sh`, `scripts/purple-x11-failed.sh`, and the removal of `i915.enable_dpcd_backlight=1` all landed. One deliberate deviation: the `Wants=/After=dev-dri-card0.device` unit dependencies proposed below were dropped (device units carry a 90s default timeout) in favor of the `ExecStartPre` poller alone. Kept for the reasoning; the code is the source of truth.
+
 ## Problem
 
 X11 starts before the i915 GPU driver finishes display initialization on slower hardware (MacBook 2014 Haswell). The screen goes fully dark (backlight off). The debug recovery shell works because the delay gives the GPU time to finish. The `i915.enable_dpcd_backlight=1` kernel parameter may also cause backlight failure on hardware that doesn't support DPCD backlight (older MacBooks use LVDS/early eDP).

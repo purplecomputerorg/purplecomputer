@@ -69,17 +69,19 @@ log "Disk sector size: logical=${SECTOR_SIZE}B"
 parted -s /dev/$TARGET mklabel gpt
 parted -s /dev/$TARGET mkpart ESP fat32 1MiB 513MiB
 parted -s /dev/$TARGET set 1 esp on
-parted -s /dev/$TARGET mkpart primary ext4 513MiB 100%
+parted -s /dev/$TARGET -- mkpart primary ext4 513MiB -2MiB
+parted -s /dev/$TARGET -- mkpart primary -2MiB 100%
+parted -s /dev/$TARGET set 3 bios_grub on
 sync
 ```
 
-This is identical to the commands in `00-build-golden-image.sh`. Because `parted` uses byte-based offsets (`MiB`), it computes the correct LBAs for whatever the device's actual logical sector size is. The filesystem data already at byte offset 1MiB (ESP) and 513MiB (root) is left untouched — only the GPT metadata at the start and end of the disk is rewritten.
+The third partition is the tiny `bios_grub` region for hybrid UEFI+BIOS boot (see `nvram-boot-entry.md`); root ends 2MiB short of the disk to make room for it. Because `parted` uses byte-based offsets (`MiB`), it computes the correct LBAs for whatever the device's actual logical sector size is. The filesystem data already at byte offset 1MiB (ESP) and 513MiB (root) is left untouched: only the GPT metadata at the start and end of the disk is rewritten.
 
 This single step fixes three things at once:
 
 1. **4K-sector drives** (Apple NVMe in MBP 2016/2017): GPT now points to the right LBAs.
 2. **Backup GPT in the wrong place.** The image's backup GPT header sits at the end of the *image*, not the end of the *target drive*. Many UEFI firmwares warn or refuse to boot when the backup header is missing/wrong. Re-running `parted mklabel gpt` writes a fresh backup at the actual end of the disk.
-3. **Root partition spans the full drive.** `mkpart ... 513MiB 100%` extends the root partition to the end of the real device, not the end of the image. (Phase 4 then grows the filesystem inside.)
+3. **Root partition spans the full drive.** `mkpart ... 513MiB -2MiB` extends the root partition to the end of the real device (minus the 2MiB `bios_grub` tail), not the end of the image. (Phase 5 then grows the filesystem inside.)
 
 On 512-byte-sector drives (the common case), this is effectively a no-op rewrite of the same layout. Cost is ~1 second; eliminates the need for any sector-size special-casing.
 
@@ -108,7 +110,7 @@ We **capture** `partprobe` stderr (instead of suppressing it) and dump it on the
 
 ### Phase 5: Grow root filesystem to fill the partition
 
-The golden image's ext4 was sized to the image, not the target disk. After Phase 3 the root *partition* spans 513MiB to end-of-disk, but the filesystem inside it is still at image size (~16GB). `resize2fs` extends the ext4 to fill the partition:
+The golden image's ext4 was sized to the image, not the target disk. After Phase 3 the root *partition* spans 513MiB to 2MiB short of end-of-disk, but the filesystem inside it is still at image size (~16GB). `resize2fs` extends the ext4 to fill the partition:
 
 ```bash
 e2fsck -fy "${PART_PREFIX}2"   # required by resize2fs before offline grow

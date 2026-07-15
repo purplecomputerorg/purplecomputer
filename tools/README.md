@@ -26,20 +26,40 @@ Uses Claude vision to generate drawings in the Art room with a visual feedback l
 
 **Usage:**
 ```bash
-./tools/doodle-ai "a tree on a green hill"
-./tools/doodle-ai "sunset with orange and purple sky" --iterations 8
-./tools/doodle-ai "simple house with red roof" --iterations 3
+./tools/art-ai "a tree on a green hill"
+./tools/art-ai "sunset with orange and purple sky" --iterations 8
+./tools/art-ai --from art_ai_output/TIMESTAMP --instruction "add a bird"
 ```
 
-**Output:**
-- `doodle_ai_output/screenshots/` - SVG screenshots from each iteration
-- `doodle_ai_output/actions.json` - All actions taken
-- `doodle_ai_output/generated_demo.py` - Demo script for Purple Computer
+**Output (per run, in `art_ai_output/TIMESTAMP/`):**
+- `screenshots/` - screenshots from each iteration
+- `plan.json` and `iteration_scripts.json` - plan and per-iteration actions, consumed by `./tools/install-art-demo`
+- `debug/` - debug output
 
 **Options:**
-- `--goal` (required): What to draw
+- `--goal` (or positional): What to draw (required unless using `--from`)
+- `--from` + `--instruction`: Continue from a previous run's output dir or screenshot
 - `--iterations`: Number of feedback loops (default: 5)
-- `--output`: Output directory (default: `doodle_ai_output`)
+- `--output`: Output directory (default: auto-generated `art_ai_output/TIMESTAMP`)
+
+## AI Music Tool (`music_ai.py`)
+
+AI composition tool for the Music room.
+
+**Usage:**
+```bash
+./tools/music-ai "smiley face that sounds happy"
+./tools/music-ai "heart" --no-review
+./tools/music-ai "rainstorm" --json
+./tools/music-ai "happy birthday" --save birthday
+```
+
+**Options:**
+- `--no-review`: Skip the review pass (Pass 2)
+- `--json`: Print raw JSON output
+- `--save NAME`: Save as a named demo segment
+
+For how generated segments compose into demos, see `guides/demo-system.md`.
 
 ## Dev Mode API
 
@@ -50,14 +70,14 @@ will take a screenshot and save the path to `$PURPLE_SCREENSHOT_DIR/latest.txt`.
 
 **Command trigger:** Write JSON commands to `$PURPLE_SCREENSHOT_DIR/command`:
 ```json
-{"action": "mode", "value": "doodle"}
+{"action": "mode", "value": "art"}
 {"action": "key", "value": "a"}
 {"action": "key", "value": "up"}
 {"action": "key", "value": "enter"}
 ```
 
 Supported actions:
-- `mode`: Switch to a mode (explore, play, doodle)
+- `mode`: Switch to a room (play, music, art)
 - `key`: Send a keypress (letters, arrows, enter, escape, space, backspace, tab)
 
 **Disable real keyboard:** Set `PURPLE_NO_EVDEV=1` to disable evdev keyboard input.

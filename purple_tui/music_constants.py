@@ -35,7 +35,9 @@ INSTRUMENT_ALIASES = {
     "uke": "ukulele",
 }
 
-# Musical frequencies (G major scale across 3 octaves)
+# Reference frequencies (G major scale across 3 octaves). Legacy table used by
+# analysis scripts and music_ai; runtime pitch comes from pitch_for() with a
+# per-session root (default C, see DEFAULT_ROOT_INDEX).
 NOTE_FREQUENCIES = {
     # Top row: bright but not shrill (392-988 Hz)
     'Q': 392.00, 'W': 440.00, 'E': 493.88, 'R': 523.25, 'T': 587.33,
@@ -48,7 +50,8 @@ NOTE_FREQUENCIES = {
     'N': 164.81, 'M': 185.00, 'comma': 196.00, 'period': 220.00, 'slash': 246.94,
 }
 
-# Note names for grid display (G major: G A B C D E F#)
+# Note names matching NOTE_FREQUENCIES above (G major: G A B C D E F#).
+# Same legacy status as NOTE_FREQUENCIES; verified by scripts/verify_note_names.py.
 # Each column plays the same note across octaves
 NOTE_NAMES = {
     'Q': 'G', 'W': 'A', 'E': 'B', 'R': 'C', 'T': 'D',

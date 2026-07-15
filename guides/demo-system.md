@@ -12,7 +12,7 @@ How to create, generate, and compose demo screencasts for Purple Computer.
   - [Per-Segment Speed](#per-segment-speed)
 - [Generating Segments](#generating-segments)
   - [Music Room Segment (music-ai)](#music-room-segment-music-ai)
-  - [Art Segment (doodle-ai)](#art-segment-doodle-ai)
+  - [Art Segment (art-ai)](#art-segment-art-ai)
   - [Writing a Segment by Hand](#writing-a-segment-by-hand)
 - [Fallback Chain](#fallback-chain)
 - [How It Works](#how-it-works)
@@ -37,8 +37,8 @@ How to create, generate, and compose demo screencasts for Purple Computer.
 ./tools/music-ai "smiley face" --save smiley
 
 # Generate an Art segment
-./tools/doodle-ai --goal "palm tree"
-./tools/install-doodle-demo --from doodle_ai_output/TIMESTAMP --save palm_tree
+./tools/art-ai --goal "palm tree"
+./tools/install-art-demo --from art_ai_output/TIMESTAMP --save palm_tree
 
 # Run it
 just run-demo
@@ -113,24 +113,24 @@ Options:
 
 Without `--save`, it just prints the generated code to stdout.
 
-### Art Segment (doodle-ai)
+### Art Segment (art-ai)
 
 Two steps: generate the drawing, then install it as a segment.
 
 **Step 1: Generate the drawing**
 
 ```bash
-./tools/doodle-ai --goal "palm tree"
+./tools/art-ai --goal "palm tree"
 ```
 
-This creates a timestamped folder like `doodle_ai_output/20260202_143022/` with screenshots of each iteration.
+This creates a timestamped folder like `art_ai_output/20260202_143022/` with screenshots of each iteration.
 
 **Step 2: Review the results**
 
 Check the screenshots to pick your favorite:
 
 ```
-doodle_ai_output/20260202_143022/screenshots/
+art_ai_output/20260202_143022/screenshots/
   iteration_0_blank.svg
   iteration_0_blank_cropped.png
   iteration_1.svg
@@ -145,13 +145,13 @@ The `_cropped.png` files show exactly what the AI saw. Or trust the AI's judgmen
 
 ```bash
 # Use best iteration (default)
-./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --save palm_tree
+./tools/install-art-demo --from art_ai_output/20260202_143022 --save palm_tree
 
 # From a specific screenshot
-./tools/install-doodle-demo --from doodle_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png --save palm_tree
+./tools/install-art-demo --from art_ai_output/20260202_143022/screenshots/iteration_2b_refinement_cropped.png --save palm_tree
 
 # Pick iteration and duration
-./tools/install-doodle-demo --from doodle_ai_output/20260202_143022 --iteration 3 --duration 15 --save palm_tree
+./tools/install-art-demo --from art_ai_output/20260202_143022 --iteration 3 --duration 15 --save palm_tree
 ```
 
 Options:
@@ -258,16 +258,24 @@ Inserted automatically between segments during composition loading. Updates the 
 ```python
 DemoPlayer(
     dispatch_action=app._dispatch_keyboard_action,
-    speed_multiplier=1.0,
+    speed_multiplier=get_speed_multiplier(),
     clear_all=app.clear_all_state,
-    set_play_key_color=app._set_play_key_color,
-    is_doodle_paint_mode=app._is_doodle_paint_mode,
+    clear_art=app._clear_art,
+    set_music_key_color=app._set_music_key_color,
+    is_art_paint_mode=app._is_art_paint_mode,
+    get_selected_menu_label=app._selected_menu_label,
+    get_cursor_position=app._get_cursor_position,
+    zoom_events_file=zoom_events_file,
 )
 ```
 
 - `clear_all`: called by `ClearAll()` to reset all modes
-- `set_play_key_color`: direct color control for Music Room keys
-- `is_doodle_paint_mode`: lets `DrawPath` check if Tab is needed
+- `clear_art`: clears the art canvas and resets the cursor
+- `set_music_key_color`: direct color control for Music Room keys
+- `is_art_paint_mode`: lets `DrawPath` check if Tab is needed
+- `get_selected_menu_label`: label of the selected menu item, for `SelectMenuItem` actions
+- `get_cursor_position`: (x_frac, y_frac) viewport fractions, used to emit cursor_at events for zoom post-processing
+- `zoom_events_file`: path to write zoom events JSON (set via `PURPLE_ZOOM_EVENTS`)
 
 ---
 

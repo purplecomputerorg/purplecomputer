@@ -538,7 +538,7 @@ SPLASHUNIT
 # Power button: TUI handles tap (sleep) and hold (shutdown)
 HandlePowerKey=ignore
 HandlePowerKeyLongPress=ignore
-# Lid: TUI handles with 2-minute delayed shutdown
+# Lid: TUI handles it (immediate sleep face, shutdown after 10 min)
 HandleLidSwitch=ignore
 HandleLidSwitchExternalPower=ignore
 HandleLidSwitchDocked=ignore

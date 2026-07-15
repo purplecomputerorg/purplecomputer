@@ -1619,7 +1619,7 @@ class SimpleEvaluator:
 
         return self._eval_plus_expr(" + ".join(groups))
 
-    _COUNT_OPS = ('x', '×', '*', 'times', '/', '÷', '-')
+    _COUNT_OPS = ('x', '×', '*', 'times', '/', '÷', '-', 'over', 'divide', 'divided')
     _COUNT_TOKEN = re.compile(r'\d+([x×*/÷-]\d+)*', re.IGNORECASE)
 
     def _take_count(self, words: list[str], i: int) -> tuple[str | None, int]:
@@ -1882,8 +1882,8 @@ class SimpleEvaluator:
         count_str, j = self._take_count(words, 0)
         if count_str is None or len(words) - j != 1:
             return None
-        consumed = " ".join(words[:j])
-        if not any(op in consumed for op in ('/', '÷', '-')):
+        consumed = self._normalize_math(" ".join(words[:j]))
+        if not any(op in consumed for op in ('/', '-')):
             return None
         count = int(count_str)
         word = words[j].lower()
@@ -2093,6 +2093,8 @@ class SimpleEvaluator:
 
     # Operator word → symbol mapping (used for exact and fuzzy normalization)
     _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
+    # Division words only apply between digits ("6 over 2"), never in prose ("game over")
+    _DIGIT_OPERATOR_WORDS = {**_OPERATOR_WORDS, 'divide': '/', 'divided': '/', 'over': '/'}
 
     def _normalize_math(self, text: str) -> str:
         """Normalize text for math evaluation: operator words/symbols → ASCII math."""
@@ -2109,23 +2111,35 @@ class SimpleEvaluator:
         result = re.sub(r'div\w+\s+by\b', '/', result)
         # x between digits → * (zero-width lookarounds so chained "2x3x4" works)
         result = re.sub(r'(?<=\d)\s*x\s*(?=\d)', '*', result)
+        result = self._strip_stray_letters(result)
         # Strip leading zeros from number tokens (Python 3 rejects "01" as a literal)
         return re.sub(r'\b0+(\d)', r'\1', result)
+
+    def _strip_stray_letters(self, text: str) -> str:
+        """Drop a lone letter glued to a number ("2 + 3 + a9") when that makes
+        the expression pure math: a finger slip, not a word. 'x' is multiplication."""
+        if not re.search(r'[+\-*/]', text) or re.match(self.MATH_CHARS_PATTERN, text):
+            return text
+        stripped = re.sub(r'(?<![a-z])[a-wyz]\s?(?=\d)|(?<=\d)\s?[a-wyz](?![a-z])', '', text)
+        if stripped != text and re.match(self.MATH_CHARS_PATTERN, stripped):
+            self._last_math_correction = (text.strip(), stripped.strip())
+            return stripped
+        return text
 
     def _fuzzy_normalize_operators(self, text: str) -> str:
         """Replace fuzzy operator words that appear between digits."""
         from ..fuzzy import fuzzy_match_small
-        op_words = list(self._OPERATOR_WORDS.keys())
+        op_words = list(self._DIGIT_OPERATOR_WORDS.keys())
         corrected = [False]
 
         def replace_match(m):
             word = m.group(2)
-            if word in self._OPERATOR_WORDS:
-                return m.group(1) + self._OPERATOR_WORDS[word] + m.group(3)
+            if word in self._DIGIT_OPERATOR_WORDS:
+                return m.group(1) + self._DIGIT_OPERATOR_WORDS[word] + m.group(3)
             matched = fuzzy_match_small(word, op_words, cutoff=0.7)
             if matched:
                 corrected[0] = True
-                return m.group(1) + self._OPERATOR_WORDS[matched] + m.group(3)
+                return m.group(1) + self._DIGIT_OPERATOR_WORDS[matched] + m.group(3)
             return m.group(0)
 
         result = re.sub(r'(\d\s+)([a-z]{3,})(\s+\d)', replace_match, text)

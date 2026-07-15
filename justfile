@@ -243,7 +243,7 @@ code-split-poc:
 release *args:
     ./build-scripts/release-iso.sh {{args}}
 
-# Upload the card PDFs to Cloudflare R2 (files.purplecomputer.org)
+# Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 

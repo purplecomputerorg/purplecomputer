@@ -413,7 +413,7 @@ Uploads ISOs to Cloudflare R2 and updates redirect rules so `/download.iso` poin
 
 ### The Download Page and PDFs
 
-The customer download page lives in the landing repo (`~/landing/src/pages/downloads.tsx`) and is served by Vercel at `downloads.purplecomputer.org`; it deploys with the landing site. The files themselves (ISOs, checksums, `latest.json`, card PDFs) are served straight from R2 at `files.purplecomputer.org`.
+The customer download page lives in the landing repo (`~/landing/src/pages/downloads.tsx`) and is served by Vercel at `downloads.purplecomputer.org`; it deploys with the landing site. The files themselves (ISOs, checksums, `latest.json`, card PDFs) are served straight from R2 on a separate custom domain (`R2_CUSTOM_DOMAIN`, value in the private env file).
 
 ```bash
 just upload-pdfs           # Upload the card PDFs, purge cache

@@ -5,7 +5,7 @@ How to build, release, and update Purple Computer downloads.
 ## Hosting layout
 
 - `downloads.purplecomputer.org`: the customer download page. Lives in the landing repo (`~/landing/src/pages/downloads.tsx`), served by Vercel, deploys with the landing site. Its root is rewritten to `/downloads` by the landing middleware.
-- `files.purplecomputer.org`: the R2 custom domain (`R2_CUSTOM_DOMAIN`). Serves the actual objects straight from Cloudflare: ISOs, checksums, `latest.json`, and the card PDFs. Everything in this guide uploads here.
+- The files host: the R2 custom domain (`R2_CUSTOM_DOMAIN`, value in the private env file). Serves the actual objects straight from Cloudflare: ISOs, checksums, `latest.json`, and the card PDFs. Everything in this guide uploads here.
 
 The download page reads `latest.json` from the files host at build time (revalidated every 5 minutes), so the version badge updates on its own after a release.
 
@@ -94,7 +94,7 @@ PDFs use fixed filenames, so `upload-pdfs` purges the Cloudflare cache after eac
 ## How the Download URL Works
 
 ```
-User visits files.purplecomputer.org/download.iso
+User visits <files host>/download.iso
     -> Cloudflare evaluates redirect rule (cache bypassed)
     -> 302 to /releases/v1.0/standard.iso
     -> Cloudflare serves cached ISO (or fetches from R2 origin)

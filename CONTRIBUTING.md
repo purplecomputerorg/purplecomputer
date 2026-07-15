@@ -1,86 +1,27 @@
-# About Purple Computer
+# Contributing to Purple Computer
 
-> **⚠️ IMPORTANT: This is NOT Open Source**
->
-> Purple Computer is **source-available** software with all rights reserved.
-> **DO NOT FORK THIS REPOSITORY.**
-> Viewing and personal use are permitted. Everything else requires written permission.
+[Tavi](https://github.com/tavinathanson) here, thank you so much for your interest in Purple!
 
-## License
+Please note that Purple Computer is **source available, not open source**. The full code is public so you can see exactly what runs on your kid's laptop, and so you can change anything about your *own copy*. This page explains what you can and can't do, and why.
 
-This project is licensed under the **Purple Computer Source-Available License 1.0**. See [LICENSE](LICENSE) for full details.
+## What you can do
 
-### What You Can Do
+Tinker as much as you like! Add words, change colors, remap keys, build your own content packs, put your weird experiment on your own Purple Key. The [LICENSE](LICENSE) permits all of it for personal use. The one firm ask: please don't redistribute the code, modified versions, or add-ons built on it.
 
-You are permitted to:
-- Download and view the source code (`git clone` for viewing/testing)
-- Run the software for personal, private use
-- Learn from the code for educational purposes
-- Report bugs via GitHub issues
-- Suggest features via GitHub issues
+Bug reports and feature ideas are genuinely welcome. Just email tavi@purplecomputer.org. I read every one. No promises on timing or fit, but nothing goes into a void.
 
-### What You CANNOT Do (Without Written Permission)
+## What I can't take on
 
-**Strictly prohibited:**
-- **Fork this repository** (including GitHub forks)
-- Modify or create derivative works
-- Redistribute or publish the code or modified versions
-- Create plugins, add-ons, or extensions
-- Submit pull requests from forked repositories
-- Use the software commercially
-- Host or deploy the software as a service
-- Distribute binaries or packaged versions
-- Use Purple Computer trademarks or branding
+I don't accept pull requests, unfortunately, as much as I appreciate anyone who wants to contribute code back to the repo.
 
-## Requesting Permission
+Two honest reasons:
 
-If you would like to contribute, create extensions, or use Purple Computer in ways not covered by the personal-use license, please contact Purple Computer in writing to request permission.
+First, Purple Computer is a small family business. Open source maintenance is a second full-time job, and the burnout stories are everywhere ([this HN thread](https://news.ycombinator.com/item?id=48620462) is a good sample). Every PR deserves a careful review, a thoughtful reply, and a years-long maintenance commitment. I can't offer that while also building the product, shipping physical packages, and supporting issues people run into. 
 
-### For Bug Reports and Feature Requests
+Second: Purple is fundamentally about removing things. No internet, no apps, no points, no login, no errors, etc. The pitch on the site is literally "Calm by design: Purple never grabs for their attention. It can even be a little boring!" Nearly every contribution is an addition, and an open roadmap pulls a project toward more while I'm trying to hold the line at less.
 
-We welcome:
-- Bug reports via GitHub issues
-- Feature suggestions via GitHub issues
-- Documentation corrections (submit as issues for review)
+Maybe at some point there will be a way to share modifications, add-ons, and so on. In the meantime, I'd love to hear about modifications you make to your own version!
 
-## Development Reference
+## Working on your own copy
 
-For those with permission to modify the code, here's the development workflow:
-
-### Quick Setup
-
-```bash
-git clone https://github.com/purplecomputerorg/purplecomputer.git
-cd purplecomputer
-just setup
-just run
-```
-
-See [README.md](README.md#quick-start) for details.
-
-### Testing
-
-- **Local** (fast iteration): `just run`
-- **Hardware** (production testing): Build ISO and install on target laptop
-
-### Code Structure
-
-- **TUI App**: `purple_tui/`
-- **Packs**: `packs/`
-- **Docs**: `README.md`, `CHANGELOG.md`
-
-### Code Style
-
-- Python: Follow PEP 8, use descriptive names
-- Comments: Explain why, not what
-- Docstrings: For all public functions
-- Keep it simple: This is for kids, not enterprise
-
-## Questions?
-
-- Search existing issues on GitHub
-- Open a new issue for discussion
-
----
-
-**Note:** This is source-available software. Viewing and running for personal use is permitted. All other uses require written permission from Purple Computer.
+The Quick Start in [README.md](README.md#quick-start) covers local setup (`just setup`, `just run`), and [MANUAL.md](MANUAL.md) covers building a full installer image. Everything you need to run and modify Purple for yourself is in this repo.

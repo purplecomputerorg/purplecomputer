@@ -14,8 +14,11 @@ They explore, create, and put it down on their own.
 > is not free software. To use it, purchase at [purplecomputer.org](https://purplecomputer.org)
 > or contact us at tavi@purplecomputer.org.
 >
-> You're welcome to look around and try things out.
-> See [LICENSE](LICENSE) for details.
+> Purple is source available, **not open source**: you're welcome to look around,
+> try things out, and modify your own copy for personal use, but please don't
+> redistribute it. Pull requests aren't accepted; bug reports and feature ideas
+> are always welcome via email. See [LICENSE](LICENSE) and
+> [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
@@ -283,14 +286,13 @@ Purple Computer includes code from the following open-source projects:
 
 Purple Computer is a paid product. Purchase at [purplecomputer.org](https://purplecomputer.org) or contact tavi@purplecomputer.org.
 
-The source code is public so you can see exactly what runs on your kid's computer. You're welcome to browse the code and try it out, but please purchase a license before regular use.
+The source code is public so you can see exactly what runs on your kid's computer. You're welcome to browse the code, try it out, and modify your own copy for personal use, but please purchase a license before regular use.
 
-See [LICENSE](LICENSE) for the full Source-Available License 1.0.
+See [LICENSE](LICENSE) for the full Source-Available License 1.1.
 
 **Without written permission, you may not:**
-- Fork, modify, or create derivatives
-- Redistribute or republish
-- Use commercially
+- Redistribute the code, modified versions, or add-ons built on it
+- Use it commercially or offer it as a service
 
 ---
 

@@ -1,0 +1,40 @@
+# Purple Computer doesn't accept pull requests (see CONTRIBUTING.md).
+# This closes them automatically with a friendly note, so nobody's work
+# sits in limbo waiting for a review that isn't coming.
+# Uses pull_request_target for a write-capable token on fork PRs; safe
+# because it never checks out or runs PR code.
+name: Close pull requests
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = [
+              "Thanks for taking the time to put this together! Purple Computer is source available but not open source, and pull requests aren't accepted: it's a one-person project, and keeping a single set of hands on the code is part of how Purple stays simple.",
+              "",
+              "You're very welcome to modify your own copy for personal use. If this fixes a bug or adds something you'd like to see in Purple, please email tavi@purplecomputer.org describing it; real requests genuinely shape the roadmap.",
+              "",
+              "See [CONTRIBUTING.md](https://github.com/purplecomputerorg/purplecomputer/blob/main/CONTRIBUTING.md) for the full picture. Closing this automatically, with thanks.",
+            ].join("\n");
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            });
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              state: "closed",
+            });

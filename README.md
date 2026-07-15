@@ -7,8 +7,6 @@ This file is AI-generated with a [human](https://github.com/tavinathanson) heavi
 Transform your old laptop into a calm space for open-ended play. No internet, no apps. Designed for ages 3-10, from learning letters to writing code.
 They explore, create, and put it down on their own.
 
-> **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.
-
 > **Purple Computer is a paid product.**
 > The source code is public so you can see how it works, but Purple Computer
 > is not free software. To use it, purchase at [purplecomputer.org](https://purplecomputer.org)
@@ -93,6 +91,8 @@ echo 'YOUR_DRIVE_SERIAL' >> .flash-drives.conf
 3. Installation runs (10-20 minutes), then system reboots into Purple Computer
 
 The system logs in automatically as the `purple` user (no password needed).
+
+> **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.
 
 See [MANUAL.md](MANUAL.md) for complete build/customization details.
 
@@ -287,6 +287,8 @@ Purple Computer includes code from the following open-source projects:
 Purple Computer is a paid product. Purchase at [purplecomputer.org](https://purplecomputer.org) or contact tavi@purplecomputer.org.
 
 The source code is public so you can see exactly what runs on your kid's computer. You're welcome to browse the code, try it out, and modify your own copy for personal use, but please purchase a license before regular use.
+
+Purple is source available, **not open source**: no redistribution, and pull requests aren't accepted. Bug reports and feature ideas are always welcome at tavi@purplecomputer.org. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full picture.
 
 See [LICENSE](LICENSE) for the full Source-Available License 1.1.
 

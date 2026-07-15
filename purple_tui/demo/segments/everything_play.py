@@ -25,7 +25,7 @@ SEGMENT = [
     Comment("=== Colors ==="),
     *type_and_enter("red + blue", 1.6),
     *type_and_enter("yellow + 3 periwinkles", 1.6),
-    *type_and_enter("2 blue + 2 reds!", 1.6),
+    *type_and_enter("say 2 blue + 2 reds", 1.6),
     *type_and_enter("bright pink unicorn and dark blue giraffe", 2.0),
 
     Comment("=== Real math ==="),
@@ -33,6 +33,8 @@ SEGMENT = [
     *type_and_enter("2 + 3 x 4 and 10 over 2.5", 2.0),
     *type_and_enter("552 monkeys", 2.8),
     *type_and_enter("3 timess 2", 1.8),
+    PressKey("enter", pause_after=2),
+    PressKey("enter", pause_after=2),
     *type_and_enter("8 / 0", 1.8),
 
     Comment("=== Patterns ==="),
@@ -40,7 +42,5 @@ SEGMENT = [
     *type_and_enter("5 apples ...", 2.2),
 
     Comment("=== Odds and ends ==="),
-    *type_and_enter("repeat 3: i love pizza!", 1.8),
-    Comment("Enter on an empty line repeats the last idea; let it land"),
-    PressKey("enter", pause_after=3.5),
+    *type_and_enter("repeat 3: i love pizza!", 4),
 ]

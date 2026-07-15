@@ -333,6 +333,12 @@ The evaluator tries methods in order:
 
 Each method can "pass through" to the next if it doesn't fully handle the input. This layered approach allows complex expressions to be evaluated piece by piece.
 
+### Testing Gotcha: Room Preprocessing Happens Before evaluate()
+
+The Play room preprocesses input in `on_inline_input_submitted` (play_room.py) before calling `SimpleEvaluator.evaluate()`: it applies `split_alnum_runs`, strips every `!` (speech trigger), and strips `say`/`talk`/`speak` prefixes. Calling `evaluate()` directly with a `!` in the input produces mangled letter-block output that is unreachable in the real app (e.g. `2 blue + 2 reds!` looks broken in isolation but mixes to purple and speaks in the app). When testing evaluator behavior, strip speech markers first or go through the room: `just preview play type:... key:enter`.
+
+The math/text boundary (when digits+letters evaluate as math vs text vs emoji vs color) is pinned down in `tests/test_play_math_text_boundary.py`.
+
 ### Operator Constants
 Math operators are defined centrally in `SimpleEvaluator`:
 - `MATH_SYMBOLS`: `{'+', '-', '*', '/', '×', '÷', '−'}`

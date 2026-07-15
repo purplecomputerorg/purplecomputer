@@ -1,4 +1,4 @@
-This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/DISCLOSURE.md).
+This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/docs/DISCLOSURE.md).
 
 # Purple Computer
 
@@ -94,7 +94,7 @@ The system logs in automatically as the `purple` user (no password needed).
 
 > **Booting from the USB changes nothing on your laptop.** Windows, macOS, and Linux are untouched. Remove the USB and restart to get back to normal. Installation only happens if you explicitly choose it from the parent menu. See [guides/live-boot-safety.md](guides/live-boot-safety.md) for how this is enforced.
 
-See [MANUAL.md](MANUAL.md) for complete build/customization details.
+See [MANUAL.md](docs/MANUAL.md) for complete build/customization details.
 
 ---
 
@@ -250,7 +250,7 @@ See [guides/architecture-overview.md](guides/architecture-overview.md) for a det
 
 ## Documentation
 
-- **[MANUAL.md](MANUAL.md):** Complete build instructions, customization, and troubleshooting
+- **[MANUAL.md](docs/MANUAL.md):** Complete build instructions, customization, and troubleshooting
 - **[guides/demo-system.md](guides/demo-system.md):** Creating, generating, and composing demo screencasts
 - **[guides/architecture-overview.md](guides/architecture-overview.md):** Why the installer works the way it does
 - **[guides/keyboard-architecture.md](guides/keyboard-architecture.md):** evdev input, state machine, F-key calibration

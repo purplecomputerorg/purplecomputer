@@ -60,7 +60,7 @@ STICKERS = [
     ("earth",  CARDS / "twemoji-1f30e.svg",  (1.0, 3.0), 1.45),
     ("sun",    CARDS / "twemoji-1f31e.svg",  (3.0, 3.0), 1.45),
     ("turtle", CARDS / "twemoji-1f422.svg",  (1.0, 4.7), 1.55),
-    ("bot",    ROOT  / "logo.svg",           (3.0, 4.9), 1.55),
+    ("bot",    ROOT  / "assets/logo.svg",    (3.0, 4.9), 1.55),
 ]
 
 

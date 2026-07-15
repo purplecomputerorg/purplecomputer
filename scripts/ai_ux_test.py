@@ -773,7 +773,7 @@ async def run_agent(
     return report
 
 
-BUG_LOG_PATH = Path(__file__).resolve().parent.parent / "AI_UX_BUGS.md"
+BUG_LOG_PATH = Path(__file__).resolve().parent.parent / "docs" / "AI_UX_BUGS.md"
 
 
 def _append_findings_log(bugs: list[dict], confusions: list[dict], persona: str, model: str):

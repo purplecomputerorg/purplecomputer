@@ -24,4 +24,4 @@ Maybe at some point there will be a way to share modifications, add-ons, and so 
 
 ## Working on your own copy
 
-The Quick Start in [README.md](README.md#quick-start) covers local setup (`just setup`, `just run`), and [MANUAL.md](MANUAL.md) covers building a full installer image. Everything you need to run and modify Purple for yourself is in this repo.
+The Quick Start in [README.md](README.md#quick-start) covers local setup (`just setup`, `just run`), and [MANUAL.md](docs/MANUAL.md) covers building a full installer image. Everything you need to run and modify Purple for yourself is in this repo.

@@ -71,7 +71,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 HUNT_DIR = REPO_ROOT / ".ai_ux_hunt"
 STATE_PATH = HUNT_DIR / "hunt_state.json"
 SESSIONS_DIR = HUNT_DIR / "sessions"
-BUG_LOG_PATH = REPO_ROOT / "AI_UX_BUGS.md"
+BUG_LOG_PATH = REPO_ROOT / "docs" / "AI_UX_BUGS.md"
 
 ORCHESTRATOR_MODEL = "claude-sonnet-4-6"
 

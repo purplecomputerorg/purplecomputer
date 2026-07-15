@@ -33,7 +33,7 @@ Purple Computer turns old laptops into calm, creative tools for kids. The instal
 1. **USB Installer:** A temporary Ubuntu live environment that copies the system to disk, then is never used again
 2. **Installed System:** A normal Ubuntu 24.04 system that kids use every day
 
-These are built differently and serve different purposes. See [guides/architecture-overview.md](guides/architecture-overview.md) for a detailed explanation.
+These are built differently and serve different purposes. See [guides/architecture-overview.md](../guides/architecture-overview.md) for a detailed explanation.
 
 ---
 
@@ -277,7 +277,7 @@ The `!` is stripped from display. Works anywhere in the text (beginning, middle,
 - Common 2-letter words excluded (by, my, go, to, etc.) to prevent unwanted completions
 - Space accepts the suggestion
 
-For the full design philosophy, see [guides/ask-mode-design.md](guides/ask-mode-design.md).
+For the full design philosophy, see [guides/ask-mode-design.md](../guides/ask-mode-design.md).
 
 ---
 

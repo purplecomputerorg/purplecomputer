@@ -56,7 +56,7 @@ fidelity vs. kiss-cut safety (industry-safe minimum is ~2mm = 0.08").
 
 ## Source artwork
 
-- **Bot** (`logo.svg`) — original, in-house.
+- **Bot** (`assets/logo.svg`) — original, in-house.
 - **Emoji characters** (T-Rex, ringed planet, Earth, turtle, sun-with-face) — sourced from [jdecked/twemoji](https://github.com/jdecked/twemoji) under CC-BY 4.0, recolored to the purple ramp at render time. Raw sources live next to the scripts as `trex-source.svg` and `twemoji-*.svg`. Attribution lives in the main project `README.md` "Third-Party Credits" section.
 
 ## Iterating

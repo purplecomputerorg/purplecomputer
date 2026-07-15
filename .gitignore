@@ -25,8 +25,8 @@ autoinstall/subiquity/
 .docker-data/
 
 # IDEs
-.vscode/
-.idea/
+.vscode
+.idea
 *.swp
 *.swo
 *~
@@ -86,10 +86,20 @@ recording-setup/apply_zoom_vf.txt
 
 recordings/*.mp4
 
-.claude/worktrees
+.claude/
+
+# Empty stubs the Claude Code sandbox bind-mounts over sensitive paths
+/.bash_profile
+/.bashrc
+/.gitconfig
+/.gitmodules
+/.mcp.json
+/.profile
+/.ripgreprc
+/.zprofile
+/.zshrc
 
 pytest-of-*/
 
 .ai_ux_last_args.json
 .ai_ux_hunt/
-.claude/worktrees/

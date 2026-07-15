@@ -26,7 +26,7 @@ The agent runs in a loop:
 5. If something looks wrong, agent files a bug report
 6. Repeat until max steps or agent calls `done`
 
-Bugs are logged to `AI_UX_BUGS.md` in the repo root (accumulates across sessions).
+Bugs are logged to `docs/AI_UX_BUGS.md` (accumulates across sessions).
 
 The agent has two levels of input:
 
@@ -71,7 +71,7 @@ Live console output shows each action and per-step token usage:
   [2] switch_room(art)
 ```
 
-Bugs are also appended to `AI_UX_BUGS.md` in the repo root with repro steps, grouped by session.
+Bugs are also appended to `docs/AI_UX_BUGS.md` with repro steps, grouped by session.
 
 ## Configuration
 
@@ -128,7 +128,7 @@ scripts/
   ai_ux_runner.py    # interactive launcher (just ux)
   ai_ux_test.py      # agent engine, tools, personas, harness
 .env.example         # template for API key
-AI_UX_BUGS.md        # accumulated bug reports (auto-appended by test runs)
+docs/AI_UX_BUGS.md   # accumulated bug reports (auto-appended by test runs)
 ```
 
 ## Cost Optimization

@@ -58,7 +58,7 @@ User-facing messages: simple, friendly, no jargon. Clear next steps, not error e
 
 **Writing style:** No em-dashes or spaced dashes. Use colons, commas, or periods instead.
 
-**UX changes:** Add a one-line description to `UX_LOG.md`.
+**UX changes:** Add a one-line description to `docs/UX_LOG.md`.
 
 ---
 
@@ -88,7 +88,7 @@ Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). See 
 
 **Visual/layout tests:** `app.run_test()` verifies widget sizes and positions headlessly. See `tests/test_code_panel_layout.py`.
 
-**AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
+**AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `docs/AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
 
 ---
 

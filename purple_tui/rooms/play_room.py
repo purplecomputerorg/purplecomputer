@@ -58,6 +58,10 @@ def _strip_markup(text: str) -> str:
     return re.sub(r'\[[^\]]*\]', '', text)
 
 
+# Max results spoken aloud for a repeat command (display shows them all)
+SPEAK_REPEAT_CAP = 5
+
+
 def _pad_narrow_emoji(text: str) -> str:
     """Always add a space after narrow+FE0F emoji to compensate for terminal width.
 
@@ -867,6 +871,8 @@ class PlayMode(Vertical):
             scroll.scroll_end(animate=False)
             self._last_input_text = input_text
             self._update_recall_hint()
+            if force_speak and results:
+                self._speak_sequence(runner.pairs, scroll)
             return
 
         # Evaluate and show result
@@ -935,6 +941,47 @@ class PlayMode(Vertical):
                 # Speech was blocked (filtered or muted): show muted icon briefly
                 self._set_speech_state(answer_widget, HistoryLine.SPEECH_FILTERED)
                 self._schedule_clear_speech(answer_widget, 1.5)
+
+    def _speak_sequence(self, pairs: list[tuple[str, str]], scroll) -> None:
+        """Speak repeat results in order, lighting each line as it plays.
+
+        Speaks at most SPEAK_REPEAT_CAP items; the rest just display.
+        """
+        from ..tts import speak_many
+
+        widgets = list(scroll.children)[-len(pairs):]
+        items = []
+        for (text, result), widget in zip(pairs, widgets):
+            speakable = self.evaluator._make_speakable(text, result)
+            if speakable and len(items) < SPEAK_REPEAT_CAP:
+                items.append((speakable, widget))
+            else:
+                self._set_speech_state(widget, HistoryLine.SPEECH_NONE)
+        if not items:
+            return
+
+        def on_playing(i):
+            self.app.call_from_thread(
+                self._set_speech_state, items[i][1], HistoryLine.SPEECH_PLAYING
+            )
+            if i:
+                self.app.call_from_thread(
+                    self._set_speech_state, items[i - 1][1], HistoryLine.SPEECH_NONE
+                )
+
+        def on_done():
+            for _, widget in items:
+                self.app.call_from_thread(
+                    self._set_speech_state, widget, HistoryLine.SPEECH_NONE
+                )
+
+        started = speak_many(
+            [s for s, _ in items], on_playing=on_playing, on_done=on_done
+        )
+        if not started:
+            for _, widget in items:
+                self._set_speech_state(widget, HistoryLine.SPEECH_FILTERED)
+                self._schedule_clear_speech(widget, 1.5)
 
     def _set_speech_state(self, widget, state: str) -> None:
         """Update a HistoryLine or ColorResultLine speech indicator."""

@@ -168,6 +168,7 @@ class PlayCodeRunner:
     def __init__(self, evaluator):
         self.evaluator = evaluator
         self.corrections: list[tuple[str, str]] = []
+        self.pairs: list[tuple[str, str]] = []  # (input, result) per command
 
     def run(self, lines: list[str]) -> list[str]:
         """Run code and return list of result strings."""
@@ -178,18 +179,18 @@ class PlayCodeRunner:
 
         cmds = parse_lines(corrected_lines)
         flat = flatten_commands(cmds)
-        results = []
+        self.pairs = []
         for cmd in flat:
             if cmd['type'] == 'line':
                 text = cmd['text']
                 try:
                     result = self.evaluator.evaluate(text)
                     if result:
-                        results.append(result)
+                        self.pairs.append((text, result))
                 except Exception:
                     log.debug("Play command failed: %s", text, exc_info=True)
                     continue
-        return results
+        return [r for _, r in self.pairs]
 
     def _fuzzy_correct(self, line: str) -> str:
         """Fuzzy-correct command keywords, matching music/art runner pattern."""

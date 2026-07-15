@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import wave
 from pathlib import Path
 import os
@@ -571,88 +572,122 @@ def speak(text: str, on_playing: callable = None, on_done: callable = None) -> b
     Returns:
         True if speech was started, False otherwise
     """
+    wrapped = (lambda i: on_playing()) if on_playing else None
+    return speak_many([text], on_playing=wrapped, on_done=on_done)
+
+
+def speak_many(texts: list[str], gap: float = 0.5,
+               on_playing: callable = None, on_done: callable = None) -> bool:
+    """
+    Speak texts in order with a pause between items.
+    Cancels any currently playing or generating speech first; a later
+    speak()/stop() cancels the rest of the sequence.
+
+    Args:
+        texts: The texts to speak, in order
+        gap: Pause between items, in seconds
+        on_playing: Called from background thread with the index into texts
+            when that item starts playing
+        on_done: Called from background thread when the sequence finishes
+            (or is cancelled)
+
+    Returns:
+        True if speech was started, False otherwise
+    """
     global _speech_id
     if _muted:
         return False
-    if not text or not text.strip():
-        return False
 
-    # Filter profanity
     from .speech_filter import filter_speech
-    text = filter_speech(text)
-
-    if not text or not text.strip():
+    items = []
+    for i, text in enumerate(texts):
+        if not text or not text.strip():
+            continue
+        filtered = filter_speech(text)
+        if filtered and filtered.strip():
+            items.append((i, filtered))
+    if not items:
         return False
 
     # Stop any previous speech and get new ID
     stop()
     my_id = _speech_id
 
-    # Run TTS in background thread
     thread = threading.Thread(
-        target=_speak_sync, args=(text, my_id, on_playing, on_done), daemon=True
+        target=_speak_seq, args=(items, my_id, gap, on_playing, on_done), daemon=True
     )
     thread.start()
     return True
 
 
-def _speak_sync(text: str, speech_id: int,
-                on_playing: callable = None, on_done: callable = None) -> bool:
-    """Synchronous speech, called from background thread"""
-    global _current_channel, _speech_id
-
+def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
+               on_playing: callable = None, on_done: callable = None) -> None:
+    """Speak a sequence of (index, text) items from a background thread."""
     try:
-        # Check cancellation first
-        if speech_id != _speech_id:
-            return False
-
-        if not _ensure_mixer():
-            return False
-
-        # Check for pre-generated voice clip first (hand-curated clips take priority)
-        clip_path = _get_voice_clip(text)
-        if clip_path:
-            return _play_clip(clip_path, speech_id, on_playing)
-
-        # Prepare text (letter expansion, pronunciation, padding)
-        prepared = _prepare_text(text)
-
-        # Check cache
-        cached_path = _get_cached(prepared)
-        if cached_path:
-            return _play_clip(cached_path, speech_id, on_playing)
-
-        # Fall back to Piper TTS for dynamic content
-        voice = _get_piper_voice()
-        if voice is None:
-            return False
-
-        # Check again after potentially slow voice load
-        if speech_id != _speech_id:
-            return False
-
-        # Synthesize, post-process, and cache (if short enough to be worth caching)
-        result_path = _synthesize_to_cache(voice, prepared)
-        if result_path is None:
-            return False
-
-        # Check if we've been cancelled after generating
-        if speech_id != _speech_id:
-            return False
-
-        is_temp = not str(result_path).startswith(str(_CACHE_DIR))
-        try:
-            return _play_clip(result_path, speech_id, on_playing)
-        finally:
-            # Clean up temp files (uncached results)
-            if is_temp:
-                result_path.unlink(missing_ok=True)
+        for n, (index, text) in enumerate(items):
+            if n:
+                time.sleep(gap)
+            if speech_id != _speech_id:
+                return
+            cb = (lambda idx=index: on_playing(idx)) if on_playing else None
+            _speak_sync(text, speech_id, cb)
     finally:
         if on_done:
             try:
                 on_done()
             except Exception:
                 pass
+
+
+def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
+    """Synchronous speech, called from background thread"""
+    global _current_channel, _speech_id
+
+    # Check cancellation first
+    if speech_id != _speech_id:
+        return False
+
+    if not _ensure_mixer():
+        return False
+
+    # Check for pre-generated voice clip first (hand-curated clips take priority)
+    clip_path = _get_voice_clip(text)
+    if clip_path:
+        return _play_clip(clip_path, speech_id, on_playing)
+
+    # Prepare text (letter expansion, pronunciation, padding)
+    prepared = _prepare_text(text)
+
+    # Check cache
+    cached_path = _get_cached(prepared)
+    if cached_path:
+        return _play_clip(cached_path, speech_id, on_playing)
+
+    # Fall back to Piper TTS for dynamic content
+    voice = _get_piper_voice()
+    if voice is None:
+        return False
+
+    # Check again after potentially slow voice load
+    if speech_id != _speech_id:
+        return False
+
+    # Synthesize, post-process, and cache (if short enough to be worth caching)
+    result_path = _synthesize_to_cache(voice, prepared)
+    if result_path is None:
+        return False
+
+    # Check if we've been cancelled after generating
+    if speech_id != _speech_id:
+        return False
+
+    is_temp = not str(result_path).startswith(str(_CACHE_DIR))
+    try:
+        return _play_clip(result_path, speech_id, on_playing)
+    finally:
+        # Clean up temp files (uncached results)
+        if is_temp:
+            result_path.unlink(missing_ok=True)
 
 
 def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> bool:

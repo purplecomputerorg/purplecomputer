@@ -15,9 +15,9 @@ SEGMENT = [
     *type_and_enter("kitties", 1.2),
     *type_and_enter("2 times 3 dinos", 1.4),
     *type_and_enter("4 birds + 3 times 5 owls", 2),
-    *type_and_enter("I love icecream", 1.6),
     *type_and_enter("say I love icecream", 2),
-    *type_and_enter(":)", 1.2),
+    *type_and_enter("periwinkle", 1.5),
+    *type_and_enter("blue :)", 1.2),
     *type_and_enter("zibzab", 1.8),
 
     *type_and_enter("I used 4 crayons at school!", 2),

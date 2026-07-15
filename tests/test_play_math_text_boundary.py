@@ -108,11 +108,15 @@ CASES = [
     ("yellow + 3 periwinkles", "color", "", None),
     ("3 reds", "boxes", "#ED1C24", None),
 
-    # --- "and" as a joiner
+    # --- "and" as a joiner: strong (number/pure color neighbor) or
+    # --- all-visual input; any plain word keeps "and" visible
     ("2 and 3", "math", "= 5", False),
     ("red and blue", "color", "", None),
     ("3 cats and 2 dogs", "emoji", "🐱🐱🐱 + 🐶🐶", None),
-    ("cat and dog", "emoji", "🐱", None),
+    ("cat and dog", "emoji", "🐱 + 🐶", None),
+    ("star and moon", "emoji", "⭐ + 🌙", None),
+    ("cat and me", "prefix", "🐱 a n d m e", None),
+    ("I love cat and dog", "prefix", "I ❤️ 🐱 a n d 🐶", None),
 
     # --- Numeric edges
     ("8 / 0", "math", "🤷", None),

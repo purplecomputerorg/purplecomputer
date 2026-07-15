@@ -1999,6 +1999,21 @@ class TestAndNormalization:
         assert "🍎" in result
         assert "🍊" in result
 
+    def test_and_joins_all_visual_composition(self, evaluator):
+        # Every word is visual (colors, adjectives, emoji): "and" is a joiner
+        r1 = evaluator.evaluate("bright pink unicorn + dark blue giraffe")
+        r2 = evaluator.evaluate("bright pink unicorn and dark blue giraffe")
+        assert r1 == r2
+
+    def test_and_with_bare_emojis(self, evaluator):
+        assert evaluator.evaluate("cat and dog") == evaluator.evaluate("cat + dog")
+
+    def test_and_kept_in_sentences(self, evaluator):
+        # Any plain word anywhere means a sentence: "and" stays visible
+        for text in ("cat and me", "I love cat and dog", "up and down", "apple and orange"):
+            plain = " ".join(strip_markup(evaluator.evaluate(text)).split())
+            assert "a n d" in plain, text
+
 
 class TestCommaExpressions:
     """Test comma-separated expressions with colors and numbers."""

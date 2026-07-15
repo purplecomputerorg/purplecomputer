@@ -1089,22 +1089,36 @@ class SimpleEvaluator:
     def _normalize_and(self, text: str) -> str:
         """Replace 'and'/'&' with '+' when used as a joiner in expressions.
 
-        Only triggers when at least one side is a number or a pure color
-        (not an emoji that happens to also be a color like "orange").
-        Preserves "and" in plain text like "cat loves dog" or "apple & orange".
+        Strong signal, either side suffices: a number or a pure color.
+        Weak signal: every word in the input is visual (number, color, color
+        adjective, or emoji word), so the whole input is a composition and
+        "and" is a joiner ("unicorn and dark blue giraffe", "cat and dog").
+        Any plain word anywhere means a sentence, keeping "and" visible
+        ("cat and me", "I love cat and dog"). Words that are both emoji and
+        color ("orange") never count as visual: "+" would color-tint the
+        neighbor, so "apple and orange" stays a sentence.
         """
+        from ..color_mixing import COLOR_ADJECTIVES
+
+        def is_strong(w):
+            if w.isdigit():
+                return True
+            return bool(self.content.get_color(w)) and not self.content.get_emoji(w)
+
+        def is_visual(w):
+            if is_strong(w) or w in COLOR_ADJECTIVES:
+                return True
+            return bool(self.content.get_emoji(w)) and not self.content.get_color(w)
+
+        all_visual = all(
+            is_visual(w) for w in text.lower().split() if w not in ('and', '&')
+        )
+
         def replace_if_expression(m):
             before = text[:m.start()].rstrip().rsplit(None, 1)[-1] if text[:m.start()].rstrip() else ""
             after = text[m.end():].lstrip().split(None, 1)[0] if text[m.end():].lstrip() else ""
             bl, al = before.lower(), after.lower()
-
-            def is_number_or_pure_color(w):
-                if w.isdigit():
-                    return True
-                # Color that is NOT also an emoji (avoids "orange", "lemon", etc.)
-                return bool(self.content.get_color(w)) and not self.content.get_emoji(w)
-
-            if is_number_or_pure_color(bl) or is_number_or_pure_color(al):
+            if is_strong(bl) or is_strong(al) or all_visual:
                 return ' + '
             return m.group(0)
         return self._AND_PATTERN.sub(replace_if_expression, text)

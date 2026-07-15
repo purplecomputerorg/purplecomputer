@@ -2,6 +2,13 @@
 
 How to build, release, and update Purple Computer downloads.
 
+## Hosting layout
+
+- `downloads.purplecomputer.org`: the customer download page. Lives in the landing repo (`~/landing/src/pages/downloads.tsx`), served by Vercel, deploys with the landing site. Its root is rewritten to `/downloads` by the landing middleware.
+- `files.purplecomputer.org`: the R2 custom domain (`R2_CUSTOM_DOMAIN`). Serves the actual objects straight from Cloudflare: ISOs, checksums, `latest.json`, and the card PDFs. Everything in this guide uploads here.
+
+The download page reads `latest.json` from the files host at build time (revalidated every 5 minutes), so the version badge updates on its own after a release.
+
 ---
 
 ## Prerequisites
@@ -62,21 +69,17 @@ just flash-debug    # debug ISO
 
 ## Updating the Download Page
 
-```bash
-just upload-early-access
-```
-
-This uploads `build-scripts/early-access.html` as `index.html`, extracts and uploads PDFs from `cards/purple.pdf`, and purges the Cloudflare cache for all three files.
+The page is part of the landing site: edit `~/landing/src/pages/downloads.tsx` and deploy the landing repo. Nothing to upload from this repo.
 
 ---
 
-## Updating Just the PDFs
+## Updating the PDFs
 
 ```bash
 just upload-pdfs
 ```
 
-Extracts installation (pages 1-2) and guide (pages 3-4) from `cards/purple.pdf`, uploads them, and purges the Cloudflare cache. Use this when you update the cards without changing the download page.
+Extracts installation (pages 1-2) and guide (pages 3-4) from `cards/purple.pdf`, uploads them to R2, and purges the Cloudflare cache. The download page embeds them from the files host.
 
 ---
 
@@ -84,14 +87,14 @@ Extracts installation (pages 1-2) and guide (pages 3-4) from `cards/purple.pdf`,
 
 ISOs use versioned paths (`releases/v1.0/standard.iso`), so each release has a unique URL cached aggressively at the edge (1 day TTL). The `/download.iso` shortcut is a Cloudflare 302 redirect with cache bypassed, so it always resolves to the latest version.
 
-`index.html` and PDFs use fixed filenames, so the upload scripts purge the Cloudflare cache after each upload. If the purge fails (missing CF credentials), a warning is printed but uploads still succeed.
+PDFs use fixed filenames, so `upload-pdfs` purges the Cloudflare cache after each upload. If the purge fails (missing CF credentials), a warning is printed but uploads still succeed.
 
 ---
 
 ## How the Download URL Works
 
 ```
-User visits /download.iso
+User visits files.purplecomputer.org/download.iso
     -> Cloudflare evaluates redirect rule (cache bypassed)
     -> 302 to /releases/v1.0/standard.iso
     -> Cloudflare serves cached ISO (or fetches from R2 origin)
@@ -121,9 +124,7 @@ All scripts live in `build-scripts/`.
 |--------|-------------|---------|
 | `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `release-iso.sh` | `just release` | Upload ISOs to R2, update redirects |
-| `upload-early-access.sh` | `just upload-early-access` | Upload download page + PDFs, purge cache |
-| `upload-early-access-html.sh` | `just upload-early-access-html` | Upload just the landing page HTML, purge cache |
-| `upload-pdfs.sh` | `just upload-pdfs` | Upload just the PDFs, purge cache |
+| `upload-pdfs.sh` | `just upload-pdfs` | Upload the card PDFs, purge cache |
 | `clean-old-releases.sh` | `just clean-releases` | Delete old release versions from R2 |
 | `flash-to-usb.sh` | `just flash` | Write ISO to USB drive |
 | `setup-cloudflare-rules.sh` | (called by release) | Configure Cloudflare cache/redirect rules |

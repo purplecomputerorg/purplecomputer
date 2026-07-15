@@ -411,28 +411,23 @@ Uploads ISOs to Cloudflare R2 and updates redirect rules so `/download.iso` poin
 
 **Cloudflare setup (one-time):** `setup-cloudflare-rules.sh` configures cache rules (aggressive caching for `/releases/*`, bypass for `/download*`) and redirect rules. It runs automatically as part of `release-iso.sh`, or can be run standalone to set up cache rules without releasing.
 
-### Uploading the Download Page and PDFs
+### The Download Page and PDFs
 
-**Scripts:** `upload-early-access.sh`, `upload-pdfs.sh`
-
-The download page (`early-access.html`) and guide PDFs are uploaded separately from ISO releases.
+The customer download page lives in the landing repo (`~/landing/src/pages/downloads.tsx`) and is served by Vercel at `downloads.purplecomputer.org`; it deploys with the landing site. The files themselves (ISOs, checksums, `latest.json`, card PDFs) are served straight from R2 at `files.purplecomputer.org`.
 
 ```bash
-just upload-early-access   # Upload page + PDFs, purge cache
-just upload-pdfs           # Upload just the PDFs, purge cache
+just upload-pdfs           # Upload the card PDFs, purge cache
 ```
 
-`upload-early-access` extracts installation (pages 1-2) and guide (pages 3-4) PDFs from `cards/purple.pdf`, uploads everything, then purges the Cloudflare cache for `index.html` and both PDFs.
-
-`upload-pdfs` does the same extraction and upload for just the PDFs, for when you update the cards without touching the page.
+`upload-pdfs` extracts installation (pages 1-2) and guide (pages 3-4) PDFs from `cards/purple.pdf`, uploads them to R2, then purges the Cloudflare cache for both.
 
 ### Caching Strategy
 
 ISOs use versioned paths (`releases/{version}/standard.iso`), so each release has a unique URL that can be cached aggressively (1 day edge TTL). The `/download.iso` shortcut is a Cloudflare 302 redirect to the current version, with cache bypassed so it always resolves to the latest release.
 
-`index.html` and PDFs don't have versioned filenames, so the upload scripts purge the Cloudflare cache after each upload. If the purge fails (e.g., missing CF credentials), a warning is printed but the upload still succeeds. Visitors may see stale content briefly until the cache expires naturally.
+PDFs don't have versioned filenames, so `upload-pdfs` purges the Cloudflare cache after each upload. If the purge fails (e.g., missing CF credentials), a warning is printed but the upload still succeeds. Visitors may see stale content briefly until the cache expires naturally.
 
-Both upload scripts share common helpers from `r2-helpers.sh` (env loading, R2 upload, PDF extraction, cache purge).
+The upload script shares common helpers from `r2-helpers.sh` (env loading, R2 upload, PDF extraction, cache purge).
 
 ---
 

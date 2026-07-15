@@ -243,15 +243,7 @@ code-split-poc:
 release *args:
     ./build-scripts/release-iso.sh {{args}}
 
-# Upload early-access page + PDFs to Cloudflare R2 (downloads.purplecomputer.org)
-upload-early-access:
-    ./build-scripts/upload-early-access.sh
-
-# Upload just the early-access HTML to Cloudflare R2 (no PDFs)
-upload-early-access-html:
-    ./build-scripts/upload-early-access-html.sh
-
-# Upload just the PDFs to Cloudflare R2
+# Upload the card PDFs to Cloudflare R2 (files.purplecomputer.org)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 

@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
 # Set up Cloudflare cache and redirect rules for ISO downloads.
 #
-# Requires CF_API_TOKEN and CF_ZONE_ID in .env (or environment).
+# Requires CF_API_TOKEN, CF_ZONE_ID, and R2_CUSTOM_DOMAIN in .env (or environment).
 # CF_API_TOKEN needs "Zone.Cache Purge", "Zone.Cache Rules", "Zone.Dynamic Redirect", and "Zone.Transform Rules" permissions.
 #
-# What this creates:
+# All rules are scoped to the R2 custom domain (R2_CUSTOM_DOMAIN, the files
+# host). The download PAGE lives in the landing repo on Vercel at
+# downloads.purplecomputer.org; this script only manages the object host.
+#
+# What this creates on the files host:
 #   Cache rules:
 #     /releases/* : cache 1 day at edge
 #     /download*  : bypass cache (so pointer updates take effect immediately)
-#   URL rewrite rules:
-#     /                          → /index.html  (invisible rewrite, URL stays /)
 #   Redirect rules:
 #     /download.iso              → /releases/{version}/standard.iso         (302)
 #     /download-debug.iso        → /releases/{version}/debug.iso            (302)
 #     /download.iso.sha256       → /releases/{version}/standard.iso.sha256  (302)
 #     /download-debug.iso.sha256 → /releases/{version}/debug.iso.sha256     (302)
+#
+# It also clears the legacy zone-wide "/ → /index.html" rewrite rule from when
+# the R2 host served the download page itself.
 #
 # Usage:
 #   ./setup-cloudflare-rules.sh                    # just cache rules
@@ -45,10 +50,11 @@ fi
 MISSING=()
 [ -z "${CF_API_TOKEN:-}" ] && MISSING+=("CF_API_TOKEN")
 [ -z "${CF_ZONE_ID:-}" ] && MISSING+=("CF_ZONE_ID")
+[ -z "${R2_CUSTOM_DOMAIN:-}" ] && MISSING+=("R2_CUSTOM_DOMAIN")
 
 if [ ${#MISSING[@]} -gt 0 ]; then
     log_error "Missing required values: ${MISSING[*]}"
-    echo "  Add CF_API_TOKEN and CF_ZONE_ID to $ENV_FILE"
+    echo "  Add them to $ENV_FILE"
     exit 1
 fi
 
@@ -97,7 +103,7 @@ setup_cache_rules() {
     log_step "Setting up cache rules..."
 
     local rules
-    rules=$(cat <<'ENDJSON'
+    rules=$(cat <<ENDJSON
 {
   "name": "Purple Computer download cache rules",
   "kind": "zone",
@@ -105,7 +111,7 @@ setup_cache_rules() {
   "rules": [
     {
       "description": "Cache release ISOs aggressively (1 day edge TTL)",
-      "expression": "starts_with(http.request.uri.path, \"/releases/\")",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and starts_with(http.request.uri.path, \"/releases/\")",
       "action": "set_cache_settings",
       "action_parameters": {
         "cache": true,
@@ -121,7 +127,7 @@ setup_cache_rules() {
     },
     {
       "description": "Bypass cache for download pointers and latest.json",
-      "expression": "starts_with(http.request.uri.path, \"/download\") or http.request.uri.path eq \"/latest.json\"",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and (starts_with(http.request.uri.path, \"/download\") or http.request.uri.path eq \"/latest.json\")",
       "action": "set_cache_settings",
       "action_parameters": {
         "cache": false
@@ -146,47 +152,26 @@ ENDJSON
     log_info "Cache rules configured."
 }
 
-# ─── URL Rewrite Rules ───────────────────────────────────────
+# ─── URL Rewrite Rules (legacy cleanup) ──────────────────────
 
-setup_rewrite_rules() {
-    log_step "Setting up URL rewrite rules..."
-
-    local rules
-    rules=$(cat <<'ENDJSON'
-{
-  "name": "Purple Computer URL rewrites",
-  "kind": "zone",
-  "phase": "http_request_transform",
-  "rules": [
-    {
-      "description": "Rewrite / to /index.html (browser URL stays clean)",
-      "expression": "http.request.uri.path eq \"/\"",
-      "action": "rewrite",
-      "action_parameters": {
-        "uri": {
-          "path": {
-            "value": "/index.html"
-          }
-        }
-      }
-    }
-  ]
-}
-ENDJSON
-)
+# The zone used to rewrite / → /index.html so the R2 host could serve the
+# download page. The page now lives on Vercel (downloads.purplecomputer.org),
+# where that rewrite would break the site root, so clear the ruleset.
+clear_rewrite_rules() {
+    log_step "Clearing legacy URL rewrite rules..."
 
     local existing_id
     existing_id=$(find_ruleset_id "http_request_transform")
 
-    if [ -n "$existing_id" ]; then
-        log_info "Updating existing rewrite ruleset ($existing_id)..."
-        cf_api PUT "/rulesets/$existing_id" "$rules" > /dev/null
-    else
-        log_info "Creating new rewrite ruleset..."
-        cf_api POST "/rulesets" "$rules" > /dev/null
+    if [ -z "$existing_id" ]; then
+        log_info "No rewrite ruleset found, nothing to clear."
+        return
     fi
 
-    log_info "Rewrite rules configured."
+    cf_api PUT "/rulesets/$existing_id" \
+        '{"name":"Purple Computer URL rewrites","kind":"zone","phase":"http_request_transform","rules":[]}' > /dev/null
+
+    log_info "Rewrite rules cleared."
 }
 
 # ─── Redirect Rules ──────────────────────────────────────────
@@ -202,12 +187,6 @@ setup_redirect_rules() {
 
     log_step "Setting up redirect rules for $version..."
 
-    # Get custom domain from .env, or ask
-    if [ -z "${R2_CUSTOM_DOMAIN:-}" ]; then
-        log_error "R2_CUSTOM_DOMAIN not set in .env (needed for redirect target URLs)"
-        exit 1
-    fi
-
     local base_url="https://${R2_CUSTOM_DOMAIN}"
 
     local rules
@@ -219,7 +198,7 @@ setup_redirect_rules() {
   "rules": [
     {
       "description": "Redirect /download.iso to current release",
-      "expression": "http.request.uri.path eq \"/download.iso\"",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and http.request.uri.path eq \"/download.iso\"",
       "action": "redirect",
       "action_parameters": {
         "from_value": {
@@ -232,7 +211,7 @@ setup_redirect_rules() {
     },
     {
       "description": "Redirect /download-debug.iso to current debug release",
-      "expression": "http.request.uri.path eq \"/download-debug.iso\"",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and http.request.uri.path eq \"/download-debug.iso\"",
       "action": "redirect",
       "action_parameters": {
         "from_value": {
@@ -245,7 +224,7 @@ setup_redirect_rules() {
     },
     {
       "description": "Redirect /download.iso.sha256 to current release checksum",
-      "expression": "http.request.uri.path eq \"/download.iso.sha256\"",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and http.request.uri.path eq \"/download.iso.sha256\"",
       "action": "redirect",
       "action_parameters": {
         "from_value": {
@@ -258,7 +237,7 @@ setup_redirect_rules() {
     },
     {
       "description": "Redirect /download-debug.iso.sha256 to current debug release checksum",
-      "expression": "http.request.uri.path eq \"/download-debug.iso.sha256\"",
+      "expression": "http.host eq \"${R2_CUSTOM_DOMAIN}\" and http.request.uri.path eq \"/download-debug.iso.sha256\"",
       "action": "redirect",
       "action_parameters": {
         "from_value": {
@@ -302,7 +281,7 @@ echo
 
 setup_cache_rules
 echo
-setup_rewrite_rules
+clear_rewrite_rules
 echo
 setup_redirect_rules "$VERSION"
 

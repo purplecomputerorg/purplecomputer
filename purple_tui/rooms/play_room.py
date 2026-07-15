@@ -2123,7 +2123,12 @@ class SimpleEvaluator:
             return None
         try:
             result = eval(text, {"__builtins__": {}}, {})
-            return int(result) if isinstance(result, float) and result.is_integer() else result
+            if isinstance(result, float):
+                # Snap binary float noise (3.2 + 5.4 == 8.600000000000001)
+                result = float(f"{result:.12g}")
+                if result.is_integer():
+                    return int(result)
+            return result
         except ZeroDivisionError:
             return "🤷"
         except Exception:

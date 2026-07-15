@@ -63,6 +63,25 @@ if HAS_PYTEST:
         def test_division_clean(self, evaluator):
             assert evaluator.evaluate("1 / 4") == "= 0.25"
 
+        def test_float_noise_is_exact(self, evaluator):
+            # Binary float noise (3.2 + 5.4 == 8.600000000000001) must not
+            # trigger the ≈ prefix: the decimal answer is exact.
+            assert evaluator.evaluate("3.2 + 5.4") == "= 8.6"
+            assert evaluator.evaluate("0.1 + 0.2") == "= 0.3"
+            assert evaluator.evaluate("3.3 - 3.2") == "= 0.1"
+            assert evaluator.evaluate("0.1 * 3") == "= 0.3"
+            assert evaluator.evaluate("1.1 + 2.2") == "= 3.3"
+
+        def test_float_noise_near_integer(self, evaluator):
+            # 0.3 / 0.1 == 2.9999999999999996 must snap to the integer 3
+            # (and get the dot visualization like any whole number).
+            result = evaluator.evaluate("0.3 / 0.1")
+            assert result.startswith("= 3\n") and result.count("●") == 3
+
+        def test_truly_repeating_decimal_keeps_approx(self, evaluator):
+            # Snapping float noise must not hide honest rounding.
+            assert evaluator.evaluate("10 / 3") == "= ≈ 3.333"
+
         def test_complex_expression(self, evaluator):
             result = evaluator.evaluate("2 + 3 * 4")
             assert result.startswith("= 14\n") and result.count("●") == 14  # single row of 14 dots

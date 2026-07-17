@@ -1292,6 +1292,8 @@ class PurpleApp(App):
 
         def _on_event(action: str) -> None:
             boot_log.heartbeat(f"audio hotplug: {action}")
+            from .tts import _dbg
+            _dbg(f"audio hotplug event: {action}")
             from .rooms.music_room import reinit_mixer_after_hotplug
             ok = reinit_mixer_after_hotplug()
             # Flip audio_ok on the main thread so the parent menu indicator
@@ -1316,6 +1318,8 @@ class PurpleApp(App):
                 _time.sleep(5)
                 if self.audio_ok:
                     return
+                from .tts import _dbg
+                _dbg("audio retry poll: probing")
                 if reinit_mixer_after_hotplug():
                     self.call_from_thread(setattr, self, "audio_ok", True)
                     boot_log.heartbeat("audio retry poll: mixer came up")

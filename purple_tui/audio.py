@@ -27,8 +27,9 @@ def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
     """
     try:
         return sound.play(*args, **kwargs)
-    except Exception:
-        pass
+    except Exception as e:
+        from .tts import _dbg
+        _dbg(f"play_safe: play raised {type(e).__name__}: {e}, reiniting")
     try:
         from .rooms.music_room import reinit_mixer
         reinit_mixer()
@@ -36,5 +37,7 @@ def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
         return None
     try:
         return sound.play(*args, **kwargs)
-    except Exception:
+    except Exception as e:
+        from .tts import _dbg
+        _dbg(f"play_safe: retry after reinit also raised {type(e).__name__}: {e}")
         return None

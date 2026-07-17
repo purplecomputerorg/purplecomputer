@@ -157,7 +157,10 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     a late caller waits for the early caller's result.
     """
     global pygame, _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT
+    from ..tts import _dbg
+    _dbg("warm_mixer: waiting for _MIXER_LOCK")
     with _MIXER_LOCK:
+        _dbg(f"warm_mixer: got lock, ready={_MIXER_READY}")
         if _MIXER_READY is not None:
             return _MIXER_READY
         if output_is_known_silent():
@@ -236,10 +239,14 @@ def reinit_mixer() -> None:
     invalid after quit(), so callers must clear their sound caches.
     """
     global _MIXER_READY
+    from ..tts import _dbg
+    _dbg("reinit_mixer: start")
     if not _ensure_mixer():
         return
     try:
+        _dbg("reinit_mixer: calling mixer.quit()")
         pygame.mixer.quit()
+        _dbg("reinit_mixer: quit returned")
     except Exception:
         pass
     try:
@@ -248,6 +255,7 @@ def reinit_mixer() -> None:
         _MIXER_READY = True
     except pygame.error:
         _MIXER_READY = False
+    _dbg(f"reinit_mixer: done ready={_MIXER_READY}")
     from .. import tts
     tts._current_channel = None
 
@@ -261,11 +269,15 @@ def reinit_mixer_after_hotplug() -> bool:
     Returns True iff the mixer is working after reinit.
     """
     global _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT
+    from ..tts import _dbg
+    _dbg("reinit_after_hotplug: waiting for _MIXER_LOCK")
     with _MIXER_LOCK:
         if pygame is not None:
             try:
                 if pygame.mixer.get_init():
+                    _dbg("reinit_after_hotplug: calling mixer.quit()")
                     pygame.mixer.quit()
+                    _dbg("reinit_after_hotplug: quit returned")
             except Exception:
                 pass
         _MIXER_READY = None

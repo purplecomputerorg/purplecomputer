@@ -465,7 +465,10 @@ def _ensure_mixer() -> bool:
     """
     global pygame
     from .rooms.music_room import warm_mixer
-    if not warm_mixer():
+    _dbg("ensure_mixer: calling warm_mixer")
+    ok = warm_mixer()
+    _dbg(f"ensure_mixer: warm_mixer -> {ok}")
+    if not ok:
         return False
     if pygame is None:
         import pygame as _pg
@@ -643,6 +646,7 @@ def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
             if n:
                 time.sleep(gap)
             if speech_id != _speech_id:
+                _dbg(f"speak_seq: cancelled (id {speech_id} != {_speech_id})")
                 return
             cb = (lambda idx=index: on_playing(idx)) if on_playing else None
             _speak_sync(text, speech_id, cb)

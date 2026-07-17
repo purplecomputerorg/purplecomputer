@@ -277,8 +277,10 @@ def _postprocess_wav(wav_path: str) -> None:
 
 _CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE")) if os.environ.get("PURPLE_TTS_CACHE") else Path.home() / ".purple" / "cache" / "tts"
 
-# Don't cache text longer than this (unlikely to be retyped exactly)
-_MAX_CACHE_TEXT_LEN = 60
+# Don't cache text longer than this. Generous because Enter-Enter recall
+# makes exact repeats common, and long utterances cost the most to synthesize.
+# Keys are hashed and the 50MB LRU bounds disk use, so this is just a sanity cap.
+_MAX_CACHE_TEXT_LEN = 500
 
 # Cache size limit (bytes). Oldest-accessed files evicted when exceeded.
 _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
@@ -368,6 +370,10 @@ def _get_voice_clip(text: str) -> Path | None:
     """Check if a pre-generated voice clip exists for this text."""
     # Convert text to filename (spaces to underscores)
     filename = text.strip().lower().replace(" ", "_") + ".wav"
+    # Clips are short curated phrases; a longer name would also make
+    # Path.exists() raise ENAMETOOLONG (filesystem cap is 255 bytes)
+    if len(filename.encode()) > 255:
+        return None
     clip_path = VOICE_CLIPS_DIR / filename
     if clip_path.exists():
         return clip_path
@@ -649,7 +655,11 @@ def _speak_seq(items: list[tuple[int, str]], speech_id: int, gap: float,
                 _dbg(f"speak_seq: cancelled (id {speech_id} != {_speech_id})")
                 return
             cb = (lambda idx=index: on_playing(idx)) if on_playing else None
-            _speak_sync(text, speech_id, cb)
+            try:
+                _speak_sync(text, speech_id, cb)
+            except Exception as e:
+                # A failed item must not silently kill the whole thread
+                _dbg(f"speak_seq: item raised {type(e).__name__}: {e}")
     finally:
         if on_done:
             try:

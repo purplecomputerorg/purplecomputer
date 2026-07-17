@@ -1399,9 +1399,10 @@ class TestSpeakable:
         assert speak == "cat"
 
     def test_emoji_multiply(self, evaluator):
+        # No new number in the result (3 is already in the input), so no "equals"
         result = evaluator.evaluate("cat * 3")
         speak = evaluator._make_speakable("cat * 3", result)
-        assert speak == "cat times 3 equals 3 cats"
+        assert speak == "cat times 3"
 
     def test_emoji_plus_expr(self, evaluator):
         result = evaluator.evaluate("2 + 3 apples")
@@ -1435,12 +1436,113 @@ class TestSpeakable:
         assert "2 lions" in speak
 
     def test_multi_emoji_speaking_cats_dogs(self, evaluator):
+        # Counts don't merge (different emoji), so the result just restates the
+        # input: speaking "equals 3 cats and 2 dogs" would be redundant
         result = evaluator.evaluate("3 * cat + 2 dogs")
         speak = evaluator._make_speakable("3 * cat + 2 dogs", result)
-        assert "equals" in speak
-        assert "3 cats" in speak
-        assert "2 dogs" in speak
-        assert "🐱" not in speak
+        assert speak == "3 times cat plus 2 dogs"
+
+    def test_division_words_speak_equals(self, evaluator):
+        # Word operators the evaluator computes must also speak "equals",
+        # preserving the kid's own phrasing ("over" stays "over")
+        for text, expected in [
+            ("8 over 2 moons", "8 over 2 moons equals 4 moons"),
+            ("8 divide 2 moons", "8 divide 2 moons equals 4 moons"),
+            ("8 divided by 2 moons", "8 divided by 2 moons equals 4 moons"),
+            ("5 minus 2 moons", "5 minus 2 moons equals 3 moons"),
+            ("6 over 2", "6 over 2 equals 3"),
+        ]:
+            result = evaluator.evaluate(text)
+            assert evaluator._make_speakable(text, result) == expected
+
+    def test_typo_operators_speak_corrected(self, evaluator):
+        for text, expected in [
+            ("8 timess 2", "8 times 2 equals 16"),
+            ("8 pluss 2", "8 plus 2 equals 10"),
+            ("8 timess 2 moons", "8 times 2 moons equals 16 moons"),
+        ]:
+            result = evaluator.evaluate(text)
+            assert evaluator._make_speakable(text, result) == expected
+
+    def test_plus_typo_with_emoji(self, evaluator):
+        for text in ("8 pluss 2 moons", "8 puls 2 moons"):
+            result = evaluator.evaluate(text)
+            assert evaluator._make_speakable(text, result) \
+                == "8 plus 2 moons equals 10 moons"
+
+    def test_divided_by_typo_with_emoji(self, evaluator):
+        result = evaluator.evaluate("8 divded by 2 moons")
+        speak = evaluator._make_speakable("8 divded by 2 moons", result)
+        assert speak == "8 divided by 2 moons equals 4 moons"
+
+    def test_div_by_prose_untouched(self, evaluator):
+        # "div... by" only means division between digits: prose never corrects
+        result = evaluator.evaluate("diver by the sea")
+        assert evaluator._last_math_correction is None
+        assert evaluator._make_speakable("diver by the sea", result) == "diver by the sea"
+
+    def test_content_words_never_become_operators(self, evaluator):
+        # "tigers" is one edit from "times": digit-flanked content words must
+        # not fuzzy-match operators ("2 tigers 3 tigers" is not 2*3)
+        result = evaluator.evaluate("2 tigers 3 tigers")
+        assert "6" not in result
+        assert evaluator._last_math_correction is None
+        assert "equals" not in evaluator._make_speakable("2 tigers 3 tigers", result)
+
+    def test_prose_words_never_compute(self, evaluator):
+        for text in ("game over", "repeat over"):
+            result = evaluator.evaluate(text)
+            assert evaluator._make_speakable(text, result) == text
+
+    def test_divide_by_zero_skips_equals(self, evaluator):
+        # Result is 🤷, which isn't speakable: just say the input
+        result = evaluator.evaluate("8 / 0")
+        assert evaluator._make_speakable("8 / 0", result) == "8 divided by 0"
+
+    def test_bare_negative_no_equals(self, evaluator):
+        result = evaluator.evaluate("-5")
+        assert evaluator._make_speakable("-5", result) == "minus 5"
+
+    def test_fraction_speaks_equals(self, evaluator):
+        result = evaluator.evaluate("7 / 2")
+        assert evaluator._make_speakable("7 / 2", result) == "7 divided by 2 equals 3.5"
+
+    def test_color_and_speaks_equals(self, evaluator):
+        result = evaluator.evaluate("red and yellow")
+        assert evaluator._make_speakable("red and yellow", result) \
+            == "red and yellow equals orange"
+
+    def test_cleaned_expression_speaks_corrected(self, evaluator):
+        for text, expected in [
+            ("2 ++ 3", "2 plus 3 equals 5"),
+            ("2 + 3 + a9", "2 plus 3 plus 9 equals 14"),
+        ]:
+            result = evaluator.evaluate(text)
+            assert evaluator._make_speakable(text, result) == expected
+
+    def test_chained_division_with_emoji(self, evaluator):
+        result = evaluator.evaluate("8 over 2 over 2 moons")
+        assert evaluator._make_speakable("8 over 2 over 2 moons", result) \
+            == "8 over 2 over 2 moons equals 2 moons"
+
+    def test_and_merge_speaks_equals(self, evaluator):
+        result = evaluator.evaluate("3 cats and 2 cats")
+        assert evaluator._make_speakable("3 cats and 2 cats", result) \
+            == "3 cats and 2 cats equals 5 cats"
+
+    def test_no_merge_no_equals(self, evaluator):
+        # Different emoji never merge, so nothing was computed: no "equals"
+        for text in ("2 apples and 3 bananas", "2 apples + 3 bananas"):
+            result = evaluator.evaluate(text)
+            assert "equals" not in evaluator._make_speakable(text, result)
+
+    def test_repeat_pairs_carry_computed_flag(self, evaluator):
+        from purple_tui.code_runner import PlayCodeRunner
+        runner = PlayCodeRunner(evaluator)
+        runner.run(["repeat 2: 2 + 2"])
+        assert [c for _, _, c in runner.pairs] == [True, True]
+        runner.run(["repeat 2: cat"])
+        assert [c for _, _, c in runner.pairs] == [False, False]
 
     def test_5x5_speaks_equals(self, evaluator):
         # After alnum-run normalization the submit handler passes "5 x 5"

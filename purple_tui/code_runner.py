@@ -168,7 +168,7 @@ class PlayCodeRunner:
     def __init__(self, evaluator):
         self.evaluator = evaluator
         self.corrections: list[tuple[str, str]] = []
-        self.pairs: list[tuple[str, str]] = []  # (input, result) per command
+        self.pairs: list[tuple[str, str, bool]] = []  # (input, result, computed) per command
 
     def run(self, lines: list[str]) -> list[str]:
         """Run code and return list of result strings."""
@@ -186,11 +186,11 @@ class PlayCodeRunner:
                 try:
                     result = self.evaluator.evaluate(text)
                     if result:
-                        self.pairs.append((text, result))
+                        self.pairs.append((text, result, self.evaluator._last_computed))
                 except Exception:
                     log.debug("Play command failed: %s", text, exc_info=True)
                     continue
-        return [r for _, r in self.pairs]
+        return [r for _, r, _ in self.pairs]
 
     def _fuzzy_correct(self, line: str) -> str:
         """Fuzzy-correct command keywords, matching music/art runner pattern."""

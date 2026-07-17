@@ -942,7 +942,7 @@ class PlayMode(Vertical):
                 self._set_speech_state(answer_widget, HistoryLine.SPEECH_FILTERED)
                 self._schedule_clear_speech(answer_widget, 1.5)
 
-    def _speak_sequence(self, pairs: list[tuple[str, str]], scroll) -> None:
+    def _speak_sequence(self, pairs: list[tuple[str, str, bool]], scroll) -> None:
         """Speak repeat results in order, lighting each line as it plays.
 
         Speaks at most SPEAK_REPEAT_CAP items; the rest just display.
@@ -951,8 +951,8 @@ class PlayMode(Vertical):
 
         widgets = list(scroll.children)[-len(pairs):]
         items = []
-        for (text, result), widget in zip(pairs, widgets):
-            speakable = self.evaluator._make_speakable(text, result)
+        for (text, result, computed), widget in zip(pairs, widgets):
+            speakable = self.evaluator._make_speakable(text, result, computed)
             if speakable and len(items) < SPEAK_REPEAT_CAP:
                 items.append((speakable, widget))
             else:
@@ -1020,8 +1020,7 @@ class SimpleEvaluator:
     # Largest count shown inline (dots/emoji/color blocks); above this, switch to abacus.
     INLINE_MAX = 500
 
-    # Math operators: symbols and their word equivalents
-    MATH_SYMBOLS = {'+', '-', '*', '/', '×', '÷', '−'}
+    # Operator words recognized when scanning for embedded expressions
     WORD_TO_SYMBOL = {'times': '*', 'plus': '+', 'minus': '-', 'x': '*'}
     # Display operators to normalize before evaluation
     DISPLAY_TO_SYMBOL = {'×': '*', '÷': '/'}
@@ -1056,6 +1055,9 @@ class SimpleEvaluator:
     def __init__(self):
         self.content = get_content()
         self._last_math_correction: tuple[str, str] | None = None
+        # True when the last evaluate() actually did arithmetic (merged counts,
+        # evaluated an expression, mixed colors), not just rendered the input.
+        self._last_computed = False
 
     def evaluate(self, text: str) -> str:
         """Evaluate input and return result string.
@@ -1065,6 +1067,7 @@ class SimpleEvaluator:
         Never raises or produces invalid markup: falls back to colored letter blocks.
         """
         text = text.strip()
+        self._last_computed = False
         if not text:
             return ""
         self.content.pop_correction()  # Clear stale corrections
@@ -1081,6 +1084,7 @@ class SimpleEvaluator:
                 Text.from_markup(result)
             return result
         except Exception:
+            self._last_computed = False
             return self._format_text_as_color_blocks(text)
 
     # "and"/"&" → "+" only when between digits, colors, or known emoji words
@@ -1130,9 +1134,13 @@ class SimpleEvaluator:
         text = self._normalize_number_words(text)
         text = self._normalize_commas(text)
 
-        # Clean math expression typos (repeated operators, stray =, etc.)
+        # Clean math expression typos (repeated operators, stray =, etc.),
+        # then normalize operator words and typos between digits once for the
+        # whole input, so every path (plus, emoji counts, pure math) agrees:
+        # "8 pluss 2 moons" -> "8 + 2 moons"
         self._last_math_correction = None
         text = self._clean_math_expression(text)
+        text = self._fuzzy_normalize_operators(text)
 
         # Patterns: "5 4 3 ..." or "2 cats ... 5" (check before any other eval)
         if '..' in text:
@@ -1191,6 +1199,9 @@ class SimpleEvaluator:
         # Try auto-mixing colors with emojis or text (e.g., "red apple", "red blue")
         if auto_mix := self._eval_auto_mix(text):
             return auto_mix
+
+        # Nothing computed: clear any flag set by speculative math attempts above
+        self._last_computed = False
 
         # Try emoji substitution in text (e.g., "I love cat")
         subbed = self._substitute_emojis(text, colorize_unknown=True)
@@ -1352,6 +1363,8 @@ class SimpleEvaluator:
                 if items[i][0] == 'emoji':
                     e, c, w = items[i][1]
                     items[i] = ('emoji', (e, c + pending, w))
+                    if pending:
+                        self._last_computed = True
                     attached = True
                     break
             if not attached:
@@ -1403,11 +1416,13 @@ class SimpleEvaluator:
         # Same-emoji expressions: collapse to abacus when total exceeds INLINE_MAX
         # (small counts like "2 + 3 cats" keep grouped inline display)
         if all_same_emoji and not has_text and len(emoji_items) > 1 and total_count > self.INLINE_MAX:
+            self._last_computed = True
             e = emoji_items[0][0]
             return self._format_emoji_label(e, total_count)
 
         # Singleton emoji addition (apple + apple → "= 2 🍎" with dots)
         if all_singletons:
+            self._last_computed = True
             e = emoji_items[0][0]
             return self._format_emoji_label(e, total_count)
 
@@ -1428,6 +1443,8 @@ class SimpleEvaluator:
             combined = {}
             for e, c, w in emoji_items:
                 combined[e] = combined.get(e, 0) + c
+            if len(combined) < len(emoji_items):
+                self._last_computed = True
             label_parts = [f"{c} {e}" for e, c in combined.items()]
             label = ' '.join(label_parts)
             result = f"{label}\n{result}"
@@ -1551,6 +1568,7 @@ class SimpleEvaluator:
             for g in groups:
                 all_colors.extend(g['colors'])
             if len(all_colors) >= 2:
+                self._last_computed = True
                 mixed = mix_colors_paint(all_colors)
                 name = get_color_name_approximation(mixed)
                 return f"COLOR_RESULT:{mixed}:{name.replace(' ', '_')}:{','.join(all_colors)}"
@@ -1633,23 +1651,56 @@ class SimpleEvaluator:
 
         return self._eval_plus_expr(" + ".join(groups))
 
-    _COUNT_OPS = ('x', '×', '*', 'times', '/', '÷', '-', 'over', 'divide', 'divided')
+    # Operator word → symbol mapping (used for exact and fuzzy normalization)
+    _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
+    # Division words only apply between digits ("6 over 2"), never in prose ("game over")
+    _DIGIT_OPERATOR_WORDS = {**_OPERATOR_WORDS, 'divide': '/', 'divided': '/', 'over': '/'}
+    # Count operators exclude '+'/'plus' (they mean "combine groups", handled by the plus path)
+    _COUNT_OPS = ('x', '×', '*', '/', '÷', '-') + tuple(w for w in _DIGIT_OPERATOR_WORDS if w != 'plus')
     _COUNT_TOKEN = re.compile(r'\d+([x×*/÷-]\d+)*', re.IGNORECASE)
+
+    def _is_content_word(self, w: str) -> bool:
+        """Exact emoji/color word, singular or plural. Fuzzy content matches
+        don't count: a typo like "timess" must stay correctable to an operator."""
+        if self.content.exact_emoji(w) or self.content.exact_color(w):
+            return True
+        s = singularize(w)
+        return bool(s and s != w and (self.content.exact_emoji(s) or self.content.exact_color(s)))
+
+    def _fuzzy_op_word(self, word: str) -> str | None:
+        """Fuzzy-match a typo to an operator word. Real content words between
+        digits ("2 tigers 3", "2 limes 3") are never operators."""
+        w = word.lower()
+        if self._is_content_word(w):
+            return None
+        from ..fuzzy import fuzzy_match_small
+        return fuzzy_match_small(w, list(self._DIGIT_OPERATOR_WORDS), cutoff=0.7)
+
+    def _is_count_op(self, word: str) -> bool:
+        w = word.lower()
+        if w in self._COUNT_OPS:
+            return True
+        matched = self._fuzzy_op_word(w)
+        return matched is not None and matched != 'plus'
 
     def _take_count(self, words: list[str], i: int) -> tuple[str | None, int]:
         """Consume a leading count starting at i: a number or an arithmetic
-        expression ("3", "3x2", "3 × 2", "6 / 2", "5 - 2"). The expression is
-        evaluated so the count binds to the following noun: "6/2 dogs" -> 3 dogs.
-        Returns (count_str_or_None, next_index); '+' is excluded (it means
-        "combine groups", handled by the plus path).
+        expression ("3", "3x2", "3 × 2", "6 / 2", "5 minus 2", "8 divided by 2").
+        The expression is evaluated so the count binds to the following noun:
+        "6/2 dogs" -> 3 dogs. Returns (count_str_or_None, next_index).
         """
         n = len(words)
         if i >= n or not self._COUNT_TOKEN.fullmatch(words[i]):
             return None, i
         j = i + 1
-        while j + 1 < n and words[j].lower() in self._COUNT_OPS \
-                and self._COUNT_TOKEN.fullmatch(words[j + 1]):
-            j += 2
+        while j + 1 < n and self._is_count_op(words[j]):
+            k = j + 1
+            if words[j].lower().startswith('div') and k < n and words[k].lower() == 'by':
+                k += 1
+            if k < n and self._COUNT_TOKEN.fullmatch(words[k]):
+                j = k + 1
+            else:
+                break
         val = self._eval_math(self._normalize_math(" ".join(words[i:j])))
         if isinstance(val, (int, float)) and not isinstance(val, bool) \
                 and float(val).is_integer() and val >= 0:
@@ -2010,6 +2061,8 @@ class SimpleEvaluator:
             if m := pattern.match(term):
                 word, n1, n2 = m['word'], m['n1'], m['n2']
                 if e := self._get_emoji(word):
+                    if n2:
+                        self._last_computed = True
                     return (e, int(n1) * (int(n2) if n2 else 1), word)
 
         # Word doubles as factor and label, e.g. "3 * cat", "cat * 3"
@@ -2105,11 +2158,6 @@ class SimpleEvaluator:
             return ' + '.join(parts)
         return text
 
-    # Operator word → symbol mapping (used for exact and fuzzy normalization)
-    _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
-    # Division words only apply between digits ("6 over 2"), never in prose ("game over")
-    _DIGIT_OPERATOR_WORDS = {**_OPERATOR_WORDS, 'divide': '/', 'divided': '/', 'over': '/'}
-
     def _normalize_math(self, text: str) -> str:
         """Normalize text for math evaluation: operator words/symbols → ASCII math."""
         result = text.lower()
@@ -2141,22 +2189,26 @@ class SimpleEvaluator:
         return text
 
     def _fuzzy_normalize_operators(self, text: str) -> str:
-        """Replace fuzzy operator words that appear between digits."""
-        from ..fuzzy import fuzzy_match_small
-        op_words = list(self._DIGIT_OPERATOR_WORDS.keys())
+        """Replace exact or fuzzy operator words that appear between digits."""
         corrected = [False]
 
         def replace_match(m):
             word = m.group(2)
             if word in self._DIGIT_OPERATOR_WORDS:
                 return m.group(1) + self._DIGIT_OPERATOR_WORDS[word] + m.group(3)
-            matched = fuzzy_match_small(word, op_words, cutoff=0.7)
+            matched = self._fuzzy_op_word(word)
             if matched:
                 corrected[0] = True
                 return m.group(1) + self._DIGIT_OPERATOR_WORDS[matched] + m.group(3)
             return m.group(0)
 
+        def replace_div_by(m):
+            if m.group(2) not in ('divide', 'divided'):
+                corrected[0] = True
+            return m.group(1) + '/' + m.group(3)
+
         result = re.sub(r'(\d\s+)([a-z]{3,})(\s+\d)', replace_match, text)
+        result = re.sub(r'(\d\s+)(div\w+)\s+by(\s+\d)', replace_div_by, result)
         if corrected[0]:
             self._last_math_correction = (text, result)
         return result
@@ -2198,16 +2250,20 @@ class SimpleEvaluator:
             return None
         try:
             result = eval(text, {"__builtins__": {}}, {})
-            if isinstance(result, float):
-                # Snap binary float noise (3.2 + 5.4 == 8.600000000000001)
-                result = float(f"{result:.12g}")
-                if result.is_integer():
-                    return int(result)
-            return result
         except ZeroDivisionError:
+            self._last_computed = True
             return "🤷"
         except Exception:
             return None
+        # Operator after a digit means real arithmetic; bare numbers don't count
+        if re.search(r'[\d)]\s*[+\-*/]', text):
+            self._last_computed = True
+        if isinstance(result, float):
+            # Snap binary float noise (3.2 + 5.4 == 8.600000000000001)
+            result = float(f"{result:.12g}")
+            if result.is_integer():
+                return int(result)
+        return result
 
     def _format_number(self, num: int | float) -> str:
         """Format number (up to 3 decimals). Prefix ≈ when rounding loses precision."""
@@ -2473,30 +2529,27 @@ class SimpleEvaluator:
             return (parts[1], name, parts[3].split(",") if len(parts) > 3 and parts[3] else [])
         return None
 
-    def _make_speakable(self, input_text: str, result: str) -> str:
+    def _make_speakable(self, input_text: str, result: str, computed: bool | None = None) -> str:
         """Convert input/result pair to minimal speakable text.
 
         Principles:
         - Don't pronounce emoji symbols or color boxes
-        - For computation: "input equals result"
-        - For simple lookups (no operators): just the word
-        - Handle text prefixes naturally
+        - When arithmetic happened: "input equals result"
+        - Otherwise: just the input, spoken naturally
+        - Speak typo corrections in their corrected form
+
+        `computed` defaults to the flag from the last evaluate() call; the
+        repeat path passes per-line flags captured at evaluation time.
         """
         input_text = input_text.strip()
         if not input_text:
             return ""
 
-        # Check if input has operators (implies computation)
-        def has_operator(text: str) -> bool:
-            t = text.lower()
-            if any(op in text for op in self.MATH_SYMBOLS):
-                return True
-            if any(f' {w} ' in f' {t} ' or t.startswith(f'{w} ') or t.endswith(f' {w}')
-                   for w in self.WORD_TO_SYMBOL):
-                return True
-            if 'divided' in t:
-                return True
-            return False
+        if computed is None:
+            computed = self._last_computed
+        if self._last_math_correction:
+            orig, corr = self._last_math_correction
+            input_text = re.sub(re.escape(orig), corr, input_text, count=1, flags=re.IGNORECASE)
 
         # Convert operators to spoken words
         def speakable_ops(text: str) -> str:
@@ -2609,8 +2662,6 @@ class SimpleEvaluator:
                     return ' '.join(words[:i]) if i > 0 else ""
             return ""
 
-        # Simple echo (input "5" → output "5", input "cat" → output emoji)
-        computed = has_operator(input_text)
         input_prefix = extract_prefix(input_text)
         result_speak = speakable_result(result, input_prefix)
         input_speak = speakable_ops(input_text)

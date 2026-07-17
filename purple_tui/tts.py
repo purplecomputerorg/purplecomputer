@@ -49,6 +49,18 @@ def _suppress_stderr():
             pass
         sys.stderr = old_stderr
 
+# TEMP diagnostic logging for the silent-speech bug; remove once captured
+_DEBUG_LOG = "/tmp/purple-tts-debug.log"
+
+
+def _dbg(msg: str) -> None:
+    try:
+        with open(_DEBUG_LOG, "a") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+    except Exception:
+        pass
+
+
 # Voice model configuration
 VOICE_MODEL = "en_US-libritts-high"
 VOICE_SPEAKER = 166  # p6006
@@ -548,6 +560,7 @@ def set_muted(muted: bool) -> None:
 def stop() -> None:
     """Stop any currently playing speech and cancel pending"""
     global _current_channel, _speech_id
+    _dbg(f"stop() id {_speech_id} -> {_speech_id + 1}")
     _speech_id += 1  # Invalidate any pending speech (atomic due to GIL)
     try:
         ch = _current_channel
@@ -595,6 +608,7 @@ def speak_many(texts: list[str], gap: float = 0.5,
         True if speech was started, False otherwise
     """
     global _speech_id
+    _dbg(f"speak_many n={len(texts)} muted={_muted} first={texts[0][:60]!r}" if texts else "speak_many empty")
     if _muted:
         return False
 
@@ -607,6 +621,7 @@ def speak_many(texts: list[str], gap: float = 0.5,
         if filtered and filtered.strip():
             items.append((i, filtered))
     if not items:
+        _dbg("speak_many: all filtered, not starting")
         return False
 
     # Stop any previous speech and get new ID
@@ -645,14 +660,17 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
 
     # Check cancellation first
     if speech_id != _speech_id:
+        _dbg(f"speak_sync: cancelled before start (id {speech_id} != {_speech_id})")
         return False
 
     if not _ensure_mixer():
+        _dbg("speak_sync: mixer unavailable")
         return False
 
     # Check for pre-generated voice clip first (hand-curated clips take priority)
     clip_path = _get_voice_clip(text)
     if clip_path:
+        _dbg(f"speak_sync: voice clip {clip_path}")
         return _play_clip(clip_path, speech_id, on_playing)
 
     # Prepare text (letter expansion, pronunciation, padding)
@@ -661,24 +679,30 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
     # Check cache
     cached_path = _get_cached(prepared)
     if cached_path:
+        _dbg("speak_sync: cache hit")
         return _play_clip(cached_path, speech_id, on_playing)
 
     # Fall back to Piper TTS for dynamic content
     voice = _get_piper_voice()
     if voice is None:
+        _dbg("speak_sync: piper voice unavailable")
         return False
 
     # Check again after potentially slow voice load
     if speech_id != _speech_id:
+        _dbg("speak_sync: cancelled after voice load")
         return False
 
     # Synthesize, post-process, and cache (if short enough to be worth caching)
+    _dbg(f"speak_sync: synthesizing len={len(prepared)}")
     result_path = _synthesize_to_cache(voice, prepared)
     if result_path is None:
+        _dbg("speak_sync: synthesis FAILED")
         return False
 
     # Check if we've been cancelled after generating
     if speech_id != _speech_id:
+        _dbg("speak_sync: cancelled after synthesis")
         return False
 
     is_temp = not str(result_path).startswith(str(_CACHE_DIR))
@@ -696,11 +720,13 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
 
     try:
         if speech_id != _speech_id:
+            _dbg("play_clip: cancelled before play")
             return False
 
         sound = pygame.mixer.Sound(str(clip_path))
         from .audio import play_safe
         channel = play_safe(sound)
+        _dbg(f"play_clip: dur={sound.get_length():.1f}s channel={'ok' if channel else 'NONE'}")
         _current_channel = channel
 
         if on_playing:
@@ -720,9 +746,11 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
                 pygame.time.wait(50)
 
         _current_channel = None
+        _dbg("play_clip: finished")
         return True
 
-    except Exception:
+    except Exception as e:
+        _dbg(f"play_clip: exception {type(e).__name__}: {e}")
         return False
 
 

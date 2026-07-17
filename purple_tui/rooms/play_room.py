@@ -904,6 +904,8 @@ class PlayMode(Vertical):
             self.post_message(ExpressionEvaluated(eval_text, _strip_markup(result)))
 
         # Handle speech (if ! or say/talk was used)
+        from ..tts import _dbg
+        _dbg(f"submit raw={input_text!r} force_speak={force_speak} result_len={len(result or '')}")
         if force_speak:
             self._speak(eval_text, result)
 
@@ -919,6 +921,8 @@ class PlayMode(Vertical):
         from ..tts import speak
 
         speakable = self.evaluator._make_speakable(input_text, result)
+        from ..tts import _dbg
+        _dbg(f"speakable len={len(speakable)} head={speakable[:60]!r}")
         if speakable:
             # Find the answer line we just mounted to update its speech indicator
             scroll = self.query_one("#history-scroll")
@@ -937,6 +941,7 @@ class PlayMode(Vertical):
                     )
 
             started = speak(speakable, on_playing=on_playing, on_done=on_done)
+            _dbg(f"speak started={started}")
             if not started and answer_widget:
                 # Speech was blocked (filtered or muted): show muted icon briefly
                 self._set_speech_state(answer_widget, HistoryLine.SPEECH_FILTERED)

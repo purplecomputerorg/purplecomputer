@@ -5,6 +5,7 @@ can't accidentally drop the pulseaudio user-enable or the module-
 switch-on-connect drop-in without failing tests.
 """
 
+import functools
 import re
 from pathlib import Path
 
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD_SCRIPT = ROOT / "build-scripts" / "00-build-golden-image.sh"
 
 
+@functools.lru_cache(maxsize=1)
 def _build_source() -> str:
     return BUILD_SCRIPT.read_text()
 
@@ -79,3 +81,29 @@ def test_grub_and_efibootmgr_verification_still_present():
     src = _build_source()
     assert re.search(r"grub-install.*efibootmgr|efibootmgr.*grub-install", src, re.DOTALL), \
         "boot tooling verification block missing"
+
+
+def test_sof_firmware_and_ucm_in_apt_list():
+    """Recommends-only packages --no-install-recommends would silently drop.
+    Without intel/sof, DMIC laptops probe no sound card (HP 15-dy2xxx bug)."""
+    src = _build_source()
+    for pkg in ("firmware-sof-signed", "alsa-ucm-conf", "alsa-topology-conf"):
+        assert re.search(rf"\b{pkg}\b", src), f"{pkg} not in apt install list"
+    assert re.search(r"usr/share/alsa/ucm2", src), \
+        "audio verification does not check UCM profiles landed"
+
+
+def test_firmware_prune_keeps_and_guards_audio_gpu_dirs():
+    """The keep list and the post-prune guard must share FIRMWARE_KEEP_DIRS,
+    so a keep-list edit that drops a dir fails the build instead of shipping
+    an ISO without it. radeon covers pre-2016 AMD GPUs/APUs on the radeon
+    driver; intel/sof is the DSP audio firmware."""
+    src = _build_source()
+    m = re.search(r'FIRMWARE_KEEP_DIRS="([^"]+)"', src)
+    assert m, "FIRMWARE_KEEP_DIRS not defined"
+    kept = m.group(1).split()
+    for dir_ in ("i915", "amdgpu", "nvidia", "radeon", "intel", "cirrus", "realtek"):
+        assert dir_ in kept, f"{dir_} not in FIRMWARE_KEEP_DIRS"
+    assert re.search(r"for dir in \$FIRMWARE_KEEP_DIRS intel/sof; do", src), \
+        "post-prune guard does not iterate FIRMWARE_KEEP_DIRS plus intel/sof"
+    assert "missing after prune" in src, "no post-prune firmware existence guard"

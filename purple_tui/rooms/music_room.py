@@ -95,35 +95,44 @@ _KNOWN_SILENT = False  # True = output codec opens fine but is inaudible (don't 
 _SILENT_HDA_CODECS = ("CS8409",)
 
 
-def _has_usb_audio(sound_root: str = "/sys/class/sound") -> bool:
-    """True if any ALSA card is a USB device (a real output Pulse can route to)."""
-    for card in Path(sound_root).glob("card*"):
-        try:
-            if "usb" in os.path.realpath(card / "device").lower():
-                return True
-        except OSError:
-            pass
-    return False
-
-
-def output_is_known_silent(sound_root: str = "/sys/class/sound") -> bool:
-    """True when an HDA output codec is known to be inaudible and no USB audio
-    adapter is present to provide a real output.
-
-    A plugged-in USB device clears the veto: Pulse routes to it, so the silent
-    internal codec no longer matters. The hotplug re-probe re-evaluates this,
-    so plugging a speaker in flips audio back on without a restart.
-    """
-    if _has_usb_audio(sound_root):
+def _is_usb_card(card: Path) -> bool:
+    """A USB ALSA card is a real output Pulse can route to."""
+    try:
+        return "usb" in os.path.realpath(card / "device").lower()
+    except OSError:
         return False
-    for chip in Path(sound_root).glob("hwC*D*/chip_name"):
+
+
+def _silence_reason(sound_root: str = "/sys/class/sound") -> str | None:
+    """Why the output can't make sound, or None if it might.
+
+    'no-card': no sound card at all (e.g. DSP firmware missing). Must be
+    vetoed because Pulse's module-always-sink fabricates a dummy sink, so
+    mixer.init() "succeeds" while everything plays into the void. Transient:
+    the card may still probe late in boot, so callers keep retrying.
+    'silent-codec': an HDA codec on the denylist. Permanent.
+    A plugged-in USB device clears both: Pulse routes to it. The hotplug
+    re-probe and retry poll re-evaluate this, so plugging in a speaker flips
+    audio back on without a restart.
+    """
+    root = Path(sound_root)
+    cards = list(root.glob("card*"))
+    if any(_is_usb_card(c) for c in cards):
+        return None
+    if not cards:
+        return "no-card"
+    for chip in root.glob("hwC*D*/chip_name"):
         try:
             name = chip.read_text().strip()
         except OSError:
             continue
         if any(silent in name for silent in _SILENT_HDA_CODECS):
-            return True
-    return False
+            return "silent-codec"
+    return None
+
+
+def output_is_known_silent(sound_root: str = "/sys/class/sound") -> bool:
+    return _silence_reason(sound_root) is not None
 
 import threading as _threading
 _MIXER_LOCK = _threading.Lock()
@@ -163,8 +172,11 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
         _dbg(f"warm_mixer: got lock, ready={_MIXER_READY}")
         if _MIXER_READY is not None:
             return _MIXER_READY
-        if output_is_known_silent():
-            _KNOWN_SILENT = True
+        reason = _silence_reason()
+        if reason is not None:
+            # Only the codec-identity veto is permanent. 'no-card' stays
+            # retryable: the card may probe late (SOF firmware still loading).
+            _KNOWN_SILENT = reason == "silent-codec"
             _MIXER_READY = False
             return False
         try:

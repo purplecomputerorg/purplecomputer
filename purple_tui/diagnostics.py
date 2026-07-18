@@ -12,6 +12,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# \bsof\b catches DSP firmware load failures (e.g. "Direct firmware load for
+# intel/sof/sof-tgl.ri failed"), the root cause behind no-sound-card machines.
+# Bare "firmware" would drown the 25-line window in GPU firmware chatter.
+AUDIO_DMESG_PAT = re.compile(
+    r'cs8409|hda|cirrus|snd_pcm|snd_hda|audio|sound|\bsof\b', re.IGNORECASE
+)
+
 
 def _run(*args, timeout: float = 2.0) -> str:
     """Run a command, return stdout trimmed, or '(unavailable)' on any failure."""
@@ -246,8 +253,7 @@ def collect_audio_info(audio_ok) -> str:
     if dmesg in ("(unavailable)", "(no output)"):
         lines.append("  (dmesg not readable without elevated privileges)")
     else:
-        pat = re.compile(r'cs8409|hda|cirrus|snd_pcm|snd_hda|audio|sound', re.IGNORECASE)
-        matches = [ln for ln in dmesg.splitlines() if pat.search(ln)][-25:]
+        matches = [ln for ln in dmesg.splitlines() if AUDIO_DMESG_PAT.search(ln)][-25:]
         if matches:
             for ln in matches:
                 lines.append(f"  {ln}")

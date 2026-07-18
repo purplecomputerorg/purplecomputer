@@ -32,7 +32,7 @@ def _reset(monkeypatch):
     monkeypatch.setattr(music_room, "_MIXER_READY", None)
     monkeypatch.setattr(music_room, "_PROBE_TIMED_OUT", False)
     monkeypatch.setattr(music_room, "_KNOWN_SILENT", False)
-    monkeypatch.setattr(music_room, "output_is_known_silent", lambda *a, **k: False)
+    monkeypatch.setattr(music_room, "_silence_reason", lambda *a, **k: None)
 
 
 def test_warm_mixer_returns_when_probe_cannot_be_reaped(monkeypatch):

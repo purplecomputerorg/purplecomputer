@@ -184,11 +184,14 @@ SOURCES
     #
     # X11: minimal packages instead of the `xorg` metapackage (which pulls in
     # x11-apps, xfonts-base, xfonts-utils, x11-session-utils, xorg-docs, etc.)
-    # linux-firmware is a Recommend of linux-image-generic (not a hard dep).
-    # With --no-install-recommends it's skipped, but we need GPU firmware
-    # (i915, amdgpu, nvidia) for display. Install it explicitly here;
-    # the firmware pruning step later strips everything we don't need.
-    chroot "$MOUNT_DIR" apt-get install -y linux-firmware
+    # All Recommends-only, so --no-install-recommends silently drops them:
+    # linux-firmware (GPU firmware for display), firmware-sof-signed (Intel
+    # SOF DSP firmware; without it DMIC laptops, most 2019+ Intel consumer
+    # machines, probe NO sound card while Pulse's dummy sink hides the
+    # failure), and the ALSA UCM/topology mixer profiles SOF cards need.
+    # Legacy HDA machines never read these, so they can't regress.
+    chroot "$MOUNT_DIR" apt-get install -y linux-firmware firmware-sof-signed \
+        alsa-ucm-conf alsa-topology-conf
 
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
@@ -218,6 +221,11 @@ SOURCES
         efibootmgr \
         grub-pc-bin \
         grub2-common
+
+    # usbutils: the Support info screens shell out to lsusb (USB speaker
+    # guidance depends on seeing the device). systemd-hwe-hwdb: udev quirk
+    # database for newer laptop keyboards and input devices.
+    chroot "$MOUNT_DIR" apt-get install -y usbutils systemd-hwe-hwdb
 
     # Verify the boot-setup tools install.sh Layer 4/6 depend on actually landed.
     # On Noble: `grub-install` ships in `grub2-common` (NOT `grub-common` — that's
@@ -690,11 +698,15 @@ JOURNAL
     if [ -L "$MOUNT_DIR/etc/systemd/user/default.target.wants/pulseaudio.service" ]; then
         AUDIO_MISSING="$AUDIO_MISSING pulseaudio.service-still-enabled"
     fi
+    # UCM profiles: SOF cards need them for usable mixer paths; Recommends
+    # only, so a package-list edit can silently drop them. (intel/sof itself
+    # is guarded post-prune, where it could also vanish.)
+    [ -d "$MOUNT_DIR/usr/share/alsa/ucm2" ] || AUDIO_MISSING="$AUDIO_MISSING alsa-ucm-conf"
     if [ -n "$AUDIO_MISSING" ]; then
         echo "ERROR: audio pipeline incomplete in golden image:$AUDIO_MISSING"
         exit 1
     fi
-    log_info "  pulseaudio installed; autospawn-only (no systemd enable); stock default.pa handles switch-on-connect"
+    log_info "  pulseaudio installed; autospawn-only (no systemd enable); stock default.pa handles switch-on-connect; UCM present"
 
     # keyd: kernel keymap daemon. See config/keyd/default.conf for rationale.
     mkdir -p "$MOUNT_DIR/etc/keyd"
@@ -916,15 +928,14 @@ EOF
     FIRMWARE_KEEP="$BUILD_DIR/firmware-keep"
     mkdir -p "$FIRMWARE_KEEP"
 
-    # GPU display firmware (needed for modesetting to initialize the display)
-    for dir in i915 amdgpu nvidia; do
-        [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
-    done
-    # Intel misc firmware (includes SOF audio firmware for newer laptop speakers)
-    [ -d "$FIRMWARE_DIR/intel" ] && mv "$FIRMWARE_DIR/intel" "$FIRMWARE_KEEP/"
-    # Cirrus / Realtek audio codec blobs (T2 Macs, many ThinkPads/Dells/HPs).
-    # Missing these makes the audio probe path slow or blocking on some hardware.
-    for dir in cirrus realtek; do
+    # GPU display firmware: i915/amdgpu/nvidia/radeon (radeon covers pre-2016
+    # AMD GPUs and APUs on the radeon driver; nouveau reads from nvidia/).
+    # intel: misc Intel firmware including intel/sof from firmware-sof-signed
+    # (DSP audio; without it DMIC laptops probe no sound card).
+    # cirrus/realtek: audio codec blobs (T2 Macs, many ThinkPads/Dells/HPs);
+    # missing them makes the audio probe slow or blocking on some hardware.
+    FIRMWARE_KEEP_DIRS="i915 amdgpu nvidia radeon intel cirrus realtek"
+    for dir in $FIRMWARE_KEEP_DIRS; do
         [ -d "$FIRMWARE_DIR/$dir" ] && mv "$FIRMWARE_DIR/$dir" "$FIRMWARE_KEEP/"
     done
     # Keep loose files in firmware root (some drivers expect files here)
@@ -934,6 +945,15 @@ EOF
     rm -rf "$FIRMWARE_DIR"/*
     mv "$FIRMWARE_KEEP"/* "$FIRMWARE_DIR/"
     rmdir "$FIRMWARE_KEEP"
+
+    # Regression guard: every kept dir must survive the prune. intel/sof extra
+    # because missing SOF firmware means silent no-sound-card failures.
+    for dir in $FIRMWARE_KEEP_DIRS intel/sof; do
+        if [ ! -d "$FIRMWARE_DIR/$dir" ]; then
+            echo "ERROR: firmware $dir missing after prune"
+            exit 1
+        fi
+    done
 
     log_info "Firmware pruned. Remaining: $(du -sh "$FIRMWARE_DIR" | cut -f1)"
 

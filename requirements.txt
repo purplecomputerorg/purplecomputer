@@ -1,5 +1,9 @@
 textual>=0.40.0
-rich>=14.3.0
+# rich 14.3 counts VS16 emoji (heart, sun, snow...) as 2 cells and ZWJ sequences as one glyph,
+# but Alacritty advances 1 cell per base char: rows containing them shift the scrollbar/border.
+# 14.2 widths match Alacritty exactly. If textual ever requires >=14.3, see memory note
+# project-scrollbar-vs16-shift for the load_cell_table patch fallback.
+rich>=14.2.0,<14.3
 wcwidth>=0.2.0
 numpy>=1.24,<2
 pygame>=2.5.0

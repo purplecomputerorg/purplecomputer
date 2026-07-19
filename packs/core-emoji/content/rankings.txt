@@ -22,6 +22,10 @@ bird
 green
 ball
 baby
+mom
+dad
+boy
+girl
 car
 house
 book
@@ -58,6 +62,14 @@ bed
 balloon
 unicorn
 princess
+family
+kid
+grandma
+grandpa
+man
+woman
+person
+friend
 dragon
 dinosaur
 trex
@@ -206,6 +218,10 @@ hug
 clown
 lightning
 eye
+hand
+foot
+ear
+mouth
 skull
 circle
 square

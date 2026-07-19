@@ -514,25 +514,42 @@ EFI_GRUB_EOF
 
     OUTPUT_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.iso"
 
-    # Remove existing ISOs (xorriso can't overwrite)
-    rm -f "$OUTPUT_ISO" "${OUTPUT_ISO}.sha256" "${OUTPUT_ISO}.version"
+    # Build an installer ISO from the current iso-new tree via xorriso modify
+    # mode (load original, update files, replace EFI image), with checksum and
+    # build-version sidecars.
+    build_installer_iso() {
+        local out="$1" volid="$2"
+        # Remove existing ISOs (xorriso can't overwrite)
+        rm -f "$out" "${out}.sha256" "${out}.version"
+        xorriso -indev "$UBUNTU_ISO" \
+            -outdev "$out" \
+            -volid "$volid" \
+            -update_r "$WORK_DIR/iso-new" / \
+            -boot_image any replay \
+            -append_partition 2 0xEF "$EFI_IMG"
+        sha256sum "$out" > "${out}.sha256"
+        echo "$BUILD_VERSION" > "${out}.version"
+        log_info "Output: $out"
+        log_info "Size: $(du -h "$out" | cut -f1)"
+        log_info "SHA256: $(cat "${out}.sha256")"
+    }
 
-    # Use xorriso modify mode: load original, update files, replace EFI image
-    xorriso -indev "$UBUNTU_ISO" \
-        -outdev "$OUTPUT_ISO" \
-        -volid "PURPLE_INSTALLER" \
-        -update_r "$WORK_DIR/iso-new" / \
-        -boot_image any replay \
-        -append_partition 2 0xEF "$EFI_IMG"
-
-    # Generate checksum and record the build version beside the ISO
-    sha256sum "$OUTPUT_ISO" > "${OUTPUT_ISO}.sha256"
-    echo "$BUILD_VERSION" > "${OUTPUT_ISO}.version"
-
+    build_installer_iso "$OUTPUT_ISO" "PURPLE_INSTALLER"
     log_info "Normal ISO built successfully!"
-    log_info "Output: $OUTPUT_ISO"
-    log_info "Size: $(du -h "$OUTPUT_ISO" | cut -f1)"
-    log_info "SHA256: $(cat "${OUTPUT_ISO}.sha256")"
+
+    # With-backup variant: same ISO plus a second copy of the golden image, so
+    # install.sh can fall back if the primary copy decays on cheap USB flash
+    # (seen in the field: zstd "Data corruption detected" weeks after a
+    # verified flash). Must be a real cp, not a hardlink: xorriso stores
+    # same-inode files as one extent, which would put both copies on the same
+    # flash cells. Shipped USBs use this variant; skip with PURPLE_NO_BACKUP_ISO=1.
+    if [ "${PURPLE_NO_BACKUP_ISO:-0}" != "1" ]; then
+        log_info "Building with-backup ISO (adds a second golden image copy)..."
+        cp "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
+        build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"
+        rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"
+        log_info "With-backup ISO built successfully!"
+    fi
 
     # Step 10: Build debug ISO
     # Same squashfs/initramfs, different GRUB config: verbose boot, visible menu,
@@ -540,7 +557,6 @@ EFI_GRUB_EOF
     log_step "10/11: Building debug ISO..."
 
     DEBUG_ISO="$OUTPUT_DIR/purple-installer-$(date +%Y%m%d)${ISO_TAG}.debug.iso"
-    rm -f "$DEBUG_ISO" "${DEBUG_ISO}.sha256" "${DEBUG_ISO}.version"
 
     # Save normal GRUB config and write debug version
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
@@ -606,20 +622,8 @@ GRUB_DEBUG
 
     prepend_longmode_guard "$GRUB_CFG"
 
-    xorriso -indev "$UBUNTU_ISO" \
-        -outdev "$DEBUG_ISO" \
-        -volid "PURPLE_DEBUG" \
-        -update_r "$WORK_DIR/iso-new" / \
-        -boot_image any replay \
-        -append_partition 2 0xEF "$EFI_IMG"
-
-    sha256sum "$DEBUG_ISO" > "${DEBUG_ISO}.sha256"
-    echo "$BUILD_VERSION" > "${DEBUG_ISO}.version"
-
+    build_installer_iso "$DEBUG_ISO" "PURPLE_DEBUG"
     log_info "Debug ISO built successfully!"
-    log_info "Output: $DEBUG_ISO"
-    log_info "Size: $(du -h "$DEBUG_ISO" | cut -f1)"
-    log_info "SHA256: $(cat "${DEBUG_ISO}.sha256")"
 
     # Restore normal GRUB config (for clean state)
     mv "${GRUB_CFG}.normal" "$GRUB_CFG"

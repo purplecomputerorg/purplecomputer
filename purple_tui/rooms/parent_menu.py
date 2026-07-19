@@ -1409,6 +1409,7 @@ class InstallProgressScreen(PurpleModal):
         self._status = "Starting..."
         self._phase = "installing"  # "installing", "success", "error"
         self._log_lines: list[str] = []  # All stderr lines for error diagnostics
+        self._corrupt_key = False  # Both golden image copies failed integrity
         self._diag_lines: list[str] = []  # Full diagnostic report (built on error)
         self._diag_scroll_pos = 0  # Current line in auto-scroll
         self._scroll_timer = None  # Timer for auto-scroll
@@ -1561,11 +1562,20 @@ class InstallProgressScreen(PurpleModal):
                 bar_w.update("")
                 hint_w.update("")
             else:
-                error_summary = self._get_error_summary()
-                status_w.update(
-                    f"Setup did not finish.\n\n{error_summary}\n\n"
-                    f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
-                )
+                if self._corrupt_key:
+                    summary = (
+                        "It looks like the installation data on\n"
+                        "this Purple Key got damaged. This computer\n"
+                        "is fine, and Purple still works from the\n"
+                        "USB without installing.\n\n"
+                        f"Email us for a replacement Key:\n{SUPPORT_EMAIL}"
+                    )
+                else:
+                    summary = (
+                        f"{self._get_error_summary()}\n\n"
+                        f"If this keeps happening,\ncontact us: {SUPPORT_EMAIL}"
+                    )
+                status_w.update(f"Setup did not finish.\n\n{summary}")
                 bar_w.update("")
                 hint_w.update(
                     "Press Enter for technical details.\n"
@@ -1658,6 +1668,15 @@ class InstallProgressScreen(PurpleModal):
                     return
                 self._set_progress(lo + int(pv_pct * span / 100), self._status)
                 return
+        if clean.startswith('[PURPLE-RETRY]'):
+            # Primary image copy was corrupt; install.sh is rewriting from the
+            # backup copy. Progress is forward-only, so just soften the status.
+            self._status = "Double-checking with a backup copy..."
+            self._update_ui()
+            return
+        if clean.startswith('[PURPLE-CORRUPT-KEY]'):
+            self._corrupt_key = True
+            return
         if not clean.startswith('[PURPLE]'):
             return
         msg = clean[8:].strip()

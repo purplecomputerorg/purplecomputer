@@ -62,7 +62,9 @@ fi
 
 # Find ISOs (most recent by date)
 # Reject fast builds (minimal compression, not for release)
-STANDARD_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | grep -v debug | grep -v -- "-fast" | head -1)
+# Public download stays the plain ISO; with-backup (second golden image copy)
+# is for flashed-and-shipped USBs, corrupt-test is for install-fallback testing.
+STANDARD_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | grep -v debug | grep -v with-backup | grep -v corrupt-test | grep -v -- "-fast" | head -1)
 DEBUG_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.debug.iso 2>/dev/null | grep -v -- "-fast" | head -1)
 
 if [ -z "$STANDARD_ISO" ]; then

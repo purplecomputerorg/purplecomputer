@@ -36,6 +36,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --debug          Flash the debug ISO (.debug.iso) instead"
+    echo "  --no-backup      Use the plain ISO even when a .with-backup.iso exists"
     echo "  --yes            Skip the confirmation prompt"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
@@ -363,6 +364,7 @@ main() {
     # Handle options
     local use_debug=false
     local skip_confirm=false
+    local iso_kind=""
     FORCE_DEVICE=""
     MANAGE_UDEV=true
     SKIP_SETTLE=false
@@ -379,6 +381,10 @@ main() {
                 ;;
             --debug|-d)
                 use_debug=true
+                shift
+                ;;
+            --no-backup)
+                iso_kind=plain
                 shift
                 ;;
             --yes|-y)
@@ -419,7 +425,7 @@ main() {
                 exit 1
             fi
         else
-            ISO_PATH="$(find_latest_iso)"
+            ISO_PATH="$(find_latest_iso "$iso_kind")"
             if [[ -z "$ISO_PATH" ]]; then
                 log_error "No ISO found in $OUTPUT_DIR"
                 echo "Run build-in-docker.sh first, or specify path to ISO."

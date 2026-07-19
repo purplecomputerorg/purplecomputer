@@ -58,6 +58,8 @@ After `wipefs`, the kernel thinks the disk has zero partitions. Nothing to hold 
 
 Standard `zstd -dc | dd` with `conv=fsync`. We `tee` the decompressed stream into `sha256sum` so we can verify the disk read-back without decompressing twice.
 
+zstd verifies frame checksums as it streams, so a corrupt image file fails the pipeline mid-write. With-backup ISOs carry a second copy of the image (`purple-os-backup.img.zst`), and the write retries from it when the primary fails integrity (cheap USB flash can decay after a verified flash; seen in the field on a shipped key). A `dd` failure is classified as an internal-disk problem instead (zstd dying of SIGPIPE downstream of a dead `dd` is not evidence of a bad copy), and is not retried. Test the fallback end to end with `just corrupt-test-iso <iso> [primary|backup|both]`.
+
 ### Phase 3: Rebuild the partition table on the real device
 
 The most important phase. Done **unconditionally** on every install (one code path = robust):

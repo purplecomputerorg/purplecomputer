@@ -142,6 +142,7 @@ def _make_screen():
     screen._status = ""
     screen._phase = "installing"
     screen._log_lines = []
+    screen._corrupt_key = False
     screen._start_time = 0.0
     screen._creep_timer = None
     screen._creep_t0 = 0.0
@@ -192,6 +193,27 @@ def test_pv_and_markers_are_monotonic_and_banded():
     assert s._progress == 94
     s._handle_line("[PURPLE] Boot setup complete (UEFI + BIOS)")
     assert s._progress == 98
+
+
+def test_backup_retry_keeps_progress_and_updates_status():
+    screen = _make_screen()
+    screen._handle_line("[PURPLE] Writing Purple Computer to disk...")
+    screen._handle_line("[PURPLE-PV] 60")
+    before = screen._progress
+    screen._handle_line("[PURPLE-RETRY] backup copy")
+    assert screen._status == "Double-checking with a backup copy..."
+    assert screen._progress == before
+    screen._handle_line("[PURPLE-PV] 0")
+    assert screen._progress == before, "restarted pv must not regress the bar"
+    screen._handle_line("[PURPLE-PV] 100")
+    assert screen._progress == 70
+
+
+def test_corrupt_key_marker_sets_flag():
+    screen = _make_screen()
+    assert not screen._corrupt_key
+    screen._handle_line("[PURPLE-CORRUPT-KEY] 1")
+    assert screen._corrupt_key
 
 
 def test_calibration_factor_from_write_time(monkeypatch):

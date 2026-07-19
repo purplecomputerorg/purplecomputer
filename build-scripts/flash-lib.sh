@@ -226,11 +226,24 @@ eject_drive() {
 }
 
 # Resolve the most recent ISO in $OUTPUT_DIR. Pass "debug" for .debug.iso.
+# find_latest_iso [debug|plain]
+# Default: newest normal build, preferring its .with-backup.iso sibling (second
+# golden image copy) when one exists. "plain" skips that preference. Corrupt-test
+# ISOs (deliberately damaged, for install-fallback testing) are never auto-picked.
 find_latest_iso() {
     [[ -d "$OUTPUT_DIR" ]] || return 0
     if [[ "${1:-}" == debug ]]; then
-        ls -t "$OUTPUT_DIR"/purple-*.debug.iso 2>/dev/null | head -1
+        ls -t "$OUTPUT_DIR"/purple-*.debug.iso 2>/dev/null | grep -v 'corrupt-test' | head -1
+        return 0
+    fi
+    local plain
+    plain="$(ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null \
+        | grep -vE '\.debug\.iso$|\.with-backup\.iso$|corrupt-test' | head -1)"
+    [[ -n "$plain" ]] || return 0
+    local wb="${plain%.iso}.with-backup.iso"
+    if [[ "${1:-}" != plain && -f "$wb" ]]; then
+        echo "$wb"
     else
-        ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v '\.debug\.iso$' | head -1
+        echo "$plain"
     fi
 }

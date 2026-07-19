@@ -23,6 +23,7 @@ Flash an ISO to every whitelisted USB drive currently plugged in, in parallel.
 
 Options:
   --debug       Use the most recent .debug.iso
+  --no-backup   Use the plain ISO even when a .with-backup.iso exists
   --yes         Skip the confirmation prompt
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
@@ -33,11 +34,13 @@ EOF
 USE_DEBUG=false
 SKIP_CONFIRM=false
 SKIP_SETTLE=false
+ISO_KIND=""
 ISO_PATH=""
 while [[ -n "${1:-}" ]]; do
     case "$1" in
         --help|-h)    usage; exit 0 ;;
         --debug|-d)   USE_DEBUG=true; shift ;;
+        --no-backup)  ISO_KIND=plain; shift ;;
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
         *)            ISO_PATH="$1"; shift ;;
@@ -48,7 +51,7 @@ if [[ -z "$ISO_PATH" ]]; then
     if [[ "$USE_DEBUG" == true ]]; then
         ISO_PATH="$(find_latest_iso debug)"
     else
-        ISO_PATH="$(find_latest_iso)"
+        ISO_PATH="$(find_latest_iso "$ISO_KIND")"
     fi
 fi
 if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then

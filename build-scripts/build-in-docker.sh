@@ -58,6 +58,7 @@ main() {
         -v "$INSTALLER_BASE:$INSTALLER_BASE" \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
+        -e "PURPLE_NO_BACKUP_ISO=${PURPLE_NO_BACKUP_ISO:-}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 

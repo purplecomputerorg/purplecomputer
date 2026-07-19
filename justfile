@@ -263,6 +263,10 @@ clean-isos *args:
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 
+# Make a deliberately corrupted ISO copy to test the install's backup-image fallback: just corrupt-test-iso <iso> [primary|backup|both]
+corrupt-test-iso *args:
+    ./build-scripts/make-corrupt-test-iso.sh {{args}}
+
 # Flash debug ISO to USB drive
 flash-debug *args:
     ./build-scripts/flash-to-usb.sh --debug {{args}}

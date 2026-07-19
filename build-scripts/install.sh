@@ -243,6 +243,11 @@ main() {
 
     # ======================================================================
     # WRITE GOLDEN IMAGE
+    # With-backup ISOs carry a second copy of the image. zstd verifies frame
+    # checksums as it streams, so a decayed copy (cheap USB flash loses data
+    # in storage/transit; seen in the field) fails the pipeline and we retry
+    # from the backup copy. dd failing with a healthy stream means the
+    # internal disk is the problem, which no backup copy fixes.
     # ======================================================================
     log "Writing Purple Computer to disk..."
     log "  Source: $GOLDEN_IMAGE"
@@ -255,22 +260,63 @@ main() {
     # The tee sends the same bytes to both dd (disk write) and sha256sum (checksum).
     WRITE_SHA256_FILE="/tmp/purple-write-sha256"
     WRITE_SIZE_FILE="/tmp/purple-write-size"
+    HAVE_PV=""
     if command -v pv >/dev/null 2>&1; then
+        HAVE_PV=1
         if [ -f "${GOLDEN_IMAGE}.size" ] && [ -s "${GOLDEN_IMAGE}.size" ]; then
             IMAGE_SIZE=$(tr -dc '0-9' < "${GOLDEN_IMAGE}.size")
         fi
         [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$(zstd -l "$GOLDEN_IMAGE" 2>/dev/null | tail -1 | awk '{print $5}')
         [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$((8192*1024*1024))
-        zstd -dc "$GOLDEN_IMAGE" \
-            | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
-            | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | pv -n -s "$IMAGE_SIZE" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
-            | dd of=/dev/$TARGET bs=4M conv=fsync
-    else
-        zstd -dc "$GOLDEN_IMAGE" \
-            | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
-            | tee >(wc -c > "$WRITE_SIZE_FILE") \
-            | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
+    fi
+
+    write_image() {
+        rm -f "$WRITE_SHA256_FILE" "$WRITE_SIZE_FILE"
+        if [ -n "$HAVE_PV" ]; then
+            zstd -dc "$1" \
+                | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
+                | tee >(wc -c > "$WRITE_SIZE_FILE") \
+                | pv -n -s "$IMAGE_SIZE" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
+                | dd of=/dev/$TARGET bs=4M conv=fsync
+        else
+            zstd -dc "$1" \
+                | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
+                | tee >(wc -c > "$WRITE_SIZE_FILE") \
+                | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
+        fi
+        local ps=("${PIPESTATUS[@]}") s rc=0
+        ZSTD_RC=${ps[0]}
+        DD_RC=${ps[${#ps[@]}-1]}
+        for s in "${ps[@]}"; do [ "$s" -ne 0 ] && rc=1; done
+        return $rc
+    }
+
+    BACKUP_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os-backup.img.zst"
+    IMAGE_SOURCES=("$GOLDEN_IMAGE")
+    if [ -f "$BACKUP_IMAGE" ]; then
+        IMAGE_SOURCES+=("$BACKUP_IMAGE")
+    fi
+
+    WROTE_OK=false
+    for SRC in "${IMAGE_SOURCES[@]}"; do
+        if [ "$SRC" != "$GOLDEN_IMAGE" ]; then
+            echo "[PURPLE-RETRY] backup copy" >&2
+            log "First copy was damaged, writing from the backup copy..."
+        fi
+        if write_image "$SRC"; then
+            WROTE_OK=true
+            break
+        fi
+        # dd failing means the disk rejected writes; a SIGPIPE'd zstd upstream
+        # of a dead dd is not evidence of a bad copy, so check dd first.
+        if [ "${DD_RC:-1}" -ne 0 ]; then
+            error "Could not write to this computer's internal disk."
+        fi
+        warn "Image copy failed integrity check while reading (zstd exit ${ZSTD_RC}): $SRC"
+    done
+    if [ "$WROTE_OK" != "true" ]; then
+        echo "[PURPLE-CORRUPT-KEY] 1" >&2
+        error "The installation data on this Purple Key is damaged. This computer is fine, and Purple still works without installing."
     fi
 
     # ======================================================================

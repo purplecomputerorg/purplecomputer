@@ -209,6 +209,18 @@ def test_backup_retry_keeps_progress_and_updates_status():
     assert screen._progress == 70
 
 
+def test_merge_marker_updates_status_without_regressing():
+    screen = _make_screen()
+    screen._handle_line("[PURPLE] Writing Purple Computer to disk...")
+    screen._handle_line("[PURPLE-PV] 60")
+    before = screen._progress
+    screen._handle_line("[PURPLE-MERGING]")
+    assert screen._status == "Repairing the damaged data, this adds a few extra minutes..."
+    assert screen._progress == before
+    screen._handle_line("[PURPLE-PV] 0")
+    assert screen._progress == before, "restarted pv must not regress the bar"
+
+
 def test_corrupt_key_marker_sets_flag():
     screen = _make_screen()
     assert not screen._corrupt_key

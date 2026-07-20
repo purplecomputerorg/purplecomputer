@@ -16,23 +16,26 @@ source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
 
 usage() {
-    echo "Usage: $0 [iso] [primary|backup|both]"
+    echo "Usage: $0 [iso] [primary|backup|both|merge]"
     echo ""
     echo "  iso      ISO to copy and corrupt. Default: the newest build's"
     echo "           with-backup ISO (build one with PURPLE_WITH_BACKUP_ISO=1 just build)."
     echo "  primary  Corrupt /purple/purple-os.img.zst (default). On a"
     echo "           with-backup ISO the install should recover via the backup."
     echo "  backup   Corrupt /purple/purple-os-backup.img.zst only."
-    echo "  both     Corrupt both copies; the install should show the"
+    echo "  both     Corrupt both copies at the same offset; even the merge"
+    echo "           can't recover, so the install should show the"
     echo "           damaged-Purple-Key error screen."
+    echo "  merge    Corrupt both copies at different offsets; the install"
+    echo "           should recover by merging the good ranges of each."
 }
 
 ISO="" WHICH="primary"
 for arg in "$@"; do
     case "$arg" in
-        -h|--help)           usage; exit 0 ;;
-        primary|backup|both) WHICH="$arg" ;;
-        *)                   ISO="$arg" ;;
+        -h|--help)                 usage; exit 0 ;;
+        primary|backup|both|merge) WHICH="$arg" ;;
+        *)                         ISO="$arg" ;;
     esac
 done
 
@@ -54,7 +57,7 @@ fi
 OUT="${ISO%.iso}.corrupt-test-${WHICH}.iso"
 
 corrupt() {
-    local path="$1" lba
+    local path="$1" mib="${2:-8}" lba
     lba="$(xorriso -indev "$OUT" -find "$path" -exec report_lba -- 2>/dev/null \
         | awk -F, '/File data lba/ {gsub(/ /, "", $2); print $2}')"
     if [[ -z "$lba" ]]; then
@@ -62,12 +65,12 @@ corrupt() {
         echo "(backup copies only exist in .with-backup.iso builds)" >&2
         exit 1
     fi
-    # 8 MiB into the file: past the zstd header, early enough that the install
-    # write fails within seconds instead of at 96%.
-    local off=$(( lba * 2048 + 8*1024*1024 ))
+    # Default 8 MiB into the file: past the zstd header, early enough that the
+    # install write fails within seconds instead of at 96%.
+    local off=$(( lba * 2048 + mib*1024*1024 ))
     head -c 65536 /dev/zero | tr '\0' 'X' \
         | sudo dd of="$OUT" bs=64K seek="$off" oflag=seek_bytes conv=notrunc status=none
-    echo "Corrupted 64KiB of $path at byte offset $off"
+    echo "Corrupted 64KiB of $path at byte offset $off (${mib}MiB into the file)"
 }
 
 # The output dir is owned by the Docker build (nobody:nogroup), so all writes
@@ -84,7 +87,10 @@ case "$WHICH" in
              echo "Scenario '$WHICH': expect the install to succeed normally from the primary." ;;
     both)    corrupt /purple/purple-os.img.zst
              corrupt /purple/purple-os-backup.img.zst
-             echo "Scenario '$WHICH': expect the install to show the damaged-Purple-Key screen." ;;
+             echo "Scenario '$WHICH': expect the install to show the damaged-Purple-Key screen (same 4MiB range bad in both copies, so even the merge fails)." ;;
+    merge)   corrupt /purple/purple-os.img.zst
+             corrupt /purple/purple-os-backup.img.zst 24
+             echo "Scenario '$WHICH': expect the install to self-heal by merging the good ranges of both copies." ;;
 esac
 
 sha256sum "$OUT" | sudo tee "${OUT}.sha256" >/dev/null

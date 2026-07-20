@@ -1030,7 +1030,10 @@ EOF
     log_info "Cleaning up mounts..."
     cleanup_build
 
-    # Compress golden image
+    # Compress golden image. Must stay a single zstd frame (no pzstd or other
+    # multi-frame tools): install.sh's merge fallback detects a truncated
+    # stream only because zstd errors on an unterminated frame; a truncation
+    # landing on a frame boundary would decompress cleanly as a partial image.
     log_info "Compressing golden image..."
     zstd -${ZSTD_LEVEL} -T0 -f "$GOLDEN_IMAGE" -o "$GOLDEN_COMPRESSED"
 

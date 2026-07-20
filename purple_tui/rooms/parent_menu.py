@@ -1674,6 +1674,13 @@ class InstallProgressScreen(PurpleModal):
             self._status = "Double-checking with a backup copy..."
             self._update_ui()
             return
+        if clean.startswith('[PURPLE-MERGING]'):
+            # Both whole copies were damaged; install.sh is rewriting from the
+            # good ranges of each. The forward-only bar sits still until pv
+            # catches back up, so the status must explain the extra wait.
+            self._status = "Repairing the damaged data, this adds a few extra minutes..."
+            self._update_ui()
+            return
         if clean.startswith('[PURPLE-CORRUPT-KEY]'):
             self._corrupt_key = True
             return

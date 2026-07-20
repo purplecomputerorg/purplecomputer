@@ -246,8 +246,11 @@ main() {
     # With-backup ISOs carry a second copy of the image. zstd verifies frame
     # checksums as it streams, so a decayed copy (cheap USB flash loses data
     # in storage/transit; seen in the field) fails the pipeline and we retry
-    # from the backup copy. dd failing with a healthy stream means the
-    # internal disk is the problem, which no backup copy fixes.
+    # from the backup copy. If both whole copies fail, flash decay scatters
+    # bad pages independently across the two copies, so a last-resort pass
+    # merges the good 4MiB ranges of each (hashes in the .manifest sidecar).
+    # dd failing with a healthy stream means the internal disk is the
+    # problem, which no copy or merge fixes.
     # ======================================================================
     log "Writing Purple Computer to disk..."
     log "  Source: $GOLDEN_IMAGE"
@@ -290,19 +293,66 @@ main() {
     }
 
     BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
+    MANIFEST="${GOLDEN_IMAGE}.manifest"
+
+    # Emit each range of the compressed image from whichever copy matches its
+    # manifest hash (manifest: range size in bytes, then one sha256 per range;
+    # written by 01-remaster-iso.sh). Ranges are staged in /tmp so verified
+    # bytes are emitted without re-reading flaky flash, and a bad-sector EIO
+    # on one copy just fails over to the other. A range bad in both copies
+    # truncates the stream, which zstd rejects because the golden image is a
+    # single frame by build; the post-write disk verification backstops the rest.
+    merge_ranges() {
+        local tmp=/tmp/purple-merge-range range=0 bytes want src ok
+        {
+            read -r bytes || return 1
+            case "$bytes" in ''|*[!0-9]*)
+                echo "[PURPLE-MERGE] bad manifest header" >&2
+                return 1 ;;
+            esac
+            while IFS= read -r want; do
+                ok=""
+                for src in "$GOLDEN_IMAGE" "$BACKUP_IMAGE"; do
+                    if dd if="$src" of="$tmp" bs="$bytes" skip=$range count=1 iflag=fullblock status=none 2>/dev/null \
+                        && [ "$(sha256sum < "$tmp")" = "$want" ]; then
+                        ok=1
+                        break
+                    fi
+                done
+                if [ -z "$ok" ]; then
+                    echo "[PURPLE-MERGE] range $range unreadable in both copies" >&2
+                    rm -f "$tmp"
+                    return 1
+                fi
+                cat "$tmp" || { rm -f "$tmp"; return 1; }
+                range=$((range + 1))
+            done
+        } < "$MANIFEST"
+        rm -f "$tmp"
+    }
+
     IMAGE_SOURCES=("$GOLDEN_IMAGE")
     if [ -f "$BACKUP_IMAGE" ]; then
         IMAGE_SOURCES+=("$BACKUP_IMAGE")
+        if [ -f "$MANIFEST" ]; then
+            IMAGE_SOURCES+=(merge)
+        fi
     fi
 
     WROTE_OK=false
     for SRC in "${IMAGE_SOURCES[@]}"; do
-        if [ "$SRC" != "$GOLDEN_IMAGE" ]; then
-            echo "[PURPLE-RETRY] backup copy" >&2
-            log "First copy was damaged, writing from the backup copy..."
+        if [ "$SRC" = merge ]; then
+            echo "[PURPLE-MERGING]" >&2
+            log "Both copies are damaged, combining the good parts of each..."
+            if write_image <(merge_ranges); then WROTE_OK=true; fi
+        else
+            if [ "$SRC" != "$GOLDEN_IMAGE" ]; then
+                echo "[PURPLE-RETRY] backup copy" >&2
+                log "First copy was damaged, writing from the backup copy..."
+            fi
+            if write_image "$SRC"; then WROTE_OK=true; fi
         fi
-        if write_image "$SRC"; then
-            WROTE_OK=true
+        if [ "$WROTE_OK" = "true" ]; then
             break
         fi
         # dd failing means the disk rejected writes; a SIGPIPE'd zstd upstream
@@ -312,6 +362,7 @@ main() {
         fi
         warn "Image copy failed integrity check while reading (zstd exit ${ZSTD_RC}): $SRC"
     done
+
     if [ "$WROTE_OK" != "true" ]; then
         # The friendly wording lives in parent_menu.py, keyed off this marker.
         echo "[PURPLE-CORRUPT-KEY]" >&2

@@ -548,8 +548,14 @@ EFI_GRUB_EOF
     if [ "${PURPLE_WITH_BACKUP_ISO:-0}" = "1" ]; then
         log_info "Building with-backup ISO (adds a second golden image copy)..."
         cp --reflink=auto "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
+        # Manifest: range size in bytes, then one sha256 per range of the
+        # compressed image. When BOTH copies fail install.sh's whole-copy
+        # attempts, it merges the good ranges of each (see merge_ranges there).
+        RANGE_BYTES=$((4*1024*1024))
+        { echo "$RANGE_BYTES"; split -b "$RANGE_BYTES" --filter='sha256sum' "$GOLDEN_IMAGE"; } \
+            > "$PAYLOAD_DIR/purple-os.img.zst.manifest"
         build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"
-        rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"
+        rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst" "$PAYLOAD_DIR/purple-os.img.zst.manifest"
         log_info "With-backup ISO built successfully!"
     fi
 

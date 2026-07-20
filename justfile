@@ -267,7 +267,7 @@ build *args:
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 
-# Make a deliberately corrupted ISO copy to test the install's backup-image fallback: just corrupt-test-iso [iso] [primary|backup|both] (default: newest with-backup ISO)
+# Make a deliberately corrupted ISO copy to test the install's backup-image fallback: just corrupt-test-iso [iso] [primary|backup|both|merge] (default: newest with-backup ISO)
 corrupt-test-iso *args:
     ./build-scripts/make-corrupt-test-iso.sh {{args}}
 

@@ -284,17 +284,33 @@ class ContentManager:
             return emoji
         return None
 
+    def _fuzzy_lookup(self, word: str, table: dict[str, str]) -> Optional[str]:
+        """Fuzzy match a word against table keys and their plural forms.
+
+        Keys come before plurals in the candidate list so a singular match
+        wins ties (existing corrections never change; only misses can become
+        plural matches). Plurals map back to their source key explicitly:
+        singularize() can't reverse fallback plurals of words outside the
+        precomputed tables (e.g. from user packs).
+        """
+        from .fuzzy import fuzzy_match
+        word = word.lower().strip()
+        forms = {k: k for k in table}
+        for k in table:
+            forms.setdefault(pluralize(k), k)
+        if match := fuzzy_match(word, list(forms)):
+            self._last_correction = (word, match)
+            return table[forms[match]]
+        return None
+
     def fuzzy_emoji(self, word: str) -> Optional[str]:
         """Emoji for a word by fuzzy match only (DL distance, min 5 chars).
 
         Records the correction so callers can surface it. The emoji dict is
         large (400+), so the min-5 floor avoids 3-4 char keymash collisions.
+        Plural typos match too ("doggiess" corrects to "doggies").
         """
-        from .fuzzy import fuzzy_match
-        if match := fuzzy_match(word.lower().strip(), list(self.emojis.keys())):
-            self._last_correction = (word.lower().strip(), match)
-            return self.emojis[match]
-        return None
+        return self._fuzzy_lookup(word, self.emojis)
 
     def get_emoji(self, word: str) -> Optional[str]:
         """Get emoji for a word: exact/singular, then fuzzy (DL distance, min 5)."""
@@ -428,11 +444,7 @@ class ContentManager:
         for short slips like "bleu" lives in the explicit `color X` command
         (loose match) and in autocomplete, not in bare-word resolution.
         """
-        from .fuzzy import fuzzy_match
-        if match := fuzzy_match(word.lower().strip(), list(self.colors.keys())):
-            self._last_correction = (word.lower().strip(), match)
-            return self.colors[match]
-        return None
+        return self._fuzzy_lookup(word, self.colors)
 
     def get_color(self, word: str) -> Optional[str]:
         """Get hex color: exact/singular, then fuzzy (DL distance, min 4)."""

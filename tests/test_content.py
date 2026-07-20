@@ -105,6 +105,26 @@ class TestFuzzyEmoji:
     def test_plural_still_works(self, content):
         assert content.get_emoji("cats") is not None
 
+    def test_plural_typo_doggiess(self, content):
+        assert content.get_emoji("doggiess") == "🐶"
+
+    def test_plural_typo_catss(self, content):
+        assert content.get_emoji("catss") == "🐱"
+
+    def test_plural_typo_wolvess(self, content):
+        assert content.get_emoji("wolvess") == "🐺"
+
+    def test_plural_typo_correction_shows_plural(self, content):
+        content._last_correction = None
+        content.get_emoji("doggiess")
+        assert content._last_correction == ("doggiess", "doggies")
+
+    def test_singular_wins_tie_over_plural(self, content):
+        """A typo equidistant from 'bear' and 'bears' must correct to the singular."""
+        content._last_correction = None
+        content.get_emoji("beart")
+        assert content._last_correction == ("beart", "bear")
+
     def test_correction_tracked(self, content):
         content._last_correction = None
         content.get_emoji("dinno")
@@ -138,6 +158,9 @@ class TestFuzzyColor:
 
     def test_exact_still_works(self, content):
         assert content.get_color("red") is not None
+
+    def test_plural_typo_redss(self, content):
+        assert content.get_color("redss") is not None
 
     def test_yellow_not_hello(self, content):
         """'yellow' must not fuzzy match 'hello' emoji."""

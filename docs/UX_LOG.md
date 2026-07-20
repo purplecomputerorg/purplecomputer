@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Misspelled plurals autocorrect now**: Typo tolerance used to only know singular words, so "doggiess", "catss", or "tomatoess" showed nothing while "doggiee" corrected fine. Fuzzy matching now also checks plural forms, so plural typos resolve to the right emoji or color with the usual correction hint.
 - **Room title no longer jitters while the USB indicator blinks**: During live-USB caching the blinking USB icon alternated between the icon glyph and plain spaces of a different rendered width, nudging the centered title bar sideways every second. The indicator now keeps the same text in both blink phases and hides the icon by painting it in the background color, so the header stays put.
 
 - **Demo greeting trimmed and the Art palm tree redrawn**: The Play greeting is now just "Hi!" and "It's Purple Computer!" before the color, counting, and math beats, so it no longer opens with a wall of colored letter blocks. The Art palm tree is regenerated from a bitmap and centered on the canvas: the old keystroke art was baked for a taller, narrower canvas, so it drew as letters (the room now defaults to paint mode, which inverted its Tab toggles) and pinned to the top-left, clipping the crown. The new palm is a green tree (greens made by mixing gold over blue) with a brown trunk and sand, sized to fit with no clipping, and the "Now let's go to the Music room" hand-off lines no longer collide.

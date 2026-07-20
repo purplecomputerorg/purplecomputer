@@ -165,7 +165,9 @@ UI_READY_MARKER=/tmp/purple-ui-ready
 export WINIT_X11_SCALE_FACTOR=1.0
 
 # Software GL rendering: works on any GPU (no driver/firmware dependencies).
-# For a TUI, software GL is indistinguishable from hardware GL.
+# Cheap on big-core CPUs but NOT free on Atom-class ones, where llvmpipe
+# competes with Python for cores. History and revisit criteria:
+# guides/intel-display-tuning.md#software-gl-for-alacritty-history-and-revisit-criteria
 export LIBGL_ALWAYS_SOFTWARE=1
 
 # Debug mode: extra diagnostics at boot

@@ -51,6 +51,20 @@ Two things that matter in `config/picom/picom.conf`:
 - **`unredir-if-possible = false`** is mandatory. Alacritty runs fullscreen, and picom's default is to *unredirect* fullscreen windows for performance, which hands Alacritty straight back to the tearing scanout path and undoes everything. Keep it redirected.
 - **Hardware GL for the compositor only.** The session exports `LIBGL_ALWAYS_SOFTWARE=1` (Alacritty renders via llvmpipe, robust on any GPU). The launcher starts picom with `LIBGL_ALWAYS_SOFTWARE=0` so the *compositor* uses the real GPU (glx backend) for fast vsync, with an `xrender` fallback for VMs / machines where hardware GL is unavailable.
 
+## Software GL for Alacritty: History and Revisit Criteria
+
+The session exports `LIBGL_ALWAYS_SOFTWARE=1` (`config/xinit/xinitrc`), so Alacritty rasterizes every frame on the CPU via llvmpipe while picom composites with hardware GL (above). How we got here:
+
+- **Dec 2025 (`7671ac6`):** modesetting + glamor, hardware GL everywhere.
+- **Mar 14, 2026 (`0a540cc`):** switched Alacritty to software GL, dropping the glamor option in the same commit. Rationale: works on any GPU, no driver/firmware dependencies, and the assumption that for a TUI the cost is invisible. That assumption was never measured.
+- **Mar 15, 2026 (`4128444`):** the context. Aggressive firmware pruning (~400MB) and a minimal X stack meant Alacritty startup could not depend on whatever GPU support survived, on unknown parent hardware or in GPU-less QEMU/UTM VMs.
+- **Jun 2026 (`bfd7593`):** picom deliberately gets hardware GL with a guarded fallback (glx, then xrender, then uncomposited). Every real machine has exercised hardware GL since.
+- **Jul 2026 (`c5ea550`):** radeon firmware shipped back into the image, so the pruning fear was legitimate at least once.
+
+The cost is real on Atom-class CPUs: on an HP Stream 11 (Celeron N3060, 2 weak cores) llvmpipe burns 10-15% of a core with Purple idle and competes with Python under load. Measure with `log-performance` from the parent-menu terminal (any ISO); A/B by flipping the variable to 0 in `/home/purple/.xinitrc` on a live stick and restarting.
+
+If measurement confirms llvmpipe as a top consumer, the accepted fix is the picom pattern applied to the session: probe hardware GL at startup, fall back to llvmpipe when it is unavailable or software anyway. VMs land on llvmpipe automatically, keeping the change a safe no-op there. Update this section when that lands.
+
 ## Why PSR/FBC Stay Disabled (kept, even though they're not the fix)
 
 Disabled on every `boot=casper` line in `build-scripts/01-remaster-iso.sh` via `i915.enable_psr=0 i915.enable_fbc=0`. Intel-only params, a safe no-op on AMD/NVIDIA. We keep them off as defense-in-depth (they are genuinely buggy partial-update sources on this hardware) and because Purple gets ~no battery benefit from them anyway:

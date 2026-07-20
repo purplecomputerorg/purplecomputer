@@ -12,9 +12,18 @@ just flash-corrupt                    # flash the corrupt-test ISO
 
 Then boot the USB (VM or real hardware), open the parent menu, and run Install.
 
+To test every scenario in one pass, plug in four whitelisted drives and:
+
+```bash
+just corrupt-test-iso all             # make all four scenario ISOs
+just flash-corrupt-all                # flash one scenario per drive, in parallel
+```
+
+`flash-corrupt-all` ends with an identification phase: unplug the drives one at a time, and as each disappears it prints which scenario that stick got (and the expected install behavior) so you can label it. To make this work, corrupt-mode flashes skip the power-off eject (a powered-off drive vanishes from the bus, so its unplug would be undetectable); that's safe because writes are synced and read back verified. Corrupt mode also skips the QEMU boot-settle and never records to the orders app. Pass scenario names to flash a subset, e.g. `just flash-corrupt-all merge both` with two drives.
+
 ## Scenarios
 
-`just corrupt-test-iso [iso] [primary|backup|both|merge]`. Without an ISO path it uses the newest build's with-backup ISO and prints which one it picked. Arguments can come in any order.
+`just corrupt-test-iso [iso] [primary|backup|both|merge|all]`. Without an ISO path it uses the newest build's with-backup ISO and prints which one it picked. Arguments can come in any order; `all` makes every scenario ISO.
 
 | Scenario | Command | Expected install behavior |
 |---|---|---|
@@ -34,4 +43,4 @@ The fallback itself lives in `build-scripts/install.sh` (search `BACKUP_IMAGE`):
 - Corrupt-test ISOs are never auto-picked by normal ISO discovery (`just flash`, `just build` flows). Only `just flash-corrupt` or an explicit path flashes one.
 - `just flash-corrupt` warns if the newest corrupt-test ISO came from an older build than your newest build; re-run `just corrupt-test-iso` after rebuilding.
 - The `backup` and `both` scenarios need a with-backup ISO; a plain ISO has no backup copy to corrupt, and the script errors accordingly.
-- Corruption is a plain byte overwrite of `X` characters, deterministic and repeatable; delete the `.corrupt-test-*.iso` files (and their `.sha256`/`.version` sidecars) when done to reclaim disk.
+- Corruption is a plain byte overwrite of `X` characters, deterministic and repeatable; delete the `.corrupt-test-*.iso` files (and their `.sha256`/`.version` sidecars) when done to reclaim disk. `all` makes four full-size copies (`cp --reflink=auto` makes them nearly free on a reflink filesystem, roughly 24GB otherwise).

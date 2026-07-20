@@ -216,19 +216,13 @@ resolve_variant() {
 # Newest deliberately-corrupted test ISO (excluded from all normal ISO
 # discovery, so it needs its own resolution path).
 resolve_corrupt_iso() {
-    ISO_PATH="$(ls -t "$OUTPUT_DIR"/*.corrupt-test*.iso 2>/dev/null | head -1 || true)"
+    ISO_PATH="$(find_corrupt_iso)"
     if [[ -z "$ISO_PATH" ]]; then
         log_error "No corrupt-test ISO found in $OUTPUT_DIR."
         echo "Make one with 'just corrupt-test-iso' first."
         exit 1
     fi
-    local stem="${ISO_PATH%%.corrupt-test*}"
-    stem="${stem%.with-backup}"
-    stem="${stem%.debug}"
-    if [[ "$stem" != "$(latest_build_stem)" ]]; then
-        log_warn "This corrupt-test ISO comes from an OLDER build than the newest."
-        log_warn "Re-run 'just corrupt-test-iso' to make one from the newest build."
-    fi
+    warn_if_stale_corrupt_iso "$ISO_PATH"
 }
 
 # No ISO path and no variant flag: show the newest build's variants and ask

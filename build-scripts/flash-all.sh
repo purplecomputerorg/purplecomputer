@@ -18,12 +18,20 @@ log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
 usage() {
     cat <<EOF
 Usage: $0 [--debug] [--yes] [iso-path]
+       $0 --corrupt [scenario...]
 
 Flash an ISO to every whitelisted USB drive currently plugged in, in parallel.
+
+With --corrupt, flash the corrupt-test scenario ISOs (made by 'just
+corrupt-test-iso all') instead: one scenario per drive, then an interactive
+unplug phase tells you which stick got which scenario as you pull each one.
+Positional args select scenarios (default: ${CORRUPT_SCENARIOS[*]}).
+Corrupt mode never boot-settles: these drives are for one throwaway test.
 
 Options:
   --debug       Use the newest build's debug ISO
   --no-backup   Use the newest build's standard ISO (no backup image copy)
+  --corrupt     Flash corrupt-test scenario ISOs, one per drive
   --yes         Skip the confirmation prompt
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
@@ -33,28 +41,55 @@ EOF
 
 SKIP_CONFIRM=false
 SKIP_SETTLE=false
+CORRUPT_MODE=false
 ISO_KIND=""
-ISO_PATH=""
+POSITIONAL=()
 while [[ -n "${1:-}" ]]; do
     case "$1" in
         --help|-h)    usage; exit 0 ;;
         --debug|-d)   ISO_KIND=debug; shift ;;
         --no-backup)  ISO_KIND=standard; shift ;;
+        --corrupt)    CORRUPT_MODE=true; shift ;;
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
-        *)            ISO_PATH="$1"; shift ;;
+        *)            POSITIONAL+=("$1"); shift ;;
     esac
 done
 
-# Variant flags resolve against the NEWEST build only; an older build is never
-# picked silently. Pass a path explicitly to flash an older ISO.
-if [[ -z "$ISO_PATH" ]]; then
-    ISO_PATH="$(find_latest_iso "$ISO_KIND")"
-fi
-if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
-    log_error "No matching ISO for the newest build in $OUTPUT_DIR."
-    log_error "Run 'just build' first, or pass an ISO path explicitly."
-    exit 1
+# SCENARIOS[i] and SCEN_ISOS[i] pair up; empty outside corrupt mode.
+SCENARIOS=()
+SCEN_ISOS=()
+ISO_PATH=""
+if [[ "$CORRUPT_MODE" == true ]]; then
+    SKIP_SETTLE=true
+    SCENARIOS=("${POSITIONAL[@]}")
+    (( ${#SCENARIOS[@]} )) || SCENARIOS=("${CORRUPT_SCENARIOS[@]}")
+    for s in "${SCENARIOS[@]}"; do
+        if [[ " ${CORRUPT_SCENARIOS[*]} " != *" $s "* ]]; then
+            log_error "Unknown scenario '$s' (choose from: ${CORRUPT_SCENARIOS[*]})."
+            exit 1
+        fi
+        iso="$(find_corrupt_iso "$s")"
+        if [[ -z "$iso" ]]; then
+            log_error "No corrupt-test ISO for scenario '$s' in $OUTPUT_DIR."
+            log_error "Make them with 'just corrupt-test-iso all' first."
+            exit 1
+        fi
+        warn_if_stale_corrupt_iso "$iso"
+        SCEN_ISOS+=("$iso")
+    done
+else
+    # Variant flags resolve against the NEWEST build only; an older build is
+    # never picked silently. Pass a path explicitly to flash an older ISO.
+    ISO_PATH="${POSITIONAL[0]:-}"
+    if [[ -z "$ISO_PATH" ]]; then
+        ISO_PATH="$(find_latest_iso "$ISO_KIND")"
+    fi
+    if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
+        log_error "No matching ISO for the newest build in $OUTPUT_DIR."
+        log_error "Run 'just build' first, or pass an ISO path explicitly."
+        exit 1
+    fi
 fi
 
 load_whitelist
@@ -70,11 +105,41 @@ if [[ ${#FOUND_DRIVES[@]} -eq 0 ]]; then
     exit 1
 fi
 
+# Per-drive parallel arrays: normal mode repeats one ISO across every drive,
+# corrupt mode zips scenarios onto drives in discovery order.
+ENTRIES=()
+ISOS=()
+SCENS=()
+if [[ "$CORRUPT_MODE" == true ]]; then
+    COUNT=${#SCENARIOS[@]}
+    if (( ${#FOUND_DRIVES[@]} < COUNT )); then
+        COUNT=${#FOUND_DRIVES[@]}
+        log_error "Only $COUNT drive(s) plugged in for ${#SCENARIOS[@]} scenarios; skipping: ${SCENARIOS[*]:$COUNT}"
+    elif (( ${#FOUND_DRIVES[@]} > COUNT )); then
+        log_info "${#FOUND_DRIVES[@]} drives plugged in but only $COUNT scenario(s); the extra drives will be left untouched."
+    fi
+    for ((i = 0; i < COUNT; i++)); do
+        ENTRIES+=("${FOUND_DRIVES[$i]}")
+        ISOS+=("${SCEN_ISOS[$i]}")
+        SCENS+=("${SCENARIOS[$i]}")
+    done
+else
+    for entry in "${FOUND_DRIVES[@]}"; do
+        ENTRIES+=("$entry")
+        ISOS+=("$ISO_PATH")
+        SCENS+=("")
+    done
+fi
+
 echo
-echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") to ${#FOUND_DRIVES[@]} drive(s) in parallel:${NC}"
-for entry in "${FOUND_DRIVES[@]}"; do
-    IFS='|' read -r dev size model serial <<< "$entry"
-    printf "  %-10s %-8s %-22s %s\n" "$dev" "$size" "$model" "$serial"
+if [[ "$CORRUPT_MODE" == true ]]; then
+    echo -e "${BOLD}${YELLOW}Will flash ${#ENTRIES[@]} corrupt-test scenario(s), one per drive, in parallel:${NC}"
+else
+    echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") to ${#ENTRIES[@]} drive(s) in parallel:${NC}"
+fi
+for i in "${!ENTRIES[@]}"; do
+    IFS='|' read -r dev size model serial <<< "${ENTRIES[$i]}"
+    printf "  %-10s %-8s %-22s %-16s %s\n" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
 done
 echo -e "  ${RED}${BOLD}ALL DATA ON THESE DRIVES WILL BE DESTROYED${NC}"
 echo
@@ -84,13 +149,18 @@ if [[ "$SKIP_CONFIRM" != true ]]; then
     [[ "$confirm" == "yes" ]] || { log_info "Aborted."; exit 0; }
 fi
 
-# Verify the ISO against its build checksum once the user commits, then hand the
-# verified hash to children so they skip re-hashing 6GB apiece. After the prompt
-# so it doesn't stall confirmation; still before any drive is written.
-VERIFIED_ISO_SHA256="$(verify_iso_checksum "$ISO_PATH")" || exit 1
-export VERIFIED_ISO_SHA256
+# Verify each distinct ISO against its build checksum once the user commits,
+# then hand the verified hash to children so they skip re-hashing 6GB apiece.
+# After the prompt so it doesn't stall confirmation; still before any drive is
+# written.
+declare -A SHA_BY_ISO=()
+for iso in "${ISOS[@]}"; do
+    [[ -n "${SHA_BY_ISO[$iso]:-}" ]] && continue
+    sha="$(verify_iso_checksum "$iso")" || exit 1
+    SHA_BY_ISO["$iso"]="$sha"
+done
 init_manifest
-log_info "ISO checksum OK."
+log_info "ISO checksum(s) OK."
 
 # Prime sudo and keep the timestamp fresh for the duration of the run, so
 # children don't hit a password prompt mid-dd on long parallel flashes.
@@ -112,13 +182,13 @@ echo
 
 PIDS=()
 DEVS=()
-for entry in "${FOUND_DRIVES[@]}"; do
-    IFS='|' read -r dev _ _ _ <<< "$entry"
+for i in "${!ENTRIES[@]}"; do
+    IFS='|' read -r dev _ _ _ <<< "${ENTRIES[$i]}"
     logfile="$LOG_DIR/$(basename "$dev").log"
-    echo -e "${BOLD}→ Starting flash for $dev (tail -f $logfile)${NC}"
-    "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" \
-        $([[ "$USE_DEBUG" == true ]] && echo --debug) \
-        "$ISO_PATH" >"$logfile" 2>&1 &
+    echo -e "${BOLD}→ Starting flash for $dev${SCENS[$i]:+ [${SCENS[$i]}]} (tail -f $logfile)${NC}"
+    VERIFIED_ISO_SHA256="${SHA_BY_ISO[${ISOS[$i]}]}" \
+        "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" \
+        "${ISOS[$i]}" >"$logfile" 2>&1 &
     PIDS+=($!)
     DEVS+=("$dev")
 done
@@ -167,11 +237,17 @@ if [[ ${#SETTLE_PIDS[@]} -gt 0 ]]; then
 fi
 
 # Re-enumerate and eject each verified drive (same pass single flashes do).
-for i in "${!DEVS[@]}"; do
-    dev="${DEVS[$i]}"
-    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-    eject_drive "$dev" || true
-done
+# Corrupt mode skips this: a powered-off drive vanishes from the bus, so its
+# unplug would be undetectable and the identification phase couldn't work.
+# Safe because every write is synced and read back verified, and these test
+# drives get reflashed after one use anyway.
+if [[ "$CORRUPT_MODE" != true ]]; then
+    for i in "${!DEVS[@]}"; do
+        dev="${DEVS[$i]}"
+        [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
+        eject_drive "$dev" || true
+    done
+fi
 
 echo
 log_info "QA manifest: $(manifest_path)"
@@ -180,7 +256,7 @@ log_info "QA manifest: $(manifest_path)"
 # batch to a git hash without digging through the manifest. Uses the currently
 # checked-out commit (build-then-flash means HEAD matches the ISO).
 SUCCEEDED=$(( ${#DEVS[@]} - ${#FAILED[@]} ))
-if [[ $SUCCEEDED -gt 0 ]]; then
+if [[ $SUCCEEDED -gt 0 && "$CORRUPT_MODE" != true ]]; then
     # Prefer the version baked into the ISO (build-<hash>-<date>, from the .version
     # sidecar 01-remaster-iso.sh writes next to the ISO): that's the commit the
     # software was actually built from. Fall back to the checked-out commit only
@@ -226,7 +302,7 @@ if [[ $SUCCEEDED -gt 0 ]]; then
         # sensitive is hard-coded in this public repo.
         [[ -f "$SCRIPT_DIR/.env" ]] && source "$SCRIPT_DIR/.env"
         if [[ -n "${FLASH_LOG_URL:-}" && -n "${ADMIN_PASSWORD_PROD:-}" ]]; then
-            FLASH_PAYLOAD="{\"git_hash\":\"$FLASH_SHORT\",\"git_full\":\"$FLASH_FULL\",\"branch\":\"$FLASH_BRANCH\",\"iso_name\":\"$(basename "$ISO_PATH")\",\"iso_sha256\":\"$VERIFIED_ISO_SHA256\",\"drive_count\":$SUCCEEDED,\"flashed_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
+            FLASH_PAYLOAD="{\"git_hash\":\"$FLASH_SHORT\",\"git_full\":\"$FLASH_FULL\",\"branch\":\"$FLASH_BRANCH\",\"iso_name\":\"$(basename "$ISO_PATH")\",\"iso_sha256\":\"${SHA_BY_ISO[$ISO_PATH]}\",\"drive_count\":$SUCCEEDED,\"flashed_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}"
             # Cloudflare Access service-token headers, if the endpoint is behind
             # Access (both set in build-scripts/.env). Omitted headers just mean
             # the request relies on the app's Basic Auth alone.
@@ -246,10 +322,49 @@ if [[ $SUCCEEDED -gt 0 ]]; then
     fi
 fi
 
+# Which physical stick got which scenario: the drives skipped the power-off
+# eject, so each unplug still drops the device from /sys/block. Watch for that
+# and announce the scenario as the user pulls drives one at a time.
+identify_corrupt_drives() {
+    sudo sync
+    echo
+    echo -e "${BOLD}${YELLOW}Now unplug the drives ONE at a time to identify them.${NC}"
+    echo "As each drive disappears, label the stick you just pulled with its scenario."
+    echo
+    local remaining=() still i dev scen
+    for i in "${!DEVS[@]}"; do remaining+=("$i"); done
+    while (( ${#remaining[@]} )); do
+        sleep 0.5
+        still=()
+        for i in "${remaining[@]}"; do
+            dev="${DEVS[$i]}"
+            if [[ -e "/sys/block/$(basename "$dev")" ]]; then
+                still+=("$i")
+                continue
+            fi
+            scen="${SCENS[$i]}"
+            if [[ " ${FAILED[*]} " == *" $dev "* ]]; then
+                echo -e "${RED}✗${NC} That was ${BOLD}${scen}${NC}, but its flash FAILED. Set it aside, don't test it."
+            else
+                echo -e "${GREEN}✓${NC} That was ${BOLD}${scen}${NC}: $(corrupt_scenario_expectation "$scen"). Label it '$scen'."
+            fi
+        done
+        remaining=("${still[@]}")
+    done
+    echo
+    log_info "All drives identified and unplugged."
+}
+
+if [[ "$CORRUPT_MODE" == true && ${#DEVS[@]} -gt 0 ]]; then
+    identify_corrupt_drives
+fi
+
 if [[ ${#FAILED[@]} -eq 0 ]]; then
-    echo -e "${BOLD}${GREEN}All ${#FOUND_DRIVES[@]} drives flashed and verified. Unplug them now.${NC}"
+    if [[ "$CORRUPT_MODE" != true ]]; then
+        echo -e "${BOLD}${GREEN}All ${#DEVS[@]} drives flashed and verified. Unplug them now.${NC}"
+    fi
     exit 0
 else
-    echo -e "${BOLD}${RED}${#FAILED[@]} of ${#FOUND_DRIVES[@]} drive(s) failed: ${FAILED[*]}${NC}"
+    echo -e "${BOLD}${RED}${#FAILED[@]} of ${#DEVS[@]} drive(s) failed: ${FAILED[*]}${NC}"
     exit 1
 fi

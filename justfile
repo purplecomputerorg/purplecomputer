@@ -267,13 +267,17 @@ build *args:
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 
-# Make a deliberately corrupted ISO copy to test the install's backup-image fallback: just corrupt-test-iso [iso] [primary|backup|both|merge] (default: newest with-backup ISO)
+# Make a deliberately corrupted ISO copy to test the install's backup-image fallback: just corrupt-test-iso [iso] [primary|backup|both|merge|all] (default: newest with-backup ISO)
 corrupt-test-iso *args:
     ./build-scripts/make-corrupt-test-iso.sh {{args}}
 
 # Flash the newest corrupt-test ISO (made by just corrupt-test-iso)
 flash-corrupt *args:
     ./build-scripts/flash-to-usb.sh --corrupt {{args}}
+
+# Flash every corrupt-test scenario to plugged-in whitelisted drives, one per drive, then identify each stick as you unplug it
+flash-corrupt-all *args:
+    ./build-scripts/flash-all.sh --corrupt {{args}}
 
 # Flash debug ISO to USB drive
 flash-debug *args:

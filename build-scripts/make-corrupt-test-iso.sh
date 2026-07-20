@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
 
 usage() {
-    echo "Usage: $0 [iso] [primary|backup|both|merge]"
+    echo "Usage: $0 [iso] [primary|backup|both|merge|all]..."
     echo ""
     echo "  iso      ISO to copy and corrupt. Default: the newest build's"
     echo "           with-backup ISO (build one with PURPLE_WITH_BACKUP_ISO=1 just build)."
@@ -28,16 +28,19 @@ usage() {
     echo "           damaged-Purple-Key error screen."
     echo "  merge    Corrupt both copies at different offsets; the install"
     echo "           should recover by merging the good ranges of each."
+    echo "  all      Make every scenario ISO (for just flash-corrupt-all)."
 }
 
-ISO="" WHICH="primary"
+ISO="" SCENARIOS=()
 for arg in "$@"; do
     case "$arg" in
         -h|--help)                 usage; exit 0 ;;
-        primary|backup|both|merge) WHICH="$arg" ;;
+        all)                       SCENARIOS=("${CORRUPT_SCENARIOS[@]}") ;;
+        primary|backup|both|merge) SCENARIOS+=("$arg") ;;
         *)                         ISO="$arg" ;;
     esac
 done
+(( ${#SCENARIOS[@]} )) || SCENARIOS=(primary)
 
 if [[ -z "$ISO" ]]; then
     ISO="$(find_latest_iso backup)"
@@ -54,7 +57,6 @@ if [[ ! -f "$ISO" ]]; then
     usage
     exit 1
 fi
-OUT="${ISO%.iso}.corrupt-test-${WHICH}.iso"
 
 corrupt() {
     local path="$1" mib="${2:-8}" lba
@@ -73,28 +75,34 @@ corrupt() {
     echo "Corrupted 64KiB of $path at byte offset $off (${mib}MiB into the file)"
 }
 
+make_scenario() {
+    local which="$1"
+    OUT="${ISO%.iso}.corrupt-test-${which}.iso"
+    echo "Copying $(basename "$ISO") -> $(basename "$OUT")..."
+    sudo cp --reflink=auto -f "$ISO" "$OUT"
+    case "$which" in
+        primary) corrupt /purple/purple-os.img.zst ;;
+        backup)  corrupt /purple/purple-os-backup.img.zst ;;
+        both)    corrupt /purple/purple-os.img.zst
+                 corrupt /purple/purple-os-backup.img.zst ;;
+        merge)   corrupt /purple/purple-os.img.zst
+                 corrupt /purple/purple-os-backup.img.zst 24 ;;
+    esac
+    echo "Scenario '$which': $(corrupt_scenario_expectation "$which")."
+    sha256sum "$OUT" | sudo tee "${OUT}.sha256" >/dev/null
+    if [[ -f "${ISO}.version" ]]; then
+        sudo cp -f "${ISO}.version" "${OUT}.version"
+    fi
+}
+
 # The output dir is owned by the Docker build (nobody:nogroup), so all writes
 # need sudo. Prompt once up front rather than mid-copy.
 sudo -v
 
-echo "Copying $(basename "$ISO") -> $(basename "$OUT")..."
-sudo cp --reflink=auto -f "$ISO" "$OUT"
+for which in "${SCENARIOS[@]}"; do
+    make_scenario "$which"
+    echo ""
+done
 
-case "$WHICH" in
-    primary) corrupt /purple/purple-os.img.zst
-             echo "Scenario '$WHICH': expect the install to self-heal from the backup copy." ;;
-    backup)  corrupt /purple/purple-os-backup.img.zst
-             echo "Scenario '$WHICH': expect the install to succeed normally from the primary." ;;
-    both)    corrupt /purple/purple-os.img.zst
-             corrupt /purple/purple-os-backup.img.zst
-             echo "Scenario '$WHICH': expect the install to show the damaged-Purple-Key screen (same 4MiB range bad in both copies, so even the merge fails)." ;;
-    merge)   corrupt /purple/purple-os.img.zst
-             corrupt /purple/purple-os-backup.img.zst 24
-             echo "Scenario '$WHICH': expect the install to self-heal by merging the good ranges of both copies." ;;
-esac
-
-sha256sum "$OUT" | sudo tee "${OUT}.sha256" >/dev/null
-[[ -f "${ISO}.version" ]] && sudo cp -f "${ISO}.version" "${OUT}.version"
-
-echo ""
-echo "Done. Flash it with:  just flash-corrupt"
+echo "Done. Flash with:  just flash-corrupt      (newest corrupt-test ISO, one drive)"
+echo "             or:  just flash-corrupt-all  (every scenario, one drive each)"

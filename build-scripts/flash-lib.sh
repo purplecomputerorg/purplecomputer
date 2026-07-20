@@ -310,3 +310,34 @@ find_latest_iso() {
 newest_iso_of_variant() {
     list_build_isos | filter_variant "${1:-}" | head -1
 }
+
+# --- Corrupt-test scenarios --------------------------------------------------
+# Made by make-corrupt-test-iso.sh, flashed by flash-to-usb.sh --corrupt and
+# flash-all.sh --corrupt. The scenario lives in the ISO filename.
+
+CORRUPT_SCENARIOS=(primary backup both merge)
+
+corrupt_scenario_expectation() {
+    case "$1" in
+        primary) echo "expect the install to self-heal from the backup copy" ;;
+        backup)  echo "expect the install to succeed normally from the primary" ;;
+        both)    echo "expect the damaged-Purple-Key error screen (same range bad in both copies, so even the merge fails)" ;;
+        merge)   echo "expect the install to self-heal by merging the good ranges of both copies" ;;
+    esac
+}
+
+# Newest corrupt-test ISO, optionally restricted to one scenario. Prints
+# nothing when none exists.
+find_corrupt_iso() {
+    local scen="${1:-*}"
+    ls -t "$OUTPUT_DIR"/*.corrupt-test-$scen.iso 2>/dev/null | head -1 || true
+}
+
+warn_if_stale_corrupt_iso() {
+    local stem="${1%%.corrupt-test*}"
+    stem="${stem%.with-backup}"
+    stem="${stem%.debug}"
+    if [[ "$stem" != "$(latest_build_stem)" ]]; then
+        echo "[WARN] $(basename "$1") comes from an OLDER build than the newest; re-run 'just corrupt-test-iso' after rebuilding." >&2
+    fi
+}

@@ -11,7 +11,7 @@ ensures identical input always produces identical WAV output.
 import array
 import hashlib
 import re
-import subprocess
+import shutil
 import sys
 import tempfile
 import threading
@@ -283,25 +283,20 @@ _CACHE_DIR = Path(os.environ.get("PURPLE_TTS_CACHE")) if os.environ.get("PURPLE_
 _MAX_CACHE_TEXT_LEN = 500
 
 # Cache size limit (bytes). Oldest-accessed files evicted when exceeded.
+# Stored as raw WAV (~43 KB/s of speech, so ~500-1000 phrases fit): the image
+# ships no encoder, and LRU eviction bounds disk use either way.
+# History and rejected alternatives: guides/tts-caching.md
 _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
 
-def _wav_to_ogg(wav_path: str, ogg_path: str) -> None:
-    """Convert WAV to OGG Vorbis using ffmpeg."""
-    subprocess.run(
-        ["ffmpeg", "-y", "-loglevel", "error",
-         "-i", wav_path, "-c:a", "libvorbis", "-q:a", "2", ogg_path],
-        check=True, capture_output=True,
-    )
 
-
-def _cache_key(text: str) -> str:
-    """Hash the prepared text to create a cache filename."""
-    return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+def _cache_path(prepared_text: str) -> Path:
+    """Cache filename: hash of the prepared text."""
+    return _CACHE_DIR / f"{hashlib.sha256(prepared_text.encode('utf-8')).hexdigest()[:16]}.wav"
 
 
 def _get_cached(prepared_text: str) -> Path | None:
-    """Return cached OGG path if it exists."""
-    cache_path = _CACHE_DIR / f"{_cache_key(prepared_text)}.ogg"
+    """Return cached WAV path if it exists."""
+    cache_path = _cache_path(prepared_text)
     if cache_path.exists():
         try:
             cache_path.touch()
@@ -312,39 +307,38 @@ def _get_cached(prepared_text: str) -> Path | None:
 
 
 def _store_cache(prepared_text: str, wav_path: str) -> Path | None:
-    """Store audio in cache as OGG (or WAV fallback). Returns cache path, or None on failure."""
+    """Move the WAV into the cache. Returns cache path, or None on failure
+    (the temp file survives so the caller can still play it)."""
     if len(prepared_text) > _MAX_CACHE_TEXT_LEN:
         return None
 
     try:
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        key = _cache_key(prepared_text)
-        ogg_path = _CACHE_DIR / f"{key}.ogg"
-        _wav_to_ogg(wav_path, str(ogg_path))
+        cache_path = _cache_path(prepared_text)
+        shutil.move(wav_path, cache_path)
         _enforce_cache_limit()
-        return ogg_path
-    except Exception:
+        return cache_path
+    except Exception as e:
+        _dbg(f"_store_cache failed: {type(e).__name__}: {e}")
         return None
 
 
 def _enforce_cache_limit() -> None:
     """Evict oldest-accessed cache files if total size exceeds the limit."""
     try:
-        files = list(_CACHE_DIR.glob("*.*"))
-        if not files:
-            return
+        with os.scandir(_CACHE_DIR) as entries:
+            files = [(e.stat().st_mtime, e.stat().st_size, Path(e.path))
+                     for e in entries if e.is_file()]
 
-        total = sum(f.stat().st_size for f in files)
+        total = sum(size for _, size, _ in files)
         if total <= _MAX_CACHE_BYTES:
             return
 
-        # Sort by modification time (oldest first), evict until under limit
-        files.sort(key=lambda f: f.stat().st_mtime)
-        for f in files:
+        # Evict oldest-accessed first until under limit
+        for _, size, path in sorted(files):
             if total <= _MAX_CACHE_BYTES:
                 break
-            size = f.stat().st_size
-            f.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
             total -= size
     except Exception:
         pass
@@ -356,7 +350,7 @@ def clear_cache() -> int:
         return 0
     count = 0
     for f in _CACHE_DIR.iterdir():
-        if f.suffix == ".ogg":
+        if f.is_file():
             f.unlink()
             count += 1
     return count
@@ -538,7 +532,6 @@ def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
         # Try to cache (best effort, don't lose audio if caching fails)
         cache_path = _store_cache(prepared_text, wav_path)
         if cache_path:
-            Path(wav_path).unlink(missing_ok=True)
             return cache_path
 
         # Caching failed, return temp file (caller must clean up)

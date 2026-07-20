@@ -10,6 +10,7 @@ import logging
 import re
 
 from .content import get_content
+from .fuzzy import fuzzy_match_small
 from .rooms.art_room import get_key_color
 
 log = logging.getLogger(__name__)
@@ -96,10 +97,31 @@ def _split_commands(text: str) -> list[str]:
     return parts if parts else [text]
 
 
-def parse_lines(lines: list[str], split_commands: bool = True) -> list[dict]:
+def correct_repeat_typo(line: str, corrections: list | None = None) -> str:
+    """Fix a misspelled leading `repeat` ("repeet 3 forward 10") so the loop
+    parses. Only parse_lines can expand loops, so the fix must land before
+    parsing, not in per-line dispatch. Never corrects a real content word
+    ("treat 5" must paint, not loop)."""
+    words = line.split(None, 1)
+    if len(words) < 2 or len(words[0]) < 3:
+        return line
+    first = words[0].lower()
+    if first == 'repeat' or get_content().is_exact_word(first):
+        return line
+    if fuzzy_match_small(first, ['repeat'], cutoff=0.7):
+        fixed = 'repeat ' + words[1]
+        if corrections is not None:
+            corrections.append((line, fixed))
+        return fixed
+    return line
+
+
+def parse_lines(lines: list[str], split_commands: bool = True,
+                corrections: list | None = None) -> list[dict]:
     """Parse lines into a list of commands.
 
-    Handles inline `repeat N cmd1, cmd2` syntax.
+    Handles inline `repeat N cmd1, cmd2` syntax, fuzzy-correcting a misspelled
+    leading `repeat` (recorded in `corrections` when given).
     Clause separators (, . ; |) split a line into multiple commands.
     Returns a flat list of command dicts with 'type' and params.
 
@@ -110,7 +132,7 @@ def parse_lines(lines: list[str], split_commands: bool = True) -> list[dict]:
     """
     result = []
     for line in lines:
-        line = line.strip()
+        line = correct_repeat_typo(line.strip(), corrections)
         if not line:
             continue
 
@@ -126,7 +148,8 @@ def parse_lines(lines: list[str], split_commands: bool = True) -> list[dict]:
         if m:
             count = max(1, min(count, 100))
             sub_lines = _split_clauses(body_text)
-            body_cmds = parse_lines(sub_lines, split_commands=split_commands)
+            body_cmds = parse_lines(sub_lines, split_commands=split_commands,
+                                    corrections=corrections)
             result.append({'type': 'repeat', 'count': count, 'body': body_cmds})
             continue
 
@@ -163,8 +186,6 @@ class PlayCodeRunner:
     Results are collected and returned.
     """
 
-    _KEYWORD_VOCAB = ['repeat']
-
     def __init__(self, evaluator):
         self.evaluator = evaluator
         self.corrections: list[tuple[str, str]] = []
@@ -172,12 +193,7 @@ class PlayCodeRunner:
 
     def run(self, lines: list[str]) -> list[str]:
         """Run code and return list of result strings."""
-        # Fuzzy-correct repeat keyword before parsing
-        corrected_lines = []
-        for line in lines:
-            corrected_lines.append(self._fuzzy_correct(line))
-
-        cmds = parse_lines(corrected_lines)
+        cmds = parse_lines(lines, corrections=self.corrections)
         flat = flatten_commands(cmds)
         self.pairs = []
         for cmd in flat:
@@ -191,22 +207,6 @@ class PlayCodeRunner:
                     log.debug("Play command failed: %s", text, exc_info=True)
                     continue
         return [r for _, r, _ in self.pairs]
-
-    def _fuzzy_correct(self, line: str) -> str:
-        """Fuzzy-correct command keywords, matching music/art runner pattern."""
-        words = line.strip().split(None, 1)
-        if not words or len(words[0]) < 3:
-            return line
-        first = words[0].lower()
-        if first in ('repeat',):
-            return line
-        from .fuzzy import fuzzy_match_small
-        corrected = fuzzy_match_small(first, self._KEYWORD_VOCAB, cutoff=0.7)
-        if corrected and corrected != first:
-            new_line = corrected + (' ' + words[1] if len(words) > 1 else '')
-            self.corrections.append((line.strip(), new_line))
-            return new_line
-        return line
 
 
 class MusicCodeRunner:
@@ -279,7 +279,7 @@ class MusicCodeRunner:
         """Run music code. Corrections stored in self.corrections."""
         from .music_constants import ALL_KEYS
 
-        cmds = parse_lines(lines)
+        cmds = parse_lines(lines, corrections=self.corrections)
         flat = flatten_commands(cmds)
         self._mode = mode
         self._all_keys = ALL_KEYS
@@ -434,9 +434,6 @@ class MusicCodeRunner:
                 await asyncio.sleep(delay)
 
 
-from .fuzzy import fuzzy_match_small
-
-
 # Vocabulary lists for fuzzy matching
 _COMMAND_VOCAB = [
     'turn', 'forward', 'go', 'move', 'walk', 'step', 'paint', 'write',
@@ -499,16 +496,17 @@ class ArtCodeRunner:
         expanded = []
         for line in lines:
             expanded.extend(self._peel_color_before_repeat(line))
-        cmds = parse_lines(expanded, split_commands=False)
-        flat = flatten_commands(cmds)
         self._paint_on = paint
         self._write_on = not paint
+        await self._run_lines(expanded)
 
-        for cmd in flat:
+    async def _run_lines(self, lines: list[str], _resolving: bool = False) -> None:
+        cmds = parse_lines(lines, split_commands=False, corrections=self.corrections)
+        for cmd in flatten_commands(cmds):
             if cmd['type'] != 'line':
                 continue
             try:
-                await self._dispatch(cmd['text'])
+                await self._dispatch(cmd['text'], _resolving)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -520,8 +518,10 @@ class ArtCodeRunner:
         a loop at the start of a line, so the color must become its own line."""
         words = line.split()
         _, used = self._resolve_leading_color(words)
-        if used and used < len(words) and words[used].lower() == 'repeat':
-            return [" ".join(words[:used]), " ".join(words[used:])]
+        if used and used < len(words):
+            rest = correct_repeat_typo(" ".join(words[used:]), self.corrections)
+            if rest.split()[0].lower() == 'repeat':
+                return [" ".join(words[:used]), rest]
         return [line]
 
     async def _dispatch(self, text: str, _resolving: bool = False) -> None:
@@ -552,7 +552,7 @@ class ArtCodeRunner:
         # colors and `green 5`-style no-anchor lines via leading-color peel,
         # plus fuzzy verb correction (`forwrd 10` → `forward 10`).
         if not _resolving:
-            if self._resolve(text):
+            if await self._resolve(text):
                 return
 
         # Stage 5: paint mode paints each character (like interactive mode).
@@ -795,7 +795,7 @@ class ArtCodeRunner:
     # Resolution pipeline (for unmatched text)
     # ------------------------------------------------------------------
 
-    def _resolve(self, text: str) -> bool:
+    async def _resolve(self, text: str) -> bool:
         """Try to interpret unrecognized text. Returns True if handled."""
         words = text.strip().split()
         if not words:
@@ -812,21 +812,21 @@ class ArtCodeRunner:
                 # Splitting a color off its remainder is normalization, not a fix, so
                 # it records no correction; a real fix surfaces from the re-dispatch.
                 if re.match(r'^\d+$', remainder):
-                    asyncio.ensure_future(self._dispatch(f"forward {remainder}"))
-                else:
-                    asyncio.ensure_future(self._dispatch(remainder))
+                    remainder = f"forward {remainder}"
+                await self._run_lines([remainder])
             return True
 
         # 2. Fuzzy command keyword (e.g. "forwrd 10" -> "forward 10"), but never
         #    on a real word: "tree" overlaps "repeat" enough to fool difflib, so
         #    a known emoji word must be painted, not coerced into a command.
+        #    Re-run through _run_lines so a corrected `repeat` expands its loop.
         first = words[0].lower()
-        corrected_kw = None if get_content().exact_emoji(first) else \
+        corrected_kw = None if get_content().is_exact_word(first) else \
             fuzzy_match_small(first, _COMMAND_VOCAB)
         if corrected_kw and corrected_kw != first:
             corrected_text = corrected_kw + (" " + " ".join(words[1:]) if len(words) > 1 else "")
             self.corrections.append((text, corrected_text))
-            asyncio.ensure_future(self._dispatch(corrected_text, _resolving=True))
+            await self._run_lines([corrected_text], _resolving=True)
             return True
 
         return False

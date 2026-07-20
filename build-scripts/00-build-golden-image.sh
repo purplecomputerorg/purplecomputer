@@ -341,6 +341,8 @@ TMPFILES
         mkdir -p "$MOUNT_DIR/opt/purple/scripts"
         cp /purple-src/scripts/on-device/*.py "$MOUNT_DIR/opt/purple/scripts/" 2>/dev/null || true
         cp /purple-src/scripts/on-device/*.sh "$MOUNT_DIR/opt/purple/scripts/" 2>/dev/null || true
+        chmod +x "$MOUNT_DIR/opt/purple/scripts/log-performance.py"
+        ln -sf /opt/purple/scripts/log-performance.py "$MOUNT_DIR/usr/local/bin/log-performance"
     fi
 
     # Install build deps for compiling Python C extensions + keyd + purple-reboot.

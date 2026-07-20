@@ -5,13 +5,21 @@
 # sidecar matches the corrupted bytes) and boots normally; only the chosen
 # copy fails its zstd integrity check during install.
 #
-# corrupt-test ISOs are never auto-picked by find_latest_iso; flash them by
-# explicit path: just flash <output.iso>
+# corrupt-test ISOs are never auto-picked by find_latest_iso; flash them via
+# just flash-corrupt (or an explicit path to just flash)
+#
+# Full walkthrough: guides/corruption-testing.md
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+source "$SCRIPT_DIR/flash-lib.sh"
+
 usage() {
-    echo "Usage: $0 <iso> [primary|backup|both]"
+    echo "Usage: $0 [iso] [primary|backup|both]"
     echo ""
+    echo "  iso      ISO to copy and corrupt. Default: the newest build's"
+    echo "           with-backup ISO (build one with PURPLE_WITH_BACKUP_ISO=1 just build)."
     echo "  primary  Corrupt /purple/purple-os.img.zst (default). On a"
     echo "           with-backup ISO the install should recover via the backup."
     echo "  backup   Corrupt /purple/purple-os-backup.img.zst only."
@@ -19,9 +27,27 @@ usage() {
     echo "           damaged-Purple-Key error screen."
 }
 
-ISO="${1:-}"
-WHICH="${2:-primary}"
-if [[ -z "$ISO" || ! -f "$ISO" ]]; then
+ISO="" WHICH="primary"
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)           usage; exit 0 ;;
+        primary|backup|both) WHICH="$arg" ;;
+        *)                   ISO="$arg" ;;
+    esac
+done
+
+if [[ -z "$ISO" ]]; then
+    ISO="$(find_latest_iso backup)"
+    if [[ -z "$ISO" ]]; then
+        echo "ERROR: the newest build has no with-backup ISO in $OUTPUT_DIR." >&2
+        echo "Build one with: PURPLE_WITH_BACKUP_ISO=1 just build" >&2
+        echo "Or pass an ISO path explicitly." >&2
+        exit 1
+    fi
+    echo "Using newest with-backup ISO: $(basename "$ISO")"
+fi
+if [[ ! -f "$ISO" ]]; then
+    echo "ERROR: ISO not found: $ISO" >&2
     usage
     exit 1
 fi
@@ -59,4 +85,4 @@ sha256sum "$OUT" > "${OUT}.sha256"
 [[ -f "${ISO}.version" ]] && cp -f "${ISO}.version" "${OUT}.version"
 
 echo ""
-echo "Done. Flash it with:  just flash $OUT"
+echo "Done. Flash it with:  just flash-corrupt"

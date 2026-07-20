@@ -40,6 +40,7 @@ usage() {
     echo "Options:"
     echo "  --debug          Flash the newest build's debug ISO (visible boot menu)"
     echo "  --no-backup      Flash the newest build's standard ISO (no backup image copy)"
+    echo "  --corrupt        Flash the newest corrupt-test ISO (made by 'just corrupt-test-iso')"
     echo "  --yes            Skip all prompts (default ISO: newest build, with-backup"
     echo "                   if present, else standard)"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
@@ -210,6 +211,24 @@ resolve_variant() {
         exit 0
     fi
     ISO_PATH="$older"
+}
+
+# Newest deliberately-corrupted test ISO (excluded from all normal ISO
+# discovery, so it needs its own resolution path).
+resolve_corrupt_iso() {
+    ISO_PATH="$(ls -t "$OUTPUT_DIR"/*.corrupt-test.iso 2>/dev/null | head -1 || true)"
+    if [[ -z "$ISO_PATH" ]]; then
+        log_error "No corrupt-test ISO found in $OUTPUT_DIR."
+        echo "Make one with 'just corrupt-test-iso' first."
+        exit 1
+    fi
+    local stem="${ISO_PATH%.corrupt-test.iso}"
+    stem="${stem%.with-backup}"
+    stem="${stem%.debug}"
+    if [[ "$stem" != "$(latest_build_stem)" ]]; then
+        log_warn "This corrupt-test ISO comes from an OLDER build than the newest."
+        log_warn "Re-run 'just corrupt-test-iso' to make one from the newest build."
+    fi
 }
 
 # No ISO path and no variant flag: show the newest build's variants and ask
@@ -521,6 +540,10 @@ main() {
                 iso_kind=standard
                 shift
                 ;;
+            --corrupt)
+                iso_kind=corrupt
+                shift
+                ;;
             --yes|-y)
                 SKIP_CONFIRM=true
                 shift
@@ -555,6 +578,8 @@ main() {
                 log_error "ISO not found: $ISO_PATH"
                 exit 1
             fi
+        elif [[ "$iso_kind" == corrupt ]]; then
+            resolve_corrupt_iso
         elif [[ -n "$iso_kind" ]]; then
             resolve_variant "$iso_kind"
         else

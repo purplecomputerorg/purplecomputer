@@ -31,6 +31,14 @@ log_step() { echo -e "${BLUE}[STEP]${NC} $1"; }
 main() {
     cd "$SCRIPT_DIR"
 
+    if [ "$START_STEP" -ge 1 ]; then
+        log_info "Build plan: ISOs only (reusing existing golden image)"
+    else
+        log_info "Build plan: golden image (the slow step), then ISOs"
+    fi
+    log_info "Will produce in $OUTPUT_DIR:"
+    planned_iso_names | while read -r line; do log_info "  $line"; done
+
     # Build Docker image
     log_step "Building Docker image..."
     docker build -t "$IMAGE_NAME" .
@@ -58,7 +66,7 @@ main() {
         -v "$INSTALLER_BASE:$INSTALLER_BASE" \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
-        -e "PURPLE_NO_BACKUP_ISO=${PURPLE_NO_BACKUP_ISO:-}" \
+        -e "PURPLE_WITH_BACKUP_ISO=${PURPLE_WITH_BACKUP_ISO:-}" \
         "$IMAGE_NAME" \
         /build/build-all.sh "$START_STEP"
 

@@ -259,7 +259,7 @@ clean-releases *args:
 clean-isos *args:
     ./build-scripts/clean-old-isos.sh {{args}}
 
-# Build the installer ISOs in Docker (standard, with-backup, and debug variants)
+# Build the installer ISOs in Docker (standard + debug; PURPLE_WITH_BACKUP_ISO=1 adds the with-backup variant)
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 

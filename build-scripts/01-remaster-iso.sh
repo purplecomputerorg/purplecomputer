@@ -543,9 +543,9 @@ EFI_GRUB_EOF
     # verified flash). Must be a distinct inode, not a hardlink: xorriso stores
     # same-inode files as one extent, which would put both copies on the same
     # flash cells (reflink copies are distinct inodes, so they're fine).
-    # Shipped USBs use this variant; skipped for -fast dev builds, or with
-    # PURPLE_NO_BACKUP_ISO=1.
-    if [ "${PURPLE_NO_BACKUP_ISO:-0}" != "1" ] && [ "${FAST_BUILD:-0}" != "1" ]; then
+    # Opt-in (PURPLE_WITH_BACKUP_ISO=1): only USBs flashed for shipping need
+    # it; purple-build sets it automatically for non-fast builds.
+    if [ "${PURPLE_WITH_BACKUP_ISO:-0}" = "1" ]; then
         log_info "Building with-backup ISO (adds a second golden image copy)..."
         cp --reflink=auto "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
         build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"

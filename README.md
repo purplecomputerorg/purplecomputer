@@ -77,11 +77,12 @@ typo away from being wiped. To flash a bigger drive, or to skip the picker
 when flashing often, whitelist it: `just flash --list` shows serials, then
 add one per line to `.flash-drives.conf`.
 
-Each build produces three ISO variants; `just flash` shows them and asks
-which you want. For a personal USB, **standard** is all you need. The
-**with-backup** variant adds a second copy of the install image so the
-install self-heals if the USB stick decays (what shipped Purple Keys use),
-and **debug** shows a boot menu with verbose logging for troubleshooting.
+Each build produces two ISO variants; `just flash` shows them and asks
+which you want. For a personal USB, **standard** is all you need; **debug**
+shows a boot menu with verbose logging for troubleshooting. (A third
+variant, **with-backup**, adds a second copy of the install image so the
+install self-heals if the USB stick decays. Shipped Purple Keys use it;
+build it with `PURPLE_WITH_BACKUP_ISO=1 just build` if you want it.)
 Everything else in `build-scripts/` (batch flashing, QA manifests,
 corrupt-test ISOs, release uploads) is for producing shipped Purple Keys;
 you can ignore it.

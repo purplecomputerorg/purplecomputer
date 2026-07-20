@@ -48,23 +48,18 @@ rule_matches() {
 }
 
 # Load whitelist entries from $CONFIG_FILE into the WHITELIST array.
-# Exits with an error if the file is missing or empty.
+# A missing or empty config is fine: flash-to-usb falls back to interactively
+# offering small USB drives. Batch tools that need a whitelist check
+# ${#WHITELIST[@]} themselves.
 load_whitelist() {
-    if [[ ! -f "$CONFIG_FILE" ]]; then
-        echo "[ERROR] Config file not found: $CONFIG_FILE" >&2
-        exit 1
-    fi
     WHITELIST=()
+    [[ -f "$CONFIG_FILE" ]] || return 0
     while IFS= read -r line; do
         [[ -z "$line" ]] && continue
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
         line=$(echo "$line" | xargs)
         [[ -n "$line" ]] && WHITELIST+=("$line")
     done < "$CONFIG_FILE"
-    if [[ ${#WHITELIST[@]} -eq 0 ]]; then
-        echo "[ERROR] No drive serials found in $CONFIG_FILE" >&2
-        exit 1
-    fi
 }
 
 # Populate FOUND_DRIVES with "dev|size|model|serial" entries for every
@@ -85,6 +80,29 @@ find_whitelisted_drives() {
             fi
         done
     done < <(lsblk -d -n -o NAME,SIZE,TRAN,VENDOR,MODEL,SERIAL -P 2>/dev/null)
+}
+
+# USB drives at or under this size may be offered for flashing without a
+# whitelist entry (interactive picker only). "64GB"-marketed sticks report
+# roughly 62-64 GB decimal, so 65 GB leaves margin for over-reporting ones
+# while excluding every 100GB+ disk that might be someone's real data drive.
+MAX_UNLISTED_BYTES=65000000000
+
+# Populate CANDIDATE_DRIVES with "dev|size|model|serial|mounted" entries for
+# every plugged-in USB disk at or under MAX_UNLISTED_BYTES.
+find_candidate_drives() {
+    CANDIDATE_DRIVES=()
+    while IFS= read -r line; do
+        eval "$line"
+        [[ "$TRAN" != "usb" ]] && continue
+        [[ "$TYPE" != "disk" ]] && continue
+        [[ -z "$SIZE" || "$SIZE" -eq 0 ]] && continue
+        [[ "$SIZE" -gt "$MAX_UNLISTED_BYTES" ]] && continue
+        local mounted="" human
+        lsblk -n "/dev/$NAME" -o MOUNTPOINT 2>/dev/null | grep -q '[^[:space:]]' && mounted="yes"
+        human="$(awk -v b="$SIZE" 'BEGIN{printf "%.1fG", b/1e9}')"
+        CANDIDATE_DRIVES+=("/dev/$NAME|$human|$MODEL|$SERIAL|$mounted")
+    done < <(lsblk -d -n -b -o NAME,SIZE,TRAN,TYPE,MODEL,SERIAL -P 2>/dev/null)
 }
 
 # Verify the ISO matches its build-time .sha256 sidecar, echoing the verified
@@ -225,25 +243,70 @@ eject_drive() {
         || sudo eject "$dev" 2>/dev/null
 }
 
-# Resolve the most recent ISO in $OUTPUT_DIR. Pass "debug" for .debug.iso.
-# find_latest_iso [debug|plain]
-# Default: newest normal build, preferring its .with-backup.iso sibling (second
-# golden image copy) when one exists. "plain" skips that preference. Corrupt-test
-# ISOs (deliberately damaged, for install-fallback testing) are never auto-picked.
+# --- ISO discovery -----------------------------------------------------------
+# Each build emits up to three variants sharing one stem:
+#   <stem>.iso              standard
+#   <stem>.with-backup.iso  standard + second golden image copy (shipped USBs)
+#   <stem>.debug.iso        visible GRUB menu, verbose boot
+# Variant names are standard|backup|debug everywhere; CLI flags translate at
+# the edge. Every helper succeeds with empty output when nothing matches, so
+# callers under set -e get their friendly no-ISO errors instead of a die.
+
+# All build ISOs, newest first. The one place corrupt-test ISOs (deliberately
+# damaged test artifacts) are excluded from auto-picking.
+list_build_isos() {
+    ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null | grep -v corrupt-test || true
+}
+
+# stdin: ISO paths; keeps only the given variant (default: standard).
+filter_variant() {
+    case "${1:-}" in
+        backup) grep '\.with-backup\.iso$' || true ;;
+        debug)  grep '\.debug\.iso$' || true ;;
+        *)      grep -vE '\.debug\.iso$|\.with-backup\.iso$' || true ;;
+    esac
+}
+
+# variant_path <stem> <standard|backup|debug>
+variant_path() {
+    case "$2" in
+        backup) echo "$1.with-backup.iso" ;;
+        debug)  echo "$1.debug.iso" ;;
+        *)      echo "$1.iso" ;;
+    esac
+}
+
+# Path prefix (no variant suffix) of the most recently built ISO,
+# e.g. /opt/purple-installer/output/purple-installer-20260719
+latest_build_stem() {
+    local newest
+    newest="$(list_build_isos | head -1)"
+    [[ -n "$newest" ]] || return 0
+    newest="${newest%.with-backup.iso}"
+    newest="${newest%.debug.iso}"
+    echo "${newest%.iso}"
+}
+
+# find_latest_iso [standard|backup|debug]
+# Resolves a variant of the NEWEST build only; prints nothing when that build
+# lacks it. Nothing ever silently falls back to an older build; callers decide
+# whether to offer older ISOs explicitly. Default: with-backup, else standard.
 find_latest_iso() {
-    [[ -d "$OUTPUT_DIR" ]] || return 0
-    if [[ "${1:-}" == debug ]]; then
-        ls -t "$OUTPUT_DIR"/purple-*.debug.iso 2>/dev/null | grep -v 'corrupt-test' | head -1
-        return 0
-    fi
-    local plain
-    plain="$(ls -t "$OUTPUT_DIR"/purple-*.iso 2>/dev/null \
-        | grep -vE '\.debug\.iso$|\.with-backup\.iso$|corrupt-test' | head -1)"
-    [[ -n "$plain" ]] || return 0
-    local wb="${plain%.iso}.with-backup.iso"
-    if [[ "${1:-}" != plain && -f "$wb" ]]; then
-        echo "$wb"
+    local stem f
+    stem="$(latest_build_stem)"
+    [[ -n "$stem" ]] || return 0
+    if [[ -z "${1:-}" ]]; then
+        f="$(variant_path "$stem" backup)"
+        [[ -f "$f" ]] || f="$(variant_path "$stem" standard)"
     else
-        echo "$plain"
+        f="$(variant_path "$stem" "$1")"
     fi
+    [[ -f "$f" ]] && echo "$f"
+    return 0
+}
+
+# Newest ISO of one variant across ALL builds, for offering an explicit,
+# user-confirmed fallback when the newest build lacks that variant.
+newest_iso_of_variant() {
+    list_build_isos | filter_variant "${1:-}" | head -1
 }

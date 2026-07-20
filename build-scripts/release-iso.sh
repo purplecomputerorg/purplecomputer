@@ -13,6 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
+source "$SCRIPT_DIR/flash-lib.sh"
 ISO_DIR="$OUTPUT_DIR"
 
 GREEN='\033[0;32m'
@@ -62,10 +63,10 @@ fi
 
 # Find ISOs (most recent by date)
 # Reject fast builds (minimal compression, not for release)
-# Public download stays the plain ISO; with-backup (second golden image copy)
-# is for flashed-and-shipped USBs, corrupt-test is for install-fallback testing.
-STANDARD_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.iso 2>/dev/null | grep -v debug | grep -v with-backup | grep -v corrupt-test | grep -v -- "-fast" | head -1)
-DEBUG_ISO=$(ls -t "$ISO_DIR"/purple-installer-*.debug.iso 2>/dev/null | grep -v -- "-fast" | head -1)
+# Public download stays the standard ISO; with-backup (second golden image
+# copy) is only for flashed-and-shipped USBs. -fast dev builds never release.
+STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | head -1)
+DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | head -1)
 
 if [ -z "$STANDARD_ISO" ]; then
     log_error "No standard ISO found in $ISO_DIR"

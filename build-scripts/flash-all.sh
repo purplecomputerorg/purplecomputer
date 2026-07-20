@@ -22,8 +22,8 @@ Usage: $0 [--debug] [--yes] [iso-path]
 Flash an ISO to every whitelisted USB drive currently plugged in, in parallel.
 
 Options:
-  --debug       Use the most recent .debug.iso
-  --no-backup   Use the plain ISO even when a .with-backup.iso exists
+  --debug       Use the newest build's debug ISO
+  --no-backup   Use the newest build's standard ISO (no backup image copy)
   --yes         Skip the confirmation prompt
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
@@ -31,7 +31,6 @@ Options:
 EOF
 }
 
-USE_DEBUG=false
 SKIP_CONFIRM=false
 SKIP_SETTLE=false
 ISO_KIND=""
@@ -39,27 +38,31 @@ ISO_PATH=""
 while [[ -n "${1:-}" ]]; do
     case "$1" in
         --help|-h)    usage; exit 0 ;;
-        --debug|-d)   USE_DEBUG=true; shift ;;
-        --no-backup)  ISO_KIND=plain; shift ;;
+        --debug|-d)   ISO_KIND=debug; shift ;;
+        --no-backup)  ISO_KIND=standard; shift ;;
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
         *)            ISO_PATH="$1"; shift ;;
     esac
 done
 
+# Variant flags resolve against the NEWEST build only; an older build is never
+# picked silently. Pass a path explicitly to flash an older ISO.
 if [[ -z "$ISO_PATH" ]]; then
-    if [[ "$USE_DEBUG" == true ]]; then
-        ISO_PATH="$(find_latest_iso debug)"
-    else
-        ISO_PATH="$(find_latest_iso "$ISO_KIND")"
-    fi
+    ISO_PATH="$(find_latest_iso "$ISO_KIND")"
 fi
 if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
-    log_error "No ISO found. Build one first or pass a path."
+    log_error "No matching ISO for the newest build in $OUTPUT_DIR."
+    log_error "Run 'just build' first, or pass an ISO path explicitly."
     exit 1
 fi
 
 load_whitelist
+if [[ ${#WHITELIST[@]} -eq 0 ]]; then
+    log_error "flash-all requires a drive whitelist ($CONFIG_FILE)."
+    log_error "For a single drive without a whitelist, use flash-to-usb.sh (just flash)."
+    exit 1
+fi
 find_whitelisted_drives
 
 if [[ ${#FOUND_DRIVES[@]} -eq 0 ]]; then

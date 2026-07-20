@@ -60,30 +60,31 @@ I love cat!            # Speaks "I love cat" aloud (! triggers speech)
 
 ### For Installation (Old Laptop)
 
-**Build and test installer:**
+The happy path for "I tweaked Purple and want it on my USB" is two commands:
+
 ```bash
-cd build-scripts
+# Build the installer ISOs (20-35 min first time, 15-25 min subsequent)
+just build
 
-# Build everything (20-35 min first time, 15-25 min subsequent)
-./build-in-docker.sh
-
-# Validate build (checks configs, verifies artifacts)
-./validate-build.sh
-
-# Result: /opt/purple-installer/output/purple-installer-YYYYMMDD.iso
+# Flash to USB: asks which ISO variant to use, verifies the write
+just flash
 ```
 
-**Flash to USB:**
-```bash
-# List USB drives and find your drive's serial number
-./build-scripts/flash-to-usb.sh --list
+No setup needed: `just flash` lists plugged-in USB sticks (64GB or smaller)
+and asks which to use, then asks for a final confirmation before erasing it.
+Drives larger than 64GB are never offered, so a real hard drive is never one
+typo away from being wiped. To flash a bigger drive, or to skip the picker
+when flashing often, whitelist it: `just flash --list` shows serials, then
+add one per line to `.flash-drives.conf`.
 
-# Add your drive's serial to the whitelist (one-time setup)
-echo 'YOUR_DRIVE_SERIAL' >> .flash-drives.conf
-
-# Flash the latest ISO (with verification)
-./build-scripts/flash-to-usb.sh
-```
+Each build produces three ISO variants; `just flash` shows them and asks
+which you want. For a personal USB, **standard** is all you need. The
+**with-backup** variant adds a second copy of the install image so the
+install self-heals if the USB stick decays (what shipped Purple Keys use),
+and **debug** shows a boot menu with verbose logging for troubleshooting.
+Everything else in `build-scripts/` (batch flashing, QA manifests,
+corrupt-test ISOs, release uploads) is for producing shipped Purple Keys;
+you can ignore it.
 
 **Install to hardware:**
 1. Boot laptop from USB (Secure Boot can remain enabled)

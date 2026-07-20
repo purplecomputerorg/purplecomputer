@@ -259,7 +259,11 @@ clean-releases *args:
 clean-isos *args:
     ./build-scripts/clean-old-isos.sh {{args}}
 
-# Flash ISO to USB drive
+# Build the installer ISOs in Docker (standard, with-backup, and debug variants)
+build *args:
+    ./build-scripts/build-in-docker.sh {{args}}
+
+# Flash ISO to USB drive (asks which of the newest build's ISOs to use)
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 

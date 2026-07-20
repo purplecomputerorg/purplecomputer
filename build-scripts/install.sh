@@ -270,20 +270,18 @@ main() {
         [ -n "$IMAGE_SIZE" ] || IMAGE_SIZE=$((8192*1024*1024))
     fi
 
+    # Progress stage: pv reports byte progress for the UI; cat passes through
+    # when pv is missing.
+    PROGRESS_CMD=(cat)
+    [ -n "$HAVE_PV" ] && PROGRESS_CMD=(pv -n -s "$IMAGE_SIZE")
+
     write_image() {
         rm -f "$WRITE_SHA256_FILE" "$WRITE_SIZE_FILE"
-        if [ -n "$HAVE_PV" ]; then
-            zstd -dc "$1" \
-                | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
-                | tee >(wc -c > "$WRITE_SIZE_FILE") \
-                | pv -n -s "$IMAGE_SIZE" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
-                | dd of=/dev/$TARGET bs=4M conv=fsync
-        else
-            zstd -dc "$1" \
-                | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
-                | tee >(wc -c > "$WRITE_SIZE_FILE") \
-                | dd of=/dev/$TARGET bs=4M status=progress conv=fsync
-        fi
+        zstd -dc "$1" \
+            | tee >(sha256sum | awk '{print $1}' > "$WRITE_SHA256_FILE") \
+            | tee >(wc -c > "$WRITE_SIZE_FILE") \
+            | "${PROGRESS_CMD[@]}" 2> >(while read p; do echo "[PURPLE-PV] $p" >&2; done) \
+            | dd of=/dev/$TARGET bs=4M conv=fsync
         local ps=("${PIPESTATUS[@]}") s rc=0
         ZSTD_RC=${ps[0]}
         DD_RC=${ps[${#ps[@]}-1]}
@@ -291,7 +289,7 @@ main() {
         return $rc
     }
 
-    BACKUP_IMAGE="${PURPLE_PAYLOAD_DIR:-/purple}/purple-os-backup.img.zst"
+    BACKUP_IMAGE="${GOLDEN_IMAGE%/*}/purple-os-backup.img.zst"
     IMAGE_SOURCES=("$GOLDEN_IMAGE")
     if [ -f "$BACKUP_IMAGE" ]; then
         IMAGE_SOURCES+=("$BACKUP_IMAGE")
@@ -315,8 +313,9 @@ main() {
         warn "Image copy failed integrity check while reading (zstd exit ${ZSTD_RC}): $SRC"
     done
     if [ "$WROTE_OK" != "true" ]; then
-        echo "[PURPLE-CORRUPT-KEY] 1" >&2
-        error "The installation data on this Purple Key is damaged. This computer is fine, and Purple still works without installing."
+        # The friendly wording lives in parent_menu.py, keyed off this marker.
+        echo "[PURPLE-CORRUPT-KEY]" >&2
+        error "Every image copy on this Purple Key failed its integrity check."
     fi
 
     # ======================================================================

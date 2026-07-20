@@ -440,22 +440,29 @@ The upload script shares common helpers from `r2-helpers.sh` (env loading, R2 up
 The `flash-to-usb.sh` script provides safe USB writing with verification:
 
 ```bash
-# One-time setup: whitelist your USB drive
+# Flash: asks which of the newest build's ISO variants to use, then which
+# drive (plugged-in USB sticks of 64GB or smaller)
+./build-scripts/flash-to-usb.sh
+
+# Optional: whitelist your drive to skip the drive picker, allow drives over
+# 64GB, and enable non-interactive flashing (--yes, flash-all)
 ./build-scripts/flash-to-usb.sh --list    # Find your drive's serial/vendor/model
 echo 'YOUR_SERIAL' >> .flash-drives.conf  # Add to whitelist
 
 # Or whitelist a whole vendor+model (handy when you have several of the same kind):
 echo 'model:Verbatim/STORE N GO max=20G' >> .flash-drives.conf
-
-# Flash the latest ISO
-./build-scripts/flash-to-usb.sh
 ```
 
 **Features:**
-- Only writes to whitelisted drives (prevents accidental data loss)
-- Rejects drives over 256GB (safety limit for flash drives)
+- Only offers small USB drives (64GB and under) unless whitelisted, so a real
+  data disk is never one typo away from being erased; automation paths
+  (`--yes`, `--device`, `flash-all`) are whitelist-only
+- Whitelisted drives are capped at 256GB (whitelist rules can set tighter
+  `max=` limits per vendor/model)
 - Verifies write by reading back and comparing SHA256 checksums
-- Auto-detects most recent ISO in `/opt/purple-installer/output/`
+- Shows the newest build in `/opt/purple-installer/output/` and asks which
+  variant to flash (standard, with-backup, or debug); never silently falls
+  back to an older build
 
 **Manual method (Linux/macOS):**
 ```bash

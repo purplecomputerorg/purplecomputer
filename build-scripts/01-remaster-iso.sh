@@ -540,12 +540,14 @@ EFI_GRUB_EOF
     # With-backup variant: same ISO plus a second copy of the golden image, so
     # install.sh can fall back if the primary copy decays on cheap USB flash
     # (seen in the field: zstd "Data corruption detected" weeks after a
-    # verified flash). Must be a real cp, not a hardlink: xorriso stores
+    # verified flash). Must be a distinct inode, not a hardlink: xorriso stores
     # same-inode files as one extent, which would put both copies on the same
-    # flash cells. Shipped USBs use this variant; skip with PURPLE_NO_BACKUP_ISO=1.
-    if [ "${PURPLE_NO_BACKUP_ISO:-0}" != "1" ]; then
+    # flash cells (reflink copies are distinct inodes, so they're fine).
+    # Shipped USBs use this variant; skipped for -fast dev builds, or with
+    # PURPLE_NO_BACKUP_ISO=1.
+    if [ "${PURPLE_NO_BACKUP_ISO:-0}" != "1" ] && [ "${FAST_BUILD:-0}" != "1" ]; then
         log_info "Building with-backup ISO (adds a second golden image copy)..."
-        cp "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
+        cp --reflink=auto "$GOLDEN_IMAGE" "$PAYLOAD_DIR/purple-os-backup.img.zst"
         build_installer_iso "${OUTPUT_ISO%.iso}.with-backup.iso" "PURPLE_INSTALLER"
         rm -f "$PAYLOAD_DIR/purple-os-backup.img.zst"
         log_info "With-backup ISO built successfully!"

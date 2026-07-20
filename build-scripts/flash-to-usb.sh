@@ -27,17 +27,21 @@ usage() {
     echo "Flash PurpleOS ISO to a whitelisted USB drive."
     echo ""
     echo "Arguments:"
-    echo "  iso-path    Path to ISO file (default: most recent in $OUTPUT_DIR)"
+    echo "  iso-path    Path to ISO file. Without one, you'll be asked which of"
+    echo "              the newest build's ISOs to flash."
     echo ""
-    echo "Configuration:"
-    echo "  Whitelisted drive serials are read from: $CONFIG_FILE"
-    echo "  Create this file with one serial number per line."
+    echo "Drive selection:"
+    echo "  Drives whitelisted in $CONFIG_FILE (one serial per line)"
+    echo "  are picked automatically. Without a whitelist match, you'll be asked to"
+    echo "  choose among plugged-in USB drives of 64GB or smaller; bigger drives"
+    echo "  (which could be real data disks) can only be flashed when whitelisted."
     echo "  Run '$0 --list' to see connected USB drives and their serials."
     echo ""
     echo "Options:"
-    echo "  --debug          Flash the debug ISO (.debug.iso) instead"
-    echo "  --no-backup      Use the plain ISO even when a .with-backup.iso exists"
-    echo "  --yes            Skip the confirmation prompt"
+    echo "  --debug          Flash the newest build's debug ISO (visible boot menu)"
+    echo "  --no-backup      Flash the newest build's standard ISO (no backup image copy)"
+    echo "  --yes            Skip all prompts (default ISO: newest build, with-backup"
+    echo "                   if present, else standard)"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
     echo "  --no-settle      Skip the post-flash QEMU boot-settle (first real boot will be slow)"
     echo "  --settle-only    Skip flashing; just boot-settle and eject an already-flashed drive"
@@ -72,6 +76,48 @@ list_usb_drives() {
     echo "  - 'model:VENDOR/MODEL max=20G' (matches any drive of that vendor+model)"
 }
 
+# No whitelisted drive is plugged in: offer small USB drives interactively so
+# a quick tinker flash needs no whitelist setup, while anything that could be
+# a real data disk (over MAX_UNLISTED_BYTES) stays whitelist-only. Never used
+# by non-interactive paths (--yes, --device, flash-all): those require the
+# whitelist so automation can't pick a drive on its own.
+select_unlisted_drive() {
+    if [[ "$SKIP_CONFIRM" == true ]]; then
+        log_error "No whitelisted USB drives found (--yes requires a whitelisted drive)."
+        echo "Add your drive's serial to $CONFIG_FILE, or run without --yes to pick interactively."
+        exit 1
+    fi
+
+    find_candidate_drives
+    if [[ ${#CANDIDATE_DRIVES[@]} -eq 0 ]]; then
+        log_error "No whitelisted USB drives found, and no small USB drives to offer."
+        echo ""
+        echo "Plug in a USB stick of 64GB or smaller, or whitelist a bigger drive:"
+        echo "  Run '$0 --list' to see connected drives, then add a serial to $CONFIG_FILE"
+        exit 1
+    fi
+
+    echo ""
+    echo -e "${BOLD}No whitelisted drive found. USB drives of 64GB or smaller:${NC}"
+    echo ""
+    for i in "${!CANDIDATE_DRIVES[@]}"; do
+        IFS='|' read -r dev size model serial mounted <<< "${CANDIDATE_DRIVES[$i]}"
+        local flag=""
+        [[ -n "$mounted" ]] && flag="  ${YELLOW}(has mounted partitions, in use?)${NC}"
+        echo -e "  $((i+1))) $dev - $model ($size, serial $serial)$flag"
+    done
+    echo ""
+    echo -e "  ${RED}${BOLD}The chosen drive will be COMPLETELY ERASED.${NC}"
+    local choice
+    choice="$(read_menu_choice "${#CANDIDATE_DRIVES[@]}" "Flash which drive? [1-${#CANDIDATE_DRIVES[@]}, or Enter to cancel]: ")" || exit 1
+    if [[ -z "$choice" ]]; then
+        log_info "Aborted."
+        exit 0
+    fi
+    IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL _ <<< "${CANDIDATE_DRIVES[$((choice-1))]}"
+    UNLISTED_DRIVE=true
+}
+
 select_drive() {
     if [[ -n "$FORCE_DEVICE" ]]; then
         for entry in "${FOUND_DRIVES[@]}"; do
@@ -87,14 +133,8 @@ select_drive() {
     fi
 
     if [[ ${#FOUND_DRIVES[@]} -eq 0 ]]; then
-        log_error "No whitelisted USB drives found!"
-        echo ""
-        echo "Either:"
-        echo "  1. Plug in a whitelisted drive"
-        echo "  2. Add your drive's serial to $CONFIG_FILE"
-        echo ""
-        echo "Run '$0 --list' to see connected drives."
-        exit 1
+        select_unlisted_drive
+        return
     fi
 
     if [[ ${#FOUND_DRIVES[@]} -eq 1 ]]; then
@@ -107,9 +147,9 @@ select_drive() {
             echo "  $((i+1))) $dev - $model ($size)"
         done
         echo ""
-        read -p "Select drive [1-${#FOUND_DRIVES[@]}]: " choice
-
-        if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt ${#FOUND_DRIVES[@]} ]]; then
+        local choice
+        choice="$(read_menu_choice "${#FOUND_DRIVES[@]}" "Select drive [1-${#FOUND_DRIVES[@]}]: ")" || exit 1
+        if [[ -z "$choice" ]]; then
             log_error "Invalid selection"
             exit 1
         fi
@@ -118,6 +158,96 @@ select_drive() {
     fi
 
     IFS='|' read -r TARGET_DEV TARGET_SIZE TARGET_MODEL TARGET_SERIAL <<< "$SELECTED"
+}
+
+die_no_iso() {
+    log_error "No $1 found in $OUTPUT_DIR."
+    echo "Run 'just build' first, or pass a path to an ISO."
+    exit 1
+}
+
+# Read a 1-based menu choice for a list of $1 items; echoes the choice, or
+# nothing when the user just presses Enter. Exits on invalid input.
+read_menu_choice() {
+    local count="$1" prompt="$2" choice
+    read -p "$prompt" choice
+    [[ -z "$choice" ]] && return 0
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || [[ $choice -lt 1 ]] || [[ $choice -gt $count ]]; then
+        log_error "Invalid selection"
+        exit 1
+    fi
+    echo "$choice"
+}
+
+# Resolve a specific variant of the newest build, or, when it's missing, offer
+# the newest older build of that variant with an explicit confirmation. Never
+# silently flashes an older build.
+resolve_variant() {
+    local kind="$1" label
+    case "$kind" in
+        debug) label="debug" ;;
+        *)     label="standard (no backup image)" ;;
+    esac
+    ISO_PATH="$(find_latest_iso "$kind")"
+    [[ -n "$ISO_PATH" ]] && return 0
+
+    local stem older
+    stem="$(latest_build_stem)"
+    older="$(newest_iso_of_variant "$kind")"
+    if [[ -z "$stem" || -z "$older" ]]; then
+        die_no_iso "$label ISO"
+    fi
+    log_warn "The newest build ($(basename "$stem")) has no $label ISO."
+    if [[ "$SKIP_CONFIRM" == true ]]; then
+        log_error "Newest $label ISO is from an OLDER build: $older"
+        log_error "Refusing to pick it silently under --yes. Pass its path explicitly."
+        exit 1
+    fi
+    echo ""
+    read -p "Flash the OLDER $(basename "$older") instead? Type 'yes' to continue: " answer
+    if [[ "$answer" != "yes" ]]; then
+        log_info "Aborted."
+        exit 0
+    fi
+    ISO_PATH="$older"
+}
+
+# No ISO path and no variant flag: show the newest build's variants and ask
+# point blank which one to flash.
+select_iso() {
+    local stem
+    stem="$(latest_build_stem)"
+    [[ -n "$stem" ]] || die_no_iso "ISO"
+
+    local labels=() paths=() f
+    f="$(variant_path "$stem" backup)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard + backup image (recommended: install self-heals if the USB decays)"); }
+    f="$(variant_path "$stem" standard)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("standard (smaller, no backup image copy)"); }
+    f="$(variant_path "$stem" debug)"
+    [[ -f "$f" ]] && { paths+=("$f"); labels+=("debug (visible boot menu, verbose logs, for troubleshooting)"); }
+
+    local version=""
+    [[ -f "${paths[0]}.version" ]] && version="  [$(cat "${paths[0]}.version")]"
+    echo ""
+    echo -e "${BOLD}Newest build: $(basename "$stem")${version}${NC}"
+
+    if [[ "$SKIP_CONFIRM" == true || ${#paths[@]} -eq 1 ]]; then
+        ISO_PATH="${paths[0]}"
+        log_info "Using ${labels[0]%% (*}: $(basename "$ISO_PATH")"
+        return 0
+    fi
+
+    echo ""
+    for i in "${!paths[@]}"; do
+        echo "  $((i+1))) ${labels[$i]}"
+        echo "       $(basename "${paths[$i]}")"
+    done
+    echo ""
+    local choice
+    choice="$(read_menu_choice "${#paths[@]}" "Flash which one? [1-${#paths[@]}, default 1]: ")" || exit 1
+    [[ -n "$choice" ]] || choice=1
+    ISO_PATH="${paths[$((choice-1))]}"
 }
 
 run_boot_settle() {
@@ -143,6 +273,10 @@ confirm_write() {
     echo -e "  ${BOLD}Size:${NC}    $TARGET_SIZE"
     echo -e "  ${BOLD}Serial:${NC}  $TARGET_SERIAL"
     echo ""
+    if [[ "$UNLISTED_DRIVE" == true ]]; then
+        echo -e "  ${YELLOW}${BOLD}This drive is NOT in your whitelist. Double-check it's the right one.${NC}"
+        echo ""
+    fi
     echo -e "  ${RED}${BOLD}ALL DATA ON $TARGET_DEV WILL BE DESTROYED${NC}"
     echo ""
     read -p "Type 'yes' to continue: " confirm
@@ -362,13 +496,13 @@ write_iso() {
 
 main() {
     # Handle options
-    local use_debug=false
-    local skip_confirm=false
     local iso_kind=""
     FORCE_DEVICE=""
     MANAGE_UDEV=true
     SKIP_SETTLE=false
     SETTLE_ONLY=false
+    SKIP_CONFIRM=false
+    UNLISTED_DRIVE=false
     while [[ -n "${1:-}" ]]; do
         case "$1" in
             --help|-h)
@@ -380,15 +514,15 @@ main() {
                 exit 0
                 ;;
             --debug|-d)
-                use_debug=true
+                iso_kind=debug
                 shift
                 ;;
             --no-backup)
-                iso_kind=plain
+                iso_kind=standard
                 shift
                 ;;
             --yes|-y)
-                skip_confirm=true
+                SKIP_CONFIRM=true
                 shift
                 ;;
             --device)
@@ -417,26 +551,14 @@ main() {
     if [[ "$SETTLE_ONLY" != true ]]; then
         if [[ -n "${1:-}" ]]; then
             ISO_PATH="$1"
-        elif [[ "$use_debug" == true ]]; then
-            ISO_PATH="$(find_latest_iso debug)"
-            if [[ -z "$ISO_PATH" ]]; then
-                log_error "No debug ISO found in $OUTPUT_DIR"
-                echo "Run build-in-docker.sh first to generate a .debug.iso."
+            if [[ ! -f "$ISO_PATH" ]]; then
+                log_error "ISO not found: $ISO_PATH"
                 exit 1
             fi
+        elif [[ -n "$iso_kind" ]]; then
+            resolve_variant "$iso_kind"
         else
-            ISO_PATH="$(find_latest_iso "$iso_kind")"
-            if [[ -z "$ISO_PATH" ]]; then
-                log_error "No ISO found in $OUTPUT_DIR"
-                echo "Run build-in-docker.sh first, or specify path to ISO."
-                exit 1
-            fi
-        fi
-
-        if [[ ! -f "$ISO_PATH" ]]; then
-            log_error "ISO not found: $ISO_PATH"
-            echo "Run build-in-docker.sh first, or specify path to ISO."
-            exit 1
+            select_iso
         fi
 
         log_info "ISO: $ISO_PATH"
@@ -444,7 +566,9 @@ main() {
 
     # Load whitelist and find drives
     load_whitelist
-    log_info "Loaded ${#WHITELIST[@]} whitelisted serial(s) from config"
+    if [[ ${#WHITELIST[@]} -gt 0 ]]; then
+        log_info "Loaded ${#WHITELIST[@]} whitelisted serial(s) from config"
+    fi
 
     find_whitelisted_drives
     select_drive
@@ -467,7 +591,7 @@ main() {
         exit 0
     fi
 
-    if [[ "$skip_confirm" != true ]]; then
+    if [[ "$SKIP_CONFIRM" != true ]]; then
         confirm_write
     fi
 

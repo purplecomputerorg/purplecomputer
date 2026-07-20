@@ -215,6 +215,7 @@ yes
 no
 wave
 hug
+kiss
 clown
 lightning
 eye

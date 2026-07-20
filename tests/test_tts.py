@@ -5,15 +5,10 @@ import os
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
-import shutil
-
-import pytest
-
 from purple_tui import tts
 
 
 class TestCache:
-    @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
     def test_long_text_is_cached(self, tmp_path, monkeypatch):
         # Enter-Enter recall repeats long utterances exactly; they must not
         # re-synthesize every time

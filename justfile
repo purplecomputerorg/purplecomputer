@@ -271,7 +271,7 @@ flash *args:
 corrupt-test-iso *args:
     ./build-scripts/make-corrupt-test-iso.sh {{args}}
 
-# Flash the newest corrupt-test ISO (made by just corrupt-test-iso)
+# Flash the newest corrupt-test ISO, or a specific scenario: just flash-corrupt [primary|backup|both|merge]
 flash-corrupt *args:
     ./build-scripts/flash-to-usb.sh --corrupt {{args}}
 

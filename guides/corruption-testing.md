@@ -7,8 +7,10 @@ How to test that a decayed Purple Key self-heals during install, end to end. Che
 ```bash
 PURPLE_WITH_BACKUP_ISO=1 just build   # need a with-backup ISO (shipped-USB variant)
 just corrupt-test-iso                 # corrupt the primary copy (default scenario)
-just flash-corrupt                    # flash the corrupt-test ISO
+just flash-corrupt                    # flash the newest corrupt-test ISO
 ```
+
+`just flash-corrupt <scenario>` flashes a specific scenario's ISO; without one it takes the newest corrupt-test ISO whatever its scenario (after `corrupt-test-iso all` that's `merge`).
 
 Then boot the USB (VM or real hardware), open the parent menu, and run Install.
 

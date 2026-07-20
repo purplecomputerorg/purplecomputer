@@ -75,10 +75,14 @@ corrupt() {
     echo "Corrupted 64KiB of $path at byte offset $off (${mib}MiB into the file)"
 }
 
+# Build under a .partial name and rename as the last step, so a failed or
+# interrupted run never leaves a half-corrupted *.iso that flash commands
+# would pick up as the newest corrupt-test ISO.
 make_scenario() {
     local which="$1"
-    OUT="${ISO%.iso}.corrupt-test-${which}.iso"
-    echo "Copying $(basename "$ISO") -> $(basename "$OUT")..."
+    local final="${ISO%.iso}.corrupt-test-${which}.iso"
+    OUT="${final}.partial"
+    echo "Copying $(basename "$ISO") -> $(basename "$final")..."
     sudo cp --reflink=auto -f "$ISO" "$OUT"
     case "$which" in
         primary) corrupt /purple/purple-os.img.zst ;;
@@ -89,20 +93,23 @@ make_scenario() {
                  corrupt /purple/purple-os-backup.img.zst 24 ;;
     esac
     echo "Scenario '$which': $(corrupt_scenario_expectation "$which")."
-    sha256sum "$OUT" | sudo tee "${OUT}.sha256" >/dev/null
+    sha256sum "$OUT" | awk -v f="$final" '{print $1 "  " f}' | sudo tee "${final}.sha256" >/dev/null
     if [[ -f "${ISO}.version" ]]; then
-        sudo cp -f "${ISO}.version" "${OUT}.version"
+        sudo cp -f "${ISO}.version" "${final}.version"
     fi
+    sudo mv -f "$OUT" "$final"
+    OUT=""
 }
 
 # The output dir is owned by the Docker build (nobody:nogroup), so all writes
 # need sudo. Prompt once up front rather than mid-copy.
 sudo -v
+trap '[[ -n "${OUT:-}" ]] && sudo rm -f "$OUT" || true' EXIT
 
 for which in "${SCENARIOS[@]}"; do
     make_scenario "$which"
     echo ""
 done
 
-echo "Done. Flash with:  just flash-corrupt      (newest corrupt-test ISO, one drive)"
-echo "             or:  just flash-corrupt-all  (every scenario, one drive each)"
+echo "Done. Flash with:  just flash-corrupt [scenario]  (one drive; newest corrupt-test ISO if no scenario given)"
+echo "             or:  just flash-corrupt-all         (every scenario, one drive each)"

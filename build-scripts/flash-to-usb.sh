@@ -40,7 +40,8 @@ usage() {
     echo "Options:"
     echo "  --debug          Flash the newest build's debug ISO (visible boot menu)"
     echo "  --no-backup      Flash the newest build's standard ISO (no backup image copy)"
-    echo "  --corrupt        Flash the newest corrupt-test ISO (made by 'just corrupt-test-iso')"
+    echo "  --corrupt        Flash the newest corrupt-test ISO (made by 'just corrupt-test-iso');"
+    echo "                   a positional scenario name (primary|backup|both|merge) picks that scenario's ISO"
     echo "  --yes            Skip all prompts (default ISO: newest build, with-backup"
     echo "                   if present, else standard)"
     echo "  --device <dev>   Target a specific device (e.g. /dev/sdb); must still be whitelisted"
@@ -213,14 +214,19 @@ resolve_variant() {
     ISO_PATH="$older"
 }
 
-# Newest deliberately-corrupted test ISO (excluded from all normal ISO
-# discovery, so it needs its own resolution path).
+# Newest deliberately-corrupted test ISO, optionally of one scenario
+# (excluded from all normal ISO discovery, so it needs its own resolution
+# path).
 resolve_corrupt_iso() {
-    ISO_PATH="$(find_corrupt_iso)"
+    local scen="${1:-}"
+    ISO_PATH="$(find_corrupt_iso "$scen")"
     if [[ -z "$ISO_PATH" ]]; then
-        log_error "No corrupt-test ISO found in $OUTPUT_DIR."
+        log_error "No corrupt-test ISO${scen:+ for scenario '$scen'} found in $OUTPUT_DIR."
         echo "Make one with 'just corrupt-test-iso' first."
         exit 1
+    fi
+    if [[ -z "$scen" ]]; then
+        log_info "Picked the newest corrupt-test ISO regardless of scenario; pass one (${CORRUPT_SCENARIOS[*]}) to choose."
     fi
     warn_if_stale_corrupt_iso "$ISO_PATH"
 }
@@ -566,7 +572,9 @@ main() {
 
     # Determine ISO path (irrelevant when only settling an already-flashed drive)
     if [[ "$SETTLE_ONLY" != true ]]; then
-        if [[ -n "${1:-}" ]]; then
+        if [[ "$iso_kind" == corrupt && -n "${1:-}" && " ${CORRUPT_SCENARIOS[*]} " == *" $1 "* ]]; then
+            resolve_corrupt_iso "$1"
+        elif [[ -n "${1:-}" ]]; then
             ISO_PATH="$1"
             if [[ ! -f "$ISO_PATH" ]]; then
                 log_error "ISO not found: $ISO_PATH"

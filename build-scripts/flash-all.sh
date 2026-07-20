@@ -325,30 +325,89 @@ fi
 # Which physical stick got which scenario: the drives skipped the power-off
 # eject, so each unplug still drops the device from /sys/block. Watch for that
 # and announce the scenario as the user pulls drives one at a time.
+
+drive_present() { [[ -e "/sys/block/$(basename "${DEVS[$1]}")" ]]; }
+
+announce_pulled() {
+    local i="$1" scen="${SCENS[$1]}" odev
+    # Failure is tracked by the original device name (a replug may rename).
+    IFS='|' read -r odev _ _ _ <<< "${ENTRIES[$i]}"
+    if [[ " ${FAILED[*]} " == *" $odev "* ]]; then
+        echo -e "${RED}✗${NC} That was ${BOLD}${scen}${NC}, but its flash FAILED. Set it aside, don't test it."
+    else
+        echo -e "${GREEN}✓${NC} That was ${BOLD}${scen}${NC}: $(corrupt_scenario_expectation "$scen"). Label it '$scen'."
+    fi
+}
+
+# Block until drive index $1 is back on the bus, matched by serial since a
+# replug can come up under a new device name, and update DEVS to that name.
+wait_for_replug() {
+    local idx="$1" serial dev
+    IFS='|' read -r _ _ _ serial <<< "${ENTRIES[$idx]}"
+    while true; do
+        dev="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$serial" '$2 == s {print "/dev/" $1; exit}')"
+        if [[ -n "$dev" ]]; then
+            DEVS[$idx]="$dev"
+            return 0
+        fi
+        sleep 0.5
+    done
+}
+
 identify_corrupt_drives() {
     sudo sync
+    local i part
+    # An automounter may have grabbed partitions once the udev queue restarted;
+    # unmount so a pulled stick is never dirty.
+    for i in "${!DEVS[@]}"; do
+        for part in "${DEVS[$i]}"?*; do
+            sudo umount "$part" 2>/dev/null || true
+        done
+    done
+
+    # Unattended runs can't unplug anything; print the map and move on.
+    if [[ ! -t 0 ]]; then
+        log_info "No terminal; skipping the interactive unplug identification. Scenario map:"
+        for i in "${!DEVS[@]}"; do
+            echo "  ${DEVS[$i]} -> ${SCENS[$i]}"
+        done
+        return 0
+    fi
+
+    # A drive already gone from the bus (e.g. it dropped off mid-flash) must
+    # not be announced as an unplug, or every label after it would be shifted
+    # onto the wrong stick.
+    local remaining=()
+    for i in "${!DEVS[@]}"; do
+        if drive_present "$i"; then
+            remaining+=("$i")
+        else
+            echo -e "${YELLOW}!${NC} ${DEVS[$i]} (${BOLD}${SCENS[$i]}${NC}) already dropped off the bus; nothing has been unplugged yet. Its stick is whichever one is left after you identify the others."
+        fi
+    done
+
     echo
     echo -e "${BOLD}${YELLOW}Now unplug the drives ONE at a time to identify them.${NC}"
     echo "As each drive disappears, label the stick you just pulled with its scenario."
     echo
-    local remaining=() still i dev scen
-    for i in "${!DEVS[@]}"; do remaining+=("$i"); done
+    local gone still
     while (( ${#remaining[@]} )); do
         sleep 0.5
+        gone=()
         still=()
         for i in "${remaining[@]}"; do
-            dev="${DEVS[$i]}"
-            if [[ -e "/sys/block/$(basename "$dev")" ]]; then
-                still+=("$i")
-                continue
-            fi
-            scen="${SCENS[$i]}"
-            if [[ " ${FAILED[*]} " == *" $dev "* ]]; then
-                echo -e "${RED}✗${NC} That was ${BOLD}${scen}${NC}, but its flash FAILED. Set it aside, don't test it."
-            else
-                echo -e "${GREEN}✓${NC} That was ${BOLD}${scen}${NC}: $(corrupt_scenario_expectation "$scen"). Label it '$scen'."
-            fi
+            if drive_present "$i"; then still+=("$i"); else gone+=("$i"); fi
         done
+        if (( ${#gone[@]} > 1 )); then
+            echo -e "${YELLOW}!${NC} ${#gone[@]} drives disappeared at once, so I can't tell which stick is which. Plug them ALL back in and pull one at a time."
+            for i in "${gone[@]}"; do
+                wait_for_replug "$i"
+            done
+            echo -e "${GREEN}All back.${NC} Pull ONE at a time."
+            still+=("${gone[@]}")
+        elif (( ${#gone[@]} == 1 )); then
+            announce_pulled "${gone[0]}"
+        fi
         remaining=("${still[@]}")
     done
     echo

@@ -24,7 +24,7 @@ Then boot the USB (VM or real hardware), open the parent menu, and run Install.
 
 ## How It Works
 
-`build-scripts/make-corrupt-test-iso.sh` copies the ISO to `<name>.corrupt-test.iso` and overwrites 64KiB with garbage starting 8MiB into the chosen `/purple/*.img.zst` (past the zstd header, so the install fails in seconds instead of at 96%). It writes a matching `.sha256` sidecar, so flashing and booting behave completely normally; only zstd's frame checksums catch the damage during install.
+`build-scripts/make-corrupt-test-iso.sh` copies the ISO to `<name>.corrupt-test-<scenario>.iso` (the scenario lives in the filename, so a flashed stick is self-describing) and overwrites 64KiB with garbage starting 8MiB into the chosen `/purple/*.img.zst` (past the zstd header, so the install fails in seconds instead of at 96%). It writes a matching `.sha256` sidecar, so flashing and booting behave completely normally; only zstd's frame checksums catch the damage during install.
 
 The fallback itself lives in `build-scripts/install.sh` (search `BACKUP_IMAGE`): zstd verifies frame checksums while streaming to dd, a failed pipeline with a healthy dd means a bad copy, and the source list retries with `purple-os-backup.img.zst`. Marker lines on stderr drive the UI: `[PURPLE-RETRY]` for the fallback, `[PURPLE-CORRUPT-KEY]` for the both-copies-dead error, with friendly wording in `purple_tui/parent_menu.py`.
 
@@ -33,4 +33,4 @@ The fallback itself lives in `build-scripts/install.sh` (search `BACKUP_IMAGE`):
 - Corrupt-test ISOs are never auto-picked by normal ISO discovery (`just flash`, `just build` flows). Only `just flash-corrupt` or an explicit path flashes one.
 - `just flash-corrupt` warns if the newest corrupt-test ISO came from an older build than your newest build; re-run `just corrupt-test-iso` after rebuilding.
 - The `backup` and `both` scenarios need a with-backup ISO; a plain ISO has no backup copy to corrupt, and the script errors accordingly.
-- Corruption is a plain byte overwrite of `X` characters, deterministic and repeatable; delete the `.corrupt-test.iso` (and its `.sha256`/`.version` sidecars) when done to reclaim disk.
+- Corruption is a plain byte overwrite of `X` characters, deterministic and repeatable; delete the `.corrupt-test-*.iso` files (and their `.sha256`/`.version` sidecars) when done to reclaim disk.

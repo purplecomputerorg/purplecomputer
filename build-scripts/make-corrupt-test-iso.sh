@@ -51,7 +51,7 @@ if [[ ! -f "$ISO" ]]; then
     usage
     exit 1
 fi
-OUT="${ISO%.iso}.corrupt-test.iso"
+OUT="${ISO%.iso}.corrupt-test-${WHICH}.iso"
 
 corrupt() {
     local path="$1" lba
@@ -66,23 +66,29 @@ corrupt() {
     # write fails within seconds instead of at 96%.
     local off=$(( lba * 2048 + 8*1024*1024 ))
     head -c 65536 /dev/zero | tr '\0' 'X' \
-        | dd of="$OUT" bs=64K seek="$off" oflag=seek_bytes conv=notrunc status=none
+        | sudo dd of="$OUT" bs=64K seek="$off" oflag=seek_bytes conv=notrunc status=none
     echo "Corrupted 64KiB of $path at byte offset $off"
 }
 
+# The output dir is owned by the Docker build (nobody:nogroup), so all writes
+# need sudo. Prompt once up front rather than mid-copy.
+sudo -v
+
 echo "Copying $(basename "$ISO") -> $(basename "$OUT")..."
-cp --reflink=auto -f "$ISO" "$OUT"
+sudo cp --reflink=auto -f "$ISO" "$OUT"
 
 case "$WHICH" in
-    primary) corrupt /purple/purple-os.img.zst ;;
-    backup)  corrupt /purple/purple-os-backup.img.zst ;;
+    primary) corrupt /purple/purple-os.img.zst
+             echo "Scenario '$WHICH': expect the install to self-heal from the backup copy." ;;
+    backup)  corrupt /purple/purple-os-backup.img.zst
+             echo "Scenario '$WHICH': expect the install to succeed normally from the primary." ;;
     both)    corrupt /purple/purple-os.img.zst
-             corrupt /purple/purple-os-backup.img.zst ;;
-    *)       usage; exit 1 ;;
+             corrupt /purple/purple-os-backup.img.zst
+             echo "Scenario '$WHICH': expect the install to show the damaged-Purple-Key screen." ;;
 esac
 
-sha256sum "$OUT" > "${OUT}.sha256"
-[[ -f "${ISO}.version" ]] && cp -f "${ISO}.version" "${OUT}.version"
+sha256sum "$OUT" | sudo tee "${OUT}.sha256" >/dev/null
+[[ -f "${ISO}.version" ]] && sudo cp -f "${ISO}.version" "${OUT}.version"
 
 echo ""
 echo "Done. Flash it with:  just flash-corrupt"

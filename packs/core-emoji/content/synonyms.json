@@ -4,6 +4,7 @@
   "meow": "cat",
   "puppy": "dog",
   "doggy": "dog",
+  "doggie": "dog",
   "woof": "dog",
   "ape": "monkey",
   "chimp": "monkey",
@@ -45,6 +46,8 @@
   "bye": "wave",
   "luv": "heart",
   "xoxo": "heart",
+  "smooch": "kiss",
+  "mwah": "kiss",
   "headphone": "headphones",
 
   "moo": "cow",

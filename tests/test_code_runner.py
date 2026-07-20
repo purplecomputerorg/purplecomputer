@@ -397,3 +397,120 @@ class TestSmartResolution:
         self._run(runner.run(["paint off", "abc"]))
         assert canvas._painted_chars == []
         assert canvas._typed_chars == []
+
+
+# ---------------------------------------------------------------------------
+# Repeat keyword typo correction (parse-level)
+# ---------------------------------------------------------------------------
+
+class TestRepeatTypoCorrection:
+    def test_repeet_becomes_repeat_block(self):
+        from purple_tui.code_runner import parse_lines
+        corrections = []
+        cmds = parse_lines(["repeet 3 forward 10"], corrections=corrections)
+        assert cmds[0]['type'] == 'repeat'
+        assert cmds[0]['count'] == 3
+        assert corrections == [("repeet 3 forward 10", "repeat 3 forward 10")]
+        assert parse_lines(["Repeet 3 forward 10"])[0]['type'] == 'repeat'
+
+    def test_nested_body_typo_corrected(self):
+        from purple_tui.code_runner import parse_lines
+        cmds = parse_lines(["repeat 2: repeet 3 forward 1"])
+        assert cmds[0]['body'][0]['type'] == 'repeat'
+
+    def test_real_word_treat_not_coerced(self):
+        """'treat'/'treats' fuzzy-match 'repeat' but are real content words."""
+        from purple_tui.code_runner import parse_lines
+        corrections = []
+        for line in ("treat 5", "treats 5"):
+            cmds = parse_lines([line], corrections=corrections)
+            assert cmds[0]['type'] == 'line'
+        assert corrections == []
+
+    def test_bare_typo_without_body_left_alone(self):
+        from purple_tui.code_runner import parse_lines
+        cmds = parse_lines(["repeet"])
+        assert cmds == [{'type': 'line', 'text': 'repeet'}]
+
+    def test_play_runner_repeet_runs_loop(self):
+        from purple_tui.rooms.play_room import SimpleEvaluator
+        from purple_tui.code_runner import PlayCodeRunner
+        runner = PlayCodeRunner(SimpleEvaluator())
+        results = runner.run(["repeet 3: 2 + 2"])
+        assert len(results) == 3
+        assert runner.corrections
+
+
+class TestArtRepeatTypos:
+    """Typos in `repeat N forward M` must draw exactly like the correct line."""
+
+    CONTROL = "repeat 3 forward 4"
+
+    def _run_art(self, line):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = _FakeCanvas()
+        runner = ArtCodeRunner(canvas)
+        asyncio.run(runner.run([line]))
+        return canvas, runner
+
+    @pytest.mark.parametrize("line", [
+        "repeat 3 foward 4",
+        "repeet 3 forward 4",
+        "repeet 3 foward 4",
+    ])
+    def test_typo_draws_like_control(self, line):
+        control, _ = self._run_art(self.CONTROL)
+        canvas, runner = self._run_art(line)
+        assert canvas._painted_positions == control._painted_positions
+        assert (canvas._cursor_x, canvas._cursor_y) == \
+            (control._cursor_x, control._cursor_y)
+        assert canvas._painted_chars == []
+        assert runner.corrections
+
+    def test_color_before_misspelled_repeat(self):
+        control, _ = self._run_art("purple " + self.CONTROL)
+        canvas, runner = self._run_art("purple repeet 3 forward 4")
+        assert canvas._painted_positions == control._painted_positions
+        assert canvas._last_key_color == control._last_key_color
+        assert canvas._last_key_color != "#FF0000"
+        assert runner.corrections
+
+
+class TestRepeatTypoAcrossRunners:
+    def test_music_repeet_loops_notes(self):
+        from purple_tui.code_runner import MusicCodeRunner
+        played = []
+        runner = MusicCodeRunner(play_key_fn=lambda k, m: played.append(k))
+        asyncio.run(runner.run(["repeet 2 fast abc"]))
+        assert played == ['A', 'B', 'C', 'A', 'B', 'C']
+        assert runner.corrections
+
+    def test_correct_spelling_records_no_correction(self):
+        from purple_tui.code_runner import parse_lines
+        corrections = []
+        parse_lines(["repeat 3 forward 4"], corrections=corrections)
+        assert corrections == []
+
+
+class TestArtFuzzyVerbResolution:
+    """The corrected line is awaited through the parse pipeline, so its
+    effects must be visible as soon as run() returns."""
+
+    def _run_art(self, lines):
+        from purple_tui.code_runner import ArtCodeRunner
+        canvas = _FakeCanvas()
+        runner = ArtCodeRunner(canvas)
+        asyncio.run(runner.run(lines))
+        return canvas, runner
+
+    def test_forwrd_moves_before_run_returns(self):
+        canvas, runner = self._run_art(["forwrd 4"])
+        assert canvas._cursor_x == 4
+        assert canvas._painted_chars == []
+        assert runner.corrections == [("forwrd 4", "forward 4")]
+
+    def test_color_then_bare_number(self):
+        control, _ = self._run_art(["blue", "forward 4"])
+        canvas, runner = self._run_art(["blue 4"])
+        assert canvas._painted_positions == control._painted_positions
+        assert canvas._last_key_color == control._last_key_color

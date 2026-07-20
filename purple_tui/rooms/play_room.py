@@ -852,11 +852,10 @@ class PlayMode(Vertical):
         if eval_text:
             scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
-        # Repeat commands: use PlayCodeRunner (handles fuzzy "repeet" → "repeat")
+        # Repeat commands: use PlayCodeRunner (parse_lines fixes fuzzy "repeet" → "repeat")
         from ..code_runner import PlayCodeRunner, parse_lines
         runner = PlayCodeRunner(self.evaluator)
-        corrected = runner._fuzzy_correct(eval_text)
-        cmds = parse_lines([corrected])
+        cmds = parse_lines([eval_text])
         is_repeat = any(c['type'] == 'repeat' for c in cmds)
         if is_repeat:
             results = runner.run([eval_text])
@@ -1664,19 +1663,11 @@ class SimpleEvaluator:
     _COUNT_OPS = ('x', '×', '*', '/', '÷', '-') + tuple(w for w in _DIGIT_OPERATOR_WORDS if w != 'plus')
     _COUNT_TOKEN = re.compile(r'\d+([x×*/÷-]\d+)*', re.IGNORECASE)
 
-    def _is_content_word(self, w: str) -> bool:
-        """Exact emoji/color word, singular or plural. Fuzzy content matches
-        don't count: a typo like "timess" must stay correctable to an operator."""
-        if self.content.exact_emoji(w) or self.content.exact_color(w):
-            return True
-        s = singularize(w)
-        return bool(s and s != w and (self.content.exact_emoji(s) or self.content.exact_color(s)))
-
     def _fuzzy_op_word(self, word: str) -> str | None:
         """Fuzzy-match a typo to an operator word. Real content words between
         digits ("2 tigers 3", "2 limes 3") are never operators."""
         w = word.lower()
-        if self._is_content_word(w):
+        if self.content.is_exact_word(w):
             return None
         from ..fuzzy import fuzzy_match_small
         return fuzzy_match_small(w, list(self._DIGIT_OPERATOR_WORDS), cutoff=0.7)

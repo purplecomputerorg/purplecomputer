@@ -534,6 +534,11 @@ class ContentManager:
         """Check if word is a valid emoji or color, including plural forms."""
         return self.get_word(word) is not None
 
+    def is_exact_word(self, word: str) -> bool:
+        """Exact emoji or color word, singular or plural. Fuzzy matches don't
+        count: a typo must stay correctable to a command or operator."""
+        return bool(self.exact_emoji(word) or self.exact_color(word))
+
 
 # Global content manager instance
 _content: Optional[ContentManager] = None

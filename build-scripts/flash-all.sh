@@ -35,6 +35,7 @@ Options:
   --yes         Skip the confirmation prompt
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
+  --ref <c>     Use an old commit's archived build (made by 'just build --ref <c>')
   --help        Show this help
 EOF
 }
@@ -52,6 +53,7 @@ while [[ -n "${1:-}" ]]; do
         --corrupt)    CORRUPT_MODE=true; shift ;;
         --yes|-y)     SKIP_CONFIRM=true; shift ;;
         --no-settle)  SKIP_SETTLE=true; shift ;;
+        --ref)        OUTPUT_DIR="$(archive_dir_for_ref "$2")/output" || { log_error "Cannot resolve git commit '$2'"; exit 1; }; shift 2 ;;
         *)            POSITIONAL+=("$1"); shift ;;
     esac
 done
@@ -87,7 +89,11 @@ else
     fi
     if [[ -z "$ISO_PATH" || ! -f "$ISO_PATH" ]]; then
         log_error "No matching ISO for the newest build in $OUTPUT_DIR."
-        log_error "Run 'just build' first, or pass an ISO path explicitly."
+        if [[ "$OUTPUT_DIR" == */archive/* ]]; then
+            log_error "Build it first with 'just build --ref <commit>'."
+        else
+            log_error "Run 'just build' first, or pass an ISO path explicitly."
+        fi
         exit 1
     fi
 fi

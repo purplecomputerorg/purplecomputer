@@ -18,6 +18,15 @@ UBUNTU_ISO_NAME="ubuntu-24.04.1-live-server-amd64.iso"
 # Essential base packages for golden image (the installed system)
 GOLDEN_PACKAGES="linux-image-generic grub-efi-amd64 systemd sudo"
 
+# Where 'just build --ref <commit>' keeps an old commit's build state (its own
+# golden image and output dir), so it never clobbers the current build. Flash
+# from it with 'just flash --ref <commit>'.
+archive_dir_for_ref() {
+    local hash
+    hash="$(git -C "$(dirname "${BASH_SOURCE[0]}")/.." rev-parse --short "$1")" || return 1
+    echo "$INSTALLER_BASE/archive/$hash"
+}
+
 # Human-readable list of the ISO files a build will produce, given current
 # FAST_BUILD / PURPLE_WITH_BACKUP_ISO. Mirrors the naming in 01-remaster-iso.sh.
 planned_iso_names() {

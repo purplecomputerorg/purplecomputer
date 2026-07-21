@@ -259,11 +259,13 @@ clean-releases *args:
 clean-isos *args:
     ./build-scripts/clean-old-isos.sh {{args}}
 
-# Build the installer ISOs in Docker (standard + debug; PURPLE_WITH_BACKUP_ISO=1 adds the with-backup variant)
+# Build the installer ISOs in Docker (standard + debug; PURPLE_WITH_BACKUP_ISO=1 adds the with-backup variant).
+# just build --ref <commit> builds that commit in isolation under /opt/purple-installer/archive/<commit>/
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}
 
-# Flash ISO to USB drive (asks which of the newest build's ISOs to use)
+# Flash ISO to USB drive (asks which of the newest build's ISOs to use).
+# just flash --ref <commit> flashes from that commit's archived build (see just build --ref)
 flash *args:
     ./build-scripts/flash-to-usb.sh {{args}}
 

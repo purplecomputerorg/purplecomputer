@@ -152,6 +152,33 @@ record_manifest() {
         >> "$(manifest_path)"
 }
 
+# Each settle guest holds 2GB of RAM (-m 2048) plus QEMU overhead, so an
+# unbounded parallel settle OOMs the host. Cap concurrency to what
+# MemAvailable can hold, budgeting 2.5GB per guest with 2GB host headroom.
+# Override with BOOT_SETTLE_JOBS.
+boot_settle_max_jobs() {
+    if [[ -n "${BOOT_SETTLE_JOBS:-}" ]]; then
+        echo "$BOOT_SETTLE_JOBS"
+        return
+    fi
+    local avail_mb cap
+    avail_mb=$(( $(awk '/^MemAvailable:/{print $2}' /proc/meminfo) / 1024 ))
+    cap=$(( (avail_mb - 2048) / 2560 ))
+    (( cap >= 1 )) || cap=1
+    echo "$cap"
+}
+
+# Count PIDs still running. Unreaped children sit as zombies until the parent
+# waits, so plain kill -0 would never see a slot free up.
+count_running() {
+    local n=0 pid state
+    for pid in "$@"; do
+        state=$(ps -o state= -p "$pid" 2>/dev/null | tr -d ' ') || true
+        [[ -z "$state" || "$state" == Z* ]] || n=$((n + 1))
+    done
+    echo "$n"
+}
+
 # Boot a freshly flashed drive once in QEMU so its controller pays the
 # one-time post-write cost here instead of on a parent's first boot. A
 # sequential dd readback does not clear that state; a real boot's read

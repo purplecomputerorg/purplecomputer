@@ -227,12 +227,16 @@ for i in "${!DEVS[@]}"; do
     dev="${DEVS[$i]}"
     [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
     [[ "$SKIP_SETTLE" == true ]] && continue
-    boot_settle_drive "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
-    SETTLE_PIDS+=("$!")
     SETTLE_DEVS+=("$dev")
 done
-if [[ ${#SETTLE_PIDS[@]} -gt 0 ]]; then
-    log_info "Boot-settling ${#SETTLE_PIDS[@]} drive(s) in QEMU so the first real boot is fast (--no-settle to skip). Takes a few minutes, walk away."
+if [[ ${#SETTLE_DEVS[@]} -gt 0 ]]; then
+    SETTLE_MAX=$(boot_settle_max_jobs)
+    log_info "Boot-settling ${#SETTLE_DEVS[@]} drive(s) in QEMU so the first real boot is fast, up to $SETTLE_MAX at a time so guests fit in RAM (--no-settle to skip). Takes a few minutes, walk away."
+    for dev in "${SETTLE_DEVS[@]}"; do
+        while (( $(count_running "${SETTLE_PIDS[@]}") >= SETTLE_MAX )); do sleep 5; done
+        boot_settle_drive "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
+        SETTLE_PIDS+=("$!")
+    done
     for i in "${!SETTLE_PIDS[@]}"; do
         if wait "${SETTLE_PIDS[$i]}"; then
             echo -e "${GREEN}✓${NC} ${SETTLE_DEVS[$i]}: boot-settled"

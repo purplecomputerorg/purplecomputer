@@ -86,6 +86,14 @@ pygame = None  # populated by warm_mixer() once pygame is safe to import
 _MIXER_READY: bool | None = None  # None = untested, True/False = cached result
 _PROBE_TIMED_OUT = False  # True = probe hung (hw is broken, don't retry)
 _KNOWN_SILENT = False  # True = output codec opens fine but is inaudible (don't retry)
+_IDLE_RELEASED = False  # True = mixer closed after a quiet period; re-init skips the probe
+_RELEASING = False  # True = idle-release quit in flight; mixer unusable until it completes
+_MIXER_GENERATION = 0  # bumped on every quit; stale Sound caches reload when it changes
+
+# An open SDL stream makes Pulse mix silence forever (real CPU on weak
+# machines), so the app releases the mixer after this many quiet seconds
+# and lazily re-inits on the next play.
+AUDIO_IDLE_SECONDS = 60.0
 
 # Codecs that init cleanly but drive no speakers: the amp sits on an I2C
 # side-channel the generic HDA driver never powers on, so ALSA accepts frames
@@ -154,6 +162,20 @@ _PROBE_SCRIPT = (
 )
 
 
+def _init_mixer() -> bool:
+    """In-process mixer init. Caller must hold _MIXER_LOCK (or be a
+    recovery path that owns the mixer). Updates _MIXER_READY."""
+    global _MIXER_READY, _IDLE_RELEASED
+    try:
+        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
+        pygame.mixer.set_num_channels(16)
+        _MIXER_READY = True
+        _IDLE_RELEASED = False
+    except pygame.error:
+        _MIXER_READY = False
+    return _MIXER_READY
+
+
 def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     """Probe mixer in a subprocess, then init in-process if it passed.
 
@@ -170,8 +192,20 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
     _dbg("warm_mixer: waiting for _MIXER_LOCK")
     with _MIXER_LOCK:
         _dbg(f"warm_mixer: got lock, ready={_MIXER_READY}")
+        if _RELEASING:
+            return False
         if _MIXER_READY is not None:
             return _MIXER_READY
+        if _IDLE_RELEASED and pygame is not None:
+            # Re-init after an idle release: the probe already passed this
+            # session and pygame is imported, so a direct init is safe and
+            # fast (no subprocess). A failed init here is transient (Pulse
+            # restarting, sink waking from suspend), so reset to None
+            # instead of latching False: the next play retries.
+            if _init_mixer():
+                return True
+            _MIXER_READY = None
+            return False
         reason = _silence_reason()
         if reason is not None:
             # Only the codec-identity veto is permanent. 'no-card' stays
@@ -216,13 +250,7 @@ def warm_mixer(timeout_seconds: float = 10.0) -> bool:
         import pygame as _pg
         import pygame.mixer  # noqa: F401
         pygame = _pg
-        try:
-            pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-            pygame.mixer.set_num_channels(16)
-            _MIXER_READY = True
-        except pygame.error:
-            _MIXER_READY = False
-        return _MIXER_READY
+        return _init_mixer()
 
 
 def _ensure_mixer() -> bool:
@@ -250,23 +278,17 @@ def reinit_mixer() -> None:
     on its own. This forces a fresh connection. All cached Sound objects become
     invalid after quit(), so callers must clear their sound caches.
     """
-    global _MIXER_READY
     from ..tts import _dbg
     _dbg("reinit_mixer: start")
     if not _ensure_mixer():
         return
     try:
         _dbg("reinit_mixer: calling mixer.quit()")
-        pygame.mixer.quit()
+        _quit_mixer()
         _dbg("reinit_mixer: quit returned")
     except Exception:
         pass
-    try:
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=2048)
-        pygame.mixer.set_num_channels(16)
-        _MIXER_READY = True
-    except pygame.error:
-        _MIXER_READY = False
+    _init_mixer()
     _dbg(f"reinit_mixer: done ready={_MIXER_READY}")
     from .. import tts
     tts._current_channel = None
@@ -280,7 +302,7 @@ def reinit_mixer_after_hotplug() -> bool:
     failed at boot gets a fresh chance when a USB adapter is plugged in.
     Returns True iff the mixer is working after reinit.
     """
-    global _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT
+    global _MIXER_READY, _PROBE_TIMED_OUT, _KNOWN_SILENT, _IDLE_RELEASED
     from ..tts import _dbg
     _dbg("reinit_after_hotplug: waiting for _MIXER_LOCK")
     with _MIXER_LOCK:
@@ -288,19 +310,128 @@ def reinit_mixer_after_hotplug() -> bool:
             try:
                 if pygame.mixer.get_init():
                     _dbg("reinit_after_hotplug: calling mixer.quit()")
-                    pygame.mixer.quit()
+                    _quit_mixer()
                     _dbg("reinit_after_hotplug: quit returned")
             except Exception:
                 pass
         _MIXER_READY = None
         _PROBE_TIMED_OUT = False
         _KNOWN_SILENT = False
+        # Hardware changed: the old probe result no longer applies, so the
+        # idle fast-path must not skip the fresh probe below.
+        _IDLE_RELEASED = False
     try:
         from .. import tts
         tts._current_channel = None
     except Exception:
         pass
     return warm_mixer()
+
+
+def mixer_is_open() -> bool:
+    """True while an SDL stream is open (Pulse's sink can't suspend)."""
+    return bool(_MIXER_READY)
+
+
+def mixer_generation() -> int:
+    """Bumped on every mixer quit. Sound objects are tied to the device
+    they were decoded for, so caches stamped with an older generation
+    must reload (the contract reinit_mixer documents)."""
+    return _MIXER_GENERATION
+
+
+def _quit_mixer() -> None:
+    """Quit the mixer and invalidate cached Sounds via the generation."""
+    global _MIXER_GENERATION
+    try:
+        pygame.mixer.quit()
+    finally:
+        _MIXER_GENERATION += 1
+
+
+def mixer_ready_for_play() -> bool:
+    """Strict mixer check for cache loaders: True only when the mixer is
+    usable right now.
+
+    After an idle release this re-inits inline (direct init, no subprocess
+    probe), so it never blocks the main thread the way a cold warm_mixer()
+    could. In every other non-ready state it returns False like the old
+    _MIXER_READY guard did.
+    """
+    if _MIXER_READY:
+        return True
+    if _RELEASING:
+        return False
+    return warm_mixer() if _IDLE_RELEASED else False
+
+
+def should_attempt_play() -> bool:
+    """Permissive gate for play_safe: is attempting Sound.play() sensible?
+
+    Differs from mixer_ready_for_play() in the probe-in-flight state
+    (_MIXER_READY is None without an idle release, e.g. during a hotplug
+    re-probe): returns True so the play raises and play_safe's
+    reinit-and-retry waits out the probe and recovers the sound, exactly
+    as before idle release existed. False only when playing is pointless:
+    known-broken output or a quit in flight.
+    """
+    if _MIXER_READY:
+        return True
+    if _RELEASING or _MIXER_READY is False:
+        return False
+    return warm_mixer() if _IDLE_RELEASED else True
+
+
+def request_idle_release(min_quiet_seconds: float = AUDIO_IDLE_SECONDS) -> None:
+    """Release the mixer if nothing has played for min_quiet_seconds.
+
+    The quit runs in a daemon thread: mixer.quit() can wedge on a dying
+    audio backend (see the UTM shutdown hang), and a wedged thread is
+    harmless where a wedged UI is not. Racing plays are safe: the quiet
+    period is re-checked under the lock, and a play that still loses the
+    race is skipped (never crashed) by the _RELEASING gate.
+    """
+    from ..audio import seconds_since_last_play
+    if not _MIXER_READY or _RELEASING or \
+            seconds_since_last_play() < min_quiet_seconds:
+        return
+    try:
+        if pygame.mixer.get_busy():
+            return
+    except pygame.error:
+        return
+    _threading.Thread(target=_release_for_idle, args=(min_quiet_seconds,),
+                      daemon=True, name="mixer-idle-release").start()
+
+
+def _release_for_idle(min_quiet_seconds: float) -> None:
+    global _MIXER_READY, _IDLE_RELEASED, _RELEASING
+    from ..audio import seconds_since_last_play
+    from ..tts import _dbg
+    with _MIXER_LOCK:
+        if not _MIXER_READY or _RELEASING:
+            return
+        try:
+            busy = pygame.mixer.get_busy()
+        except pygame.error:
+            return
+        if busy or seconds_since_last_play() < min_quiet_seconds:
+            return
+        _MIXER_READY = None
+        _RELEASING = True
+    # Quit OUTSIDE the lock: a wedged quit must strand only this daemon
+    # thread. Holding the lock across it would block warm_mixer, and with
+    # it the main thread's next play-recovery path. While _RELEASING is
+    # set every mixer gate returns False, so nothing touches the
+    # half-closed device.
+    try:
+        _quit_mixer()
+    except Exception:
+        pass
+    with _MIXER_LOCK:
+        _RELEASING = False
+        _IDLE_RELEASED = True
+    _dbg("mixer released after idle")
 
 
 # Default backgrounds (dark and light themes)
@@ -456,6 +587,9 @@ class MusicGrid(Widget):
         self._percussion_loaded = False
         self._letter_sounds: dict[str, pygame.mixer.Sound] = {}
         self._letter_sounds_loaded = False
+        # Mixer generation these caches were loaded under; Sounds from an
+        # older generation are tied to a closed device and must reload.
+        self._sounds_generation = mixer_generation()
         # Keys currently showing a note/percussion label (brief flash on press)
         self._note_labels: set[str] = set()
         self._note_timers: dict[str, asyncio.TimerHandle] = {}
@@ -504,6 +638,18 @@ class MusicGrid(Widget):
                 return p
         return None
 
+    def _drop_stale_sounds(self) -> None:
+        if self._sounds_generation != mixer_generation():
+            self._clear_sound_caches()
+            self._sounds_generation = mixer_generation()
+
+    def _clear_sound_caches(self) -> None:
+        self._instrument_sounds.clear()
+        self._percussion_sounds.clear()
+        self._percussion_loaded = False
+        self._letter_sounds.clear()
+        self._letter_sounds_loaded = False
+
     def _ensure_instrument_loaded(self, instrument_id: str) -> None:
         """Load instrument sounds if not already cached.
 
@@ -511,7 +657,8 @@ class MusicGrid(Widget):
         'c4.ogg', 'cs5.ogg') keyed by the filename stem. Lookup at play
         time uses pitch_for(...) to compute the right stem.
         """
-        if instrument_id in self._instrument_sounds or not _MIXER_READY:
+        self._drop_stale_sounds()
+        if instrument_id in self._instrument_sounds or not mixer_ready_for_play():
             return
         sounds_path = self._get_sounds_path()
         inst_path = sounds_path / instrument_id
@@ -528,7 +675,8 @@ class MusicGrid(Widget):
 
     def _ensure_percussion_loaded(self) -> None:
         """Load percussion sounds (shared across all instruments)."""
-        if self._percussion_loaded or not _MIXER_READY:
+        self._drop_stale_sounds()
+        if self._percussion_loaded or not mixer_ready_for_play():
             return
         sounds_path = self._get_sounds_path()
         for key in ALL_KEYS:
@@ -673,7 +821,8 @@ class MusicGrid(Widget):
 
     def _ensure_letter_sounds_loaded(self) -> None:
         """Load letter sounds if not already loaded."""
-        if self._letter_sounds_loaded or not _MIXER_READY:
+        self._drop_stale_sounds()
+        if self._letter_sounds_loaded or not mixer_ready_for_play():
             return
         self._load_letter_sounds()
         self._letter_sounds_loaded = True
@@ -729,11 +878,7 @@ class MusicGrid(Widget):
                 pygame.mixer.stop()
             except pygame.error:
                 pass
-        self._instrument_sounds.clear()
-        self._percussion_sounds.clear()
-        self._percussion_loaded = False
-        self._letter_sounds.clear()
-        self._letter_sounds_loaded = False
+        self._clear_sound_caches()
         for timer in self._note_timers.values():
             timer.cancel()
         self._note_timers.clear()

@@ -752,13 +752,16 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
                     break
                 pygame.time.wait(50)
 
-        _current_channel = None
         _dbg("play_clip: finished")
         return True
 
     except Exception as e:
         _dbg(f"play_clip: exception {type(e).__name__}: {e}")
         return False
+    finally:
+        # Cleared even on exception: a stale channel here would veto the
+        # app's mixer idle-release for the rest of the session.
+        _current_channel = None
 
 
 def is_available() -> bool:

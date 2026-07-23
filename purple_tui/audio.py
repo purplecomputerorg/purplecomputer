@@ -10,7 +10,16 @@ Keeps playback sites (music_room, tts) free of try/except boilerplate.
 
 from __future__ import annotations
 
+import time
 from typing import Any, Optional
+
+_last_play = 0.0
+
+
+def seconds_since_last_play() -> float:
+    """Seconds since the last play_safe call (any outcome). Used by the
+    mixer idle-release to decide when the stream has gone quiet."""
+    return time.monotonic() - _last_play
 
 
 def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
@@ -25,6 +34,11 @@ def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
     variant) rather than the full hotplug re-probe, because a stale
     connection only needs quit+init, not a fresh subprocess probe.
     """
+    from .rooms.music_room import should_attempt_play
+    if not should_attempt_play():
+        return None
+    global _last_play
+    _last_play = time.monotonic()
     try:
         return sound.play(*args, **kwargs)
     except Exception as e:

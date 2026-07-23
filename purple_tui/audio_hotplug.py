@@ -78,21 +78,29 @@ def _iter_lines_with_silence_flushes(
     stdout,
     debounce_seconds: float,
 ) -> Iterable[str]:
-    """Yield lines from stdout, plus synthetic empty strings after silence.
+    """Yield lines from stdout, plus a synthetic empty string after each burst.
 
     Empty strings let `debounce_events` notice quiet periods even when no
-    more udev events are arriving (i.e. the last event of a burst).
+    more udev events are arriving (i.e. the last event of a burst). Between
+    bursts the select blocks with no timeout, so an idle listener never wakes.
+
+    Any line arms the one-shot silence flush (classifying lines is
+    debounce_events' job, and arming on a superset of what it debounces can
+    only add one harmless flush, never miss one).
     """
+    armed = False  # a line arrived; one silence flush is owed
     while True:
-        r, _, _ = select.select([stdout], [], [], debounce_seconds)
+        r, _, _ = select.select([stdout], [], [], debounce_seconds if armed else None)
         if r:
             line = stdout.readline()
             if not line:  # EOF
                 return
+            armed = True
             yield line
         else:
             # Silence window elapsed. Yield a non-matching marker so
             # debounce_events sees a "now" past the deadline.
+            armed = False
             yield ""
 
 

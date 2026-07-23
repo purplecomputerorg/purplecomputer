@@ -240,3 +240,10 @@ class TestViewportStability:
                     f"Viewport shifted from y={top_before} to y={top_after}"
                 )
         _run(_test())
+
+
+def test_code_input_caret_is_solid():
+    """Blinking recomposites the screen at 2 Hz on weak machines; the caret
+    must be a steady block."""
+    from purple_tui.code_input import CodeInput
+    assert CodeInput().cursor_blink is False

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Typing feels snappier and the caret is a steady block**: Every keystroke used to rebuild the whole typo-correction vocabulary over a dozen times (once per word on the line, twice per lookup), which made typing feel laggy on slow laptops; the vocabulary is now built once and lookups are remembered, with identical corrections and underlines. The input caret no longer blinks: a solid block is always findable and stops a twice-a-second full-screen repaint. Audio also releases its output stream after a quiet minute (the open stream kept the sound system mixing silence forever, wasting battery), and re-opens instantly on the next sound.
 - **Misspelled plurals autocorrect now**: Typo tolerance used to only know singular words, so "doggiess", "catss", or "tomatoess" showed nothing while "doggiee" corrected fine. Fuzzy matching now also checks plural forms, so plural typos resolve to the right emoji or color with the usual correction hint.
 - **Room title no longer jitters while the USB indicator blinks**: During live-USB caching the blinking USB icon alternated between the icon glyph and plain spaces of a different rendered width, nudging the centered title bar sideways every second. The indicator now keeps the same text in both blink phases and hides the icon by painting it in the background color, so the header stays put.
 

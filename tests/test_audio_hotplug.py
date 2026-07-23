@@ -5,8 +5,10 @@ Covers:
 - debounce: a burst of adds within the window fires exactly one callback
 - debounce: events separated by quiet periods fire separately
 - debounce: end-of-stream flushes a pending event
+- line iterator: blocks with no timeout when idle, ticks only during a burst
 """
 
+from purple_tui import audio_hotplug
 from purple_tui.audio_hotplug import debounce_events, parse_event_line
 
 
@@ -82,3 +84,42 @@ def test_debounce_ignores_non_matching_lines_alone():
     ]
     debounce_events(lines, fires.append, debounce_seconds=0.5, _clock=clock)
     assert fires == []
+
+
+def test_iterator_blocks_when_idle_and_ticks_during_burst(monkeypatch):
+    """The idle listener must select with no timeout (zero wakeups); any
+    line arms the debounce timeout until the silence flush disarms it."""
+    timeouts: list[float | None] = []
+    script = iter([
+        ("ready", "monitor will print the received events for:\n"),
+        ("ready", "KERNEL[12.3] add /devices/pci/sound/card1 (sound)\n"),
+        ("silence", None),
+        ("ready", ""),  # EOF
+    ])
+    pending: list[str] = []
+
+    class Stdout:
+        def readline(self):
+            return pending.pop()
+
+    stdout = Stdout()
+
+    def fake_select(rlist, wlist, xlist, timeout=None):
+        timeouts.append(timeout)
+        kind, line = next(script)
+        if kind == "ready":
+            pending.append(line)
+            return rlist, [], []
+        return [], [], []
+
+    monkeypatch.setattr(audio_hotplug.select, "select", fake_select)
+    yielded = list(audio_hotplug._iter_lines_with_silence_flushes(stdout, 0.5))
+
+    # Idle (None), armed after any line (0.5, 0.5), disarmed again after
+    # the silence flush (None).
+    assert timeouts == [None, 0.5, 0.5, None]
+    assert yielded == [
+        "monitor will print the received events for:\n",
+        "KERNEL[12.3] add /devices/pci/sound/card1 (sound)\n",
+        "",
+    ]

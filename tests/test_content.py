@@ -205,5 +205,69 @@ class TestResolve:
         assert content.resolve("zxqw").kind is None
 
 
+class TestFuzzyPrecompute:
+    """The precomputed/memoized fuzzy path must behave exactly like a fresh
+    per-call rebuild (the pre-optimization implementation)."""
+
+    @staticmethod
+    def _reference_lookup(word, table):
+        from purple_tui.content import pluralize
+        from purple_tui.fuzzy import fuzzy_match
+        word = word.lower().strip()
+        forms = {k: k for k in table}
+        for k in table:
+            forms.setdefault(pluralize(k), k)
+        if match := fuzzy_match(word, list(forms)):
+            return table[forms[match]], (word, match)
+        return None, None
+
+    def _words_to_try(self, table):
+        words = []
+        for k in list(table)[:200]:
+            words.append(k)
+            if len(k) >= 5:
+                words.append(k[:-1])          # dropped last letter
+                words.append(k[1] + k[0] + k[2:])  # transposed first pair
+                words.append(k + "s")
+        return words
+
+    def test_matches_reference_implementation(self, content):
+        for table, lookup in ((content.emojis, content.fuzzy_emoji),
+                              (content.colors, content.fuzzy_color)):
+            for word in self._words_to_try(table):
+                expected, correction = self._reference_lookup(word, table)
+                content._last_correction = None
+                assert lookup(word) == expected, word
+                if expected is not None:
+                    assert content._last_correction == correction, word
+
+    def test_memo_hit_replays_correction(self, content):
+        assert content.fuzzy_emoji("chocolat") is not None
+        assert content.pop_correction() == ("chocolat", "chocolate")
+        assert content.fuzzy_emoji("chocolat") is not None
+        assert content.pop_correction() == ("chocolat", "chocolate")
+
+    def test_memo_miss_does_not_touch_correction(self, content):
+        content._last_correction = None
+        assert content.fuzzy_emoji("zxqwv") is None
+        assert content.fuzzy_emoji("zxqwv") is None
+        assert content._last_correction is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestFuzzyCacheHygiene:
+    def test_short_words_do_not_fill_the_cache(self, content):
+        content._emoji_fuzzy_cache.clear()
+        for word in ("d", "di", "din", "dino"):
+            content.fuzzy_emoji(word)
+        assert content._emoji_fuzzy_cache == {}
+
+    def test_overfull_cache_clears_and_keeps_working(self, content):
+        content._emoji_fuzzy_cache.clear()
+        content._emoji_fuzzy_cache.update({f"fake{i}": None for i in range(2049)})
+        assert content.fuzzy_emoji("chocolat") is not None
+        assert "fake0" not in content._emoji_fuzzy_cache
+        assert content._emoji_fuzzy_cache.get("chocolat") == "chocolate"

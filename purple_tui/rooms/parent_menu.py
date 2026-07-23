@@ -575,7 +575,6 @@ class ParentVolumeModal(PurpleModal):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._focus = self._FOCUS_VOLUME
-        self._test_sound = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
@@ -692,15 +691,15 @@ class ParentVolumeModal(PurpleModal):
             if not warm_mixer():
                 return
             import pygame.mixer
-            if self._test_sound is None:
-                sounds_path = (Path(__file__).parent.parent.parent
-                               / "packs" / "core-sounds" / "content")
-                test_path = sounds_path / "glockenspiel" / "c5.ogg"
-                if test_path.exists():
-                    self._test_sound = pygame.mixer.Sound(str(test_path))
-            if self._test_sound is not None:
-                self._test_sound.set_volume(level / 100)
-                play_safe(self._test_sound)
+            # Loaded fresh each press (it's a rarely-used settings button):
+            # a cached Sound would go stale whenever the mixer is quit.
+            sounds_path = (Path(__file__).parent.parent.parent
+                           / "packs" / "core-sounds" / "content")
+            test_path = sounds_path / "glockenspiel" / "c5.ogg"
+            if test_path.exists():
+                sound = pygame.mixer.Sound(str(test_path))
+                sound.set_volume(level / 100)
+                play_safe(sound)
         except Exception:
             pass
 

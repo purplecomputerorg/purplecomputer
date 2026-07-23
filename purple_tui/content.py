@@ -83,6 +83,11 @@ class ContentManager:
         self._word_prefix_index: dict[str, list[tuple[str, str | None, str | None]]] = {}
         # Fuzzy match correction tracking (set when fuzzy fallback fires)
         self._last_correction: tuple[str, str] | None = None
+        # Precomputed fuzzy candidates (form -> source key) and per-word memos
+        self._emoji_forms: dict[str, str] = {}
+        self._color_forms: dict[str, str] = {}
+        self._emoji_fuzzy_cache: dict[str, str | None] = {}
+        self._color_fuzzy_cache: dict[str, str | None] = {}
 
     def load_all(self) -> None:
         """Load content from all installed packs"""
@@ -107,6 +112,7 @@ class ContentManager:
 
         self._loaded = True
         self._build_prefix_indexes()
+        self._build_fuzzy_forms()
 
     def _load_defaults(self) -> None:
         """Load default colors. Emoji come from the core-emoji pack."""
@@ -284,21 +290,42 @@ class ContentManager:
             return emoji
         return None
 
-    def _fuzzy_lookup(self, word: str, table: dict[str, str]) -> Optional[str]:
-        """Fuzzy match a word against table keys and their plural forms.
+    def _build_fuzzy_forms(self) -> None:
+        """Precompute fuzzy candidate tables (form -> source key), once per load.
 
-        Keys come before plurals in the candidate list so a singular match
-        wins ties (existing corrections never change; only misses can become
-        plural matches). Plurals map back to their source key explicitly:
-        singularize() can't reverse fallback plurals of words outside the
-        precomputed tables (e.g. from user packs).
+        Keys come before plurals so a singular match wins ties (existing
+        corrections never change; only misses can become plural matches).
+        Plurals map back to their source key explicitly: singularize() can't
+        reverse fallback plurals of words outside the precomputed tables
+        (e.g. from user packs).
         """
-        from .fuzzy import fuzzy_match
+        def forms(table: dict[str, str]) -> dict[str, str]:
+            out = {k: k for k in table}
+            for k in table:
+                out.setdefault(pluralize(k), k)
+            return out
+
+        self._emoji_forms = forms(self.emojis)
+        self._color_forms = forms(self.colors)
+        self._emoji_fuzzy_cache.clear()
+        self._color_fuzzy_cache.clear()
+
+    def _fuzzy_lookup(self, word: str, table: dict[str, str],
+                      forms: dict[str, str], cache: dict[str, str | None]) -> Optional[str]:
+        """Fuzzy match a word against a precomputed forms table, memoized.
+
+        The memo stores the matched form so a hit replays the correction
+        side effect identically to a fresh lookup.
+        """
+        from .fuzzy import fuzzy_match, DEFAULT_MIN_LEN
         word = word.lower().strip()
-        forms = {k: k for k in table}
-        for k in table:
-            forms.setdefault(pluralize(k), k)
-        if match := fuzzy_match(word, list(forms)):
+        if len(word) < DEFAULT_MIN_LEN:
+            return None
+        if word not in cache:
+            if len(cache) > 2048:
+                cache.clear()
+            cache[word] = fuzzy_match(word, forms)
+        if match := cache[word]:
             self._last_correction = (word, match)
             return table[forms[match]]
         return None
@@ -310,7 +337,8 @@ class ContentManager:
         large (400+), so the min-5 floor avoids 3-4 char keymash collisions.
         Plural typos match too ("doggiess" corrects to "doggies").
         """
-        return self._fuzzy_lookup(word, self.emojis)
+        return self._fuzzy_lookup(word, self.emojis, self._emoji_forms,
+                                  self._emoji_fuzzy_cache)
 
     def get_emoji(self, word: str) -> Optional[str]:
         """Get emoji for a word: exact/singular, then fuzzy (DL distance, min 5)."""
@@ -444,7 +472,8 @@ class ContentManager:
         for short slips like "bleu" lives in the explicit `color X` command
         (loose match) and in autocomplete, not in bare-word resolution.
         """
-        return self._fuzzy_lookup(word, self.colors)
+        return self._fuzzy_lookup(word, self.colors, self._color_forms,
+                                  self._color_fuzzy_cache)
 
     def get_color(self, word: str) -> Optional[str]:
         """Get hex color: exact/singular, then fuzzy (DL distance, min 4)."""

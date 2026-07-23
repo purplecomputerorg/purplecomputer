@@ -915,6 +915,10 @@ class PurpleApp(App):
         self.volume_level = VOLUME_DEFAULT  # 0-100
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
+        self._toast_reaper_timer = None
+        self._toast_empty_ticks = 0
+        self._audio_idle_timer = None
+        self.audio_ok = None  # None = probing, True/False = probed result
 
         # Power management
         self._idle_timer = None
@@ -1175,11 +1179,15 @@ class PurpleApp(App):
 
             self._idle_timer = self.set_interval(check_interval, self._check_idle_state)
 
-        # Periodic toast cleanup: Textual's per-toast timer can drop callbacks
-        # during screen transitions or heavy evdev input, and App.query only
-        # walks the active screen — so toasts on backgrounded screens (e.g.
-        # under a pushed modal) never get reaped by their own timer view.
-        self.set_interval(1.0, self._reap_stale_toasts)
+        # Toast cleanup runs only while toasts exist: _on_notify starts the
+        # reaper interval and _reap_stale_toasts stops it once the stack is
+        # toast-free, so an idle app gets no 1 Hz wakeup.
+
+        # Release the audio stream after a quiet minute so Pulse's sink can
+        # suspend (an idle SDL stream keeps it mixing silence forever).
+        # The poll stops itself once the mixer is closed and re-arms on the
+        # next keystroke, so a released or audio-less machine has no wakeup.
+        self._arm_audio_idle_timer()
 
         # Keyboard diagnostic mode: if no evdev input for 60 seconds, exit to
         # debug shell. Activated by purple.inputtest=1 kernel parameter.
@@ -1302,6 +1310,34 @@ class PurpleApp(App):
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
 
         audio_hotplug.start(_on_event)
+
+    def _arm_audio_idle_timer(self) -> None:
+        if self._audio_idle_timer is None and self.audio_ok is not False:
+            self._audio_idle_timer = self.set_interval(30.0, self._check_audio_idle)
+
+    def _check_audio_idle(self) -> None:
+        """Release the mixer when audio has been quiet and the user idle.
+
+        The Music room is exempt (scheduled loop-station notes may be
+        between beats), and the input-idle veto keeps a just-requested
+        speech from losing the mixer mid-synthesis.
+        """
+        from . import tts
+        from .power_manager import get_power_manager
+        from .rooms.music_room import (AUDIO_IDLE_SECONDS, mixer_is_open,
+                                       request_idle_release)
+        if not mixer_is_open():
+            # Released, still probing, or broken: nothing to release. Stop
+            # polling; the next keystroke re-arms via _record_user_activity.
+            if self._audio_idle_timer is not None:
+                self._audio_idle_timer.stop()
+                self._audio_idle_timer = None
+            return
+        if (self.active_room == Room.MUSIC
+                or tts._current_channel is not None
+                or get_power_manager().get_idle_seconds() < AUDIO_IDLE_SECONDS):
+            return
+        request_idle_release()
 
     def _start_audio_retry_poll(self) -> None:
         # Kernel sound-subsystem hotplug doesn't fire when Pulse itself
@@ -1987,6 +2023,22 @@ class PurpleApp(App):
         if not self._debug_no_input_received:
             self.exit(return_code=0)
 
+    def _on_notify(self, event) -> None:
+        # Hooked here rather than notify(): notify() is documented
+        # thread-safe (it only posts a message), but set_interval is not.
+        # This handler always runs on the main thread, after the toast is
+        # actually created.
+        super()._on_notify(event)
+        self._arm_toast_reaper()
+
+    def _arm_toast_reaper(self) -> None:
+        # Ticks reset even when the timer is already running: a notify
+        # arriving mid-countdown must restart the new toast's mounting
+        # grace, or the timer could stop before the toast appears.
+        self._toast_empty_ticks = 0
+        if self._toast_reaper_timer is None:
+            self._toast_reaper_timer = self.set_interval(1.0, self._reap_stale_toasts)
+
     def _reap_stale_toasts(self) -> None:
         """Wall-clock watchdog: kill any Toast that's been on screen longer
         than its own timeout, regardless of Textual's notification state.
@@ -1995,12 +2047,16 @@ class PurpleApp(App):
         timeout + grace. We don't trust notification.has_expired — if that
         flag ever fails to flip (re-stamped raised_at, missed refresh, etc.)
         the toast would hang forever. Walks every screen in the stack so
-        toasts under a pushed modal still get reaped.
+        toasts under a pushed modal still get reaped. Stops its own timer
+        after two consecutive toast-free ticks (two, not one, so a toast
+        still mounting under load isn't orphaned).
         """
         from textual.widgets._toast import Toast, ToastHolder
         now = time.monotonic()
+        seen_any = False
         for screen in self.screen_stack:
             for toast in screen.query(Toast):
+                seen_any = True
                 first_seen = getattr(toast, "_purple_first_seen", None)
                 if first_seen is None:
                     toast._purple_first_seen = now
@@ -2017,6 +2073,10 @@ class PurpleApp(App):
                     self._unnotify(toast._notification, refresh=False)
                 except Exception:
                     pass
+        self._toast_empty_ticks = 0 if seen_any else self._toast_empty_ticks + 1
+        if self._toast_empty_ticks >= 2 and self._toast_reaper_timer is not None:
+            self._toast_reaper_timer.stop()
+            self._toast_reaper_timer = None
 
     def inhibit_idle(self, reason: str) -> None:
         """Suppress idle sleep/shutdown while a long-running operation is active.
@@ -2147,6 +2207,7 @@ class PurpleApp(App):
             pm.record_activity()
         except Exception:
             pass
+        self._arm_audio_idle_timer()
 
     # ── Lid Switch ────────────────────────────────────────────────────
 

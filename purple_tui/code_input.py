@@ -63,6 +63,9 @@ class CodeInput(Input):
     def __init__(self, autocomplete_fn: Callable[[str], list[tuple[str, str, str]]] | None = None,
                  math_mode: bool = False, context_autocomplete: bool = False, **kwargs):
         super().__init__(placeholder="", select_on_focus=False, **kwargs)
+        # Solid caret: blinking recomposites the screen at 2 Hz the whole
+        # time the input is focused, which is real CPU on weak machines.
+        self.cursor_blink = False
         self._autocomplete_fn = autocomplete_fn
         self._math_mode = math_mode
         self._context_autocomplete = context_autocomplete

@@ -10,6 +10,7 @@ Command-layer fuzzy uses min 3 chars on small curated vocabularies.
 """
 
 import difflib
+from typing import Iterable
 
 
 def damerau_levenshtein(s1: str, s2: str) -> int:
@@ -29,7 +30,10 @@ def damerau_levenshtein(s1: str, s2: str) -> int:
     return d[len1][len2]
 
 
-def fuzzy_match(word: str, vocabulary: list[str], min_len: int = 5) -> str | None:
+DEFAULT_MIN_LEN = 5
+
+
+def fuzzy_match(word: str, vocabulary: Iterable[str], min_len: int = DEFAULT_MIN_LEN) -> str | None:
     """Find the closest vocabulary match using Damerau-Levenshtein distance.
 
     Threshold: DL distance <= 1 (single typo). Candidates must share the

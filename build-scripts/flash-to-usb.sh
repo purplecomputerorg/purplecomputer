@@ -349,6 +349,24 @@ write_iso() {
         iso_sha256="$(sha256sum "$ISO_PATH" | awk '{print $1}')"
     fi
 
+    # A previously booted stick carries state dd never rewrites: a relocated
+    # backup GPT in the last MiB, and the casper "writable" ext4 superblock
+    # just past the ISO extent (a stale one there could be reused instead of
+    # mkfs'd fresh, resurrecting a prior owner's data). Zero both.
+    log_info "Zeroing stale GPT and persistence signatures from prior boots..."
+    if (( TARGET_SIZE_BYTES > 1048576 )); then
+        sudo dd if=/dev/zero of="$TARGET_DEV" bs=1M count=1 \
+            seek=$(( TARGET_SIZE_BYTES - 1048576 )) oflag=seek_bytes conv=fsync status=none
+    fi
+    local post_mb=$(( (TARGET_SIZE_BYTES - iso_size_bytes) / 1048576 ))
+    if (( post_mb > 64 )); then
+        post_mb=64
+    fi
+    if (( post_mb > 0 )); then
+        sudo dd if=/dev/zero of="$TARGET_DEV" bs=1M count="$post_mb" \
+            seek="$iso_size_bytes" oflag=seek_bytes conv=fsync status=none
+    fi
+
     echo ""
     log_info "Writing ISO to $TARGET_DEV..."
     echo ""
@@ -613,7 +631,7 @@ main() {
     # Post-eject drives linger in /dev as media-less nodes until re-plugged.
     # Catch this here so we fail with a useful message instead of a cryptic
     # "No medium found" partway through dd.
-    if ! sudo blockdev --getsize64 "$TARGET_DEV" >/dev/null 2>&1; then
+    if ! TARGET_SIZE_BYTES="$(sudo blockdev --getsize64 "$TARGET_DEV" 2>/dev/null)"; then
         log_error "$TARGET_DEV has no medium."
         log_error "The drive was ejected by a previous flash. Unplug it and plug it back in, then re-run."
         exit 1

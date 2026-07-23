@@ -217,8 +217,12 @@ boot_settle_drive() {
         echo "[WARN] /dev/kvm not available; boot settle will be slow" >&2
     fi
 
-    sudo qemu-system-x86_64 "${accel[@]}" -m 2048 \
-        -drive file="$dev",format=raw,cache=none \
+    # snapshot=on: guest writes hit a throwaway overlay so the stick ships
+    # byte-exact (see guides/usb-flash-settle.md). TMPDIR=/var/tmp because the
+    # overlay can grow multi-GB per drive and a tmpfs /tmp can't hold that
+    # across parallel settles.
+    sudo env TMPDIR=/var/tmp qemu-system-x86_64 "${accel[@]}" -m 2048 \
+        -drive file="$dev",format=raw,cache=none,snapshot=on \
         -boot c -no-reboot -display none \
         >"$log" 2>&1 &
     local qpid=$!

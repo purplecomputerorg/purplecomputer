@@ -24,6 +24,10 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 ---
 
+## No Claude Memories
+
+Do not save anything to Claude's persistent memory system. All notes, TODOs, and project state go in the repo (e.g. `docs/TODO.md`).
+
 ## Sensitive Files (DO NOT READ)
 
 Never read `.env` files, `credentials.json`, or `secrets.yaml`.

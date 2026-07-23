@@ -42,6 +42,7 @@ The fallback itself lives in `build-scripts/install.sh` (search `BACKUP_IMAGE`):
 
 ## Notes
 
+- All four scenarios (primary, backup, merge, both) verified end to end on 2026-07-23: flashed via the corrupt-mode flow, booted, and installed with the expected behavior from the table above.
 - Corrupt-test ISOs are never auto-picked by normal ISO discovery (`just flash`, `just build` flows). Only `just flash-corrupt` or an explicit path flashes one.
 - `just flash-corrupt` warns if the newest corrupt-test ISO came from an older build than your newest build; re-run `just corrupt-test-iso` after rebuilding.
 - The `backup` and `both` scenarios need a with-backup ISO; a plain ISO has no backup copy to corrupt, and the script errors accordingly.

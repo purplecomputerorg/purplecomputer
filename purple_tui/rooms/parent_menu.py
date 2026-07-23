@@ -1677,7 +1677,7 @@ class InstallProgressScreen(PurpleModal):
             # Both whole copies were damaged; install.sh is rewriting from the
             # good ranges of each. The forward-only bar sits still until pv
             # catches back up, so the status must explain the extra wait.
-            self._status = "Repairing the damaged data, this adds a few extra minutes..."
+            self._status = "Still double-checking, this adds a few extra minutes..."
             self._update_ui()
             return
         if clean.startswith('[PURPLE-CORRUPT-KEY]'):

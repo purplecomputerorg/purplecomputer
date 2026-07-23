@@ -49,21 +49,26 @@ We start everywhere rather than hardware-gating: waiting for the UI makes the co
 Two things that matter in `config/picom/picom.conf`:
 
 - **`unredir-if-possible = false`** is mandatory. Alacritty runs fullscreen, and picom's default is to *unredirect* fullscreen windows for performance, which hands Alacritty straight back to the tearing scanout path and undoes everything. Keep it redirected.
-- **Hardware GL for the compositor only.** The session exports `LIBGL_ALWAYS_SOFTWARE=1` (Alacritty renders via llvmpipe, robust on any GPU). The launcher starts picom with `LIBGL_ALWAYS_SOFTWARE=0` so the *compositor* uses the real GPU (glx backend) for fast vsync, with an `xrender` fallback for VMs / machines where hardware GL is unavailable.
+- **Hardware GL for the compositor, independent of the session.** The launcher starts picom with `LIBGL_ALWAYS_SOFTWARE=0` so the *compositor* uses the real GPU (glx backend) for fast vsync, with an `xrender` fallback for VMs / machines where hardware GL is unavailable. Alacritty's GL mode is decided separately by `purple-gl-probe` (next section).
 
 ## Software GL for Alacritty: History and Revisit Criteria
 
-The session exports `LIBGL_ALWAYS_SOFTWARE=1` (`config/xinit/xinitrc`), so Alacritty rasterizes every frame on the CPU via llvmpipe while picom composites with hardware GL (above). How we got here:
+The session decides Alacritty's GL mode at startup via `purple-gl-probe` (`scripts/purple-gl-probe.sh`): hardware GL when a real GPU driver verifiably works, `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe) otherwise. picom composites with hardware GL independently (above). How we got here:
 
 - **Dec 2025 (`7671ac6`):** modesetting + glamor, hardware GL everywhere.
 - **Mar 14, 2026 (`0a540cc`):** switched Alacritty to software GL, dropping the glamor option in the same commit. Rationale: works on any GPU, no driver/firmware dependencies, and the assumption that for a TUI the cost is invisible. That assumption was never measured.
 - **Mar 15, 2026 (`4128444`):** the context. Aggressive firmware pruning (~400MB) and a minimal X stack meant Alacritty startup could not depend on whatever GPU support survived, on unknown parent hardware or in GPU-less QEMU/UTM VMs.
-- **Jun 2026 (`bfd7593`):** picom deliberately gets hardware GL with a guarded fallback (glx, then xrender, then uncomposited). Every real machine has exercised hardware GL since.
+- **Jun 2026 (`bfd7593`):** picom deliberately gets hardware GL with a guarded fallback (glx, then xrender, then uncomposited). Every real machine has exercised hardware GL since, without incident.
 - **Jul 2026 (`c5ea550`):** radeon firmware shipped back into the image, so the pruning fear was legitimate at least once.
+- **Jul 23, 2026:** measurement finally happened, on both ends of the hardware spectrum. HP Stream 11 (Celeron N3060): alacritty 62-75% of a core with software GL, 6-7% with hardware. Surface Laptop (i5-7200U, fanless): 114.7% avg vs 3.1%, and the llvmpipe load kept package power maxed so the firmware power-capped the clocks (1783 MHz avg vs 2190 after), compounding everything. The pre-agreed probe-with-fallback landed the same day.
 
-The cost is real on Atom-class CPUs: on an HP Stream 11 (Celeron N3060, 2 weak cores) llvmpipe burns 10-15% of a core with Purple idle and competes with Python under load. Measure with `log-performance` from the parent-menu terminal (any ISO); A/B by flipping the variable to 0 in `/home/purple/.xinitrc` on a live stick and restarting.
+### How the probe decides
 
-If measurement confirms llvmpipe as a top consumer, the accepted fix is the picom pattern applied to the session: probe hardware GL at startup, fall back to llvmpipe when it is unavailable or software anyway. VMs land on llvmpipe automatically, keeping the change a safe no-op there. Update this section when that lands.
+`purple-gl-probe` prints exactly `0` (use hardware) or `1` (keep software) and always exits 0; xinitrc validates the output and treats anything else as `1`. Hardware requires ALL of: `glxinfo -B` succeeds within 5s with `LIBGL_ALWAYS_SOFTWARE=0`, direct rendering, a renderer that is neither Mesa software (llvmpipe/softpipe/SWR) nor a VM paravirtual renderer (virgl, SVGA3D, VMware, VirtualBox, Parallels, QXL; accelerated VMs pass every other check but virgl-class GL is too flaky to trust), and OpenGL 3.3 core (Alacritty's renderer needs it; pre-gen6 Intel keeps software rather than trusting the less exercised GLES fallback). Every failure mode, including glxinfo missing from the image, lands on software: the exact pre-probe behavior. glxinfo runs detached and is abandoned if it outlives the timeout, so even a driver wedged in an uninterruptible ioctl (unkillable D state) cannot stall the session.
+
+Three more safety layers in xinitrc: the probe output is hard-validated to `0`/`1`; the session default export stays `LIBGL_ALWAYS_SOFTWARE=1` and only Alacritty's environment gets the probed mode, so no other GL consumer is affected; and the decision is cached per boot in `/tmp/purple-gl-mode`. If Alacritty exits nonzero under hardware GL (a driver that fools glxinfo but crashes the real renderer), xinitrc writes `1` into that cache before its restart loop, so the machine falls back to software for the rest of the boot instead of crash-looping.
+
+Escape hatches: touch `/opt/purple/force-software-gl` (baked into an ISO, or via the overlay at runtime) to force software; for a runtime A/B either way, set `GL_MODE=0` (or `1`) after the probe block in `/home/purple/.xinitrc`, delete `/tmp/purple-gl-mode`, and restart. The decision and full glxinfo output are in `/tmp/purple-gl-probe.log`, and the boot log gets a one-line summary; `log-performance` points there when it sees software GL as a bottleneck. Contract locked by `tests/test_gl_probe.py`; build wiring by `tests/test_build_verifications.py`.
 
 ## Why PSR/FBC Stay Disabled (kept, even though they're not the fix)
 
@@ -91,7 +96,8 @@ Covers the live-boot paths (the primary distribution model: pre-made USBs). `pic
 
 - `config/picom/picom.conf` (the compositor config; `unredir-if-possible=false` is load-bearing)
 - `scripts/purple-start-compositor.sh` (guarded launcher, shared by xinitrc and the diagnostic)
-- `config/xinit/xinitrc` (starts the compositor after the WM)
+- `scripts/purple-gl-probe.sh` (Alacritty GL mode decision; contract in `tests/test_gl_probe.py`)
+- `config/xinit/xinitrc` (starts the compositor after the WM, consumes the GL probe)
 - `config/xorg/10-modesetting.conf` (why modesetting, and why TearFree isn't there)
 - `scripts/on-device/debug-display.sh` (verdict + repro + compositor A/B)
 - `build-scripts/01-remaster-iso.sh` (PSR/FBC kernel cmdline, all `boot=casper` lines)

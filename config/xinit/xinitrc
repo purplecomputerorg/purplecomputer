@@ -164,11 +164,20 @@ UI_READY_MARKER=/tmp/purple-ui-ready
 # Prevent HiDPI scaling surprises
 export WINIT_X11_SCALE_FACTOR=1.0
 
-# Software GL rendering: works on any GPU (no driver/firmware dependencies).
-# Cheap on big-core CPUs but NOT free on Atom-class ones, where llvmpipe
-# competes with Python for cores. History and revisit criteria:
+# Alacritty GL mode: probe hardware GL, fall back to software (llvmpipe).
+# Software works on any GPU but burns a core-plus rasterizing on real
+# hardware (measured Jul 2026: Surface i5 114% -> 3% of a core). The probe
+# flips machines with a verified GPU driver to hardware GL; VMs, missing
+# drivers, and any probe failure land on software, exactly the pre-probe
+# behavior. The decision is cached per boot (/tmp/purple-gl-mode), and the
+# session default below stays software so only Alacritty (and its children)
+# ever sees the probed mode. To force one mode for an A/B, set GL_MODE after
+# this block. History and decision rules:
 # guides/intel-display-tuning.md#software-gl-for-alacritty-history-and-revisit-criteria
 export LIBGL_ALWAYS_SOFTWARE=1
+GL_MODE=$(purple-gl-probe 2>/dev/null)
+case "$GL_MODE" in 0|1) ;; *) GL_MODE=1 ;; esac
+xlog "Alacritty GL: LIBGL_ALWAYS_SOFTWARE=$GL_MODE ($(tail -1 /tmp/purple-gl-probe.log 2>/dev/null || echo no probe log))"
 
 # Debug mode: extra diagnostics at boot
 if [ -f "$DEBUG_FLAG" ]; then
@@ -179,7 +188,7 @@ if [ -f "$DEBUG_FLAG" ]; then
     xrdb -query 2>&1 | grep -i dpi || echo "  (none set)"
     echo "GDK_SCALE=$GDK_SCALE QT_SCALE_FACTOR=$QT_SCALE_FACTOR"
     echo "WINIT_X11_SCALE_FACTOR=$WINIT_X11_SCALE_FACTOR"
-    echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE"
+    echo "LIBGL_ALWAYS_SOFTWARE=$LIBGL_ALWAYS_SOFTWARE (alacritty gets $GL_MODE)"
     python3 /opt/purple/calc_font_size.py --info 2>&1 || echo "calc_font_size.py --info failed"
     # GL driver info
     echo "GL renderer:"
@@ -223,10 +232,18 @@ if [ -f "$DEBUG_FLAG" ]; then
 fi
 
 xlog "Launching Alacritty..."
-alacritty --config-file "$ALACRITTY_CONFIG" \
+LIBGL_ALWAYS_SOFTWARE="$GL_MODE" alacritty --config-file "$ALACRITTY_CONFIG" \
     -e /usr/local/bin/purple
 ALACRITTY_EXIT=$?
 xlog "Alacritty exited with code $ALACRITTY_EXIT"
+
+# A driver can pass the glxinfo probe yet crash Alacritty's real renderer.
+# Poison the per-boot cache so the restart below (and every later one this
+# boot) runs on software GL instead of crash-looping on hardware.
+if [ "$GL_MODE" = "0" ] && [ "$ALACRITTY_EXIT" -ne 0 ]; then
+    echo 1 > /tmp/purple-gl-mode 2>/dev/null
+    xlog "Alacritty died under hardware GL; software GL for the rest of this boot"
+fi
 
 # Restart Purple (keeps X running for fast restart without screen flash).
 # If X itself crashes, this script exits and systemd restarts the whole service.

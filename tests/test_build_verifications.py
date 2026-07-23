@@ -107,3 +107,19 @@ def test_firmware_prune_keeps_and_guards_audio_gpu_dirs():
     assert re.search(r"for dir in \$FIRMWARE_KEEP_DIRS intel/sof; do", src), \
         "post-prune guard does not iterate FIRMWARE_KEEP_DIRS plus intel/sof"
     assert "missing after prune" in src, "no post-prune firmware existence guard"
+
+
+def test_gl_probe_ships_and_glxinfo_is_verified():
+    """The GL probe needs glxinfo (mesa-utils) in the image; if either quietly
+    vanishes, every machine silently falls back to software rendering. The
+    build must install both and keep glxinfo in the fail-loudly verify loop
+    (a comment mentioning glxinfo must not satisfy this)."""
+    src = _build_source()
+    assert re.search(r"^\s*mesa-utils \\$", src, re.M), \
+        "mesa-utils not in apt install list"
+    assert re.search(r'cp /purple-src/scripts/purple-gl-probe\.sh\b', src), \
+        "purple-gl-probe.sh not copied into the image"
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/usr/local/bin/purple-gl-probe"', src), \
+        "purple-gl-probe not made executable"
+    assert re.search(r"for cmd in [^\n]*\bglxinfo\b", src), \
+        "glxinfo not in the fail-loudly tooling verification loop"

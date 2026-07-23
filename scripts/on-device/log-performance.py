@@ -27,6 +27,7 @@ PIDFILE = os.path.join(DIR, "sampler.pid")
 LOG = os.path.join(DIR, "sampler.log")
 DURATION = int(os.environ.get("PURPLE_PERF_SECONDS", "120"))
 INTERVAL = 1.0
+GL_PROBE_LOG = "/tmp/purple-gl-probe.log"
 
 RED, GREEN, YELLOW, BLUE, BOLD, NC = (
     "\033[0;31m", "\033[0;32m", "\033[1;33m", "\033[1;34m", "\033[1m", "\033[0m")
@@ -331,7 +332,8 @@ def report_pipelines(ctx):
     section("Display and audio pipeline")
     if ctx.get("alacritty_software_gl") == "1":
         warn("Alacritty draws every frame on the CPU (LIBGL_ALWAYS_SOFTWARE=1). "
-             "Heavy on weak CPUs; A/B by flipping it to 0 in /home/purple/.xinitrc.")
+             f"The GL probe chose software; {GL_PROBE_LOG} says why. Force an A/B "
+             "with GL_MODE=0 after the probe block in /home/purple/.xinitrc.")
     elif ctx.get("alacritty_software_gl") is not None:
         ok("Alacritty uses hardware GL")
     picom = ctx.get("picom_cmdline")
@@ -446,8 +448,9 @@ def verdicts(ctx, series, procs, throttled, psi):
     single = frac_above([s["maxcore"] for s in series], 90)
     if ctx.get("alacritty_software_gl") == "1" and top.get("alacritty", 0) > 25:
         findings.append("Software GL rendering: alacritty is a top CPU consumer and it is "
-                        "rasterizing on the CPU. Flip LIBGL_ALWAYS_SOFTWARE to 0 in "
-                        "/home/purple/.xinitrc and restart to A/B this.")
+                        f"rasterizing on the CPU. Check {GL_PROBE_LOG} for why the probe "
+                        "chose software; A/B with GL_MODE=0 after the probe block in "
+                        "/home/purple/.xinitrc.")
     if sat > 0.25:
         heavy = ", ".join(n for n, a in list(top.items())[:3] if a > 15) or "see table above"
         findings.append(f"The CPU is simply out of headroom {sat:.0%} of the time. "

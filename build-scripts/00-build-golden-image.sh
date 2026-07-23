@@ -202,6 +202,7 @@ SOURCES
         xserver-xorg-input-libinput \
         xkb-data xauth \
         libgl1-mesa-dri \
+        mesa-utils \
         matchbox-window-manager \
         alacritty \
         picom \
@@ -235,7 +236,9 @@ SOURCES
     # a blinking-cursor Legacy boot. Fail the build loudly if anything is off.
     log_info "Verifying boot tooling is present in the golden image..."
     MISSING=""
-    for cmd in grub-install efibootmgr pv; do
+    # glxinfo: not boot tooling, but if it vanishes the GL probe silently
+    # falls back to software rendering on every machine. Fail loudly instead.
+    for cmd in grub-install efibootmgr pv glxinfo; do
         chroot "$MOUNT_DIR" bash -c "command -v $cmd >/dev/null" || MISSING="$MISSING $cmd"
     done
     chroot "$MOUNT_DIR" test -d /usr/lib/grub/i386-pc || MISSING="$MISSING /usr/lib/grub/i386-pc"
@@ -623,9 +626,11 @@ TIMEOUTS
     cp /purple-src/scripts/purple-wait-display.sh "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
+    cp /purple-src/scripts/purple-gl-probe.sh "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
     # Tear-free compositor config (modesetting has no TearFree option of its own)
     mkdir -p "$MOUNT_DIR/etc/purple"
     cp /purple-src/config/picom/picom.conf "$MOUNT_DIR/etc/purple/picom.conf"

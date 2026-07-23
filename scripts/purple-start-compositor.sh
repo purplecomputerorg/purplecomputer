@@ -24,10 +24,11 @@ if [ -n "$running_pid" ]; then
     exit 0
 fi
 
-# Hardware GL for the compositor only; Alacritty stays software (the session
-# exports LIBGL_ALWAYS_SOFTWARE=1). glx gives reliable vsync; xrender is the
-# no-GL fallback for VMs and machines where hardware GL is unavailable. If
-# neither stays up, we fall through and leave the screen uncomposited.
+# Hardware GL for the compositor regardless of the session's Alacritty GL
+# mode (purple-gl-probe decides that separately). glx gives reliable vsync;
+# xrender is the no-GL fallback for VMs and machines where hardware GL is
+# unavailable. If neither stays up, we fall through and leave the screen
+# uncomposited.
 for backend in glx xrender; do
     LIBGL_ALWAYS_SOFTWARE=0 picom --config "$CONF" --backend "$backend" \
         --log-file "$LOG" >/dev/null 2>&1 &

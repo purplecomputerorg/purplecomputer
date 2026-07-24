@@ -1177,7 +1177,9 @@ class MusicMode(Container, can_focus=True):
         return getattr(self.app, '_littles_mode', None) == 'music_noscreen'
 
     def on_mount(self) -> None:
-        warm_mixer()
+        # Off-thread: a cold warm_mixer() can block first paint for seconds
+        # behind the boot probe lock, leaving the room blank.
+        _threading.Thread(target=warm_mixer, daemon=True, name="mixer-warm").start()
         self.focus()
         self._update_hint()
         if self._is_noscreen:

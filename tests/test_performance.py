@@ -160,3 +160,44 @@ def test_no_subsecond_timers_while_idle():
         loop.run_until_complete(scenario())
     finally:
         loop.close()
+
+
+def test_typing_never_triggers_layout_pass():
+    """A keystroke must repaint, never relayout: one layout pass reflows
+    every widget on screen and was the dominant per-key cost that made
+    burst typing lag on weak machines (the autocomplete hint update and
+    Input's virtual_size reactive both used to force one per key)."""
+    from textual.screen import Screen
+    from purple_tui.purple_tui import PurpleApp
+    from purple_tui.keyboard import CharacterAction
+
+    async def scenario():
+        app = PurpleApp()
+        async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
+            await pilot.pause()
+            for c in "warm":
+                await app._dispatch_keyboard_action(CharacterAction(char=c))
+            await pilot.pause()
+
+            calls = {"n": 0}
+            orig = Screen._refresh_layout
+
+            def counting(self, *args, **kwargs):
+                calls["n"] += 1
+                return orig(self, *args, **kwargs)
+
+            Screen._refresh_layout = counting
+            try:
+                for c in "dinosaur":
+                    await app._dispatch_keyboard_action(CharacterAction(char=c))
+                    await pilot.pause()
+            finally:
+                Screen._refresh_layout = orig
+            assert calls["n"] == 0, (
+                f"{calls['n']} screen layout passes for 8 keystrokes")
+
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(scenario())
+    finally:
+        loop.close()

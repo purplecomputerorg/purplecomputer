@@ -53,12 +53,25 @@ static struct {
 
     int ignored_signals[MAX_CALLS];
     int ignored_signal_count;
+
+    int find_xorg_pid;         /* 0 = no Xorg found */
+    int kill_pids[MAX_CALLS];
+    int kill_sigs[MAX_CALLS];
+    int kill_reboot_counts[MAX_CALLS]; /* reboot_count when each kill was sent */
+    int kill_count;
+    int stat_alive_opens;      /* /proc/<pid>/stat opens that succeed, then ENOENT */
+    char stat_state;           /* process state served by /proc/<pid>/stat */
+    int reboots_at_first_term; /* reboot_count when SIGTERM was first sent */
 } mock;
+
+#define STAT_FD 43
 
 static void mock_reset(void) {
     memset(&mock, 0, sizeof(mock));
     mock.read_return = 1;
     mock.read_char = '\n';
+    mock.stat_state = 'S';
+    mock.reboots_at_first_term = -1;
 }
 
 /* --- Mock implementations called by purple-reboot.c via pr_* macros --- */
@@ -77,6 +90,13 @@ int test_open(const char *path, int flags) {
     (void)flags;
     if (mock.open_count < MAX_CALLS)
         strncpy(mock.opened_paths[mock.open_count++], path, 255);
+    if (strstr(path, "/stat")) {
+        if (mock.stat_alive_opens > 0) {
+            mock.stat_alive_opens--;
+            return STAT_FD;
+        }
+        return -1; /* process gone */
+    }
     if (mock.console_open_fails &&
         (strcmp(path, "/dev/console") == 0 || strcmp(path, "/dev/tty0") == 0 ||
          strcmp(path, "/dev/tty") == 0))
@@ -109,7 +129,12 @@ ssize_t test_write(int fd, const void *buf, size_t len) {
 }
 
 ssize_t test_read(int fd, void *buf, size_t len) {
-    (void)fd; (void)len;
+    if (fd == STAT_FD) {
+        int n = snprintf(buf, len, "123 (Xorg) %c 1 123 123 0 -1",
+                         mock.stat_state);
+        return n;
+    }
+    (void)len;
     *(char *)buf = mock.read_char;
     return mock.read_return;
 }
@@ -134,6 +159,25 @@ void test_signal(int sig, void (*handler)(int)) {
 
 void test_alarm(unsigned int sec) {
     (void)sec;
+}
+
+int test_find_xorg(void) {
+    return mock.find_xorg_pid;
+}
+
+int test_kill(int pid, int sig) {
+    if (mock.kill_count < MAX_CALLS) {
+        mock.kill_pids[mock.kill_count] = pid;
+        mock.kill_sigs[mock.kill_count] = sig;
+        mock.kill_reboot_counts[mock.kill_count] = mock.reboot_count;
+        mock.kill_count++;
+    }
+    if (sig == SIGTERM && mock.reboots_at_first_term < 0)
+        mock.reboots_at_first_term = mock.reboot_count;
+    return 0;
+}
+
+void test_msleep(void) {
 }
 
 /* -----------------------------------------------------------------------
@@ -217,6 +261,8 @@ static int test_wait_shows_message(void) {
            "should show 'Press Enter' prompt");
     ASSERT(find_write_containing(STDOUT_FILENO, "remove the USB"),
            "should mention USB removal");
+    ASSERT(find_write_containing(STDOUT_FILENO, "hold the power"),
+           "should mention the hold-power fallback");
     return 1;
 }
 
@@ -366,6 +412,100 @@ static int test_ignores_terminal_signals(void) {
     return 1;
 }
 
+static int sent_signal(int sig) {
+    for (int i = 0; i < mock.kill_count; i++)
+        if (mock.kill_sigs[i] == sig)
+            return 1;
+    return 0;
+}
+
+static int test_xorg_sigtermed_before_any_reboot(void) {
+    mock.find_xorg_pid = 123;
+    mock.stat_alive_opens = 2;
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(mock.kill_count >= 1, "should send signals to Xorg");
+    ASSERT(mock.kill_pids[0] == 123 && mock.kill_sigs[0] == SIGTERM,
+           "first signal should be SIGTERM to the Xorg pid");
+    ASSERT(mock.reboots_at_first_term == 0,
+           "X teardown must happen before any reboot() call");
+    ASSERT(mock.reboot_count >= 1, "should still reboot after teardown");
+    return 1;
+}
+
+static int test_xorg_polled_until_dead_no_sigkill(void) {
+    mock.find_xorg_pid = 123;
+    mock.stat_alive_opens = 3;
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(!sent_signal(SIGKILL),
+           "no SIGKILL when Xorg exits within the poll window");
+    ASSERT(mock.sleep_count >= 1 && mock.sleep_seconds[0] == 1,
+           "should settle 1s after Xorg dies, before reboot");
+    return 1;
+}
+
+static int test_xorg_sigkill_backstop_never_hangs(void) {
+    mock.find_xorg_pid = 123;
+    mock.stat_alive_opens = 1000000;
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(sent_signal(SIGKILL),
+           "should SIGKILL a TERM-immune Xorg after the poll window");
+    ASSERT(mock.reboot_count >= 1,
+           "must reboot even if Xorg never dies");
+    return 1;
+}
+
+static int test_zombie_xorg_counts_as_dead(void) {
+    /* A wedged parent (USB removal) can't reap Xorg, so it stays a zombie.
+     * Its GPU is already released; the poll must not stall 7s on it. */
+    mock.find_xorg_pid = 123;
+    mock.stat_alive_opens = 1000000;
+    mock.stat_state = 'Z';
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(sent_signal(SIGTERM), "should still SIGTERM the zombie's pid");
+    ASSERT(!sent_signal(SIGKILL),
+           "zombie is dead for our purposes: no SIGKILL, no poll stall");
+    ASSERT(mock.reboot_count >= 1, "should reboot promptly");
+    return 1;
+}
+
+static int test_no_xorg_skips_teardown(void) {
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    ASSERT(mock.kill_count == 0, "no Xorg means no signals sent");
+    ASSERT(mock.reboot_count >= 1, "should reboot normally");
+    return 1;
+}
+
+static int test_retry_reboot_tears_down_respawned_xorg(void) {
+    /* purple-x11.service Restart=on-failure can bring X back ~2s after
+     * teardown; the retry reboot must kill it again first. */
+    mock.find_xorg_pid = 123;
+    mock.stat_alive_opens = 1;
+    char *argv[] = {"purple-reboot", NULL};
+    run_main(1, argv);
+    int term_after_first_reboot = 0;
+    for (int i = 0; i < mock.kill_count; i++)
+        if (mock.kill_sigs[i] == SIGTERM && mock.kill_reboot_counts[i] >= 1)
+            term_after_first_reboot = 1;
+    ASSERT(term_after_first_reboot,
+           "should SIGTERM Xorg again between reboot attempts");
+    return 1;
+}
+
+static int test_wait_tears_down_xorg_after_enter(void) {
+    mock.find_xorg_pid = 77;
+    mock.stat_alive_opens = 1;
+    char *argv[] = {"purple-reboot", "--wait", NULL};
+    run_main(2, argv);
+    ASSERT(mock.kill_pids[0] == 77 && mock.kill_sigs[0] == SIGTERM,
+           "--wait path should also tear down Xorg before reboot");
+    return 1;
+}
+
 static int test_sync_before_every_reboot(void) {
     char *argv[] = {"purple-reboot", NULL};
     run_main(1, argv);
@@ -397,6 +537,13 @@ int main(void) {
     RUN_TEST(test_console_fallback_paths);
     RUN_TEST(test_vt_activate_with_tty2);
     RUN_TEST(test_ignores_terminal_signals);
+    RUN_TEST(test_xorg_sigtermed_before_any_reboot);
+    RUN_TEST(test_xorg_polled_until_dead_no_sigkill);
+    RUN_TEST(test_xorg_sigkill_backstop_never_hangs);
+    RUN_TEST(test_zombie_xorg_counts_as_dead);
+    RUN_TEST(test_no_xorg_skips_teardown);
+    RUN_TEST(test_retry_reboot_tears_down_respawned_xorg);
+    RUN_TEST(test_wait_tears_down_xorg_after_enter);
     RUN_TEST(test_sync_before_every_reboot);
 
     printf("\n%d/%d tests passed\n", tests_passed, tests_run);

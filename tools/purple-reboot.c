@@ -6,6 +6,12 @@
  * With --wait: clears screen, shows success message, waits for Enter, reboots.
  * Without: reboots immediately.
  *
+ * Before reboot(2) it kills Xorg and waits for it to actually die. Raw
+ * reboot with X holding a live hardware-GL context can wedge some GPUs'
+ * kernel shutdown path into a black screen that never POSTs (seen on
+ * i915 Surface). systemd reboots never hit this because the X unit is
+ * stopped first; this mirrors that.
+ *
  * This binary is the ONLY thing that reliably runs after USB removal.
  * /bin/sh, Python, sudo all SIGBUS because their code pages fault on the
  * dead overlayfs. This binary is fully on tmpfs and statically linked.
@@ -37,6 +43,9 @@ extern unsigned int test_sleep(unsigned int sec);
 extern void test_pause(void);
 extern void test_signal(int sig, void (*handler)(int));
 extern void test_alarm(unsigned int sec);
+extern int  test_find_xorg(void);
+extern int  test_kill(int pid, int sig);
+extern void test_msleep(void);
 #define pr_reboot(cmd)         test_reboot(cmd)
 #define pr_sync()              test_sync()
 #define pr_open(p, f)          test_open(p, f)
@@ -48,6 +57,9 @@ extern void test_alarm(unsigned int sec);
 #define pr_pause()             test_pause()
 #define pr_signal(s, h)        test_signal(s, h)
 #define pr_alarm(s)            test_alarm(s)
+#define pr_find_xorg()         test_find_xorg()
+#define pr_kill(p, s)          test_kill(p, s)
+#define pr_msleep()            test_msleep()
 #else
 #define pr_reboot(cmd)         reboot(cmd)
 #define pr_sync()              sync()
@@ -60,6 +72,43 @@ extern void test_alarm(unsigned int sec);
 #define pr_pause()             pause()
 #define pr_signal(s, h)        signal(s, h)
 #define pr_alarm(s)            alarm(s)
+#define pr_kill(p, s)          kill(p, s)
+
+#include <dirent.h>
+#include <stdlib.h>
+#include <time.h>
+
+static int pr_find_xorg(void) {
+    DIR *d = opendir("/proc");
+    struct dirent *e;
+    int found = -1;
+    if (!d)
+        return -1;
+    while (found < 0 && (e = readdir(d)) != NULL) {
+        if (e->d_name[0] < '1' || e->d_name[0] > '9')
+            continue;
+        char path[300] = "/proc/";
+        char comm[16] = {0};
+        strcat(path, e->d_name);
+        strcat(path, "/comm");
+        int fd = open(path, O_RDONLY);
+        if (fd < 0)
+            continue;
+        ssize_t n = read(fd, comm, sizeof(comm) - 1);
+        close(fd);
+        if (n > 0 && comm[n - 1] == '\n')
+            comm[n - 1] = '\0';
+        if (strcmp(comm, "Xorg") == 0)
+            found = atoi(e->d_name);
+    }
+    closedir(d);
+    return found;
+}
+
+static void pr_msleep(void) {
+    struct timespec ts = {0, 100 * 1000 * 1000};
+    nanosleep(&ts, NULL);
+}
 #endif
 
 static volatile int timed_out = 0;
@@ -79,6 +128,10 @@ static const char WAIT_MSG[] =
     "  You can remove the USB drive now.\n"
     "\n"
     "  Press Enter to restart.\n"
+    "\n"
+    "  If nothing happens, hold the power button down\n"
+    "  for about ten seconds, until the screen turns\n"
+    "  off. Then press it once to start up again.\n"
     "\n";
 
 static const char FAIL_MSG[] =
@@ -87,11 +140,58 @@ static const char FAIL_MSG[] =
     "  Purple Computer was installed successfully,\n"
     "  but automatic restart did not work on this computer.\n"
     "\n"
-    "  Please hold the power button to turn off,\n"
-    "  then turn it back on.\n"
+    "  Please hold the power button down for about\n"
+    "  ten seconds, until the screen turns off.\n"
+    "  Then press it once to start up again.\n"
     "\n"
     "  If you need help: support@purplecomputer.org\n"
     "\n";
+
+/* Alive means still holding resources. A zombie has already released its
+ * DRM master, so it counts as dead: kill(pid, 0) would say alive and stall
+ * the whole poll window when a wedged parent (USB removal) can't reap. */
+static int xorg_alive(int pid) {
+    char path[40] = "/proc/";
+    char digits[12];
+    char buf[128];
+    int len = 6, n = 0;
+
+    for (int v = pid; v > 0; v /= 10)
+        digits[n++] = (char)('0' + v % 10);
+    while (n > 0)
+        path[len++] = digits[--n];
+    strcpy(path + len, "/stat");
+
+    int fd = pr_open(path, O_RDONLY);
+    if (fd < 0)
+        return 0;
+    ssize_t r = pr_read(fd, buf, sizeof(buf) - 1);
+    pr_close(fd);
+    if (r <= 0)
+        return 0;
+    buf[r] = '\0';
+    char *p = strrchr(buf, ')');  /* state field follows "(comm) " */
+    return !(p && p[1] == ' ' && p[2] == 'Z');
+}
+
+/* Kill Xorg and wait for real process death (DRM master released) before
+ * reboot(2), so the GPU driver is not mid-render during kernel shutdown.
+ * Deterministic poll, not a fixed sleep; bounded at ~7s, then reboot
+ * proceeds regardless. No X found means nothing to do. */
+static void stop_xorg(void) {
+    int pid = pr_find_xorg();
+    if (pid <= 0)
+        return;
+    pr_kill(pid, SIGTERM);
+    for (int i = 0; i < 50 && xorg_alive(pid); i++)
+        pr_msleep();
+    if (xorg_alive(pid)) {
+        pr_kill(pid, SIGKILL);
+        for (int i = 0; i < 10 && xorg_alive(pid); i++)
+            pr_msleep();
+    }
+    pr_sleep(1);  /* let the driver finish DRM teardown */
+}
 
 /* Try sysrq 'b' (immediate hard reboot, no sync). */
 static void try_sysrq_reboot(void) {
@@ -197,12 +297,16 @@ int purple_reboot_main(int argc, char **argv) {
         }
     }
 
+    stop_xorg();
     pr_sync();
     pr_reboot(RB_AUTOBOOT);
 
     /* reboot() should never return on success.
-     * If we're here, something went wrong. Try harder. */
+     * If we're here, something went wrong. Try harder. Kill X again first:
+     * purple-x11.service (Restart=on-failure, RestartSec=2) may have
+     * respawned it with a fresh GL context during the failed attempt. */
     pr_sleep(1);
+    stop_xorg();
     pr_sync();
     pr_reboot(RB_AUTOBOOT);
 

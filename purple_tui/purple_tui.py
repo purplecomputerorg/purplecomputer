@@ -244,6 +244,8 @@ class TitleBar(Widget):
         self.refresh()
 
     def set_shift(self, text: str, active: bool) -> None:
+        if (text, active) == (self._shift_text, self._shift_active):
+            return
         self._shift_text = text
         self._shift_active = active
         self.refresh()
@@ -576,63 +578,19 @@ class BatteryIndicator(Static):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._battery_available = False
-        self._battery_path = None
         self._update_timer = None
 
     def on_mount(self) -> None:
-        """Find battery and start periodic updates"""
-        self._find_battery()
-        if self._battery_available or os.environ.get("PURPLE_TEST_BATTERY"):
+        """Start periodic updates if a battery exists (per PowerManager)"""
+        if get_power_manager().battery_available or os.environ.get("PURPLE_TEST_BATTERY") == "1":
             self._update_battery()  # Push initial state
             self._update_timer = self.set_interval(30, self._update_battery)
 
-    def _find_battery(self) -> None:
-        """Try to find a battery in /sys/class/power_supply/"""
-        try:
-            power_supply_path = "/sys/class/power_supply"
-            if not os.path.exists(power_supply_path):
-                return
-
-            for entry in os.listdir(power_supply_path):
-                entry_path = os.path.join(power_supply_path, entry)
-                type_file = os.path.join(entry_path, "type")
-                try:
-                    with open(type_file) as f:
-                        if f.read().strip() == "Battery":
-                            # Found a battery. Verify we can read capacity
-                            capacity_file = os.path.join(entry_path, "capacity")
-                            if os.path.exists(capacity_file):
-                                self._battery_path = entry_path
-                                self._battery_available = True
-                                return
-                except (IOError, OSError, PermissionError):
-                    continue
-        except (IOError, OSError, PermissionError):
-            pass
-
     def _read_battery_status(self) -> tuple[int, bool] | None:
-        """Read battery percentage and charging status. Returns None on error."""
-        if not self._battery_available or not self._battery_path:
-            return None
-
-        try:
-            # Read capacity (percentage)
-            capacity_file = os.path.join(self._battery_path, "capacity")
-            with open(capacity_file) as f:
-                capacity = int(f.read().strip())
-
-            # Read charging status
-            status_file = os.path.join(self._battery_path, "status")
-            charging = False
-            if os.path.exists(status_file):
-                with open(status_file) as f:
-                    status = f.read().strip().lower()
-                    charging = status in ("charging", "full")
-
-            return (capacity, charging)
-        except (IOError, OSError, PermissionError, ValueError):
-            return None
+        """Cached battery state from PowerManager's background refresher.
+        No sysfs reads here: battery capacity goes through the EC on many
+        laptops and can block, and this runs on the UI thread."""
+        return get_power_manager().get_battery_status()
 
     def _get_battery_icon(self, capacity: int, charging: bool) -> str:
         """Get the appropriate battery icon based on level and charging status"""
@@ -653,7 +611,7 @@ class BatteryIndicator(Static):
         """Periodic update callback: push battery text to TitleBar."""
         status = self._read_battery_status()
         if status is None:
-            text = ICON_BATTERY_FULL if os.environ.get("PURPLE_TEST_BATTERY") else ""
+            text = ICON_BATTERY_FULL if os.environ.get("PURPLE_TEST_BATTERY") == "1" else ""
         else:
             capacity, charging = status
             text = self._get_battery_icon(capacity, charging)
@@ -1042,6 +1000,12 @@ class PurpleApp(App):
             Path(UI_READY_MARKER).touch()
         except OSError:
             pass
+        # Startup is done and its ~85k objects are permanent. Freeze them out
+        # of the collector so full GC passes (a "sometimes" typing stall on
+        # weak CPUs) only ever scan per-session garbage.
+        import gc
+        gc.collect()
+        gc.freeze()
 
     async def on_mount(self) -> None:
         """Called when app starts"""
@@ -1343,23 +1307,41 @@ class PurpleApp(App):
         # Kernel sound-subsystem hotplug doesn't fire when Pulse itself
         # transitions from dead to alive (the card was there the whole time),
         # so a first-boot Pulse crash-loop that later recovers would leave
-        # audio_ok=False forever. Poll cheaply every few seconds while
-        # audio_ok is False; flip to True the moment a probe succeeds.
+        # audio_ok=False forever.
+        #
+        # Each probe is a full cold python+pygame subprocess (up to 10s on a
+        # wedged codec), which on a 2-core machine competes with the UI hard
+        # enough that typing hangs when a burst overlaps one. So: back off
+        # exponentially, never probe while the user is actively typing
+        # (skipped rounds don't spend the probe budget, so continuous typing
+        # can't starve recovery), and give up after 5 probes or 10 minutes,
+        # whichever comes first. A USB speaker plugged in later still
+        # recovers via the hotplug listener.
         import threading
         import time as _time
 
         def _poll() -> None:
             from .rooms.music_room import reinit_mixer_after_hotplug
-            while True:
-                _time.sleep(5)
+            from .power_manager import get_power_manager
+            from .tts import _dbg
+            delay = 5
+            deadline = _time.monotonic() + 600
+            while delay <= 80 and _time.monotonic() < deadline:
+                _time.sleep(delay)
                 if self.audio_ok:
                     return
-                from .tts import _dbg
-                _dbg("audio retry poll: probing")
+                try:
+                    if get_power_manager().get_idle_seconds() < 10:
+                        continue  # user active: probe later, budget untouched
+                except Exception:
+                    pass
+                _dbg(f"audio retry poll: probing (next delay {delay * 2}s)")
                 if reinit_mixer_after_hotplug():
                     self.call_from_thread(setattr, self, "audio_ok", True)
                     boot_log.heartbeat("audio retry poll: mixer came up")
                     return
+                delay *= 2
+            _dbg("audio retry poll: giving up until an audio hotplug event")
 
         threading.Thread(target=_poll, daemon=True, name="audio-retry-poll").start()
 
@@ -2102,11 +2084,12 @@ class PurpleApp(App):
             from .power_manager import _power_log
             pm = get_power_manager()
 
-            # Refresh charger state each tick (for smoothing)
+            # Cached: PowerManager's background thread does the ACPI reads
             charger = pm.is_on_charger()
 
             # Fallback lid detection: if LidSwitchReader isn't available,
-            # poll /proc/acpi (up to 5s latency, but works everywhere)
+            # read PowerManager's cache (refreshed every 5s off-thread, so
+            # up to ~10s latency stacked with this tick, but works everywhere)
             if self._lid_switch_reader is None:
                 lid_open = pm.get_lid_state()
                 if lid_open is False and self._lid_close_time is None:

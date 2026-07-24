@@ -158,10 +158,15 @@ class PowerManager:
     - Charger unknown = treated as battery (conservative)
     """
 
+    # Cadence of the background ACPI refresher. Charger/lid every tick,
+    # battery every 6th (30s), matching the old main-thread cadences.
+    _REFRESH_INTERVAL = 5.0
+
     def __init__(self):
         self._last_activity = time.time()
         self._lid_path: Optional[str] = None
         self._mains_path: Optional[str] = None
+        self._battery_path: Optional[str] = None
         self._poweroff_available = False
 
         # Charger state smoothing: require _CHARGER_SMOOTH_COUNT consecutive
@@ -173,6 +178,29 @@ class PowerManager:
 
         # Probe capabilities on init
         self._probe_capabilities()
+
+        # ACPI reads (charger online, lid state, battery capacity) go
+        # through the EC on many cheap laptops and can occasionally block
+        # for 100ms+. The UI thread must never pay that, so a daemon
+        # thread refreshes these caches and the getters return them.
+        self._lid_open_cached = self._read_lid_raw()
+        self._battery_status: Optional[tuple[int, bool]] = self._read_battery_raw()
+        import threading
+        threading.Thread(target=self._refresh_loop, daemon=True,
+                         name="power-refresh").start()
+
+    def _refresh_loop(self) -> None:
+        tick = 0
+        while True:
+            time.sleep(self._REFRESH_INTERVAL)
+            tick += 1
+            try:
+                self._refresh_charger()
+                self._lid_open_cached = self._read_lid_raw()
+                if tick % 6 == 0:
+                    self._battery_status = self._read_battery_raw()
+            except Exception:
+                pass
 
     def _probe_capabilities(self) -> None:
         """Check what power features are available on this system."""
@@ -192,8 +220,9 @@ class PowerManager:
                 except (IOError, OSError, PermissionError):
                     continue
 
-        # Find AC mains power supply (charger detection)
+        # Find AC mains power supply (charger detection) and battery
         self._find_mains()
+        self._find_battery()
 
         _power_log(f"INIT: lid_path={self._lid_path}, mains_path={self._mains_path}, "
                     f"initial_charger={self._charger_state}")
@@ -244,6 +273,49 @@ class PowerManager:
         except (IOError, OSError, PermissionError, ValueError):
             return None
 
+    def _find_battery(self) -> None:
+        """Find a battery in /sys/class/power_supply/ (naming varies)."""
+        try:
+            power_supply_path = "/sys/class/power_supply"
+            if not os.path.exists(power_supply_path):
+                return
+            for entry in os.listdir(power_supply_path):
+                entry_path = os.path.join(power_supply_path, entry)
+                try:
+                    with open(os.path.join(entry_path, "type")) as f:
+                        if f.read().strip() == "Battery":
+                            if os.path.exists(os.path.join(entry_path, "capacity")):
+                                self._battery_path = entry_path
+                                return
+                except (IOError, OSError, PermissionError):
+                    continue
+        except (IOError, OSError, PermissionError):
+            pass
+
+    def _read_battery_raw(self) -> Optional[tuple[int, bool]]:
+        """Read battery (percentage, charging). Returns None on error."""
+        if not self._battery_path:
+            return None
+        try:
+            with open(os.path.join(self._battery_path, "capacity")) as f:
+                capacity = int(f.read().strip())
+            charging = False
+            status_file = os.path.join(self._battery_path, "status")
+            if os.path.exists(status_file):
+                with open(status_file) as f:
+                    charging = f.read().strip().lower() in ("charging", "full")
+            return (capacity, charging)
+        except (IOError, OSError, PermissionError, ValueError):
+            return None
+
+    @property
+    def battery_available(self) -> bool:
+        return self._battery_path is not None
+
+    def get_battery_status(self) -> Optional[tuple[int, bool]]:
+        """Cached battery (percentage, charging); refreshed every 30s."""
+        return self._battery_status
+
     def record_activity(self) -> None:
         """Call this on any user input to reset idle timer."""
         idle_was = self.get_idle_seconds()
@@ -256,13 +328,13 @@ class PowerManager:
         return time.time() - self._last_activity
 
     def get_lid_state(self) -> Optional[bool]:
-        """
-        Check if lid is open.
-        Returns: True if open, False if closed, None if unknown/error.
-        """
+        """Cached lid state: True if open, False if closed, None unknown.
+        Refreshed by the background thread every 5s."""
+        return self._lid_open_cached
+
+    def _read_lid_raw(self) -> Optional[bool]:
         if not self._lid_path:
             return None
-
         try:
             with open(self._lid_path) as f:
                 content = f.read().strip().lower()
@@ -275,15 +347,17 @@ class PowerManager:
             return None
 
     def is_on_charger(self) -> Optional[bool]:
-        """Check if AC charger is connected.
+        """Cached charger state: True on charger, False on battery, None
+        unknown. Refreshed (with smoothing) by the background thread."""
+        return self._charger_state
 
-        Returns: True if on charger, False if on battery, None if unknown.
-        Uses smoothing: requires multiple consecutive reads of the same value
-        before changing state, to avoid flicker from firmware noise.
-        """
+    def _refresh_charger(self) -> None:
+        """Read mains state and apply smoothing: requires multiple
+        consecutive identical reads before changing state, to avoid
+        flicker from firmware noise during plug/unplug."""
         raw = self._read_mains_online()
         if raw is None:
-            return self._charger_state  # Keep last known state
+            return  # Keep last known state
 
         if raw == self._charger_pending:
             self._charger_pending_count += 1
@@ -298,8 +372,6 @@ class PowerManager:
         if self._charger_state != old_state:
             _power_log(f"CHARGER CHANGE: {old_state} -> {self._charger_state} "
                         f"(raw={raw}, pending_count={self._charger_pending_count})")
-
-        return self._charger_state
 
     def get_idle_sleep_threshold(self) -> int:
         """Get the idle seconds threshold for showing the sleep face.

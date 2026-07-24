@@ -10,7 +10,9 @@ from typing import Callable
 
 from textual.widgets import Static, Input
 from textual import events
+from textual.geometry import Size
 from textual.message import Message
+from textual.reactive import Reactive
 from rich.highlighter import Highlighter
 from rich.text import Text
 
@@ -56,6 +58,14 @@ class CodeInput(Input):
         def __init__(self, value: str) -> None:
             self.value = value
             super().__init__()
+
+    # Input._watch_value sets virtual_size on every keystroke, and the stock
+    # reactive (layout=True) reflows the entire screen each time: the main
+    # cause of burst-typing lag on weak machines. This input is fixed-size
+    # (height 1, width from container) with no scrollbars, so nothing about
+    # its layout can change with content; cursor-follow scrolling still works
+    # (scroll_to_region only touches scroll_offset, which repaints).
+    virtual_size = Reactive(Size(0, 0), layout=False)
 
     # Math operators after the global *->\u00d7, /->\u00f7 remap in _dispatch_keyboard_action
     MATH_OPERATORS = {'+', '-', '\u00d7', '\u00f7'}
@@ -212,15 +222,25 @@ class InputPrompt(Static):
 
 
 class AutocompleteHint(Static):
-    """Shows autocomplete suggestion and help hints."""
+    """Shows autocomplete suggestion and help hints.
+
+    Updates are repaint-only: this runs on every keystroke, and a layout
+    pass here reflows the whole screen, which is what made burst typing
+    lag on weak machines. Fixed width keeps repaint-only correct (a
+    width:auto Static must relayout when its content length changes).
+    """
 
     DEFAULT_CSS = """
     AutocompleteHint {
+        width: 1fr;
         height: 1;
         color: $text-muted;
         margin-left: 5;
     }
     """
+
+    def update(self, content="") -> None:
+        super().update(content, layout=False)
 
 
 
@@ -254,7 +274,10 @@ class RecallHint(Static):
         self.refresh()
 
     def show_if_empty(self, input_empty: bool) -> None:
-        self._visible = input_empty and bool(self._last_command)
+        visible = input_empty and bool(self._last_command)
+        if visible == self._visible:
+            return
+        self._visible = visible
         self.refresh()
 
     def render(self) -> str:

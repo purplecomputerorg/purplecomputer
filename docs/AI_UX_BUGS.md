@@ -1,6 +1,6 @@
 # AI UX Test Bugs
 
-Bugs discovered by automated AI UX testing (`just ux`). Mark fixed bugs with ~~strikethrough~~ or delete them.
+Bugs discovered by automated AI UX testing (`just ux`), a dev-machine test harness that never ships. Mark fixed bugs with ~~strikethrough~~ or delete them.
 
 ## 2026-03-31 11:20 (coder, claude-opus-4-6)
 

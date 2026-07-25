@@ -2,6 +2,8 @@
 
 Automated exploratory testing where a Claude agent pretends to be a kid (or parent) using Purple Computer, presses keys, observes the screen, and reports bugs.
 
+This runs on a developer's machine against a dev build. It is a test harness, not a feature: nothing here ships. See [Does Purple use AI?](../README.md#does-purple-use-ai).
+
 ## Quick Start
 
 ```bash

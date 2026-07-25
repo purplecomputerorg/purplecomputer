@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install an AI-generated art demo into Purple Computer.
+"""Install a generated art demo into Purple Computer as a fixed action script.
 
 Reads training output from art_ai.py and generates a demo script
 that can be played back with PURPLE_DEMO_AUTOSTART=1.
@@ -62,7 +62,7 @@ def estimate_duration(actions: list[dict]) -> float:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Install an AI-generated art demo into Purple Computer",
+        description="Install a generated art demo into Purple Computer as a fixed action script",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -171,9 +171,9 @@ After installing, run:
         segments_dir = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "segments")
         os.makedirs(segments_dir, exist_ok=True)
 
-        # The generated demo_code defines AI_DRAWING. We need to transform it
+        # The generated demo_code defines RECORDED_DRAWING. We need to transform it
         # to export SEGMENT instead, and add SPEED_MULTIPLIER.
-        segment_code = demo_code.replace("AI_DRAWING = [", "SEGMENT = [")
+        segment_code = demo_code.replace("RECORDED_DRAWING = [", "SEGMENT = [")
         segment_content = segment_code + "\n\n"
         segment_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
 
@@ -187,11 +187,11 @@ After installing, run:
         print(f"\nSaved segment: {segment_path}")
         print("  Added to demo.json")
     else:
-        # Legacy behavior: write to ai_generated_script.py
+        # Legacy behavior: write to recorded_script.py
         output_content = demo_code + "\n\n"
         output_content += f"SPEED_MULTIPLIER = {speed_multiplier:.4f}\n"
 
-        dest_path = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "ai_generated_script.py")
+        dest_path = os.path.join(PROJECT_ROOT, "purple_tui", "demo", "recorded_script.py")
         with open(dest_path, 'w') as f:
             f.write(output_content)
 

@@ -2,6 +2,8 @@
 
 Development tools for Purple Computer. Run these inside the VM (requires Linux/evdev).
 
+**These tools are not part of the product.** They author demo-video content on a developer's machine, and nothing here is copied into the ISO or the installed system. See [Does Purple use AI?](../README.md#does-purple-use-ai).
+
 ## Setup
 
 ```bash
@@ -12,9 +14,9 @@ echo "ANTHROPIC_API_KEY=sk-ant-your-key-here" > tools/.env
 pip install -r tools/requirements.txt
 ```
 
-## AI Drawing Tool (`art_ai.py`)
+## Demo Drawing Tool (`art_ai.py`)
 
-Uses Claude vision to generate drawings in the Art room with a visual feedback loop.
+Uses Claude vision on your dev machine to generate Art room demo drawings with a visual feedback loop. The output is a saved list of keypresses that the product replays.
 
 **How it works:**
 1. Starts Purple Computer in dev mode (`PURPLE_DEV_MODE=1`)
@@ -42,9 +44,9 @@ Uses Claude vision to generate drawings in the Art room with a visual feedback l
 - `--iterations`: Number of feedback loops (default: 5)
 - `--output`: Output directory (default: auto-generated `art_ai_output/TIMESTAMP`)
 
-## AI Music Tool (`music_ai.py`)
+## Demo Music Tool (`music_ai.py`)
 
-AI composition tool for the Music room.
+Dev-machine composition tool for Music room demo segments. Like the drawing tool, it writes out a fixed segment that ships as data.
 
 **Usage:**
 ```bash
@@ -82,7 +84,7 @@ Supported actions:
 
 **Disable real keyboard:** Set `PURPLE_NO_EVDEV=1` to disable evdev keyboard input.
 This prevents the physical keyboard from interfering with programmatic control.
-The AI tool sets this automatically.
+The demo tools set this automatically.
 
 ## Environment Variables
 

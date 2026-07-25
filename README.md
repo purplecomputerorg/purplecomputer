@@ -1,4 +1,4 @@
-This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/docs/DISCLOSURE.md).
+This file is AI-generated with a [human](https://github.com/tavinathanson) heavily involved. Human involvement varies across this repo; see [DISCLOSURE.md](/docs/DISCLOSURE.md). That is about how the code and docs get written; for what's in the product, see [Does Purple use AI?](#does-purple-use-ai) below.
 
 # Purple Computer
 
@@ -26,10 +26,19 @@ Purple Computer turns your old laptop into a calm, creative computer for kids. W
 
 - **Building, not consuming.** Words, colors, sounds, and numbers to play with.
 - **Nothing to break.** The whole laptop is Purple. No apps, no internet, nothing to mess up.
+- **No chatbot.** Just regular if/then logic, so it never says anything unexpected. [More below](#does-purple-use-ai).
 - **A screen they walk away from.** No tantrums, no parental controls needed.
 - **Pay once, use on every laptop.** Works on every laptop you own, now or later.
 
 **Learn more at [purplecomputer.org](https://purplecomputer.org).**
+
+---
+
+## Does Purple use AI?
+
+No. There's no chatbot and nothing that might say something unexpected: it's just regular if/then logic. One thing to note is the speak-out-loud feature, which uses machine learning (via [Piper](https://github.com/rhasspy/piper)) to generate natural-sounding speech, but it is not an LLM. It runs entirely on the laptop, offline, with nothing sent anywhere.
+
+AI does help build Purple, the way it helps write a lot of software now. Claude writes code, tests the UI, and helps make the drawings and music you see in the demo videos. All of that happens on a developer's machine. None of it ships: `tools/` and `scripts/ai_ux_*` are never copied into the image, and what those tools produce is checked in as plain fixed data, like the recorded list of keypresses in `purple_tui/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md) for how AI is used across this repo.
 
 ---
 
@@ -195,14 +204,16 @@ purplecomputer/
 │   ├── generate_sounds.py          # Procedural sound synthesis
 │   └── generate_voice_clips.py     # TTS narration generation
 │
-├── tools/                # AI-assisted content creation
-│   ├── art_ai.py                  # AI art room drawing generation
-│   └── music_ai.py                # AI music room content
+├── tools/                # Dev-machine only: authoring demo content (never shipped)
+│   ├── art_ai.py                  # Generates Art room demo drawings for videos
+│   └── music_ai.py                # Generates Music room demo compositions for videos
 │
 ├── config/               # System configs (Alacritty, X11, fonts)
 ├── tests/                # Test suite
 └── guides/               # Technical references
 ```
+
+What actually ships is whatever `build-scripts/00-build-golden-image.sh` copies into `/opt/purple`: `purple_tui/`, `packs/`, and two named scripts. `tools/` and `scripts/ai_ux_*` stay on the developer's machine, as does the demo tooling in `recording-setup/`.
 
 **Stack:**
 - **Target System:** Ubuntu 24.04 LTS minimal + X11 + Alacritty + Textual TUI

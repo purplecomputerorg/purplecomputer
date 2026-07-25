@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI-assisted Art Mode drawing generator.
+Art Mode demo drawing generator. Dev machine only, not part of the product.
 
 Uses the REAL Purple Computer app with visual feedback:
 1. Run the real app in a PTY with PURPLE_DEV_MODE=1
@@ -4488,14 +4488,14 @@ def generate_demo_script(actions: list[dict], canvas_width: int = CANVAS_WIDTH, 
         actions = downsampled
 
     lines = [
-        '"""AI-generated drawing demo."""',
+        '"""Pre-recorded drawing demo, authored on a dev machine with tools/art_ai.py."""',
         '',
         'from purple_tui.demo.script import (',
         '    PressKey, SwitchRoom, Pause, DrawPath, MoveSequence, Comment,',
         ')',
         '',
-        'AI_DRAWING = [',
-        '    Comment("=== AI GENERATED DRAWING ==="),',
+        'RECORDED_DRAWING = [',
+        '    Comment("=== PRE-RECORDED DRAWING ==="),',
         '    SwitchRoom("art"),',
         '    Pause(0.3),',
         '    PressKey("tab"),  # Enter paint mode',
@@ -4618,7 +4618,7 @@ def generate_output_dir(base_dir: str = "art_ai_output") -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AI-assisted drawing using real Purple Computer app",
+        description="Generate Art room demo drawings using the real Purple Computer app (dev machine only)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

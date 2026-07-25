@@ -57,7 +57,7 @@ SEGMENT = [
     PressKey("tab", pause_after=0.1),
 
     SetSpeed(83.365),
-    Comment("=== PALM TREE PAINTING (AI GENERATED) ==="),
+    Comment("=== PALM TREE PAINTING (PRE-RECORDED) ==="),
     Comment("Move from text end (91,21) to palm tree start (48,26)"),
     MoveSequence(directions=['left'] * 43 + ['down'] * 5, delay_per_step=0.008),
     PressKey('f'),

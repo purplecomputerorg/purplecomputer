@@ -1,11 +1,11 @@
-"""AI-generated drawing demo."""
+"""Pre-recorded drawing demo, authored on a dev machine with tools/art_ai.py."""
 
 from purple_tui.demo.script import (
     PressKey, SwitchRoom, Pause, MoveSequence, Comment,
 )
 
-AI_DRAWING = [
-    Comment("=== AI GENERATED DRAWING ==="),
+RECORDED_DRAWING = [
+    Comment("=== PRE-RECORDED DRAWING ==="),
     SwitchRoom("art"),
     Pause(0.3),
     PressKey("tab"),  # Enter paint mode

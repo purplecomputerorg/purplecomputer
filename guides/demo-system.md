@@ -2,6 +2,8 @@
 
 How to create, generate, and compose demo screencasts for Purple Computer.
 
+Generation happens on a developer's machine. A demo is a fixed list of keypresses recorded ahead of time, and the product just replays it.
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -159,7 +161,7 @@ Options:
 - `--iteration X`: use a specific iteration instead of the best
 - `--duration N`: target playback duration in seconds (default: 10)
 
-Without `--save`, it writes to `ai_generated_script.py` (legacy behavior).
+Without `--save`, it writes to `recorded_script.py` (legacy behavior).
 
 ### Writing a Segment by Hand
 
@@ -197,7 +199,7 @@ append_to_demo_json("greeting")
 The demo system checks these in order:
 
 1. **`demo.json`** exists: load composed segments
-2. **`ai_generated_script.py`** exists: use the monolithic AI script (legacy)
+2. **`recorded_script.py`** exists: use the monolithic recorded script (legacy)
 3. **`default_script.py`**: the hand-crafted default
 
 Delete `demo.json` to fall back to option 2 or 3.
@@ -440,7 +442,7 @@ Check which keyboard row the key is on (QWERTY=red, ASDF=yellow, ZXCV=blue).
 Check that `demo.json` exists in `purple_tui/demo/` and that the segment names match files in `purple_tui/demo/segments/`.
 
 **Demo plays the old monolithic script.**
-Delete `demo.json` to fall back to `ai_generated_script.py`, or delete both to fall back to `default_script.py`.
+Delete `demo.json` to fall back to `recorded_script.py`, or delete both to fall back to `default_script.py`.
 
 **Tempo reference:**
 - 90 bpm = 0.67s per note

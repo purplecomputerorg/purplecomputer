@@ -1,4 +1,4 @@
-"""AI-generated drawing demo."""
+"""Pre-recorded drawing demo, authored on a dev machine with tools/art_ai.py."""
 
 from purple_tui.demo.script import (
     PressKey, SwitchRoom, Pause, MoveSequence, Comment, TypeText,
@@ -6,7 +6,7 @@ from purple_tui.demo.script import (
 )
 
 SEGMENT = [
-    Comment("=== AI GENERATED DRAWING ==="),
+    Comment("=== PRE-RECORDED DRAWING ==="),
     SwitchRoom("art"),
     Pause(0.3),
 

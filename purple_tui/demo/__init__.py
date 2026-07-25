@@ -78,15 +78,15 @@ def get_demo_script() -> list:
 
     Priority:
     1. composition json (if it exists)
-    2. AI-generated script (ai_generated_script.py)
+    2. Pre-recorded script (recorded_script.py)
     3. Default hand-crafted demo
     """
     demo_json = _composition_path()
     if demo_json.exists():
         return _load_composition(demo_json)
     try:
-        from .ai_generated_script import AI_DRAWING
-        return AI_DRAWING
+        from .recorded_script import RECORDED_DRAWING
+        return RECORDED_DRAWING
     except ImportError:
         return DEMO_SCRIPT
 
@@ -95,14 +95,14 @@ def get_speed_multiplier() -> float:
     """Get the speed multiplier for demo playback.
 
     Returns 1.0 when composition mode is active (speed is handled
-    per-segment via SetSpeed actions). Otherwise uses the AI-generated
+    per-segment via SetSpeed actions). Otherwise uses the pre-recorded
     script's multiplier if available.
     """
     demo_json = _composition_path()
     if demo_json.exists():
         return 1.0
     try:
-        from .ai_generated_script import SPEED_MULTIPLIER
+        from .recorded_script import SPEED_MULTIPLIER
         return SPEED_MULTIPLIER
     except ImportError:
         return 1.0

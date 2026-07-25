@@ -28,6 +28,7 @@
 #include <string.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 /* Test hooks: when TESTING is defined, these are provided by the test harness.
  * In production, they're just the real syscalls. */
@@ -46,6 +47,8 @@ extern void test_alarm(unsigned int sec);
 extern int  test_find_xorg(void);
 extern int  test_kill(int pid, int sig);
 extern void test_msleep(void);
+extern int  test_access(const char *path);
+#define pr_access(p)           test_access(p)
 #define pr_reboot(cmd)         test_reboot(cmd)
 #define pr_sync()              test_sync()
 #define pr_open(p, f)          test_open(p, f)
@@ -73,9 +76,9 @@ extern void test_msleep(void);
 #define pr_signal(s, h)        signal(s, h)
 #define pr_alarm(s)            alarm(s)
 #define pr_kill(p, s)          kill(p, s)
+#define pr_access(p)           access(p, F_OK)
 
 #include <dirent.h>
-#include <stdlib.h>
 #include <time.h>
 
 static int pr_find_xorg(void) {
@@ -113,6 +116,13 @@ static void pr_msleep(void) {
 
 static volatile int timed_out = 0;
 
+/* Preview mode is debug-ISO only: a stray env var must never be able to skip
+ * the reboot and its fallbacks on a family's machine. */
+static int preview_requested(void) {
+    const char *v = getenv("PURPLE_REBOOT_PREVIEW");
+    return v && strcmp(v, "1") == 0 && pr_access("/opt/purple/debug") == 0;
+}
+
 static void alarm_handler(int sig) {
     (void)sig;
     timed_out = 1;
@@ -128,6 +138,10 @@ static const char WAIT_MSG[] =
     "  You can remove the USB drive now.\n"
     "\n"
     "  Press Enter to restart.\n"
+    "\n"
+    "\n"
+    "\n"
+    "\n"
     "\n"
     "  If nothing happens, hold the power button down\n"
     "  for about ten seconds, until the screen turns\n"
@@ -296,6 +310,10 @@ int purple_reboot_main(int argc, char **argv) {
                 break;
         }
     }
+
+    /* Before stop_xorg: tearing X down would blank the screen being previewed. */
+    if (preview_requested())
+        return 0;
 
     stop_xorg();
     pr_sync();

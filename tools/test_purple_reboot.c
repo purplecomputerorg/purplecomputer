@@ -62,6 +62,7 @@ static struct {
     int stat_alive_opens;      /* /proc/<pid>/stat opens that succeed, then ENOENT */
     char stat_state;           /* process state served by /proc/<pid>/stat */
     int reboots_at_first_term; /* reboot_count when SIGTERM was first sent */
+    int debug_flag_present;    /* /opt/purple/debug exists (debug ISO only) */
 } mock;
 
 #define STAT_FD 43
@@ -165,6 +166,12 @@ int test_find_xorg(void) {
     return mock.find_xorg_pid;
 }
 
+int test_access(const char *path) {
+    if (strcmp(path, "/opt/purple/debug") == 0)
+        return mock.debug_flag_present ? 0 : -1;
+    return -1;
+}
+
 int test_kill(int pid, int sig) {
     if (mock.kill_count < MAX_CALLS) {
         mock.kill_pids[mock.kill_count] = pid;
@@ -263,6 +270,41 @@ static int test_wait_shows_message(void) {
            "should mention USB removal");
     ASSERT(find_write_containing(STDOUT_FILENO, "hold the power"),
            "should mention the hold-power fallback");
+    return 1;
+}
+
+static int test_preview_on_debug_iso_shows_message_but_never_reboots(void) {
+    mock.debug_flag_present = 1;
+    mock.find_xorg_pid = 123;
+    setenv("PURPLE_REBOOT_PREVIEW", "1", 1);
+    char *argv[] = {"purple-reboot", "--wait", NULL};
+    run_main(2, argv);
+    unsetenv("PURPLE_REBOOT_PREVIEW");
+    ASSERT(find_write_containing(STDOUT_FILENO, "Press Enter to restart"),
+           "preview should still show the restart message");
+    ASSERT(mock.reboot_count == 0, "preview must not reboot");
+    /* find_xorg_pid is set, so a stray stop_xorg() would show up here and
+     * would blank the screen the preview exists to display. */
+    ASSERT(mock.kill_count == 0, "preview must not tear down X");
+    return 1;
+}
+
+/* The gate that keeps a stray env var from stranding a family post-install. */
+static int test_preview_env_alone_still_reboots(void) {
+    mock.debug_flag_present = 0;
+    setenv("PURPLE_REBOOT_PREVIEW", "1", 1);
+    char *argv[] = {"purple-reboot", "--wait", NULL};
+    run_main(2, argv);
+    unsetenv("PURPLE_REBOOT_PREVIEW");
+    ASSERT(mock.reboot_count > 0, "without the debug marker it must still reboot");
+    return 1;
+}
+
+static int test_preview_needs_the_env_var(void) {
+    mock.debug_flag_present = 1;
+    char *argv[] = {"purple-reboot", "--wait", NULL};
+    run_main(2, argv);
+    ASSERT(mock.reboot_count > 0, "debug ISO alone must still reboot");
     return 1;
 }
 
@@ -522,6 +564,9 @@ int main(void) {
 
     RUN_TEST(test_no_args_reboots_immediately);
     RUN_TEST(test_wait_shows_message);
+    RUN_TEST(test_preview_on_debug_iso_shows_message_but_never_reboots);
+    RUN_TEST(test_preview_env_alone_still_reboots);
+    RUN_TEST(test_preview_needs_the_env_var);
     RUN_TEST(test_wait_exits_alternate_screen);
     RUN_TEST(test_wait_reads_enter);
     RUN_TEST(test_wait_reads_eof);

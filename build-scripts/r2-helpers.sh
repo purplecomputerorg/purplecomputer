@@ -45,18 +45,7 @@ r2_upload() {
 
 # Extract and upload PDFs from cards/purple.pdf
 upload_pdfs() {
-    just python - <<'EOF'
-import fitz
-doc = fitz.open("cards/purple.pdf")
-install = fitz.open()
-install.insert_pdf(doc, from_page=0, to_page=1)
-install.save("cards/purple-installation.pdf")
-print("Extracted pages 1-2 → cards/purple-installation.pdf")
-guide = fitz.open()
-guide.insert_pdf(doc, from_page=2, to_page=3)
-guide.save("cards/purple-guide.pdf")
-print("Extracted pages 3-4 → cards/purple-guide.pdf")
-EOF
+    just python cards/split_card.py cards/purple.pdf
 
     local cards_dir="$R2_HELPERS_DIR/../cards"
     r2_upload "$cards_dir/purple-installation.pdf" "purple-installation.pdf" "application/pdf"

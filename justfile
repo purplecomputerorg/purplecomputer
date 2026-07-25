@@ -247,7 +247,9 @@ release *args:
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh
 
-# Add print bleed to the postcard PDF for Vistaprint (cards/purple.pdf -> cards/purple-bleed.pdf)
+# Prep the postcard PDF for print, writing the -installation / -guide halves alongside.
+#   just print-card                -> purple-pad.pdf, 4x6 with safety margin (FedEx upload)
+#   just print-card --bleed 0.125  -> purple-bleed.pdf, 4.25x6.25 for a trim-and-cut shop
 print-card *args:
     @{{venv}}/bin/python cards/add_bleed.py {{args}}
 

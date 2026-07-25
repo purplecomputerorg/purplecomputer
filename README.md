@@ -36,7 +36,7 @@ Purple Computer turns your old laptop into a calm, creative computer for kids. W
 
 ## Does Purple use AI?
 
-No. There's no chatbot and nothing that might say something unexpected: it's just regular if/then logic. One thing to note is the speak-out-loud feature, which uses machine learning (via [Piper](https://github.com/rhasspy/piper)) to generate natural-sounding speech, but it is not an LLM. It runs entirely on the laptop, offline, with nothing sent anywhere.
+No. There's no chatbot, no LLM in the product, nothing that generates unpredictable output. The one ML component is speak-out-loud, which uses [Piper](https://github.com/rhasspy/piper) for text-to-speech; it runs entirely on the laptop, offline, with nothing sent anywhere.
 
 A lot of the code is LLM-generated, and LLMs are also used to make the demo videos, but no LLM ships in the product. The image gets `purple_tui/`, `packs/`, and a named list of files from `scripts/` (see `build-scripts/00-build-golden-image.sh`); `anthropic` is only in `tools/requirements.txt`. Generated assets are checked in as fixed data, like the keypress list in `purple_tui/demo/segments/`. See [DISCLOSURE.md](/docs/DISCLOSURE.md).
 

@@ -159,3 +159,75 @@ def test_stray_letter_correction_shows_what_changed(evaluator):
 def test_division_typo_correction_shows_symbol(evaluator):
     evaluator.evaluate("6 divded 2")
     assert evaluator._last_math_correction == ("6 divded 2", "6 / 2")
+
+
+# Markup metacharacters a kid can type; each one used to crash the app on submit.
+HOSTILE_INPUT = [
+    "[", "[[[", "a[b[c", "[/]", "][", "cat[dog", "[cat] love [dog", "hello[",
+    "a[/", "[/x", "cat [/ dog", "\\", "a\\b", "\\red", "\\\\red", "\\[", "[red blue",
+]
+
+
+@pytest.mark.parametrize("text", HOSTILE_INPUT)
+def test_hostile_input_renders_without_crashing(evaluator, text):
+    """Ask and answer lines must render, whatever the kid typed."""
+    from purple_tui.rooms.play_room import HistoryLine
+
+    HistoryLine(text, line_type="ask").render()
+    result = evaluator.evaluate(text)
+    if isinstance(result, str):
+        HistoryLine(result, line_type="answer").render()
+
+
+@pytest.mark.parametrize("text", HOSTILE_INPUT)
+def test_ask_line_echoes_exactly_what_was_typed(text):
+    """The Ask line is the kid's own words: it must not drop or mangle them."""
+    from purple_tui.rooms.play_room import HistoryLine
+
+    plain = HistoryLine(text, line_type="ask").render().plain
+    assert plain.endswith(text), f"ask line showed {plain!r} for {text!r}"
+
+
+@pytest.mark.parametrize("text", HOSTILE_INPUT)
+def test_hostile_input_never_shows_raw_markup(evaluator, text):
+    """Whatever renders, a kid must never see style syntax like "on #ED1C24"."""
+    from purple_tui.rooms.play_room import HistoryLine
+
+    result = evaluator.evaluate(text)
+    if not isinstance(result, str):
+        return
+    plain = HistoryLine(result, line_type="answer").render().plain
+    assert not re.search(r'on #[0-9A-Fa-f]{6}', plain), f"{text!r} leaked markup: {plain!r}"
+
+
+@pytest.mark.parametrize("text", ["\\", "a\\b", "x\\y\\z"])
+def test_typed_backslash_does_not_leak_a_closing_tag(evaluator, text):
+    """A backslash must not escape the "[/]" the wrapper re-emits around it."""
+    from purple_tui.rooms.play_room import HistoryLine
+
+    result = evaluator.evaluate(text)
+    if not isinstance(result, str):
+        return
+    plain = HistoryLine(result, line_type="answer").render().plain
+    assert "[/]" not in plain, f"{text!r} leaked a closing tag: {plain!r}"
+    assert "\\" in plain, f"{text!r} lost the backslash: {plain!r}"
+
+
+@pytest.mark.parametrize("text", ["a[b", "[cat", "a[/"])
+def test_typed_bracket_survives_to_the_code_panel(evaluator, text):
+    """_strip_markup feeds the code panel and speech, so the "[" must survive."""
+    from purple_tui.rooms.play_room import _strip_markup
+
+    result = evaluator.evaluate(text)
+    if isinstance(result, str):
+        assert '[' in _strip_markup(result)
+
+
+def test_ask_line_wraps_typed_brackets_at_the_right_width():
+    """An escaped "\\[" is one cell, not two, or answers wrap early."""
+    from purple_tui.rooms.play_room import HistoryLine, _escaped_width
+
+    assert _escaped_width("\\[") == 1
+    assert _escaped_width("ab") == 2
+    tokens = HistoryLine._tokenize_markup("[#fff on #000] \\[ [/]")
+    assert sum(w for _, w in tokens) == 3

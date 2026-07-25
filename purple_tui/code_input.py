@@ -280,20 +280,23 @@ class RecallHint(Static):
         self._visible = visible
         self.refresh()
 
-    def render(self) -> str:
+    def render(self) -> Text:
+        # Rich Text, not markup: the command is raw kid input, and characters
+        # like "[" would crash the markup parser.
         if not self._visible or not self._last_command:
-            return ""
+            return Text("")
         if self._correction:
             orig, corr = self._correction
             self._correction = None  # show once
-            display = f"{orig} \u2192 {corr}"
-            if len(display) > self.MAX_RECALL_LEN:
-                display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"
-            return f"[dim]{display}[/]"
-        display = self._last_command
-        if len(display) > self.MAX_RECALL_LEN:
-            display = display[:self.MAX_RECALL_LEN - 1] + "\u2026"
-        return f"[dim]Enter to try again: {display}[/]"
+            display = self._truncate(f"{orig} \u2192 {corr}")
+        else:
+            display = f"Enter to try again: {self._truncate(self._last_command)}"
+        return Text(display, style="dim")
+
+    def _truncate(self, text: str) -> str:
+        if len(text) > self.MAX_RECALL_LEN:
+            return text[:self.MAX_RECALL_LEN - 1] + "\u2026"
+        return text
 
 
 class ExampleHint(Static):

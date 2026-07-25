@@ -21,11 +21,12 @@ Features:
 from textual.widgets import Static, Input
 from textual.widget import Widget
 from textual.containers import Vertical, Horizontal, ScrollableContainer
-from textual.app import ComposeResult
+from textual.app import ComposeResult, RenderResult
 from textual import events
 from textual.message import Message
 from textual.strip import Strip
-from rich.markup import escape as rich_escape
+from textual.content import Content
+from textual.markup import MarkupError
 from rich.segment import Segment
 from rich.style import Style
 import re
@@ -53,9 +54,37 @@ from ..scrolling import scroll_widget
 from .art_room import get_key_color, PaintModeChanged
 
 
+def _escape_markup(text: str) -> str:
+    """Escape kid input so it can never open a markup tag."""
+    return text.replace('[', '\\[')
+
+
+def _escaped_width(text: str) -> int:
+    """Visual width of markup inner text, counting a "\\[" escape as one cell."""
+    return _cell_width('[') * text.count('\\[') + sum(
+        _cell_width(ch) for ch in text.replace('\\[', '')
+    )
+
+
 def _strip_markup(text: str) -> str:
-    """Strip Rich markup tags like [#FFF on #000] and [/] from text."""
-    return re.sub(r'\[[^\]]*\]', '', text)
+    """Strip markup tags, keeping an escaped "\\[" as a literal bracket."""
+    out = []
+    i = 0
+    while i < len(text):
+        if text[i] == '\\' and i + 1 < len(text) and text[i + 1] == '[':
+            out.append('[')
+            i += 2
+        elif text[i] == '[':
+            end = text.find(']', i)
+            if end == -1:
+                out.append(text[i])
+                i += 1
+            else:
+                i = end + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return ''.join(out)
 
 
 # Max results spoken aloud for a repeat command (display shows them all)
@@ -153,6 +182,12 @@ class HistoryLine(Static):
         tokens = []
         i = 0
         while i < len(text):
+            if text[i] == '\\' and i + 1 < len(text) and text[i + 1] == '[':
+                # Escaped literal "[" the kid typed: keep both chars as one
+                # token so the "[" is not mistaken for a tag opener.
+                tokens.append(('\\[', _cell_width('[')))
+                i += 2
+                continue
             if text[i] == '[':
                 end = text.find('[/]', i)
                 if end != -1:
@@ -160,15 +195,16 @@ class HistoryLine(Static):
                     m = re.match(r'(\[[^\]]*\])(.*)\[/\]$', block, re.DOTALL)
                     if m:
                         open_tag, inner = m.group(1), m.group(2)
-                        if inner.strip() == '':
-                            width = sum(_cell_width(c) for c in inner)
-                            tokens.append((block, width))
+                        # A bare backslash would escape the "[/]" we re-emit
+                        # after splitting, so keep such a block whole.
+                        if inner.strip() == '' or re.search(r'\\(?!\[)', inner):
+                            tokens.append((block, _escaped_width(inner)))
                         else:
                             for part in re.split(r'(\s+)', inner):
                                 if not part:
                                     continue
-                                width = sum(_cell_width(c) for c in part)
-                                tokens.append((f"{open_tag}{part}[/]", width))
+                                tokens.append((f"{open_tag}{part}[/]",
+                                               _escaped_width(part)))
                         i = end + 3
                         continue
             ch = text[i]
@@ -216,7 +252,16 @@ class HistoryLine(Static):
 
         return '\n'.join(lines)
 
-    def render(self) -> str:
+    def render(self) -> RenderResult:
+        markup = self._build_markup()
+        try:
+            return Content.from_markup(markup)
+        except MarkupError:
+            # Last line of defence: unbalanced markup must never kill the app.
+            # Drop escapes first so no tag survives as visible text.
+            return Content(_strip_markup(re.sub(r'\\+(?=\[)', '', markup)))
+
+    def _build_markup(self) -> str:
         dark = self._is_dark()
         if self.line_type == "code_header":
             # Code results header: no "Ask →" prefix, just bold text
@@ -227,7 +272,7 @@ class HistoryLine(Static):
         elif self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "
-            return self._wrap_with_arrows(rich_escape(self.text), prefix, ask_color)
+            return self._wrap_with_arrows(_escape_markup(self.text), prefix, ask_color)
         else:
             answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
             lines = self.text.split('\n')
@@ -2396,9 +2441,7 @@ class SimpleEvaluator:
             elif ord(char) >= 32:
                 bg = get_key_color(char)
                 fg = _contrast_color(bg)
-                # Escape [ for Rich markup safety
-                display = "\\[" if char == '[' else char
-                blocks.append(f"[{fg} on {bg}] {display} [/]")
+                blocks.append(f"[{fg} on {bg}] {_escape_markup(char)} [/]")
         return "".join(blocks)
 
     def _format_text_on_color(self, text: str, bg_color: str) -> str:
@@ -2485,9 +2528,7 @@ class SimpleEvaluator:
                             matched = True
                             break
                 if not matched:
-                    ch = text[i]
-                    # Escape [ to prevent Rich markup injection
-                    result.append("\\[" if ch == '[' else ch)
+                    result.append(_escape_markup(text[i]))
                     i += 1
         return ''.join(result)
 

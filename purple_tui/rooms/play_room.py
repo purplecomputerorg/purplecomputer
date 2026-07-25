@@ -1402,7 +1402,9 @@ class SimpleEvaluator:
                 if isinstance(r, str):
                     return r
                 if not r and chunk.strip():
-                    items.append(('text', self._substitute_emojis(chunk)))
+                    # Raw text: consumers render it. Storing markup here would
+                    # get blockified again, spelling tags out on screen.
+                    items.append(('text', chunk))
 
         # Attach remaining pending to last emoji or color
         if pending_nums:
@@ -1485,7 +1487,7 @@ class SimpleEvaluator:
                 else:
                     result_parts.append(e * c)
             elif item_type == 'text':
-                result_parts.append(self._format_text_as_color_blocks(value))
+                result_parts.append(self._substitute_emojis(value, colorize_unknown=True))
 
         result = ' + '.join(result_parts) if result_parts else None
         if show_label and result:
@@ -1656,13 +1658,13 @@ class SimpleEvaluator:
                     result_parts.append(emoji_str)
             elif item[0] == 'text':
                 word = item[1]
-                input_parts.append(self._format_text_as_color_blocks(word))
+                input_parts.append(self._substitute_emojis(word, colorize_unknown=True))
                 if mixed and all(ch.isalnum() or ch.isspace() for ch in word):
                     result_parts.append(self._format_text_on_color(word, mixed))
                 elif mixed:
-                    result_parts.append(f"[on {mixed}] {word} [/]")
+                    result_parts.append(f"[on {mixed}] {_escape_markup(word)} [/]")
                 else:
-                    result_parts.append(self._format_text_as_color_blocks(word))
+                    result_parts.append(self._substitute_emojis(word, colorize_unknown=True))
 
         input_str = " + ".join(input_parts)
         result = " ".join(result_parts)

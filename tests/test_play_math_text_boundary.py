@@ -188,16 +188,22 @@ def test_ask_line_echoes_exactly_what_was_typed(text):
     assert plain.endswith(text), f"ask line showed {plain!r} for {text!r}"
 
 
-@pytest.mark.parametrize("text", HOSTILE_INPUT)
-def test_hostile_input_never_shows_raw_markup(evaluator, text):
-    """Whatever renders, a kid must never see style syntax like "on #ED1C24"."""
+MARKUP_ON_SCREEN = re.compile(r'on #[0-9A-Fa-f]{3,6}|#[0-9A-Fa-f]{6}|\[bold|\[dim|\[/\]')
+
+
+@pytest.mark.parametrize("text", HOSTILE_INPUT + [
+    "[red blue", "red [ blue", "big [red dog", "2 [cats", "purple blue[", "[3 dogs]",
+])
+def test_input_never_shows_raw_markup(evaluator, text):
+    """A kid must never see style syntax like "on #ED1C24" on screen."""
     from purple_tui.rooms.play_room import HistoryLine
 
     result = evaluator.evaluate(text)
-    if not isinstance(result, str):
-        return
+    if not isinstance(result, str) or "COLOR_RESULT:" in result:
+        return  # sentinel, swapped for swatches before it reaches a HistoryLine
     plain = HistoryLine(result, line_type="answer").render().plain
-    assert not re.search(r'on #[0-9A-Fa-f]{6}', plain), f"{text!r} leaked markup: {plain!r}"
+    leaked = [m.group() for m in MARKUP_ON_SCREEN.finditer(plain) if m.group() not in text]
+    assert not leaked, f"{text!r} showed markup {leaked}: {plain!r}"
 
 
 @pytest.mark.parametrize("text", ["\\", "a\\b", "x\\y\\z"])

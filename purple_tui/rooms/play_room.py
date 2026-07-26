@@ -2458,7 +2458,7 @@ class SimpleEvaluator:
             elif char.isalnum():
                 blocks.append(f"[{fg} on {bg_color}] {char} [/]")
             else:
-                blocks.append(char)
+                blocks.append(_escape_markup(char))
         return "".join(blocks)
 
     def _substitute_emojis(self, text: str, colorize_unknown: bool = False) -> str:

@@ -1252,9 +1252,11 @@ class SimpleEvaluator:
         # Nothing computed: clear any flag set by speculative math attempts above
         self._last_computed = False
 
-        # Try emoji substitution in text (e.g., "I love cat")
+        # Try emoji substitution in text (e.g., "I love cat"). Compare against
+        # the escaped text: escaping a typed "[" is not a substitution, and
+        # counting it as one skipped the color blocks every other char gets.
         subbed = self._substitute_emojis(text, colorize_unknown=True)
-        if subbed != text:
+        if subbed != _escape_markup(text):
             return self._maybe_add_label(subbed, had_parens)
 
         # Plain text fallback: show as colored blocks (one per letter)

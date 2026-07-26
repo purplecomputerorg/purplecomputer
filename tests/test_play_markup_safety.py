@@ -119,6 +119,18 @@ def test_typed_bracket_survives_to_the_code_panel(evaluator, text):
         assert '[' in _strip_markup(result)
 
 
+@pytest.mark.parametrize("text", ["[", "]", "[[", "]]", "[]", "((", "@@", "[[["])
+def test_punctuation_all_gets_letter_blocks(evaluator, text):
+    """A typed "[" is a character like any other: it gets a colored block too.
+
+    Escaping it used to read as "something was substituted", which skipped the
+    block fallback, so "]]" came back colored and "[[" came back bare.
+    """
+    result = evaluator.evaluate(text)
+    assert isinstance(result, str)
+    assert result.count("[/]") == len(text), f"{text!r} -> {result!r}"
+
+
 def test_escaped_bracket_is_one_cell_wide():
     """An escaped "\\[" is one cell, not two, or answers wrap early."""
     assert _escaped_width("\\[") == 1

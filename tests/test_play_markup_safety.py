@@ -23,7 +23,7 @@ os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 from purple_tui.purple_tui import PurpleApp  # noqa: E402
 from purple_tui.constants import REQUIRED_TERMINAL_ROWS  # noqa: E402
 from purple_tui.rooms.play_room import (  # noqa: E402
-    SimpleEvaluator, HistoryLine, _strip_markup, _escaped_width,
+    SimpleEvaluator, HistoryLine, _strip_markup, _escaped_width, _escape_markup,
 )
 
 APP_SIZE = (146, REQUIRED_TERMINAL_ROWS)
@@ -119,6 +119,24 @@ def test_typed_bracket_survives_to_the_code_panel(evaluator, text):
         assert '[' in _strip_markup(result)
 
 
+@pytest.mark.parametrize("text", ["[]]]fwa", "[fe]wa]w", "[]few]af]ea", "a[b"])
+def test_brackets_get_blocks_even_beside_words(evaluator, text):
+    """Brackets stayed bare whenever anything else in the line was substituted."""
+    result = evaluator.evaluate(text)
+    for bracket in "[]":
+        # The block holds the escaped form, so "[" sits in it as "\\[".
+        blocks = result.count(f" {_escape_markup(bracket)} [/]")
+        assert blocks == text.count(bracket), f"{text!r} -> {result!r}"
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("cat, dog", "🐱, 🐶"),          # separators stay plain glue between emoji
+    ("cat + dog", "🐱 + 🐶"),
+])
+def test_separators_stay_plain_next_to_emoji(evaluator, text, expected):
+    assert evaluator.evaluate(text) == expected
+
+
 @pytest.mark.parametrize("text", ["[", "]", "[[", "]]", "[]", "((", "@@", "[[["])
 def test_punctuation_all_gets_letter_blocks(evaluator, text):
     """A typed "[" is a character like any other: it gets a colored block too.
@@ -154,6 +172,41 @@ async def _submit(app, pilot, text):
     await pilot.pause()
     await asyncio.sleep(SETTLE)
     await pilot.pause()
+
+
+def test_other_rooms_survive_hostile_typing():
+    """Art and Music paint through Strip/Segment, which never parses markup.
+
+    That is why a "[" cannot open a tag there. This pins it: the rooms are
+    driven with the same input that used to kill Play.
+    """
+    from purple_tui.constants import ROOM_ART, ROOM_MUSIC
+    from purple_tui.rooms.art_room import ArtCanvas
+
+    async def scenario():
+        app = PurpleApp()
+        async with app.run_test(size=APP_SIZE) as pilot:
+            await pilot.pause()
+            await asyncio.sleep(SETTLE)
+            await pilot.pause()
+            for room_id in (ROOM_ART[0], ROOM_MUSIC[0]):
+                app.action_switch_room(room_id)
+                await pilot.pause()
+                await asyncio.sleep(SETTLE)
+                await pilot.pause()
+                for char in "[]\\[/]a":
+                    await app._execute_dev_command({"action": "key", "value": char})
+                await pilot.pause()
+                await asyncio.sleep(SETTLE)
+                await pilot.pause()
+                # A markup error in either room would have crashed the app by
+                # now, which run_test surfaces as an exception out of pilot.
+                assert app.screen is not None
+            # Prove the keys actually landed, so this cannot pass vacuously.
+            canvas = app.query_one(ArtCanvas)
+            assert canvas._painted_positions, "hostile keys never reached the canvas"
+
+    _run(scenario())
 
 
 def test_real_app_never_puts_markup_on_screen():

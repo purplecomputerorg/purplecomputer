@@ -37,7 +37,7 @@ def _cell_width(ch: str) -> int:
     """Visual cell width of one char in a monospace terminal (1 or 2)."""
     return 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
 
-from ..constants import ICON_ROBOT, HOLD_OR_TAP_THRESHOLD
+from ..constants import HOLD_OR_TAP_THRESHOLD
 from ..content import singularize
 
 from ..content import get_content
@@ -86,6 +86,11 @@ def _strip_markup(text: str) -> str:
             i += 1
     return ''.join(out)
 
+
+# Shapes a kid draws with, so they get a color block like a letter does.
+# Separators (", & = + -") stay plain: they are glue between emoji, and a
+# colored comma between two animals reads as a mistake.
+BLOCK_CHARS = "[]\\"
 
 # Max results spoken aloud for a repeat command (display shows them all)
 SPEAK_REPEAT_CAP = 5
@@ -263,13 +268,7 @@ class HistoryLine(Static):
 
     def _build_markup(self) -> str:
         dark = self._is_dark()
-        if self.line_type == "code_header":
-            # Code results header: no "Ask →" prefix, just bold text
-            # Extra newline above for visual separation from previous output
-            answer_color = self.ANSWER_ARROW_DARK if dark else self.ANSWER_ARROW_LIGHT
-            prefix = f"{ICON_ROBOT}  [{answer_color}]→[/] [bold {answer_color}]{self.text}[/] "
-            return f"\n{prefix}"
-        elif self.line_type == "ask":
+        if self.line_type == "ask":
             ask_color = self.ASK_ARROW_DARK if dark else self.ASK_ARROW_LIGHT
             prefix = f"[bold {ask_color}]Ask →[/] "
             return self._wrap_with_arrows(_escape_markup(self.text), prefix, ask_color)
@@ -2532,7 +2531,11 @@ class SimpleEvaluator:
                             matched = True
                             break
                 if not matched:
-                    result.append(_escape_markup(text[i]))
+                    ch = text[i]
+                    if colorize_unknown and ch in BLOCK_CHARS:
+                        result.append(self._format_text_as_color_blocks(ch))
+                    else:
+                        result.append(_escape_markup(ch))
                     i += 1
         return ''.join(result)
 

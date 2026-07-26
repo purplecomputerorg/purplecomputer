@@ -112,7 +112,7 @@ Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPO
 
 All modals inherit from `PurpleModal` (`purple_tui/modal.py`), which provides shared `DEFAULT_CSS` for centering, dialog background, title, and hint styling. Use standard IDs: `#modal-dialog`, `#modal-title`, `#modal-hint`. Content-specific widgets use their own IDs. Each subclass sets its own width, padding, and border via `CSS`.
 
-### Background Colors (Textual 0.67.0)
+### Background Colors (seen on Textual 0.67.0; installed is 8.0.2, unretested since)
 
 `widget.styles.background` on `Static` doesn't repaint. Use `Widget` subclass with `render_line()` returning `Strip([Segment(...)])`.
 

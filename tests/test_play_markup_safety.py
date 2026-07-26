@@ -35,9 +35,12 @@ HOSTILE_INPUT = [
     "[red blue", "red [ blue", "big [red dog", "2 [cats", "[3 dogs]", "purple blue[",
 ]
 
-# Style syntax that must never reach the screen. Matched against the rendered
-# text with whitespace removed, because letter blocks render as "o n # E D 1 C".
-MARKUP_ON_SCREEN = re.compile(r'on#[0-9A-Fa-f]{3,6}|#[0-9A-Fa-f]{6}|\[/\]|\[bold|\[dim')
+# A color code leaks spelled out as letter blocks ("o n # E D 1 C"), so it is
+# matched with whitespace removed. A tag leaks as literal text, so it is matched
+# as-is: squashing would join the "[/" and "]" a kid typed either side of a
+# swatch and report that as a leak.
+COLOR_CODE_ON_SCREEN = re.compile(r'on#[0-9A-Fa-f]{3,6}|#[0-9A-Fa-f]{6}')
+TAG_ON_SCREEN = re.compile(r'\[/\]|\[bold|\[dim|\[on |\[#')
 
 
 @pytest.fixture
@@ -45,29 +48,25 @@ def evaluator():
     return SimpleEvaluator()
 
 
-def _typed_by_kid(fragment: str, typed: str) -> bool:
-    """True if the fragment's characters all appear, in order, in what was typed.
-
-    Squashing whitespace can join text either side of a color swatch, so
-    "[/red]" reads back as "[/]". Those characters really were typed.
-    """
-    it = iter(typed)
-    return all(ch in it for ch in fragment)
-
-
 def leaked_markup(plain: str, typed: str) -> list[str]:
     """Style syntax visible on screen that the kid did not type themselves."""
-    squashed = re.sub(r'\s+', '', plain)
+    hits = [m.group() for m in COLOR_CODE_ON_SCREEN.finditer(re.sub(r'\s+', '', plain))]
+    hits += [m.group() for m in TAG_ON_SCREEN.finditer(plain)]
     typed_squashed = re.sub(r'\s+', '', typed)
-    return [m.group() for m in MARKUP_ON_SCREEN.finditer(squashed)
-            if not _typed_by_kid(m.group(), typed_squashed)]
+    return sorted({h for h in hits if h not in typed and h not in typed_squashed})
 
 
-def test_detector_sees_markup_spelled_out_as_letter_blocks():
+def test_detector_sees_color_codes_spelled_out_as_letter_blocks():
     """Letter blocks render spaced out, which a naive contiguous match misses."""
     spaced = "    →    +  \\  [  [  o  n   #  E  D  1  C  2  4  ]    [  /  ] "
     assert leaked_markup(spaced, "[red blue")
     assert not re.search(r'on #[0-9A-Fa-f]{6}', spaced)  # why the squash is needed
+
+
+def test_detector_does_not_squash_typed_brackets_around_a_swatch():
+    """"[/red]" renders as "[", "/", swatch, "]": all typed, so not a leak."""
+    assert not leaked_markup("    →  [ /   ] ", "[/red]")
+    assert leaked_markup("    → [/] here", "hello")
 
 
 def test_detector_allows_what_the_kid_typed():
@@ -129,6 +128,31 @@ def test_brackets_get_blocks_even_beside_words(evaluator, text):
         assert blocks == text.count(bracket), f"{text!r} -> {result!r}"
 
 
+@pytest.mark.parametrize("text,emoji,word", [
+    ("red cat!", "🐱", "cat"),
+    ("blue dog?", "🐶", "dog"),
+    ("red 2 cats!", "🐱", "cats"),
+    ("green sun!", "☀", "sun"),
+])
+def test_color_answer_shows_the_emoji_not_the_typed_word(evaluator, text, emoji, word):
+    """Both halves of the arrow substitute: "red cat!" must not answer "cat!"."""
+    plain = HistoryLine(evaluator.evaluate(text), line_type="answer").render().plain
+    assert emoji in plain, f"{text!r} lost the emoji: {plain!r}"
+    assert word not in plain, f"{text!r} answered with the letters: {plain!r}"
+
+
+@pytest.mark.parametrize("text", ["red blue", "red and blue", "purple blue"])
+def test_color_mix_sentinel_never_reaches_the_screen(evaluator, text):
+    """COLOR_RESULT is swapped for swatches; an unparsed one would be shown raw."""
+    result = evaluator.evaluate(text)
+    if not isinstance(result, str) or "COLOR_RESULT:" not in result:
+        return
+    for part in result.split():
+        if part.startswith("COLOR_RESULT:"):
+            assert evaluator._parse_color_result(part) is not None, \
+                f"{text!r} would mount the raw sentinel: {part!r}"
+
+
 @pytest.mark.parametrize("text,expected", [
     ("cat, dog", "🐱, 🐶"),          # separators stay plain glue between emoji
     ("cat + dog", "🐱 + 🐶"),
@@ -183,28 +207,40 @@ def test_other_rooms_survive_hostile_typing():
     from purple_tui.constants import ROOM_ART, ROOM_MUSIC
     from purple_tui.rooms.art_room import ArtCanvas
 
+    async def type_hostile(app, pilot):
+        for char in "[]\\[/]a":
+            await app._execute_dev_command({"action": "key", "value": char})
+        await pilot.pause()
+        await asyncio.sleep(SETTLE)
+        await pilot.pause()
+
+    async def enter_room(app, pilot, room_id):
+        app.action_switch_room(room_id)
+        await pilot.pause()
+        await asyncio.sleep(SETTLE)
+        await pilot.pause()
+
     async def scenario():
         app = PurpleApp()
         async with app.run_test(size=APP_SIZE) as pilot:
             await pilot.pause()
             await asyncio.sleep(SETTLE)
             await pilot.pause()
-            for room_id in (ROOM_ART[0], ROOM_MUSIC[0]):
-                app.action_switch_room(room_id)
-                await pilot.pause()
-                await asyncio.sleep(SETTLE)
-                await pilot.pause()
-                for char in "[]\\[/]a":
-                    await app._execute_dev_command({"action": "key", "value": char})
-                await pilot.pause()
-                await asyncio.sleep(SETTLE)
-                await pilot.pause()
-                # A markup error in either room would have crashed the app by
-                # now, which run_test surfaces as an exception out of pilot.
-                assert app.screen is not None
-            # Prove the keys actually landed, so this cannot pass vacuously.
+
+            await enter_room(app, pilot, ROOM_ART[0])
+            await type_hostile(app, pilot)
             canvas = app.query_one(ArtCanvas)
-            assert canvas._painted_positions, "hostile keys never reached the canvas"
+            assert canvas._painted_positions, "keys never reached the Art canvas"
+
+            await enter_room(app, pilot, ROOM_MUSIC[0])
+            grid = app.query_one("#room-music").grid
+            played = []
+            painted = grid.flash_note
+            grid.flash_note = lambda *a, **k: (played.append(a), painted(*a, **k))[1]
+            await type_hostile(app, pilot)
+            assert played, "keys never reached the Music grid"
+            # A markup error in either room would have surfaced as an exception
+            # out of run_test before reaching here.
 
     _run(scenario())
 

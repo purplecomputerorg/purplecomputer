@@ -59,6 +59,11 @@ def _escape_markup(text: str) -> str:
     return text.replace('[', '\\[')
 
 
+def _has_tag(text: str) -> bool:
+    """True if text carries a generated markup tag (an unescaped "[")."""
+    return re.search(r'(?<!\\)\[', text) is not None
+
+
 def _escaped_width(text: str) -> int:
     """Visual width of markup inner text, counting a "\\[" escape as one cell."""
     return _cell_width('[') * text.count('\\[') + sum(
@@ -1251,9 +1256,7 @@ class SimpleEvaluator:
         # Nothing computed: clear any flag set by speculative math attempts above
         self._last_computed = False
 
-        # Try emoji substitution in text (e.g., "I love cat"). Compare against
-        # the escaped text: escaping a typed "[" is not a substitution, and
-        # counting it as one skipped the color blocks every other char gets.
+        # Compare against the escaped text: escaping a "[" is not a substitution.
         subbed = self._substitute_emojis(text, colorize_unknown=True)
         if subbed != _escape_markup(text):
             return self._maybe_add_label(subbed, had_parens)
@@ -1403,8 +1406,7 @@ class SimpleEvaluator:
                 if isinstance(r, str):
                     return r
                 if not r and chunk.strip():
-                    # Raw text: consumers render it. Storing markup here would
-                    # get blockified again, spelling tags out on screen.
+                    # Raw: consumers render it, and markup here gets blocked twice.
                     items.append(('text', chunk))
 
         # Attach remaining pending to last emoji or color
@@ -1658,14 +1660,20 @@ class SimpleEvaluator:
                 else:
                     result_parts.append(emoji_str)
             elif item[0] == 'text':
-                word = item[1]
-                input_parts.append(self._substitute_emojis(word, colorize_unknown=True))
-                if mixed and all(ch.isalnum() or ch.isspace() for ch in word):
-                    result_parts.append(self._format_text_on_color(word, mixed))
-                elif mixed:
-                    result_parts.append(f"[on {mixed}] {_escape_markup(word)} [/]")
+                # Substitute first, or "red cat!" answers with the letters.
+                # Tagged content cannot be nested: its "[/]" would close ours.
+                subbed = self._substitute_emojis(item[1])
+                if _has_tag(subbed):
+                    input_parts.append(subbed)
+                    result_parts.append(subbed)
+                    continue
+                input_parts.append(self._format_text_as_color_blocks(subbed))
+                if not mixed:
+                    result_parts.append(self._format_text_as_color_blocks(subbed))
+                elif all(ch.isalnum() or ch.isspace() for ch in subbed):
+                    result_parts.append(self._format_text_on_color(subbed, mixed))
                 else:
-                    result_parts.append(self._substitute_emojis(word, colorize_unknown=True))
+                    result_parts.append(f"[on {mixed}] {subbed} [/]")
 
         input_str = " + ".join(input_parts)
         result = " ".join(result_parts)
@@ -2454,10 +2462,8 @@ class SimpleEvaluator:
         for char in text:
             if char.isspace():
                 blocks.append(" ")
-            elif char.isalnum():
-                blocks.append(f"[{fg} on {bg_color}] {char} [/]")
             else:
-                blocks.append(_escape_markup(char))
+                blocks.append(f"[{fg} on {bg_color}] {_escape_markup(char)} [/]")
         return "".join(blocks)
 
     def _substitute_emojis(self, text: str, colorize_unknown: bool = False) -> str:

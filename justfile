@@ -257,7 +257,7 @@ print-card *args:
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}
 
-# Delete local ISOs older than N days (default: 7). E.g., just clean-isos 3, just clean-isos --dry-run
+# Keep the newest N builds (default: 3) and delete older ones, plus every corrupt-test ISO. E.g., just clean-isos 5, just clean-isos --dry-run
 clean-isos *args:
     ./build-scripts/clean-old-isos.sh {{args}}
 

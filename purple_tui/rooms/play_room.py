@@ -130,6 +130,15 @@ def _pad_narrow_emoji(text: str) -> str:
     return ''.join(result)
 
 
+def _repeat_emoji(emoji: str, count: int) -> str:
+    """The emoji drawn `count` times, or "0" when the kid asked for none of it.
+
+    Zero copies is an empty string, which answers nothing at all or leaves a
+    stray "+" standing where the group should be.
+    """
+    return emoji * count if count else "0"
+
+
 def _mix_tint(colors: list[str]) -> str | None:
     """The one color a group of color words paints with, or None for no colors."""
     if not colors:
@@ -1380,7 +1389,7 @@ class SimpleEvaluator:
             if m := re.match(r'^(\d+)\s+(.+)$', result):
                 count, emoji_str = int(m.group(1)), m.group(2).strip()
                 if self._is_emoji_str(emoji_str):
-                    result = emoji_str * count
+                    result = _repeat_emoji(emoji_str, count)
             # Collapse "emoji + emoji" back to plain emoji string for reuse
             collapsed = result.replace(' + ', '')
             if collapsed != result and self._is_emoji_str(collapsed):
@@ -1495,7 +1504,7 @@ class SimpleEvaluator:
                 if c > self.INLINE_MAX:
                     result_parts.append(self._format_emoji_label(e, c))
                 else:
-                    result_parts.append(e * c)
+                    result_parts.append(_repeat_emoji(e, c))
             elif item_type == 'text':
                 result_parts.append(self._substitute_emojis(value))
 
@@ -1696,7 +1705,15 @@ class SimpleEvaluator:
 
             if item[0] == 'emoji':
                 e, count = item[1], item[2]
-                emoji_str = e * count
+                if count > self.INLINE_MAX:
+                    # Same cutoff as every other path: past it a count gets
+                    # counted on the abacus, not drawn one bead at a time,
+                    # which would bury the question under a wall of emoji.
+                    self._last_computed = True
+                    input_parts.append(f"{count} {e}")
+                    result_parts.append(self._format_emoji_label(e, count, tint=mixed))
+                    continue
+                emoji_str = _repeat_emoji(e, count)
                 input_parts.append(emoji_str)
                 if mixed:
                     result_parts.append(f"[on {mixed}] {emoji_str} [/]")
@@ -1707,7 +1724,10 @@ class SimpleEvaluator:
                 result_parts.append(self._substitute_emojis(item[1], tint=mixed))
 
         input_str = " + ".join(input_parts)
-        result = " ".join(result_parts)
+        # An abacus owns its lines: anything joined onto its last row would read
+        # as another bead in the ones column.
+        joiner = "\n" if any("\n" in p for p in result_parts) else " "
+        result = joiner.join(result_parts)
         combined = f"{input_str} → {result}"
         if self._estimate_visual_width(combined) <= MAX_INLINE_WIDTH:
             return combined
@@ -1870,14 +1890,16 @@ class SimpleEvaluator:
         result = re.sub(r'(?<=[\d\w])\s*\bx\b\s*(?=[\d\w])', ' * ', result, flags=re.IGNORECASE)
         return result
 
-    def _format_emoji_label(self, emoji: str, count: int, expression: str = "") -> str:
+    def _format_emoji_label(self, emoji: str, count: int, expression: str = "",
+                            tint: str | None = None) -> str:
         """Format emoji with label and visualization.
 
         Uses _format_number_with_dots with emoji as bead for consistent
-        grouping and abacus rendering.
+        grouping and abacus rendering. `tint` paints the bead its color.
         """
-        viz = self._format_number_with_dots(count, show_label=False, expression=expression, bead=emoji)
-        return f"= {count} {emoji}\n{viz}"
+        bead = f"[on {tint}] {emoji} [/]" if tint else emoji
+        viz = self._format_number_with_dots(count, show_label=False, expression=expression, bead=bead)
+        return f"= {count} {bead}\n{viz}"
 
     def _format_color_label(self, hex_color: str, count: int) -> str:
         """Format color multiplication with label and abacus visualization."""
@@ -2047,7 +2069,7 @@ class SimpleEvaluator:
         count = int(count_str)
         word = words[j].lower()
         if e := self._get_emoji(word):
-            return self._format_emoji_label(e, count) if count > 1 else e * count
+            return self._format_emoji_label(e, count) if count > 1 else _repeat_emoji(e, count)
         if h := self._get_color(word):
             return self._format_color_label(h, count)
         return None
@@ -2062,13 +2084,13 @@ class SimpleEvaluator:
         if m := re.match(r'^(.+?)\s*\*\s*(\d+)$', text.strip()):
             s, count = m.group(1).strip(), int(m.group(2))
             if self._is_emoji_str(s) and count <= 100:
-                return s * count
+                return _repeat_emoji(s, count)
 
         # "N * emoji_string"
         if m := re.match(r'^(\d+)\s*\*\s*(.+)$', text.strip()):
             count, s = int(m.group(1)), m.group(2).strip()
             if self._is_emoji_str(s) and count <= 100:
-                return s * count
+                return _repeat_emoji(s, count)
 
         # Try _parse_emoji for word-based patterns
         if emoji_data := self._parse_emoji(t_lower):
@@ -2082,7 +2104,7 @@ class SimpleEvaluator:
                             expr = f"{m.group(1)}*{m.group(2)}"
                             break
                 return self._format_emoji_label(e, c, expression=expr)
-            return e * c
+            return _repeat_emoji(e, c)
 
         # "N * word" or "word * N" for colors
         if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', t_lower):
@@ -2543,7 +2565,7 @@ class SimpleEvaluator:
                     word = text[word_start:k].lower()
                     # Check if it's an emoji word
                     if (emoji := self._get_emoji(word)) and num <= 100:
-                        result.append(('markup', emoji * num))
+                        result.append(('markup', _repeat_emoji(emoji, num)))
                         i = k
                         continue
                 # Not an "N emoji" pattern, just output the number

@@ -19,7 +19,9 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-from purple_tui.rooms.play_room import SimpleEvaluator, HistoryLine  # noqa: E402
+from purple_tui.rooms.play_room import (  # noqa: E402
+    SimpleEvaluator, HistoryLine, _strip_markup,
+)
 from tests.test_play_markup_safety import leaked_markup  # noqa: E402
 
 # Tallest an answer may be. The history view is 21 rows, so anything past this
@@ -72,9 +74,11 @@ KID_INPUT = [
     "  cat  ", "cat  dog", " red cat ",
 ]
 
-# "0 cats" and friends answer with nothing at all, so the kid sees only their
-# own question echoed back. Known gap, kept out of the answers-something net.
-KNOWN_SILENT = ["0 cats", "0 dogs", "zero cats"]
+# None of something is still an answer. Zero copies of an emoji is an empty
+# string, which used to print nothing at all or leave a stray "+" behind.
+NONE_OF_SOMETHING = [
+    "0 cats", "0 dogs", "zero cats", "0 hearts", "0 times cat", "2 - 2 cats",
+]
 
 # Looked up rather than written down, so a palette change doesn't break the test.
 # "orange", "peach" and "rose" are here on purpose: they name a color and a
@@ -143,16 +147,26 @@ def tinted(evaluator, noun: str, answer: str) -> str | None:
     return m.group(0) if m else None
 
 
-@pytest.mark.parametrize("text", KID_INPUT)
+@pytest.mark.parametrize("text", KID_INPUT + NONE_OF_SOMETHING)
 def test_every_line_answers_something(evaluator, text):
     """An empty answer shows nothing at all, which reads as being ignored."""
     assert evaluator.evaluate(text), f"{text!r} answered nothing"
 
 
-@pytest.mark.parametrize("text", KNOWN_SILENT)
-def test_zero_of_something_answers_nothing_today(evaluator, text):
-    """Known gap: "0 cats" prints no answer line. Flip this test when it does."""
-    assert evaluator.evaluate(text) == ""
+@pytest.mark.parametrize("text", NONE_OF_SOMETHING)
+def test_none_of_something_answers_zero(evaluator, text):
+    assert _strip_markup(evaluator.evaluate(text)).strip() == "0"
+
+
+@pytest.mark.parametrize("text,answer", [
+    ("i have 0 cats", "0"),  # the sentence renders as letter blocks, then "0"
+    ("0 cats and 0 dogs", "0 + 0"),
+    ("0 cats and 3 dogs", "0 + 🐶🐶🐶"),
+])
+def test_none_of_something_still_counts_beside_the_rest(evaluator, text, answer):
+    """A zero group used to vanish, leaving a "+" joining nothing to anything."""
+    plain = re.sub(r"\s+", " ", _strip_markup(evaluator.evaluate(text))).strip()
+    assert plain.endswith(answer), f"{text!r} -> {plain!r}"
 
 
 @pytest.mark.parametrize("text", KID_INPUT)
@@ -286,10 +300,22 @@ def test_a_sentence_paints_the_thing_it_names(evaluator, text, noun, color):
         f"{text!r} -> {evaluator.evaluate(text)!r}"
 
 
-@pytest.mark.parametrize("text", ["1000 cats", "1000 blues", "9999 cats", "600 dots"])
+@pytest.mark.parametrize("text", [
+    "1000 cats", "1000 blues", "9999 cats", "600 dots",
+    # A color word used to skip the cutoff and draw every bead: "1000 blue cats"
+    # filled all 21 rows of the view, and "9999 blue cats" ran to 81.
+    "1000 blue cats", "1000 cats blue", "9999 blue cats", "600 red dogs",
+    "501 blue cats", "1000 cats and 3 blue dogs",
+])
 def test_a_big_count_switches_to_the_abacus_instead_of_filling_the_view(
     evaluator, text
 ):
     """Counts past INLINE_MAX get counted, not drawn one bead at a time."""
     _, lines = rendered(evaluator.evaluate(text))
-    assert lines <= MAX_ANSWER_LINES, f"{text!r} answered {lines} rows tall"
+    assert lines <= MAX_ANSWER_LINES + 1, f"{text!r} answered {lines} rows tall"
+
+
+def test_a_big_count_keeps_its_color(evaluator):
+    """The abacus beads are the colored thing the kid asked to count."""
+    assert f"[on {evaluator._get_color('blue')}] 🐱 [/]" in \
+        evaluator.evaluate("1000 blue cats")

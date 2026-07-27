@@ -1257,7 +1257,7 @@ class SimpleEvaluator:
         self._last_computed = False
 
         # Compare against the escaped text: escaping a "[" is not a substitution.
-        subbed = self._substitute_emojis(text, colorize_unknown=True)
+        subbed = self._substitute_emojis(text)
         if subbed != _escape_markup(text):
             return self._maybe_add_label(subbed, had_parens)
 
@@ -1490,7 +1490,7 @@ class SimpleEvaluator:
                 else:
                     result_parts.append(e * c)
             elif item_type == 'text':
-                result_parts.append(self._substitute_emojis(value, colorize_unknown=True))
+                result_parts.append(self._substitute_emojis(value))
 
         result = ' + '.join(result_parts) if result_parts else None
         if show_label and result:
@@ -1660,20 +1660,8 @@ class SimpleEvaluator:
                 else:
                     result_parts.append(emoji_str)
             elif item[0] == 'text':
-                # Substitute first, or "red cat!" answers with the letters.
-                # Tagged content cannot be nested: its "[/]" would close ours.
-                subbed = self._substitute_emojis(item[1])
-                if _has_tag(subbed):
-                    input_parts.append(subbed)
-                    result_parts.append(subbed)
-                    continue
-                input_parts.append(self._format_text_as_color_blocks(subbed))
-                if not mixed:
-                    result_parts.append(self._format_text_as_color_blocks(subbed))
-                elif all(ch.isalnum() or ch.isspace() for ch in subbed):
-                    result_parts.append(self._format_text_on_color(subbed, mixed))
-                else:
-                    result_parts.append(f"[on {mixed}] {subbed} [/]")
+                input_parts.append(self._substitute_emojis(item[1]))
+                result_parts.append(self._substitute_emojis(item[1], tint=mixed))
 
         input_str = " + ".join(input_parts)
         result = " ".join(result_parts)
@@ -2466,17 +2454,18 @@ class SimpleEvaluator:
                 blocks.append(f"[{fg} on {bg_color}] {_escape_markup(char)} [/]")
         return "".join(blocks)
 
-    def _substitute_emojis(self, text: str, colorize_unknown: bool = False) -> str:
-        """Replace emoji and color words inline, including 'N word' patterns.
+    def _segment_text(self, text: str) -> list[tuple[str, str]]:
+        """Split kid input into ('markup', rendered) and literal segments.
 
-        When colorize_unknown=True, unknown words are rendered as per-letter
-        colored blocks instead of plaintext.
+        Literal segments are 'word' (an unrecognized word or number) or 'char'
+        (one other character), and stay raw: escaping happens once, when
+        _render_segments turns them into markup. Escaping here instead would
+        put a visible backslash in front of every "[" a kid types.
 
         Examples:
-            'I love cat' -> 'I 😍 🐱'
-            'purple truck' -> '[on #7B2D8E]  [/] 🚚'
-            '2 rabbits ate' -> '🐰🐰 ate'
-            'the tomatoes' -> 'the 🍅🍅'
+            'I love cat' -> markup 'I', markup '😍', markup '🐱'
+            'purple truck' -> markup '[on #7B2D8E]  [/]', markup '🚚'
+            '[bl' -> char '[', word 'bl'
         """
         result, i = [], 0
         while i < len(text):
@@ -2500,14 +2489,11 @@ class SimpleEvaluator:
                     word = text[word_start:k].lower()
                     # Check if it's an emoji word
                     if (emoji := self._get_emoji(word)) and num <= 100:
-                        result.append(emoji * num)
+                        result.append(('markup', emoji * num))
                         i = k
                         continue
                 # Not an "N emoji" pattern, just output the number
-                if colorize_unknown:
-                    result.append(self._format_text_as_color_blocks(num_str))
-                else:
-                    result.append(num_str)
+                result.append(('word', num_str))
                 i = j
                 continue
 
@@ -2517,11 +2503,9 @@ class SimpleEvaluator:
                     j += 1
                 word = text[i:j].lower()
                 if rendered := self._lookup(word):
-                    result.append(rendered)
-                elif colorize_unknown:
-                    result.append(self._format_text_as_color_blocks(text[i:j]))
+                    result.append(('markup', rendered))
                 else:
-                    result.append(text[i:j])
+                    result.append(('word', text[i:j]))
                 i = j
             else:
                 # Try matching emoticons (e.g. :) :D <3) longest first
@@ -2532,18 +2516,36 @@ class SimpleEvaluator:
                     for length in (3, 2):
                         candidate = text[i:i + length]
                         if len(candidate) == length and candidate in self.content.emojis:
-                            result.append(self.content.emojis[candidate])
+                            result.append(('markup', self.content.emojis[candidate]))
                             i += length
                             matched = True
                             break
                 if not matched:
-                    ch = text[i]
-                    if colorize_unknown and ch in BLOCK_CHARS:
-                        result.append(self._format_text_as_color_blocks(ch))
-                    else:
-                        result.append(_escape_markup(ch))
+                    result.append(('char', text[i]))
                     i += 1
-        return ''.join(result)
+        return result
+
+    def _render_segments(self, segments: list[tuple[str, str]], tint: str | None) -> str:
+        """Turn segments into markup, optionally over a mixed-color background.
+
+        Words and drawing characters get letter blocks; other punctuation is
+        glue between emoji and stays plain. Tagged content (a color swatch)
+        can't sit on a tint: its "[/]" would close ours.
+        """
+        out = []
+        for kind, value in segments:
+            if kind == 'markup':
+                out.append(f"[on {tint}] {value} [/]" if tint and not _has_tag(value) else value)
+            elif kind == 'word' or value in BLOCK_CHARS:
+                out.append(self._format_text_on_color(value, tint) if tint
+                           else self._format_text_as_color_blocks(value))
+            else:
+                out.append(_escape_markup(value))
+        return ''.join(out)
+
+    def _substitute_emojis(self, text: str, tint: str | None = None) -> str:
+        """Replace emoji and color words inline, including 'N word' patterns."""
+        return self._render_segments(self._segment_text(text), tint)
 
     def _describe_emoji_result(self, text: str, result: str) -> str:
         """Describe emoji result for speech (e.g., '3 apples and 2 bananas')."""

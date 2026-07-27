@@ -128,6 +128,32 @@ def test_brackets_get_blocks_even_beside_words(evaluator, text):
         assert blocks == text.count(bracket), f"{text!r} -> {result!r}"
 
 
+BRACKET_WITH_COLOR = ["red [bl", "[red blue", "blue [ red", "[red] blue", "red [", "red ]"]
+
+
+@pytest.mark.parametrize("text", BRACKET_WITH_COLOR)
+def test_bracket_beside_a_color_gets_a_block_on_both_sides_of_the_arrow(evaluator, text):
+    """The mixer passed a bracket through bare whenever the chunk held a swatch."""
+    result = evaluator.evaluate(text)
+    for half in result.split(" → "):
+        for bracket in set("[]") & set(text):
+            assert f" {_escape_markup(bracket)} [/]" in half, f"{text!r} -> {result!r}"
+
+
+@pytest.mark.parametrize("text", BRACKET_WITH_COLOR + ["red cat?", "red xyz?"])
+def test_escaping_a_bracket_never_paints_a_backslash(evaluator, text):
+    """Escaped text fed back to the block formatter drew its own "\\" as a letter."""
+    plain = HistoryLine(evaluator.evaluate(text), line_type="answer").render().plain
+    assert "\\" not in plain, f"{text!r} painted an escape: {plain!r}"
+
+
+@pytest.mark.parametrize("text,emoji", [("red cat?", "🐱"), ("blue 2 dogs?", "🐶")])
+def test_punctuation_does_not_knock_an_emoji_out_of_its_color(evaluator, text, emoji):
+    """A trailing "?" used to make the whole chunk plain text, greying the emoji."""
+    result = evaluator.evaluate(text)
+    assert re.search(rf'\[on #[0-9A-Fa-f]{{6}}\] {emoji}+ \[/\]', result), result
+
+
 @pytest.mark.parametrize("text,emoji,word", [
     ("red cat!", "🐱", "cat"),
     ("blue dog?", "🐶", "dog"),

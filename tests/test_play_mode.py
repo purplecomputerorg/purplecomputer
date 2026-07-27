@@ -1013,6 +1013,13 @@ class TestColorAdjectiveModel:
         ("2 + 3 cats blue", "[on #1F75FE] 🐱🐱 [/] [on #1F75FE] 🐱🐱🐱 [/]"),
         # a different noun stops it, same as the forward direction
         ("2 cats 3 dogs blue", "🐱🐱 [on #1F75FE] 🐶🐶🐶 [/]"),
+        # the noun wins over the little word that happens to sit last
+        ("cat is blue",
+         "[on #1F75FE] 🐱 [/] [#FFFFFF on #BA1A1A] i [/][#000000 on #EEDD8A] s [/]"),
+        # ...and an earlier color still wins over both
+        ("red cat is blue",
+         "[on #ED1C24] 🐱 [/] [#FFFFFF on #BA1A1A] i [/][#000000 on #EEDD8A] s [/] "
+         "[on #1F75FE]  [/]"),
     ])
     def test_trailing_color_paints_the_word_before_it(self, evaluator, text, answer):
         result = evaluator.evaluate(text)

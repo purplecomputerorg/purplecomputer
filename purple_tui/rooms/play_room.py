@@ -1583,9 +1583,7 @@ class SimpleEvaluator:
         groups of the *same* emoji, so "2 + 3 dark red dogs" colors all 5 dogs
         (the count is split by addition but it's one colored noun). A different
         emoji or a new color stops the carry. A color at the end has no next
-        item, so it colors the item before it ("cat blue" is a blue cat) unless
-        that item already has a color, in which case it stays a swatch of its
-        own ("red cat blue" is a red cat beside blue).
+        item, so it colors an item behind it instead (see _trailing_target).
 
         Input: list of ('color', hex) | ('emoji', emoji, count) | ('text', word)
         Output: list of {'colors': [hex...], 'tint': hex_or_None, 'item': info}.
@@ -1609,26 +1607,48 @@ class SimpleEvaluator:
             groups.append({'colors': colors, 'tint': tint, 'item': info})
         if current_colors:
             groups.append({'colors': current_colors, 'tint': None, 'item': None})
-        if len(groups) >= 2 and groups[-1]['item'] is None and not groups[-2]['tint']:
-            self._colorize_backward(groups)
+        if len(groups) >= 2 and groups[-1]['item'] is None:
+            target = self._trailing_target(groups[:-1])
+            if target is not None:
+                self._colorize_backward(groups, target)
         return groups
 
     @staticmethod
-    def _colorize_backward(groups: list[dict]) -> None:
-        """Move the trailing color group onto the uncolored item before it.
+    def _trailing_target(groups: list[dict]) -> int | None:
+        """Which group a color typed last paints, or None to leave it a swatch.
+
+        The nearest emoji wins over the nearest word, so "my cat is blue" paints
+        the cat and not the "is" that happens to sit last. Words are the
+        fallback for a line with no emoji in it at all ("[red blue"). A group
+        that already has a color ends the search: a color the kid typed earlier
+        is never overwritten, and the trailing one stays its own swatch.
+        """
+        target = None
+        for i in reversed(range(len(groups))):
+            if groups[i]['tint']:
+                return None
+            if groups[i]['item'][0] == 'emoji':
+                return i
+            if target is None:
+                target = i
+        return target
+
+    @staticmethod
+    def _colorize_backward(groups: list[dict], target: int) -> None:
+        """Move the trailing color group onto the group at `target`.
 
         'colors' draws the input swatch and 'tint' colors the answer, so both
         have to move or the color shows on one side of the arrow only. The tint
         then carries back over the same emoji the way it carries forward, so
         "2 + 3 cats blue" makes all five cats blue, not just the last three.
         """
-        trailing = groups.pop()
-        groups[-1]['colors'] = trailing['colors']
-        groups[-1]['tint'] = tint = _mix_tint(trailing['colors'])
-        item = groups[-1]['item']
+        colors = groups.pop()['colors']
+        groups[target]['colors'] = colors
+        groups[target]['tint'] = tint = _mix_tint(colors)
+        item = groups[target]['item']
         if item[0] != 'emoji':
             return
-        for g in reversed(groups[:-1]):
+        for g in reversed(groups[:target]):
             if g['tint'] or g['item'][0] != 'emoji' or g['item'][1] != item[1]:
                 return
             g['tint'] = tint

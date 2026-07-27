@@ -1799,8 +1799,19 @@ class SimpleEvaluator:
         """
         from ..color_mixing import COLOR_ADJECTIVES
 
-        def is_color_word(w: str) -> bool:
-            return bool(self._get_color(w)) and not self._get_emoji(w)
+        def is_color_word(k: int) -> bool:
+            """Whether words[k] is being used as a color here.
+
+            "orange" names a color and a fruit. It is the color when a noun
+            follows it ("3 orange cats" is three cats) and the fruit when none
+            does ("3 oranges"), which decides whether a count binds to it.
+            """
+            w = words[k].lower()
+            if not self._get_color(w):
+                return False
+            if not self._get_emoji(w):
+                return True
+            return k + 1 < n and bool(self._get_emoji(words[k + 1].lower()))
 
         groups: list[str] = []
         i, n = 0, len(words)
@@ -1823,7 +1834,7 @@ class SimpleEvaluator:
                 k = j
                 while k < n and words[k].lower() in COLOR_ADJECTIVES:
                     k += 1
-                if k < n and is_color_word(words[k].lower()):
+                if k < n and is_color_word(k):
                     color_chunks.append(" ".join(words[j:k + 1]))
                     j = k + 1
                 else:

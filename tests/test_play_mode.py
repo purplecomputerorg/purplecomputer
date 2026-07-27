@@ -998,6 +998,26 @@ class TestColorAdjectiveModel:
         assert "🍎" in result
         assert "[on " in result
 
+    # A color typed last has no word after it to modify, so it paints the word
+    # before it. Each case pins the whole answer half, since what is at stake
+    # is exactly which items came out colored.
+    @pytest.mark.parametrize("text,answer", [
+        # the plain case: "cat blue" is a blue cat
+        ("cat blue", "[on #1F75FE] 🐱 [/]"),
+        # an earlier color wins; the trailing one stays a swatch of its own
+        ("red cat blue", "[on #ED1C24] 🐱 [/] [on #1F75FE]  [/]"),
+        # ...including when that color reached the noun by carrying forward
+        ("red dog dog blue",
+         "[on #ED1C24] 🐶 [/] [on #ED1C24] 🐶 [/] [on #1F75FE]  [/]"),
+        # one noun split by addition stays one color, same as "2 + 3 blue cats"
+        ("2 + 3 cats blue", "[on #1F75FE] 🐱🐱 [/] [on #1F75FE] 🐱🐱🐱 [/]"),
+        # a different noun stops it, same as the forward direction
+        ("2 cats 3 dogs blue", "🐱🐱 [on #1F75FE] 🐶🐶🐶 [/]"),
+    ])
+    def test_trailing_color_paints_the_word_before_it(self, evaluator, text, answer):
+        result = evaluator.evaluate(text)
+        assert result.split(" → ")[-1] == answer, result
+
     def test_plus_red_apple_green_banana(self, evaluator):
         """red + apple + green + banana: apple on red, banana on green."""
         result = evaluator.evaluate("red + apple + green + banana")

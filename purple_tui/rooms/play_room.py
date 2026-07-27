@@ -130,6 +130,13 @@ def _pad_narrow_emoji(text: str) -> str:
     return ''.join(result)
 
 
+def _mix_tint(colors: list[str]) -> str | None:
+    """The one color a group of color words paints with, or None for no colors."""
+    if not colors:
+        return None
+    return mix_colors_paint(colors) if len(colors) > 1 else colors[0]
+
+
 def _contrast_color(hex_color: str) -> str:
     """Return black or white for readable text on the given background."""
     h = hex_color.lstrip('#')
@@ -1575,8 +1582,10 @@ class SimpleEvaluator:
         the same item mix together. A color's tint also carries to following
         groups of the *same* emoji, so "2 + 3 dark red dogs" colors all 5 dogs
         (the count is split by addition but it's one colored noun). A different
-        emoji or a new color stops the carry. Trailing colors with no item
-        after them form a group with item=None.
+        emoji or a new color stops the carry. A color at the end has no next
+        item, so it colors the item before it ("cat blue" is a blue cat) unless
+        that item already has a color, in which case it stays a swatch of its
+        own ("red cat blue" is a red cat beside blue).
 
         Input: list of ('color', hex) | ('emoji', emoji, count) | ('text', word)
         Output: list of {'colors': [hex...], 'tint': hex_or_None, 'item': info}.
@@ -1592,23 +1601,37 @@ class SimpleEvaluator:
                 continue
             colors = list(current_colors)
             current_colors = []
-            if colors:
-                tint = mix_colors_paint(colors) if len(colors) > 1 else colors[0]
-            elif info[0] == 'emoji' and info[1] == carry_emoji:
+            tint = _mix_tint(colors)
+            if not tint and info[0] == 'emoji' and info[1] == carry_emoji:
                 tint = carry_tint
-            else:
-                tint = None
             carry_emoji = info[1] if info[0] == 'emoji' and tint else None
             carry_tint = tint if carry_emoji else None
             groups.append({'colors': colors, 'tint': tint, 'item': info})
         if current_colors:
             groups.append({'colors': current_colors, 'tint': None, 'item': None})
-        if (len(groups) >= 2
-                and groups[-1]['item'] is None
-                and not groups[-2]['colors']):
-            groups[-2]['colors'] = groups[-1]['colors']
-            groups.pop()
+        if len(groups) >= 2 and groups[-1]['item'] is None and not groups[-2]['tint']:
+            self._colorize_backward(groups)
         return groups
+
+    @staticmethod
+    def _colorize_backward(groups: list[dict]) -> None:
+        """Move the trailing color group onto the uncolored item before it.
+
+        'colors' draws the input swatch and 'tint' colors the answer, so both
+        have to move or the color shows on one side of the arrow only. The tint
+        then carries back over the same emoji the way it carries forward, so
+        "2 + 3 cats blue" makes all five cats blue, not just the last three.
+        """
+        trailing = groups.pop()
+        groups[-1]['colors'] = trailing['colors']
+        groups[-1]['tint'] = tint = _mix_tint(trailing['colors'])
+        item = groups[-1]['item']
+        if item[0] != 'emoji':
+            return
+        for g in reversed(groups[:-1]):
+            if g['tint'] or g['item'][0] != 'emoji' or g['item'][1] != item[1]:
+                return
+            g['tint'] = tint
 
     def _render_adjective_groups(self, groups: list[dict]) -> str | None:
         """Render adjective groups into markup.

@@ -15,9 +15,11 @@ FAST_BUILD=0
 # Parse arguments
 START_STEP=0
 BUILD_REF=""
+FORCE_BUILD=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --fast) FAST_BUILD=1 ;;
+        --force) FORCE_BUILD=1 ;;
         --ref) BUILD_REF="$2"; shift ;;
         *) START_STEP="$1" ;;
     esac
@@ -60,6 +62,28 @@ setup_ref_build() {
     log_info "Building commit $hash in isolation under $HOST_INSTALLER_DIR"
 }
 
+# The build takes hours, so stop early when this exact commit is already sitting
+# in the output dir. Only trustworthy on a clean tree: uncommitted edits ship in
+# the image but leave the hash alone.
+skip_if_already_built() {
+    local hash existing variant path
+    [ "$FORCE_BUILD" = "1" ] && return 0
+    hash="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null)" || return 0
+    existing="$(existing_build_for_hash "$hash")" || return 0
+    if [ -n "$(git -C "$PROJECT_DIR" status --porcelain 2>/dev/null)" ]; then
+        log_info "Commit $hash is already built, but the tree has uncommitted changes, so building anyway."
+        return 0
+    fi
+    log_info "Commit $hash is already built and the tree is clean, so there is nothing to do."
+    log_info "In $(dirname "$existing"):"
+    for variant in $(planned_iso_variants); do
+        path="$(variant_path "$existing" "$variant")"
+        log_info "  $(basename "$path")  ($(variant_label "$variant"), $(du -h "$path" | cut -f1))"
+    done
+    log_info "Flash it with 'just flash', or rebuild anyway with --force."
+    exit 0
+}
+
 main() {
     cd "$SCRIPT_DIR"
 
@@ -69,6 +93,7 @@ main() {
     if [ -n "$BUILD_REF" ]; then
         setup_ref_build
     fi
+    skip_if_already_built
 
     if [ "$START_STEP" -ge 1 ]; then
         log_info "Build plan: ISOs only (reusing existing golden image)"

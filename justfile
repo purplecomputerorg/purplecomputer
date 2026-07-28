@@ -262,6 +262,7 @@ clean-isos *args:
     ./build-scripts/clean-old-isos.sh {{args}}
 
 # Build the installer ISOs in Docker (standard + debug; PURPLE_WITH_BACKUP_ISO=1 adds the with-backup variant).
+# Stops early if the checked-out commit is already built and the tree is clean; --force builds anyway.
 # just build --ref <commit> builds that commit in isolation under /opt/purple-installer/archive/<commit>/
 build *args:
     ./build-scripts/build-in-docker.sh {{args}}

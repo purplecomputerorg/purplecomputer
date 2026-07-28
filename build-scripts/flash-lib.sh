@@ -298,15 +298,6 @@ filter_variant() {
     esac
 }
 
-# variant_path <stem> <standard|backup|debug>
-variant_path() {
-    case "$2" in
-        backup) echo "$1.with-backup.iso" ;;
-        debug)  echo "$1.debug.iso" ;;
-        *)      echo "$1.iso" ;;
-    esac
-}
-
 # Path prefix (no variant suffix) of the most recently built ISO,
 # e.g. /opt/purple-installer/output/purple-installer-20260719
 latest_build_stem() {

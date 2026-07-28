@@ -1,4 +1,4 @@
-"""Help & Videos screen: a scannable QR plus the plain video-guide URL.
+"""Help & Videos screen: a scannable QR plus the plain help-hub URL.
 
 Opened from the parent menu. The QR is pre-baked (purple_tui/qr_data.py) and
 drawn with half-block characters so two module rows fit per terminal row,
@@ -15,7 +15,7 @@ from rich.text import Text
 from ..constants import SUPPORT_EMAIL
 from ..keyboard import ControlAction, CharacterAction
 from ..modal import PurpleModal
-from ..qr_data import VIDEO_QR_MATRIX, VIDEO_QR_URL
+from ..qr_data import HELP_QR_MATRIX, HELP_QR_URL
 
 _UPPER_HALF = "▀"  # ▀ : foreground paints top module, background the bottom one
 
@@ -25,7 +25,7 @@ _QR_LIGHT = "#f3eefb"
 
 
 def _render_qr() -> Text:
-    rows = [[c == "1" for c in row] for row in VIDEO_QR_MATRIX]
+    rows = [[c == "1" for c in row] for row in HELP_QR_MATRIX]
     blank = [False] * len(rows[0])
     text = Text(no_wrap=True)
     for top in range(0, len(rows), 2):
@@ -41,7 +41,7 @@ def _render_qr() -> Text:
 
 
 class HelpVideosScreen(PurpleModal):
-    """Show video-guide QR and URL for parents."""
+    """Show help-hub QR and URL for parents."""
 
     CSS = """
     #modal-dialog {
@@ -71,9 +71,9 @@ class HelpVideosScreen(PurpleModal):
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-dialog"):
             yield Static("Help & Videos", id="modal-title")
-            yield Static("Scan to watch video guides:", id="help-intro")
+            yield Static("Scan for videos and other help:", id="help-intro")
             yield Static(_render_qr(), id="help-qr")
-            yield Static(VIDEO_QR_URL.split("://", 1)[-1], id="help-url")
+            yield Static(HELP_QR_URL.split("://", 1)[-1], id="help-url")
             yield Static(f"Questions? {SUPPORT_EMAIL}", id="modal-hint")
 
     async def _on_key(self, event) -> None:

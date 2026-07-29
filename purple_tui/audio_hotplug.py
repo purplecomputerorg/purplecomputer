@@ -12,15 +12,24 @@ quick succession), and calls back once per quiet period.
 
 Design: one daemon thread per app, started from _start_mixer_warmup after
 the initial probe completes so we don't race the warmup's own probe.
-The thread stops when the subprocess exits, which happens at shutdown
-when the app's process group is terminated.
+The thread stops when the subprocess exits.
+
+The subprocess is killed from an atexit hook, not just the loop's finally:
+CPython kills daemon threads at interpreter exit without unwinding them, so
+the finally never runs on the normal exit path, and `udevadm monitor` only
+writes on a sound event, so it never sees EPIPE from our closed pipe. It
+would outlive us indefinitely (xinitrc re-execs Purple in the same systemd
+cgroup, so nothing else reaps it). Paths that never unwind Python at all,
+os.execv and hard crashes, still leak one monitor until the next reboot.
 """
 
 from __future__ import annotations
 
+import atexit
 import re
 import select
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable, Iterable, Optional
@@ -127,25 +136,53 @@ def run_hotplug_loop(
     except (FileNotFoundError, OSError):
         return
 
+    stopping = threading.Event()
+
+    def _kill() -> None:
+        stopping.set()
+        try:
+            proc.terminate()
+            proc.wait(timeout=1)
+        except Exception:
+            pass
+
+    def _fire(action: str) -> None:
+        # Our own terminate() EOFs the pipe, and EOF flushes any pending
+        # event. Firing it here would run a full mixer re-probe against an
+        # already-stopped app, mid-shutdown.
+        if not stopping.is_set():
+            on_event(action)
+
+    atexit.register(_kill)
+    # A hook registered after finalization began never runs, and we start on
+    # the mixer-warmup thread, which can still be working when Purple exits.
+    if sys.is_finalizing():
+        _kill()
+        return
+
     try:
         assert proc.stdout is not None
         debounce_events(
             _iter_lines_with_silence_flushes(proc.stdout, debounce_seconds),
-            on_event,
+            _fire,
             debounce_seconds=debounce_seconds,
         )
     finally:
-        try:
-            proc.terminate()
-        except Exception:
-            pass
+        atexit.unregister(_kill)
+        _kill()
 
 
-def start(on_event: Callable[[str], None]) -> threading.Thread:
+def start(
+    on_event: Callable[[str], None],
+    *,
+    debounce_seconds: float = _DEBOUNCE_SECONDS,
+    _monitor_cmd: Optional[list[str]] = None,
+) -> threading.Thread:
     """Start the hotplug listener in a daemon thread. Returns the thread."""
     t = threading.Thread(
         target=run_hotplug_loop,
         args=(on_event,),
+        kwargs={"debounce_seconds": debounce_seconds, "_monitor_cmd": _monitor_cmd},
         daemon=True,
         name="audio-hotplug",
     )

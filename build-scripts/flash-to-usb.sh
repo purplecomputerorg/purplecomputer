@@ -450,7 +450,7 @@ write_iso() {
         if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
             run_boot_settle
             if ! recheck_after_settle "$TARGET_DEV" "$iso_sha256" "$iso_size_bytes"; then
-                record_manifest fail "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" "post-settle-mismatch"
+                record_manifest fail-post-settle "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" ""
                 log_error "$TARGET_DEV verified after writing but NOT after boot-settle: the flash is decaying."
                 log_error "Do NOT ship this drive. Check it with 'just check-drive $TARGET_DEV'."
                 exit 1

@@ -239,9 +239,10 @@ count_running() {
 # read counters: at least BOOT_SETTLE_MIN_MB read, then BOOT_SETTLE_QUIET_SECS
 # with no new reads. The drive then stays powered BOOT_SETTLE_HOLD_SECS so
 # the controller can finish background relocation. QEMU's own output goes to
-# $log for diagnosis. Returns 1 (without failing the flash) if QEMU is
-# missing, exits early, or the threshold isn't reached within $3 (default
-# BOOT_SETTLE_TIMEOUT_SECS). Callers wanting a retry use boot_settle_with_retry.
+# $log for diagnosis. Returns 1 (without failing the flash) if QEMU exits early
+# or the threshold isn't reached within $3 (default BOOT_SETTLE_TIMEOUT_SECS),
+# and 2 if settling is impossible at all. Callers wanting a retry use
+# boot_settle_with_retry.
 boot_settle_drive() {
     local dev="$1" log="$2"
     local timeout="${3:-${BOOT_SETTLE_TIMEOUT_SECS:-600}}"
@@ -253,7 +254,7 @@ boot_settle_drive() {
 
     if ! command -v qemu-system-x86_64 >/dev/null 2>&1; then
         echo "[WARN] qemu-system-x86_64 not found; cannot boot-settle $dev" >&2
-        return 1
+        return 2
     fi
 
     local part
@@ -323,10 +324,13 @@ boot_settle_with_retry() {
     local dev="$1" log="$2"
     local attempts="${BOOT_SETTLE_ATTEMPTS:-2}"
     local timeout="${BOOT_SETTLE_TIMEOUT_SECS:-600}"
-    local i
+    local i rc
     for (( i = 1; i <= attempts; i++ )); do
         echo "[settle] $dev attempt $i/$attempts (timeout ${timeout}s)" >>"$log"
         boot_settle_drive "$dev" "$log" "$timeout" && return 0
+        rc=$?
+        # 2 means settling is impossible here, not that this drive was slow.
+        (( rc == 2 )) && return 1
         timeout=$((timeout * 2))
         if (( i < attempts )); then
             echo "[INFO] retrying boot settle for $dev with a ${timeout}s window" >&2

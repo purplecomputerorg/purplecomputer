@@ -324,7 +324,7 @@ if [[ "$REVERIFY" == true && ${#SETTLE_IDX[@]} -gt 0 ]]; then
         else
             ST_OK[$i]=false
             echo -e "${RED}✗${NC} ${ST_DEV[$i]}: verified after writing but NOT after settle, flash is decaying"
-            record_manifest fail "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" "post-settle-mismatch"
+            record_manifest fail-post-settle "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" ""
         fi
     done
 fi

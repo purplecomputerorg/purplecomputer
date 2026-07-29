@@ -264,12 +264,12 @@ for (( attempt = 1; attempt <= MAX_ATTEMPTS; attempt++ )); do
     done
 done
 
-# Downstream settle/eject work off these, as they did before retries existed.
+# ST_OK[i] is the only source of truth for whether a drive is still good: every
+# stage below iterates indices and consults it rather than matching device
+# nodes, since a power-cycled drive can come back on a letter another stick
+# just gave up. DEVS is the corrupt-mode identify path's own live node list,
+# which it rewrites as drives are replugged.
 DEVS=("${ST_DEV[@]}")
-FAILED=()
-for i in "${!ENTRIES[@]}"; do
-    [[ "${ST_OK[$i]}" == true ]] || FAILED+=("${ST_DEV[$i]}")
-done
 
 echo
 # Lift the gate before ejecting so udevadm settle can drain.
@@ -280,28 +280,28 @@ sudo udevadm control --start-exec-queue 2>/dev/null || true
 # first boot. A dd read pass did not clear that state; a real boot does (see
 # guides/usb-flash-settle.md).
 SETTLE_PIDS=()
-SETTLE_DEVS=()
-for i in "${!DEVS[@]}"; do
-    dev="${DEVS[$i]}"
-    [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-    [[ "$SKIP_SETTLE" == true ]] && continue
-    SETTLE_DEVS+=("$dev")
-done
-if [[ ${#SETTLE_DEVS[@]} -gt 0 ]]; then
+SETTLE_IDX=()
+if [[ "$SKIP_SETTLE" != true ]]; then
+    for i in "${!ENTRIES[@]}"; do
+        [[ "${ST_OK[$i]}" == true ]] && SETTLE_IDX+=("$i")
+    done
+fi
+if [[ ${#SETTLE_IDX[@]} -gt 0 ]]; then
     SETTLE_MAX=$(boot_settle_max_jobs)
-    log_info "Boot-settling ${#SETTLE_DEVS[@]} drive(s) in QEMU so the first real boot is fast, up to $SETTLE_MAX at a time so guests fit in RAM (--no-settle to skip). Takes a few minutes, walk away."
-    for dev in "${SETTLE_DEVS[@]}"; do
+    log_info "Boot-settling ${#SETTLE_IDX[@]} drive(s) in QEMU so the first real boot is fast, up to $SETTLE_MAX at a time so guests fit in RAM (--no-settle to skip). Takes a few minutes, walk away."
+    for i in "${SETTLE_IDX[@]}"; do
         while (( $(count_running "${SETTLE_PIDS[@]}") >= SETTLE_MAX )); do sleep 5; done
-        boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
+        boot_settle_with_retry "${ST_DEV[$i]}" "$LOG_DIR/$(basename "${ST_DEV[$i]}").boot-settle.log" &
         SETTLE_PIDS+=("$!")
     done
-    for i in "${!SETTLE_PIDS[@]}"; do
-        if wait "${SETTLE_PIDS[$i]}"; then
-            echo -e "${GREEN}✓${NC} ${SETTLE_DEVS[$i]}: boot-settled"
+    for k in "${!SETTLE_PIDS[@]}"; do
+        i="${SETTLE_IDX[$k]}"
+        if wait "${SETTLE_PIDS[$k]}"; then
+            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]}: boot-settled"
         else
-            echo -e "${YELLOW}!${NC} ${SETTLE_DEVS[$i]}: boot settle incomplete after retry, first real boot may be slow"
-            echo -e "    drive: $(drive_location "${SETTLE_DEVS[$i]}")"
-            echo -e "    log:   $LOG_DIR/$(basename "${SETTLE_DEVS[$i]}").boot-settle.log"
+            echo -e "${YELLOW}!${NC} ${ST_DEV[$i]}: boot settle incomplete after retry, first real boot may be slow"
+            echo -e "    drive: $(drive_location "${ST_DEV[$i]}")"
+            echo -e "    log:   $LOG_DIR/$(basename "${ST_DEV[$i]}").boot-settle.log"
         fi
     done
 fi
@@ -309,12 +309,10 @@ fi
 # Re-read every settled drive before ejecting, catching flash that decays in
 # the minutes after being written. Must precede eject_drive: a powered-off
 # drive leaves a media-less node whose reads look like corruption.
-if [[ "$REVERIFY" == true && ${#SETTLE_DEVS[@]} -gt 0 ]]; then
-    log_info "Re-verifying ${#SETTLE_DEVS[@]} drive(s) after boot-settle..."
+if [[ "$REVERIFY" == true && ${#SETTLE_IDX[@]} -gt 0 ]]; then
+    log_info "Re-verifying ${#SETTLE_IDX[@]} drive(s) after boot-settle..."
     RV_PIDS=(); RV_IDX=()
-    for i in "${!ENTRIES[@]}"; do
-        [[ "${ST_OK[$i]}" == true ]] || continue
-        [[ " ${SETTLE_DEVS[*]} " == *" ${ST_DEV[$i]} "* ]] || continue
+    for i in "${SETTLE_IDX[@]}"; do
         while (( $(count_running "${RV_PIDS[@]}") >= 4 )); do sleep 5; done
         recheck_after_settle "${ST_DEV[$i]}" "${SHA_BY_ISO[${ISOS[$i]}]}" "$(stat -c %s "${ISOS[$i]}")" &
         RV_PIDS+=("$!"); RV_IDX+=("$i")
@@ -325,12 +323,18 @@ if [[ "$REVERIFY" == true && ${#SETTLE_DEVS[@]} -gt 0 ]]; then
             echo -e "${GREEN}✓${NC} ${ST_DEV[$i]}: still intact after settle"
         else
             ST_OK[$i]=false
-            FAILED+=("${ST_DEV[$i]}")
             echo -e "${RED}✗${NC} ${ST_DEV[$i]}: verified after writing but NOT after settle, flash is decaying"
             record_manifest fail "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" "post-settle-mismatch"
         fi
     done
 fi
+
+# Built after the re-verify, the last stage that can flip ST_OK. Reporting and
+# counts only: nothing downstream decides anything by matching a device node.
+FAILED=()
+for i in "${!ENTRIES[@]}"; do
+    [[ "${ST_OK[$i]}" == true ]] || FAILED+=("${ST_DEV[$i]}")
+done
 
 # Re-enumerate and eject each verified drive (same pass single flashes do).
 # Corrupt mode skips this: a powered-off drive vanishes from the bus, so its
@@ -338,10 +342,9 @@ fi
 # Safe because every write is synced and read back verified, and these test
 # drives get reflashed after one use anyway.
 if [[ "$CORRUPT_MODE" != true ]]; then
-    for i in "${!DEVS[@]}"; do
-        dev="${DEVS[$i]}"
-        [[ " ${FAILED[*]} " == *" $dev "* ]] && continue
-        eject_drive "$dev" || true
+    for i in "${!ENTRIES[@]}"; do
+        [[ "${ST_OK[$i]}" == true ]] || continue
+        eject_drive "${ST_DEV[$i]}" || true
     done
 fi
 
@@ -425,10 +428,8 @@ fi
 drive_present() { [[ -e "/sys/block/$(basename "${DEVS[$1]}")" ]]; }
 
 announce_pulled() {
-    local i="$1" scen="${SCENS[$1]}" odev
-    # Failure is tracked by the original device name (a replug may rename).
-    IFS='|' read -r odev _ _ _ <<< "${ENTRIES[$i]}"
-    if [[ " ${FAILED[*]} " == *" $odev "* ]]; then
+    local i="$1" scen="${SCENS[$1]}"
+    if [[ "${ST_OK[$i]}" != true ]]; then
         echo -e "${RED}✗${NC} That was ${BOLD}${scen}${NC}, but its flash FAILED. Set it aside, don't test it."
     else
         echo -e "${GREEN}✓${NC} That was ${BOLD}${scen}${NC}: $(corrupt_scenario_expectation "$scen"). Label it '$scen'."

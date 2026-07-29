@@ -240,11 +240,11 @@ count_running() {
 # with no new reads. The drive then stays powered BOOT_SETTLE_HOLD_SECS so
 # the controller can finish background relocation. QEMU's own output goes to
 # $log for diagnosis. Returns 1 (without failing the flash) if QEMU is
-# missing, exits early, or the threshold isn't reached within
-# BOOT_SETTLE_TIMEOUT_SECS.
+# missing, exits early, or the threshold isn't reached within $3 (default
+# BOOT_SETTLE_TIMEOUT_SECS). Callers wanting a retry use boot_settle_with_retry.
 boot_settle_drive() {
     local dev="$1" log="$2"
-    local timeout="${BOOT_SETTLE_TIMEOUT_SECS:-600}"
+    local timeout="${3:-${BOOT_SETTLE_TIMEOUT_SECS:-600}}"
     local min_mb="${BOOT_SETTLE_MIN_MB:-200}"
     local quiet_target="${BOOT_SETTLE_QUIET_SECS:-30}"
     local hold="${BOOT_SETTLE_HOLD_SECS:-60}"
@@ -275,10 +275,10 @@ boot_settle_drive() {
     sudo env TMPDIR=/var/tmp qemu-system-x86_64 "${accel[@]}" -m 2048 \
         -drive file="$dev",format=raw,cache=none,snapshot=on \
         -boot c -no-reboot -display none \
-        >"$log" 2>&1 &
+        >>"$log" 2>&1 &
     local qpid=$!
 
-    local read0 last cur quiet=0 elapsed=0 booted=1
+    local read0 last cur quiet=0 elapsed=0 booted=1 trail=""
     read0=$(awk '{print $3}' "$stat")
     last=$read0
     while (( elapsed < timeout )); do
@@ -293,6 +293,7 @@ boot_settle_drive() {
             quiet=$((quiet + 5))
         fi
         # /sys/block stat counts 512-byte sectors; /2048 converts to MB.
+        (( elapsed % 60 == 0 )) && trail+=" ${elapsed}s:$(( (cur - read0) / 2048 ))MB"
         if (( (cur - read0) / 2048 >= min_mb && quiet >= quiet_target )); then
             booted=0
             break
@@ -300,6 +301,9 @@ boot_settle_drive() {
     done
 
     local mb=$(( (last - read0) / 2048 ))
+    # The read trail separates "slow but progressing" from "stalled early",
+    # which is the difference between retrying and suspecting the drive.
+    (( booted == 0 )) || echo "[settle] $dev read trail:$trail" >>"$log"
     if (( booted == 0 )); then
         sleep "$hold"
     elif [[ -d "/proc/$qpid" ]]; then
@@ -310,6 +314,123 @@ boot_settle_drive() {
     sudo kill "$qpid" 2>/dev/null || true
     wait "$qpid" 2>/dev/null || true
     return "$booted"
+}
+
+# An incomplete settle is usually a drive that was still booting when the
+# window closed, not a broken one, so retry it with a doubled window before
+# asking a human to find the stick. Attempts append to the same $log.
+boot_settle_with_retry() {
+    local dev="$1" log="$2"
+    local attempts="${BOOT_SETTLE_ATTEMPTS:-2}"
+    local timeout="${BOOT_SETTLE_TIMEOUT_SECS:-600}"
+    local i
+    for (( i = 1; i <= attempts; i++ )); do
+        echo "[settle] $dev attempt $i/$attempts (timeout ${timeout}s)" >>"$log"
+        boot_settle_drive "$dev" "$log" "$timeout" && return 0
+        timeout=$((timeout * 2))
+        if (( i < attempts )); then
+            echo "[INFO] retrying boot settle for $dev with a ${timeout}s window" >&2
+        fi
+    done
+    return 1
+}
+
+# Sysfs directory of the USB device behind a block device, e.g.
+# /sys/devices/.../usb4/4-1/4-1.4. Empty when the device isn't USB or is gone.
+# Sysfs, not lsblk/udevadm: the flash tools pause udev's exec queue, and an
+# ejected drive keeps its sysfs node after its /dev node stops working.
+usb_device_dir() {
+    local usbdir
+    usbdir="$(readlink -f "/sys/block/$(basename "$1")" 2>/dev/null)"
+    # .../4-1.4/4-1.4:1.0/host6/... -> .../4-1.4, the first parent that is a
+    # USB device rather than an interface or SCSI node.
+    while [[ "$usbdir" == /sys/devices/?* && ! -f "$usbdir/idVendor" ]]; do
+        usbdir="$(dirname "$usbdir")"
+    done
+    [[ -f "$usbdir/idVendor" ]] && echo "$usbdir"
+}
+
+# Product, serial and USB port path of a drive, so one that still needs
+# hands-on attention can be found on the hub without unplugging everything.
+# The port is bus-rootport.hubport (e.g. 4-1.4), stable per physical socket.
+drive_location() {
+    local dev="$1" usbdir
+    usbdir="$(usb_device_dir "$dev")"
+    if [[ -z "$usbdir" ]]; then
+        echo "$dev"
+        return
+    fi
+    echo "$(cat "$usbdir/product" "$usbdir/serial" 2>/dev/null | xargs), USB port $(basename "$usbdir")"
+}
+
+# Sysfs port-control directory for whichever hub port a drive sits in, e.g.
+# 4-1.4 -> .../4-1:1.0/4-1-port4, or a root-port 2-1 -> .../2-0:1.0/usb2-port1.
+# Writing to its "disable" attribute power-cycles just that socket.
+usb_port_control() {
+    local usbdir port parent path
+    usbdir="$(usb_device_dir "$1")"
+    [[ -n "$usbdir" ]] || return 1
+    port="$(basename "$usbdir")"          # 4-1.4  or  2-1
+    if [[ "$port" == *.* ]]; then
+        parent="${port%.*}"               # 4-1
+        path="/sys/bus/usb/devices/$parent:1.0/$parent-port${port##*.}"
+    else
+        parent="${port%%-*}"              # 2
+        path="/sys/bus/usb/devices/$parent-0:1.0/usb$parent-port${port#*-}"
+    fi
+    [[ -w "$path/disable" || -e "$path/disable" ]] && echo "$path"
+}
+
+# Find the block device currently holding a serial, waiting up to $2 seconds
+# for it to appear (a power-cycled drive takes a few seconds to re-enumerate,
+# and can come back under a different letter).
+dev_for_serial() {
+    local serial="$1" timeout="${2:-30}" waited=0 name
+    while (( waited < timeout )); do
+        name="$(lsblk -d -n -o NAME,SERIAL 2>/dev/null | awk -v s="$serial" '$2 == s {print $1; exit}')"
+        if [[ -n "$name" && -b "/dev/$name" ]]; then
+            echo "/dev/$name"
+            return 0
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    return 1
+}
+
+# Power-cycle a hub port and return the device node the drive comes back on,
+# which may differ from the one it left. This is what makes an unattended retry
+# possible: a drive that failed or was ejected is often gone from the bus
+# entirely, and only a port power cycle brings it back without hands on the hub.
+#
+# Takes a port path from usb_port_control, NOT a device node: an ejected drive
+# has no /sys/block entry left to derive the port from, so callers must capture
+# the port while the drive is still present.
+recover_drive() {
+    local port="$1" serial="$2"
+    [[ -n "$port" && -e "$port/disable" ]] || return 1
+    echo 1 | sudo tee "$port/disable" >/dev/null 2>&1 || return 1
+    sleep 3
+    echo 0 | sudo tee "$port/disable" >/dev/null 2>&1 || return 1
+    dev_for_serial "$serial" 40
+}
+
+# SHA256 of the first $2 bytes of a device, read with O_DIRECT after dropping
+# the page cache so the bytes come off the flash rather than out of RAM.
+device_sha256() {
+    sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
+    sudo dd if="$1" bs=4M count="$2" iflag=direct,count_bytes status=none 2>/dev/null \
+        | sha256sum | awk '{print $1}'
+}
+
+# Confirm a drive still holds the image after boot-settling, catching flash
+# that decays right after being written. MUST run before eject_drive: a
+# powered-off drive leaves a media-less node whose reads return garbage, which
+# looks exactly like corruption that isn't there.
+recheck_after_settle() {
+    local dev="$1" expected="$2" bytes="$3" actual
+    actual="$(device_sha256 "$dev" "$bytes")"
+    [[ "$actual" == "$expected" ]]
 }
 
 # Re-read the partition table, then power off the drive so it re-enumerates

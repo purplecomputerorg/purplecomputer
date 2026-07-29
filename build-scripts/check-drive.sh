@@ -79,7 +79,7 @@ note_pass() { echo -e "  ${GREEN}OK${NC}    $1"; }
 # dd's rate is the last comma-separated field of its summary line.
 dd_rate_mb() {
     local out
-    out="$("$@" 2>&1 | tr '\r' '\n' | grep -a "copied" | tail -1)"
+    out="$("$@" 2>&1 | tr '\r' '\n' | grep -a "copied" | tail -1 || true)"
     echo "$out" | sed 's/.*, //' | awk '{ if ($2 ~ /^GB/) print $1 * 1024; else if ($2 ~ /^kB/) print $1 / 1024; else print $1 }'
 }
 

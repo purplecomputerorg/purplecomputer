@@ -29,6 +29,10 @@ Options:
   --no-backup   Use the newest build's standard ISO (no backup image copy)
   --corrupt     Flash corrupt-test scenario ISOs, one per drive
   --yes         Skip the confirmation prompt
+  --retries <n> Automatic re-flashes for a drive that fails verification,
+                each preceded by a power-cycle of its hub port (default 1)
+  --no-reverify Skip the post-settle re-read that confirms the image is still
+                intact before the drive is ejected
   --no-settle   Skip the post-flash QEMU boot-settle (faster, but the first
                 live boot on each drive will be slow)
   --ref <c>     Use an old commit's archived build (made by 'just build --ref <c>')
@@ -40,10 +44,14 @@ SKIP_CONFIRM=false
 SKIP_SETTLE=false
 CORRUPT_MODE=false
 ISO_KIND=""
+MAX_ATTEMPTS=2
+REVERIFY=true
 POSITIONAL=()
 while [[ -n "${1:-}" ]]; do
     case "$1" in
         --help|-h)    usage; exit 0 ;;
+        --retries)    MAX_ATTEMPTS=$(( ${2:-1} + 1 )); shift 2 ;;
+        --no-reverify) REVERIFY=false; shift ;;
         --debug|-d)   ISO_KIND=debug; shift ;;
         --no-backup)  ISO_KIND=standard; shift ;;
         --corrupt)    CORRUPT_MODE=true; shift ;;
@@ -182,31 +190,85 @@ LOG_DIR="$(mktemp -d -t purple-flash-all.XXXXXX)"
 log_info "Per-drive logs: $LOG_DIR"
 echo
 
-PIDS=()
-DEVS=()
+# Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
+# node: a power-cycled drive can come back under a different letter, and
+# retrying the old letter could write to whatever landed there instead.
+# ST_PORT is captured now, while every drive is still enumerated: a drive that
+# fails or gets ejected loses its /sys/block entry, and with it any way to find
+# which hub port it sits in.
+ST_DEV=(); ST_SER=(); ST_TRIES=(); ST_OK=(); ST_LOG=(); ST_PORT=()
 for i in "${!ENTRIES[@]}"; do
-    IFS='|' read -r dev _ _ _ <<< "${ENTRIES[$i]}"
-    logfile="$LOG_DIR/$(basename "$dev").log"
-    echo -e "${BOLD}→ Starting flash for $dev${SCENS[$i]:+ [${SCENS[$i]}]} (tail -f $logfile)${NC}"
-    VERIFIED_ISO_SHA256="${SHA_BY_ISO[${ISOS[$i]}]}" \
-        "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" \
-        "${ISOS[$i]}" >"$logfile" 2>&1 &
-    PIDS+=($!)
-    DEVS+=("$dev")
+    IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
+    ST_DEV+=("$dev"); ST_SER+=("$ser"); ST_TRIES+=(0); ST_OK+=(false); ST_LOG+=("")
+    ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
 done
 
-echo
-log_info "All flashes started. Waiting for completion..."
-echo
+launch_flash() {
+    local i="$1" dev="${ST_DEV[$i]}" suffix=""
+    (( ST_TRIES[i] > 1 )) && suffix=".try${ST_TRIES[$i]}"
+    ST_LOG[$i]="$LOG_DIR/$(basename "$dev")${suffix}.log"
+    echo -e "${BOLD}→ Starting flash for $dev${SCENS[$i]:+ [${SCENS[$i]}]} (tail -f ${ST_LOG[$i]})${NC}"
+    VERIFIED_ISO_SHA256="${SHA_BY_ISO[${ISOS[$i]}]}" \
+        "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" \
+        "${ISOS[$i]}" >"${ST_LOG[$i]}" 2>&1 &
+    LAUNCHED_PID=$!
+}
 
+ROUND=("${!ENTRIES[@]}")
+for (( attempt = 1; attempt <= MAX_ATTEMPTS; attempt++ )); do
+    (( ${#ROUND[@]} )) || break
+    (( attempt > 1 )) && log_info "Retry round $((attempt - 1)): ${#ROUND[@]} drive(s)."
+    PIDS=(); IDX=()
+    for i in "${ROUND[@]}"; do
+        ST_TRIES[$i]=$(( ST_TRIES[i] + 1 ))
+        launch_flash "$i"
+        PIDS+=("$LAUNCHED_PID"); IDX+=("$i")
+    done
+
+    echo
+    log_info "All flashes started. Waiting for completion..."
+    echo
+
+    RETRY=()
+    for k in "${!PIDS[@]}"; do
+        i="${IDX[$k]}"
+        if wait "${PIDS[$k]}"; then
+            ST_OK[$i]=true
+            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]} — verified"
+        else
+            echo -e "${RED}✗${NC} ${ST_DEV[$i]} — FAILED (see ${ST_LOG[$i]})"
+            RETRY+=("$i")
+        fi
+    done
+
+    # Corrupt mode never retries: scenarios are zipped onto drives by position,
+    # and these sticks are reflashed after one throwaway test anyway.
+    ROUND=()
+    (( attempt >= MAX_ATTEMPTS )) && break
+    [[ "$CORRUPT_MODE" == true ]] && break
+    for i in "${RETRY[@]}"; do
+        echo
+        if [[ -z "${ST_PORT[$i]}" ]]; then
+            log_error "No hub port recorded for ${ST_DEV[$i]} (${ST_SER[$i]}); cannot power-cycle it. Re-seat it by hand and re-run."
+            continue
+        fi
+        log_info "Power-cycling ${ST_SER[$i]} at $(basename "${ST_PORT[$i]}") to retry..."
+        newdev="$(recover_drive "${ST_PORT[$i]}" "${ST_SER[$i]}" || true)"
+        if [[ -z "$newdev" ]]; then
+            log_error "${ST_SER[$i]} did not come back after a power cycle; leaving it failed."
+            continue
+        fi
+        [[ "$newdev" != "${ST_DEV[$i]}" ]] && log_info "Came back as $newdev (was ${ST_DEV[$i]})."
+        ST_DEV[$i]="$newdev"
+        ROUND+=("$i")
+    done
+done
+
+# Downstream settle/eject work off these, as they did before retries existed.
+DEVS=("${ST_DEV[@]}")
 FAILED=()
-for i in "${!PIDS[@]}"; do
-    if wait "${PIDS[$i]}"; then
-        echo -e "${GREEN}✓${NC} ${DEVS[$i]} — verified"
-    else
-        echo -e "${RED}✗${NC} ${DEVS[$i]} — FAILED (see $LOG_DIR/$(basename "${DEVS[$i]}").log)"
-        FAILED+=("${DEVS[$i]}")
-    fi
+for i in "${!ENTRIES[@]}"; do
+    [[ "${ST_OK[$i]}" == true ]] || FAILED+=("${ST_DEV[$i]}")
 done
 
 echo
@@ -230,14 +292,42 @@ if [[ ${#SETTLE_DEVS[@]} -gt 0 ]]; then
     log_info "Boot-settling ${#SETTLE_DEVS[@]} drive(s) in QEMU so the first real boot is fast, up to $SETTLE_MAX at a time so guests fit in RAM (--no-settle to skip). Takes a few minutes, walk away."
     for dev in "${SETTLE_DEVS[@]}"; do
         while (( $(count_running "${SETTLE_PIDS[@]}") >= SETTLE_MAX )); do sleep 5; done
-        boot_settle_drive "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
+        boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log" &
         SETTLE_PIDS+=("$!")
     done
     for i in "${!SETTLE_PIDS[@]}"; do
         if wait "${SETTLE_PIDS[$i]}"; then
             echo -e "${GREEN}✓${NC} ${SETTLE_DEVS[$i]}: boot-settled"
         else
-            echo -e "${YELLOW}!${NC} ${SETTLE_DEVS[$i]}: boot settle incomplete, first real boot may be slow (log: $LOG_DIR/$(basename "${SETTLE_DEVS[$i]}").boot-settle.log)"
+            echo -e "${YELLOW}!${NC} ${SETTLE_DEVS[$i]}: boot settle incomplete after retry, first real boot may be slow"
+            echo -e "    drive: $(drive_location "${SETTLE_DEVS[$i]}")"
+            echo -e "    log:   $LOG_DIR/$(basename "${SETTLE_DEVS[$i]}").boot-settle.log"
+        fi
+    done
+fi
+
+# Re-read every settled drive before ejecting, catching flash that decays in
+# the minutes after being written. Must precede eject_drive: a powered-off
+# drive leaves a media-less node whose reads look like corruption.
+if [[ "$REVERIFY" == true && ${#SETTLE_DEVS[@]} -gt 0 ]]; then
+    log_info "Re-verifying ${#SETTLE_DEVS[@]} drive(s) after boot-settle..."
+    RV_PIDS=(); RV_IDX=()
+    for i in "${!ENTRIES[@]}"; do
+        [[ "${ST_OK[$i]}" == true ]] || continue
+        [[ " ${SETTLE_DEVS[*]} " == *" ${ST_DEV[$i]} "* ]] || continue
+        while (( $(count_running "${RV_PIDS[@]}") >= 4 )); do sleep 5; done
+        recheck_after_settle "${ST_DEV[$i]}" "${SHA_BY_ISO[${ISOS[$i]}]}" "$(stat -c %s "${ISOS[$i]}")" &
+        RV_PIDS+=("$!"); RV_IDX+=("$i")
+    done
+    for k in "${!RV_PIDS[@]}"; do
+        i="${RV_IDX[$k]}"
+        if wait "${RV_PIDS[$k]}"; then
+            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]}: still intact after settle"
+        else
+            ST_OK[$i]=false
+            FAILED+=("${ST_DEV[$i]}")
+            echo -e "${RED}✗${NC} ${ST_DEV[$i]}: verified after writing but NOT after settle, flash is decaying"
+            record_manifest fail "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" "post-settle-mismatch"
         fi
     done
 fi
@@ -424,12 +514,46 @@ if [[ "$CORRUPT_MODE" == true && ${#DEVS[@]} -gt 0 ]]; then
     identify_corrupt_drives
 fi
 
+# Per-drive rundown, so an unattended batch can be judged at a glance instead
+# of by reading eleven logs.
+if [[ "$CORRUPT_MODE" != true ]]; then
+    echo
+    echo -e "${BOLD}Batch summary${NC}"
+    printf "  %-10s %-18s %-9s %-8s %s\n" "DEVICE" "SERIAL" "ATTEMPTS" "RATE" "RESULT"
+    echo "  ---------------------------------------------------------------------------"
+    for i in "${!ENTRIES[@]}"; do
+        # || true: with pipefail a non-matching grep would abort the summary,
+        # which is exactly what happens for a drive that failed before dd ran.
+        rate=""
+        [[ -f "${ST_LOG[$i]}" ]] && rate="$(tr '\r' '\n' < "${ST_LOG[$i]}" | grep -a "copied" | tail -1 | sed 's/.*copied, [0-9.]* s, //' || true)"
+        if [[ "${ST_OK[$i]}" == true ]]; then
+            result="${GREEN}verified${NC}"
+            (( ST_TRIES[i] > 1 )) && result="${GREEN}verified${NC} ${YELLOW}(after retry)${NC}"
+        else
+            result="${RED}FAILED${NC}"
+        fi
+        printf "  %-10s %-18s %-9s %-8s %b\n" \
+            "${ST_DEV[$i]}" "${ST_SER[$i]}" "${ST_TRIES[$i]}" "${rate:-n/a}" "$result"
+    done
+    echo
+fi
+
 if [[ ${#FAILED[@]} -eq 0 ]]; then
     if [[ "$CORRUPT_MODE" != true ]]; then
-        echo -e "${BOLD}${GREEN}All ${#DEVS[@]} drives flashed and verified. Unplug them now.${NC}"
+        RETRIED=0
+        for i in "${!ENTRIES[@]}"; do (( ST_TRIES[i] > 1 )) && RETRIED=$((RETRIED + 1)); done
+        echo -e "${BOLD}${GREEN}Good to go: ${#DEVS[@]}/${#DEVS[@]} flashed, verified$([[ "$REVERIFY" == true && "$SKIP_SETTLE" != true ]] && echo ", and re-verified after settling"). Unplug them now.${NC}"
+        (( RETRIED )) && echo -e "${YELLOW}$RETRIED drive(s) needed a retry. Watch those serials: a drive that keeps needing one is on its way out.${NC}"
     fi
     exit 0
-else
-    echo -e "${BOLD}${RED}${#FAILED[@]} of ${#DEVS[@]} drive(s) failed: ${FAILED[*]}${NC}"
-    exit 1
 fi
+
+echo -e "${BOLD}${RED}${#FAILED[@]} of ${#DEVS[@]} drive(s) need attention:${NC}"
+for i in "${!ENTRIES[@]}"; do
+    [[ "${ST_OK[$i]}" == true ]] && continue
+    echo -e "  ${RED}✗${NC} ${ST_DEV[$i]} (${ST_SER[$i]}) after ${ST_TRIES[$i]} attempt(s): $(drive_location "${ST_DEV[$i]}")"
+    echo -e "      log: ${ST_LOG[$i]}"
+    echo -e "      test it: just check-drive ${ST_DEV[$i]}   (add --deny if it fails)"
+done
+echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship.${NC}"
+exit 1

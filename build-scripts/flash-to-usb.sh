@@ -273,10 +273,10 @@ run_boot_settle() {
     local settle_log
     settle_log="$(mktemp -t purple-boot-settle.XXXXXX.log)"
     log_info "Boot-settling $TARGET_DEV in QEMU so the first real boot is fast (--no-settle to skip)..."
-    if boot_settle_drive "$TARGET_DEV" "$settle_log"; then
+    if boot_settle_with_retry "$TARGET_DEV" "$settle_log"; then
         log_info "Boot settle complete."
     else
-        log_warn "Boot settle incomplete; first real boot may be slow (QEMU log: $settle_log)"
+        log_warn "Boot settle incomplete for $TARGET_DEV ($(drive_location "$TARGET_DEV")); first real boot may be slow (QEMU log: $settle_log)"
     fi
 }
 
@@ -402,14 +402,7 @@ write_iso() {
             sudo umount "$part" 2>/dev/null || true
         done
 
-        # Drop kernel page cache so readback hits the device, not RAM.
-        sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
-
-        # Read back with O_DIRECT to bypass page cache entirely.
-        # iflag=count_bytes: interpret count as bytes (not blocks), so we read
-        #   exactly iso_size_bytes without needing head -c in a pipeline (which
-        #   could cause SIGPIPE issues with dd).
-        usb_sha256="$(sudo dd if="$TARGET_DEV" bs=4M count="$iso_size_bytes" iflag=direct,count_bytes status=none 2>/dev/null | sha256sum | awk '{print $1}')"
+        usb_sha256="$(device_sha256 "$TARGET_DEV" "$iso_size_bytes")"
 
         if [[ "$iso_sha256" == "$usb_sha256" ]]; then
             verify_passed=true
@@ -456,6 +449,13 @@ write_iso() {
         # in parallel after its own udev gate lifts.
         if [[ "$MANAGE_UDEV" == true && "$SKIP_SETTLE" != true ]]; then
             run_boot_settle
+            if ! recheck_after_settle "$TARGET_DEV" "$iso_sha256" "$iso_size_bytes"; then
+                record_manifest fail "$TARGET_DEV" "$TARGET_SERIAL" "$TARGET_MODEL" "$TARGET_SIZE" "$iso_filename" "post-settle-mismatch"
+                log_error "$TARGET_DEV verified after writing but NOT after boot-settle: the flash is decaying."
+                log_error "Do NOT ship this drive. Check it with 'just check-drive $TARGET_DEV'."
+                exit 1
+            fi
+            log_info "Re-verified after boot-settle."
         fi
 
         # Power-cycle so the drive re-enumerates fresh on next plug-in.

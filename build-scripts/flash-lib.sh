@@ -2,6 +2,17 @@
 # Shared helpers for flash-to-usb.sh and flash-all.sh.
 # Sourced, not executed.
 
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
 # Global safety cap: reject anything larger regardless of per-entry max.
 MAX_SIZE_GB=256
 
@@ -62,6 +73,41 @@ load_whitelist() {
     done < "$CONFIG_FILE"
 }
 
+# Serials of drives that must never be flashed again, one per line, with an
+# optional "# reason" shown when one is skipped. A drive that fails readback
+# verification is often dying rather than mis-flashed: without this it stays
+# whitelisted by its model rule and eats a full write+verify cycle on every
+# subsequent run before failing again.
+denylist_path() { echo "$PROJECT_DIR/.flash-denylist.conf"; }
+
+declare -A DENIED_SERIALS
+DENYLIST_LOADED=false
+load_denylist() {
+    [[ "$DENYLIST_LOADED" == true ]] && return 0
+    DENYLIST_LOADED=true
+    local file line serial reason
+    file="$(denylist_path)"
+    [[ -f "$file" ]] || return 0
+    while IFS= read -r line; do
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        serial="$(echo "${line%%#*}" | xargs)"
+        [[ -z "$serial" ]] && continue
+        reason="$(echo "${line#*#}" | xargs)"
+        [[ "$reason" == "$serial" ]] && reason=""
+        DENIED_SERIALS["$serial"]="${reason:-known bad drive}"
+    done < "$file"
+}
+
+# True when a serial is denied, with the reason left in DENY_REASON. Callers
+# must not wrap this in $(): the cache would then load in a subshell and be
+# thrown away, re-reading the file once per drive.
+DENY_REASON=""
+is_denied() {
+    load_denylist
+    DENY_REASON="${DENIED_SERIALS[$1]:-}"
+    [[ -n "$DENY_REASON" ]]
+}
+
 # Populate FOUND_DRIVES with "dev|size|model|serial" entries for every
 # plugged-in USB drive that matches a whitelist rule.
 find_whitelisted_drives() {
@@ -71,6 +117,10 @@ find_whitelisted_drives() {
         [[ "$TRAN" != "usb" ]] && continue
         [[ -z "$SERIAL" ]] && continue
         local vendor size_gb
+        if is_denied "$SERIAL"; then
+            echo "[WARN] Skipping /dev/$NAME (serial $SERIAL): $DENY_REASON" >&2
+            continue
+        fi
         vendor=$(echo "$VENDOR" | xargs)
         size_gb=$(parse_size_to_gb "$SIZE")
         for rule in "${WHITELIST[@]}"; do
@@ -96,6 +146,7 @@ find_candidate_drives() {
         eval "$line"
         [[ "$TRAN" != "usb" ]] && continue
         [[ "$TYPE" != "disk" ]] && continue
+        if is_denied "$SERIAL"; then continue; fi
         [[ -z "$SIZE" || "$SIZE" -eq 0 ]] && continue
         [[ "$SIZE" -gt "$MAX_UNLISTED_BYTES" ]] && continue
         local mounted="" human

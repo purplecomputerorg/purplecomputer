@@ -292,6 +292,10 @@ flash-debug *args:
 flash-clean:
     ./build-scripts/flash-clean.sh
 
+# Test whether a suspect drive is dying: just check-drive [--read-only] [--deny] /dev/sdX
+check-drive *args:
+    ./build-scripts/check-drive.sh {{args}}
+
 # Flash ISO to ALL whitelisted USB drives in parallel
 flash-all *args:
     ./build-scripts/flash-all.sh {{args}}

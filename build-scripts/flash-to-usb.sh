@@ -10,17 +10,6 @@ source "$SCRIPT_DIR/config.sh"
 source "$SCRIPT_DIR/flash-lib.sh"
 CONFIG_FILE="$PROJECT_DIR/.flash-drives.conf"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-
 usage() {
     echo "Usage: $0 [options] [iso-path]"
     echo ""
@@ -132,6 +121,11 @@ select_drive() {
                 return
             fi
         done
+        if is_denied "$(lsblk -dno SERIAL "$FORCE_DEVICE" 2>/dev/null | xargs)"; then
+            log_error "$FORCE_DEVICE is on the denylist: $DENY_REASON"
+            log_error "Check it with 'just check-drive $FORCE_DEVICE', or remove its serial from $(denylist_path) to override."
+            exit 1
+        fi
         log_error "$FORCE_DEVICE is not a whitelisted USB drive."
         exit 1
     fi

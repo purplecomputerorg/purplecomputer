@@ -12,7 +12,6 @@ import array
 import hashlib
 import re
 import shutil
-import sys
 import tempfile
 import threading
 import time
@@ -22,11 +21,6 @@ import os
 
 # Suppress pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-# Suppress ONNX Runtime warnings (e.g., "Unknown CPU vendor" in VMs)
-os.environ['ORT_LOGGING_LEVEL'] = '3'
-# Also suppress TensorFlow/transformers warnings if they leak through
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-from contextlib import contextmanager
 
 # Lazy: pygame.mixer drags in numpy (~120ms) and mixer.init() can block
 # forever in C on broken audio hardware. Actual init happens via
@@ -34,20 +28,6 @@ from contextlib import contextmanager
 # reuses whatever pygame module that call populated.
 pygame = None  # populated by _ensure_mixer() after warm_mixer() succeeds
 
-
-@contextmanager
-def _suppress_stderr():
-    """Temporarily redirect stderr to suppress ONNX runtime warnings."""
-    old_stderr = sys.stderr
-    try:
-        sys.stderr = open(os.devnull, 'w')
-        yield
-    finally:
-        try:
-            sys.stderr.close()
-        except Exception:
-            pass
-        sys.stderr = old_stderr
 
 # TEMP diagnostic logging for the silent-speech bug; remove once captured
 _DEBUG_LOG = "/tmp/purple-tts-debug.log"
@@ -408,26 +388,13 @@ def _get_piper_voice():
     if _piper_voice is not None:
         return _piper_voice
 
-    # In demo mode, skip piper entirely to avoid ONNX runtime warnings
-    # Demo should use only pre-generated voice clips
+    # The scripted demo plays only pre-generated clips, so never pay the load
     if os.environ.get("PURPLE_DEMO_AUTOSTART"):
         _piper_available = False
         return None
 
     try:
-        # Suppress stderr during piper import (loads ONNX runtime)
-        # This catches the "Unknown CPU vendor" warning from onnxruntime C code
-        import sys
-        old_stderr = sys.stderr
-        sys.stderr = open(os.devnull, 'w')
-        try:
-            from piper import PiperVoice
-        finally:
-            try:
-                sys.stderr.close()
-            except Exception:
-                pass
-            sys.stderr = old_stderr
+        from piper import PiperVoice
 
         # Check for voice model in various locations
         model_path = None
@@ -441,9 +408,7 @@ def _get_piper_voice():
             _piper_available = False
             return None
 
-        # Suppress stderr during model loading (ONNX session creation)
-        with _suppress_stderr():
-            _piper_voice = PiperVoice.load(str(model_path))
+        _piper_voice = PiperVoice.load(str(model_path))
         _piper_available = True
         return _piper_voice
 
@@ -496,8 +461,7 @@ def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     config = _make_synth_config()
 
     with _synthesis_lock:
-        with _suppress_stderr():
-            audio_chunks = list(voice.synthesize(prepared_text, config))
+        audio_chunks = list(voice.synthesize(prepared_text, config))
 
     if not audio_chunks:
         return False

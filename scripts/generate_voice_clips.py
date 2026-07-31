@@ -17,6 +17,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # Voice model configuration (same as tts.py)
 VOICE_MODEL = "en_US-libritts-high"
@@ -68,8 +69,9 @@ def find_voice_model() -> Path | None:
 
 
 def phrase_to_filename(phrase: str) -> str:
-    """Convert a phrase to a safe filename."""
-    return phrase.replace(" ", "_") + ".wav"
+    """Convert a phrase to the filename the app looks the clip up under."""
+    from purple_tui.tts import voice_clip_filename
+    return voice_clip_filename(phrase)
 
 
 def _fix_pronunciation(text: str) -> str:
@@ -273,8 +275,6 @@ def _stub_ui_modules():
 
 def _collect_all_actions() -> list:
     """Collect all demo actions from composition segments and fallback script."""
-    sys.path.insert(0, str(PROJECT_ROOT))
-
     import importlib
     import json
 
@@ -302,15 +302,17 @@ def _collect_all_actions() -> list:
 def extract_demo_phrases() -> list[str]:
     """Extract speakable phrases from demo segments and default script.
 
-    Mirrors the Play room's speech triggers: a "!" anywhere, or a
-    say/talk/speak prefix. Demo mode disables live TTS, so every spoken
-    line needs a matching pre-generated clip or it records silent.
+    Uses the Play room's own speech-trigger and speakable logic, so a
+    `repeat N ...` line yields the per-item phrases the room looks up.
+    Demo mode disables live TTS, so every spoken line needs a matching
+    pre-generated clip or it records silent.
     """
-    sys.path.insert(0, str(PROJECT_ROOT))
     _stub_ui_modules()
 
     from purple_tui.demo.script import TypeText
-    from purple_tui.rooms.play_room import SimpleEvaluator
+    from purple_tui.rooms.play_room import (
+        SimpleEvaluator, parse_speech_trigger, speakables_for,
+    )
 
     evaluator = SimpleEvaluator()
     phrases = []
@@ -319,30 +321,14 @@ def extract_demo_phrases() -> list[str]:
         if not isinstance(action, TypeText):
             continue
 
-        eval_text = action.text
-
-        speaks = "!" in eval_text
-        eval_text = eval_text.replace("!", "")
-        words = eval_text.split(None, 1)
-        if words and words[0].lower() in SimpleEvaluator.SPEAK_PREFIXES:
-            speaks = True
-            eval_text = words[1] if len(words) > 1 else ""
-
-        if not speaks:
-            continue
-        eval_text = eval_text.strip()
-        if not eval_text:
+        speaks, eval_text = parse_speech_trigger(action.text)
+        if not speaks or not eval_text:
             continue
 
-        # Evaluate to get the result
-        result = evaluator.evaluate(eval_text)
-
-        # Convert to speakable text
-        speakable = evaluator._make_speakable(eval_text, result)
-
-        if speakable and speakable not in phrases:
-            phrases.append(speakable)
-            print(f"  Found: '{eval_text}' -> '{speakable}'")
+        for speakable in speakables_for(evaluator, eval_text):
+            if speakable not in phrases:
+                phrases.append(speakable)
+                print(f"  Found: '{eval_text}' -> '{speakable}'")
 
     return phrases
 

@@ -101,6 +101,56 @@ BLOCK_CHARS = "[]\\"
 SPEAK_REPEAT_CAP = 5
 
 
+def parse_speech_trigger(text: str) -> tuple[bool, str]:
+    """Split a submitted line into (speaks aloud?, text to evaluate).
+
+    Speech triggers: "!" anywhere, or a say/talk/speak prefix (fuzzy, so
+    "sayy hi" still talks). Both markers are stripped from the returned text.
+    """
+    from ..fuzzy import fuzzy_match_small
+
+    eval_text = SimpleEvaluator.split_alnum_runs(text)
+    force_speak = '!' in eval_text
+    eval_text = eval_text.replace('!', '')
+    words = eval_text.split(None, 1)
+    if words:
+        prefix = words[0].lower()
+        prefixes = list(SimpleEvaluator.SPEAK_PREFIXES)
+        if prefix in prefixes or (len(prefix) >= 3
+                                  and fuzzy_match_small(prefix, prefixes, cutoff=0.7)):
+            force_speak = True
+            eval_text = words[1] if len(words) > 1 else ""
+    return force_speak, eval_text.strip()
+
+
+def pair_speakables(evaluator, pairs: list[tuple[str, str, bool]]) -> list[tuple[int, str]]:
+    """(index, speakable) for each repeat result that speaks, up to the cap."""
+    out = []
+    for i, (text, result, computed) in enumerate(pairs):
+        if len(out) >= SPEAK_REPEAT_CAP:
+            break
+        speakable = evaluator._make_speakable(text, result, computed)
+        if speakable:
+            out.append((i, speakable))
+    return out
+
+
+def speakables_for(evaluator, eval_text: str) -> list[str]:
+    """Every phrase a submitted line speaks: one per item for `repeat N ...`.
+
+    Demo recordings need these names to pre-generate voice clips, so this
+    has to match what the room actually looks up at speech time.
+    """
+    from ..code_runner import PlayCodeRunner, is_repeat_line
+
+    if is_repeat_line(eval_text):
+        runner = PlayCodeRunner(evaluator)
+        runner.run([eval_text])
+        return [s for _, s in pair_speakables(evaluator, runner.pairs)]
+    speakable = evaluator._make_speakable(eval_text, evaluator.evaluate(eval_text))
+    return [speakable] if speakable else []
+
+
 def _pad_narrow_emoji(text: str) -> str:
     """Always add a space after narrow+FE0F emoji to compensate for terminal width.
 
@@ -886,43 +936,16 @@ class PlayMode(Vertical):
         input_text = event.value
         scroll = self.query_one("#history-scroll")
 
-        # Check for speech triggers:
-        # 1. "!" anywhere in text (strip it)
-        # 2. "say" or "talk" prefix (strip it)
-        force_speak = False
-        eval_text = SimpleEvaluator.split_alnum_runs(input_text)
-
-        # Check for ! anywhere
-        if '!' in eval_text:
-            force_speak = True
-            eval_text = eval_text.replace('!', '')
-
-        # Check for speak prefix (e.g., "say", "talk", "speak") with fuzzy
-        words = eval_text.split(None, 1)
-        if words:
-            prefix = words[0].lower()
-            if prefix in SimpleEvaluator.SPEAK_PREFIXES:
-                force_speak = True
-                eval_text = words[1] if len(words) > 1 else ""
-            elif len(prefix) >= 3:
-                from ..fuzzy import fuzzy_match_small
-                if fuzzy_match_small(prefix, list(SimpleEvaluator.SPEAK_PREFIXES), cutoff=0.7):
-                    force_speak = True
-                    eval_text = words[1] if len(words) > 1 else ""
-
-        # Clean up whitespace after stripping
-        eval_text = eval_text.strip()
+        force_speak, eval_text = parse_speech_trigger(input_text)
 
         # Add the "Ask →" line to history (without speech markers)
         if eval_text:
             scroll.mount(HistoryLine(eval_text, line_type="ask"))
 
         # Repeat commands: use PlayCodeRunner (parse_lines fixes fuzzy "repeet" → "repeat")
-        from ..code_runner import PlayCodeRunner, parse_lines
+        from ..code_runner import PlayCodeRunner, is_repeat_line
         runner = PlayCodeRunner(self.evaluator)
-        cmds = parse_lines([eval_text])
-        is_repeat = any(c['type'] == 'repeat' for c in cmds)
-        if is_repeat:
+        if is_repeat_line(eval_text):
             results = runner.run([eval_text])
             for result in results:
                 self._display_result(scroll, result, force_speak)
@@ -1019,11 +1042,11 @@ class PlayMode(Vertical):
         from ..tts import speak_many
 
         widgets = list(scroll.children)[-len(pairs):]
+        spoken = dict(pair_speakables(self.evaluator, pairs))
         items = []
-        for (text, result, computed), widget in zip(pairs, widgets):
-            speakable = self.evaluator._make_speakable(text, result, computed)
-            if speakable and len(items) < SPEAK_REPEAT_CAP:
-                items.append((speakable, widget))
+        for i, widget in enumerate(widgets):
+            if i in spoken:
+                items.append((spoken[i], widget))
             else:
                 self._set_speech_state(widget, HistoryLine.SPEECH_NONE)
         if not items:

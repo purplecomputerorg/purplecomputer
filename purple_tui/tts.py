@@ -340,10 +340,18 @@ def clear_cache() -> int:
 VOICE_CLIPS_DIR = Path(__file__).parent.parent / "packs" / "core-sounds" / "content" / "voice"
 
 
+def voice_clip_filename(text: str) -> str:
+    """Filename a phrase's pre-generated clip lives under.
+
+    scripts/generate_voice_clips.py writes clips under this name, so the two
+    must agree or the clip is generated and never found.
+    """
+    return text.strip().lower().replace(" ", "_") + ".wav"
+
+
 def _get_voice_clip(text: str) -> Path | None:
     """Check if a pre-generated voice clip exists for this text."""
-    # Convert text to filename (spaces to underscores)
-    filename = text.strip().lower().replace(" ", "_") + ".wav"
+    filename = voice_clip_filename(text)
     # Clips are short curated phrases; a longer name would also make
     # Path.exists() raise ENAMETOOLONG (filesystem cap is 255 bytes)
     if len(filename.encode()) > 255:

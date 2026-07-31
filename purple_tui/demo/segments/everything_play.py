@@ -42,5 +42,6 @@ SEGMENT = [
     *type_and_enter("5 apples ...", 2.2),
 
     Comment("=== Odds and ends ==="),
-    *type_and_enter("repeat 3: i love pizza!", 4),
+    # Speaks each copy in turn: ~0.9s of audio plus a 0.5s gap, three times over.
+    *type_and_enter("repeat 3: i love pizza!", 5.5),
 ]

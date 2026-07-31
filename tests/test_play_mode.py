@@ -18,7 +18,9 @@ try:
 except ImportError:
     HAS_PYTEST = False
 
-from purple_tui.rooms.play_room import SimpleEvaluator, _pad_narrow_emoji
+from purple_tui.rooms.play_room import (
+    SimpleEvaluator, _pad_narrow_emoji, parse_speech_trigger,
+)
 
 
 def strip_markup(text: str) -> str:
@@ -1400,6 +1402,24 @@ class TestColorNumberAttachment:
         result = evaluator.evaluate("2 + red + 3 cats")
         assert "[on " in result  # color swatch markup
         assert "🐱🐱🐱" in result  # 3 cats
+
+
+class TestSpeechTrigger:
+    """Test parse_speech_trigger: what makes a line talk, and what it says."""
+
+    def test_bang_anywhere_speaks_and_is_stripped(self):
+        assert parse_speech_trigger("blue :)!") == (True, "blue :)")
+        assert parse_speech_trigger("hi! there") == (True, "hi there")
+
+    def test_say_prefix_speaks_and_is_stripped(self):
+        assert parse_speech_trigger("say I love icecream") == (True, "I love icecream")
+
+    def test_misspelled_prefix_still_speaks(self):
+        assert parse_speech_trigger("sayy hello") == (True, "hello")
+        assert parse_speech_trigger("tak hello") == (True, "hello")
+
+    def test_plain_line_is_silent(self):
+        assert parse_speech_trigger("2 + 3") == (False, "2 + 3")
 
 
 class TestSpeakable:

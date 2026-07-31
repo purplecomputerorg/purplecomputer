@@ -165,6 +165,11 @@ def parse_lines(lines: list[str], split_commands: bool = True,
     return result
 
 
+def is_repeat_line(text: str) -> bool:
+    """True when a submitted line is a `repeat N ...` loop."""
+    return any(c['type'] == 'repeat' for c in parse_lines([text]))
+
+
 def flatten_commands(cmds: list[dict]) -> list[dict]:
     """Expand repeat blocks into flat command lists."""
     result = []

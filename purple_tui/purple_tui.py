@@ -25,11 +25,8 @@ Keyboard controls:
 from . import boot_log
 boot_log.heartbeat("purple_tui entry: beginning stdlib imports")
 
-# Suppress ONNX runtime warnings early (before any imports that might load it)
 import os
 from pathlib import Path
-os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
-os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 import asyncio
 import time
@@ -3344,10 +3341,6 @@ def main():
     signal.signal(signal.SIGTERM, lambda s, f: (restore_terminal(), sys.exit(0)))
     signal.signal(signal.SIGINT, lambda s, f: (restore_terminal(), sys.exit(0)))
 
-    # Note: We intentionally do NOT filter stderr here.
-    # Textual renders to stderr, so any pipe redirection causes UI lag.
-    # ALSA noise should be silenced at the source (see tts.py for handlers).
-
     # Auto-size Alacritty font to fit the required terminal grid.
     # Measures actual terminal dimensions and adjusts empirically.
     # Shows "Loading..." if adjustment is needed (usually <1 second).
@@ -3364,6 +3357,12 @@ def main():
         # Friendly error for configuration issues
         print(f"\n  Purple Computer cannot start:\n  {e}\n", file=sys.stderr)
         sys.exit(1)
+
+    # Last thing before the UI starts: startup errors above still reach the
+    # terminal, and every native stderr write from here on lands in the log
+    # instead of on top of Textual's screen.
+    from .stderr_guard import hide_native_stderr
+    hide_native_stderr()
 
     app.run(mouse=False)  # Purple Computer is keyboard-only
 

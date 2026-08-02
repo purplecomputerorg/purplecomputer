@@ -111,6 +111,48 @@ class TestRoomTimeline:
 
 
 # ---------------------------------------------------------------------------
+# Time Travel bar dot track
+# ---------------------------------------------------------------------------
+
+from purple_tui import time_travel as time_travel_mod
+from purple_tui.time_travel import TimeTravelBar
+
+
+class TestTimeTravelDots:
+    def _markup(self, index, total):
+        bar = TimeTravelBar()
+        bar.set_position(index, total)  # unmounted: must not raise
+        return bar._dots_markup()
+
+    def test_short_history_is_one_dot_per_step(self):
+        markup = self._markup(2, 3)
+        assert markup.count("●") == 3
+        assert "○" not in markup
+        assert "⋯" not in markup
+        assert "forward" in markup and "back in time" in markup
+
+    def test_each_step_back_clears_exactly_one_dot(self):
+        total = time_travel_mod.MAX_DOTS * 4
+        for presses in range(1, 4):
+            markup = self._markup(total - 1 - presses, total)
+            assert markup.count("○") == presses
+
+    def test_long_history_shows_more_marker(self):
+        markup = self._markup(99, 100)
+        assert markup.count("●") == time_travel_mod.MAX_DOTS
+        assert "⋯" in markup
+
+    def test_window_slides_when_scrubbed_past_left_edge(self):
+        markup = self._markup(10, 100)
+        assert markup.count("●") == 1
+        assert markup.count("⋯") == 2  # more steps on both sides
+
+    def test_endpoints_are_dimmed(self):
+        assert "[dim]◀ back in time[/]" in self._markup(0, 5)
+        assert "[dim]forward ▶[/]" in self._markup(4, 5)
+
+
+# ---------------------------------------------------------------------------
 # Room adapters + scrubbing (app harness)
 # ---------------------------------------------------------------------------
 

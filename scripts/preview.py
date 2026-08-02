@@ -34,6 +34,7 @@ Actions (processed left to right):
                      escape, backspace, delete, or a single character)
     wait:SECONDS     Pause for N seconds (e.g. wait:0.5)
     clear            Clear the art canvas
+    time_travel      Open the Time Travel scrubber in the current room
 
 Output: path to the PNG (or SVG if PNG conversion unavailable).
 """
@@ -121,6 +122,10 @@ async def run_action(app, action_str: str) -> None:
     elif action_str == "clear_room":
         from purple_tui.room_picker import ConfirmFreshScreen
         app.push_screen(ConfirmFreshScreen(app.active_room.name.lower()))
+        await asyncio.sleep(0.3)
+
+    elif action_str == "time_travel":
+        app._start_time_travel()
         await asyncio.sleep(0.3)
 
     elif action_str == "help_videos":

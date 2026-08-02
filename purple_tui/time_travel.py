@@ -10,7 +10,7 @@ from textual.widgets import Static
 
 from .constants import ICON_TIME_TRAVEL
 
-MAX_DOTS = 24  # dot track length; longer histories map onto it proportionally
+MAX_DOTS = 24  # dots shown 1:1 for the newest steps; ⋯ marks more beyond
 
 
 class TimeTravelBar(Vertical):
@@ -48,29 +48,37 @@ class TimeTravelBar(Vertical):
         self._total = 0
 
     def compose(self):
+        # Initial content comes from values stored by set_position() before
+        # mounting completes, so the bar never flashes blank.
         yield Static(f"[bold]{ICON_TIME_TRAVEL} Time Travel[/]", id="tt-head")
-        yield Static("", id="tt-dots")
-        yield Static("", id="tt-action")
-
-    def on_mount(self) -> None:
-        self._render_lines()
+        yield Static(self._dots_markup(), id="tt-dots")
+        yield Static("Enter: keep this    Esc: put it back", id="tt-action")
 
     def set_position(self, index: int, total: int) -> None:
-        """Show step `index` (0-based) of `total` as a filled-dots track."""
+        """Show step `index` (0-based) of `total` on the dot track."""
         self._index = index
         self._total = total
-        self._render_lines()
+        try:
+            self.query_one("#tt-dots", Static).update(self._dots_markup())
+        except Exception:
+            pass  # not composed yet; compose() will use the stored values
 
-    def _render_lines(self) -> None:
-        if not self.is_mounted:
-            return
+    def _dots_markup(self) -> str:
+        """One dot per step over a window of the newest MAX_DOTS steps, so each
+        arrow press moves exactly one dot. A dim ⋯ says more steps lie beyond."""
         index, total = self._index, self._total
-        dots = min(total, MAX_DOTS)
-        filled = max(1, round((index + 1) / total * dots)) if total else 0
-        track = ("● " * filled + "○ " * (dots - filled)).rstrip()
-        left = "[dim]◀[/]" if index <= 0 else "◀"
-        right = "[dim]▶[/]" if index >= total - 1 else "▶"
-        self.query_one("#tt-dots", Static).update(f"{left}   {track}   {right}")
-        self.query_one("#tt-action", Static).update(
-            "◀ ▶ go back and forth    Enter: keep this    Esc: put it back"
-        )
+        count = min(total, MAX_DOTS)
+        start = min(max(0, total - count), index)
+        filled = index - start + 1 if total else 0
+        track = ("● " * filled + "○ " * (count - filled)).rstrip()
+        if start > 0:
+            track = f"[dim]⋯[/] {track}"
+        if start + count < total:
+            track = f"{track} [dim]⋯[/]"
+        left = "◀ back in time"
+        right = "forward ▶"
+        if index <= 0:
+            left = f"[dim]{left}[/]"
+        if index >= total - 1:
+            right = f"[dim]{right}[/]"
+        return f"{left}   {track}   {right}"

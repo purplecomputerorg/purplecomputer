@@ -1,7 +1,7 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Room +
+Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear +
 Time Travel side by side. Arrow keys navigate, number keys 1-3 for direct
 room selection, V opens volume, C clears a room, T starts Time Travel,
 Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
@@ -50,7 +50,7 @@ class RoomOption(Static):
 
     DEFAULT_CSS = """
     RoomOption {
-        width: 16;
+        width: 20;
         height: 8;
         content-align: center middle;
         text-align: center;
@@ -84,7 +84,7 @@ class ExtraOption(Static):
 
     DEFAULT_CSS = """
     ExtraOption {
-        width: 25;
+        width: 20;
         height: 6;
         content-align: center middle;
         text-align: center;
@@ -150,8 +150,8 @@ class RoomPickerScreen(PurpleModal):
     Modal screen for selecting rooms with arrow key navigation.
 
     Layout (2 navigable rows):
-      [1 Play]  [2 Music]  [3 Art]                        <- room row
-      [Volume  V]  [Clear Room  C]  [Time Travel  T]      <- extras row
+      [1 Play]  [2 Music]  [3 Art]                   <- room row
+      [Volume  V]  [Clear  C]  [Time Travel  T]      <- extras row
     """
 
     CSS = """
@@ -241,7 +241,7 @@ class RoomPickerScreen(PurpleModal):
                     yield ExtraOption(icon, label, "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
-                yield ExtraOption(ICON_BROOM, "Clear Room", "C", id="opt-clear-rooms")
+                yield ExtraOption(ICON_BROOM, "Clear", "C", id="opt-clear-rooms")
                 yield ExtraOption(ICON_TIME_TRAVEL, "Time Travel", "T", id="opt-time-travel")
 
             if self._show_code_row:

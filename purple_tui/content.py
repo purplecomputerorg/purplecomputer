@@ -63,6 +63,29 @@ def pluralize(word: str) -> str:
     return singular_to_plural.get(lower, lower + "s")
 
 
+# Arithmetic word → symbol. Division words only read as operators between
+# digits ("6 over 2"), never in prose ("game over").
+OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
+DIGIT_OPERATOR_WORDS = {**OPERATOR_WORDS, 'divide': '/', 'divided': '/', 'over': '/'}
+
+
+@cache
+def _no_correct_words() -> frozenset[str]:
+    """Words the typo fallback must leave alone, plurals included: see
+    common_words.txt. Plurals come from pluralize() rather than a bare "+s" so
+    "womans" stays a typo of "woman" while "things" is a real word. Operator
+    words are not pluralized: "timess" is a typo of "times", not a word."""
+    path = Path(__file__).parent / "common_words.txt"
+    lines = (line.strip().lower() for line in path.read_text().splitlines())
+    words = {w for w in lines if w and not w.startswith("#")}
+    return frozenset(words | {pluralize(w) for w in words} | set(DIGIT_OPERATOR_WORDS))
+
+
+def is_real_word(word: str) -> bool:
+    """Whether a word is everyday English rather than a possible typo."""
+    return word.lower().strip() in _no_correct_words()
+
+
 class ContentManager:
     """
     Manages loading and accessing content from purplepacks.
@@ -319,7 +342,9 @@ class ContentManager:
         """
         from .fuzzy import fuzzy_match, DEFAULT_MIN_LEN
         word = word.lower().strip()
-        if len(word) < DEFAULT_MIN_LEN:
+        # A word that is content itself still resolves; only typo corrections
+        # of everyday words are suppressed ("thank" must not become 🤔 think).
+        if len(word) < DEFAULT_MIN_LEN or (word not in forms and is_real_word(word)):
             return None
         if word not in cache:
             if len(cache) > 2048:

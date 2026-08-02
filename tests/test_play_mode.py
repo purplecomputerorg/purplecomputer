@@ -188,6 +188,14 @@ if HAS_PYTEST:
             result = evaluator.evaluate("3x4")
             assert result.startswith("= 12\n") and result.count("●") == 12  # 4 groups of 3 dots
 
+        def test_operator_words_never_fuzzy_match_content(self, evaluator):
+            # "times" used to fuzzy-correct to "ties" 👔, so "10 dinos times 10"
+            # drew a necktie instead of multiplying
+            for word in ("times", "plus", "minus", "divide", "divided", "over"):
+                assert evaluator.content.get_emoji(word) is None
+                assert evaluator.content.get_color(word) is None
+            assert evaluator.evaluate("ties") == "👔👔"  # real word still works
+
 
     class TestUnicodeOperators:
         """Test Unicode display operators (× and ÷)"""
@@ -309,6 +317,35 @@ if HAS_PYTEST:
             result = evaluator.evaluate("2 times 5 cats")
             assert result.startswith("= 10 🐱\n")
             assert result.count("🐱") == 10 + 1  # 10 in viz + 1 in label
+
+        def test_n_word_x_m(self, evaluator):
+            # Count on both sides of the noun: same answer as "2 x 3 cats"
+            result = evaluator.evaluate("3 cats x 2")
+            assert result.startswith("= 6 🐱\n")
+            assert result.count("🐱") == 6 + 1
+            assert "   " in result  # grouped 3 + 3
+
+        def test_n_word_times_m(self, evaluator):
+            result = evaluator.evaluate("3 cats times 2")
+            assert result.startswith("= 6 🐱\n")
+            assert result.count("🐱") == 6 + 1
+
+        @pytest.mark.parametrize("text", [
+            "6 cats / 2", "6 cats divided by 2", "6 cats over 2",
+            "5 cats - 2", "5 cats minus 2",
+        ])
+        def test_noun_between_a_count_and_its_operator(self, evaluator, text):
+            # "6 / 2 cats" always worked; the noun in the middle used to leave
+            # the operator sitting there as letters
+            result = evaluator.evaluate(text)
+            assert result.startswith("= 3 🐱\n")
+            assert result.count("🐱") == 3 + 1
+
+        def test_noun_between_counts_needs_the_whole_tail(self, evaluator):
+            # Two nouns is a composition, not one count expression
+            assert "🐶" in evaluator.evaluate("3 dogs x 2 cats")
+            assert "🐱" in evaluator.evaluate("3 dogs x 2 cats")
+            assert evaluator.evaluate("2 tigers 3").startswith("🐯🐯")
 
 
     class TestEmojiDescription:
@@ -848,6 +885,12 @@ class TestColorMixing:
         parts = result.split(":")
         components = parts[3].split(",")
         assert len(components) == 4  # 3 yellow + 1 red
+
+    @pytest.mark.parametrize("text", ["3 red x 2", "3 x 2 red", "12 red / 2", "8 red - 2"])
+    def test_color_takes_a_whole_count_expression(self, evaluator, text):
+        # "3 red x 2" used to answer with a stray "x" and the wrong number of
+        # swatches; a count expression now works the way it does for a noun
+        assert evaluator.evaluate(text).count("[on ") == 6
 
     def test_color_plural_with_number(self, evaluator):
         # "3 yellows + red" should work like "3 yellow + red"

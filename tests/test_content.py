@@ -120,10 +120,15 @@ class TestFuzzyEmoji:
         assert content._last_correction == ("doggiess", "doggies")
 
     def test_singular_wins_tie_over_plural(self, content):
-        """A typo equidistant from 'bear' and 'bears' must correct to the singular."""
-        content._last_correction = None
-        content.get_emoji("beart")
-        assert content._last_correction == ("beart", "bear")
+        """A plural form resolves back to its singular key, so a typo corrected
+        through the plural is reported against the singular's emoji."""
+        assert content._emoji_forms["bears"] == "bear"
+        assert content.get_emoji("bearss") == content.get_emoji("bear")
+
+    def test_letter_typed_onto_the_end_is_a_different_word(self, content):
+        """"beart" used to become a bear: one more keypress usually makes another
+        word ("star" -> "start"), unlike stopping a letter short."""
+        assert content.get_emoji("beart") is None
 
     def test_correction_tracked(self, content):
         content._last_correction = None
@@ -200,6 +205,32 @@ class TestResolve:
     def test_real_word_not_coerced_to_short_color(self, content):
         # "tell" must not become color "teal"; bare short fuzzy is off by design.
         assert content.resolve("tell").kind is None
+
+    @pytest.mark.parametrize("word", [
+        "would", "while", "thing", "things", "thank", "sleep", "start", "check",
+        "money", "point", "share", "noise", "heard", "times", "words", "print",
+        "trick", "songs", "skill", "sheet", "miles", "block",
+    ])
+    def test_everyday_words_are_never_corrected_into_pictures(self, content, word):
+        # "sleep" drew 🐑, "start" drew ⭐, "words" drew 🪱, "times" drew 👔
+        assert content.resolve(word).kind is None
+
+    @pytest.mark.parametrize("typo,emoji", [
+        ("dinno", "🦕"), ("doggiess", "🐶"), ("chocolat", "🍫"), ("unicron", "🦄"),
+    ])
+    def test_real_typos_are_still_corrected(self, content, typo, emoji):
+        assert content.resolve(typo).value == emoji
+
+    def test_operator_word_typos_are_not_protected(self, content):
+        # "timess"/"pluss" are slips, not words: the math path still fixes them
+        from purple_tui.content import is_real_word
+        assert not any(is_real_word(w) for w in ("timess", "pluss", "minuss"))
+
+    def test_a_real_word_that_is_content_still_draws(self, content):
+        # Protection only switches off the typo fallback, never an exact match
+        for word in ("woman", "heart", "school", "children"):
+            assert content.resolve(word).kind == "emoji"
+        assert content.resolve("womans").kind == "emoji"  # still a typo of "woman"
 
     def test_unresolved(self, content):
         assert content.resolve("zxqw").kind is None

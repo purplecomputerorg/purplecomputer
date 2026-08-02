@@ -683,5 +683,59 @@ class TestKeyboardValidation:
         assert not letter_keys.issubset(small)
 
 
+class TestSilentKeyboardDiagnostics:
+    """A silent keyboard leaves no trace unless the scan records one."""
+
+    def test_virtual_only_scan_is_flagged(self):
+        """keyd's uinput device passes every keyboard check, so a machine with
+        no physical keyboard still scans clean."""
+        reader = EvdevReader(callback=AsyncCallback())
+        logged = []
+        with patch.object(reader, '_diag', lambda msg: logged.append(msg)):
+            reader._warn_if_virtual_only(
+                [FakeInputDevice("/dev/input/event0", "keyd virtual keyboard")]
+            )
+            assert any("no physical keyboard" in m for m in logged)
+
+            logged.clear()
+            reader._logged_scan_lines.clear()
+            reader._warn_if_virtual_only([
+                FakeInputDevice("/dev/input/event0", "keyd virtual keyboard"),
+                FakeInputDevice("/dev/input/event1", "AT Translated Set 2 keyboard"),
+            ])
+            assert logged == []
+
+    def test_failed_grab_reaches_the_diag_log(self):
+        """A device another process holds stays open and silent forever, so the
+        failure has to land in the log the silent-keyboard reports come from."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            kbd.grab()  # another process got there first
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=True)
+            logged = []
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
+                 patch.object(reader, '_diag', lambda msg: logged.append(msg)):
+                await reader.start()
+                await reader.stop()
+
+            assert any("KBD GRAB" in m and "FAILED" in m for m in logged)
+
+        _run(_test())
+
+    def test_repeated_scans_do_not_repeat_the_inventory(self):
+        """_reconnect rescans once a second; the log has to stay readable."""
+        reader = EvdevReader(callback=AsyncCallback())
+        logged = []
+        with patch.object(reader, '_diag', lambda msg: logged.append(msg)):
+            for _ in range(5):
+                reader._diag_once("KBD SCAN: listening on 1 keyboard device(s)")
+            assert len(logged) == 1
+
+            reader._logged_scan_lines.clear()  # a new episode starts
+            reader._diag_once("KBD SCAN: listening on 1 keyboard device(s)")
+            assert len(logged) == 2
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

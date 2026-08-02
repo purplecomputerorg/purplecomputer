@@ -280,6 +280,7 @@ class EvdevReader:
         self._pending_scancodes: dict = {}  # Per-device pending scancodes
         self._tasks: list[asyncio.Task] = []
         self._logged_keycodes: set = set()  # Keycodes logged to diag (first-occurrence)
+        self._logged_scan_lines: set = set()  # Scan diag lines already written
         self._got_first_event = False
         self._watchdog_task: Optional[asyncio.Task] = None
 
@@ -307,6 +308,27 @@ class EvdevReader:
                 pass
         logger.info(msg)
 
+    def _diag_once(self, msg: str) -> None:
+        """Log a scan line the first time only. A reconnect rescans once a
+        second and would otherwise flood the log; `_logged_scan_lines` is
+        cleared when a new episode starts, so the log keeps one device
+        inventory per real event rather than one per scan."""
+        if msg in self._logged_scan_lines:
+            return
+        self._logged_scan_lines.add(msg)
+        self._diag(msg)
+
+    def _grab_device(self, dev) -> None:
+        """Grab exclusively. A failed grab is not cosmetic: another process
+        (keyd) holds the device, so our fd stays open and silent forever."""
+        if not self._grab:
+            return
+        try:
+            dev.grab()
+            self._diag_once(f"KBD GRAB: {dev.path} ok")
+        except (IOError, OSError) as e:
+            self._diag_once(f"KBD GRAB: {dev.path} FAILED ({e}), grabbed elsewhere, will be silent")
+
     async def start(self) -> None:
         """Start reading keyboard events in background."""
         from evdev import InputDevice
@@ -330,14 +352,8 @@ class EvdevReader:
         for dev in self._devices:
             self._diag(f"EvdevReader: using {dev.path} ({dev.name})")
 
-        # Grab devices if requested
-        if self._grab:
-            for dev in self._devices:
-                try:
-                    dev.grab()
-                    logger.info(f"EvdevReader: grabbed {dev.path} exclusively")
-                except IOError as e:
-                    logger.warning(f"EvdevReader: could not grab {dev.path}: {e}")
+        for dev in self._devices:
+            self._grab_device(dev)
 
         self._running = True
         for dev in self._devices:
@@ -430,24 +446,22 @@ class EvdevReader:
         """
         import select
 
-        if self._grab:
-            for dev in self._devices:
-                try:
-                    # Flush any pending events before reacquiring grab
-                    try:
-                        flush_deadline = time.monotonic() + 1.0
-                        while time.monotonic() < flush_deadline:
-                            readable, _, _ = select.select([dev.fd], [], [], 0)
-                            if not readable:
-                                break
-                            dev.read_one()
-                    except Exception:
-                        pass
+        if not self._grab:
+            return
 
-                    dev.grab()
-                    logger.info(f"EvdevReader: reacquired grab on {dev.path}")
-                except (IOError, OSError) as e:
-                    logger.warning(f"EvdevReader: could not reacquire grab on {dev.path}: {e}")
+        for dev in self._devices:
+            # Flush any pending events before reacquiring grab
+            try:
+                flush_deadline = time.monotonic() + 1.0
+                while time.monotonic() < flush_deadline:
+                    readable, _, _ = select.select([dev.fd], [], [], 0)
+                    if not readable:
+                        break
+                    dev.read_one()
+            except Exception:
+                pass
+
+            self._grab_device(dev)
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one keyboard device."""
@@ -603,6 +617,7 @@ class EvdevReader:
         for up to 30 seconds, which covers USB bus resets (typically
         ~1-2 seconds) and slower device re-enumeration.
         """
+        self._logged_scan_lines.clear()
         active_paths = {d.path for d in self._devices}
 
         for attempt in range(30):
@@ -621,11 +636,7 @@ class EvdevReader:
             if new_devices:
                 for dev in new_devices:
                     self._diag(f"Reconnected: {dev.path} ({dev.name})")
-                    if self._grab:
-                        try:
-                            dev.grab()
-                        except IOError as e:
-                            self._diag(f"Reconnect grab failed: {dev.path}: {e}")
+                    self._grab_device(dev)
                     self._devices.append(dev)
                     active_paths.add(dev.path)
                     self._tasks.append(asyncio.create_task(self._read_loop(dev)))
@@ -651,7 +662,7 @@ class EvdevReader:
         import evdev
         from evdev import InputDevice
 
-        _diag = self._diag
+        _diag = self._diag_once
 
         letter_keys = set(range(KeyCode.KEY_A, KeyCode.KEY_Z + 1))
         required_keys = letter_keys | {
@@ -713,6 +724,14 @@ class EvdevReader:
                     found.append(dev)
                     seen_paths.add(dev_path)
                 else:
+                    # Only keyboard-ish rejects are worth a line. Logging every
+                    # touchpad and lid switch would push the real answer out of
+                    # the parent menu's diagnostics view, which shows 10 lines.
+                    try:
+                        if _has_letter_keys(dev):
+                            _diag(f"KBD SCAN: rejected {dev_path} ({dev.name})")
+                    except OSError:
+                        pass  # Node vanished mid-scan; still needs the close below
                     dev.close()
 
             return found
@@ -742,16 +761,28 @@ class EvdevReader:
         found = _gather(_is_real_keyboard, "strict")
         if found:
             _diag(f"KBD SCAN: listening on {len(found)} keyboard device(s)")
+            self._warn_if_virtual_only(found)
             return found
 
         # Loose fallback: some keyboards (e.g. Apple SPI in Touch Bar Macs)
         # lack EV_REP but are still the user's only keyboard.
         _diag("KBD SCAN: no strict matches, falling back to loose match")
-        logger.warning("No keyboard passed strict check, falling back to loose match")
         found = _gather(_has_letter_keys, "loose")
         if found:
             _diag(f"KBD SCAN: {len(found)} device(s) via loose match")
+            self._warn_if_virtual_only(found)
         return found
+
+    def _warn_if_virtual_only(self, found) -> None:
+        """keyd's uinput device passes every keyboard check even when no
+        physical keyboard exists, so a scan can look healthy on a machine that
+        can never receive a keypress. Record it: nothing else would show it."""
+        if any(KEYD_VIRTUAL_NAME not in d.name.lower() for d in found):
+            return
+        self._diag_once(
+            "KBD SCAN: WARNING only the keyd virtual keyboard found, "
+            "no physical keyboard enumerated"
+        )
 
 
 # =============================================================================

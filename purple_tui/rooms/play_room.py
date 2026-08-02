@@ -38,7 +38,7 @@ def _cell_width(ch: str) -> int:
     return 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
 
 from ..constants import HOLD_OR_TAP_THRESHOLD
-from ..content import singularize
+from ..content import singularize, OPERATOR_WORDS, DIGIT_OPERATOR_WORDS
 
 from ..content import get_content
 from ..code_input import (
@@ -1244,6 +1244,7 @@ class SimpleEvaluator:
 
         # Handle parentheses first
         text = self._eval_parens(text)
+        text = self._hoist_noun(text)
 
         # Try adjective + color (e.g., "bright green", "dark light blue")
         if modified := self._eval_modified_color(text):
@@ -1551,7 +1552,7 @@ class SimpleEvaluator:
         Colors emit per-color items (adjective model); a pending number
         binds to the next emoji, or multiplies a color when no emoji follows.
         """
-        part = part.strip()
+        part = self._hoist_noun(part.strip())
         if not part:
             return True
 
@@ -1785,12 +1786,8 @@ class SimpleEvaluator:
 
         return self._eval_plus_expr(" + ".join(groups))
 
-    # Operator word → symbol mapping (used for exact and fuzzy normalization)
-    _OPERATOR_WORDS = {'times': '*', 'plus': '+', 'minus': '-'}
-    # Division words only apply between digits ("6 over 2"), never in prose ("game over")
-    _DIGIT_OPERATOR_WORDS = {**_OPERATOR_WORDS, 'divide': '/', 'divided': '/', 'over': '/'}
     # Count operators exclude '+'/'plus' (they mean "combine groups", handled by the plus path)
-    _COUNT_OPS = ('x', '×', '*', '/', '÷', '-') + tuple(w for w in _DIGIT_OPERATOR_WORDS if w != 'plus')
+    _COUNT_OPS = ('x', '×', '*', '/', '÷', '-') + tuple(w for w in DIGIT_OPERATOR_WORDS if w != 'plus')
     _COUNT_TOKEN = re.compile(r'\d+([x×*/÷-]\d+)*', re.IGNORECASE)
 
     def _fuzzy_op_word(self, word: str) -> str | None:
@@ -1800,7 +1797,7 @@ class SimpleEvaluator:
         if self.content.is_exact_word(w):
             return None
         from ..fuzzy import fuzzy_match_small
-        return fuzzy_match_small(w, list(self._DIGIT_OPERATOR_WORDS), cutoff=0.7)
+        return fuzzy_match_small(w, list(DIGIT_OPERATOR_WORDS), cutoff=0.7)
 
     def _is_count_op(self, word: str) -> bool:
         w = word.lower()
@@ -1832,6 +1829,23 @@ class SimpleEvaluator:
                 and float(val).is_integer() and val >= 0:
             return str(int(val)), j
         return None, i
+
+    def _hoist_noun(self, text: str) -> str:
+        """Move a noun sitting inside a count expression to the end, so every
+        path sees the canonical "<count expression> <noun>":
+        "10 dinos x 10" -> "10 x 10 dinos", "6 dinos minus 2" -> "6 minus 2 dinos".
+        Only fires when the rest of the input is that one count expression, so
+        "3 dogs x 2 cats" and "2 tigers 3" are left alone.
+        """
+        words = text.split()
+        if len(words) < 4 or not self._COUNT_TOKEN.fullmatch(words[0]):
+            return text
+        noun = words[1].lower()
+        if not self._is_count_op(words[2]) or not (self._get_emoji(noun) or self._get_color(noun)):
+            return text
+        rest = [words[0]] + words[2:]
+        count, j = self._take_count(rest, 0)
+        return " ".join(rest + [words[1]]) if count is not None and j == len(rest) else text
 
     def _chunk_words(self, words: list[str]) -> list[str]:
         """Single source of truth for grouping space-separated words into
@@ -2076,22 +2090,22 @@ class SimpleEvaluator:
         return sep.join(str(n) for n in sequence)
 
     def _eval_op_noun(self, text: str) -> str | None:
-        """Division/subtraction of a count applied to a single noun or color,
-        the analogue of _eval_mult: "6/2 dogs" -> 3 dogs, "5 - 2 reds" -> 3 red
-        boxes, "10 - 3 - 2 dogs" -> 5 dogs. Multiplication stays in _eval_mult
-        (it renders the abacus grouping), so this only fires when the consumed
-        expression actually contains a division or subtraction operator.
+        """A count expression applied to a single noun or color, the analogue of
+        _eval_mult: "6/2 dogs" -> 3 dogs, "5 - 2 reds" -> 3 red boxes,
+        "10 - 3 - 2 dogs" -> 5 dogs. Emoji multiplication stays in _eval_mult
+        (it renders the abacus grouping), so for nouns this only fires when the
+        consumed expression contains a division or subtraction. Colors have no
+        grouping to preserve, so they take any operator ("3 x 2 red").
         """
         words = text.strip().split()
         count_str, j = self._take_count(words, 0)
         if count_str is None or len(words) - j != 1:
             return None
-        consumed = self._normalize_math(" ".join(words[:j]))
-        if not any(op in consumed for op in ('/', '-')):
-            return None
-        count = int(count_str)
-        word = words[j].lower()
-        if e := self._get_emoji(word):
+        count, word = int(count_str), words[j].lower()
+        if e := self._get_emoji(word):  # a word that is both ("3 oranges") is the thing
+            consumed = self._normalize_math(" ".join(words[:j]))
+            if not any(op in consumed for op in ('/', '-')):
+                return None
             return self._format_emoji_label(e, count) if count > 1 else _repeat_emoji(e, count)
         if h := self._get_color(word):
             return self._format_color_label(h, count)
@@ -2121,11 +2135,10 @@ class SimpleEvaluator:
             # Show label+abacus for explicit operators OR large counts
             if c > 1 and (has_operator or c > self.INLINE_MAX):
                 expr = ""
-                if has_operator:
-                    for pat in (r'^(\d+)\s*\*\s*(\d+)(?:\s+|[a-z])', r'^[a-z]+\s*(\d+)\s*\*\s*(\d+)$'):
-                        if m := re.match(pat, t_lower):
-                            expr = f"{m.group(1)}*{m.group(2)}"
-                            break
+                # The two factors, wherever the noun sits: "3 * 2 cats",
+                # "cats 3 * 2", "3 cats * 2"
+                if has_operator and (m := re.search(r'(\d+)\s*(?:[a-z]+\s*)?\*\s*(\d+)', t_lower)):
+                    expr = f"{m.group(1)}*{m.group(2)}"
                 return self._format_emoji_label(e, c, expression=expr)
             return _repeat_emoji(e, c)
 
@@ -2157,18 +2170,17 @@ class SimpleEvaluator:
         """Parse color term -> list of hex colors (repeated for multiplication)."""
         term = self._normalize_mult(term.strip()).lower()
 
-        # "color * N" or "N * color"
+        # "N color", "N * M color", "6 / 2 color"
+        words = term.split()
+        count, j = self._take_count(words, 0)
+        if count is not None and len(words) - j == 1 and 1 <= int(count) <= 20:
+            if h := self._get_color(words[j]):
+                return [h] * int(count)
+
+        # "color * N"
         if m := re.match(r'^(\w+)\s*\*\s*(\d+)$', term):
             if (h := self._get_color(m.group(1))) and 1 <= int(m.group(2)) <= 20:
                 return [h] * int(m.group(2))
-        if m := re.match(r'^(\d+)\s*\*\s*(\w+)$', term):
-            if (h := self._get_color(m.group(2))) and 1 <= int(m.group(1)) <= 20:
-                return [h] * int(m.group(1))
-
-        # "N word" (e.g., "3 yellow" or "3 yellows")
-        if m := re.match(r'^(\d+)\s+(\w+)$', term):
-            if (h := self._get_color(m.group(2))) and 1 <= int(m.group(1)) <= 20:
-                return [h] * int(m.group(1))
 
         # Bare plural (e.g., "yellows" -> 2 yellow)
         if term.endswith('s') and len(term) > 2:
@@ -2304,7 +2316,7 @@ class SimpleEvaluator:
         for display, symbol in self.DISPLAY_TO_SYMBOL.items():
             result = result.replace(display, symbol)
         # Operator words → symbols (exact match with negative lookahead)
-        for word, symbol in self._OPERATOR_WORDS.items():
+        for word, symbol in OPERATOR_WORDS.items():
             result = re.sub(word + r'(?![a-z])', symbol, result)
         # Fuzzy operator words between digits ("3 timess 2" → "3 * 2")
         result = self._fuzzy_normalize_operators(result)
@@ -2333,12 +2345,12 @@ class SimpleEvaluator:
 
         def replace_match(m):
             word = m.group(2)
-            if word in self._DIGIT_OPERATOR_WORDS:
-                return m.group(1) + self._DIGIT_OPERATOR_WORDS[word] + m.group(3)
+            if word in DIGIT_OPERATOR_WORDS:
+                return m.group(1) + DIGIT_OPERATOR_WORDS[word] + m.group(3)
             matched = self._fuzzy_op_word(word)
             if matched:
                 corrected[0] = True
-                return m.group(1) + self._DIGIT_OPERATOR_WORDS[matched] + m.group(3)
+                return m.group(1) + DIGIT_OPERATOR_WORDS[matched] + m.group(3)
             return m.group(0)
 
         def replace_div_by(m):

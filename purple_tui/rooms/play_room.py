@@ -626,6 +626,10 @@ class PlayMode(Vertical):
     }
     """
 
+    # Timeline keeps this many recent entries; older ones roll off so scrub
+    # previews (which replay every entry) stay fast.
+    TIMELINE_MAX_ENTRIES = 100
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.evaluator = SimpleEvaluator()
@@ -633,6 +637,10 @@ class PlayMode(Vertical):
         self._last_input_text: str = ""
         # Space hold: tap inserts space, hold is no-op (consistent with other rooms)
         self._space_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
+        # Submitted entries as (seq, text): the room's Time Travel state.
+        # Seq is stable across trimming so timeline deltas stay small.
+        self._timeline_entries: list[tuple[int, str]] = []
+        self._timeline_seq = 0
 
     def compose(self) -> ComposeResult:
         yield KeyboardOnlyScroll(id="history-scroll")
@@ -647,6 +655,22 @@ class PlayMode(Vertical):
     def on_mount(self) -> None:
         """Focus the input when mode loads"""
         self.query_one("#play-input").focus()
+        restore = getattr(self.app, "timeline_restore", None)
+        if restore:
+            restore("play", self)
+
+    def timeline_state(self) -> dict:
+        return {f"e:{seq}": text for seq, text in self._timeline_entries}
+
+    def restore_timeline_state(self, state: dict) -> None:
+        self.clear_history()
+        entries = sorted(
+            (int(k[2:]), v) for k, v in state.items() if k.startswith("e:")
+        )
+        self._timeline_entries = entries
+        self._timeline_seq = entries[-1][0] + 1 if entries else self._timeline_seq
+        for _, text in entries:
+            self._submit_line(text, allow_speak=False)
 
     def evaluate_for_panel(self, expression: str) -> str:
         """Evaluate an expression for the code panel. Returns result string."""
@@ -668,6 +692,7 @@ class PlayMode(Vertical):
 
     def clear_history(self) -> None:
         """Clear the history scroll and reset last result."""
+        self._timeline_entries = []
         try:
             scroll = self.query_one("#history-scroll")
             scroll.remove_children()
@@ -933,10 +958,23 @@ class PlayMode(Vertical):
 
     async def on_inline_input_submitted(self, event: InlineInput.Submitted) -> None:
         """Handle input submission"""
-        input_text = event.value
+        self._submit_line(event.value)
+        self._timeline_entries.append((self._timeline_seq, event.value))
+        self._timeline_seq += 1
+        self._timeline_entries = self._timeline_entries[-self.TIMELINE_MAX_ENTRIES:]
+        capture = getattr(self.app, "timeline_capture_now", None)
+        if capture:
+            capture("play")
+
+    def _submit_line(self, input_text: str, allow_speak: bool = True) -> None:
+        """Evaluate one submitted line and mount its history lines.
+
+        allow_speak=False replays silently (timeline restore and scrubbing).
+        """
         scroll = self.query_one("#history-scroll")
 
         force_speak, eval_text = parse_speech_trigger(input_text)
+        force_speak = force_speak and allow_speak
 
         # Add the "Ask →" line to history (without speech markers)
         if eval_text:

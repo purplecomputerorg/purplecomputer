@@ -1,10 +1,10 @@
 """
 Room Picker Screen: A kid-friendly modal for switching rooms.
 
-Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Room
-side by side. Arrow keys navigate, number keys 1-3 for direct room
-selection, V opens volume, C clears a room, Enter selects, Escape cancels.
-Any unrecognized key dismisses gracefully.
+Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear Room +
+Time Travel side by side. Arrow keys navigate, number keys 1-3 for direct
+room selection, V opens volume, C clears a room, T starts Time Travel,
+Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
 """
 
 from .modal import PurpleModal, PickerModal
@@ -15,7 +15,7 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE,
+    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE, ICON_TIME_TRAVEL,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .hints import arrow_keys_text
@@ -38,10 +38,11 @@ ROW_ROOMS = 0
 ROW_EXTRAS = 1
 ROW_CODE = 2
 
-# Extras columns: 0 = volume, 1 = clear room
+# Extras columns: 0 = volume, 1 = clear room, 2 = time travel
 COL_VOLUME = 0
 COL_CLEAR = 1
-NUM_EXTRA_COLS = 2
+COL_TIME_TRAVEL = 2
+NUM_EXTRA_COLS = 3
 
 
 class RoomOption(Static):
@@ -126,22 +127,20 @@ class ExtraOption(Static):
 
 
 class ConfirmFreshScreen(PickerModal):
-    """Clear-room chooser: go back (default, on top), this room, or all rooms.
+    """Clear-room confirm: clear this room (pre-selected) or go back.
 
-    Dismisses with the id of the room to clear ("play"/"music"/"art"), "all",
-    or None to cancel. Go Back is on top and pre-selected so a stray Enter
-    never wipes a kid's work, while the likely action is one press away.
+    Dismisses with the id of the room to clear ("play"/"music"/"art") or None
+    to cancel. Clear sits on top and pre-selected because clearing is safe now:
+    Time Travel can always bring the room back.
     """
 
     TITLE = "Clear a Room"
-    DESCRIPTION = "Pick what to clear."
 
     def __init__(self, current_room: str = "play", **kwargs):
         room_name = ROOM_DISPLAY_NAMES.get(current_room, "This")
         self.OPTIONS = [
-            (None, "Go Back"),
             (current_room, f"Clear {room_name} Room"),
-            ("all", "Clear All Rooms"),
+            (None, "Go Back"),
         ]
         super().__init__(**kwargs)
 
@@ -151,8 +150,8 @@ class RoomPickerScreen(PurpleModal):
     Modal screen for selecting rooms with arrow key navigation.
 
     Layout (2 navigable rows):
-      [1 Play]  [2 Music]  [3 Art]          <- room row
-      [Volume  V]  [Clear Room  C]          <- extras row (50/50)
+      [1 Play]  [2 Music]  [3 Art]                        <- room row
+      [Volume  V]  [Clear Room  C]  [Time Travel  T]      <- extras row
     """
 
     CSS = """
@@ -243,6 +242,7 @@ class RoomPickerScreen(PurpleModal):
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
                 yield ExtraOption(ICON_BROOM, "Clear Room", "C", id="opt-clear-rooms")
+                yield ExtraOption(ICON_TIME_TRAVEL, "Time Travel", "T", id="opt-time-travel")
 
             if self._show_code_row:
                 with Horizontal(id="picker-code-row"):
@@ -272,7 +272,7 @@ class RoomPickerScreen(PurpleModal):
                 pass
 
         # Extras row
-        extra_ids = ["#opt-volume", "#opt-clear-rooms"]
+        extra_ids = ["#opt-volume", "#opt-clear-rooms", "#opt-time-travel"]
         for i, eid in enumerate(extra_ids):
             try:
                 widget = self.query_one(eid, ExtraOption)
@@ -320,16 +320,13 @@ class RoomPickerScreen(PurpleModal):
                     self._update_selection()
                 elif self._active_row == ROW_EXTRAS:
                     self._active_row = ROW_ROOMS
-                    # Map extras column back to nearest room:
-                    # extras 0 -> room 0, extras 1 -> room 2
-                    self._room_index = 0 if self._extra_index == 0 else 2
+                    # Rooms and extras are both 3 columns: keep the column
+                    self._room_index = self._extra_index
                     self._update_selection()
             elif action.direction == 'down':
                 if self._active_row == ROW_ROOMS:
                     self._active_row = ROW_EXTRAS
-                    # Map room column to closest extras column:
-                    # rooms 0,1 (left/center) -> extras 0, room 2 (right) -> extras 1
-                    self._extra_index = 0 if self._room_index <= 1 else 1
+                    self._extra_index = self._room_index
                     self._update_selection()
                 elif self._active_row == ROW_EXTRAS and self._show_code_row:
                     self._active_row = ROW_CODE
@@ -351,6 +348,8 @@ class RoomPickerScreen(PurpleModal):
                 self._extra_index = COL_CLEAR
                 self._update_selection()
                 self._confirm_clear_rooms()
+            elif action.char.lower() == 't':
+                self.dismiss({"time_travel": True})
             else:
                 # Any other character key: dismiss picker
                 self.dismiss(None)
@@ -376,6 +375,8 @@ class RoomPickerScreen(PurpleModal):
                         self._open_volume()
                     elif self._extra_index == COL_CLEAR:
                         self._confirm_clear_rooms()
+                    elif self._extra_index == COL_TIME_TRAVEL:
+                        self.dismiss({"time_travel": True})
                 elif self._active_row == ROW_CODE:
                     if self._code_panel_open:
                         self.dismiss({"close_code": True})
@@ -394,11 +395,9 @@ class RoomPickerScreen(PurpleModal):
                 self.app.action_volume_up()
 
     def _confirm_clear_rooms(self) -> None:
-        """Let the parent choose to clear just this room or all rooms."""
+        """Confirm clearing the current room."""
         def on_confirm(result: str | None) -> None:
-            if result == "all":
-                self.dismiss({"start_fresh": True})
-            elif result:
+            if result:
                 self.dismiss({"clear_room": result})
 
         self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)

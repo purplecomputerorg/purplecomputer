@@ -105,6 +105,7 @@ ICON_KEYBOARD = "󰌌"          # nf-md-keyboard (key capture indicator)
 ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
 ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
+ICON_TIME_TRAVEL = "󰕍"        # nf-md-restore (Time Travel scrubbing)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

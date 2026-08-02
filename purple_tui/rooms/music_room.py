@@ -1184,6 +1184,9 @@ class MusicMode(Container, can_focus=True):
         self._update_hint()
         if self._is_noscreen:
             self._apply_noscreen()
+        restore = getattr(self.app, "timeline_restore", None)
+        if restore:
+            restore("music", self)
 
     def _apply_noscreen(self) -> None:
         """Hide visual elements for no-screen music mode."""
@@ -1257,22 +1260,38 @@ class MusicMode(Container, can_focus=True):
 
     def reset_state(self) -> None:
         """Reset music mode to defaults (colors, loop, instrument, letters mode)."""
+        self.restore_timeline_state({})
+        if self._header:
+            self._header.set_code_mode(False)
+
+    def timeline_state(self) -> dict:
+        state = {f"k:{k}": v for k, v in self.grid.color_state.items() if v != -1} if self.grid else {}
+        state["instrument"] = self._instrument_index
+        state["root"] = self._root_index
+        state["letters"] = self._letters_mode
+        state["labels"] = bool(self.grid and self.grid._show_labels)
+        return state
+
+    def restore_timeline_state(self, state: dict) -> None:
         self._stop_loop()
-        self._instrument_index = 0
-        self._letters_mode = False
-        self._root_index = DEFAULT_ROOT_INDEX
+        self._instrument_index = int(state.get("instrument", 0))
+        self._root_index = int(state.get("root", DEFAULT_ROOT_INDEX))
+        self._letters_mode = bool(state.get("letters", False))
         if self.grid:
-            self.grid.reset_colors()
-            self.grid.set_instrument(0)
+            self.grid.color_state = {k: -1 for k in ALL_KEYS}
+            for key, val in state.items():
+                if key.startswith("k:") and key[2:] in self.grid.color_state:
+                    self.grid.color_state[key[2:]] = int(val)
+            self.grid.set_instrument(self._instrument_index)
             self.grid._root_index = self._root_index
             self.grid._pitch_transition = None
-            self.grid._show_labels = False
+            self.grid._show_labels = bool(state.get("labels", False))
             self.grid.refresh()
         if self._header:
-            self._header.update_instrument(INSTRUMENTS[0][1])
-            self._header.update_mode(False)
-            self._header.set_code_mode(False)
+            self._header.update_instrument(INSTRUMENTS[self._instrument_index][1])
+            self._header.update_mode(self._letters_mode)
             self._header.update_pitch(self._root_index)
+        self._update_hint()
 
     # -- Loop station controls -----------------------------------------------
 

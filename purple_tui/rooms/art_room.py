@@ -5,8 +5,7 @@ A text-focused canvas with paint-by-key features:
 - Normal typing draws readable text (left-to-right, wrapping at edges)
 - Arrow keys move the cursor (no drawing)
 - Hold Space + arrows to paint colored trails
-- Backspace erases glyph and fades background
-- Hold Backspace to clear the entire canvas
+- Backspace erases glyph and fades background (hold to erase fast)
 
 Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev. This gives us true key release detection.
@@ -14,13 +13,12 @@ which reads directly from evdev. This gives us true key release detection.
 
 import colorsys
 
-from textual.widgets import Static, Button
-from textual.containers import Container, Horizontal
+from textual.widgets import Static
+from textual.containers import Container
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.strip import Strip
 from textual.message import Message
-from ..modal import PurpleModal
 from textual import events
 from rich.segment import Segment
 from rich.style import Style
@@ -56,6 +54,9 @@ GRAYSCALE = {
 
 # Brush character for painting
 BRUSH_CHAR = "█"
+
+# Default brush: Purple Computer purple
+DEFAULT_BRUSH_COLOR = "#9b7bc4"
 
 
 def _visible_arrow_color(fg_hex: str, bg_hex: str) -> str:
@@ -280,7 +281,7 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Paint mode toggle
         self._paint_mode = True
-        self._last_key_color = "#9b7bc4"  # Default brush: Purple Computer purple
+        self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""  # Last key pressed
 
         # Space-hold for drawing lines in paint mode
@@ -889,7 +890,7 @@ class ArtCanvas(Widget, can_focus=True):
         self._code_mode = False
         self._heading = 'right'
         self._use_heading_cursor = False
-        self._last_key_color = "#9b7bc4"
+        self._last_key_color = DEFAULT_BRUSH_COLOR
 
         self._clear_animation_active = False
         self._invalidate_all()
@@ -1413,6 +1414,38 @@ class ArtMode(Container):
         # Initialize header (canvas starts in paint mode)
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(True, "#FFFFFF")
+        restore = getattr(self.app, "timeline_restore", None)
+        if restore:
+            restore("art", self)
+
+    def timeline_state(self) -> dict:
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        state = {
+            f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in canvas._painted_positions else 0]
+            for (x, y), (ch, fg, bg) in canvas._grid.items()
+        }
+        state["cursor"] = [canvas._cursor_x, canvas._cursor_y]
+        state["paint"] = canvas._paint_mode
+        state["color"] = canvas._last_key_color
+        return state
+
+    def restore_timeline_state(self, state: dict) -> None:
+        canvas = self.query_one("#art-canvas", ArtCanvas)
+        canvas._grid.clear()
+        canvas._painted_positions.clear()
+        for key, val in state.items():
+            if not key.startswith("c:"):
+                continue
+            x, y = (int(n) for n in key[2:].split(","))
+            canvas._grid[(x, y)] = (val[0], val[1], val[2])
+            if val[3]:
+                canvas._painted_positions.add((x, y))
+        canvas._cursor_x, canvas._cursor_y = state.get("cursor", [0, 0])
+        canvas._paint_mode = bool(state.get("paint", True))
+        canvas._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
+        canvas._post_paint_mode_changed()
+        canvas._invalidate_all()
+        canvas.refresh()
 
     def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
         """Update header when paint mode changes."""
@@ -1535,99 +1568,3 @@ class ArtMode(Container):
                 ControlAction(action='space', is_down=True, is_repeat=False))
 
         await canvas.handle_keyboard_action(action)
-
-
-# =============================================================================
-# ART PROMPT SCREEN
-# =============================================================================
-
-class ArtPromptScreen(PurpleModal):
-    """
-    Modal screen shown when entering Art room with existing content.
-
-    Presents two big buttons: "Keep drawing" and "New drawing".
-    Kid-friendly: no text to read, just two clear choices.
-    """
-
-    CSS = """
-    #modal-dialog {
-        width: 60;
-        padding: 2 4;
-    }
-
-    #modal-title {
-        margin-bottom: 2;
-    }
-
-    #art-prompt-buttons {
-        width: 100%;
-        height: auto;
-        align: center middle;
-    }
-
-    #art-prompt-buttons Button {
-        width: 20;
-        margin: 1 2;
-    }
-
-    #btn-keep {
-        background: $success;
-    }
-
-    #btn-new {
-        background: $primary;
-    }
-    """
-
-    BINDINGS = [("escape", "dismiss(False)", "Keep")]
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._selected_index = 0  # 0 = Keep, 1 = New
-
-    def compose(self) -> ComposeResult:
-        with Container(id="modal-dialog"):
-            yield Static("Your drawing is still here!", id="modal-title")
-            with Horizontal(id="art-prompt-buttons"):
-                yield Button("Keep drawing", id="btn-keep", variant="success")
-                yield Button("New drawing", id="btn-new", variant="primary")
-
-    def on_mount(self) -> None:
-        """Focus the Keep button by default."""
-        self._update_button_focus()
-
-    def _update_button_focus(self) -> None:
-        """Update button visual focus based on selection."""
-        keep_btn = self.query_one("#btn-keep", Button)
-        new_btn = self.query_one("#btn-new", Button)
-
-        if self._selected_index == 0:
-            keep_btn.focus()
-        else:
-            new_btn.focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button clicks."""
-        if event.button.id == "btn-keep":
-            self.dismiss(False)  # False = don't clear
-        else:
-            self.dismiss(True)   # True = clear canvas
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Handle keyboard navigation from evdev."""
-        from ..keyboard import NavigationAction, ControlAction
-
-        if isinstance(action, NavigationAction):
-            if action.direction in ('left', 'right'):
-                # Toggle selection
-                self._selected_index = 1 - self._selected_index
-                self._update_button_focus()
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                # Confirm current selection
-                self.dismiss(self._selected_index == 1)
-            elif action.action == 'escape':
-                # Escape = keep drawing
-                self.dismiss(False)

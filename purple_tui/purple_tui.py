@@ -54,7 +54,7 @@ from .constants import (
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
     ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
     ICON_SHIFT,
-    ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, display_len,
+    ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, ICON_TIME_TRAVEL, display_len,
     APP_BACKGROUND,
     is_usb_cached, is_usb_present,
     VOLUME_LEVELS, VOLUME_DEFAULT,
@@ -85,6 +85,8 @@ from .room_picker import RoomPickerScreen
 boot_log.heartbeat("room_picker imported; importing repl_panel")
 from .repl_panel import ReplCommandSubmitted, ReplPanelClosed, ReplPanelToggleRequested, ReplPanel
 from .loop_panel import LoopPanelToggleRequested
+from .timeline import RoomTimeline
+from .time_travel import TimeTravelBar
 boot_log.heartbeat("all purple_tui imports done")
 
 
@@ -918,6 +920,13 @@ class PurpleApp(App):
         self._demo_player: DemoPlayer | None = None
         self._demo_task = None
 
+        # Time Travel: per-room history that doubles as restart persistence
+        self._timelines = {r: RoomTimeline(r) for r in ("play", "music", "art")}
+        self._timeline_pending: dict[str, tuple[float, float]] = {}  # room -> (first, last) touch
+        self._timeline_timer = None
+        self._timeline_restored: set[str] = set()
+        self._time_travel: dict | None = None  # active scrub session, or None
+
         # Register our purple themes
         self.register_theme(
             Theme(
@@ -1344,6 +1353,8 @@ class PurpleApp(App):
 
     async def on_unmount(self) -> None:
         """Called when app is shutting down"""
+        self._timeline_flush()
+
         # Clean up evdev reader
         if self._evdev_reader:
             await self._evdev_reader.stop()
@@ -1565,6 +1576,11 @@ class PurpleApp(App):
                 await active_screen.handle_keyboard_action(action)
             return
 
+        # Time Travel scrub owns the keyboard while active
+        if self._time_travel is not None:
+            await self._handle_time_travel_action(action)
+            return
+
         # Arrows in code mode: a kid reaching for a way out. Pulse the close hint.
         if self._code_panel_active and isinstance(action, NavigationAction):
             self._pulse_close_code_hint(action.direction)
@@ -1582,6 +1598,7 @@ class PurpleApp(App):
             # Call the mode's action handler if it exists
             if hasattr(room_widget, 'handle_keyboard_action'):
                 await room_widget.handle_keyboard_action(action)
+                self._timeline_touch()
         except NoMatches:
             pass
 
@@ -1661,12 +1678,14 @@ class PurpleApp(App):
             self._open_code_panel_in_room(self.active_room)
             return
 
-        # Clear rooms: all, or just one
-        if result.get("start_fresh"):
-            self._start_fresh()
-            return
+        # Clear the chosen room
         if result.get("clear_room"):
             self._start_fresh(result["clear_room"])
+            return
+
+        # Start Time Travel scrubbing in the current room
+        if result.get("time_travel"):
+            self._start_time_travel()
             return
 
     _code_run_task: asyncio.Task | None = None
@@ -1779,6 +1798,10 @@ class PurpleApp(App):
 
     def on_loop_panel_toggle_requested(self, message: LoopPanelToggleRequested) -> None:
         """Mirror the REPL toggle: grow viewport on open, shrink on close."""
+        # A loop stopped by entering Time Travel must not shrink the viewport
+        # out from under the scrub bar.
+        if self._time_travel is not None:
+            return
         self._apply_code_panel_ui(active=message.opened, kind='loop')
 
     def on_repl_panel_toggle_requested(self, message: ReplPanelToggleRequested) -> None:
@@ -1838,6 +1861,8 @@ class PurpleApp(App):
                     viewport.styles.height = VIEWPORT_HEIGHT + 4
                     if kind == 'loop':
                         _set_viewport_hints(viewport, left=f"{ICON_MUSIC} Hold Enter: close looping {ICON_MUSIC}", right=None, active_theme=self.active_theme)
+                    elif kind == 'time':
+                        _set_viewport_hints(viewport, left=f"{ICON_TIME_TRAVEL} Time Travel", right=None, active_theme=self.active_theme)
                     else:
                         _set_viewport_hints(viewport, left=None, right=CODE_PANEL_CLOSE_HINT, active_theme=self.active_theme)
                 else:
@@ -1894,13 +1919,9 @@ class PurpleApp(App):
             from .rooms.art_room import ArtCanvas, CanvasHeader
             content_area = self.query_one("#content-area")
             art = content_area.query_one("#room-art")
-            canvas = art.query_one("#art-canvas", ArtCanvas)
-            canvas.set_code_mode(False)
-            canvas.styles.height = "1fr"
-            header = art.query_one("#canvas-header", CanvasHeader)
-            header.set_code_mode(False)
-            from .rooms.art_room import ArtHintBar
-            art.query_one("#art-hint-bar", ArtHintBar).display = True
+            art.query_one("#art-canvas", ArtCanvas).set_code_mode(False)
+            art.query_one("#canvas-header", CanvasHeader).set_code_mode(False)
+            self._set_room_bottom_pinned("art", art, False)
         except Exception:
             pass
         try:
@@ -1911,12 +1932,8 @@ class PurpleApp(App):
             grid = music.query_one(MusicGrid)
             # Sync instrument: code may have changed it via "choose"
             music._instrument_index = grid._instrument_index
-            header = music.query_one(MusicRoomHeader)
-            header.update_instrument(INSTRUMENTS[grid._instrument_index][1])
-            grid._layout_ready = False
-            grid.styles.height = "1fr"
-            from .rooms.music_room import MusicExampleHint
-            music.query_one("#example-hint", MusicExampleHint).display = True
+            music.query_one(MusicRoomHeader).update_instrument(INSTRUMENTS[grid._instrument_index][1])
+            self._set_room_bottom_pinned("music", music, False)
         except Exception:
             pass
 
@@ -1946,21 +1963,13 @@ class PurpleApp(App):
             panel = room_widget.query_one(ReplPanel)
             if not panel.is_open:
                 if room == Room.ART:
-                    from .rooms.art_room import ArtCanvas, CanvasHeader, ArtHintBar
-                    canvas = room_widget.query_one("#art-canvas", ArtCanvas)
-                    canvas.set_code_mode(True)
-                    if canvas.size.height > 0:
-                        canvas.styles.height = canvas.size.height
-                    header = room_widget.query_one("#canvas-header", CanvasHeader)
-                    header.set_code_mode(True)
-                    room_widget.query_one("#art-hint-bar", ArtHintBar).display = False
+                    from .rooms.art_room import ArtCanvas, CanvasHeader
+                    room_widget.query_one("#art-canvas", ArtCanvas).set_code_mode(True)
+                    room_widget.query_one("#canvas-header", CanvasHeader).set_code_mode(True)
                 elif room == Room.MUSIC:
-                    from .rooms.music_room import MusicGrid, MusicExampleHint
-                    room_widget.query_one("#example-hint", MusicExampleHint).display = False
-                    grid = room_widget.query_one(MusicGrid)
-                    if grid.size.height > 0:
-                        grid.styles.height = grid.size.height
-                        grid.set_instrument(room_widget._instrument_index)
+                    from .rooms.music_room import MusicGrid
+                    room_widget.query_one(MusicGrid).set_instrument(room_widget._instrument_index)
+                self._set_room_bottom_pinned(room.name.lower(), room_widget, True)
                 panel.open()
         except Exception:
             pass
@@ -2371,8 +2380,6 @@ class PurpleApp(App):
 
     def action_switch_room(self, room_name: str) -> None:
         """Switch to a different room"""
-        from .rooms.art_room import ArtPromptScreen
-
         # Debug: log who is calling mode switch
         if os.environ.get("PURPLE_DEV_MODE") == "1":
             import traceback
@@ -2387,18 +2394,11 @@ class PurpleApp(App):
         }
         new_room = room_map.get(room_name, Room.PLAY)
 
-        # If ArtPromptScreen is showing and we're switching to a different mode,
-        # dismiss it (keeping the drawing) and proceed with the switch
-        if len(self.screen_stack) > 1:
-            active_screen = self.screen
-            if isinstance(active_screen, ArtPromptScreen):
-                # Dismiss without callback action (we're switching modes anyway)
-                self.pop_screen()
-                # If switching back to art, we're already there, just return
-                if new_room == Room.ART:
-                    return
+        if self._time_travel is not None:
+            self._cancel_time_travel()
 
         if new_room != self.active_room:
+            self._timeline_flush()
             # Reset viewport border when leaving art mode
             if self.active_room == Room.ART:
                 self._reset_viewport_border()
@@ -2488,48 +2488,209 @@ class PurpleApp(App):
         # Refresh shift banner hint (different rooms show different hints)
         self._update_shift_indicator()
 
+    # -- Time Travel timeline -------------------------------------------------
+
+    TIMELINE_DEBOUNCE_S = 3.0   # capture after this much quiet
+    TIMELINE_MAX_WAIT_S = 15.0  # ...but at least this often during nonstop activity
+
+    def _room_key(self) -> str:
+        return self.active_room.name.lower()
+
+    def _room_widget(self, room: str):
+        try:
+            return self.query_one("#content-area").query_one(f"#room-{room}")
+        except NoMatches:
+            return None
+
+    def timeline_restore(self, room: str, widget) -> None:
+        """Restore a room's last recorded state, once per room per session."""
+        if room in self._timeline_restored:
+            return
+        self._timeline_restored.add(room)
+        try:
+            tip = self._timelines[room].tip()
+            if tip:
+                widget.restore_timeline_state(tip)
+            else:
+                # Baseline step so scrubbing can always reach the blank room
+                self._timelines[room].record(widget.timeline_state())
+        except Exception:
+            pass
+
+    def timeline_capture_now(self, room: str) -> None:
+        """Record the room's current state as a timeline step (if it changed)."""
+        self._timeline_pending.pop(room, None)
+        if self._time_travel is not None:
+            return
+        widget = self._room_widget(room)
+        if widget is None:
+            return
+        try:
+            self._timelines[room].record(widget.timeline_state())
+        except Exception:
+            pass
+
+    def _timeline_touch(self) -> None:
+        """Note activity in the active room; a debounced capture follows."""
+        if self._time_travel is not None:
+            return
+        room = self._room_key()
+        now = time.monotonic()
+        first, _ = self._timeline_pending.get(room, (now, now))
+        self._timeline_pending[room] = (first, now)
+        if self._timeline_timer is None:
+            self._timeline_timer = self.set_interval(1.0, self._timeline_tick)
+
+    def _timeline_tick(self) -> None:
+        now = time.monotonic()
+        for room, (first, last) in list(self._timeline_pending.items()):
+            if (now - last >= self.TIMELINE_DEBOUNCE_S
+                    or now - first >= self.TIMELINE_MAX_WAIT_S):
+                self.timeline_capture_now(room)
+        if not self._timeline_pending and self._timeline_timer is not None:
+            self._timeline_timer.stop()
+            self._timeline_timer = None
+
+    def _timeline_flush(self) -> None:
+        """Capture all pending rooms immediately (room switch, clear, exit)."""
+        for room in list(self._timeline_pending):
+            self.timeline_capture_now(room)
+
+    # -- Time Travel scrubbing ------------------------------------------------
+
+    def _start_time_travel(self) -> None:
+        """Open the scrubber: viewport grows, a slim bar takes the bottom rows,
+        and arrows preview the room's history full-size above it."""
+        room = self._room_key()
+        widget = self._room_widget(room)
+        if widget is None:
+            return
+        if self._code_panel_active:
+            self._close_repl_panel()
+        self._silence_music()
+        self._timeline_flush()
+        self.timeline_capture_now(room)
+        tl = self._timelines[room]
+        if len(tl) == 0:
+            return
+        bar = TimeTravelBar(id="time-travel-bar")
+        self._time_travel = {"room": room, "index": len(tl) - 1, "bar": bar}
+        self._set_room_bottom_pinned(room, widget, True)
+        widget.mount(bar)
+        self._apply_code_panel_ui(active=True, kind='time')
+        bar.set_position(len(tl) - 1, len(tl))
+
+    def _end_time_travel(self) -> None:
+        tt = self._time_travel
+        self._time_travel = None
+        try:
+            tt["bar"].remove()
+        except Exception:
+            pass
+        widget = self._room_widget(tt["room"])
+        self._apply_code_panel_ui(active=False)
+        if widget is not None:
+            self._set_room_bottom_pinned(tt["room"], widget, False)
+            self._focus_room(widget)
+
+    def _cancel_time_travel(self) -> None:
+        """Escape: put the room back to its newest state."""
+        tt = self._time_travel
+        tl = self._timelines[tt["room"]]
+        widget = self._room_widget(tt["room"])
+        if widget is not None and tt["index"] != len(tl) - 1:
+            try:
+                widget.restore_timeline_state(tl.tip())
+            except Exception:
+                pass
+        self._end_time_travel()
+
+    def _land_time_travel(self) -> None:
+        """Enter: keep what's on screen. Lands by appending a new step, never
+        truncating, so the state the kid scrubbed away from stays reachable."""
+        room = self._time_travel["room"]
+        self._end_time_travel()
+        self.timeline_capture_now(room)
+
+    def _step_time_travel(self, delta: int) -> None:
+        tt = self._time_travel
+        tl = self._timelines[tt["room"]]
+        index = max(0, min(len(tl) - 1, tt["index"] + delta))
+        if index == tt["index"]:
+            return
+        tt["index"] = index
+        widget = self._room_widget(tt["room"])
+        if widget is not None:
+            try:
+                widget.restore_timeline_state(tl.state_at(index))
+            except Exception:
+                pass
+        tt["bar"].set_position(index, len(tl))
+
+    async def _handle_time_travel_action(self, action) -> None:
+        if isinstance(action, NavigationAction):
+            if action.direction == 'left':
+                self._step_time_travel(-1)
+            elif action.direction == 'right':
+                self._step_time_travel(1)
+            return
+        if isinstance(action, ControlAction) and action.is_down and not action.is_repeat:
+            if action.action == 'enter':
+                self._land_time_travel()
+            elif action.action == 'escape':
+                self._escape_consumed_by_mode = True
+                self._cancel_time_travel()
+
+    def _set_room_bottom_pinned(self, room: str, widget, pinned: bool) -> None:
+        """Hide a room's bottom hint/input row and pin its canvas height while
+        a bottom panel borrows the space (Time Travel bar, code panel)."""
+        try:
+            if room == "art":
+                from .rooms.art_room import ArtCanvas, ArtHintBar
+                widget.query_one("#art-hint-bar", ArtHintBar).display = not pinned
+                canvas = widget.query_one("#art-canvas", ArtCanvas)
+                if pinned:
+                    if canvas.size.height > 0:
+                        canvas.styles.height = canvas.size.height
+                else:
+                    canvas.styles.height = "1fr"
+            elif room == "music":
+                from .rooms.music_room import MusicGrid, MusicExampleHint
+                widget.query_one("#example-hint", MusicExampleHint).display = not pinned
+                grid = widget.query_one(MusicGrid)
+                if pinned:
+                    if grid.size.height > 0:
+                        grid.styles.height = grid.size.height
+                else:
+                    grid._layout_ready = False
+                    grid.styles.height = "1fr"
+            elif room == "play":
+                widget.query_one("#bottom-area").display = not pinned
+        except Exception:
+            pass
+
     def _start_fresh(self, room: str | None = None) -> None:
-        """Clear rooms. room=None clears all; otherwise just that one room."""
+        """Clear rooms. room=None clears all; otherwise just that one room.
+
+        The state right before each clear is recorded first, so a cleared room
+        is always reachable through Time Travel.
+        """
         from .rooms.art_room import ArtMode
         from .rooms.music_room import MusicMode
+        from .rooms.play_room import PlayMode
 
-        if room in (None, "art"):
+        clearers = {
+            "play": (PlayMode, "clear_history"),
+            "music": (MusicMode, "reset_state"),
+            "art": (ArtMode, "clear_canvas"),
+        }
+        for r in ([room] if room else list(clearers)):
+            self.timeline_capture_now(r)
             try:
-                self.query_one(ArtMode).clear_canvas()
+                getattr(self.query_one(clearers[r][0]), clearers[r][1])()
             except Exception:
                 pass
-
-        if room in (None, "music"):
-            try:
-                self.query_one(MusicMode).reset_state()
-            except Exception:
-                pass
-
-        if room in (None, "play"):
-            try:
-                content_area = self.query_one("#content-area")
-                play = content_area.query_one("#room-play")
-                if hasattr(play, 'clear_history'):
-                    play.clear_history()
-            except Exception:
-                pass
-
-    def _show_art_prompt(self) -> None:
-        """Show prompt when entering Art mode with existing content."""
-        from .rooms.art_room import ArtPromptScreen
-
-        def handle_prompt_result(should_clear: bool) -> None:
-            # Clear canvas if user chose "New drawing"
-            if should_clear:
-                try:
-                    content_area = self.query_one("#content-area")
-                    art_widget = content_area.query_one(f"#room-{ROOM_ART[0]}")
-                    if hasattr(art_widget, 'clear_canvas'):
-                        art_widget.clear_canvas()
-                except NoMatches:
-                    pass
-
-        self.push_screen(ArtPromptScreen(), handle_prompt_result)
+            self.timeline_capture_now(r)
 
     def action_volume_mute(self) -> None:
         """Toggle mute on/off"""
@@ -3084,30 +3245,7 @@ class PurpleApp(App):
 
     def clear_all_state(self) -> None:
         """Clear all state across all modes. Used at start of demo."""
-        from .rooms.play_room import PlayMode
-        from .rooms.music_room import MusicMode
-        from .rooms.art_room import ArtMode
-
-        # Clear play mode history
-        try:
-            play = self.query_one(PlayMode)
-            play.clear_history()
-        except Exception:
-            pass
-
-        # Reset music mode colors
-        try:
-            music = self.query_one(MusicMode)
-            music.reset_state()
-        except Exception:
-            pass
-
-        # Clear art mode canvas
-        try:
-            art = self.query_one(ArtMode)
-            art.clear_canvas()
-        except Exception:
-            pass
+        self._start_fresh()
 
     def _set_music_key_color(self, key: str, color_index: int) -> None:
         """Set a Music mode key's color directly. Used by demo player for flash effects."""

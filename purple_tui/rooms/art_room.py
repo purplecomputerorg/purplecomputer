@@ -1067,13 +1067,14 @@ class ArtCanvas(Widget, can_focus=True):
                 directions_to_move.extend(action.other_arrows_held)
 
             # Accelerate after sustained hold: each repeat takes multiple steps.
-            # Painting (space-held) draws at every intermediate cell so a fast
-            # held arrow leaves a streak instead of dotted gaps.
+            # Painting (space or letter held) draws at every intermediate cell so
+            # a fast held arrow leaves a streak instead of dotted gaps.
             step_count = (HOLD_ACCEL_MULTIPLIER
                           if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
                           else 1)
             paint_each_step = (self._paint_mode
-                               and (self._space_down or action.space_held))
+                               and (self._space_down or action.space_held
+                                    or bool(action.char_held)))
 
             any_moved = False
             for direction in directions_to_move:

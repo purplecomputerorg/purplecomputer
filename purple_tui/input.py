@@ -36,6 +36,12 @@ KEYD_VIRTUAL_NAME = "keyd virtual keyboard"
 KEYD_CONFIG_PATH = Path("/etc/keyd/default.conf")
 KEYD_WAIT_SECS = 10.0
 
+# Hotplug watch. Polling the /dev/input path set is a glob plus a stat per
+# node with no opens, so this can run for the life of the session; the real
+# scan only happens when the set changes.
+DEVICE_POLL_SECS = 2.0
+SILENT_KEYBOARD_WARN_SECS = 30
+
 # Diag log paths. /var/log/purple is on the writable partition of the installed
 # system (same convention as purple_tui/boot_log.py) and survives reboot.
 DIAG_LOG_PATHS = ("/tmp/evdev-diag.log", "/var/log/purple/evdev.log")
@@ -282,7 +288,12 @@ class EvdevReader:
         self._logged_keycodes: set = set()  # Keycodes logged to diag (first-occurrence)
         self._logged_scan_lines: set = set()  # Scan diag lines already written
         self._got_first_event = False
-        self._watchdog_task: Optional[asyncio.Task] = None
+        self._watcher_task: Optional[asyncio.Task] = None
+        self._known_device_paths: set = set()
+        self._seen_path_sets: set = set()  # Device sets already logged, so a flap can't repeat
+        self._grabs_released = False
+        self._keyd_timed_out = False
+        self._rescan_wanted = False  # Consumed by _watch_devices
 
         # Emergency VT switch: Ctrl+\ held 3s or Ctrl+Alt+F2 → chvt 2
         self._ctrl_held = False
@@ -309,10 +320,10 @@ class EvdevReader:
         logger.info(msg)
 
     def _diag_once(self, msg: str) -> None:
-        """Log a scan line the first time only. A reconnect rescans once a
-        second and would otherwise flood the log; `_logged_scan_lines` is
-        cleared when a new episode starts, so the log keeps one device
-        inventory per real event rather than one per scan."""
+        """Log a scan line the first time only. A device that flaps in place is
+        rescanned every couple of seconds; `_logged_scan_lines` is cleared when
+        the device set really changes, so the log keeps one inventory per real
+        event instead of one per scan."""
         if msg in self._logged_scan_lines:
             return
         self._logged_scan_lines.add(msg)
@@ -320,8 +331,12 @@ class EvdevReader:
 
     def _grab_device(self, dev) -> None:
         """Grab exclusively. A failed grab is not cosmetic: another process
-        (keyd) holds the device, so our fd stays open and silent forever."""
-        if not self._grab:
+        (keyd) holds the device, so our fd stays open and silent forever.
+
+        Skipped while grabs are deliberately released (VT switch, shutdown):
+        a device adopted in that window must not re-take the keyboard.
+        """
+        if not self._grab or self._grabs_released:
             return
         try:
             dev.grab()
@@ -339,6 +354,11 @@ class EvdevReader:
         if self._device_path:
             self._devices = [InputDevice(self._device_path)]
         else:
+            await self._await_keyd_virtual()
+            # Snapshot before the scan, never after: a keyboard that enumerates
+            # while we scan would otherwise land in the baseline as already
+            # known, and the watcher would never adopt it.
+            self._known_device_paths = self._device_paths()
             self._devices = self._find_keyboards()
 
         if not self._devices:
@@ -358,19 +378,23 @@ class EvdevReader:
         self._running = True
         for dev in self._devices:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
-        self._watchdog_task = asyncio.create_task(self._watchdog())
+
+        # An explicit device_path means "read exactly this one", so no watcher:
+        # it would adopt every other keyboard on the machine.
+        if not self._device_path:
+            self._watcher_task = asyncio.create_task(self._watch_devices())
 
     async def stop(self) -> None:
         """Stop reading and release all devices."""
         self._running = False
 
-        if self._watchdog_task:
-            self._watchdog_task.cancel()
+        if self._watcher_task:
+            self._watcher_task.cancel()
             try:
-                await asyncio.wait_for(self._watchdog_task, timeout=2.0)
+                await asyncio.wait_for(self._watcher_task, timeout=2.0)
             except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
-            self._watchdog_task = None
+            self._watcher_task = None
 
         # Close all devices first to unblock async_read_loop() immediately.
         # Virtual devices (UTM, QEMU) may not wake up on cancel alone.
@@ -429,13 +453,16 @@ class EvdevReader:
         (e.g., for input() to receive keystrokes).
         Call reacquire_grab() after resuming.
         """
-        if self._grab:
-            for dev in self._devices:
-                try:
-                    dev.ungrab()
-                    logger.info(f"EvdevReader: released grab on {dev.path}")
-                except (IOError, OSError) as e:
-                    logger.warning(f"EvdevReader: could not release grab on {dev.path}: {e}")
+        if not self._grab:
+            return
+
+        self._grabs_released = True
+        for dev in self._devices:
+            try:
+                dev.ungrab()
+                logger.info(f"EvdevReader: released grab on {dev.path}")
+            except (IOError, OSError) as e:
+                logger.warning(f"EvdevReader: could not release grab on {dev.path}: {e}")
 
     def reacquire_grab(self) -> None:
         """
@@ -449,6 +476,7 @@ class EvdevReader:
         if not self._grab:
             return
 
+        self._grabs_released = False
         for dev in self._devices:
             # Flush any pending events before reacquiring grab
             try:
@@ -586,63 +614,149 @@ class EvdevReader:
             self._diag(f"Read loop ERROR: {dev_path}: {e}")
             logger.error(f"EvdevReader error on {dev_path}: {e}")
 
-        # Device lost while we're still supposed to be running: try to
-        # reconnect. USB devices can briefly disappear during bus resets
-        # or heavy I/O. The kernel re-creates the device node quickly.
+        # Device lost while we're still supposed to be running. USB devices
+        # disappear briefly during bus resets and the kernel re-creates the node
+        # quickly, so hand it to the watcher rather than starting a private
+        # retry loop here: a device that dies without its node disappearing is
+        # invisible to the path-set check, and this flag is what covers it.
         if self._running:
-            # Remove the dead device
             self._devices = [d for d in self._devices if d.path != dev_path]
             try:
                 device.close()
             except Exception:
                 pass
-            asyncio.ensure_future(self._reconnect(dev_path))
+            self._rescan_wanted = True
 
-    async def _watchdog(self) -> None:
-        """Rescan once if no key event in 30s: Surface Type Cover / slow keyd
-        can enumerate after the boot scan."""
+    @staticmethod
+    def _device_paths() -> set:
+        """Current /dev/input event nodes. Cheap: a glob and a stat per node."""
+        import evdev
         try:
-            await asyncio.sleep(30)
+            return set(evdev.list_devices())
+        except OSError:
+            return set()
+
+    async def _watch_devices(self) -> None:
+        """Adopt keyboards that appear after startup.
+
+        Covers a keyboard that enumerates late (Surface Type Cover, slow keyd)
+        and one a parent plugs in mid-session, which nothing else recovers once
+        every read loop is healthy. Watching the path set rather than rescanning
+        on a timer keeps the poll free and the pickup near-immediate.
+        """
+        warned = False
+        deadline = time.monotonic() + SILENT_KEYBOARD_WARN_SECS
+        try:
+            while self._running:
+                await asyncio.sleep(DEVICE_POLL_SECS)
+                if not self._running:
+                    return
+
+                if not warned and not self._got_first_event and time.monotonic() >= deadline:
+                    warned = True
+                    self._diag(
+                        f"WATCHDOG: no key events {SILENT_KEYBOARD_WARN_SECS}s after start"
+                    )
+
+                # This is the only thing watching for a keyboard that shows up
+                # late, so it has to survive a bad scan. Letting one exception
+                # out would end the task and the session's last recovery path.
+                try:
+                    await self._poll_devices()
+                except Exception as e:
+                    # _poll_devices consumes both triggers before it scans, so
+                    # put one back: the path set may never change again, and
+                    # this flag is all that reopens the gate on the next tick.
+                    self._rescan_wanted = True
+                    self._diag_once(f"KBD WATCHER: poll failed: {e}")
         except asyncio.CancelledError:
             return
-        if not self._running or self._got_first_event:
+
+    async def _poll_devices(self) -> None:
+        """One watcher tick: adopt whatever we are not already reading."""
+        paths = self._device_paths()
+        changed = paths != self._known_device_paths
+        if not changed and not self._rescan_wanted:
             return
-        self._diag("WATCHDOG: no key events 30s after start, rescanning")
-        await self._reconnect("watchdog")
 
-    async def _reconnect(self, lost_path: str) -> None:
-        """Scan for keyboards and restart read loops on new devices.
+        self._known_device_paths = paths
+        self._rescan_wanted = False
 
-        Called when a read loop exits unexpectedly. Retries every second
-        for up to 30 seconds, which covers USB bus resets (typically
-        ~1-2 seconds) and slower device re-enumeration.
+        # A failing device flaps between two path sets. The adopt below still
+        # has to run on every flip, but re-logging the whole inventory each time
+        # would grow the log for as long as the hardware is bad, so only a set
+        # we have never seen starts a fresh episode.
+        key = frozenset(paths)
+        if changed and key not in self._seen_path_sets:
+            self._seen_path_sets.add(key)
+            self._logged_scan_lines.clear()
+            self._diag(f"KBD HOTPLUG: /dev/input changed, {len(paths)} nodes")
+
+        await self._await_keyd_virtual()
+        self._adopt_new_keyboards()
+
+    def _adopt_new_keyboards(self) -> int:
+        """Open and start reading every keyboard we aren't already reading.
+
+        Deliberately free of `await`: nothing can interleave between reading the
+        active paths and appending, so two callers cannot both adopt the same
+        device and deliver every keypress twice.
         """
-        self._logged_scan_lines.clear()
         active_paths = {d.path for d in self._devices}
+        found = self._find_keyboards()
 
-        for attempt in range(30):
-            if not self._running:
+        new_devices = [d for d in found if d.path not in active_paths]
+        for d in found:
+            if d.path in active_paths:
+                d.close()  # Already being read on another handle
+
+        self._tasks = [t for t in self._tasks if not t.done()]
+        for dev in new_devices:
+            self._diag_once(f"KBD ADOPT: {dev.path} ({dev.name})")
+            self._grab_device(dev)
+            self._devices.append(dev)
+            self._tasks.append(asyncio.create_task(self._read_loop(dev)))
+        return len(new_devices)
+
+    @staticmethod
+    def _keyd_virtual_present() -> bool:
+        import evdev
+        from evdev import InputDevice
+
+        for path in evdev.list_devices():
+            try:
+                dev = InputDevice(path)
+            except (PermissionError, OSError):
+                continue
+            try:
+                if KEYD_VIRTUAL_NAME in dev.name.lower():
+                    return True
+            finally:
+                dev.close()
+        return False
+
+    async def _await_keyd_virtual(self) -> None:
+        """Wait for keyd's uinput device before scanning.
+
+        purple-x11.service has After=keyd.service, but keyd is Type=simple, so
+        "started" means "forked", not "uinput device ready". Without this we
+        race keyd's device creation and open a physical keyboard keyd grabs a
+        moment later, which leaves us reading a device that emits nothing.
+        Async, because this also runs on the event loop on every later rescan,
+        where blocking would freeze the UI and the power button with it.
+        """
+        # Paid once. If keyd is configured but dead, re-waiting would add 10s to
+        # every rescan; the watcher picks its device up from the path set if it
+        # ever does appear.
+        if self._keyd_timed_out or not KEYD_CONFIG_PATH.exists():
+            return
+        deadline = time.monotonic() + KEYD_WAIT_SECS
+        while not self._keyd_virtual_present():
+            if time.monotonic() >= deadline:
+                self._keyd_timed_out = True
+                self._diag("KBD SCAN: keyd virtual keyboard never appeared")
                 return
-            await asyncio.sleep(1)
-
-            found = self._find_keyboards()
-            new_devices = [d for d in found if d.path not in active_paths]
-
-            # Close devices we didn't need (already being read)
-            for d in found:
-                if d.path in active_paths:
-                    d.close()
-
-            if new_devices:
-                for dev in new_devices:
-                    self._diag(f"Reconnected: {dev.path} ({dev.name})")
-                    self._grab_device(dev)
-                    self._devices.append(dev)
-                    active_paths.add(dev.path)
-                    self._tasks.append(asyncio.create_task(self._read_loop(dev)))
-                return
-
-        self._diag(f"Reconnect gave up after 30s (lost {lost_path})")
+            await asyncio.sleep(0.1)
 
     def _find_keyboards(self):
         """Find all real keyboard input devices.
@@ -735,28 +849,6 @@ class EvdevReader:
                     dev.close()
 
             return found
-
-        def _keyd_virtual_present():
-            for p in evdev.list_devices():
-                try:
-                    dev = InputDevice(p)
-                except (PermissionError, OSError):
-                    continue
-                try:
-                    if KEYD_VIRTUAL_NAME in dev.name.lower():
-                        return True
-                finally:
-                    dev.close()
-            return False
-
-        # purple-x11.service has After=keyd.service, but keyd is Type=simple,
-        # so "started" means "forked", not "uinput device ready". Without this
-        # poll we race keyd's device creation at cold boot and pick up a
-        # physical keyboard keyd grabs a moment later -> silent input.
-        if KEYD_CONFIG_PATH.exists():
-            deadline = time.monotonic() + KEYD_WAIT_SECS
-            while not _keyd_virtual_present() and time.monotonic() < deadline:
-                time.sleep(0.1)
 
         found = _gather(_is_real_keyboard, "strict")
         if found:

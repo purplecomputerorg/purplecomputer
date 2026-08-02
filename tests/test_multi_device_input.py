@@ -11,6 +11,7 @@ Run with: pytest tests/test_multi_device_input.py -v
 
 import asyncio
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -683,27 +684,303 @@ class TestKeyboardValidation:
         assert not letter_keys.issubset(small)
 
 
-class TestSilentKeyboardDiagnostics:
-    """A silent keyboard leaves no trace unless the scan records one."""
+class TestSilentKeyboardRecovery:
+    """A keyboard that never delivers a key is the failure mode these guard."""
 
-    def test_virtual_only_scan_is_flagged(self):
-        """keyd's uinput device passes every keyboard check, so a machine with
-        no physical keyboard still scans clean."""
-        reader = EvdevReader(callback=AsyncCallback())
-        logged = []
-        with patch.object(reader, '_diag', lambda msg: logged.append(msg)):
-            reader._warn_if_virtual_only(
-                [FakeInputDevice("/dev/input/event0", "keyd virtual keyboard")]
-            )
-            assert any("no physical keyboard" in m for m in logged)
+    def test_keyboard_plugged_in_later_is_adopted(self):
+        """Once every read loop is healthy nothing else notices a new keyboard,
+        so the watcher is the only thing that picks one up mid-session."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            late = FakeInputDevice("/dev/input/event1", "Late KB", _full_keyboard_caps())
 
-            logged.clear()
-            reader._logged_scan_lines.clear()
-            reader._warn_if_virtual_only([
-                FakeInputDevice("/dev/input/event0", "keyd virtual keyboard"),
-                FakeInputDevice("/dev/input/event1", "AT Translated Set 2 keyboard"),
-            ])
-            assert logged == []
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
+                 patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+
+                # A rescan opens fresh handles for devices already being read.
+                dup = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+                with patch.object(reader, '_find_keyboards', return_value=[dup, late]), \
+                     patch.object(reader, '_device_paths',
+                                  return_value={"/dev/input/event0", "/dev/input/event1"}):
+                    await asyncio.sleep(0.1)
+
+                assert [d.path for d in reader._devices] == [kbd.path, late.path]
+                assert len(reader._tasks) == 2
+                await reader.stop()
+
+        _run(_test())
+
+    def test_watcher_only_scans_when_the_device_set_changes(self):
+        """The poll runs for the whole session, so it has to stay free."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            scans = []
+
+            def _counting_scan():
+                scans.append(1)
+                return [kbd]
+
+            with patch.object(reader, '_find_keyboards', _counting_scan), \
+                 patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+                await asyncio.sleep(0.15)
+                await reader.stop()
+
+            assert len(scans) == 1  # the boot scan, and nothing since
+
+        _run(_test())
+
+    def test_adopt_is_atomic_so_concurrent_callers_cant_double_open(self):
+        """A lost device and the watcher can both land here; two read loops on
+        one device would deliver every keypress twice."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            late = FakeInputDevice("/dev/input/event1", "Late KB", _full_keyboard_caps())
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+
+            # A rescan opens fresh handles, so the already-active keyboard
+            # comes back as a distinct object on the same path.
+            dup = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            with patch.object(reader, '_find_keyboards', return_value=[dup, late]):
+                assert reader._adopt_new_keyboards() == 1
+                assert reader._adopt_new_keyboards() == 0
+
+            assert [d.path for d in reader._devices] == [kbd.path, late.path]
+            assert len(reader._tasks) == 2
+            await reader.stop()
+
+        _run(_test())
+
+    def test_every_lost_device_gets_recovered(self):
+        """Two nodes for one keyboard is the case _find_keyboards exists for,
+        and a bus reset takes down both read loops."""
+        async def _test():
+            dev_a = FakeInputDevice("/dev/input/event0", "KB A", _full_keyboard_caps())
+            dev_b = FakeInputDevice("/dev/input/event1", "KB B", _full_keyboard_caps())
+            paths = {"/dev/input/event0", "/dev/input/event1"}
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            with patch.object(reader, '_find_keyboards', return_value=[dev_a, dev_b]), \
+                 patch.object(reader, '_device_paths', return_value=paths), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+
+                # Both read loops die, staggered, without either node going
+                # away: the path set never changes, so only the flag covers it.
+                def _scan():  # a real scan opens fresh handles every time
+                    return [
+                        FakeInputDevice("/dev/input/event0", "KB A", _full_keyboard_caps()),
+                        FakeInputDevice("/dev/input/event1", "KB B", _full_keyboard_caps()),
+                    ]
+
+                with patch.object(reader, '_find_keyboards', _scan):
+                    reader._devices = [dev_b]
+                    reader._rescan_wanted = True
+                    await asyncio.sleep(0.05)
+                    reader._devices = []
+                    reader._rescan_wanted = True
+                    await asyncio.sleep(0.05)
+
+                assert sorted(d.path for d in reader._devices) == [
+                    "/dev/input/event0", "/dev/input/event1"
+                ]
+                await reader.stop()
+
+        _run(_test())
+
+    def test_a_dead_read_loop_asks_for_a_rescan(self):
+        """A device that dies without its node disappearing is invisible to the
+        path-set check, so the read loop has to flag it."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
+                 patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 5):
+                await reader.start()
+                assert not reader._rescan_wanted
+
+                kbd.close()  # read loop sees the device go away
+                await asyncio.sleep(0.05)
+
+                assert reader._rescan_wanted
+                assert reader._devices == []
+                await reader.stop()
+
+        _run(_test())
+
+    def test_finished_read_loop_tasks_dont_accumulate(self):
+        """A flapping device would otherwise grow _tasks for the session."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+
+            for _ in range(3):
+                reader._devices[0].close()
+                await asyncio.sleep(0)
+                reader._devices = []
+                fresh = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+                with patch.object(reader, '_find_keyboards', return_value=[fresh]):
+                    reader._adopt_new_keyboards()
+
+            assert len(reader._tasks) == 1
+            await reader.stop()
+
+        _run(_test())
+
+    def test_keyd_wait_does_not_block_the_event_loop(self):
+        """It runs during a reconnect, where blocking would freeze the UI and
+        the power button along with it."""
+        async def _test():
+            reader = EvdevReader(callback=AsyncCallback())
+            ticks = []
+
+            async def _ticker():
+                while True:
+                    await asyncio.sleep(0.01)
+                    ticks.append(1)
+
+            with patch.object(reader, '_keyd_virtual_present', return_value=False), \
+                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purple_tui.input.KEYD_WAIT_SECS", 0.2):
+                ticker = asyncio.create_task(_ticker())
+                await reader._await_keyd_virtual()
+                ticker.cancel()
+
+            assert len(ticks) > 5  # the loop kept running throughout
+
+        _run(_test())
+
+    def test_keyd_wait_returns_as_soon_as_the_device_appears(self):
+        async def _test():
+            reader = EvdevReader(callback=AsyncCallback())
+            with patch.object(reader, '_keyd_virtual_present', return_value=True), \
+                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purple_tui.input.KEYD_WAIT_SECS", 5.0):
+                start = time.monotonic()
+                await reader._await_keyd_virtual()
+                assert time.monotonic() - start < 0.1
+
+        _run(_test())
+
+    def test_watcher_survives_a_failing_scan(self):
+        """It's the only thing watching for a late keyboard, so one bad scan
+        must not end the task for the rest of the session."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            late = FakeInputDevice("/dev/input/event1", "Late KB", _full_keyboard_caps())
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
+                 patch.object(reader, '_device_paths', return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+
+                with patch.object(reader, '_device_paths', side_effect=OSError("boom")):
+                    await asyncio.sleep(0.05)
+                assert not reader._watcher_task.done()
+
+                # A scan that throws after the triggers are consumed must not
+                # swallow the work item: capabilities() raises OSError when a
+                # node vanishes mid-scan, which is this recovery's own case.
+                reader._rescan_wanted = True
+                with patch.object(reader, '_find_keyboards', side_effect=OSError("gone")):
+                    await asyncio.sleep(0.05)
+                assert reader._rescan_wanted
+
+                dup = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+                with patch.object(reader, '_find_keyboards', return_value=[dup, late]), \
+                     patch.object(reader, '_device_paths',
+                                  return_value={"/dev/input/event0", "/dev/input/event1"}):
+                    await asyncio.sleep(0.05)
+
+                assert [d.path for d in reader._devices] == [kbd.path, late.path]
+                await reader.stop()
+
+        _run(_test())
+
+    def test_a_flapping_device_stops_rewriting_the_log(self):
+        """A dying keyboard alternates between two path sets. Adoption still has
+        to run on each flip, but the log can't grow while the hardware is bad."""
+        async def _test():
+            sets = [{"/dev/input/event0"}, {"/dev/input/event0", "/dev/input/event1"}]
+            flips = {"n": 0}
+
+            def _flapping_paths():
+                flips["n"] += 1
+                return sets[flips["n"] % 2]
+
+            def _scan():
+                return [FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())]
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            logged = []
+            with patch.object(reader, '_find_keyboards', _scan), \
+                 patch.object(reader, '_device_paths', return_value=sets[0]), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+
+                with patch.object(reader, '_diag', lambda m: logged.append(m)), \
+                     patch.object(reader, '_device_paths', _flapping_paths):
+                    await asyncio.sleep(0.2)
+                await reader.stop()
+
+            assert flips["n"] > 5  # the flap really did happen many times
+            assert len([m for m in logged if "HOTPLUG" in m]) == 2
+
+        _run(_test())
+
+    def test_keyd_wait_is_paid_once_when_keyd_is_dead(self):
+        """Re-waiting would add 10s to every reconnect on a broken machine."""
+        async def _test():
+            reader = EvdevReader(callback=AsyncCallback())
+            with patch.object(reader, '_keyd_virtual_present', return_value=False), \
+                 patch("purple_tui.input.KEYD_CONFIG_PATH", Path(__file__)), \
+                 patch("purple_tui.input.KEYD_WAIT_SECS", 0.2):
+                await reader._await_keyd_virtual()
+
+                start = time.monotonic()
+                await reader._await_keyd_virtual()
+                assert time.monotonic() - start < 0.05
+
+        _run(_test())
+
+    def test_adopting_while_grabs_are_released_does_not_grab(self):
+        """release_grab() runs on the way to a VT switch and to shutdown; a
+        device adopted in that window must not re-take the keyboard."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            late = FakeInputDevice("/dev/input/event1", "Late KB", _full_keyboard_caps())
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=True)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]):
+                await reader.start()
+            assert kbd._grabbed
+
+            reader.release_grab()
+            dup = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+            with patch.object(reader, '_find_keyboards', return_value=[dup, late]):
+                reader._adopt_new_keyboards()
+            assert not late._grabbed
+
+            reader.reacquire_grab()
+            assert late._grabbed
+
+            await reader.stop()
+
+        _run(_test())
 
     def test_failed_grab_reaches_the_diag_log(self):
         """A device another process holds stays open and silent forever, so the
@@ -724,7 +1001,8 @@ class TestSilentKeyboardDiagnostics:
         _run(_test())
 
     def test_repeated_scans_do_not_repeat_the_inventory(self):
-        """_reconnect rescans once a second; the log has to stay readable."""
+        """A device that flaps in place is rescanned every couple of seconds;
+        the log has to stay readable."""
         reader = EvdevReader(callback=AsyncCallback())
         logged = []
         with patch.object(reader, '_diag', lambda msg: logged.append(msg)):
@@ -735,6 +1013,25 @@ class TestSilentKeyboardDiagnostics:
             reader._logged_scan_lines.clear()  # a new episode starts
             reader._diag_once("KBD SCAN: listening on 1 keyboard device(s)")
             assert len(logged) == 2
+
+    def test_virtual_only_scan_is_flagged(self):
+        """keyd's uinput device passes every keyboard check, so a machine with
+        no physical keyboard still scans clean."""
+        reader = EvdevReader(callback=AsyncCallback())
+        logged = []
+        with patch.object(reader, '_diag', lambda msg: logged.append(msg)):
+            reader._warn_if_virtual_only(
+                [FakeInputDevice("/dev/input/event0", "keyd virtual keyboard")]
+            )
+            assert any("no physical keyboard" in m for m in logged)
+
+            logged.clear()
+            reader._logged_scan_lines.clear()
+            reader._warn_if_virtual_only([
+                FakeInputDevice("/dev/input/event0", "keyd virtual keyboard"),
+                FakeInputDevice("/dev/input/event1", "AT Translated Set 2 keyboard"),
+            ])
+            assert logged == []
 
 
 if __name__ == "__main__":

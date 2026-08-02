@@ -800,11 +800,9 @@ class ArtCanvas(Widget, can_focus=True):
         pos = (self._cursor_x, self._cursor_y)
         cell = self._grid.get(pos)
 
-        # Check if painting over existing paint
-        if cell and cell[0] == BRUSH_CHAR:
-            # Mix with existing paint color
-            existing_color = cell[2]
-            new_color = mix_colors_paint([existing_color, self._last_key_color])
+        # Painted cells mix even when a typed letter sits on top of the paint
+        if pos in self._painted_positions:
+            new_color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color])
         else:
             # First paint stroke: use pure key color (no background blending)
             new_color = self._last_key_color

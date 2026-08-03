@@ -52,7 +52,7 @@ class TimeTravelBar(Vertical):
         # mounting completes, so the bar never flashes blank.
         yield Static(f"[bold]{ICON_TIME_TRAVEL} Time Travel[/]", id="tt-head")
         yield Static(self._dots_markup(), id="tt-dots")
-        yield Static("Enter: keep this    Esc: put it back", id="tt-action")
+        yield Static("Enter: keep this    Esc: never mind", id="tt-action")
 
     def set_position(self, index: int, total: int) -> None:
         """Show step `index` (0-based) of `total` on the dot track."""

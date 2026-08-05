@@ -38,7 +38,7 @@ def _cell_width(ch: str) -> int:
     return 2 if unicodedata.east_asian_width(ch) in ('W', 'F') else 1
 
 from ..constants import HOLD_OR_TAP_THRESHOLD
-from ..content import singularize, OPERATOR_WORDS, DIGIT_OPERATOR_WORDS
+from ..content import OPERATOR_WORDS, DIGIT_OPERATOR_WORDS
 
 from ..content import get_content
 from ..code_input import (
@@ -2196,12 +2196,23 @@ class SimpleEvaluator:
             if h := self._get_color(word):
                 return self._format_color_label(h, count)
 
-        # Bare plural for colors (e.g., "yellows" -> 2 yellow boxes)
-        if t_lower.endswith('s') and len(t_lower) > 2:
-            word = t_lower[:-1]
-            if h := self.content.get_color(word):
-                return f"[on {h}]  [/]" * 2
+        # Bare plural for colors, typos included (e.g., "yellows", "redds")
+        if h := self._plural_color(t_lower):
+            return f"[on {h}]  [/]" * 2
 
+        return None
+
+    def _plural_color(self, term: str) -> str | None:
+        """Hex for a plural color word, typos included ("redds" -> red).
+
+        Falls back to stripping a trailing "s" so kid plurals of colors whose
+        table plural differs still work ("skys" -> sky).
+        """
+        if (singular := self.content.fuzzy_singularize(term)) and singular != term:
+            if h := self.content.get_color(singular):
+                return h
+        if term.endswith('s') and len(term) > 2:
+            return self.content.get_color(term[:-1])
         return None
 
     def _parse_color(self, term: str) -> list[str] | None:
@@ -2220,11 +2231,9 @@ class SimpleEvaluator:
             if (h := self._get_color(m.group(1))) and 1 <= int(m.group(2)) <= 20:
                 return [h] * int(m.group(2))
 
-        # Bare plural (e.g., "yellows" -> 2 yellow)
-        if term.endswith('s') and len(term) > 2:
-            word = term[:-1]
-            if h := self.content.get_color(word):
-                return [h] * 2
+        # Bare plural, typos included (e.g., "yellows" -> 2 yellow, "redds" -> 2 red)
+        if h := self._plural_color(term):
+            return [h] * 2
 
         # Just a color name
         if h := self._get_color(term):
@@ -2262,8 +2271,8 @@ class SimpleEvaluator:
             if e := self._get_emoji(m.group(1)):
                 return (e, int(m.group(2)), m.group(1))
 
-        # Bare plural (e.g., "cats" -> 2 cat emojis, "tomatoes" -> 2 tomato emojis)
-        if singular := singularize(term):
+        # Bare plural, typos included (e.g., "cats" -> 2 cat emojis, "appples" -> 2 apples)
+        if singular := self.content.fuzzy_singularize(term):
             # Skip uncountable nouns where singular == original (sheep, fish, deer, etc.)
             if singular != term.lower() and (e := self.content.get_emoji(singular)):
                 return (e, 2, singular)

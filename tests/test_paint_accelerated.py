@@ -10,6 +10,12 @@
    letter-held path painted once per arrow repeat, so once acceleration kicked
    in it painted 1 cell and skipped the next 5, leaving a dotted trail where
    the space-held pen drew a solid streak.
+
+3. A held-letter drag over existing paint must leave a uniform trail. The
+   per-repeat pre-paint re-coated the cell the previous repeat's landing step
+   had just painted, and a second coat mixes again, so over another color
+   every accelerated landing cell turned a different shade and the trail
+   looked dotted even though every cell was painted.
 """
 
 import asyncio
@@ -143,5 +149,39 @@ def test_held_letter_paints_every_cell_through_acceleration():
                 f"the accel threshold the cursor jumps "
                 f"{HOLD_ACCEL_MULTIPLIER} cells, so painting must happen at "
                 f"every intermediate step, not once per repeat."
+            )
+    _run(_test())
+
+
+def test_held_letter_drag_over_existing_paint_is_uniform():
+    """Hold 'r' + right arrow across a blue stretch: one even blend, no stripes."""
+    async def _test():
+        async with _art_canvas() as canvas:
+            row = 5
+            for x in range(0, 30):
+                canvas._grid[(x, row)] = ("█", "#1F75FE", "#1F75FE")
+                canvas._painted_positions.add((x, row))
+
+            canvas._cursor_x = 2
+            canvas._cursor_y = row
+            canvas._pen_down = False
+
+            start_x = canvas._cursor_x
+            await _hold_to_accel_threshold(
+                canvas, direction='right', char_held='r'
+            )
+            for _ in range(2):
+                await canvas.handle_keyboard_action(
+                    NavigationAction(direction='right', is_repeat=True, char_held='r')
+                )
+
+            colors = {canvas._grid[(x, row)][2]
+                      for x in range(start_x + 1, canvas._cursor_x)}
+            assert len(colors) == 1, (
+                f"Drag over existing paint left {len(colors)} shades "
+                f"({sorted(colors)}) between columns {start_x + 1} and "
+                f"{canvas._cursor_x - 1}. Each cell must get exactly one coat: "
+                f"a second coat on the repeat boundary re-mixes and stripes "
+                f"the trail."
             )
     _run(_test())

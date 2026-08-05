@@ -333,12 +333,13 @@ class ContentManager:
         self._emoji_fuzzy_cache.clear()
         self._color_fuzzy_cache.clear()
 
-    def _fuzzy_lookup(self, word: str, table: dict[str, str],
-                      forms: dict[str, str], cache: dict[str, str | None]) -> Optional[str]:
+    def _fuzzy_lookup(self, word: str, forms: dict[str, str],
+                      cache: dict[str, str | None]) -> Optional[str]:
         """Fuzzy match a word against a precomputed forms table, memoized.
 
-        The memo stores the matched form so a hit replays the correction
-        side effect identically to a fresh lookup.
+        Returns the matched form ("apples" for "appples"). The memo stores
+        the matched form so a hit replays the correction side effect
+        identically to a fresh lookup.
         """
         from .fuzzy import fuzzy_match, DEFAULT_MIN_LEN
         word = word.lower().strip()
@@ -351,8 +352,9 @@ class ContentManager:
                 cache.clear()
             cache[word] = fuzzy_match(word, forms)
         if match := cache[word]:
-            self._last_correction = (word, match)
-            return table[forms[match]]
+            if match != word:
+                self._last_correction = (word, match)
+            return match
         return None
 
     def fuzzy_emoji(self, word: str) -> Optional[str]:
@@ -362,12 +364,31 @@ class ContentManager:
         large (400+), so the min-5 floor avoids 3-4 char keymash collisions.
         Plural typos match too ("doggiess" corrects to "doggies").
         """
-        return self._fuzzy_lookup(word, self.emojis, self._emoji_forms,
-                                  self._emoji_fuzzy_cache)
+        if m := self._fuzzy_lookup(word, self._emoji_forms, self._emoji_fuzzy_cache):
+            return self.emojis[self._emoji_forms[m]]
+        return None
 
     def get_emoji(self, word: str) -> Optional[str]:
         """Get emoji for a word: exact/singular, then fuzzy (DL distance, min 5)."""
         return self.exact_emoji(word) or self.fuzzy_emoji(word)
+
+    def fuzzy_singularize(self, word: str) -> str | None:
+        """Singular for a plural word, fixing a single-slip typo first, so
+        "appples" counts as two apples just like "apples". Checks emoji forms
+        then color forms; records the correction when a typo fix fires.
+        Returns None for words that aren't plurals of known content.
+        """
+        word = word.lower().strip()
+        if s := singularize(word):
+            return s
+        if self.is_exact_word(word):
+            return None
+        for forms, memo in ((self._emoji_forms, self._emoji_fuzzy_cache),
+                            (self._color_forms, self._color_fuzzy_cache)):
+            if m := self._fuzzy_lookup(word, forms, memo):
+                key = forms[m]
+                return key if key != m else singularize(m)
+        return None
 
     def emoji_to_word(self, emoji: str) -> Optional[str]:
         """Reverse lookup: get word for an emoji character"""
@@ -497,8 +518,9 @@ class ContentManager:
         for short slips like "bleu" lives in the explicit `color X` command
         (loose match) and in autocomplete, not in bare-word resolution.
         """
-        return self._fuzzy_lookup(word, self.colors, self._color_forms,
-                                  self._color_fuzzy_cache)
+        if m := self._fuzzy_lookup(word, self._color_forms, self._color_fuzzy_cache):
+            return self.colors[self._color_forms[m]]
+        return None
 
     def get_color(self, word: str) -> Optional[str]:
         """Get hex color: exact/singular, then fuzzy (DL distance, min 4)."""

@@ -249,7 +249,9 @@ class TestFuzzyPrecompute:
         for k in table:
             forms.setdefault(pluralize(k), k)
         if match := fuzzy_match(word, list(forms)):
-            return table[forms[match]], (word, match)
+            # A distance-0 hit on a known form is not a correction
+            correction = (word, match) if match != word else None
+            return table[forms[match]], correction
         return None, None
 
     def _words_to_try(self, table):

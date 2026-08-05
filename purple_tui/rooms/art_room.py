@@ -287,6 +287,10 @@ class ArtCanvas(Widget, can_focus=True):
         self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
         # Positions that have been deliberately painted (vs text tint bg)
         self._painted_positions: set[tuple[int, int]] = set()
+        # Cell painted most recently, so a held-letter drag never coats the
+        # same cell twice (a second coat re-mixes and stripes trails drawn
+        # over existing paint)
+        self._last_paint_pos: tuple[int, int] | None = None
         self._cursor_x = 0
         self._cursor_y = 0
 
@@ -826,6 +830,7 @@ class ArtCanvas(Widget, can_focus=True):
             new_color = self._last_key_color
 
         self._painted_positions.add(pos)
+        self._last_paint_pos = pos
 
         # If cell has a text character, keep it and just paint the background
         if cell and cell[0] not in ("", " ", BRUSH_CHAR):
@@ -890,6 +895,8 @@ class ArtCanvas(Widget, can_focus=True):
         if pos in self._grid:
             del self._grid[pos]
             self._painted_positions.discard(pos)
+            if pos == self._last_paint_pos:
+                self._last_paint_pos = None
 
         self._mark_cursor_dirty()  # New position
         self.refresh()
@@ -901,6 +908,7 @@ class ArtCanvas(Widget, can_focus=True):
         # Simple clear (animation could be added via set_interval)
         self._grid.clear()
         self._painted_positions.clear()
+        self._last_paint_pos = None
         self._cursor_x = 0
         self._cursor_y = 0
         self._paint_mode = True
@@ -1066,7 +1074,12 @@ class ArtCanvas(Widget, can_focus=True):
                         self._last_key_char = lower
                         self._last_key_color = color
                         self._post_paint_mode_changed()
-                self._paint_at_cursor()
+                # Skip when the previous repeat's landing step already painted
+                # this cell: a second coat re-mixes, so over existing paint
+                # every accelerated landing cell turned a different shade and
+                # the trail looked dotted.
+                if (self._cursor_x, self._cursor_y) != self._last_paint_pos:
+                    self._paint_at_cursor()
 
             # Smart ↑/↓: the auto-advance after a stamp pushed the cursor one
             # cell right; pulling it back to the stamp column lets `a, ↓, a`
@@ -1453,6 +1466,7 @@ class ArtMode(Container):
         canvas = self.query_one("#art-canvas", ArtCanvas)
         canvas._grid.clear()
         canvas._painted_positions.clear()
+        canvas._last_paint_pos = None
         for key, val in state.items():
             if not key.startswith("c:"):
                 continue

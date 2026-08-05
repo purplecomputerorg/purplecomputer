@@ -146,6 +146,16 @@ if [[ "$CORRUPT_MODE" == true ]]; then
     echo -e "${BOLD}${YELLOW}Will flash ${#ENTRIES[@]} corrupt-test scenario(s), one per drive, in parallel:${NC}"
 else
     echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") to ${#ENTRIES[@]} drive(s) in parallel:${NC}"
+    # Shipping guard: customer batches should be release builds. Quiet when the
+    # ISO matches the release branch tip (or the branch doesn't exist locally).
+    ISO_SRC_COMMIT="$(tr -d '[:space:]' < "${ISO_PATH}.commit" 2>/dev/null || true)"
+    if [[ -n "$ISO_SRC_COMMIT" ]]; then
+        RELEASE_HEAD="$(git -C "$PROJECT_DIR" rev-parse --short="${#ISO_SRC_COMMIT}" release/1.x 2>/dev/null || true)"
+        if [[ -n "$RELEASE_HEAD" && "$ISO_SRC_COMMIT" != "$RELEASE_HEAD" ]]; then
+            echo -e "  ${YELLOW}${BOLD}Not the current release build:${NC}${YELLOW} this ISO is from commit $ISO_SRC_COMMIT, release/1.x is at $RELEASE_HEAD.${NC}"
+            echo -e "  ${YELLOW}Fine for dev sticks; do not ship these drives to customers.${NC}"
+        fi
+    fi
 fi
 for i in "${!ENTRIES[@]}"; do
     IFS='|' read -r dev size model serial <<< "${ENTRIES[$i]}"

@@ -20,6 +20,8 @@ Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supp
 
 Commit messages: **one line, max two short sentences.** No bullet-list body. No `Co-Authored-By` trailer. No `lane(...)` prefix — the script handles whatever prefixing is needed. Never use the default verbose Claude Code commit format.
 
+Commit messages and `docs/UX_LOG.md` are public and customer-readable: describe what changed, never the messaging strategy or tone intent behind it (no "warmer", "apologetic", "less blame-y").
+
 If you're unsure what message to use, propose one and ask the user to confirm before committing.
 
 ## Shipping Branch

@@ -68,6 +68,10 @@ run-sleep-demo:
 preview *args:
     @PYTHONPATH={{justfile_directory()}} {{venv}}/bin/python scripts/preview.py {{args}}
 
+# Screenshot the GRUB unsupported-computer (32-bit) screen via QEMU, no ISO build needed
+preview-grub-guard:
+    @./scripts/preview-grub-guard.sh
+
 # Run tests (lint runs first; static checks catch undefined-name bugs before pytest spins up)
 test: lint
     {{venv}}/bin/python -m pytest tests/ -v

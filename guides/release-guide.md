@@ -32,6 +32,11 @@ Decide fix vs feature at pick time; when a commit is both, it belongs to 2.0 (a 
 
 To ship: build and `just release` from `~/purplecomputer-release` (steps below), then tag the shipped commit with the version the release script printed: `git tag <version>`. Tags are the only record mapping a shipped ISO to a commit.
 
+Two traps when shipping from the worktree:
+
+- All checkouts build into the same `/opt/purple-installer/output/`, and the release script uploads the newest ISO there. Build and release back-to-back, and check the ISO filename in the confirm prompt: a newer main build in that directory would ship 2.0 features early.
+- The on-device version (Parent Menu) is stamped at build time via `PURPLE_VERSION`; the release name is chosen at upload time. Pass the same version to both, or pass neither and get a date build.
+
 When 2.0 ships from main: delete the branch, the worktree, and this section.
 
 

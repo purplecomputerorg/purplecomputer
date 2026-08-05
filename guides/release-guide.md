@@ -31,6 +31,16 @@ To ship: build and `just release` from `~/purplecomputer-release` (steps below),
 
 The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` aborts on a mismatch. A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 
+### Why a separate worktree
+
+`~/purplecomputer-release` is a linked worktree of this repo, not a clone: same object database, same branches and tags, just a second directory with `release/1.x` checked out (its `.git` is a pointer file back into the main checkout's).
+
+- Builds read the working tree (docker mounts the project directory), so the branch needs its own directory. The alternative, switching the main checkout back and forth on ship day, is stateful and error-prone.
+- A shared object database means `release-pick` cherry-picks local commits directly and tags are visible from both directories, no remote round-trips. The justfile resolves `.venv` through `git-common-dir`, so the worktree also needs no second environment.
+- It lives outside `.claude/worktrees/` deliberately: lane worktrees merge into main and get deleted, and this branch must never merge.
+
+It is not a backup: it shares `.git` with the main checkout and dies with it. Push `release/1.x` when you want an off-machine copy.
+
 When the next major release ships from main: delete the branch, the worktree, and this section.
 
 

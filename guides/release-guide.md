@@ -11,7 +11,30 @@ The download page reads `latest.json` from the files host at build time (revalid
 
 ---
 
-## Prerequisites
+## Fix/Feature Split (until 2.0)
+
+`main` is the 2.0 line. `release/1.x` is what customers get today: a fixes-only branch, checked out permanently at `~/purplecomputer-release`. Features (Time Travel, room persistence, the Art pen, the Music demo rebuild) stay on main for the 2.0 release.
+
+Rules, in order of importance:
+
+1. **Everything lands on main first** via the normal lanes flow. Never commit directly on `release/1.x`; its only commits are cherry-picks from main.
+2. **Never merge** between the branches, in either direction. Fixes flow main to release via `just release-pick <sha>...` only.
+3. **Ship from `~/purplecomputer-release`**, never from the main checkout.
+
+Day to day:
+
+```bash
+just release-status          # commits on main not on release/1.x (= already picked, + not)
+just release-pick <sha>...   # cherry-pick fixes over and run the release branch's tests
+```
+
+Decide fix vs feature at pick time; when a commit is both, it belongs to 2.0 (a fix to an unshipped feature ships with the feature). The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
+
+To ship: build and `just release` from `~/purplecomputer-release` (steps below), then tag the shipped commit with the version the release script printed: `git tag <version>`. Tags are the only record mapping a shipped ISO to a commit.
+
+When 2.0 ships from main: delete the branch, the worktree, and this section.
+
+
 
 Copy the credentials template and fill it in:
 

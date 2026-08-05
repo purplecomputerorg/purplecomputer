@@ -731,15 +731,17 @@ JOURNAL
 
     # Stamp build version so parents can report it from the Parent Menu.
     # PURPLE_VERSION env var can be set externally (e.g. by release-iso.sh).
-    # Falls back to git short hash + build date.
-    local build_version="${PURPLE_VERSION:-}"
-    if [ -z "$build_version" ]; then
-        local git_hash
+    # Falls back to git short hash + build date. /etc/purple-commit always
+    # carries the source commit so release-iso.sh can verify an ISO against
+    # the checkout even when a friendly version hides the hash.
+    local git_hash="${PURPLE_COMMIT:-}"
+    if [ -z "$git_hash" ]; then
         git_hash=$(git -C /purple-src rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        build_version="build-${git_hash}-$(date +%Y%m%d)"
     fi
+    local build_version="${PURPLE_VERSION:-build-${git_hash}-$(date +%Y%m%d)}"
     echo "$build_version" > "$MOUNT_DIR/etc/purple-version"
-    log_info "Version stamp: $build_version"
+    echo "$git_hash" > "$MOUNT_DIR/etc/purple-commit"
+    log_info "Version stamp: $build_version (commit $git_hash)"
 
     # tty2: autologin as purple, starts at sysinit.target (not getty.target).
     # This gives us a debug shell even when something blocks multi-user.target.

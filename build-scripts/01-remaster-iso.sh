@@ -248,12 +248,13 @@ SOURCES_EOF
     # ISO was built from, not whatever happens to be checked out at flash time.
     rm -rf "$WORK_DIR/sq-version"
     BUILD_VERSION="unknown"
-    if unsquashfs -d "$WORK_DIR/sq-version" "$LIVE_SQUASHFS" etc/purple-version >/dev/null 2>&1 \
-        && [ -f "$WORK_DIR/sq-version/etc/purple-version" ]; then
-        BUILD_VERSION="$(cat "$WORK_DIR/sq-version/etc/purple-version")"
+    BUILD_COMMIT="unknown"
+    if unsquashfs -d "$WORK_DIR/sq-version" "$LIVE_SQUASHFS" etc/purple-version etc/purple-commit >/dev/null 2>&1; then
+        [ -f "$WORK_DIR/sq-version/etc/purple-version" ] && BUILD_VERSION="$(cat "$WORK_DIR/sq-version/etc/purple-version")"
+        [ -f "$WORK_DIR/sq-version/etc/purple-commit" ] && BUILD_COMMIT="$(cat "$WORK_DIR/sq-version/etc/purple-commit")"
     fi
     rm -rf "$WORK_DIR/sq-version"
-    log_info "Build version (from image): $BUILD_VERSION"
+    log_info "Build version (from image): $BUILD_VERSION (commit $BUILD_COMMIT)"
 
     # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
     log_step "5/11: Modifying initramfs..."
@@ -520,7 +521,7 @@ EFI_GRUB_EOF
     build_installer_iso() {
         local out="$1" volid="$2"
         # Remove existing ISOs (xorriso can't overwrite)
-        rm -f "$out" "${out}.sha256" "${out}.version"
+        rm -f "$out" "${out}.sha256" "${out}.version" "${out}.commit"
         xorriso -indev "$UBUNTU_ISO" \
             -outdev "$out" \
             -volid "$volid" \
@@ -529,6 +530,7 @@ EFI_GRUB_EOF
             -append_partition 2 0xEF "$EFI_IMG"
         sha256sum "$out" > "${out}.sha256"
         echo "$BUILD_VERSION" > "${out}.version"
+        echo "$BUILD_COMMIT" > "${out}.commit"
         log_info "Output: $out"
         log_info "Size: $(du -h "$out" | cut -f1)"
         log_info "SHA256: $(cat "${out}.sha256")"

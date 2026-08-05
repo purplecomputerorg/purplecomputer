@@ -115,9 +115,10 @@ main() {
     log_info "  - Squashfs and boot stack remain untouched"
 
     # Resolve version on the host where git works (container hits safe.directory errors)
+    local git_hash
+    git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    PURPLE_COMMIT="${PURPLE_COMMIT:-$git_hash}"
     if [ -z "${PURPLE_VERSION:-}" ]; then
-        local git_hash
-        git_hash=$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")
         PURPLE_VERSION="build-${git_hash}-$(date +%Y%m%d)"
     fi
 
@@ -126,6 +127,7 @@ main() {
         -v "$PROJECT_DIR:/purple-src" \
         -v "$HOST_INSTALLER_DIR:$INSTALLER_BASE" \
         -e "PURPLE_VERSION=${PURPLE_VERSION}" \
+        -e "PURPLE_COMMIT=${PURPLE_COMMIT}" \
         -e "FAST_BUILD=${FAST_BUILD}" \
         -e "PURPLE_WITH_BACKUP_ISO=${PURPLE_WITH_BACKUP_ISO:-}" \
         "$IMAGE_NAME" \

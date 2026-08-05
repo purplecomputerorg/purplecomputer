@@ -11,33 +11,27 @@ The download page reads `latest.json` from the files host at build time (revalid
 
 ---
 
-## Fix/Feature Split (until 2.0)
+## Release Branch (1.x)
 
-`main` is the 2.0 line. `release/1.x` is what customers get today: a fixes-only branch, checked out permanently at `~/purplecomputer-release`. Features (Time Travel, room persistence, the Art pen, the Music demo rebuild) stay on main for the 2.0 release.
+Until the next major release, `main` and the shipping branch are separate:
 
-Rules, in order of importance:
-
-1. **Everything lands on main first** via the normal lanes flow. Never commit directly on `release/1.x`; its only commits are cherry-picks from main.
-2. **Never merge** between the branches, in either direction. Fixes flow main to release via `just release-pick <sha>...` only.
-3. **Ship from `~/purplecomputer-release`**, never from the main checkout.
+- `main` is where all work lands, via the normal lanes flow.
+- `release/1.x`, checked out at `~/purplecomputer-release`, is the branch releases build from. Its only commits are fixes cherry-picked from main. It is never committed to directly and never merges with main in either direction.
 
 Day to day:
 
 ```bash
 just release-status          # commits on main not on release/1.x (= already picked, + not)
-just release-pick <sha>...   # cherry-pick fixes over and run the release branch's tests
+just release-pick <sha>...   # cherry-pick onto release/1.x and run its tests
 ```
 
-Decide fix vs feature at pick time; when a commit is both, it belongs to 2.0 (a fix to an unshipped feature ships with the feature). The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
+A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
 
-To ship: build and `just release` from `~/purplecomputer-release` (steps below), then tag the shipped commit with the version the release script printed: `git tag <version>`. Tags are the only record mapping a shipped ISO to a commit.
+To ship: build and `just release` from `~/purplecomputer-release` (steps below), then `git tag <version>` there with the version the release script printed. Tags map each shipped ISO back to its commit.
 
-Two traps when shipping from the worktree:
+The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` aborts on a mismatch. A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 
-- All checkouts build into the same `/opt/purple-installer/output/`, and the release script uploads the newest ISO there. Build and release back-to-back, and check the ISO filename in the confirm prompt: a newer main build in that directory would ship 2.0 features early.
-- The on-device version (Parent Menu) is stamped at build time via `PURPLE_VERSION`; the release name is chosen at upload time. Pass the same version to both, or pass neither and get a date build.
-
-When 2.0 ships from main: delete the branch, the worktree, and this section.
+When the next major release ships from main: delete the branch, the worktree, and this section.
 
 
 

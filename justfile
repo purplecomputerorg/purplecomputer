@@ -243,7 +243,7 @@ code-split-poc:
 release *args:
     ./build-scripts/release-iso.sh {{args}}
 
-# The fixes-only shipping branch lives in this worktree until 2.0 ships from main
+# The shipping branch's worktree; see guides/release-guide.md, Release Branch
 release_dir := env_var("HOME") / "purplecomputer-release"
 
 # List commits on main not yet on release/1.x (= means already cherry-picked)

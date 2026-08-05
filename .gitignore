@@ -86,7 +86,8 @@ recording-setup/apply_zoom_vf.txt
 
 recordings/*.mp4
 
-.claude/
+.claude/*
+!.claude/commands/
 
 # Empty stubs the Claude Code sandbox bind-mounts over sensitive paths
 /.bash_profile

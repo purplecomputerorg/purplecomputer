@@ -1,8 +1,8 @@
 ---
-description: Review release-status with an LLM sanity check, confirm anything that looks off, then hand off to the user to run just ship
+description: Review release-status with an LLM sanity check, confirm anything that looks off, then hand off the build, flash, and ship steps to the user
 ---
 
-Ship a customer release, with a review pass before anything builds. Version argument (optional, e.g. `v1.0`): $ARGUMENTS
+Review a customer release before the user builds and ships it. Version argument (optional, e.g. `v1.0`): $ARGUMENTS
 
 ## 1. Gather state
 
@@ -30,16 +30,19 @@ Summarize your review: what ships, what waits, and each concern with a one-line 
 - Run proposed release-picks first (then re-run `just release-status`, re-review, and confirm again)
 - Abort
 
-If no version was passed as an argument, also ask whether this is a semver release (needs `just ship vX.Y`) or an auto date-stamped build (plain `just ship`).
+If no version was passed as an argument, also ask whether this is a semver release (version stamped at build time) or an auto date-stamped release.
 
-If nothing looks off at all, say so plainly and still ask for the final ship confirmation.
+If nothing looks off at all, say so plainly and still ask for the final confirmation.
 
 ## 4. Hand off to the user
 
-Do not run `just ship` yourself: the Docker build needs daemon socket access the sandbox blocks, and the user runs the release from their own terminal. After confirmation, end by telling the user exactly what to run, e.g.:
+Do not run the build or release yourself: the Docker build needs daemon socket access the sandbox blocks, and the user runs these from their own terminal. After confirmation, end by printing the pipeline for them to run:
 
 ```
-Review done, nothing blocking. Run: just ship
+Review done, nothing blocking. Run:
+  purple-build --release      # build (PURPLE_VERSION=vX.Y purple-build --release for semver)
+  just flash-all              # flash customer USBs, validate one on hardware
+  just ship                   # upload the downloads and tag
 ```
 
-(or `just ship vX.Y` if they chose a semver version). Answer `y` at its confirmation prompt. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.
+Steps they've already done can be skipped: if the release commit is already built, `purple-build --release` no-ops, and `just ship` releases the existing build. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.

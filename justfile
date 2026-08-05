@@ -260,12 +260,13 @@ release-pick +shas:
     cd {{release_dir}} && just test
     @echo && ./build-scripts/release-status.sh
 
-# One-command customer release: summary, confirm, build, upload, tag
-ship version="":
+# Publish the already-built release: summary, confirm, upload, tag. Build first with
+# purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
+ship:
     @./build-scripts/release-status.sh && echo
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
-    @printf "Build and release the above? [y/N] " && read -r r && { [ "$r" = y ] || [ "$r" = Y ]; }
-    @cd {{release_dir}} && { [ -z "{{version}}" ] || export PURPLE_VERSION="{{version}}"; } && ./build-scripts/build-in-docker.sh && just release
+    @printf "Release the above to the downloads? [y/N] " && read -r r && { [ "$r" = y ] || [ "$r" = Y ]; }
+    @cd {{release_dir}} && ./build-scripts/release-iso.sh
 
 # Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:

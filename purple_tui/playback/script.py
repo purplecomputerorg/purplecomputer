@@ -160,7 +160,7 @@ class PlayKeys(PlaybackAction):
 
 @dataclass
 class DrawPath(PlaybackAction):
-    """Draw a path in Art room (hold space + arrows).
+    """Draw a path in Art room (space tap puts the pen down, arrows paint, space tap lifts it).
 
     Args:
         directions: List of arrow directions: 'up', 'down', 'left', 'right'.
@@ -179,7 +179,7 @@ class DrawPath(PlaybackAction):
 
 @dataclass
 class MoveSequence(PlaybackAction):
-    """Move cursor without painting (just arrow keys, no space held).
+    """Move cursor without painting (just arrow keys, pen up).
 
     Use this for repositioning the cursor between paint operations.
     For actual painting, use DrawPath instead.

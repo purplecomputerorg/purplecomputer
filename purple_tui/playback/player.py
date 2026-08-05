@@ -82,6 +82,7 @@ class PlaybackPlayer:
         clear_art: Callable[[], None] | None = None,
         set_music_key_color: Callable[[str, int], None] | None = None,
         is_art_paint_mode: Callable[[], bool] | None = None,
+        set_art_pen: Callable[[bool], None] | None = None,
         is_play_letters_mode: Callable[[], bool] | None = None,
         get_selected_menu_label: Callable[[], str | None] | None = None,
         set_instrument: Callable[[str], None] | None = None,
@@ -100,6 +101,9 @@ class PlaybackPlayer:
                 color index directly (0=purple, 1=blue, 2=red, -1=off)
             is_art_paint_mode: Optional function to check if Art room
                 is in paint mode (vs text mode)
+            set_art_pen: Optional function to set Art's pen latch directly.
+                Sync so DrawPath can lift the pen from a finally block even
+                when the demo task is cancelled mid-draw.
             is_play_letters_mode: Optional function to check if Music room
                 is in letters mode (vs music mode)
             get_selected_menu_label: Optional function returning the label of
@@ -118,6 +122,7 @@ class PlaybackPlayer:
         self._clear_art = clear_art
         self._set_music_key_color = set_music_key_color
         self._is_art_paint_mode = is_art_paint_mode
+        self._set_art_pen = set_art_pen
         self._is_play_letters_mode = is_play_letters_mode
         self._get_selected_menu_label = get_selected_menu_label
         self._set_instrument = set_instrument
@@ -397,24 +402,25 @@ class PlaybackPlayer:
             ))
             await self._sleep(0.1)
 
-        await self._dispatch(_control('space'))
-        await self._sleep(0.05)
+        # Set pen state explicitly (never toggle blindly), and lift it in
+        # finally so a cancelled demo task can't leave the pen latched.
+        pen = self._set_art_pen or (lambda down: None)
+        pen(True)
+        try:
+            for direction in action.directions:
+                primary, _, extra = direction.partition('+')
+                for _ in range(action.steps_per_direction):
+                    if self._cancelled:
+                        return
 
-        for direction in action.directions:
-            primary, _, extra = direction.partition('+')
-            for _ in range(action.steps_per_direction):
-                if self._cancelled:
-                    await self._dispatch(_control('space', is_down=False))
-                    return
+                    await self._dispatch(NavigationAction(
+                        direction=primary,
+                        other_arrows_held={extra} if extra else set(),
+                    ))
+                    await self._sleep(action.delay_per_step)
+        finally:
+            pen(False)
 
-                await self._dispatch(NavigationAction(
-                    direction=primary,
-                    space_held=True,
-                    other_arrows_held={extra} if extra else set(),
-                ))
-                await self._sleep(action.delay_per_step)
-
-        await self._dispatch(_control('space', is_down=False))
         await self._sleep(action.pause_after)
 
     async def _move_sequence(self, action: MoveSequence) -> None:
@@ -425,7 +431,6 @@ class PlaybackPlayer:
 
             await self._dispatch(NavigationAction(
                 direction=direction,
-                space_held=False,
                 char_held=action.char_held,
             ))
             await self._sleep(action.delay_per_step)

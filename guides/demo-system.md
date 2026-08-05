@@ -321,7 +321,7 @@ Paint mode colors by keyboard row:
 Drawing mechanics:
 - Lowercase key: select color AND stamp, then advance cursor
 - Shift+key: select color only (no stamp)
-- Space+arrows: draw lines (hold space while moving)
+- Space toggles the pen: while down, arrows draw lines
 - `DrawPath` handles all of this automatically
 
 ### Play Room
@@ -363,7 +363,7 @@ PlayKeys(sequence=['a', 's', ['d', 'f'], None], seconds_between=0.5, pause_after
 ```python
 DrawPath(directions=['right', 'right', 'down'], color_key='f', delay_per_step=0.1)
 ```
-Automatically enters paint mode. Holds space while moving.
+Automatically enters paint mode. Taps space to put the pen down, moves, then taps space to lift it.
 
 ### MoveSequence
 ```python

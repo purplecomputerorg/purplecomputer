@@ -2887,8 +2887,10 @@ class PurpleApp(App):
                     await self._dispatch_keyboard_action(key_action)
                     self._dev_log(f"[DevCmd] key={value} dispatched, mode now={self.active_room.name}")
 
-                    # For control keys (especially space), also send key-up event
-                    # Without this, _space_down stays True and arrow movements paint
+                    # For control keys, also send key-up so no held state lingers.
+                    # For space, the up completes ArtMode's tap detection: the
+                    # buffered press is delivered as a pen toggle instead of the
+                    # hold timer firing and opening the code panel.
                     if isinstance(key_action, ControlAction):
                         key_up_action = ControlAction(action=key_action.action, is_down=False)
                         await self._dispatch_keyboard_action(key_up_action)
@@ -3307,6 +3309,15 @@ class PurpleApp(App):
         except Exception:
             return False
 
+    def _set_art_pen(self, down: bool) -> None:
+        """Set Art's pen latch directly (sync, for demo playback cleanup)."""
+        from .rooms.art_room import ArtCanvas
+
+        try:
+            self.query_one("#art-canvas", ArtCanvas)._set_pen(down)
+        except Exception:
+            pass
+
     def _clear_art(self) -> None:
         """Clear only the art canvas and reset cursor to (0,0)."""
         from .rooms.art_room import ArtMode
@@ -3338,6 +3349,7 @@ class PurpleApp(App):
             clear_art=self._clear_art,
             set_music_key_color=self._set_music_key_color,
             is_art_paint_mode=self._is_art_paint_mode,
+            set_art_pen=self._set_art_pen,
             get_selected_menu_label=self._selected_menu_label,
             get_cursor_position=self._get_cursor_position,
             zoom_events_file=zoom_events_file,

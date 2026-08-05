@@ -1,7 +1,7 @@
 """Regression tests for painting while an arrow is held past the accel threshold.
 
-1. Accelerated vertical paint must mark every passed row dirty. Holding space
-   (pen down) plus an arrow long enough to trigger 6x acceleration wrote 6
+1. Accelerated vertical paint must mark every passed row dirty. Pen down
+   plus an arrow held long enough to trigger 6x acceleration wrote 6
    cells to the grid but only marked the start and end rows dirty. The 4
    intermediate rows kept their stale cached strips and rendered as gaps until
    a later cursor pass happened to mark them dirty.
@@ -74,11 +74,11 @@ def test_accelerated_paint_marks_every_passed_row_dirty():
         async with _art_canvas() as canvas:
             canvas._cursor_x = 5
             canvas._cursor_y = 2
-            canvas._space_down = True
+            canvas._pen_down = True
             canvas._last_key_color = "#FF0000"
 
             await _hold_to_accel_threshold(
-                canvas, direction='down', space_held=True
+                canvas, direction='down'
             )
 
             # Reset render bookkeeping so we observe only the accelerated step.
@@ -87,7 +87,7 @@ def test_accelerated_paint_marks_every_passed_row_dirty():
             y_before = canvas._cursor_y
 
             await canvas.handle_keyboard_action(
-                NavigationAction(direction='down', is_repeat=True, space_held=True)
+                NavigationAction(direction='down', is_repeat=True)
             )
 
             y_after = canvas._cursor_y
@@ -122,7 +122,7 @@ def test_held_letter_paints_every_cell_through_acceleration():
         async with _art_canvas() as canvas:
             canvas._cursor_x = 2
             canvas._cursor_y = 5
-            canvas._space_down = False  # Letter held, not the space pen
+            canvas._pen_down = False  # Letter held, not the pen latch
             canvas._painted_positions.clear()
 
             start_x = canvas._cursor_x

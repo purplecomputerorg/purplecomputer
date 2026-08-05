@@ -58,7 +58,7 @@ SEGMENT = [
     MoveSequence(directions=['left'] * 6 + ['down'], delay_per_step=0.02, pause_after=0.2),
     MoveSequence(directions=['right'] * 14, char_held='8', delay_per_step=0.15, pause_after=0.8),
 
-    Comment("=== Sun: hold Space to draw; two arrows makes diagonal rays ==="),
+    Comment("=== Sun: Space puts the pen down; two arrows makes diagonal rays ==="),
     MoveSequence(directions=['up'] * 13 + ['right'] * 10, delay_per_step=0.02, pause_after=0.2),
     DrawPath(directions=['right'] * 2, color_key='a', delay_per_step=0.15, pause_after=0.3),
     DrawPath(directions=['right+down'] * 3, color_key='s', delay_per_step=0.2, pause_after=0.3),

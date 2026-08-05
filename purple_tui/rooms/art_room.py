@@ -3,8 +3,8 @@ Art Room: Drawing Canvas with Playful Painting
 
 A text-focused canvas with paint-by-key features:
 - Normal typing draws readable text (left-to-right, wrapping at edges)
-- Arrow keys move the cursor (no drawing)
-- Hold Space + arrows to paint colored trails
+- Arrow keys move the cursor (no drawing while the pen is up)
+- Space toggles the pen: while down, arrows paint colored trails
 - Backspace erases glyph and fades background (hold to erase fast)
 
 Keyboard input is received via handle_keyboard_action() from the main app,
@@ -89,6 +89,16 @@ BOX_CHARS = {
     (-1, 1): "└",   # bottom-left (light corner)
     (0, 1): "━",    # bottom-center (heavy horizontal)
     (1, 1): "┘",    # bottom-right (light corner)
+}
+
+# Pen-down ring: heavy corners too, so a latched pen reads as a thicker,
+# steady ring instead of the blinking light-cornered hover ring.
+BOX_CHARS_PEN_DOWN = {
+    **BOX_CHARS,
+    (-1, -1): "┏",
+    (1, -1): "┓",
+    (-1, 1): "┗",
+    (1, 1): "┛",
 }
 
 # Keyboard rows for colors (full rows including symbols)
@@ -243,11 +253,12 @@ def get_legend_row_from_color(color: str) -> int:
 # =============================================================================
 
 class PaintModeChanged(Message):
-    """Message sent when paint mode changes."""
+    """Message sent when paint mode or pen state changes."""
 
-    def __init__(self, is_painting: bool, last_color: str) -> None:
+    def __init__(self, is_painting: bool, last_color: str, pen_down: bool = False) -> None:
         self.is_painting = is_painting
         self.last_color = last_color
+        self.pen_down = pen_down
         super().__init__()
 
 
@@ -257,7 +268,7 @@ class PaintModeChanged(Message):
 
 class ArtCanvas(Widget, can_focus=True):
     """
-    Custom canvas widget with text typing and Space-held painting.
+    Custom canvas widget with text typing and a Space-toggled pen for painting.
 
     Uses render_line() for full control over rendering.
     Cell structure: (char, fg_color, bg_color)
@@ -284,9 +295,8 @@ class ArtCanvas(Widget, can_focus=True):
         self._last_key_color = DEFAULT_BRUSH_COLOR
         self._last_key_char = ""  # Last key pressed
 
-        # Space-hold for drawing lines in paint mode
-        # With evdev, we get true key release events
-        self._space_down = False
+        # Pen latch: Space toggles it. While down, arrow moves paint.
+        self._pen_down = False
 
         # Cursor blink state
         self._cursor_visible = True
@@ -320,15 +330,15 @@ class ArtCanvas(Widget, can_focus=True):
         # Last (paint_mode, color) we broadcast via PaintModeChanged. Streaks
         # of the same key would otherwise fire identical messages per stamp,
         # each triggering a DOM walk + refresh of legend/header/hint/shift.
-        self._last_posted_paint_state: tuple[bool, str] | None = None
+        self._last_posted_paint_state: tuple[bool, str, bool] | None = None
 
     def _post_paint_mode_changed(self) -> None:
-        """Post PaintModeChanged only if (paint_mode, color) changed since last post."""
-        state = (self._paint_mode, self._last_key_color)
+        """Post PaintModeChanged only if (paint_mode, color, pen) changed since last post."""
+        state = (self._paint_mode, self._last_key_color, self._pen_down)
         if state == self._last_posted_paint_state:
             return
         self._last_posted_paint_state = state
-        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color))
+        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color, self._pen_down))
 
     def on_mount(self) -> None:
         """Start cursor blinking when canvas is mounted."""
@@ -390,7 +400,7 @@ class ArtCanvas(Widget, can_focus=True):
         if self._paint_mode == painting:
             return
         self._paint_mode = painting
-        self._space_down = False
+        self._set_pen(False)
 
         self._mark_cursor_dirty()
         self._post_paint_mode_changed()
@@ -414,6 +424,8 @@ class ArtCanvas(Widget, can_focus=True):
 
     def _toggle_blink(self) -> None:
         """Toggle cursor visibility for blink effect."""
+        if self._pen_down:
+            return  # Pen-down ring is steady; skip identical repaints
         self._cursor_visible = not self._cursor_visible
         self._mark_cursor_dirty()
         self.refresh()
@@ -442,15 +454,17 @@ class ArtCanvas(Widget, can_focus=True):
         if self._blink_timer is not None:
             self._blink_timer.reset()
 
-    def _release_space_down(self) -> None:
-        """Release brush-down state (called on space key release)."""
-        self._space_down = False
+    def _set_pen(self, down: bool) -> None:
+        """Latch or lift the pen. Going down paints the cell under the cursor."""
+        if self._pen_down == down:
+            return
+        self._pen_down = down
+        if down:
+            self._paint_at_cursor()
         self._mark_cursor_dirty()
+        self._restart_blink()
+        self._post_paint_mode_changed()
         self.refresh()
-
-    def _start_space_down(self) -> None:
-        """Start brush-down state for line drawing."""
-        self._space_down = True
 
     @property
     def canvas_width(self) -> int:
@@ -531,7 +545,10 @@ class ArtCanvas(Widget, can_focus=True):
         grid = self._grid
         painted = self._painted_positions
         paint_mode = self._paint_mode
-        cursor_visible = self._cursor_visible
+        pen_down = paint_mode and self._pen_down
+        # Pen down: steady ring (no blink) so contact reads as solid
+        cursor_visible = self._cursor_visible or pen_down
+        ring_chars = BOX_CHARS_PEN_DOWN if pen_down else BOX_CHARS
         last_key_color = self._last_key_color
 
         for x in range(width):
@@ -605,7 +622,7 @@ class ArtCanvas(Widget, can_focus=True):
                         arrow_fg = _visible_arrow_color(last_key_color, bg)
                         char_out, style_out = heading_arrow, Style(color=arrow_fg, bgcolor=bg, bold=True)
                     else:
-                        box_char = BOX_CHARS.get((dx, dy), "·")
+                        box_char = ring_chars.get((dx, dy), "·")
                         is_corner = (dx, dy) in CORNER_POSITIONS
                         ring_fg = corner_fg if is_corner else last_key_color
 
@@ -887,12 +904,14 @@ class ArtCanvas(Widget, can_focus=True):
         self._cursor_x = 0
         self._cursor_y = 0
         self._paint_mode = True
+        self._set_pen(False)
         self._code_mode = False
         self._heading = 'right'
         self._use_heading_cursor = False
         self._last_key_color = DEFAULT_BRUSH_COLOR
 
         self._clear_animation_active = False
+        self._post_paint_mode_changed()
         self._invalidate_all()
         self.refresh()
 
@@ -961,31 +980,29 @@ class ArtCanvas(Widget, can_focus=True):
         # Handle control actions (space, tab, backspace, enter, escape)
         if isinstance(action, ControlAction):
             if action.action == 'space':
-                if action.is_down:
-                    self._mark_cursor_dirty()
-                    if self._paint_mode:
-                        # In paint mode: stamp and enable "pen down" for line drawing
-                        self._paint_at_cursor()
-                        self._start_space_down()
-                        # If an arrow key is held, advance in that direction after stamping
-                        if action.arrow_held:
-                            self._advance_after_stamp(action.arrow_held)
+                if not action.is_down:
+                    return
+                if self._paint_mode:
+                    # Toggle the pen latch (repeats would flutter it).
+                    # _set_pen owns the stamp, dirty marking, blink reset, and refresh.
+                    if action.is_repeat:
+                        return
+                    self._set_pen(not self._pen_down)
+                    # If an arrow key is held, advance in that direction after stamping
+                    if self._pen_down and action.arrow_held:
+                        self._advance_after_stamp(action.arrow_held)
                         self._mark_cursor_dirty()
-                        self._restart_blink()
-                        self.refresh()
-                    else:
-                        # In write mode: type a space
-                        pos = (self._cursor_x, self._cursor_y)
-                        existing_bg = self._get_cell_bg(pos)
-                        self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
-                        self._advance_after_stamp('right')
-                        self._mark_cursor_dirty()
-                        self._restart_blink()
                         self.refresh()
                 else:
-                    # Space release: stop line drawing
-                    if self._paint_mode:
-                        self._release_space_down()
+                    # In write mode: type a space
+                    self._mark_cursor_dirty()
+                    pos = (self._cursor_x, self._cursor_y)
+                    existing_bg = self._get_cell_bg(pos)
+                    self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
+                    self._advance_after_stamp('right')
+                    self._mark_cursor_dirty()
+                    self._restart_blink()
+                    self.refresh()
                 return
 
             if action.action == 'tab' and action.is_down:
@@ -1072,8 +1089,7 @@ class ArtCanvas(Widget, can_focus=True):
                           if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
                           else 1)
             paint_each_step = (self._paint_mode
-                               and (self._space_down or action.space_held
-                                    or bool(action.char_held)))
+                               and (self._pen_down or bool(action.char_held)))
 
             any_moved = False
             for direction in directions_to_move:
@@ -1343,18 +1359,22 @@ class ArtHintBar(Static):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._is_painting = True
+        self._pen_down = False
 
-    def update_state(self, is_painting: bool) -> None:
-        if self._is_painting == is_painting:
+    def update_state(self, is_painting: bool, pen_down: bool) -> None:
+        if self._is_painting == is_painting and self._pen_down == pen_down:
             return
         self._is_painting = is_painting
+        self._pen_down = pen_down
         self.refresh()
 
     def render(self) -> str:
         if getattr(self.app, '_littles_mode', None):
             return "  Type to paint!  "
         if self._is_painting:
-            return "  Type to paint! Every letter is a color, mix them together. Arrow keys move.  "
+            if self._pen_down:
+                return "  Pen is down! Arrows paint a trail. Space lifts the pen.  "
+            return "  Type to paint! Every letter is a color. Space puts the pen down.  "
         return "  Type to write! Arrow keys move. Enter for a new line.  "
 
 
@@ -1367,7 +1387,7 @@ class ArtMode(Container):
     Art Room: Drawing canvas with playful painting.
 
     Normal typing draws readable text on the canvas background.
-    Holding Space while pressing arrows paints colorful trails.
+    Space toggles the pen; while it is down, arrows paint colorful trails.
     A permanent hint bar below the canvas shows tips for tool switching.
     """
 
@@ -1442,6 +1462,7 @@ class ArtMode(Container):
                 canvas._painted_positions.add((x, y))
         canvas._cursor_x, canvas._cursor_y = state.get("cursor", [0, 0])
         canvas._paint_mode = bool(state.get("paint", True))
+        canvas._set_pen(False)
         canvas._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
         canvas._post_paint_mode_changed()
         canvas._invalidate_all()
@@ -1452,7 +1473,7 @@ class ArtMode(Container):
         header = self.query_one("#canvas-header", CanvasHeader)
         header.update_state(event.is_painting, event.last_color)
         hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
-        hint_bar.update_state(event.is_painting)
+        hint_bar.update_state(event.is_painting, event.pen_down)
 
     def has_content(self) -> bool:
         """Check if the canvas has any content."""
@@ -1478,7 +1499,7 @@ class ArtMode(Container):
         if not getattr(self.app, '_code_panel_enabled', True):
             return
         canvas = self.query_one("#art-canvas", ArtCanvas)
-        canvas._release_space_down()  # Release any paint brush state
+        canvas._set_pen(False)  # Lift the pen while the code panel is open
         header = self.query_one("#canvas-header", CanvasHeader)
         if self._repl_panel and not self._repl_panel.is_open:
             # Hide hint bar (REPL has its own hints) and pin canvas height
@@ -1530,6 +1551,11 @@ class ArtMode(Container):
         # Check for space hold to open REPL
         if isinstance(action, ControlAction) and action.action == 'space':
             canvas = self.query_one("#art-canvas", ArtCanvas)
+            # Code panel disabled (Littles Mode): no tap-vs-hold ambiguity,
+            # deliver space straight to the canvas so the pen latches instantly
+            if not getattr(self.app, '_code_panel_enabled', True):
+                await canvas.handle_keyboard_action(action)
+                return
             # After hold fired (panel just opened/closed), suppress until release
             if self._space_hold.fired:
                 if not action.is_down:
@@ -1553,11 +1579,9 @@ class ArtMode(Container):
             elif not action.is_down:
                 tapped = self._space_hold.on_up()
                 if tapped:
-                    # Quick tap: send space-down then space-up to canvas
+                    # Quick tap: deliver the buffered space (pen toggle / typed space)
                     await canvas.handle_keyboard_action(
                         ControlAction(action='space', is_down=True, is_repeat=False))
-                # Pass through up event to canvas (releases paint brush etc.)
-                await canvas.handle_keyboard_action(action)
                 return
             return
 

@@ -2,7 +2,7 @@
 
 How to create, generate, and compose demo screencasts for Purple Computer.
 
-Generation happens on a developer's machine. A demo is a fixed list of keypresses recorded ahead of time, and the product just replays it.
+This is a recording rig for producing the marketing and walkthrough video, not a product feature: customers cannot reach it. It runs only when `PURPLE_DEMO_AUTOSTART=1` is set, which the dev launcher passes through and the shipped image never sets. A demo is a fixed list of keypresses composed ahead of time; the app replays them while the screen is captured.
 
 ## Table of Contents
 

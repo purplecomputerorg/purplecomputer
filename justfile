@@ -16,7 +16,7 @@ env:
     @echo "PURPLE_SLEEP_DEMO=1     Accelerated sleep/power timings"
     @echo "PURPLE_FAKE_USB=STATE   Simulate USB: caching|cached|removed"
     @echo "PURPLE_TEST_BATTERY=1   Show battery icon"
-    @echo "PURPLE_DEMO_AUTOSTART=1 Auto-run demo sequence"
+    @echo "PURPLE_DEMO_AUTOSTART=1 Auto-run demo sequence (video recording rig, never set on shipped images)"
     @echo "PURPLE_DEMO_SEGMENT=X   Run specific demo segment"
     @echo "PURPLE_TTS_CACHE=path   Override TTS cache dir"
     @echo "PURPLE_SCREENSHOT_DIR=X Override screenshot output dir"

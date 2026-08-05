@@ -80,6 +80,44 @@ if [ -z "$DEBUG_ISO" ]; then
     exit 1
 fi
 
+# The ISOs must be one build, and that build must match this checkout. The
+# .commit sidecar records the source commit baked into the image; older builds
+# without one fall back to the hash inside a build-* version stamp.
+STANDARD_STEM="${STANDARD_ISO%.iso}"
+DEBUG_STEM="${DEBUG_ISO%.debug.iso}"
+if [ "$STANDARD_STEM" != "$DEBUG_STEM" ]; then
+    log_error "Standard and debug ISOs come from different builds:"
+    echo "  $STANDARD_ISO"
+    echo "  $DEBUG_ISO"
+    exit 1
+fi
+
+ISO_VERSION="$(tr -d '[:space:]' < "${STANDARD_ISO}.version" 2>/dev/null || true)"
+ISO_COMMIT="$(tr -d '[:space:]' < "${STANDARD_ISO}.commit" 2>/dev/null || true)"
+if [ -z "$ISO_COMMIT" ] || [ "$ISO_COMMIT" = "unknown" ]; then
+    [[ "$ISO_VERSION" =~ ^build-([0-9a-f]+)- ]] && ISO_COMMIT="${BASH_REMATCH[1]}" || ISO_COMMIT=""
+fi
+if [ -z "$ISO_COMMIT" ]; then
+    log_error "Cannot tell which commit built $STANDARD_ISO; rebuild it before releasing."
+    exit 1
+fi
+HEAD_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse --short="${#ISO_COMMIT}" HEAD)
+if [ "$ISO_COMMIT" != "$HEAD_COMMIT" ]; then
+    log_error "This ISO was built from commit $ISO_COMMIT, but this checkout is at $HEAD_COMMIT."
+    echo "  Rebuild from this checkout, or release from the checkout that built it."
+    exit 1
+fi
+
+# A version stamped at build time is the release version; an argument may
+# confirm it but not contradict it.
+if [ -n "$ISO_VERSION" ] && [ "$ISO_VERSION" != "unknown" ] && [[ "$ISO_VERSION" != build-* ]]; then
+    if [ -n "${1:-}" ] && [ "$1" != "$ISO_VERSION" ]; then
+        log_error "This ISO is stamped $ISO_VERSION; it cannot be released as $1."
+        exit 1
+    fi
+    VERSION="$ISO_VERSION"
+fi
+
 STANDARD_SIZE=$(du -h "$STANDARD_ISO" | cut -f1)
 DEBUG_SIZE=$(du -h "$DEBUG_ISO" | cut -f1)
 

@@ -243,6 +243,21 @@ code-split-poc:
 release *args:
     ./build-scripts/release-iso.sh {{args}}
 
+# The shipping branch's worktree; see guides/release-guide.md, Release Branch
+release_dir := env_var("HOME") / "purplecomputer-release"
+
+# List commits on main not yet on release/1.x (= means already cherry-picked)
+release-status:
+    @picked=$(git log release/1.x --format=%b | sed -n 's/.*(cherry picked from commit \([0-9a-f]*\)).*/\1/p'); \
+    git log --oneline --no-merges release/1.x..main | while read -r sha rest; do \
+        echo "$picked" | grep -q "$(git rev-parse $sha)" && echo "= $sha $rest" || echo "+ $sha $rest"; \
+    done
+
+# Cherry-pick fixes from main onto release/1.x, then run its tests
+release-pick +shas:
+    git -C {{release_dir}} cherry-pick -x {{shas}}
+    cd {{release_dir}} && just test
+
 # Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
     ./build-scripts/upload-pdfs.sh

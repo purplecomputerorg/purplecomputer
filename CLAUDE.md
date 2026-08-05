@@ -22,6 +22,10 @@ Commit messages: **one line, max two short sentences.** No bullet-list body. No 
 
 If you're unsure what message to use, propose one and ask the user to confirm before committing.
 
+## Shipping Branch
+
+Customer ISOs build from `release/1.x`, a fixes-only branch checked out at `~/purplecomputer-release`. Never commit or merge there directly: fixes land on main first, then flow over via `just release-pick`. Full workflow: `guides/release-guide.md`, Release Branch section.
+
 ---
 
 ## No Claude Memories

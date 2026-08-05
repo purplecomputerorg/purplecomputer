@@ -21,13 +21,14 @@ Until the next major release, `main` and the shipping branch are separate:
 Day to day:
 
 ```bash
-just release-status          # commits on main not on release/1.x (= already picked, + not)
-just release-pick <sha>...   # cherry-pick onto release/1.x and run its tests
+just release-status          # what ships vs what waits (= on release/1.x, + main only)
+just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
+just ship [version]          # summary, confirm, build, upload, tag, in one command
 ```
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
 
-To ship: build and `just release` from `~/purplecomputer-release` (steps below), then `git tag <version>` there with the version the release script printed. Tags map each shipped ISO back to its commit.
+`just ship` prints the status summary and asks for confirmation before building, refuses if the worktree is not on `release/1.x`, and the release script tags the shipped commit with the release version on success. Tags map each shipped ISO back to its commit.
 
 The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` aborts on a mismatch. A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 

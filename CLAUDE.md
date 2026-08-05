@@ -26,6 +26,8 @@ If you're unsure what message to use, propose one and ask the user to confirm be
 
 Customer ISOs build from `release/1.x`, a fixes-only branch checked out at `~/purplecomputer-release`. Never commit or merge there directly: fixes land on main first, then flow over via `just release-pick`. Full workflow: `guides/release-guide.md`, Release Branch section.
 
+Cherry-pick decisions (fix vs feature) are the user's to confirm: propose picks, and after every `release-pick`, show the `just release-status` output with a one-line reason per commit for why it ships or waits.
+
 ---
 
 ## No Claude Memories

@@ -23,12 +23,16 @@ Day to day:
 ```bash
 just release-status          # what ships vs what waits (= on release/1.x, + main only)
 just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
-just ship [version]          # summary, confirm, build, upload, tag, in one command
+purple-build --release       # build the release worktree (includes the with-backup ISO)
+just flash-all               # flash customer USBs from that build (prefers with-backup)
+just ship                    # summary, confirm, upload, tag
 ```
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
 
-`just ship` prints the status summary and asks for confirmation before building, refuses if the worktree is not on `release/1.x`, and the release script tags the shipped commit with the release version on success. Tags map each shipped ISO back to its commit.
+Build, then flash, then ship: flashing first means a stick can be validated on real hardware before the downloads update. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.
+
+`just ship` prints the status summary and asks for confirmation, refuses if the worktree is not on `release/1.x`, and the release script tags the shipped commit with the release version on success. Tags map each shipped ISO back to its commit. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the release gets an auto date version.
 
 The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` aborts on a mismatch. A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 

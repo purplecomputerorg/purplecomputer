@@ -1,4 +1,7 @@
-"""Demo playback system for Purple Computer screencasts.
+"""Demo playback system for recording marketing/walkthrough video screencasts.
+
+Not a product feature: runs only under PURPLE_DEMO_AUTOSTART=1, which the
+shipped image never sets. See guides/demo-system.md.
 
 To run the demo:
     PURPLE_DEMO_AUTOSTART=1 ./scripts/run_local.sh

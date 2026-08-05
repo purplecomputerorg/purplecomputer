@@ -1,5 +1,5 @@
 ---
-description: Review release-status with an LLM sanity check, confirm anything that looks off, then run just ship
+description: Review release-status with an LLM sanity check, confirm anything that looks off, then hand off to the user to run just ship
 ---
 
 Ship a customer release, with a review pass before anything builds. Version argument (optional, e.g. `v1.0`): $ARGUMENTS
@@ -34,12 +34,12 @@ If no version was passed as an argument, also ask whether this is a semver relea
 
 If nothing looks off at all, say so plainly and still ask for the final ship confirmation.
 
-## 4. Ship
+## 4. Hand off to the user
 
-Only after explicit confirmation. `just ship` prompts y/N on stdin, and your in-chat confirmation replaces that prompt, so pipe the answer:
+Do not run `just ship` yourself: the Docker build needs daemon socket access the sandbox blocks, and the user runs the release from their own terminal. After confirmation, end by telling the user exactly what to run, e.g.:
 
-```bash
-printf 'y\n' | just ship [version]
+```
+Review done, nothing blocking. Run: just ship
 ```
 
-Run it in the background (the Docker build plus upload takes well over 10 minutes), monitor it, and report the outcome: released version, tag, and download URL on success, or the failing step's output on failure. Do not retry a failed build without showing the user the error first.
+(or `just ship vX.Y` if they chose a semver version). Answer `y` at its confirmation prompt. If they later report a failure, help debug from the output they paste; do not attempt the build yourself.

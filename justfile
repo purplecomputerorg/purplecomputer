@@ -246,17 +246,22 @@ release *args:
 # The shipping branch's worktree; see guides/release-guide.md, Release Branch
 release_dir := env_var("HOME") / "purplecomputer-release"
 
-# List commits on main not yet on release/1.x (= means already cherry-picked)
+# Show what ships vs what waits (= on release/1.x, + main only)
 release-status:
-    @picked=$(git log release/1.x --format=%b | sed -n 's/.*(cherry picked from commit \([0-9a-f]*\)).*/\1/p'); \
-    git log --oneline --no-merges release/1.x..main | while read -r sha rest; do \
-        echo "$picked" | grep -q "$(git rev-parse $sha)" && echo "= $sha $rest" || echo "+ $sha $rest"; \
-    done
+    @./build-scripts/release-status.sh
 
-# Cherry-pick fixes from main onto release/1.x, then run its tests
+# Cherry-pick fixes from main onto release/1.x, run its tests, show what ships
 release-pick +shas:
     git -C {{release_dir}} cherry-pick -x {{shas}}
     cd {{release_dir}} && just test
+    @echo && ./build-scripts/release-status.sh
+
+# One-command customer release: summary, confirm, build, upload, tag
+ship version="":
+    @./build-scripts/release-status.sh && echo
+    @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
+    @printf "Build and release the above? [y/N] " && read -r r && { [ "$r" = y ] || [ "$r" = Y ]; }
+    @cd {{release_dir}} && { [ -z "{{version}}" ] || export PURPLE_VERSION="{{version}}"; } && ./build-scripts/build-in-docker.sh && just release
 
 # Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:

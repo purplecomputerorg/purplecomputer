@@ -214,6 +214,13 @@ echo
 log_info "Release $VERSION uploaded successfully!"
 echo
 
+# Tag the shipped commit; tags are the record mapping a shipped ISO to a commit
+if git -C "$SCRIPT_DIR" tag "$VERSION" 2>/dev/null; then
+    log_info "Tagged $VERSION at $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+else
+    log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION"
+fi
+
 log_info "Download links:"
 log_info "  https://${R2_CUSTOM_DOMAIN}/download.iso"
 log_info "  https://${R2_CUSTOM_DOMAIN}/download-debug.iso"

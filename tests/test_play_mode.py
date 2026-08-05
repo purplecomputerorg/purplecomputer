@@ -501,6 +501,27 @@ if HAS_PYTEST:
             # "3 cherries" -> 3 cherry emojis
             assert evaluator.evaluate("3 cherries") == "🍒🍒🍒"
 
+        def test_plural_typo_keeps_count(self, evaluator):
+            # "appples" corrects to "apples" so it must show 2, not 1
+            assert evaluator.evaluate("appples") == "🍎🍎"
+            assert evaluator.content.pop_correction() == ("appples", "apples")
+
+        def test_plural_typo_cats(self, evaluator):
+            assert evaluator.evaluate("catts") == "🐱🐱"
+            assert evaluator.content.pop_correction() == ("catts", "cats")
+
+        def test_singular_typo_stays_single(self, evaluator):
+            assert evaluator.evaluate("dinno") == "🦕"
+
+        def test_color_plural_typo_keeps_count(self, evaluator):
+            # "redds" corrects to "reds" so it must show 2 boxes
+            assert evaluator.evaluate("redds").count("[on #") == 2
+            assert evaluator.content.pop_correction() == ("redds", "reds")
+
+        def test_color_plural_stem_typo_keeps_count(self, evaluator):
+            assert evaluator.evaluate("yelloows").count("[on #") == 2
+            assert evaluator.content.pop_correction() == ("yelloows", "yellows")
+
 
     class TestPluralAutocomplete:
         """Test that plural forms work in autocomplete and underline detection."""

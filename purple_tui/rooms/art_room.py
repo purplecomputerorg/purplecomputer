@@ -1074,11 +1074,11 @@ class ArtCanvas(Widget, can_focus=True):
                         self._last_key_char = lower
                         self._last_key_color = color
                         self._post_paint_mode_changed()
-                # Skip when the previous repeat's landing step already painted
-                # this cell: a second coat re-mixes, so over existing paint
-                # every accelerated landing cell turned a different shade and
-                # the trail looked dotted.
-                if (self._cursor_x, self._cursor_y) != self._last_paint_pos:
+                # On repeats, skip the cell the previous landing step painted:
+                # a second coat re-mixes the shade. A fresh press always paints
+                # so a new stroke's first cell never inherits a stale skip.
+                if (self._arrow_repeat_count == 0
+                        or (self._cursor_x, self._cursor_y) != self._last_paint_pos):
                     self._paint_at_cursor()
 
             # Smart ↑/↓: the auto-advance after a stamp pushed the cursor one

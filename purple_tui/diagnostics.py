@@ -130,8 +130,7 @@ def _ram_total() -> str:
 
 
 def device_summary_lines() -> list[str]:
-    """Compact hardware identity: shared by the Device info sub-screen and
-    the install failure diagnostic scroll."""
+    """Compact hardware identity lines."""
     return [
         f"Purple: {get_version_label() or '(dev)'}",
         f"Kernel: {_run('uname', '-rvm')}",

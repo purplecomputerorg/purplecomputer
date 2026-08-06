@@ -28,6 +28,7 @@ import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from .. import diagnostics
 
 
 # =============================================================================
@@ -1765,6 +1766,14 @@ class InstallProgressScreen(PurpleModal):
             lines.append(f"  {line}")
         if not self._log_lines:
             lines.append("  (no log output captured)")
+
+        # Hardware identity so support knows which machine this is
+        section("Device")
+        try:
+            for line in diagnostics.device_summary_lines():
+                lines.append(f"  {line}")
+        except Exception:
+            lines.append("  (device info failed)")
 
         # USB / source media state
         section("USB / source media")

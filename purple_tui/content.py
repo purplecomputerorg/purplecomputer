@@ -387,7 +387,11 @@ class ContentManager:
                             (self._color_forms, self._color_fuzzy_cache)):
             if m := self._fuzzy_lookup(word, forms, memo):
                 key = forms[m]
-                return key if key != m else singularize(m)
+                s = key if key != m else singularize(m)
+                # The plural table has bogus entries for s-ending singulars
+                # ("princess" -> "princes"): only trust a singular that is
+                # itself a key of the matched table.
+                return s if s and forms.get(s) == s else None
         return None
 
     def emoji_to_word(self, emoji: str) -> Optional[str]:

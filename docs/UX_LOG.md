@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Typos of s-ending singular words stay single**: The plural typo fix made "princcess" show two princes, "cactuss" two cacti, and "octopuss" two octopuses, because the plural tables wrongly treat words like "princess" as plurals. A corrected word now only counts as a plural when its singular is a real picture word, so these typos show one correct picture again while "appples" still shows two apples.
 - **Install failure scroll now identifies the machine**: The technical details scroll a parent records after a failed install gains a Device section (Purple version, kernel, model, vendor, BIOS, CPU, RAM), so support can tell which computer the report came from without asking.
 - **Misspelled plurals count as two**: "appples" corrected to "apples" but drew one apple, while "apples" drew two. A corrected plural now keeps its plural meaning everywhere a real plural works, for emojis and colors alike: "appples" is two apples, "catts" two cats, "redds" two red boxes, with the usual correction hint.
 - **Fast paint over another color stays even**: The earlier fix made a held letter plus a held arrow paint every cell once the cursor speeds up, but each speed-up landing cell got painted twice, and painting twice mixes twice. On a blank canvas that was invisible; over an area already painted a different color, every sixth cell turned a deeper shade, so the trail still looked dotted. Each cell in a drag now gets exactly one coat, so the blended trail is one even color.

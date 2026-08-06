@@ -291,7 +291,12 @@ For the full design philosophy, see [guides/play-room-design.md](../guides/play-
 - [`just`](https://github.com/casey/just) for the `just build` / `just flash` wrappers
 - 20GB free disk space
 - Internet connection (for downloads)
-- Any OS (Linux, macOS, NixOS); flashing tools require Linux
+- Linux is the tested platform. macOS with Docker Desktop should be doable
+  but is untested: share `/opt` in Docker Desktop's file-sharing settings,
+  and on Apple silicon enable Rosetta emulation and
+  `export DOCKER_DEFAULT_PLATFORM=linux/amd64` before building
+- Flashing tools require Linux; on a Mac, write the ISO with `dd` or
+  balenaEtcher (see [Writing to USB](#writing-to-usb))
 
 The build keeps its working state and output in `/opt/purple-installer` on
 the host (root-owned, created on first build). Edit the paths at the top of

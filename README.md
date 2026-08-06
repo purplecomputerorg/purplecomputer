@@ -69,7 +69,9 @@ I love cat!            # Speaks "I love cat" aloud (! triggers speech)
 
 ### For Installation (Old Laptop)
 
-**Build prerequisites:** a Linux machine with [`just`](https://github.com/casey/just), Docker (Podman works too: install your distro's `podman-docker` package so the `docker` command exists), and about 20GB free disk. The build keeps its working state and finished ISOs in `/opt/purple-installer` on the host (root-owned, created by the build). To put it somewhere else, edit the paths at the top of `build-scripts/config.sh` before building.
+**Build prerequisites:** [`just`](https://github.com/casey/just), Docker (Podman works too: install your distro's `podman-docker` package so the `docker` command exists), and about 20GB free disk. Linux is the tested platform. Building on a Mac with Docker Desktop should be doable but is currently untested: share `/opt` in Docker Desktop's file-sharing settings, and on Apple silicon enable Rosetta emulation and `export DOCKER_DEFAULT_PLATFORM=linux/amd64` first. The flash tooling is Linux-only either way; on a Mac, write the ISO with `dd` or balenaEtcher instead (see [MANUAL.md](docs/MANUAL.md)).
+
+The build keeps its working state and finished ISOs in `/opt/purple-installer` on the host (root-owned, created by the build). To put it somewhere else, edit the paths at the top of `build-scripts/config.sh` before building.
 
 The happy path for "I tweaked Purple and want it on my USB" is two commands:
 

@@ -116,6 +116,21 @@ create_install_script() {
     chmod +x "$DEST/install.sh"
 }
 
+# Blank casper's 13swap script, which swapons any swap partition it finds on
+# the internal disk (e.g. from an old dual-boot Linux install). That writes to
+# a disk the user never agreed to touch, and active swap held the old
+# partition table so install.sh's repartition failed (seen in the field).
+# This casper version has no noswap cmdline option, so blanking is the fix.
+neuter_casper_swap() {
+    local swap_script="$1/scripts/casper-bottom/13swap"
+    if [ -f "$swap_script" ]; then
+        printf '#!/bin/sh\nexit 0\n' > "$swap_script"
+        log_info "Neutered casper-bottom/13swap (no swap activation on internal disks)"
+    else
+        log_info "WARNING: casper-bottom/13swap not found; swap may auto-activate at boot"
+    fi
+}
+
 # Prepend a 64-bit check to a grub.cfg. On a 32-bit-only CPU, loading our
 # amd64 kernel silently hangs at "GRUB" (e.g. old Atom netbooks). Instead,
 # show a friendly "too old" message. If the cpuid module is missing the
@@ -357,6 +372,8 @@ SPLASH_EOF
         log_info "Removing default-layer.conf (disabling multi-layer squashfs)..."
         rm "$MAIN_DIR/conf/conf.d/default-layer.conf"
     fi
+
+    neuter_casper_swap "$MAIN_DIR"
 
     # Repack initramfs
     log_info "Repacking initramfs..."

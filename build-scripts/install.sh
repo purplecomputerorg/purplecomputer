@@ -32,6 +32,24 @@ error() {
     exit 1
 }
 
+# Deactivate active swap on the given disk (casper's 13swap activates any
+# swap partition it finds, e.g. from an old dual-boot Linux install; active
+# swap makes the kernel hold the old partition table, so the post-write
+# rebuild fails with "Partition(s) ... are being used"). $2 overrides
+# /proc/swaps for tests. Returns nonzero if any swapoff failed.
+disable_swaps_on() {
+    local disk="$1" swaps="${2:-/proc/swaps}" dev _ failed=""
+    while read -r dev _; do
+        case "$dev" in
+            "$disk"|"$disk"[0-9]*|"${disk}p"[0-9]*)
+                log "  Deactivating swap on $dev"
+                swapoff "$dev" || failed="$failed $dev"
+                ;;
+        esac
+    done <<< "$(cat "$swaps")"
+    [ -z "$failed" ]
+}
+
 # Catch unexpected exits (e.g. pipeline failures from USB removal) and emit
 # a tagged error so the UI can display it.
 trap '_rc=$?; if [ $_rc -ne 0 ]; then echo -e "${RED}[ERROR]${NC} Install failed (exit code $_rc)" >&2; echo "[PURPLE ERROR] Install failed (exit code $_rc)" >/dev/console 2>/dev/null || true; fi' EXIT
@@ -223,6 +241,8 @@ main() {
     # the kernel thinks old partitions (e.g. macOS APFS) are still in use.
     # ======================================================================
     log "Preparing disk..."
+
+    disable_swaps_on "/dev/$TARGET" || error "Could not deactivate swap on /dev/$TARGET"
 
     # Unmount any existing partitions on the target disk
     for part in $(lsblk -ln -o NAME "/dev/$TARGET" 2>/dev/null | tail -n +2); do

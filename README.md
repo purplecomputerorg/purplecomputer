@@ -69,6 +69,8 @@ I love cat!            # Speaks "I love cat" aloud (! triggers speech)
 
 ### For Installation (Old Laptop)
 
+**Build prerequisites:** a Linux machine with [`just`](https://github.com/casey/just), Docker (Podman works too: install your distro's `podman-docker` package so the `docker` command exists), and about 20GB free disk. The build keeps its working state and finished ISOs in `/opt/purple-installer` on the host (root-owned, created by the build). To put it somewhere else, edit the paths at the top of `build-scripts/config.sh` before building.
+
 The happy path for "I tweaked Purple and want it on my USB" is two commands:
 
 ```bash
@@ -95,6 +97,12 @@ build it with `PURPLE_WITH_BACKUP_ISO=1 just build` if you want it.)
 Everything else in `build-scripts/` (batch flashing, QA manifests,
 corrupt-test ISOs, release uploads) is for producing shipped Purple Keys;
 you can ignore it.
+
+Prefer your own flashing tool? The ISOs are hybrid images, so any raw ISO
+writer works: write `/opt/purple-installer/output/purple-installer-<date>.iso`
+(the standard variant) with `dd`, balenaEtcher, or Rufus (pick DD mode if it
+asks). You lose `just flash`'s write verification and its one-time boot-settle,
+so the first boot on some sticks is slower; everything else is identical.
 
 **Install to hardware:**
 1. Boot laptop from USB (Secure Boot can remain enabled)

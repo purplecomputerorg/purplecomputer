@@ -286,10 +286,16 @@ For the full design philosophy, see [guides/play-room-design.md](../guides/play-
 ### Prerequisites
 
 **Build machine:**
-- Docker installed and running
+- Docker installed and running. Podman works too: install your distro's
+  `podman-docker` package so the scripts' `docker` calls resolve
+- [`just`](https://github.com/casey/just) for the `just build` / `just flash` wrappers
 - 20GB free disk space
 - Internet connection (for downloads)
-- Any OS (Linux, macOS, NixOS)
+- Any OS (Linux, macOS, NixOS); flashing tools require Linux
+
+The build keeps its working state and output in `/opt/purple-installer` on
+the host (root-owned, created on first build). Edit the paths at the top of
+`build-scripts/config.sh` to relocate it.
 
 **Time estimate:**
 - Golden image: 10-15 minutes
@@ -474,6 +480,7 @@ Replace `/dev/sdX` with your USB device (check with `lsblk`).
 
 **Windows:**
 Use [balenaEtcher](https://www.balena.io/etcher/) or [Rufus](https://rufus.ie/).
+In Rufus, pick "DD Image mode" if it asks how to write the ISO.
 
 ### Booting
 

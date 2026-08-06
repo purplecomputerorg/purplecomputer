@@ -129,22 +129,23 @@ def _ram_total() -> str:
     return "(unknown)"
 
 
+def device_summary_lines() -> list[str]:
+    """Compact hardware identity: shared by the Device info sub-screen and
+    the install failure diagnostic scroll."""
+    return [
+        f"Purple: {get_version_label() or '(dev)'}",
+        f"Kernel: {_run('uname', '-rvm')}",
+        f"Model: {_read('/sys/class/dmi/id/product_name', '(unknown)')}",
+        f"Vendor: {_read('/sys/class/dmi/id/sys_vendor', '(unknown)')}",
+        f"BIOS: {_read('/sys/class/dmi/id/bios_version', '(unknown)')}",
+        f"CPU: {_cpu_model()}",
+        f"RAM: {_ram_total()}",
+    ]
+
+
 def collect_device_info() -> str:
     """Broad device dump for the Device info sub-screen."""
-    lines = []
-
-    version = get_version_label() or "(dev)"
-    lines.append(f"Purple: {version}")
-
-    uname = _run("uname", "-rvm")
-    lines.append(f"Kernel: {uname}")
-
-    lines.append(f"Model: {_read('/sys/class/dmi/id/product_name', '(unknown)')}")
-    lines.append(f"Vendor: {_read('/sys/class/dmi/id/sys_vendor', '(unknown)')}")
-    lines.append(f"BIOS: {_read('/sys/class/dmi/id/bios_version', '(unknown)')}")
-
-    lines.append(f"CPU: {_cpu_model()}")
-    lines.append(f"RAM: {_ram_total()}")
+    lines = device_summary_lines()
     lines.append("")
 
     lines.append("Disks:")

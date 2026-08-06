@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **Install failure scroll now identifies the machine**: The technical details scroll a parent records after a failed install gains a Device section (Purple version, kernel, model, vendor, BIOS, CPU, RAM), so support can tell which computer the report came from without asking.
 - **Misspelled plurals count as two**: "appples" corrected to "apples" but drew one apple, while "apples" drew two. A corrected plural now keeps its plural meaning everywhere a real plural works, for emojis and colors alike: "appples" is two apples, "catts" two cats, "redds" two red boxes, with the usual correction hint.
 - **Fast paint over another color stays even**: The earlier fix made a held letter plus a held arrow paint every cell once the cursor speeds up, but each speed-up landing cell got painted twice, and painting twice mixes twice. On a blank canvas that was invisible; over an area already painted a different color, every sixth cell turned a deeper shade, so the trail still looked dotted. Each cell in a drag now gets exactly one coat, so the blended trail is one even color.
 - **The whole app is faster on machines with a working GPU**: Alacritty used to rasterize every frame on the CPU on all hardware (a full core on a Surface Laptop, and the wasted power made fanless machines throttle their clocks down). A startup probe now switches Alacritty to hardware GL when the GPU driver verifiably works, and keeps the old CPU rendering on VMs and machines where it doesn't, so nothing changes there.

@@ -137,7 +137,8 @@ PAINT_STRENGTH = 0.7
 # Hold-to-accelerate: after this many consecutive same-direction repeats on
 # arrows or backspace, each repeat does HOLD_ACCEL_MULTIPLIER steps instead of
 # one. Threshold is high enough that a kid moving 3-4 cells never accelerates,
-# but a sustained hold escapes a corner or erases a streak quickly.
+# but a sustained hold escapes a corner or erases a streak quickly. Never
+# applies while paint is going down: a multi-cell jump overshoots corners.
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
 
@@ -1077,15 +1078,17 @@ class ArtCanvas(Widget, can_focus=True):
             if action.other_arrows_held:
                 directions_to_move.extend(action.other_arrows_held)
 
-            # Accelerate after sustained hold: each repeat takes multiple steps.
-            # Painting (space or letter held) draws at every intermediate cell so
-            # a fast held arrow leaves a streak instead of dotted gaps.
-            step_count = (HOLD_ACCEL_MULTIPLIER
-                          if self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
-                          else 1)
+            # Accelerate after sustained hold: each repeat takes multiple
+            # steps. Only while traveling, never while painting: precision
+            # matters when paint is going down, and a multi-cell jump blows
+            # past the corner of a shape.
             paint_each_step = (self._paint_mode
                                and (self._space_down or action.space_held
                                     or bool(action.char_held)))
+            step_count = (HOLD_ACCEL_MULTIPLIER
+                          if (not paint_each_step
+                              and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD)
+                          else 1)
 
             any_moved = False
             for direction in directions_to_move:
@@ -1095,10 +1098,8 @@ class ArtCanvas(Widget, can_focus=True):
                     any_moved = True
                     if paint_each_step:
                         self._paint_at_cursor()
-                        # Intermediate rows during accelerated vertical paint
-                        # are otherwise outside the cursor's 3-row dirty ring,
-                        # so their cached strips never re-render until a later
-                        # cursor pass marks them dirty.
+                        # Rows painted mid-move (diagonals) can fall outside
+                        # the cursor's 3-row dirty ring, leaving stale strips.
                         self._dirty_lines.add(self._cursor_y)
 
             if not any_moved:

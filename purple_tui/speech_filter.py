@@ -32,12 +32,12 @@ _BLOCKED_WORDS = frozenset(
         "YXJzZSxhc3MsYmFzdGFyZCxiZW90Y2gsYmlhdGNoLGJpY2gsYml0Y2gsYm9sbG9j"
         "a3MsYm9uZXIsYm9vYixib29icyxib290eSxieXRjaCxjb2NrLGNvayxjcmFwLGN1"
         "bnQsZGFtbixkaWNrLGRpayxkaWxkbyxkeWssZmFjayxmYWcsZmFnZ2V0LGZhZ2dv"
-        "dCxmYWdvdCxmYXJ0LGZ1YyxmdWNrLGZ1ayxmdXEsaGVsbCxob3JlLGhvcm55LGpp"
-        "enosa29rLGt1bnQsbmlnYSxuaWdlcixuaWdnYSxuaWdnZXIsbmlxcWEsbmlxcWVy"
-        "LG9yZ2FzbSxwZW5pcyxwZW51cyxwaHVjLHBodWNrLHBodWsscGlzcyxwb28scG9v"
-        "cCxwb3JuLHJldGFyZCxzZXh5LHNoYXQsc2hpdCxzaGl0ZSxzaHl0LHNsdXQsc3B1"
-        "bmssc3RmdSxzdWNrLHRpdCx0aXRzLHR1cmQsdHdhdCx2YWdpbmEsd2Fuayx3aG9y"
-        "ZSx3dGY="
+        "dCxmYWdvdCxmYXJ0LGZsdWMsZmx1Y2ssZmx1ayxmbHVxLGZ1YyxmdWNrLGZ1ayxm"
+        "dXEsaGVsbCxob3JlLGhvcm55LGppenosa29rLGt1bnQsbmlnYSxuaWdlcixuaWdn"
+        "YSxuaWdnZXIsbmlxcWEsbmlxcWVyLG9yZ2FzbSxwZW5pcyxwZW51cyxwaHVjLHBo"
+        "dWNrLHBodWsscGlzcyxwb28scG9vcCxwb3JuLHJldGFyZCxzZXh5LHNoYXQsc2hp"
+        "dCxzaGl0ZSxzaHl0LHNsdXQsc3B1bmssc3RmdSxzdWNrLHRpdCx0aXRzLHR1cmQs"
+        "dHdhdCx2YWdpbmEsd2Fuayx3aG9yZSx3dGY="
     )
     .decode()
     .split(",")
@@ -80,6 +80,10 @@ _ALLOWED_WORDS = frozenset({
     "scrap", "scrappy", "scrape",
     # Contains "horn" (from "horny")
     "horn", "hornet", "unicorn", "acorn",
+    # Contains "fluc" / "fluk"
+    "fluctuate", "fluctuates", "fluctuated", "fluctuating",
+    "fluctuation", "fluctuations",
+    "fluke", "flukes", "fluky",
 })
 
 

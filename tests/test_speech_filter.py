@@ -30,7 +30,8 @@ _SPACED = _decode("ZiB1IGMga3xzIGggaSB0fGYudS5jLmt8cy1oLWktdA==")
 _VARIANTS = _decode(
     "cGh1Y2t8cGh1a3xwaHVjfGZ1a3xmdWN8ZnVxfHNoeXR8c2hpdGV8YmljaHxi"
     "aWF0Y2h8Ynl0Y2h8YmVvdGNofGRpa3xkeWt8Y29rfGtva3xrdW50fGhvcmV8"
-    "bmlnZXJ8bmlnYXxmYWdvdHxmYWdnZXR8cGVudXM="
+    "bmlnZXJ8bmlnYXxmYWdvdHxmYWdnZXR8cGVudXN8Zmx1Y2t8Zmx1a3xmbHVj"
+    "a2VyfGZsdXE="
 )
 _LEET = _decode("ZjRja3wkaGl0fGEkJHxiMXRjaHxkMWNrfCRsdTd8bjFnZzNy")
 _SUFFIXED = _decode(
@@ -38,6 +39,7 @@ _SUFFIXED = _decode(
     "fHdhbmtlcnxyZXRhcmRlZHxzbHV0dHk="
 )
 _SENTENCES = _decode("c2F5IHRoZSBmdWNrIHdvcmR8c2F5IHNoaXQ=")
+_VARIANT_SENTENCES = _decode("c2F5IHRoZSBmbHVjayB3b3JkfHdoYXQgdGhlIGZsdWNrfGZsdWNraW5n")
 
 
 class TestNormalize:
@@ -92,6 +94,12 @@ class TestBlockedWords:
         result = filter_speech(_SENTENCES[0])
         assert result == "say the word"
 
+    def test_variant_sentence_scrubbed_cleanly(self):
+        # "say the <variant> word" → whole variant removed, no leftover letters
+        assert filter_speech(_VARIANT_SENTENCES[0]) == "say the word"
+        assert filter_speech(_VARIANT_SENTENCES[1]) == "what the"
+        assert filter_speech(_VARIANT_SENTENCES[2]) == ""
+
     def test_short_sentence_with_blocked_word_replaced(self):
         # "say <blocked>" → per-word check catches the blocked word
         result = filter_speech(_SENTENCES[1])
@@ -138,6 +146,7 @@ class TestAllowedWords:
     @pytest.mark.parametrize("word", [
         "dictionary", "mississippi", "arsenal", "shiitake", "scunthorpe",
         "flag", "swank", "damnation", "stitch",
+        "fluke", "flukes", "fluky", "fluctuate", "fluctuating", "flunk", "flu",
     ])
     def test_other_substrings_allowed(self, word):
         assert filter_speech(word) == word, f"'{word}' should NOT be blocked"
@@ -147,6 +156,14 @@ class TestAllowedWords:
     ])
     def test_dam_words_allowed(self, word):
         assert filter_speech(word) == word, f"'{word}' should NOT be blocked"
+
+    @pytest.mark.parametrize("text", [
+        # Allowed words survive inside sentences even though the normalized
+        # (spaceless) form contains a blocked substring across the word
+        "say hello", "say fluke", "say flukes", "the temperature fluctuates",
+    ])
+    def test_allowed_word_in_sentence_passes(self, text):
+        assert filter_speech(text) == text
 
 
 class TestCommonWordsNotBlocked:

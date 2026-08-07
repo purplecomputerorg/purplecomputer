@@ -735,6 +735,45 @@ class TestSilentKeyboardRecovery:
 
         _run(_test())
 
+    def test_silence_forces_rescan_until_first_key_event(self):
+        """A keyboard the boot scan missed can hide behind a stable node set
+        (e.g. capabilities still enumerating), so silence has to trigger a
+        rescan on its own; once keys flow, the nudging stops."""
+        async def _test():
+            kbd = FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps())
+
+            # Rescans open fresh handles, so every scan returns new objects.
+            def fresh_scan():
+                return [
+                    FakeInputDevice("/dev/input/event0", "KB", _full_keyboard_caps()),
+                    FakeInputDevice("/dev/input/event1", "Slow KB", _full_keyboard_caps()),
+                ]
+
+            reader = EvdevReader(callback=AsyncCallback(), grab=False)
+            with patch.object(reader, '_find_keyboards', return_value=[kbd]), \
+                 patch.object(reader, '_device_paths',
+                              return_value={"/dev/input/event0", "/dev/input/event1"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01), \
+                 patch("purple_tui.input.SILENT_RESCAN_FIRST_SECS", 0.02):
+                await reader.start()
+
+                with patch.object(reader, '_find_keyboards', fresh_scan):
+                    await asyncio.sleep(0.1)
+                assert [d.path for d in reader._devices] == \
+                    ["/dev/input/event0", "/dev/input/event1"]
+
+                # First event ends the nudging: silence is now a kid reading
+                # the screen, not a broken keyboard.
+                reader._got_first_event = True
+                scans = []
+                with patch.object(reader, '_find_keyboards',
+                                  lambda: scans.append(1) or []):
+                    await asyncio.sleep(0.1)
+                assert not scans
+                await reader.stop()
+
+        _run(_test())
+
     def test_adopt_is_atomic_so_concurrent_callers_cant_double_open(self):
         """A lost device and the watcher can both land here; two read loops on
         one device would deliver every keypress twice."""

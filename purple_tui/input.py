@@ -40,7 +40,7 @@ KEYD_WAIT_SECS = 10.0
 # node with no opens, so this can run for the life of the session; the real
 # scan only happens when the set changes.
 DEVICE_POLL_SECS = 2.0
-SILENT_KEYBOARD_WARN_SECS = 30
+SILENT_RESCAN_FIRST_SECS = 5
 
 # Diag log paths. /var/log/purple is on the writable partition of the installed
 # system (same convention as purple_tui/boot_log.py) and survives reboot.
@@ -643,20 +643,34 @@ class EvdevReader:
         and one a parent plugs in mid-session, which nothing else recovers once
         every read loop is healthy. Watching the path set rather than rescanning
         on a timer keeps the poll free and the pickup near-immediate.
+
+        Until the first key event, prolonged silence also forces a rescan
+        (with doubling backoff, since the scan is a synchronous sweep of every
+        input node on the UI's event loop): a keyboard the boot scan misjudged,
+        e.g. capabilities still enumerating, sits behind a stable node set that
+        the path watch alone would never look at again. A device we already
+        opened but that stays silent (keyd grabbing it from under us) is not
+        recovered here: adoption skips paths already being read.
         """
         warned = False
-        deadline = time.monotonic() + SILENT_KEYBOARD_WARN_SECS
+        interval = SILENT_RESCAN_FIRST_SECS
+        deadline = time.monotonic() + interval
         try:
             while self._running:
                 await asyncio.sleep(DEVICE_POLL_SECS)
                 if not self._running:
                     return
 
-                if not warned and not self._got_first_event and time.monotonic() >= deadline:
-                    warned = True
-                    self._diag(
-                        f"WATCHDOG: no key events {SILENT_KEYBOARD_WARN_SECS}s after start"
-                    )
+                if not self._got_first_event and time.monotonic() >= deadline:
+                    deadline = time.monotonic() + interval
+                    interval *= 2
+                    self._rescan_wanted = True
+                    if not warned:
+                        warned = True
+                        self._diag(
+                            f"WATCHDOG: no key events {SILENT_RESCAN_FIRST_SECS}s "
+                            "after start, rescanning until one arrives"
+                        )
 
                 # This is the only thing watching for a keyboard that shows up
                 # late, so it has to survive a bad scan. Letting one exception

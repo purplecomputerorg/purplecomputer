@@ -145,9 +145,9 @@ echo
 if [[ "$CORRUPT_MODE" == true ]]; then
     echo -e "${BOLD}${YELLOW}Will flash ${#ENTRIES[@]} corrupt-test scenario(s), one per drive, in parallel:${NC}"
 else
-    echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") to ${#ENTRIES[@]} drive(s) in parallel:${NC}"
-    # Shipping guard: customer batches should be release builds. Quiet only
-    # when the ISO provably matches the release branch tip.
+    ISO_VERSION="$(tr -d '[:space:]' < "${ISO_PATH}.version" 2>/dev/null || true)"
+    echo -e "${BOLD}${YELLOW}Will flash $(basename "$ISO_PATH") (version ${ISO_VERSION:-unknown}) to ${#ENTRIES[@]} drive(s) in parallel:${NC}"
+    # Shipping guard: customer batches should be release builds.
     ISO_SRC_COMMIT="$(tr -d '[:space:]' < "${ISO_PATH}.commit" 2>/dev/null || true)"
     RELEASE_HEAD="$(git -C "$PROJECT_DIR" rev-parse release/1.x 2>/dev/null || true)"
     UNSHIPPABLE=""
@@ -156,11 +156,20 @@ else
     elif [[ -z "$RELEASE_HEAD" ]]; then
         UNSHIPPABLE="release/1.x was not found locally to compare against"
     elif [[ "$RELEASE_HEAD" != "$ISO_SRC_COMMIT"* ]]; then
-        UNSHIPPABLE="this ISO is from commit $ISO_SRC_COMMIT, release/1.x is at ${RELEASE_HEAD:0:7}"
+        if git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" release/1.x 2>/dev/null; then
+            ISO_LINE="an older release build"
+        elif git -C "$PROJECT_DIR" merge-base --is-ancestor "$ISO_SRC_COMMIT" main 2>/dev/null; then
+            ISO_LINE="a main build, not a release build"
+        else
+            ISO_LINE="from a commit on neither main nor release/1.x"
+        fi
+        UNSHIPPABLE="this ISO is $ISO_LINE (commit $ISO_SRC_COMMIT), release/1.x is at ${RELEASE_HEAD:0:7}"
     fi
     if [[ -n "$UNSHIPPABLE" ]]; then
         echo -e "  ${YELLOW}${BOLD}Not confirmed as the current release build:${NC}${YELLOW} ${UNSHIPPABLE}.${NC}"
         echo -e "  ${YELLOW}Fine for dev sticks; do not ship these drives to customers.${NC}"
+    else
+        echo -e "  ${GREEN}Current release build: commit ${ISO_SRC_COMMIT} matches release/1.x.${NC}"
     fi
 fi
 for i in "${!ENTRIES[@]}"; do

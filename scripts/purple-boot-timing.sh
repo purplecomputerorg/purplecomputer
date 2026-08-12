@@ -62,19 +62,33 @@ else
 fi
 
 section "What the firmware has to read before Linux starts"
-ls -lL /boot/vmlinuz /boot/initrd.img 2>&1
+# The image ships /boot/vmlinuz symlinks, but a machine booting versioned
+# names only must still report something rather than a pile of ls errors.
+KERNEL=$(ls -1 /boot/vmlinuz /boot/vmlinuz-* 2>/dev/null | head -1)
+INITRD=$(ls -1 /boot/initrd.img /boot/initrd.img-* 2>/dev/null | head -1)
+if [ -n "$KERNEL" ] && [ -n "$INITRD" ]; then
+    ls -lL "$KERNEL" "$INITRD"
+else
+    echo "no kernel/initrd found under /boot"
+fi
 BOOT_DEV=$(findmnt -no SOURCE /boot 2>/dev/null || findmnt -no SOURCE / 2>/dev/null)
 echo "read from: $BOOT_DEV ($(findmnt -no FSTYPE /boot 2>/dev/null || findmnt -no FSTYPE / 2>/dev/null))"
-if command -v filefrag >/dev/null 2>&1; then
+if ! command -v filefrag >/dev/null 2>&1; then
+    echo "filefrag not installed (skipping fragmentation check)"
+elif [ -n "$KERNEL" ] && [ -n "$INITRD" ]; then
     # Extent count is the proxy for GRUB's seek load: one extent is a single
     # sequential run, hundreds means the firmware seeks for every chunk.
-    filefrag /boot/vmlinuz /boot/initrd.img 2>&1
-else
-    echo "filefrag not installed (skipping fragmentation check)"
+    filefrag "$KERNEL" "$INITRD" 2>&1
 fi
 
+# Never guess the disk: measuring an unrelated drive would send the whole
+# investigation the wrong way.
 DISK=$(lsblk -no PKNAME "$BOOT_DEV" 2>/dev/null | head -1)
-[ -n "${DISK:-}" ] || DISK=sda
+if [ -z "${DISK:-}" ]; then
+    echo "could not identify the disk behind $BOOT_DEV; skipping disk tests"
+    echo "run the disk tests by hand against the right device if needed"
+    exit 0
+fi
 
 section "Disk: sequential read (/dev/$DISK)"
 if [ "$(id -u)" -ne 0 ]; then

@@ -35,6 +35,7 @@ Actions (processed left to right):
     wait:SECONDS     Pause for N seconds (e.g. wait:0.5)
     clear            Clear the art canvas
     time_travel      Open the Time Travel scrubber in the current room
+    first_boot       Show the first-boot power-cycle screen
 
 Output: path to the PNG (or SVG if PNG conversion unavailable).
 """
@@ -131,6 +132,11 @@ async def run_action(app, action_str: str) -> None:
     elif action_str == "help_videos":
         from purple_tui.rooms.help_videos import HelpVideosScreen
         app.push_screen(HelpVideosScreen())
+        await asyncio.sleep(0.3)
+
+    elif action_str == "first_boot":
+        from purple_tui.rooms.sleep_screen import FirstBootPowerCycleScreen
+        app.push_screen(FirstBootPowerCycleScreen())
         await asyncio.sleep(0.3)
 
     elif action_str == "clear":

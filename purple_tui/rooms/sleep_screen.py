@@ -15,8 +15,10 @@ from textual.screen import Screen
 from textual.widgets import Static
 from textual import events
 
+import os
+
 from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY
-from ..constants import is_live_boot
+from ..constants import is_live_boot, LIVE_AUDIO_MARKER
 
 
 def _friendly_time(seconds: float) -> str:
@@ -399,3 +401,76 @@ class LiveBootSplash(Screen):
     async def handle_keyboard_action(self, action) -> None:
         """Any key dismisses the splash."""
         self.dismiss()
+
+
+def first_boot_power_cycle_needed(audio_ok) -> bool:
+    """True when audio worked in the live session but no sound card came up
+    on this installed boot: the warm-reboot codec wedge a power off fixes.
+
+    The no-card requirement keeps known-silent codecs (CS8409 Macs) and
+    mixer-only failures from triggering a power cycle that won't help.
+    """
+    if audio_ok is not False or is_live_boot():
+        return False
+    if not os.path.exists(LIVE_AUDIO_MARKER):
+        return False
+    from .music_room import _silence_reason
+    return _silence_reason() == "no-card"
+
+
+class FirstBootPowerCycleScreen(Screen):
+    """
+    Shown at most once, on the first installed boot, when
+    first_boot_power_cycle_needed() says a power off should bring audio back.
+
+    Framed as finishing setup, not as an error: the parent presses ENTER,
+    the machine turns off (a real power off, which resets the codec), and
+    the next press of the power button cold-boots into a working Purple.
+    """
+
+    DEFAULT_CSS = """
+    FirstBootPowerCycleScreen {
+        align: center middle;
+        background: $background;
+    }
+
+    #firstboot-message {
+        content-align: center middle;
+        color: $primary;
+        margin-bottom: 2;
+    }
+
+    #firstboot-hint {
+        content-align: center middle;
+        color: $text-muted;
+    }
+    """
+
+    _MESSAGE = (
+        "Almost done!\n"
+        "\n"
+        "Purple needs to turn off and on\n"
+        "one time to finish setting up.\n"
+        "\n"
+        "After it turns off, press the\n"
+        "power button to start Purple."
+    )
+
+    def compose(self) -> ComposeResult:
+        yield Static(self._MESSAGE, id="firstboot-message")
+        yield Static("Press ENTER to turn off", id="firstboot-hint")
+
+    def _power_off(self) -> None:
+        self.app.push_screen(ByeScreen())
+
+    def on_key(self, event: events.Key) -> None:
+        event.stop()
+        event.prevent_default()
+        if event.key == "enter":
+            self._power_off()
+
+    async def handle_keyboard_action(self, action) -> None:
+        from ..keyboard import ControlAction
+        if isinstance(action, ControlAction) and action.action == 'enter' \
+                and action.is_down:
+            self._power_off()

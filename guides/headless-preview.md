@@ -76,6 +76,15 @@ Opens the room picker modal.
 just preview play room_picker            # Room picker over Play room
 ```
 
+### `first_boot`
+
+Shows the first-boot power-cycle screen (the "Almost done!" offer shown when
+audio worked in the live session but no sound card came up after install).
+
+```bash
+just preview play first_boot
+```
+
 ### `clear`
 
 Clears the art canvas.

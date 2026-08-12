@@ -1602,6 +1602,10 @@ class InstallProgressScreen(PurpleModal):
                 **os.environ,
                 "PURPLE_PAYLOAD_DIR": "/cdrom/purple",
                 "PURPLE_COMPUTER_NAME": self._computer_name,
+                # Lets the installed system's first boot tell "audio worked
+                # minutes ago, silent now" apart from never-had-sound.
+                "PURPLE_LIVE_AUDIO_OK":
+                    "1" if getattr(self.app, "audio_ok", None) is True else "0",
             },
         )
         buf = b""

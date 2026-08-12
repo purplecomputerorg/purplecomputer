@@ -47,6 +47,15 @@ SILENT_RESCAN_FIRST_SECS = 5
 DIAG_LOG_PATHS = ("/tmp/evdev-diag.log", "/var/log/purple/evdev.log")
 
 
+def _list_input_paths() -> set:
+    """Current /dev/input event nodes. Cheap: a glob and a stat per node."""
+    import evdev
+    try:
+        return set(evdev.list_devices())
+    except OSError:
+        return set()
+
+
 # =============================================================================
 # Key Codes (subset of Linux input-event-codes.h)
 # =============================================================================
@@ -359,7 +368,7 @@ class EvdevReader:
             # while we scan would otherwise land in the baseline as already
             # known, and the watcher would never adopt it.
             self._known_device_paths = self._device_paths()
-            self._devices = self._find_keyboards()
+            self._devices = list(self._find_keyboards())
 
         if not self._devices:
             self._diag("ERROR: no keyboard found")
@@ -627,14 +636,7 @@ class EvdevReader:
                 pass
             self._rescan_wanted = True
 
-    @staticmethod
-    def _device_paths() -> set:
-        """Current /dev/input event nodes. Cheap: a glob and a stat per node."""
-        import evdev
-        try:
-            return set(evdev.list_devices())
-        except OSError:
-            return set()
+    _device_paths = staticmethod(_list_input_paths)
 
     async def _watch_devices(self) -> None:
         """Adopt keyboards that appear after startup.
@@ -931,8 +933,23 @@ class PowerButtonReader:
         self._running = False
         self._tasks: list[asyncio.Task] = []
         self._heartbeat_task: Optional[asyncio.Task] = None
+        self._watcher_task: Optional[asyncio.Task] = None
+        self._known_device_paths: set = set()
+        self._rescan_wanted = False  # Consumed by _watch_devices
+        self._logged_once: set = set()  # Diag lines already written
         self._hold_task: Optional[asyncio.Task] = None
         self._press_time: Optional[float] = None
+
+    _device_paths = staticmethod(_list_input_paths)
+
+    def _diag_once(self, msg: str) -> None:
+        """Log identical diag lines once. The log is always-on to disk and a
+        flapping node re-runs scans every couple of seconds, so repeats would
+        grow it unbounded for as long as the hardware is bad."""
+        from .power_manager import _power_diag
+        if msg not in self._logged_once:
+            self._logged_once.add(msg)
+            _power_diag(msg)
 
     @property
     def _device(self):
@@ -941,11 +958,15 @@ class PowerButtonReader:
 
     async def start(self) -> None:
         """Start reading power button events in background."""
-        self._devices = self._find_power_buttons()
+        # Snapshot before the scan, never after: a device that enumerates
+        # while we scan must not land in the baseline as already known.
+        self._known_device_paths = self._device_paths()
+        # list() so appends can't mutate a scan result the caller still holds
+        self._devices = list(self._find_power_buttons())
 
         if not self._devices:
-            logger.info("PowerButtonReader: no power button device found (OK on desktops)")
-            return
+            logger.info("PowerButtonReader: no power button device found yet "
+                        "(OK on desktops), watching for one")
 
         for dev in self._devices:
             logger.info(f"PowerButtonReader: listening on {dev.path} ({dev.name})")
@@ -953,12 +974,21 @@ class PowerButtonReader:
         self._running = True
         for dev in self._devices:
             self._tasks.append(asyncio.create_task(self._read_loop(dev)))
+        self._watcher_task = asyncio.create_task(self._watch_devices())
         self._heartbeat_task = asyncio.create_task(self._heartbeat())
 
     async def stop(self) -> None:
         """Stop reading and release all devices."""
         self._running = False
         self._cancel_hold_task()
+
+        if self._watcher_task:
+            self._watcher_task.cancel()
+            try:
+                await asyncio.wait_for(self._watcher_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            self._watcher_task = None
 
         if self._heartbeat_task:
             self._heartbeat_task.cancel()
@@ -999,6 +1029,66 @@ class PowerButtonReader:
         except asyncio.CancelledError:
             pass
 
+    async def _watch_devices(self) -> None:
+        """Adopt power buttons that appear after startup.
+
+        The ACPI button devices (LNXPWRBN, PNP0C0C) can enumerate or become
+        readable after our one startup scan, leaving the power menu dead for
+        the whole session. Same failure class the keyboard watcher covers.
+
+        A path-set change triggers a rescan. While we hold no device at all,
+        rescans also fire on a doubling backoff (a present-but-unreadable node
+        sits behind a stable path set the watch alone would never revisit);
+        unbounded doubling keeps a desktop with no power button near-silent.
+        """
+        interval = SILENT_RESCAN_FIRST_SECS
+        deadline = time.monotonic() + interval
+        try:
+            while self._running:
+                await asyncio.sleep(DEVICE_POLL_SECS)
+                if not self._running:
+                    return
+
+                if not self._devices and time.monotonic() >= deadline:
+                    deadline = time.monotonic() + interval
+                    interval *= 2
+                    self._rescan_wanted = True
+
+                paths = self._device_paths()
+                if paths != self._known_device_paths:
+                    self._known_device_paths = paths
+                    self._rescan_wanted = True
+
+                if not self._rescan_wanted:
+                    continue
+                self._rescan_wanted = False
+                try:
+                    self._adopt_new_buttons()
+                except Exception as e:
+                    # The flag is all that reopens the gate if the path set
+                    # never changes again, so put it back on failure.
+                    self._rescan_wanted = True
+                    self._diag_once(f"POWER WATCHER: adopt failed: {e}")
+        except asyncio.CancelledError:
+            return
+
+    def _adopt_new_buttons(self) -> None:
+        """Open and start reading every power button we aren't already reading."""
+        active_paths = {d.path for d in self._devices}
+        found = self._find_power_buttons()
+
+        new_devices = [d for d in found if d.path not in active_paths]
+        for d in found:
+            if d.path in active_paths:
+                d.close()  # Already being read on another handle
+
+        self._tasks = [t for t in self._tasks if not t.done()]
+        for dev in new_devices:
+            self._diag_once(f"POWER ADOPT: {dev.path} ({dev.name})")
+            logger.info(f"PowerButtonReader: adopted {dev.path} ({dev.name})")
+            self._devices.append(dev)
+            self._tasks.append(asyncio.create_task(self._read_loop(dev)))
+
     def _cancel_hold_task(self) -> None:
         if self._hold_task and not self._hold_task.done():
             self._hold_task.cancel()
@@ -1020,23 +1110,23 @@ class PowerButtonReader:
 
     async def _read_loop(self, device) -> None:
         """Main event reading loop for one power button device."""
-        from .power_manager import _power_log
-        _power_log(f"POWER READ LOOP: starting on {device.path} ({device.name})")
+        from .power_manager import _power_diag
+        self._diag_once(f"POWER READ LOOP: starting on {device.path} ({device.name})")
         event_count = 0
         try:
             async for event in device.async_read_loop():
                 if not self._running:
-                    _power_log("POWER READ LOOP: stopped (_running=False)")
+                    self._diag_once("POWER READ LOOP: stopped (_running=False)")
                     break
 
                 event_count += 1
                 # Log first few events to confirm device is alive
                 if event_count <= 5:
-                    _power_log(f"POWER READ LOOP: event #{event_count} type={event.type} "
+                    _power_diag(f"POWER READ LOOP: event #{event_count} type={event.type} "
                                f"code={event.code} value={event.value}")
 
                 if event.type == EV_KEY and event.code == KeyCode.KEY_POWER:
-                    _power_log(f"POWER KEY: value={event.value} (1=press, 0=release)")
+                    _power_diag(f"POWER KEY: value={event.value} (1=press, 0=release)")
                     if event.value == 1:  # press
                         self._press_time = event.timestamp()
                         self._cancel_hold_task()
@@ -1053,14 +1143,25 @@ class PowerButtonReader:
                         self._press_time = None
 
         except asyncio.CancelledError:
-            _power_log("POWER READ LOOP: cancelled")
+            self._diag_once("POWER READ LOOP: cancelled")
         except OSError as e:
-            _power_log(f"POWER READ LOOP: OSError (device closed?): {e}")
+            self._diag_once(f"POWER READ LOOP: OSError (device closed?): {e}")
         except Exception as e:
-            _power_log(f"POWER READ LOOP: unexpected error: {e}")
+            self._diag_once(f"POWER READ LOOP: unexpected error: {e}")
             logger.error(f"PowerButtonReader error: {e}")
         else:
-            _power_log(f"POWER READ LOOP: exited normally after {event_count} events")
+            self._diag_once(f"POWER READ LOOP: exited normally after {event_count} events")
+
+        # Device lost while we're still supposed to be running: hand it to the
+        # watcher so a recreated node is re-adopted (same pattern as EvdevReader).
+        if self._running:
+            self._devices = [d for d in self._devices if d.path != device.path]
+            try:
+                device.close()
+            except Exception:
+                pass
+            self._rescan_wanted = True
+            self._diag_once(f"POWER READ LOOP: {device.path} lost, watcher will rescan")
 
     def _find_power_buttons(self):
         """Find all dedicated power button input devices.
@@ -1071,7 +1172,6 @@ class PowerButtonReader:
         """
         import evdev
         from evdev import InputDevice
-        from .power_manager import _power_log
 
         dedicated = []   # Few keys (dedicated power button devices)
         keyboards = []   # Many keys (keyboards that also have KEY_POWER)
@@ -1082,7 +1182,7 @@ class PowerButtonReader:
                 caps = dev.capabilities().get(evdev.ecodes.EV_KEY, [])
                 if evdev.ecodes.KEY_POWER in caps:
                     n_keys = len(caps)
-                    _power_log(f"POWER SCAN: {dev_path} name={dev.name!r} keys={n_keys}")
+                    self._diag_once(f"POWER SCAN: {dev_path} name={dev.name!r} keys={n_keys}")
                     if n_keys < 20:
                         dedicated.append(dev)
                     else:
@@ -1090,11 +1190,11 @@ class PowerButtonReader:
                 else:
                     dev.close()
             except (PermissionError, OSError) as e:
-                _power_log(f"POWER SCAN: {dev_path} error: {e}")
+                self._diag_once(f"POWER SCAN: {dev_path} error: {e}")
                 continue
 
         if not dedicated and not keyboards:
-            _power_log("POWER SCAN: no devices with KEY_POWER found")
+            self._diag_once("POWER SCAN: no devices with KEY_POWER found")
             return []
 
         # Use all dedicated power button devices (listen on all of them).
@@ -1107,7 +1207,7 @@ class PowerButtonReader:
             chosen = keyboards
 
         for dev in chosen:
-            _power_log(f"POWER SCAN: will listen on {dev.path} ({dev.name})")
+            self._diag_once(f"POWER SCAN: will listen on {dev.path} ({dev.name})")
 
             # Test if another process has an exclusive grab
             try:
@@ -1115,9 +1215,9 @@ class PowerButtonReader:
                 EVIOCGRAB = 0x40044590
                 fcntl.ioctl(dev.fd, EVIOCGRAB, 1)
                 fcntl.ioctl(dev.fd, EVIOCGRAB, 0)
-                _power_log(f"POWER GRAB TEST: {dev.path} NOT grabbed")
+                self._diag_once(f"POWER GRAB TEST: {dev.path} NOT grabbed")
             except OSError as e:
-                _power_log(f"POWER GRAB TEST: {dev.path} IS grabbed: {e}")
+                self._diag_once(f"POWER GRAB TEST: {dev.path} IS grabbed: {e}")
 
         return chosen
 

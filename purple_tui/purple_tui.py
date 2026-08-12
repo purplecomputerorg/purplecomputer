@@ -1098,7 +1098,7 @@ class PurpleApp(App):
 
         # Start power button reader (separate device from keyboard)
         if os.environ.get("PURPLE_NO_EVDEV") != "1":
-            from .power_manager import POWER_HOLD_SHUTDOWN, _power_log
+            from .power_manager import POWER_HOLD_SHUTDOWN, _power_diag
             self._power_button_reader = PowerButtonReader(
                 callback=self._handle_power_button_event,
                 hold_seconds=POWER_HOLD_SHUTDOWN,
@@ -1106,12 +1106,12 @@ class PurpleApp(App):
             try:
                 await self._power_button_reader.start()
                 if not self._power_button_reader._devices:
-                    _power_log("POWER BUTTON INIT: no device found")
+                    _power_diag("POWER BUTTON INIT: no device found, watcher will adopt one")
                 else:
                     for dev in self._power_button_reader._devices:
-                        _power_log(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
+                        _power_diag(f"POWER BUTTON INIT: listening on {dev.path} ({dev.name})")
             except Exception as e:
-                _power_log(f"POWER BUTTON INIT: start failed: {e}")
+                _power_diag(f"POWER BUTTON INIT: start failed: {e}")
                 self._power_button_reader = None
 
         # Start lid switch reader (instant lid open/close detection via evdev)
@@ -1228,6 +1228,14 @@ class PurpleApp(App):
         else:
             self._start_mixer_warmup()
 
+        # First installed boot after audio worked in live: if no sound card
+        # comes up, offer a one-time power off (warm-reboot codec wedge).
+        # 30s gives the warmup retries and retry poll time to catch a card
+        # that merely probes late, so only a truly absent card prompts.
+        from .constants import LIVE_AUDIO_MARKER
+        if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
+            self.set_timer(30.0, self._check_first_boot_audio)
+
     def _start_mixer_warmup(self) -> None:
         import threading
         import time as _time
@@ -1264,6 +1272,25 @@ class PurpleApp(App):
             self._start_audio_hotplug()
             self._start_audio_retry_poll()
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
+
+    def _check_first_boot_audio(self) -> None:
+        from .constants import LIVE_AUDIO_MARKER
+        from .rooms.sleep_screen import (FirstBootPowerCycleScreen,
+                                         first_boot_power_cycle_needed)
+        if self.audio_ok is None:
+            self.set_timer(10.0, self._check_first_boot_audio)  # still probing
+            return
+        offer = first_boot_power_cycle_needed(self.audio_ok)
+        if self.audio_ok or offer:
+            # Consume the marker either way: audio came up fine, or we are
+            # about to offer the one power cycle we will ever offer.
+            try:
+                os.unlink(LIVE_AUDIO_MARKER)
+            except OSError:
+                pass
+        if offer:
+            boot_log.heartbeat("first boot: no sound card, offering power cycle")
+            self.push_screen(FirstBootPowerCycleScreen())
 
     def _start_audio_hotplug(self) -> None:
         from . import audio_hotplug

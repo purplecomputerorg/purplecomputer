@@ -21,6 +21,16 @@ LOG_PATH = "/tmp/purple-stderr.log"
 _terminal: io.TextIOWrapper | None = None
 
 
+def terminal_stderr() -> io.TextIOWrapper | None:
+    """The real terminal, for children that must be seen (interactive shells).
+
+    fd 2 points at the log file once the guard is active, and bash writes its
+    prompt and readline's echo to stderr, so a child that inherits fd 2 runs
+    invisibly. Returns None when the guard never ran (fd 2 is still the tty).
+    """
+    return _terminal
+
+
 def hide_native_stderr(log_path: str = LOG_PATH) -> bool:
     """Point fd 2 at `log_path` and give Textual a private handle on the terminal.
 

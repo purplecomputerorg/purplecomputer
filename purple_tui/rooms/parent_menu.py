@@ -2532,13 +2532,20 @@ class ParentMenu(PurpleModal):
             # Get the user's default shell or fall back to bash
             shell = os.environ.get('SHELL', '/bin/bash')
 
+            # bash writes its prompt and readline's echo to stderr, which the
+            # guard has pointed at a log file: hand the child the real terminal
+            # or the shell runs invisibly.
+            from ..stderr_guard import terminal_stderr
+            shell_stderr = terminal_stderr()
+
             if getattr(self.app, 'demo_running', False):
                 # Demo playback has nobody at the keyboard: show the real
                 # shell briefly, then return to Purple on its own.
-                subprocess.run([shell, '-i'], input='sleep 3\nexit\n', text=True)
+                subprocess.run([shell, '-i'], input='sleep 3\nexit\n', text=True,
+                               stderr=shell_stderr)
             else:
                 # Run the shell interactively
-                subprocess.run([shell, '-i'])
+                subprocess.run([shell, '-i'], stderr=shell_stderr)
 
             # When shell exits, clean up before resuming
             print()

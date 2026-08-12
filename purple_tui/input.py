@@ -439,20 +439,13 @@ class EvdevReader:
             return True  # Assume tty1 if we can't tell
 
     def _switch_to_tty2(self) -> None:
-        """Switch to tty2 with a usable bash shell.
+        """Switch to tty2, which already has an autologin shell.
 
-        Uses openvt (from kbd package) to spawn a clean login shell on
-        tty2. openvt handles terminal setup correctly, avoiding the
-        broken-echo / wrong-keymap issues that happen when manually
-        redirecting to /dev/tty2.
+        The image runs an autologin agetty on tty2 from sysinit.target. Spawning
+        a second login here (openvt -f) left two processes reading one tty, so
+        each got a fraction of the keystrokes and neither shell was usable.
         """
-        # openvt -s switches to the VT, -f forces even if VT is in use,
-        # -c 2 targets tty2, -- separates openvt args from the command.
-        # login -f skips password for the purple user.
-        subprocess.Popen(
-            ["sudo", "openvt", "-s", "-f", "-c", "2", "--",
-             "login", "-f", "purple"],
-        )
+        subprocess.Popen(["sudo", "chvt", "2"])
 
     def release_grab(self) -> None:
         """

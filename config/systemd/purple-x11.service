@@ -16,6 +16,12 @@ After=keyd.service
 Requires=purple-splash.service
 # Don't start in installer mode
 ConditionKernelCommandLine=!purple.install=1
+# Rate limit for Restart=on-failure below. These are Unit-section keys: systemd
+# ignores them in the service section ("Unknown key name ... ignoring"), which
+# left the limit inert and X restarting forever instead of showing the error
+# screen.
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 # Route pygame/SDL audio through PulseAudio instead of direct ALSA.
@@ -47,11 +53,9 @@ TTYVTDisallocate=no
 # Don't let this service block shutdown. Default is 90s which causes
 # the system to hang on a purple screen for 90s if something is stuck.
 TimeoutStopSec=10
-# Restart on failure (replaces manual fail counter)
+# Restart on failure (replaces manual fail counter). Rate limit is in [Unit].
 Restart=on-failure
 RestartSec=2
-StartLimitIntervalSec=60
-StartLimitBurst=3
 # Show error on tty1 if we hit the restart limit (or any failure)
 ExecStopPost=-/usr/local/bin/purple-x11-failed
 

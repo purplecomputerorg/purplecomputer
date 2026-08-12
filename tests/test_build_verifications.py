@@ -123,3 +123,15 @@ def test_gl_probe_ships_and_glxinfo_is_verified():
         "purple-gl-probe not made executable"
     assert re.search(r"for cmd in [^\n]*\bglxinfo\b", src), \
         "glxinfo not in the fail-loudly tooling verification loop"
+
+
+def test_x11_service_start_limit_keys_are_in_unit_section():
+    """StartLimitIntervalSec/StartLimitBurst are [Unit] keys. Under [Service]
+    systemd logs 'Unknown key name ... ignoring' and the restart rate limit is
+    inert, so X restarts forever instead of reaching purple-x11-failed."""
+    unit = (ROOT / "config" / "systemd" / "purple-x11.service").read_text()
+    before_service = unit.split("[Service]", 1)[0]
+    for key in ("StartLimitIntervalSec", "StartLimitBurst"):
+        assert re.search(rf"^{key}=", before_service, re.M), f"{key} not in [Unit]"
+        assert not re.search(rf"^{key}=", unit.split("[Service]", 1)[1], re.M), \
+            f"{key} still under [Service]"

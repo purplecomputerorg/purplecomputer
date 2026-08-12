@@ -135,3 +135,16 @@ def test_x11_service_start_limit_keys_are_in_unit_section():
         assert re.search(rf"^{key}=", before_service, re.M), f"{key} not in [Unit]"
         assert not re.search(rf"^{key}=", unit.split("[Service]", 1)[1], re.M), \
             f"{key} still under [Service]"
+
+
+def test_boot_timing_tool_ships():
+    """The pre-kernel boot investigation depends on this being on the image;
+    it is the only way to measure seek latency and file fragmentation on a
+    customer machine. See docs/PLAN-macbook5-slow-boot.md."""
+    src = _build_source()
+    assert re.search(r'cp /purple-src/scripts/purple-boot-timing\.sh\b', src), \
+        "purple-boot-timing.sh not copied into the image"
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/usr/local/bin/purple-boot-timing"', src), \
+        "purple-boot-timing not made executable"
+    assert re.search(r"^\s*smartmontools \\$", src, re.M), \
+        "smartmontools not in apt install list (SMART check silently skips)"

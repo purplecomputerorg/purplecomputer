@@ -218,6 +218,7 @@ SOURCES
         kbd \
         evtest \
         strace \
+        smartmontools \
         parted \
         efibootmgr \
         grub-pc-bin \
@@ -627,6 +628,8 @@ TIMEOUTS
     cp /purple-src/scripts/purple-x11-failed.sh "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     cp /purple-src/scripts/purple-start-compositor.sh "$MOUNT_DIR/usr/local/bin/purple-start-compositor"
     cp /purple-src/scripts/purple-gl-probe.sh "$MOUNT_DIR/usr/local/bin/purple-gl-probe"
+    cp /purple-src/scripts/purple-boot-timing.sh "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-boot-timing"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-wait-display"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-x11-failed"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-start-compositor"

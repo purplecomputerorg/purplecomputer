@@ -474,6 +474,115 @@ class TestPowerButtonEvents:
         _run(_test())
 
 
+class TestPowerButtonHotplug:
+    """A power button the boot scan missed leaves the power menu dead all
+    session, the same failure class the keyboard watcher covers."""
+
+    def test_button_appearing_later_is_adopted_and_works(self):
+        async def _test():
+            cb = AsyncCallback()
+            late = FakeInputDevice("/dev/input/event0", "LNXPWRBN",
+                                   {KeyCode.KEY_POWER}, has_ev_rep=False)
+
+            reader = PowerButtonReader(callback=cb, hold_seconds=3)
+            with patch.object(reader, '_find_power_buttons', return_value=[]), \
+                 patch.object(reader, '_device_paths', return_value=set()), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+                assert reader._devices == []
+
+                with patch.object(reader, '_find_power_buttons', return_value=[late]), \
+                     patch.object(reader, '_device_paths',
+                                  return_value={"/dev/input/event0"}):
+                    await asyncio.sleep(0.1)
+
+                assert [d.path for d in reader._devices] == [late.path]
+
+                late.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 1, 100.0))
+                await asyncio.sleep(0.05)
+                late.inject_event(FakeEvent(EV_KEY, KeyCode.KEY_POWER, 0, 100.1))
+                await asyncio.sleep(0.05)
+                await reader.stop()
+
+            assert len(cb.calls) == 1
+            assert cb.calls[0].action == "tap"
+
+        _run(_test())
+
+    def test_unreadable_button_retried_behind_stable_path_set(self):
+        """An unreadable node (udev perms not applied yet) hides behind an
+        unchanged path set, so emptiness alone has to force rescans."""
+        async def _test():
+            pb = FakeInputDevice("/dev/input/event0", "PNP0C0C",
+                                 {KeyCode.KEY_POWER}, has_ev_rep=False)
+
+            reader = PowerButtonReader(callback=AsyncCallback(), hold_seconds=3)
+            with patch.object(reader, '_device_paths',
+                              return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01), \
+                 patch("purple_tui.input.SILENT_RESCAN_FIRST_SECS", 0.02):
+                with patch.object(reader, '_find_power_buttons', return_value=[]):
+                    await reader.start()
+                    assert reader._devices == []
+
+                with patch.object(reader, '_find_power_buttons', return_value=[pb]):
+                    await asyncio.sleep(0.15)
+
+                assert [d.path for d in reader._devices] == [pb.path]
+                await reader.stop()
+
+        _run(_test())
+
+    def test_dead_read_loop_triggers_readoption(self):
+        async def _test():
+            pb = FakeInputDevice("/dev/input/event0", "LNXPWRBN",
+                                 {KeyCode.KEY_POWER}, has_ev_rep=False)
+
+            reader = PowerButtonReader(callback=AsyncCallback(), hold_seconds=3)
+            with patch.object(reader, '_device_paths',
+                              return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                with patch.object(reader, '_find_power_buttons', return_value=[pb]):
+                    await reader.start()
+
+                # Node dies without disappearing; a rescan finds a fresh handle.
+                fresh = FakeInputDevice("/dev/input/event0", "LNXPWRBN",
+                                        {KeyCode.KEY_POWER}, has_ev_rep=False)
+                with patch.object(reader, '_find_power_buttons', return_value=[fresh]):
+                    pb.close()
+                    await asyncio.sleep(0.1)
+
+                assert [d.path for d in reader._devices] == [fresh.path]
+                assert not fresh._closed
+                await reader.stop()
+
+        _run(_test())
+
+    def test_healthy_devices_no_rescan_on_stable_paths(self):
+        """The poll runs for the whole session, so it has to stay free."""
+        async def _test():
+            pb = FakeInputDevice("/dev/input/event0", "LNXPWRBN",
+                                 {KeyCode.KEY_POWER}, has_ev_rep=False)
+            reader = PowerButtonReader(callback=AsyncCallback(), hold_seconds=3)
+            scans = []
+
+            def _counting_scan():
+                scans.append(1)
+                return [pb]
+
+            with patch.object(reader, '_find_power_buttons', _counting_scan), \
+                 patch.object(reader, '_device_paths',
+                              return_value={"/dev/input/event0"}), \
+                 patch("purple_tui.input.DEVICE_POLL_SECS", 0.01):
+                await reader.start()
+                await asyncio.sleep(0.15)
+                await reader.stop()
+
+            assert len(scans) == 1  # the boot scan, and nothing since
+
+        _run(_test())
+
+
 # =============================================================================
 # Shutdown Watchdog Tests
 # =============================================================================

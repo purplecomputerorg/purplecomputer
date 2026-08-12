@@ -650,6 +650,19 @@ main() {
                 fi
             fi
 
+            # Record that audio worked during the live session. The first
+            # installed boot uses this to tell a warm-reboot codec wedge
+            # (fixable by a power off) apart from hardware that never had
+            # sound. Consumed by the TUI; see purple_tui/rooms/sleep_screen.py.
+            if [ "$PURPLE_LIVE_AUDIO_OK" = "1" ]; then
+                mkdir -p /mnt/root/var/log/purple
+                if touch /mnt/root/var/log/purple/audio-worked-in-live 2>/dev/null; then
+                    log "  Live audio marker written"
+                else
+                    warn "Could not write live audio marker"
+                fi
+            fi
+
             # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
             if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
                 sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg

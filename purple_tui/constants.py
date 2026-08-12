@@ -146,6 +146,12 @@ USB_CACHE_MARKER = "/tmp/purple-usb-cached"
 # instead of contending with it and slowing boot. See intel-display-tuning.md.
 UI_READY_MARKER = "/tmp/purple-ui-ready"
 
+# Written into the installed system by install.sh when audio worked during
+# the live session; consumed on the first installed boot to tell "worked
+# minutes ago, silent now" (warm-reboot codec wedge, fixed by a power off)
+# apart from hardware that never had sound. See rooms/sleep_screen.py.
+LIVE_AUDIO_MARKER = "/var/log/purple/audio-worked-in-live"
+
 # PURPLE_FAKE_USB env var simulates USB boot states for testing.
 # Values: "caching" (USB blinking), "cached" (safe to remove), "removed" (USB pulled out)
 _FAKE_USB = os.environ.get("PURPLE_FAKE_USB", "")

@@ -41,9 +41,11 @@ BOOT_ID_FILE=/var/log/purple/boot_id
 CURRENT_BOOT_ID=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null || echo "unknown")
 STORED_BOOT_ID=$(cat "$BOOT_ID_FILE" 2>/dev/null || echo "")
 if [ "$CURRENT_BOOT_ID" != "$STORED_BOOT_ID" ]; then
-    if [ -f "$BOOT_LOG_PERSIST" ]; then
-        mv -f "$BOOT_LOG_PERSIST" "${BOOT_LOG_PERSIST}.prev" 2>/dev/null || true
-    fi
+    for f in "$BOOT_LOG_PERSIST" /var/log/purple/power.log /var/log/purple/evdev.log; do
+        if [ -f "$f" ]; then
+            mv -f "$f" "${f}.prev" 2>/dev/null || true
+        fi
+    done
     echo "$CURRENT_BOOT_ID" > "$BOOT_ID_FILE" 2>/dev/null || true
 fi
 

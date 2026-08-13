@@ -87,7 +87,9 @@ Open question worth one test: **do other spinning-disk machines show this?** Cos
 
 ## Hardware validation checklist for fixes 1 and 2
 
-Status 2026-08-13: the first ISO carrying both fixes was machine-tested. Fix 2 confirmed present and working (3:40 vs ~5:00). Fix 1 v1 was the no-op (see postmortem); v2 needs a fresh build.
+Status 2026-08-13, second ISO (fix 1 v2 + fix 2): **steady-state validated on the MacBook5,2 at 2:56 power-to-UI** against a ~2:50 prediction (from ~5:00 originally, 3:40 with fix 2 alone). Initrd on disk 37.2MB (vs 27.7MB in the pre-build container test; delta is module-set drift from the fresh debootstrap), lean-marker grep clean, firmware on disk intact, `purple_set_root` present, Linux 32s.
+
+Open observation: the **first boot immediately after install took over 6 minutes**, all pre-kernel (the user journal shows sessions starting at monotonic 15.5s), with the USB stick removed. Second boot: 2:56. Same shape appeared on the previous install (3:55 then 3:40). Candidates: Apple firmware re-evaluating its boot catalog after the disk and NVRAM were rewritten, or the same unexplained boot-to-boot read-rate variance seen during the experiments (one boot measured ~3x faster than its neighbors with identical configuration). One-time and self-healing; not worth chasing unless customer-visible on other Macs. If a parent-facing mitigation is ever wanted, the install success screen could set expectations ("the first start takes a few minutes").
 
 Per machine, on the next ISO:
 

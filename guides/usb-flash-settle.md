@@ -8,13 +8,20 @@ Freshly flashed drives take much longer on their first boot than on every boot a
 
 Conclusion: the penalty is state on the USB drive (controller-level, likely post-write read recalibration or SLC cache folding), not per-machine UEFI caching. One boot on any machine clears it for all machines.
 
+Reconfirmed 2026-08-13 on a MacBook5,2 (USB 2.0): first boot of an unsettled fresh flash took roughly 10 minutes (untimed; this also included casper's first-boot persistence setup), second boot of the same stick took 37 seconds. Settled drives still showed 60s+ first-boot penalties versus their second boot, which closed the snapshot=on tradeoff gate: see the next section.
+
 The sequential dd "settle" read pass in `flash-all.sh` did NOT clear it; an actual boot does. Fix: `boot_settle_drive` in `flash-lib.sh` boots each drive once in QEMU (raw `/dev/sdX` with `cache=none`, so guest reads hit the flash rather than the host page cache), detects boot completion from host-side `/sys/block` read counters, then keeps the drive powered briefly for background relocation. Used by both `flash-all.sh` (parallel) and standalone `flash-to-usb.sh`; skip with `--no-settle`, tune with `BOOT_SETTLE_*` env vars.
 
-## Settle Boot Must Not Write (2026-07-22)
+## Settle Boot Writes Again (2026-08-13, reverting 2026-07-22's snapshot=on)
 
-The settle boot runs with `snapshot=on`: guest writes land in a throwaway qcow2 overlay (forced to `TMPDIR=/var/tmp`, since sudo strips TMPDIR and QEMU would otherwise fill a tmpfs `/tmp` during parallel settles), never on the stick. Before this, the settle boot mutated every drive after checksum verification (casper relocated the backup GPT to the disk's true end and added a ~48GB "writable" persistence partition), so shipped bytes were not the verified bytes, and reflashed sticks accumulated conflicting GPT headers. `flash-to-usb.sh` now also zeroes stale history before every dd: the last MiB (relocated backup GPT) and 64MiB past the ISO extent (old "writable" superblock, which casper could otherwise reuse instead of mkfs'ing fresh, resurrecting a prior owner's data).
+From 2026-07-22 to 2026-08-13 the settle boot ran with `snapshot=on`, sending guest writes to a throwaway qcow2 overlay so shipped bytes stayed byte-exact with the verified ISO. That deliberately deferred casper's one-time persistence setup (relocating the backup GPT to the disk's true end, creating and mkfs'ing the ~48GB "writable" partition) to the customer's first boot, with a gate: revisit if first boot regresses badly. It did: settled drives still paid 60s+ on their first real boot versus their second, which is exactly the deferred persistence setup. So the settle boot writes for real again and casper's setup happens in the factory.
 
-Known tradeoff: the old settle boot's real writes were pre-doing casper's one-time persistence setup (GPT relocation plus mkfs of the writable partition), so with `snapshot=on` that write work happens on the customer's first boot instead. Accepted deliberately for byte-exact shipping; the controller read recalibration (the penalty this feature exists for) is read-driven and survives. Gate: time one first boot on a freshly flashed drive; if it regresses badly, revisit (pre-creating the persistence partition at flash time would be the fallback).
+The two problems `snapshot=on` was introduced for are both covered by mechanisms that landed independently:
+
+- **Reflashed sticks accumulating conflicting GPT headers:** `flash-to-usb.sh` zeroes stale history before every dd: the last MiB (relocated backup GPT) and 64MiB past the ISO extent (old "writable" superblock, which casper could otherwise reuse instead of mkfs'ing fresh, resurrecting a prior owner's data). The writable partition a shipped stick now carries is a factory-fresh mkfs, so there is no owner data to resurrect.
+- **Shipped bytes differing from verified bytes:** `recheck_after_settle` re-hashes the drive against the ISO after the settle boot, so the bytes that ship are verified after all writes. It skips the first MiB (`GPT_SKIP_BYTES`): adding the writable partition rewrites the primary GPT there, so that region legitimately differs from the ISO. Everything from 1MiB to the end of the ISO extent must still match; casper's other writes (backup GPT at disk end, mkfs) land past the ISO extent.
+
+Side effect worth knowing: settle boots were anecdotally slower under `snapshot=on` (every guest write paid qcow2 allocation into an O_DIRECT overlay on `/var/tmp`); with real writes that overhead is gone, at the cost of the mkfs writes going to the stick during settle.
 
 ## Timed-Out Settles Retry Themselves (2026-07-28)
 

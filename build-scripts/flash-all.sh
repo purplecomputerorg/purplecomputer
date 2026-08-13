@@ -339,7 +339,7 @@ if [[ "$REVERIFY" == true && ${#SETTLE_IDX[@]} -gt 0 ]]; then
     RV_PIDS=(); RV_IDX=()
     for i in "${SETTLE_IDX[@]}"; do
         while (( $(count_running "${RV_PIDS[@]}") >= 4 )); do sleep 5; done
-        recheck_after_settle "${ST_DEV[$i]}" "${SHA_BY_ISO[${ISOS[$i]}]}" "$(stat -c %s "${ISOS[$i]}")" &
+        recheck_after_settle "${ST_DEV[$i]}" "${ISOS[$i]}" &
         RV_PIDS+=("$!"); RV_IDX+=("$i")
     done
     for k in "${!RV_PIDS[@]}"; do

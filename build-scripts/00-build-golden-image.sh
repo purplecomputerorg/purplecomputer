@@ -287,8 +287,39 @@ SOURCES
         fi
     done
 
+    # Keep nouveau and its firmware out of the initrd. The GSP blobs alone are
+    # 44MB in the *uncompressed* early cpio, which slow pre-kernel loaders pay
+    # for on every boot (Apple EFI SATA reads ~0.5MB/s: 90+ seconds just for
+    # this). Display init doesn't need the initrd: nouveau loads post-pivot
+    # from the real filesystem (squashfs on live, ext4 installed), where the
+    # full firmware tree lives. Removing the module too, not just the firmware,
+    # means no NVIDIA card ever probes without its firmware present.
+    # "zzz-" so it sorts after the hooks that populate modules and firmware.
+    # See docs/PLAN-macbook5-slow-boot.md.
+    cat > "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu" <<'LEANGPU'
+#!/bin/sh
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0 ;; esac
+
+find "$DESTDIR/usr/lib/modules" -name 'nouveau.ko*' -delete 2>/dev/null
+rm -rf "$DESTDIR/usr/lib/firmware/nvidia"
+[ -n "$version" ] && [ -d "$DESTDIR/usr/lib/modules/$version" ] && \
+    depmod -b "$DESTDIR" "$version" 2>/dev/null
+exit 0
+LEANGPU
+    chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu"
+
     # Rebuild initrd to include casper scripts (installed above, casper-stop neutered)
     chroot "$MOUNT_DIR" update-initramfs -u -k "$KVER"
+
+    # Verify the lean-gpu hook actually ran: nvidia firmware back in the initrd
+    # would silently re-add 90s of boot on slow-firmware machines.
+    if chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$KVER" | grep -qE 'firmware/nvidia/|/nouveau\.ko'; then
+        echo "ERROR: initrd still contains nouveau or nvidia firmware (lean-gpu hook did not run)"
+        exit 1
+    fi
+    log_info "Initrd size: $(du -h "$MOUNT_DIR/boot/initrd.img-$KVER" | cut -f1) (nouveau + nvidia firmware excluded)"
 
     # Verify sound modules are present (fail the build if not)
     log_info "Kernel version: $KVER"
@@ -770,14 +801,26 @@ AUTOLOGIN
 set timeout=0
 set default=0
 
+# Pin root to the fixed partition layout (p2 = PURPLE_ROOT) and only fall
+# back to a device scan when the pin is wrong (extra disks can shift hd
+# numbering). `search` probes every block device, and an empty optical
+# drive under Apple EFI answers slowly: the probe alone cost 47s on a
+# MacBook5,2. See docs/PLAN-macbook5-slow-boot.md.
+function purple_set_root {
+    set root=(hd0,gpt2)
+    if [ ! -f /boot/vmlinuz ]; then
+        search --no-floppy --label PURPLE_ROOT --set=root
+    fi
+}
+
 menuentry "PurpleOS" {
-    search --no-floppy --label PURPLE_ROOT --set=root
+    purple_set_root
     linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
     initrd /boot/initrd.img
 }
 
 menuentry "PurpleOS (recovery mode)" {
-    search --no-floppy --label PURPLE_ROOT --set=root
+    purple_set_root
     linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
     initrd /boot/initrd.img
 }

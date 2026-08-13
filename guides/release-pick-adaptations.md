@@ -5,6 +5,11 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-08-13
+
+- `d23ad08` (late power button adoption + power/evdev log persistence + first-boot audio check) → release `cde4645`
+  - `scripts/preview.py`: kept only the `first_boot` docstring line, dropped the `time_travel` line that rode along in the conflict (Time Travel `a14d1e6` stays on main; no handler code came over).
+
 ## 2026-08-07
 
 - `c795423` (swap install fix + no-accel-while-painting) → release `aa11a65`

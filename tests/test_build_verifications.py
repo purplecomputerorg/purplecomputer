@@ -176,7 +176,7 @@ def test_initrd_lean_hook_prunes_modules_and_firmware():
     assert hook, "lean-initrd initramfs hook not written"
     body = hook.group(1)
     for d in ("kernel/drivers/net", "kernel/drivers/bluetooth", "kernel/net/wireless",
-              "kernel/drivers/gpu"):
+              "kernel/drivers/gpu", "kernel/drivers/infiniband"):
         assert d in body, f"hook no longer prunes {d} from the initrd"
     assert re.search(r'rm -rf "\$DESTDIR/usr/lib/firmware/nvidia"', body), \
         "hook does not remove nvidia firmware (MODULES=dep regen trap)"

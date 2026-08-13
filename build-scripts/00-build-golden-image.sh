@@ -312,7 +312,7 @@ case "$1" in prereqs) prereqs; exit 0 ;; esac
 MODDIR="$DESTDIR/usr/lib/modules"
 for d in kernel/drivers/net kernel/drivers/bluetooth kernel/net/bluetooth \
          kernel/net/wireless kernel/drivers/nfc kernel/drivers/isdn \
-         kernel/drivers/gpu; do
+         kernel/drivers/gpu kernel/drivers/infiniband; do
     rm -rf "$MODDIR"/*/"$d"
 done
 rm -rf "$DESTDIR/usr/lib/firmware/nvidia"

@@ -160,30 +160,37 @@ def _installed_grub_cfg_block() -> str:
     return m.group(1)
 
 
-def test_initrd_excludes_nouveau_and_nvidia_firmware():
-    """The nvidia GSP blobs are 44MB of *uncompressed* early-cpio payload that
-    slow pre-kernel loaders read on every boot (90+ seconds on Apple EFI SATA).
-    The lean-gpu hook must remove the nouveau module TOGETHER with the firmware,
-    so no NVIDIA card ever probes firmware-less from the initrd: nouveau loads
-    post-pivot from the real filesystem instead. See PLAN-macbook5-slow-boot."""
+def test_initrd_lean_hook_prunes_modules_and_firmware():
+    """The shipped initrd carried 44MB of .ko.zst modules and firmware for
+    hardware classes the rootfs prune already removes (Mellanox switch fw,
+    NetXen 10GbE...), in an UNCOMPRESSED early cpio that slow pre-kernel
+    loaders read at ~0.5MB/s. The first version of this hook targeted nvidia
+    firmware the golden initrd never contained and shipped as a silent no-op,
+    so these assertions pin the mechanism, not just the file's existence:
+    net-class + gpu module pruning, unreferenced-firmware pruning, and a
+    fail-loudly artifact check. See docs/PLAN-macbook5-slow-boot.md."""
     src = _build_source()
     hook = re.search(
-        r'cat > "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu" <<\'LEANGPU\'\n(.*?)\nLEANGPU\n',
+        r'cat > "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd" <<\'LEANINITRD\'\n(.*?)\nLEANINITRD\n',
         src, re.DOTALL)
-    assert hook, "lean-gpu initramfs hook not written"
+    assert hook, "lean-initrd initramfs hook not written"
     body = hook.group(1)
-    assert re.search(r"find .*modules.* -name 'nouveau\.ko\*' -delete", body), \
-        "hook does not remove the nouveau module (firmware-less probe risk on NVIDIA)"
+    for d in ("kernel/drivers/net", "kernel/drivers/bluetooth", "kernel/net/wireless",
+              "kernel/drivers/gpu"):
+        assert d in body, f"hook no longer prunes {d} from the initrd"
     assert re.search(r'rm -rf "\$DESTDIR/usr/lib/firmware/nvidia"', body), \
-        "hook does not remove nvidia firmware"
+        "hook does not remove nvidia firmware (MODULES=dep regen trap)"
+    assert "modinfo -F firmware" in body and "grep -qxF" in body, \
+        "hook lost the unreferenced-firmware prune (firmware without its module)"
     assert "depmod -b" in body, "hook does not refresh module deps"
-    assert re.search(r'chmod \+x "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu"', src), \
-        "lean-gpu hook not made executable"
-    # Hook must exist before the initrd rebuild, and the rebuild must be verified.
-    assert src.index("zzz-purple-lean-gpu") < src.index('update-initramfs -u -k "$KVER"'), \
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd"', src), \
+        "lean-initrd hook not made executable"
+    assert src.index("zzz-purple-lean-initrd") < src.index('update-initramfs -u -k "$KVER"'), \
         "hook written after the initrd rebuild it must influence"
-    assert re.search(r"lsinitramfs .*\|.*grep -qE 'firmware/nvidia/\|/nouveau\\\.ko'", src), \
-        "no fail-loudly check that the initrd is actually lean"
+    assert re.search(
+        r"lsinitramfs .*grep -qE 'kernel/drivers/net/\|kernel/drivers/gpu/\|firmware/nvidia/\|firmware/mellanox/'",
+        src, re.DOTALL), \
+        "no fail-loudly artifact check that the initrd is actually lean"
 
 
 def test_installed_grub_pins_root_with_search_fallback():

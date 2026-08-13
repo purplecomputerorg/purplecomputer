@@ -8,6 +8,8 @@ Freshly flashed drives take much longer on their first boot than on every boot a
 
 Conclusion: the penalty is state on the USB drive (controller-level, likely post-write read recalibration or SLC cache folding), not per-machine UEFI caching. One boot on any machine clears it for all machines.
 
+Reconfirmed 2026-08-13 on a MacBook5,2 (USB 2.0): first boot of an unsettled fresh flash took roughly 10 minutes (untimed; this also included casper's first-boot persistence setup, see the snapshot=on tradeoff below), second boot of the same stick took 37 seconds. The tradeoff gate ("time one first boot on a freshly flashed drive") remains open in its precise form: that 10 minutes conflates recalibration with persistence setup, so a *settled* drive's first boot, persistence setup only, is the number still missing.
+
 The sequential dd "settle" read pass in `flash-all.sh` did NOT clear it; an actual boot does. Fix: `boot_settle_drive` in `flash-lib.sh` boots each drive once in QEMU (raw `/dev/sdX` with `cache=none`, so guest reads hit the flash rather than the host page cache), detects boot completion from host-side `/sys/block` read counters, then keeps the drive powered briefly for background relocation. Used by both `flash-all.sh` (parallel) and standalone `flash-to-usb.sh`; skip with `--no-settle`, tune with `BOOT_SETTLE_*` env vars.
 
 ## Settle Boot Must Not Write (2026-07-22)

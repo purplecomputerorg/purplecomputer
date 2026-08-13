@@ -231,11 +231,12 @@ count_running() {
 }
 
 # Boot a freshly flashed drive once in QEMU so its controller pays the
-# one-time post-write cost here instead of on a parent's first boot. A
-# sequential dd readback does not clear that state; a real boot's read
-# workload does (see guides/usb-flash-settle.md). cache=none (O_DIRECT) so
-# guest reads hit the flash, not the
-# host page cache. Boot completion is detected host-side from /sys/block
+# one-time post-write cost here instead of on a parent's first boot, and so
+# casper does its one-time persistence setup (GPT relocation plus mkfs of the
+# writable partition) here instead of on the customer's first boot. A
+# sequential dd readback does not clear the controller state; a real boot's
+# read workload does (see guides/usb-flash-settle.md). cache=none (O_DIRECT)
+# so guest reads hit the flash, not the host page cache. Boot completion is detected host-side from /sys/block
 # read counters: at least BOOT_SETTLE_MIN_MB read, then BOOT_SETTLE_QUIET_SECS
 # with no new reads. The drive then stays powered BOOT_SETTLE_HOLD_SECS so
 # the controller can finish background relocation. QEMU's own output goes to
@@ -269,12 +270,11 @@ boot_settle_drive() {
         echo "[WARN] /dev/kvm not available; boot settle will be slow" >&2
     fi
 
-    # snapshot=on: guest writes hit a throwaway overlay so the stick ships
-    # byte-exact (see guides/usb-flash-settle.md). TMPDIR=/var/tmp because the
-    # overlay can grow multi-GB per drive and a tmpfs /tmp can't hold that
-    # across parallel settles.
-    sudo env TMPDIR=/var/tmp qemu-system-x86_64 "${accel[@]}" -m 2048 \
-        -drive file="$dev",format=raw,cache=none,snapshot=on \
+    # Guest writes land on the stick deliberately, so casper's persistence
+    # setup happens in the factory; recheck_after_settle accounts for the
+    # regions it touches (see guides/usb-flash-settle.md).
+    sudo qemu-system-x86_64 "${accel[@]}" -m 2048 \
+        -drive file="$dev",format=raw,cache=none \
         -boot c -no-reboot -display none \
         >>"$log" 2>&1 &
     local qpid=$!
@@ -419,21 +419,32 @@ recover_drive() {
     dev_for_serial "$serial" 40
 }
 
-# SHA256 of the first $2 bytes of a device, read with O_DIRECT after dropping
-# the page cache so the bytes come off the flash rather than out of RAM.
+# SHA256 of $2 bytes of a device starting at byte $3 (default 0), read with
+# O_DIRECT after dropping the page cache so the bytes come off the flash
+# rather than out of RAM.
 device_sha256() {
     sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null || true
-    sudo dd if="$1" bs=4M count="$2" iflag=direct,count_bytes status=none 2>/dev/null \
+    sudo dd if="$1" bs=4M count="$2" skip="${3:-0}" \
+        iflag=direct,count_bytes,skip_bytes status=none 2>/dev/null \
         | sha256sum | awk '{print $1}'
 }
 
+# The settle boot's casper adds the writable partition, which rewrites the
+# primary GPT at the start of the disk. Skip that region when comparing the
+# drive against the ISO after settling.
+GPT_SKIP_BYTES=1048576
+
 # Confirm a drive still holds the image after boot-settling, catching flash
-# that decays right after being written. MUST run before eject_drive: a
+# that decays right after being written. Compares bytes GPT_SKIP_BYTES..iso_size
+# against the same span of the ISO file. MUST run before eject_drive: a
 # powered-off drive leaves a media-less node whose reads return garbage, which
 # looks exactly like corruption that isn't there.
 recheck_after_settle() {
-    local dev="$1" expected="$2" bytes="$3" actual
-    actual="$(device_sha256 "$dev" "$bytes")"
+    local dev="$1" iso="$2" bytes expected actual
+    bytes=$(( $(stat -c %s "$iso") - GPT_SKIP_BYTES ))
+    expected="$(dd if="$iso" bs=4M skip="$GPT_SKIP_BYTES" count="$bytes" \
+        iflag=skip_bytes,count_bytes status=none | sha256sum | awk '{print $1}')"
+    actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")"
     [[ "$actual" == "$expected" ]]
 }
 

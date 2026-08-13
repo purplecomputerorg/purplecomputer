@@ -148,3 +148,64 @@ def test_boot_timing_tool_ships():
         "purple-boot-timing not made executable"
     assert re.search(r"^\s*smartmontools \\$", src, re.M), \
         "smartmontools not in apt install list (SMART check silently skips)"
+
+
+def _installed_grub_cfg_block() -> str:
+    """The heredoc that becomes the installed system's /boot/grub/grub.cfg."""
+    src = _build_source()
+    m = re.search(
+        r'cat > "\$MOUNT_DIR/boot/grub/grub\.cfg" <<\'EOF\'\n(.*?)\nEOF\n',
+        src, re.DOTALL)
+    assert m, "installed grub.cfg heredoc not found"
+    return m.group(1)
+
+
+def test_initrd_excludes_nouveau_and_nvidia_firmware():
+    """The nvidia GSP blobs are 44MB of *uncompressed* early-cpio payload that
+    slow pre-kernel loaders read on every boot (90+ seconds on Apple EFI SATA).
+    The lean-gpu hook must remove the nouveau module TOGETHER with the firmware,
+    so no NVIDIA card ever probes firmware-less from the initrd: nouveau loads
+    post-pivot from the real filesystem instead. See PLAN-macbook5-slow-boot."""
+    src = _build_source()
+    hook = re.search(
+        r'cat > "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu" <<\'LEANGPU\'\n(.*?)\nLEANGPU\n',
+        src, re.DOTALL)
+    assert hook, "lean-gpu initramfs hook not written"
+    body = hook.group(1)
+    assert re.search(r"find .*modules.* -name 'nouveau\.ko\*' -delete", body), \
+        "hook does not remove the nouveau module (firmware-less probe risk on NVIDIA)"
+    assert re.search(r'rm -rf "\$DESTDIR/usr/lib/firmware/nvidia"', body), \
+        "hook does not remove nvidia firmware"
+    assert "depmod -b" in body, "hook does not refresh module deps"
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu"', src), \
+        "lean-gpu hook not made executable"
+    # Hook must exist before the initrd rebuild, and the rebuild must be verified.
+    assert src.index("zzz-purple-lean-gpu") < src.index('update-initramfs -u -k "$KVER"'), \
+        "hook written after the initrd rebuild it must influence"
+    assert re.search(r"lsinitramfs .*\|.*grep -qE 'firmware/nvidia/\|/nouveau\\\.ko'", src), \
+        "no fail-loudly check that the initrd is actually lean"
+
+
+def test_installed_grub_pins_root_with_search_fallback():
+    """`search --label` probes every block device; an empty optical drive under
+    Apple EFI made that cost 47s per boot. The installed grub.cfg must pin
+    root to the fixed layout (p2) and keep `search` ONLY as the fallback for
+    wrong hd numbering: a pin without fallback is an unbootable machine, a
+    fallback without pin is the 47s again."""
+    cfg = _installed_grub_cfg_block()
+    fn = re.search(r"function purple_set_root \{\n(.*?)\n\}", cfg, re.DOTALL)
+    assert fn, "purple_set_root function missing from installed grub.cfg"
+    body = fn.group(1)
+    assert re.search(r"set root=\(hd0,gpt2\)", body), "root not pinned to (hd0,gpt2)"
+    assert re.search(
+        r"if \[ ! -f /boot/vmlinuz \]; then\s*\n\s*search --no-floppy --label PURPLE_ROOT --set=root",
+        body), "fallback search missing or not guarded by the pin check"
+    # Both menuentries use the function; no entry searches unconditionally.
+    entries = re.findall(r'menuentry [^\n]*\{\n(.*?)\n\}', cfg, re.DOTALL)
+    assert len(entries) == 2, f"expected 2 menuentries, found {len(entries)}"
+    for entry in entries:
+        assert "purple_set_root" in entry, "menuentry does not call purple_set_root"
+        assert "search --no-floppy" not in entry, \
+            "menuentry still searches unconditionally"
+    assert cfg.count("search --no-floppy --label PURPLE_ROOT") == 1, \
+        "search should appear exactly once: as the fallback inside purple_set_root"

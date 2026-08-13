@@ -287,39 +287,69 @@ SOURCES
         fi
     done
 
-    # Keep nouveau and its firmware out of the initrd. The GSP blobs alone are
-    # 44MB in the *uncompressed* early cpio, which slow pre-kernel loaders pay
-    # for on every boot (Apple EFI SATA reads ~0.5MB/s: 90+ seconds just for
-    # this). Display init doesn't need the initrd: nouveau loads post-pivot
-    # from the real filesystem (squashfs on live, ext4 installed), where the
-    # full firmware tree lives. Removing the module too, not just the firmware,
-    # means no NVIDIA card ever probes without its firmware present.
-    # "zzz-" so it sorts after the hooks that populate modules and firmware.
+    # Keep the initrd lean: slow pre-kernel loaders read every byte of it on
+    # every boot (Apple EFI SATA: ~0.5MB/s, so 44MB of dead weight is 90s).
+    # Measured on the shipped initrd, the weight was .ko.zst modules for the
+    # MODULES=most set plus their firmware (Mellanox switch, NetXen 10GbE...):
+    # hardware classes the rootfs prune already removes, riding along in an
+    # uncompressed early cpio. Three prunes, mirroring the rootfs prune:
+    #   1. net-class modules (initrds never network-boot here)
+    #   2. GPU modules (nouveau appears via MODULES=dep regens on machines;
+    #      removing module+firmware together means no card ever probes
+    #      firmware-less from the initrd; display init happens post-pivot,
+    #      which purple-wait-display exists to absorb)
+    #   3. any firmware file no remaining module references (firmware without
+    #      its module is unloadable from the initrd by construction)
+    # "zzz-" sorts last within /etc hooks; /etc hooks run after /usr/share
+    # hooks (mkinitramfs runs the two dirs as separate passes).
     # See docs/PLAN-macbook5-slow-boot.md.
-    cat > "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu" <<'LEANGPU'
+    cat > "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd" <<'LEANINITRD'
 #!/bin/sh
 PREREQ=""
 prereqs() { echo "$PREREQ"; }
 case "$1" in prereqs) prereqs; exit 0 ;; esac
 
-find "$DESTDIR/usr/lib/modules" -name 'nouveau.ko*' -delete 2>/dev/null
+MODDIR="$DESTDIR/usr/lib/modules"
+for d in kernel/drivers/net kernel/drivers/bluetooth kernel/net/bluetooth \
+         kernel/net/wireless kernel/drivers/nfc kernel/drivers/isdn \
+         kernel/drivers/gpu; do
+    rm -rf "$MODDIR"/*/"$d"
+done
 rm -rf "$DESTDIR/usr/lib/firmware/nvidia"
-[ -n "$version" ] && [ -d "$DESTDIR/usr/lib/modules/$version" ] && \
+
+KEEP=$(mktemp)
+find "$MODDIR" -name '*.ko*' -print0 2>/dev/null \
+    | xargs -0 -r modinfo -F firmware 2>/dev/null | sort -u > "$KEEP"
+FWDIR="$DESTDIR/usr/lib/firmware"
+if [ -d "$FWDIR" ]; then
+    find "$FWDIR" -type f | while read -r f; do
+        rel="${f#"$FWDIR"/}"; rel="${rel%.zst}"; rel="${rel%.xz}"
+        grep -qxF "$rel" "$KEEP" || rm -f "$f"
+    done
+    find "$FWDIR" -xtype l -delete 2>/dev/null
+    find "$FWDIR" -type d -empty -delete 2>/dev/null
+fi
+rm -f "$KEEP"
+
+[ -n "$version" ] && [ -d "$MODDIR/$version" ] && \
     depmod -b "$DESTDIR" "$version" 2>/dev/null
 exit 0
-LEANGPU
-    chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-gpu"
+LEANINITRD
+    chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/zzz-purple-lean-initrd"
 
     # Rebuild initrd to include casper scripts (installed above, casper-stop neutered)
     chroot "$MOUNT_DIR" update-initramfs -u -k "$KVER"
 
-    # Verify the lean-gpu hook actually ran: nvidia firmware back in the initrd
-    # would silently re-add 90s of boot on slow-firmware machines.
-    if chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$KVER" | grep -qE 'firmware/nvidia/|/nouveau\.ko'; then
-        echo "ERROR: initrd still contains nouveau or nvidia firmware (lean-gpu hook did not run)"
+    # Verify the lean hook actually ran, against the artifact: the first
+    # version of this hook shipped as a silent no-op because it targeted
+    # content the initrd never had. Check for what we now KNOW rides along
+    # when the hook is broken, and log the size so build logs show drift.
+    if chroot "$MOUNT_DIR" lsinitramfs "/boot/initrd.img-$KVER" \
+        | grep -qE 'kernel/drivers/net/|kernel/drivers/gpu/|firmware/nvidia/|firmware/mellanox/'; then
+        echo "ERROR: initrd still contains net/gpu modules or their firmware (lean-initrd hook did not run)"
         exit 1
     fi
-    log_info "Initrd size: $(du -h "$MOUNT_DIR/boot/initrd.img-$KVER" | cut -f1) (nouveau + nvidia firmware excluded)"
+    log_info "Initrd size: $(du -h "$MOUNT_DIR/boot/initrd.img-$KVER" | cut -f1) (net + gpu modules and unreferenced firmware excluded)"
 
     # Verify sound modules are present (fail the build if not)
     log_info "Kernel version: $KVER"

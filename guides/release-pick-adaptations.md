@@ -7,6 +7,10 @@ If a later pick conflicts weirdly in one of these spots, look here first.
 
 ## 2026-08-13
 
+- `6c79598` (initrd prune v2) → release `5611960`
+  - `guides/usb-flash-settle.md`: took main's merged version wholesale. The commit carried a swept-in guide paragraph written against the pre-`e39b3cd` text; main's HEAD already harmonizes both edits, so release converges to it rather than diverging.
+- `95899bd` (infiniband prune) → release `fbc3ed5`
+  - Dropped `guides/release-pick-adaptations.md` from the pick (delete-resolution). The file rode along via a broad `git add -A`; it is this guide, a main-only process doc from `fcd7be8`, and release deliberately does not carry it.
 - `d23ad08` (late power button adoption + power/evdev log persistence + first-boot audio check) → release `cde4645`
   - `scripts/preview.py`: kept only the `first_boot` docstring line, dropped the `time_travel` line that rode along in the conflict (Time Travel `a14d1e6` stays on main; no handler code came over).
 

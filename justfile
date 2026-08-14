@@ -329,7 +329,7 @@ flash-all *args:
 label-ports:
     ./build-scripts/label-ports.sh
 
-# Blink a hub socket's LED to find a stick by eye (power-cycles it): just blink /dev/sdX (or a port like 4-1.4)
+# Find sticks by eye. just blink: safe read-pulse tour of every stick, one at a time, with letters and socket labels. just blink /dev/sdX (or a port like 4-1.4): power-cycle blink for that one socket.
 blink *args:
     ./build-scripts/blink-port.sh {{args}}
 

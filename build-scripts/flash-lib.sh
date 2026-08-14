@@ -443,23 +443,44 @@ describe_port() {
     echo "$1${label:+ ($label)}"
 }
 
+# Repeat a pulse command in the background until the user presses Enter.
+# $1 is the prompt, the rest the command to run once per pulse. The user's
+# reply is left in REPLY for callers that offer choices.
+pulse_until_enter() {
+    local prompt="$1" pid
+    shift
+    ( while true; do "$@"; sleep 0.7; done ) &
+    pid=$!
+    read -r -p "$prompt"
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+}
+
+port_power_pulse() {
+    echo 1 | sudo tee "$1/disable" >/dev/null 2>&1
+    sleep 0.7
+    echo 0 | sudo tee "$1/disable" >/dev/null 2>&1
+}
+
 # Blink a hub socket's LED by toggling port power until the user presses
 # Enter, then restore power. $1 is a control path from port_control_path,
 # $2 the prompt. Safe only on a stick whose contents no longer matter: each
 # blink is a power cycle.
 blink_port_until_enter() {
-    local port="$1" prompt="$2" pid
-    ( while true; do
-        echo 1 | sudo tee "$port/disable" >/dev/null 2>&1
-        sleep 0.7
-        echo 0 | sudo tee "$port/disable" >/dev/null 2>&1
-        sleep 0.7
-      done ) &
-    pid=$!
-    read -r -p "$prompt"
-    kill "$pid" 2>/dev/null || true
-    wait "$pid" 2>/dev/null || true
-    echo 0 | sudo tee "$port/disable" >/dev/null 2>&1 || true
+    pulse_until_enter "$2" port_power_pulse "$1"
+    echo 0 | sudo tee "$1/disable" >/dev/null 2>&1 || true
+}
+
+dev_read_pulse() {
+    sudo dd if="$1" of=/dev/null bs=1M count=8 skip=$((RANDOM % 256)) \
+        iflag=direct status=none 2>/dev/null || true
+}
+
+# Blink a stick's activity LED with bursts of direct reads until the user
+# presses Enter. Safe on any stick: no power cycling, so device letters stay
+# put and contents are untouched.
+blink_dev_reads_until_enter() {
+    pulse_until_enter "$2" dev_read_pulse "$1"
 }
 
 # --- Cross-process counting semaphore ----------------------------------------

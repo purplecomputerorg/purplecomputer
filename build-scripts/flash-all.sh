@@ -237,7 +237,37 @@ done
 # and result.$i carries each job's outcome back as "status|dev|tries|log".
 STATE_DIR="$LOG_DIR/state"
 mkdir -p "$STATE_DIR"
+: > "$STATE_DIR/safe-slots"
 SETTLE_MAX=$(boot_settle_max_jobs)
+
+# Physical socket label for drive index $1 ("top row 3"), from the launch-time
+# port capture so it works even after the drive drops off the bus.
+slot_name() {
+    local port="${ST_PORTNAME[$1]}" label
+    [[ -n "$port" ]] || { echo "unknown socket (${ST_DEV[$1]})"; return; }
+    label="$(port_label "$port")"
+    echo "${label:-socket $port}"
+}
+
+# Comma-joined ship-ready slots. Labels can't contain | (save_port_label strips it).
+safe_slot_list() { paste -sd'|' "$STATE_DIR/safe-slots" | sed 's/|/, /g'; }
+
+# Record a drive's outcome and announce, by physical slot, that its stick can
+# come out of the hub. Good sticks join the running ship-ready list.
+finish_drive() {
+    local i="$1" status="$2" dev="$3" tries="$4" log="$5" slot safe
+    slot="$(slot_name "$i")"
+    echo "$status|$dev|$tries|$log|$slot" > "$STATE_DIR/result.$i"
+    [[ "$CORRUPT_MODE" == true ]] && return 0
+    if [[ "$status" == ok ]]; then
+        echo "$slot" >> "$STATE_DIR/safe-slots"
+        echo -e "${GREEN}${BOLD}✓ TAKE OUT ${slot}${NC}${GREEN}: done, safe to ship.${NC}"
+    else
+        echo -e "${RED}${BOLD}✗ TAKE OUT ${slot}${NC}${RED}: FAILED, set it aside, do NOT ship it.${NC}"
+    fi
+    safe="$(safe_slot_list)"
+    echo -e "  ${BOLD}Ship-ready so far ($(wc -l < "$STATE_DIR/safe-slots")/${#ENTRIES[@]}):${NC} ${safe:-none}"
+}
 
 # One drive's whole journey, run as its own background job so a slow or
 # failing drive never holds up the rest of the batch: flash (with power-cycle
@@ -266,7 +296,7 @@ run_drive() {
             log_error "No hub port recorded for $dev ($serial); cannot power-cycle it. Re-seat it by hand and re-run."
             break
         fi
-        log_info "$dev failed; power-cycling $serial at $(basename "$port") to retry..."
+        log_info "$dev failed; power-cycling $serial at $(slot_name "$i") to retry..."
         newdev="$(recover_drive "$port" "$serial" || true)"
         if [[ -z "$newdev" ]]; then
             log_error "$serial did not come back after a power cycle; leaving it failed."
@@ -281,7 +311,7 @@ run_drive() {
 
     if [[ "$ok" != true ]]; then
         echo -e "${RED}✗${NC} $dev — FAILED (see $log)"
-        echo "fail|$dev|$tries|$log" > "$STATE_DIR/result.$i"
+        finish_drive "$i" fail "$dev" "$tries" "$log"
         return 0
     fi
     echo -e "${GREEN}✓${NC} $dev — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
@@ -311,7 +341,7 @@ run_drive() {
                 slot_release 8
                 echo -e "${RED}✗${NC} $dev: verified after writing but NOT after settle, flash is decaying"
                 record_manifest fail-post-settle "$dev" "$serial" "" "" "$(basename "$iso")" ""
-                echo "fail|$dev|$tries|$log" > "$STATE_DIR/result.$i"
+                finish_drive "$i" fail "$dev" "$tries" "$log"
                 return 0
             fi
             slot_release 8
@@ -327,7 +357,7 @@ run_drive() {
         while [[ ! -e "$STATE_DIR/udev-lifted" ]]; do sleep 1; done
         eject_drive "$dev" || true
     fi
-    echo "ok|$dev|$tries|$log" > "$STATE_DIR/result.$i"
+    finish_drive "$i" ok "$dev" "$tries" "$log"
 }
 
 PIDS=()
@@ -370,7 +400,7 @@ done
 ST_OK=(); ST_TRIES=(); ST_LOG=()
 for i in "${!ENTRIES[@]}"; do
     status=fail; dev="${ST_DEV[$i]}"; tries=0; lg=""
-    [[ -f "$STATE_DIR/result.$i" ]] && IFS='|' read -r status dev tries lg < "$STATE_DIR/result.$i"
+    [[ -f "$STATE_DIR/result.$i" ]] && IFS='|' read -r status dev tries lg _ < "$STATE_DIR/result.$i"
     ST_DEV[$i]="$dev"; ST_TRIES[$i]="$tries"; ST_LOG[$i]="$lg"
     [[ "$status" == ok ]] && ST_OK[$i]=true || ST_OK[$i]=false
 done
@@ -553,8 +583,8 @@ fi
 if [[ "$CORRUPT_MODE" != true ]]; then
     echo
     echo -e "${BOLD}Batch summary${NC}"
-    printf "  %-10s %-18s %-9s %-8s %s\n" "DEVICE" "SERIAL" "ATTEMPTS" "RATE" "RESULT"
-    echo "  ---------------------------------------------------------------------------"
+    printf "  %-10s %-18s %-16s %-9s %-8s %s\n" "DEVICE" "SERIAL" "SLOT" "ATTEMPTS" "RATE" "RESULT"
+    echo "  --------------------------------------------------------------------------------------------"
     for i in "${!ENTRIES[@]}"; do
         # || true: with pipefail a non-matching grep would abort the summary,
         # which is exactly what happens for a drive that failed before dd ran.
@@ -566,8 +596,8 @@ if [[ "$CORRUPT_MODE" != true ]]; then
         else
             result="${RED}FAILED${NC}"
         fi
-        printf "  %-10s %-18s %-9s %-8s %b\n" \
-            "${ST_DEV[$i]}" "${ST_SER[$i]}" "${ST_TRIES[$i]}" "${rate:-n/a}" "$result"
+        printf "  %-10s %-18s %-16s %-9s %-8s %b\n" \
+            "${ST_DEV[$i]}" "${ST_SER[$i]}" "$(slot_name "$i")" "${ST_TRIES[$i]}" "${rate:-n/a}" "$result"
     done
     echo
 fi
@@ -577,6 +607,7 @@ if [[ ${#FAILED[@]} -eq 0 ]]; then
         RETRIED=0
         for i in "${!ENTRIES[@]}"; do (( ST_TRIES[i] > 1 )) && RETRIED=$((RETRIED + 1)); done
         echo -e "${BOLD}${GREEN}Good to go: ${#DEVS[@]}/${#DEVS[@]} flashed, verified$([[ "$REVERIFY" == true && "$SKIP_SETTLE" != true ]] && echo ", and re-verified after settling"). Unplug them now.${NC}"
+        echo -e "${GREEN}Ship-ready slots: $(safe_slot_list)${NC}"
         (( RETRIED )) && echo -e "${YELLOW}$RETRIED drive(s) needed a retry. Watch those serials: a drive that keeps needing one is on its way out.${NC}"
     fi
     exit 0
@@ -587,12 +618,12 @@ for i in "${!ENTRIES[@]}"; do
     [[ "${ST_OK[$i]}" == true ]] && continue
     # Socket from the launch-time capture, not drive_location: a dead drive
     # has no sysfs node left to locate it by.
-    SOCK="${ST_PORTNAME[$i]:+socket $(describe_port "${ST_PORTNAME[$i]}")}"
-    echo -e "  ${RED}✗${NC} ${ST_DEV[$i]} (${ST_SER[$i]}) after ${ST_TRIES[$i]} attempt(s): ${SOCK:-location unknown}"
+    echo -e "  ${RED}✗${NC} ${ST_DEV[$i]} (${ST_SER[$i]}) after ${ST_TRIES[$i]} attempt(s): ${BOLD}$(slot_name "$i")${NC}"
     echo -e "      log: ${ST_LOG[$i]:-none}"
     echo -e "      test it: just check-drive ${ST_DEV[$i]}   (add --deny if it fails)"
 done
-echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship.${NC}"
+SAFE_LIST="$(safe_slot_list)"
+echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship${SAFE_LIST:+: ${SAFE_LIST}}.${NC}"
 
 # Blink each failed drive's hub socket so it can be found by eye. Failed
 # sticks only: a blink is a power cycle, which is fine on a drive whose
@@ -604,7 +635,7 @@ if [[ -t 0 ]]; then
         echo
         read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n] " ans
         [[ "$ans" == [nN]* ]] && continue
-        blink_port_until_enter "${ST_PORT[$i]}" "Blinking socket $(describe_port "${ST_PORTNAME[$i]}")... press Enter once you've spotted it: "
+        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $(slot_name "$i")... press Enter once you've spotted it: "
         newdev="$(dev_for_serial "${ST_SER[$i]}" 20 || true)"
         [[ -n "$newdev" && "$newdev" != "${ST_DEV[$i]}" ]] && log_info "It came back as $newdev; use that for check-drive."
     done

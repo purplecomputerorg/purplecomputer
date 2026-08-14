@@ -325,6 +325,10 @@ check-drive *args:
 flash-all *args:
     ./build-scripts/flash-all.sh {{args}}
 
+# Live status of the newest flash-all run, by physical slot: ship-ready vs failed vs still working
+flash-status *args:
+    ./build-scripts/flash-status.sh {{args}}
+
 # One-time: label the hub's physical sockets ("top row 3") so flash failures point at a stick by location
 label-ports:
     ./build-scripts/label-ports.sh

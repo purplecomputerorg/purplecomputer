@@ -325,6 +325,14 @@ check-drive *args:
 flash-all *args:
     ./build-scripts/flash-all.sh {{args}}
 
+# One-time: label the hub's physical sockets ("top row 3") so flash failures point at a stick by location
+label-ports:
+    ./build-scripts/label-ports.sh
+
+# Blink a hub socket's LED to find a stick by eye (power-cycles it): just blink /dev/sdX (or a port like 4-1.4)
+blink *args:
+    ./build-scripts/blink-port.sh {{args}}
+
 # Manually record a flashed build into the orders app (backfill a batch): just record-flash <commit> [drives] [flashed_at]
 record-flash *args:
     ./build-scripts/record-flash.sh {{args}}

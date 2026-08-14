@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Flash PurpleOS ISO to ALL whitelisted USB drives in parallel.
-# Shares one udev gate across children and streams per-drive logs to /tmp.
+# Each drive runs its own pipeline (flash with retries, boot-settle,
+# re-verify, eject) as an independent job, so one slow or failing drive never
+# holds up the batch. One udev gate is shared across children; per-drive logs
+# stream to /tmp.
 
 set -eo pipefail
 
@@ -218,160 +221,165 @@ echo
 # Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
 # node: a power-cycled drive can come back under a different letter, and
 # retrying the old letter could write to whatever landed there instead.
-# ST_PORT is captured now, while every drive is still enumerated: a drive that
-# fails or gets ejected loses its /sys/block entry, and with it any way to find
-# which hub port it sits in.
-ST_DEV=(); ST_SER=(); ST_TRIES=(); ST_OK=(); ST_LOG=(); ST_PORT=()
+# ST_PORT/ST_PORTNAME are captured now, while every drive is still enumerated:
+# a drive that fails or gets ejected loses its /sys/block entry, and with it
+# any way to find which hub socket it sits in.
+ST_DEV=(); ST_SER=(); ST_PORT=(); ST_PORTNAME=()
 for i in "${!ENTRIES[@]}"; do
     IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
-    ST_DEV+=("$dev"); ST_SER+=("$ser"); ST_TRIES+=(0); ST_OK+=(false); ST_LOG+=("")
+    ST_DEV+=("$dev"); ST_SER+=("$ser")
     ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
+    ST_PORTNAME+=("$(usb_port_name "$dev" 2>/dev/null || true)")
 done
 
-launch_flash() {
-    local i="$1" dev="${ST_DEV[$i]}" suffix=""
-    (( ST_TRIES[i] > 1 )) && suffix=".try${ST_TRIES[$i]}"
-    ST_LOG[$i]="$LOG_DIR/$(basename "$dev")${suffix}.log"
-    echo -e "${BOLD}→ Starting flash for $dev${SCENS[$i]:+ [${SCENS[$i]}]} (tail -f ${ST_LOG[$i]})${NC}"
-    VERIFIED_ISO_SHA256="${SHA_BY_ISO[${ISOS[$i]}]}" \
-        "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" \
-        "${ISOS[$i]}" >"${ST_LOG[$i]}" 2>&1 &
-    LAUNCHED_PID=$!
+# Cross-job coordination lives in files under STATE_DIR: flashed.$i markers
+# gate the udev queue restart, slot dirs bound settle/re-verify concurrency,
+# and result.$i carries each job's outcome back as "status|dev|tries|log".
+STATE_DIR="$LOG_DIR/state"
+mkdir -p "$STATE_DIR"
+SETTLE_MAX=$(boot_settle_max_jobs)
+
+# One drive's whole journey, run as its own background job so a slow or
+# failing drive never holds up the rest of the batch: flash (with power-cycle
+# retries), boot-settle, re-verify, eject.
+run_drive() {
+    local i="$1"
+    local dev="${ST_DEV[$i]}" serial="${ST_SER[$i]}" port="${ST_PORT[$i]}"
+    local iso="${ISOS[$i]}" tries=0 ok=false log newdev suffix
+    local max_attempts=$MAX_ATTEMPTS
+    # Corrupt mode never retries: these sticks are for one throwaway test.
+    [[ "$CORRUPT_MODE" == true ]] && max_attempts=1
+
+    while (( tries < max_attempts )); do
+        tries=$((tries + 1))
+        suffix=""
+        (( tries > 1 )) && suffix=".try${tries}"
+        log="$LOG_DIR/$(basename "$dev")${suffix}.log"
+        echo -e "${BOLD}→ $dev${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
+        if VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
+            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1; then
+            ok=true
+            break
+        fi
+        (( tries < max_attempts )) || break
+        if [[ -z "$port" ]]; then
+            log_error "No hub port recorded for $dev ($serial); cannot power-cycle it. Re-seat it by hand and re-run."
+            break
+        fi
+        log_info "$dev failed; power-cycling $serial at $(basename "$port") to retry..."
+        newdev="$(recover_drive "$port" "$serial" || true)"
+        if [[ -z "$newdev" ]]; then
+            log_error "$serial did not come back after a power cycle; leaving it failed."
+            break
+        fi
+        [[ "$newdev" != "$dev" ]] && log_info "$serial came back as $newdev (was $dev)."
+        dev="$newdev"
+    done
+
+    # The parent restarts the udev exec queue once every drive has one of these.
+    : > "$STATE_DIR/flashed.$i"
+
+    if [[ "$ok" != true ]]; then
+        echo -e "${RED}✗${NC} $dev — FAILED (see $log)"
+        echo "fail|$dev|$tries|$log" > "$STATE_DIR/result.$i"
+        return 0
+    fi
+    echo -e "${GREEN}✓${NC} $dev — flashed and verified$( (( tries > 1 )) && echo " (after retry)")"
+
+    if [[ "$SKIP_SETTLE" != true ]]; then
+        # Boot the drive once in QEMU so its controller pays the one-time
+        # post-write cost here instead of on the parent's first boot (see
+        # guides/usb-flash-settle.md). Slots keep concurrent guests in RAM.
+        slot_acquire "$STATE_DIR/settle-slots" "$SETTLE_MAX" 8
+        log_info "$dev: boot-settling in QEMU..."
+        if boot_settle_with_retry "$dev" "$LOG_DIR/$(basename "$dev").boot-settle.log"; then
+            echo -e "${GREEN}✓${NC} $dev: boot-settled"
+        else
+            echo -e "${YELLOW}!${NC} $dev: boot settle incomplete after retry, first real boot may be slow"
+            echo -e "    drive: $(drive_location "$dev")"
+            echo -e "    log:   $LOG_DIR/$(basename "$dev").boot-settle.log"
+        fi
+        slot_release 8
+
+        # Re-read the drive before ejecting, catching flash that decays in the
+        # minutes after being written. Must precede eject_drive: a powered-off
+        # drive leaves a media-less node whose reads look like corruption.
+        if [[ "$REVERIFY" == true ]]; then
+            slot_acquire "$STATE_DIR/reverify-slots" 4 8
+            log_info "$dev: re-verifying after settle..."
+            if ! recheck_after_settle "$dev" "$iso"; then
+                slot_release 8
+                echo -e "${RED}✗${NC} $dev: verified after writing but NOT after settle, flash is decaying"
+                record_manifest fail-post-settle "$dev" "$serial" "" "" "$(basename "$iso")" ""
+                echo "fail|$dev|$tries|$log" > "$STATE_DIR/result.$i"
+                return 0
+            fi
+            slot_release 8
+            echo -e "${GREEN}✓${NC} $dev: still intact after settle"
+        fi
+    fi
+
+    # Ejecting needs udev back (udevadm settle), so wait for the parent to
+    # lift the queue after the last drive finishes writing. Corrupt mode skips
+    # the eject so the identify phase can watch for unplugs; safe because every
+    # write is synced and verified, and these sticks get reflashed anyway.
+    if [[ "$CORRUPT_MODE" != true ]]; then
+        while [[ ! -e "$STATE_DIR/udev-lifted" ]]; do sleep 1; done
+        eject_drive "$dev" || true
+    fi
+    echo "ok|$dev|$tries|$log" > "$STATE_DIR/result.$i"
 }
 
-ROUND=("${!ENTRIES[@]}")
-for (( attempt = 1; attempt <= MAX_ATTEMPTS; attempt++ )); do
-    (( ${#ROUND[@]} )) || break
-    (( attempt > 1 )) && log_info "Retry round $((attempt - 1)): ${#ROUND[@]} drive(s)."
-    PIDS=(); IDX=()
-    for i in "${ROUND[@]}"; do
-        ST_TRIES[$i]=$(( ST_TRIES[i] + 1 ))
-        launch_flash "$i"
-        PIDS+=("$LAUNCHED_PID"); IDX+=("$i")
-    done
-
-    echo
-    log_info "All flashes started. Waiting for completion..."
-    echo
-
-    RETRY=()
-    for k in "${!PIDS[@]}"; do
-        i="${IDX[$k]}"
-        if wait "${PIDS[$k]}"; then
-            ST_OK[$i]=true
-            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]} — verified"
-        else
-            echo -e "${RED}✗${NC} ${ST_DEV[$i]} — FAILED (see ${ST_LOG[$i]})"
-            RETRY+=("$i")
-        fi
-    done
-
-    # Corrupt mode never retries: scenarios are zipped onto drives by position,
-    # and these sticks are reflashed after one throwaway test anyway.
-    ROUND=()
-    (( attempt >= MAX_ATTEMPTS )) && break
-    [[ "$CORRUPT_MODE" == true ]] && break
-    for i in "${RETRY[@]}"; do
-        echo
-        if [[ -z "${ST_PORT[$i]}" ]]; then
-            log_error "No hub port recorded for ${ST_DEV[$i]} (${ST_SER[$i]}); cannot power-cycle it. Re-seat it by hand and re-run."
-            continue
-        fi
-        log_info "Power-cycling ${ST_SER[$i]} at $(basename "${ST_PORT[$i]}") to retry..."
-        newdev="$(recover_drive "${ST_PORT[$i]}" "${ST_SER[$i]}" || true)"
-        if [[ -z "$newdev" ]]; then
-            log_error "${ST_SER[$i]} did not come back after a power cycle; leaving it failed."
-            continue
-        fi
-        [[ "$newdev" != "${ST_DEV[$i]}" ]] && log_info "Came back as $newdev (was ${ST_DEV[$i]})."
-        ST_DEV[$i]="$newdev"
-        ROUND+=("$i")
-    done
+PIDS=()
+for i in "${!ENTRIES[@]}"; do
+    run_drive "$i" &
+    PIDS+=("$!")
 done
 
-# ST_OK[i] is the only source of truth for whether a drive is still good: every
-# stage below iterates indices and consults it rather than matching device
-# nodes, since a power-cycled drive can come back on a letter another stick
-# just gave up. DEVS is the corrupt-mode identify path's own live node list,
-# which it rewrites as drives are replugged.
+echo
+log_info "All ${#ENTRIES[@]} drive pipeline(s) started; each flashes, settles (up to $SETTLE_MAX at a time so QEMU guests fit in RAM), re-verifies, and ejects on its own. Takes a while, walk away."
+echo
+
+# Restart the udev exec queue as soon as every drive is done writing (marker
+# present, or its job died without leaving one), so early finishers can eject
+# while stragglers are still settling.
+while true; do
+    PENDING=false
+    for i in "${!ENTRIES[@]}"; do
+        [[ -e "$STATE_DIR/flashed.$i" ]] && continue
+        [[ "$(count_running "${PIDS[$i]}")" == 0 ]] && continue
+        PENDING=true
+        break
+    done
+    [[ "$PENDING" == false ]] && break
+    sleep 2
+done
+sudo udevadm control --start-exec-queue 2>/dev/null || true
+: > "$STATE_DIR/udev-lifted"
+
+for pid in "${PIDS[@]}"; do
+    wait "$pid" || true
+done
+
+# Fold each job's outcome back into per-drive state. ST_OK[i] is the only
+# source of truth for whether a drive is good: every stage below iterates
+# indices and consults it rather than matching device nodes, since a
+# power-cycled drive can come back on a letter another stick just gave up.
+# DEVS is the corrupt-mode identify path's own live node list, which it
+# rewrites as drives are replugged.
+ST_OK=(); ST_TRIES=(); ST_LOG=()
+for i in "${!ENTRIES[@]}"; do
+    status=fail; dev="${ST_DEV[$i]}"; tries=0; lg=""
+    [[ -f "$STATE_DIR/result.$i" ]] && IFS='|' read -r status dev tries lg < "$STATE_DIR/result.$i"
+    ST_DEV[$i]="$dev"; ST_TRIES[$i]="$tries"; ST_LOG[$i]="$lg"
+    [[ "$status" == ok ]] && ST_OK[$i]=true || ST_OK[$i]=false
+done
 DEVS=("${ST_DEV[@]}")
 
-echo
-# Lift the gate before ejecting so udevadm settle can drain.
-sudo udevadm control --start-exec-queue 2>/dev/null || true
-
-# Boot-settle: boot each verified drive once in QEMU, in parallel, so its
-# controller pays the one-time post-write cost here instead of on the parent's
-# first boot. A dd read pass did not clear that state; a real boot does (see
-# guides/usb-flash-settle.md).
-SETTLE_PIDS=()
-SETTLE_IDX=()
-if [[ "$SKIP_SETTLE" != true ]]; then
-    for i in "${!ENTRIES[@]}"; do
-        [[ "${ST_OK[$i]}" == true ]] && SETTLE_IDX+=("$i")
-    done
-fi
-if [[ ${#SETTLE_IDX[@]} -gt 0 ]]; then
-    SETTLE_MAX=$(boot_settle_max_jobs)
-    log_info "Boot-settling ${#SETTLE_IDX[@]} drive(s) in QEMU so the first real boot is fast, up to $SETTLE_MAX at a time so guests fit in RAM (--no-settle to skip). Takes a few minutes, walk away."
-    for i in "${SETTLE_IDX[@]}"; do
-        while (( $(count_running "${SETTLE_PIDS[@]}") >= SETTLE_MAX )); do sleep 5; done
-        boot_settle_with_retry "${ST_DEV[$i]}" "$LOG_DIR/$(basename "${ST_DEV[$i]}").boot-settle.log" &
-        SETTLE_PIDS+=("$!")
-    done
-    for k in "${!SETTLE_PIDS[@]}"; do
-        i="${SETTLE_IDX[$k]}"
-        if wait "${SETTLE_PIDS[$k]}"; then
-            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]}: boot-settled"
-        else
-            echo -e "${YELLOW}!${NC} ${ST_DEV[$i]}: boot settle incomplete after retry, first real boot may be slow"
-            echo -e "    drive: $(drive_location "${ST_DEV[$i]}")"
-            echo -e "    log:   $LOG_DIR/$(basename "${ST_DEV[$i]}").boot-settle.log"
-        fi
-    done
-fi
-
-# Re-read every settled drive before ejecting, catching flash that decays in
-# the minutes after being written. Must precede eject_drive: a powered-off
-# drive leaves a media-less node whose reads look like corruption.
-if [[ "$REVERIFY" == true && ${#SETTLE_IDX[@]} -gt 0 ]]; then
-    log_info "Re-verifying ${#SETTLE_IDX[@]} drive(s) after boot-settle..."
-    RV_PIDS=(); RV_IDX=()
-    for i in "${SETTLE_IDX[@]}"; do
-        while (( $(count_running "${RV_PIDS[@]}") >= 4 )); do sleep 5; done
-        recheck_after_settle "${ST_DEV[$i]}" "${ISOS[$i]}" &
-        RV_PIDS+=("$!"); RV_IDX+=("$i")
-    done
-    for k in "${!RV_PIDS[@]}"; do
-        i="${RV_IDX[$k]}"
-        if wait "${RV_PIDS[$k]}"; then
-            echo -e "${GREEN}✓${NC} ${ST_DEV[$i]}: still intact after settle"
-        else
-            ST_OK[$i]=false
-            echo -e "${RED}✗${NC} ${ST_DEV[$i]}: verified after writing but NOT after settle, flash is decaying"
-            record_manifest fail-post-settle "${ST_DEV[$i]}" "${ST_SER[$i]}" "" "" "$(basename "${ISOS[$i]}")" ""
-        fi
-    done
-fi
-
-# Built after the re-verify, the last stage that can flip ST_OK. Reporting and
-# counts only: nothing downstream decides anything by matching a device node.
 FAILED=()
 for i in "${!ENTRIES[@]}"; do
     [[ "${ST_OK[$i]}" == true ]] || FAILED+=("${ST_DEV[$i]}")
 done
-
-# Re-enumerate and eject each verified drive (same pass single flashes do).
-# Corrupt mode skips this: a powered-off drive vanishes from the bus, so its
-# unplug would be undetectable and the identification phase couldn't work.
-# Safe because every write is synced and read back verified, and these test
-# drives get reflashed after one use anyway.
-if [[ "$CORRUPT_MODE" != true ]]; then
-    for i in "${!ENTRIES[@]}"; do
-        [[ "${ST_OK[$i]}" == true ]] || continue
-        eject_drive "${ST_DEV[$i]}" || true
-    done
-fi
 
 echo
 log_info "QA manifest: $(manifest_path)"
@@ -577,9 +585,28 @@ fi
 echo -e "${BOLD}${RED}${#FAILED[@]} of ${#DEVS[@]} drive(s) need attention:${NC}"
 for i in "${!ENTRIES[@]}"; do
     [[ "${ST_OK[$i]}" == true ]] && continue
-    echo -e "  ${RED}✗${NC} ${ST_DEV[$i]} (${ST_SER[$i]}) after ${ST_TRIES[$i]} attempt(s): $(drive_location "${ST_DEV[$i]}")"
-    echo -e "      log: ${ST_LOG[$i]}"
+    # Socket from the launch-time capture, not drive_location: a dead drive
+    # has no sysfs node left to locate it by.
+    SOCK="${ST_PORTNAME[$i]:+socket $(describe_port "${ST_PORTNAME[$i]}")}"
+    echo -e "  ${RED}✗${NC} ${ST_DEV[$i]} (${ST_SER[$i]}) after ${ST_TRIES[$i]} attempt(s): ${SOCK:-location unknown}"
+    echo -e "      log: ${ST_LOG[$i]:-none}"
     echo -e "      test it: just check-drive ${ST_DEV[$i]}   (add --deny if it fails)"
 done
 echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship.${NC}"
+
+# Blink each failed drive's hub socket so it can be found by eye. Failed
+# sticks only: a blink is a power cycle, which is fine on a drive whose
+# contents are already worthless. 'just blink' does this standalone.
+if [[ -t 0 ]]; then
+    for i in "${!ENTRIES[@]}"; do
+        [[ "${ST_OK[$i]}" == true ]] && continue
+        [[ -n "${ST_PORT[$i]}" ]] || continue
+        echo
+        read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n] " ans
+        [[ "$ans" == [nN]* ]] && continue
+        blink_port_until_enter "${ST_PORT[$i]}" "Blinking socket $(describe_port "${ST_PORTNAME[$i]}")... press Enter once you've spotted it: "
+        newdev="$(dev_for_serial "${ST_SER[$i]}" 20 || true)"
+        [[ -n "$newdev" && "$newdev" != "${ST_DEV[$i]}" ]] && log_info "It came back as $newdev; use that for check-drive."
+    done
+fi
 exit 1

@@ -364,26 +364,122 @@ drive_location() {
         echo "$dev"
         return
     fi
-    echo "$(cat "$usbdir/product" "$usbdir/serial" 2>/dev/null | xargs), USB port $(basename "$usbdir")"
+    echo "$(cat "$usbdir/product" "$usbdir/serial" 2>/dev/null | xargs), USB port $(describe_port "$(basename "$usbdir")")"
 }
 
-# Sysfs port-control directory for whichever hub port a drive sits in, e.g.
+# USB port name of a drive (e.g. 4-1.4), stable per physical socket.
+usb_port_name() {
+    local usbdir
+    usbdir="$(usb_device_dir "$1")"
+    [[ -n "$usbdir" ]] && basename "$usbdir"
+}
+
+# Sysfs port-control directory for a hub port NAME, e.g.
 # 4-1.4 -> .../4-1:1.0/4-1-port4, or a root-port 2-1 -> .../2-0:1.0/usb2-port1.
 # Writing to its "disable" attribute power-cycles just that socket.
-usb_port_control() {
-    local usbdir port parent path
-    usbdir="$(usb_device_dir "$1")"
-    [[ -n "$usbdir" ]] || return 1
-    port="$(basename "$usbdir")"          # 4-1.4  or  2-1
+port_control_path() {
+    local port="$1" parent path
     if [[ "$port" == *.* ]]; then
-        parent="${port%.*}"               # 4-1
+        parent="${port%.*}"               # 4-1.4 -> 4-1
         path="/sys/bus/usb/devices/$parent:1.0/$parent-port${port##*.}"
     else
-        parent="${port%%-*}"              # 2
+        parent="${port%%-*}"              # 2-1 -> 2
         path="/sys/bus/usb/devices/$parent-0:1.0/usb$parent-port${port#*-}"
     fi
-    [[ -w "$path/disable" || -e "$path/disable" ]] && echo "$path"
+    [[ -e "$path/disable" ]] && echo "$path"
 }
+
+# Same, resolved from a block device instead of a port name.
+usb_port_control() {
+    local port
+    port="$(usb_port_name "$1")"
+    [[ -n "$port" ]] || return 1
+    port_control_path "$port"
+}
+
+# --- Physical socket labels --------------------------------------------------
+# Map of USB port name to a human label for the physical socket ("top row 3"),
+# written by label-ports.sh (just label-ports). Lets failure reports point at
+# a stick by where it sits instead of a device node, which works even after
+# the drive has dropped off the bus.
+port_labels_path() { echo "$PROJECT_DIR/.flash-ports.conf"; }
+
+declare -A PORT_LABELS
+PORT_LABELS_LOADED=false
+load_port_labels() {
+    [[ "$PORT_LABELS_LOADED" == true ]] && return 0
+    PORT_LABELS_LOADED=true
+    local line port label
+    [[ -f "$(port_labels_path)" ]] || return 0
+    while IFS='|' read -r port label; do
+        port="$(echo "$port" | xargs)"
+        [[ -z "$port" || "$port" == \#* ]] && continue
+        PORT_LABELS["$port"]="$(echo "$label" | xargs)"
+    done < "$(port_labels_path)"
+}
+
+# Label for a port name, or empty. Same subshell caveat as is_denied: calling
+# this via $() re-reads the file, which is fine for a file this small.
+port_label() {
+    load_port_labels
+    echo "${PORT_LABELS[$1]:-}"
+}
+
+save_port_label() {
+    local port="$1" label="${2//|/ }" file tmp
+    load_port_labels
+    PORT_LABELS["$port"]="$label"
+    file="$(port_labels_path)"
+    tmp="$(mktemp)"
+    [[ -f "$file" ]] && grep -v "^${port}|" "$file" > "$tmp" || true
+    echo "${port}|${label}" >> "$tmp"
+    mv "$tmp" "$file"
+}
+
+# "4-1.4 (top row 3)" when the socket is labeled, else just "4-1.4".
+describe_port() {
+    local label
+    label="$(port_label "$1")"
+    echo "$1${label:+ ($label)}"
+}
+
+# Blink a hub socket's LED by toggling port power until the user presses
+# Enter, then restore power. $1 is a control path from port_control_path,
+# $2 the prompt. Safe only on a stick whose contents no longer matter: each
+# blink is a power cycle.
+blink_port_until_enter() {
+    local port="$1" prompt="$2" pid
+    ( while true; do
+        echo 1 | sudo tee "$port/disable" >/dev/null 2>&1
+        sleep 0.7
+        echo 0 | sudo tee "$port/disable" >/dev/null 2>&1
+        sleep 0.7
+      done ) &
+    pid=$!
+    read -r -p "$prompt"
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    echo 0 | sudo tee "$port/disable" >/dev/null 2>&1 || true
+}
+
+# --- Cross-process counting semaphore ----------------------------------------
+# Bounds how many parallel drive pipelines run an expensive stage at once.
+# $1 slot dir, $2 slot count, $3 fd to hold the lock on. Blocks until a slot
+# frees. The slot is released by slot_release or automatically when the
+# process exits (the fd closes), so a killed job can't leak one.
+slot_acquire() {
+    local dir="$1" n="$2" fd="$3" k
+    mkdir -p "$dir"
+    while true; do
+        for (( k = 1; k <= n; k++ )); do
+            eval "exec $fd>\"$dir/$k\""
+            flock -n "$fd" && return 0
+        done
+        sleep 3
+    done
+}
+
+slot_release() { eval "exec $1>&-"; }
 
 # Find the block device currently holding a serial, waiting up to $2 seconds
 # for it to appear (a power-cycled drive takes a few seconds to re-enumerate,

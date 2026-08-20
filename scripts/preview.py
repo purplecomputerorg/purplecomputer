@@ -34,6 +34,8 @@ Actions (processed left to right):
                      escape, backspace, delete, or a single character)
     wait:SECONDS     Pause for N seconds (e.g. wait:0.5)
     clear            Clear the art canvas
+    doodle           Paint the Secret Menu doodle onto the Art canvas
+    photo            Paint the Secret Menu photo onto the Art canvas
     time_travel      Open the Time Travel scrubber in the current room
     first_boot       Show the first-boot power-cycle screen
 
@@ -138,6 +140,11 @@ async def run_action(app, action_str: str) -> None:
         from purple_tui.rooms.sleep_screen import FirstBootPowerCycleScreen
         app.push_screen(FirstBootPowerCycleScreen())
         await asyncio.sleep(0.3)
+
+    elif action_str in ("doodle", "photo"):
+        from purple_tui.secret_doodle import paint_doodle, paint_photo
+        (paint_doodle if action_str == "doodle" else paint_photo)(app)
+        await asyncio.sleep(1.0)
 
     elif action_str == "clear":
         await app._execute_dev_command({"action": "clear"})

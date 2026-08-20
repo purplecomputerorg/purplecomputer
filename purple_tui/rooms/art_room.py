@@ -942,7 +942,8 @@ class ArtCanvas(Widget, can_focus=True):
         Args:
             x: X coordinate (0 to canvas_width-1)
             y: Y coordinate (0 to canvas_height-1)
-            color_key: Key character for color (e.g., 'f' for yellow, 'c' for blue)
+            color_key: Key character for color (e.g., 'f' for yellow, 'c' for
+                blue) or a literal "#rrggbb" hex color
         """
         # Clamp coordinates
         x = max(0, min(x, self.canvas_width - 1))
@@ -954,7 +955,9 @@ class ArtCanvas(Widget, can_focus=True):
 
         # Determine color from key (same logic as keyboard input)
         key_lower = color_key.lower()
-        if key_lower in GRAYSCALE:
+        if key_lower.startswith("#"):
+            self._last_key_color = key_lower
+        elif key_lower in GRAYSCALE:
             self._last_key_char = key_lower
             self._last_key_color = GRAYSCALE[key_lower]
         elif key_lower.isalpha() or key_lower in KEY_COLORS:

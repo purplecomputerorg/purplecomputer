@@ -1,6 +1,7 @@
-"""A saved hand-drawn doodle, reproducible from the Secret Menu.
+"""Saved pictures, reproducible from the Secret Menu.
 
-The strokes are stored as ordered (x, y, color_key) paint ops. Order matters:
+Pictures are stored as ordered (x, y, color_key) paint ops, where color_key is
+an Art room key or a "#rrggbb" hex color. For the doodle, order matters:
 base colors are painted first, then overlays mix (yellow 'f' + blue 'c' = green,
 yellow 'f' + red 'r' = orange). Colors: z=light blue, c=med blue, f=yellow,
 r=red, 1=white.
@@ -101,8 +102,8 @@ def build_ops() -> list[tuple[int, int, str]]:
     return ops
 
 
-def paint_doodle(app) -> None:
-    """Switch to the Art room and paint the saved doodle onto a fresh canvas.
+def paint_ops(app, ops: list[tuple[int, int, str]]) -> None:
+    """Switch to the Art room and paint ops onto a fresh canvas.
 
     The Art room mounts its canvas lazily on first activation, so the paint is
     retried after each refresh until the canvas exists.
@@ -126,9 +127,18 @@ def paint_doodle(app) -> None:
                 app.call_after_refresh(_paint, attempts_left - 1)
             return
         art.clear_canvas()
-        for x, y, k in build_ops():
+        for x, y, k in ops:
             canvas.paint_at(x, y, k)
         canvas._invalidate_all()
         canvas.refresh()
 
     app.call_after_refresh(_paint)
+
+
+def paint_doodle(app) -> None:
+    paint_ops(app, build_ops())
+
+
+def paint_photo(app) -> None:
+    from .secret_photo import OPS
+    paint_ops(app, OPS)

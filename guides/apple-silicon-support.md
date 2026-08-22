@@ -38,9 +38,9 @@ This is the companion to `t2-mac-support.md` (Intel Macs with T2 chip). Apple Si
 
 ---
 
-## Key Difference from Intel: No USB Boot
+## Key Difference from Intel: No USB Boot Without a One-Time Install
 
-**Apple Silicon cannot boot from USB storage.** This is a hardware restriction in the SecureROM (burned into silicon, immutable). There is no workaround. You cannot make a live USB drive that boots on Apple Silicon.
+**Apple Silicon cannot boot a USB stick on a fresh machine.** The SecureROM only runs Apple's boot chain from the internal SSD. The workaround is a one-time internal install of the Asahi "UEFI environment" (m1n1 + U-Boot + ESP, ~3GB), after which U-Boot boots a normal `BOOTAA64.EFI` USB stick. Current plan and the M3/M4 situation: `mac-and-chromebook-plan.md`.
 
 On Intel Macs and PCs, the deployment model is:
 ```
@@ -53,7 +53,7 @@ Run installer script from macOS → Reboot to Recovery → Authenticate →
 Complete OS setup → Set as default boot → Running
 ```
 
-This is a fundamental architectural difference, not a software limitation that can be solved.
+The recoveryOS authorization step is the part no script can remove.
 
 ---
 

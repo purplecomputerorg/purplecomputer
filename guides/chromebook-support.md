@@ -4,7 +4,7 @@
 
 Purple Computer does not support Chromebooks. We don't test on them and don't fix Chromebook-only bugs.
 
-On an x86 Chromebook it can work after replacing the firmware. This guide covers what that involves.
+On an x86 Chromebook it can work after replacing the firmware. This guide covers what that involves. The 2026 plan (unattended RW_LEGACY via `dev_default_boot=legacy`, offline audio and keyd baking, kernel requirement, school-enrolled devices) is in `mac-and-chromebook-plan.md`.
 
 ---
 

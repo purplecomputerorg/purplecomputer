@@ -2,7 +2,7 @@
 
 Apple Macs with the T2 Security Chip (2018-2020 models) are a viable hardware target for Purple Computer. The things that are "broken" on T2 Linux (Wi-Fi firmware, suspend, Touch ID) are all things Purple Computer doesn't need.
 
-This guide covers what works, what's needed, and how to get Purple Computer running on T2 Macs.
+This guide covers what works, what's needed, and how to get Purple Computer running on T2 Macs. The verified list of manual steps (including making Purple the default startup disk) and the companion-app plan are in `mac-and-chromebook-plan.md`.
 
 ---
 

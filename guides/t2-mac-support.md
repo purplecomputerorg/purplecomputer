@@ -130,7 +130,7 @@ Purple Computer's installer is a remastered Ubuntu Server ISO. To support T2 Mac
 2. **`apple-bce` module in initramfs** (so keyboard works immediately at boot)
 3. **`efi=noruntime`** kernel parameter may be needed on some T2 models to avoid boot hangs
 
-On non-T2 hardware, the apple-bce driver simply doesn't find a T2 chip and does nothing. So a single ISO can support both T2 and non-T2 machines.
+On non-T2 hardware, the apple-bce driver simply doesn't find a T2 chip and does nothing. A single ISO can support both, but not with a single kernel: the t2linux kernel is unsigned, so replacing the Canonical-signed kernel would break every Secure Boot machine. The plan is two kernels on one ISO with GRUB choosing by SMBIOS model. See `hardware-coverage-plan.md`.
 
 ---
 

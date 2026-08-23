@@ -2,6 +2,8 @@
 
 One place for the machines our USB stick can't boot as-is: Apple Silicon Macs (M1 through M4), T2 Intel Macs, and Chromebooks. Researched August 2026. Claims marked **unverified** were not checked on hardware.
 
+**Status: brainstorming, not a commitment.** Nothing here is decided or scheduled. It records what is possible, what it would cost, and what stays impossible, so the decision can be made later with the facts in one place.
+
 The premise throughout: the kid owns the machine. Purple owns the whole visible surface. What Apple or Google keep underneath is our concern, never the kid's.
 
 Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-support.md`, `chromebook-support.md`. Where they disagree with this one, this one is newer. The x86 kernel plan (T2 kernel, 32-bit EFI, 32-bit CPUs) is in `hardware-coverage-plan.md`.
@@ -19,7 +21,8 @@ Companion guides with background detail: `t2-mac-support.md`, `apple-silicon-sup
 | x86 Chromebook, retail, case opened | MrChromebox Full ROM, then USB stick | Purple | Nothing |
 | x86 Chromebook, retail, case closed | RW_LEGACY plus `dev_default_boot=legacy` | Warning screen, 30s, beep, Purple | ChromeOS, dormant |
 | ARM Chromebook | Cadmium (Ctrl+U kernel partition) | Not worth it | Everything |
-| School-enrolled Chromebook | Web page only, if the school allows it | A browser tab | Everything |
+| Any Chromebook, no flashing | Admin-console enrollment, kiosk-mode Purple Web | Purple Web | ChromeOS underneath |
+| School-enrolled Chromebook | Out of scope; ask the school to deprovision, then it is retail | | |
 
 Three pieces of work unlock most rows and are reused across them:
 
@@ -122,27 +125,47 @@ What our image needs for Chromebooks, all bakeable offline as no-ops elsewhere:
 
 Ctrl+U boot of a vboot-signed kernel partition on USB (no firmware change at all) is technically real on x86 and ARM, but the tooling is dead (eupnea/depthboot discontinued 2023 with a compromised GitHub; PrawnOS last touched 2021), the kernel command line is baked into the signed blob, and shim/GRUB are bypassed entirely. Not worth maintaining.
 
-### The Chromebook companion
+### The Chromebook companion: commands only, no screwdriver
 
-ChromeOS runs no apps of ours before Developer Mode, so the companion is a web page plus one script, not an app:
+Idea, not a decision: a script on the stick plus a SuzyQ debug cable. Parents already follow keystroke instructions for UEFI boot; opening a laptop is a different ask. Closed Case Debugging removes the screwdriver:
 
-1. **Before buying:** the login screen says "managed by" for enrolled devices. That is the whole pre-purchase check. No tool can do it remotely.
-2. **Enable Developer Mode** (wipes local data). Photo-guided, unavoidable.
-3. **Run `curl https://purple.../chromebook | bash` in the VT2 shell.** Our wrapper: reads `crossystem wpsw_cur` to say whether the case must be opened, runs `firmware-util.sh` non-interactively for RW_LEGACY (or Full ROM once write protect is off), sets `dev_boot_altfw=1` and `dev_default_boot=legacy`, reports the board name so we know which audio profile applies.
-4. **Boot the stick.** Purple's installer sees a Chromebook board, and the baked audio files and keyd map do the rest.
+1. **Developer Mode:** Esc+Refresh+Power, Ctrl+D (wipes ChromeOS data). Blocked on enrolled devices, so the login screen's "managed by" text is the whole pre-purchase check.
+2. **Shell:** Ctrl+Alt+F2 at the login screen, log in as `root`.
+3. **Run the script from the stick:** ChromeOS auto-mounts USB, so `bash /media/removable/PURPLE/chromebook.sh`. The script reads the board and `crossystem wpsw_cur`, and refuses unsupported boards.
+4. **Tier 1, RW_LEGACY, no write-protect change, zero brick risk:** the script installs it and sets `dev_boot_altfw=1` and `dev_default_boot=legacy`. Cost: warning screen, 30 seconds, beep, every boot.
+5. **Tier 2, quiet boot (Full ROM), needs write protect off:** the script runs `gsctool -a -o` and the parent presses the power button when asked (physical presence, 2-3 minutes, one reboot). Then the cable goes in the port the script names (upper/left USB-C; flip the plug if `/dev/ttyUSB0` does not appear) and the script sends `wp false`, `wp false atboot`, `ccd reset factory`, does the Ti50 `AllowUnverifiedRo:always` step where needed, and flashes.
+6. **Boot the stick.** Purple's installer sees a Chromebook board; the baked audio files and keyd map do the rest.
 
-Everything after step 3 is the normal stick experience.
+Open questions: a Full ROM flash can brick (recovery button dance on Ti50, worst case a programmer), a different risk class from booting UEFI; MrChromebox's script downloads per-board ROMs (~16MB each), so either bundle a supported subset on the stick or accept Wi-Fi once at setup; the official SparkFun SuzyQable is retired, so clones or a DIY design need testing. Battery disconnect (open the case, unplug the battery connector, run on AC) stays the documented fallback for boards where CCD does not cooperate.
 
 ### ARM Chromebooks (MediaTek Kompanio, Snapdragon 7c)
 
 No coreboot, so the only route is Cadmium (https://github.com/Maccraft123/Cadmium): Ctrl+U kernel-partition boot with a mainline arm64 kernel, open-source drivers only, manual audio fiddling on some boards. A separate project with the arm64 build as a prerequisite. Skip.
 
-### School-enrolled Chromebooks
+### Locking a Chromebook to Purple Web: kiosk mode
 
-Enrolled means Google Admin policy owns the device: Developer Mode blocked, Forced Re-Enrollment re-applies policy on any network check-in, and most schools also disable Linux (Crostini). The exploits (sh1mmer, badrecovery) are version-gated, patched continuously, and not something to build a product on. Under our premise this one is settled: the kid does not own a school Chromebook; the school does. There are two honest positions:
+ChromeOS has exactly one real single-app lock: **kiosk mode**, which auto-launches a web app at boot with no shelf, launcher, or sign-in, survives reboot, and runs fully offline once the PWA is cached. It requires the device to be enrolled in a Google Admin console, which needs a domain-verified Workspace or Cloud Identity account plus a per-device Kiosk & Signage Upgrade (about $25/device/year). A parent's Gmail or Workspace Individual cannot enroll anything.
 
-- **After the school lets it go.** Schools sell or give away fleets at AUE. If the school deprovisioned the device in the admin console, it is a retail Chromebook and the x86 path above applies. If they did not, FRE keeps it enrolled forever; tell people to ask the school to deprovision before taking it home.
-- **While the school owns it: a web page.** The only thing that runs on an enrolled Chromebook is what the admin's allowlist permits. A "Purple Web" that a teacher can allow is the sole route, and it is a different product: browser keydown/keyup give real key-up events, so the input seam works, but rendering has to come from a server (textual-serve) or an in-browser Python (Pyodide plus a custom xterm.js driver, **unverified**), TTS moves to the browser (Web Speech API, or Piper via onnxruntime-web), and sound to Web Audio. That same web build is also what a parent-owned, unflashed Chromebook could run under Family Link with Purple as the only allowed site, or as a Chrome kiosk app on a parent-enrolled device ($50/device Kiosk Upgrade). Worth knowing, not worth building before the Mac work; it rides on the same input seam.
+Everything short of enrollment is escapable: Family Link gives a site allowlist but leaves the shelf, launcher, and guest sign-in; the Keyboard Lock API in fullscreen captures Alt+Tab, Ctrl+W and Esc but holding Esc for two seconds always releases it, and the power and Search keys are not reliably capturable. There is no `--kiosk` flag on ChromeOS.
+
+Technically, then: any Admin console can enroll a powerwashed device (Ctrl+Alt+E at the sign-in screen) and auto-launch Purple Web as the only thing on the machine. No Developer Mode, no flashing, no case opening; works on ARM Chromebooks and on boards MrChromebox will never support. Whether anyone runs such a console is a product question outside this repo; it depends on Purple Web existing either way.
+
+### School-enrolled Chromebooks: out of scope
+
+Enrolled devices are the school's property and Forced Re-Enrollment (keyed to the serial in read-only VPD, Developer Mode blocked by the Cr50/Ti50 chip) keeps them that way; the exploit race (sh1mmer, badrecovery) is lost on current fleets and is not a product foundation. Districts are supposed to **deprovision** in the Admin console when they sell or gift fleets; after that the device is retail and every path above applies. Customer docs should say: ask the school to deprovision it before taking it home. We do not handle the still-enrolled case.
+
+### Purple Web, the prerequisite
+
+Constraints: offline after a one-time download (like getting the ISO), and pixel-identical to Alacritty. Both rule out the obvious routes. Server-rendered Textual (textual-serve) needs the internet at runtime, so no. A JavaScript rewrite is the approach least likely to match Alacritty, because 30k lines of Python would be reimplemented and every layout divergence is a visual one, twice, forever.
+
+What makes the screen look like Alacritty is only this: a 146x37 cell grid drawn in JetBrainsMono Nerd Font plus Noto Color Emoji with per-cell colors. Draw the same grid with the same two font files and it matches by construction (font rasterization aside). So:
+
+- **Same Python, in the browser.** Pyodide (CPython on WebAssembly) runs the existing code as a PWA; numpy is available, pygame, evdev and piper are not, which maps exactly onto the seams below.
+- **A Textual driver that emits cells, not ANSI.** The compositor already produces styled strips per row; the driver sends `(row, col, char, fg, bg, style)` diffs to JS. No terminal emulator in the loop.
+- **A canvas renderer (~500 lines)** drawing the grid with both fonts bundled via `@font-face` (Noto Color Emoji as COLRv1, ~10MB; system fonts would make ChromeOS and macOS each look like themselves), cell size computed like `font_sizer.py`, scaled to fill the screen.
+- **Seams:** browser keydown/keyup to `RawKeyEvent` (the same input seam as native macOS); `audio.play_safe()` and its five other call sites feed numpy buffers to Web Audio; TTS via Piper on onnxruntime-web or pre-rendered clips. Linux-only modules (`power_manager.py`, `audio_hotplug.py`, `boot_log.py`, `font_sizer.py`) become no-ops under a web profile, as the headless preview already proves is possible.
+
+The bet, **unverified**: nobody has published Textual running inside Pyodide. Textual is asyncio-based (fine) but some workers use real threads (Pyodide has none), and cold start of Pyodide plus Textual plus numpy is a few seconds before caching. Spike: two to three days to get Textual importing in Pyodide and one room painting on a canvas with the real fonts. There is no fallback if it fails, since the fallback would be a server.
 
 ---
 
@@ -152,7 +175,7 @@ Enrolled means Google Admin policy owns the device: Developer Mode blocked, Forc
 2. Purple for Mac.app shell: routing, native setup, T2 USB flashing and verification.
 3. Chromebook: vendor the audio files and keyd map into the golden image, the VT2 wrapper script, the newer kernel alongside the T2 kernel work.
 4. arm64 build: Asahi native on M1/M2 via hosted installer data, and ARM anything later.
-5. Purple Web, only if locked Chromebooks turn out to be a real population.
+5. Purple Web, only if Chromebooks turn out to be a real population.
 
 ---
 
@@ -171,3 +194,7 @@ Enrolled means Google Admin policy owns the device: Developer Mode blocked, Forc
 - Chromebook audio and keyboard: https://github.com/WeirdTreeThing/chromebook-linux-audio , https://github.com/WeirdTreeThing/cros-keyboard-map
 - chrultrabook: https://docs.chrultrabook.com/docs/installing/known-issues.html
 - Cadmium (ARM): https://github.com/Maccraft123/Cadmium
+- ChromeOS kiosk web apps and upgrades: https://support.google.com/chrome/a/answer/9781496 , https://support.google.com/chrome/a/answer/7613771
+- Keyboard Lock API: https://developer.chrome.com/docs/capabilities/web-apis/keyboard-lock
+- Forced Re-Enrollment: https://www.chromium.org/chromium-os/forced-re-enrollment/
+- Deprovisioning: https://support.google.com/chrome/a/answer/3523633

@@ -1,0 +1,43 @@
+# initramfs-tools boot script (boot=purple-install): the whole "live session"
+# for 32-bit CPUs, which get no casper. Mounts the Purple Key, asks once, and
+# runs the ISO's install.sh against the i386 image. Installed as
+# /etc/initramfs-tools/scripts/purple-install; init calls mountroot().
+# See guides/hardware-coverage-plan.md.
+
+say() { printf '\n   %s\n' "$@"; }
+
+stop() {
+    say "$@" "Email support@purplecomputer.org and we will help." "It is safe to turn this computer off now."
+    while :; do sleep 86400; done
+}
+
+mountroot() {
+    exec </dev/tty1 >/dev/tty1 2>&1
+    [ -e /dev/fd ] || ln -s /proc/self/fd /dev/fd
+    modprobe isofs; modprobe vfat; modprobe ext4
+    printf '\033]P02d1b4e\033[H\033[2J\033[97m'
+    say "Welcome to Purple Computer!" "Looking for the Purple Key..."
+    for i in $(seq 60); do
+        STICK=$(ls /dev/disk/by-label/PURPLE_INSTALLER /dev/disk/by-label/PURPLE_DEBUG 2>/dev/null | head -1)
+        [ -n "$STICK" ] && break
+        sleep 1
+    done
+    mkdir -p /cdrom
+    mount -o ro "$STICK" /cdrom || stop "Could not read the Purple Key."
+    say "This computer is an older 32-bit model, so Purple installs straight onto it." \
+        "That erases everything on this computer. It takes about 15 minutes." \
+        "Type YES and press Enter to install, or just turn the computer off."
+    printf '   > '
+    read answer
+    [ "$answer" = "YES" ] || stop "Okay, nothing was changed."
+    # install.sh's [PURPLE-PV] percent lines feed the TUI on amd64; here they
+    # become one updating line instead of a 15-minute scroll.
+    { PURPLE_PAYLOAD_DIR=/cdrom/purple32 bash /cdrom/purple/install.sh; echo $? > /tmp/rc; } 2>&1 \
+        | awk '/^\[PURPLE-PV/ { printf "\r   %s%% done   ", $2; fflush(); next } { print }'
+    if [ "$(cat /tmp/rc)" = 0 ]; then
+        say "All done! Unplug the Purple Key, then press Enter to start Purple."
+        read answer
+        reboot -f
+    fi
+    stop "Something went wrong while installing."
+}

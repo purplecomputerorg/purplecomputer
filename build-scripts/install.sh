@@ -94,9 +94,11 @@ find_target() {
     # Method 2: Find the device containing the live filesystem
     # The ISO volume is labeled PURPLE_INSTALLER
     local iso_dev=""
-    iso_dev=$(blkid -L PURPLE_INSTALLER 2>/dev/null | sed 's/[0-9]*$//' || true)
+    iso_dev=$( (blkid -L PURPLE_INSTALLER || blkid -L PURPLE_DEBUG) 2>/dev/null || true)
     if [ -n "$iso_dev" ]; then
-        boot_dev=$(basename "$iso_dev")
+        # lsblk resolves partition to parent for every naming scheme (sda1, mmcblk0p1)
+        boot_dev=$(lsblk -no pkname "$iso_dev" 2>/dev/null | head -1)
+        [ -n "$boot_dev" ] || boot_dev=$(basename "$iso_dev")
         log "  Boot device (ISO): $boot_dev"
     fi
 
@@ -398,7 +400,7 @@ main() {
     if [ -f "$WRITE_SHA256_FILE" ] && [ -s "$WRITE_SHA256_FILE" ] && [ -f "$WRITE_SIZE_FILE" ] && [ -s "$WRITE_SIZE_FILE" ]; then
         WRITE_SHA256=$(cat "$WRITE_SHA256_FILE")
         WRITE_SIZE=$(cat "$WRITE_SIZE_FILE" | tr -d ' ')
-        log "Verifying disk write (this takes a few minutes)..."
+        log "Verifying disk write of $WRITE_SIZE bytes (this takes a few minutes)..."
 
         # Flush hardware write caches before reading back
         blockdev --flushbufs /dev/$TARGET 2>/dev/null || true
@@ -592,9 +594,10 @@ main() {
                 fi
             fi
             if [ "$WINDOWS_DETECTED" -eq 0 ]; then
+                # || true: the i386 image's ESP has only BOOTIA32.EFI
                 mkdir -p /mnt/efi/EFI/Microsoft/Boot
-                cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi
-                cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi
+                cp /mnt/efi/EFI/BOOT/BOOTX64.EFI /mnt/efi/EFI/Microsoft/Boot/bootmgfw.efi 2>/dev/null || true
+                cp /mnt/efi/EFI/BOOT/grubx64.efi /mnt/efi/EFI/Microsoft/Boot/grubx64.efi 2>/dev/null || true
                 cp /mnt/efi/EFI/BOOT/mmx64.efi /mnt/efi/EFI/Microsoft/Boot/mmx64.efi 2>/dev/null || true
                 log "  Layer 3: /EFI/Microsoft/Boot/ shim + GRUB"
             fi

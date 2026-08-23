@@ -12,6 +12,7 @@ import array
 import hashlib
 import re
 import shutil
+import subprocess
 import tempfile
 import threading
 import time
@@ -378,54 +379,32 @@ def _get_voice_search_paths() -> list[Path]:
         pass
     return paths
 
-# Piper voice instance (lazy loaded)
-_piper_voice = None
-_piper_available = None
-
 # Serialize all Piper synthesis calls (espeak phonemizer is not thread-safe)
 _synthesis_lock = threading.Lock()
 
+# Fallback voice when Piper is absent (32-bit builds have no onnxruntime)
+_ESPEAK = "espeak-ng"
+_voice = None  # PiperVoice, _ESPEAK, or False once loading failed
 
-def _get_piper_voice():
-    """Get or create the Piper voice instance"""
-    global _piper_voice, _piper_available
 
-    if _piper_available is False:
-        return None
-
-    if _piper_voice is not None:
-        return _piper_voice
-
-    # The scripted demo plays only pre-generated clips, so never pay the load
-    if os.environ.get("PURPLE_DEMO_AUTOSTART"):
-        _piper_available = False
-        return None
-
+def _load_voice():
     try:
         from piper import PiperVoice
-
-        # Check for voice model in various locations
-        model_path = None
         for base_path in _get_voice_search_paths():
             candidate = base_path / f"{VOICE_MODEL}.onnx"
             if candidate.exists():
-                model_path = candidate
-                break
-
-        if model_path is None:
-            _piper_available = False
-            return None
-
-        _piper_voice = PiperVoice.load(str(model_path))
-        _piper_available = True
-        return _piper_voice
-
-    except ImportError:
-        _piper_available = False
-        return None
+                return PiperVoice.load(str(candidate))
     except Exception:
-        _piper_available = False
-        return None
+        pass
+    return _ESPEAK if shutil.which(_ESPEAK) else None
+
+
+def _get_voice():
+    global _voice
+    # The scripted demo plays only pre-generated clips, so never pay the load
+    if _voice is None and not os.environ.get("PURPLE_DEMO_AUTOSTART"):
+        _voice = _load_voice() or False
+    return _voice or None
 
 
 def _ensure_mixer() -> bool:
@@ -466,6 +445,13 @@ def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     Acquires _synthesis_lock to prevent concurrent Piper calls
     (espeak phonemizer is not thread-safe).
     """
+    if voice == _ESPEAK:
+        with _synthesis_lock:
+            subprocess.run([_ESPEAK, "-w", wav_path, prepared_text], check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _postprocess_wav(wav_path)
+        return True
+
     config = _make_synth_config()
 
     with _synthesis_lock:
@@ -501,8 +487,10 @@ def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
             Path(wav_path).unlink(missing_ok=True)
             return None
 
-        # Try to cache (best effort, don't lose audio if caching fails)
-        cache_path = _store_cache(prepared_text, wav_path)
+        # Try to cache (best effort, don't lose audio if caching fails).
+        # Never cache espeak clips: the cache key is engine-blind, so one boot
+        # with Piper broken would leave robot-voiced clips that outlive the fix.
+        cache_path = None if voice == _ESPEAK else _store_cache(prepared_text, wav_path)
         if cache_path:
             return cache_path
 
@@ -662,7 +650,7 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
         return _play_clip(cached_path, speech_id, on_playing)
 
     # Fall back to Piper TTS for dynamic content
-    voice = _get_piper_voice()
+    voice = _get_voice()
     if voice is None:
         _dbg("speak_sync: piper voice unavailable")
         return False
@@ -738,4 +726,4 @@ def _play_clip(clip_path: Path, speech_id: int, on_playing: callable = None) -> 
 
 def is_available() -> bool:
     """Check if TTS is available"""
-    return _get_piper_voice() is not None
+    return _get_voice() is not None

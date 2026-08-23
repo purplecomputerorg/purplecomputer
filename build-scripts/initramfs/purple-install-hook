@@ -1,0 +1,24 @@
+#!/bin/sh
+# initramfs-tools hook: adds install.sh's tools to the i386 installer initrd.
+# Only when building that initrd (PURPLE_INSTALLER_INITRD=1), so the installed
+# system's own initrd stays lean. See build-scripts/initramfs/purple-install.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in prereqs) prereqs; exit 0;; esac
+[ "$PURPLE_INSTALLER_INITRD" = "1" ] || exit 0
+
+. /usr/share/initramfs-tools/hook-functions
+
+# coreutils dd and wc, util-linux blkid: install.sh needs dd iflag=count_bytes,
+# blkid -L/-s, and a wc that counts past 4GB (busybox's wraps at 32 bits, so
+# the 8GB image came out as 0 bytes to verify). The busybox hook runs first and
+# copy_exec skips existing files, so drop its hardlinks before copying.
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+for bin in bash dd wc zstd pv parted partprobe wipefs lsblk blkid e2fsck resize2fs grub-install; do
+    src=$(command -v "$bin") || { echo "purple-install: $bin not found" >&2; exit 1; }
+    rm -f "$DESTDIR$src"
+    copy_exec "$src"
+done
+mkdir -p "$DESTDIR/usr/lib/grub"
+cp -a /usr/lib/grub/i386-pc "$DESTDIR/usr/lib/grub/"
+manual_add_modules isofs vfat nls_cp437 nls_ascii nls_iso8859-1 usbhid hid_generic hid_apple

@@ -2,6 +2,8 @@
 
 Findings and plan (August 2026) for booting Purple on three hardware classes the current ISO can't reach, plus the ISO size work that makes room for them. Companion to `t2-mac-support.md`, `secure-boot.md`, and `usb-boot-reference.md`.
 
+**Status (August 2026): built, on branch `expanded-laptops`.** The plan below is kept as the rationale; the "As built" section at the end records where each piece landed and where the build deviated from the plan.
+
 ## The three classes
 
 "32-bit" hides two different problems, and T2 is a third. Ranked by devices unlocked per week of work:
@@ -187,3 +189,23 @@ All four are features, so they land on main and ship in a new ISO rather than vi
 - Does Canonical's signed GRUB allow `smbios` under Secure Boot lockdown? (Safe either way; decides whether T2 detection works on a T2 Mac that someone re-enabled Secure Boot on, which can't boot Linux anyway.)
 - Which stick capacities ship today? Decides whether the with-backup variant needs the cleanup before any feature lands.
 - Any support emails from the "Purple does not support this computer" screen? Real counts for the 32-bit CPU class would confirm or kill step 4.
+
+## As built
+
+One variable does the routing. `config/grub/purple-router.cfg` sets `purple_variant` to `""`, `-t2` or `-i386` (plus `purple_args`, the T2 kernel parameters `pm_async=off intel_iommu=on iommu=pt`), and every menuentry on the ISO boots `/casper/vmlinuz$purple_variant` with `/casper/initrd$purple_variant`. The installed grub.cfg sources the same file and boots `/boot/vmlinuz$purple_variant`. The installed grub.cfg falls back to the stock kernel when the routed file is missing (the i386 image has no `vmlinuz-i386`; installed kernels are always the right arch). `scripts/test-grub-router.sh` runs the QEMU matrix above; `scripts/preview-grub-guard.sh` still renders the "too old" screen, which now only appears when the i386 payload is missing (fast builds skip it).
+
+GRUB script gotcha: `if insmod cpuid && ! cpuid -l` routed every 64-bit machine to `-i386` in QEMU. Nested `if`s behave; keep them.
+
+| Piece | Where |
+|---|---|
+| Zero free blocks | `00-build-golden-image.sh`, after the squashfs, before unmount |
+| Drop `/pool`, `/dists` | `01-remaster-iso.sh`, step 4 |
+| BOOTIA32.EFI | `grub-mkimage -O i386-efi -p /EFI/ubuntu` in `00-build-golden-image.sh`, on both the golden ESP and (via `signed-efi/`) the ISO's EFI image. Same prefix as Canonical's signed GRUB, so it reads the same `/EFI/ubuntu/grub.cfg`. Every needed module is built in: once that config points `$prefix` at a device with no `i386-efi/` tree, nothing else can load, and a failed `insmod cpuid` would route a 32-bit CPU to the amd64 kernel |
+| T2 kernel | `install_pinned_deb` in `00-build-golden-image.sh`: `linux-image-6.18.45-1-t2-noble` and `apple-t2-audio-config` 0.5.2, sha256-pinned. dpkg's postinst builds the initrd through the lean hook; the remaster extracts both kernel pairs from the squashfs and patches both initrds |
+| i386 image | `PURPLE_ARCH=i386 ./00-build-golden-image.sh` (run by `build-all.sh` after the amd64 image, skipped on fast builds). Same script, Debian trixie i386 (bookworm has no alacritty) with bookworm's `linux-image-686` pinned in (trixie has no i386 kernel). `requirements.txt` skips numpy and Piper on i686 via PEP 508 markers; Debian's `python3-numpy` (2.x, built for the i686 baseline, so the SSE4.2 problem behind `numpy-pin.md` doesn't apply) fills in. No casper. Output under `build/i386/` |
+| i386 installer | No custom initrd: initramfs-tools boot script `build-scripts/initramfs/purple-install` (`boot=purple-install`) mounts the stick by label, asks for YES, runs the ISO's own `install.sh` with `PURPLE_PAYLOAD_DIR=/cdrom/purple32`, reboots. The hook next to it adds bash, zstd, pv, parted, util-linux, e2fsprogs and `grub-install` with `i386-pc`, only when `PURPLE_INSTALLER_INITRD=1` |
+| Voice on i386 | `tts.py` falls back to `espeak-ng` when Piper is absent (also the missing amd64 fallback) |
+
+Two traps found in QEMU, both in the installer initrd: the busybox hook runs before ours and `copy_exec` skips files that exist, so busybox's `dd`/`blkid`/`wc` applets shadowed the real ones (busybox `wc -c` wraps at 32 bits, which turned the 8GB write into `WRITE_SIZE=0` and an instant SHA mismatch). The hook now removes the applet links first.
+
+Still open: bench-test the T2 kernel on a 2018-2020 Air (display firmware, audio profile, `apple-bce` autoload), BOOTIA32 on a 2006-2008 MacBook, and the i386 installer on an Atom netbook. All three paths are QEMU-verified only as far as QEMU can go.

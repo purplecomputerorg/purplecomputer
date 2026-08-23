@@ -131,171 +131,48 @@ neuter_casper_swap() {
     fi
 }
 
-# Prepend a 64-bit check to a grub.cfg. On a 32-bit-only CPU, loading our
-# amd64 kernel silently hangs at "GRUB" (e.g. old Atom netbooks). Instead,
-# show a friendly "too old" message. If the cpuid module is missing the
-# check is skipped, so 64-bit machines are never wrongly blocked.
-prepend_longmode_guard() {
+# Prepend the kernel router (config/grub/purple-router.cfg) to a grub.cfg. A
+# 32-bit CPU whose i386 payload isn't on this ISO (fast builds) gets a friendly
+# "too old" screen instead of the silent hang an amd64 kernel causes there.
+prepend_router() {
     local cfg="$1"
-    local tmp="${cfg}.guard"
-    cat > "$tmp" << 'LONGMODE_GUARD'
-if insmod cpuid; then
-    if ! cpuid -l; then
-        clear
-        echo ""
-        echo "    So sorry! Purple does not support this computer."
-        echo ""
-        echo "    This machine uses an older kind of chip that Purple"
-        echo "    cannot run on. Most laptops made in the last 15 years"
-        echo "    or so will work."
-        echo "    (Technical: this is a 32-bit CPU. Purple needs 64-bit.)"
-        echo ""
-        echo "    Email support@purplecomputer.org for a full refund,"
-        echo "    or just to talk through options. Happy to help!"
-        echo ""
-        echo "    It is safe to turn this computer off now."
-        echo ""
-        sleep --interruptible 86400
-        halt
-    fi
+    local tmp="${cfg}.router"
+    cat > "$tmp" << 'ROUTER'
+source $prefix/purple-router.cfg
+set purple_boot=casper
+if [ "$purple_variant" = "-i386" ]; then
+    set purple_boot=purple-install
+fi
+if [ ! -f /casper/vmlinuz$purple_variant ]; then
+    clear
+    echo ""
+    echo "    So sorry! Purple does not support this computer."
+    echo ""
+    echo "    This machine uses an older kind of chip that Purple"
+    echo "    cannot run on. Most laptops made in the last 15 years"
+    echo "    or so will work."
+    echo "    (Technical: this is a 32-bit CPU. Purple needs 64-bit.)"
+    echo ""
+    echo "    Email support@purplecomputer.org for a full refund,"
+    echo "    or just to talk through options. Happy to help!"
+    echo ""
+    echo "    It is safe to turn this computer off now."
+    echo ""
+    sleep --interruptible 86400
+    halt
 fi
 
-LONGMODE_GUARD
+ROUTER
     cat "$cfg" >> "$tmp"
     mv "$tmp" "$cfg"
 }
 
-main() {
-    log_step "Purple Computer ISO Remaster (Live Boot + Optional Install)"
-    log_info "Architecture: Live boot default, install via GRUB menu option"
-
-    if [ "$EUID" -ne 0 ]; then
-        echo "This script must be run as root"
-        exit 1
-    fi
-
-    # Check for golden image
-    if [ ! -f "$GOLDEN_IMAGE" ]; then
-        echo "ERROR: Golden image not found: $GOLDEN_IMAGE"
-        echo "Run step 0 first: ./build-all.sh 0"
-        exit 1
-    fi
-
-    # Check for live squashfs
-    LIVE_SQUASHFS="${BUILD_DIR}/filesystem.squashfs"
-    LIVE_SIZE="${BUILD_DIR}/filesystem.size"
-
-    if [ ! -f "$LIVE_SQUASHFS" ]; then
-        echo "ERROR: Live squashfs not found: $LIVE_SQUASHFS"
-        echo "Run step 0 first: ./build-all.sh 0"
-        exit 1
-    fi
-
-    # Setup directories
-    mkdir -p "$WORK_DIR"
-    mkdir -p "$OUTPUT_DIR"
-
-    # Step 1: Download Ubuntu Server ISO if needed
-    log_step "1/11: Checking Ubuntu Server ISO..."
-    if [ -f "$UBUNTU_ISO" ]; then
-        log_info "Using cached ISO: $UBUNTU_ISO"
-    else
-        log_info "Downloading Ubuntu Server ISO..."
-        wget -O "$UBUNTU_ISO" "$UBUNTU_ISO_URL"
-    fi
-    log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
-
-    # Step 2: Setup working directories
-    log_step "2/11: Setting up working directories..."
-    rm -rf "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
-    mkdir -p "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
-
-    # Step 3: Mount and copy ISO contents
-    log_step "3/11: Extracting ISO contents..."
-    mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
-
-    # Copy everything from ISO
-    rsync -a --info=progress2 "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
-
-    # Step 4: Replace squashfs with Purple Computer
-    log_step "4/11: Replacing squashfs with Purple Computer..."
-    # Remove ALL Ubuntu Server squashfs files and replace with ours.
-    # Casper reads install-sources.yaml to know which layers to mount.
-    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
-    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs.gpg
-    rm -f "$WORK_DIR/iso-new/casper/"*.manifest
-    rm -f "$WORK_DIR/iso-new/casper/"*.size
-    cp "$LIVE_SQUASHFS" "$WORK_DIR/iso-new/casper/filesystem.squashfs"
-    cp "$LIVE_SIZE" "$WORK_DIR/iso-new/casper/filesystem.size"
-
-    # Rewrite install-sources.yaml to point at our single squashfs
-    SQUASHFS_SIZE=$(stat -c%s "$LIVE_SQUASHFS")
-    cat > "$WORK_DIR/iso-new/casper/install-sources.yaml" << SOURCES_EOF
-- default: true
-  id: purple-computer
-  name:
-    en: Purple Computer
-  path: filesystem.squashfs
-  size: ${SQUASHFS_SIZE}
-  type: fsimage
-  variant: server
-SOURCES_EOF
-    log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
-
-    # Replace the ISO's kernel and initrd with ours from the squashfs.
-    # Everything must come from one source to avoid version mismatches.
-    # The squashfs has casper installed, so its initrd supports live boot.
-    # Use unsquashfs (no loop device needed, works reliably in Docker).
-    log_info "Extracting kernel and initrd from squashfs..."
-    SQEXT="$WORK_DIR/sq-extract"
-    unsquashfs -d "$SQEXT" "$LIVE_SQUASHFS" boot/
-
-    # Follow symlinks to get the actual versioned files
-    cp -L "$SQEXT/boot/vmlinuz" "$WORK_DIR/iso-new/casper/vmlinuz"
-    cp -L "$SQEXT/boot/initrd.img" "$WORK_DIR/iso-new/casper/initrd"
-    PURPLE_KVER=$(readlink "$SQEXT/boot/vmlinuz" | sed 's/vmlinuz-//')
-    log_info "  Kernel: $PURPLE_KVER"
-    log_info "  Initrd: $(readlink "$SQEXT/boot/initrd.img")"
-
-    rm -rf "$SQEXT"
-
-    # Read back the build version baked into the image (build-<githash>-<date>,
-    # written to /etc/purple-version by 00-build-golden-image.sh). This is the
-    # authoritative "what's actually on the drive" version. We drop it beside the
-    # finished ISO as a .version sidecar so flashing tools report the commit the
-    # ISO was built from, not whatever happens to be checked out at flash time.
-    rm -rf "$WORK_DIR/sq-version"
-    BUILD_VERSION="unknown"
-    BUILD_COMMIT="unknown"
-    if unsquashfs -d "$WORK_DIR/sq-version" "$LIVE_SQUASHFS" etc/purple-version etc/purple-commit >/dev/null 2>&1; then
-        [ -f "$WORK_DIR/sq-version/etc/purple-version" ] && BUILD_VERSION="$(cat "$WORK_DIR/sq-version/etc/purple-version")"
-        [ -f "$WORK_DIR/sq-version/etc/purple-commit" ] && BUILD_COMMIT="$(cat "$WORK_DIR/sq-version/etc/purple-commit")"
-    fi
-    rm -rf "$WORK_DIR/sq-version"
-    log_info "Build version (from image): $BUILD_VERSION (commit $BUILD_COMMIT)"
-
-    # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
-    log_step "5/11: Modifying initramfs..."
-
-    # Find the initrd (might be named differently)
-    INITRD_PATH=""
-    for path in "$WORK_DIR/iso-new/casper/initrd" "$WORK_DIR/iso-new/casper/initrd.img" "$WORK_DIR/iso-new/casper/initrd.lz"; do
-        if [ -f "$path" ]; then
-            INITRD_PATH="$path"
-            break
-        fi
-    done
-
-    if [ -z "$INITRD_PATH" ]; then
-        echo "ERROR: Cannot find initrd in ISO"
-        ls -la "$WORK_DIR/iso-new/casper/"
-        exit 1
-    fi
-
-    log_info "Found initrd: $INITRD_PATH"
-
+# Inject the Purple hooks into a casper initrd (boot splash, dotfiles,
+# debug mode, no swap activation) and repack it in place.
+patch_casper_initrd() {
+    local INITRD_PATH="$1"
     # Extract initramfs (Ubuntu uses concatenated cpio archives)
-    cd "$WORK_DIR/initrd-work"
+    rm -rf "$WORK_DIR/initrd-work"; mkdir -p "$WORK_DIR/initrd-work"; cd "$WORK_DIR/initrd-work"
     unmkinitramfs "$INITRD_PATH" .
 
     # Find the main initramfs directory (contains /scripts)
@@ -401,6 +278,147 @@ SPLASH_EOF
     # Replace initrd in ISO
     cp "$NEW_INITRD" "$INITRD_PATH"
     log_info "Initramfs modified successfully"
+}
+
+main() {
+    log_step "Purple Computer ISO Remaster (Live Boot + Optional Install)"
+    log_info "Architecture: Live boot default, install via GRUB menu option"
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "This script must be run as root"
+        exit 1
+    fi
+
+    # Check for golden image
+    if [ ! -f "$GOLDEN_IMAGE" ]; then
+        echo "ERROR: Golden image not found: $GOLDEN_IMAGE"
+        echo "Run step 0 first: ./build-all.sh 0"
+        exit 1
+    fi
+
+    # Check for live squashfs
+    LIVE_SQUASHFS="${BUILD_DIR}/filesystem.squashfs"
+    LIVE_SIZE="${BUILD_DIR}/filesystem.size"
+
+    if [ ! -f "$LIVE_SQUASHFS" ]; then
+        echo "ERROR: Live squashfs not found: $LIVE_SQUASHFS"
+        echo "Run step 0 first: ./build-all.sh 0"
+        exit 1
+    fi
+
+    # Setup directories
+    mkdir -p "$WORK_DIR"
+    mkdir -p "$OUTPUT_DIR"
+
+    # Step 1: Download Ubuntu Server ISO if needed
+    log_step "1/11: Checking Ubuntu Server ISO..."
+    if [ -f "$UBUNTU_ISO" ]; then
+        log_info "Using cached ISO: $UBUNTU_ISO"
+    else
+        log_info "Downloading Ubuntu Server ISO..."
+        wget -O "$UBUNTU_ISO" "$UBUNTU_ISO_URL"
+    fi
+    log_info "ISO size: $(du -h "$UBUNTU_ISO" | cut -f1)"
+
+    # Step 2: Setup working directories
+    log_step "2/11: Setting up working directories..."
+    rm -rf "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
+    mkdir -p "$WORK_DIR/iso-mount" "$WORK_DIR/iso-new" "$WORK_DIR/initrd-work"
+
+    # Step 3: Mount and copy ISO contents
+    log_step "3/11: Extracting ISO contents..."
+    mount -o loop,ro "$UBUNTU_ISO" "$WORK_DIR/iso-mount"
+
+    # Copy everything from ISO
+    # pool/dists: Ubuntu Server's 1.5GB apt repo, read only by the subiquity
+    # installer we replaced
+    rsync -a --info=progress2 --exclude=pool --exclude=dists "$WORK_DIR/iso-mount/" "$WORK_DIR/iso-new/"
+
+    # Step 4: Replace squashfs with Purple Computer
+    log_step "4/11: Replacing squashfs with Purple Computer..."
+    # Remove ALL Ubuntu Server squashfs files and replace with ours.
+    # Casper reads install-sources.yaml to know which layers to mount.
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs
+    rm -f "$WORK_DIR/iso-new/casper/"*.squashfs.gpg
+    rm -f "$WORK_DIR/iso-new/casper/"*.manifest
+    rm -f "$WORK_DIR/iso-new/casper/"*.size
+    cp "$LIVE_SQUASHFS" "$WORK_DIR/iso-new/casper/filesystem.squashfs"
+    cp "$LIVE_SIZE" "$WORK_DIR/iso-new/casper/filesystem.size"
+
+    # Rewrite install-sources.yaml to point at our single squashfs
+    SQUASHFS_SIZE=$(stat -c%s "$LIVE_SQUASHFS")
+    cat > "$WORK_DIR/iso-new/casper/install-sources.yaml" << SOURCES_EOF
+- default: true
+  id: purple-computer
+  name:
+    en: Purple Computer
+  path: filesystem.squashfs
+  size: ${SQUASHFS_SIZE}
+  type: fsimage
+  variant: server
+SOURCES_EOF
+    log_info "Squashfs replaced ($(du -h "$LIVE_SQUASHFS" | cut -f1))"
+
+    # Replace the ISO's kernel and initrd with ours from the squashfs.
+    # Everything must come from one source to avoid version mismatches.
+    # The squashfs has casper installed, so its initrd supports live boot.
+    # Use unsquashfs (no loop device needed, works reliably in Docker).
+    log_info "Extracting kernel and initrd from squashfs..."
+    SQEXT="$WORK_DIR/sq-extract"
+    unsquashfs -d "$SQEXT" "$LIVE_SQUASHFS" boot/
+
+    # Follow symlinks to get the actual versioned files. The golden image
+    # carries two kernels (stock and -t2); the router picks one at boot.
+    for variant in "" -t2; do
+        if [ ! -f "$SQEXT/boot/vmlinuz$variant" ]; then
+            echo "ERROR: golden image has no vmlinuz$variant (stale step-0 cache?). Run step 0 first: ./build-all.sh 0"
+            exit 1
+        fi
+        cp -L "$SQEXT/boot/vmlinuz$variant" "$WORK_DIR/iso-new/casper/vmlinuz$variant"
+        cp -L "$SQEXT/boot/initrd.img$variant" "$WORK_DIR/iso-new/casper/initrd$variant"
+        log_info "  Kernel${variant}: $(readlink "$SQEXT/boot/vmlinuz$variant")"
+    done
+
+    rm -rf "$SQEXT"
+
+    # Read back the build version baked into the image (build-<githash>-<date>,
+    # written to /etc/purple-version by 00-build-golden-image.sh). This is the
+    # authoritative "what's actually on the drive" version. We drop it beside the
+    # finished ISO as a .version sidecar so flashing tools report the commit the
+    # ISO was built from, not whatever happens to be checked out at flash time.
+    rm -rf "$WORK_DIR/sq-version"
+    BUILD_VERSION="unknown"
+    BUILD_COMMIT="unknown"
+    if unsquashfs -d "$WORK_DIR/sq-version" "$LIVE_SQUASHFS" etc/purple-version etc/purple-commit >/dev/null 2>&1; then
+        [ -f "$WORK_DIR/sq-version/etc/purple-version" ] && BUILD_VERSION="$(cat "$WORK_DIR/sq-version/etc/purple-version")"
+        [ -f "$WORK_DIR/sq-version/etc/purple-commit" ] && BUILD_COMMIT="$(cat "$WORK_DIR/sq-version/etc/purple-commit")"
+    fi
+    rm -rf "$WORK_DIR/sq-version"
+    log_info "Build version (from image): $BUILD_VERSION (commit $BUILD_COMMIT)"
+
+    # Debian i386 payload for 32-bit CPUs (built by 00-build-golden-image.sh
+    # with PURPLE_ARCH=i386). Optional: fast builds skip it, and the router
+    # then shows the "too old" screen on those machines.
+    if [ -f "$BUILD_DIR/i386/purple-os.img.zst" ]; then
+        log_info "Adding i386 installer payload..."
+        cp "$BUILD_DIR/i386/vmlinuz" "$WORK_DIR/iso-new/casper/vmlinuz-i386"
+        cp "$BUILD_DIR/i386/initrd" "$WORK_DIR/iso-new/casper/initrd-i386"
+        mkdir -p "$WORK_DIR/iso-new/purple32"
+        cp "$BUILD_DIR/i386/purple-os.img.zst" "$BUILD_DIR/i386/purple-os.img.zst.size" "$WORK_DIR/iso-new/purple32/"
+        I386_COMMIT=$(cat "$BUILD_DIR/i386/purple-os.img.zst.commit" 2>/dev/null || echo unknown)
+        if [ "$I386_COMMIT" != "$BUILD_COMMIT" ]; then
+            log_info "WARNING: i386 payload is from commit $I386_COMMIT, amd64 from $BUILD_COMMIT (fast builds reuse the last i386 image)"
+        fi
+    fi
+
+
+    # Step 5: Extract and modify initramfs (boot splash, dotfiles, debug mode)
+    log_step "5/11: Modifying initramfs..."
+
+    for variant in "" -t2; do
+        log_info "Patching initrd$variant..."
+        patch_casper_initrd "$WORK_DIR/iso-new/casper/initrd$variant"
+    done
 
     # Step 6: Add payload to ISO
     log_step "6/11: Adding payload to ISO..."
@@ -425,6 +443,7 @@ SPLASH_EOF
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     if [ -f "$GRUB_CFG" ]; then
         log_info "Replacing GRUB config with Purple boot menu..."
+        cp /purple-src/config/grub/purple-router.cfg "$WORK_DIR/iso-new/boot/grub/"
 
         # Backup original
         cp "$GRUB_CFG" "${GRUB_CFG}.orig"
@@ -458,8 +477,8 @@ set default=0
 # at power-off. tty2 keeps its recovery getty (a separate unit, not the console).
 menuentry "Purple Computer" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty63 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty63 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Boot from next volume" {
@@ -471,7 +490,7 @@ menuentry "UEFI Firmware Settings" {
 }
 GRUB_PURPLE
 
-        prepend_longmode_guard "$GRUB_CFG"
+        prepend_router "$GRUB_CFG"
         log_info "GRUB config replaced (live boot default)"
     else
         log_info "WARNING: GRUB config not found at expected location"
@@ -511,9 +530,8 @@ GRUB_PURPLE
 
     # Standard UEFI fallback path: /EFI/BOOT/
     mkdir -p "$EFI_MNT/EFI/BOOT"
-    cp "$SIGNED_EFI/BOOTX64.EFI" "$EFI_MNT/EFI/BOOT/BOOTX64.EFI"
-    cp "$SIGNED_EFI/grubx64.efi" "$EFI_MNT/EFI/BOOT/grubx64.efi"
-    [ -f "$SIGNED_EFI/mmx64.efi" ] && cp "$SIGNED_EFI/mmx64.efi" "$EFI_MNT/EFI/BOOT/mmx64.efi"
+    # BOOTIA32.EFI: unsigned i386-efi GRUB for 32-bit UEFI (2006-2008 Macs, Bay Trail)
+    cp "$SIGNED_EFI"/* "$EFI_MNT/EFI/BOOT/"
 
     # Signed GRUB has prefix=/EFI/ubuntu compiled in. Also add /boot/grub/ as fallback.
     # Both chain to the ISO filesystem's real config.
@@ -592,7 +610,7 @@ EFI_GRUB_EOF
     GRUB_CFG="$WORK_DIR/iso-new/boot/grub/grub.cfg"
     cp "$GRUB_CFG" "${GRUB_CFG}.normal"
 
-    cat > "$GRUB_CFG" << GRUB_DEBUG
+    cat > "$GRUB_CFG" << 'GRUB_DEBUG'
 # Purple Computer - DEBUG GRUB Configuration
 # Verbose boot, visible menu, all diagnostics enabled
 # (See normal GRUB config above for explanation of masked services)
@@ -603,32 +621,32 @@ set default=0
 
 menuentry "Purple Computer (DEBUG)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, input test)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.inputtest=1 ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.inputtest=1 ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, recovery shell)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=casper-md5check.service purple.debug=1 ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 single username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=casper-md5check.service purple.debug=1 ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, test error screen)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failx11=1 ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failx11=1 ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Purple Computer (DEBUG, test install failure)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failinstall=1 ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 systemd.show_status=true username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service purple.debug=1 purple.failinstall=1 ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "---" {
@@ -637,8 +655,8 @@ menuentry "---" {
 
 menuentry "Purple Computer (production boot)" {
     set gfxpayload=keep
-    linux /casper/vmlinuz boot=casper i915.enable_psr=0 i915.enable_fbc=0 quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty63 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff ---
-    initrd /casper/initrd
+    linux /casper/vmlinuz$purple_variant boot=$purple_boot $purple_args i915.enable_psr=0 i915.enable_fbc=0 quiet loglevel=0 systemd.show_status=false vt.global_cursor_default=0 console=tty63 console=ttyS0,115200 username=purple cloud-init=disabled systemd.mask=subiquity.service systemd.mask=snapd.service systemd.mask=snapd.socket systemd.mask=ssh.service systemd.mask=ssh.socket systemd.mask=udisks2.service systemd.mask=casper-md5check.service vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff ---
+    initrd /casper/initrd$purple_variant
 }
 
 menuentry "Boot from next volume" {
@@ -650,7 +668,7 @@ menuentry "UEFI Firmware Settings" {
 }
 GRUB_DEBUG
 
-    prepend_longmode_guard "$GRUB_CFG"
+    prepend_router "$GRUB_CFG"
 
     build_installer_iso "$DEBUG_ISO" "PURPLE_DEBUG"
     log_info "Debug ISO built successfully!"

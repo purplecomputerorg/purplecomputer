@@ -6,11 +6,43 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.sh"
+UBUNTU_MIRROR="${UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}"
+
+# PURPLE_ARCH=i386: install-only image for 32-bit CPUs, Debian trixie userland
+# with bookworm's i386 kernel. See guides/hardware-coverage-plan.md.
+PURPLE_ARCH="${PURPLE_ARCH:-amd64}"
+if [ "$PURPLE_ARCH" = "i386" ]; then
+    BUILD_DIR="${BUILD_DIR}/i386"
+    DIST=trixie
+    MIRROR=http://deb.debian.org/debian
+    SECURITY_SRC="http://security.debian.org/debian-security trixie-security"
+    COMPONENTS="main non-free-firmware"
+    KERNEL_PKG=""
+    FIRMWARE_PKGS="firmware-intel-graphics firmware-nvidia-graphics firmware-amd-graphics firmware-intel-sound firmware-sof-signed firmware-cirrus firmware-realtek"
+    ARCH_PKGS="busybox"
+    SETARCH=linux32  # so pip sees platform_machine=i686 under the 64-bit build kernel
+else
+    DIST=noble
+    MIRROR="$UBUNTU_MIRROR"
+    SECURITY_SRC="$UBUNTU_MIRROR noble-security"
+    COMPONENTS="main universe"
+    KERNEL_PKG=linux-image-generic
+    FIRMWARE_PKGS="linux-firmware firmware-sof-signed"
+    ARCH_PKGS="casper systemd-hwe-hwdb"  # hwe-hwdb: udev quirks for newer laptop keyboards
+    SETARCH=""
+fi
+
+# t2linux kernel for 2018-2020 Macs (apple-bce: keyboard, trackpad, audio).
+# Unsigned, so it ships beside the signed stock kernel; config/grub/purple-router.cfg picks.
+T2_KERNEL_URL="https://github.com/t2linux/T2-Debian-and-Ubuntu-Kernel/releases/download/v6.18.45-1/linux-image-6.18.45-1-t2-noble_6.18.45-1_amd64.deb"
+T2_KERNEL_SHA256="f56b1d5811cd251fcafde74129377b8f8c6450817a31022a13bcd700b102e8ba"
+T2_AUDIO_URL="https://github.com/AdityaGarg8/t2-ubuntu-repo/releases/download/noble/apple-t2-audio-config_0.5.2-noble_amd64.deb"
+T2_AUDIO_SHA256="faf4746429d8ccff669c4df2c9fbd937e19a8514e397b50916344f8fd26922e1"
+
 GOLDEN_IMAGE="${BUILD_DIR}/purple-os.img"
 GOLDEN_COMPRESSED="${BUILD_DIR}/purple-os.img.zst"
 IMAGE_SIZE_MB=8192
 MOUNT_DIR="${BUILD_DIR}/mnt-golden"
-UBUNTU_MIRROR="${UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -59,6 +91,66 @@ cleanup_build() {
 # Clean up on exit (success or failure) so failed builds never leave stale state
 trap cleanup_build EXIT
 
+install_pinned_deb() {
+    local url="$1" sha="$2" name
+    name="$(basename "$url")"
+    [ -f "$BUILD_DIR/$name" ] || curl -fsSL "$url" -o "$BUILD_DIR/$name"
+    echo "$sha  $BUILD_DIR/$name" | sha256sum -c --quiet
+    cp "$BUILD_DIR/$name" "$MOUNT_DIR/tmp/$name"
+    chroot "$MOUNT_DIR" dpkg -i "/tmp/$name"
+    rm -f "$MOUNT_DIR/tmp/$name"
+}
+
+# shim (Microsoft-signed) -> GRUB (Canonical-signed) -> kernel (Canonical-signed).
+# Downloaded rather than installed: grub-install's postinst fails in a chroot
+# and would fight the manual EFI layout. Also saved for the ISO's EFI partition.
+install_signed_boot_chain() {
+    if ! chroot "$MOUNT_DIR" bash -c 'cd /tmp && apt-get download shim-signed grub-efi-amd64-signed'; then
+        echo "ERROR: Failed to download signed boot packages"
+        exit 1
+    fi
+
+    # Extract signed binaries from downloaded debs
+    EXTRACT_DIR="$MOUNT_DIR/tmp/boot-extract"
+    mkdir -p "$EXTRACT_DIR"
+    for deb in "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb; do
+        [ -f "$deb" ] && dpkg -x "$deb" "$EXTRACT_DIR"
+    done
+
+    # Find signed binaries (follow symlinks, skip .previous versions)
+    SHIM_SRC=$(find "$EXTRACT_DIR" -name "shimx64.efi.signed*" ! -name "*.previous" 2>/dev/null | head -1)
+    GRUB_SRC=$(find "$EXTRACT_DIR" -name "grubx64.efi.signed" 2>/dev/null | head -1)
+    MMX64_SRC=$(find "$EXTRACT_DIR" -iname "mmx64.efi*" ! -name "*.previous" 2>/dev/null | head -1)
+
+    if [ -z "$SHIM_SRC" ] || [ -z "$GRUB_SRC" ]; then
+        echo "ERROR: Could not find signed boot binaries"
+        echo "  Shim: $SHIM_SRC"
+        echo "  GRUB: $GRUB_SRC"
+        ls -laR "$EXTRACT_DIR/usr/lib/" 2>/dev/null
+        exit 1
+    fi
+
+    # BOOTX64.EFI = shim (UEFI spec fallback path, all firmware checks this)
+    cp -L "$SHIM_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
+    # grubx64.efi = signed GRUB (shim loads this from same directory)
+    cp -L "$GRUB_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/grubx64.efi"
+    # mmx64.efi = MOK Manager (shim loads this for key enrollment if needed)
+    if [ -n "$MMX64_SRC" ]; then
+        cp -L "$MMX64_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/mmx64.efi"
+    fi
+    log_info "  Shim: $(basename "$SHIM_SRC")"
+    log_info "  GRUB: $(basename "$GRUB_SRC")"
+    log_info "  MOK:  $([ -n "$MMX64_SRC" ] && basename "$MMX64_SRC" || echo 'not found (optional)')"
+
+    # Save signed binaries for remaster script (ISO's EFI partition needs them too)
+    cp -L "$SHIM_SRC" "$BUILD_DIR/signed-efi/BOOTX64.EFI"
+    cp -L "$GRUB_SRC" "$BUILD_DIR/signed-efi/grubx64.efi"
+    [ -n "$MMX64_SRC" ] && cp -L "$MMX64_SRC" "$BUILD_DIR/signed-efi/mmx64.efi"
+
+    # Clean up downloaded debs and extracted files
+    rm -rf "$EXTRACT_DIR" "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb
+}
+
 main() {
     log_info "Building PurpleOS Golden Image..."
 
@@ -106,12 +198,12 @@ main() {
     # Install base system using debootstrap
     log_info "Installing base system with debootstrap..."
     debootstrap \
-        --arch=amd64 \
+        --arch="$PURPLE_ARCH" \
         --variant=minbase \
-        --include=linux-image-generic,initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
-        noble \
+        --include="${KERNEL_PKG:+$KERNEL_PKG,}"initramfs-tools,systemd,systemd-sysv,sudo,vim-tiny,less,python3 \
+        "$DIST" \
         "$MOUNT_DIR" \
-        "$UBUNTU_MIRROR"
+        "$MIRROR"
 
     # Mount virtual filesystems for chroot operations (required by apt-get, systemd, etc.)
     log_info "Mounting virtual filesystems for chroot..."
@@ -124,10 +216,15 @@ main() {
     # which points at the same base 'noble' repo. This guarantees the version matches
     # the kernel debootstrap installed. Must happen BEFORE we overwrite sources.list
     # with noble-updates (which has newer, non-matching versions).
+    if [ "$PURPLE_ARCH" = "i386" ]; then
+        echo "deb $MIRROR bookworm main" > "$MOUNT_DIR/etc/apt/sources.list.d/bookworm-kernel.list"
+        printf 'Package: linux-image-*\nPin: release n=bookworm\nPin-Priority: 900\n' > "$MOUNT_DIR/etc/apt/preferences.d/bookworm-kernel"
+    fi
+    chroot "$MOUNT_DIR" apt-get update
+    [ "$PURPLE_ARCH" = "amd64" ] || chroot "$MOUNT_DIR" apt-get install -y linux-image-686
     KVER=$(ls "$MOUNT_DIR/lib/modules/" | head -1)
     log_info "Kernel from debootstrap: $KVER"
-    chroot "$MOUNT_DIR" apt-get update
-    chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
+    [ "$PURPLE_ARCH" = "i386" ] || chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER"
 
     # Prevent debconf from prompting interactively inside the chroot.
     # Without this, packages like console-setup fail when their postinst
@@ -160,9 +257,9 @@ FSTAB
 
     # Setup apt sources for universe repository (needed for pip)
     cat > "$MOUNT_DIR/etc/apt/sources.list" <<SOURCES
-deb $UBUNTU_MIRROR noble main universe
-deb $UBUNTU_MIRROR noble-updates main universe
-deb $UBUNTU_MIRROR noble-security main universe
+deb $MIRROR $DIST $COMPONENTS
+deb $MIRROR $DIST-updates $COMPONENTS
+deb $SECURITY_SRC $COMPONENTS
 SOURCES
 
     # Don't install Recommended packages. This is an appliance, not a desktop.
@@ -190,7 +287,7 @@ SOURCES
     # machines, probe NO sound card while Pulse's dummy sink hides the
     # failure), and the ALSA UCM/topology mixer profiles SOF cards need.
     # Legacy HDA machines never read these, so they can't regress.
-    chroot "$MOUNT_DIR" apt-get install -y linux-firmware firmware-sof-signed \
+    chroot "$MOUNT_DIR" apt-get install -y $FIRMWARE_PKGS $ARCH_PKGS \
         alsa-ucm-conf alsa-topology-conf
 
     chroot "$MOUNT_DIR" apt-get install -y \
@@ -212,22 +309,21 @@ SOURCES
         fonts-noto-color-emoji \
         xkbset \
         unclutter \
-        casper \
         zstd \
         pv \
         kbd \
         evtest \
+        espeak-ng \
         strace \
         smartmontools \
-        parted \
+        parted e2fsprogs \
         efibootmgr \
         grub-pc-bin \
         grub2-common
 
     # usbutils: the Support info screens shell out to lsusb (USB speaker
-    # guidance depends on seeing the device). systemd-hwe-hwdb: udev quirk
-    # database for newer laptop keyboards and input devices.
-    chroot "$MOUNT_DIR" apt-get install -y usbutils systemd-hwe-hwdb
+    # guidance depends on seeing the device).
+    chroot "$MOUNT_DIR" apt-get install -y usbutils
 
     # Verify the boot-setup tools install.sh Layer 4/6 depend on actually landed.
     # On Noble: `grub-install` ships in `grub2-common` (NOT `grub-common` — that's
@@ -260,7 +356,7 @@ SOURCES
     KVER_NOW=$(ls -v "$MOUNT_DIR/lib/modules/" | tail -1)
     if [ "$KVER_NOW" != "$KVER" ]; then
         log_info "Kernel upgraded: $KVER -> $KVER_NOW"
-        chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER_NOW"
+        [ "$PURPLE_ARCH" = "i386" ] || chroot "$MOUNT_DIR" apt-get install -y "linux-modules-extra-$KVER_NOW"
 
         # Remove old kernel to save ~100-200MB (appliance only needs one kernel)
         log_info "Removing old kernel $KVER..."
@@ -351,6 +447,23 @@ LEANINITRD
     fi
     log_info "Initrd size: $(du -h "$MOUNT_DIR/boot/initrd.img-$KVER" | cut -f1) (net + gpu modules and unreferenced firmware excluded)"
 
+    if [ "$PURPLE_ARCH" = "i386" ]; then
+        # Installer initrd pieces: the hook only fires for the ISO's installer
+        # initrd (PURPLE_INSTALLER_INITRD=1), the boot script is inert otherwise.
+        cp /purple-src/build-scripts/initramfs/purple-install-hook "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-install"
+        cp /purple-src/build-scripts/initramfs/purple-install "$MOUNT_DIR/etc/initramfs-tools/scripts/purple-install"
+        chmod +x "$MOUNT_DIR/etc/initramfs-tools/hooks/purple-install"
+    else
+        # dpkg's postinst builds the T2 initrd through the lean hook above
+        install_pinned_deb "$T2_KERNEL_URL" "$T2_KERNEL_SHA256"
+        install_pinned_deb "$T2_AUDIO_URL" "$T2_AUDIO_SHA256"
+        T2_KVER=$(ls "$MOUNT_DIR/lib/modules/" | grep -- -t2)
+        [ -f "$MOUNT_DIR/boot/initrd.img-$T2_KVER" ] || chroot "$MOUNT_DIR" update-initramfs -c -k "$T2_KVER"
+        ln -sf "vmlinuz-$T2_KVER" "$MOUNT_DIR/boot/vmlinuz-t2"
+        ln -sf "initrd.img-$T2_KVER" "$MOUNT_DIR/boot/initrd.img-t2"
+        log_info "T2 kernel: $T2_KVER"
+    fi
+
     # Verify sound modules are present (fail the build if not)
     log_info "Kernel version: $KVER"
     if [ ! -d "$MOUNT_DIR/lib/modules/$KVER/kernel/sound/pci" ]; then
@@ -415,7 +528,9 @@ TMPFILES
     chroot "$MOUNT_DIR" apt-get install -y gcc make linux-libc-dev python3-dev
 
     # Install Python dependencies from requirements.txt
-    chroot "$MOUNT_DIR" pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
+    # (requirements.txt skips numpy and Piper on i686, which have no wheels there)
+    [ "$PURPLE_ARCH" = "amd64" ] || chroot "$MOUNT_DIR" apt-get install -y python3-numpy
+    chroot "$MOUNT_DIR" $SETARCH pip3 install --no-cache-dir --break-system-packages -r /opt/purple/requirements.txt
 
     # Precompile every .py into .pyc so boot doesn't pay cold-compile cost off
     # USB. Saves ~1-2s per cold boot on slow machines where bytecode generation
@@ -471,12 +586,14 @@ TMPFILES
     chroot "$MOUNT_DIR" apt-get remove --purge -y --no-auto-remove gcc make linux-libc-dev python3-dev 2>/dev/null || true
 
     # Download Piper TTS voice model (LibriTTS high quality - American English, speaker p6006)
-    log_info "Downloading Piper TTS voice model..."
     VOICE_MODEL="en_US-libritts-high"
     VOICE_DIR="$MOUNT_DIR/opt/purple/piper-voices"
-    mkdir -p "$VOICE_DIR"
-    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
-    curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
+    if [ "$PURPLE_ARCH" = "amd64" ]; then
+        log_info "Downloading Piper TTS voice model..."
+        mkdir -p "$VOICE_DIR"
+        curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx" -o "$VOICE_DIR/${VOICE_MODEL}.onnx"
+        curl -fsSL "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/${VOICE_MODEL}.onnx.json" -o "$VOICE_DIR/${VOICE_MODEL}.onnx.json"
+    fi
 
     # Create launcher script
     # NOTE: Do NOT redirect stderr - Textual writes its UI to stderr!
@@ -826,10 +943,18 @@ AUTOLOGIN
     # This is what gets loaded when the EFI search config calls configfile
     log_info "Creating minimal GRUB configuration..."
     mkdir -p "$MOUNT_DIR/boot/grub"
+    cp /purple-src/config/grub/purple-router.cfg "$MOUNT_DIR/boot/grub/"
     cat > "$MOUNT_DIR/boot/grub/grub.cfg" <<'EOF'
 # PurpleOS minimal GRUB configuration
 set timeout=0
 set default=0
+# Installed kernels are always the right arch, so a variant this image lacks
+# (the i386 image has no vmlinuz-i386) means the stock kernel
+source $prefix/purple-router.cfg
+if [ ! -f /boot/vmlinuz$purple_variant ]; then
+    set purple_variant=""
+    set purple_args=""
+fi
 
 # Pin root to the fixed partition layout (p2 = PURPLE_ROOT) and only fall
 # back to a device scan when the pin is wrong (extra disks can shift hd
@@ -845,20 +970,20 @@ function purple_set_root {
 
 menuentry "PurpleOS" {
     purple_set_root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
-    initrd /boot/initrd.img
+    linux /boot/vmlinuz$purple_variant $purple_args root=LABEL=PURPLE_ROOT ro loglevel=3 systemd.show_status=true vt.global_cursor_default=0 console=tty2 console=ttyS0,115200n8 vt.default_red=0x2d,0xaa,0x00,0xaa,0x00,0xaa,0x00,0xaa,0x55,0xff,0x55,0xff,0x55,0xff,0x55,0xff vt.default_grn=0x1b,0x00,0xaa,0x55,0x00,0x00,0xaa,0xaa,0x55,0x55,0xff,0xff,0x55,0x55,0xff,0xff vt.default_blu=0x4e,0x00,0x00,0x00,0xaa,0xaa,0xaa,0xaa,0x55,0x55,0x55,0x55,0xff,0xff,0xff,0xff
+    initrd /boot/initrd.img$purple_variant
 }
 
 menuentry "PurpleOS (recovery mode)" {
     purple_set_root
-    linux /boot/vmlinuz root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
-    initrd /boot/initrd.img
+    linux /boot/vmlinuz$purple_variant $purple_args root=LABEL=PURPLE_ROOT ro single console=tty0 console=ttyS0,115200n8
+    initrd /boot/initrd.img$purple_variant
 }
 EOF
 
     # Create symlinks to actual kernel/initrd (Ubuntu installs versioned files)
     # This makes our grub.cfg work regardless of kernel version
-    KERNEL_VERSION=$(ls -v "$MOUNT_DIR/boot/" | grep "vmlinuz-" | tail -1 | sed 's/vmlinuz-//')
+    KERNEL_VERSION=$(ls -v "$MOUNT_DIR/boot/" | grep "vmlinuz-" | grep -v -- -t2 | tail -1 | sed 's/vmlinuz-//')
     if [ -n "$KERNEL_VERSION" ]; then
         ln -sf "vmlinuz-$KERNEL_VERSION" "$MOUNT_DIR/boot/vmlinuz"
         ln -sf "initrd.img-$KERNEL_VERSION" "$MOUNT_DIR/boot/initrd.img"
@@ -871,50 +996,18 @@ EOF
     log_info "Setting up Secure Boot boot chain..."
     mkdir -p "$MOUNT_DIR/boot/efi/EFI/BOOT"
 
-    # Download signed binaries without full install (avoids grub-install postinst
-    # which fails in container/chroot and would fight our manual EFI layout)
-    if ! chroot "$MOUNT_DIR" bash -c 'cd /tmp && apt-get download shim-signed grub-efi-amd64-signed'; then
-        echo "ERROR: Failed to download signed boot packages"
-        exit 1
-    fi
-
-    # Extract signed binaries from downloaded debs
-    EXTRACT_DIR="$MOUNT_DIR/tmp/boot-extract"
-    mkdir -p "$EXTRACT_DIR"
-    for deb in "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb; do
-        [ -f "$deb" ] && dpkg -x "$deb" "$EXTRACT_DIR"
-    done
-
-    # Find signed binaries (follow symlinks, skip .previous versions)
-    SHIM_SRC=$(find "$EXTRACT_DIR" -name "shimx64.efi.signed*" ! -name "*.previous" 2>/dev/null | head -1)
-    GRUB_SRC=$(find "$EXTRACT_DIR" -name "grubx64.efi.signed" 2>/dev/null | head -1)
-    MMX64_SRC=$(find "$EXTRACT_DIR" -iname "mmx64.efi*" ! -name "*.previous" 2>/dev/null | head -1)
-
-    if [ -z "$SHIM_SRC" ] || [ -z "$GRUB_SRC" ]; then
-        echo "ERROR: Could not find signed boot binaries"
-        echo "  Shim: $SHIM_SRC"
-        echo "  GRUB: $GRUB_SRC"
-        ls -laR "$EXTRACT_DIR/usr/lib/" 2>/dev/null
-        exit 1
-    fi
-
-    # BOOTX64.EFI = shim (UEFI spec fallback path, all firmware checks this)
-    cp -L "$SHIM_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/BOOTX64.EFI"
-    # grubx64.efi = signed GRUB (shim loads this from same directory)
-    cp -L "$GRUB_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/grubx64.efi"
-    # mmx64.efi = MOK Manager (shim loads this for key enrollment if needed)
-    if [ -n "$MMX64_SRC" ]; then
-        cp -L "$MMX64_SRC" "$MOUNT_DIR/boot/efi/EFI/BOOT/mmx64.efi"
-    fi
-    log_info "  Shim: $(basename "$SHIM_SRC")"
-    log_info "  GRUB: $(basename "$GRUB_SRC")"
-    log_info "  MOK:  $([ -n "$MMX64_SRC" ] && basename "$MMX64_SRC" || echo 'not found (optional)')"
-
-    # Save signed binaries for remaster script (ISO's EFI partition needs them too)
+    rm -rf "$BUILD_DIR/signed-efi"
     mkdir -p "$BUILD_DIR/signed-efi"
-    cp -L "$SHIM_SRC" "$BUILD_DIR/signed-efi/BOOTX64.EFI"
-    cp -L "$GRUB_SRC" "$BUILD_DIR/signed-efi/grubx64.efi"
-    [ -n "$MMX64_SRC" ] && cp -L "$MMX64_SRC" "$BUILD_DIR/signed-efi/mmx64.efi"
+    [ "$PURPLE_ARCH" = "i386" ] || install_signed_boot_chain
+
+    # BOOTIA32.EFI for 32-bit UEFI (2006-2008 Macs, Bay Trail; no Secure Boot
+    # there, so unsigned is fine). Same prefix as the signed x64 GRUB, so it
+    # reads the same /EFI/ubuntu/grub.cfg. Modules are built in: once that
+    # config points $prefix at a disk with no i386-efi tree, nothing else loads.
+    grub-mkimage -O i386-efi -p /EFI/ubuntu -o "$BUILD_DIR/signed-efi/BOOTIA32.EFI" \
+        normal configfile linux search search_fs_file search_label search_fs_uuid part_gpt part_msdos \
+        fat ext2 iso9660 regexp cpuid smbios test echo sleep halt true minicmd efifwsetup all_video efi_gop efi_uga gfxterm
+    cp "$BUILD_DIR/signed-efi/BOOTIA32.EFI" "$MOUNT_DIR/boot/efi/EFI/BOOT/"
 
     # Create EFI search config at /EFI/ubuntu/ (where Ubuntu's signed GRUB expects it).
     # The signed GRUB binary has prefix=/EFI/ubuntu compiled in, so it loads
@@ -973,9 +1066,6 @@ echo "(Technical: root partition not found)"
 echo ""
 sleep 10
 EOF
-
-    # Clean up downloaded debs and extracted files
-    rm -rf "$EXTRACT_DIR" "$MOUNT_DIR/tmp/"shim-signed_*.deb "$MOUNT_DIR/tmp/"grub-efi-amd64-signed_*.deb
 
     # =========================================================================
     # SIZE REDUCTION: strip everything not needed for an offline kids' appliance
@@ -1057,22 +1147,22 @@ EOF
         rm -rf "$kdir/drivers/isdn"          # Legacy telecom
     done
 
-    # Rebuild module dependency database after pruning
-    chroot "$MOUNT_DIR" depmod -a "$KVER"
-
-    # Verify critical modules can load with all their dependencies.
-    # modprobe --dry-run resolves the full dependency chain and fails if
-    # any required module was removed by the pruning above.
+    # Rebuild module dependency databases after pruning, then verify critical
+    # modules can load with all their dependencies: modprobe --dry-run resolves
+    # the full chain and fails if any required module was removed above.
     log_info "Verifying critical kernel modules..."
     MODULES_FAILED=0
-    for mod in i915 amdgpu snd_hda_intel; do
-        if chroot "$MOUNT_DIR" modprobe -S "$KVER" --dry-run "$mod" 2>/dev/null; then
-            log_info "  $mod: OK"
-        else
-            echo "ERROR: modprobe --dry-run $mod failed! A dependency was likely removed."
-            echo "  Run: modprobe -v $mod  to see which module is missing."
-            MODULES_FAILED=1
-        fi
+    for kver in $(ls "$MOUNT_DIR/lib/modules/"); do
+        chroot "$MOUNT_DIR" depmod -a "$kver"
+        for mod in i915 amdgpu snd_hda_intel; do
+            if chroot "$MOUNT_DIR" modprobe -S "$kver" --dry-run "$mod" 2>/dev/null; then
+                log_info "  $kver $mod: OK"
+            else
+                echo "ERROR: modprobe --dry-run $mod failed for $kver! A dependency was likely removed."
+                echo "  Run: modprobe -v $mod  to see which module is missing."
+                MODULES_FAILED=1
+            fi
+        done
     done
     if [ "$MODULES_FAILED" -eq 1 ]; then
         exit 1
@@ -1092,22 +1182,40 @@ EOF
     # via -wildcards instead, preserving the empty directories.
     mkdir -p "$MOUNT_DIR/dev" "$MOUNT_DIR/proc" "$MOUNT_DIR/sys"
 
-    # Create squashfs for live boot (same root filesystem, different packaging)
-    log_info "Creating live boot squashfs..."
-    SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
-    rm -f "$SQUASHFS_OUT"
-    mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
-        -comp zstd \
-        -Xcompression-level $SQUASHFS_LEVEL \
-        -noappend \
-        -wildcards \
-        -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
+    if [ "$PURPLE_ARCH" = "i386" ]; then
+        # No live session on 32-bit: the ISO boots this kernel with an initrd
+        # that carries install.sh's tools and installs the image directly.
+        log_info "Building installer initrd..."
+        chroot "$MOUNT_DIR" env PURPLE_INSTALLER_INITRD=1 mkinitramfs -o /tmp/initrd "$KVER"
+        mv "$MOUNT_DIR/tmp/initrd" "$BUILD_DIR/initrd"
+        cp -L "$MOUNT_DIR/boot/vmlinuz" "$BUILD_DIR/vmlinuz"
+        log_info "  Installer initrd: $(du -h "$BUILD_DIR/initrd" | cut -f1)"
+    else
+        # Create squashfs for live boot (same root filesystem, different packaging)
+        log_info "Creating live boot squashfs..."
+        SQUASHFS_OUT="${BUILD_DIR}/filesystem.squashfs"
+        rm -f "$SQUASHFS_OUT"
+        mksquashfs "$MOUNT_DIR" "$SQUASHFS_OUT" \
+            -comp zstd \
+            -Xcompression-level $SQUASHFS_LEVEL \
+            -noappend \
+            -wildcards \
+            -e 'boot/efi' 'proc/*' 'sys/*' 'dev/*'
 
-    # Record uncompressed size (required by casper)
-    du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
+        # Record uncompressed size (required by casper)
+        du -sx --block-size=1 "$MOUNT_DIR" | cut -f1 > "${BUILD_DIR}/filesystem.size"
 
-    log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
-    log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
+        log_info "  Squashfs: $(du -h "$SQUASHFS_OUT" | cut -f1)"
+        log_info "  Uncompressed: $(cat "${BUILD_DIR}/filesystem.size") bytes"
+    fi
+
+    # Zero freed blocks. Every purge above (linux-firmware, gcc, pip caches)
+    # leaves its bytes in unallocated blocks, and zstd compresses that garbage
+    # faithfully: 2.8GB of a 3.7GB image. See guides/hardware-coverage-plan.md.
+    log_info "Zeroing free space..."
+    dd if=/dev/zero of="$MOUNT_DIR/.zero-fill" bs=1M status=none 2>/dev/null || true
+    sync
+    rm -f "$MOUNT_DIR/.zero-fill"
 
     # Unmount and detach (the EXIT trap also calls cleanup_build as a safety net)
     log_info "Cleaning up mounts..."
@@ -1123,6 +1231,7 @@ EOF
     # Stamp the exact decompressed byte size so install.sh can feed pv an
     # accurate total (zstd -l output columns aren't a reliable byte count).
     stat -c%s "$GOLDEN_IMAGE" > "${GOLDEN_COMPRESSED}.size"
+    echo "$git_hash" > "${GOLDEN_COMPRESSED}.commit"
 
     log_info "✓ Golden image ready: $GOLDEN_COMPRESSED"
     log_info "  Original size: $(du -h $GOLDEN_IMAGE | cut -f1)"

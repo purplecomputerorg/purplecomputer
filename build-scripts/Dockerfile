@@ -7,8 +7,9 @@ ARG APT_MIRROR=http://archive.ubuntu.com
 RUN sed -i "s|http://archive.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list.d/ubuntu.sources && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    # Golden image building
+    # Golden image building (debian-archive-keyring: the i386 image is Debian)
     debootstrap \
+    debian-archive-keyring \
     # ISO remastering
     xorriso \
     isolinux \
@@ -18,6 +19,7 @@ RUN sed -i "s|http://archive.ubuntu.com|${APT_MIRROR}|g" /etc/apt/sources.list.d
     cpio \
     # Bootloader tools (for golden image GRUB setup)
     grub-efi-amd64-bin \
+    grub-efi-ia32-bin \
     grub-pc-bin \
     mtools \
     # Disk utilities

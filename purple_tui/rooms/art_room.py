@@ -2,7 +2,6 @@
 Space puts the pen down so arrows draw, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
-import math
 import time
 
 import pygame
@@ -10,17 +9,17 @@ import pygame
 from .. import palette as P
 from ..code_runner import ArtCodeRunner
 from ..color_mixing import mix_colors_paint
-from ..gfx import contrast_text, luminance, mix, rgb
+from ..gfx import contrast_text, luminance, rgb
 from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ..palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
 
 COLS, ROWS = 64, 36
-LETTER_ROWS = 2                      # written letters stand two cells tall
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
 CANVAS_BG = "#221440"
+CANVAS_ALT = "#281a4a"               # checkerboard partner of CANVAS_BG
 HEADING_ARROWS = {"right": "▶", "left": "◀", "up": "▲", "down": "▼"}
 HINTS = {
     "littles": "Type to paint!",
@@ -282,52 +281,25 @@ class ArtRoom:
         self._advance_after_stamp(direction)
 
     def _letter_px(self, c: int) -> int:
-        return max(8, int(c * LETTER_ROWS * 0.95))
+        return max(6, round(c * 0.8))
 
-    def _advance_for(self, char: str) -> int:
-        """Cells a written letter takes: one for narrow glyphs (i, l, space),
-        LETTER_ROWS for the rest, so letters sit centered in even boxes."""
-        if char == " ":
-            return 1
-        w = self.app.g.measure(char, self._letter_px(self._cell), "sans-heavy")[0]
-        return max(1, min(LETTER_ROWS, math.ceil(w / self._cell)))
+    def _new_line(self):
+        self._cursor_x = self._line_start
+        self._cursor_y = min(ROWS - 1, self._cursor_y + 1)
 
     def type_char(self, char: str, direction: str = "right"):
-        adv = self._advance_for(char)
-        if direction == "right" and self._cursor_x > COLS - adv:
-            self._cursor_x = self._line_start
-            self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
         pos = (self._cursor_x, self._cursor_y)
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
         bg = self._get_cell_bg(pos)
         self._set_cell(pos, char, _contrast_text_color(bg) if pos in self._painted_positions else P.TEXT, bg)
         self._post_stamp_x = self._cursor_x
-        if direction == "right":
-            self._cursor_x += adv
-            if self._cursor_x >= COLS:
-                self._cursor_x = self._line_start
-                self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
+        if direction == "right" and self._cursor_x >= COLS - 1:
+            self._new_line()
         else:
             self._move_in_direction(direction)
         self._restart_blink()
         self.app.invalidate()
-
-    def _backspace_letter(self):
-        """Walk back to the previous written letter on this row and erase it."""
-        y = self._cursor_y
-        for d in range(1, 4):
-            x = self._cursor_x - d
-            if x < 0:
-                break
-            cell = self._grid.get((x, y))
-            if cell and cell[0] not in ("", " ", BRUSH_CHAR):
-                self._cursor_x = x
-                self._del_cell((x, y))
-                self._painted_positions.discard((x, y))
-                self.app.invalidate()
-                return
-        self._backspace()
 
     def _backspace(self):
         if self._cursor_x > 0:
@@ -449,13 +421,12 @@ class ArtRoom:
                     self._post_stamp_x = prior_post_stamp_x
                     await self.handle(NavigationAction(direction="down", is_repeat=action.is_repeat))
                 elif not action.is_repeat:
-                    self._cursor_x = self._line_start
-                    self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
+                    self._new_line()
                     self.app.invalidate()
             elif a == "backspace":
                 self._backspace_repeat_count = self._backspace_repeat_count + 1 if action.is_repeat else 0
                 for _ in range(HOLD_ACCEL_MULTIPLIER if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD else 1):
-                    self._backspace_letter() if not self._paint_mode else self._backspace()
+                    self._backspace()
             return
         if isinstance(action, NavigationAction):
             self._navigate(action, prior_post_stamp_x)
@@ -509,7 +480,6 @@ class ArtRoom:
         self._origin = (ox, oy)
         c = self._cell
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
-        self._draw_grid_halo(g, ox, oy, c)
         self._draw_letters(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
         if self.app._panel is None:
@@ -524,38 +494,27 @@ class ArtRoom:
         if self._surf is None or self._surf.get_width() != c * COLS or self._surf.get_height() != c * ROWS:
             self._surf = pygame.Surface((c * COLS, c * ROWS))
             self._dirty = None
-        cells = self._grid.keys() if self._dirty is None else self._dirty
-        if self._dirty is None:
-            self._surf.fill(rgb(CANVAS_BG))
+        cells = [(x, y) for x in range(COLS) for y in range(ROWS)] if self._dirty is None else self._dirty
         for x, y in list(cells):
             if not (0 <= x < COLS and 0 <= y < ROWS):
                 continue
             cell = self._grid.get((x, y))
-            rect = (x * c, y * c, c, c)
-            self._surf.fill(rgb(cell[2] if cell and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR) else CANVAS_BG), rect)
+            painted = cell and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR)
+            self._surf.fill(rgb(cell[2] if painted else self._ground(x, y)), (x * c, y * c, c, c))
         self._dirty = set()
         return self._surf
+
+    @staticmethod
+    def _ground(x: int, y: int) -> str:
+        """Unpainted cells alternate two near-identical purples: a checkerboard
+        shows the grid without lines."""
+        return CANVAS_ALT if (x + y) % 2 else CANVAS_BG
 
     def _draw_letters(self, g, ox, oy, c):
         px = self._letter_px(c)
         for (x, y), (ch, fg, _bg) in self._grid.items():
             if ch not in ("", " ", BRUSH_CHAR) and 0 <= x < COLS and 0 <= y < ROWS:
-                g.draw_text(ch, px, ox + x * c + self._advance_for(ch) * c // 2, oy + y * c + c, "sans-heavy", fg, anchor="center")
-
-    def _draw_grid_halo(self, g, ox, oy, c):
-        """Faint grid only near the cursor, so the canvas reads as paper."""
-        R = 4
-        cx, cy = self._cursor_x, self._cursor_y
-        x0, x1 = max(0, cx - R), min(COLS, cx + R + 1)
-        y0, y1 = max(0, cy - R), min(ROWS, cy + R + 1)
-        for x in range(x0, x1 + 1):
-            for y in range(y0, y1):
-                d = max(abs(x - cx), abs(y - cy))
-                pygame.draw.line(g.surface, mix(CANVAS_BG, P.PRIMARY, 0.18 * (1 - d / (R + 1))), (ox + x * c, oy + y * c), (ox + x * c, oy + (y + 1) * c))
-        for y in range(y0, y1 + 1):
-            for x in range(x0, x1):
-                d = max(abs(x - cx), abs(y - cy))
-                pygame.draw.line(g.surface, mix(CANVAS_BG, P.PRIMARY, 0.18 * (1 - d / (R + 1))), (ox + x * c, oy + y * c), (ox + (x + 1) * c, oy + y * c))
+                g.draw_text(ch, px, ox + x * c + c // 2, oy + y * c + c // 2, "block", fg, anchor="center")
 
     def _draw_cursor(self, g, ox, oy, c):
         x, y = ox + self._cursor_x * c, oy + self._cursor_y * c
@@ -568,8 +527,9 @@ class ArtRoom:
                 corner = P.TEXT
                 for cx, cy in ((ring.x, ring.y), (ring.right - thick, ring.y), (ring.x, ring.bottom - thick), (ring.right - thick, ring.bottom - thick)):
                     g.rect(corner, (cx, cy, thick, thick))
-        elif visible:
-            g.rect(P.PRIMARY, (x, y, max(2, c // 3), c * LETTER_ROWS))
+        elif visible:  # underline caret: the next letter lands in this cell
+            bar = max(2, c // 4)
+            g.rect(P.ACCENT, (x, y + c - bar, c, bar))
         if self._use_heading_cursor and visible:
             dx, dy = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}[self._heading]
             color = _visible_arrow_color(self._last_key_color if self._paint_mode else "#FFFFFF", CANVAS_BG)

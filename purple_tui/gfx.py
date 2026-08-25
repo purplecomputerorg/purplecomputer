@@ -28,6 +28,7 @@ FACES = {
     "sans-heavy": "NunitoSans-ExtraBold.ttf",
     "mono": "JetBrainsMono-Regular.ttf",
     "mono-bold": "JetBrainsMono-SemiBold.ttf",
+    "block": "PressStart2P-Regular.ttf",  # one letter per square Art cell
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }
 EMOJI_FONT_PATHS = [

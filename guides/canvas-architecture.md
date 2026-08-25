@@ -20,7 +20,8 @@ Design rules, in priority order:
 3. A grid exists only where the grid is the content: Music tiles, Art cells.
 4. The prompt stays monospace with a block caret. That is the DOS memory.
 5. Blockiness is a per-element choice: Art cells and Music tiles have hard
-   edges; a letter drawn in an Art cell is still smooth.
+   edges, and a letter written in an Art cell is a block letter (Press
+   Start 2P, one glyph per square); everything else is smooth type.
 6. Hints sit near the thing they describe and fade after a room has been used.
 
 ## Layers
@@ -58,7 +59,9 @@ second ticks while idle in Play.
 
 Sizes come from `g.vh(percent)` and `g.vw(percent)` so a 1024x768 netbook and
 a 1440x900 MacBook get the same proportions. The Art grid is a fixed logical
-64x36 with `cell = floor(available / rows)` so cells are square everywhere.
+64x36 with `cell = floor(available / rows)` so cells are square everywhere;
+unpainted cells alternate two near-identical purples so the grid shows as a
+checkerboard rather than lines.
 
 ## Text
 

@@ -44,6 +44,8 @@ def pump(g):
     for ev in pygame.event.get():
         if ev.type == pygame.QUIT:
             yield None
+        elif ev.type == pygame.WINDOWSIZECHANGED:
+            g.resize()
         elif ev.type in (pygame.KEYDOWN, pygame.KEYUP):
             code = KEYMAP.get(ev.key)
             if code is None:

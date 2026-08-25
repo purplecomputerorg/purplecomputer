@@ -190,8 +190,8 @@ class Gfx:
         if headless:
             self.surface = pygame.Surface(size or (1366, 768))
         else:
-            flags = 0 if windowed else pygame.FULLSCREEN
-            self.surface = pygame.display.set_mode(size or (0, 0), flags)
+            self._flags = 0 if windowed else pygame.FULLSCREEN
+            self.surface = pygame.display.set_mode(size or (0, 0), self._flags)
             pygame.display.set_caption("Purple")
             pygame.mouse.set_visible(False)
         self.headless = headless
@@ -204,6 +204,16 @@ class Gfx:
         self._coverage: dict = {}
         self._probes: dict = {}
         self._emoji_font = self._load_emoji_font()
+
+    def resize(self):
+        """Follow the window when the X screen changes size under us (a VM
+        display agent after the window opens, or a hotplugged monitor)."""
+        size = pygame.display.get_window_size()
+        if self.headless or size == (self.w, self.h):
+            return
+        self.surface = pygame.display.set_mode(size, self._flags)
+        self.w, self.h = self.surface.get_size()
+        self.dirty = True
 
     # ----- units -----
     def vh(self, pct: float) -> int:

@@ -23,7 +23,7 @@ from .constants import (
     SYSTEM_VOLUME_MAX, UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
 )
-from .gfx import Gfx
+from .gfx import Gfx, rgb
 from .input import EvdevReader, LidSwitchReader, PowerButtonReader, RawKeyEvent, check_evdev_available
 from .keyboard import (
     CharacterAction, ControlAction, InputFloodGuard, KeyboardStateMachine, NavigationAction, RoomAction,
@@ -1113,18 +1113,20 @@ class PurpleApp:
             g.draw_text(right, px, g.w - g.vw(1.6) - g.vw(1), y, "sans-bold", P.MUTED, anchor="midright")
 
     def _draw_legend(self, vp):
+        """Sticker colors per keyboard row beside the viewport; a triangle
+        points at the row of the last key."""
         if not self._legend_visible:
             return
         g = self.g
-        sw = g.vw(0.8)
-        sh = g.vh(2.2)
-        x = vp.right + g.vw(0.6)
+        sw, sh = g.vw(0.7), g.vh(2.2)
+        x = vp.right + g.vw(0.5)
         y = vp.bottom - 4 * sh - g.vh(1)
         for r, shades in enumerate(ROW_LEGEND_COLORS):
             for i, color in enumerate(shades):
                 g.rect(color, (x + i * sw, y + r * sh, sw, sh))
-            if r == self._legend_row:
-                g.draw_text("◀", g.vh(1.8), x + 3 * sw + g.vw(0.2), y + r * sh + sh // 2, "sans-bold", P.TEXT, anchor="midleft")
+        if self._legend_row >= 0:
+            tx, ty, t = x + 3 * sw + g.vw(0.25), y + self._legend_row * sh + sh // 2, g.vh(0.7)
+            pygame.draw.polygon(g.surface, rgb(P.TEXT), [(tx, ty), (tx + t, ty - t), (tx + t, ty + t)])
 
     def _draw_tabs(self, vp):
         g = self.g

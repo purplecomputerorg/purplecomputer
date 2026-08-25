@@ -206,10 +206,14 @@ class TextField:
         return "   ".join(parts) + "   [dim]⇥ Tab[/]"
 
     # --- drawing ---
+    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask") -> int:
+        """Where typed text starts, so hints under the field can line up with it."""
+        return x + g.measure(f"{label} →", px, "mono-bold")[0] + px // 2
+
     def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask") -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used."""
-        lab = g.draw_text(f"{label} →", px, x, y, "mono-bold", P.ACCENT)
-        tx = lab.right + px // 2
+        g.draw_text(f"{label} →", px, x, y, "mono-bold", P.ACCENT)
+        tx = self.text_x(g, x, px, label)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
         g.draw_text(shown, px, tx, y, "mono", P.TEXT)

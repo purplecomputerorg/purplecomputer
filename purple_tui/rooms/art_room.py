@@ -2,6 +2,7 @@
 Space puts the pen down so arrows draw, Tab switches to writing letters, and
 hold Space opens the Logo-style code line."""
 
+import math
 import time
 
 import pygame
@@ -284,11 +285,12 @@ class ArtRoom:
         return max(8, int(c * LETTER_ROWS * 0.95))
 
     def _advance_for(self, char: str) -> int:
-        """Cells a written letter takes: its measured width, at least one."""
+        """Cells a written letter takes: one for narrow glyphs (i, l, space),
+        LETTER_ROWS for the rest, so letters sit centered in even boxes."""
         if char == " ":
             return 1
         w = self.app.g.measure(char, self._letter_px(self._cell), "sans-heavy")[0]
-        return max(1, round(w / self._cell + 0.15))
+        return max(1, min(LETTER_ROWS, math.ceil(w / self._cell)))
 
     def type_char(self, char: str, direction: str = "right"):
         adv = self._advance_for(char)
@@ -538,7 +540,7 @@ class ArtRoom:
         px = self._letter_px(c)
         for (x, y), (ch, fg, _bg) in self._grid.items():
             if ch not in ("", " ", BRUSH_CHAR) and 0 <= x < COLS and 0 <= y < ROWS:
-                g.draw_text(ch, px, ox + x * c + int(c * 0.08), oy + y * c + c, "sans-heavy", fg, anchor="midleft")
+                g.draw_text(ch, px, ox + x * c + self._advance_for(ch) * c // 2, oy + y * c + c, "sans-heavy", fg, anchor="center")
 
     def _draw_grid_halo(self, g, ox, oy, c):
         """Faint grid only near the cursor, so the canvas reads as paper."""
@@ -567,7 +569,7 @@ class ArtRoom:
                 for cx, cy in ((ring.x, ring.y), (ring.right - thick, ring.y), (ring.x, ring.bottom - thick), (ring.right - thick, ring.bottom - thick)):
                     g.rect(corner, (cx, cy, thick, thick))
         elif visible:
-            g.rect("#6633AA", (x, y, max(2, c // 3), c * LETTER_ROWS))
+            g.rect(P.PRIMARY, (x, y, max(2, c // 3), c * LETTER_ROWS))
         if self._use_heading_cursor and visible:
             dx, dy = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}[self._heading]
             color = _visible_arrow_color(self._last_key_color if self._paint_mode else "#FFFFFF", CANVAS_BG)

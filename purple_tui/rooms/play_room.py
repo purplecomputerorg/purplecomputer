@@ -30,6 +30,8 @@ PLAY_HINTS = [
 ]
 TIMELINE_MAX_ENTRIES = 100
 MAX_HISTORY = 60
+ASK_LABEL = "Ask"
+ASK_VH = 2.4                      # echo line size, percent of screen height
 SPEECH_ICONS = {"generating": "··", "playing": "🔊", "filtered": "🔇"}
 
 
@@ -274,26 +276,28 @@ class PlayRoom:
     def draw(self, g, rect):
         pad = g.vw(2)
         line_px = g.vh(3.8)
+        width = rect.w - 2 * pad
         bottom = rect.bottom - g.vh(1.5)
         hint_px = g.vh(2.1)
         g.draw_text(self.hints.current, hint_px, rect.centerx, bottom, "sans-bold", P.DIM, anchor="midbottom")
         bottom -= g.vh(3.4)
         sub = self.field.autocomplete_markup or (f"[dim]{self.field.recall_text()}[/]" if self.field.recall_text() else "")
         sub_h = g.vh(3)
+        sub_x = self.field.text_x(g, rect.x + pad, line_px)
         if sub:
-            g.draw_markup(sub, hint_px, rect.x + pad + g.vw(5.5), bottom - sub_h, "sans-bold", P.MUTED, rect.w - 2 * pad - g.vw(6), dim_to=P.SURFACE)
+            g.draw_markup(sub, hint_px, sub_x, bottom - sub_h, "sans-bold", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         bottom -= sub_h
         line_h = g.line_height(line_px, "mono")
-        self.field.draw(g, rect.x + pad, bottom - line_h, rect.w - 2 * pad, line_px)
+        self.field.draw(g, rect.x + pad, bottom - line_h, width, line_px)
         top_limit = rect.y + g.vh(1)
         y = bottom - line_h - g.vh(2.5)
         g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + g.vh(1)))
         for e in reversed(self.history[:len(self.history) - self.scroll] if self.scroll else self.history):
-            h = self._entry_height(g, e, rect.w - 2 * pad)
+            h = self._entry_height(g, e, width)
             y -= h
             if y + h < top_limit:
                 break
-            self._draw_entry(g, e, rect.x + pad, y, rect.w - 2 * pad)
+            self._draw_entry(g, e, rect.x + pad, y, width)
             y -= g.vh(1) if e.kind == "answer" else g.vh(0.4)
         g.surface.set_clip(None)
 
@@ -303,18 +307,24 @@ class PlayRoom:
             return g.vh(9)
         return g.vh(4.2)
 
+    def _gutter(self, g) -> int:
+        """Width of the 'Ask →' column; echoes and answers both start after it."""
+        return g.measure(f"{ASK_LABEL} →", g.vh(ASK_VH), "mono-bold")[0] + g.vh(ASK_VH) // 2
+
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
-            return g.line_height(g.vh(2.4), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width - g.vw(4))[1]
+            return g.line_height(g.vh(ASK_VH), "mono")
+        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width - self._gutter(g))[1]
 
     def _draw_entry(self, g, e, x, y, width):
+        px, gutter = g.vh(ASK_VH), self._gutter(g)
         if e.kind == "ask":
-            px = g.vh(2.4)
-            r = g.draw_text("Ask →", px, x, y, "mono-bold", P.ACCENT)
-            g.draw_text(e.markup, px, r.right + px // 2, y, "mono", P.MUTED)
+            g.draw_text(f"{ASK_LABEL} →", px, x, y, "mono-bold", P.ACCENT)
+            g.draw_text(e.markup, px, x + gutter, y, "mono", P.MUTED)
             return
-        px = self._answer_px(g, e)
+        answer_px = self._answer_px(g, e)
+        lines = g.layout(e.markup, answer_px, "sans-bold", P.TEXT, width - gutter, P.SURFACE)
         icon = SPEECH_ICONS.get(e.speech, "")
-        r = g.draw_text(f"{icon} →" if icon else "→", g.vh(2.4), x, y + g.vh(1.2), "mono-bold", P.TEXT if icon else P.MUTED)
-        g.draw_markup(e.markup, px, r.right + g.vw(1), y, "sans-bold", P.TEXT, width - g.vw(4), dim_to=P.SURFACE)
+        g.draw_text(f"{icon} →" if icon else "→", px, x + gutter - px // 2, y + lines[0][1] // 2,
+                    "mono-bold", P.TEXT if icon else P.MUTED, anchor="midright")
+        g.draw_markup(e.markup, answer_px, x + gutter, y, "sans-bold", P.TEXT, width - gutter, dim_to=P.SURFACE)

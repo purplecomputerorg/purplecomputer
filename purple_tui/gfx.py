@@ -39,12 +39,13 @@ EMOJI_FONT_PATHS = [
 EMOJI_NATIVE_PX = 109  # Noto Color Emoji is a bitmap font with one strike; we scale from it
 CACHE_LIMIT = 4096
 
+# Text-default symbols (arrows, shapes, ☀, ❤) are emoji only with VS16, as
+# Unicode says; emoji-default ones (⭐, ⚽, everything in the SMP) always are.
 _EMOJI_RE = re.compile(
     "(?:[\U0001F1E6-\U0001F1FF]{2}"
-    "|[©®‼⁉™ℹ↔-↙↩↪⌚⌛⌨⏏"
-    "⏩-⏳⏸-⏺Ⓜ▪▫▶◀◻-◾☀-➿"
-    "⤴⤵⬅-⬇⬛⬜⭐⭕〰〽㊗㊙"
-    "\U0001F000-\U0001FAFF][️⃣\U0001F3FB-\U0001F3FF]*"
+    "|(?:[©®‼⁉™ℹ↔-↙↩↪⌨⏏⏭-⏯⏱⏲⏸-⏺Ⓜ▪▫▶◀◻◼☀-➿⤴⤵⬅-⬇〰〽㊗㊙]\ufe0f"
+    "|[⌚⌛⏩-⏬⏰⏳◽◾☔☕♈-♓♿⚓⚡⚪⚫⚽⚾⛄⛅⛎⛔⛪⛲⛳⛵⛺⛽✅✊✋✨❌❎❓-❕❗➕-➗➰➿⬛⬜⭐⭕"
+    "\U0001F000-\U0001FAFF])[️⃣\U0001F3FB-\U0001F3FF]*"
     "(?:‍[☀-➿\U0001F000-\U0001FAFF][️\U0001F3FB-\U0001F3FF]*)*)+"
 )
 _TAG_RE = re.compile(r"\\\[|\[(/?)([^\[\]]*)\]")
@@ -347,13 +348,10 @@ class Gfx:
             for part in re.split(r"(\n)", chunk):
                 if part == "\n":
                     pieces.append(None)
-                    continue
-                if bg and part.isspace():
-                    pieces.append((part, f, fg, bg))
-                    continue
-                for word in re.split(r"(\s+)", part):
-                    if word:
-                        pieces.append((word, f, fg, bg))
+                elif bg and part.isspace():
+                    pieces.append((part, f, fg, bg, True))
+                else:  # spaces inside a colored span are padding, not swatches
+                    pieces.extend((w, f, fg, bg, False) for w in re.split(r"(\s+)", part) if w)
         lines, cur, cur_w = [], [], 0
         line_h = self.line_height(px, face)
 
@@ -367,8 +365,8 @@ class Gfx:
             if piece is None:
                 flush()
                 continue
-            word, f, fg, bg = piece
-            if bg and word.isspace():  # a color swatch: one square per span, not per space
+            word, f, fg, bg, swatch = piece
+            if swatch:  # one square per span, not per space
                 s = pygame.Surface((line_h, line_h), pygame.SRCALPHA)
                 cur.append((s, cur_w, bg))
                 cur_w += line_h + px // 6

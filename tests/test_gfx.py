@@ -59,3 +59,17 @@ def test_draw_markup_returns_height(g):
 def test_contrast_text():
     assert contrast_text("#ffffff") == "#000000"
     assert contrast_text("#000000") == "#FFFFFF"
+
+
+def test_text_default_symbols_are_emoji_only_with_vs16():
+    assert split_runs("◀ back ▶") == [("◀ back ▶", False)]
+    assert split_runs("❤️⭐☕") == [("❤️⭐☕", True)]
+    assert split_runs("☀") == [("☀", False)]
+
+
+def test_spaces_inside_a_colored_span_are_padding_not_swatches(g):
+    (_, _, pieces), = g.layout("[#000000 on #ffcc00] f [/][#000000 on #ff8888] w [/]", 20)
+    assert [bg for _, _, bg in pieces] == ["#ffcc00"] * 3 + ["#ff8888"] * 3
+    xs = [x for _, x, _ in pieces]
+    widths = [s.get_width() for s, _, _ in pieces]
+    assert all(xs[i] + widths[i] == xs[i + 1] for i in range(len(xs) - 1))  # one contiguous tile per letter

@@ -52,7 +52,7 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 **Instrumentation can ship in the standard (+debug) ISO only if it's non-visual, non-expensive, and non-interfering.** Otherwise it's debug-only (gated on `/opt/purple/debug`).
 
-- **Non-visual** = file descriptors only. Never write to stdout/stderr: Textual owns stderr for its UI, so any stray write corrupts the screen. `stderr_guard.hide_native_stderr()` (called just before `app.run()`) hands Textual a dup of the terminal and points fd 2 at `/tmp/purple-stderr.log`, so C-level noise (onnxruntime, ALSA, espeak) lands there instead. That log is where a missing traceback went.
+- **Non-visual** = file descriptors only. Never write to stdout/stderr from hot paths: they land in the xinitrc log, fine for diagnostics, wrong for per-keystroke chatter. Use `boot_log`, `_power_log`, or `tts._dbg`.
 - **Non-expensive** = cheap appends, no subprocess spawns at runtime, no fsync/flush cascades.
 - **Non-interfering** = no EVIOCGRAB, no terminal mode changes, no signal handlers that paint.
 
@@ -110,48 +110,9 @@ Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPO
 
 ---
 
-## Textual Framework Workarounds
+## Canvas UI
 
-### CSS Scoping (IMPORTANT)
-
-`CSS` is **scoped** to the defining class. A base class's `CSS` rules won't apply inside subclass instances. Use `DEFAULT_CSS` for inheritable styles (lower specificity, subclass `CSS` overrides cleanly).
-
-### Modal Dialogs
-
-All modals inherit from `PurpleModal` (`purple_tui/modal.py`), which provides shared `DEFAULT_CSS` for centering, dialog background, title, and hint styling. Use standard IDs: `#modal-dialog`, `#modal-title`, `#modal-hint`. Content-specific widgets use their own IDs. Each subclass sets its own width, padding, and border via `CSS`.
-
-### Background Colors (seen on Textual 0.67.0; installed is 8.0.2, unretested since)
-
-`widget.styles.background` on `Static` doesn't repaint. Use `Widget` subclass with `render_line()` returning `Strip([Segment(...)])`.
-
-### Flicker-Free Reflows (MusicGrid pattern)
-
-When widget height changes, Textual renders intermediate sizes causing flicker. Fix: `_layout_ready = False` before change, cache last good dimensions in `_cached_layout`, render with cached values during reflow. `on_resize` debounces 50ms then sets `_layout_ready = True`.
-
-### Keyboard Input (evdev + keyd)
-
-Input via evdev (`/dev/input/event*`), bypassing the terminal. Alacritty is display-only.
-
-```
-Physical Keyboard → keyd (EVIOCGRAB + uinput) → keyd virtual keyboard
-                                               → EvdevReader → KeyboardStateMachine → handle_keyboard_action()
-```
-
-**keyd** (`config/keyd/default.conf`, built from source in `00-build-golden-image.sh`) runs as a systemd service on the golden image and does the grave/tilde→Escape and RightAlt→F2 remaps at the kernel level, so they work before Purple starts and at rescue shells. `purple_tui/input.py` uses keyd's virtual device alongside any physicals keyd didn't grab. Do NOT add application-level grave/tilde remaps — they'd duplicate keyd and only work while Purple is running. Full rationale (why keyd not systemd-hwdb, Apple SPI driver constraint): `guides/keyboard-architecture.md#remap-layer-choice`.
-
-**Key files:** `purple_tui/input.py`, `purple_tui/keyboard.py`. See `guides/keyboard-architecture.md`.
-
-**Single code path:** All keyboard logic in `handle_keyboard_action()`. Textual's `_on_key()` suppresses events. All navigation is explicit (no Tab/Shift-Tab focus).
-
-### HoldOrTap Pattern
-
-`HoldOrTap` (keyboard.py) distinguishes quick taps from long holds (space-hold toggles code panel). Always check `on_other_key()` return value to flush buffered space before the next character.
-
-### Code Panel Architecture
-
-`_code_panel_active` (app-level, persists across rooms) vs `ReplPanel.is_open` (per-room). Space-hold pins canvas height; viewport grows by 4 on open. Write-mode space is buffered by `HoldOrTap`: tap flushes the space before the next key via `on_other_key()` returning True.
-
----
+The screen is a pygame window the app paints itself (`purple_tui/gfx.py`, `purple_tui/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere.
 
 ## Python Gotchas
 
@@ -174,7 +135,7 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. Textual exits, Python `execv`s into `/run/purple-reboot-mount/purple-reboot --wait` (static binary on tmpfs)
+5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs)
 
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
 

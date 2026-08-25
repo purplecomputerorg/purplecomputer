@@ -437,7 +437,7 @@ def _ensure_mixer() -> bool:
     snd_pcm_open() on broken audio hardware while holding the GIL.
     """
     global pygame
-    from .rooms.music_room import warm_mixer
+    from .mixer import warm_mixer
     _dbg("ensure_mixer: calling warm_mixer")
     ok = warm_mixer()
     _dbg(f"ensure_mixer: warm_mixer -> {ok}")

@@ -11,7 +11,7 @@ default:
 # Show environment variables for testing
 env:
     @echo "PURPLE_NO_AUDIO=1       Force audio off (test no-sound UX)"
-    @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use terminal keyboard)"
+    @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use the window's keyboard events)"
     @echo "PURPLE_DEV_MODE=1       Dev shortcuts, screenshots, debug keys"
     @echo "PURPLE_SLEEP_DEMO=1     Accelerated sleep/power timings"
     @echo "PURPLE_FAKE_USB=STATE   Simulate USB: caching|cached|removed"
@@ -20,6 +20,8 @@ env:
     @echo "PURPLE_DEMO_SEGMENT=X   Run specific demo segment"
     @echo "PURPLE_TTS_CACHE=path   Override TTS cache dir"
     @echo "PURPLE_SCREENSHOT_DIR=X Override screenshot output dir"
+    @echo "PURPLE_WINDOWED=1       Run in a window instead of fullscreen"
+    @echo "PURPLE_WINDOW_SIZE=WxH  Window / preview size (default: the screen, or 1366x768 headless)"
     @echo "PURPLE_POWER_LOG=1      Force power manager logging"
     @echo ""
     @echo "Example: PURPLE_NO_AUDIO=1 just run"
@@ -238,10 +240,6 @@ apply-zoom:
 # Open zoom keyframe editor in browser
 zoom-editor:
     python recording-setup/zoom_editor_server.py
-
-# Test code split-screen POC (font resize proof of concept)
-code-split-poc:
-    PURPLE_ALACRITTY_CONFIG=config/alacritty/alacritty-dev.toml alacritty --config-file config/alacritty/alacritty-dev.toml -e {{venv}}/bin/python scripts/code_split_poc.py
 
 # Release ISOs to Cloudflare R2 (e.g., just release, just release v1.0)
 release *args:

@@ -1,15 +1,7 @@
-"""
-Purple Computer Rooms
+"""Rooms: Play, Music, Art, and the parent-facing screens."""
 
-Executable Textual widgets for each room. These are curated, reviewed code,
-NOT user-installable.
+from .art_room import ArtRoom
+from .music_room import MusicRoom
+from .play_room import PlayRoom
 
-Content (emojis, definitions, sounds) comes from purplepacks, which are
-content-only and safe for parents to install.
-"""
-
-from .play_room import PlayMode
-from .music_room import MusicMode
-from .art_room import ArtMode
-
-__all__ = ["PlayMode", "MusicMode", "ArtMode"]
+__all__ = ["ArtRoom", "MusicRoom", "PlayRoom"]

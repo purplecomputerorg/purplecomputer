@@ -1,7 +1,7 @@
 """
 Purple Computer - The Calm Computer for Kids
 
-A Textual TUI application providing:
+A keyboard-only computer for kids, drawn on a pygame canvas providing:
 - Ask Mode: Math and emoji REPL
 - Music Room: Music and art grid
 - Write Mode: Simple text editor

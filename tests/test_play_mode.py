@@ -18,8 +18,8 @@ try:
 except ImportError:
     HAS_PYTEST = False
 
-from purple_tui.rooms.play_room import (
-    SimpleEvaluator, _pad_narrow_emoji, parse_speech_trigger,
+from purple_tui.play_eval import (
+    SimpleEvaluator, parse_speech_trigger,
 )
 
 
@@ -1851,27 +1851,6 @@ class TestSpeakPrefixes:
             assert prefix not in speak.lower()
 
 
-class TestThemeConstants:
-    """Test theme color constants match the app's registered themes."""
-
-    def test_surface_constants_match_app_theme(self):
-        """Surface color constants should match the app's theme values."""
-        from purple_tui.rooms.play_room import ColorResultLine
-
-        # These should match the values in purple_tui.py register_theme calls
-        assert ColorResultLine.SURFACE_DARK == "#2a1845"
-        assert ColorResultLine.SURFACE_LIGHT == "#e8daf0"
-
-    def test_arrow_constants_exist(self):
-        """Arrow color constants should be defined for both themes."""
-        from purple_tui.rooms.play_room import HistoryLine
-
-        assert HistoryLine.ASK_ARROW_DARK == "#c4a0e8"
-        assert HistoryLine.ASK_ARROW_LIGHT == "#7a5a9e"
-        assert HistoryLine.ANSWER_ARROW_DARK == "#ffffff"
-        assert HistoryLine.ANSWER_ARROW_LIGHT == "#3a2a50"
-
-
 # =============================================================================
 # Standalone runner
 # =============================================================================
@@ -1951,55 +1930,6 @@ class TestColorMappingConsistency:
             assert expected_color in result, (
                 f"Expected color {expected_color} for '{char}' not found in formatted output"
             )
-
-
-    class TestPadNarrowEmoji:
-        """Test _pad_narrow_emoji: spaces after narrow+FE0F emoji to prevent overlap."""
-
-        def test_no_change_for_wide_emoji(self):
-            # Apple (U+1F34E) is Wide, no FE0F, no padding needed
-            assert _pad_narrow_emoji("🍎^🍎") == "🍎^🍎"
-
-        def test_no_change_for_plain_text(self):
-            assert _pad_narrow_emoji("hello world") == "hello world"
-
-        def test_heart_caret_heart_gets_padded(self):
-            # Heart (U+2764+FE0F) is narrow+FE0F, ^ would get clobbered
-            result = _pad_narrow_emoji("❤️^❤️")
-            assert result == "❤️ ^❤️ "  # trailing space after last FE0F
-
-        def test_always_pad_even_before_space(self):
-            # Always add space after FE0F; first space absorbs glyph overflow
-            assert _pad_narrow_emoji("❤️ hello") == "❤️  hello"  # double space
-
-        def test_adjacent_narrow_emoji(self):
-            # Two hearts side by side: space after each FE0F
-            result = _pad_narrow_emoji("❤️❤️")
-            assert result == "❤️ ❤️ "
-
-        def test_narrow_emoji_at_end_of_string(self):
-            # FE0F at end always gets trailing space
-            assert _pad_narrow_emoji("I love ❤️") == "I love ❤️ "
-
-        def test_mixed_wide_and_narrow(self):
-            # Apple (wide) then heart (narrow+FE0F) then apple
-            result = _pad_narrow_emoji("🍎❤️🍎")
-            # Heart's FE0F always gets a space
-            assert "❤️ 🍎" in result
-            # Apple before heart has no FE0F, no change
-            assert "🍎❤️" in result
-
-        def test_preserves_rich_markup(self):
-            # Rich markup tags should pass through unchanged
-            result = _pad_narrow_emoji("[on #FF0000]❤️[/]text")
-            assert "[on #FF0000]" in result
-            assert "[/]" in result
-
-        def test_snow_cloud_sun(self):
-            # Other narrow+FE0F emoji: always add space after FE0F
-            assert _pad_narrow_emoji("❄️!") == "❄️ !"
-            assert _pad_narrow_emoji("☁️x") == "☁️ x"
-            assert _pad_narrow_emoji("☀️ bright") == "☀️  bright"  # double space
 
 
     class TestDisplayConsistency:

@@ -30,7 +30,7 @@ class _FakeSound:
 def test_play_safe_success_first_try():
     channel_sentinel = object()
     sound = _FakeSound([channel_sentinel])
-    with patch("purple_tui.rooms.music_room.reinit_mixer") as reinit:
+    with patch("purple_tui.mixer.reinit_mixer") as reinit:
         result = play_safe(sound)
     assert result is channel_sentinel
     assert sound.call_count == 1
@@ -40,7 +40,7 @@ def test_play_safe_success_first_try():
 def test_play_safe_retries_once_after_reinit():
     channel_sentinel = object()
     sound = _FakeSound([RuntimeError("stale"), channel_sentinel])
-    with patch("purple_tui.rooms.music_room.reinit_mixer") as reinit:
+    with patch("purple_tui.mixer.reinit_mixer") as reinit:
         result = play_safe(sound)
     assert result is channel_sentinel
     assert sound.call_count == 2
@@ -49,7 +49,7 @@ def test_play_safe_retries_once_after_reinit():
 
 def test_play_safe_gives_up_after_second_failure():
     sound = _FakeSound([RuntimeError("boom1"), RuntimeError("boom2")])
-    with patch("purple_tui.rooms.music_room.reinit_mixer") as reinit:
+    with patch("purple_tui.mixer.reinit_mixer") as reinit:
         result = play_safe(sound)
     assert result is None
     assert sound.call_count == 2
@@ -60,7 +60,7 @@ def test_play_safe_does_not_loop_beyond_one_retry():
     """Even if we wire up a pathological Sound that would raise forever,
     play_safe must stop after exactly two total attempts."""
     sound = _FakeSound([RuntimeError()] * 10)
-    with patch("purple_tui.rooms.music_room.reinit_mixer"):
+    with patch("purple_tui.mixer.reinit_mixer"):
         play_safe(sound)
     assert sound.call_count == 2
 
@@ -68,7 +68,7 @@ def test_play_safe_does_not_loop_beyond_one_retry():
 def test_play_safe_handles_reinit_failure():
     """If reinit itself raises, return None without crashing the caller."""
     sound = _FakeSound([RuntimeError("first"), RuntimeError("second")])
-    with patch("purple_tui.rooms.music_room.reinit_mixer", side_effect=RuntimeError("reinit broken")):
+    with patch("purple_tui.mixer.reinit_mixer", side_effect=RuntimeError("reinit broken")):
         result = play_safe(sound)
     assert result is None
     # Sound.play was only called once because reinit failed before the retry.

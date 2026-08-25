@@ -17,8 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from PIL import Image
 
-from purple_tui.art_config import CANVAS_WIDTH, CANVAS_HEIGHT
-from purple_tui.rooms.art_room import DEFAULT_BG_DARK
+from purple_tui.rooms.art_room import COLS as CANVAS_WIDTH, ROWS as CANVAS_HEIGHT, CANVAS_BG as DEFAULT_BG_DARK
 
 CELL_ASPECT = 2  # a canvas cell is twice as tall as it is wide
 PREVIEW_CELL_PX = 10

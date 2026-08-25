@@ -140,105 +140,18 @@ if [ -d "packs/core-definitions" ]; then
     echo_info "✓ Built core-definitions.purplepack"
 fi
 
-# Install JetBrainsMono Nerd Font (for UI icons in Alacritty)
-echo_step "Checking JetBrainsMono Nerd Font..."
-install_nerd_font() {
-    local FONT_VERSION="3.3.0"
-    local FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/download/v${FONT_VERSION}/JetBrainsMono.zip"
-    local TEMP_DIR=$(mktemp -d)
-
-    echo_info "Downloading JetBrainsMono Nerd Font..."
-    curl -sL "$FONT_URL" -o "$TEMP_DIR/jetbrains-mono-nerd.zip"
-    unzip -q "$TEMP_DIR/jetbrains-mono-nerd.zip" -d "$TEMP_DIR/fonts"
-
-    if [ "$OS" = "mac" ]; then
-        mkdir -p ~/Library/Fonts
-        cp "$TEMP_DIR/fonts/"*.ttf ~/Library/Fonts/ 2>/dev/null || true
-        echo_info "✓ JetBrainsMono Nerd Font installed to ~/Library/Fonts/"
+# Color emoji for the UI (the ISO installs fonts-noto-color-emoji; a dev box
+# needs the file where purple_tui/gfx.py looks for it). macOS uses its own.
+echo_step "Checking Noto Color Emoji..."
+if [ "$OS" = "linux" ]; then
+    EMOJI_FONT="$HOME/.local/share/fonts/NotoColorEmoji.ttf"
+    if [ -f "$EMOJI_FONT" ] || [ -f /usr/share/fonts/truetype/noto/NotoColorEmoji.ttf ]; then
+        echo_info "✓ Noto Color Emoji present"
     else
-        mkdir -p ~/.local/share/fonts
-        cp "$TEMP_DIR/fonts/"*.ttf ~/.local/share/fonts/ 2>/dev/null || true
-        fc-cache -f ~/.local/share/fonts
-        echo_info "✓ JetBrainsMono Nerd Font installed to ~/.local/share/fonts/"
-    fi
-
-    rm -rf "$TEMP_DIR"
-}
-
-if [ "$OS" = "mac" ]; then
-    if ls ~/Library/Fonts/JetBrainsMonoNerdFont-* &> /dev/null 2>&1; then
-        echo_info "✓ JetBrainsMono Nerd Font already installed"
-    else
-        install_nerd_font
-    fi
-elif [ "$OS" = "linux" ]; then
-    # Remove any broken/empty fontconfig files before font checks
-    if [ -f /etc/fonts/conf.d/99-emoji.conf ] && [ ! -s /etc/fonts/conf.d/99-emoji.conf ]; then
-        sudo rm /etc/fonts/conf.d/99-emoji.conf 2>/dev/null
-    fi
-    if fc-list | grep -qi "JetBrainsMono Nerd Font" 2>/dev/null; then
-        echo_info "✓ JetBrainsMono Nerd Font already installed"
-    else
-        install_nerd_font
-    fi
-fi
-
-# Install Noto Color Emoji (for Unicode emoji)
-echo_step "Checking Noto Color Emoji font..."
-if [ "$OS" = "mac" ]; then
-    # macOS has built-in emoji support via Apple Color Emoji
-    echo_info "✓ macOS has built-in emoji support"
-elif [ "$OS" = "linux" ]; then
-    if fc-list | grep -qi "Noto Color Emoji" 2>/dev/null; then
-        echo_info "✓ Noto Color Emoji already installed"
-    else
-        echo_info "Installing Noto Color Emoji..."
-        if command -v apt-get &> /dev/null; then
-            sudo apt-get install -y fonts-noto-color-emoji
-            echo_info "✓ Noto Color Emoji installed"
-        else
-            echo_warn "Could not install Noto Color Emoji (apt not available)"
-            echo_warn "Install manually: https://fonts.google.com/noto/specimen/Noto+Color+Emoji"
-        fi
-    fi
-
-    # Install fontconfig rule to prioritize Noto Color Emoji
-    # Without this, some emoji may render as monochrome outlines
-    echo_step "Installing emoji fontconfig rule..."
-    FONTCONFIG_DIR="/etc/fonts/conf.d"
-    EMOJI_CONF="$PROJECT_ROOT/config/fontconfig/99-emoji.conf"
-    if [ -f "$EMOJI_CONF" ]; then
-        sudo cp "$EMOJI_CONF" "$FONTCONFIG_DIR/"
-        sudo fc-cache -f
-        echo_info "✓ Emoji fontconfig rule installed"
-    fi
-fi
-
-# Check Alacritty (optional but recommended)
-echo_step "Checking Alacritty installation (optional)..."
-ALACRITTY_AVAILABLE=false
-if command -v alacritty &> /dev/null; then
-    echo_info "✓ Alacritty is installed"
-    ALACRITTY_AVAILABLE=true
-elif [[ "$OSTYPE" == "darwin"* ]] && [ -d "/Applications/Alacritty.app" ]; then
-    echo_info "✓ Alacritty.app is installed"
-    ALACRITTY_AVAILABLE=true
-else
-    echo_warn "Alacritty not found (optional but recommended)"
-    if [ "$OS" = "mac" ]; then
-        echo_warn "Install with: brew install --cask alacritty"
-    else
-        echo_warn "Install with: sudo apt install alacritty"
-    fi
-fi
-
-# Install Alacritty config
-if [ "$ALACRITTY_AVAILABLE" = true ]; then
-    ALACRITTY_CONFIG="$PROJECT_ROOT/config/alacritty/alacritty.toml"
-    if [ -f "$ALACRITTY_CONFIG" ]; then
-        mkdir -p ~/.config/alacritty
-        cp "$ALACRITTY_CONFIG" ~/.config/alacritty/
-        echo_info "✓ Alacritty config installed"
+        mkdir -p "$(dirname "$EMOJI_FONT")"
+        curl -fsSL https://github.com/googlefonts/noto-emoji/raw/main/fonts/NotoColorEmoji.ttf -o "$EMOJI_FONT" \
+            && echo_info "✓ Noto Color Emoji installed to $EMOJI_FONT" \
+            || echo_warn "Could not download Noto Color Emoji; emoji will render from the text font"
     fi
 fi
 
@@ -251,17 +164,6 @@ echo ""
 echo_info "Virtual environment created at .venv/"
 echo_info "Activate it with: source .venv/bin/activate"
 echo ""
-if [ "$ALACRITTY_AVAILABLE" = true ]; then
-    echo_info "Alacritty detected - 'make run' will use Purple theme"
-else
-    echo_warn "For the full Purple experience, install Alacritty:"
-    if [ "$OS" = "mac" ]; then
-        echo "  brew install --cask alacritty"
-    else
-        echo "  sudo apt install alacritty"
-    fi
-    echo ""
-fi
 echo_info "You can now run Purple Computer:"
 echo ""
 echo "  make run"

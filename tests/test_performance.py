@@ -20,7 +20,6 @@ import pytest
 
 from purple_tui import fuzzy
 from purple_tui.content import ContentManager, pluralize
-from purple_tui.constants import REQUIRED_TERMINAL_ROWS
 
 
 @pytest.fixture(scope="module")
@@ -113,91 +112,35 @@ def test_line_validation_absolute_budget(content):
     assert elapsed < 1.0, f"200 line validations took {elapsed:.2f}s"
 
 
-def _running_timers(app):
-    """All unpaused Textual timers in the app, as (interval, owner) pairs."""
-    found = []
-    for node in [app, *app.screen_stack, *app.query("*")]:
-        for timer in getattr(node, "_timers", ()):
-            if timer._active.is_set():
-                found.append((timer._interval, repr(node)))
-    return found
-
-
 def test_no_subsecond_timers_while_idle():
-    """The idle-CPU contract: an idle app must not tick faster than 1s.
-    Catches regressions like cursor blink (0.5s repaint), an always-on
-    toast reaper, or any new fast poll. Dev-mode-only screenshot/command
-    triggers (0.1s/0.2s) are exempt: they never ship enabled."""
-    from purple_tui.purple_tui import PurpleApp
+    """An idle Purple must not wake the CPU several times a second: no blink,
+    no reaper, no fast poll. Dev-mode screenshot triggers (0.1s/0.2s) are
+    exempt: they never ship enabled."""
+    from purple_tui.harness import make_app, run
 
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
-            await pilot.pause()
-            await asyncio.sleep(0.5)
-            await pilot.pause()
-
-            offenders = [
-                (interval, owner)
-                for interval, owner in _running_timers(app)
-                if interval is not None and interval < 1.0
-                and interval not in (0.1, 0.2)  # dev-mode triggers
-            ]
-            assert offenders == [], f"sub-second timers while idle: {offenders}"
-
-            # The caret must not blink (each blink recomposites the screen)
-            from purple_tui.code_input import CodeInput
-            for inp in app.query(CodeInput):
-                assert inp.cursor_blink is False
-                blink = getattr(inp, "_blink_timer", None)
-                assert blink is None or not blink._active.is_set()
-
-            # The toast reaper must not run with no toasts on screen
-            assert app._toast_reaper_timer is None
-
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(scenario())
-    finally:
-        loop.close()
+        app = make_app()
+        await asyncio.sleep(0.3)
+        offenders = [(p, name) for p, name in app.timers.intervals() if p < 1.0 and p not in (0.1, 0.2)]
+        assert offenders == [], f"sub-second timers while idle: {offenders}"
+    run(scenario())
 
 
-def test_typing_never_triggers_layout_pass():
-    """A keystroke must repaint, never relayout: one layout pass reflows
-    every widget on screen and was the dominant per-key cost that made
-    burst typing lag on weak machines (the autocomplete hint update and
-    Input's virtual_size reactive both used to force one per key)."""
-    from textual.screen import Screen
-    from purple_tui.purple_tui import PurpleApp
-    from purple_tui.keyboard import CharacterAction
+def test_typing_and_repainting_stays_cheap():
+    """Each keystroke redraws the whole screen from cached text; eight of them,
+    frames included, must stay well inside a keystroke's worth of time even on
+    a 20x slower laptop."""
+    from purple_tui.harness import make_app, press, run
 
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
-            await pilot.pause()
-            for c in "warm":
-                await app._dispatch_keyboard_action(CharacterAction(char=c))
-            await pilot.pause()
-
-            calls = {"n": 0}
-            orig = Screen._refresh_layout
-
-            def counting(self, *args, **kwargs):
-                calls["n"] += 1
-                return orig(self, *args, **kwargs)
-
-            Screen._refresh_layout = counting
-            try:
-                for c in "dinosaur":
-                    await app._dispatch_keyboard_action(CharacterAction(char=c))
-                    await pilot.pause()
-            finally:
-                Screen._refresh_layout = orig
-            assert calls["n"] == 0, (
-                f"{calls['n']} screen layout passes for 8 keystrokes")
-
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(scenario())
-    finally:
-        loop.close()
+        app = make_app()
+        for c in "warm":
+            await press(app, c)
+        app._draw()
+        start = time.perf_counter()
+        for c in "dinosaur":
+            await press(app, c)
+            app._draw()
+        elapsed = time.perf_counter() - start
+        assert elapsed < 0.25, f"8 keystrokes with repaints took {elapsed * 1000:.0f} ms"
+    run(scenario())

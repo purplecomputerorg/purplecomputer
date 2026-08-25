@@ -1,16 +1,8 @@
 """Tests for the Time Travel timeline: storage, persistence, and app scrubbing."""
 
-import asyncio
 import json
-import os
 
 # Set environment before app imports
-os.environ['PURPLE_NO_EVDEV'] = '1'
-os.environ['PURPLE_DEV_MODE'] = '1'
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
-os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
 from purple_tui import timeline as timeline_mod
 from purple_tui.timeline import RoomTimeline
@@ -114,15 +106,16 @@ class TestRoomTimeline:
 # Time Travel bar dot track
 # ---------------------------------------------------------------------------
 
-from purple_tui import time_travel as time_travel_mod
-from purple_tui.time_travel import TimeTravelBar
+from types import SimpleNamespace
+
+from purple_tui import panels
+from purple_tui.harness import make_app, run, type_text
 
 
 class TestTimeTravelDots:
     def _markup(self, index, total):
-        bar = TimeTravelBar()
-        bar.set_position(index, total)  # unmounted: must not raise
-        return bar._dots_markup()
+        bar = panels.TimeTravelBar(SimpleNamespace(time_travel_position=lambda: (index, total)))
+        return bar.dots_markup()
 
     def test_short_history_is_one_dot_per_step(self):
         markup = self._markup(2, 3)
@@ -132,242 +125,149 @@ class TestTimeTravelDots:
         assert "forward" in markup and "back in time" in markup
 
     def test_each_step_back_clears_exactly_one_dot(self):
-        total = time_travel_mod.MAX_DOTS * 4
+        total = panels.MAX_DOTS * 4
         for presses in range(1, 4):
             markup = self._markup(total - 1 - presses, total)
             assert markup.count("○") == presses
 
     def test_long_history_shows_more_marker(self):
         markup = self._markup(99, 100)
-        assert markup.count("●") == time_travel_mod.MAX_DOTS
+        assert markup.count("●") == panels.MAX_DOTS
         assert "⋯" in markup
 
     def test_window_slides_when_scrubbed_past_left_edge(self):
         markup = self._markup(10, 100)
         assert markup.count("●") == 1
-        assert markup.count("⋯") == 2  # more steps on both sides
+        assert markup.count("⋯") == 2
 
     def test_endpoints_are_dimmed(self):
         assert "[dim]◀ back in time[/]" in self._markup(0, 5)
         assert "[dim]forward ▶[/]" in self._markup(4, 5)
 
 
-# ---------------------------------------------------------------------------
-# Room adapters + scrubbing (app harness)
-# ---------------------------------------------------------------------------
-
-from purple_tui.purple_tui import PurpleApp
-from purple_tui.constants import REQUIRED_TERMINAL_ROWS, ROOM_ART, ROOM_MUSIC
-
-APP_SIZE = (146, REQUIRED_TERMINAL_ROWS)
-SETTLE = 0.4
-
-
-def _run(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-async def _settle(pilot):
-    await pilot.pause()
-    await asyncio.sleep(SETTLE)
-    await pilot.pause()
-
-
 def test_art_state_round_trip():
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_ART[0])
-            await _settle(pilot)
-
-            from purple_tui.rooms.art_room import ArtMode, ArtCanvas
-            art = app.query_one(ArtMode)
-            canvas = art.query_one("#art-canvas", ArtCanvas)
-            canvas.paint_at(3, 2, "f")
-            canvas.paint_at(4, 2, "c")
-            canvas.type_char("h")
-
-            state = art.timeline_state()
-            grid_before = dict(canvas._grid)
-            painted_before = set(canvas._painted_positions)
-
-            art.clear_canvas()
-            assert not canvas._grid
-
-            art.restore_timeline_state(state)
-            assert canvas._grid == grid_before
-            assert canvas._painted_positions == painted_before
-            assert art.timeline_state() == state
-
-    _run(scenario())
+        app = make_app()
+        app.action_switch_room("art")
+        art = app.rooms["art"]
+        art.paint_at(3, 2, "f")
+        art.paint_at(4, 2, "c")
+        art.type_char("h")
+        state = art.timeline_state()
+        grid_before = dict(art._grid)
+        painted_before = set(art._painted_positions)
+        art.clear()
+        assert not art._grid
+        art.restore_timeline_state(state)
+        assert art._grid == grid_before
+        assert art._painted_positions == painted_before
+        assert art.timeline_state() == state
+    run(scenario())
 
 
 def test_music_state_round_trip_and_reset():
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_MUSIC[0])
-            await _settle(pilot)
-
-            from purple_tui.rooms.music_room import MusicMode
-            music = app.query_one(MusicMode)
-            music.grid.next_color("A")
-            music.grid.next_color("A")
-            music.grid.next_color("5")
-            music._instrument_index = 2
-            music._letters_mode = True
-
-            state = music.timeline_state()
-            music.reset_state()
-            assert music.timeline_state() != state
-
-            music.restore_timeline_state(state)
-            assert music.timeline_state() == state
-            assert music._instrument_index == 2
-            assert music._letters_mode is True
-
-    _run(scenario())
+        app = make_app()
+        app.action_switch_room("music")
+        music = app.rooms["music"]
+        music.next_color("A")
+        music.next_color("A")
+        music.next_color("5")
+        music.instrument_index = 2
+        music.letters_mode = True
+        state = music.timeline_state()
+        music.clear()
+        assert music.timeline_state() != state
+        music.restore_timeline_state(state)
+        assert music.timeline_state() == state
+        assert music.instrument_index == 2
+        assert music.letters_mode is True
+    run(scenario())
 
 
 def test_play_entries_replay_and_clear_records_steps(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-
-            from purple_tui.rooms.play_room import PlayMode, InlineInput
-            play = app.query_one(PlayMode)
-            play.query_one("#play-input").post_message(InlineInput.Submitted("2 + 2"))
-            await _settle(pilot)
-            play.query_one("#play-input").post_message(InlineInput.Submitted("3 + 3"))
-            await _settle(pilot)
-
-            tl = app._timelines["play"]
-            state = tl.tip()
-            assert sorted(state.values()) == ["2 + 2", "3 + 3"]
-
-            steps_before_clear = len(tl)
-            app._start_fresh("play")
-            await _settle(pilot)
-            assert play.timeline_state() == {}
-            assert tl.tip() == {}
-            assert len(tl) > steps_before_clear
-
-            play.restore_timeline_state(state)
-            await _settle(pilot)
-            assert play.timeline_state() == state
-            scroll = play.query_one("#history-scroll")
-            assert len(scroll.children) > 0
-
-    _run(scenario())
+        app = make_app()
+        play = app.rooms["play"]
+        await type_text(app, "2 + 2", enter=True)
+        await type_text(app, "3 + 3", enter=True)
+        tl = app._timelines["play"]
+        state = tl.tip()
+        assert sorted(state.values()) == ["2 + 2", "3 + 3"]
+        steps_before_clear = len(tl)
+        app._start_fresh("play")
+        assert play.timeline_state() == {}
+        assert tl.tip() == {}
+        assert len(tl) > steps_before_clear
+        play.restore_timeline_state(state)
+        assert play.timeline_state() == state
+        assert play.history
+    run(scenario())
 
 
 def test_room_state_survives_restart(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def first_boot():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_ART[0])
-            await _settle(pilot)
-            from purple_tui.rooms.art_room import ArtMode, ArtCanvas
-            canvas = app.query_one(ArtMode).query_one("#art-canvas", ArtCanvas)
-            canvas.paint_at(7, 4, "f")
-            app.timeline_capture_now("art")
-            return dict(canvas._grid)
+        app = make_app()
+        app.action_switch_room("art")
+        app.rooms["art"].paint_at(7, 4, "f")
+        app.timeline_capture_now("art")
+        return dict(app.rooms["art"]._grid)
 
     async def second_boot():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_ART[0])
-            await _settle(pilot)
-            from purple_tui.rooms.art_room import ArtMode, ArtCanvas
-            canvas = app.query_one(ArtMode).query_one("#art-canvas", ArtCanvas)
-            return dict(canvas._grid)
-
-    painted = _run(first_boot())
+        app = make_app()
+        app.action_switch_room("art")
+        return dict(app.rooms["art"]._grid)
+    painted = run(first_boot())
     assert painted
-    assert _run(second_boot()) == painted
+    assert run(second_boot()) == painted
+
+
+def _two_paints(app):
+    app.action_switch_room("art")
+    art, tl = app.rooms["art"], app._timelines["art"]
+    art.paint_at(1, 1, "f")
+    app.timeline_capture_now("art")
+    art.paint_at(2, 1, "c")
+    app.timeline_capture_now("art")
+    return art, tl
 
 
 def test_scrub_previews_and_escape_restores(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_ART[0])
-            await _settle(pilot)
-
-            from purple_tui.rooms.art_room import ArtMode, ArtCanvas
-            art = app.query_one(ArtMode)
-            canvas = art.query_one("#art-canvas", ArtCanvas)
-
-            tl = app._timelines["art"]
-            canvas.paint_at(1, 1, "f")
-            app.timeline_capture_now("art")
-            canvas.paint_at(2, 1, "c")
-            app.timeline_capture_now("art")
-            total = len(tl)
-            assert total >= 3  # baseline + two paints
-
-            app._start_time_travel()
-            assert app._time_travel is not None
-            await _settle(pilot)
-
-            app._step_time_travel(-1)
-            assert (2, 1) not in canvas._grid  # previewing the earlier step
-            app._step_time_travel(-1)
-
-            app._cancel_time_travel()
-            await _settle(pilot)
-            assert app._time_travel is None
-            assert (2, 1) in canvas._grid  # tip restored
-            assert len(tl) == total  # cancel adds nothing
-
-    _run(scenario())
+        app = make_app()
+        art, tl = _two_paints(app)
+        total = len(tl)
+        assert total >= 3  # baseline + two paints
+        app._start_time_travel()
+        assert app._time_travel is not None
+        app._step_time_travel(-1)
+        assert (2, 1) not in art._grid  # previewing the earlier step
+        app._step_time_travel(-1)
+        app._cancel_time_travel()
+        assert app._time_travel is None
+        assert (2, 1) in art._grid  # tip restored
+        assert len(tl) == total  # cancel adds nothing
+    run(scenario())
 
 
 def test_scrub_land_appends_instead_of_truncating(monkeypatch, tmp_path):
     monkeypatch.setenv("PURPLE_TIMELINE_DIR", str(tmp_path))
 
     async def scenario():
-        app = PurpleApp()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            app.action_switch_room(ROOM_ART[0])
-            await _settle(pilot)
-
-            from purple_tui.rooms.art_room import ArtMode, ArtCanvas
-            art = app.query_one(ArtMode)
-            canvas = art.query_one("#art-canvas", ArtCanvas)
-
-            tl = app._timelines["art"]
-            canvas.paint_at(1, 1, "f")
-            app.timeline_capture_now("art")
-            canvas.paint_at(2, 1, "c")
-            app.timeline_capture_now("art")
-            total = len(tl)
-
-            app._start_time_travel()
-            app._step_time_travel(-1)
-            app._land_time_travel()
-            await _settle(pilot)
-
-            assert app._time_travel is None
-            assert len(tl) == total + 1  # landed state appended, nothing lost
-            assert (2, 1) not in canvas._grid
-            assert tl.state_at(total - 1) != tl.tip()  # old tip still reachable
-
-    _run(scenario())
+        app = make_app()
+        art, tl = _two_paints(app)
+        total = len(tl)
+        app._start_time_travel()
+        app._step_time_travel(-1)
+        app._land_time_travel()
+        assert app._time_travel is None
+        assert len(tl) == total + 1  # landed state appended, nothing lost
+        assert (2, 1) not in art._grid
+        assert tl.state_at(total - 1) != tl.tip()  # old tip still reachable
+    run(scenario())

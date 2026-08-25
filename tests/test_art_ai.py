@@ -5,6 +5,10 @@ Also tests for the compact action parser and other utilities.
 """
 
 import ast
+
+import pytest
+
+pytest.skip("tools/art_ai.py drives the retired Textual app over a pty; needs porting to purple_tui.harness", allow_module_level=True)
 import subprocess
 import sys
 import os

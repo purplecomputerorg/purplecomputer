@@ -6,13 +6,14 @@ fast drills (different letters) pass through. Music mode is unaffected
 sanity check there too).
 """
 import pytest
-from purple_tui.rooms.music_room import MusicMode
+from purple_tui.rooms.music_room import (LETTERS_CROSS_KEY_DEBOUNCE_S, LETTERS_SAME_KEY_DEBOUNCE_S,
+                                          MusicRoom)
 
 
 class _Stub:
     """Bare object with just the attrs `_letters_debounce_drop` touches."""
-    LETTERS_SAME_KEY_DEBOUNCE_S = MusicMode.LETTERS_SAME_KEY_DEBOUNCE_S
-    LETTERS_CROSS_KEY_DEBOUNCE_S = MusicMode.LETTERS_CROSS_KEY_DEBOUNCE_S
+    LETTERS_SAME_KEY_DEBOUNCE_S = LETTERS_SAME_KEY_DEBOUNCE_S
+    LETTERS_CROSS_KEY_DEBOUNCE_S = LETTERS_CROSS_KEY_DEBOUNCE_S
 
     def __init__(self):
         self._last_letter_key = None
@@ -20,7 +21,7 @@ class _Stub:
 
 
 def _drop(stub, key, t):
-    return MusicMode._letters_debounce_drop(stub, key, t)
+    return MusicRoom._letters_debounce_drop(stub, key, t)
 
 
 def test_first_press_always_accepted():

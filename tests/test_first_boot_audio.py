@@ -28,7 +28,7 @@ def _gate(audio_ok, *, live=False, marker=None, reason="no-card"):
     with patch("purple_tui.rooms.sleep_screen.is_live_boot", return_value=live), \
          patch("purple_tui.rooms.sleep_screen.LIVE_AUDIO_MARKER",
                str(marker) if marker else "/nonexistent/marker"), \
-         patch("purple_tui.rooms.music_room._silence_reason", return_value=reason):
+         patch("purple_tui.mixer._silence_reason", return_value=reason):
         return first_boot_power_cycle_needed(audio_ok)
 
 
@@ -75,34 +75,24 @@ def _run(coro):
 
 
 def _app_check(tmp_path, audio_ok, reason="no-card"):
-    """Run _check_first_boot_audio in a live app. Returns (screen_shown, marker_exists)."""
-    from purple_tui.purple_tui import PurpleApp
-    from purple_tui.constants import REQUIRED_TERMINAL_ROWS
+    from purple_tui.harness import make_app
     from purple_tui.rooms.sleep_screen import FirstBootPowerCycleScreen
-
     marker = tmp_path / "audio-worked-in-live"
     marker.touch()
 
     async def _test():
-        app = PurpleApp()
-        with patch("purple_tui.constants.LIVE_AUDIO_MARKER", str(marker)), \
+        with patch("purple_tui.app.LIVE_AUDIO_MARKER", str(marker)), \
              patch("purple_tui.rooms.sleep_screen.LIVE_AUDIO_MARKER", str(marker)), \
              patch("purple_tui.rooms.sleep_screen.is_live_boot", return_value=False), \
-             patch("purple_tui.rooms.music_room._silence_reason", return_value=reason):
-            async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
-                await pilot.pause()
-                app.audio_ok = audio_ok
-                app._check_first_boot_audio()
-                await pilot.pause()
-                shown = isinstance(app.screen, FirstBootPowerCycleScreen)
-                return shown, marker.exists()
-
+             patch("purple_tui.mixer._silence_reason", return_value=reason):
+            app = make_app()
+            app.audio_ok = audio_ok
+            app._check_first_boot_audio()
+            return app.has_overlay(FirstBootPowerCycleScreen), marker.exists()
     return _run(_test())
 
 
 class TestFirstBootAppFlow:
-    """Marker consumption: the offer happens at most once, ever."""
-
     def test_wedge_shows_screen_and_consumes_marker(self, tmp_path):
         shown, marker_left = _app_check(tmp_path, audio_ok=False)
         assert shown and not marker_left
@@ -120,25 +110,15 @@ class TestFirstBootAppFlow:
         assert not shown and marker_left
 
     def test_evdev_enter_powers_off(self, tmp_path):
-        """The evdev path (real hardware) must power off on ENTER too."""
-        from purple_tui.purple_tui import PurpleApp
-        from purple_tui.constants import REQUIRED_TERMINAL_ROWS
+        from purple_tui.harness import make_app
         from purple_tui.keyboard import ControlAction
-        from purple_tui.rooms.sleep_screen import (ByeScreen,
-                                                   FirstBootPowerCycleScreen)
+        from purple_tui.rooms.sleep_screen import ByeScreen, FirstBootPowerCycleScreen
 
         async def _test():
-            app = PurpleApp()
-            async with app.run_test(size=(146, REQUIRED_TERMINAL_ROWS)) as pilot:
-                await pilot.pause()
-                app.push_screen(FirstBootPowerCycleScreen())
-                await pilot.pause()
-                with patch("purple_tui.power_manager.PowerManager.shutdown",
-                           return_value=True) as shutdown:
-                    await app.screen.handle_keyboard_action(
-                        ControlAction(action='enter', is_down=True))
-                    await pilot.pause()
-                    assert isinstance(app.screen, ByeScreen)
-                    assert shutdown.called
-
+            app = make_app()
+            app.push(FirstBootPowerCycleScreen(app))
+            with patch("purple_tui.power_manager.PowerManager.shutdown", return_value=True) as shutdown:
+                await app.top.handle(ControlAction(action='enter', is_down=True))
+                assert app.has_overlay(ByeScreen)
+                assert shutdown.called
         _run(_test())

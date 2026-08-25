@@ -16,7 +16,7 @@ os.environ['SDL_AUDIODRIVER'] = 'dummy'
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
 from purple_tui.demo.script import TypeText
-from purple_tui.rooms.play_room import (
+from purple_tui.play_eval import (
     SimpleEvaluator, parse_speech_trigger, speakables_for,
 )
 

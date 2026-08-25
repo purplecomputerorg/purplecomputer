@@ -179,100 +179,7 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
 
 
 def _stub_ui_modules():
-    """Stub out textual/rich/pygame so we can import SimpleEvaluator without UI deps.
-
-    SimpleEvaluator is pure computation (no textual dependency), but it lives
-    in play_room.py which imports textual at module level for the UI classes.
-    The modes/__init__.py also imports all modes, pulling in their dependencies.
-    """
-    import types
-
-    class _StubMeta(type):
-        """Metaclass that allows _StubClass to return itself for class-level attribute access."""
-        def __getattr__(cls, name):
-            return cls
-
-    class _StubClass(metaclass=_StubMeta):
-        """Dummy class that accepts any args and returns itself for chaining."""
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def __init_subclass__(cls, **kwargs):
-            pass
-
-        def __call__(self, *args, **kwargs):
-            return self
-
-        def __getattr__(self, name):
-            return _StubClass()
-
-    class _PygameError(Exception):
-        """Stub for pygame.error so it can be caught."""
-        pass
-
-    class _PygameMixer:
-        """Stub for pygame.mixer module."""
-        @staticmethod
-        def init(*args, **kwargs):
-            raise _PygameError("stubbed")
-
-        @staticmethod
-        def get_init():
-            return None
-
-        @staticmethod
-        def set_num_channels(*args):
-            pass
-
-        Sound = _StubClass
-        Channel = _StubClass
-
-    class _PygameModule(types.ModuleType):
-        """Stub for pygame with working error exception."""
-        error = _PygameError
-        mixer = _PygameMixer
-
-        def __getattr__(self, name):
-            return _StubClass
-
-    class _StubModule(types.ModuleType):
-        """Module that returns a dummy class for any attribute lookup."""
-        def __getattr__(self, name):
-            return _StubClass
-
-    import importlib.abc
-    import importlib.machinery
-
-    class _StubLoader(importlib.abc.Loader):
-        def create_module(self, spec):
-            return _StubModule(spec.name)
-
-        def exec_module(self, module):
-            pass
-
-    class _StubFinder(importlib.abc.MetaPathFinder):
-        """Stub any submodule of these UI packages on demand.
-
-        Enumerating submodules by hand kept breaking whenever a new one
-        (e.g. rich.markup) got imported, so match by top-level package.
-        """
-        _purple_stub = True
-        prefixes = ("textual", "rich")
-
-        def find_spec(self, name, path, target=None):
-            if name.split(".")[0] in self.prefixes:
-                return importlib.machinery.ModuleSpec(name, _StubLoader())
-            return None
-
-    if not any(getattr(f, "_purple_stub", False) for f in sys.meta_path):
-        sys.meta_path.insert(0, _StubFinder())
-
-    if "pygame" not in sys.modules:
-        sys.modules["pygame"] = _PygameModule("pygame")
-    if "pygame.mixer" not in sys.modules:
-        sys.modules["pygame.mixer"] = _PygameMixer
-
-
+    """The evaluator lives in purple_tui.play_eval with no UI dependencies now; nothing to stub."""
 def _collect_all_actions() -> list:
     """Collect all demo actions from composition segments and fallback script."""
     import importlib
@@ -310,7 +217,7 @@ def extract_demo_phrases() -> list[str]:
     _stub_ui_modules()
 
     from purple_tui.demo.script import TypeText
-    from purple_tui.rooms.play_room import (
+    from purple_tui.play_eval import (
         SimpleEvaluator, parse_speech_trigger, speakables_for,
     )
 

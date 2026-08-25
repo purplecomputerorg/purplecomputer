@@ -241,11 +241,11 @@ class _FakeCanvas:
         self._painted_chars.append(ch)
 
     def execute_logo_command(self, action, direction, distance):
-        from purple_tui.rooms.art_room import ArtCanvas
+        from purple_tui.rooms.art_room import ArtRoom as ArtCanvas
         ArtCanvas.execute_logo_command(self, action, direction, distance)
 
     def turn(self, direction):
-        from purple_tui.rooms.art_room import ArtCanvas
+        from purple_tui.rooms.art_room import ArtRoom as ArtCanvas
         ArtCanvas.turn(self, direction)
 
     _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}

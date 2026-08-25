@@ -1,153 +1,92 @@
-"""Smoke tests: visit each room and exercise its render path.
+"""Every screen draws without raising, at a few sizes, after real key traffic."""
 
-Catches the class of bug where a refactor leaves a stale identifier
-(NameError, AttributeError, wrong-arity call) inside a `render()` method
-that only fires when the widget is actually painted with content. Static
-linting catches NameErrors; this catches the rest.
-"""
+import pytest
 
-import asyncio
-import os
+from purple_tui.harness import make_app, press, run, type_text
 
-os.environ['PURPLE_NO_EVDEV'] = '1'
-os.environ['PURPLE_DEV_MODE'] = '1'
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
-os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
-
-from purple_tui.purple_tui import PurpleApp
-from purple_tui.constants import REQUIRED_TERMINAL_ROWS
-
-APP_SIZE = (146, REQUIRED_TERMINAL_ROWS)
-SETTLE = 0.4
+SIZES = [(1024, 768), (1366, 768), (1440, 900)]
 
 
-def _make_app():
-    app = PurpleApp()
-    app._render_smoke_errors = []
-
-    def _capture(error):
-        app._render_smoke_errors.append(error)
-
-    app._handle_exception = _capture
-    return app
-
-
-async def _settle(pilot):
-    await pilot.pause()
-    await asyncio.sleep(SETTLE)
-    await pilot.pause()
-
-
-async def _switch(app, pilot, room):
-    app.action_switch_room(room)
-    await _settle(pilot)
-
-
-async def _type(app, text):
-    for ch in text:
-        await app._execute_dev_command({"action": "key", "value": ch})
-        await asyncio.sleep(0.03)
-
-
-async def _press(app, key):
-    await app._execute_dev_command({"action": "key", "value": key})
-
-
-def _run(coro):
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-def _check(app):
-    if app._render_smoke_errors:
-        err = app._render_smoke_errors[0]
-        raise AssertionError(f"render raised {type(err).__name__}: {err}") from err
-
-
-def test_play_room_renders_math_answer():
-    """Submitting a math expression in Play renders an answer line — the exact path that crashed on `caps`."""
+@pytest.mark.parametrize("size", SIZES)
+def test_rooms_draw_after_typing(size):
     async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "play")
-            await _type(app, "2+3")
-            await _press(app, "enter")
-            await _settle(pilot)
-            _check(app)
-    _run(go())
+        app = make_app(size)
+        await type_text(app, "cat", enter=True)
+        await type_text(app, "2 + 2", enter=True)
+        await type_text(app, "red + blue", enter=True)
+        await type_text(app, "5 x 5 ducks", enter=True)
+        app._draw()
+        app.action_switch_room("music")
+        for ch in "asdf1":
+            await press(app, ch)
+        await press(app, "right")
+        await press(app, "tab")
+        app._draw()
+        app.action_switch_room("art")
+        await type_text(app, "qwerty")
+        await press(app, "space")
+        await press(app, "right")
+        await press(app, "down")
+        await press(app, "tab")
+        await type_text(app, "hi")
+        app._draw()
+        assert app.g.surface.get_size() == size
+    run(go())
 
 
-def test_play_room_renders_word_answer():
-    """A word lookup hits the multi-line answer branch in PlayResultLine.render."""
+def test_overlays_and_panels_draw():
     async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "play")
-            await _type(app, "cat")
-            await _press(app, "enter")
-            await _settle(pilot)
-            _check(app)
-    _run(go())
+        app = make_app()
+        app._show_room_picker()
+        app._draw()
+        app.top.close(None)
+        app.action_parent_menu()
+        app._draw()
+        from purple_tui.rooms.parent_menu import (ComputerNameScreen, DisplaySettingsScreen, InstallConfirmScreen,
+                                                   LittlesModeScreen, ParentVolumeModal, PinEntry, TerminalScreen)
+        from purple_tui.rooms.help_videos import HelpVideosScreen
+        from purple_tui.rooms.sleep_screen import FirstBootPowerCycleScreen, LiveBootSplash, ShutdownConfirmScreen, SleepScreen
+        from purple_tui.rooms.support_info import SupportInfoScreen
+        for overlay in (LittlesModeScreen(app), ComputerNameScreen(app), InstallConfirmScreen(app), PinEntry(app),
+                        ParentVolumeModal(app), DisplaySettingsScreen(app), HelpVideosScreen(app),
+                        SupportInfoScreen(app), FirstBootPowerCycleScreen(app), LiveBootSplash(app),
+                        ShutdownConfirmScreen(app), SleepScreen(app), TerminalScreen(app)):
+            app.push(overlay)
+            app._draw()
+            overlay.close()
+        app.top.close()
+        app.action_switch_room("art")
+        app.room.open_code_panel()
+        await type_text(app, "red forward 5", enter=True)
+        app._draw()
+        app.room.close_code_panel()
+        app._start_time_travel()
+        app._draw()
+        app._cancel_time_travel()
+        app.action_switch_room("music")
+        await press(app, "enter", hold=1.0)   # start recording
+        await press(app, "a")
+        app._draw()
+        app.rooms["music"].stop_sound()
+        app._draw()
+    run(go())
 
 
-def test_art_room_renders_after_typing():
+def test_all_caps_uppercases_drawn_text():
     async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "art")
-            await _type(app, "abc")
-            await _settle(pilot)
-            _check(app)
-    _run(go())
+        app = make_app()
+        app.g.all_caps = True
+        s = app.g.text("hello", 20)
+        assert s.get_width() == app.g.text("HELLO", 20).get_width()
+        app._draw()
+    run(go())
 
 
-def test_music_room_renders():
+def test_littles_mode_draws():
     async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "music")
-            await _settle(pilot)
-            _check(app)
-    _run(go())
-
-
-def test_music_loop_panel_open_close_renders():
-    """Open the loop record panel (Hold Enter), then close it. Exercises
-    the dual-hint and single-hint bottom-border subtitle paths."""
-    async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "music")
-            app._apply_code_panel_ui(active=True, kind='loop')
-            await _settle(pilot)
-            _check(app)
-            app._apply_code_panel_ui(active=False, kind='loop')
-            await _settle(pilot)
-            _check(app)
-    _run(go())
-
-
-def test_music_code_panel_open_close_renders():
-    """Open the code (REPL) panel via Hold Space, then close it."""
-    async def go():
-        app = _make_app()
-        async with app.run_test(size=APP_SIZE) as pilot:
-            await _settle(pilot)
-            await _switch(app, pilot, "music")
-            app._apply_code_panel_ui(active=True, kind='code')
-            await _settle(pilot)
-            _check(app)
-            app._apply_code_panel_ui(active=False, kind='code')
-            await _settle(pilot)
-            _check(app)
-    _run(go())
+        app = make_app()
+        for mode in ("music", "music_noscreen", "art", None):
+            app._apply_littles_mode(mode)
+            await press(app, "a")
+            app._draw()
+    run(go())

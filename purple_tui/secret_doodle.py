@@ -102,37 +102,18 @@ def build_ops() -> list[tuple[int, int, str]]:
     return ops
 
 
-def paint_ops(app, ops: list[tuple[int, int, str]]) -> None:
-    """Switch to the Art room and paint ops onto a fresh canvas.
-
-    The Art room mounts its canvas lazily on first activation, so the paint is
-    retried after each refresh until the canvas exists.
-    """
-    from .constants import ROOM_ART
-    from .rooms.art_room import ArtMode, ArtCanvas
-    from textual.css.query import NoMatches
-
-    app.action_switch_room(ROOM_ART[0])
-
-    def _paint(attempts_left: int = 30) -> None:
-        try:
-            art = app.query_one(ArtMode)
-            canvas = art.query_one(ArtCanvas)
-            ready = canvas.canvas_width > 50  # size 0 until first layout
-        except NoMatches:
-            canvas = None
-            ready = False
-        if not ready:
-            if attempts_left > 0:
-                app.call_after_refresh(_paint, attempts_left - 1)
-            return
-        art.clear_canvas()
-        for x, y, k in ops:
-            canvas.paint_at(x, y, k)
-        canvas._invalidate_all()
-        canvas.refresh()
-
-    app.call_after_refresh(_paint)
+def paint_ops(app, ops: list) -> None:
+    """Switch to the Art room and paint ops onto a fresh canvas. The ops were
+    authored on the old 132x25 terminal grid (2:1 cells), so they are scaled
+    onto today's square grid keeping their proportions."""
+    from .rooms.art_room import COLS
+    app.action_switch_room("art")
+    art = app.rooms["art"]
+    art.clear()
+    s = COLS / 132
+    for x, y, k in ops:
+        art.paint_at(round(x * s), round(y * 2 * s), k)
+    app.invalidate()
 
 
 def paint_doodle(app) -> None:

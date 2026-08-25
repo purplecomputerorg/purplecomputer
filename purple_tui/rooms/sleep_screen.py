@@ -1,32 +1,20 @@
-"""
-Purple Computer - Sleep Screen, Shutdown Confirm Screen, Bye Screen,
-Live Boot Splash, and First Boot Welcome
-
-Kid-friendly screens for sleep (idle timeout), shutdown confirmation
-(power button tap), shutdown (power button hold, lid close timeout),
-live boot welcome message, and first-boot-after-install welcome.
-
-Two power states: awake and sleep face. No DPMS screen-off state.
-Timers adapt to charger status and lid position.
-"""
-
-from textual.app import ComposeResult
-from textual.screen import Screen
-from textual.widgets import Static
-from textual import events
+"""Sleep, shutdown confirm, bye, live-boot splash, and the first-boot power
+cycle screen. Full-screen overlays; any key wakes or dismisses as noted."""
 
 import os
+import time
 
-from ..power_manager import get_power_manager, LID_SHUTDOWN_DELAY
-from ..constants import is_live_boot, LIVE_AUDIO_MARKER
+from .. import palette as P
+from ..constants import LIVE_AUDIO_MARKER, is_live_boot
+from ..keyboard import ControlAction
+from ..power_manager import LID_SHUTDOWN_DELAY, get_power_manager
+from ..ui import Overlay
+
+_FACE = ["---     ---", "", "   \\___/   ", "", "   z z z   "]
+_BYE_FACE = ["---     ---", "", "   \\___/   ", "", "    Bye!   "]
 
 
 def _friendly_time(seconds: float) -> str:
-    """Format remaining seconds as friendly, rounded text for parents.
-
-    45+ min: 'about 1 hr', 10-44 min: 'about NN min',
-    1-9 min: 'N min', under 1 min: 'soon'.
-    """
     minutes = int(seconds / 60)
     if minutes >= 45:
         return "about 1 hr"
@@ -36,441 +24,177 @@ def _friendly_time(seconds: float) -> str:
         return f"{minutes} min"
     return "soon"
 
-# All lines SAME WIDTH for consistent bounding box
-_SLEEP_FACE = "\n".join([
-    "---     ---",
-    "           ",
-    "   \\___/   ",
-    "           ",
-    "   z z z   ",
-])
+
+class FullScreen(Overlay):
+    """Solid background, a face or message, and a hint underneath."""
+
+    bg = P.BG
+    face: list = []
+    message = ""
+    hint = ""
+    status = ""
+
+    def draw(self, g):
+        g.fill(self.bg)
+        y = g.h // 2 - g.vh(14)
+        for line in self.face:
+            g.draw_text(line or " ", g.vh(4), g.w // 2, y, "mono-bold", P.PRIMARY, anchor="midtop")
+            y += g.vh(5)
+        if self.message:
+            y += g.draw_markup(self.message, g.vh(2.8), g.vw(10), y, "sans-bold", P.PRIMARY, g.vw(80), "center", self.bg, g.vh(0.6))
+        if self.hint:
+            y += g.vh(3)
+            y += g.draw_markup(self.hint, g.vh(2.4), g.vw(10), y, "sans", P.MUTED, g.vw(80), "center", self.bg)
+        if self.status:
+            y += g.vh(2)
+            g.draw_markup(self.status, g.vh(2.2), g.vw(10), y, "sans", P.MUTED, g.vw(80), "center", self.bg, g.vh(0.4))
 
 
-class SleepFace(Static):
-    """Sleeping face widget - centered as a single block."""
+class SleepScreen(FullScreen):
+    bg = "#140a22"
+    face = _FACE
+    hint = "Press any key to wake"
 
-    def render(self) -> str:
-        return _SLEEP_FACE
-
-
-class SleepScreen(Screen):
-    """
-    Sleep screen shown when computer is idle or lid is closed.
-
-    Press any key to wake up and return to normal operation.
-    Shuts down after extended idle or lid-closed timeout.
-    """
-
-    DEFAULT_CSS = """
-    SleepScreen {
-        align: center middle;
-        background: #140a22;
-    }
-
-    SleepFace {
-        content-align: center middle;
-        color: $primary;
-    }
-
-    #sleep-hint {
-        content-align: center middle;
-        color: $text-muted;
-        margin-top: 2;
-    }
-
-    #sleep-status {
-        content-align: center middle;
-        color: $text-muted;
-        margin-top: 2;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._status_timer = None
+    def on_open(self):
         self._shutdown_initiated = False
-
-    def compose(self) -> ComposeResult:
-        yield SleepFace()
-        yield Static("Press any key to wake", id="sleep-hint")
-        yield Static("", id="sleep-status")
-
-    def on_mount(self) -> None:
-        """Start update timer when screen is shown."""
         self._update_status()
-        self._status_timer = self.set_interval(5.0, self._tick)
+        self._timer = self.app.timers.every(5.0, self._tick)
 
-    def on_unmount(self) -> None:
-        """Clean up timer when screen is hidden."""
-        if self._status_timer:
-            self._status_timer.stop()
+    def on_close(self):
+        self._timer.stop()
 
-    def _tick(self) -> None:
-        """Update status text and check for idle shutdown."""
+    def _tick(self):
         self._update_status()
         self._check_idle_shutdown()
+        self.app.invalidate()
 
-    def _update_status(self) -> None:
-        """Update the power status hint based on current state."""
-        import time
+    def _update_status(self):
         pm = get_power_manager()
-        on_charger = pm.is_on_charger()
-        live = is_live_boot()
-
-        lid_close_time = getattr(self.app, '_lid_close_time', None)
-        lid_was_closed_for = getattr(self.app, '_lid_was_closed_for', 0)
-
+        lid_close_time = self.app._lid_close_time
         lines = []
         if lid_close_time is not None:
             closed_min = int((time.time() - lid_close_time) / 60)
             lines.append(f"💻 Lid closed{f' {closed_min} min' if closed_min >= 1 else ''}.")
-        elif lid_was_closed_for > 0:
-            closed_min = int(lid_was_closed_for / 60)
+        elif self.app._lid_was_closed_for > 0:
+            closed_min = int(self.app._lid_was_closed_for / 60)
             lines.append(f"💻 Lid open{f' (closed {closed_min} min)' if closed_min >= 1 else ''}.")
-
-        if live:
+        if is_live_boot():
             lines.append("💾 USB. Need it to restart.")
-
         if lid_close_time is not None:
             remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
             lines.append(f"⏳ Shuts off in {_friendly_time(remaining)}.")
         else:
-            idle = pm.get_idle_seconds()
-            remaining = max(0, pm.get_idle_shutdown_threshold() - idle)
-            power_icon = "🔌 Plugged in." if on_charger is True else "🔋 Battery."
-            lines.append(f"{power_icon} Shuts off in {_friendly_time(remaining)}.")
+            remaining = max(0, pm.get_idle_shutdown_threshold() - pm.get_idle_seconds())
+            icon = "🔌 Plugged in." if pm.is_on_charger() is True else "🔋 Battery."
+            lines.append(f"{icon} Shuts off in {_friendly_time(remaining)}.")
+        self.status = "\n".join(lines)
 
-        try:
-            self.query_one("#sleep-status", Static).update("\n".join(lines))
-        except Exception:
-            pass
-
-    def _check_idle_shutdown(self) -> None:
-        """Check if idle time has reached shutdown threshold."""
+    def _check_idle_shutdown(self):
         from ..power_manager import _power_log
         pm = get_power_manager()
-
-        charger = pm.is_on_charger()
-        idle = pm.get_idle_seconds()
-        shutdown_threshold = pm.get_idle_shutdown_threshold()
+        idle, threshold = pm.get_idle_seconds(), pm.get_idle_shutdown_threshold()
         if int(idle) % 30 == 0:
-            _power_log(f"SLEEP_SCREEN TICK: idle={idle:.0f}s, shutdown_threshold={shutdown_threshold}, charger={charger}")
-        if idle >= shutdown_threshold:
-            _power_log(f"SLEEP_SCREEN SHUTDOWN: idle {idle:.0f}s >= {shutdown_threshold}s")
+            _power_log(f"SLEEP_SCREEN TICK: idle={idle:.0f}s, shutdown_threshold={threshold}, charger={pm.is_on_charger()}")
+        if idle >= threshold:
+            _power_log(f"SLEEP_SCREEN SHUTDOWN: idle {idle:.0f}s >= {threshold}s")
             self._do_shutdown()
 
-    def _do_shutdown(self) -> None:
-        """Execute shutdown (only once, further calls are no-ops)."""
+    def _do_shutdown(self):
         if self._shutdown_initiated:
             return
         self._shutdown_initiated = True
-        pm = get_power_manager()
-        if not pm.shutdown():
-            try:
-                self.query_one("#sleep-hint", Static).update("Please turn off")
-            except Exception:
-                pass
+        if not get_power_manager().shutdown():
+            self.hint = "Please turn off"
 
-    def _wake_up(self) -> None:
-        """Wake up and return to normal operation."""
+    async def handle(self, action):
         from ..power_manager import _power_log
         _power_log("WAKE UP: key pressed on sleep screen")
-        pm = get_power_manager()
-        pm.record_activity()
-        # Clear the "was closed for" so it doesn't linger into next sleep
+        get_power_manager().record_activity()
         self.app._lid_was_closed_for = 0
-        self.dismiss()
-
-    def on_key(self, event: events.Key) -> None:
-        """Any key press wakes up the computer (terminal fallback)"""
-        event.stop()
-        event.prevent_default()
-        self._wake_up()
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Any key action wakes up the computer (evdev)"""
-        self._wake_up()
+        self.close()
 
 
-class ShutdownConfirmScreen(Screen):
-    """
-    Confirmation screen shown when power button is tapped.
-
-    Shows "Press power button again to shut down" with a 3-second
-    countdown. Auto-dismisses when the countdown expires. Any other
-    key also dismisses back to normal operation.
-    """
-
+class ShutdownConfirmScreen(FullScreen):
     COUNTDOWN_SECONDS = 3
+    face = _FACE
 
-    DEFAULT_CSS = """
-    ShutdownConfirmScreen {
-        align: center middle;
-        background: $background;
-    }
-
-    #shutdown-face {
-        content-align: center middle;
-        color: $primary;
-    }
-
-    #shutdown-hint {
-        content-align: center middle;
-        color: $text-muted;
-        margin-top: 2;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        yield Static(_SLEEP_FACE, id="shutdown-face")
-        yield Static(
-            f"Press power button again to shut down ({self.COUNTDOWN_SECONDS})",
-            id="shutdown-hint",
-        )
-
-    def on_mount(self) -> None:
+    def on_open(self):
         self._remaining = self.COUNTDOWN_SECONDS
-        self.set_interval(1.0, self._tick)
+        self._refresh()
+        self._timer = self.app.timers.every(1.0, self._tick)
 
-    def _tick(self) -> None:
+    def on_close(self):
+        self._timer.stop()
+
+    def _refresh(self):
+        self.hint = f"Press power button again to shut down ({self._remaining})"
+
+    def _tick(self):
         self._remaining -= 1
         if self._remaining <= 0:
-            self._cancel()
-            return
-        hint = self.query_one("#shutdown-hint", Static)
-        hint.update(f"Press power button again to shut down ({self._remaining})")
+            return self._cancel()
+        self._refresh()
+        self.app.invalidate()
 
-    def _cancel(self) -> None:
-        """Cancel shutdown and return to normal operation."""
-        pm = get_power_manager()
-        pm.record_activity()
-        self.dismiss()
+    def _cancel(self):
+        get_power_manager().record_activity()
+        self.close()
 
-    def on_key(self, event: events.Key) -> None:
-        """Any non-power key cancels (terminal fallback)."""
-        event.stop()
-        event.prevent_default()
-        self._cancel()
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Any non-power key cancels (evdev)."""
+    async def handle(self, action):
         self._cancel()
 
 
-class ByeScreen(Screen):
-    """
-    Friendly shutdown screen shown when power button is held for 3 seconds.
+class ByeScreen(FullScreen):
+    face = _BYE_FACE
+    hint = "Turning off..."
 
-    Shows a brief goodbye message, then powers off. No cancel option
-    since the 3-second hold was already a deliberate action.
-    """
+    def on_open(self):
+        if not get_power_manager().shutdown():
+            self.hint = "Please turn off"
 
-    DEFAULT_CSS = """
-    ByeScreen {
-        align: center middle;
-        background: $background;
-    }
-
-    #bye-face {
-        content-align: center middle;
-        color: $primary;
-    }
-
-    #bye-text {
-        content-align: center middle;
-        color: $text-muted;
-        margin-top: 2;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        yield Static(
-            "\n".join([
-                "---     ---",
-                "           ",
-                "   \\___/   ",
-                "           ",
-                "    Bye!   ",
-            ]),
-            id="bye-face",
-        )
-        yield Static("Turning off...", id="bye-text")
-
-    def on_mount(self) -> None:
-        """Show goodbye and shut down immediately.
-
-        The user already confirmed (held power 3s or tapped twice).
-        No reason to delay.
-        """
-        pm = get_power_manager()
-        if not pm.shutdown():
-            try:
-                self.query_one("#bye-text", Static).update("Please turn off")
-            except Exception:
-                pass
-
-    def on_key(self, event: events.Key) -> None:
-        """Suppress all keys during shutdown."""
-        event.stop()
-        event.prevent_default()
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Suppress all keys during shutdown."""
+    async def handle(self, action):
         pass
 
 
-class LiveBootSplash(Screen):
-    """
-    Welcome screen shown once on first launch during live boot (USB).
+class LiveBootSplash(FullScreen):
+    message = ("Welcome to Purple Computer!\n\n"
+               "Purple is keyboard only, on purpose!\nKids explore by typing.\n\n"
+               "You're running from USB. If the computer\nturns off, you'll need the USB to start again.\n\n"
+               "To install Purple and keep it, hold the Esc\nkey to open the Parent Menu.")
+    _AUDIO_WARNING = ("🔇 Sound is not working on this computer.\nPlug in a USB audio adapter, or open the\n"
+                      "Parent Menu to see Support info.")
+    hint = "Press any key to start"
 
-    Tells the parent that Purple is running from USB and will be gone
-    after shutdown unless installed. When audio is detected as broken,
-    appends a one-line warning pointing at Support info + USB adapter.
-    Dismissed by any key press.
-    """
+    def on_open(self):
+        self._timer = self.app.timers.every(0.25, self._refresh)
 
-    DEFAULT_CSS = """
-    LiveBootSplash {
-        align: center middle;
-        background: $background;
-    }
+    def on_close(self):
+        self._timer.stop()
 
-    #splash-message {
-        content-align: center middle;
-        color: $primary;
-        margin-bottom: 2;
-    }
+    def _refresh(self):
+        warn = self._AUDIO_WARNING if self.app.audio_ok is False else ""
+        if warn != self.status:
+            self.status = warn
+            self.app.invalidate()
 
-    #splash-audio-warning {
-        content-align: center middle;
-        color: $warning;
-        margin-bottom: 2;
-    }
-
-    #splash-hint {
-        content-align: center middle;
-        color: $text-muted;
-    }
-    """
-
-    _BASE_MESSAGE = (
-        "Welcome to Purple Computer!\n"
-        "\n"
-        "Purple is keyboard only, on purpose!\n"
-        "Kids explore by typing.\n"
-        "\n"
-        "You're running from USB. If the computer\n"
-        "turns off, you'll need the USB to start again.\n"
-        "\n"
-        "To install Purple and keep it, hold the Esc\n"
-        "key to open the Parent Menu."
-    )
-
-    _AUDIO_WARNING = (
-        "\U0001f507 Sound is not working on this computer.\n"
-        "Plug in a USB audio adapter, or open the\n"
-        "Parent Menu to see Support info."
-    )
-
-    def compose(self) -> ComposeResult:
-        yield Static(self._BASE_MESSAGE, id="splash-message")
-        yield Static("", id="splash-audio-warning")
-        yield Static("Press any key to start", id="splash-hint")
-
-    def on_mount(self) -> None:
-        # Audio probe runs on a background thread started from on_mount
-        # of PurpleApp. By the time the user finishes reading the splash,
-        # app.audio_ok is almost always set. Poll briefly in case it isn't.
-        self._refresh_audio_warning()
-        self.set_interval(0.25, self._refresh_audio_warning)
-
-    def _refresh_audio_warning(self) -> None:
-        audio_ok = getattr(self.app, "audio_ok", None)
-        try:
-            warning = self.query_one("#splash-audio-warning", Static)
-        except Exception:
-            return
-        warning.update(self._AUDIO_WARNING if audio_ok is False else "")
-
-    def on_key(self, event: events.Key) -> None:
-        """Any key dismisses the splash."""
-        event.stop()
-        event.prevent_default()
-        self.dismiss()
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Any key dismisses the splash."""
-        self.dismiss()
+    async def handle(self, action):
+        self.close()
 
 
 def first_boot_power_cycle_needed(audio_ok) -> bool:
-    """True when audio worked in the live session but no sound card came up
-    on this installed boot: the warm-reboot codec wedge a power off fixes.
-
-    The no-card requirement keeps known-silent codecs (CS8409 Macs) and
-    mixer-only failures from triggering a power cycle that won't help.
-    """
-    if audio_ok is not False or is_live_boot():
+    """Audio worked in the live session but no card came up on this installed
+    boot: the warm-reboot codec wedge a power off fixes."""
+    if audio_ok is not False or is_live_boot() or not os.path.exists(LIVE_AUDIO_MARKER):
         return False
-    if not os.path.exists(LIVE_AUDIO_MARKER):
-        return False
-    from .music_room import _silence_reason
+    from ..mixer import _silence_reason
     return _silence_reason() == "no-card"
 
 
-class FirstBootPowerCycleScreen(Screen):
-    """
-    Shown at most once, on the first installed boot, when
-    first_boot_power_cycle_needed() says a power off should bring audio back.
+class FirstBootPowerCycleScreen(FullScreen):
+    message = ("Almost done!\n\nPurple needs to turn off and on\none time to finish setting up.\n\n"
+               "After it turns off, press the\npower button to start Purple.")
+    hint = "Press ENTER to turn off"
 
-    Framed as finishing setup, not as an error: the parent presses ENTER,
-    the machine turns off (a real power off, which resets the codec), and
-    the next press of the power button cold-boots into a working Purple.
-    """
-
-    DEFAULT_CSS = """
-    FirstBootPowerCycleScreen {
-        align: center middle;
-        background: $background;
-    }
-
-    #firstboot-message {
-        content-align: center middle;
-        color: $primary;
-        margin-bottom: 2;
-    }
-
-    #firstboot-hint {
-        content-align: center middle;
-        color: $text-muted;
-    }
-    """
-
-    _MESSAGE = (
-        "Almost done!\n"
-        "\n"
-        "Purple needs to turn off and on\n"
-        "one time to finish setting up.\n"
-        "\n"
-        "After it turns off, press the\n"
-        "power button to start Purple."
-    )
-
-    def compose(self) -> ComposeResult:
-        yield Static(self._MESSAGE, id="firstboot-message")
-        yield Static("Press ENTER to turn off", id="firstboot-hint")
-
-    def _power_off(self) -> None:
-        self.app.push_screen(ByeScreen())
-
-    def on_key(self, event: events.Key) -> None:
-        event.stop()
-        event.prevent_default()
-        if event.key == "enter":
-            self._power_off()
-
-    async def handle_keyboard_action(self, action) -> None:
-        from ..keyboard import ControlAction
-        if isinstance(action, ControlAction) and action.action == 'enter' \
-                and action.is_down:
-            self._power_off()
+    async def handle(self, action):
+        if isinstance(action, ControlAction) and action.action == "enter" and action.is_down:
+            self.app.push(ByeScreen(self.app))

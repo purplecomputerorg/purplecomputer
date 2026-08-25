@@ -1,530 +1,170 @@
-"""
-Room Picker Screen: A kid-friendly modal for switching rooms.
+"""The Esc menu: pick a room, or Volume, Clear, Time Travel, and the code toggle."""
 
-Shows 3 rooms (Play, Music, Art) at the top, then Volume + Clear +
-Time Travel side by side. Arrow keys navigate, number keys 1-3 for direct
-room selection, V opens volume, C clears a room, T starts Time Travel,
-Enter selects, Escape cancels. Any unrecognized key dismisses gracefully.
-"""
+import pygame
 
-from .modal import PurpleModal, PickerModal
-from textual.containers import Container, Horizontal
-from textual.widgets import Static
-from textual.app import ComposeResult
-from textual.message import Message
+from . import palette as P
+from .keyboard import CharacterAction, ControlAction, NavigationAction
+from .ui import Dialog, Overlay, Picker
 
-from .constants import (
-    ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE, ICON_TIME_TRAVEL,
-)
-from .keyboard import NavigationAction, ControlAction, CharacterAction
-from .hints import arrow_keys_text
+ROOM_OPTIONS = [("play", "🎈", "Play"), ("music", "🎵", "Music"), ("art", "🎨", "Art")]
+NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
+ROWS, EXTRAS, CODE = 0, 1, 2
 
 
-# Room options: (id, icon, label, result)
-ROOM_OPTIONS = [
-    ("play", ICON_CHAT, "Play", {"room": "play"}),
-    ("music", ICON_MUSIC, "Music", {"room": "music"}),
-    ("art", ICON_PALETTE, "Art", {"room": "art"}),
-]
-
-ROOM_DISPLAY_NAMES = {opt_id: label for opt_id, _, label, _ in ROOM_OPTIONS}
-
-# Map number keys to room indices
-NUMBER_KEY_ROOMS = {'1': 0, '2': 1, '3': 2}
-
-# Navigation rows
-ROW_ROOMS = 0
-ROW_EXTRAS = 1
-ROW_CODE = 2
-
-# Extras columns: 0 = volume, 1 = clear room, 2 = time travel
-COL_VOLUME = 0
-COL_CLEAR = 1
-COL_TIME_TRAVEL = 2
-NUM_EXTRA_COLS = 3
+def volume_badge(vol: int):
+    steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
+    label = next(lbl for lvl, lbl in steps if vol <= lvl)
+    filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
+    return ("🔇" if vol == 0 else "🔊"), "█" * filled + "░" * (10 - filled), label
 
 
-class RoomOption(Static):
-    """A single selectable room option with icon and label."""
+class RoomPicker(Overlay):
+    def __init__(self, app):
+        super().__init__(app)
+        self.row = ROWS
+        self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
+        self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
 
-    DEFAULT_CSS = """
-    RoomOption {
-        width: 20;
-        height: 8;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-        padding: 0 1;
-    }
-
-    RoomOption.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-    """
-
-    def __init__(self, option_id: str, icon: str, label: str, number: int, **kwargs):
-        super().__init__(**kwargs)
-        self.option_id = option_id
-        self.icon = icon
-        self.label = label
-        self.number = number
-
-    def render(self) -> str:
-        enter_hint = "\nor Enter" if self.has_class("selected") else ""
-        return f"\n{self.icon}  {self.label}  {self.icon}\n\nPress {self.number}{enter_hint}\n"
-
-
-class ExtraOption(Static):
-    """Half-width action button for the extras row (volume, clear room)."""
-
-    DEFAULT_CSS = """
-    ExtraOption {
-        width: 20;
-        height: 6;
-        content-align: center middle;
-        text-align: center;
-        border: round $surface-lighten-2;
-        margin: 0 1;
-    }
-
-    ExtraOption.selected {
-        border: heavy $accent;
-        background: $primary;
-        color: $background;
-        text-style: bold;
-    }
-
-    ExtraOption.disabled {
-        color: $text-muted;
-        border: round $surface-darken-1;
-    }
-
-    ExtraOption.disabled.selected {
-        background: $surface-lighten-1;
-        color: $text-muted;
-        border: heavy $accent-darken-2;
-    }
-    """
-
-    def __init__(self, icon: str, label: str, key_hint: str, disabled: bool = False, **kwargs):
-        super().__init__(**kwargs)
-        self._icon = icon
-        self._label = label
-        self._key_hint = key_hint
-        if disabled:
-            self.add_class("disabled")
-
-    def render(self) -> str:
-        if self.has_class("disabled"):
-            return f"\n{self._icon}  {self._label}  {self._icon}\n"
-        hint = f"Press {self._key_hint} or Enter" if self.has_class("selected") else f"Press {self._key_hint}"
-        return f"\n{self._icon}  {self._label}  {self._icon}\n{hint}"
-
-
-class ConfirmFreshScreen(PickerModal):
-    """Clear-room confirm: clear this room (pre-selected) or go back.
-
-    Dismisses with the id of the room to clear ("play"/"music"/"art") or None
-    to cancel. Clear sits on top and pre-selected because clearing is safe now:
-    Time Travel can always bring the room back.
-    """
-
-    TITLE = "Clear a Room"
-
-    def __init__(self, current_room: str = "play", **kwargs):
-        room_name = ROOM_DISPLAY_NAMES.get(current_room, "This")
-        self.OPTIONS = [
-            (current_room, f"Clear {room_name} Room"),
-            (None, "Go Back"),
-        ]
-        super().__init__(**kwargs)
-
-
-class RoomPickerScreen(PurpleModal):
-    """
-    Modal screen for selecting rooms with arrow key navigation.
-
-    Layout (2 navigable rows):
-      [1 Play]  [2 Music]  [3 Art]                   <- room row
-      [Volume  V]  [Clear  C]  [Time Travel  T]      <- extras row
-    """
-
-    CSS = """
-    #modal-dialog {
-        width: 100;
-        padding: 2 3;
-    }
-
-    #picker-options {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #picker-extras {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #picker-code-row {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-bottom: 1;
-    }
-
-    #opt-code-toggle {
-        width: 52;
-    }
-
-    #picker-arrows {
-        width: 100%;
-        height: auto;
-        align: center middle;
-        margin-top: 1;
-    }
-
-    #picker-arrow-hint {
-        width: auto;
-        height: auto;
-        color: $text-muted;
-    }
-    """
-
-    class RoomSelected(Message, bubble=True):
-        """Posted when a room is selected, before the picker is dismissed.
-
-        The app should handle this by switching rooms, then dismissing the picker.
-        This avoids a flicker frame where the old room is visible between
-        picker dismiss and room switch.
-        """
-        def __init__(self, result: dict):
-            super().__init__()
-            self.result = result
-
-    def __init__(self, current_room: str = "play", code_panel_open: bool = False, code_panel_enabled: bool = False, **kwargs):
-        super().__init__(**kwargs)
-        self._current_room = current_room
-        self._code_panel_open = code_panel_open
-        self._code_panel_enabled = code_panel_enabled
-        self._show_code_row = current_room in ("music", "art") and (code_panel_open or code_panel_enabled)
-        # Always start on the room row, highlighting the current room
-        self._active_row = ROW_ROOMS
-        self._room_index = self._get_initial_room_index()
-        self._extra_index = COL_VOLUME
-
-    def _get_initial_room_index(self) -> int:
-        for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
-            if opt_id == self._current_room:
-                return i
-        return 0
-
-    def compose(self) -> ComposeResult:
-        with Container(id="modal-dialog"):
-            yield Static("Pick a Room", id="modal-title")
-
-            with Horizontal(id="picker-options"):
-                for i, (opt_id, icon, label, _) in enumerate(ROOM_OPTIONS):
-                    yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
-
-            with Horizontal(id="picker-extras"):
-                if getattr(self.app, "volume_locked", False):
-                    icon, label = self._locked_volume_badge()
-                    yield ExtraOption(icon, label, "", disabled=True, id="opt-volume")
-                else:
-                    yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
-                yield ExtraOption(ICON_BROOM, "Clear", "C", id="opt-clear-rooms")
-                yield ExtraOption(ICON_TIME_TRAVEL, "Time Travel", "T", id="opt-time-travel")
-
-            if self._show_code_row:
-                with Horizontal(id="picker-code-row"):
-                    if self._code_panel_open:
-                        yield ExtraOption(ICON_CODE, "Close Code", "Space", id="opt-code-toggle")
-                    else:
-                        yield ExtraOption(ICON_CODE, "Open Code", "Space", id="opt-code-toggle")
-
-            yield Static("Enter pick   Hold Esc for grown-ups", id="modal-hint")
-            with Container(id="picker-arrows"):
-                yield Static(arrow_keys_text(), id="picker-arrow-hint")
-
-    def on_mount(self) -> None:
-        self._update_selection()
-
-    def _update_selection(self) -> None:
-        """Update visual selection state."""
-        # Room row
-        for i, (opt_id, _, _, _) in enumerate(ROOM_OPTIONS):
-            try:
-                option = self.query_one(f"#opt-{opt_id}", RoomOption)
-                if self._active_row == ROW_ROOMS and i == self._room_index:
-                    option.add_class("selected")
-                else:
-                    option.remove_class("selected")
-            except Exception:
-                pass
-
-        # Extras row
-        extra_ids = ["#opt-volume", "#opt-clear-rooms", "#opt-time-travel"]
-        for i, eid in enumerate(extra_ids):
-            try:
-                widget = self.query_one(eid, ExtraOption)
-                if self._active_row == ROW_EXTRAS and i == self._extra_index:
-                    widget.add_class("selected")
-                else:
-                    widget.remove_class("selected")
-            except Exception:
-                pass
-
-        # Code row (present when code panel is open or enabled in music/art)
-        if self._show_code_row:
-            try:
-                code_opt = self.query_one("#opt-code-toggle", ExtraOption)
-                if self._active_row == ROW_CODE:
-                    code_opt.add_class("selected")
-                else:
-                    code_opt.remove_class("selected")
-            except Exception:
-                pass
-
-    def _select_room(self, index: int) -> None:
-        if 0 <= index < len(ROOM_OPTIONS):
-            _, _, _, result = ROOM_OPTIONS[index]
-            self.post_message(self.RoomSelected(result))
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Handle keyboard navigation from evdev."""
-        if isinstance(action, NavigationAction):
-            if action.direction == 'left':
-                if self._active_row == ROW_ROOMS:
-                    self._room_index = max(0, self._room_index - 1)
-                elif self._active_row == ROW_EXTRAS:
-                    self._extra_index = max(0, self._extra_index - 1)
-                self._update_selection()
-            elif action.direction == 'right':
-                if self._active_row == ROW_ROOMS:
-                    self._room_index = min(len(ROOM_OPTIONS) - 1, self._room_index + 1)
-                elif self._active_row == ROW_EXTRAS:
-                    self._extra_index = min(NUM_EXTRA_COLS - 1, self._extra_index + 1)
-                self._update_selection()
-            elif action.direction == 'up':
-                if self._active_row == ROW_CODE:
-                    self._active_row = ROW_EXTRAS
-                    self._update_selection()
-                elif self._active_row == ROW_EXTRAS:
-                    self._active_row = ROW_ROOMS
-                    # Rooms and extras are both 3 columns: keep the column
-                    self._room_index = self._extra_index
-                    self._update_selection()
-            elif action.direction == 'down':
-                if self._active_row == ROW_ROOMS:
-                    self._active_row = ROW_EXTRAS
-                    self._extra_index = self._room_index
-                    self._update_selection()
-                elif self._active_row == ROW_EXTRAS and self._show_code_row:
-                    self._active_row = ROW_CODE
-                    self._update_selection()
-            return
-
-        if isinstance(action, CharacterAction) and not action.is_repeat:
-            if action.char in NUMBER_KEY_ROOMS:
-                self._select_room(NUMBER_KEY_ROOMS[action.char])
-            elif action.char.lower() == 'v':
-                # Jump to volume and activate
-                self._active_row = ROW_EXTRAS
-                self._extra_index = COL_VOLUME
-                self._update_selection()
-                self._open_volume()
-            elif action.char.lower() == 'c':
-                # Jump to clear room and activate
-                self._active_row = ROW_EXTRAS
-                self._extra_index = COL_CLEAR
-                self._update_selection()
-                self._confirm_clear_rooms()
-            elif action.char.lower() == 't':
-                self.dismiss({"time_travel": True})
-            else:
-                # Any other character key: dismiss picker
-                self.dismiss(None)
-            return
-
-        # Escape dismisses on release, not press. The app runs a 1s long-hold
-        # timer on every escape press; if we dismissed on press the picker
-        # would close instantly, leaving the long-hold timer to open the
-        # parent menu 1s later (visible flicker / two-step transition).
-        # Releasing-side dismiss means a tap closes the picker, while a hold
-        # leaves the picker up until the timer fires and dismisses it itself
-        # in _check_escape_hold().
-        if isinstance(action, ControlAction) and action.action == 'escape' and not action.is_down:
-            self.dismiss(None)
-            return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action == 'enter':
-                if self._active_row == ROW_ROOMS:
-                    self._select_room(self._room_index)
-                elif self._active_row == ROW_EXTRAS:
-                    if self._extra_index == COL_VOLUME:
-                        self._open_volume()
-                    elif self._extra_index == COL_CLEAR:
-                        self._confirm_clear_rooms()
-                    elif self._extra_index == COL_TIME_TRAVEL:
-                        self.dismiss({"time_travel": True})
-                elif self._active_row == ROW_CODE:
-                    if self._code_panel_open:
-                        self.dismiss({"close_code": True})
-                    else:
-                        self.dismiss({"open_code": True})
-            elif action.action == 'space' and self._show_code_row:
-                if self._code_panel_open:
-                    self.dismiss({"close_code": True})
-                else:
-                    self.dismiss({"open_code": True})
-            elif action.action == 'volume_mute':
-                self.app.action_volume_mute()
-            elif action.action == 'volume_down':
-                self.app.action_volume_down()
-            elif action.action == 'volume_up':
-                self.app.action_volume_up()
-
-    def _confirm_clear_rooms(self) -> None:
-        """Confirm clearing the current room."""
-        def on_confirm(result: str | None) -> None:
-            if result:
-                self.dismiss({"clear_room": result})
-
-        self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)
-
-    def _locked_volume_badge(self) -> tuple[str, str]:
-        """Pick the icon + label for the Volume slot when it's locked."""
-        lock = getattr(self.app, "_volume_lock", None)
+    def _locked_volume(self):
+        lock = self.app._volume_lock
         if lock == 0:
-            return ICON_VOLUME_OFF, "Silent Mode"
+            return "🔇", "Silent Mode"
         if lock is not None:
-            if lock <= 35:
-                icon = ICON_VOLUME_LOW
-            elif lock <= 60:
-                icon = ICON_VOLUME_MED
-            else:
-                icon = ICON_VOLUME_HIGH
-            return icon, "Locked"
-        return ICON_VOLUME_OFF, "No Sound"
+            return "🔊", "Locked"
+        if self.app.audio_ok is False:
+            return "🔇", "No Sound"
+        return None
 
-    def _open_volume(self) -> None:
-        """Open the kid's volume modal (skip when audio is off or a parent lock is on)."""
-        if getattr(self.app, "volume_locked", False):
-            return
-        self.app.push_screen(VolumeModal())
-
-    async def _on_key(self, event) -> None:
-        """Suppress terminal key events. All input comes via evdev."""
-        event.stop()
-        event.prevent_default()
-
-
-class VolumeModal(PurpleModal):
-    """Simple volume adjustment modal.
-
-    Shows current volume level. Up/down arrows adjust. Enter/Esc to close.
-    """
-
-    CSS = """
-    #modal-dialog {
-        width: 50;
-        padding: 2 3;
-    }
-
-    #volume-display {
-        width: 100%;
-        text-align: center;
-        margin-bottom: 1;
-    }
-
-    #modal-hint {
-        margin-top: 0;
-    }
-    """
-
-    def compose(self) -> ComposeResult:
-        with Container(id="modal-dialog"):
-            yield Static("Volume", id="modal-title")
-            yield Static("", id="volume-display")
-            yield Static("\u25c0 \u25b6 \u25b2 \u25bc adjust   Enter close", id="modal-hint")
-
-    def on_mount(self) -> None:
-        self._update_display()
-
-    def _update_display(self) -> None:
-        level = self.app.volume_level
-        from .constants import (
-            ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-        )
-        if level == 0:
-            icon = ICON_VOLUME_OFF
-            label = "Sound Off"
-            bars = "░░░░░░░░░░"
-        elif level <= 15:
-            icon = ICON_VOLUME_LOW
-            label = "Whisper"
-            bars = "██░░░░░░░░"
-        elif level <= 35:
-            icon = ICON_VOLUME_LOW
-            label = "Quiet"
-            bars = "████░░░░░░"
-        elif level <= 60:
-            icon = ICON_VOLUME_MED
-            label = "Medium"
-            bars = "██████░░░░"
-        elif level <= 85:
-            icon = ICON_VOLUME_HIGH
-            label = "Loud"
-            bars = "████████░░"
-        else:
-            icon = ICON_VOLUME_HIGH
-            label = "Full"
-            bars = "██████████"
-
-        try:
-            display = self.query_one("#volume-display", Static)
-            display.update(f"{icon}  {bars}  {label}")
-        except Exception:
-            pass
-
-    async def handle_keyboard_action(self, action) -> None:
+    async def handle(self, action):
         if isinstance(action, NavigationAction):
-            if action.direction in ('up', 'right'):
-                self.app.action_volume_up()
-                self._update_display()
-            elif action.direction in ('down', 'left'):
-                self.app.action_volume_down()
-                self._update_display()
+            if action.is_repeat:
+                return
+            d = action.direction
+            if d in ("left", "right") and self.row != CODE:
+                self.col = max(0, min(2, self.col + (1 if d == "right" else -1)))
+            elif d == "up":
+                self.row = max(ROWS, self.row - 1)
+            elif d == "down":
+                self.row = min(CODE if self.code_row else EXTRAS, self.row + 1)
+            self.app.invalidate()
             return
-
-        if isinstance(action, ControlAction) and action.is_down:
-            if action.action in ('enter', 'escape', 'tab'):
-                self.dismiss(None)
-            elif action.action == 'volume_mute':
-                self.app.action_volume_mute()
-                self._update_display()
-            elif action.action == 'volume_down':
-                self.app.action_volume_down()
-                self._update_display()
-            elif action.action == 'volume_up':
-                self.app.action_volume_up()
-                self._update_display()
-            return
-
         if isinstance(action, CharacterAction):
-            # Any character key dismisses
-            self.dismiss(None)
+            if action.is_repeat:
+                return
+            ch = action.char.lower()
+            if ch in NUMBER_KEY_ROOMS:
+                return self.close({"room": NUMBER_KEY_ROOMS[ch]})
+            if ch == "v":
+                self.row, self.col = EXTRAS, 0
+                return self._open_volume()
+            if ch == "c":
+                self.row, self.col = EXTRAS, 1
+                return self._confirm_clear()
+            if ch == "t":
+                return self.close({"time_travel": True})
+            return self.close(None)
+        if isinstance(action, ControlAction):
+            a = action.action
+            if a in ("volume_mute", "volume_down", "volume_up") and action.is_down:
+                getattr(self.app, f"action_{a}")()
+            elif a == "escape" and not action.is_down:
+                self.close(None)  # on release, so a hold falls through to the app's timer
+            elif a == "space" and action.is_down and not action.is_repeat and self.code_row:
+                self._toggle_code()
+            elif a == "enter" and action.is_down and not action.is_repeat:
+                self._activate()
 
-    async def _on_key(self, event) -> None:
-        event.stop()
-        event.prevent_default()
+    def _activate(self):
+        if self.row == ROWS:
+            self.close({"room": ROOM_OPTIONS[self.col][0]})
+        elif self.row == EXTRAS:
+            (self._open_volume, self._confirm_clear, lambda: self.close({"time_travel": True}))[self.col]()
+        else:
+            self._toggle_code()
+
+    def _toggle_code(self):
+        self.close({"close_code": True} if self.app._code_panel_active else {"open_code": True})
+
+    def _open_volume(self):
+        if not self.app.volume_locked:
+            self.app.push(VolumeModal(self.app))
+
+    def _confirm_clear(self):
+        self.app.push(ConfirmFresh(self.app, self.app.active_room), on_close=lambda r: r and self.close({"clear_room": r}))
+
+    def draw(self, g):
+        s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
+        s.fill((30, 16, 51, 225))
+        g.surface.blit(s, (0, 0))
+        tw, th, gap, eh = g.vw(22), g.vh(18), g.vw(1.5), g.vh(11)
+        rows_h = th + g.vh(2) + eh + (g.vh(2) + eh if self.code_row else 0)
+        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + g.vw(8), g.vh(8) + rows_h + g.vh(9))
+        box.center = (g.w // 2, g.h // 2)
+        g.rect(P.SURFACE, box, radius=g.vh(0.5))
+        g.rect(P.LINE, box, width=2, radius=g.vh(0.5))
+        g.draw_text("Pick a Room", g.vh(3), box.centerx, box.y + g.vh(3), "sans-heavy", P.TEXT, anchor="midtop")
+        y = box.y + g.vh(8)
+        x0 = box.centerx - (3 * tw + 2 * gap) // 2
+        for i, (rid, icon, label) in enumerate(ROOM_OPTIONS):
+            on = self.row == ROWS and self.col == i
+            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, th), on, f"{icon}  {label}  {icon}",
+                       f"Press {i + 1}" + ("\nor Enter" if on else ""))
+        y += th + g.vh(2)
+        locked = self._locked_volume()
+        vol_label = f"{locked[0]}  {locked[1]}  {locked[0]}" if locked else "🔊  Volume  🔊"
+        extras = [(vol_label, "" if locked else "Press V", locked is not None),
+                  ("🧹  Clear  🧹", "Press C", False), ("⏪  Time Travel  ⏪", "Press T", False)]
+        for i, (label, key, disabled) in enumerate(extras):
+            on = self.row == EXTRAS and self.col == i
+            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, eh), on, label,
+                       "" if disabled else key + (" or Enter" if on else ""), disabled)
+        if self.code_row:
+            y += eh + g.vh(2)
+            label = "🤖  Close Code  🤖" if self.app._code_panel_active else "🤖  Open Code  🤖"
+            self._tile(g, pygame.Rect(x0, y, 3 * tw + 2 * gap, eh), self.row == CODE, label,
+                       "Space" + (" or Enter" if self.row == CODE else ""))
+        g.draw_text("Enter picks   •   Hold Esc for grown-ups", g.vh(2.1), box.centerx, box.bottom - g.vh(5.5), "sans-bold", P.MUTED, anchor="center")
+        g.draw_text("Arrows move  ← ↑ ↓ →", g.vh(2.1), box.centerx, box.bottom - g.vh(2.5), "sans-bold", P.DIM, anchor="center")
+
+    def _tile(self, g, r, on, label, sub, disabled=False):
+        g.rect(P.PRIMARY if on else P.SURFACE, r, radius=g.vh(0.4))
+        g.rect(P.ACCENT if on else (P.TILE if disabled else P.LINE), r, width=2, radius=g.vh(0.4))
+        fg = P.BG if on else (P.DIM if disabled else P.TEXT)
+        g.draw_text(label, g.vh(2.8), r.centerx, r.centery - (g.vh(2) if sub else 0), "sans-heavy", fg, anchor="center")
+        yy = r.centery + g.vh(1.5)
+        for line in sub.split("\n"):
+            g.draw_text(line, g.vh(2.2), r.centerx, yy, "sans-bold", fg if on else P.MUTED, anchor="midtop")
+            yy += g.vh(2.8)
+
+
+class VolumeModal(Dialog):
+    title = "Volume"
+    hint = "◀ ▶ ▲ ▼ adjust   Enter close"
+    width_pct = 40
+
+    def body_height(self, g):
+        return g.vh(6)
+
+    def draw_body(self, g, rect):
+        icon, bars, label = volume_badge(self.app.volume_level)
+        g.draw_text(f"{icon}  {bars}  {label}", g.vh(3), rect.centerx, rect.centery, "mono-bold", P.TEXT, anchor="center")
+
+    async def handle(self, action):
+        if isinstance(action, NavigationAction):
+            if action.direction in ("up", "right"):
+                self.app.action_volume_up()
+            elif action.direction in ("down", "left"):
+                self.app.action_volume_down()
+            self.app.clear_notifications()
+        elif isinstance(action, ControlAction) and action.is_down and action.action in ("enter", "escape", "tab"):
+            self.close()
+        elif isinstance(action, CharacterAction):
+            self.close()
+
+
+class ConfirmFresh(Picker):
+    title = "Clear a Room"
+
+    def __init__(self, app, room):
+        name = {"play": "Play", "music": "Music", "art": "Art"}[room]
+        super().__init__(app, [(room, f"Clear {name} Room"), (None, "Go Back")])

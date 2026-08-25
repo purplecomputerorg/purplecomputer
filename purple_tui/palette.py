@@ -1,0 +1,90 @@
+"""Colors: the theme and the keyboard-row palette that matches the key stickers.
+
+The number row is grayscale, the letter rows are red, yellow and blue families
+graded light to dark left to right, exactly the colors printed on the stickers
+in the box. Play, Music and Art all read from here.
+"""
+
+import colorsys
+
+from .color_mixing import hex_to_rgb
+from .gfx import contrast_text
+
+# Theme (single, dark on purpose: the screen is a calm object, not a document)
+BG = "#1e1033"          # app ground
+SURFACE = "#261643"     # viewport
+TILE = "#2d1b4e"        # music tiles, panels
+LINE = "#5a3875"        # borders, dividers
+PRIMARY = "#9b7bc4"     # room title, active tab, arrows
+ACCENT = "#c4a0e8"      # prompt label
+TEXT = "#f1ebf9"
+MUTED = "#8a78a8"       # hints, status
+DIM = "#5f4f80"         # quiet hints
+CARET = "#e6f0b8"
+DANGER = "#c46b7b"
+GOOD = "#7bc48a"
+
+GRAYSCALE = {
+    "1": "#FFFFFF", "2": "#E8E8E8", "3": "#D0D0D0", "4": "#B8B8B8", "5": "#A0A0A0",
+    "6": "#888888", "7": "#707070", "8": "#585858", "9": "#404040", "0": "#282828",
+    "-": "#101010", "=": "#000000", "+": "#000000",
+}
+QWERTY_ROW = list("qwertyuiop[]")
+ASDF_ROW = list("asdfghjkl;'")
+ZXCV_ROW = list("zxcvbnm,./")
+
+# Legend swatches per keyboard row, light to dark, top to bottom like the keyboard
+ROW_LEGEND_COLORS = [
+    ["#C0C0C0", "#808080", "#404040"],
+    ["#DF7070", "#BF4040", "#802020"],
+    ["#DFC070", "#BFA040", "#806820"],
+    ["#7090DF", "#4060BF", "#203080"],
+]
+
+DEFAULT_BRUSH_COLOR = PRIMARY
+UNMAPPED = "#AAAAAA"
+
+
+def hsl_to_hex(h: float, s: float, l: float) -> str:
+    r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
+    return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+
+
+def generate_row_gradient(hue: float, keys: list) -> dict:
+    count = len(keys)
+    return {k: hsl_to_hex(hue, 0.75, 0.80 - (i / max(count - 1, 1)) * 0.60) for i, k in enumerate(keys)}
+
+
+KEY_COLORS: dict = {}
+KEY_COLORS.update(GRAYSCALE)
+KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))
+KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))
+KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))
+# Kid-math remaps arrive as the displayed glyph
+KEY_COLORS["÷"] = KEY_COLORS["/"]
+KEY_COLORS["×"] = KEY_COLORS.get("*", KEY_COLORS["/"])
+
+
+def get_key_color(char: str) -> str:
+    """Sticker color for a key, or UNMAPPED (callers treat it as 'not a color')."""
+    return KEY_COLORS.get(char.lower(), UNMAPPED)
+
+
+def text_color_for(bg_hex: str) -> str:
+    return contrast_text(bg_hex)
+
+
+def get_legend_row_from_color(color: str) -> int:
+    """0 gray, 1 red, 2 yellow, 3 blue, by hue and saturation."""
+    r, g, b = hex_to_rgb(color)
+    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+    hue = h * 360
+    if s < 0.15:
+        return 0
+    if hue < 30 or hue > 330:
+        return 1
+    if 30 <= hue < 90:
+        return 2
+    if 180 <= hue < 270:
+        return 3
+    return 0

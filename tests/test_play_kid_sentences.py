@@ -19,9 +19,8 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
 os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-from purple_tui.rooms.play_room import (  # noqa: E402
-    SimpleEvaluator, HistoryLine, _strip_markup,
-)
+from purple_tui.gfx import strip_markup  # noqa: E402
+from purple_tui.play_eval import SimpleEvaluator, _strip_markup  # noqa: E402
 from tests.test_play_markup_safety import leaked_markup  # noqa: E402
 
 # Tallest an answer may be. The history view is 21 rows, so anything past this
@@ -128,8 +127,7 @@ def answer_of(result: str) -> str:
 
 def rendered(result: str) -> tuple[str, int]:
     """What reaches the screen, and how many rows it takes."""
-    line = HistoryLine(result, line_type="answer")
-    return line.render().plain, len(line._build_markup().split("\n"))
+    return strip_markup(result), len(result.split("\n"))
 
 
 def painted(evaluator, noun: str, color: str) -> re.Pattern:
@@ -172,8 +170,18 @@ def test_none_of_something_still_counts_beside_the_rest(evaluator, text, answer)
 @pytest.mark.parametrize("text", KID_INPUT)
 def test_the_ask_line_echoes_what_was_typed(text):
     """The Ask line is the kid's own words: never reordered, dropped, or escaped."""
-    plain = HistoryLine(text, line_type="ask").render().plain
-    assert plain.endswith(text), f"ask line showed {plain!r}"
+    from purple_tui.harness import make_app, press, run, type_text
+    from purple_tui.play_eval import parse_speech_trigger
+
+    async def scenario():
+        app = make_app()
+        play = app.rooms["play"]
+        await type_text(app, text)
+        typed = play.field.value
+        await press(app, "enter")
+        ask = next(e for e in reversed(play.history) if e.kind == "ask")
+        assert ask.markup == parse_speech_trigger(typed)[1], f"ask line showed {ask.markup!r}"
+    run(scenario())
 
 
 @pytest.mark.parametrize("text", KID_INPUT)

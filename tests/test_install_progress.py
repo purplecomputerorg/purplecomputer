@@ -137,7 +137,7 @@ def _make_screen():
     """An InstallProgressScreen with UI repaint stubbed out (no running app)."""
     from purple_tui.rooms.parent_menu import InstallProgressScreen
     screen = InstallProgressScreen.__new__(InstallProgressScreen)
-    # Bypass Textual widget init; set only the state _handle_line/creep touch.
+    # Bypass Overlay init; set only the state _handle_line/creep touch.
     screen._progress = 0
     screen._status = ""
     screen._phase = "installing"
@@ -151,7 +151,8 @@ def _make_screen():
     screen._creep_tau = 1.0
     screen._write_t0 = None
     screen._k = 1.0
-    screen._update_ui = lambda: None
+    from types import SimpleNamespace
+    screen.app = SimpleNamespace(invalidate=lambda: None)
     return screen
 
 
@@ -306,9 +307,3 @@ def test_eta_hints_have_no_trailing_period(monkeypatch):
         screen._progress = prog
         clock["t"] = t
         assert not screen._eta_hint().endswith("."), f"period at {prog}%"
-
-
-def test_render_bar_width_is_constant():
-    screen = _make_screen()
-    widths = {len(screen._render_bar(p)) for p in (0, 5, 12, 70, 100)}
-    assert len(widths) == 1, f"bar width must not change: {widths}"

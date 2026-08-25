@@ -8,24 +8,15 @@ space) on top of paint mixes exactly like the bare paint next to it.
 """
 
 import asyncio
-import os
 from contextlib import asynccontextmanager
 
-os.environ['PURPLE_NO_EVDEV'] = '1'
-os.environ['PURPLE_DEV_MODE'] = '1'
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
-os.environ.setdefault('ORT_LOGGING_LEVEL', '3')
-os.environ.setdefault('TF_CPP_MIN_LOG_LEVEL', '3')
 
-from purple_tui.purple_tui import PurpleApp
-from purple_tui.constants import REQUIRED_TERMINAL_ROWS
+from purple_tui.harness import make_app
 from purple_tui.color_mixing import mix_colors_paint
 from purple_tui.keyboard import CharacterAction
-from purple_tui.rooms.art_room import ArtCanvas, BRUSH_CHAR, get_key_color
+from purple_tui.palette import get_key_color
+from purple_tui.rooms.art_room import BRUSH_CHAR
 
-APP_SIZE = (146, REQUIRED_TERMINAL_ROWS)
-SETTLE = 0.4
 YELLOW = "#FFFF00"
 BLUE = "#0000FF"
 YELLOW_ON_BLUE = mix_colors_paint([YELLOW, BLUE])
@@ -33,20 +24,13 @@ YELLOW_ON_BLUE = mix_colors_paint([YELLOW, BLUE])
 
 @asynccontextmanager
 async def _art_canvas():
-    app = PurpleApp()
-    async with app.run_test(size=APP_SIZE) as pilot:
-        await pilot.pause()
-        await asyncio.sleep(SETTLE)
-        await pilot.pause()
-        app.action_switch_room("art")
-        await pilot.pause()
-        await asyncio.sleep(SETTLE)
-        await pilot.pause()
-        canvas = app.query_one("#art-canvas", ArtCanvas)
-        canvas._grid.clear()
-        canvas._painted_positions.clear()
-        canvas._cursor_x = canvas._cursor_y = 0
-        yield canvas
+    app = make_app()
+    app.action_switch_room("art")
+    canvas = app.rooms["art"]
+    canvas._grid.clear()
+    canvas._painted_positions.clear()
+    canvas._cursor_x = canvas._cursor_y = 0
+    yield canvas
 
 
 def _canvas_test(body):
@@ -184,7 +168,7 @@ async def test_real_key_presses_mix_over_a_letter(canvas):
     """End to end through the keyboard path: paint, write, paint again."""
     async def press(char, x):
         canvas._cursor_x, canvas._cursor_y = x, 0
-        await canvas.handle_keyboard_action(CharacterAction(char=char, shift_held=False))
+        await canvas.handle(CharacterAction(char=char, shift_held=False))
 
     canvas._set_paint_mode(True)
     await press("q", 0)

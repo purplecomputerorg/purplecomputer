@@ -438,6 +438,15 @@ class EvdevReader:
         except Exception:
             return True  # Assume tty1 if we can't tell
 
+    def switch_to_tty2(self) -> None:
+        """Parent Menu 'Open Terminal': the same path as Ctrl+Alt+F2."""
+        if self._vt_away:
+            return
+        self._vt_away = True
+        self._vt_away_time = time.monotonic()
+        self.release_grab()
+        self._switch_to_tty2()
+
     def _switch_to_tty2(self) -> None:
         """Switch to tty2, which already has an autologin shell.
 

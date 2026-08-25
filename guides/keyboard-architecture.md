@@ -13,7 +13,7 @@ By reading evdev directly, Purple gets:
 - Precise timestamps for timing features
 - All keycodes (no filtering)
 
-The terminal (Alacritty) becomes display-only.
+The screen is a pygame window the app paints itself; it never reads its own key events on the device.
 
 ---
 
@@ -47,11 +47,11 @@ TUI Process:
   │     - Handles double-tap (same key < 400ms)
   │     - Emits high-level actions
   │           ↓
-  │   Textual App
+  │   PurpleApp (purple_tui/app.py)
   │     - Receives actions, updates UI
   │           ↓
-  └── Alacritty (display only)
-        - Renders Textual's output
+  └── SDL window (display only)
+        - Painted by purple_tui/gfx.py
         - Keyboard input ignored
 ```
 
@@ -123,9 +123,9 @@ With keyboard input bypassing the terminal:
 
 | Concern | Impact |
 |---------|--------|
-| Character echo | None. Textual controls all display in raw mode. |
-| Window resize | Still works. Alacritty notifies Textual via SIGWINCH. |
-| Copy/paste | Alacritty shortcuts won't work. Not needed for kids 2–8+. |
+| Character echo | None. The app draws every character itself. |
+| Window resize | Not applicable: the window is fullscreen at the screen's size. |
+| Copy/paste | None. Not needed for kids 2–8+. |
 | Mouse input | Purple disables trackpad anyway. |
 | Focus | In kiosk mode, only Purple runs. No focus issues. |
 
@@ -248,22 +248,6 @@ Purple reads keyboard directly from evdev, bypassing the terminal. This gives us
 
 Parent mode can open a shell for admin tasks. This requires temporarily releasing the evdev grab so the terminal receives keyboard input.
 
-Use `app.suspend_with_terminal_input()`:
-
-```python
-with self.app.suspend_with_terminal_input():
-    os.system('stty sane')
-    subprocess.run(['/bin/bash', '-i'])
-    os.system('stty sane')
-
-self.app.refresh(repaint=True)
-```
-
-This context manager:
-1. Releases the evdev grab
-2. Calls Textual's `suspend()` to restore the terminal
-3. Reacquires the grab and resets keyboard state on exit
+Terminal mode is a VT switch. `EvdevReader.switch_to_tty2()` marks the reader as away, releases the grab, and runs `sudo chvt 2`; tty2 has an autologin shell. The reader reacquires the grab on the first event after the VT is back on tty1 (`back` on tty2, or Ctrl+Alt+F1). This is the same path Ctrl+Alt+F2 uses, so there is one implementation.
 
 **Important**: When flushing pending evdev events before reacquiring the grab, use `select()` with a 0 timeout to check for data before calling `read_one()`. Otherwise `read_one()` blocks forever.
-
-**Exiting from suspend**: If you need to exit the app from inside a suspend context, use `os._exit(0)` instead of `sys.exit(0)`. The latter tries to unwind through Textual's cleanup, which can leave the terminal in a broken state.

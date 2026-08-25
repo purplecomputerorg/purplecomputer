@@ -125,33 +125,4 @@ just preview music key:a
 
 ## How It Works
 
-The preview script (`scripts/preview.py`) uses Textual's `run_test()` to render the app in memory at the correct viewport size (146x38) without needing a terminal or display.
-
-Key environment variables set automatically:
-- `PURPLE_NO_EVDEV=1`: skips hardware keyboard detection
-- `SDL_AUDIODRIVER=dummy`: prevents pygame audio init failures
-- `PURPLE_DEV_MODE=1`: enables dev command infrastructure
-
-Set `PURPLE_SCREENSHOT_DIR` to override the default `/tmp/screenshots/` output directory.
-
-SVG screenshots are taken via Textual's `save_screenshot()`, then converted to PNG using `rsvg-convert` (pulled via `nix-shell -p librsvg`).
-
-## Output Files
-
-Screenshots are saved to `/tmp/screenshots/` with filenames derived from the room and actions:
-
-```
-/tmp/screenshots/preview_play.png
-/tmp/screenshots/play_type_cat.png
-/tmp/screenshots/art_code_panel.png
-/tmp/screenshots/art_code_panel_type_forward_key_enter.png
-```
-
-Both the SVG source and PNG conversion are kept.
-
-## Limitations
-
-- No audio playback (pygame uses dummy driver)
-- No evdev keyboard input (uses synthetic key dispatch)
-- Some timing-dependent features (animations, debounced toggles) may not render identically to real hardware
-- Emoji rendering depends on system fonts (Noto Color Emoji may not be installed on the server, so emoji may show as placeholder glyphs)
+The preview script (`scripts/preview.py`) builds the app on SDL's dummy video driver through `purple_tui.harness.make_app()`, feeds key actions through the real dispatcher, draws one frame, and saves it with `pygame.image.save`. No display, no terminal, no SVG conversion. Set `PURPLE_WINDOW_SIZE=WxH` to preview another screen size.

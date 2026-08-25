@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from purple_tui.rooms.art_room import ArtCanvas, HEADING_ARROWS
+from purple_tui.rooms.art_room import ArtRoom as ArtCanvas, HEADING_ARROWS
 
 
 # ---------------------------------------------------------------------------

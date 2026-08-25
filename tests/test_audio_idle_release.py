@@ -14,9 +14,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from purple_tui import audio
-from purple_tui.purple_tui import PurpleApp, Room
-from purple_tui.rooms import music_room
-from purple_tui.rooms.music_room import MusicGrid
+from purple_tui import mixer as music_room
+from purple_tui.app import PurpleApp
+from purple_tui.rooms.music_room import MusicRoom
 
 
 class _FakeMixer:
@@ -219,8 +219,8 @@ def test_sound_caches_reload_after_mixer_quit(monkeypatch):
     _ready_mixer(monkeypatch)
 
     class GridStub:
-        _drop_stale_sounds = MusicGrid._drop_stale_sounds
-        _clear_sound_caches = MusicGrid._clear_sound_caches
+        _drop_stale_sounds = MusicRoom._drop_stale_sounds
+        _clear_sound_caches = MusicRoom._clear_sound_caches
 
         def __init__(self):
             self._instrument_sounds = {"glockenspiel": {"c5": object()}}
@@ -324,7 +324,7 @@ def _idle_check_setup(monkeypatch, idle_seconds):
 
 def test_idle_check_releases_when_everything_quiet(monkeypatch):
     calls = _idle_check_setup(monkeypatch, idle_seconds=999)
-    _FakeAppForIdleCheck(Room.PLAY)._check_audio_idle()
+    _FakeAppForIdleCheck("play")._check_audio_idle()
     assert len(calls) == 1
 
 
@@ -332,16 +332,16 @@ def test_idle_check_vetoes(monkeypatch):
     from purple_tui import tts
 
     calls = _idle_check_setup(monkeypatch, idle_seconds=999)
-    _FakeAppForIdleCheck(Room.MUSIC)._check_audio_idle()  # music room veto
+    _FakeAppForIdleCheck("music")._check_audio_idle()  # music room veto
     assert calls == []
 
     calls = _idle_check_setup(monkeypatch, idle_seconds=999)
     monkeypatch.setattr(tts, "_current_channel", object())  # speech veto
-    _FakeAppForIdleCheck(Room.PLAY)._check_audio_idle()
+    _FakeAppForIdleCheck("play")._check_audio_idle()
     assert calls == []
 
     calls = _idle_check_setup(monkeypatch, idle_seconds=5)  # recent input veto
-    _FakeAppForIdleCheck(Room.PLAY)._check_audio_idle()
+    _FakeAppForIdleCheck("play")._check_audio_idle()
     assert calls == []
 
 
@@ -350,7 +350,7 @@ def test_idle_check_stops_polling_once_mixer_closed(monkeypatch):
     the next keystroke re-arms it via _record_user_activity."""
     calls = _idle_check_setup(monkeypatch, idle_seconds=999)
     monkeypatch.setattr(music_room, "_MIXER_READY", None)
-    app = _FakeAppForIdleCheck(Room.PLAY)
+    app = _FakeAppForIdleCheck("play")
     timer = app._audio_idle_timer
 
     app._check_audio_idle()
@@ -364,7 +364,7 @@ def test_audio_idle_timer_rearm_respects_audio_ok():
     app = SimpleNamespace(
         _audio_idle_timer=None, audio_ok=True,
         _check_audio_idle=lambda: None,
-        set_interval=lambda *a, **k: "timer",
+        timers=SimpleNamespace(loop=object(), every=lambda *a, **k: "timer"),
     )
     PurpleApp._arm_audio_idle_timer(app)
     assert app._audio_idle_timer == "timer"

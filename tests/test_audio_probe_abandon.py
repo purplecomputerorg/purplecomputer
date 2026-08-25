@@ -9,8 +9,8 @@ Popen + wait(timeout) + abandon, so it returns at the deadline regardless.
 import subprocess
 import time
 
-from purple_tui.rooms import music_room
-from purple_tui.purple_tui import PurpleApp
+from purple_tui import mixer as music_room
+from purple_tui.app import PurpleApp
 
 
 class _WedgedProc:
@@ -84,6 +84,8 @@ class _FakeApp:
     _start_audio_retry_poll = lambda self: None
 
     _start_mixer_warmup = PurpleApp._start_mixer_warmup
+    call_from_thread = lambda self, fn, *a: fn(*a)
+    invalidate = lambda self: None
 
 
 def _run_warmup_and_wait(app):

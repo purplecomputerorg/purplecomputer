@@ -1,1612 +1,597 @@
-"""
-Art Room: Drawing Canvas with Playful Painting
+"""Art room: a grid of square cells. Every letter paints its sticker color,
+Space puts the pen down so arrows draw, Tab switches to writing letters, and
+hold Space opens the Logo-style code line."""
 
-A text-focused canvas with paint-by-key features:
-- Normal typing draws readable text (left-to-right, wrapping at edges)
-- Arrow keys move the cursor (no drawing while the pen is up)
-- Space toggles the pen: while down, arrows paint colored trails
-- Backspace erases glyph and fades background (hold to erase fast)
+import time
 
-Keyboard input is received via handle_keyboard_action() from the main app,
-which reads directly from evdev. This gives us true key release detection.
-"""
+import pygame
 
-import colorsys
+from .. import palette as P
+from ..code_runner import ArtCodeRunner
+from ..color_mixing import mix_colors_paint
+from ..gfx import contrast_text, luminance, mix, rgb
+from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
+from ..palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
+from ..panels import CodePanel, SpaceHold
 
-from textual.widgets import Static
-from textual.containers import Container
-from textual.app import ComposeResult
-from textual.widget import Widget
-from textual.strip import Strip
-from textual.message import Message
-from textual import events
-from rich.segment import Segment
-from rich.style import Style
-
-from ..color_mixing import mix_colors_paint, hex_to_rgb
-from ..constants import ICON_TAB, HOLD_OR_TAP_THRESHOLD, VIEWPORT_WIDTH, APP_BACKGROUND
-from ..keyboard import (
-    CharacterAction, NavigationAction, ControlAction, HoldOrTap,
-    UNSHIFT_MAP,
-)
-
-
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-
-# Grayscale values (selected by number row keys: 1=lightest, 0/-/= darkest)
-GRAYSCALE = {
-    "1": "#FFFFFF",  # Pure white
-    "2": "#E8E8E8",
-    "3": "#D0D0D0",
-    "4": "#B8B8B8",
-    "5": "#A0A0A0",
-    "6": "#888888",  # Middle gray
-    "7": "#707070",
-    "8": "#585858",
-    "9": "#404040",
-    "0": "#282828",
-    "-": "#101010",  # Near black
-    "=": "#000000",  # Pure black (equals, right of -)
-    "+": "#000000",  # Pure black (= remapped to + globally)
+COLS, ROWS = 64, 36
+LETTER_ROWS = 2                      # written letters stand two cells tall
+BRUSH_CHAR = "█"
+ARROW_HOLD_REPEAT_THRESHOLD = 8
+HOLD_ACCEL_MULTIPLIER = 6
+CANVAS_BG = "#221440"
+HEADING_ARROWS = {"right": "▶", "left": "◀", "up": "▲", "down": "▼"}
+HINTS = {
+    "littles": "Type to paint!",
+    "pen": "Pen is down! Arrows paint a trail. Space lifts the pen.",
+    "paint": "Type to paint! Every letter is a color. Space puts the pen down.",
+    "write": "Type to write! Arrow keys move. Enter for a new line.",
 }
 
-# Brush character for painting
-BRUSH_CHAR = "█"
 
-# Default brush: Purple Computer purple
-DEFAULT_BRUSH_COLOR = "#9b7bc4"
+def _contrast_text_color(bg_hex: str) -> str:
+    """Black on light paint, white on dark: the simple perceptual split the
+    canvas has always used for letters over paint."""
+    r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
+    return "#000000" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5 else "#FFFFFF"
 
 
 def _visible_arrow_color(fg_hex: str, bg_hex: str) -> str:
-    """Return fg_hex if it contrasts enough with bg, otherwise black or white."""
-    fr, fg, fb = hex_to_rgb(fg_hex)
-    br, bg_, bb = hex_to_rgb(bg_hex)
-    # Perceived luminance difference (0-1 scale)
-    fl = (0.299 * fr + 0.587 * fg + 0.114 * fb) / 255
-    bl = (0.299 * br + 0.587 * bg_ + 0.114 * bb) / 255
-    if abs(fl - bl) > 0.25:
-        return fg_hex
-    return "#000000" if bl > 0.5 else "#FFFFFF"
-
-# Heading indicator: arrow char + offset from cursor center
-HEADING_ARROWS = {
-    'right': ("▶", (1, 0)),
-    'left': ("◀", (-1, 0)),
-    'up': ("▲", (0, -1)),
-    'down': ("▼", (0, 1)),
-}
-
-# Box-drawing characters for cursor border
-# Sides use heavy lines (in brush color), corners use light lines (in contrast color)
-BOX_CHARS = {
-    (-1, -1): "┌",  # top-left (light corner)
-    (0, -1): "━",   # top-center (heavy horizontal)
-    (1, -1): "┐",   # top-right (light corner)
-    (-1, 0): "┃",   # middle-left (heavy vertical)
-    (1, 0): "┃",    # middle-right (heavy vertical)
-    (-1, 1): "└",   # bottom-left (light corner)
-    (0, 1): "━",    # bottom-center (heavy horizontal)
-    (1, 1): "┘",    # bottom-right (light corner)
-}
-
-# Pen-down ring: heavy corners too, so a latched pen reads as a thicker,
-# steady ring instead of the blinking light-cornered hover ring.
-BOX_CHARS_PEN_DOWN = {
-    **BOX_CHARS,
-    (-1, -1): "┏",
-    (1, -1): "┓",
-    (-1, 1): "┗",
-    (1, 1): "┛",
-}
-
-# Keyboard rows for colors (full rows including symbols)
-QWERTY_ROW = list("qwertyuiop[]")     # Red family (top letter row + brackets)
-ASDF_ROW = list("asdfghjkl;'")        # Yellow family (home row + semicolon + quote)
-ZXCV_ROW = list("zxcvbnm,./")         # Blue family (bottom row + comma + period + slash)
-
-# Color legend: 3 shades per keyboard row (light, medium, dark)
-# Ordered top-to-bottom to mirror keyboard layout (numbers at top, ZXCV at bottom)
-ROW_LEGEND_COLORS = [
-    # Gray (number row, grayscale): light → dark
-    ["#C0C0C0", "#808080", "#404040"],
-    # Red (QWERTY row): light → dark
-    ["#DF7070", "#BF4040", "#802020"],
-    # Yellow/gold (ASDF row): light → dark
-    ["#DFC070", "#BFA040", "#806820"],
-    # Blue (ZXCV row): light → dark
-    ["#7090DF", "#4060BF", "#203080"],
-]
-
-# Canvas surface backgrounds (inside viewport, matches theme surface)
-DEFAULT_BG_DARK = "#2a1845"
-DEFAULT_BG_LIGHT = "#e8daf0"
-
-# App outer backgrounds (outside viewport, matches theme background)
-APP_BG_DARK = APP_BACKGROUND
-APP_BG_LIGHT = "#f0e8f8"
-
-# Readable text foreground colors (dark and light themes)
-TEXT_FG_DARK = "#FFFFFF"
-TEXT_FG_LIGHT = APP_BG_DARK  # Dark text uses same color as dark app background
-
-# Cursor colors
-CURSOR_BG_NORMAL = "#6633AA"
-CURSOR_BG_PAINT = "#FF6600"
-
-# Cursor ring corner colors (high contrast for visibility on any background)
-CURSOR_CORNER_DARK = "#FFFFFF"   # White corners on dark theme
-CURSOR_CORNER_LIGHT = APP_BG_DARK  # Dark corners on light theme
-
-# Corner positions in the 3x3 ring
-CORNER_POSITIONS = {(-1, -1), (1, -1), (-1, 1), (1, 1)}
-
-# Paint color strength when holding space
-PAINT_STRENGTH = 0.7
-
-# Hold-to-accelerate: after this many consecutive same-direction repeats on
-# arrows or backspace, each repeat does HOLD_ACCEL_MULTIPLIER steps instead of
-# one. Threshold is high enough that a kid moving 3-4 cells never accelerates,
-# but a sustained hold escapes a corner or erases a streak quickly. Never
-# applies while paint is going down: a multi-cell jump overshoots corners.
-ARROW_HOLD_REPEAT_THRESHOLD = 8
-HOLD_ACCEL_MULTIPLIER = 6
-
-# Gutter size (cells around content where cursor ring can extend)
-GUTTER = 1
-
-# Gutter background colors (checkerboard pattern, slightly lighter than canvas)
-GUTTER_BG_DARK_A = "#2F1D4C"   # Lighter purple A
-GUTTER_BG_DARK_B = "#382358"   # Lighter purple B
-GUTTER_BG_LIGHT_A = "#DFD0E8"  # Darker purple A
-GUTTER_BG_LIGHT_B = "#D8C8E2"  # Darker purple B
+    return fg_hex if abs(luminance(fg_hex) - luminance(bg_hex)) >= 0.25 else contrast_text(bg_hex)
 
 
-# =============================================================================
-# COLOR UTILITIES
-# =============================================================================
+class ArtRoom:
+    """Cells are (char, fg, bg); a painted cell holds BRUSH_CHAR with both
+    colors equal, a written letter holds the letter over whatever bg it had."""
 
-def hsl_to_hex(h: float, s: float, l: float) -> str:
-    """Convert HSL to hex color string."""
-    r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
-    return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+    name = "art"
+    canvas_width = COLS
+    canvas_height = ROWS
+    _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
+    _TURN_LEFT = {'right': 'up', 'up': 'left', 'left': 'down', 'down': 'right'}
 
-
-def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
-    """Generate a light-to-dark gradient for a row of keys."""
-    result = {}
-    count = len(keys)
-    for i, key in enumerate(keys):
-        lightness = 0.80 - (i / max(count - 1, 1)) * 0.60
-        result[key] = hsl_to_hex(hue, 0.75, lightness)
-    return result
-
-
-# Build key-to-color mapping (primary colors by row)
-KEY_COLORS: dict[str, str] = {}
-KEY_COLORS.update(GRAYSCALE)                                 # Grayscale (number row)
-KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top letter row)
-KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
-KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
-
-# Display aliases for kid-math remaps in purple_tui._KID_MATH_REMAP: keys arrive
-# at paint handlers as the displayed glyph, not the source key.
-KEY_COLORS["÷"] = KEY_COLORS["/"]
-KEY_COLORS["×"] = KEY_COLORS.get("*", KEY_COLORS["/"])
-
-def _rel_luminance(hex_color: str) -> float:
-    h = hex_color.lstrip("#")
-    def ch(v: int) -> float:
-        s = v / 255
-        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
-    r, g, b = ch(int(h[0:2], 16)), ch(int(h[2:4], 16)), ch(int(h[4:6], 16))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def text_color_for(bg_hex: str) -> str:
-    """Pick whichever of black/white has the higher WCAG contrast ratio."""
-    l = _rel_luminance(bg_hex)
-    return "#FFFFFF" if 1.05 / (l + 0.05) >= (l + 0.05) / 0.05 else "#000000"
-
-
-def get_key_color(char: str) -> str:
-    """Get the color for a key, or white if not mapped."""
-    return KEY_COLORS.get(char.lower(), "#AAAAAA")
-
-
-
-def get_legend_row_from_color(color: str) -> int:
-    """Get the legend row index (0-3) from a color based on its hue.
-
-    Returns:
-        0 = Gray (number row, low saturation)
-        1 = Red (QWERTY row, hue ~0°)
-        2 = Yellow (ASDF row, hue ~50°)
-        3 = Blue (ZXCV row, hue ~220°)
-    """
-    r, g, b = hex_to_rgb(color)
-    # Convert to HLS to check hue and saturation
-    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-    hue_deg = h * 360
-
-    # Low saturation = grayscale (number row)
-    if s < 0.15:
-        return 0
-
-    # Determine row by hue angle
-    # Red: hue around 0° (or 360°), range roughly 330-30°
-    # Yellow: hue around 50°, range roughly 30-90°
-    # Blue: hue around 220°, range roughly 180-270°
-    if hue_deg < 30 or hue_deg > 330:
-        return 1  # Red
-    elif 30 <= hue_deg < 90:
-        return 2  # Yellow
-    elif 180 <= hue_deg < 270:
-        return 3  # Blue
-
-    return 0  # Default
-
-
-
-# =============================================================================
-# MESSAGES
-# =============================================================================
-
-class PaintModeChanged(Message):
-    """Message sent when paint mode or pen state changes."""
-
-    def __init__(self, is_painting: bool, last_color: str, pen_down: bool = False) -> None:
-        self.is_painting = is_painting
-        self.last_color = last_color
-        self.pen_down = pen_down
-        super().__init__()
-
-
-# =============================================================================
-# CANVAS WIDGET
-# =============================================================================
-
-class ArtCanvas(Widget, can_focus=True):
-    """
-    Custom canvas widget with text typing and a Space-toggled pen for painting.
-
-    Uses render_line() for full control over rendering.
-    Cell structure: (char, fg_color, bg_color)
-    """
-
-    DEFAULT_CSS = """
-    ArtCanvas {
-        width: 100%;
-        height: 100%;
-    }
-    """
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        # Grid: dict[(x, y)] = (char, fg_color, bg_color)
-        self._grid: dict[tuple[int, int], tuple[str, str, str]] = {}
-        # Positions that have been deliberately painted (vs text tint bg)
-        self._painted_positions: set[tuple[int, int]] = set()
-        # Cell painted most recently, so a held-letter drag never coats the
-        # same cell twice (a second coat re-mixes and stripes trails drawn
-        # over existing paint)
-        self._last_paint_pos: tuple[int, int] | None = None
-        self._cursor_x = 0
-        self._cursor_y = 0
-
-        # Paint mode toggle
+    def __init__(self, app):
+        self.app = app
+        self._grid: dict = {}
+        self._painted_positions: set = set()
+        self._last_paint_pos = None
+        self._cursor_x = self._cursor_y = 0
         self._paint_mode = True
         self._last_key_color = DEFAULT_BRUSH_COLOR
-        self._last_key_char = ""  # Last key pressed
-
-        # Pen latch: Space toggles it. While down, arrow moves paint.
+        self._last_key_char = ""
         self._pen_down = False
-
-        # Cursor blink state
-        self._cursor_visible = True
-        self._blink_timer = None
         self._code_mode = False
+        self._heading = "right"
+        self._use_heading_cursor = False
+        self._post_stamp_x = None
+        self._line_start = 0          # write mode: where Enter returns to
+        self._arrow_repeat_dir = None
+        self._arrow_repeat_count = 0
+        self._backspace_repeat_count = 0
+        self._blink_on = True
+        self._blink_stamp = time.monotonic()
+        self._blink_timer = None
+        self.space = SpaceHold(app, self._space_tap, self._space_hold_fired)
+        self.code_panel = None
+        self._cell = 10
+        self._origin = (0, 0)
+        self._surf = None            # cached canvas: cells are repainted only when they change
+        self._dirty = None           # None = repaint everything, else a set of (x, y)
 
-        # Heading for turn/forward commands (Logo turtle direction)
-        self._heading = 'right'
-        self._use_heading_cursor = False  # Show directional cursor during code run
+    # ---------------------------------------------------------------- lifecycle
+    def on_enter(self):
+        self._post_paint_mode_changed()
+        if self._blink_timer is None:
+            self._blink_timer = self.app.timers.every(0.4, self._blink)
 
-        self._clear_animation_active = False
+    def on_leave(self):
+        self.code_panel = None
+        if self._blink_timer:
+            self._blink_timer.stop()
+            self._blink_timer = None
 
-        # Line-level render cache: y -> Strip (avoids recomputing unchanged lines)
-        self._line_cache: dict[int, Strip] = {}
-        self._dirty_lines: set[int] = set()
-        self._all_dirty = True  # Start fully dirty
+    def stop_sound(self):
+        pass
 
-        # Smart up/down: column the most recent stamp was placed at, so a
-        # subsequent ↑/↓ can return to it (lets `a, ↓, a, ↓, a` draw a
-        # vertical line instead of a diagonal). Cleared by any non-stamp,
-        # non-↑↓ action.
-        self._post_stamp_x: int | None = None
-
-        # Hold-to-accelerate: count consecutive same-direction arrow repeats
-        # and consecutive backspace repeats. Past threshold, each repeat does
-        # 4 steps instead of 1.
-        self._arrow_repeat_dir: str | None = None
-        self._arrow_repeat_count: int = 0
-        self._backspace_repeat_count: int = 0
-
-        # Last (paint_mode, color) we broadcast via PaintModeChanged. Streaks
-        # of the same key would otherwise fire identical messages per stamp,
-        # each triggering a DOM walk + refresh of legend/header/hint/shift.
-        self._last_posted_paint_state: tuple[bool, str, bool] | None = None
-
-    def _post_paint_mode_changed(self) -> None:
-        """Post PaintModeChanged only if (paint_mode, color, pen) changed since last post."""
-        state = (self._paint_mode, self._last_key_color, self._pen_down)
-        if state == self._last_posted_paint_state:
+    def _blink(self):
+        if self._pen_down or self.code_panel is not None:
             return
-        self._last_posted_paint_state = state
-        self.post_message(PaintModeChanged(self._paint_mode, self._last_key_color, self._pen_down))
+        self._blink_on = not self._blink_on
+        self.app.invalidate()
 
-    def on_mount(self) -> None:
-        """Start cursor blinking when canvas is mounted."""
-        self._start_blink()
+    def _restart_blink(self):
+        self._blink_on = True
+        if self._blink_timer:
+            self._blink_timer.reset()
 
-    def _get_default_bg(self) -> str:
-        """Get default background based on current theme."""
-        try:
-            is_dark = "dark" in self.app.theme
-            return DEFAULT_BG_DARK if is_dark else DEFAULT_BG_LIGHT
-        except Exception:
-            return DEFAULT_BG_DARK
+    @property
+    def paint_mode(self) -> bool:
+        return self._paint_mode
 
-    def _is_dark_theme(self) -> bool:
-        """Check if using dark theme."""
-        try:
-            return "dark" in self.app.theme
-        except Exception:
-            return True
+    @property
+    def is_painting(self) -> bool:
+        return self._paint_mode
 
-    def _get_text_fg(self) -> str:
-        """Get text foreground color based on current theme."""
-        return TEXT_FG_DARK if self._is_dark_theme() else TEXT_FG_LIGHT
+    def set_pen(self, down: bool):
+        self._set_pen(down)
 
-    def _contrast_text_color(self, bg_color: str) -> str:
-        """Get black or white text for readability on the given background."""
-        r, g, b = hex_to_rgb(bg_color)
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return "#000000" if luminance > 0.5 else "#FFFFFF"
+    def refresh(self):
+        self.app.invalidate()
 
-    def _get_gutter_bg(self, x: int, y: int) -> str:
-        """Get gutter background color (checkerboard pattern based on position)."""
-        even = (x + y) % 2 == 0
-        if self._is_dark_theme():
-            return GUTTER_BG_DARK_A if even else GUTTER_BG_DARK_B
-        return GUTTER_BG_LIGHT_A if even else GUTTER_BG_LIGHT_B
+    def _mark_cursor_dirty(self):
+        pass
 
-    def on_resize(self, event) -> None:
-        """Invalidate line cache when widget resizes."""
-        self._invalidate_all()
-        self.refresh()
+    def _post_paint_mode_changed(self):
+        self.app.set_legend(self._last_key_color if self._paint_mode else None, visible=True)
+        self.app.invalidate()
 
-    def _mark_cursor_dirty(self) -> None:
-        """Mark the 3 lines around the cursor as dirty (cursor ring is 3x3)."""
-        cy = self._cursor_y + GUTTER
-        self._dirty_lines.update(range(cy - 1, cy + 2))
+    def hold_progress(self):
+        p = self.space.progress()
+        return (p, "code") if p is not None else None
 
-    def _invalidate_all(self) -> None:
-        """Mark all lines dirty (theme change, clear canvas, etc.)."""
-        self._all_dirty = True
-        self._line_cache.clear()
+    def cursor_fraction(self, vp):
+        return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,
+                (self._origin[1] + self._cursor_y * self._cell - vp.y) / vp.h)
 
-    def _toggle_paint_mode(self) -> None:
-        """Toggle between paint mode and text mode."""
-        self._set_paint_mode(not self._paint_mode)
+    # ---------------------------------------------------------------- timeline
+    def timeline_state(self) -> dict:
+        state = {f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in self._painted_positions else 0]
+                 for (x, y), (ch, fg, bg) in self._grid.items()}
+        state.update(cursor=[self._cursor_x, self._cursor_y], paint=self._paint_mode, color=self._last_key_color)
+        return state
 
-    def _set_paint_mode(self, painting: bool) -> None:
-        """Set paint mode explicitly."""
+    def restore_timeline_state(self, state: dict):
+        self._grid.clear()
+        self._painted_positions.clear()
+        self._last_paint_pos = None
+        for key, val in state.items():
+            if key.startswith("c:"):
+                x, y = (int(n) for n in key[2:].split(","))
+                self._grid[(x, y)] = (val[0], val[1], val[2])
+                if val[3]:
+                    self._painted_positions.add((x, y))
+        self._repaint_all()
+        self._cursor_x, self._cursor_y = state.get("cursor", [0, 0])
+        self._paint_mode = bool(state.get("paint", True))
+        self._set_pen(False)
+        self._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
+        self._post_paint_mode_changed()
+
+    def clear(self):
+        self._grid.clear()
+        self._repaint_all()
+        self._painted_positions.clear()
+        self._last_paint_pos = None
+        self._cursor_x = self._cursor_y = 0
+        self._paint_mode = True
+        self._set_pen(False)
+        self._code_mode = False
+        self._heading = "right"
+        self._use_heading_cursor = False
+        self._last_key_color = DEFAULT_BRUSH_COLOR
+        self._post_paint_mode_changed()
+
+    def has_content(self) -> bool:
+        return bool(self._grid)
+
+    # ---------------------------------------------------------------- cell ops
+    def _get_cell_bg(self, pos) -> str:
+        cell = self._grid.get(pos)
+        return cell[2] if cell else CANVAS_BG
+
+    def _set_cell(self, pos, char, fg, bg):
+        self._grid[pos] = (char, fg, bg)
+        self._touch(pos)
+
+    def _del_cell(self, pos):
+        if self._grid.pop(pos, None) is not None:
+            self._touch(pos)
+
+    def _touch(self, pos):
+        if self._dirty is not None:
+            self._dirty.add(pos)
+
+    def _repaint_all(self):
+        self._dirty = None
+
+    def _paint_at_cursor(self):
+        pos = (self._cursor_x, self._cursor_y)
+        cell = self._grid.get(pos)
+        color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color]) if pos in self._painted_positions else self._last_key_color
+        self._painted_positions.add(pos)
+        self._last_paint_pos = pos
+        if cell and cell[0] not in ("", " ", BRUSH_CHAR):
+            self._set_cell(pos, cell[0], _contrast_text_color(color), color)
+        else:
+            self._set_cell(pos, BRUSH_CHAR, color, color)
+        self.app.invalidate()
+
+    def _set_paint_mode(self, painting: bool):
         if self._paint_mode == painting:
             return
         self._paint_mode = painting
         self._set_pen(False)
-
-        self._mark_cursor_dirty()
         self._post_paint_mode_changed()
-        self.refresh()
 
-    def set_code_mode(self, code_mode: bool) -> None:
-        """Toggle code mode cursor."""
-        self._code_mode = code_mode
-        if code_mode:
-            self._use_heading_cursor = True
-            self._heading = 'right'
-        else:
-            self._use_heading_cursor = False
-        self._mark_cursor_dirty()
-        self._update_blink_for_code_mode()
-        self.refresh()
+    def _toggle_paint_mode(self):
+        self._set_paint_mode(not self._paint_mode)
+        if not self._paint_mode:
+            self._line_start = self._cursor_x
 
-    def _update_blink_for_code_mode(self) -> None:
-        """Update blink rate. Half speed in code mode so it's less distracting."""
-        self._start_blink(slow=self._code_mode)
-
-    def _toggle_blink(self) -> None:
-        """Toggle cursor visibility for blink effect."""
-        if self._pen_down:
-            return  # Pen-down ring is steady; skip identical repaints
-        self._cursor_visible = not self._cursor_visible
-        self._mark_cursor_dirty()
-        self.refresh()
-
-    BLINK_NORMAL = 0.4
-    BLINK_SLOW = 0.8
-
-    def _start_blink(self, slow: bool = False) -> None:
-        """Start cursor blinking. Half speed when slow=True (code mode)."""
-        self._cursor_visible = True
-        if self._blink_timer is not None:
-            self._blink_timer.stop()
-        rate = self.BLINK_SLOW if slow else self.BLINK_NORMAL
-        self._blink_timer = self.set_interval(rate, self._toggle_blink)
-
-    def _stop_blink(self) -> None:
-        """Stop cursor blinking."""
-        if self._blink_timer is not None:
-            self._blink_timer.stop()
-            self._blink_timer = None
-        self._cursor_visible = True
-
-    def _restart_blink(self) -> None:
-        """Reset blink to visible state. Prevents blink flicker during rapid input."""
-        self._cursor_visible = True
-        if self._blink_timer is not None:
-            self._blink_timer.reset()
-
-    def _set_pen(self, down: bool) -> None:
-        """Latch or lift the pen. Going down paints the cell under the cursor."""
+    def _set_pen(self, down: bool):
         if self._pen_down == down:
             return
         self._pen_down = down
         if down:
             self._paint_at_cursor()
-        self._mark_cursor_dirty()
         self._restart_blink()
         self._post_paint_mode_changed()
-        self.refresh()
 
-    @property
-    def canvas_width(self) -> int:
-        """Width of the content area (excluding gutter)."""
-        return max(1, self.size.width - 2 * GUTTER)
-
-    @property
-    def canvas_height(self) -> int:
-        """Height of the content area (excluding gutter)."""
-        return max(1, self.size.height - 2 * GUTTER)
-
-    @property
-    def is_painting(self) -> bool:
-        """Whether paint mode is active."""
-        return self._paint_mode
-
-    def _is_in_brush_ring(self, x: int, y: int) -> bool:
-        """Check if position is in the 3x3 ring around cursor (not center)."""
-        dx = x - self._cursor_x
-        dy = y - self._cursor_y
-        # In the 3x3 area but not the center
-        return abs(dx) <= 1 and abs(dy) <= 1 and not (dx == 0 and dy == 0)
-
-    def render_line(self, y: int) -> Strip:
-        """Render a single line of the canvas.
-
-        Uses line-level caching: only recomputes lines marked dirty.
-        Screen coordinates (x, y) map to content coordinates (x - GUTTER, y - GUTTER).
-        The gutter area around the edges is where the cursor ring can extend.
-        """
-        # Return cached strip if this line is clean
-        all_dirty = self._all_dirty
-        if not all_dirty and y not in self._dirty_lines and y in self._line_cache:
-            return self._line_cache[y]
-
-        # Clear all_dirty flag so subsequent render_line calls for non-dirty
-        # lines on future frames can use the cache
-        if all_dirty:
-            self._all_dirty = False
-            self._dirty_lines.clear()
-
-        width = self.size.width
-        height = self.size.height
-
-        if width <= 0:
-            return Strip([])
-
-        # Cache theme lookups for this render pass
-        default_bg = self._get_default_bg()
-        is_dark = self._is_dark_theme()
-        text_fg = TEXT_FG_DARK if is_dark else TEXT_FG_LIGHT
-        corner_fg = CURSOR_CORNER_DARK if is_dark else CURSOR_CORNER_LIGHT
-        # Cursor position in screen coordinates
-        cursor_screen_x = self._cursor_x + GUTTER
-        cursor_screen_y = self._cursor_y + GUTTER
-
-        # Pre-check if this line is near the cursor (within brush ring range)
-        dy = y - cursor_screen_y
-        near_cursor = abs(dy) <= 1
-
-        # Gutter flags for this row
-        in_gutter_y = (y < GUTTER or y >= height - GUTTER)
-        gutter_x_min = GUTTER
-        gutter_x_max = width - GUTTER
-
-        segments = []
-        # Track current run for batching consecutive same-style empty cells
-        run_char = None
-        run_style = None
-        run_len = 0
-
-        def flush_run():
-            nonlocal run_char, run_style, run_len
-            if run_len > 0:
-                segments.append(Segment(run_char * run_len, run_style))
-                run_len = 0
-
-        grid = self._grid
-        painted = self._painted_positions
-        paint_mode = self._paint_mode
-        pen_down = paint_mode and self._pen_down
-        # Pen down: steady ring (no blink) so contact reads as solid
-        cursor_visible = self._cursor_visible or pen_down
-        ring_chars = BOX_CHARS_PEN_DOWN if pen_down else BOX_CHARS
-        last_key_color = self._last_key_color
-
-        for x in range(width):
-            in_gutter = in_gutter_y or x < gutter_x_min or x >= gutter_x_max
-
-            # Content coordinates
-            content_x = x - GUTTER
-            content_y = y - GUTTER
-
-            # Fast path: check cursor proximity only if this line is near cursor
-            char_out = None
-            style_out = None
-
-            if near_cursor:
-                dx = x - cursor_screen_x
-                is_cursor_center = (dx == 0 and dy == 0)
-                is_brush_ring = (paint_mode and
-                                 abs(dx) <= 1 and
-                                 not is_cursor_center)
-                # Write mode heading indicator: arrow one cell from cursor
-                heading_info = HEADING_ARROWS.get(self._heading)
-                is_write_heading = (not paint_mode and
-                                    self._use_heading_cursor and
-                                    heading_info is not None and
-                                    (dx, dy) == heading_info[1] and
-                                    not is_cursor_center)
-            else:
-                is_cursor_center = False
-                is_brush_ring = False
-                is_write_heading = False
-
-            cell = None if in_gutter else grid.get((content_x, content_y))
-
-            if is_cursor_center and not in_gutter:
-                flush_run()
-                if paint_mode:
-                    if cell:
-                        char, fg_color, bg_color = cell
-                        if char != BRUSH_CHAR:
-                            fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
-                    else:
-                        char_out, style_out = " ", Style(bgcolor=default_bg)
-                else:
-                    if cursor_visible:
-                        char_out = "▌"
-                        style_out = Style(color=TEXT_FG_DARK, bgcolor=CURSOR_BG_NORMAL, bold=True)
-                    else:
-                        if cell:
-                            char, fg_color, bg_color = cell
-                            if char != BRUSH_CHAR:
-                                fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                            char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
-                        else:
-                            char_out, style_out = " ", Style(bgcolor=default_bg)
-                segments.append(Segment(char_out, style_out))
-                continue
-
-            if is_brush_ring:
-                flush_run()
-                if cursor_visible:
-                    # Check if this ring cell should show a heading arrow
-                    heading_arrow = None
-                    if self._use_heading_cursor:
-                        h_info = HEADING_ARROWS.get(self._heading)
-                        if h_info and (dx, dy) == h_info[1]:
-                            heading_arrow = h_info[0]
-
-                    if heading_arrow:
-                        bg = cell[2] if cell else (self._get_gutter_bg(x, y) if in_gutter else default_bg)
-                        arrow_fg = _visible_arrow_color(last_key_color, bg)
-                        char_out, style_out = heading_arrow, Style(color=arrow_fg, bgcolor=bg, bold=True)
-                    else:
-                        box_char = ring_chars.get((dx, dy), "·")
-                        is_corner = (dx, dy) in CORNER_POSITIONS
-                        ring_fg = corner_fg if is_corner else last_key_color
-
-                        if cell:
-                            char, fg_color, bg_color = cell
-                            if char not in (" ", BRUSH_CHAR, ""):
-                                tfg = self._contrast_text_color(bg_color)
-                                char_out, style_out = char, Style(color=tfg, bgcolor=bg_color)
-                            else:
-                                char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg_color)
-                        else:
-                            bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                            char_out, style_out = box_char, Style(color=ring_fg, bgcolor=bg)
-                else:
-                    if cell:
-                        char, fg_color, bg_color = cell
-                        if char != BRUSH_CHAR:
-                            if (content_x, content_y) in painted:
-                                fg_color = self._contrast_text_color(bg_color)
-                            else:
-                                fg_color = text_fg
-                                bg_color = default_bg
-                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
-                    else:
-                        bg = self._get_gutter_bg(x, y) if in_gutter else default_bg
-                        char_out, style_out = " ", Style(bgcolor=bg)
-                segments.append(Segment(char_out, style_out))
-                continue
-
-            if is_write_heading and not in_gutter:
-                flush_run()
-                if cursor_visible:
-                    arrow_char, _ = HEADING_ARROWS[self._heading]
-                    bg = cell[2] if cell else default_bg
-                    arrow_fg = _visible_arrow_color("#FFFFFF", bg)
-                    char_out = arrow_char
-                    style_out = Style(color=arrow_fg, bgcolor=bg, bold=True)
-                else:
-                    if cell:
-                        char, fg_color, bg_color = cell
-                        if char != BRUSH_CHAR:
-                            fg_color = self._contrast_text_color(bg_color) if (content_x, content_y) in painted else text_fg
-                        char_out, style_out = char, Style(color=fg_color, bgcolor=bg_color)
-                    else:
-                        char_out, style_out = " ", Style(bgcolor=default_bg)
-                segments.append(Segment(char_out, style_out))
-                continue
-
-            if cell:
-                flush_run()
-                char, fg_color, bg_color = cell
-                if char == BRUSH_CHAR:
-                    pass  # keep stored colors
-                elif (content_x, content_y) in painted:
-                    fg_color = self._contrast_text_color(bg_color)
-                else:
-                    fg_color = text_fg
-                segments.append(Segment(char, Style(color=fg_color, bgcolor=bg_color)))
-            else:
-                # Empty cell: batch with adjacent empty cells of same style
-                if in_gutter:
-                    bg = self._get_gutter_bg(x, y)
-                else:
-                    bg = default_bg
-                s = Style(bgcolor=bg)
-                if run_len > 0 and run_style == s:
-                    run_len += 1
-                else:
-                    flush_run()
-                    run_char = " "
-                    run_style = s
-                    run_len = 1
-
-        flush_run()
-
-        strip = Strip(segments)
-        self._line_cache[y] = strip
-        self._dirty_lines.discard(y)
-        return strip
-
-    def _move_cursor_right(self) -> bool:
-        """Move cursor right, return False if at edge."""
-        if self._cursor_x < self.canvas_width - 1:
-            self._cursor_x += 1
-            return True
-        return False
-
-    def _move_cursor_left(self) -> bool:
-        """Move cursor left, return False if at edge."""
-        if self._cursor_x > 0:
-            self._cursor_x -= 1
-            return True
-        return False
-
-    def _move_cursor_up(self) -> bool:
-        """Move cursor up, return False if at edge."""
-        if self._cursor_y > 0:
-            self._cursor_y -= 1
-            return True
-        return False
-
-    def _move_cursor_down(self) -> bool:
-        """Move cursor down, return False if at edge."""
-        if self._cursor_y < self.canvas_height - 1:
-            self._cursor_y += 1
-            return True
-        return False
+    def set_code_mode(self, on: bool):
+        self._code_mode = on
+        self._use_heading_cursor = on
+        if on:
+            self._heading = "right"
+        self.app.invalidate()
 
     def _move_in_direction(self, direction: str) -> bool:
-        """Move cursor in the given direction. Returns True if moved."""
-        if direction == 'up':
-            return self._move_cursor_up()
-        elif direction == 'down':
-            return self._move_cursor_down()
-        elif direction == 'left':
-            return self._move_cursor_left()
-        elif direction == 'right':
-            return self._move_cursor_right()
-        return False
+        dx, dy = {"up": (0, -1), "down": (0, 1), "left": (-1, 0), "right": (1, 0)}.get(direction, (0, 0))
+        nx, ny = self._cursor_x + dx, self._cursor_y + dy
+        if not (0 <= nx < COLS and 0 <= ny < ROWS):
+            return False
+        self._cursor_x, self._cursor_y = nx, ny
+        return True
 
-    def _carriage_return(self) -> None:
-        """Move to start of next line, wrapping from the last row back to the top."""
+    def _carriage_return(self):
         self._cursor_x = 0
-        self._cursor_y = (self._cursor_y + 1) % self.canvas_height
+        self._cursor_y = (self._cursor_y + 1) % ROWS
 
-    def _advance_after_stamp(self, direction: str) -> None:
-        """Advance cursor after stamping a character or paint blob.
-
-        Wraps at the right edge to column 0 of the next row so kids can
-        keep typing past the right side without getting stuck. Records the
-        stamp column so a subsequent ↑/↓ can snap back to it (smart vertical
-        line drawing).
-        """
+    def _advance_after_stamp(self, direction: str):
         stamp_x = self._cursor_x
-        if direction == 'right' and self._cursor_x >= self.canvas_width - 1:
+        if direction == "right" and self._cursor_x >= COLS - 1:
             self._carriage_return()
         else:
             self._move_in_direction(direction)
         self._post_stamp_x = stamp_x
 
-    def execute_logo_command(self, action: str, direction: str, distance: int) -> None:
-        """Execute a Logo-style command: move or paint N steps in a direction."""
-        self._mark_cursor_dirty()
+    def execute_logo_command(self, action: str, direction: str, distance: int):
         for _ in range(distance):
             if action == "paint":
                 self._paint_at_cursor()
-            moved = self._move_in_direction(direction)
-            if not moved:
+            if not self._move_in_direction(direction):
                 break
-        self._mark_cursor_dirty()
-        self._invalidate_all()
         self._restart_blink()
         self.refresh()
 
-    _TURN_RIGHT = {'right': 'down', 'down': 'left', 'left': 'up', 'up': 'right'}
-    _TURN_LEFT = {'right': 'up', 'up': 'left', 'left': 'down', 'down': 'right'}
-
-    def turn(self, direction: str) -> None:
-        """Turn the heading.
-
-        Absolute: left, right, up, down (sets heading directly).
-        Relative: spin/rotate (90 CW), back/backward/around (180).
-        """
-        self._mark_cursor_dirty()
-        if direction in ('left', 'right', 'up', 'down'):
+    def turn(self, direction: str):
+        if direction in ("left", "right", "up", "down"):
             self._heading = direction
-        elif direction in ('spin', 'rotate'):
+        elif direction in ("spin", "rotate"):
             self._heading = self._TURN_RIGHT[self._heading]
-        elif direction in ('back', 'backward', 'around'):
+        elif direction in ("back", "backward", "around"):
             self._heading = self._TURN_RIGHT[self._TURN_RIGHT[self._heading]]
         self._use_heading_cursor = True
-        self._mark_cursor_dirty()
         self._restart_blink()
         self.refresh()
 
-    def _get_cell_bg(self, pos: tuple[int, int]) -> str:
-        """Get background color of a cell, or default if empty."""
-        cell = self._grid.get(pos)
-        if cell:
-            return cell[2]
-        return self._get_default_bg()
-
-    def _set_cell(self, pos: tuple[int, int], char: str, fg: str, bg: str) -> None:
-        """Set a cell's content."""
-        self._grid[pos] = (char, fg, bg)
-
-    def _paint_at_cursor(self) -> None:
-        """Paint at current cursor position using current color.
-
-        Paint colors are stored as pure key colors, not blended with the background.
-        This ensures colors look identical regardless of light/dark theme.
-        """
-        pos = (self._cursor_x, self._cursor_y)
-        cell = self._grid.get(pos)
-
-        # Painted cells mix even when a typed letter sits on top of the paint
-        if pos in self._painted_positions:
-            new_color = mix_colors_paint([self._get_cell_bg(pos), self._last_key_color])
-        else:
-            # First paint stroke: use pure key color (no background blending)
-            new_color = self._last_key_color
-
-        self._painted_positions.add(pos)
-        self._last_paint_pos = pos
-
-        # If cell has a text character, keep it and just paint the background
-        if cell and cell[0] not in ("", " ", BRUSH_CHAR):
-            self._set_cell(pos, cell[0], self._contrast_text_color(new_color), new_color)
-        else:
-            self._set_cell(pos, BRUSH_CHAR, new_color, new_color)
-
-    def paint_char(self, char: str, direction: str = 'right') -> None:
-        """Paint a colored block for a character (like interactive paint mode).
-
-        Sets the key's color as both fg and bg with BRUSH_CHAR, then advances
-        in the given direction. Wraps at the right edge to the next row.
-        Used by the code runner when paint mode is on.
-        """
-        self._mark_cursor_dirty()
+    def paint_char(self, char: str, direction: str = "right"):
         self._last_key_char = char.lower()
         self._last_key_color = get_key_color(char)
         self._paint_at_cursor()
         self._advance_after_stamp(direction)
-        self._mark_cursor_dirty()
-        self.refresh()
 
-    def type_char(self, char: str, direction: str = 'right') -> None:
-        """Type a character at cursor position, advancing in direction."""
-        self._mark_cursor_dirty()  # Old cursor position
+    def _letter_px(self, c: int) -> int:
+        return max(8, int(c * LETTER_ROWS * 0.95))
+
+    def _advance_for(self, char: str) -> int:
+        """Cells a written letter takes: its measured width, at least one."""
+        if char == " ":
+            return 1
+        w = self.app.g.measure(char, self._letter_px(self._cell), "sans-heavy")[0]
+        return max(1, round(w / self._cell + 0.15))
+
+    def type_char(self, char: str, direction: str = "right"):
+        adv = self._advance_for(char)
+        if direction == "right" and self._cursor_x > COLS - adv:
+            self._cursor_x = self._line_start
+            self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
         pos = (self._cursor_x, self._cursor_y)
-
-        # Update last key color (for painting)
         self._last_key_char = char
         self._last_key_color = get_key_color(char)
-
-        # Keep existing background (painted cells keep their color, empty cells stay default)
-        new_bg = self._get_cell_bg(pos)
-
-        # Use contrast color on painted backgrounds, theme color otherwise
-        if pos in self._painted_positions:
-            text_fg = self._contrast_text_color(new_bg)
+        bg = self._get_cell_bg(pos)
+        self._set_cell(pos, char, _contrast_text_color(bg) if pos in self._painted_positions else P.TEXT, bg)
+        self._post_stamp_x = self._cursor_x
+        if direction == "right":
+            self._cursor_x += adv
+            if self._cursor_x >= COLS:
+                self._cursor_x = self._line_start
+                self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
         else:
-            text_fg = self._get_text_fg()
-        self._set_cell(pos, char, text_fg, new_bg)
-
-        # Move cursor in the specified direction (right wraps to next row)
-        self._advance_after_stamp(direction)
-
-        self._mark_cursor_dirty()  # New cursor position
+            self._move_in_direction(direction)
         self._restart_blink()
-        self.refresh()
+        self.app.invalidate()
 
-    def _backspace(self) -> None:
-        """Delete character at cursor, reverting to blank canvas."""
-        self._mark_cursor_dirty()  # Old position
-        # Move cursor back first
+    def _backspace_letter(self):
+        """Walk back to the previous written letter on this row and erase it."""
+        y = self._cursor_y
+        for d in range(1, 4):
+            x = self._cursor_x - d
+            if x < 0:
+                break
+            cell = self._grid.get((x, y))
+            if cell and cell[0] not in ("", " ", BRUSH_CHAR):
+                self._cursor_x = x
+                self._del_cell((x, y))
+                self._painted_positions.discard((x, y))
+                self.app.invalidate()
+                return
+        self._backspace()
+
+    def _backspace(self):
         if self._cursor_x > 0:
             self._cursor_x -= 1
         elif self._cursor_y > 0:
-            # Wrap to end of previous line
             self._cursor_y -= 1
-            self._cursor_x = self.canvas_width - 1
-
+            self._cursor_x = COLS - 1
         pos = (self._cursor_x, self._cursor_y)
-        # Remove cell entirely, reverting to blank canvas
         if pos in self._grid:
-            del self._grid[pos]
+            self._del_cell(pos)
             self._painted_positions.discard(pos)
             if pos == self._last_paint_pos:
                 self._last_paint_pos = None
+        self.app.invalidate()
 
-        self._mark_cursor_dirty()  # New position
-        self.refresh()
+    def set_cursor_position(self, x: int, y: int):
+        self._cursor_x = max(0, min(x, COLS - 1))
+        self._cursor_y = max(0, min(y, ROWS - 1))
+        self.app.invalidate()
 
-    def _clear_canvas(self) -> None:
-        """Clear the entire canvas with animation."""
-        self._clear_animation_active = True
-
-        # Simple clear (animation could be added via set_interval)
-        self._grid.clear()
-        self._painted_positions.clear()
-        self._last_paint_pos = None
-        self._cursor_x = 0
-        self._cursor_y = 0
-        self._paint_mode = True
-        self._set_pen(False)
-        self._code_mode = False
-        self._heading = 'right'
-        self._use_heading_cursor = False
-        self._last_key_color = DEFAULT_BRUSH_COLOR
-
-        self._clear_animation_active = False
-        self._post_paint_mode_changed()
-        self._invalidate_all()
-        self.refresh()
-
-    def has_content(self) -> bool:
-        """Check if the canvas has any content."""
-        return len(self._grid) > 0
-
-    def set_cursor_position(self, x: int, y: int) -> None:
-        """Set cursor position directly (for dev/AI tools)."""
-        self._mark_cursor_dirty()  # Old position
-        self._cursor_x = max(0, min(x, self.canvas_width - 1))
-        self._cursor_y = max(0, min(y, self.canvas_height - 1))
-        self._mark_cursor_dirty()  # New position
-        self.refresh()
-
-    def paint_at(self, x: int, y: int, color_key: str) -> None:
-        """Paint a color at a specific position (for dev/AI tools).
-
-        Args:
-            x: X coordinate (0 to canvas_width-1)
-            y: Y coordinate (0 to canvas_height-1)
-            color_key: Key character for color (e.g., 'f' for yellow, 'c' for
-                blue) or a literal "#rrggbb" hex color
-        """
-        # Clamp coordinates
-        x = max(0, min(x, self.canvas_width - 1))
-        y = max(0, min(y, self.canvas_height - 1))
-
-        # Set cursor position
-        self._cursor_x = x
-        self._cursor_y = y
-
-        # Determine color from key (same logic as keyboard input)
-        key_lower = color_key.lower()
-        if key_lower.startswith("#"):
-            self._last_key_color = key_lower
-        elif key_lower in GRAYSCALE:
-            self._last_key_char = key_lower
-            self._last_key_color = GRAYSCALE[key_lower]
-        elif key_lower.isalpha() or key_lower in KEY_COLORS:
-            color = get_key_color(key_lower)
-            if color != "#AAAAAA":  # Only if it's a mapped color
-                self._last_key_char = key_lower
-                self._last_key_color = color
-
-        # Paint
+    def paint_at(self, x: int, y: int, color_key: str):
+        """Paint one cell by key char or '#rrggbb' (Secret Menu pictures)."""
+        self._cursor_x, self._cursor_y = max(0, min(x, COLS - 1)), max(0, min(y, ROWS - 1))
+        k = color_key.lower()
+        if k.startswith("#"):
+            self._last_key_color = k
+        elif k in GRAYSCALE:
+            self._last_key_char, self._last_key_color = k, GRAYSCALE[k]
+        elif (k.isalpha() or k in KEY_COLORS) and get_key_color(k) != UNMAPPED:
+            self._last_key_char, self._last_key_color = k, get_key_color(k)
         self._paint_at_cursor()
 
-    def _on_edge_hit(self) -> None:
-        """Provide feedback when cursor hits an edge."""
-        # Could add visual flash or sound here
-        # For now, the cursor just stops
-        pass
+    def _select_brush(self, char: str) -> bool:
+        """Set the brush from a key; False when the key has no color."""
+        if char in GRAYSCALE:
+            self._last_key_char, self._last_key_color = char, GRAYSCALE[char]
+        elif (char.isalpha() or char in KEY_COLORS) and get_key_color(char) != UNMAPPED:
+            self._last_key_char, self._last_key_color = char.lower(), get_key_color(char)
+        else:
+            return False
+        self._post_paint_mode_changed()
+        return True
 
-    async def handle_keyboard_action(self, action) -> None:
-        """
-        Handle keyboard actions from the main app's KeyboardStateMachine.
+    # ---------------------------------------------------------------- code panel
+    def open_code_panel(self):
+        if self.code_panel is None and self.app._code_panel_enabled:
+            self._set_pen(False)
+            self.code_panel = CodePanel(self.app, "art")
+            self.set_code_mode(True)
+            self.app.set_panel(self.code_panel)
 
-        This receives high-level actions (CharacterAction, NavigationAction, etc.)
-        instead of raw key events. Key up/down detection works reliably via evdev.
-        """
-        # Smart ↑/↓ uses the column of the most recent stamp; this is the
-        # only place that reads it. Clear up front so any path that doesn't
-        # explicitly set it (most actions) invalidates the snap. Stamp paths
-        # re-set it via _advance_after_stamp.
+    def close_code_panel(self):
+        if self.code_panel is not None:
+            self.code_panel = None
+            self.set_code_mode(False)
+            self.app.set_panel(None)
+
+    def _space_hold_fired(self):
+        if self.code_panel is None:
+            self.open_code_panel()
+        else:
+            self.close_code_panel()
+
+    def _space_tap(self):
+        if self.code_panel is not None:
+            self.code_panel.field.insert(" ")
+        else:
+            self._space(arrow_held=None)
+
+    async def run_code(self, lines: list):
+        try:
+            runner = ArtCodeRunner(self)
+            await runner.run(lines, paint=self._paint_mode)
+            self._post_paint_mode_changed()
+            if runner.corrections and self.code_panel:
+                self.code_panel.set_correction(*runner.corrections[-1])
+        except Exception as exc:
+            if isinstance(exc, __import__("asyncio").CancelledError):
+                raise
+        self.app.invalidate()
+
+    # ---------------------------------------------------------------- input
+    def _space(self, arrow_held):
+        if self._paint_mode:
+            self._set_pen(not self._pen_down)
+            if self._pen_down and arrow_held:
+                self._advance_after_stamp(arrow_held)
+        else:
+            self.type_char(" ")
+        self.app.invalidate()
+
+    async def handle(self, action):
+        if isinstance(action, ControlAction) and action.action == "space" and self.space.route(action):
+            return
+        if self.code_panel is not None:
+            self.space.other_key()
+            result = await self.code_panel.handle(action)
+            if result == "tab_fallthrough":
+                self._toggle_paint_mode()
+            elif result == "close":
+                self.close_code_panel()
+            return
+        self.space.other_key()
         prior_post_stamp_x = self._post_stamp_x
         self._post_stamp_x = None
-
-        # Handle control actions (space, tab, backspace, enter, escape)
         if isinstance(action, ControlAction):
-            if action.action == 'space':
-                if not action.is_down:
-                    return
-                if self._paint_mode:
-                    # Toggle the pen latch (repeats would flutter it).
-                    # _set_pen owns the stamp, dirty marking, blink reset, and refresh.
-                    if action.is_repeat:
-                        return
-                    self._set_pen(not self._pen_down)
-                    # If an arrow key is held, advance in that direction after stamping
-                    if self._pen_down and action.arrow_held:
-                        self._advance_after_stamp(action.arrow_held)
-                        self._mark_cursor_dirty()
-                        self.refresh()
-                else:
-                    # In write mode: type a space
-                    self._mark_cursor_dirty()
-                    pos = (self._cursor_x, self._cursor_y)
-                    existing_bg = self._get_cell_bg(pos)
-                    self._set_cell(pos, " ", self._get_text_fg(), existing_bg)
-                    self._advance_after_stamp('right')
-                    self._mark_cursor_dirty()
-                    self._restart_blink()
-                    self.refresh()
-                return
-
-            if action.action == 'tab' and action.is_down:
-                self._toggle_paint_mode()
-                return
-
-            if action.action == 'enter' and action.is_down:
-                # Enter is an alias for the down arrow so kids who reach for
-                # the big labeled key get the same smart-snap behavior as ↓.
-                self._post_stamp_x = prior_post_stamp_x
-                await self.handle_keyboard_action(NavigationAction(
-                    direction='down',
-                    is_repeat=action.is_repeat,
-                ))
-                return
-
-            if action.action == 'backspace':
-                if action.is_down:
-                    if action.is_repeat:
-                        self._backspace_repeat_count += 1
-                    else:
-                        self._backspace_repeat_count = 0
-                    erase_count = (HOLD_ACCEL_MULTIPLIER
-                                   if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD
-                                   else 1)
-                    for _ in range(erase_count):
-                        self._backspace()
-                else:
+            if not action.is_down:
+                if action.action == "backspace":
                     self._backspace_repeat_count = 0
                 return
-
-            # Escape is handled by the main app (parent mode)
+            a = action.action
+            if a == "space":
+                if not (self._paint_mode and action.is_repeat):
+                    self._space(action.arrow_held)
+            elif a == "tab":
+                self._toggle_paint_mode()
+            elif a == "enter":
+                if self._paint_mode:
+                    self._post_stamp_x = prior_post_stamp_x
+                    await self.handle(NavigationAction(direction="down", is_repeat=action.is_repeat))
+                elif not action.is_repeat:
+                    self._cursor_x = self._line_start
+                    self._cursor_y = min(ROWS - LETTER_ROWS, self._cursor_y + LETTER_ROWS)
+                    self.app.invalidate()
+            elif a == "backspace":
+                self._backspace_repeat_count = self._backspace_repeat_count + 1 if action.is_repeat else 0
+                for _ in range(HOLD_ACCEL_MULTIPLIER if self._backspace_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD else 1):
+                    self._backspace_letter() if not self._paint_mode else self._backspace()
             return
-
-        # Handle navigation actions (arrow keys)
         if isinstance(action, NavigationAction):
-            self._mark_cursor_dirty()  # Old position
-
-            # Track consecutive same-direction repeats so a sustained hold
-            # accelerates movement. Fresh press (is_repeat=False) resets.
-            if action.is_repeat and action.direction == self._arrow_repeat_dir:
-                self._arrow_repeat_count += 1
-            else:
-                self._arrow_repeat_dir = action.direction
-                self._arrow_repeat_count = 1 if action.is_repeat else 0
-
-            # When a character key is held while arrowing in paint mode,
-            # paint at the current position BEFORE moving. This avoids a
-            # one-cell gap: the CharacterAction already painted and advanced
-            # the cursor, so we fill the current cell then step forward.
-            if self._paint_mode and action.char_held:
-                char = action.char_held
-                if char in GRAYSCALE:
-                    self._last_key_char = char
-                    self._last_key_color = GRAYSCALE[char]
-                    self._post_paint_mode_changed()
-                elif char.isalpha() or char in KEY_COLORS:
-                    lower = char.lower()
-                    color = get_key_color(lower)
-                    if color != "#AAAAAA":
-                        self._last_key_char = lower
-                        self._last_key_color = color
-                        self._post_paint_mode_changed()
-                # On repeats, skip the cell the previous landing step painted:
-                # a second coat re-mixes the shade. A fresh press always paints
-                # so a new stroke's first cell never inherits a stale skip.
-                if (self._arrow_repeat_count == 0
-                        or (self._cursor_x, self._cursor_y) != self._last_paint_pos):
-                    self._paint_at_cursor()
-
-            # Smart ↑/↓: the auto-advance after a stamp pushed the cursor one
-            # cell right; pulling it back to the stamp column lets `a, ↓, a`
-            # draw a vertical line at the original column. Skip when char_held
-            # (existing fill-the-gap diagonal mechanic owns that case).
-            if (action.direction in ('up', 'down')
-                    and prior_post_stamp_x is not None
-                    and not action.char_held):
-                self._cursor_x = prior_post_stamp_x
-
-            # Collect all directions to move (primary + any other held arrows)
-            directions_to_move = [action.direction]
-            if action.other_arrows_held:
-                directions_to_move.extend(action.other_arrows_held)
-
-            # Accelerate after sustained hold: each repeat takes multiple
-            # steps. Only while traveling, never while painting: precision
-            # matters when paint is going down, and a multi-cell jump blows
-            # past the corner of a shape.
-            paint_each_step = (self._paint_mode
-                               and (self._pen_down or bool(action.char_held)))
-            step_count = (HOLD_ACCEL_MULTIPLIER
-                          if (not paint_each_step
-                              and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD)
-                          else 1)
-
-            any_moved = False
-            for direction in directions_to_move:
-                for _ in range(step_count):
-                    if not self._move_in_direction(direction):
-                        break
-                    any_moved = True
-                    if paint_each_step:
-                        self._paint_at_cursor()
-                        # Rows painted mid-move (diagonals) can fall outside
-                        # the cursor's 3-row dirty ring, leaving stale strips.
-                        self._dirty_lines.add(self._cursor_y)
-
-            if not any_moved:
-                self._on_edge_hit()
-
-            self._mark_cursor_dirty()  # New position
-            self._restart_blink()
-            self.refresh()
+            self._navigate(action, prior_post_stamp_x)
             return
-
-        # Handle character actions (printable characters)
         if isinstance(action, CharacterAction):
             self._backspace_repeat_count = 0
-
             char = action.char
-            # When an arrow is held, advance in that direction after stamping.
-            # This lets you type "leftward" or "downward" by holding an arrow while typing.
-            advance_direction = action.arrow_held if action.arrow_held else 'right'
-            if self._paint_mode:
-                # Paint mode only: fold shifted number-row symbols back to the
-                # bare key so Shift+9='(' etc. resolve to a grayscale shade,
-                # mirroring how the alpha branch uses .lower() for letters.
-                # Write mode below keeps the shifted char so '?' '#' etc. type
-                # correctly, matching play mode.
-                if action.shift_held and char in UNSHIFT_MAP:
-                    char = UNSHIFT_MAP[char]
-                self._mark_cursor_dirty()  # Old position
-                # In paint mode:
-                # - Lowercase letters / unshifted numbers: select color, stamp, advance
-                # - Shift held: just select color (no stamp, no advance)
-                if char in GRAYSCALE:
-                    self._last_key_char = char
-                    self._last_key_color = GRAYSCALE[char]
-                    self._post_paint_mode_changed()
-                    if not action.shift_held:
-                        self._paint_at_cursor()
-                        self._advance_after_stamp(advance_direction)
-                    self._mark_cursor_dirty()  # New position
-                    self._restart_blink()
-                    self.refresh()
-                elif char.isalpha() or char in KEY_COLORS:
-                    lower = char.lower()
-                    color = get_key_color(lower)
-                    if color != "#AAAAAA":  # Only if it's a mapped color
-                        self._last_key_char = lower
-                        self._last_key_color = color
-                        self._post_paint_mode_changed()
-                        if not action.shift_held:
-                            # No shift: stamp and advance in arrow direction (or right by default)
-                            self._paint_at_cursor()
-                            self._advance_after_stamp(advance_direction)
-                        # Shift held: just select brush, no stamp
-                        self._mark_cursor_dirty()  # New position
-                        self._restart_blink()
-                        self.refresh()
-            else:
-                # In text mode: type the character
+            direction = action.arrow_held or "right"
+            if not self._paint_mode:
                 self.type_char(char)
-            return
+                return
+            if action.shift_held and char in UNSHIFT_MAP:
+                char = UNSHIFT_MAP[char]
+            if self._select_brush(char) and not action.shift_held:
+                self._paint_at_cursor()
+                self._advance_after_stamp(direction)
+            self._restart_blink()
+            self.app.invalidate()
 
-    def on_blur(self, event: events.Blur) -> None:
-        """Reset state when losing focus."""
-        pass  # Paint mode persists across focus changes
-
-
-# =============================================================================
-# COLOR LEGEND WIDGET
-# =============================================================================
-
-class ColorLegend(Widget):
-    """
-    Simple color legend showing keyboard row colors as bars with active row indicator.
-
-    Displays 4 colored bars representing the keyboard rows:
-    - Gray (number row, grayscale)
-    - Red (QWERTY row)
-    - Yellow (ASDF row)
-    - Blue (ZXCV row)
-
-    Shows an arrow pointing to the currently active row.
-    Only visible in paint mode. Always occupies space to prevent layout shifts.
-    """
-
-    # Arrow character for active row indicator
-    ARROW = "◀"
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._visible = False
-        self._active_row = 0
-
-    def set_visible(self, visible: bool) -> None:
-        """Show or hide the legend."""
-        if self._visible == visible:
-            return
-        self._visible = visible
-        self.refresh()
-
-    def set_active_color(self, color: str) -> None:
-        """Set the active row based on the current brush color."""
-        row = get_legend_row_from_color(color)
-        if row == self._active_row:
-            return
-        self._active_row = row
-        self.refresh()
-
-    def set_active_row(self, row: int) -> None:
-        """Set the active row directly. Use -1 for no active row."""
-        self._active_row = row
-        self.refresh()
-
-    def _get_app_bg(self) -> str:
-        """Get the app's background color to blend in when hidden."""
-        try:
-            is_dark = "dark" in self.app.theme
-            return APP_BG_DARK if is_dark else APP_BG_LIGHT
-        except Exception:
-            return APP_BG_DARK
-
-    def render_line(self, y: int) -> Strip:
-        """Render a single line of the legend (3 shades + arrow for active row)."""
-        width = self.size.width
-        app_bg = self._get_app_bg()
-
-        if not self._visible or y >= len(ROW_LEGEND_COLORS):
-            # Hidden or beyond legend rows: render as app background
-            return Strip([Segment(" " * width, Style(bgcolor=app_bg))])
-
-        # Reserve 1 char for arrow on the right
-        color_width = width - 1
-        shades = ROW_LEGEND_COLORS[y]
-        segments = []
-
-        # Render 3 shades side-by-side
-        third = color_width // 3
-        remainder = color_width - (third * 3)
-
-        for i, color in enumerate(shades):
-            # Distribute remainder across segments
-            seg_width = third + (1 if i == 2 and remainder > 0 else 0)
-            if i == 1 and remainder > 1:
-                seg_width += 1
-            if i == 0 and remainder > 2:
-                seg_width += 1
-            segments.append(Segment(" " * seg_width, Style(bgcolor=color)))
-
-        # Add arrow for active row, space for others
-        if y == self._active_row:
-            # Use contrasting color for arrow visibility
-            arrow_fg = TEXT_FG_DARK if "dark" in str(self.app.theme) else TEXT_FG_LIGHT
-            segments.append(Segment(self.ARROW, Style(color=arrow_fg, bgcolor=app_bg)))
+    def _navigate(self, action, prior_post_stamp_x):
+        if action.is_repeat and action.direction == self._arrow_repeat_dir:
+            self._arrow_repeat_count += 1
         else:
-            segments.append(Segment(" ", Style(bgcolor=app_bg)))
+            self._arrow_repeat_dir = action.direction
+            self._arrow_repeat_count = 1 if action.is_repeat else 0
+        if self._paint_mode and action.char_held:
+            self._select_brush(action.char_held)
+            if self._arrow_repeat_count == 0 or (self._cursor_x, self._cursor_y) != self._last_paint_pos:
+                self._paint_at_cursor()
+        if action.direction in ("up", "down") and prior_post_stamp_x is not None and not action.char_held:
+            self._cursor_x = prior_post_stamp_x
+        paint_each_step = self._paint_mode and (self._pen_down or bool(action.char_held))
+        steps = HOLD_ACCEL_MULTIPLIER if (not paint_each_step and self._arrow_repeat_count >= ARROW_HOLD_REPEAT_THRESHOLD) else 1
+        for direction in [action.direction] + list(action.other_arrows_held or ()):
+            for _ in range(steps):
+                if not self._move_in_direction(direction):
+                    break
+                if paint_each_step:
+                    self._paint_at_cursor()
+        self._restart_blink()
+        self.app.invalidate()
 
-        return Strip(segments)
+    # ---------------------------------------------------------------- drawing
+    def draw(self, g, rect):
+        head_h, hint_h = g.vh(5.5), g.vh(4.5)
+        self._draw_header(g, pygame.Rect(rect.x, rect.y, rect.w, head_h))
+        area = pygame.Rect(rect.x + g.vw(1), rect.y + head_h, rect.w - g.vw(2), rect.h - head_h - hint_h)
+        self._cell = max(3, min(area.w // COLS, area.h // ROWS))
+        ox = area.x + (area.w - self._cell * COLS) // 2
+        oy = area.y + (area.h - self._cell * ROWS) // 2
+        self._origin = (ox, oy)
+        c = self._cell
+        g.surface.blit(self._canvas_surface(g, c), (ox, oy))
+        self._draw_grid_halo(g, ox, oy, c)
+        self._draw_letters(g, ox, oy, c)
+        self._draw_cursor(g, ox, oy, c)
+        if self.app._panel is None:
+            key = "littles" if self.app._littles_mode else ("pen" if self._paint_mode and self._pen_down else "paint" if self._paint_mode else "write")
+            g.draw_text(HINTS[key], g.vh(2.1), rect.centerx, rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="center")
+            if self.app._code_panel_enabled and not self.app._littles_mode:
+                g.draw_text("🤖 Hold Space: write code!", g.vh(2.0), rect.right - g.vw(1.5), rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="midright")
 
-
-# =============================================================================
-# HEADER WIDGET
-# =============================================================================
-
-class CanvasHeader(Static):
-    """Shows current mode with both tools visible, current highlighted."""
-
-    DEFAULT_CSS = """
-    CanvasHeader {
-        height: 1;
-        dock: top;
-        color: $text-muted;
-        background: $surface;
-    }
-    """
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._is_painting = True
-        self._last_color = "#FFFFFF"
-        self._code_mode = False
-
-    def update_state(self, is_painting: bool, last_color: str) -> None:
-        """Update displayed state."""
-        if self._is_painting == is_painting and self._last_color == last_color:
-            return
-        self._is_painting = is_painting
-        self._last_color = last_color
-        self.refresh()
-
-    def set_code_mode(self, code_mode: bool) -> None:
-        self._code_mode = code_mode
-        self.refresh()
-
-    def on_resize(self, event) -> None:
-        self.refresh()
-
-    def _get_contrast_color(self, color: str) -> str:
-        """Get a color that contrasts well with the given color."""
-        r, g, b = hex_to_rgb(color)
-        # Calculate perceived luminance (human eye is more sensitive to green)
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        # Return dark text for light colors, light text for dark colors
-        return APP_BG_DARK if luminance > 0.5 else TEXT_FG_DARK
-
-    def render(self) -> str:
-        """Render header showing both tools with current highlighted."""
-        # Symbols: ABC for Write, colored squares for Paint
-        write_icon = "ABC"
-        paint_icon = "[#DF7070]■[/][#DFC070]■[/][#7090DF]■[/]"
-
-        if self._is_painting:
-            # Paint mode: PAINT highlighted, Write dim
-            text_color = self._get_contrast_color(self._last_color)
-            paint_part = f"[{text_color} on {self._last_color}] {paint_icon} [/]"
-            write_part = f"[dim] {write_icon} [/]"
-        else:
-            # Write mode: WRITE highlighted, Paint dim
-            paint_part = f"[dim] {paint_icon} [/]"
-            write_part = f"[{APP_BG_DARK} on #9070C0] {write_icon} [/]"
-
-        if getattr(self.app, '_littles_mode', None):
-            part = paint_part if self._is_painting else write_part
-            part_w = 3 + 2  # " ■■■ " or " ABC "
-            width = self.size.width or VIEWPORT_WIDTH
-            left_pad = max(0, (width - part_w) // 2)
-            return f"{' ' * left_pad}{part}"
-
-        modes = f"{paint_part}  {write_part}"
-        modes_w = 3 + 2 + 2 + 3 + 2 + 2  # " ■■■ " + "  " + " ABC "
-        hint = f"{ICON_TAB} Tab to {'write' if self._is_painting else 'paint'}"
-        hint_w = len(hint)
-        width = self.size.width or VIEWPORT_WIDTH
-        left_pad = max(0, (width - modes_w) // 2)
-        right_area = max(0, width - left_pad - modes_w)
-        hint_left_pad = max(1, (right_area - hint_w) // 2)
-        return f"{' ' * left_pad}{modes}{' ' * hint_left_pad}[dim]{hint}[/]"
-
-
-# =============================================================================
-# ART HINT BAR
-# =============================================================================
-
-class ArtHintBar(Static):
-    """Permanent hint bar below the canvas with tips for kids."""
-
-    DEFAULT_CSS = """
-    ArtHintBar {
-        dock: bottom;
-        width: 100%;
-        height: 1;
-        text-align: center;
-        color: $text-muted;
-    }
-    """
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._is_painting = True
-        self._pen_down = False
-
-    def update_state(self, is_painting: bool, pen_down: bool) -> None:
-        if self._is_painting == is_painting and self._pen_down == pen_down:
-            return
-        self._is_painting = is_painting
-        self._pen_down = pen_down
-        self.refresh()
-
-    def render(self) -> str:
-        if getattr(self.app, '_littles_mode', None):
-            return "  Type to paint!  "
-        if self._is_painting:
-            if self._pen_down:
-                return "  Pen is down! Arrows paint a trail. Space lifts the pen.  "
-            return "  Type to paint! Every letter is a color. Space puts the pen down.  "
-        return "  Type to write! Arrow keys move. Enter for a new line.  "
-
-
-# =============================================================================
-# ART MODE CONTAINER
-# =============================================================================
-
-class ArtMode(Container):
-    """
-    Art Room: Drawing canvas with playful painting.
-
-    Normal typing draws readable text on the canvas background.
-    Space toggles the pen; while it is down, arrows paint colorful trails.
-    A permanent hint bar below the canvas shows tips for tool switching.
-    """
-
-    DEFAULT_CSS = """
-    ArtMode {
-        width: 100%;
-        height: 100%;
-        padding: 0;
-        background: $surface;
-    }
-
-    #canvas-header {
-        height: 1;
-        dock: top;
-    }
-
-    #art-canvas {
-        width: 100%;
-        height: 1fr;
-    }
-
-    #art-hint-bar {
-        dock: bottom;
-    }
-    """
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._repl_panel = None
-        self._space_hold = HoldOrTap(hold_seconds=HOLD_OR_TAP_THRESHOLD)
-
-    def compose(self) -> ComposeResult:
-        from ..repl_panel import ReplPanel
-        yield CanvasHeader(id="canvas-header")
-        yield ArtCanvas(id="art-canvas")
-        yield ArtHintBar(id="art-hint-bar")
-        self._repl_panel = ReplPanel(room="art", id="art-repl")
-        yield self._repl_panel
-
-    def on_mount(self) -> None:
-        """Focus the canvas when mode loads."""
-        canvas = self.query_one("#art-canvas", ArtCanvas)
-        canvas.focus()
-        # Initialize header (canvas starts in paint mode)
-        header = self.query_one("#canvas-header", CanvasHeader)
-        header.update_state(True, "#FFFFFF")
-        restore = getattr(self.app, "timeline_restore", None)
-        if restore:
-            restore("art", self)
-
-    def timeline_state(self) -> dict:
-        canvas = self.query_one("#art-canvas", ArtCanvas)
-        state = {
-            f"c:{x},{y}": [ch, fg, bg, 1 if (x, y) in canvas._painted_positions else 0]
-            for (x, y), (ch, fg, bg) in canvas._grid.items()
-        }
-        state["cursor"] = [canvas._cursor_x, canvas._cursor_y]
-        state["paint"] = canvas._paint_mode
-        state["color"] = canvas._last_key_color
-        return state
-
-    def restore_timeline_state(self, state: dict) -> None:
-        canvas = self.query_one("#art-canvas", ArtCanvas)
-        canvas._grid.clear()
-        canvas._painted_positions.clear()
-        canvas._last_paint_pos = None
-        for key, val in state.items():
-            if not key.startswith("c:"):
+    def _canvas_surface(self, g, c):
+        """The cells as one surface; only cells that changed since the last
+        frame are repainted, so a keystroke costs a cell, not a canvas."""
+        if self._surf is None or self._surf.get_width() != c * COLS or self._surf.get_height() != c * ROWS:
+            self._surf = pygame.Surface((c * COLS, c * ROWS))
+            self._dirty = None
+        cells = self._grid.keys() if self._dirty is None else self._dirty
+        if self._dirty is None:
+            self._surf.fill(rgb(CANVAS_BG))
+        for x, y in list(cells):
+            if not (0 <= x < COLS and 0 <= y < ROWS):
                 continue
-            x, y = (int(n) for n in key[2:].split(","))
-            canvas._grid[(x, y)] = (val[0], val[1], val[2])
-            if val[3]:
-                canvas._painted_positions.add((x, y))
-        canvas._cursor_x, canvas._cursor_y = state.get("cursor", [0, 0])
-        canvas._paint_mode = bool(state.get("paint", True))
-        canvas._set_pen(False)
-        canvas._last_key_color = state.get("color", DEFAULT_BRUSH_COLOR)
-        canvas._post_paint_mode_changed()
-        canvas._invalidate_all()
-        canvas.refresh()
+            cell = self._grid.get((x, y))
+            rect = (x * c, y * c, c, c)
+            self._surf.fill(rgb(cell[2] if cell and (cell[2] != CANVAS_BG or cell[0] == BRUSH_CHAR) else CANVAS_BG), rect)
+        self._dirty = set()
+        return self._surf
 
-    def on_paint_mode_changed(self, event: PaintModeChanged) -> None:
-        """Update header when paint mode changes."""
-        header = self.query_one("#canvas-header", CanvasHeader)
-        header.update_state(event.is_painting, event.last_color)
-        hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
-        hint_bar.update_state(event.is_painting, event.pen_down)
+    def _draw_letters(self, g, ox, oy, c):
+        px = self._letter_px(c)
+        for (x, y), (ch, fg, _bg) in self._grid.items():
+            if ch not in ("", " ", BRUSH_CHAR) and 0 <= x < COLS and 0 <= y < ROWS:
+                g.draw_text(ch, px, ox + x * c + int(c * 0.08), oy + y * c + c, "sans-heavy", fg, anchor="midleft")
 
-    def has_content(self) -> bool:
-        """Check if the canvas has any content."""
-        try:
-            canvas = self.query_one("#art-canvas", ArtCanvas)
-            return canvas.has_content()
-        except Exception:
-            return False
+    def _draw_grid_halo(self, g, ox, oy, c):
+        """Faint grid only near the cursor, so the canvas reads as paper."""
+        R = 4
+        cx, cy = self._cursor_x, self._cursor_y
+        x0, x1 = max(0, cx - R), min(COLS, cx + R + 1)
+        y0, y1 = max(0, cy - R), min(ROWS, cy + R + 1)
+        for x in range(x0, x1 + 1):
+            for y in range(y0, y1):
+                d = max(abs(x - cx), abs(y - cy))
+                pygame.draw.line(g.surface, mix(CANVAS_BG, P.PRIMARY, 0.18 * (1 - d / (R + 1))), (ox + x * c, oy + y * c), (ox + x * c, oy + (y + 1) * c))
+        for y in range(y0, y1 + 1):
+            for x in range(x0, x1):
+                d = max(abs(x - cx), abs(y - cy))
+                pygame.draw.line(g.surface, mix(CANVAS_BG, P.PRIMARY, 0.18 * (1 - d / (R + 1))), (ox + x * c, oy + y * c), (ox + (x + 1) * c, oy + y * c))
 
-    def clear_canvas(self) -> None:
-        """Clear the canvas and reset to defaults."""
-        try:
-            canvas = self.query_one("#art-canvas", ArtCanvas)
-            canvas._clear_canvas()
-            header = self.query_one("#canvas-header", CanvasHeader)
-            header.update_state(True, "#FFFFFF")
-            header.set_code_mode(False)
-        except Exception:
-            pass
+    def _draw_cursor(self, g, ox, oy, c):
+        x, y = ox + self._cursor_x * c, oy + self._cursor_y * c
+        visible = self._blink_on or self._pen_down
+        if self._paint_mode:
+            ring = pygame.Rect(x - c, y - c, 3 * c, 3 * c)
+            thick = max(3, c // 3) if self._pen_down else 2
+            if visible:
+                g.rect(self._last_key_color, ring, width=thick, radius=2)
+                corner = P.TEXT
+                for cx, cy in ((ring.x, ring.y), (ring.right - thick, ring.y), (ring.x, ring.bottom - thick), (ring.right - thick, ring.bottom - thick)):
+                    g.rect(corner, (cx, cy, thick, thick))
+        elif visible:
+            g.rect("#6633AA", (x, y, max(2, c // 3), c * LETTER_ROWS))
+        if self._use_heading_cursor and visible:
+            dx, dy = {"right": (1, 0), "left": (-1, 0), "up": (0, -1), "down": (0, 1)}[self._heading]
+            color = _visible_arrow_color(self._last_key_color if self._paint_mode else "#FFFFFF", CANVAS_BG)
+            g.draw_text(HEADING_ARROWS[self._heading], max(8, int(c * 0.9)), x + c // 2 + dx * c, y + c // 2 + dy * c, "sans-heavy", color, anchor="center")
 
-    def _on_space_hold_fired(self) -> None:
-        """Space held long enough: toggle REPL."""
-        if not getattr(self.app, '_code_panel_enabled', True):
+    def _draw_header(self, g, r):
+        px = g.vh(2.4)
+        cy = r.centery
+        if self.app._littles_mode:
+            label = "■■■  Paint" if self._paint_mode else "ABC  Write"
+            g.draw_text(label, px, r.centerx, cy, "sans-heavy", P.TEXT, anchor="center")
             return
-        canvas = self.query_one("#art-canvas", ArtCanvas)
-        canvas._set_pen(False)  # Lift the pen while the code panel is open
-        header = self.query_one("#canvas-header", CanvasHeader)
-        if self._repl_panel and not self._repl_panel.is_open:
-            # Hide hint bar (REPL has its own hints) and pin canvas height
-            hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
-            hint_bar.display = False
-            canvas.styles.height = canvas.size.height
-            self._repl_panel.open()
-            canvas.set_code_mode(True)
-            header.set_code_mode(True)
-        elif self._repl_panel and self._repl_panel.is_open:
-            self._repl_panel.close()
-            canvas.set_code_mode(False)
-            header.set_code_mode(False)
-            # Restore hint bar and flex sizing
-            hint_bar = self.query_one("#art-hint-bar", ArtHintBar)
-            hint_bar.display = True
-            canvas.styles.height = "1fr"
-        from ..repl_panel import ReplPanelToggleRequested
-        self.post_message(ReplPanelToggleRequested("art"))
-
-    async def _flush_space_tap_to_repl(self) -> None:
-        """Insert a space character into the REPL panel."""
-        from ..keyboard import ControlAction as CA
-        await self._repl_panel.handle_keyboard_action(
-            CA(action='space', is_down=True, is_repeat=False))
-
-    async def handle_keyboard_action(self, action) -> None:
-        """Route to REPL panel if open, otherwise delegate to canvas."""
-        # When REPL is open, route keyboard to REPL (both paint and write mode)
-        if self._repl_panel and self._repl_panel.is_open:
-            # Space hold to close REPL, short press inserts space
-            if isinstance(action, ControlAction) and action.action == 'space':
-                if action.is_down and not action.is_repeat:
-                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
-                elif not action.is_down:
-                    if self._space_hold.on_up():
-                        await self._flush_space_tap_to_repl()
-                return
-            # Another key while space pending: flush space first
-            if self._space_hold.on_other_key():
-                await self._flush_space_tap_to_repl()
-            result = await self._repl_panel.handle_keyboard_action(action)
-            if result == "tab_fallthrough":
-                # Tab with no autocomplete: toggle paint/write mode
-                canvas = self.query_one("#art-canvas", ArtCanvas)
-                canvas._toggle_paint_mode()
-            return
-
-        # Check for space hold to open REPL
-        if isinstance(action, ControlAction) and action.action == 'space':
-            canvas = self.query_one("#art-canvas", ArtCanvas)
-            # Code panel disabled (Littles Mode): no tap-vs-hold ambiguity,
-            # deliver space straight to the canvas so the pen latches instantly
-            if not getattr(self.app, '_code_panel_enabled', True):
-                await canvas.handle_keyboard_action(action)
-                return
-            # After hold fired (panel just opened/closed), suppress until release
-            if self._space_hold.fired:
-                if not action.is_down:
-                    self._space_hold.on_up()
-                return
-            if action.is_down and not action.is_repeat:
-                if not action.arrow_held:
-                    # Buffer space: don't pass through until we know tap vs hold
-                    self._space_hold.on_down(self.set_timer, self._on_space_hold_fired)
-                    return
-                # Arrow held: pass through for painting (no REPL toggle)
-                await canvas.handle_keyboard_action(action)
-                return
-            elif action.is_down and action.is_repeat:
-                if self._space_hold.is_pending:
-                    # Suppress repeats while hold timer is pending
-                    return
-                # No pending hold: pass through
-                await canvas.handle_keyboard_action(action)
-                return
-            elif not action.is_down:
-                tapped = self._space_hold.on_up()
-                if tapped:
-                    # Quick tap: deliver the buffered space (pen toggle / typed space)
-                    await canvas.handle_keyboard_action(
-                        ControlAction(action='space', is_down=True, is_repeat=False))
-                return
-            return
-
-        # Another key while space is pending: flush space as a tap
-        canvas = self.query_one("#art-canvas", ArtCanvas)
-        if self._space_hold.on_other_key():
-            await canvas.handle_keyboard_action(
-                ControlAction(action='space', is_down=True, is_repeat=False))
-
-        await canvas.handle_keyboard_action(action)
+        tabs = [("paint", self._paint_mode), ("ABC", not self._paint_mode)]
+        widths = [g.vw(7), g.measure("ABC", px, "sans-bold")[0] + g.vw(2)]
+        x = r.centerx - (sum(widths) + g.vw(1)) // 2
+        for (label, on), w in zip(tabs, widths):
+            box = pygame.Rect(x, cy - g.vh(1.9), w, g.vh(3.8))
+            if on:
+                g.rect(self._last_key_color if label == "paint" else P.PRIMARY, box, radius=g.vh(0.3))
+            if label == "paint":
+                sw = g.vh(1.6)
+                for i, color in enumerate(("#DF7070", "#DFC070", "#7090DF")):
+                    g.rect(color, (box.centerx - sw * 1.5 + i * sw, cy - sw // 2, sw, sw))
+            else:
+                g.draw_text("ABC", px, box.centerx, cy, "sans-bold", P.BG if on else P.MUTED, anchor="center")
+            x += w + g.vw(1)
+        g.draw_text("⇥ Tab to paint" if not self._paint_mode else "⇥ Tab to write", px, r.right - g.vw(1.5), cy, "sans-bold", P.MUTED, anchor="midright")

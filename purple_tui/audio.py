@@ -12,6 +12,8 @@ maps onto perceived loudness and follows the default sink across hotplug),
 
 from __future__ import annotations
 
+import array
+import math
 import shutil
 import subprocess
 import threading
@@ -26,6 +28,7 @@ _backend: Optional[str] = None
 _volume_lock = threading.Lock()
 _latest_level = 0
 BADGE_CELLS = 10
+_FULL_SCALE = 32767
 
 
 def volume_backend() -> str:
@@ -87,6 +90,19 @@ def volume_badge(level: int) -> tuple[str, str, str]:
     step = volume_step(level)
     filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
     return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), VOLUME_LABELS[step]
+
+
+def normalize_loudness(samples: array.array, target_rms_db: float, ceiling_db: float) -> array.array:
+    """Scale 16-bit samples so RMS lands on target_rms_db unless the peak would
+    pass ceiling_db (both dBFS). Speech has a low crest factor so the RMS target
+    binds; percussive material hits the ceiling first."""
+    peak = max((abs(s) for s in samples), default=0)
+    if not peak:
+        return samples
+    rms = math.sqrt(math.sumprod(samples, samples) / len(samples))
+    gain = min(_FULL_SCALE * 10 ** (target_rms_db / 20) / rms,
+               _FULL_SCALE * 10 ** (ceiling_db / 20) / peak)
+    return array.array('h', (max(-32768, min(32767, int(s * gain))) for s in samples))
 
 
 def seconds_since_last_play() -> float:

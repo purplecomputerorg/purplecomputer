@@ -78,3 +78,38 @@ def test_adjacent_volume_walks_steps_and_clamps():
     assert audio.adjacent_volume(60, up=True) == 80
     assert audio.adjacent_volume(60, up=False) == 40
     assert audio.adjacent_volume(85, up=False) == 60
+
+
+def _db(x: float) -> float:
+    import math
+    return 20 * math.log10(x / 32767)
+
+
+def _stats(samples):
+    import math
+    return _db(math.sqrt(sum(s * s for s in samples) / len(samples))), _db(max(abs(s) for s in samples))
+
+
+def test_normalize_loudness_hits_rms_target_when_peak_allows():
+    import array
+    import math
+    tone = array.array('h', (int(8000 * math.sin(i / 7)) for i in range(4000)))
+    rms, peak = _stats(audio.normalize_loudness(tone, target_rms_db=-12.0, ceiling_db=-1.0))
+    assert abs(rms - (-12.0)) < 0.05
+    assert peak < -1.0
+
+
+def test_normalize_loudness_backs_off_to_ceiling_for_spiky_material():
+    import array
+    spiky = array.array('h', [30] * 4000)
+    spiky[100] = 3000
+    out = audio.normalize_loudness(spiky, target_rms_db=-12.0, ceiling_db=-1.0)
+    rms, peak = _stats(out)
+    assert abs(peak - (-1.0)) < 0.05
+    assert rms < -12.0
+
+
+def test_normalize_loudness_leaves_silence_alone():
+    import array
+    silence = array.array('h', [0] * 100)
+    assert audio.normalize_loudness(silence, -12.0, -1.0) == silence

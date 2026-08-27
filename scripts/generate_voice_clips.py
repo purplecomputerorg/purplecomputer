@@ -92,49 +92,6 @@ def _make_synth_config():
     return SynthesisConfig(**kwargs)
 
 
-def _trim_silence(samples, sample_rate, threshold_db=-40.0):
-    """Trim leading and trailing silence using windowed RMS."""
-    if not samples:
-        return samples
-    threshold = 32767 * (10 ** (threshold_db / 20.0))
-    threshold_sq = threshold * threshold
-    window = max(1, int(sample_rate * 0.005))
-
-    def _rms_above(idx):
-        end = min(idx + window, len(samples))
-        if end <= idx:
-            return False
-        return (sum(s * s for s in samples[idx:end]) / (end - idx)) > threshold_sq
-
-    start = 0
-    for i in range(0, len(samples) - window, window):
-        if _rms_above(i):
-            start = max(0, i - int(sample_rate * 0.01))
-            break
-    end = len(samples)
-    for i in range(len(samples) - window, -1, -window):
-        if _rms_above(i):
-            end = min(len(samples), i + window + int(sample_rate * 0.02))
-            break
-    return samples[start:end]
-
-
-def _apply_fade(samples, sample_rate, fade_ms=10.0):
-    """Apply fade-in and fade-out to eliminate clicks."""
-    import array as _array
-    if not samples:
-        return samples
-    fade_len = min(int(sample_rate * fade_ms / 1000.0), len(samples) // 2)
-    if fade_len < 1:
-        return samples
-    result = _array.array('h', samples)
-    for i in range(fade_len):
-        scale = i / fade_len
-        result[i] = int(result[i] * scale)
-        result[-(i + 1)] = int(result[-(i + 1)] * scale)
-    return result
-
-
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     """Generate a single voice clip with deterministic parameters."""
     import array
@@ -155,19 +112,8 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     samples = array.array('h')
     samples.frombytes(raw)
 
-    # Trim, fade, normalize
-    samples = _trim_silence(samples, first_chunk.sample_rate)
-    samples = _apply_fade(samples, first_chunk.sample_rate)
-
-    if samples:
-        peak = max(abs(s) for s in samples)
-        if peak > 0:
-            target = 32767 * (10 ** (-3.0 / 20.0))
-            scale = target / peak
-            normalized = array.array('h')
-            for s in samples:
-                normalized.append(max(-32768, min(32767, int(s * scale))))
-            samples = normalized
+    from purple_tui.tts import postprocess_samples
+    samples = postprocess_samples(samples, first_chunk.sample_rate)
 
     with wave.open(str(output_path), 'wb') as wav_file:
         wav_file.setnchannels(first_chunk.sample_channels)

@@ -93,6 +93,18 @@ sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
 section "pactl list short sinks"
 sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
     pactl list short sinks 2>&1
+section "pactl sinks (volume, base volume, active port)"
+# base volume is where Pulse thinks the sink's nominal level sits: the
+# cleanest single signal for "this machine has a weak amp".
+sudo -u purple XDG_RUNTIME_DIR=/run/user/1000 \
+    pactl list sinks 2>&1
+
+section "alsa Master (raw, then dB-mapped)"
+amixer sget Master 2>&1
+amixer -M sget Master 2>&1
+
+section "alsa mixer state (all simple controls)"
+amixer scontents 2>&1
 
 section "purple boot heartbeat (audio-related)"
 grep -iE 'mixer|audio|pulse|hotplug' /var/log/purple/boot.log 2>/dev/null | tail -40

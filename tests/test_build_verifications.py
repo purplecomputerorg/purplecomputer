@@ -75,6 +75,15 @@ def test_audio_pipeline_verification_block():
         "audio verification does not exit on failure"
 
 
+def test_pactl_ships_and_is_verified():
+    """Runtime volume goes through pactl (purple_tui/audio.py). It must be in
+    the apt list and guarded, or volume silently degrades to amixer."""
+    src = _build_source()
+    assert re.search(r"\bpulseaudio-utils\b", src), "pulseaudio-utils not in apt install list"
+    assert re.search(r'command -v pactl >/dev/null" \|\| AUDIO_MISSING=', src), \
+        "build does not verify pactl is present"
+
+
 def test_grub_and_efibootmgr_verification_still_present():
     """Don't let this refactor accidentally drop the grub/efibootmgr check
     from the prior audio-adjacent work on hybrid boot."""

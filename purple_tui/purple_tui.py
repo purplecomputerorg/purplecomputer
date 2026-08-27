@@ -1204,6 +1204,7 @@ class PurpleApp(App):
             boot_log.heartbeat("mixer disabled (PURPLE_NO_AUDIO=1)")
         else:
             self._start_mixer_warmup()
+            self.set_timer(5.0, self._preload_speech)
 
         # First installed boot after audio worked in live: if no sound card
         # comes up, offer a one-time power off (warm-reboot codec wedge).
@@ -1212,6 +1213,11 @@ class PurpleApp(App):
         from .constants import LIVE_AUDIO_MARKER
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.set_timer(30.0, self._check_first_boot_audio)
+
+    def _preload_speech(self) -> None:
+        from . import tts
+        if self.audio_ok is not False:
+            tts.preload()
 
     def _start_mixer_warmup(self) -> None:
         import threading

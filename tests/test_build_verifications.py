@@ -153,6 +153,16 @@ def test_boot_timing_tool_ships():
         "smartmontools not in apt install list (SMART check silently skips)"
 
 
+def test_audio_probe_tool_ships():
+    """purple-audio-probe is the hands-on loudness diagnostic (mic loopback at
+    three steps, speech-model timing); it only helps if it is on the image."""
+    src = _build_source()
+    assert re.search(r'cp /purple-src/scripts/purple-audio-probe\.sh\b', src), \
+        "purple-audio-probe.sh not copied into the image"
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/usr/local/bin/purple-audio-probe"', src), \
+        "purple-audio-probe not made executable"
+
+
 def _installed_grub_cfg_block() -> str:
     """The heredoc that becomes the installed system's /boot/grub/grub.cfg."""
     src = _build_source()

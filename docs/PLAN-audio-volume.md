@@ -78,6 +78,19 @@ Bring the audio dump back from any machine that still sounds quiet: the sink's
 `base volume` and `amixer scontents` are what decides whether Phase 3's
 boot-time mixer normalization is needed.
 
+### Hands-on probe (2026-08-27)
+
+The first hardware pass showed base volume at 100% and every mixer control at
+0 dB on the quiet HP, so the electrical readouts can't tell a loud machine from
+a quiet one. `purple-audio-probe` (shipped in the image, run from the
+parent-menu terminal) gathers what can: speaker pin count and placement from
+the HDA codec, smart-amp presence, mixer and Pulse state including sources, a
+mic loopback of a three-tone chime at 40/60/80% with ambient-floor and per-tone
+SNR, and speech-model load and synthesis timings. Photograph the SUMMARY block
+at the end, or bring back `/var/log/purple/audio-probe-*.log`. Two machines,
+one loud and one quiet, is enough to decide between a speaker-pin prior, a
+mic-based sound check at boot, and a parent-facing ceiling.
+
 ## Problem
 
 Customers report Purple is too quiet, and more so on some machines than others.

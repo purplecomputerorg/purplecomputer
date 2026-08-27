@@ -364,41 +364,50 @@ _piper_available = None
 
 # Serialize all Piper synthesis calls (espeak phonemizer is not thread-safe)
 _synthesis_lock = threading.Lock()
+_load_lock = threading.Lock()
 
 
 def _get_piper_voice():
-    """Get or create the Piper voice instance"""
+    """Piper voice, loaded once. Serialized so a preload and a first speak can't both load."""
     global _piper_voice, _piper_available
-
-    if _piper_available is False:
-        return None
-
-    if _piper_voice is not None:
-        return _piper_voice
-
-    # The scripted demo plays only pre-generated clips, so never pay the load
-    if os.environ.get("PURPLE_DEMO_AUTOSTART"):
-        _piper_available = False
-        return None
-
-    try:
-        from piper import PiperVoice
-
-        model_path = find_voice_model()
-        if model_path is None:
-            _piper_available = False
+    with _load_lock:
+        if _piper_available is False or _piper_voice is not None:
+            return _piper_voice
+        if os.environ.get("PURPLE_DEMO_AUTOSTART"):
+            _piper_available = False  # the scripted demo plays only pre-generated clips
             return None
-
-        _piper_voice = PiperVoice.load(str(model_path))
-        _piper_available = True
+        try:
+            _piper_voice = load_voice()
+            _piper_available = True
+        except Exception as e:
+            _dbg(f"piper unavailable: {type(e).__name__}: {e}")
+            _piper_available = False
         return _piper_voice
 
-    except ImportError:
-        _piper_available = False
-        return None
-    except Exception:
-        _piper_available = False
-        return None
+
+def preload() -> None:
+    """Load the model and run one throwaway synthesis in the background. Model
+    load plus the first inference is many seconds on weak laptops, long enough
+    for a kid to type the next thing and cancel the first word ever spoken."""
+    def _work():
+        from .audio import _log
+        t0 = time.monotonic()
+        voice = _get_piper_voice()
+        t1 = time.monotonic()
+        if voice is None:
+            _log(f"piper preload: unavailable ({t1 - t0:.1f}s)")
+            return
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav_path = f.name
+        try:
+            synthesize_to_file(voice, "purple.", wav_path)
+        except Exception as e:
+            _dbg(f"piper preload: warm synth raised {type(e).__name__}: {e}")
+        finally:
+            Path(wav_path).unlink(missing_ok=True)
+        _log(f"piper preload: model {t1 - t0:.1f}s, warm synth {time.monotonic() - t1:.1f}s")
+
+    threading.Thread(target=_work, daemon=True, name="piper-preload").start()
 
 
 def _ensure_mixer() -> bool:

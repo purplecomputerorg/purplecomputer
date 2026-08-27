@@ -28,7 +28,7 @@ import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
-from ..audio import adjacent_volume, set_system_volume, volume_badge
+from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 from .. import diagnostics
 
 
@@ -868,11 +868,7 @@ class MusicKeySwitchingScreen(PickerModal):
 
 def _volume_menu_label(lock) -> str:
     """One-line state hint for the consolidated Sound entry in the parent menu."""
-    if lock == 0:
-        return "Sound: Silent Mode"
-    if lock is not None:
-        return "Sound: Locked"
-    return "Sound"
+    return "Sound" if lock is None else f"Sound: {lock_badge(lock)[2]}"
 
 
 def _flush_terminal_input() -> None:

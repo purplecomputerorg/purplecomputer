@@ -8,6 +8,7 @@ Stored in ~/.config/purple/settings.json alongside display.json.
 import json
 from pathlib import Path
 
+from .audio import snap_volume
 from .constants import VOLUME_DEFAULT
 
 SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
@@ -41,6 +42,9 @@ def load_settings() -> dict:
                     settings[key] = data[key]
             if data.get("silent_mode") and settings["volume_lock"] is None:
                 settings["volume_lock"] = 0
+            settings["volume_level"] = snap_volume(settings["volume_level"])
+            if settings["volume_lock"] is not None:
+                settings["volume_lock"] = snap_volume(settings["volume_lock"])
     except Exception:
         pass
     return settings

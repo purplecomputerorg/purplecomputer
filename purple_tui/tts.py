@@ -4,8 +4,7 @@ Text-to-Speech module using Piper TTS
 Piper is a fast, local, neural TTS system.
 https://github.com/rhasspy/piper
 
-Deterministic synthesis: noise_scale=0.3, noise_w=0.3, length_scale=1.15
-ensures identical input always produces identical WAV output.
+Deterministic synthesis: fixed _SYNTH_PARAMS, so identical input produces identical WAV output.
 """
 
 import array
@@ -19,7 +18,7 @@ import wave
 from pathlib import Path
 import os
 
-from .audio import normalize_loudness
+from .audio import db_to_linear, normalize_loudness
 
 # Suppress pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
@@ -148,7 +147,7 @@ def _trim_silence(samples: array.array, sample_rate: int, threshold_db: float = 
         return samples
 
     # Convert dB threshold to linear amplitude (16-bit full scale = 32767)
-    threshold = 32767 * (10 ** (threshold_db / 20.0))
+    threshold = db_to_linear(threshold_db)
     threshold_sq = threshold * threshold
 
     # 5ms RMS window
@@ -205,36 +204,14 @@ def _apply_fade(samples: array.array, sample_rate: int, fade_ms: float = 10.0) -
     return result
 
 
-# Speech level. The RMS target is what sets loudness; the ceiling only guards
-# the loudest syllable. Pre-generated clips and runtime synthesis share this.
 SPEECH_RMS_DB = -12.0
 SPEECH_CEILING_DB = -1.0
 
 
 def postprocess_samples(samples: array.array, sample_rate: int) -> array.array:
-    """Trim silence, fade edges, and level speech. Shared with
-    scripts/generate_voice_clips.py so clips match runtime synthesis."""
-    samples = _trim_silence(samples, sample_rate, threshold_db=-40.0)
-    samples = _apply_fade(samples, sample_rate, fade_ms=10.0)
+    samples = _trim_silence(samples, sample_rate)
+    samples = _apply_fade(samples, sample_rate)
     return normalize_loudness(samples, SPEECH_RMS_DB, SPEECH_CEILING_DB)
-
-
-def _postprocess_wav(wav_path: str) -> None:
-    with wave.open(wav_path, 'rb') as wf:
-        n_channels = wf.getnchannels()
-        sample_width = wf.getsampwidth()
-        sample_rate = wf.getframerate()
-        raw = wf.readframes(wf.getnframes())
-
-    samples = array.array('h')
-    samples.frombytes(raw)
-    samples = postprocess_samples(samples, sample_rate)
-
-    with wave.open(wav_path, 'wb') as wf:
-        wf.setnchannels(n_channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(sample_rate)
-        wf.writeframes(samples.tobytes())
 
 
 # --- Caching ---
@@ -253,9 +230,13 @@ _MAX_CACHE_TEXT_LEN = 500
 _MAX_CACHE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
+_SYNTH_SIGNATURE = repr((VOICE_MODEL, VOICE_SPEAKER, sorted(_SYNTH_PARAMS.items()), SPEECH_RMS_DB, SPEECH_CEILING_DB))
+
+
 def _cache_path(prepared_text: str) -> Path:
-    """Cache filename: hash of the prepared text."""
-    return _CACHE_DIR / f"{hashlib.sha256(prepared_text.encode('utf-8')).hexdigest()[:16]}.wav"
+    """Keyed on text plus synthesis settings, so a voice or leveling change never replays stale WAVs."""
+    key = f"{_SYNTH_SIGNATURE}\n{prepared_text}".encode('utf-8')
+    return _CACHE_DIR / f"{hashlib.sha256(key).hexdigest()[:16]}.wav"
 
 
 def _get_cached(prepared_text: str) -> Path | None:
@@ -362,6 +343,21 @@ def _get_voice_search_paths() -> list[Path]:
         pass
     return paths
 
+
+def find_voice_model() -> Path | None:
+    candidates = (p / f"{VOICE_MODEL}.onnx" for p in _get_voice_search_paths())
+    return next((c for c in candidates if c.exists()), None)
+
+
+def load_voice():
+    """PiperVoice for the clip scripts. Raises ImportError or FileNotFoundError with the reason."""
+    from piper import PiperVoice
+    model_path = find_voice_model()
+    if model_path is None:
+        searched = "\n".join(f"  {p / f'{VOICE_MODEL}.onnx'}" for p in _get_voice_search_paths())
+        raise FileNotFoundError(f"Piper voice model not found. Searched in:\n{searched}")
+    return PiperVoice.load(str(model_path))
+
 # Piper voice instance (lazy loaded)
 _piper_voice = None
 _piper_available = None
@@ -388,14 +384,7 @@ def _get_piper_voice():
     try:
         from piper import PiperVoice
 
-        # Check for voice model in various locations
-        model_path = None
-        for base_path in _get_voice_search_paths():
-            candidate = base_path / f"{VOICE_MODEL}.onnx"
-            if candidate.exists():
-                model_path = candidate
-                break
-
+        model_path = find_voice_model()
         if model_path is None:
             _piper_available = False
             return None
@@ -444,30 +433,22 @@ def _make_synth_config():
     return SynthesisConfig(**kwargs)
 
 
-def _synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
-    """Synthesize prepared text to a WAV file. Returns True on success.
-
-    Acquires _synthesis_lock to prevent concurrent Piper calls
-    (espeak phonemizer is not thread-safe).
-    """
+def synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
+    """Shared by runtime speech and the clip scripts so the two can't drift. Serialized: espeak's phonemizer is not thread-safe."""
     config = _make_synth_config()
-
     with _synthesis_lock:
         audio_chunks = list(voice.synthesize(prepared_text, config))
-
     if not audio_chunks:
         return False
-
-    first_chunk = audio_chunks[0]
+    first = audio_chunks[0]
+    samples = array.array('h')
+    samples.frombytes(b''.join(chunk.audio_int16_bytes for chunk in audio_chunks))
+    samples = postprocess_samples(samples, first.sample_rate)
     with wave.open(wav_path, 'wb') as wav_file:
-        wav_file.setnchannels(first_chunk.sample_channels)
-        wav_file.setsampwidth(first_chunk.sample_width)
-        wav_file.setframerate(first_chunk.sample_rate)
-        for chunk in audio_chunks:
-            wav_file.writeframes(chunk.audio_int16_bytes)
-
-    # Post-process: trim silence, normalize
-    _postprocess_wav(wav_path)
+        wav_file.setnchannels(first.sample_channels)
+        wav_file.setsampwidth(first.sample_width)
+        wav_file.setframerate(first.sample_rate)
+        wav_file.writeframes(samples.tobytes())
     return True
 
 
@@ -481,7 +462,7 @@ def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
-        if not _synthesize_to_file(voice, prepared_text, wav_path):
+        if not synthesize_to_file(voice, prepared_text, wav_path):
             Path(wav_path).unlink(missing_ok=True)
             return None
 

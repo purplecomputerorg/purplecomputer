@@ -65,6 +65,9 @@ def test_audio_pipeline_verification_block():
     src = _build_source()
     assert re.search(r"AUDIO_MISSING", src), "audio verification block not found"
     assert re.search(r'command -v pulseaudio', src), "pulseaudio command check missing"
+    assert re.search(r"\bpulseaudio-utils\b", src), "pulseaudio-utils not in apt install list"
+    assert re.search(r'command -v pactl >/dev/null" \|\| AUDIO_MISSING=', src), \
+        "pactl (the runtime volume backend) is not verified"
     assert re.search(r"stale-10-purple\.pa-dropin-present", src), \
         "verification does not guard against the duplicate-load drop-in regression"
     assert re.search(r"pulseaudio\.socket-still-enabled", src), \
@@ -73,15 +76,6 @@ def test_audio_pipeline_verification_block():
         "verification does not guard against pulseaudio.service being enabled"
     assert re.search(r"AUDIO_MISSING.*\n.*exit 1", src, re.DOTALL), \
         "audio verification does not exit on failure"
-
-
-def test_pactl_ships_and_is_verified():
-    """Runtime volume goes through pactl (purple_tui/audio.py). It must be in
-    the apt list and guarded, or volume silently degrades to amixer."""
-    src = _build_source()
-    assert re.search(r"\bpulseaudio-utils\b", src), "pulseaudio-utils not in apt install list"
-    assert re.search(r'command -v pactl >/dev/null" \|\| AUDIO_MISSING=', src), \
-        "build does not verify pactl is present"
 
 
 def test_grub_and_efibootmgr_verification_still_present():

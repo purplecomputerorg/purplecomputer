@@ -19,7 +19,7 @@ from .constants import (
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .hints import arrow_keys_text
-from .audio import volume_badge
+from .audio import lock_badge, volume_badge
 
 
 # Room options: (id, icon, label, result)
@@ -406,11 +406,10 @@ class RoomPickerScreen(PurpleModal):
     def _locked_volume_badge(self) -> tuple[str, str]:
         """Pick the icon + label for the Volume slot when it's locked."""
         lock = getattr(self.app, "_volume_lock", None)
-        if lock == 0:
-            return ICON_VOLUME_OFF, "Silent Mode"
-        if lock is not None:
-            return volume_badge(lock)[0], "Locked"
-        return ICON_VOLUME_OFF, "No Sound"
+        if lock is None:
+            return ICON_VOLUME_OFF, "No Sound"
+        icon, _, label = lock_badge(lock)
+        return icon, label
 
     def _open_volume(self) -> None:
         """Open the kid's volume modal (skip when audio is off or a parent lock is on)."""

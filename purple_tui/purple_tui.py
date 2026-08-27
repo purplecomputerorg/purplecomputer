@@ -63,7 +63,7 @@ from .constants import (
     is_live_boot, is_debug,
     UI_READY_MARKER,
 )
-from .audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
+from .audio import adjacent_volume, effective_volume, lock_badge, set_system_volume, volume_badge
 boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -2733,14 +2733,14 @@ class PurpleApp(App):
         """Decrease volume"""
         if self._notify_volume_lock_blocked():
             return
-        self.volume_level = adjacent_volume(self.volume_level, up=False)
+        self.volume_level = adjacent_volume(self._effective_volume(), up=False)
         self._apply_volume()  # Always show feedback, even at min
 
     def action_volume_up(self) -> None:
         """Increase volume"""
         if self._notify_volume_lock_blocked():
             return
-        self.volume_level = adjacent_volume(self.volume_level, up=True)
+        self.volume_level = effective_volume(adjacent_volume(self._effective_volume(), up=True), self._volume_lock)
         self._apply_volume()  # Always show feedback, even at max
 
     def _show_brightness_hint(self) -> None:
@@ -2993,15 +2993,12 @@ class PurpleApp(App):
         return None
 
     def _effective_volume(self) -> int:
-        """Volume actually applied to playback: the lock level if a parent lock is set (0 = silent), else the kid's level."""
-        if self._volume_lock is not None:
-            return self._volume_lock
-        return self.volume_level
+        return effective_volume(self.volume_level, self._volume_lock)
 
     @property
     def volume_locked(self) -> bool:
-        """Volume controls should be hidden/disabled: audio isn't working, or a parent lock is on."""
-        return self.audio_ok is False or self._volume_lock is not None
+        """Volume controls should be hidden/disabled: audio isn't working, or Silent Mode is on."""
+        return self.audio_ok is False or self._volume_lock == 0
 
     def _apply_volume_system(self) -> None:
         set_system_volume(self._effective_volume())
@@ -3031,19 +3028,15 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        icon, bars, label = volume_badge(vol)
+        at_ceiling = self._volume_lock is not None and vol >= self._volume_lock
+        icon, bars, label = lock_badge(vol) if at_ceiling else volume_badge(vol)
         self.clear_notifications()
         self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def _notify_volume_lock_blocked(self) -> bool:
-        """If a parent lock blocks volume changes, flash the current locked badge.
-
-        Returns True iff the press should be swallowed (a lock is on), so the
-        volume key handlers can early-return without changing the level. A lock
-        at 0 is the unified "Silent" state.
-        """
-        if self._volume_lock is not None:
-            icon, bars, label = lock_badge(self._volume_lock)
+        """Silent Mode swallows the volume keys; flash its badge so the press isn't a mystery."""
+        if self._volume_lock == 0:
+            icon, bars, label = lock_badge(0)
             self.clear_notifications()
             self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
             return True

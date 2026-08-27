@@ -404,15 +404,14 @@ class RoomPickerScreen(PurpleModal):
         self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)
 
     def _locked_volume_badge(self) -> tuple[str, str]:
-        """Pick the icon + label for the Volume slot when it's locked."""
-        lock = getattr(self.app, "_volume_lock", None)
-        if lock is None:
-            return ICON_VOLUME_OFF, "No Sound"
-        icon, _, label = lock_badge(lock)
-        return icon, label
+        """Icon + label for the Volume slot when it's disabled: Silent Mode or no audio."""
+        if getattr(self.app, "_volume_lock", None) == 0:
+            icon, _, label = lock_badge(0)
+            return icon, label
+        return ICON_VOLUME_OFF, "No Sound"
 
     def _open_volume(self) -> None:
-        """Open the kid's volume modal (skip when audio is off or a parent lock is on)."""
+        """Open the kid's volume modal (skip when audio is off or Silent Mode is on)."""
         if getattr(self.app, "volume_locked", False):
             return
         self.app.push_screen(VolumeModal())
@@ -456,7 +455,7 @@ class VolumeModal(PurpleModal):
         self._update_display()
 
     def _update_display(self) -> None:
-        icon, bars, label = volume_badge(self.app.volume_level)
+        icon, bars, label = volume_badge(self.app._effective_volume())
         try:
             display = self.query_one("#volume-display", Static)
             display.update(f"{icon}  {bars}  {label}")

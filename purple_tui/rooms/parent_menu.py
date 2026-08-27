@@ -513,14 +513,16 @@ class SecretMenuScreen(PickerModal):
 
 
 class ParentVolumeModal(PurpleModal):
-    """Parent volume modal: adjust + lock at current level + test sound.
+    """Parent volume modal: adjust, cap the kid's volume at the slider level, test sound.
 
-    Visual style mirrors DisplaySettingsScreen (label / bar / value rows).
+    With Limit on, the slider sets the ceiling: the kid's volume keys still work
+    below it. A limit at 0 is Silent Mode.
 
     Controls (the hint line tells the parent which keys do what right now):
-      ▲ ▼      switch between the Volume and Lock rows
-      ← →      Volume row: change the level (level 0 reads "Silent Mode")
-      Enter    Lock row: turn the lock on or off at the current level
+      ▲ ▼      switch between the Volume and Limit rows
+      ← →      Volume row: change the level, or the limit while it is on
+               (level 0 reads "Silent Mode")
+      Enter    Limit row: turn the limit on or off at the current level
       Space    play a test sound at the current level
       Esc      close
     """
@@ -579,7 +581,7 @@ class ParentVolumeModal(PurpleModal):
                 yield Static("", id="vol-volume-bar", classes="vol-bar")
                 yield Static("", id="vol-volume-value", classes="vol-value")
             with Horizontal(classes="vol-row"):
-                yield Static("Lock:", classes="vol-label")
+                yield Static("Limit:", classes="vol-label")
                 yield Static("", id="vol-lock-bar", classes="vol-bar")
                 yield Static("", id="vol-lock-value", classes="vol-value")
             yield Static("", id="vol-hint-row", classes="vol-hint")
@@ -588,8 +590,13 @@ class ParentVolumeModal(PurpleModal):
     def on_mount(self) -> None:
         self._refresh()
 
+    def _slider_level(self) -> int:
+        """With Limit on the slider edits the ceiling, otherwise the kid's level."""
+        lock = self.app._volume_lock
+        return self.app.volume_level if lock is None else lock
+
     def _refresh(self) -> None:
-        level = self.app.volume_level
+        level = self._slider_level()
         _, bar, label = volume_badge(level)
         vol_focused = self._focus == self._FOCUS_VOLUME
         bar_text = f"[bold cyan]← {bar} →[/]" if vol_focused else f"  {bar}  "
@@ -633,15 +640,14 @@ class ParentVolumeModal(PurpleModal):
                 return
 
     def _adjust_slider(self, up: bool) -> None:
-        cur = self.app.volume_level
+        cur = self._slider_level()
         new_level = adjacent_volume(cur, up)
-        if new_level == cur:
-            self._refresh()
-            return
-        self.app.volume_level = new_level
-        if self.app._volume_lock is not None:
-            self._write_lock(new_level)
-        self.app._apply_volume()
+        if new_level != cur:
+            if self.app._volume_lock is None:
+                self.app.volume_level = new_level
+            else:
+                self._write_lock(new_level)
+            self.app._apply_volume()
         self._refresh()
 
     def _toggle_lock(self) -> None:
@@ -656,12 +662,9 @@ class ParentVolumeModal(PurpleModal):
         self.app._volume_lock = level
 
     def _play_test_sound(self) -> None:
-        """Play the glockenspiel test tone at the slider's current level.
-
-        Forces the mixer to the slider level (ignoring any active lock) so the
-        parent can preview what the kid will hear before committing.
-        """
-        level = self.app.volume_level
+        """Play the glockenspiel test tone at the slider level (the ceiling while
+        Limit is on), so the parent hears the loudest the kid will get."""
+        level = self._slider_level()
         if level == 0:
             return
         set_system_volume(level, wait=True)

@@ -2,6 +2,7 @@
 
 Brief descriptions of user experience changes, newest first.
 
+- **The parent volume lock is now a limit**: Turning it on caps how loud the kid can go instead of pinning the volume in place. The kid's volume keys and the Volume screen keep working below the limit, the badge reads "Max Medium" (or whichever step) when they hit it, and the parent menu shows the limit as "Sound: Max Medium". A limit at zero is still Silent Mode, which disables the keys as before. Saved locks carry over as limits at the same level.
 - **The first spoken word comes sooner**: The voice used to load only when first asked to speak, so the first thing a kid typed could take ten seconds or more to say on a slower laptop, and typing something else in the meantime cancelled it, so it never played. The voice now loads quietly in the background a few seconds after Purple starts.
 - **The voice speaks a little slower**: Parents said the talking was too fast for young kids to follow. Speech is now about 15% slower, both for what the computer says live and for the pre-recorded phrases, which have been regenerated at the new pace.
 - **The voice is louder and even**: Spoken phrases were leveled by their loudest instant, so a phrase with one sharp syllable came out quieter overall, and the pre-recorded clips sat several decibels below what the computer says live. Speech is now leveled by its average loudness with a ceiling on the peaks, pre-recorded clips and live speech use the same rule, and the clips have been regenerated to match.

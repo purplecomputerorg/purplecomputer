@@ -19,6 +19,8 @@ import wave
 from pathlib import Path
 import os
 
+from .audio import normalize_loudness
+
 # Suppress pygame welcome message
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
 
@@ -203,31 +205,21 @@ def _apply_fade(samples: array.array, sample_rate: int, fade_ms: float = 10.0) -
     return result
 
 
-def _normalize_peak(samples: array.array, target_db: float = -3.0) -> array.array:
-    """Normalize peak amplitude to target_db.
+# Speech level. The RMS target is what sets loudness; the ceiling only guards
+# the loudest syllable. Pre-generated clips and runtime synthesis share this.
+SPEECH_RMS_DB = -12.0
+SPEECH_CEILING_DB = -1.0
 
-    Args:
-        samples: array of signed 16-bit samples
-        target_db: target peak level in dB (relative to 16-bit full scale)
-    """
-    if not samples:
-        return samples
 
-    peak = max(abs(s) for s in samples)
-    if peak == 0:
-        return samples
-
-    target_linear = 32767 * (10 ** (target_db / 20.0))
-    scale = target_linear / peak
-
-    result = array.array('h')
-    for s in samples:
-        result.append(max(-32768, min(32767, int(s * scale))))
-    return result
+def postprocess_samples(samples: array.array, sample_rate: int) -> array.array:
+    """Trim silence, fade edges, and level speech. Shared with
+    scripts/generate_voice_clips.py so clips match runtime synthesis."""
+    samples = _trim_silence(samples, sample_rate, threshold_db=-40.0)
+    samples = _apply_fade(samples, sample_rate, fade_ms=10.0)
+    return normalize_loudness(samples, SPEECH_RMS_DB, SPEECH_CEILING_DB)
 
 
 def _postprocess_wav(wav_path: str) -> None:
-    """Trim silence, fade edges, and normalize a WAV file in place."""
     with wave.open(wav_path, 'rb') as wf:
         n_channels = wf.getnchannels()
         sample_width = wf.getsampwidth()
@@ -236,15 +228,7 @@ def _postprocess_wav(wav_path: str) -> None:
 
     samples = array.array('h')
     samples.frombytes(raw)
-
-    # Trim leading/trailing silence at -40 dB (windowed RMS)
-    samples = _trim_silence(samples, sample_rate, threshold_db=-40.0)
-
-    # Fade edges to eliminate clicks/pops
-    samples = _apply_fade(samples, sample_rate, fade_ms=10.0)
-
-    # Normalize peak to -3 dB
-    samples = _normalize_peak(samples, target_db=-3.0)
+    samples = postprocess_samples(samples, sample_rate)
 
     with wave.open(wav_path, 'wb') as wf:
         wf.setnchannels(n_channels)

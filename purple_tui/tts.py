@@ -4,7 +4,7 @@ Text-to-Speech module using Piper TTS
 Piper is a fast, local, neural TTS system.
 https://github.com/rhasspy/piper
 
-Deterministic synthesis: noise_scale=0.3, noise_w=0.3, length_scale=1.0
+Deterministic synthesis: noise_scale=0.3, noise_w=0.3, length_scale=1.15
 ensures identical input always produces identical WAV output.
 """
 
@@ -53,7 +53,7 @@ _SYNTH_PARAMS = {
     "noise_scale": 0.3,
     "noise_w": 0.3,         # some piper builds
     "noise_w_scale": 0.3,   # other piper builds
-    "length_scale": 1.0,
+    "length_scale": 1.15,  # 15% slower than the model default: kids follow it better
 }
 
 # Pronunciation overrides: words Piper mispronounces -> phonetic respelling

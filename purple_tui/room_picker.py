@@ -15,10 +15,11 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE,
+    ICON_BROOM, ICON_CODE,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .hints import arrow_keys_text
+from .audio import volume_badge
 
 
 # Room options: (id, icon, label, result)
@@ -409,13 +410,7 @@ class RoomPickerScreen(PurpleModal):
         if lock == 0:
             return ICON_VOLUME_OFF, "Silent Mode"
         if lock is not None:
-            if lock <= 35:
-                icon = ICON_VOLUME_LOW
-            elif lock <= 60:
-                icon = ICON_VOLUME_MED
-            else:
-                icon = ICON_VOLUME_HIGH
-            return icon, "Locked"
+            return volume_badge(lock)[0], "Locked"
         return ICON_VOLUME_OFF, "No Sound"
 
     def _open_volume(self) -> None:
@@ -463,35 +458,7 @@ class VolumeModal(PurpleModal):
         self._update_display()
 
     def _update_display(self) -> None:
-        level = self.app.volume_level
-        from .constants import (
-            ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-        )
-        if level == 0:
-            icon = ICON_VOLUME_OFF
-            label = "Sound Off"
-            bars = "░░░░░░░░░░"
-        elif level <= 15:
-            icon = ICON_VOLUME_LOW
-            label = "Whisper"
-            bars = "██░░░░░░░░"
-        elif level <= 35:
-            icon = ICON_VOLUME_LOW
-            label = "Quiet"
-            bars = "████░░░░░░"
-        elif level <= 60:
-            icon = ICON_VOLUME_MED
-            label = "Medium"
-            bars = "██████░░░░"
-        elif level <= 85:
-            icon = ICON_VOLUME_HIGH
-            label = "Loud"
-            bars = "████████░░"
-        else:
-            icon = ICON_VOLUME_HIGH
-            label = "Full"
-            bars = "██████████"
-
+        icon, bars, label = volume_badge(self.app.volume_level)
         try:
             display = self.query_one("#volume-display", Static)
             display.update(f"{icon}  {bars}  {label}")

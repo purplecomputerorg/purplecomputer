@@ -63,7 +63,7 @@ from .constants import (
     is_live_boot, is_debug,
     UI_READY_MARKER,
 )
-from .audio import adjacent_volume, set_system_volume, volume_badge
+from .audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -1242,7 +1242,7 @@ class PurpleApp(App):
             # checking..." forever). Assigned once here so every non-success
             # path above, including the known-silent break and any exception,
             # fails safe to "not working" and the parent gets the USB-speaker path.
-            self.audio_ok = ok
+            self._mixer_recovered(ok)
             # After the initial probe lands either way, start the hotplug listener
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.
@@ -1278,14 +1278,17 @@ class PurpleApp(App):
             _dbg(f"audio hotplug event: {action}")
             from .rooms.music_room import reinit_mixer_after_hotplug
             ok = reinit_mixer_after_hotplug()
-            if ok:
-                self._apply_volume_system()  # a new sink boots at its own level
-            # Flip audio_ok on the main thread so the parent menu indicator
-            # updates without a Purple restart.
-            self.call_from_thread(setattr, self, "audio_ok", ok)
+            self._mixer_recovered(ok)
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
 
         audio_hotplug.start(_on_event)
+
+    def _mixer_recovered(self, ok: bool) -> None:
+        """Worker-thread follow-up to a mixer reinit: a new or restarted sink
+        boots at its own level, and the parent menu indicator needs audio_ok."""
+        if ok:
+            self._apply_volume_system()
+        self.call_from_thread(setattr, self, "audio_ok", ok)
 
     def _arm_audio_idle_timer(self) -> None:
         if self._audio_idle_timer is None and self.audio_ok is not False:
@@ -1349,7 +1352,7 @@ class PurpleApp(App):
                     pass
                 _dbg(f"audio retry poll: probing (next delay {delay * 2}s)")
                 if reinit_mixer_after_hotplug():
-                    self.call_from_thread(setattr, self, "audio_ok", True)
+                    self._mixer_recovered(True)
                     boot_log.heartbeat("audio retry poll: mixer came up")
                     return
                 delay *= 2
@@ -2871,8 +2874,7 @@ class PurpleApp(App):
         at 0 is the unified "Silent" state.
         """
         if self._volume_lock is not None:
-            icon, bars, _ = volume_badge(self._volume_lock)
-            label = "Silent Mode" if self._volume_lock == 0 else "Locked"
+            icon, bars, label = lock_badge(self._volume_lock)
             self.clear_notifications()
             self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
             return True

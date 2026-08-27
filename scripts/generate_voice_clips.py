@@ -11,7 +11,6 @@ text with ! (which triggers speech in Play mode).
 
 import os
 import sys
-import wave
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
@@ -20,8 +19,7 @@ VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from purple_tui.tts import (  # noqa: E402
-    VOICE_MODEL, _fix_pronunciation, _get_voice_search_paths, _make_synth_config,
-    postprocess_samples, voice_clip_filename,
+    _fix_pronunciation, find_voice_model, load_voice, synthesize_to_file, voice_clip_filename,
 )
 
 # Static phrases (UI feedback, etc.)
@@ -31,49 +29,8 @@ STATIC_PHRASES = [
 ]
 
 
-def find_voice_model() -> Path | None:
-    """Find the Piper voice model."""
-    for base_path in _get_voice_search_paths():
-        candidate = base_path / f"{VOICE_MODEL}.onnx"
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def phrase_to_filename(phrase: str) -> str:
-    """Convert a phrase to the filename the app looks the clip up under."""
-    return voice_clip_filename(phrase)
-
-
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
-    """Generate a single voice clip with deterministic parameters."""
-    import array
-
-    config = _make_synth_config()
-
-    # Fix pronunciation before synthesis
-    synth_text = _fix_pronunciation(phrase)
-
-    audio_chunks = list(voice.synthesize(synth_text, config))
-    if not audio_chunks:
-        return False
-
-    first_chunk = audio_chunks[0]
-
-    # Collect all raw samples for post-processing
-    raw = b''.join(chunk.audio_int16_bytes for chunk in audio_chunks)
-    samples = array.array('h')
-    samples.frombytes(raw)
-
-    samples = postprocess_samples(samples, first_chunk.sample_rate)
-
-    with wave.open(str(output_path), 'wb') as wav_file:
-        wav_file.setnchannels(first_chunk.sample_channels)
-        wav_file.setsampwidth(first_chunk.sample_width)
-        wav_file.setframerate(first_chunk.sample_rate)
-        wav_file.writeframes(samples.tobytes())
-
-    return True
+    return synthesize_to_file(voice, _fix_pronunciation(phrase), str(output_path))
 
 
 def _stub_ui_modules():
@@ -256,7 +213,7 @@ def main():
 
     to_generate = []
     for phrase in all_phrases:
-        filename = phrase_to_filename(phrase)
+        filename = voice_clip_filename(phrase)
         output_path = VOICE_DIR / filename
         if args.force or not output_path.exists():
             to_generate.append((phrase, output_path))
@@ -265,29 +222,13 @@ def main():
         print("All voice clips already exist. Use --force to regenerate.")
         return 0
 
-    # Find voice model
-    model_path = find_voice_model()
-    if model_path is None:
-        print("ERROR: Piper voice model not found.")
-        print("Searched in:")
-        for path in _get_voice_search_paths():
-            print(f"  {path / f'{VOICE_MODEL}.onnx'}")
-        print()
-        print("Please install the voice model first.")
-        return 1
-
-    print(f"Using voice model: {model_path}")
-    print()
-
-    # Load Piper
     try:
-        from piper import PiperVoice
-    except ImportError:
-        print("ERROR: piper-tts not installed.")
-        print("Install with: pip install piper-tts")
+        voice = load_voice()
+    except (ImportError, FileNotFoundError) as e:
+        print(f"ERROR: {e}")
         return 1
-
-    voice = PiperVoice.load(str(model_path))
+    print(f"Using voice model: {find_voice_model()}")
+    print()
 
     # Generate standard clips
     if to_generate:
@@ -307,7 +248,7 @@ def main():
         print(f"Generating {args.variants} variants for {len(variant_phrases)} phrases...")
         print()
         for phrase in variant_phrases:
-            base = phrase_to_filename(phrase).removesuffix(".wav")
+            base = voice_clip_filename(phrase).removesuffix(".wav")
             for i in range(1, args.variants + 1):
                 output_path = VOICE_DIR / f"{base}_v{i}.wav"
                 if generate_clip(voice, phrase, output_path):
@@ -317,7 +258,7 @@ def main():
         print()
         print("Listen to each variant and copy the best one:")
         for phrase in variant_phrases:
-            final_name = phrase_to_filename(phrase)
+            final_name = voice_clip_filename(phrase)
             base = final_name.removesuffix(".wav")
             print(f"  cp {VOICE_DIR}/{base}_v?.wav {VOICE_DIR}/{final_name}")
 

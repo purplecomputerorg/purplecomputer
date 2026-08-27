@@ -10,19 +10,14 @@ Usage:
 Output: /tmp/letter-tests/*.wav
 """
 
-import array
 import sys
-import wave
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.generate_letter_clips import (
-    find_voice_model, _make_synth_config,
-    _trim_silence, _apply_fade, _normalize_peak,
-)
+from purple_tui.tts import load_voice, synthesize_to_file  # noqa: E402
 
 OUTPUT_DIR = Path("/tmp/letter-tests")
 
@@ -56,46 +51,17 @@ CANDIDATES = {
 
 
 def generate_candidate(voice, text: str, output_path: Path) -> bool:
-    """Generate a single candidate pronunciation clip."""
-    config = _make_synth_config()
-
-    audio_chunks = list(voice.synthesize(text, config))
-    if not audio_chunks:
-        return False
-
-    first_chunk = audio_chunks[0]
-    raw = b''.join(chunk.audio_int16_bytes for chunk in audio_chunks)
-    samples = array.array('h')
-    samples.frombytes(raw)
-
-    samples = _trim_silence(samples, first_chunk.sample_rate)
-    samples = _apply_fade(samples, first_chunk.sample_rate)
-    samples = _normalize_peak(samples)
-
-    with wave.open(str(output_path), 'wb') as wav_file:
-        wav_file.setnchannels(first_chunk.sample_channels)
-        wav_file.setsampwidth(first_chunk.sample_width)
-        wav_file.setframerate(first_chunk.sample_rate)
-        wav_file.writeframes(samples.tobytes())
-
-    return True
+    return synthesize_to_file(voice, text, str(output_path))
 
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    model_path = find_voice_model()
-    if model_path is None:
-        print("ERROR: Piper voice model not found.")
-        return 1
-
     try:
-        from piper import PiperVoice
-    except ImportError:
-        print("ERROR: piper-tts not installed.")
+        voice = load_voice()
+    except (ImportError, FileNotFoundError) as e:
+        print(f"ERROR: {e}")
         return 1
-
-    voice = PiperVoice.load(str(model_path))
 
     for letter, candidates in CANDIDATES.items():
         print(f"\n=== Letter {letter} ===")

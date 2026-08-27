@@ -13,6 +13,7 @@ maps onto perceived loudness and follows the default sink across hotplug),
 from __future__ import annotations
 
 import array
+import functools
 import math
 import shutil
 import subprocess
@@ -20,23 +21,25 @@ import threading
 import time
 from typing import Any, Optional
 
-from . import boot_log
 from .constants import VOLUME_ICONS, VOLUME_LABELS, VOLUME_LEVELS
 
 _last_play = 0.0
-_backend: Optional[str] = None
 _volume_lock = threading.Lock()
 _latest_level = 0
 BADGE_CELLS = 10
-_FULL_SCALE = 32767
+FULL_SCALE = 32767
 
 
+def _log(line: str) -> None:
+    from . import boot_log  # arms the boot watchdog on import; keep it out of scripts and tests
+    boot_log.heartbeat(line)
+
+
+@functools.cache
 def volume_backend() -> str:
-    global _backend
-    if _backend is None:
-        _backend = "pactl" if shutil.which("pactl") else "amixer"
-        boot_log.heartbeat(f"volume backend: {_backend}")
-    return _backend
+    backend = "pactl" if shutil.which("pactl") else "amixer"
+    _log(f"volume backend: {backend}")
+    return backend
 
 
 def system_volume_argv(level: int) -> list[list[str]]:
@@ -55,18 +58,17 @@ def _run_volume_commands(level: int) -> None:
             return  # a newer request is queued behind us
         for argv in system_volume_argv(level):
             try:
-                rc: Any = subprocess.run(
+                rc = subprocess.run(
                     argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2,
                 ).returncode
             except Exception as e:
                 rc = type(e).__name__
             if rc != 0:
-                boot_log.heartbeat(f"volume: {' '.join(argv)} -> {rc}")
+                _log(f"volume: {' '.join(argv)} -> {rc}")
 
 
 def set_system_volume(level: int, wait: bool = False) -> None:
-    """Push `level` to the system mixer off the UI thread (a blocking call here
-    once froze the volume keys). `wait` is for the parent menu's test tone."""
+    """Push `level` to the mixer off the UI thread: a blocking call here once froze the volume keys."""
     global _latest_level
     _latest_level = level
     worker = threading.Thread(target=_run_volume_commands, args=(level,), daemon=True)
@@ -76,8 +78,12 @@ def set_system_volume(level: int, wait: bool = False) -> None:
 
 
 def volume_step(level: int) -> int:
-    """Index of the VOLUME_LEVELS step nearest `level` (saved levels may predate the current steps)."""
     return min(range(len(VOLUME_LEVELS)), key=lambda i: abs(VOLUME_LEVELS[i] - level))
+
+
+def snap_volume(level: int) -> int:
+    """Nearest step: settings saved under an older step table can sit between steps."""
+    return VOLUME_LEVELS[volume_step(level)]
 
 
 def adjacent_volume(level: int, up: bool) -> int:
@@ -86,23 +92,32 @@ def adjacent_volume(level: int, up: bool) -> int:
 
 
 def volume_badge(level: int) -> tuple[str, str, str]:
-    """(icon, bars, label) for a 0-100 level, derived from the step tables."""
+    """(icon, bars, label) for a 0-100 level."""
     step = volume_step(level)
     filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
     return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), VOLUME_LABELS[step]
 
 
+def lock_badge(lock: int) -> tuple[str, str, str]:
+    """Badge for a parent volume lock: a lock at 0 is Silent Mode."""
+    icon, bars, _ = volume_badge(lock)
+    return icon, bars, "Silent Mode" if lock == 0 else "Locked"
+
+
+def db_to_linear(db: float) -> float:
+    return FULL_SCALE * 10 ** (db / 20)
+
+
 def normalize_loudness(samples: array.array, target_rms_db: float, ceiling_db: float) -> array.array:
     """Scale 16-bit samples so RMS lands on target_rms_db unless the peak would
-    pass ceiling_db (both dBFS). Speech has a low crest factor so the RMS target
-    binds; percussive material hits the ceiling first."""
-    peak = max((abs(s) for s in samples), default=0)
+    pass ceiling_db (both dBFS, ceiling at most 0). Speech has a low crest
+    factor so the RMS target binds; percussive material hits the ceiling first."""
+    peak = max(map(abs, samples), default=0)
     if not peak:
         return samples
     rms = math.sqrt(math.sumprod(samples, samples) / len(samples))
-    gain = min(_FULL_SCALE * 10 ** (target_rms_db / 20) / rms,
-               _FULL_SCALE * 10 ** (ceiling_db / 20) / peak)
-    return array.array('h', (max(-32768, min(32767, int(s * gain))) for s in samples))
+    gain = min(db_to_linear(target_rms_db) / rms, db_to_linear(ceiling_db) / peak)
+    return array.array('h', (int(s * gain) for s in samples))
 
 
 def seconds_since_last_play() -> float:

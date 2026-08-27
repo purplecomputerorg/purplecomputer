@@ -39,3 +39,10 @@ def test_legacy_silent_mode_does_not_override_existing_lock(temp_settings):
     temp_settings.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
     temp_settings.SETTINGS_FILE.write_text(json.dumps({"silent_mode": True, "volume_lock": 60}))
     assert temp_settings.get_volume_lock() == 60
+
+
+def test_levels_saved_under_old_step_table_snap_on_load(temp_settings):
+    temp_settings.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temp_settings.SETTINGS_FILE.write_text(json.dumps({"volume_level": 85, "volume_lock": 15}))
+    assert temp_settings.get_volume_level() == 80
+    assert temp_settings.get_volume_lock() == 20

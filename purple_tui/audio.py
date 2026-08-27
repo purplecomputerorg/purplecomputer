@@ -1,19 +1,92 @@
-"""Resilient pygame.mixer playback helper.
+"""Audio helpers: resilient playback, system volume, and the volume badge.
 
 All sound playback in Purple goes through `play_safe`, which retries once
 after a mixer reinit if the first attempt raises. This catches the
 "Pulse server restarted / SDL stream went stale" case that otherwise
 leaves sound silently broken until Purple is restarted.
 
-Keeps playback sites (music_room, tts) free of try/except boilerplate.
+System volume goes through `set_system_volume`: pactl when present (percent
+maps onto perceived loudness and follows the default sink across hotplug),
+`amixer -M` otherwise. Design and history: docs/PLAN-audio-volume.md.
 """
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import threading
 import time
 from typing import Any, Optional
 
+from . import boot_log
+from .constants import VOLUME_ICONS, VOLUME_LABELS, VOLUME_LEVELS
+
 _last_play = 0.0
+_backend: Optional[str] = None
+_volume_lock = threading.Lock()
+_latest_level = 0
+BADGE_CELLS = 10
+
+
+def volume_backend() -> str:
+    global _backend
+    if _backend is None:
+        _backend = "pactl" if shutil.which("pactl") else "amixer"
+        boot_log.heartbeat(f"volume backend: {_backend}")
+    return _backend
+
+
+def system_volume_argv(level: int) -> list[list[str]]:
+    """Commands that set the system volume to `level` (0-100), muting at 0."""
+    if volume_backend() == "pactl":
+        return [
+            ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0" if level else "1"],
+            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{level}%"],
+        ]
+    return [["amixer", "-M", "sset", "Master", f"{level}%", "unmute" if level else "mute"]]
+
+
+def _run_volume_commands(level: int) -> None:
+    with _volume_lock:
+        if level != _latest_level:
+            return  # a newer request is queued behind us
+        for argv in system_volume_argv(level):
+            try:
+                rc: Any = subprocess.run(
+                    argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2,
+                ).returncode
+            except Exception as e:
+                rc = type(e).__name__
+            if rc != 0:
+                boot_log.heartbeat(f"volume: {' '.join(argv)} -> {rc}")
+
+
+def set_system_volume(level: int, wait: bool = False) -> None:
+    """Push `level` to the system mixer off the UI thread (a blocking call here
+    once froze the volume keys). `wait` is for the parent menu's test tone."""
+    global _latest_level
+    _latest_level = level
+    worker = threading.Thread(target=_run_volume_commands, args=(level,), daemon=True)
+    worker.start()
+    if wait:
+        worker.join(timeout=3)
+
+
+def volume_step(level: int) -> int:
+    """Index of the VOLUME_LEVELS step nearest `level` (saved levels may predate the current steps)."""
+    return min(range(len(VOLUME_LEVELS)), key=lambda i: abs(VOLUME_LEVELS[i] - level))
+
+
+def adjacent_volume(level: int, up: bool) -> int:
+    step = volume_step(level) + (1 if up else -1)
+    return VOLUME_LEVELS[max(0, min(step, len(VOLUME_LEVELS) - 1))]
+
+
+def volume_badge(level: int) -> tuple[str, str, str]:
+    """(icon, bars, label) for a 0-100 level, derived from the step tables."""
+    step = volume_step(level)
+    filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
+    return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), VOLUME_LABELS[step]
 
 
 def seconds_since_last_play() -> float:

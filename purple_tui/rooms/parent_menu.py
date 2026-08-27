@@ -28,6 +28,7 @@ import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from ..audio import adjacent_volume, set_system_volume, volume_badge
 from .. import diagnostics
 
 
@@ -509,14 +510,6 @@ class SecretMenuScreen(PickerModal):
         self.dismiss(value)
 
 
-_VOLUME_LEVEL_LABELS = {
-    0:   "Silent Mode",
-    15:  "Whisper",
-    35:  "Quiet",
-    60:  "Medium",
-    85:  "Loud",
-    100: "Full",
-}
 
 
 class ParentVolumeModal(PurpleModal):
@@ -597,13 +590,11 @@ class ParentVolumeModal(PurpleModal):
 
     def _refresh(self) -> None:
         level = self.app.volume_level
-        segments = 10
-        filled = round(level / 100 * segments)
-        bar = "█" * filled + "░" * (segments - filled)
+        _, bar, label = volume_badge(level)
         vol_focused = self._focus == self._FOCUS_VOLUME
         bar_text = f"[bold cyan]← {bar} →[/]" if vol_focused else f"  {bar}  "
         self.query_one("#vol-volume-bar", Static).update(bar_text)
-        self.query_one("#vol-volume-value", Static).update(_VOLUME_LEVEL_LABELS.get(level, str(level)))
+        self.query_one("#vol-volume-value", Static).update("Silent Mode" if level == 0 else label)
 
         locked = self.app._volume_lock is not None
         state = "On" if locked else "Off"
@@ -642,12 +633,8 @@ class ParentVolumeModal(PurpleModal):
                 return
 
     def _adjust_slider(self, up: bool) -> None:
-        from ..constants import VOLUME_LEVELS
         cur = self.app.volume_level
-        if up:
-            new_level = next((v for v in VOLUME_LEVELS if v > cur), cur)
-        else:
-            new_level = next((v for v in reversed(VOLUME_LEVELS) if v < cur), cur)
+        new_level = adjacent_volume(cur, up)
         if new_level == cur:
             self._refresh()
             return
@@ -671,22 +658,13 @@ class ParentVolumeModal(PurpleModal):
     def _play_test_sound(self) -> None:
         """Play the glockenspiel test tone at the slider's current level.
 
-        Forces amixer to the slider level (ignoring any active lock) so the
+        Forces the mixer to the slider level (ignoring any active lock) so the
         parent can preview what the kid will hear before committing.
         """
         level = self.app.volume_level
         if level == 0:
             return
-        try:
-            from ..constants import SYSTEM_VOLUME_MAX
-            system_vol = round(level * SYSTEM_VOLUME_MAX / 100)
-            subprocess.run(
-                ["amixer", "sset", "Master", f"{system_vol}%"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                check=False, timeout=2,
-            )
-        except Exception:
-            pass
+        set_system_volume(level, wait=True)
         try:
             from ..audio import play_safe
             from .music_room import warm_mixer

@@ -5,7 +5,7 @@
 # with read pulses while printing its /dev name and socket label. Safe on any
 # stick: no power cycling, so /dev names stay put and contents are untouched.
 #
-# With </dev/sdX | port name like 4-1.4>: blink that one socket by toggling
+# With </dev/sdX | socket like 4-1.4 or 1.4>: blink that one socket by toggling
 # port power. Each blink power-cycles the socket, so only point it at a stick
 # whose contents no longer matter (a failed flash, or one about to be
 # reflashed).
@@ -38,9 +38,10 @@ if [[ -z "$arg" ]]; then
         printf "  %-10s %-28s socket %s\n" "/dev/${names[$i]}" "${descs[$i]}" "$(describe_port "${ports[$i]}")"
     done
     load_port_labels
-    for port in "${!PORT_LABELS[@]}"; do
-        [[ " ${ports[*]} " == *" $port "* ]] || \
-            echo -e "  ${YELLOW}socket $(describe_port "$port") has no device; power-blink it with 'just blink $port'${NC}"
+    present=" $(for p in "${ports[@]}"; do port_key "$p"; done | paste -sd' ') "
+    for key in "${!PORT_LABELS[@]}"; do
+        [[ "$present" == *" $key "* ]] || \
+            echo -e "  ${YELLOW}socket $(describe_port "$(resolve_port_name "$key")") has no device; power-blink it with 'just blink $key'${NC}"
     done
     echo
     sudo -v
@@ -75,7 +76,7 @@ if [[ "$arg" == /dev/* ]]; then
         exit 1
     fi
 else
-    port="$arg"
+    port="$(resolve_port_name "$arg")"
 fi
 
 ctrl="$(port_control_path "$port" || true)"

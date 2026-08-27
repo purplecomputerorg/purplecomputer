@@ -398,11 +398,17 @@ usb_port_control() {
 }
 
 # --- Physical socket labels --------------------------------------------------
-# Map of USB port name to a human label for the physical socket ("top row 3"),
-# written by label-ports.sh (just label-ports). Lets failure reports point at
-# a stick by where it sits instead of a device node, which works even after
-# the drive has dropped off the bus.
+# Map of hub socket to a human label ("top row 3"), written by label-ports.sh
+# (just label-ports). Lets failure reports point at a stick by where it sits
+# instead of a device node, which works even after the drive has dropped off
+# the bus. Keyed by the port path below the bus ("1.4" for 4-1.4): the bus
+# number changes when the hub's uplink moves to another port on this machine,
+# and a USB 2.0 stick enumerates on the hub's 2.0 companion bus, so only the
+# path under the hub identifies the physical socket.
 port_labels_path() { echo "$PROJECT_DIR/.flash-ports.conf"; }
+
+# 4-1.4 -> 1.4; a bare key passes through.
+port_key() { echo "${1#*-}"; }
 
 declare -A PORT_LABELS
 PORT_LABELS_LOADED=false
@@ -414,26 +420,40 @@ load_port_labels() {
     while IFS='|' read -r port label; do
         port="$(echo "$port" | xargs)"
         [[ -z "$port" || "$port" == \#* ]] && continue
-        PORT_LABELS["$port"]="$(echo "$label" | xargs)"
+        PORT_LABELS["$(port_key "$port")"]="$(echo "$label" | xargs)"
     done < "$(port_labels_path)"
 }
 
-# Label for a port name, or empty. Same subshell caveat as is_denied: calling
-# this via $() re-reads the file, which is fine for a file this small.
+# Label for a port name or key, or empty. Same subshell caveat as is_denied:
+# calling this via $() re-reads the file, which is fine for a file this small.
 port_label() {
     load_port_labels
-    echo "${PORT_LABELS[$1]:-}"
+    echo "${PORT_LABELS[$(port_key "$1")]:-}"
 }
 
 save_port_label() {
-    local port="$1" label="${2//|/ }" file tmp
+    local label="${2//|/ }" key tmp
     load_port_labels
-    PORT_LABELS["$port"]="$label"
-    file="$(port_labels_path)"
+    PORT_LABELS["$(port_key "$1")"]="$label"
     tmp="$(mktemp)"
-    [[ -f "$file" ]] && grep -v "^${port}|" "$file" > "$tmp" || true
-    echo "${port}|${label}" >> "$tmp"
-    mv "$tmp" "$file"
+    for key in "${!PORT_LABELS[@]}"; do echo "${key}|${PORT_LABELS[$key]}"; done | sort -V > "$tmp"
+    mv "$tmp" "$(port_labels_path)"
+}
+
+# Full port name for a socket key on the fastest bus whose hub exposes that
+# socket right now (1.4 -> 4-1.4). Full names pass through; an unresolvable
+# key is echoed as is, so callers can always print it and port_control_path
+# fails cleanly on it.
+resolve_port_name() {
+    local key="$1" bus n speed best="$1" best_speed=0
+    [[ "$key" == *-* ]] && { echo "$key"; return; }
+    for bus in /sys/bus/usb/devices/usb*; do
+        n="${bus##*/usb}"
+        speed="$(cat "$bus/speed" 2>/dev/null || echo 0)"
+        [[ -n "$(port_control_path "$n-$key")" && "$speed" -gt "$best_speed" ]] || continue
+        best="$n-$key"; best_speed="$speed"
+    done
+    echo "$best"
 }
 
 # "4-1.4 (top row 3)" when the socket is labeled, else just "4-1.4".

@@ -1,8 +1,82 @@
 # Plan: Volume That Is Loud Enough, On Every Machine
 
-> **Status: PROPOSED.** Nothing here has shipped. Phase 0 is measurement and is
-> safe to land on its own; Phases 2 and 3 are deliberately gated on what Phase 0
-> finds.
+> **Status: Phases 0, 1, and 2 landed on main 2026-08-27** (`ea6c0c7`,
+> `6eef3e2`, `e5fa6e7`), untested on hardware as of that date. Phase 3 stays
+> gated on the hardware pass below. The sections after this one are the
+> original plan; where the implementation diverged, this status block wins.
+
+## What shipped, and where the plan was wrong
+
+- **Phase 0a was a false alarm.** `pulseaudio` in noble *Depends* on
+  `pulseaudio-utils`, so `pactl` has been in every shipped image and the audio
+  dump's `pactl` sections have been working. The package is now listed
+  explicitly and the build fails if `pactl` is missing, so that can't regress.
+  The dump also captures `pactl list sinks` (base volume), `amixer sget Master`
+  raw and `-M`, and `amixer scontents`.
+- **Phase 1 landed as written**, with one addition: `set_system_volume` runs
+  the mixer commands on a daemon thread with a latest-wins guard, so rapid key
+  presses can't land out of order, and non-zero exits go to the boot log. The
+  parent menu, room picker, and app badge had three separate hardcoded copies
+  of the level thresholds; all now derive from `VOLUME_LEVELS`/`VOLUME_LABELS`/
+  `VOLUME_ICONS` via `audio.volume_badge`, and levels saved under the old steps
+  (15/35/85) snap to the nearest new step. Settings saved at the old default
+  (60) stay at 60, which under Pulse's cubic map is about -13 dB rather than
+  the old -32 dB, so existing installs get louder too.
+- **Phase 2's "6 to 10 dB" did not survive measurement.** Loudness
+  normalization under a fixed peak ceiling can only raise a sound until its
+  peak hits the ceiling. The instruments have a 17 to 21 dB crest factor and
+  speech about 16 dB, so the ceiling binds for all of them and the RMS target
+  never does. Getting more than that means a limiter that reshapes the attack,
+  which is a timbre decision, not a gain-staging one, and was not made here.
+  What did land: one `normalize_loudness` in `purple_tui/audio.py`, used by
+  runtime TTS and `scripts/generate_voice_clips.py` through a shared
+  `tts.postprocess_samples` (the script's duplicated trim/fade/normalize code
+  is gone). Speech now sits at a -1 dBFS peak instead of -3, and the shipped
+  clips, which had been at anywhere from -7.8 to 0 dBFS, are all at -1 dBFS:
+  +2 to +7 dB depending on the clip, and no more clipping-hot ones. The
+  instrument renderer (`generate_sounds.py`) was left alone: with the ceiling
+  binding it would have produced bit-identical output.
+- **Runtime TTS cache.** Phrases already cached under `~/.purple/cache/tts`
+  on an installed machine keep their old level until evicted. Harmless, noted.
+
+## How to test on hardware
+
+The live USB runs Purple without installing, so no install is needed.
+
+```bash
+just build            # debug ISO (build-scripts/build-in-docker.sh)
+just flash-debug      # flash it
+```
+
+Boot it on the quietest machine you have and one that was fine, then:
+
+1. **Startup level.** First sound after boot should be clearly louder than the
+   current release at the same badge. Default is now Loud (80).
+2. **Walk the steps.** Volume keys through Whisper, Quiet, Medium, Loud, Full:
+   every non-zero step audible, each clearly louder than the last, bars and
+   labels in the corner badge match, mute shows Sound Off and silences.
+3. **Speech vs music.** Say something in Play, then play a note in Music at
+   the same setting. The pre-recorded clips ("hi", "purple") should match live
+   speech.
+4. **Hotplug.** Plug in a USB speaker or headphones mid-session: level should
+   match the badge without touching a key.
+5. **Music room mash.** Ten keys at once at Full: no crackle.
+6. **Hiss.** Sit in Music at Full in silence for a minute. This is what gates
+   Phase 3.
+7. **Parent menu.** Volume Lock picker: Space plays the test tone at the
+   slider level, Esc restores.
+
+Then confirm the software side from the parent menu terminal:
+
+```bash
+grep -i volume /tmp/purple-boot.log      # expect "volume backend: pactl", no "volume: ... ->" failures
+pactl get-sink-volume @DEFAULT_SINK@     # should track the badge (80% at Loud)
+ls /var/log/purple/audio-*.log           # the dump, now with sink base volume and mixer state
+```
+
+Bring the audio dump back from any machine that still sounds quiet: the sink's
+`base volume` and `amixer scontents` are what decides whether Phase 3's
+boot-time mixer normalization is needed.
 
 ## Problem
 

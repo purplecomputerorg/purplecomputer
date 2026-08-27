@@ -19,7 +19,7 @@ import pygame
 from . import boot_log
 from . import palette as P
 from .constants import (
-    ESCAPE_HOLD_THRESHOLD, LIVE_AUDIO_MARKER, ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
+    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, LIVE_AUDIO_MARKER, ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
     SYSTEM_VOLUME_MAX, UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
 )
@@ -31,13 +31,14 @@ from .keyboard import (
 )
 from .palette import ROW_LEGEND_COLORS
 from .timeline import RoomTimeline
-from .ui import Overlay, Timers, Toast, draw_ring
+from .ui import TRACK, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
 ROOM_ICONS = {"play": "🎈", "music": "🎵", "art": "🎨"}
 ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
+FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
 TIMELINE_DEBOUNCE_S = 3.0
 TIMELINE_MAX_WAIT_S = 15.0
 
@@ -438,17 +439,12 @@ class PurpleApp:
         self._cancel_escape_hold_timer()
         self._escape_down_at = time.monotonic()
         self._escape_hold_timer = self.timers.after(ESCAPE_HOLD_THRESHOLD, self._check_escape_hold)
-        self._escape_ring_timer = self.timers.every(1 / 30, self.invalidate)
 
     def _cancel_escape_hold_timer(self):
         if self._escape_hold_timer:
             self._escape_hold_timer.stop()
             self._escape_hold_timer = None
-        if getattr(self, "_escape_ring_timer", None):
-            self._escape_ring_timer.stop()
-            self._escape_ring_timer = None
         self._escape_down_at = None
-        self.invalidate()
 
     def _check_escape_hold(self):
         self._escape_hold_timer = None
@@ -467,9 +463,8 @@ class PurpleApp:
             self.action_parent_menu()
 
     def hold_progress(self):
-        """(fraction, label) for whatever hold gesture is in flight, else None."""
-        if self._escape_down_at is not None and not self._overlays:
-            return min(1.0, (time.monotonic() - self._escape_down_at) / ESCAPE_HOLD_THRESHOLD), "grown-ups"
+        """(fraction, label) for the room's hold gesture in flight, else None.
+        The Esc hold (Parent Menu) shows nothing on purpose: no affordance for kids."""
         return self.room.hold_progress()
 
     # ------------------------------------------------------------------ room picker / parent menu
@@ -1061,16 +1056,27 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ drawing
     def _viewport_rect(self) -> pygame.Rect:
+        """The room area: CANVAS_COLS x CANVAS_ROWS square units, as large as
+        fit between the title and status strips, so every machine shows the
+        same shape and the Art grid fills it edge to edge."""
         g = self.g
-        pad_y, pad_x = g.vh(1.2), g.vw(1.6)
-        top = pad_y + g.vh(5) + g.vh(1.2)
-        bottom = g.h - pad_y - g.vh(8) - g.vh(1.2)
-        legend_w = g.vw(3.2)
-        return pygame.Rect(pad_x, top, g.w - 2 * pad_x - legend_w, bottom - top)
+        pad, title_h, status_h, legend_w = g.vh(1.2 + FRAME_GAP_VH), g.vh(5), g.vh(6), g.vw(3)
+        unit = max(4, min((g.w - 2 * pad - legend_w) // CANVAS_COLS, (g.h - 2 * pad - title_h - status_h) // CANVAS_ROWS))
+        vp = pygame.Rect(0, 0, unit * CANVAS_COLS, unit * CANVAS_ROWS)
+        vp.center = ((g.w - legend_w) // 2, (title_h - status_h + g.h) // 2)
+        return vp
+
+    @property
+    def unit(self) -> int:
+        """One viewport unit in pixels (an Art cell); panels size themselves in it."""
+        return self._viewport_rect().w // CANVAS_COLS
+
+    def _frame_rect(self, vp: pygame.Rect) -> pygame.Rect:
+        return vp.inflate(2 * self.g.vh(FRAME_GAP_VH), 2 * self.g.vh(FRAME_GAP_VH))
 
     def content_rect(self, vp: pygame.Rect) -> pygame.Rect:
-        """Room drawing area: the viewport minus the border and any bottom panel."""
-        inner = vp.inflate(-6, -6)
+        """Room drawing area: the viewport minus any bottom panel."""
+        inner = vp.copy()
         if self._panel is not None:
             inner.height -= self._panel.height(self.g)
         return inner
@@ -1079,48 +1085,48 @@ class PurpleApp:
         g = self.g
         g.fill(P.BG)
         vp = self._viewport_rect()
-        self._draw_title(vp)
-        g.rect(P.SURFACE, vp, radius=g.vh(0.4))
-        g.rect(P.LINE, vp, width=2, radius=g.vh(0.4))
+        frame = self._frame_rect(vp)
+        self._draw_title(frame)
+        g.rect(P.SURFACE, frame)
+        g.rect(P.LINE, frame, width=2)
         content = self.content_rect(vp)
-        g.surface.set_clip(vp.inflate(-4, -4))
+        g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
         if self._panel is not None:
             self._panel.draw(g, pygame.Rect(content.x, content.bottom, content.w, self._panel.height(g)))
-        g.surface.set_clip(None)
-        self._draw_legend(vp)
-        self._draw_tabs(vp)
         hold = self.hold_progress()
-        if hold:
-            frac, label = hold
-            if frac > 0.12:
-                draw_ring(g, vp.centerx, vp.bottom - g.vh(8), g.vh(4.5), frac, label)
+        if hold and hold[0] > 0.12:
+            strip_h = g.vh(4.5)
+            draw_hold_bar(g, pygame.Rect(content.x, content.bottom - strip_h, content.w, strip_h), hold[0], hold[1])
+        g.surface.set_clip(None)
+        self._draw_legend(frame)
+        self._draw_status(frame)
         for o in self._overlays:
             o.draw(g)
         self._draw_toasts()
 
-    def _draw_title(self, vp):
+    def _draw_title(self, frame):
         g = self.g
-        y = g.vh(1.2) + g.vh(2.5)
-        px = g.vh(2.1)
-        g.draw_text(self._boot_mode_text(), px, vp.x + g.vw(1), y, "sans-bold", P.MUTED, anchor="midleft")
-        title = f"{ROOM_ICONS[self.active_room]}  {dict(ROOMS)[self.active_room]}"
-        g.draw_text(title, g.vh(2.3), g.w // 2, y, "sans-heavy", P.PRIMARY, anchor="center")
+        y = frame.y - g.vh(5) // 2
+        px = g.vh(1.9)
+        g.draw_text(self._boot_mode_text().upper(), px, frame.x, y, "mono-bold", P.MUTED, anchor="midleft", track=TRACK / 2)
+        title = f"{ROOM_ICONS[self.active_room]}  {dict(ROOMS)[self.active_room].upper()}"
+        g.draw_text(title, g.vh(2.3), frame.centerx, y, "mono-heavy", P.PRIMARY, anchor="center", track=TRACK)
         right = self._battery_text()
         if self._keyboard_state_machine._sticky_shift_active:
             right = "⇧  " + right
         if right:
-            g.draw_text(right, px, g.w - g.vw(1.6) - g.vw(1), y, "sans-bold", P.MUTED, anchor="midright")
+            g.draw_text(right.upper(), px, frame.right, y, "mono-bold", P.MUTED, anchor="midright", track=TRACK / 2)
 
-    def _draw_legend(self, vp):
+    def _draw_legend(self, frame):
         """Sticker colors per keyboard row beside the viewport; a triangle
         points at the row of the last key."""
         if not self._legend_visible:
             return
         g = self.g
         sw, sh = g.vw(0.7), g.vh(2.2)
-        x = vp.right + g.vw(0.5)
-        y = vp.bottom - 4 * sh - g.vh(1)
+        x = frame.right + g.vw(0.5)
+        y = frame.bottom - 4 * sh
         for r, shades in enumerate(ROW_LEGEND_COLORS):
             for i, color in enumerate(shades):
                 g.rect(color, (x + i * sw, y + r * sh, sw, sh))
@@ -1128,35 +1134,36 @@ class PurpleApp:
             tx, ty, t = x + 3 * sw + g.vw(0.25), y + self._legend_row * sh + sh // 2, g.vh(0.7)
             pygame.draw.polygon(g.surface, rgb(P.TEXT), [(tx, ty), (tx + t, ty - t), (tx + t, ty + t)])
 
-    def _draw_tabs(self, vp):
+    def _draw_status(self, frame):
+        """The strip under the viewport: keyboard note, Esc and the room
+        names (active one in inverse video), arrow hint."""
         g = self.g
-        y = g.h - g.vh(1.2) - g.vh(4)
-        px = g.vh(2.2)
+        y = frame.bottom + g.vh(6) // 2
+        px = g.vh(1.9)
         if self._littles_mode:
-            g.draw_text("🎈 Littles Mode · Hold Esc to exit", px, g.w // 2, y, "sans-bold", P.MUTED, anchor="center")
+            g.draw_text("🎈 Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
-        g.draw_text("⌨  Purple is always keyboard only", px, vp.x + g.vw(1), y, "sans-bold", P.DIM, anchor="midleft")
-        tabs = [("Esc", None)] + [(label, rid) for rid, label in ROOMS]
-        widths = [g.measure(t, px, "sans-bold")[0] + g.vw(3) for t, _ in tabs]
-        x = g.w // 2 - (sum(widths) + g.vw(0.8) * (len(tabs) - 1)) // 2
+        g.draw_text("⌨ Purple is always keyboard only", px, frame.x, y, "mono", P.DIM, anchor="midleft")
+        gap = g.vw(1.4)
+        tabs = [(label.upper(), rid) for rid, label in ROOMS]
+        widths = [g.measure(t, px, "mono-bold", TRACK)[0] + px for t, _ in tabs]
+        esc_w = g.measure("ESC", px, "mono-bold", TRACK)[0] + int(px * 0.9)
+        x = frame.centerx - (esc_w + gap + sum(widths) + gap * (len(tabs) - 1)) // 2
+        x = draw_keycap(g, "Esc", px, x, y).right + gap
         for (label, rid), w in zip(tabs, widths):
-            box = pygame.Rect(x, y - g.vh(2.4), w, g.vh(4.8))
-            on = rid == self.active_room
-            g.rect(P.PRIMARY if on else P.BG, box, radius=g.vh(0.35))
-            g.rect(P.PRIMARY if on else P.LINE, box, width=2, radius=g.vh(0.35))
-            g.draw_text(label, px, box.centerx, box.centery, "sans-bold" if rid else "mono-bold",
-                        P.BG if on else P.MUTED, anchor="center")
-            x += w + g.vw(0.8)
+            draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
+            x += w + gap
         right = ARROW_HINTS[self.active_room]
         if self._effective_volume() == 0:
             right = "🔇  " + right
-        g.draw_text(right, px, g.w - g.vw(1.6) - g.vw(1), y, "sans-bold", P.DIM, anchor="midright")
+        g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
 
     def _draw_toasts(self):
         g = self.g
         y = g.vh(9)
         for t in self._toasts[-3:]:
             r = g.draw_text(t.text, g.vh(2.4), g.w - g.vw(3), y, "sans-bold", P.TEXT, anchor="topright", bg=P.TILE, pad=g.vh(1))
+            g.rect(P.LINE, r.inflate(g.vh(2), g.vh(2)), width=1)
             y = r.bottom + g.vh(2.2)
 
 

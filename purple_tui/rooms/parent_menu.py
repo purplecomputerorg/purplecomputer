@@ -17,7 +17,7 @@ from .. import diagnostics
 from .. import palette as P
 from ..constants import SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
+from ..ui import CANCELLED, TRACK, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -1235,11 +1235,9 @@ class ParentMenu(Overlay):
 
     # --- drawing ---
     def draw(self, g):
-        s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
-        s.fill((30, 16, 51, 235))
-        g.surface.blit(s, (0, 0))
+        draw_scrim(g, 235)
         live_h = g.vh(9) if is_live_boot() else 0
-        fixed = g.vh(6) + live_h + g.vh(12)
+        fixed = window_title_height(g, "x") + g.vh(1.5) + live_h + g.vh(12)
         n_rows = sum(1 for i in range(len(self.items)) if not self._is_section(i))
         n_secs = len(self.items) - n_rows
         row_h = min(g.vh(4.6), int((g.h - g.vh(2) - fixed) / (n_rows + n_secs * 0.85)))
@@ -1247,20 +1245,17 @@ class ParentMenu(Overlay):
         rows_h = n_rows * row_h + n_secs * sec_h
         box = pygame.Rect(0, 0, g.vw(56), fixed + rows_h)
         box.center = (g.w // 2, g.h // 2)
-        g.rect(P.SURFACE, box, radius=g.vh(0.5))
-        g.rect(P.LINE, box, width=2, radius=g.vh(0.5))
-        g.draw_text("Parent Menu", g.vh(3), box.centerx, box.y + g.vh(1.5), "sans-heavy", P.TEXT, anchor="midtop")
+        y = draw_window(g, box, "Parent Menu") + g.vh(1.5)
         version = diagnostics.get_version_label()
         if version:
             g.draw_text(version, g.vh(1.8), box.right - g.vw(1.5), box.bottom - g.vh(1.2), "mono", P.DIM, anchor="bottomright")
-        y = box.y + g.vh(6)
         if live_h:
             g.draw_markup(_boot_mode_hint(), g.vh(1.9), box.x + g.vw(2), y, "sans", P.MUTED, box.w - g.vw(4), "center", P.SURFACE)
             y += live_h
         px = min(g.vh(2.4), int(row_h * 0.55))
         for i, (item_id, label) in enumerate(self.items):
             if self._is_section(i):
-                g.draw_text(label.upper(), g.vh(1.7), box.x + g.vw(3), y + sec_h - g.vh(1.4), "sans-heavy", P.DIM, anchor="bottomleft")
+                g.draw_text(label.upper(), g.vh(1.6), box.x + g.vw(3), y + sec_h - g.vh(1.4), "mono-bold", P.DIM, anchor="bottomleft", track=TRACK)
                 y += sec_h
                 continue
             if item_id in ("menu-support", "menu-volume") and self.app.audio_ok is False:
@@ -1268,11 +1263,11 @@ class ParentMenu(Overlay):
             on = i == self.selected
             r = pygame.Rect(box.x + g.vw(2.5), y, box.w - g.vw(5), row_h - g.vh(0.6))
             if on:
-                g.rect(P.PRIMARY, r, radius=g.vh(0.35))
+                g.rect(P.PRIMARY, r)
             fg = P.BG if on else (P.DIM if self._disabled(item_id) else P.TEXT)
             g.draw_text(label, px, r.x + g.vw(1.5), r.centery, "sans-bold", fg, anchor="midleft")
             y += row_h
-        g.draw_text("▲ ▼   Enter   Esc", g.vh(2.1), box.centerx, y + g.vh(1.5), "sans-bold", P.MUTED, anchor="midtop")
+        g.draw_text("▲ ▼   Enter   Esc", g.vh(2.0), box.centerx, y + g.vh(1.5), "mono", P.MUTED, anchor="midtop")
         g.draw_markup("Purple is keyboard only, on purpose!\nKids explore by typing.", g.vh(1.9), box.x, y + g.vh(5),
                       "sans", P.DIM, box.w, "center", P.SURFACE)
 

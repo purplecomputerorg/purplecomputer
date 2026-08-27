@@ -48,6 +48,12 @@ ROOM_CODE = ("code", "Code")           # Legacy (kept for compatibility, not a s
 #   - Code panel: CODE_PANEL_MIN_HEIGHT rows (flexible via 1fr, no top border)
 #   - Compact indicator: 1 row (no margin)
 
+# The canvas viewport is this many square units on every machine, sized to fit.
+# The Art grid is the same units (minus its header and hint rows), so no
+# computer gets a wider picture than another.
+CANVAS_COLS = 48
+CANVAS_ROWS = 27
+
 VIEWPORT_WIDTH = 134          # Viewport widget width (CSS)
 VIEWPORT_HEIGHT = 29          # Viewport widget height (CSS)
 REQUIRED_TERMINAL_COLS = VIEWPORT_WIDTH + 2 + 5 + 5  # Full UI width (+ border + spacer + legend)

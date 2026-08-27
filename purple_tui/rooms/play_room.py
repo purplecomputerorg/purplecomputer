@@ -278,8 +278,8 @@ class PlayRoom:
         line_px = g.vh(3.8)
         width = rect.w - 2 * pad
         bottom = rect.bottom - g.vh(1.5)
-        hint_px = g.vh(2.1)
-        g.draw_text(self.hints.current, hint_px, rect.centerx, bottom, "sans-bold", P.DIM, anchor="midbottom")
+        hint_px = g.vh(1.9)
+        g.draw_text(self.hints.current, hint_px, rect.centerx, bottom, "mono", P.DIM, anchor="midbottom")
         bottom -= g.vh(3.4)
         sub = self.field.autocomplete_markup or (f"[dim]{self.field.recall_text()}[/]" if self.field.recall_text() else "")
         sub_h = g.vh(3)

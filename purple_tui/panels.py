@@ -132,7 +132,7 @@ class CodePanel:
         self.hints = HintRotator(ROOM_HINTS[room])
 
     def height(self, g) -> int:
-        return g.vh(15)
+        return 3 * self.app.unit    # the Art header and hint rows it replaces, so the grid keeps its size
 
     def set_correction(self, original: str, corrected: str):
         self.field.set_correction(original, corrected)
@@ -176,15 +176,15 @@ class CodePanel:
         return None
 
     def draw(self, g, rect):
-        px = g.vh(3.2)
-        y = rect.y + g.vh(1.2)
+        """Two lines: the code line, then autocomplete, the recall hint, or a
+        'Try:' idea, whichever applies."""
+        px, sub_px = g.vh(2.8), g.vh(1.9)
+        y = rect.y + (rect.h - g.line_height(px, "mono") - g.line_height(sub_px, "mono")) // 2
         self.field.draw(g, rect.x + g.vw(1), y, rect.w - g.vw(2), px, "Code")
-        y += g.line_height(px, "mono") + g.vh(0.6)
-        sub = self.field.autocomplete_markup or (f"[dim]{self.field.recall_text()}[/]" if self.field.recall_text() else "")
-        if sub:
-            g.draw_markup(sub, g.vh(2.1), rect.x + g.vw(1) + g.vw(6), y, "sans-bold", P.MUTED, rect.w - g.vw(8), dim_to=P.SURFACE)
-        g.draw_text(self.hints.current, g.vh(2.1), rect.centerx, rect.bottom - g.vh(1.4), "sans-bold", P.DIM, anchor="midbottom")
-        g.draw_text("🤖 Hold Space: close code 🤖", g.vh(2.0), rect.right - g.vw(1), rect.bottom - g.vh(1.4), "sans-bold", P.DIM, anchor="midright")
+        y += g.line_height(px, "mono")
+        sub = self.field.autocomplete_markup or f"[dim]{self.field.recall_text() or self.hints.current}[/]"
+        g.draw_markup(sub, sub_px, self.field.text_x(g, rect.x + g.vw(1), px, "Code"), y, "mono", P.MUTED, rect.w - g.vw(26), dim_to=P.SURFACE)
+        g.draw_text("🤖 Hold Space: close code", sub_px, rect.right - g.vw(1), y + g.line_height(sub_px, "mono") // 2, "mono", P.DIM, anchor="midright")
 
 
 class LoopPanel:
@@ -217,8 +217,8 @@ class LoopPanel:
             draw_bar(g, cx - bw // 2, by, bw, g.vh(1.4), frac, P.DANGER)
         else:
             draw_bar(g, cx - bw // 2, by, bw, g.vh(1.4), 0)
-            g.rect(P.TEXT, (cx - bw // 2 + int(bw * frac) - g.vw(0.3), by - 2, g.vw(0.6), g.vh(1.4) + 4), radius=3)
-        g.draw_text(action, g.vh(2.1), cx, by + g.vh(3.2), "sans-bold", P.MUTED, anchor="midtop")
+            g.rect(P.TEXT, (cx - bw // 2 + int(bw * frac) - g.vw(0.3), by - 2, g.vw(0.6), g.vh(1.4) + 4))
+        g.draw_text(action, g.vh(1.9), cx, by + g.vh(3.2), "mono", P.MUTED, anchor="midtop")
 
 
 class TimeTravelBar:
@@ -252,4 +252,4 @@ class TimeTravelBar:
         markup = self.dots_markup()
         w = g.markup_size(markup, px)[0]
         g.draw_markup(markup, px, cx - w // 2, rect.y + g.vh(5.5), "sans-bold", P.PRIMARY, dim_to=P.SURFACE)
-        g.draw_text("Enter: keep this    Esc: never mind", g.vh(2.1), cx, rect.bottom - g.vh(1.4), "sans-bold", P.MUTED, anchor="midbottom")
+        g.draw_text("Enter: keep this    Esc: never mind", g.vh(1.9), cx, rect.bottom - g.vh(1.4), "mono", P.MUTED, anchor="midbottom")

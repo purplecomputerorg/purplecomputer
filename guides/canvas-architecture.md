@@ -18,11 +18,18 @@ Design rules, in priority order:
 1. Motion only in response to a key. Nothing moves on an idle screen.
 2. Text and emoji render smoothly at native resolution, any size per element.
 3. A grid exists only where the grid is the content: Music tiles, Art cells.
-4. The prompt stays monospace with a block caret. That is the DOS memory.
-5. Blockiness is a per-element choice: Art cells and Music tiles have hard
-   edges, and a letter written in an Art cell is a block letter (Press
-   Start 2P, one glyph per square); everything else is smooth type.
+4. The prompt stays monospace with a block caret. That is the DOS memory,
+   and the chrome follows it: titles, room tabs, keycaps and hints are IBM
+   Plex Mono, labels in tracked caps, the active thing in inverse video.
+   Reading text (replies, dialog bodies) is IBM Plex Sans.
+5. Square corners everywhere. Blockiness is otherwise a per-element choice:
+   Art cells and Music tiles have hard edges, and a letter written in an Art
+   cell is a block letter (Press Start 2P, one glyph per square); everything
+   else is smooth type.
 6. Hints sit near the thing they describe and fade after a room has been used.
+7. The Parent Menu hold (Esc) draws no progress on purpose: kids get no
+   affordance for it. Space and Enter holds show a segmented bar over the
+   hint strip.
 
 ## Layers
 
@@ -58,10 +65,15 @@ lists what is armed; `tests/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 
 Sizes come from `g.vh(percent)` and `g.vw(percent)` so a 1024x768 netbook and
-a 1440x900 MacBook get the same proportions. The Art grid is a fixed logical
-64x36 with `cell = floor(available / rows)` so cells are square everywhere;
-unpainted cells alternate two near-identical purples so the grid shows as a
-checkerboard rather than lines.
+a 1440x900 MacBook get the same proportions. The viewport itself is a fixed
+`CANVAS_COLS x CANVAS_ROWS` (48x27) grid of square units, as large as fits
+between the title and status strips and centered, so every machine shows the
+same shape; wide screens get margins at the sides, 4:3 screens above and
+below. The Art grid is those units: 48x24 cells under a 1.5 unit mode switch
+and over a 1.5 unit hint row, edge to edge with no leftover space. The code
+line is 3 units tall and takes those two rows, so the picture keeps its size
+while coding. Unpainted cells alternate two near-identical purples so the
+grid shows as a checkerboard rather than lines.
 
 ## Text
 
@@ -84,9 +96,9 @@ Unchanged: evdev events go through `KeyboardStateMachine` into
 is no evdev (`PURPLE_NO_EVDEV=1`, macOS), `sdl_input.pump` turns the window's
 key events into the same `RawKeyEvent`s.
 
-Hold gestures show a ring (`ui.draw_ring`): Esc for the Parent Menu, Space for
-the code panel, Enter for the loop station. `panels.SpaceHold` holds the tap
-versus hold policy Music and Art share.
+Hold gestures for Space (code panel) and Enter (loop station) show a bar
+(`ui.draw_hold_bar`); the Esc hold for the Parent Menu shows nothing.
+`panels.SpaceHold` holds the tap versus hold policy Music and Art share.
 
 ## Overlays
 

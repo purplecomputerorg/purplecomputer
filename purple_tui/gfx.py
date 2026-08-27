@@ -23,11 +23,12 @@ import pygame  # noqa: E402
 
 FONT_DIR = Path(__file__).parent / "fonts"
 FACES = {
-    "sans": "NunitoSans-Regular.ttf",
-    "sans-bold": "NunitoSans-Bold.ttf",
-    "sans-heavy": "NunitoSans-ExtraBold.ttf",
-    "mono": "JetBrainsMono-Regular.ttf",
-    "mono-bold": "JetBrainsMono-SemiBold.ttf",
+    "sans": "IBMPlexSans-Regular.ttf",
+    "sans-bold": "IBMPlexSans-SemiBold.ttf",
+    "sans-heavy": "IBMPlexSans-Bold.ttf",
+    "mono": "IBMPlexMono-Regular.ttf",
+    "mono-bold": "IBMPlexMono-SemiBold.ttf",
+    "mono-heavy": "IBMPlexMono-Bold.ttf",
     "block": "PressStart2P-Regular.ttf",  # one letter per square Art cell
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }
@@ -255,27 +256,34 @@ class Gfx:
             return pygame.transform.smoothscale(native, size)
         return self._emoji.get_or((text, px), make)
 
-    def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False) -> pygame.Surface:
+    def text(self, text: str, px: int, face: str = "sans", color="#ffffff", _raw=False, track: float = 0) -> pygame.Surface:
         """One line of text as a surface (cached). Emoji inside go through the
-        emoji font; ALL CAPS is applied here so every caller inherits it."""
+        emoji font; ALL CAPS is applied here so every caller inherits it.
+        track spaces letters apart by that fraction of px (chrome labels)."""
         if self.all_caps and not _raw:
             text = text.upper()
-        key = (text, px, face, hexcolor(color))
+        key = (text, px, face, hexcolor(color), track)
 
         def make():
             if not text:
                 return pygame.Surface((0, self.line_height(px, face)), pygame.SRCALPHA)
             runs = [(t, e) for chunk, e in split_runs(text) for t in ([chunk] if e else self._by_coverage(face, chunk))]
-            if _raw or (len(runs) == 1 and not runs[0][1] and self._covers(face, runs[0][0])):
+            if _raw or (not track and len(runs) == 1 and not runs[0][1] and self._covers(face, runs[0][0])):
                 return self.font(face, px).render(text, True, rgb(color))
-            pieces = [self.emoji(t, px) if e else self.font(face if self._covers(face, t) else "symbols", px).render(t, True, rgb(color))
-                      for t, e in runs]
+            pieces = []
+            for t, e in runs:
+                if e:
+                    pieces.append(self.emoji(t, px))
+                    continue
+                f = self.font(face if self._covers(face, t) else "symbols", px)
+                pieces.extend(f.render(u, True, rgb(color)) for u in (t if track else [t]))
+            gap = round(px * track)
             h = max(p.get_height() for p in pieces)
-            out = pygame.Surface((sum(p.get_width() for p in pieces), h), pygame.SRCALPHA)
+            out = pygame.Surface((sum(p.get_width() for p in pieces) + gap * (len(pieces) - 1), h), pygame.SRCALPHA)
             x = 0
             for p in pieces:
                 out.blit(p, (x, (h - p.get_height()) // 2))
-                x += p.get_width()
+                x += p.get_width() + gap
             return out
         return self._text.get_or(key, make)
 
@@ -308,8 +316,8 @@ class Gfx:
             state = ok
         return out + [buf] if buf else out
 
-    def measure(self, text: str, px: int, face: str = "sans") -> tuple:
-        return self.text(text, px, face).get_size()
+    def measure(self, text: str, px: int, face: str = "sans", track: float = 0) -> tuple:
+        return self.text(text, px, face, track=track).get_size()
 
     def line_height(self, px: int, face: str = "sans") -> int:
         return self.font(face, px).get_linesize()
@@ -318,16 +326,16 @@ class Gfx:
     def fill(self, color, rect=None):
         self.surface.fill(rgb(color), rect)
 
-    def rect(self, color, rect, width=0, radius=0):
-        pygame.draw.rect(self.surface, rgb(color), rect, width, border_radius=radius)
+    def rect(self, color, rect, width=0):
+        pygame.draw.rect(self.surface, rgb(color), rect, width)
 
-    def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0) -> pygame.Rect:
+    def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0) -> pygame.Rect:
         """Blit one line. anchor is any pygame.Rect attribute name (topleft,
         center, midtop, topright, midleft, ...). bg paints a box behind it."""
-        s = self.text(text, px, face, color)
+        s = self.text(text, px, face, color, track=track)
         r = s.get_rect(**{anchor: (x, y)})
         if bg is not None:
-            self.rect(bg, r.inflate(pad * 2, pad * 2), radius=max(1, pad // 3))
+            self.rect(bg, r.inflate(pad * 2, pad * 2))
         self.surface.blit(s, r)
         return r
 

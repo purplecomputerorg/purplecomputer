@@ -4,7 +4,7 @@ import pygame
 
 from . import palette as P
 from .keyboard import CharacterAction, ControlAction, NavigationAction
-from .ui import Dialog, Overlay, Picker
+from .ui import TRACK, Dialog, Overlay, Picker, draw_scrim, draw_window, window_title_height
 
 ROOM_OPTIONS = [("play", "🎈", "Play"), ("music", "🎵", "Music"), ("art", "🎨", "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
@@ -93,48 +93,46 @@ class RoomPicker(Overlay):
         self.app.push(ConfirmFresh(self.app, self.app.active_room), on_close=lambda r: r and self.close({"clear_room": r}))
 
     def draw(self, g):
-        s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
-        s.fill((30, 16, 51, 225))
-        g.surface.blit(s, (0, 0))
-        tw, th, gap, eh = g.vw(22), g.vh(18), g.vw(1.5), g.vh(11)
-        rows_h = th + g.vh(2) + eh + (g.vh(2) + eh if self.code_row else 0)
-        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + g.vw(8), g.vh(8) + rows_h + g.vh(9))
+        draw_scrim(g)
+        tw, th, gap, eh = g.vw(22), g.vh(17), g.vw(1.5), g.vh(10)
+        rows_h = th + gap + eh + (gap + eh if self.code_row else 0)
+        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + g.vw(8), window_title_height(g, "x") + g.vh(3) + rows_h + g.vh(9))
         box.center = (g.w // 2, g.h // 2)
-        g.rect(P.SURFACE, box, radius=g.vh(0.5))
-        g.rect(P.LINE, box, width=2, radius=g.vh(0.5))
-        g.draw_text("Pick a Room", g.vh(3), box.centerx, box.y + g.vh(3), "sans-heavy", P.TEXT, anchor="midtop")
-        y = box.y + g.vh(8)
+        y = draw_window(g, box, "Pick a Room") + g.vh(3)
         x0 = box.centerx - (3 * tw + 2 * gap) // 2
         for i, (rid, icon, label) in enumerate(ROOM_OPTIONS):
             on = self.row == ROWS and self.col == i
-            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, th), on, f"{icon}  {label}  {icon}",
-                       f"Press {i + 1}" + ("\nor Enter" if on else ""))
-        y += th + g.vh(2)
+            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, th), on, label,
+                       f"Press {i + 1}" + (" or Enter" if on else ""), icon=icon)
+        y += th + gap
         locked = self._locked_volume()
-        vol_label = f"{locked[0]}  {locked[1]}  {locked[0]}" if locked else "🔊  Volume  🔊"
+        vol_label = f"{locked[0]}  {locked[1]}" if locked else "🔊  Volume"
         extras = [(vol_label, "" if locked else "Press V", locked is not None),
-                  ("🧹  Clear  🧹", "Press C", False), ("⏪  Time Travel  ⏪", "Press T", False)]
+                  ("🧹  Clear", "Press C", False), ("⏪  Time Travel", "Press T", False)]
         for i, (label, key, disabled) in enumerate(extras):
             on = self.row == EXTRAS and self.col == i
             self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, eh), on, label,
                        "" if disabled else key + (" or Enter" if on else ""), disabled)
         if self.code_row:
-            y += eh + g.vh(2)
-            label = "🤖  Close Code  🤖" if self.app._code_panel_active else "🤖  Open Code  🤖"
+            y += eh + gap
+            label = "🤖  Close Code" if self.app._code_panel_active else "🤖  Open Code"
             self._tile(g, pygame.Rect(x0, y, 3 * tw + 2 * gap, eh), self.row == CODE, label,
                        "Space" + (" or Enter" if self.row == CODE else ""))
-        g.draw_text("Enter picks   •   Hold Esc for grown-ups", g.vh(2.1), box.centerx, box.bottom - g.vh(5.5), "sans-bold", P.MUTED, anchor="center")
-        g.draw_text("Arrows move  ← ↑ ↓ →", g.vh(2.1), box.centerx, box.bottom - g.vh(2.5), "sans-bold", P.DIM, anchor="center")
+        g.draw_text("Enter picks   •   Hold Esc for grown-ups", g.vh(2.0), box.centerx, box.bottom - g.vh(5.5), "mono", P.MUTED, anchor="center")
+        g.draw_text("Arrows move  ← ↑ ↓ →", g.vh(2.0), box.centerx, box.bottom - g.vh(2.5), "mono", P.DIM, anchor="center")
 
-    def _tile(self, g, r, on, label, sub, disabled=False):
-        g.rect(P.PRIMARY if on else P.SURFACE, r, radius=g.vh(0.4))
-        g.rect(P.ACCENT if on else (P.TILE if disabled else P.LINE), r, width=2, radius=g.vh(0.4))
+    def _tile(self, g, r, on, label, sub, disabled=False, icon=""):
+        """icon (room tiles) draws large above the label; other tiles are one line."""
+        g.rect(P.PRIMARY if on else P.TILE, r)
+        if not on and not disabled:
+            g.rect(P.LINE, r, width=1)
         fg = P.BG if on else (P.DIM if disabled else P.TEXT)
-        g.draw_text(label, g.vh(2.8), r.centerx, r.centery - (g.vh(2) if sub else 0), "sans-heavy", fg, anchor="center")
-        yy = r.centery + g.vh(1.5)
-        for line in sub.split("\n"):
-            g.draw_text(line, g.vh(2.2), r.centerx, yy, "sans-bold", fg if on else P.MUTED, anchor="midtop")
-            yy += g.vh(2.8)
+        cy = r.centery + (g.vh(2.5) if icon else 0)
+        if icon:
+            g.draw_text(icon, g.vh(5), r.centerx, cy - g.vh(5), "sans", fg, anchor="center")
+        g.draw_text(label.upper(), g.vh(2.4), r.centerx, cy - g.vh(1.6), "mono-bold", fg, anchor="center", track=TRACK)
+        if sub:
+            g.draw_text(sub, g.vh(1.9), r.centerx, cy + g.vh(1.6), "mono", fg if on else P.MUTED, anchor="center")
 
 
 class VolumeModal(Dialog):

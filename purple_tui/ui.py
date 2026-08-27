@@ -1,11 +1,10 @@
 """Small UI primitives shared by every screen: timers, a text field with
-autocomplete, dialogs, pickers, toasts, and the hold ring.
+autocomplete, dialogs, pickers, toasts, and the hold bar.
 
 Nothing here knows about rooms. Screens compose these and draw with Gfx.
 """
 
 import asyncio
-import math
 import re
 import time
 
@@ -84,6 +83,7 @@ _COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in
 MATH_OPERATORS = {'+', '-', '×', '÷'}
 MAX_RECALL_LEN = 40
 CANCELLED = object()  # a picker closed with Esc, distinct from choosing None
+TRACK = 0.12          # letter spacing for mono caps labels (titles, tabs, keycaps)
 
 
 class TextField:
@@ -220,7 +220,7 @@ class TextField:
         if self._validator:
             self._underline(g, shown, px, tx, y)
         cx = tx + g.measure(before, px, "mono")[0] if before else tx
-        g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)), radius=2)
+        g.rect(P.CARET, (cx, y + px // 8, max(2, int(px * 0.55)), int(px * 1.05)))
         return pygame.Rect(x, y, width, g.line_height(px, "mono"))
 
     def _visible_slice(self, g, px, avail):
@@ -323,27 +323,19 @@ class Dialog(Overlay):
 
     def draw(self, g: Gfx):
         if self.scrim:
-            s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
-            s.fill((30, 16, 51, 225))
-            g.surface.blit(s, (0, 0))
+            draw_scrim(g)
         pad = g.vh(3)
-        title_h = g.line_height(g.vh(3), "sans-heavy") if self.title else 0
-        hint_h = g.line_height(g.vh(2.1)) if self.hint else 0
+        hint_h = g.line_height(g.vh(2.0), "mono") if self.hint else 0
         body_h = self.body_height(g)
         w = self.box_width(g)
-        h = pad * 2 + title_h + (pad // 2 if self.title else 0) + body_h + (pad // 2 if self.hint else 0) + hint_h
+        h = window_title_height(g, self.title) + pad + body_h + (pad // 2 if self.hint else 0) + hint_h + pad
         box = pygame.Rect(0, 0, w, h)
         box.center = (g.w // 2, g.h // 2)
-        g.rect(P.SURFACE, box, radius=g.vh(0.5))
-        g.rect(P.LINE, box, width=2, radius=g.vh(0.5))
-        y = box.y + pad
-        if self.title:
-            g.draw_text(self.title, g.vh(3), box.centerx, y, "sans-heavy", P.TEXT, anchor="midtop")
-            y += title_h + pad // 2
+        y = draw_window(g, box, self.title) + pad
         inner = pygame.Rect(box.x + g.vw(3), y, w - 2 * g.vw(3), body_h)
         self.draw_body(g, inner)
         if self.hint:
-            g.draw_markup(self.hint, g.vh(2.1), inner.x, box.bottom - pad - hint_h, "sans-bold", P.MUTED, inner.w, "center", P.SURFACE)
+            g.draw_markup(self.hint, g.vh(2.0), inner.x, box.bottom - pad - hint_h, "mono", P.MUTED, inner.w, "center", P.SURFACE)
         self.box = box
 
     def draw_body(self, g: Gfx, rect: pygame.Rect):
@@ -384,9 +376,7 @@ class Picker(Dialog):
         for i, opt in enumerate(self.options):
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
-            g.rect(P.PRIMARY if on else P.TILE, box, radius=g.vh(0.4))
-            if on:
-                g.rect(P.ACCENT, box, width=2, radius=g.vh(0.4))
+            g.rect(P.PRIMARY if on else P.TILE, box)
             label = opt[1]
             color = P.BG if on else P.TEXT
             if len(opt) == 3:
@@ -440,27 +430,66 @@ class Toast:
 # ----------------------------------------------------------------------------
 
 
-def draw_ring(g: Gfx, cx: int, cy: int, radius: int, progress: float, label: str):
-    """The 'you are about to' ring for hold gestures: fills clockwise."""
-    thick = max(3, radius // 5)
-    rect = pygame.Rect(cx - radius, cy - radius, radius * 2, radius * 2)
-    pygame.draw.circle(g.surface, rgb(P.SURFACE), (cx, cy), radius)
-    pygame.draw.circle(g.surface, rgb(P.LINE), (cx, cy), radius, thick)
-    if progress > 0:
-        start = math.pi / 2 - 2 * math.pi * progress
-        pygame.draw.arc(g.surface, rgb(P.PRIMARY), rect.inflate(-thick // 2, -thick // 2), start, math.pi / 2, thick)
-    g.draw_text(label, max(10, int(radius * 0.55)), cx, cy, "sans-heavy", P.TEXT, anchor="center")
+def draw_scrim(g: Gfx, alpha: int = 225):
+    s = pygame.Surface((g.w, g.h), pygame.SRCALPHA)
+    s.fill((*rgb(P.BG), alpha))
+    g.surface.blit(s, (0, 0))
+
+
+def window_title_height(g: Gfx, title: str) -> int:
+    return g.vh(4.4) if title else 0
+
+
+def draw_window(g: Gfx, box: pygame.Rect, title: str = "") -> int:
+    """A dialog box: single-line frame and a title strip across the top, the
+    way a DOS window carried its name. Returns the y where the body starts."""
+    g.rect(P.SURFACE, box)
+    g.rect(P.LINE, box, width=2)
+    if not title:
+        return box.y
+    strip = pygame.Rect(box.x, box.y, box.w, window_title_height(g, title))
+    g.rect(P.TILE, strip)
+    g.rect(P.LINE, (box.x, strip.bottom - 1, box.w, 2))
+    g.draw_text(title.upper(), g.vh(2.0), strip.centerx, strip.centery, "mono-bold", P.TEXT, anchor="center", track=TRACK)
+    return strip.bottom
+
+
+def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=P.MUTED, anchor="midleft", on=False) -> pygame.Rect:
+    """Mono caps label; on = inverse video (the DOS way to mark the active thing)."""
+    pad = px // 2
+    if on:
+        return g.draw_text(text.upper(), px, x, y, "mono-bold", P.BG, anchor=anchor, bg=P.PRIMARY, pad=pad, track=TRACK)
+    return g.draw_text(text.upper(), px, x, y, "mono-bold", color, anchor=anchor, track=TRACK)
+
+
+def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", color=P.MUTED) -> pygame.Rect:
+    """A key name in a thin square outline: ESC, TAB."""
+    r = g.draw_text(text.upper(), px, x, y, "mono-bold", color, anchor=anchor, track=TRACK)
+    box = r.inflate(px * 0.9, px * 0.5)
+    g.rect(color, box, width=1)
+    return box
 
 
 def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PRIMARY, track=P.LINE):
-    g.rect(track, (x, y, w, h), radius=h // 2)
+    g.rect(track, (x, y, w, h))
     if fraction > 0:
-        g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h), radius=h // 2)
+        g.rect(color, (x, y, max(h, int(w * min(1.0, fraction))), h))
 
 
-def draw_key_hint(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft") -> pygame.Rect:
-    """A keycap-looking label like [Esc]."""
-    return g.draw_text(text, px, x, y, "sans-bold", P.MUTED, anchor=anchor, bg=P.TILE, pad=px // 4)
+def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
+    """Progress for a hold gesture, drawn over the hint strip at the bottom of
+    the viewport: a caps label and a segmented bar that fills left to right."""
+    g.rect(P.SURFACE, rect)
+    px = g.vh(2.0)
+    seg_w, seg_h, n = g.vw(1.1), g.vh(1.4), 12
+    lab = g.text(label.upper(), px, "mono-bold", P.PRIMARY, track=TRACK)
+    total = lab.get_width() + px + n * seg_w + (n - 1) * (seg_w // 3)
+    x = rect.centerx - total // 2
+    g.surface.blit(lab, lab.get_rect(midleft=(x, rect.centery)))
+    x += lab.get_width() + px
+    for i in range(n):
+        g.rect(P.PRIMARY if i < round(progress * n) else P.LINE, (x, rect.centery - seg_h // 2, seg_w, seg_h))
+        x += seg_w + seg_w // 3
 
 
 def is_char(action, ch: str | None = None) -> bool:

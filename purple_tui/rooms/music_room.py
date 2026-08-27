@@ -21,6 +21,7 @@ from ..music_constants import (
 )
 from ..palette import KEY_COLORS, text_color_for
 from ..panels import CodePanel, LoopPanel, SpaceHold
+from ..ui import TRACK, draw_keycap, draw_label
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
@@ -587,52 +588,46 @@ class MusicRoom:
         grid = pygame.Rect(rect.x + g.vw(1.5), rect.y + head_h, rect.w - g.vw(3), rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
-            g.draw_text(self._hint_text(), g.vh(2.1), rect.centerx, rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="center")
+            px, cy = g.vh(1.9), rect.bottom - hint_h // 2
+            g.draw_text(self._hint_text(), px, rect.x + g.vw(1.5), cy, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled:
-                g.draw_text("🤖 Hold Space: write code!", g.vh(2.0), rect.right - g.vw(1.5), rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="midright")
-            if self.app._music_looping_enabled:
-                g.draw_text("Hold Enter: record a loop", g.vh(2.0), rect.x + g.vw(1.5), rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="midleft")
+                g.draw_text("🤖 Hold Space: write code", px, rect.right - g.vw(1.5), cy, "mono", P.DIM, anchor="midright")
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "Enter: instrument"
         parts = ["Space: hide notes" if self.show_labels else "Space: show notes"]
         if self.app._music_key_switching_enabled:
-            parts.append("Arrows: switch key")
+            parts.append("Arrows: key")
         parts.append("Enter: instrument")
         if self.app._music_looping_enabled:
             parts.append("Hold Enter: loop")
-        return "    ".join(parts)
+        return "   ".join(parts)
 
     def _draw_header(self, g, r):
-        px = g.vh(2.4)
+        px = g.vh(1.9)
         cy = r.centery
         inst = f"🎵 {INSTRUMENTS[self.instrument_index][1]}"
         if self.app._littles_mode:
-            g.draw_text(inst, px, r.centerx, cy, "sans-heavy", P.TEXT, anchor="center")
+            draw_label(g, inst, px, r.centerx, cy, P.TEXT, anchor="center")
             return
-        if self.app._music_key_switching_enabled:
-            g.draw_text(f"← Key {FRIENDLY_KEY_NAMES[self.root_index]} →", px, r.x + g.vw(1.5), cy, "sans-bold", P.MUTED, anchor="midleft")
-        else:
-            g.draw_text(f"Key {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}", px, r.x + g.vw(1.5), cy, "sans-bold", P.MUTED, anchor="midleft")
-        tabs = [(inst, not self.letters_mode), ("Say Letters", self.letters_mode)]
-        widths = [g.measure(t, px, "sans-bold")[0] + g.vw(2) for t, _ in tabs]
-        x = r.centerx - (sum(widths) + g.vw(1)) // 2
-        for (label, on), w in zip(tabs, widths):
-            box = pygame.Rect(x, cy - g.vh(1.9), w, g.vh(3.8))
-            if on:
-                g.rect(P.PRIMARY, box, radius=g.vh(0.3))
-            g.draw_text(label, px, box.centerx, cy, "sans-bold", P.BG if on else P.MUTED, anchor="center")
-            x += w + g.vw(1)
-        hint = "⇥ Tab to stop saying letters" if self.letters_mode else "⇥ Tab to say letters"
-        g.draw_text(hint, px, r.right - g.vw(1.5), cy, "sans-bold", P.MUTED, anchor="midright")
+        key = f"← Key {FRIENDLY_KEY_NAMES[self.root_index]} →" if self.app._music_key_switching_enabled else f"Key {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
+        draw_label(g, key, px, r.x + g.vw(1.5), cy)
+        gap = g.vw(1.5)
+        w_inst, w_say = g.measure(inst.upper(), px, "mono-bold", TRACK)[0] + px, g.measure("SAY LETTERS", px, "mono-bold", TRACK)[0] + px
+        x = r.centerx - (w_inst + gap + w_say) // 2
+        draw_label(g, inst, px, x + w_inst // 2, cy, anchor="center", on=not self.letters_mode)
+        draw_label(g, "Say Letters", px, x + w_inst + gap + w_say // 2, cy, anchor="center", on=self.letters_mode)
+        hint = "to stop saying letters" if self.letters_mode else "to say letters"
+        g.draw_text(hint, px, r.right - g.vw(1.5), cy, "mono", P.MUTED, anchor="midright")
+        draw_keycap(g, "Tab", px, r.right - g.vw(1.5) - g.measure(hint + " ", px, "mono")[0] - int(px * 0.5), cy, anchor="midright")
 
     def _draw_grid(self, g, r):
         gap_x, gap_y = g.vw(0.5), g.vh(0.9)
         cw = (r.w - 9 * gap_x) / 10
         ch = (r.h - 3 * gap_y) / 4
-        letter_px = int(min(ch * 0.5, cw * 0.55))
-        label_px = max(10, int(ch * 0.17))
+        letter_px = int(min(ch * 0.36, cw * 0.4))
+        label_px = max(10, int(ch * 0.16))
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
@@ -644,9 +639,9 @@ class MusicRoom:
                     if at_front:
                         bg = WAVEFRONT_COLOR
                 tile = pygame.Rect(int(r.x + col_idx * (cw + gap_x)), int(r.y + row_idx * (ch + gap_y)), int(cw), int(ch))
-                g.rect(bg, tile, radius=g.vh(0.35))
-                fg = text_color_for(bg)
-                g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery, "sans-heavy", fg, anchor="center")
+                g.rect(bg, tile)
+                fg = P.ACCENT if bg == P.TILE else text_color_for(bg)
+                g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery, "sans-bold", fg, anchor="center")
                 show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))
                 label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
                 if show and label:

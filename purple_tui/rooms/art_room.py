@@ -8,13 +8,16 @@ import pygame
 
 from .. import palette as P
 from ..code_runner import ArtCodeRunner
+from ..constants import CANVAS_COLS, CANVAS_ROWS
 from ..color_mixing import mix_colors_paint
 from ..gfx import contrast_text, luminance, rgb
 from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ..palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
+from ..ui import TRACK, draw_keycap, draw_label
 
-COLS, ROWS = 64, 36
+HEAD_UNITS = FOOT_UNITS = 1.5       # mode switch above the grid, hint below, in cell units
+COLS, ROWS = CANVAS_COLS, CANVAS_ROWS - 3
 BRUSH_CHAR = "█"
 ARROW_HOLD_REPEAT_THRESHOLD = 8
 HOLD_ACCEL_MULTIPLIER = 6
@@ -64,7 +67,6 @@ class ArtRoom:
         self._heading = "right"
         self._use_heading_cursor = False
         self._post_stamp_x = None
-        self._line_start = 0          # write mode: where Enter returns to
         self._arrow_repeat_dir = None
         self._arrow_repeat_count = 0
         self._backspace_repeat_count = 0
@@ -215,8 +217,6 @@ class ArtRoom:
 
     def _toggle_paint_mode(self):
         self._set_paint_mode(not self._paint_mode)
-        if not self._paint_mode:
-            self._line_start = self._cursor_x
 
     def _set_pen(self, down: bool):
         if self._pen_down == down:
@@ -284,7 +284,7 @@ class ArtRoom:
         return max(6, round(c * 0.8))
 
     def _new_line(self):
-        self._cursor_x = self._line_start
+        self._cursor_x = 0
         self._cursor_y = min(ROWS - 1, self._cursor_y + 1)
 
     def type_char(self, char: str, direction: str = "right"):
@@ -471,22 +471,25 @@ class ArtRoom:
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
-        head_h, hint_h = g.vh(5.5), g.vh(4.5)
-        self._draw_header(g, pygame.Rect(rect.x, rect.y, rect.w, head_h))
-        area = pygame.Rect(rect.x + g.vw(1), rect.y + head_h, rect.w - g.vw(2), rect.h - head_h - hint_h)
-        self._cell = max(3, min(area.w // COLS, area.h // ROWS))
-        ox = area.x + (area.w - self._cell * COLS) // 2
-        oy = area.y + (area.h - self._cell * ROWS) // 2
+        """Cells are the viewport unit: the grid plus its header and hint rows
+        fill the viewport exactly. A bottom panel takes those rows instead."""
+        reserve = 0 if self.app._panel is not None else HEAD_UNITS + FOOT_UNITS
+        c = self._cell = max(3, min(rect.w // COLS, int(rect.h / (ROWS + reserve))))
+        head_h = round(c * HEAD_UNITS) if reserve else 0
+        ox = rect.x + (rect.w - c * COLS) // 2
+        oy = rect.y + head_h + (rect.h - round(c * reserve) - c * ROWS) // 2
         self._origin = (ox, oy)
-        c = self._cell
+        if reserve:
+            self._draw_header(g, pygame.Rect(ox, oy - head_h, c * COLS, head_h))
         g.surface.blit(self._canvas_surface(g, c), (ox, oy))
         self._draw_letters(g, ox, oy, c)
         self._draw_cursor(g, ox, oy, c)
-        if self.app._panel is None:
+        if reserve:
+            foot = pygame.Rect(ox, oy + c * ROWS, c * COLS, round(c * FOOT_UNITS))
             key = "littles" if self.app._littles_mode else ("pen" if self._paint_mode and self._pen_down else "paint" if self._paint_mode else "write")
-            g.draw_text(HINTS[key], g.vh(2.1), rect.centerx, rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="center")
+            g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled and not self.app._littles_mode:
-                g.draw_text("🤖 Hold Space: write code!", g.vh(2.0), rect.right - g.vw(1.5), rect.bottom - hint_h // 2, "sans-bold", P.DIM, anchor="midright")
+                g.draw_text("🤖 Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
 
     def _canvas_surface(self, g, c):
         """The cells as one surface; only cells that changed since the last
@@ -523,7 +526,7 @@ class ArtRoom:
             ring = pygame.Rect(x - c, y - c, 3 * c, 3 * c)
             thick = max(3, c // 3) if self._pen_down else 2
             if visible:
-                g.rect(self._last_key_color, ring, width=thick, radius=2)
+                g.rect(self._last_key_color, ring, width=thick)
                 corner = P.TEXT
                 for cx, cy in ((ring.x, ring.y), (ring.right - thick, ring.y), (ring.x, ring.bottom - thick), (ring.right - thick, ring.bottom - thick)):
                     g.rect(corner, (cx, cy, thick, thick))
@@ -536,24 +539,18 @@ class ArtRoom:
             g.draw_text(HEADING_ARROWS[self._heading], max(8, int(c * 0.9)), x + c // 2 + dx * c, y + c // 2 + dy * c, "sans-heavy", color, anchor="center")
 
     def _draw_header(self, g, r):
-        px = g.vh(2.4)
+        """PAINT / ABC mode switch (active one in inverse video) with the brush
+        color as a swatch beside it, and the Tab keycap on the right."""
+        px = g.vh(1.9)
         cy = r.centery
         if self.app._littles_mode:
-            label = "■■■  Paint" if self._paint_mode else "ABC  Write"
-            g.draw_text(label, px, r.centerx, cy, "sans-heavy", P.TEXT, anchor="center")
+            draw_label(g, "Paint" if self._paint_mode else "Write", px, r.centerx, cy, P.TEXT, anchor="center")
             return
-        tabs = [("paint", self._paint_mode), ("ABC", not self._paint_mode)]
-        widths = [g.vw(7), g.measure("ABC", px, "sans-bold")[0] + g.vw(2)]
-        x = r.centerx - (sum(widths) + g.vw(1)) // 2
-        for (label, on), w in zip(tabs, widths):
-            box = pygame.Rect(x, cy - g.vh(1.9), w, g.vh(3.8))
-            if on:
-                g.rect(self._last_key_color if label == "paint" else P.PRIMARY, box, radius=g.vh(0.3))
-            if label == "paint":
-                sw = g.vh(1.6)
-                for i, color in enumerate(("#DF7070", "#DFC070", "#7090DF")):
-                    g.rect(color, (box.centerx - sw * 1.5 + i * sw, cy - sw // 2, sw, sw))
-            else:
-                g.draw_text("ABC", px, box.centerx, cy, "sans-bold", P.BG if on else P.MUTED, anchor="center")
-            x += w + g.vw(1)
-        g.draw_text("⇥ Tab to paint" if not self._paint_mode else "⇥ Tab to write", px, r.right - g.vw(1.5), cy, "sans-bold", P.MUTED, anchor="midright")
+        w_paint, w_abc = (g.measure(t, px, "mono-bold", TRACK)[0] + px for t in ("PAINT", "ABC"))
+        x = r.centerx - (w_paint + px + w_abc) // 2
+        draw_label(g, "Paint", px, x + w_paint // 2, cy, anchor="center", on=self._paint_mode)
+        draw_label(g, "ABC", px, x + w_paint + px + w_abc // 2, cy, anchor="center", on=not self._paint_mode)
+        sw = round(r.h * 0.5)
+        g.rect(self._last_key_color, (x - px - sw, cy - sw // 2, sw, sw))
+        g.draw_text("to paint" if not self._paint_mode else "to write", px, r.right, cy, "mono", P.MUTED, anchor="midright")
+        draw_keycap(g, "Tab", px, r.right - g.measure("to write ", px, "mono")[0] - int(px * 0.5), cy, anchor="midright")

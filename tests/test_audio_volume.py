@@ -64,7 +64,14 @@ def test_step_tables_and_badges():
 
 def test_lock_badge_labels():
     assert audio.lock_badge(0)[2] == "Silent Mode"
-    assert audio.lock_badge(60) == (*audio.volume_badge(60)[:2], "Locked")
+    assert audio.lock_badge(60) == (*audio.volume_badge(60)[:2], "Max Medium")
+
+
+def test_ceiling_holds_the_kid_level_down_but_never_up():
+    assert audio.effective_volume(80, None) == 80
+    assert audio.effective_volume(80, 40) == 40
+    assert audio.effective_volume(20, 40) == 20
+    assert audio.effective_volume(80, 0) == 0
 
 
 @pytest.mark.parametrize("legacy,snapped", [(15, 20), (35, 40), (85, 80)])
@@ -102,3 +109,34 @@ def test_normalize_loudness_backs_off_to_ceiling_for_spiky_material():
 def test_normalize_loudness_leaves_silence_alone():
     silence = array.array('h', [0] * 100)
     assert audio.normalize_loudness(silence, -12.0, -1.0) == silence
+
+
+def _app(level: int, ceiling):
+    from purple_tui.purple_tui import PurpleApp
+    app = PurpleApp.__new__(PurpleApp)
+    app.volume_level, app._volume_lock, app._volume_before_mute = level, ceiling, level
+    app.audio_ok = True
+    app._apply_volume = lambda: None
+    app.clear_notifications = lambda: None
+    app.notify = lambda *a, **k: None
+    return app
+
+
+def test_volume_keys_step_from_the_effective_level_under_a_ceiling():
+    from purple_tui.purple_tui import PurpleApp
+    app = _app(80, 40)
+    PurpleApp.action_volume_down(app)
+    assert app.volume_level == 20  # one press below the ceiling, not below the stale 80
+    PurpleApp.action_volume_up(app)
+    PurpleApp.action_volume_up(app)
+    assert app.volume_level == 40  # held at the ceiling
+    assert app._effective_volume() == 40
+
+
+def test_silent_mode_still_swallows_the_keys():
+    from purple_tui.purple_tui import PurpleApp
+    app = _app(60, 0)
+    PurpleApp.action_volume_up(app)
+    assert app.volume_level == 60 and app._effective_volume() == 0
+    assert app.volume_locked
+    assert not _app(60, 40).volume_locked

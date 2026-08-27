@@ -98,10 +98,15 @@ def volume_badge(level: int) -> tuple[str, str, str]:
     return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), VOLUME_LABELS[step]
 
 
-def lock_badge(lock: int) -> tuple[str, str, str]:
-    """Badge for a parent volume lock: a lock at 0 is Silent Mode."""
-    icon, bars, _ = volume_badge(lock)
-    return icon, bars, "Silent Mode" if lock == 0 else "Locked"
+def effective_volume(level: int, ceiling: Optional[int]) -> int:
+    """What playback gets: the kid's level, held under the parent's ceiling when one is set."""
+    return level if ceiling is None else min(level, ceiling)
+
+
+def lock_badge(ceiling: int) -> tuple[str, str, str]:
+    """Badge for a parent volume ceiling: 0 is Silent Mode, anything else names the top step."""
+    icon, bars, label = volume_badge(ceiling)
+    return icon, bars, "Silent Mode" if ceiling == 0 else f"Max {label}"
 
 
 def db_to_linear(db: float) -> float:

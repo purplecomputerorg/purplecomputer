@@ -78,6 +78,17 @@ Bring the audio dump back from any machine that still sounds quiet: the sink's
 `base volume` and `amixer scontents` are what decides whether Phase 3's
 boot-time mixer normalization is needed.
 
+### Volume Lock is now a limit (2026-08-27)
+
+The first hardware pass had one machine too loud and one too quiet at the
+same step, and base volume could not tell them apart, so the parent needs a
+per-machine lever that does not require knowing the machine. Rather than add
+a setting, the existing lock became a ceiling: the parent picks the loudest
+step, the kid's keys keep working below it, the badge reads "Max Medium" at
+the top, and a limit at 0 is still Silent Mode with the keys disabled. Saved
+locks carry over as limits at the same level. Phase 3's "extra loud" and
+mixer-normalization items stay gated on the probe results below.
+
 ### Hands-on probe (2026-08-27)
 
 The first hardware pass showed base volume at 100% and every mixer control at

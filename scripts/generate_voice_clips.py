@@ -19,20 +19,10 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 VOICE_DIR = PROJECT_ROOT / "packs" / "core-sounds" / "content" / "voice"
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Voice model configuration (same as tts.py)
-VOICE_MODEL = "en_US-libritts-high"
-VOICE_SPEAKER = 166  # p6006
-_SYNTH_PARAMS = {
-    "noise_scale": 0.3,
-    "noise_w": 0.3,
-    "noise_w_scale": 0.3,
-    "length_scale": 1.0,
-}
-
-# Pronunciation overrides (same as tts.py)
-PRONUNCIATION_MAP = {
-    "dinos": "dyenoze",
-}
+from purple_tui.tts import (  # noqa: E402
+    VOICE_MODEL, _fix_pronunciation, _get_voice_search_paths, _make_synth_config,
+    postprocess_samples, voice_clip_filename,
+)
 
 # Static phrases (UI feedback, etc.)
 STATIC_PHRASES = [
@@ -41,27 +31,9 @@ STATIC_PHRASES = [
 ]
 
 
-def get_voice_search_paths() -> list[Path]:
-    """Get list of paths to search for voice model."""
-    import os
-    paths = [
-        Path.home() / ".local" / "share" / "piper-voices",
-        Path.home() / ".cache" / "piper",
-        Path("/opt/purple/piper-voices"),
-        Path("/opt/piper"),
-    ]
-    try:
-        import pwd
-        real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
-        paths.insert(0, real_home / ".local" / "share" / "piper-voices")
-    except (ImportError, KeyError):
-        pass
-    return paths
-
-
 def find_voice_model() -> Path | None:
     """Find the Piper voice model."""
-    for base_path in get_voice_search_paths():
+    for base_path in _get_voice_search_paths():
         candidate = base_path / f"{VOICE_MODEL}.onnx"
         if candidate.exists():
             return candidate
@@ -70,26 +42,7 @@ def find_voice_model() -> Path | None:
 
 def phrase_to_filename(phrase: str) -> str:
     """Convert a phrase to the filename the app looks the clip up under."""
-    from purple_tui.tts import voice_clip_filename
     return voice_clip_filename(phrase)
-
-
-def _fix_pronunciation(text: str) -> str:
-    """Replace words Piper mispronounces with phonetic respellings."""
-    import re
-    for word, replacement in PRONUNCIATION_MAP.items():
-        text = re.sub(rf'\b{word}\b', replacement, text, flags=re.IGNORECASE)
-    return text
-
-
-def _make_synth_config():
-    """Build a SynthesisConfig using only parameters the installed version accepts."""
-    from piper.config import SynthesisConfig
-    import dataclasses
-    valid = {f.name for f in dataclasses.fields(SynthesisConfig)}
-    kwargs = {k: v for k, v in _SYNTH_PARAMS.items() if k in valid}
-    kwargs["speaker_id"] = VOICE_SPEAKER
-    return SynthesisConfig(**kwargs)
 
 
 def generate_clip(voice, phrase: str, output_path: Path) -> bool:
@@ -112,7 +65,6 @@ def generate_clip(voice, phrase: str, output_path: Path) -> bool:
     samples = array.array('h')
     samples.frombytes(raw)
 
-    from purple_tui.tts import postprocess_samples
     samples = postprocess_samples(samples, first_chunk.sample_rate)
 
     with wave.open(str(output_path), 'wb') as wav_file:
@@ -318,7 +270,7 @@ def main():
     if model_path is None:
         print("ERROR: Piper voice model not found.")
         print("Searched in:")
-        for path in get_voice_search_paths():
+        for path in _get_voice_search_paths():
             print(f"  {path / f'{VOICE_MODEL}.onnx'}")
         print()
         print("Please install the voice model first.")

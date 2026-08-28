@@ -9,14 +9,17 @@ Deterministic synthesis: fixed _SYNTH_PARAMS, so identical input produces identi
 
 import array
 import hashlib
+import os
 import re
+import select
 import shutil
+import subprocess
+import sys
 import tempfile
 import threading
 import time
 import wave
 from pathlib import Path
-import os
 
 from .audio import db_to_linear, normalize_loudness
 
@@ -364,13 +367,13 @@ _piper_available = None
 
 # Serialize all Piper synthesis calls (espeak phonemizer is not thread-safe)
 _synthesis_lock = threading.Lock()
-_load_lock = threading.Lock()
+_preload_started = False
 
 
 def _get_piper_voice():
     """Piper voice, loaded once. Serialized so a preload and a first speak can't both load."""
     global _piper_voice, _piper_available
-    with _load_lock:
+    with _synthesis_lock:
         if _piper_available is False or _piper_voice is not None:
             return _piper_voice
         if os.environ.get("PURPLE_DEMO_AUTOSTART"):
@@ -385,29 +388,85 @@ def _get_piper_voice():
         return _piper_voice
 
 
-def preload() -> None:
-    """Load the model and run one throwaway synthesis in the background. Model
-    load plus the first inference is many seconds on weak laptops, long enough
-    for a kid to type the next thing and cancel the first word ever spoken."""
-    def _work():
+_worker: subprocess.Popen | None = None
+_worker_ready = threading.Event()  # set once the worker is usable, or once it is known dead
+_WORKER_READY_TIMEOUT = 90.0
+_WORKER_REPLY_TIMEOUT = 30.0
+
+
+def _worker_stderr():
+    from .stderr_guard import LOG_PATH
+    try:
+        return open(LOG_PATH, "ab")
+    except OSError:
+        return subprocess.DEVNULL
+
+
+def _drop_worker(proc) -> None:
+    global _worker
+    if _worker is proc:
+        _worker = None
+    try:
+        proc.stdin.close()  # EOF: the worker exits on its own
+    except Exception:
+        pass
+    _worker_ready.set()
+
+
+def preload() -> threading.Thread | None:
+    """Start the speech worker once per session. The model loads in its own
+    process, so typing never stalls and the first word isn't cancelled mid-load."""
+    global _preload_started, _worker
+    if _preload_started or os.environ.get("PURPLE_DEMO_AUTOSTART") or find_voice_model() is None:
+        return None
+    _preload_started = True
+    try:
+        _worker = subprocess.Popen(
+            [sys.executable, "-m", "purple_tui.tts_worker"],
+            cwd=Path(__file__).resolve().parent.parent,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_worker_stderr(),
+            text=True, bufsize=1,
+        )
+    except Exception as e:
+        _dbg(f"piper worker: spawn failed {type(e).__name__}: {e}")
+        return None
+    proc = _worker
+
+    def _await_ready():
         from .audio import _log
         t0 = time.monotonic()
-        voice = _get_piper_voice()
-        t1 = time.monotonic()
-        if voice is None:
-            _log(f"piper preload: unavailable ({t1 - t0:.1f}s)")
-            return
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            wav_path = f.name
-        try:
-            synthesize_to_file(voice, "purple.", wav_path)
-        except Exception as e:
-            _dbg(f"piper preload: warm synth raised {type(e).__name__}: {e}")
-        finally:
-            Path(wav_path).unlink(missing_ok=True)
-        _log(f"piper preload: model {t1 - t0:.1f}s, warm synth {time.monotonic() - t1:.1f}s")
+        if proc.stdout.readline().strip() == "ready":
+            _worker_ready.set()
+            _log(f"piper worker: ready in {time.monotonic() - t0:.1f}s")
+        else:
+            _log(f"piper worker: failed to start ({time.monotonic() - t0:.1f}s), speech loads in-process")
+            _drop_worker(proc)
 
-    threading.Thread(target=_work, daemon=True, name="piper-preload").start()
+    thread = threading.Thread(target=_await_ready, daemon=True, name="piper-worker-ready")
+    thread.start()
+    return thread
+
+
+def _worker_synthesize(prepared_text: str, wav_path: str) -> bool | None:
+    """ok/fail from the worker, or None when there is no usable worker."""
+    if _worker is None or not _worker_ready.wait(timeout=_WORKER_READY_TIMEOUT):
+        return None
+    proc = _worker
+    if proc is None:
+        return None
+    with _synthesis_lock:
+        try:
+            proc.stdin.write(f"{wav_path}\t{prepared_text}\n")
+            proc.stdin.flush()
+            readable, _, _ = select.select([proc.stdout], [], [], _WORKER_REPLY_TIMEOUT)
+            reply = proc.stdout.readline().strip() if readable else ""
+        except (OSError, ValueError):
+            reply = ""
+    if reply in ("ok", "fail"):
+        return reply == "ok"
+    _dbg("piper worker: no reply, dropping it")
+    _drop_worker(proc)
+    return None
 
 
 def _ensure_mixer() -> bool:
@@ -461,17 +520,19 @@ def synthesize_to_file(voice, prepared_text: str, wav_path: str) -> bool:
     return True
 
 
-def _synthesize_to_cache(voice, prepared_text: str) -> Path | None:
-    """Synthesize prepared text, post-process, and store in cache.
-
-    Returns the path to play (cache path or temp file), or None on failure.
-    """
+def _synthesize_to_cache(prepared_text: str) -> Path | None:
+    """Synthesize prepared text (worker first, in-process if there is none),
+    post-process, and store in cache. Returns the path to play, or None."""
     wav_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
             wav_path = f.name
 
-        if not synthesize_to_file(voice, prepared_text, wav_path):
+        ok = _worker_synthesize(prepared_text, wav_path)
+        if ok is None:
+            voice = _get_piper_voice()
+            ok = voice is not None and synthesize_to_file(voice, prepared_text, wav_path)
+        if not ok:
             Path(wav_path).unlink(missing_ok=True)
             return None
 
@@ -635,20 +696,8 @@ def _speak_sync(text: str, speech_id: int, on_playing: callable = None) -> bool:
         _dbg("speak_sync: cache hit")
         return _play_clip(cached_path, speech_id, on_playing)
 
-    # Fall back to Piper TTS for dynamic content
-    voice = _get_piper_voice()
-    if voice is None:
-        _dbg("speak_sync: piper voice unavailable")
-        return False
-
-    # Check again after potentially slow voice load
-    if speech_id != _speech_id:
-        _dbg("speak_sync: cancelled after voice load")
-        return False
-
-    # Synthesize, post-process, and cache (if short enough to be worth caching)
     _dbg(f"speak_sync: synthesizing len={len(prepared)}")
-    result_path = _synthesize_to_cache(voice, prepared)
+    result_path = _synthesize_to_cache(prepared)
     if result_path is None:
         _dbg("speak_sync: synthesis FAILED")
         return False

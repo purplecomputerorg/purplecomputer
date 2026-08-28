@@ -89,18 +89,45 @@ the top, and a limit at 0 is still Silent Mode with the keys disabled. Saved
 locks carry over as limits at the same level. Phase 3's "extra loud" and
 mixer-normalization items stay gated on the probe results below.
 
-### Hands-on probe (2026-08-27)
+### Hands-on probe (2026-08-27, reworked 2026-08-28)
 
 The first hardware pass showed base volume at 100% and every mixer control at
 0 dB on the quiet HP, so the electrical readouts can't tell a loud machine from
 a quiet one. `purple-audio-probe` (shipped in the image, run from the
 parent-menu terminal) gathers what can: speaker pin count and placement from
 the HDA codec, smart-amp presence, mixer and Pulse state including sources, a
-mic loopback of a three-tone chime at 40/60/80% with ambient-floor and per-tone
-SNR, and speech-model load and synthesis timings. Photograph the SUMMARY block
-at the end, or bring back `/var/log/purple/audio-probe-*.log`. Two machines,
-one loud and one quiet, is enough to decide between a speaker-pin prior, a
-mic-based sound check at boot, and a parent-facing ceiling.
+mic sound check, and speech-model load and synthesis timings. Photograph the
+SUMMARY block at the end, or bring back `/var/log/purple/audio-probe-*.log`.
+
+**First run, Surface Laptop (2026-08-28):** one speaker pin, no smart amp,
+same electrical fingerprint as the quiet HP, and it is the loud machine. So
+hardware priors are out. The original three-step chime saturated the mic at
+every step (source at 100%, chime pinned at -2 dBFS, CLIP on 40/60/80) and the
+broadband floor read -13 dBFS while tonal SNR was 50 dB, which means DC offset
+on the capture path, not noise. Speech: model load 1.5 s, synthesis 0.3 s.
+
+**The sound check** (`purple_tui/sound_check.py`, called by the probe, meant
+to be the startup chime later) plays a short C-major chime (a rising arpeggio that rings as a chord) at sink 60% and
+records it, stepping the mic gain down 100/50/25/12% until a take doesn't
+clip. It reports **loop gain**: the level the chord reached at the mic,
+normalized by the sent level and the sink and source dB that pactl reports,
+so machines are comparable at nominal 100%/100%. Floor is DC-subtracted; SNR
+is per tone (Goertzel at 520/660/780 Hz, whole cycles per 50 ms window).
+
+**The experiment that decides the startup chime:** run the probe on every
+machine on hand (Surface, HP, at least one Mac, since Mac mics under Linux
+are the likely spoiler) and note the subjective right step for each. If loop
+gain sorts them into the right order, a startup check that only ever lowers
+the default from Loud on hot machines is worth building; if it doesn't, a
+per-model table keyed on the `machine:` line is the answer.
+
+Speech synthesis runs in a worker process (`purple_tui/tts_worker.py`, started
+by `tts.preload` when the mixer comes up). Building the ONNX session holds the
+GIL for seconds, which in-process meant a frozen screen exactly when a kid
+starts typing; in its own process the load never touches the UI, and the child
+exits on stdin EOF so it dies with the app. Cost: the model's ~180 MB plus a
+second interpreter (~50 MB), paid whether or not anything is spoken. If the
+worker is missing or stops answering, speech loads in-process as before.
 
 ## Problem
 

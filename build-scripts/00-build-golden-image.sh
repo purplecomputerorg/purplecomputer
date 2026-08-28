@@ -724,9 +724,7 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-dump"
     cp /purple-src/config/systemd/purple-audio-dump.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-audio-dump.service
-    # Hands-on counterpart, run by a person from the parent-menu terminal on a
-    # machine that sounds wrong: plays a chime at three steps, records it with
-    # the built-in mic, times the speech model. See docs/PLAN-audio-volume.md.
+    # Hands-on loudness probe, run by a person from the parent-menu terminal.
     cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
 

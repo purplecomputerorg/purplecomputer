@@ -63,7 +63,7 @@ from .constants import (
     is_live_boot, is_debug,
     UI_READY_MARKER,
 )
-from .audio import adjacent_volume, effective_volume, lock_badge, set_system_volume, volume_badge
+from .audio import adjacent_volume, effective_volume, set_system_volume, volume_badge
 boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -1213,7 +1213,6 @@ class PurpleApp(App):
             boot_log.heartbeat("mixer disabled (PURPLE_NO_AUDIO=1)")
         else:
             self._start_mixer_warmup()
-            self.set_timer(5.0, self._preload_speech)
 
         # First installed boot after audio worked in live: if no sound card
         # comes up, offer a one-time power off (warm-reboot codec wedge).
@@ -1222,11 +1221,6 @@ class PurpleApp(App):
         from .constants import LIVE_AUDIO_MARKER
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.set_timer(30.0, self._check_first_boot_audio)
-
-    def _preload_speech(self) -> None:
-        from . import tts
-        if self.audio_ok is not False:
-            tts.preload()
 
     def _start_mixer_warmup(self) -> None:
         import threading
@@ -1303,6 +1297,8 @@ class PurpleApp(App):
         boots at its own level, and the parent menu indicator needs audio_ok."""
         if ok:
             self._apply_volume_system()
+            from . import tts
+            tts.preload()
         self.call_from_thread(setattr, self, "audio_ok", ok)
 
     def _arm_audio_idle_timer(self) -> None:
@@ -2740,7 +2736,7 @@ class PurpleApp(App):
         """Increase volume"""
         if self._notify_volume_lock_blocked():
             return
-        self.volume_level = effective_volume(adjacent_volume(self._effective_volume(), up=True), self._volume_lock)
+        self.volume_level = adjacent_volume(self._effective_volume(), up=True)
         self._apply_volume()  # Always show feedback, even at max
 
     def _show_brightness_hint(self) -> None:
@@ -2996,9 +2992,17 @@ class PurpleApp(App):
         return effective_volume(self.volume_level, self._volume_lock)
 
     @property
-    def volume_locked(self) -> bool:
+    def volume_disabled(self) -> bool:
         """Volume controls should be hidden/disabled: audio isn't working, or Silent Mode is on."""
         return self.audio_ok is False or self._volume_lock == 0
+
+    def _volume_badge(self) -> tuple[str, str, str]:
+        return volume_badge(self._effective_volume(), self._volume_lock)
+
+    def _flash_badge(self, badge: tuple[str, str, str]) -> None:
+        icon, bars, label = badge
+        self.clear_notifications()
+        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def _apply_volume_system(self) -> None:
         set_system_volume(self._effective_volume())
@@ -3016,6 +3020,8 @@ class PurpleApp(App):
         """Apply volume level to TTS, system mixer, and update UI."""
         from . import tts
         from .settings import set_volume_level
+        if self._volume_lock:
+            self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
         set_volume_level(self.volume_level)
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
@@ -3028,17 +3034,12 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        at_ceiling = self._volume_lock is not None and vol >= self._volume_lock
-        icon, bars, label = lock_badge(vol) if at_ceiling else volume_badge(vol)
-        self.clear_notifications()
-        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        self._flash_badge(self._volume_badge())
 
     def _notify_volume_lock_blocked(self) -> bool:
         """Silent Mode swallows the volume keys; flash its badge so the press isn't a mystery."""
         if self._volume_lock == 0:
-            icon, bars, label = lock_badge(0)
-            self.clear_notifications()
-            self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+            self._flash_badge(self._volume_badge())
             return True
         return False
 

@@ -347,12 +347,6 @@ class LiveBootSplash(Screen):
         margin-bottom: 2;
     }
 
-    #splash-sound-check {
-        content-align: center middle;
-        color: $text-muted;
-        margin-bottom: 2;
-    }
-
     #splash-hint {
         content-align: center middle;
         color: $text-muted;
@@ -378,31 +372,25 @@ class LiveBootSplash(Screen):
         "Parent Menu to see Support info."
     )
 
-    _SOUND_CHECK = (
-        "Listen for a chime: Purple is checking how loud\n"
-        "this computer's speakers are."
-    )
-
     def compose(self) -> ComposeResult:
         yield Static(self._BASE_MESSAGE, id="splash-message")
         yield Static("", id="splash-audio-warning")
-        yield Static("", id="splash-sound-check")
         yield Static("Press any key to start", id="splash-hint")
 
     def on_mount(self) -> None:
-        # The audio probe and the sound check run on background threads started
-        # from PurpleApp.on_mount; poll so the splash follows them.
-        self._refresh_audio_state()
-        self.set_interval(0.25, self._refresh_audio_state)
+        # Audio probe runs on a background thread started from on_mount
+        # of PurpleApp. By the time the user finishes reading the splash,
+        # app.audio_ok is almost always set. Poll briefly in case it isn't.
+        self._refresh_audio_warning()
+        self.set_interval(0.25, self._refresh_audio_warning)
 
-    def _refresh_audio_state(self) -> None:
+    def _refresh_audio_warning(self) -> None:
+        audio_ok = getattr(self.app, "audio_ok", None)
         try:
             warning = self.query_one("#splash-audio-warning", Static)
-            checking = self.query_one("#splash-sound-check", Static)
         except Exception:
             return
-        warning.update(self._AUDIO_WARNING if getattr(self.app, "audio_ok", None) is False else "")
-        checking.update(self._SOUND_CHECK if getattr(self.app, "_sound_check_running", False) else "")
+        warning.update(self._AUDIO_WARNING if audio_ok is False else "")
 
     def on_key(self, event: events.Key) -> None:
         """Any key dismisses the splash."""

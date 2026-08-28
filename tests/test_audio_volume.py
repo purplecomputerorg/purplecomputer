@@ -63,20 +63,20 @@ def test_step_tables_and_badges():
 
 
 def test_badge_under_a_ceiling():
-    assert audio.volume_badge(20, 40)[2] == "Whisper"
-    assert audio.volume_badge(40, 40)[2] == "Max Quiet"
+    assert audio.volume_badge(26, 45)[2] == "Whisper"
+    assert audio.volume_badge(45, 45)[2] == "Max Soft"
     assert audio.lock_badge(0)[2] == "Silent Mode"
-    assert audio.lock_badge(60) == (*audio.volume_badge(60)[:2], "Max Medium")
+    assert audio.lock_badge(58) == (*audio.volume_badge(58)[:2], "Max Medium")
 
 
 def test_ceiling_holds_the_kid_level_down_but_never_up():
-    assert audio.effective_volume(80, None) == 80
-    assert audio.effective_volume(80, 40) == 40
-    assert audio.effective_volume(20, 40) == 20
-    assert audio.effective_volume(80, 0) == 0
+    assert audio.effective_volume(76, None) == 76
+    assert audio.effective_volume(76, 45) == 45
+    assert audio.effective_volume(26, 45) == 26
+    assert audio.effective_volume(76, 0) == 0
 
 
-@pytest.mark.parametrize("legacy,snapped", [(15, 20), (35, 40), (85, 80)])
+@pytest.mark.parametrize("legacy,snapped", [(15, 26), (40, 45), (60, 58), (85, 76)])
 def test_levels_saved_under_old_steps_snap_to_nearest(legacy, snapped):
     assert audio.snap_volume(legacy) == snapped
 
@@ -84,8 +84,8 @@ def test_levels_saved_under_old_steps_snap_to_nearest(legacy, snapped):
 def test_adjacent_volume_walks_steps_and_clamps():
     assert audio.adjacent_volume(0, up=False) == 0
     assert audio.adjacent_volume(100, up=True) == 100
-    assert audio.adjacent_volume(60, up=True) == 80
-    assert audio.adjacent_volume(60, up=False) == 40
+    assert audio.adjacent_volume(58, up=True) == 76
+    assert audio.adjacent_volume(58, up=False) == 45
 
 
 def _stats(samples):
@@ -128,48 +128,49 @@ def _app(level: int, ceiling):
 
 
 def test_volume_keys_step_from_the_effective_level_under_a_ceiling():
-    app = _app(80, 40)
+    app = _app(76, 45)
     app.action_volume_down()
-    assert app.volume_level == 20  # one press below the ceiling, not below the stale 80
+    assert app.volume_level == 34  # one press below the ceiling, not below the stale 76
     app.action_volume_up()
     app.action_volume_up()
-    assert app.volume_level == 40  # held at the ceiling
+    assert app.volume_level == 45  # held at the ceiling
 
 
 def test_silent_mode_swallows_the_keys_and_keeps_the_kid_level():
-    app = _app(60, 0)
+    app = _app(58, 0)
     app.action_volume_up()
     app._apply_volume()
-    assert app.volume_level == 60 and app._effective_volume() == 0
-    assert app.volume_disabled and not _app(60, 40).volume_disabled
+    assert app.volume_level == 58 and app._effective_volume() == 0
+    assert app.volume_disabled and not _app(58, 45).volume_disabled
 
 
-def test_sound_check_cap_only_lowers_a_never_chosen_volume():
-    app = _app(80, None)
-    app._volume_chosen = False
-    app._apply_sound_check(60)
-    assert app.volume_level == 60 and app.applied == [False]  # applied, not remembered as a choice
+def test_sound_check_verdict_only_moves_a_never_chosen_volume():
+    for verdict in (58, 100):
+        app = _app(76, None)
+        app._volume_chosen = False
+        app._apply_sound_check(verdict)
+        assert app.volume_level == verdict and app.applied == [False]  # applied, not remembered as a choice
 
-    chosen = _app(80, None)
-    chosen._apply_sound_check(60)
-    assert chosen.volume_level == 80 and chosen.applied == ["system"]
+    chosen = _app(76, None)
+    chosen._apply_sound_check(58)
+    assert chosen.volume_level == 76 and chosen.applied == ["system"]
 
-    for level, cap in ((40, 60), (80, None)):
+    for level, verdict in ((58, 58), (76, None)):
         app = _app(level, None)
         app._volume_chosen = False
-        app._apply_sound_check(cap)
+        app._apply_sound_check(verdict)
         assert app.volume_level == level and app.applied == ["system"]
 
 
 def test_sound_check_respects_the_parent_limit():
-    app = _app(80, 40)
+    app = _app(76, 45)
     app._volume_chosen = False
-    app._apply_sound_check(60)
-    assert app._effective_volume() == 40
+    app._apply_sound_check(100)
+    assert app._effective_volume() == 45
 
 
 def test_sound_check_skipped_when_silent(monkeypatch):
     import threading
     monkeypatch.setattr(threading, "Thread", lambda *a, **k: pytest.fail("must not start"))
-    _app(60, 0)._start_sound_check()
+    _app(58, 0)._start_sound_check()
     _app(0, None)._start_sound_check()

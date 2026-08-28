@@ -77,7 +77,7 @@ if [ ! -d "$SRC/purple_tui" ]; then
     section "mic loopback and speech timing"
     echo "$SRC/purple_tui not found (set PURPLE_SRC); skipped"
 else
-    section "mic loopback: marimba chime at 60% through the default sink, recorded by the default source"
+    section "mic loopback: the startup chime at the Medium step, recorded by the default source"
     # Drops the mic gain a step each time the chord clips, restores sink and
     # source state, and prints the summary line last.
     OUT=$(pa env PYTHONPATH="$SRC" python3 -m purple_tui.sound_check 2>&1)

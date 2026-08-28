@@ -114,7 +114,9 @@ marimba decay reads the same wherever the recording starts) minus the same
 measurement on the rendered chime, minus the sink and source dB pactl
 reports, so machines compare at nominal 100%/100%. Floor is DC-subtracted;
 SNR is per tone. The probe retries a clipped take at 12% mic gain; the app
-never does, a clipped take is a lower bound and that is enough.
+never does, a clipped take is a lower bound and that is enough. The same
+check with the probe's retry runs from the parent menu: Support info, Sound
+check, which shows the verdict and the readings without a terminal.
 
 **First-boot verdict (2026-08-28):** hot (loop gain at or above 30 dB, or
 clipped) starts at Medium; quiet (15 dB or below, or not heard at all through

@@ -12,8 +12,8 @@ def temp_settings(tmp_path, monkeypatch):
 
 
 def test_volume_lock_round_trip(temp_settings):
-    temp_settings.set_volume_lock(58)
-    assert temp_settings.get_volume_lock() == 58
+    temp_settings.set_volume_lock(53)
+    assert temp_settings.get_volume_lock() == 53
     temp_settings.set_volume_lock(0)
     assert temp_settings.get_volume_lock() == 0
     temp_settings.set_volume_lock(None)
@@ -37,20 +37,20 @@ def test_legacy_silent_mode_migrates_to_lock_at_zero(temp_settings):
 def test_legacy_silent_mode_does_not_override_existing_lock(temp_settings):
     """If both legacy silent_mode and a real lock are set, the lock wins."""
     temp_settings.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temp_settings.SETTINGS_FILE.write_text(json.dumps({"silent_mode": True, "volume_lock": 58}))
-    assert temp_settings.get_volume_lock() == 58
+    temp_settings.SETTINGS_FILE.write_text(json.dumps({"silent_mode": True, "volume_lock": 53}))
+    assert temp_settings.get_volume_lock() == 53
 
 
 def test_levels_saved_under_old_step_table_snap_on_load(temp_settings):
     temp_settings.SETTINGS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temp_settings.SETTINGS_FILE.write_text(json.dumps({"volume_level": 85, "volume_lock": 15}))
-    assert temp_settings.get_volume_level() == 76
-    assert temp_settings.get_volume_lock() == 26
+    temp_settings.SETTINGS_FILE.write_text(json.dumps({"volume_level": 85, "volume_lock": 26}))
+    assert temp_settings.get_volume_level() == 81
+    assert temp_settings.get_volume_lock() == 28
 
 
 def test_volume_is_unset_until_someone_chooses_one(temp_settings):
     assert temp_settings.get_volume_level() is None
-    temp_settings.set_volume_level(58)
-    assert temp_settings.get_volume_level() == 58
+    temp_settings.set_volume_level(53)
+    assert temp_settings.get_volume_level() == 53
     temp_settings.set_all_caps(True)  # saving another setting must not invent a volume choice
-    assert temp_settings.get_volume_level() == 58
+    assert temp_settings.get_volume_level() == 53

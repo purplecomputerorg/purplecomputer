@@ -12,8 +12,8 @@ from textual.app import ComposeResult
 from textual.containers import Vertical, ScrollableContainer
 from textual.widgets import Static
 
-from ..audio import volume_step
-from ..constants import SUPPORT_EMAIL, VOLUME_DEFAULT, VOLUME_LABELS
+from ..audio import volume_badge
+from ..constants import SUPPORT_EMAIL, VOLUME_DEFAULT
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..modal import PurpleModal
 from ..scrolling import scroll_widget
@@ -100,7 +100,7 @@ def sound_check_report(result, takes: list[str]) -> str:
     heard = "heard" if result.heard else "did not hear"
     level = sound_check.default_volume(result) or VOLUME_DEFAULT
     verdict = (f"The microphone {heard} the chime.\n"
-               f"Until someone picks a volume, this computer starts at {VOLUME_LABELS[volume_step(level)]}.")
+               f"Until someone picks a volume, this computer starts at volume {volume_badge(level)[2]}.")
     return "\n".join([verdict, "", "Readings:", f"  {result.summary()}", *takes])
 
 

@@ -7,7 +7,7 @@ import math
 import pytest
 
 from purple_tui import audio
-from purple_tui.constants import VOLUME_ICONS, VOLUME_LABELS, VOLUME_LEVELS
+from purple_tui.constants import VOLUME_ICONS, VOLUME_LEVELS
 
 
 @pytest.fixture
@@ -54,38 +54,39 @@ def test_set_system_volume_runs_commands_and_logs_failures(backend, monkeypatch)
 
 
 def test_step_tables_and_badges():
-    assert len(VOLUME_LEVELS) == len(VOLUME_LABELS) == len(VOLUME_ICONS)
-    assert len(set(VOLUME_LABELS)) == len(VOLUME_LABELS)
+    assert len(VOLUME_LEVELS) == len(VOLUME_ICONS) == 11
+    assert VOLUME_LEVELS == sorted(VOLUME_LEVELS)
     badges = [audio.volume_badge(v) for v in VOLUME_LEVELS]
-    assert all(len(b[1]) == audio.BADGE_CELLS for b in badges)
-    assert badges[0] == (VOLUME_ICONS[0], "░" * audio.BADGE_CELLS, "Sound Off")
-    assert badges[-1][1] == "█" * audio.BADGE_CELLS
+    assert badges[0] == (VOLUME_ICONS[0], "░" * 10, "Sound Off")
+    assert badges[1] == (VOLUME_ICONS[1], "█" + "░" * 9, "1")
+    assert badges[-1] == (VOLUME_ICONS[-1], "█" * 10, "10")
 
 
 def test_badge_under_a_ceiling():
-    assert audio.volume_badge(26, 45)[2] == "Whisper"
-    assert audio.volume_badge(45, 45)[2] == "Max Soft"
+    assert audio.volume_badge(23, 43)[2] == "3"
+    assert audio.volume_badge(43, 43)[2] == "Max 6"
     assert audio.lock_badge(0)[2] == "Silent Mode"
-    assert audio.lock_badge(58) == (*audio.volume_badge(58)[:2], "Max Medium")
+    assert audio.lock_badge(53) == (*audio.volume_badge(53)[:2], "Max 7")
 
 
 def test_ceiling_holds_the_kid_level_down_but_never_up():
-    assert audio.effective_volume(76, None) == 76
-    assert audio.effective_volume(76, 45) == 45
-    assert audio.effective_volume(26, 45) == 26
-    assert audio.effective_volume(76, 0) == 0
+    assert audio.effective_volume(81, None) == 81
+    assert audio.effective_volume(81, 43) == 43
+    assert audio.effective_volume(23, 43) == 23
+    assert audio.effective_volume(81, 0) == 0
 
 
-@pytest.mark.parametrize("legacy,snapped", [(15, 26), (40, 45), (60, 58), (85, 76)])
+@pytest.mark.parametrize("legacy,snapped", [(10, 15), (26, 28), (58, 53), (76, 81), (85, 81)])
 def test_levels_saved_under_old_steps_snap_to_nearest(legacy, snapped):
     assert audio.snap_volume(legacy) == snapped
 
 
 def test_adjacent_volume_walks_steps_and_clamps():
     assert audio.adjacent_volume(0, up=False) == 0
+    assert audio.adjacent_volume(15, up=False) == 0
     assert audio.adjacent_volume(100, up=True) == 100
-    assert audio.adjacent_volume(58, up=True) == 76
-    assert audio.adjacent_volume(58, up=False) == 45
+    assert audio.adjacent_volume(53, up=True) == 66
+    assert audio.adjacent_volume(53, up=False) == 43
 
 
 def _stats(samples):
@@ -128,45 +129,45 @@ def _app(level: int, ceiling):
 
 
 def test_volume_keys_step_from_the_effective_level_under_a_ceiling():
-    app = _app(76, 45)
+    app = _app(81, 43)
     app.action_volume_down()
-    assert app.volume_level == 34  # one press below the ceiling, not below the stale 76
+    assert app.volume_level == 35  # one step below the ceiling, not below the stale 81
     app.action_volume_up()
     app.action_volume_up()
-    assert app.volume_level == 45  # held at the ceiling
+    assert app.volume_level == 43  # held at the ceiling
 
 
 def test_silent_mode_swallows_the_keys_and_keeps_the_kid_level():
-    app = _app(58, 0)
+    app = _app(53, 0)
     app.action_volume_up()
     app._apply_volume()
-    assert app.volume_level == 58 and app._effective_volume() == 0
-    assert app.volume_disabled and not _app(58, 45).volume_disabled
+    assert app.volume_level == 53 and app._effective_volume() == 0
+    assert app.volume_disabled and not _app(53, 43).volume_disabled
 
 
 def test_sound_check_verdict_settles_a_never_chosen_volume():
-    for verdict, level in ((58, 58), (100, 100), (None, 76)):
-        app = _app(76, None)
+    for verdict, level in ((19, 19), (100, 100), (None, 53)):
+        app = _app(53, None)
         app._volume_chosen = False
         app._apply_sound_check(verdict)
         assert app.volume_level == level and app.applied == ["saved"]
 
-    chosen = _app(76, None)
-    chosen._apply_sound_check(58)
-    assert chosen.volume_level == 76 and chosen.applied == ["saved"]  # theirs, reapplied once the chime lets go of the sink
+    chosen = _app(81, None)
+    chosen._apply_sound_check(53)
+    assert chosen.volume_level == 81 and chosen.applied == ["saved"]  # theirs, reapplied once the chime lets go of the sink
 
 
 def test_sound_check_respects_the_parent_limit():
-    app = _app(76, 45)
+    app = _app(81, 43)
     app._volume_chosen = False
     app._apply_sound_check(100)
-    assert app._effective_volume() == 45
+    assert app._effective_volume() == 43
 
 
 def test_sound_check_skipped_when_silent_or_already_settled(monkeypatch):
     import threading
     monkeypatch.setattr(threading, "Thread", lambda *a, **k: pytest.fail("must not start"))
-    silent, muted, settled = _app(58, 0), _app(0, None), _app(76, None)
+    silent, muted, settled = _app(53, 0), _app(0, None), _app(81, None)
     silent._volume_chosen = muted._volume_chosen = False
     for app in (silent, muted, settled):
         app._start_sound_check()
@@ -179,13 +180,13 @@ def test_sound_check_owns_the_sink_until_its_verdict_lands(monkeypatch):
     monkeypatch.setattr(threading, "Thread", lambda *a, **k: SimpleNamespace(start=lambda: None))
     system = []
     monkeypatch.setattr("purple_tui.purple_tui.set_system_volume", system.append)
-    app = _app(76, None)
+    app = _app(53, None)
     app._volume_chosen = False
     app._start_sound_check()
     assert app._sound_check_running
     app._apply_volume_system()  # the mixer warmup landing mid-chime must not move the sink
     assert system == []
-    app._apply_sound_check(58)
-    assert not app._sound_check_running and app.volume_level == 58 and app.applied == ["saved"]
+    app._apply_sound_check(35)
+    assert not app._sound_check_running and app.volume_level == 35 and app.applied == ["saved"]
     app._apply_volume_system()
-    assert system == [58]
+    assert system == [35]

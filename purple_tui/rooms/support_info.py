@@ -1,15 +1,19 @@
 """Support info screen: version, device summary, and scrollable deep dives.
 
 Opened from the parent menu. Shows Purple version, hardware model, and
-audio status at a glance. Two buttons drop into scrollable Device info
-and Audio info sub-screens for diagnostics.
+audio status at a glance. Buttons drop into scrollable Device info and
+Audio info sub-screens for diagnostics, and a Sound check that plays the
+startup chime and reports what the microphone heard.
 """
+
+import threading
 
 from textual.app import ComposeResult
 from textual.containers import Vertical, ScrollableContainer
 from textual.widgets import Static
 
-from ..constants import SUPPORT_EMAIL
+from ..audio import volume_step
+from ..constants import SUPPORT_EMAIL, VOLUME_DEFAULT, VOLUME_LABELS
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..modal import PurpleModal
 from ..scrolling import scroll_widget
@@ -88,11 +92,52 @@ class AudioInfoScreen(_ScrollablePage):
         return diagnostics.collect_audio_info(getattr(self.app, "audio_ok", None))
 
 
+def sound_check_report(result, takes: list[str]) -> str:
+    """What a parent reads after the chime: a plain verdict, then the readings support wants."""
+    from .. import sound_check
+    if result.note:
+        return f"Couldn't run the check: {result.note}."
+    heard = "heard" if result.heard else "did not hear"
+    level = sound_check.default_volume(result) or VOLUME_DEFAULT
+    verdict = (f"The microphone {heard} the chime.\n"
+               f"Until someone picks a volume, this computer starts at {VOLUME_LABELS[volume_step(level)]}.")
+    return "\n".join([verdict, "", "Readings:", f"  {result.summary()}", *takes])
+
+
+class SoundCheckScreen(_ScrollablePage):
+    """The startup chime on demand: play it, listen through the mic, show what first boot would decide."""
+
+    TITLE = "Sound check"
+
+    def _collect_text(self) -> str:
+        return "Playing the chime and listening through the microphone..."
+
+    def on_mount(self) -> None:
+        if self.app._effective_volume() == 0:
+            self._show("Sound is off, so the chime can't play. Turn the volume up first.")
+            return
+        threading.Thread(target=self._run, daemon=True, name="sound-check-menu").start()
+
+    def _run(self) -> None:
+        from .. import sound_check
+        takes: list[str] = []
+        result = sound_check.run(ladder=sound_check.PROBE_LADDER, log=takes.append)
+        self.app._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours
+        self.app.call_from_thread(self._show, sound_check_report(result, takes))
+
+    def _show(self, text: str) -> None:
+        try:
+            self.query_one("#info-body", Static).update(text)
+        except Exception:
+            pass  # Esc during the chime: the page is gone
+
+
 # Registry of sub-screen buttons. Add new (id, label, screen_class) tuples
 # here to grow the Support info screen without touching any other code.
 _SUB_SCREENS = [
     ("btn-device-info", "Device info", DeviceInfoScreen),
     ("btn-audio-info", "Audio info", AudioInfoScreen),
+    ("btn-sound-check", "Sound check", SoundCheckScreen),
 ]
 
 

@@ -4,8 +4,8 @@ machine's loop gain: how many dB the acoustic path adds from digital out at
 sink 100% to digital in with the mic at its base volume (pactl's 0 dB
 hardware gain, the one reference comparable across analog and digital mics:
 "100%" is +66 dB of boost on one laptop and +20 dB on another). At first
-boot the volume starts at the step that
-brings the chime to the same loudness on every machine, Medium through Full.
+boot the volume starts at the step that brings the chime to the same
+loudness on every machine.
 The app and purple-audio-probe both call run(). Rationale and the calibration
 status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .audio import FULL_SCALE, snap_volume
+from .constants import VOLUME_LEVELS
 from .synth import generate_marimba
 
 TONES = (523.25, 659.25, 783.99)  # C5 E5 G5, rising
@@ -44,14 +45,12 @@ CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
 READY_POLL = 0.5  # seconds between looks for a sound card that is still enumerating at boot
 # First-boot verdict: the step that brings loop gain plus step dB to TARGET_DB.
-# Measured: Surface Laptop -11 dB (right at Medium), HP Stream -34 dB (right at
-# Full), HP 15 digital mic +7 dB (too loud at Loud). Mic sensitivity still
-# varies by machine, so the verdict is clamped to Medium..Full: at worst a
-# step or two off, one key press from right, and then remembered.
+# Measured: Surface Laptop -11 dB (right at volume 7), HP Stream -34 dB (right
+# at 10), HP 15 digital mic +7 dB (comfortable at 4 to 6). A digital mic reads
+# a few dB hot, so expect a step off on some; one key press fixes a step.
 TARGET_DB = -25.0
 MIC_ALIVE_FLOOR_DB = -70.0  # a "not heard" only counts when the mic is clearly delivering room noise
-HOT_MACHINE_VOLUME = 58  # Medium, the floor of the verdict
-QUIET_MACHINE_VOLUME = 100  # Full, its ceiling, and the answer when a live mic did not hear the chime
+QUIETEST, LOUDEST = VOLUME_LEVELS[1], VOLUME_LEVELS[-1]  # the verdict never picks Sound Off; not heard means loudest
 
 
 def render_chime(rate: int = CHIME_RATE) -> array.array:
@@ -163,14 +162,14 @@ def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
 
 def default_volume(check: SoundCheck) -> Optional[int]:
     """First-boot level for this machine, or None to keep the default. A clipped
-    reading is a lower bound on loop gain, so it can only ever confirm the floor."""
+    reading is a lower bound on loop gain, so it can only ever confirm the quietest step."""
     if check.note:
         return None
     if not check.heard:
-        return QUIET_MACHINE_VOLUME if check.floor_db > MIC_ALIVE_FLOOR_DB else None
+        return LOUDEST if check.floor_db > MIC_ALIVE_FLOOR_DB else None
     pct = 100 * 10 ** ((TARGET_DB - check.loop_gain_db) / 60)  # pactl's cubic map, inverted
-    level = min(max(snap_volume(round(pct)), HOT_MACHINE_VOLUME), QUIET_MACHINE_VOLUME)
-    return level if check.clean or level == HOT_MACHINE_VOLUME else None
+    level = max(snap_volume(round(pct)), QUIETEST)
+    return level if check.clean or level == QUIETEST else None
 
 
 @functools.cache

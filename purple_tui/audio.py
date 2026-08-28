@@ -21,12 +21,12 @@ import threading
 import time
 from typing import Any, Optional
 
-from .constants import VOLUME_ICONS, VOLUME_LABELS, VOLUME_LEVELS
+from .constants import VOLUME_ICONS, VOLUME_LEVELS
 
 _last_play = 0.0
 _volume_lock = threading.Lock()
 _latest_level = 0
-BADGE_CELLS = 10
+VOLUME_TOP = len(VOLUME_LEVELS) - 1
 FULL_SCALE = 32767
 
 
@@ -97,14 +97,13 @@ def effective_volume(level: int, ceiling: Optional[int]) -> int:
 
 
 def volume_badge(level: int, ceiling: Optional[int] = None) -> tuple[str, str, str]:
-    """(icon, bars, label) for an effective 0-100 level. At the parent's ceiling
-    the label reads Max <step>; a ceiling of 0 is Silent Mode."""
+    """(icon, bars, label) for an effective 0-100 level: one bar per step, labelled
+    by its number. At the parent's ceiling the label reads Max 5; a ceiling of 0 is Silent Mode."""
     step = volume_step(level)
-    filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
-    label = VOLUME_LABELS[step]
+    label = "Sound Off" if step == 0 else str(step)
     if ceiling is not None and level >= ceiling:
         label = "Silent Mode" if ceiling == 0 else f"Max {label}"
-    return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), label
+    return VOLUME_ICONS[step], "█" * step + "░" * (VOLUME_TOP - step), label
 
 
 def lock_badge(ceiling: int) -> tuple[str, str, str]:

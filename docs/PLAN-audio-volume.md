@@ -126,11 +126,9 @@ check, which shows the verdict and the readings without a terminal.
 Laptop 15-dy2 with a digital mic under SOF +7 dB (too loud at Loud). At 100%
 mic reference the HP 15 read +27 and the Stream +32, the wrong order; at
 base reference the three sort as they sound. The verdict is continuous: the
-step nearest `TARGET_DB` (-25) minus loop gain, clamped to Medium..Full
-because mic sensitivity still differs by machine (the HP 15 reads as Whisper
-unclamped, which is surely too far) and a wrong read should cost at most a
-step or two. A chime that a live mic did not hear at all also means Full; a
-clipped take is a lower bound and only ever confirms Medium. Both mics
+step nearest `TARGET_DB` (-25) minus loop gain, any step but Sound Off: the
+three land at volume 7, 10, and 4. A chime that a live mic did not hear at
+all means 10; a clipped take is a lower bound and only ever confirms 1. Both mics
 clipped with the source at 50% and the HP barely heard the chime at 12%, so
 the app's single take uses 20%. The verdict runs at first boot only, while
 `volume_level` is still `None` in settings, and is then saved as the volume,
@@ -141,10 +139,16 @@ enumerates late. It does not play at all in Silent Mode, with a saved mute,
 or without pactl, a real sink, and a real unmuted mic; every failure is one
 boot-log line and the defaults stand.
 
-**Steps re-spaced (2026-08-28):** six non-zero steps about 7 dB apart
-(26/34/45/58/76/100, Whisper through Full) replace the five at 20% spacing,
-whose Whisper sat at -42 dB and was inaudible on quiet machines. Default is
-Loud (76%, -7 dB).
+**Steps re-spaced (2026-08-28):** volume 1 to 10, about 5.4 dB apart from
+-49 dB to 0 (15/19/23/28/35/43/53/66/81/100), replaces five named steps at
+20% spacing and briefly six 7 dB apart. By ear the HP 15 and the HP Stream
+are about 30 dB apart (volume 4 to 6 on one is right, 10 on the other), and
+a family needs 20 dB of quiet-to-loud on top of that, so six steps (35 dB)
+left the HP 15 with no whisper: its bottom step was still plainly audible.
+Names went with them; a number out of ten needs no explaining. The mic-less
+default is volume 7 (53%, -16 dB). A per-machine shift of the whole scale was
+considered and rejected: it would turn a mic reading with a few dB of error
+into a hard ceiling, and a family must always have a way to go louder.
 
 **Calibration still wanted:** whether the HP 15 is right at Medium or wants
 Soft (which would mean lowering the floor), and a Mac. If a reading doesn't

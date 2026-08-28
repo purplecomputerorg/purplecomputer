@@ -86,6 +86,7 @@ built_from_head() {
 # -fast dev builds never release.
 RELEASE_COMMIT=$(git rev-parse HEAD)
 HEAD_COMMIT=${RELEASE_COMMIT:0:7}
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
 STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | built_from_head | head -1)
 DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | built_from_head | head -1)
 
@@ -124,7 +125,7 @@ STANDARD_SIZE=$(du -h "$STANDARD_ISO" | cut -f1)
 DEBUG_SIZE=$(du -h "$DEBUG_ISO" | cut -f1)
 
 echo
-log_info "Release $VERSION: commit $HEAD_COMMIT ($(git rev-parse --abbrev-ref HEAD))"
+log_info "Release $VERSION: commit $HEAD_COMMIT ($BRANCH)"
 log_info "ISO: $(basename "$STANDARD_STEM") standard + debug ($STANDARD_SIZE each)"
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
 [ -n "$LAST_TAG" ] && log_info "$(git rev-list --count "$LAST_TAG..HEAD") commits since $LAST_TAG"
@@ -218,6 +219,13 @@ if git tag "$VERSION" 2>/dev/null; then
     log_info "Tagged $VERSION at ${RELEASE_COMMIT:0:7}"
 else
     log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION"
+fi
+
+# The download page links the shipped commit on GitHub, so the branch has to be there
+if git push -q -u origin "$BRANCH" $(git tag -l "$VERSION"); then
+    log_info "Pushed $BRANCH and $VERSION to GitHub"
+else
+    log_error "Push failed; the release is fine but the download page's commit link will 404 until you run: git push -u origin $BRANCH $VERSION"
 fi
 
 # Step 5: keep the replaced release as a rollback, delete everything older

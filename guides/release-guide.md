@@ -35,7 +35,7 @@ When a pick needs hand-edits to fit the release branch (usually because it touch
 
 Build, then flash, then ship: flashing first means a stick can be validated on real hardware before the downloads update. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.
 
-`just ship` prints the commit, the ISO it picked, and the commit count since the last release tag, then asks for confirmation before uploading anything. It refuses if the worktree is not on `release/1.x`, and the release script records the shipped commit in `latest.json` and tags it with the release version on success. `just release-check <sha>` reads the live download back and fails unless it is that commit, so after telling someone which build they are getting you can prove the download matches. Releases before the commit was recorded fall back to the tag; `v2026.07.27-1107` and earlier have neither, so they report as unknown. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the version is the build's UTC timestamp, so the download page dates a release by when it was built, not when it was uploaded.
+`just ship` prints the commit, the ISO it picked, and the commit count since the last release tag, then asks for confirmation before uploading anything. It refuses if the worktree is not on `release/1.x`, and the release script records the shipped commit in `latest.json`, tags it with the release version, and pushes `release/1.x` and the tag to GitHub on success (the download page links the shipped commit, and GitHub only knows commits that have been pushed). `just release-check <sha>` reads the live download back and fails unless it is that commit, so after telling someone which build they are getting you can prove the download matches. Releases before the commit was recorded fall back to the tag; `v2026.07.27-1107` and earlier have neither, so they report as unknown. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the version is the build's UTC timestamp, so the download page dates a release by when it was built, not when it was uploaded.
 
 The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` picks the newest ISO with that commit, ignoring newer builds of other commits (main builds share the output directory). A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 
@@ -47,7 +47,7 @@ The release script only uploads an ISO built from the checkout it runs in: every
 - A shared object database means `release-pick` cherry-picks local commits directly and tags are visible from both directories, no remote round-trips. The justfile resolves `.venv` through `git-common-dir`, so the worktree also needs no second environment. Release tooling (`just ship`, `release-iso.sh`, `.env`) always runs from this checkout; the worktree only supplies the commit, so tooling fixes on main take effect without a cherry-pick.
 - It lives outside `.claude/worktrees/` deliberately: lane worktrees merge into main and get deleted, and this branch must never merge.
 
-It is not a backup: it shares `.git` with the main checkout and dies with it. Push `release/1.x` when you want an off-machine copy.
+It is not a backup: it shares `.git` with the main checkout and dies with it. `just ship` pushes `release/1.x` after every release, so GitHub has a copy as of the last ship.
 
 When the next major release ships from main: delete the branch, the worktree, and this section.
 
@@ -85,7 +85,7 @@ This will:
 1. Generate SHA-256 checksums for both ISOs
 2. Upload standard + debug ISOs to `releases/{version}/`
 3. Update Cloudflare redirect rules (`/download.iso` -> versioned path)
-4. Write `latest.json` with version, commit, checksums, and sizes
+4. Write `latest.json` with version, commit, checksums, and sizes, then tag the commit and push `release/1.x` and the tag to GitHub
 5. Delete every older release except the one just replaced, which stays as a rollback
 
 The script shows a summary and asks for confirmation before uploading.

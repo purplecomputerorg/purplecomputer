@@ -106,20 +106,29 @@ every step (source at 100%, chime pinned at -2 dBFS, CLIP on 40/60/80) and the
 broadband floor read -13 dBFS while tonal SNR was 50 dB, which means DC offset
 on the capture path, not noise. Speech: model load 1.5 s, synthesis 0.3 s.
 
-**The sound check** (`purple_tui/sound_check.py`, called by the probe, meant
-to be the startup chime later) plays a short C-major chime (a rising arpeggio that rings as a chord) at sink 60% and
-records it, stepping the mic gain down 100/50/25/12% until a take doesn't
-clip. It reports **loop gain**: the level the chord reached at the mic,
-normalized by the sent level and the sink and source dB that pactl reports,
-so machines are comparable at nominal 100%/100%. Floor is DC-subtracted; SNR
-is per tone (Goertzel at 520/660/780 Hz, whole cycles per 50 ms window).
+**The sound check** (`purple_tui/sound_check.py`) is the startup chime: three
+marimba notes rising (C5 E5 G5, the Music room's own instrument), played at
+sink 60% and recorded, stepping the mic gain 50% then 12% if the take clips.
+It reports **loop gain**: each tone's loudest 100 ms window at the mic (25 ms
+hops, so the fast marimba decay reads the same wherever the recording
+starts) minus the same measurement on the rendered chime, minus the sink and
+source dB pactl reports, so machines compare at nominal 100%/100%. Floor is
+DC-subtracted; SNR is per tone.
 
-**The experiment that decides the startup chime:** run the probe on every
-machine on hand (Surface, HP, at least one Mac, since Mac mics under Linux
-are the likely spoiler) and note the subjective right step for each. If loop
-gain sorts them into the right order, a startup check that only ever lowers
-the default from Loud on hot machines is worth building; if it doesn't, a
-per-model table keyed on the `machine:` line is the answer.
+**What the app does with it (2026-08-28):** the check runs in the background
+once the mixer is up. `LOUD_LOOP_GAIN_DB` (30, provisional, set from the
+Surface alone) marks a machine as hot, and a hot machine starts at Medium
+instead of Loud, but only while nobody has ever chosen a volume
+(`volume_level` is `None` in settings until the keys or the parent menu set
+it). A chosen volume is never touched, the parent limit is never touched, and
+the level is never raised. The chime does not play at all in Silent Mode, with
+a saved mute, or without pactl, a real sink, and a real unmuted mic; every
+failure is one boot-log line and the defaults stand.
+
+**Calibration still needed:** run `purple-audio-probe` on the Surface, the HP,
+and a Mac, note the subjective right step for each, and set the threshold
+from the gap between the hot and fine readings. If the mic readings don't sort
+the machines, the fallback is a per-model table keyed on the `machine:` line.
 
 Speech synthesis runs in a worker process (`purple_tui/tts_worker.py`, started
 by `tts.preload` when the mixer comes up). Building the ONNX session holds the

@@ -1,20 +1,23 @@
-"""Sound check: play a short chord through the speaker, record it with the
-built-in mic, and report the machine's loop gain (how many dB the acoustic
-path adds from digital out to digital in at 100%/100%) plus whether the
-speaker was heard at all. purple-audio-probe runs it today; the same chime
-and analysis are meant to run at startup once loop gain is shown to predict
-the right default volume. Rationale: docs/PLAN-audio-volume.md, "Hands-on probe".
+"""Startup chime that doubles as a loudness check: play a short marimba
+arpeggio through the speaker, record it with the built-in mic, and report the
+machine's loop gain (how many dB the acoustic path adds from digital out to
+digital in at 100%/100%). Machines that play it hot start a volume step lower.
+The app and purple-audio-probe both call run(). Rationale and the calibration
+status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
-Stdlib only, no boot_log: runnable as `python3 -m purple_tui.sound_check`.
+run() never raises and never plays unless pactl, a real sink, and a real
+unmuted mic are all present: nobody needs a microphone to use Purple.
+No boot_log import here, so `python3 -m purple_tui.sound_check` stays cheap.
 """
 
 from __future__ import annotations
 
 import array
+import functools
 import math
 import re
+import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import wave
@@ -22,46 +25,35 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .audio import FULL_SCALE, db_to_linear
+from .audio import FULL_SCALE
+from .synth import generate_marimba
 
-TONES = (520, 660, 780)  # C major, tuned to whole cycles per 50 ms window so Goertzel reads exact amplitude
-TONE_DB = -12.0  # per fundamental; the full chord peaks near -3 dBFS
+TONES = (523.25, 659.25, 783.99)  # C5 E5 G5, rising
+NOTE_SECONDS, STAGGER = 0.9, 0.22
+CHIME_PEAK_DB = -8.0
 CHIME_RATE = 22050
 RECORD_RATE = 16000
 SINK_PCT = 60
-SOURCE_LADDER = (100, 50, 25, 12)  # mic gain drops a step whenever the chord clips
+SOURCE_LADDER = (50, 12)  # mic gain drops a step whenever the chime clips
 CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
-ATTACK, STAGGER, HOLD, RELEASE = 0.06, 0.18, 0.9, 0.7  # chime envelope, seconds
-
-
-def _note(t: float, onset: float, freq: float, hold_end: float) -> float:
-    """One bell-like note: soft 60 ms onset, octave and fifth partials that fade
-    fast, a steady fundamental while the chord rings, then a long smooth release."""
-    a = t - onset
-    if a < 0:
-        return 0.0
-    env = 0.5 - 0.5 * math.cos(math.pi * min(a, ATTACK) / ATTACK)
-    if t > hold_end:
-        env *= 0.5 + 0.5 * math.cos(math.pi * min(t - hold_end, RELEASE) / RELEASE)
-    partials = (0.25 * math.exp(-a / 0.4) * math.sin(4 * math.pi * freq * t)
-                + 0.1 * math.exp(-a / 0.15) * math.sin(6 * math.pi * freq * t))
-    return env * (math.sin(2 * math.pi * freq * t) + partials)
+# Provisional: the Surface Laptop (too loud at the Loud step) clipped the mic
+# at sink 40% / source 100%, which puts its loop gain above about +34 dB. Set
+# from a loud machine only; the quiet HP's reading decides where this really sits.
+LOUD_LOOP_GAIN_DB = 30.0
+LOUD_MACHINE_VOLUME = 60
 
 
 def render_chime(rate: int = CHIME_RATE) -> array.array:
-    """Rising arpeggio into a held chord that fades: 0.4 s lead-in, about 2.3 s
-    of sound, 0.2 s tail. The fundamentals sit at a steady TONE_DB for HOLD
-    seconds once all three notes are in, which is the stretch analyze() measures."""
-    hold_end = STAGGER * (len(TONES) - 1) + ATTACK + HOLD
-    amp = db_to_linear(TONE_DB)
-    out = array.array("h")
-    out.frombytes(bytes(2 * int(rate * 0.4)))
-    for i in range(int(rate * (hold_end + RELEASE))):
-        t = i / rate
-        out.append(int(amp * sum(_note(t, k * STAGGER, f, hold_end) for k, f in enumerate(TONES))))
-    out.frombytes(bytes(2 * int(rate * 0.2)))
-    return out
+    """Three marimba notes rising 0.22 s apart, 0.3 s lead-in, 0.2 s tail, peak at CHIME_PEAK_DB."""
+    notes = [generate_marimba(f, NOTE_SECONDS, rate) for f in TONES]
+    lead, stagger = int(rate * 0.3), int(rate * STAGGER)
+    mix = [0.0] * (lead + stagger * (len(notes) - 1) + len(notes[-1]) + int(rate * 0.2))
+    for k, note in enumerate(notes):
+        for i, x in enumerate(note):
+            mix[lead + k * stagger + i] += x
+    gain = FULL_SCALE * 10 ** (CHIME_PEAK_DB / 20) / max(map(abs, mix))
+    return array.array("h", (int(x * gain) for x in mix))
 
 
 def write_chime(path: Path) -> Path:
@@ -92,8 +84,9 @@ class SoundCheck:
 
     @property
     def loop_gain_db(self) -> float:
-        """Mic level the chord would reach at sink 100% / source 100%, relative to what was sent."""
-        return sum(self.tone_db) / len(self.tone_db) - TONE_DB - self.sink_db - self.source_db
+        """Mic level the chime would reach at sink 100% / source 100%, relative to what was sent."""
+        sent = _sent_tone_db()
+        return sum(m - s for m, s in zip(self.tone_db, sent)) / len(sent) - self.sink_db - self.source_db
 
     def detail(self) -> str:
         if self.note:
@@ -130,28 +123,43 @@ def _rms(chunk: array.array) -> float:
 
 
 def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
-    """Ambient floor from the first 0.5 s, chord level from the loudest 0.6 s, per-tone SNR."""
+    """Ambient floor from the first 0.5 s; each tone's level is its loudest
+    100 ms window, stepped 25 ms so a fast marimba decay reads the same
+    wherever the recording happened to start."""
     samples = array.array("h")
     samples.frombytes(raw[: len(raw) // 2 * 2])
-    win = rate // 20
+    win, hop = rate // 10, rate // 40
     if len(samples) < 10 * win:
         return SoundCheck(note="mic not delivering")
-    wins = [samples[i:i + win] for i in range(0, len(samples) - win + 1, win)]
-    tone = [[_goertzel(c, f, rate) for f in TONES] for c in wins]
-    n_ambient = rate // 2 // win
+    starts = range(0, len(samples) - win + 1, hop)
+    tone = [[_goertzel(samples[i:i + win], f, rate) for f in TONES] for i in starts]
+    ambient = [k for k, i in enumerate(starts) if i + win <= rate // 2]
     pct = lambda xs, q: sorted(xs)[int(len(xs) * q)]
-    floor = pct([_rms(c) for c in wins[:n_ambient]], 0.1)
-    tone_floor = [pct([t[k] for t in tone[:n_ambient]], 0.1) for k in range(len(TONES))]
-    top = sorted(range(len(wins)), key=lambda i: sum(tone[i]), reverse=True)[:12]
-    chord = [pct([tone[i][k] for i in top], 0.5) for k in range(len(TONES))]
-    snr = min(_db(chord[k]) - _db(tone_floor[k]) for k in range(len(TONES)))
+    floor = pct([_rms(samples[starts[k]:starts[k] + win]) for k in ambient], 0.1)
+    tone_floor = [pct([tone[k][j] for k in ambient], 0.1) for j in range(len(TONES))]
+    peak = [max(t[j] for t in tone) for j in range(len(TONES))]
+    snr = min(_db(peak[j]) - _db(tone_floor[j]) for j in range(len(TONES)))
     return SoundCheck(
         heard=snr > HEARD_SNR_DB,
         clipped=sum(1 for x in samples if abs(x) >= FULL_SCALE - 67),
         floor_db=_db(floor),
-        tone_db=tuple(_db(t) for t in chord),
+        tone_db=tuple(_db(t) for t in peak),
         snr_db=snr,
     )
+
+
+def default_volume(check: SoundCheck) -> Optional[int]:
+    """Startup cap for a machine that plays the chime hot; None leaves the level alone.
+    A clipped reading is a lower bound on loop gain, so it can only ever confirm loud."""
+    if check.heard and check.loop_gain_db >= LOUD_LOOP_GAIN_DB:
+        return LOUD_MACHINE_VOLUME
+    return None
+
+
+@functools.cache
+def _sent_tone_db() -> tuple[float, ...]:
+    """Per-tone level of the chime itself under the same windowing analyze() applies to the mic."""
+    return analyze(render_chime(RECORD_RATE).tobytes()).tone_db
 
 
 def _pactl(*args: str) -> str:
@@ -169,39 +177,60 @@ def _saved_state(kind: str, name: str) -> tuple[str, str]:
 
 
 def _capture(sink: str, source: str, wav: Path) -> bytes:
-    """Record the mic while the chime plays 0.7 s in; about 3.5 s total."""
-    with tempfile.TemporaryDirectory() as d:
-        rec_path = Path(d) / "rec.raw"
-        rec = subprocess.Popen(
-            ["parecord", "--raw", "--channels=1", f"--rate={RECORD_RATE}", "--format=s16le", "-d", source, str(rec_path)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-        time.sleep(0.7)
-        subprocess.run(["paplay", "-d", sink, str(wav)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-        time.sleep(0.3)
-        rec.terminate()
-        try:
-            rec.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            rec.kill()
-            rec.wait()
-        return rec_path.read_bytes() if rec_path.exists() else b""
+    """Record the mic while the chime plays 0.7 s in; about 3 s total. The
+    audio streams through a pipe and is analyzed in memory: it never touches disk."""
+    rec = subprocess.Popen(
+        ["parecord", "--raw", "--channels=1", f"--rate={RECORD_RATE}", "--format=s16le", "-d", source],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    time.sleep(0.7)
+    subprocess.run(["paplay", "-d", sink, str(wav)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+    time.sleep(0.3)
+    rec.terminate()
+    try:
+        return rec.communicate(timeout=2)[0]
+    except subprocess.TimeoutExpired:
+        rec.kill()
+        return rec.communicate()[0]
+
+
+def _ready(sink: str, source: str) -> str:
+    """Why the chime must not play, or an empty string. A muted mic is respected, not overridden."""
+    if not all(shutil.which(tool) for tool in ("pactl", "paplay", "parecord")):
+        return "pulse tools missing"
+    if not sink or sink.startswith("auto_null"):
+        return "no speaker"
+    if not source or source.endswith(".monitor"):
+        return "no microphone"
+    if "yes" in _pactl("get-source-mute", source):
+        return "microphone muted"
+    return ""
 
 
 def run(sink: Optional[str] = None, source: Optional[str] = None, sink_pct: int = SINK_PCT,
         ladder: tuple[int, ...] = SOURCE_LADDER, log: Callable[[str], None] = lambda line: None) -> SoundCheck:
-    """One chord per mic-gain step down the ladder until a take is clean. Restores sink and source state."""
+    """One chime per mic-gain step down the ladder until a take is clean.
+    Restores sink and source state. Never raises: any failure is a note."""
+    try:
+        return _run(sink, source, sink_pct, ladder, log)
+    except Exception as e:
+        return SoundCheck(note=f"failed ({type(e).__name__}: {e})")
+
+
+def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tuple[int, ...],
+         log: Callable[[str], None]) -> SoundCheck:
+    if not shutil.which("pactl"):
+        return SoundCheck(note="pulse tools missing")
     sink = sink or _pactl("get-default-sink").strip()
     source = source or _pactl("get-default-source").strip()
-    if not sink or not source or source.endswith(".monitor"):
-        return SoundCheck(note="no microphone")
+    if reason := _ready(sink, source):
+        return SoundCheck(note=reason)
     saved = {kind: _saved_state(kind, name) for kind, name in (("sink", sink), ("source", source))}
     result = SoundCheck(note="mic not delivering")
     try:
         with tempfile.TemporaryDirectory() as d:
             wav = write_chime(Path(d) / "chime.wav")
             _pactl("set-sink-mute", sink, "0")
-            _pactl("set-source-mute", source, "0")
             _pactl("set-sink-volume", sink, f"{sink_pct}%")
             for pct in ladder:
                 _pactl("set-source-volume", source, f"{pct}%")
@@ -220,8 +249,4 @@ def run(sink: Optional[str] = None, source: Optional[str] = None, sink_pct: int 
 
 
 if __name__ == "__main__":
-    try:
-        print(run(log=print).summary())
-    except Exception as e:
-        print(f"sound check: failed ({type(e).__name__}: {e})")
-        sys.exit(1)
+    print(run(log=print).summary())

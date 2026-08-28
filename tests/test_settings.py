@@ -46,3 +46,11 @@ def test_levels_saved_under_old_step_table_snap_on_load(temp_settings):
     temp_settings.SETTINGS_FILE.write_text(json.dumps({"volume_level": 85, "volume_lock": 15}))
     assert temp_settings.get_volume_level() == 80
     assert temp_settings.get_volume_lock() == 20
+
+
+def test_volume_is_unset_until_someone_chooses_one(temp_settings):
+    assert temp_settings.get_volume_level() is None
+    temp_settings.set_volume_level(60)
+    assert temp_settings.get_volume_level() == 60
+    temp_settings.set_all_caps(True)  # saving another setting must not invent a volume choice
+    assert temp_settings.get_volume_level() == 60

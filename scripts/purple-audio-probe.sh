@@ -3,9 +3,9 @@
 # machine that sounds too loud or too quiet, then photograph the SUMMARY block
 # at the end (the full log is saved next to the boot dumps).
 #
-# Unlike purple-audio-dump this one is ACTIVE: it plays a short chord and
+# Unlike purple-audio-dump this one is ACTIVE: it plays the startup chime and
 # records it with the built-in mic (purple_tui/sound_check.py, the same check
-# meant to run at startup), and it loads the speech model to time it.
+# the app runs at startup), and it loads the speech model to time it.
 # Rationale and what to look for: docs/PLAN-audio-volume.md, "Hands-on probe".
 set +e
 
@@ -77,7 +77,7 @@ if [ ! -d "$SRC/purple_tui" ]; then
     section "mic loopback and speech timing"
     echo "$SRC/purple_tui not found (set PURPLE_SRC); skipped"
 else
-    section "mic loopback: chord at 60% through the default sink, recorded by the default source"
+    section "mic loopback: marimba chime at 60% through the default sink, recorded by the default source"
     # Drops the mic gain a step each time the chord clips, restores sink and
     # source state, and prints the summary line last.
     OUT=$(pa env PYTHONPATH="$SRC" python3 -m purple_tui.sound_check 2>&1)

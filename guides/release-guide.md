@@ -25,7 +25,8 @@ just release-status          # what ships vs what waits (= on release/1.x, + mai
 just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
-just ship                    # summary, confirm, upload, tag
+just ship                    # confirm, upload, tag
+just release-check <sha>     # confirm the public download is that commit
 ```
 
 A commit that is both fix and feature belongs with the feature. The `-x` flag stamps each pick with its main SHA, which is what `release-status` uses to mark `=`.
@@ -34,16 +35,16 @@ When a pick needs hand-edits to fit the release branch (usually because it touch
 
 Build, then flash, then ship: flashing first means a stick can be validated on real hardware before the downloads update. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.
 
-`just ship` prints the status summary and asks for confirmation, refuses if the worktree is not on `release/1.x`, and the release script tags the shipped commit with the release version on success. Tags map each shipped ISO back to its commit. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the release gets an auto date version.
+`just ship` prints the commit, the ISO it picked, and the commit count since the last release tag, then asks for confirmation before uploading anything. It refuses if the worktree is not on `release/1.x`, and the release script records the shipped commit in `latest.json` and tags it with the release version on success. `just release-check <sha>` reads the live download back and fails unless it is that commit, so after telling someone which build they are getting you can prove the download matches. Releases before the commit was recorded fall back to the tag; `v2026.07.27-1107` and earlier have neither, so they report as unknown. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the version is the build's UTC timestamp, so the download page dates a release by when it was built, not when it was uploaded.
 
-The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` aborts on a mismatch. A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
+The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` picks the newest ISO with that commit, ignoring newer builds of other commits (main builds share the output directory). A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 
 ### Why a separate worktree
 
 `~/purplecomputer-release` is a linked worktree of this repo, not a clone: same object database, same branches and tags, just a second directory with `release/1.x` checked out (its `.git` is a pointer file back into the main checkout's).
 
 - Builds read the working tree (docker mounts the project directory), so the branch needs its own directory. The alternative, switching the main checkout back and forth on ship day, is stateful and error-prone.
-- A shared object database means `release-pick` cherry-picks local commits directly and tags are visible from both directories, no remote round-trips. The justfile resolves `.venv` through `git-common-dir`, so the worktree also needs no second environment.
+- A shared object database means `release-pick` cherry-picks local commits directly and tags are visible from both directories, no remote round-trips. The justfile resolves `.venv` through `git-common-dir`, so the worktree also needs no second environment. Release tooling (`just ship`, `release-iso.sh`, `.env`) always runs from this checkout; the worktree only supplies the commit, so tooling fixes on main take effect without a cherry-pick.
 - It lives outside `.claude/worktrees/` deliberately: lane worktrees merge into main and get deleted, and this branch must never merge.
 
 It is not a backup: it shares `.git` with the main checkout and dies with it. Push `release/1.x` when you want an off-machine copy.
@@ -76,7 +77,7 @@ Output goes to `/opt/purple-installer/output/`. Both a standard and debug ISO ar
 ### 2. Release to Cloudflare R2
 
 ```bash
-just release            # auto-version: v2026.04.02-1430
+just release            # auto-version from the build time: v2026.04.02-1430
 just release v1.0       # semver for major releases
 ```
 
@@ -150,7 +151,7 @@ Every ISO is stamped with a version in `/etc/purple-version`, visible in the Par
 | Type | Example | Parent Menu shows | When |
 |------|---------|-------------------|------|
 | Semver | `v1.0` | Version 1.0 | Major releases (`just release v1.0`) |
-| Date-time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular releases (`just release`) |
+| Build time | `v2026.03.30-1430` | Build: Mar 30, 2026 | Regular releases (`just ship`), UTC |
 | Dev build | `build-abc1234-20260330` | Dev build: abc1234 | No `PURPLE_VERSION` set at build time |
 
 ---
@@ -163,6 +164,7 @@ All scripts live in `build-scripts/`.
 |--------|-------------|---------|
 | `build-all.sh` (via `build-in-docker.sh`) | `./build-scripts/build-in-docker.sh` | Build standard + debug ISOs |
 | `release-iso.sh` | `just release` | Upload ISOs to R2, update redirects |
+| `release-check.sh` | `just release-check` | Show the live download's commit, verify it against a hash |
 | `upload-pdfs.sh` | `just upload-pdfs` | Upload the card PDFs, purge cache |
 | `clean-old-releases.sh` | `just clean-releases` | Delete old release versions from R2 |
 | `flash-to-usb.sh` | `just flash` | Write ISO to USB drive |

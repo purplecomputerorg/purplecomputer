@@ -125,10 +125,15 @@ check, which shows the verdict and the readings without a terminal.
 (too loud at Loud, right at Medium), HP Stream 11 -34 dB (right at Full), HP
 Laptop 15-dy2 with a digital mic under SOF +7 dB (too loud at Loud). At 100%
 mic reference the HP 15 read +27 and the Stream +32, the wrong order; at
-base reference the three sort as they sound. The verdict is continuous: the
-step nearest `TARGET_DB` (-25) minus loop gain, any step but Sound Off: the
-three land at volume 7, 10, and 4. A chime that a live mic did not hear at
-all means 10; a clipped take is a lower bound and only ever confirms 1. Both mics
+base reference the three sort as they sound. **Fourth machine, MacBook Air 2011:** loop gain -35 dB,
+one below the Stream, yet plainly louder by ear, and 10 was too loud. Its
+mic hears the chime at -64 dBFS at base gain: an insensitive mic and a quiet
+speaker read the same. So the top end of the metric sorts machines and the
+bottom end does not, and the verdict is binary: loop gain above -2 dB (the
+midpoint of the HP 15 and the Surface) starts at volume 4, everything else,
+including not heard, keeps 7. The chime only ever turns the volume down; too
+quiet is the one failure left, and it's a key press. A clipped take is a
+lower bound and still counts as loud. Both mics
 clipped with the source at 50% and the HP barely heard the chime at 12%, so
 the app's single take uses 20%. The verdict runs at first boot only, while
 `volume_level` is still `None` in settings, and is then saved as the volume,

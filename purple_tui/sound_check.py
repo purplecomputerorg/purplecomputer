@@ -4,8 +4,9 @@ machine's loop gain: how many dB the acoustic path adds from digital out at
 sink 100% to digital in with the mic at its base volume (pactl's 0 dB
 hardware gain, the one reference comparable across analog and digital mics:
 "100%" is +66 dB of boost on one laptop and +20 dB on another). At first
-boot the volume starts at the step that brings the chime to the same
-loudness on every machine.
+boot a machine that plays the chime loud starts at volume 4 instead of 7.
+The check only ever turns the volume down: a low reading can mean a quiet
+speaker or an insensitive mic, and those look the same.
 The app and purple-audio-probe both call run(). Rationale and the calibration
 status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
@@ -29,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .audio import FULL_SCALE, snap_volume
+from .audio import FULL_SCALE
 from .constants import VOLUME_LEVELS
 from .synth import generate_marimba
 
@@ -44,13 +45,13 @@ PROBE_LADDER = (SOURCE_PCT, 12)  # the probe retries a clipped take at lower mic
 CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
 READY_POLL = 0.5  # seconds between looks for a sound card that is still enumerating at boot
-# First-boot verdict: the step that brings loop gain plus step dB to TARGET_DB.
-# Measured: Surface Laptop -11 dB (right at volume 7), HP Stream -34 dB (right
-# at 10), HP 15 digital mic +7 dB (comfortable at 4 to 6). A digital mic reads
-# a few dB hot, so expect a step off on some; one key press fixes a step.
-TARGET_DB = -25.0
-MIC_ALIVE_FLOOR_DB = -70.0  # a "not heard" only counts when the mic is clearly delivering room noise
-QUIETEST, LOUDEST = VOLUME_LEVELS[1], VOLUME_LEVELS[-1]  # the verdict never picks Sound Off; not heard means loudest
+# Measured loop gains: HP 15 (digital mic) +7 dB, too loud at 7 and right at
+# 4; Surface Laptop -11 dB, right at 7; HP Stream -34 dB and MacBook Air 2011
+# -35 dB, the Air plainly the louder of the two by ear. So the top end sorts
+# machines and the bottom end does not: loud is anything above the midpoint
+# of the HP 15 and the Surface, and nothing else moves.
+LOUD_LOOP_GAIN_DB = -2.0
+LOUD_MACHINE_VOLUME = VOLUME_LEVELS[4]
 
 
 def render_chime(rate: int = CHIME_RATE) -> array.array:
@@ -161,15 +162,11 @@ def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
 
 
 def default_volume(check: SoundCheck) -> Optional[int]:
-    """First-boot level for this machine, or None to keep the default. A clipped
-    reading is a lower bound on loop gain, so it can only ever confirm the quietest step."""
-    if check.note:
+    """Volume 4 for a machine that plays the chime loud, else None to keep the
+    default. A clipped reading is a lower bound on loop gain, so it still counts."""
+    if check.note or not check.heard:
         return None
-    if not check.heard:
-        return LOUDEST if check.floor_db > MIC_ALIVE_FLOOR_DB else None
-    pct = 100 * 10 ** ((TARGET_DB - check.loop_gain_db) / 60)  # pactl's cubic map, inverted
-    level = max(snap_volume(round(pct)), QUIETEST)
-    return level if check.clean or level == QUIETEST else None
+    return LOUD_MACHINE_VOLUME if check.loop_gain_db >= LOUD_LOOP_GAIN_DB else None
 
 
 @functools.cache

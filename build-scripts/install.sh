@@ -663,6 +663,21 @@ main() {
                 fi
             fi
 
+            # Carry the live session's settings over (the volume the sound
+            # check picked, anything the parent changed) so the installed
+            # first boot doesn't start from scratch or chime again.
+            # Every command sits inside the if condition: under set -e a
+            # failure here must only warn, never stop the install.
+            if [ -n "$PURPLE_LIVE_SETTINGS" ] && [ -f "$PURPLE_LIVE_SETTINGS" ]; then
+                if mkdir -p /mnt/root/home/purple/.config/purple 2>/dev/null \
+                    && cp "$PURPLE_LIVE_SETTINGS" /mnt/root/home/purple/.config/purple/settings.json 2>/dev/null \
+                    && chown -R 1000:1000 /mnt/root/home/purple/.config 2>/dev/null; then
+                    log "  Live settings carried over"
+                else
+                    warn "Could not copy live settings"
+                fi
+            fi
+
             # Layer 5 (root part): Update grub.cfg with UUID for deterministic boot
             if [ -n "$ROOT_UUID" ] && [ -f /mnt/root/boot/grub/grub.cfg ]; then
                 sed -i "s|root=LABEL=PURPLE_ROOT|root=UUID=$ROOT_UUID|g" /mnt/root/boot/grub/grub.cfg

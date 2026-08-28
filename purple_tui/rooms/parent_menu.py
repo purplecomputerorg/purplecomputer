@@ -1565,6 +1565,7 @@ class InstallProgressScreen(PurpleModal):
         avoid Python 3.13 pipe-hang bugs. UI updates go via call_from_thread().
         """
         _SENTINEL = Path('/run/purple-install-complete')
+        from ..settings import SETTINGS_FILE
         proc = subprocess.Popen(
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
             stderr=subprocess.PIPE,
@@ -1577,6 +1578,7 @@ class InstallProgressScreen(PurpleModal):
                 # minutes ago, silent now" apart from never-had-sound.
                 "PURPLE_LIVE_AUDIO_OK":
                     "1" if getattr(self.app, "audio_ok", None) is True else "0",
+                "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),  # copied into the installed system
             },
         )
         buf = b""

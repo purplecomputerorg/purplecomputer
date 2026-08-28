@@ -434,14 +434,24 @@ device_sha256() {
 # drive against the ISO after settling.
 GPT_SKIP_BYTES=1048576
 
+# Bytes of the ISO covered by its partitions. Past them the file holds only
+# a backup GPT the settle boot supersedes and xorriso padding, and casper puts
+# the writable partition on the next 2MiB boundary after the last partition,
+# which can land inside that padding: its mkfs then looks like decay.
+iso_partitioned_bytes() {
+    local end
+    end=$(sfdisk -l -q -o end "$1" 2>/dev/null | tail -n +2 | sort -n | tail -n1)
+    if [[ -n "$end" ]]; then echo $(( (end + 1) * 512 )); else stat -c %s "$1"; fi
+}
+
 # Confirm a drive still holds the image after boot-settling, catching flash
-# that decays right after being written. Compares bytes GPT_SKIP_BYTES..iso_size
-# against the same span of the ISO file. MUST run before eject_drive: a
-# powered-off drive leaves a media-less node whose reads return garbage, which
-# looks exactly like corruption that isn't there.
+# that decays right after being written. Compares bytes GPT_SKIP_BYTES..end of
+# the ISO's last partition against the same span of the ISO file. MUST run
+# before eject_drive: a powered-off drive leaves a media-less node whose reads
+# return garbage, which looks exactly like corruption that isn't there.
 recheck_after_settle() {
     local dev="$1" iso="$2" bytes expected actual
-    bytes=$(( $(stat -c %s "$iso") - GPT_SKIP_BYTES ))
+    bytes=$(( $(iso_partitioned_bytes "$iso") - GPT_SKIP_BYTES ))
     expected="$(dd if="$iso" bs=4M skip="$GPT_SKIP_BYTES" count="$bytes" \
         iflag=skip_bytes,count_bytes status=none | sha256sum | awk '{print $1}')"
     actual="$(device_sha256 "$dev" "$bytes" "$GPT_SKIP_BYTES")"

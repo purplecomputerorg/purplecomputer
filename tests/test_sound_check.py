@@ -59,17 +59,25 @@ def _heard(loop_gain_db: float, **fields) -> sound_check.SoundCheck:
     return sound_check.SoundCheck(heard=True, floor_db=-60, tone_db=tuple(t + loop_gain_db for t in sent), **fields)
 
 
+def test_loop_gain_is_referenced_to_the_mic_base_volume():
+    analog = _heard(-20, sink_db=-14.0, source_db=-42.0, source_base_db=-66.0)
+    digital = _heard(-20, sink_db=-14.0, source_db=-42.0, source_base_db=-20.0)
+    assert analog.loop_gain_db == pytest.approx(-20 + 14 + 42 - 66, abs=0.01)
+    assert digital.loop_gain_db - analog.loop_gain_db == pytest.approx(46, abs=0.01)
+    assert "mic base -66 dB" in analog.summary()
+
+
 def test_default_volume_verdicts():
-    hot, quiet = sound_check.HOT_LOOP_GAIN_DB, sound_check.QUIET_LOOP_GAIN_DB
-    assert sound_check.default_volume(_heard(hot + 5)) == sound_check.HOT_MACHINE_VOLUME
-    assert sound_check.default_volume(_heard(hot)) == sound_check.HOT_MACHINE_VOLUME
-    assert sound_check.default_volume(_heard(hot + 5, clipped=99)) == sound_check.HOT_MACHINE_VOLUME
-    assert sound_check.default_volume(_heard((hot + quiet) / 2)) is None
-    assert sound_check.default_volume(_heard(quiet)) == sound_check.QUIET_MACHINE_VOLUME
-    assert sound_check.default_volume(_heard(quiet - 20)) == sound_check.QUIET_MACHINE_VOLUME
-    clipped = sound_check.analyze(_recording(+12))  # a lower bound well under hot: unknown, keep the default
-    assert not clipped.clean and clipped.loop_gain_db < hot
-    assert sound_check.default_volume(clipped) is None
+    surface, stream, hp15 = -11, -34, 7  # measured: right at Medium, right at Full, too loud at Loud
+    assert sound_check.default_volume(_heard(surface)) == 58
+    assert sound_check.default_volume(_heard(stream)) == 100
+    assert sound_check.default_volume(_heard(hp15)) == sound_check.HOT_MACHINE_VOLUME  # never below Medium
+    assert sound_check.default_volume(_heard(-18)) == 76
+    assert sound_check.default_volume(_heard(-60)) == sound_check.QUIET_MACHINE_VOLUME
+    assert sound_check.default_volume(_heard(surface, clipped=99)) == 58  # a lower bound already at the floor
+    assert sound_check.default_volume(_heard(stream, clipped=99)) is None  # a lower bound says nothing: keep the default
+    hot_and_clipped = sound_check.analyze(_recording(+12))
+    assert not hot_and_clipped.clean and sound_check.default_volume(hot_and_clipped) == 58
 
 
 def test_default_volume_when_nothing_was_heard():
@@ -89,6 +97,8 @@ def pulse(monkeypatch):
         "get-default-sink": "spk\n", "get-default-source": "mic\n",
         "get-sink-volume": "Volume: mono: 52428 / 80% / -5.81 dB\n", "get-sink-mute": "Mute: no\n",
         "get-source-volume": "Volume: mono: 65536 / 100% / 0.00 dB\n", "get-source-mute": "Mute: no\n",
+        "list": ("Source #0\n\tName: spk.monitor\n\tBase Volume: 65536 / 100% / 0.00 dB\n"
+                 "Source #1\n\tName: mic\n\tVolume: mono: 65536 / 100% / 0.00 dB\n\tBase Volume: 6554 / 10% / -60.00 dB\n"),
     }
 
     def fake_pactl(*args):
@@ -109,7 +119,7 @@ def test_run_plays_once_by_default_and_restores_state(pulse, monkeypatch):
     monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12))
     details = []
     r = sound_check.run(log=details.append)
-    assert r.source_pct == sound_check.SOURCE_PCT and not r.clean and len(details) == 1
+    assert r.source_pct == sound_check.SOURCE_PCT and r.source_base_db == -60.0 and not r.clean and len(details) == 1
     assert ("set-sink-volume", "spk", f"{sound_check.SINK_PCT}%") in calls
     assert calls[-4:] == [("set-sink-volume", "spk", "80%"), ("set-sink-mute", "spk", "0"),
                           ("set-source-volume", "mic", "100%"), ("set-source-mute", "mic", "0")]
@@ -117,7 +127,7 @@ def test_run_plays_once_by_default_and_restores_state(pulse, monkeypatch):
 
 def test_probe_ladder_steps_the_mic_gain_down_until_clean(pulse, monkeypatch):
     calls, _ = pulse
-    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12 if _source_pct(calls) == 50 else -20))
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12 if _source_pct(calls) == sound_check.SOURCE_PCT else -20))
     details = []
     r = sound_check.run(ladder=sound_check.PROBE_LADDER, log=details.append)
     assert r.source_pct == 12 and r.clean and len(details) == 2
@@ -137,6 +147,24 @@ def test_run_does_not_play_without_a_working_speaker_and_mic(pulse, monkeypatch,
     monkeypatch.setattr(sound_check, "_capture", lambda *a: pytest.fail("must not play"))
     assert sound_check.run().summary() == f"sound check: {note}"
     assert not any(a[0].startswith("set-") for a in calls)
+
+
+def test_run_waits_for_a_card_that_enumerates_late_only_when_asked(pulse, monkeypatch):
+    calls, outputs = pulse
+    outputs["get-default-sink"] = "\n"
+    fake = sound_check._pactl
+
+    def late_card(*args):
+        if args[0] == "get-default-sink" and sum(a[0] == "get-default-sink" for a in calls) == 2:
+            outputs["get-default-sink"] = "spk\n"
+        return fake(*args)
+
+    monkeypatch.setattr(sound_check, "_pactl", late_card)
+    monkeypatch.setattr(sound_check, "READY_POLL", 0)
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(-20))
+    assert sound_check.run().note == "no speaker"
+    r = sound_check.run(wait=1.0)
+    assert r.heard and r.clean and r.source_pct == sound_check.SOURCE_PCT
 
 
 def test_run_without_pulse_tools(pulse, monkeypatch):

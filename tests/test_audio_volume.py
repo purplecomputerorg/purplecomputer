@@ -118,11 +118,11 @@ def _app(level: int, ceiling):
     from purple_tui.purple_tui import PurpleApp
     app = PurpleApp.__new__(PurpleApp)
     app.volume_level, app._volume_lock, app.audio_ok, app._volume_chosen = level, ceiling, True, True
+    app._sound_check_running = False
     app.applied = []
-    app._apply_volume = lambda remember=True: (
-        app.applied.append(remember),
+    app._apply_volume = lambda: (
+        app.applied.append("saved"),
         app._volume_lock and setattr(app, "volume_level", app._effective_volume()))
-    app._apply_volume_system = lambda: app.applied.append("system")
     app._flash_badge = lambda badge: None
     return app
 
@@ -144,22 +144,16 @@ def test_silent_mode_swallows_the_keys_and_keeps_the_kid_level():
     assert app.volume_disabled and not _app(58, 45).volume_disabled
 
 
-def test_sound_check_verdict_only_moves_a_never_chosen_volume():
-    for verdict in (58, 100):
+def test_sound_check_verdict_settles_a_never_chosen_volume():
+    for verdict, level in ((58, 58), (100, 100), (None, 76)):
         app = _app(76, None)
         app._volume_chosen = False
         app._apply_sound_check(verdict)
-        assert app.volume_level == verdict and app.applied == [False]  # applied, not remembered as a choice
+        assert app.volume_level == level and app.applied == ["saved"]
 
     chosen = _app(76, None)
     chosen._apply_sound_check(58)
-    assert chosen.volume_level == 76 and chosen.applied == ["system"]
-
-    for level, verdict in ((58, 58), (76, None)):
-        app = _app(level, None)
-        app._volume_chosen = False
-        app._apply_sound_check(verdict)
-        assert app.volume_level == level and app.applied == ["system"]
+    assert chosen.volume_level == 76 and chosen.applied == ["saved"]  # theirs, reapplied once the chime lets go of the sink
 
 
 def test_sound_check_respects_the_parent_limit():
@@ -169,8 +163,29 @@ def test_sound_check_respects_the_parent_limit():
     assert app._effective_volume() == 45
 
 
-def test_sound_check_skipped_when_silent(monkeypatch):
+def test_sound_check_skipped_when_silent_or_already_settled(monkeypatch):
     import threading
     monkeypatch.setattr(threading, "Thread", lambda *a, **k: pytest.fail("must not start"))
-    _app(58, 0)._start_sound_check()
-    _app(0, None)._start_sound_check()
+    silent, muted, settled = _app(58, 0), _app(0, None), _app(76, None)
+    silent._volume_chosen = muted._volume_chosen = False
+    for app in (silent, muted, settled):
+        app._start_sound_check()
+        assert not app._sound_check_running
+
+
+def test_sound_check_owns_the_sink_until_its_verdict_lands(monkeypatch):
+    import threading
+    from types import SimpleNamespace
+    monkeypatch.setattr(threading, "Thread", lambda *a, **k: SimpleNamespace(start=lambda: None))
+    system = []
+    monkeypatch.setattr("purple_tui.purple_tui.set_system_volume", system.append)
+    app = _app(76, None)
+    app._volume_chosen = False
+    app._start_sound_check()
+    assert app._sound_check_running
+    app._apply_volume_system()  # the mixer warmup landing mid-chime must not move the sink
+    assert system == []
+    app._apply_sound_check(58)
+    assert not app._sound_check_running and app.volume_level == 58 and app.applied == ["saved"]
+    app._apply_volume_system()
+    assert system == [58]

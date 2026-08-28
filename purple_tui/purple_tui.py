@@ -854,7 +854,8 @@ class PurpleApp(App):
         self.active_theme = "purple-dark"
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
-        self._volume_chosen = True  # False only while nobody has ever set a volume: the startup sound check may then lower it
+        self._volume_chosen = True  # False only until the first boot's sound check, or a person, settles the volume
+        self._sound_check_running = False
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
         self._toast_reaper_timer = None
@@ -1207,6 +1208,7 @@ class PurpleApp(App):
             boot_log.heartbeat("mixer disabled (PURPLE_NO_AUDIO=1)")
         else:
             self._start_mixer_warmup()
+            self._start_sound_check()
 
         # First installed boot after audio worked in live: if no sound card
         # comes up, offer a one-time power off (warm-reboot codec wedge).
@@ -1246,8 +1248,6 @@ class PurpleApp(App):
             # path above, including the known-silent break and any exception,
             # fails safe to "not working" and the parent gets the USB-speaker path.
             self._mixer_recovered(ok)
-            if ok:
-                self._start_sound_check()
             # After the initial probe lands either way, start the hotplug listener
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.
@@ -1289,15 +1289,18 @@ class PurpleApp(App):
         audio_hotplug.start(_on_event)
 
     def _start_sound_check(self) -> None:
-        """Startup chime that doubles as a loudness check (sound_check.py). Silent
-        Mode and a saved mute skip it; a hot machine starts a step lower and a faint
-        one at Full, but only while nobody has ever chosen a volume."""
-        if self._effective_volume() == 0:
+        """First boot only: the startup chime doubles as a loudness check
+        (sound_check.py) and its verdict becomes the saved volume, so later boots
+        are quiet and a chosen volume is never touched. Silent Mode and a saved
+        mute skip it. Runs alongside the mixer warmup, not after it: it only
+        needs pactl, and waits for a sound card that enumerates late."""
+        if self._volume_chosen or self._effective_volume() == 0:
             return
+        self._sound_check_running = True
 
         def _work():
             from . import sound_check
-            result = sound_check.run()
+            result = sound_check.run(wait=5.0)
             boot_log.heartbeat(result.summary())
             self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
 
@@ -1305,11 +1308,10 @@ class PurpleApp(App):
         threading.Thread(target=_work, daemon=True, name="sound-check").start()
 
     def _apply_sound_check(self, level: "int | None") -> None:
-        if level is not None and not self._volume_chosen and self.volume_level != level:
+        self._sound_check_running = False
+        if level is not None and not self._volume_chosen:
             self.volume_level = level
-            self._apply_volume(remember=False)
-        else:
-            self._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours
+        self._apply_volume()  # saved either way: the first boot settles the volume and later boots don't chime
 
     def _mixer_recovered(self, ok: bool) -> None:
         """Worker-thread follow-up to a mixer reinit: a new or restarted sink
@@ -2870,7 +2872,8 @@ class PurpleApp(App):
         self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def _apply_volume_system(self) -> None:
-        set_system_volume(self._effective_volume())
+        if not self._sound_check_running:  # the chime owns the sink until its verdict lands, which reapplies
+            set_system_volume(self._effective_volume())
 
     def _invalidate_sound_caches(self) -> None:
         """Clear cached Sound objects after a mixer reinit (they become invalid)."""
@@ -2881,16 +2884,14 @@ class PurpleApp(App):
         except Exception:
             pass
 
-    def _apply_volume(self, remember: bool = True) -> None:
-        """Apply volume level to TTS, system mixer, and update UI. `remember`
-        persists it as a deliberate choice; the startup sound check passes False."""
+    def _apply_volume(self) -> None:
+        """Save the volume level and apply it to TTS, the system mixer, and the UI."""
         from . import tts
         from .settings import set_volume_level
         if self._volume_lock:
             self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
-        if remember:
-            set_volume_level(self.volume_level)
-            self._volume_chosen = True
+        set_volume_level(self.volume_level)
+        self._volume_chosen = True
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()

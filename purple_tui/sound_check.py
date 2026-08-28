@@ -1,8 +1,11 @@
 """Startup chime that doubles as a loudness check: play a short marimba
 arpeggio through the speaker, record it with the built-in mic, and report the
-machine's loop gain (how many dB the acoustic path adds from digital out to
-digital in at 100%/100%). At first boot a machine that plays it hot starts a
-step lower and one that plays it faint starts at Full.
+machine's loop gain: how many dB the acoustic path adds from digital out at
+sink 100% to digital in with the mic at its base volume (pactl's 0 dB
+hardware gain, the one reference comparable across analog and digital mics:
+"100%" is +66 dB of boost on one laptop and +20 dB on another). At first
+boot the volume starts at the step that
+brings the chime to the same loudness on every machine, Medium through Full.
 The app and purple-audio-probe both call run(). Rationale and the calibration
 status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
@@ -26,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-from .audio import FULL_SCALE
+from .audio import FULL_SCALE, snap_volume
 from .synth import generate_marimba
 
 TONES = (523.25, 659.25, 783.99)  # C5 E5 G5, rising
@@ -35,20 +38,20 @@ CHIME_PEAK_DB = -8.0
 CHIME_RATE = 22050
 RECORD_RATE = 16000
 SINK_PCT = 58  # the Medium step
-SOURCE_PCT = 50
+SOURCE_PCT = 20  # both measured mics clipped at 50%, and one barely heard the chime at 12%
 PROBE_LADDER = (SOURCE_PCT, 12)  # the probe retries a clipped take at lower mic gain; the app plays once
 CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
-# First-boot verdicts. The one measured anchor is the Surface Laptop (too loud
-# at Loud): its mic clipped at sink 40% / source 100%, so its loop gain is at
-# least +34 dB. Hot is that and anything within a few dB; quiet leaves a 15 dB
-# margin below it. Mic gain structure varies by machine, so expect a step off
-# on some; every verdict is one key press from right and then remembered.
-HOT_LOOP_GAIN_DB = 30.0
-QUIET_LOOP_GAIN_DB = 15.0
+READY_POLL = 0.5  # seconds between looks for a sound card that is still enumerating at boot
+# First-boot verdict: the step that brings loop gain plus step dB to TARGET_DB.
+# Measured: Surface Laptop -11 dB (right at Medium), HP Stream -34 dB (right at
+# Full), HP 15 digital mic +7 dB (too loud at Loud). Mic sensitivity still
+# varies by machine, so the verdict is clamped to Medium..Full: at worst a
+# step or two off, one key press from right, and then remembered.
+TARGET_DB = -25.0
 MIC_ALIVE_FLOOR_DB = -70.0  # a "not heard" only counts when the mic is clearly delivering room noise
-HOT_MACHINE_VOLUME = 58  # Medium
-QUIET_MACHINE_VOLUME = 100  # Full
+HOT_MACHINE_VOLUME = 58  # Medium, the floor of the verdict
+QUIET_MACHINE_VOLUME = 100  # Full, its ceiling, and the answer when a live mic did not hear the chime
 
 
 def render_chime(rate: int = CHIME_RATE) -> array.array:
@@ -83,6 +86,7 @@ class SoundCheck:
     sink_db: float = 0.0
     source_pct: int = 0
     source_db: float = 0.0
+    source_base_db: float = 0.0
     note: str = ""
 
     @property
@@ -91,22 +95,24 @@ class SoundCheck:
 
     @property
     def loop_gain_db(self) -> float:
-        """Mic level the chime would reach at sink 100% / source 100%, relative to what was sent."""
+        """Mic level the chime would reach at sink 100% with the mic at its base volume, relative to what was sent."""
         sent = _sent_tone_db()
-        return sum(m - s for m, s in zip(self.tone_db, sent)) / len(sent) - self.sink_db - self.source_db
+        return sum(m - s for m, s in zip(self.tone_db, sent)) / len(sent) - self.sink_db - (self.source_db - self.source_base_db)
 
     def detail(self) -> str:
         if self.note:
             return f"  {self.note}"
         tones = " ".join(f"{t:.1f}" for t in self.tone_db)
-        return (f"  sink {self.sink_pct}% ({self.sink_db:+.1f} dB), source {self.source_pct}% ({self.source_db:+.1f} dB): "
+        return (f"  sink {self.sink_pct}% ({self.sink_db:+.1f} dB), source {self.source_pct}% ({self.source_db:+.1f} dB, "
+                f"base {self.source_base_db:+.1f} dB): "
                 f"tones {tones} dBFS at mic, floor {self.floor_db:.1f} dBFS, SNR {self.snr_db:.0f} dB, clipped {self.clipped}")
 
     def summary(self) -> str:
         if self.note:
             return f"sound check: {self.note}"
         flags = ("" if self.clean else " CLIP") + ("" if self.heard else " NOT HEARD")
-        return (f"sound check: loop gain {self.loop_gain_db:+.0f} dB (sink {self.sink_pct}%, source {self.source_pct}%), "
+        return (f"sound check: loop gain {self.loop_gain_db:+.0f} dB (sink {self.sink_pct}%, source {self.source_pct}%, "
+                f"mic base {self.source_base_db:+.0f} dB), "
                 f"SNR {self.snr_db:.0f} dB, floor {self.floor_db:.0f} dBFS{flags}")
 
 
@@ -157,16 +163,14 @@ def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
 
 def default_volume(check: SoundCheck) -> Optional[int]:
     """First-boot level for this machine, or None to keep the default. A clipped
-    reading is a lower bound on loop gain, so it can only ever confirm hot."""
+    reading is a lower bound on loop gain, so it can only ever confirm the floor."""
     if check.note:
         return None
     if not check.heard:
         return QUIET_MACHINE_VOLUME if check.floor_db > MIC_ALIVE_FLOOR_DB else None
-    if check.loop_gain_db >= HOT_LOOP_GAIN_DB:
-        return HOT_MACHINE_VOLUME
-    if check.clean and check.loop_gain_db <= QUIET_LOOP_GAIN_DB:
-        return QUIET_MACHINE_VOLUME
-    return None
+    pct = 100 * 10 ** ((TARGET_DB - check.loop_gain_db) / 60)  # pactl's cubic map, inverted
+    level = min(max(snap_volume(round(pct)), HOT_MACHINE_VOLUME), QUIET_MACHINE_VOLUME)
+    return level if check.clean or level == HOT_MACHINE_VOLUME else None
 
 
 @functools.cache
@@ -181,6 +185,13 @@ def _pactl(*args: str) -> str:
 
 def _volume_db(kind: str, name: str) -> float:
     m = re.search(r"(-?[\d.]+|-inf) dB", _pactl(f"get-{kind}-volume", name))
+    return float(m.group(1)) if m else 0.0
+
+
+def _base_db(kind: str, name: str) -> float:
+    """Base volume of the device (the capture or playback chain at 0 dB hardware gain)."""
+    block = re.search(rf"Name: {re.escape(name)}\n(.*?)(?=\n\S|\Z)", _pactl("list", f"{kind}s"), re.S)
+    m = block and re.search(r"Base Volume:.*?(-?[\d.]+|-inf) dB", block.group(1))
     return float(m.group(1)) if m else 0.0
 
 
@@ -207,6 +218,18 @@ def _capture(sink: str, source: str, wav: Path) -> bytes:
         return rec.communicate()[0]
 
 
+def _devices(sink: Optional[str], source: Optional[str], wait: float) -> tuple[str, str, str]:
+    """Sink, source, and why the chime must not play (or ""), waiting up to
+    `wait` seconds for a card that is still enumerating at boot."""
+    deadline = time.monotonic() + wait
+    while True:
+        found = (sink or _pactl("get-default-sink").strip(), source or _pactl("get-default-source").strip())
+        reason = _ready(*found)
+        if reason not in ("no speaker", "no microphone") or time.monotonic() >= deadline:
+            return *found, reason
+        time.sleep(READY_POLL)
+
+
 def _ready(sink: str, source: str) -> str:
     """Why the chime must not play, or an empty string. A muted mic is respected, not overridden."""
     if not all(shutil.which(tool) for tool in ("pactl", "paplay", "parecord")):
@@ -221,23 +244,23 @@ def _ready(sink: str, source: str) -> str:
 
 
 def run(sink: Optional[str] = None, source: Optional[str] = None, sink_pct: int = SINK_PCT,
-        ladder: tuple[int, ...] = (SOURCE_PCT,), log: Callable[[str], None] = lambda line: None) -> SoundCheck:
+        ladder: tuple[int, ...] = (SOURCE_PCT,), wait: float = 0.0,
+        log: Callable[[str], None] = lambda line: None) -> SoundCheck:
     """One chime per mic-gain step down the ladder until a take is clean; the
     default ladder is a single take. Restores sink and source state. Never
     raises: any failure is a note."""
     try:
-        return _run(sink, source, sink_pct, ladder, log)
+        return _run(sink, source, sink_pct, ladder, wait, log)
     except Exception as e:
         return SoundCheck(note=f"failed ({type(e).__name__}: {e})")
 
 
 def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tuple[int, ...],
-         log: Callable[[str], None]) -> SoundCheck:
+         wait: float, log: Callable[[str], None]) -> SoundCheck:
     if not shutil.which("pactl"):
         return SoundCheck(note="pulse tools missing")
-    sink = sink or _pactl("get-default-sink").strip()
-    source = source or _pactl("get-default-source").strip()
-    if reason := _ready(sink, source):
+    sink, source, reason = _devices(sink, source, wait)
+    if reason:
         return SoundCheck(note=reason)
     saved = {kind: _saved_state(kind, name) for kind, name in (("sink", sink), ("source", source))}
     result = SoundCheck(note="mic not delivering")
@@ -251,6 +274,7 @@ def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tupl
                 result = analyze(_capture(sink, source, wav))
                 result.sink_pct, result.sink_db = sink_pct, _volume_db("sink", sink)
                 result.source_pct, result.source_db = pct, _volume_db("source", source)
+                result.source_base_db = _base_db("source", source)
                 log(result.detail())
                 if result.clean or not result.heard:
                     break

@@ -573,6 +573,7 @@ class ParentVolumeModal(PurpleModal):
                 yield Static("Limit:", classes="vol-label")
                 yield Static("", id="vol-lock-bar", classes="vol-bar")
                 yield Static("", id="vol-lock-value", classes="vol-value")
+            yield Static("", id="vol-limit-note", classes="vol-hint")
             yield Static("", id="vol-hint-row", classes="vol-hint")
             yield Static("Space plays sound    Esc done", classes="vol-hint")
 
@@ -598,6 +599,9 @@ class ParentVolumeModal(PurpleModal):
         lock_text = f"[bold cyan]▶ {state}[/]" if lock_focused else f"  {state}"
         self.query_one("#vol-lock-bar", Static).update("")
         self.query_one("#vol-lock-value", Static).update(lock_text)
+        self.query_one("#vol-limit-note", Static).update(
+            "The kid can't go louder than this. 0 is silent." if locked
+            else "Turn on to cap how loud the kid can turn it up.")
 
         hint = "← → change    ▲ ▼ switch" if vol_focused else "Enter on/off    ▲ ▼ switch"
         self.query_one("#vol-hint-row", Static).update(hint)

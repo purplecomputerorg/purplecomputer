@@ -108,39 +108,48 @@ on the capture path, not noise. Speech: model load 1.5 s, synthesis 0.3 s.
 
 **The sound check** (`purple_tui/sound_check.py`) is the startup chime: three
 marimba notes rising (C5 E5 G5, the Music room's own instrument), played once
-at the Medium step with the mic at 50% and recorded. It reports **loop
+at the Medium step with the mic at 20% and recorded. It reports **loop
 gain**: each tone's loudest 100 ms window at the mic (25 ms hops, so the fast
 marimba decay reads the same wherever the recording starts) minus the same
-measurement on the rendered chime, minus the sink and source dB pactl
-reports, so machines compare at nominal 100%/100%. Floor is DC-subtracted;
+measurement on the rendered chime, minus the sink dB and the source dB above
+its base volume (the capture chain at 0 dB hardware gain; "100%" is +66 dB of
+boost on the HP Stream and +20 dB on a digital mic, so it is no reference at
+all), so machines compare at sink 100% with the mic at base. Floor is
+DC-subtracted;
 SNR is per tone. The probe retries a clipped take at 12% mic gain; the app
 never does, a clipped take is a lower bound and that is enough. The same
 check with the probe's retry runs from the parent menu: Support info, Sound
 check, which shows the verdict and the readings without a terminal.
 
-**First-boot verdict (2026-08-28):** hot (loop gain at or above 30 dB, or
-clipped) starts at Medium; quiet (15 dB or below, or not heard at all through
-a mic that is clearly delivering room noise) starts at Full; anything between
-keeps Loud. The 30 comes from the Surface Laptop, the only measured anchor
-(too loud at Loud; its loop gain is at least +34 dB); the 15 leaves a 15 dB
-margin below it. Mic gain structure differs by machine (analog HDA with
-boost vs. digital mics under SOF), so some machines will land a step off.
-The verdict applies only while nobody has ever chosen a volume
-(`volume_level` is `None` in settings until the keys or the parent menu set
-it); a chosen volume is never touched and the parent limit always wins. The
-chime does not play at all in Silent Mode, with a saved mute, or without
-pactl, a real sink, and a real unmuted mic; every failure is one boot-log
-line and the defaults stand.
+**Three machines measured (2026-08-28):** Surface Laptop loop gain -11 dB
+(too loud at Loud, right at Medium), HP Stream 11 -34 dB (right at Full), HP
+Laptop 15-dy2 with a digital mic under SOF +7 dB (too loud at Loud). At 100%
+mic reference the HP 15 read +27 and the Stream +32, the wrong order; at
+base reference the three sort as they sound. The verdict is continuous: the
+step nearest `TARGET_DB` (-25) minus loop gain, clamped to Medium..Full
+because mic sensitivity still differs by machine (the HP 15 reads as Whisper
+unclamped, which is surely too far) and a wrong read should cost at most a
+step or two. A chime that a live mic did not hear at all also means Full; a
+clipped take is a lower bound and only ever confirms Medium. Both mics
+clipped with the source at 50% and the HP barely heard the chime at 12%, so
+the app's single take uses 20%. The verdict runs at first boot only, while
+`volume_level` is still `None` in settings, and is then saved as the volume,
+so later boots don't chime; a volume anyone picks is never touched and the
+parent limit always wins. The chime starts alongside the mixer warmup, about
+a second after the first frame, waiting up to 5 s for a sound card that
+enumerates late. It does not play at all in Silent Mode, with a saved mute,
+or without pactl, a real sink, and a real unmuted mic; every failure is one
+boot-log line and the defaults stand.
 
 **Steps re-spaced (2026-08-28):** six non-zero steps about 7 dB apart
 (26/34/45/58/76/100, Whisper through Full) replace the five at 20% spacing,
 whose Whisper sat at -42 dB and was inaudible on quiet machines. Default is
 Loud (76%, -7 dB).
 
-**Calibration still wanted:** bring back `purple-audio-probe` summaries from
-the HP and a Mac alongside the Surface. If the readings sort the machines,
-tighten the thresholds; if they don't, the fallback is a per-model table
-keyed on the `machine:` line.
+**Calibration still wanted:** whether the HP 15 is right at Medium or wants
+Soft (which would mean lowering the floor), and a Mac. If a reading doesn't
+sort with the others, the fallback is a per-model table keyed on the
+`machine:` line.
 
 Speech synthesis runs in a worker process (`purple_tui/tts_worker.py`, started
 by `tts.preload` when the mixer comes up). Building the ONNX session holds the

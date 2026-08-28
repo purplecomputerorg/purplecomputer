@@ -5,7 +5,7 @@ from purple_tui.rooms.support_info import sound_check_report
 
 
 def test_report_names_the_first_boot_volume():
-    hot = sound_check.SoundCheck(heard=True, tone_db=(-5.0,) * 3, snr_db=40, sink_pct=58, sink_db=-12.0, source_pct=50, source_db=-12.0)
+    hot = sound_check.SoundCheck(heard=True, tone_db=(-5.0,) * 3, snr_db=40, sink_pct=58, sink_db=-14.0, source_pct=20, source_db=-42.0)
     text = sound_check_report(hot, ["  take one"])
     assert text.startswith("The microphone heard the chime.")
     assert "starts at Medium" in text

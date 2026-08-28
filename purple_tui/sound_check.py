@@ -1,7 +1,8 @@
 """Startup chime that doubles as a loudness check: play a short marimba
 arpeggio through the speaker, record it with the built-in mic, and report the
 machine's loop gain (how many dB the acoustic path adds from digital out to
-digital in at 100%/100%). Machines that play it hot start a volume step lower.
+digital in at 100%/100%). At first boot a machine that plays it hot starts a
+step lower and one that plays it faint starts at Full.
 The app and purple-audio-probe both call run(). Rationale and the calibration
 status: docs/PLAN-audio-volume.md, "Hands-on probe".
 
@@ -33,15 +34,21 @@ NOTE_SECONDS, STAGGER = 0.9, 0.22
 CHIME_PEAK_DB = -8.0
 CHIME_RATE = 22050
 RECORD_RATE = 16000
-SINK_PCT = 60
-SOURCE_LADDER = (50, 12)  # mic gain drops a step whenever the chime clips
+SINK_PCT = 58  # the Medium step
+SOURCE_PCT = 50
+PROBE_LADDER = (SOURCE_PCT, 12)  # the probe retries a clipped take at lower mic gain; the app plays once
 CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
-# Provisional: the Surface Laptop (too loud at the Loud step) clipped the mic
-# at sink 40% / source 100%, which puts its loop gain above about +34 dB. Set
-# from a loud machine only; the quiet HP's reading decides where this really sits.
-LOUD_LOOP_GAIN_DB = 30.0
-LOUD_MACHINE_VOLUME = 60
+# First-boot verdicts. The one measured anchor is the Surface Laptop (too loud
+# at Loud): its mic clipped at sink 40% / source 100%, so its loop gain is at
+# least +34 dB. Hot is that and anything within a few dB; quiet leaves a 15 dB
+# margin below it. Mic gain structure varies by machine, so expect a step off
+# on some; every verdict is one key press from right and then remembered.
+HOT_LOOP_GAIN_DB = 30.0
+QUIET_LOOP_GAIN_DB = 15.0
+MIC_ALIVE_FLOOR_DB = -70.0  # a "not heard" only counts when the mic is clearly delivering room noise
+HOT_MACHINE_VOLUME = 58  # Medium
+QUIET_MACHINE_VOLUME = 100  # Full
 
 
 def render_chime(rate: int = CHIME_RATE) -> array.array:
@@ -149,10 +156,16 @@ def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
 
 
 def default_volume(check: SoundCheck) -> Optional[int]:
-    """Startup cap for a machine that plays the chime hot; None leaves the level alone.
-    A clipped reading is a lower bound on loop gain, so it can only ever confirm loud."""
-    if check.heard and check.loop_gain_db >= LOUD_LOOP_GAIN_DB:
-        return LOUD_MACHINE_VOLUME
+    """First-boot level for this machine, or None to keep the default. A clipped
+    reading is a lower bound on loop gain, so it can only ever confirm hot."""
+    if check.note:
+        return None
+    if not check.heard:
+        return QUIET_MACHINE_VOLUME if check.floor_db > MIC_ALIVE_FLOOR_DB else None
+    if check.loop_gain_db >= HOT_LOOP_GAIN_DB:
+        return HOT_MACHINE_VOLUME
+    if check.clean and check.loop_gain_db <= QUIET_LOOP_GAIN_DB:
+        return QUIET_MACHINE_VOLUME
     return None
 
 
@@ -208,9 +221,10 @@ def _ready(sink: str, source: str) -> str:
 
 
 def run(sink: Optional[str] = None, source: Optional[str] = None, sink_pct: int = SINK_PCT,
-        ladder: tuple[int, ...] = SOURCE_LADDER, log: Callable[[str], None] = lambda line: None) -> SoundCheck:
-    """One chime per mic-gain step down the ladder until a take is clean.
-    Restores sink and source state. Never raises: any failure is a note."""
+        ladder: tuple[int, ...] = (SOURCE_PCT,), log: Callable[[str], None] = lambda line: None) -> SoundCheck:
+    """One chime per mic-gain step down the ladder until a take is clean; the
+    default ladder is a single take. Restores sink and source state. Never
+    raises: any failure is a note."""
     try:
         return _run(sink, source, sink_pct, ladder, log)
     except Exception as e:
@@ -249,4 +263,4 @@ def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tupl
 
 
 if __name__ == "__main__":
-    print(run(log=print).summary())
+    print(run(ladder=PROBE_LADDER, log=print).summary())

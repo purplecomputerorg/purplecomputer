@@ -54,15 +54,31 @@ def test_analyze_needs_a_real_recording():
     assert not quiet.heard and "NOT HEARD" in quiet.summary()
 
 
-def test_default_volume_only_caps_machines_heard_hot():
-    loud, fine = sound_check.LOUD_LOOP_GAIN_DB + 5, sound_check.LOUD_LOOP_GAIN_DB - 5
-    assert sound_check.default_volume(sound_check.analyze(_recording(loud - 30, dc=0))) is None  # clipped, bound too low
-    hot = sound_check.SoundCheck(heard=True, tone_db=tuple(s + loud for s in sound_check._sent_tone_db()))
-    assert sound_check.default_volume(hot) == sound_check.LOUD_MACHINE_VOLUME
-    hot.heard = False
-    assert sound_check.default_volume(hot) is None
-    ok = sound_check.SoundCheck(heard=True, tone_db=tuple(s + fine for s in sound_check._sent_tone_db()))
-    assert sound_check.default_volume(ok) is None
+def _heard(loop_gain_db: float, **fields) -> sound_check.SoundCheck:
+    sent = sound_check._sent_tone_db()
+    return sound_check.SoundCheck(heard=True, floor_db=-60, tone_db=tuple(t + loop_gain_db for t in sent), **fields)
+
+
+def test_default_volume_verdicts():
+    hot, quiet = sound_check.HOT_LOOP_GAIN_DB, sound_check.QUIET_LOOP_GAIN_DB
+    assert sound_check.default_volume(_heard(hot + 5)) == sound_check.HOT_MACHINE_VOLUME
+    assert sound_check.default_volume(_heard(hot)) == sound_check.HOT_MACHINE_VOLUME
+    assert sound_check.default_volume(_heard(hot + 5, clipped=99)) == sound_check.HOT_MACHINE_VOLUME
+    assert sound_check.default_volume(_heard((hot + quiet) / 2)) is None
+    assert sound_check.default_volume(_heard(quiet)) == sound_check.QUIET_MACHINE_VOLUME
+    assert sound_check.default_volume(_heard(quiet - 20)) == sound_check.QUIET_MACHINE_VOLUME
+    clipped = sound_check.analyze(_recording(+12))  # a lower bound well under hot: unknown, keep the default
+    assert not clipped.clean and clipped.loop_gain_db < hot
+    assert sound_check.default_volume(clipped) is None
+
+
+def test_default_volume_when_nothing_was_heard():
+    silent_speaker = sound_check.analyze(_recording(-95))  # room noise present, chime absent
+    assert not silent_speaker.heard and silent_speaker.floor_db > sound_check.MIC_ALIVE_FLOOR_DB
+    assert sound_check.default_volume(silent_speaker) == sound_check.QUIET_MACHINE_VOLUME
+    dead_mic = sound_check.analyze(_recording(-95, noise=0, dc=0))
+    assert sound_check.default_volume(dead_mic) is None
+    assert sound_check.default_volume(sound_check.SoundCheck(note="no microphone")) is None
 
 
 @pytest.fixture
@@ -88,13 +104,23 @@ def _source_pct(calls):
     return next(int(a[2].rstrip("%")) for a in reversed(calls) if a[0] == "set-source-volume")
 
 
-def test_run_steps_the_mic_gain_down_until_clean_and_restores_state(pulse, monkeypatch):
+def test_run_plays_once_by_default_and_restores_state(pulse, monkeypatch):
+    calls, _ = pulse
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12))
+    details = []
+    r = sound_check.run(log=details.append)
+    assert r.source_pct == sound_check.SOURCE_PCT and not r.clean and len(details) == 1
+    assert ("set-sink-volume", "spk", f"{sound_check.SINK_PCT}%") in calls
+    assert calls[-4:] == [("set-sink-volume", "spk", "80%"), ("set-sink-mute", "spk", "0"),
+                          ("set-source-volume", "mic", "100%"), ("set-source-mute", "mic", "0")]
+
+
+def test_probe_ladder_steps_the_mic_gain_down_until_clean(pulse, monkeypatch):
     calls, _ = pulse
     monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12 if _source_pct(calls) == 50 else -20))
     details = []
-    r = sound_check.run(log=details.append)
+    r = sound_check.run(ladder=sound_check.PROBE_LADDER, log=details.append)
     assert r.source_pct == 12 and r.clean and len(details) == 2
-    assert ("set-sink-volume", "spk", "60%") in calls
     assert calls[-4:] == [("set-sink-volume", "spk", "80%"), ("set-sink-mute", "spk", "0"),
                           ("set-source-volume", "mic", "100%"), ("set-source-mute", "mic", "0")]
 

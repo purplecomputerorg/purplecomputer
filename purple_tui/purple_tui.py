@@ -1299,8 +1299,8 @@ class PurpleApp(App):
 
     def _start_sound_check(self) -> None:
         """Startup chime that doubles as a loudness check (sound_check.py). Silent
-        Mode and a saved mute skip it; a hot machine starts a step lower, but only
-        while nobody has ever chosen a volume."""
+        Mode and a saved mute skip it; a hot machine starts a step lower and a faint
+        one at Full, but only while nobody has ever chosen a volume."""
         if self._effective_volume() == 0:
             return
 
@@ -1313,9 +1313,9 @@ class PurpleApp(App):
         import threading
         threading.Thread(target=_work, daemon=True, name="sound-check").start()
 
-    def _apply_sound_check(self, cap: "int | None") -> None:
-        if cap is not None and not self._volume_chosen and self.volume_level > cap:
-            self.volume_level = cap
+    def _apply_sound_check(self, level: "int | None") -> None:
+        if level is not None and not self._volume_chosen and self.volume_level != level:
+            self.volume_level = level
             self._apply_volume(remember=False)
         else:
             self._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours

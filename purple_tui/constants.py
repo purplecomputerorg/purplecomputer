@@ -70,11 +70,13 @@ STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 HOLD_OR_TAP_THRESHOLD = 0.8  # Space/Enter hold threshold for code panel / loop mode (seconds)
 
-# Volume steps (0-100). pactl maps percent onto perceived loudness, so even
-# spacing is even loudness. Labels and icons run parallel to the steps.
-VOLUME_LEVELS = [0, 20, 40, 60, 80, 100]
-VOLUME_LABELS = ["Sound Off", "Whisper", "Quiet", "Medium", "Loud", "Full"]
-VOLUME_DEFAULT = 80
+# Volume steps (0-100), about 7 dB apart under pactl's cubic map (26% is
+# -35 dB, 76% is -7 dB): close enough that the right level for a room is
+# never far from a step, and the bottom stays audible on quiet machines.
+# Labels and icons run parallel to the steps. docs/PLAN-audio-volume.md.
+VOLUME_LEVELS = [0, 26, 34, 45, 58, 76, 100]
+VOLUME_LABELS = ["Sound Off", "Whisper", "Quiet", "Soft", "Medium", "Loud", "Full"]
+VOLUME_DEFAULT = 76
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 # These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
@@ -83,7 +85,7 @@ ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off (muted)
 ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low
 ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium
 ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high
-VOLUME_ICONS = [ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_LOW,
+VOLUME_ICONS = [ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_LOW, ICON_VOLUME_MED,
                 ICON_VOLUME_MED, ICON_VOLUME_HIGH, ICON_VOLUME_HIGH]
 ICON_VOLUME_DOWN = "󰝞"      # nf-md-volume_minus
 ICON_VOLUME_UP = "󰝝"        # nf-md-volume_plus

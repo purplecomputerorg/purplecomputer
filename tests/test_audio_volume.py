@@ -117,8 +117,12 @@ def _app(level: int, ceiling):
     """A PurpleApp with only the volume state, and _apply_volume reduced to its clamp."""
     from purple_tui.purple_tui import PurpleApp
     app = PurpleApp.__new__(PurpleApp)
-    app.volume_level, app._volume_lock, app.audio_ok = level, ceiling, True
-    app._apply_volume = lambda: app._volume_lock and setattr(app, "volume_level", app._effective_volume())
+    app.volume_level, app._volume_lock, app.audio_ok, app._volume_chosen = level, ceiling, True, True
+    app.applied = []
+    app._apply_volume = lambda remember=True: (
+        app.applied.append(remember),
+        app._volume_lock and setattr(app, "volume_level", app._effective_volume()))
+    app._apply_volume_system = lambda: app.applied.append("system")
     app._flash_badge = lambda badge: None
     return app
 
@@ -138,3 +142,34 @@ def test_silent_mode_swallows_the_keys_and_keeps_the_kid_level():
     app._apply_volume()
     assert app.volume_level == 60 and app._effective_volume() == 0
     assert app.volume_disabled and not _app(60, 40).volume_disabled
+
+
+def test_sound_check_cap_only_lowers_a_never_chosen_volume():
+    app = _app(80, None)
+    app._volume_chosen = False
+    app._apply_sound_check(60)
+    assert app.volume_level == 60 and app.applied == [False]  # applied, not remembered as a choice
+
+    chosen = _app(80, None)
+    chosen._apply_sound_check(60)
+    assert chosen.volume_level == 80 and chosen.applied == ["system"]
+
+    for level, cap in ((40, 60), (80, None)):
+        app = _app(level, None)
+        app._volume_chosen = False
+        app._apply_sound_check(cap)
+        assert app.volume_level == level and app.applied == ["system"]
+
+
+def test_sound_check_respects_the_parent_limit():
+    app = _app(80, 40)
+    app._volume_chosen = False
+    app._apply_sound_check(60)
+    assert app._effective_volume() == 40
+
+
+def test_sound_check_skipped_when_silent(monkeypatch):
+    import threading
+    monkeypatch.setattr(threading, "Thread", lambda *a, **k: pytest.fail("must not start"))
+    _app(60, 0)._start_sound_check()
+    _app(0, None)._start_sound_check()

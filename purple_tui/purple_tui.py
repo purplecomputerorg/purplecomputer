@@ -854,6 +854,7 @@ class PurpleApp(App):
         self.active_theme = "purple-dark"
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
+        self._volume_chosen = True  # False only while nobody has ever set a volume: the startup sound check may then lower it
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
         self._toast_reaper_timer = None
@@ -1010,7 +1011,9 @@ class PurpleApp(App):
                                get_volume_lock)
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
-        self.volume_level = get_volume_level()
+        saved_volume = get_volume_level()
+        self._volume_chosen = saved_volume is not None
+        self.volume_level = VOLUME_DEFAULT if saved_volume is None else saved_volume
         self._volume_lock = get_volume_lock()
         saved_littles = get_littles_mode()
         if saved_littles:
@@ -1243,6 +1246,8 @@ class PurpleApp(App):
             # path above, including the known-silent break and any exception,
             # fails safe to "not working" and the parent gets the USB-speaker path.
             self._mixer_recovered(ok)
+            if ok:
+                self._start_sound_check()
             # After the initial probe lands either way, start the hotplug listener
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.
@@ -1282,6 +1287,29 @@ class PurpleApp(App):
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
 
         audio_hotplug.start(_on_event)
+
+    def _start_sound_check(self) -> None:
+        """Startup chime that doubles as a loudness check (sound_check.py). Silent
+        Mode and a saved mute skip it; a hot machine starts a step lower, but only
+        while nobody has ever chosen a volume."""
+        if self._effective_volume() == 0:
+            return
+
+        def _work():
+            from . import sound_check
+            result = sound_check.run()
+            boot_log.heartbeat(result.summary())
+            self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
+
+        import threading
+        threading.Thread(target=_work, daemon=True, name="sound-check").start()
+
+    def _apply_sound_check(self, cap: "int | None") -> None:
+        if cap is not None and not self._volume_chosen and self.volume_level > cap:
+            self.volume_level = cap
+            self._apply_volume(remember=False)
+        else:
+            self._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours
 
     def _mixer_recovered(self, ok: bool) -> None:
         """Worker-thread follow-up to a mixer reinit: a new or restarted sink
@@ -2853,13 +2881,16 @@ class PurpleApp(App):
         except Exception:
             pass
 
-    def _apply_volume(self) -> None:
-        """Apply volume level to TTS, system mixer, and update UI."""
+    def _apply_volume(self, remember: bool = True) -> None:
+        """Apply volume level to TTS, system mixer, and update UI. `remember`
+        persists it as a deliberate choice; the startup sound check passes False."""
         from . import tts
         from .settings import set_volume_level
         if self._volume_lock:
             self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
-        set_volume_level(self.volume_level)
+        if remember:
+            set_volume_level(self.volume_level)
+            self._volume_chosen = True
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()

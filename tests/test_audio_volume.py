@@ -62,7 +62,9 @@ def test_step_tables_and_badges():
     assert badges[-1][1] == "█" * audio.BADGE_CELLS
 
 
-def test_lock_badge_labels():
+def test_badge_under_a_ceiling():
+    assert audio.volume_badge(20, 40)[2] == "Whisper"
+    assert audio.volume_badge(40, 40)[2] == "Max Quiet"
     assert audio.lock_badge(0)[2] == "Silent Mode"
     assert audio.lock_badge(60) == (*audio.volume_badge(60)[:2], "Max Medium")
 
@@ -112,31 +114,27 @@ def test_normalize_loudness_leaves_silence_alone():
 
 
 def _app(level: int, ceiling):
+    """A PurpleApp with only the volume state, and _apply_volume reduced to its clamp."""
     from purple_tui.purple_tui import PurpleApp
     app = PurpleApp.__new__(PurpleApp)
-    app.volume_level, app._volume_lock, app._volume_before_mute = level, ceiling, level
-    app.audio_ok = True
-    app._apply_volume = lambda: None
-    app.clear_notifications = lambda: None
-    app.notify = lambda *a, **k: None
+    app.volume_level, app._volume_lock, app.audio_ok = level, ceiling, True
+    app._apply_volume = lambda: app._volume_lock and setattr(app, "volume_level", app._effective_volume())
+    app._flash_badge = lambda badge: None
     return app
 
 
 def test_volume_keys_step_from_the_effective_level_under_a_ceiling():
-    from purple_tui.purple_tui import PurpleApp
     app = _app(80, 40)
-    PurpleApp.action_volume_down(app)
+    app.action_volume_down()
     assert app.volume_level == 20  # one press below the ceiling, not below the stale 80
-    PurpleApp.action_volume_up(app)
-    PurpleApp.action_volume_up(app)
+    app.action_volume_up()
+    app.action_volume_up()
     assert app.volume_level == 40  # held at the ceiling
-    assert app._effective_volume() == 40
 
 
-def test_silent_mode_still_swallows_the_keys():
-    from purple_tui.purple_tui import PurpleApp
+def test_silent_mode_swallows_the_keys_and_keeps_the_kid_level():
     app = _app(60, 0)
-    PurpleApp.action_volume_up(app)
+    app.action_volume_up()
+    app._apply_volume()
     assert app.volume_level == 60 and app._effective_volume() == 0
-    assert app.volume_locked
-    assert not _app(60, 40).volume_locked
+    assert app.volume_disabled and not _app(60, 40).volume_disabled

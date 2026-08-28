@@ -91,22 +91,24 @@ def adjacent_volume(level: int, up: bool) -> int:
     return VOLUME_LEVELS[max(0, min(step, len(VOLUME_LEVELS) - 1))]
 
 
-def volume_badge(level: int) -> tuple[str, str, str]:
-    """(icon, bars, label) for a 0-100 level."""
-    step = volume_step(level)
-    filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
-    return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), VOLUME_LABELS[step]
-
-
 def effective_volume(level: int, ceiling: Optional[int]) -> int:
     """What playback gets: the kid's level, held under the parent's ceiling when one is set."""
     return level if ceiling is None else min(level, ceiling)
 
 
+def volume_badge(level: int, ceiling: Optional[int] = None) -> tuple[str, str, str]:
+    """(icon, bars, label) for an effective 0-100 level. At the parent's ceiling
+    the label reads Max <step>; a ceiling of 0 is Silent Mode."""
+    step = volume_step(level)
+    filled = step * BADGE_CELLS // (len(VOLUME_LEVELS) - 1)
+    label = VOLUME_LABELS[step]
+    if ceiling is not None and level >= ceiling:
+        label = "Silent Mode" if ceiling == 0 else f"Max {label}"
+    return VOLUME_ICONS[step], "█" * filled + "░" * (BADGE_CELLS - filled), label
+
+
 def lock_badge(ceiling: int) -> tuple[str, str, str]:
-    """Badge for a parent volume ceiling: 0 is Silent Mode, anything else names the top step."""
-    icon, bars, label = volume_badge(ceiling)
-    return icon, bars, "Silent Mode" if ceiling == 0 else f"Max {label}"
+    return volume_badge(ceiling, ceiling)
 
 
 def db_to_linear(db: float) -> float:

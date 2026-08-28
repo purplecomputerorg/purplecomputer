@@ -40,26 +40,55 @@ class TestVoiceClipLookup:
         assert tts._get_voice_clip(long_text) is None
 
 
-def test_preload_loads_once_and_warms(monkeypatch, tmp_path):
-    """One model load, one throwaway synthesis, nothing left on disk, timing logged."""
-    import threading
-    loads, synths, logged = [], [], []
-
+def _fake_voice(synths):
     class _Voice:
-        pass
+        def synthesize(self, text, config):
+            synths.append(text)
+            return iter(())
+    return _Voice()
 
-    monkeypatch.setattr(tts, "_piper_voice", None)
-    monkeypatch.setattr(tts, "_piper_available", None)
-    monkeypatch.setattr(tts, "load_voice", lambda: loads.append(1) or _Voice())
-    monkeypatch.setattr(tts, "synthesize_to_file", lambda voice, text, path: synths.append(path) or True)
+
+def test_worker_process_serves_requests(monkeypatch):
+    import io
+    from purple_tui import tts_worker
+    synths, written = [], []
+    monkeypatch.setattr(tts, "load_voice", lambda: _fake_voice(synths))
+    monkeypatch.setattr(tts, "_make_synth_config", lambda: None)
+    monkeypatch.setattr(tts, "synthesize_to_file", lambda voice, text, path: written.append((text, path)) or True)
+    replies = io.StringIO()
+    tts_worker.serve(io.StringIO("/tmp/a.wav\tapple.\n/tmp/b.wav\tbanana.\n"), replies)
+    assert replies.getvalue() == "ready\nok\nok\n"
+    assert synths == ["purple."] and written == [("apple.", "/tmp/a.wav"), ("banana.", "/tmp/b.wav")]
+
+
+def test_preload_talks_to_the_worker_and_falls_back_when_it_dies(monkeypatch):
+    r_req, w_req = os.pipe()
+    r_rep, w_rep = os.pipe()
+
+    class _Proc:
+        stdin = os.fdopen(w_req, "w")
+        stdout = os.fdopen(r_rep, "r")
+
+    monkeypatch.setattr(tts.subprocess, "Popen", lambda *a, **k: _Proc())
+    monkeypatch.setattr(tts, "find_voice_model", lambda: "model.onnx")
+    monkeypatch.setattr(tts, "_worker_stderr", lambda: None)
+    monkeypatch.setattr(tts, "_preload_started", False)
+    monkeypatch.setattr(tts, "_worker", None)
+    tts._worker_ready.clear()
     from purple_tui import audio
+    logged = []
     monkeypatch.setattr(audio, "_log", logged.append)
 
-    tts.preload()
-    for t in threading.enumerate():
-        if t.name == "piper-preload":
-            t.join(timeout=5)
-    assert loads == [1] and len(synths) == 1
-    assert not os.path.exists(synths[0])
-    assert tts._get_piper_voice() is not None and loads == [1]
-    assert any(line.startswith("piper preload: model") for line in logged)
+    os.write(w_rep, b"ready\n")
+    tts.preload().join(timeout=5)
+    assert tts._worker_ready.is_set() and any("ready in" in line for line in logged)
+    assert tts.preload() is None  # once per session
+
+    os.write(w_rep, b"ok\n")
+    assert tts._worker_synthesize("apple.", "/tmp/x.wav") is True
+    assert os.read(r_req, 100) == b"/tmp/x.wav\tapple.\n"
+
+    os.close(w_rep)  # the worker died
+    assert tts._worker_synthesize("banana.", "/tmp/y.wav") is None
+    assert tts._worker is None
+    os.close(r_req)

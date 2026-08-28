@@ -512,19 +512,8 @@ class SecretMenuScreen(PickerModal):
 
 
 class ParentVolumeModal(PurpleModal):
-    """Parent volume modal: adjust, cap the kid's volume at the slider level, test sound.
-
-    With Limit on, the slider sets the ceiling: the kid's volume keys still work
-    below it. A limit at 0 is Silent Mode.
-
-    Controls (the hint line tells the parent which keys do what right now):
-      ▲ ▼      switch between the Volume and Limit rows
-      ← →      Volume row: change the level, or the limit while it is on
-               (level 0 reads "Silent Mode")
-      Enter    Limit row: turn the limit on or off at the current level
-      Space    play a test sound at the current level
-      Esc      close
-    """
+    """Parent volume modal. With Limit on, the slider edits the ceiling and the
+    kid's keys keep working below it; a limit at 0 is Silent Mode."""
 
     CSS = """
     #modal-dialog {

@@ -138,7 +138,8 @@ clipped with the source at 50% and the HP barely heard the chime at 12%, so
 the app's single take uses 20%. The verdict runs at first boot only, while
 `volume_level` is still `None` in settings, and is then saved as the volume,
 so later boots don't chime; a volume anyone picks is never touched and the
-parent limit always wins. The chime starts alongside the mixer warmup, about
+parent limit always wins. Installing copies the live session's settings
+file into the new system, so the installed first boot doesn't chime either. The chime starts alongside the mixer warmup, about
 a second after the first frame, waiting up to 5 s for a sound card that
 enumerates late. It does not play at all in Silent Mode, with a saved mute,
 or without pactl, a real sink, and a real unmuted mic; every failure is one

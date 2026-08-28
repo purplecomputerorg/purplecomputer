@@ -67,26 +67,20 @@ def test_loop_gain_is_referenced_to_the_mic_base_volume():
     assert "mic base -66 dB" in analog.summary()
 
 
-def test_default_volume_verdicts():
-    surface, stream, hp15 = -11, -34, 7  # measured: right at volume 7, right at 10, comfortable at 4 to 6
-    assert sound_check.default_volume(_heard(surface)) == 53
-    assert sound_check.default_volume(_heard(stream)) == 100
-    assert sound_check.default_volume(_heard(hp15)) == 28
-    assert sound_check.default_volume(_heard(-20)) == 81
-    assert sound_check.default_volume(_heard(-60)) == sound_check.LOUDEST
-    assert sound_check.default_volume(_heard(40)) == sound_check.QUIETEST  # never Sound Off
-    assert sound_check.default_volume(_heard(40, clipped=99)) == sound_check.QUIETEST  # a lower bound already at the bottom
-    assert sound_check.default_volume(_heard(stream, clipped=99)) is None  # a lower bound says nothing: keep the default
+def test_default_volume_only_ever_turns_a_loud_machine_down():
+    hp15, surface, stream, air = 7, -11, -34, -35  # measured; the Air is louder than the Stream by ear
+    assert sound_check.default_volume(_heard(hp15)) == 28  # volume 4
+    assert sound_check.default_volume(_heard(hp15, clipped=99)) == 28  # a lower bound still says loud
+    assert sound_check.default_volume(_heard(40)) == 28
+    for quiet in (surface, stream, air, -60):
+        assert sound_check.default_volume(_heard(quiet)) is None
     hot_and_clipped = sound_check.analyze(_recording(+12))
-    assert not hot_and_clipped.clean and sound_check.default_volume(hot_and_clipped) is None
+    assert not hot_and_clipped.clean and sound_check.default_volume(hot_and_clipped) == 28
 
 
 def test_default_volume_when_nothing_was_heard():
-    silent_speaker = sound_check.analyze(_recording(-95))  # room noise present, chime absent
-    assert not silent_speaker.heard and silent_speaker.floor_db > sound_check.MIC_ALIVE_FLOOR_DB
-    assert sound_check.default_volume(silent_speaker) == sound_check.LOUDEST
-    dead_mic = sound_check.analyze(_recording(-95, noise=0, dc=0))
-    assert sound_check.default_volume(dead_mic) is None
+    not_heard = sound_check.analyze(_recording(-95))
+    assert not not_heard.heard and sound_check.default_volume(not_heard) is None
     assert sound_check.default_volume(sound_check.SoundCheck(note="no microphone")) is None
 
 

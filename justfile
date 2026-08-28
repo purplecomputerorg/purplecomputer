@@ -260,7 +260,7 @@ release-pick +shas:
     cd {{release_dir}} && just test
     @echo && ./build-scripts/release-status.sh
 
-# Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags.
+# Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
 # Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
 ship:
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
@@ -280,7 +280,8 @@ upload-pdfs:
 print-card *args:
     @{{venv}}/bin/python cards/add_bleed.py {{args}}
 
-# Delete old releases from Cloudflare R2, keeping only the current version
+# Delete old releases from Cloudflare R2, keeping the current version (just ship runs this, also keeping the one it replaced).
+# E.g., just clean-releases --dry-run, just clean-releases --keep v1.0
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}
 

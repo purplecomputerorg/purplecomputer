@@ -85,18 +85,22 @@ This will:
 1. Generate SHA-256 checksums for both ISOs
 2. Upload standard + debug ISOs to `releases/{version}/`
 3. Update Cloudflare redirect rules (`/download.iso` -> versioned path)
-4. Write `latest.json` with version, checksums, and sizes
+4. Write `latest.json` with version, commit, checksums, and sizes
+5. Delete every older release except the one just replaced, which stays as a rollback
 
 The script shows a summary and asks for confirmation before uploading.
 
-### 3. Clean up old releases (optional)
+### 3. Clean up old releases (by hand)
+
+Every release already prunes R2 down to the current version plus the one before it. To go further, or to keep extra versions:
 
 ```bash
-just clean-releases             # interactive: lists old versions, asks before deleting
-just clean-releases --dry-run   # preview what would be deleted
+just clean-releases                    # interactive: lists old versions, asks before deleting
+just clean-releases --dry-run          # preview what would be deleted
+just clean-releases --keep v1.0        # also keep v1.0
 ```
 
-Deletes all release versions from R2 except the current one (determined from `latest.json`).
+The current version (from `latest.json`) is always kept.
 
 ### 4. Flash to USB
 

@@ -8,9 +8,10 @@
 # Releases the commit checked out in the current directory (just ship runs
 # this inside the release worktree); the script and .env come from main.
 #
-# Uploads standard + debug ISOs with checksums, then updates
-# the Cloudflare redirect rules so /download.iso and /download-debug.iso
-# point to the new versioned paths (no re-upload needed).
+# Uploads standard + debug ISOs with checksums, updates the Cloudflare
+# redirect rules so /download.iso and /download-debug.iso point to the new
+# versioned paths (no re-upload needed), then deletes every older release
+# except the one just replaced, which stays as a rollback.
 
 set -euo pipefail
 
@@ -159,14 +160,14 @@ s3_upload() {
 echo
 
 # Step 1: Generate checksums
-log_step "1/4: Generating checksums..."
+log_step "1/5: Generating checksums..."
 STANDARD_SHA256=$(sha256sum "$STANDARD_ISO" | cut -d' ' -f1)
 DEBUG_SHA256=$(sha256sum "$DEBUG_ISO" | cut -d' ' -f1)
 log_info "Standard: $STANDARD_SHA256"
 log_info "Debug:    $DEBUG_SHA256"
 
 # Step 2: Upload ISOs and checksums
-log_step "2/4: Uploading standard ISO..."
+log_step "2/5: Uploading standard ISO..."
 s3_upload "$STANDARD_ISO" "releases/${VERSION}/standard.iso" \
     "application/octet-stream" "attachment; filename=\"purple-computer-${VERSION}.iso\""
 
@@ -181,11 +182,12 @@ echo "$DEBUG_SHA256  debug.iso" | s3_upload - "releases/${VERSION}/debug.iso.sha
 # Step 3: Update Cloudflare redirect rules
 # /download.iso and /download-debug.iso redirect (302) to the versioned paths.
 # This replaces re-uploading the full ISOs to pointer paths.
-log_step "3/4: Updating download redirect rules..."
+log_step "3/5: Updating download redirect rules..."
 "$SCRIPT_DIR/setup-cloudflare-rules.sh" "$VERSION"
 
-# Step 4: Write latest.json
-log_step "4/4: Writing latest.json..."
+# Step 4: Write latest.json, remembering which release it replaces
+log_step "4/5: Writing latest.json..."
+PREVIOUS_VERSION=$(aws s3 cp "s3://${R2_BUCKET}/latest.json" - --endpoint-url "$R2_ENDPOINT" 2>/dev/null | jq -r '.version // empty' || true)
 LATEST_JSON=$(cat <<ENDJSON
 {
   "version": "${VERSION}",
@@ -217,6 +219,12 @@ if git tag "$VERSION" 2>/dev/null; then
 else
     log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION"
 fi
+
+# Step 5: keep the replaced release as a rollback, delete everything older
+log_step "5/5: Cleaning old releases..."
+"$SCRIPT_DIR/clean-old-releases.sh" --yes ${PREVIOUS_VERSION:+--keep "$PREVIOUS_VERSION"} \
+    || log_error "Cleanup failed; the release is fine. Run: just clean-releases"
+echo
 
 log_info "Download links:"
 log_info "  https://${R2_CUSTOM_DOMAIN}/download.iso"

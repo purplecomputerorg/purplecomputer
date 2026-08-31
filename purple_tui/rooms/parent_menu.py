@@ -913,7 +913,11 @@ class InstallDoneScreen(FullScreen):
 # Terminal (an xterm on the same screen; VT switch stays as last-resort escape)
 # ---------------------------------------------------------------------------
 
-_TERM_RC = "/opt/purple/parent-shell-rc.sh"
+def _term_rc() -> str:
+    installed = Path("/opt/purple/parent-shell-rc.sh")
+    if installed.exists():
+        return str(installed)
+    return str(Path(__file__).resolve().parents[2] / "scripts" / "parent-shell-rc.sh")
 
 
 def _xterm_cmd() -> list:
@@ -922,7 +926,7 @@ def _xterm_cmd() -> list:
         "-fa", "IBM Plex Mono", "-fs", "14",
         "-bg", P.BG, "-fg", "#ffffff", "-b", "24",
         "-title", "Purple Terminal",
-        "-e", "bash", "--rcfile", _TERM_RC,
+        "-e", "bash", "--rcfile", _term_rc(),
     ]
 
 

@@ -937,12 +937,12 @@ class TerminalScreen(FullScreen):
             self.status += ("\n\nDisplay checkerboard? Run:\n/opt/purple/scripts/debug-display.sh   (state + verdict)\n"
                             "/opt/purple/scripts/debug-display.sh repro   (reproduce it)\n"
                             "/opt/purple/scripts/debug-display.sh compositor off|on   (A/B the fix)")
-        reader = self.app._evdev_reader
-        if reader is not None and not self.app.demo_running:
+        if not self.app.demo_running and os.environ.get("DISPLAY"):
             self._running = True
-            asyncio.ensure_future(self._run_terminal(reader))
+            asyncio.ensure_future(self._run_terminal())
 
-    async def _run_terminal(self, reader):
+    async def _run_terminal(self):
+        reader = self.app._evdev_reader  # None in dev mode (SDL keyboard, no grab)
         try:
             self._proc = subprocess.Popen(_xterm_cmd())
         except OSError as e:
@@ -953,11 +953,13 @@ class TerminalScreen(FullScreen):
             return
         # If the terminal never takes focus, Ctrl+Alt+F1 closes it (rescue), so
         # a parent can't get stuck. Normal exit is typing exit in the shell.
-        reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
+        if reader is not None:
+            reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
         try:
             await asyncio.get_running_loop().run_in_executor(None, self._proc.wait)
         finally:
-            reader.resume_from_x_terminal()
+            if reader is not None:
+                reader.resume_from_x_terminal()
             self._running = False
             self.close()
             self.app.invalidate()

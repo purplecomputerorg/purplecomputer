@@ -174,6 +174,21 @@ def test_sound_check_skipped_when_silent_or_already_settled(monkeypatch):
         assert not app._sound_check_running
 
 
+def test_sound_check_worker_dying_never_wedges_the_sink(monkeypatch):
+    import threading
+
+    class InlineThread:
+        def __init__(self, target=None, **kw):
+            self.start = target
+
+    monkeypatch.setattr(threading, "Thread", InlineThread)
+    monkeypatch.setattr("purple_tui.sound_check.run", lambda **kw: (_ for _ in ()).throw(OSError("mid-check crash")))
+    app = _app(53, None)
+    app._volume_chosen = False
+    app._start_sound_check()
+    assert not app._sound_check_running  # a stuck flag would freeze the sink for the whole session
+
+
 def test_sound_check_owns_the_sink_until_its_verdict_lands(monkeypatch):
     import threading
     from types import SimpleNamespace

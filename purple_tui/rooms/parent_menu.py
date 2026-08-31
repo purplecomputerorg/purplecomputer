@@ -16,6 +16,7 @@ import pygame
 
 from .. import diagnostics
 from .. import palette as P
+from ..gfx import FONT_DIR
 from ..constants import SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, TRACK, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
@@ -925,6 +926,15 @@ def _xterm_cmd() -> list:
     ]
 
 
+def _xterm_env() -> dict:
+    # Point fontconfig at Purple's bundled fonts so xterm resolves "IBM Plex
+    # Mono" everywhere (dev and ISO), even where the family isn't installed
+    # system-wide. Without this xterm falls back to a font with no glyphs and
+    # shows an advancing cursor but no letters. fontconfig scans
+    # $XDG_DATA_HOME/fonts, and FONT_DIR's parent holds that fonts/ dir.
+    return {**os.environ, "XDG_DATA_HOME": str(FONT_DIR.parent)}
+
+
 class TerminalScreen(FullScreen):
     message = "Terminal"
     hint = "Type exit and press Enter to go back to Purple."
@@ -944,7 +954,7 @@ class TerminalScreen(FullScreen):
     async def _run_terminal(self):
         reader = self.app._evdev_reader  # None in dev mode (SDL keyboard, no grab)
         try:
-            self._proc = subprocess.Popen(_xterm_cmd())
+            self._proc = subprocess.Popen(_xterm_cmd(), env=_xterm_env())
         except OSError as e:
             self.message = "Terminal unavailable"
             self.hint = f"Could not open a terminal.\nPress Enter to go back.\n(Technical: {e})"

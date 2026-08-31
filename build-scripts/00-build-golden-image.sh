@@ -358,12 +358,8 @@ LEANINITRD
     log_info "Sound modules verified"
 
     # UI fonts ship inside purple_tui/fonts; Noto Color Emoji comes from apt above.
-
-    # Register IBM Plex Mono with fontconfig so the parent-menu xterm can resolve
-    # it by family (-fa "IBM Plex Mono"). The image excludes xfonts-*, so xterm
-    # has no core bitmap font to fall back to; this is the terminal's font.
-    mkdir -p "$MOUNT_DIR/usr/local/share/fonts/purple"
-    cp /purple-src/purple_tui/fonts/IBMPlexMono-*.ttf "$MOUNT_DIR/usr/local/share/fonts/purple/"
+    # The parent-menu xterm resolves IBM Plex Mono from that bundled dir via
+    # XDG_DATA_HOME (see rooms/parent_menu.py), so no system font install here.
 
     # Install fontconfig rule to prioritize Noto Color Emoji
     # Without this, some emoji render as monochrome outlines instead of color

@@ -114,9 +114,13 @@ marimba decay reads the same wherever the recording starts) minus the same
 measurement on the rendered chime, minus the sink dB and the source dB above
 its base volume (the capture chain at 0 dB hardware gain; "100%" is +66 dB of
 boost on the HP Stream and +20 dB on a digital mic, so it is no reference at
-all), so machines compare at sink 100% with the mic at base. Floor is
-DC-subtracted;
-SNR is per tone. The probe retries a clipped take at 12% mic gain; the app
+all), so machines compare at sink 100% with the mic at base. The mic audio
+streams from the pipe in 25 ms chunks and is reduced to tone levels on the
+fly: at most 0.1 s of sound exists at any moment, nothing is written
+anywhere, and every measurement (peaks, ambient floor, SNR) is a Goertzel
+filter at the chime's own three pitches, so the check cannot represent
+speech and no recording ever exists. This also makes the tone measurements
+blind to DC offset. The probe retries a clipped take at 12% mic gain; the app
 never does, a clipped take is a lower bound and that is enough. The same
 check with the probe's retry runs from the parent menu: Support info, Sound
 check, which shows the verdict and the readings without a terminal.

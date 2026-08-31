@@ -1300,9 +1300,12 @@ class PurpleApp(App):
 
         def _work():
             from . import sound_check
-            result = sound_check.run(wait=5.0)
-            boot_log.heartbeat(result.summary())
-            self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
+            try:
+                result = sound_check.run(wait=5.0)
+                boot_log.heartbeat(result.summary())
+                self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
+            except Exception:
+                self._sound_check_running = False  # a wedged flag would keep the sink frozen all session
 
         import threading
         threading.Thread(target=_work, daemon=True, name="sound-check").start()

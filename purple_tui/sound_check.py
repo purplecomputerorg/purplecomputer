@@ -13,6 +13,11 @@ status: docs/PLAN-audio-volume.md, "Hands-on probe".
 run() never raises and never plays unless pactl, a real sink, and a real
 unmuted mic are all present: nobody needs a microphone to use Purple.
 No boot_log import here, so `python3 -m purple_tui.sound_check` stays cheap.
+
+Privacy: the mic audio is reduced to tone levels as it streams in. At most a
+tenth of a second of sound exists at any moment, nothing is written anywhere,
+and every measurement is a Goertzel filter at the chime's own three pitches,
+so the check cannot represent speech. No recording ever exists.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import array
 import functools
 import math
 import re
+import select
 import shutil
 import subprocess
 import tempfile
@@ -28,7 +34,7 @@ import time
 import wave
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Iterable, Iterator, Optional, Union
 
 from .audio import FULL_SCALE
 from .constants import VOLUME_LEVELS
@@ -36,6 +42,7 @@ from .synth import generate_marimba
 
 TONES = (523.25, 659.25, 783.99)  # C5 E5 G5, rising
 NOTE_SECONDS, STAGGER = 0.9, 0.22
+LEAD_SECONDS, TAIL_SECONDS = 0.3, 0.2
 CHIME_PEAK_DB = -8.0
 CHIME_RATE = 22050
 RECORD_RATE = 16000
@@ -57,8 +64,8 @@ LOUD_MACHINE_VOLUME = VOLUME_LEVELS[4]
 def render_chime(rate: int = CHIME_RATE) -> array.array:
     """Three marimba notes rising 0.22 s apart, 0.3 s lead-in, 0.2 s tail, peak at CHIME_PEAK_DB."""
     notes = [generate_marimba(f, NOTE_SECONDS, rate) for f in TONES]
-    lead, stagger = int(rate * 0.3), int(rate * STAGGER)
-    mix = [0.0] * (lead + stagger * (len(notes) - 1) + len(notes[-1]) + int(rate * 0.2))
+    lead, stagger = int(rate * LEAD_SECONDS), int(rate * STAGGER)
+    mix = [0.0] * (lead + stagger * (len(notes) - 1) + len(notes[-1]) + int(rate * TAIL_SECONDS))
     for k, note in enumerate(notes):
         for i, x in enumerate(note):
             mix[lead + k * stagger + i] += x
@@ -130,33 +137,43 @@ def _goertzel(chunk: array.array, freq: float, rate: int) -> float:
     return math.sqrt(max(s1 * s1 + s2 * s2 - w * s1 * s2, 0)) * 2 / len(chunk)
 
 
-def _rms(chunk: array.array) -> float:
-    mean = sum(chunk) / len(chunk)  # DC offset from a hot capture path is not noise
-    return math.sqrt(max(math.sumprod(chunk, chunk) / len(chunk) - mean * mean, 0))
-
-
-def analyze(raw: bytes, rate: int = RECORD_RATE) -> SoundCheck:
-    """Ambient floor from the first 0.5 s; each tone's level is its loudest
-    100 ms window, stepped 25 ms so a fast marimba decay reads the same
-    wherever the recording happened to start."""
-    samples = array.array("h")
-    samples.frombytes(raw[: len(raw) // 2 * 2])
+def analyze(chunks: Union[Iterable[bytes], bytes], rate: int = RECORD_RATE) -> SoundCheck:
+    """Reduce audio to tone levels as it arrives: each tone's level is its
+    loudest 100 ms window, stepped 25 ms so a fast marimba decay reads the
+    same wherever the recording happened to start, and the floor is the same
+    measurement over the first 0.5 s, before the chime. Only Goertzel filters
+    at the chime's own pitches ever read the samples (so DC offset and speech
+    alike are invisible), and at most one window of audio is held at a time."""
     win, hop = rate // 10, rate // 40
-    if len(samples) < 10 * win:
+    window, rest = array.array("h"), b""
+    start = total = clipped = 0
+    peak = [0.0] * len(TONES)
+    ambient: list[list[float]] = [[] for _ in TONES]
+    for chunk in ((chunks,) if isinstance(chunks, bytes) else chunks):
+        buf = rest + chunk
+        cut = len(buf) // 2 * 2
+        rest = buf[cut:]
+        samples = array.array("h")
+        samples.frombytes(buf[:cut])
+        total += len(samples)
+        clipped += sum(1 for x in samples if abs(x) >= FULL_SCALE - 67)
+        window.extend(samples)
+        while len(window) >= win:
+            for j, t in enumerate(_goertzel(window[:win], f, rate) for f in TONES):
+                peak[j] = max(peak[j], t)
+                if start + win <= rate // 2:
+                    ambient[j].append(t)
+            del window[:hop]
+            start += hop
+    if total < 10 * win:
         return SoundCheck(note="mic not delivering")
-    starts = range(0, len(samples) - win + 1, hop)
-    tone = [[_goertzel(samples[i:i + win], f, rate) for f in TONES] for i in starts]
-    ambient = [k for k, i in enumerate(starts) if i + win <= rate // 2]
-    pct = lambda xs, q: sorted(xs)[int(len(xs) * q)]
-    floor = pct([_rms(samples[starts[k]:starts[k] + win]) for k in ambient], 0.1)
-    tone_floor = [pct([tone[k][j] for k in ambient], 0.1) for j in range(len(TONES))]
-    peak = [max(t[j] for t in tone) for j in range(len(TONES))]
-    snr = min(_db(peak[j]) - _db(tone_floor[j]) for j in range(len(TONES)))
+    floor = [sorted(a)[int(len(a) * 0.1)] for a in ambient]
+    snr = min(_db(p) - _db(f) for p, f in zip(peak, floor))
     return SoundCheck(
         heard=snr > HEARD_SNR_DB,
-        clipped=sum(1 for x in samples if abs(x) >= FULL_SCALE - 67),
-        floor_db=_db(floor),
-        tone_db=tuple(_db(t) for t in peak),
+        clipped=clipped,
+        floor_db=max(map(_db, floor)),
+        tone_db=tuple(map(_db, peak)),
         snr_db=snr,
     )
 
@@ -196,22 +213,47 @@ def _saved_state(kind: str, name: str) -> tuple[str, str]:
     return (f"{pct.group(1)}%" if pct else "100%", "1" if "yes" in _pactl(f"get-{kind}-mute", name) else "0")
 
 
-def _capture(sink: str, source: str, wav: Path) -> bytes:
+def _capture(sink: str, source: str, wav: Path) -> SoundCheck:
     """Record the mic while the chime plays 0.7 s in; about 3 s total. The
-    audio streams through a pipe and is analyzed in memory: it never touches disk."""
+    audio streams through a pipe straight into analyze(): no complete
+    recording ever exists, in memory or on disk."""
     rec = subprocess.Popen(
         ["parecord", "--raw", "--channels=1", f"--rate={RECORD_RATE}", "--format=s16le", "-d", source],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0,
     )
-    time.sleep(0.7)
-    subprocess.run(["paplay", "-d", sink, str(wav)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
-    time.sleep(0.3)
-    rec.terminate()
     try:
-        return rec.communicate(timeout=2)[0]
-    except subprocess.TimeoutExpired:
-        rec.kill()
-        return rec.communicate()[0]
+        return analyze(_stream(rec, sink, wav))
+    finally:
+        rec.terminate()
+        try:
+            rec.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            rec.kill()
+            rec.wait()
+        rec.stdout.close()
+
+
+def _stream(rec: subprocess.Popen, sink: str, wav: Path) -> Iterator[bytes]:
+    """Mic audio in 25 ms chunks. The chime starts 0.7 s in whether or not the
+    mic delivers, capture ends 0.3 s after it finishes playing, 15 s hard cap."""
+    deadline = time.monotonic() + 15
+    play_at, play, tail_end = time.monotonic() + 0.7, None, None
+    try:
+        while time.monotonic() < deadline and (tail_end is None or time.monotonic() < tail_end):
+            if play is None and time.monotonic() >= play_at:
+                play = subprocess.Popen(["paplay", "-d", sink, str(wav)],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if play and tail_end is None and play.poll() is not None:
+                tail_end = time.monotonic() + 0.3
+            if select.select([rec.stdout], [], [], 0.1)[0]:
+                chunk = rec.stdout.read(RECORD_RATE // 40 * 2)
+                if not chunk:
+                    return
+                yield chunk
+    finally:
+        if play and play.poll() is None:
+            play.kill()
+            play.wait()
 
 
 def _devices(sink: Optional[str], source: Optional[str], wait: float) -> tuple[str, str, str]:
@@ -267,7 +309,7 @@ def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tupl
             _pactl("set-sink-volume", sink, f"{sink_pct}%")
             for pct in ladder:
                 _pactl("set-source-volume", source, f"{pct}%")
-                result = analyze(_capture(sink, source, wav))
+                result = _capture(sink, source, wav)
                 result.sink_pct, result.sink_db = sink_pct, _volume_db("sink", sink)
                 result.source_pct, result.source_db = pct, _volume_db("source", source)
                 result.source_base_db = _base_db("source", source)

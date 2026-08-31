@@ -4,7 +4,10 @@ ladder, restores state, and never plays or raises when the setup isn't right."""
 
 import array
 import math
+import os
 import random
+import threading
+import time
 
 import pytest
 
@@ -40,6 +43,25 @@ def test_analyze_recovers_loop_gain_wherever_the_recording_starts(lead):
     assert r.loop_gain_db == pytest.approx(-20, abs=0.5)
     assert r.floor_db < -50  # DC offset must not read as noise
     assert "loop gain -20 dB" in r.summary()
+
+
+@pytest.mark.parametrize("size", [RATE // 40 * 2, 333])  # one hop, and odd so sample pairs straddle chunks
+def test_analyze_streams_without_ever_holding_a_full_recording(size):
+    raw = _recording(-20)
+    r = sound_check.analyze(raw[i:i + size] for i in range(0, len(raw), size))
+    assert r == sound_check.analyze(raw)
+    assert r.heard and r.loop_gain_db == pytest.approx(-20, abs=0.5)
+
+
+def test_analyze_is_blind_to_everything_but_the_chimes_notes():
+    """A loud room (-9 dBFS broadband) reads about 20 dB down at the chime's
+    pitches, the floor stays far below the room level, and no room can fake a
+    loud-machine verdict: nothing broadband is ever measured or kept."""
+    rng = random.Random(2)
+    room = array.array("h", (rng.randint(-20000, 20000) for _ in range(RATE * 3)))
+    r = sound_check.analyze(room.tobytes())
+    assert all(t < -25 for t in r.tone_db) and r.floor_db < -40
+    assert sound_check.default_volume(r) is None
 
 
 def test_analyze_flags_clipping():
@@ -111,7 +133,7 @@ def _source_pct(calls):
 
 def test_run_plays_once_by_default_and_restores_state(pulse, monkeypatch):
     calls, _ = pulse
-    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12))
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: sound_check.analyze(_recording(+12)))
     details = []
     r = sound_check.run(log=details.append)
     assert r.source_pct == sound_check.SOURCE_PCT and r.source_base_db == -60.0 and not r.clean and len(details) == 1
@@ -122,7 +144,7 @@ def test_run_plays_once_by_default_and_restores_state(pulse, monkeypatch):
 
 def test_probe_ladder_steps_the_mic_gain_down_until_clean(pulse, monkeypatch):
     calls, _ = pulse
-    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(+12 if _source_pct(calls) == sound_check.SOURCE_PCT else -20))
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: sound_check.analyze(_recording(+12 if _source_pct(calls) == sound_check.SOURCE_PCT else -20)))
     details = []
     r = sound_check.run(ladder=sound_check.PROBE_LADDER, log=details.append)
     assert r.source_pct == 12 and r.clean and len(details) == 2
@@ -156,7 +178,7 @@ def test_run_waits_for_a_card_that_enumerates_late_only_when_asked(pulse, monkey
 
     monkeypatch.setattr(sound_check, "_pactl", late_card)
     monkeypatch.setattr(sound_check, "READY_POLL", 0)
-    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: _recording(-20))
+    monkeypatch.setattr(sound_check, "_capture", lambda sink, source, wav: sound_check.analyze(_recording(-20)))
     assert sound_check.run().note == "no speaker"
     r = sound_check.run(wait=1.0)
     assert r.heard and r.clean and r.source_pct == sound_check.SOURCE_PCT
@@ -178,3 +200,74 @@ def test_run_never_raises_and_still_restores(pulse, monkeypatch):
     assert r.note.startswith("failed (OSError") and not r.heard
     assert sound_check.default_volume(r) is None
     assert calls[-1] == ("set-source-mute", "mic", "0")
+
+
+class _FakeProc:
+    def __init__(self, stdout=None, runtime=0.0):
+        self.stdout = stdout
+        self._done_at = time.monotonic() + runtime
+        self.ended = []
+
+    def poll(self):
+        return 0 if time.monotonic() >= self._done_at else None
+
+    def wait(self, timeout=None):
+        return 0
+
+    def terminate(self):
+        self.ended.append("terminate")
+
+    def kill(self):
+        self.ended.append("kill")
+
+
+@pytest.fixture
+def fake_audio_procs(monkeypatch):
+    """Popen faked: parecord's stdout is a real pipe the test writes, paplay 'plays' for 0.2 s."""
+    read_fd, write_fd = os.pipe()
+    procs = {}
+
+    def fake_popen(cmd, **kw):
+        if cmd[0] == "parecord":
+            procs["parecord"] = _FakeProc(stdout=os.fdopen(read_fd, "rb", buffering=0))
+        elif cmd[0] == "paplay":
+            procs["paplay"] = _FakeProc(runtime=0.2)
+            procs["paplay"].cmd = cmd
+        else:
+            pytest.fail(f"unexpected Popen: {cmd}")
+        return procs[cmd[0]]
+
+    monkeypatch.setattr(sound_check.subprocess, "Popen", fake_popen)
+    yield write_fd, procs
+    try:
+        os.close(write_fd)
+    except OSError:
+        pass
+
+
+def _feed(write_fd, data):
+    view = memoryview(data)
+    while view:
+        view = view[os.write(write_fd, view):]
+    os.close(write_fd)
+
+
+def test_capture_streams_the_pipe_and_cleans_up(fake_audio_procs, tmp_path):
+    write_fd, procs = fake_audio_procs
+    raw = _recording(-20)
+    threading.Thread(target=_feed, args=(write_fd, raw), daemon=True).start()
+    r = sound_check._capture("spk", "mic", tmp_path / "chime.wav")
+    assert r.heard and r.loop_gain_db == pytest.approx(-20, abs=0.5)
+    rec = procs["parecord"]
+    assert "terminate" in rec.ended and rec.stdout.closed
+
+
+def test_capture_still_plays_the_chime_when_the_mic_delivers_nothing(fake_audio_procs, tmp_path):
+    _, procs = fake_audio_procs
+    wav = tmp_path / "chime.wav"
+    began = time.monotonic()
+    r = sound_check._capture("spk", "mic", wav)
+    assert r.note == "mic not delivering"
+    assert procs["paplay"].cmd == ["paplay", "-d", "spk", str(wav)]
+    assert 0.9 < time.monotonic() - began < 3  # chime at 0.7 s, ends 0.3 s after it, no 15 s stall
+    assert "terminate" in procs["parecord"].ended

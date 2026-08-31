@@ -14,6 +14,10 @@
 
 ---
 
+## Task tracking
+
+Maintainers track tasks, bugs, and ideas in Linear (issue ids like `PUR-6`). If you have access, ask about updating it when you start, finish, or materially change tracked work. Without access, that's fine: reference any `PUR-` id the user gives you, but keep `docs/TODO.md` and plan docs as the technical reasoning of record. Don't restate issue status in `docs/`, and don't keep a parallel task list there.
+
 ## Git Commits
 
 Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These come from the [`lanes`](https://github.com/tavinathanson/lanes) tool installed at `~/.claude/`.

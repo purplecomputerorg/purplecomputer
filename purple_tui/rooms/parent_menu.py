@@ -1,6 +1,7 @@
 """Parent Menu: hold Esc. Install, Littles Mode, code and looping toggles,
 ALL CAPS, sound lock, display, PIN, terminal, support, shut down."""
 
+import asyncio
 import json
 import math
 import os
@@ -908,15 +909,29 @@ class InstallDoneScreen(FullScreen):
 
 
 # ---------------------------------------------------------------------------
-# Terminal mode (a VT switch; tty2 has an autologin shell)
+# Terminal (an xterm on the same screen; VT switch stays as last-resort escape)
 # ---------------------------------------------------------------------------
+
+_TERM_RC = "/opt/purple/parent-shell-rc.sh"
+
+
+def _xterm_cmd() -> list:
+    return [
+        "xterm",
+        "-fa", "IBM Plex Mono", "-fs", "14",
+        "-bg", P.BG, "-fg", "#ffffff", "-b", "24",
+        "-title", "Purple Terminal",
+        "-e", "bash", "--rcfile", _TERM_RC,
+    ]
 
 
 class TerminalScreen(FullScreen):
-    message = "Terminal mode"
-    hint = "The terminal is on the other screen.\nType `back` there, or press Ctrl+Alt+F1, to return to Purple."
+    message = "Terminal"
+    hint = "Type exit and press Enter to go back to Purple."
 
     def on_open(self):
+        self._proc = None
+        self._running = False
         self.status = _boot_mode_hint()
         if is_debug():
             self.status += ("\n\nDisplay checkerboard? Run:\n/opt/purple/scripts/debug-display.sh   (state + verdict)\n"
@@ -924,9 +939,32 @@ class TerminalScreen(FullScreen):
                             "/opt/purple/scripts/debug-display.sh compositor off|on   (A/B the fix)")
         reader = self.app._evdev_reader
         if reader is not None and not self.app.demo_running:
-            self.app.timers.after(0.3, reader.switch_to_tty2)
+            self._running = True
+            asyncio.ensure_future(self._run_terminal(reader))
+
+    async def _run_terminal(self, reader):
+        try:
+            self._proc = subprocess.Popen(_xterm_cmd())
+        except OSError as e:
+            self.message = "Terminal unavailable"
+            self.hint = f"Could not open a terminal.\nPress Enter to go back.\n(Technical: {e})"
+            self._running = False
+            self.app.invalidate()
+            return
+        # If the terminal never takes focus, Ctrl+Alt+F1 closes it (rescue), so
+        # a parent can't get stuck. Normal exit is typing exit in the shell.
+        reader.suspend_for_x_terminal(on_rescue=self._proc.terminate)
+        try:
+            await asyncio.get_running_loop().run_in_executor(None, self._proc.wait)
+        finally:
+            reader.resume_from_x_terminal()
+            self._running = False
+            self.close()
+            self.app.invalidate()
 
     async def handle(self, action):
+        if self._running:
+            return
         if isinstance(action, ControlAction) and action.is_down and action.action in ("escape", "enter"):
             self.close()
 

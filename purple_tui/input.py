@@ -312,6 +312,12 @@ class EvdevReader:
         self._vt_away = False  # True while switched away to another VT
         self._vt_away_time: float = 0  # When _vt_away was set (for chvt race guard)
 
+        # True while a same-screen X terminal (xterm) is focused: grab is
+        # released so X delivers keys to it, and we drop every event so Purple
+        # stays inert underneath. No VT switch. Rescue closes it (see below).
+        self._suspended = False
+        self._on_terminal_rescue = None
+
     @property
     def _device(self):
         """Primary device (for backward compat with logging)."""
@@ -438,14 +444,26 @@ class EvdevReader:
         except Exception:
             return True  # Assume tty1 if we can't tell
 
-    def switch_to_tty2(self) -> None:
-        """Parent Menu 'Open Terminal': the same path as Ctrl+Alt+F2."""
-        if self._vt_away:
+    def suspend_for_x_terminal(self, on_rescue) -> None:
+        """Release the grab and stop forwarding events so an X client on the
+        same screen (xterm) receives the keyboard. No VT switch.
+
+        on_rescue() is invoked if the parent presses Ctrl+Alt+F1: it must close
+        the terminal so resume_from_x_terminal() runs, guaranteeing no one can
+        get stuck if the terminal never took focus.
+        """
+        if self._suspended:
             return
-        self._vt_away = True
-        self._vt_away_time = time.monotonic()
+        self._suspended = True
+        self._on_terminal_rescue = on_rescue
         self.release_grab()
-        self._switch_to_tty2()
+
+    def resume_from_x_terminal(self) -> None:
+        if not self._suspended:
+            return
+        self._suspended = False
+        self._on_terminal_rescue = None
+        self.reacquire_grab()
 
     def _switch_to_tty2(self) -> None:
         """Switch to tty2, which already has an autologin shell.
@@ -559,7 +577,11 @@ class EvdevReader:
                             logger.warning("Emergency VT switch: Ctrl+Alt+F1, switching back to tty1")
                             subprocess.Popen(["sudo", "chvt", "1"])
                             self._vt_away = False
-                            self.reacquire_grab()
+                            if not self._suspended:
+                                self.reacquire_grab()
+                        elif self._suspended and self._on_terminal_rescue is not None:
+                            logger.warning("Terminal rescue: Ctrl+Alt+F1, closing same-screen terminal")
+                            self._on_terminal_rescue()
 
                     # Ctrl+\ held 3s: toggle VT switch
                     if keycode == KeyCode.KEY_BACKSLASH:
@@ -573,7 +595,8 @@ class EvdevReader:
                                     logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching back to tty1")
                                     subprocess.Popen(["sudo", "chvt", "1"])
                                     self._vt_away = False
-                                    self.reacquire_grab()
+                                    if not self._suspended:
+                                        self.reacquire_grab()
                                 else:
                                     logger.warning("Emergency VT switch: Ctrl+\\ held 3s, switching to tty2")
                                     self._vt_away = True
@@ -596,9 +619,16 @@ class EvdevReader:
                         if time.monotonic() - self._vt_away_time > 0.5 and self._is_on_tty1():
                             logger.info("VT switch: back on tty1, reacquiring grab")
                             self._vt_away = False
-                            self.reacquire_grab()
+                            if not self._suspended:
+                                self.reacquire_grab()
                         else:
                             continue  # Don't forward events while away
+
+                    # Same-screen X terminal is focused: X delivers keys to it,
+                    # Purple ignores them. Grab is released; Ctrl+Alt+F1 above is
+                    # the rescue out.
+                    if self._suspended:
+                        continue
 
                     scancode = self._pending_scancodes.pop(dev_path, 0)
 

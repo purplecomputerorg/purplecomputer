@@ -248,6 +248,10 @@ Purple reads keyboard directly from evdev, bypassing the terminal. This gives us
 
 Parent mode can open a shell for admin tasks. This requires temporarily releasing the evdev grab so the terminal receives keyboard input.
 
-Terminal mode is a VT switch. `EvdevReader.switch_to_tty2()` marks the reader as away, releases the grab, and runs `sudo chvt 2`; tty2 has an autologin shell. The reader reacquires the grab on the first event after the VT is back on tty1 (`back` on tty2, or Ctrl+Alt+F1). This is the same path Ctrl+Alt+F2 uses, so there is one implementation.
+The Parent Menu terminal opens `xterm` as a sibling X client on the same screen (Purple is itself an X client; see `guides/canvas-architecture.md`). `EvdevReader.suspend_for_x_terminal(on_rescue)` releases the grab so X delivers keys to xterm, and sets `_suspended` so the read loop drops every event (Purple stays inert underneath but keeps running). `resume_from_x_terminal()` clears the flag and reacquires the grab. `TerminalScreen` (`rooms/parent_menu.py`) launches xterm, awaits its exit in an executor, and resumes in a `finally`, so a Popen failure or the process dying still restores input.
+
+No-stuck guarantees: normal exit is typing `exit` in the shell; if xterm never takes focus, Ctrl+Alt+F1 fires the rescue (`on_rescue` = SIGTERM the xterm), which ends the wait and resumes. Because `_suspended` drops events *after* the VT-combo handling but every reacquire is gated on `not self._suspended`, the deep escape (Ctrl+Alt+F2 to tty2, `back`/Ctrl+Alt+F1 to return) still works during a terminal session without grabbing the keyboard out from under xterm.
+
+The VT-switch machinery (`_switch_to_tty2` + `chvt`) stays as the emergency path (Ctrl+Alt+F2, or Ctrl+\ held 3s), even though the Parent Menu no longer uses it.
 
 **Important**: When flushing pending evdev events before reacquiring the grab, use `select()` with a 0 timeout to check for data before calling `read_one()`. Otherwise `read_one()` blocks forever.

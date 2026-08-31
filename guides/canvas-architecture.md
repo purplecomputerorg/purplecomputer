@@ -117,9 +117,11 @@ driver that lies; the app itself never asks for GL. The UI-ready marker
 (`/tmp/purple-ui-ready`) is touched after the first frame, which is what
 gates the compositor start.
 
-Terminal mode from the Parent Menu is a VT switch to tty2 (the same path as
-Ctrl+Alt+F2); the install flow ends on an in-app "All done" screen and
-execs `purple-reboot` on Enter.
+Terminal mode from the Parent Menu opens `xterm` as a sibling X client on the
+same screen (see `guides/keyboard-architecture.md`, Suspending for Terminal
+Access). Ctrl+Alt+F2 still VT-switches to tty2 as an emergency escape. The
+install flow ends on an in-app "All done" screen and execs `purple-reboot` on
+Enter.
 
 ## Working on it
 

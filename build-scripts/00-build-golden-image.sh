@@ -204,6 +204,7 @@ SOURCES
         libgl1-mesa-dri \
         matchbox-window-manager \
         picom \
+        xterm \
         fontconfig \
         fonts-noto-color-emoji \
         xkbset \
@@ -358,6 +359,12 @@ LEANINITRD
 
     # UI fonts ship inside purple_tui/fonts; Noto Color Emoji comes from apt above.
 
+    # Register IBM Plex Mono with fontconfig so the parent-menu xterm can resolve
+    # it by family (-fa "IBM Plex Mono"). The image excludes xfonts-*, so xterm
+    # has no core bitmap font to fall back to; this is the terminal's font.
+    mkdir -p "$MOUNT_DIR/usr/local/share/fonts/purple"
+    cp /purple-src/purple_tui/fonts/IBMPlexMono-*.ttf "$MOUNT_DIR/usr/local/share/fonts/purple/"
+
     # Install fontconfig rule to prioritize Noto Color Emoji
     # Without this, some emoji render as monochrome outlines instead of color
     log_info "Installing emoji fontconfig rule..."
@@ -379,6 +386,7 @@ TMPFILES
     cp -r /purple-src/packs "$MOUNT_DIR/opt/purple/"
     cp /purple-src/requirements.txt "$MOUNT_DIR/opt/purple/"
     cp /purple-src/scripts/debug-shell.sh "$MOUNT_DIR/opt/purple/"
+    cp /purple-src/scripts/parent-shell-rc.sh "$MOUNT_DIR/opt/purple/"
 
     # Copy on-device scripts (everything in scripts/on-device/)
     # These are available on the image for debugging from the parent menu terminal

@@ -288,7 +288,9 @@ class PlayRoom:
             g.draw_markup(sub, hint_px, sub_x, bottom - sub_h, "sans-bold", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         bottom -= sub_h
         line_h = g.line_height(line_px, "mono")
-        self.field.draw(g, rect.x + pad, bottom - line_h, width, line_px)
+        field_top = bottom - line_h
+        self.field.draw(g, rect.x + pad, field_top, width, line_px)
+        g.rect(P.LINE, (rect.x + pad, field_top + line_h, width, max(1, g.vh(0.22))))
         top_limit = rect.y + g.vh(1)
         y = bottom - line_h - g.vh(2.5)
         g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + g.vh(1)))
@@ -304,7 +306,7 @@ class PlayRoom:
     def _answer_px(self, g, e) -> int:
         plain = strip_markup(e.markup).strip()
         if is_emoji(plain.replace(" ", "")) and len(plain.replace(" ", "")) <= 12:
-            return g.vh(9)
+            return g.vh(6)
         return g.vh(4.2)
 
     def _gutter(self, g) -> int:
@@ -319,7 +321,7 @@ class PlayRoom:
     def _draw_entry(self, g, e, x, y, width):
         px, gutter = g.vh(ASK_VH), self._gutter(g)
         if e.kind == "ask":
-            g.draw_text(f"{ASK_LABEL} →", px, x, y, "mono-bold", P.ACCENT)
+            g.draw_text(f"{ASK_LABEL} →", px, x, y, "mono-bold", P.DIM)
             g.draw_text(e.markup, px, x + gutter, y, "mono", P.MUTED)
             return
         answer_px = self._answer_px(g, e)

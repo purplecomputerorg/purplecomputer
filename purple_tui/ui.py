@@ -380,10 +380,10 @@ class Picker(Dialog):
             label = opt[1]
             color = P.BG if on else P.TEXT
             if len(opt) == 3:
-                g.draw_text(label, g.vh(2.6), box.centerx, box.centery - g.vh(1.2), "sans-heavy" if on else "sans-bold", color, anchor="center")
+                g.draw_text(label, g.vh(2.6), box.centerx, box.centery - g.vh(1.2), "mono-heavy" if on else "mono-bold", color, anchor="center")
                 g.draw_text(opt[2], g.vh(1.9), box.centerx, box.centery + g.vh(1.4), "sans", color if on else P.MUTED, anchor="center")
             else:
-                g.draw_text(label, g.vh(2.6), box.centerx, box.centery, "sans-heavy" if on else "sans-bold", color, anchor="center")
+                g.draw_text(label, g.vh(2.6), box.centerx, box.centery, "mono-heavy" if on else "mono-bold", color, anchor="center")
             y += oh + g.vh(1)
 
     def selected_item_label(self):

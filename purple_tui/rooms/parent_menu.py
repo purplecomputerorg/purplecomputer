@@ -19,7 +19,7 @@ from .. import palette as P
 from ..gfx import FONT_DIR
 from ..constants import SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, TRACK, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
+from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -1309,7 +1309,7 @@ class ParentMenu(Overlay):
         px = min(g.vh(2.4), int(row_h * 0.55))
         for i, (item_id, label) in enumerate(self.items):
             if self._is_section(i):
-                g.draw_text(label.upper(), g.vh(1.6), box.x + g.vw(3), y + sec_h - g.vh(1.4), "mono-bold", P.DIM, anchor="bottomleft", track=TRACK)
+                g.draw_text(label, g.vh(1.9), box.x + g.vw(3), y + sec_h - g.vh(1.4), "mono-italic", P.DIM, anchor="bottomleft")
                 y += sec_h
                 continue
             if item_id in ("menu-support", "menu-volume") and self.app.audio_ok is False:
@@ -1319,11 +1319,11 @@ class ParentMenu(Overlay):
             if on:
                 g.rect(P.PRIMARY, r)
             fg = P.BG if on else (P.DIM if self._disabled(item_id) else P.TEXT)
-            g.draw_text(label, px, r.x + g.vw(1.5), r.centery, "sans-bold", fg, anchor="midleft")
+            g.draw_text(label, px, r.x + g.vw(1.5), r.centery, "mono-bold" if on else "mono", fg, anchor="midleft")
             y += row_h
         g.draw_text("▲ ▼   Enter   Esc", g.vh(2.0), box.centerx, y + g.vh(1.5), "mono", P.MUTED, anchor="midtop")
         g.draw_markup("Purple is keyboard only, on purpose!\nKids explore by typing.", g.vh(1.9), box.x, y + g.vh(5),
-                      "sans", P.DIM, box.w, "center", P.SURFACE)
+                      "mono", P.DIM, box.w, "center", P.SURFACE)
 
 
 def write_computer_name(name: str):

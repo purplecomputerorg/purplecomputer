@@ -29,9 +29,13 @@ FACES = {
     "mono": "IBMPlexMono-Regular.ttf",
     "mono-bold": "IBMPlexMono-SemiBold.ttf",
     "mono-heavy": "IBMPlexMono-Bold.ttf",
+    "mono-italic": "IBMPlexMono-Italic.ttf",  # parent-menu section headers
     "block": "PressStart2P-Regular.ttf",  # one letter per square Art cell
+    "nerd": "SymbolsNerdFontMono-Regular.ttf",  # mono-tinted UI icon glyphs
     "symbols": "DejaVuSans.ttf",  # fallback for glyphs the faces above lack
 }
+# A char the requested face lacks falls through this chain, in order.
+FALLBACK_FACES = ("nerd", "symbols")
 EMOJI_FONT_PATHS = [
     os.environ.get("PURPLE_EMOJI_FONT", ""),
     "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf",
@@ -267,15 +271,20 @@ class Gfx:
         def make():
             if not text:
                 return pygame.Surface((0, self.line_height(px, face)), pygame.SRCALPHA)
-            runs = [(t, e) for chunk, e in split_runs(text) for t in ([chunk] if e else self._by_coverage(face, chunk))]
-            if _raw or (not track and len(runs) == 1 and not runs[0][1] and self._covers(face, runs[0][0])):
+            runs = []  # (chunk, face) with face None for an emoji run
+            for chunk, e in split_runs(text):
+                if e:
+                    runs.append((chunk, None))
+                else:
+                    runs.extend(self._split_faces(face, chunk))
+            if _raw or (not track and len(runs) == 1 and runs[0][1] == face):
                 return self.font(face, px).render(text, True, rgb(color))
             pieces = []
-            for t, e in runs:
-                if e:
+            for t, rf in runs:
+                if rf is None:
                     pieces.append(self.emoji(t, px))
                     continue
-                f = self.font(face if self._covers(face, t) else "symbols", px)
+                f = self.font(rf, px)
                 pieces.extend(f.render(u, True, rgb(color)) for u in (t if track else [t]))
             gap = round(px * track)
             h = max(p.get_height() for p in pieces)
@@ -303,18 +312,28 @@ class Gfx:
                 return False
         return True
 
-    def _by_coverage(self, face: str, text: str) -> list:
-        """Split text into maximal runs the face can and cannot draw."""
-        out, buf, state = [], "", None
+    def _resolve_face(self, face: str, ch: str) -> str:
+        """The face that draws ch: the requested one, then the fallback chain
+        (nerd icons, then DejaVu symbols). Spaces stay on the requested face."""
+        if ch.isspace() or self._covers(face, ch):
+            return face
+        for fb in FALLBACK_FACES:
+            if fb != face and self._covers(fb, ch):
+                return fb
+        return FALLBACK_FACES[-1]
+
+    def _split_faces(self, face: str, text: str) -> list:
+        """Split text into maximal (run, face) pairs by resolved face."""
+        out, buf, cur = [], "", None
         for ch in text:
-            ok = self._covers(face, ch)
-            if state is None or ok == state:
+            rf = self._resolve_face(face, ch)
+            if cur is None or rf == cur:
                 buf += ch
             else:
-                out.append(buf)
+                out.append((buf, cur))
                 buf = ch
-            state = ok
-        return out + [buf] if buf else out
+            cur = rf
+        return out + [(buf, cur)] if buf else out
 
     def measure(self, text: str, px: int, face: str = "sans", track: float = 0) -> tuple:
         return self.text(text, px, face, track=track).get_size()

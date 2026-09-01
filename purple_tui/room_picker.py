@@ -3,10 +3,14 @@
 import pygame
 
 from . import palette as P
+from .constants import (
+    ICON_BROOM, ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_ROBOT, ICON_TIME_TRAVEL,
+    ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
+)
 from .keyboard import CharacterAction, ControlAction, NavigationAction
 from .ui import TRACK, Dialog, Overlay, Picker, draw_scrim, draw_window, window_title_height
 
-ROOM_OPTIONS = [("play", "🎈", "Play"), ("music", "🎵", "Music"), ("art", "🎨", "Art")]
+ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
 ROWS, EXTRAS, CODE = 0, 1, 2
 
@@ -15,7 +19,7 @@ def volume_badge(vol: int):
     steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
     label = next(lbl for lvl, lbl in steps if vol <= lvl)
     filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
-    return ("🔇" if vol == 0 else "🔊"), "█" * filled + "░" * (10 - filled), label
+    return (ICON_VOLUME_OFF if vol == 0 else ICON_VOLUME_HIGH), "█" * filled + "░" * (10 - filled), label
 
 
 class RoomPicker(Overlay):
@@ -28,11 +32,11 @@ class RoomPicker(Overlay):
     def _locked_volume(self):
         lock = self.app._volume_lock
         if lock == 0:
-            return "🔇", "Silent Mode"
+            return ICON_VOLUME_OFF, "Silent Mode"
         if lock is not None:
-            return "🔊", "Locked"
+            return ICON_VOLUME_HIGH, "Locked"
         if self.app.audio_ok is False:
-            return "🔇", "No Sound"
+            return ICON_VOLUME_OFF, "No Sound"
         return None
 
     async def handle(self, action):
@@ -106,16 +110,16 @@ class RoomPicker(Overlay):
                        f"Press {i + 1}" + (" or Enter" if on else ""), icon=icon)
         y += th + gap
         locked = self._locked_volume()
-        vol_label = f"{locked[0]}  {locked[1]}" if locked else "🔊  Volume"
+        vol_label = f"{locked[0]}  {locked[1]}" if locked else f"{ICON_VOLUME_HIGH}  Volume"
         extras = [(vol_label, "" if locked else "Press V", locked is not None),
-                  ("🧹  Clear", "Press C", False), ("⏪  Time Travel", "Press T", False)]
+                  (f"{ICON_BROOM}  Clear", "Press C", False), (f"{ICON_TIME_TRAVEL}  Time Travel", "Press T", False)]
         for i, (label, key, disabled) in enumerate(extras):
             on = self.row == EXTRAS and self.col == i
             self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, eh), on, label,
                        "" if disabled else key + (" or Enter" if on else ""), disabled)
         if self.code_row:
             y += eh + gap
-            label = "🤖  Close Code" if self.app._code_panel_active else "🤖  Open Code"
+            label = f"{ICON_ROBOT}  Close Code" if self.app._code_panel_active else f"{ICON_ROBOT}  Open Code"
             self._tile(g, pygame.Rect(x0, y, 3 * tw + 2 * gap, eh), self.row == CODE, label,
                        "Space" + (" or Enter" if self.row == CODE else ""))
         g.draw_text("Enter picks   •   Hold Esc for grown-ups", g.vh(2.0), box.centerx, box.bottom - g.vh(5.5), "mono", P.MUTED, anchor="center")
@@ -127,9 +131,9 @@ class RoomPicker(Overlay):
         if not on and not disabled:
             g.rect(P.LINE, r, width=1)
         fg = P.BG if on else (P.DIM if disabled else P.TEXT)
-        cy = r.centery + (g.vh(2.5) if icon else 0)
+        cy = r.centery + (g.vh(2.0) if icon else 0)
         if icon:
-            g.draw_text(icon, g.vh(5), r.centerx, cy - g.vh(5), "sans", fg, anchor="center")
+            g.draw_text(icon, g.vh(3.8), r.centerx, cy - g.vh(4.3), "nerd", fg, anchor="center")
         g.draw_text(label.upper(), g.vh(2.4), r.centerx, cy - g.vh(1.6), "mono-bold", fg, anchor="center", track=TRACK)
         if sub:
             g.draw_text(sub, g.vh(1.9), r.centerx, cy + g.vh(1.6), "mono", fg if on else P.MUTED, anchor="center")

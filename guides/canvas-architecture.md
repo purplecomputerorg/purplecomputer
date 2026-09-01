@@ -21,7 +21,11 @@ Design rules, in priority order:
 4. The prompt stays monospace with a block caret. That is the DOS memory,
    and the chrome follows it: titles, room tabs, keycaps and hints are IBM
    Plex Mono, labels in tracked caps, the active thing in inverse video.
-   Reading text (replies, dialog bodies) is IBM Plex Sans.
+   Menus are mono too: the Parent Menu list and every Picker option label,
+   with section headers in Plex Mono Italic (dim, mixed case). Reading text
+   (replies, and descriptive dialog bodies like a confirm's explanation) is
+   IBM Plex Sans. UI icons are mono-tinted Nerd Font glyphs (`ICON_*`) that
+   take the text color; full color is reserved for the kid's own output.
 5. Square corners everywhere. Blockiness is otherwise a per-element choice:
    Art cells and Music tiles have hard edges, and a letter written in an Art
    cell is a block letter (Press Start 2P, one glyph per square); everything

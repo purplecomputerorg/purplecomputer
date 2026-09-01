@@ -19,7 +19,8 @@ import pygame
 from . import boot_log
 from . import palette as P
 from .constants import (
-    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, LIVE_AUDIO_MARKER, ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
+    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_CHAT, ICON_MUSIC, ICON_PALETTE, LIVE_AUDIO_MARKER,
+    ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
     SYSTEM_VOLUME_MAX, UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
 )
@@ -34,7 +35,7 @@ from .timeline import RoomTimeline
 from .ui import TRACK, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
-ROOM_ICONS = {"play": "🎈", "music": "🎵", "art": "🎨"}
+ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE}
 ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  ← →", "art": "Arrows move  ← ↑ ↓ →"}
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
@@ -1141,7 +1142,7 @@ class PurpleApp:
         y = frame.bottom + g.vh(6) // 2
         px = g.vh(1.9)
         if self._littles_mode:
-            g.draw_text("🎈 Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")
+            g.draw_text("Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
         g.draw_text("⌨ Purple is always keyboard only", px, frame.x, y, "mono", P.DIM, anchor="midleft")
         gap = g.vw(1.4)
@@ -1159,12 +1160,15 @@ class PurpleApp:
         g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
 
     def _draw_toasts(self):
+        """A calm centered pill above the status strip, stacking upward, so a
+        transient message never lands on top of the room's content."""
         g = self.g
-        y = g.vh(9)
-        for t in self._toasts[-3:]:
-            r = g.draw_text(t.text, g.vh(2.4), g.w - g.vw(3), y, "sans-bold", P.TEXT, anchor="topright", bg=P.TILE, pad=g.vh(1))
-            g.rect(P.LINE, r.inflate(g.vh(2), g.vh(2)), width=1)
-            y = r.bottom + g.vh(2.2)
+        pad = g.vh(1.1)
+        y = g.h - g.vh(11)
+        for t in reversed(self._toasts[-3:]):
+            r = g.draw_text(t.text, g.vh(2.4), g.w // 2, y, "mono-bold", P.TEXT, anchor="midbottom", bg=P.SURFACE, pad=pad)
+            g.rect(P.LINE, r.inflate(pad * 2, pad * 2), width=1)
+            y = r.top - pad * 2 - g.vh(1.4)
 
 
 def _read(path: str) -> str:

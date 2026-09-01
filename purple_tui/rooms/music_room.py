@@ -11,7 +11,7 @@ import pygame
 from .. import palette as P
 from ..audio import play_safe
 from ..code_runner import MusicCodeRunner
-from ..constants import HOLD_OR_TAP_THRESHOLD
+from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_MUSIC, ICON_ROBOT
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ..loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ..mixer import mixer_generation, mixer_ready_for_play, warm_mixer
@@ -461,10 +461,10 @@ class MusicRoom:
 
     # ---------------------------------------------------------------- input
     def _toggle_letters(self):
+        # The header shows the mode (instrument vs Say Letters) persistently,
+        # so the switch needs no toast over the keys.
         self.letters_mode = not self.letters_mode
-        label = "Say Letters" if self.letters_mode else f"🎵 {INSTRUMENTS[self.instrument_index][1]}"
-        self.app.clear_notifications()
-        self.app.notify(label)
+        self.app.invalidate()
 
     def _letters_debounce_drop(self, lookup: str, now: float) -> bool:
         threshold = LETTERS_SAME_KEY_DEBOUNCE_S if lookup == self._last_letter_key else LETTERS_CROSS_KEY_DEBOUNCE_S
@@ -512,8 +512,6 @@ class MusicRoom:
             if action.direction in ("left", "right"):
                 step = 1 if action.direction == "right" else -1
                 self.shift_root((self.root_index + step) % len(FRIENDLY_KEYS), step)
-                self.app.clear_notifications()
-                self.app.notify(f"🎵 Key {FRIENDLY_KEY_NAMES[self.root_index]}")
             return
         if isinstance(action, CharacterAction):
             if action.is_repeat or not action.char:
@@ -544,8 +542,7 @@ class MusicRoom:
             self._stop_enter_ring()
             if self.enter_hold.on_up():
                 self.instrument_index = (self.instrument_index + 1) % len(INSTRUMENTS)
-                self.app.clear_notifications()
-                self.app.notify(f"🎵 {INSTRUMENTS[self.instrument_index][1]}")
+                self.app.invalidate()
 
     def _flush_enter(self):
         self.enter_hold.on_other_key()
@@ -591,7 +588,7 @@ class MusicRoom:
             px, cy = g.vh(1.9), rect.bottom - hint_h // 2
             g.draw_text(self._hint_text(), px, rect.x + g.vw(1.5), cy, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled:
-                g.draw_text("🤖 Hold Space: write code", px, rect.right - g.vw(1.5), cy, "mono", P.DIM, anchor="midright")
+                g.draw_text(f"{ICON_ROBOT} Hold Space: write code", px, rect.right - g.vw(1.5), cy, "mono", P.DIM, anchor="midright")
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
@@ -607,7 +604,7 @@ class MusicRoom:
     def _draw_header(self, g, r):
         px = g.vh(1.9)
         cy = r.centery
-        inst = f"🎵 {INSTRUMENTS[self.instrument_index][1]}"
+        inst = f"{ICON_MUSIC} {INSTRUMENTS[self.instrument_index][1]}"
         if self.app._littles_mode:
             draw_label(g, inst, px, r.centerx, cy, P.TEXT, anchor="center")
             return

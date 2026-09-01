@@ -45,7 +45,7 @@ def test_analyze_recovers_loop_gain_wherever_the_recording_starts(lead):
     assert "loop gain -20 dB" in r.summary()
 
 
-@pytest.mark.parametrize("size", [RATE // 40 * 2, 333])  # one hop, and odd so sample pairs straddle chunks
+@pytest.mark.parametrize("size", [RATE // 40 * 2, 333, 3])  # one hop; odd so pairs straddle; tiny so rest carries every chunk
 def test_analyze_streams_without_ever_holding_a_full_recording(size):
     raw = _recording(-20)
     r = sound_check.analyze(raw[i:i + size] for i in range(0, len(raw), size))
@@ -222,8 +222,10 @@ class _FakeProc:
 
 
 @pytest.fixture
-def fake_audio_procs(monkeypatch):
-    """Popen faked: parecord's stdout is a real pipe the test writes, paplay 'plays' for 0.2 s."""
+def fake_audio_procs(monkeypatch, request):
+    """Popen faked: parecord's stdout is a real pipe the test writes, paplay
+    'plays' for `request.param` seconds (0.2 s by default)."""
+    paplay_runtime = getattr(request, "param", 0.2)
     read_fd, write_fd = os.pipe()
     procs = {}
 
@@ -231,7 +233,7 @@ def fake_audio_procs(monkeypatch):
         if cmd[0] == "parecord":
             procs["parecord"] = _FakeProc(stdout=os.fdopen(read_fd, "rb", buffering=0))
         elif cmd[0] == "paplay":
-            procs["paplay"] = _FakeProc(runtime=0.2)
+            procs["paplay"] = _FakeProc(runtime=paplay_runtime)
             procs["paplay"].cmd = cmd
         else:
             pytest.fail(f"unexpected Popen: {cmd}")
@@ -245,11 +247,12 @@ def fake_audio_procs(monkeypatch):
         pass
 
 
-def _feed(write_fd, data):
+def _feed(write_fd, data, close=True):
     view = memoryview(data)
     while view:
         view = view[os.write(write_fd, view):]
-    os.close(write_fd)
+    if close:
+        os.close(write_fd)
 
 
 def test_capture_streams_the_pipe_and_cleans_up(fake_audio_procs, tmp_path):
@@ -260,6 +263,32 @@ def test_capture_streams_the_pipe_and_cleans_up(fake_audio_procs, tmp_path):
     assert r.heard and r.loop_gain_db == pytest.approx(-20, abs=0.5)
     rec = procs["parecord"]
     assert "terminate" in rec.ended and rec.stdout.closed
+
+
+def test_capture_ends_on_the_tail_while_the_mic_keeps_streaming(fake_audio_procs, tmp_path):
+    """The real-hardware path: parecord never EOFs, so capture must play the
+    chime and end 0.3 s after paplay finishes, not stall to the hard cap."""
+    write_fd, procs = fake_audio_procs
+    threading.Thread(target=_feed, args=(write_fd, _recording(-20), False), daemon=True).start()
+    began = time.monotonic()
+    r = sound_check._capture("spk", "mic", tmp_path / "chime.wav")
+    assert r.heard and r.loop_gain_db == pytest.approx(-20, abs=0.5)
+    assert procs["paplay"].cmd == ["paplay", "-d", "spk", str(tmp_path / "chime.wav")]
+    assert 0.9 < time.monotonic() - began < 3  # tail path, not MAX_CAPTURE_SECONDS
+
+
+@pytest.mark.parametrize("fake_audio_procs", [100.0], indirect=True)  # paplay that never returns
+def test_capture_stops_at_the_hard_cap_when_the_chime_never_finishes(fake_audio_procs, tmp_path, monkeypatch):
+    """If the mic keeps streaming and paplay never returns, the deadline ends
+    capture and both children are cleaned up."""
+    monkeypatch.setattr(sound_check, "MAX_CAPTURE_SECONDS", 1.1)
+    write_fd, procs = fake_audio_procs
+    threading.Thread(target=_feed, args=(write_fd, _recording(-20), False), daemon=True).start()
+    began = time.monotonic()
+    r = sound_check._capture("spk", "mic", tmp_path / "chime.wav")
+    assert r.heard
+    assert "kill" in procs["paplay"].ended and "terminate" in procs["parecord"].ended
+    assert 1.0 < time.monotonic() - began < 3
 
 
 def test_capture_still_plays_the_chime_when_the_mic_delivers_nothing(fake_audio_procs, tmp_path):

@@ -7,7 +7,7 @@ import re
 import time
 
 from . import palette as P
-from .constants import HOLD_OR_TAP_THRESHOLD
+from .constants import HOLD_OR_TAP_THRESHOLD, ICON_LOOP, ICON_ROBOT, ICON_TIME_TRAVEL
 from .content import get_content
 from .keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from .loop_station import LOOPING, RECORDING
@@ -184,7 +184,7 @@ class CodePanel:
         y += g.line_height(px, "mono")
         sub = self.field.autocomplete_markup or f"[dim]{self.field.recall_text() or self.hints.current}[/]"
         g.draw_markup(sub, sub_px, self.field.text_x(g, rect.x + g.vw(1), px, "Code"), y, "mono", P.MUTED, rect.w - g.vw(26), dim_to=P.SURFACE)
-        g.draw_text("🤖 Hold Space: close code", sub_px, rect.right - g.vw(1), y + g.line_height(sub_px, "mono") // 2, "mono", P.DIM, anchor="midright")
+        g.draw_text(f"{ICON_ROBOT} Hold Space: close code", sub_px, rect.right - g.vw(1), y + g.line_height(sub_px, "mono") // 2, "mono", P.DIM, anchor="midright")
 
 
 class LoopPanel:
@@ -205,7 +205,7 @@ class LoopPanel:
             frac = self.loop.recording_progress()
             action = "Play any keys    Space: play it back    Esc: exit"
         elif st == LOOPING:
-            head = "🔁 Looping and recording"
+            head = f"{ICON_LOOP} Looping and recording"
             frac = self.loop.loop_progress()
             action = "Play on top    Esc: exit"
         else:
@@ -247,7 +247,7 @@ class TimeTravelBar:
 
     def draw(self, g, rect):
         cx = rect.centerx
-        g.draw_text("⏪ Time Travel", g.vh(2.6), cx, rect.y + g.vh(1.5), "sans-heavy", P.TEXT, anchor="midtop")
+        g.draw_text(f"{ICON_TIME_TRAVEL} Time Travel", g.vh(2.6), cx, rect.y + g.vh(1.5), "sans-heavy", P.TEXT, anchor="midtop")
         px = g.vh(2.4)
         markup = self.dots_markup()
         w = g.markup_size(markup, px)[0]

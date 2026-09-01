@@ -4,8 +4,8 @@ scrolls up; the line you're typing sits above the rotating 'Try:' hint."""
 import pygame
 
 from .. import palette as P
+from ..constants import ICON_SPARK, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..content import get_content
-from ..gfx import is_emoji, strip_markup
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..palette import get_key_color
 from ..play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
@@ -30,9 +30,7 @@ PLAY_HINTS = [
 ]
 TIMELINE_MAX_ENTRIES = 100
 MAX_HISTORY = 60
-ASK_LABEL = "Ask"
-ASK_VH = 2.4                      # echo line size, percent of screen height
-SPEECH_ICONS = {"generating": "··", "playing": "🔊", "filtered": "🔇"}
+SPEECH_ICONS = {"generating": "··", "playing": ICON_VOLUME_HIGH, "filtered": ICON_VOLUME_OFF}
 
 
 def _play_validator(word: str) -> bool:
@@ -274,59 +272,54 @@ class PlayRoom:
 
     # ---------------------------------------------------------------- drawing
     def draw(self, g, rect):
-        pad = g.vw(2)
-        line_px = g.vh(3.8)
+        em = g.em
+        pad = em(1.6)
+        x = rect.x + pad
         width = rect.w - 2 * pad
-        bottom = rect.bottom - g.vh(1.5)
-        hint_px = g.vh(1.9)
-        g.draw_text(self.hints.current, hint_px, rect.centerx, bottom, "mono", P.DIM, anchor="midbottom")
-        bottom -= g.vh(3.4)
-        sub = self.field.autocomplete_markup or (f"[dim]{self.field.recall_text()}[/]" if self.field.recall_text() else "")
-        sub_h = g.vh(3)
-        sub_x = self.field.text_x(g, rect.x + pad, line_px)
-        if sub:
-            g.draw_markup(sub, hint_px, sub_x, bottom - sub_h, "sans-bold", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
-        bottom -= sub_h
+        line_px = em(1.05)
+        bottom = rect.bottom - em(1.4)
+        g.draw_text(f"{ICON_SPARK}  {self.hints.current}", em(0.95), x, bottom, "mono", P.DIM, anchor="bottomleft")
+        bottom -= g.line_height(em(0.95), "mono") + em(1.1)
+        sub = self.field.autocomplete_markup or \
+            f"[dim]{self.field.recall_text() or 'Type a word, then press Enter'}[/]"
+        sub_h = g.line_height(em(0.92), "mono")
+        sub_x = self.field.text_x(g, x, line_px, label_px=em(1.2))
+        g.draw_markup(sub, em(0.92), sub_x, bottom - sub_h, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
+        bottom -= sub_h + em(0.4)
+        box = pygame.Rect(sub_x - em(0.6), bottom - em(2.0), 0, em(2.0))
+        box.w = min(rect.right - pad - box.x, em(21))
+        g.rect(P.FIELD, box, radius=em(0.42))
+        g.rect(P.LINE, box, width=1, radius=em(0.42))
         line_h = g.line_height(line_px, "mono")
-        field_top = bottom - line_h
-        self.field.draw(g, rect.x + pad, field_top, width, line_px)
-        g.rect(P.LINE, (rect.x + pad, field_top + line_h, width, max(1, g.vh(0.22))))
-        top_limit = rect.y + g.vh(1)
-        y = bottom - line_h - g.vh(2.5)
-        g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + g.vh(1)))
+        self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2))
+        top_limit = rect.y + em(1)
+        y = box.y - em(1)
+        g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + em(0.5)))
         for e in reversed(self.history[:len(self.history) - self.scroll] if self.scroll else self.history):
             h = self._entry_height(g, e, width)
             y -= h
             if y + h < top_limit:
                 break
-            self._draw_entry(g, e, rect.x + pad, y, width)
-            y -= g.vh(1) if e.kind == "answer" else g.vh(0.4)
+            self._draw_entry(g, e, x, y, width)
+            y -= em(0.3) if e.kind == "answer" else em(0.1)
         g.surface.set_clip(None)
 
     def _answer_px(self, g, e) -> int:
-        plain = strip_markup(e.markup).strip()
-        if is_emoji(plain.replace(" ", "")) and len(plain.replace(" ", "")) <= 12:
-            return g.vh(6)
-        return g.vh(4.2)
-
-    def _gutter(self, g) -> int:
-        """Width of the 'Ask →' column; echoes and answers both start after it."""
-        return g.measure(f"{ASK_LABEL} →", g.vh(ASK_VH), "mono-bold")[0] + g.vh(ASK_VH) // 2
+        return g.em(2.2)
 
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
-            return g.line_height(g.vh(ASK_VH), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width - self._gutter(g))[1]
+            return g.line_height(g.em(1.05), "mono")
+        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width)[1]
 
     def _draw_entry(self, g, e, x, y, width):
-        px, gutter = g.vh(ASK_VH), self._gutter(g)
         if e.kind == "ask":
-            g.draw_text(f"{ASK_LABEL} →", px, x, y, "mono-bold", P.DIM)
-            g.draw_text(e.markup, px, x + gutter, y, "mono", P.MUTED)
+            px = g.em(1.05)
+            r = g.draw_text("Ask → ", px, x, y, "mono-bold", P.MUTED)
+            g.draw_text(e.markup, px, r.right, y, "mono", P.MUTED)
             return
-        answer_px = self._answer_px(g, e)
-        lines = g.layout(e.markup, answer_px, "sans-bold", P.TEXT, width - gutter, P.SURFACE)
+        ax = x + g.em(0.1)
         icon = SPEECH_ICONS.get(e.speech, "")
-        g.draw_text(f"{icon} →" if icon else "→", px, x + gutter - px // 2, y + lines[0][1] // 2,
-                    "mono-bold", P.TEXT if icon else P.MUTED, anchor="midright")
-        g.draw_markup(e.markup, answer_px, x + gutter, y, "sans-bold", P.TEXT, width - gutter, dim_to=P.SURFACE)
+        if icon:
+            ax = g.draw_text(icon, g.em(1.05), ax, y, "mono-bold", P.TEXT).right + g.em(0.5)
+        g.draw_markup(e.markup, self._answer_px(g, e), ax, y, "sans-bold", P.TEXT, width - (ax - x), dim_to=P.SURFACE)

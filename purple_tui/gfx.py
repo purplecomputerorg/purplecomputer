@@ -229,6 +229,11 @@ class Gfx:
     def vw(self, pct: float) -> int:
         return max(1, round(self.w * pct / 100))
 
+    def em(self, n: float = 1.0) -> int:
+        """The chrome unit: 1.3% of screen width, the same scale the design
+        mock used, so its em-based paddings, gaps and radii port verbatim."""
+        return max(1, round(self.w * 0.013 * n))
+
     # ----- fonts -----
     def font(self, face: str, px: int) -> pygame.font.Font:
         key = (face, px)
@@ -345,8 +350,8 @@ class Gfx:
     def fill(self, color, rect=None):
         self.surface.fill(rgb(color), rect)
 
-    def rect(self, color, rect, width=0):
-        pygame.draw.rect(self.surface, rgb(color), rect, width)
+    def rect(self, color, rect, width=0, radius=0):
+        pygame.draw.rect(self.surface, rgb(color), rect, width, border_radius=radius)
 
     def draw_text(self, text, px, x, y, face="sans", color="#ffffff", anchor="topleft", bg=None, pad=0, track: float = 0) -> pygame.Rect:
         """Blit one line. anchor is any pygame.Rect attribute name (topleft,
@@ -368,7 +373,7 @@ class Gfx:
         for chunk, style in parse_markup(markup):
             fg = style.get("fg", color)
             if style.get("dim"):
-                fg = mix(fg, dim_to or "#1e1033", 0.5)
+                fg = mix(fg, dim_to or "#1d1234", 0.5)
             f = face
             if style.get("bold") and not face.endswith("bold") and not face.endswith("heavy"):
                 f = face + "-bold"

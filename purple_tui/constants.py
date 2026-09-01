@@ -112,6 +112,11 @@ ICON_TAB = "󰌒"                # nf-md-keyboard_tab
 ICON_BROOM = "󰃢"              # nf-md-broom (start fresh / clear)
 ICON_ROBOT = "󰚩"              # nf-md-robot (same as ICON_CODE, for code space toggle)
 ICON_TIME_TRAVEL = "󰕍"        # nf-md-restore (Time Travel scrubbing)
+ICON_COMPUTER = "\U000F0379"  # nf-md-monitor (this computer, title bar)
+ICON_LAPTOP = "\U000F0322"    # nf-md-laptop (lid status lines)
+ICON_PLUG = "\U000F06A5"      # nf-md-power_plug (plugged in)
+ICON_HOURGLASS = "\U000F051F" # nf-md-timer_sand (countdowns)
+ICON_SPARK = "\U000F0674"     # nf-md-creation (the 'Try:' suggestion line)
 
 # Battery icons (nf-md-battery variants)
 ICON_BATTERY_FULL = "󰁹"     # nf-md-battery (100%)

@@ -11,6 +11,7 @@ import time
 import pygame
 
 from . import palette as P
+from .constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from .gfx import Gfx, rgb
 from .keyboard import CharacterAction, ControlAction, NavigationAction
 
@@ -83,7 +84,14 @@ _COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in
 MATH_OPERATORS = {'+', '-', '×', '÷'}
 MAX_RECALL_LEN = 40
 CANCELLED = object()  # a picker closed with Esc, distinct from choosing None
-TRACK = 0.12          # letter spacing for mono caps labels (titles, tabs, keycaps)
+
+
+def volume_badge(vol: int):
+    """(icon, bar, label) for a volume level; Play, the picker and toasts share it."""
+    steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
+    label = next(lbl for lvl, lbl in steps if vol <= lvl)
+    filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
+    return (ICON_VOLUME_OFF if vol == 0 else ICON_VOLUME_HIGH), "█" * filled + "░" * (10 - filled), label
 
 
 class TextField:
@@ -206,14 +214,16 @@ class TextField:
         return "   ".join(parts) + "   [dim]⇥ Tab[/]"
 
     # --- drawing ---
-    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask") -> int:
+    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask", label_px: int | None = None) -> int:
         """Where typed text starts, so hints under the field can line up with it."""
-        return x + g.measure(f"{label} →", px, "mono-bold")[0] + px // 2
+        return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + px // 2
 
-    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask") -> pygame.Rect:
-        """'Label →  text▌' in the mono face; returns the rect used."""
-        g.draw_text(f"{label} →", px, x, y, "mono-bold", P.ACCENT)
-        tx = self.text_x(g, x, px, label)
+    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask", label_px: int | None = None) -> pygame.Rect:
+        """'Label →  text▌' in the mono face; returns the rect used.
+        label_px lets the label sit a step larger than the typed text."""
+        mid = y + g.line_height(px, "mono") // 2
+        g.draw_text(f"{label} →", label_px or px, x, mid, "mono-heavy", P.ACCENT, anchor="midleft")
+        tx = self.text_x(g, x, px, label, label_px)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
         g.draw_text(shown, px, tx, y, "mono", P.TEXT)
@@ -376,9 +386,9 @@ class Picker(Dialog):
         for i, opt in enumerate(self.options):
             box = pygame.Rect(rect.x, y, rect.w, oh)
             on = i == self.selected
-            g.rect(P.PRIMARY if on else P.TILE, box)
+            g.rect(P.PRIMARY if on else P.TILE, box, radius=g.em(0.35))
             label = opt[1]
-            color = P.BG if on else P.TEXT
+            color = P.ON_PRIMARY if on else P.TEXT
             if len(opt) == 3:
                 g.draw_text(label, g.vh(2.6), box.centerx, box.centery - g.vh(1.2), "mono-heavy" if on else "mono-bold", color, anchor="center")
                 g.draw_text(opt[2], g.vh(1.9), box.centerx, box.centery + g.vh(1.4), "sans", color if on else P.MUTED, anchor="center")
@@ -441,32 +451,38 @@ def window_title_height(g: Gfx, title: str) -> int:
 
 
 def draw_window(g: Gfx, box: pygame.Rect, title: str = "") -> int:
-    """A dialog box: single-line frame and a title strip across the top, the
-    way a DOS window carried its name. Returns the y where the body starts."""
-    g.rect(P.SURFACE, box)
-    g.rect(P.LINE, box, width=2)
+    """A dialog box: rounded frame and a title strip across the top.
+    Returns the y where the body starts."""
+    radius = g.em(0.6)
+    g.rect(P.SURFACE, box, radius=radius)
+    g.rect(P.LINE, box, width=1, radius=radius)
     if not title:
         return box.y
     strip = pygame.Rect(box.x, box.y, box.w, window_title_height(g, title))
-    g.rect(P.TILE, strip)
-    g.rect(P.LINE, (box.x, strip.bottom - 1, box.w, 2))
-    g.draw_text(title.upper(), g.vh(2.0), strip.centerx, strip.centery, "mono-bold", P.TEXT, anchor="center", track=TRACK)
+    pygame.draw.rect(g.surface, rgb(P.TILE), strip, border_top_left_radius=radius, border_top_right_radius=radius)
+    g.rect(P.HAIR, (box.x, strip.bottom - 1, box.w, 1))
+    g.draw_text(title, g.vh(2.0), strip.centerx, strip.centery, "mono-bold", P.TEXT, anchor="center")
     return strip.bottom
 
 
 def draw_label(g: Gfx, text: str, px: int, x: int, y: int, color=P.MUTED, anchor="midleft", on=False) -> pygame.Rect:
-    """Mono caps label; on = inverse video (the DOS way to mark the active thing)."""
-    pad = px // 2
-    if on:
-        return g.draw_text(text.upper(), px, x, y, "mono-bold", P.BG, anchor=anchor, bg=P.PRIMARY, pad=pad, track=TRACK)
-    return g.draw_text(text.upper(), px, x, y, "mono-bold", color, anchor=anchor, track=TRACK)
+    """Mono label; on = the selection plate (filled rounded pill, dark ink):
+    the one selection idiom everywhere."""
+    if not on:
+        return g.draw_text(text, px, x, y, "mono", color, anchor=anchor)
+    w, h = g.measure(text, px, "mono-bold")
+    plate = pygame.Rect(0, 0, w + round(px * 1.4), h + round(px * 0.56))
+    setattr(plate, anchor, (x, y))
+    g.rect(P.PRIMARY, plate, radius=round(px * 0.5))
+    g.draw_text(text, px, plate.centerx, plate.centery, "mono-bold", P.ON_PRIMARY, anchor="center")
+    return plate
 
 
 def draw_keycap(g: Gfx, text: str, px: int, x: int, y: int, anchor="midleft", color=P.MUTED) -> pygame.Rect:
-    """A key name in a thin square outline: ESC, TAB."""
-    r = g.draw_text(text.upper(), px, x, y, "mono-bold", color, anchor=anchor, track=TRACK)
-    box = r.inflate(px * 0.9, px * 0.5)
-    g.rect(color, box, width=1)
+    """A key name in a quiet rounded outline pill: Esc, Tab."""
+    r = g.draw_text(text, px, x, y, "mono", color, anchor=anchor)
+    box = r.inflate(round(px * 1.4), round(px * 0.56))
+    g.rect(P.HAIR, box, width=1, radius=round(px * 0.5))
     return box
 
 
@@ -478,11 +494,11 @@ def draw_bar(g: Gfx, x: int, y: int, w: int, h: int, fraction: float, color=P.PR
 
 def draw_hold_bar(g: Gfx, rect: pygame.Rect, progress: float, label: str):
     """Progress for a hold gesture, drawn over the hint strip at the bottom of
-    the viewport: a caps label and a segmented bar that fills left to right."""
+    the viewport: a label and a segmented bar that fills left to right."""
     g.rect(P.SURFACE, rect)
     px = g.vh(2.0)
     seg_w, seg_h, n = g.vw(1.1), g.vh(1.4), 12
-    lab = g.text(label.upper(), px, "mono-bold", P.PRIMARY, track=TRACK)
+    lab = g.text(label, px, "mono-bold", P.PRIMARY)
     total = lab.get_width() + px + n * seg_w + (n - 1) * (seg_w // 3)
     x = rect.centerx - total // 2
     g.surface.blit(lab, lab.get_rect(midleft=(x, rect.centery)))

@@ -19,7 +19,9 @@ import pygame
 from . import boot_log
 from . import palette as P
 from .constants import (
-    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_CHAT, ICON_MUSIC, ICON_PALETTE, LIVE_AUDIO_MARKER,
+    CANVAS_COLS, CANVAS_ROWS, ESCAPE_HOLD_THRESHOLD, ICON_BATTERY_CHARGING, ICON_BATTERY_EMPTY, ICON_BATTERY_FULL,
+    ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_CHAT, ICON_COMPUTER, ICON_MENU, ICON_MUSIC,
+    ICON_PALETTE, ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER,
     ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
     SYSTEM_VOLUME_MAX, UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
@@ -32,7 +34,7 @@ from .keyboard import (
 )
 from .palette import ROW_LEGEND_COLORS
 from .timeline import RoomTimeline
-from .ui import TRACK, Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
+from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label, volume_badge
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE}
@@ -40,15 +42,20 @@ ARROW_HINTS = {"play": "Arrows scroll  ↑ ↓", "music": "Arrows change key  �
 _KID_MATH_REMAP = {'=': '+', '/': '÷', '*': '×'}
 BACKSLASH_HOLD = 3.0
 FRAME_GAP_VH = 0.8            # gap between the viewport units and the frame line
+TITLE_STRIP_VH = 6.8          # air above the stage, matched to the mock's osbar
+STATUS_STRIP_VH = 6.8         # air below the stage, matched to the mock's osfoot
 TIMELINE_DEBOUNCE_S = 3.0
 TIMELINE_MAX_WAIT_S = 15.0
 
 
-def _volume_badge(vol: int):
-    steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
-    label = next(lbl for lvl, lbl in steps if vol <= lvl)
-    filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
-    return "🔇" if vol == 0 else "🔊", "█" * filled + "░" * (10 - filled), label
+def _battery_icon(pct: int, charging: bool) -> str:
+    if charging:
+        return ICON_BATTERY_CHARGING
+    for level, icon in ((70, ICON_BATTERY_FULL), (50, ICON_BATTERY_HIGH), (30, ICON_BATTERY_MED),
+                        (10, ICON_BATTERY_LOW)):
+        if pct >= level:
+            return icon
+    return ICON_BATTERY_EMPTY
 
 
 class PurpleApp:
@@ -676,13 +683,13 @@ class PurpleApp:
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()
-        icon, bars, label = _volume_badge(vol)
+        icon, bars, label = volume_badge(vol)
         self.clear_notifications()
         self.notify(f"{icon}  {bars}  {label}")
 
     def _notify_volume_lock_blocked(self) -> bool:
         if self._volume_lock is not None:
-            icon, bars, _ = _volume_badge(self._volume_lock)
+            icon, bars, _ = volume_badge(self._volume_lock)
             self.clear_notifications()
             self.notify(f"{icon}  {bars}  {'Silent Mode' if self._volume_lock == 0 else 'Locked'}")
             return True
@@ -1039,10 +1046,11 @@ class PurpleApp:
 
     def _boot_mode_text(self) -> str:
         if not is_live_boot():
-            return f"💾 {self.computer_name()}"
+            return f"{ICON_COMPUTER} {self.computer_name()}"
         if not is_usb_cached():
-            return "🔌 USB" if int(time.monotonic()) % 2 else "USB"
-        return "🔌 USB  OK to remove • If restart, reinsert" if is_usb_present() else "🔌 USB  If restart, reinsert"
+            return f"{ICON_USB} USB" if int(time.monotonic()) % 2 else "USB"
+        return f"{ICON_USB} USB  OK to remove • If restart, reinsert" if is_usb_present() \
+            else f"{ICON_USB} USB  If restart, reinsert"
 
     def _battery_text(self) -> str:
         from .power_manager import get_power_manager
@@ -1053,7 +1061,7 @@ class PurpleApp:
         if not status:
             return ""
         pct, charging = status
-        return f"⚡{pct}%" if charging else f"🔋{pct}%"
+        return f"{_battery_icon(pct, charging)} {pct}%"
 
     # ------------------------------------------------------------------ drawing
     def _viewport_rect(self) -> pygame.Rect:
@@ -1061,7 +1069,7 @@ class PurpleApp:
         fit between the title and status strips, so every machine shows the
         same shape and the Art grid fills it edge to edge."""
         g = self.g
-        pad, title_h, status_h, legend_w = g.vh(1.2 + FRAME_GAP_VH), g.vh(5), g.vh(6), g.vw(3)
+        pad, title_h, status_h, legend_w = g.vh(1.2 + FRAME_GAP_VH), g.vh(TITLE_STRIP_VH), g.vh(STATUS_STRIP_VH), g.vw(3)
         unit = max(4, min((g.w - 2 * pad - legend_w) // CANVAS_COLS, (g.h - 2 * pad - title_h - status_h) // CANVAS_ROWS))
         vp = pygame.Rect(0, 0, unit * CANVAS_COLS, unit * CANVAS_ROWS)
         vp.center = ((g.w - legend_w) // 2, (title_h - status_h + g.h) // 2)
@@ -1088,8 +1096,8 @@ class PurpleApp:
         vp = self._viewport_rect()
         frame = self._frame_rect(vp)
         self._draw_title(frame)
-        g.rect(P.SURFACE, frame)
-        g.rect(P.LINE, frame, width=2)
+        g.rect(P.SURFACE, frame, radius=g.em(0.6))
+        g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
         content = self.content_rect(vp)
         g.surface.set_clip(frame.inflate(-4, -4))
         self.room.draw(g, content)
@@ -1106,18 +1114,21 @@ class PurpleApp:
             o.draw(g)
         self._draw_toasts()
 
-    def _draw_title(self, frame):
+    def _draw_title(self, frame, title=None):
+        """The strip above the frame: computer name, screen title, battery.
+        The Parent Menu reuses it with its own title."""
         g = self.g
-        y = frame.y - g.vh(5) // 2
-        px = g.vh(1.9)
-        g.draw_text(self._boot_mode_text().upper(), px, frame.x, y, "mono-bold", P.MUTED, anchor="midleft", track=TRACK / 2)
-        title = f"{ROOM_ICONS[self.active_room]}  {dict(ROOMS)[self.active_room].upper()}"
-        g.draw_text(title, g.vh(2.3), frame.centerx, y, "mono-heavy", P.PRIMARY, anchor="center", track=TRACK)
+        y = frame.y - g.vh(TITLE_STRIP_VH) // 2
+        px = g.em(1.0)
+        g.draw_text(self._boot_mode_text(), px, frame.x, y, "mono", P.MUTED, anchor="midleft")
+        if title is None:
+            title = f"{ROOM_ICONS[self.active_room]} {dict(ROOMS)[self.active_room]}"
+        g.draw_text(title, px, frame.centerx, y, "mono-bold", P.ACCENT, anchor="center", track=0.04)
         right = self._battery_text()
         if self._keyboard_state_machine._sticky_shift_active:
             right = "⇧  " + right
         if right:
-            g.draw_text(right.upper(), px, frame.right, y, "mono-bold", P.MUTED, anchor="midright", track=TRACK / 2)
+            g.draw_text(right, px, frame.right, y, "mono", P.MUTED, anchor="midright")
 
     def _draw_legend(self, frame):
         """Sticker colors per keyboard row beside the viewport; a triangle
@@ -1135,28 +1146,31 @@ class PurpleApp:
             tx, ty, t = x + 3 * sw + g.vw(0.25), y + self._legend_row * sh + sh // 2, g.vh(0.7)
             pygame.draw.polygon(g.surface, rgb(P.TEXT), [(tx, ty), (tx + t, ty - t), (tx + t, ty + t)])
 
-    def _draw_status(self, frame):
-        """The strip under the viewport: keyboard note, Esc and the room
-        names (active one in inverse video), arrow hint."""
+    def _draw_status(self, frame, left=None, right=None, tabs=True):
+        """The strip under the viewport: keyboard note, the Esc pill and room
+        names (active one in inverse video), arrow hint. The Parent Menu
+        reuses it with its own corners and no room tabs."""
         g = self.g
-        y = frame.bottom + g.vh(6) // 2
-        px = g.vh(1.9)
+        y = frame.bottom + g.vh(STATUS_STRIP_VH) // 2
+        px = g.em(0.92)
         if self._littles_mode:
             g.draw_text("Littles Mode · Hold Esc to exit", px, frame.centerx, y, "mono", P.MUTED, anchor="center")
             return
-        g.draw_text("⌨ Purple is always keyboard only", px, frame.x, y, "mono", P.DIM, anchor="midleft")
-        gap = g.vw(1.4)
-        tabs = [(label.upper(), rid) for rid, label in ROOMS]
-        widths = [g.measure(t, px, "mono-bold", TRACK)[0] + px for t, _ in tabs]
-        esc_w = g.measure("ESC", px, "mono-bold", TRACK)[0] + int(px * 0.9)
-        x = frame.centerx - (esc_w + gap + sum(widths) + gap * (len(tabs) - 1)) // 2
-        x = draw_keycap(g, "Esc", px, x, y).right + gap
-        for (label, rid), w in zip(tabs, widths):
+        g.draw_text(left if left is not None else "Keyboard only, on purpose", px, frame.x, y, "mono", P.DIM, anchor="midleft")
+        gap = g.em(0.5)
+        esc = f"Esc {ICON_MENU}"
+        esc_w = g.measure(esc, px, "mono")[0] + round(px * 1.4)
+        names = [(rid, f"{ROOM_ICONS[rid]} {label}") for rid, label in ROOMS] if tabs else []
+        widths = [g.measure(t, px, "mono-bold")[0] + round(px * 1.4) for _, t in names]
+        x = frame.centerx - (esc_w + sum(gap + w for w in widths)) // 2
+        x = draw_keycap(g, esc, px, x, y).right + gap
+        for (rid, label), w in zip(names, widths):
             draw_label(g, label, px, x + w // 2, y, P.MUTED, anchor="center", on=rid == self.active_room)
             x += w + gap
-        right = ARROW_HINTS[self.active_room]
-        if self._effective_volume() == 0:
-            right = "🔇  " + right
+        if right is None:
+            right = ARROW_HINTS[self.active_room]
+            if self._effective_volume() == 0:
+                right = f"{ICON_VOLUME_OFF}  " + right
         g.draw_text(right, px, frame.right, y, "mono", P.DIM, anchor="midright")
 
     def _draw_toasts(self):
@@ -1166,9 +1180,12 @@ class PurpleApp:
         pad = g.vh(1.1)
         y = g.h - g.vh(11)
         for t in reversed(self._toasts[-3:]):
-            r = g.draw_text(t.text, g.vh(2.4), g.w // 2, y, "mono-bold", P.TEXT, anchor="midbottom", bg=P.SURFACE, pad=pad)
-            g.rect(P.LINE, r.inflate(pad * 2, pad * 2), width=1)
-            y = r.top - pad * 2 - g.vh(1.4)
+            r = g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT).get_rect(midbottom=(g.w // 2, y))
+            pill = r.inflate(pad * 2, pad * 2)
+            g.rect(P.SURFACE, pill, radius=g.em(0.5))
+            g.rect(P.HAIR, pill, width=1, radius=g.em(0.5))
+            g.surface.blit(g.text(t.text, g.vh(2.4), "mono-bold", P.TEXT), r)
+            y = pill.top - g.vh(1.4)
 
 
 def _read(path: str) -> str:

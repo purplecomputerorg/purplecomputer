@@ -19,17 +19,19 @@ Design rules, in priority order:
 2. Text and emoji render smoothly at native resolution, any size per element.
 3. A grid exists only where the grid is the content: Music tiles, Art cells.
 4. The prompt stays monospace with a block caret. That is the DOS memory,
-   and the chrome follows it: titles, room tabs, keycaps and hints are IBM
-   Plex Mono, labels in tracked caps, the active thing in inverse video.
-   Menus are mono too: the Parent Menu list and every Picker option label,
-   with section headers in Plex Mono Italic (dim, mixed case). Reading text
-   (replies, and descriptive dialog bodies like a confirm's explanation) is
-   IBM Plex Sans. UI icons are mono-tinted Nerd Font glyphs (`ICON_*`) that
-   take the text color; full color is reserved for the kid's own output.
-5. Square corners everywhere. Blockiness is otherwise a per-element choice:
-   Art cells and Music tiles have hard edges, and a letter written in an Art
-   cell is a block letter (Press Start 2P, one glyph per square); everything
-   else is smooth type.
+   and the chrome follows it: titles, room tabs, keycaps, hints and menus
+   are IBM Plex Mono in mixed case (the ALL CAPS parent setting is the one
+   exception, applied inside `Gfx.text`), with the active thing in inverse
+   video: one selection idiom everywhere. Parent Menu section headers are
+   Plex Mono Italic, dim. Reading text (replies, and descriptive dialog
+   bodies like a confirm's explanation) is IBM Plex Sans. UI icons are
+   mono-tinted Nerd Font glyphs (`ICON_*`) that take the text color; full
+   color is reserved for the kid's own output.
+5. Corners are gently rounded, sized in `g.em` straight from the design
+   mock: stage and cards 0.6em, pills 0.5em, Music keys 0.42em, the Play
+   field 0.4em, menu rows 0.35em. Art cells stay hard-edged (the grid is
+   the content), and a letter written in an Art cell is a block letter
+   (Press Start 2P, one glyph per square).
 6. Hints sit near the thing they describe and fade after a room has been used.
 7. The Parent Menu hold (Esc) draws no progress on purpose: kids get no
    affordance for it. Space and Enter holds show a segmented bar over the
@@ -69,7 +71,10 @@ lists what is armed; `tests/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 
 Sizes come from `g.vh(percent)` and `g.vw(percent)` so a 1024x768 netbook and
-a 1440x900 MacBook get the same proportions. The viewport itself is a fixed
+a 1440x900 MacBook get the same proportions. Chrome (bars, menus, pills, the
+Music keys, the Play input) is sized in `g.em(n)`, 1.3% of screen width: the
+same unit the HTML design mock used, so its paddings, gaps and radii port
+verbatim. The viewport itself is a fixed
 `CANVAS_COLS x CANVAS_ROWS` (48x27) grid of square units, as large as fits
 between the title and status strips and centered, so every machine shows the
 same shape; wide screens get margins at the sides, 4:3 screens above and

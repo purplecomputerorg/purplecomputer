@@ -8,13 +8,13 @@ import pygame
 
 from .. import palette as P
 from ..code_runner import ArtCodeRunner
-from ..constants import CANVAS_COLS, CANVAS_ROWS
+from ..constants import CANVAS_COLS, CANVAS_ROWS, ICON_ROBOT
 from ..color_mixing import mix_colors_paint
 from ..gfx import contrast_text, luminance, rgb
 from ..keyboard import UNSHIFT_MAP, CharacterAction, ControlAction, NavigationAction
 from ..palette import DEFAULT_BRUSH_COLOR, GRAYSCALE, KEY_COLORS, UNMAPPED, get_key_color
 from ..panels import CodePanel, SpaceHold
-from ..ui import TRACK, draw_keycap, draw_label
+from ..ui import draw_keycap, draw_label
 
 HEAD_UNITS = FOOT_UNITS = 1.5       # mode switch above the grid, hint below, in cell units
 COLS, ROWS = CANVAS_COLS, CANVAS_ROWS - 3
@@ -129,7 +129,7 @@ class ArtRoom:
 
     def hold_progress(self):
         p = self.space.progress()
-        return (p, "code") if p is not None else None
+        return (p, "Code") if p is not None else None
 
     def cursor_fraction(self, vp):
         return ((self._origin[0] + self._cursor_x * self._cell - vp.x) / vp.w,
@@ -489,7 +489,7 @@ class ArtRoom:
             key = "littles" if self.app._littles_mode else ("pen" if self._paint_mode and self._pen_down else "paint" if self._paint_mode else "write")
             g.draw_text(HINTS[key], g.vh(1.9), foot.x, foot.centery, "mono", P.DIM, anchor="midleft")
             if self.app._code_panel_enabled and not self.app._littles_mode:
-                g.draw_text("🤖 Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
+                g.draw_text(f"{ICON_ROBOT} Hold Space: write code", g.vh(1.9), foot.right, foot.centery, "mono", P.DIM, anchor="midright")
 
     def _canvas_surface(self, g, c):
         """The cells as one surface; only cells that changed since the last
@@ -546,7 +546,7 @@ class ArtRoom:
         if self.app._littles_mode:
             draw_label(g, "Paint" if self._paint_mode else "Write", px, r.centerx, cy, P.TEXT, anchor="center")
             return
-        w_paint, w_abc = (g.measure(t, px, "mono-bold", TRACK)[0] + px for t in ("PAINT", "ABC"))
+        w_paint, w_abc = (g.measure(t, px, "mono-bold")[0] + px for t in ("Paint", "ABC"))
         x = r.centerx - (w_paint + px + w_abc) // 2
         draw_label(g, "Paint", px, x + w_paint // 2, cy, anchor="center", on=self._paint_mode)
         draw_label(g, "ABC", px, x + w_paint + px + w_abc // 2, cy, anchor="center", on=not self._paint_mode)

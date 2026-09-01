@@ -8,18 +8,11 @@ from .constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from .keyboard import CharacterAction, ControlAction, NavigationAction
-from .ui import TRACK, Dialog, Overlay, Picker, draw_scrim, draw_window, window_title_height
+from .ui import Dialog, Overlay, Picker, draw_scrim, volume_badge
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}
 ROWS, EXTRAS, CODE = 0, 1, 2
-
-
-def volume_badge(vol: int):
-    steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
-    label = next(lbl for lvl, lbl in steps if vol <= lvl)
-    filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
-    return (ICON_VOLUME_OFF if vol == 0 else ICON_VOLUME_HIGH), "█" * filled + "░" * (10 - filled), label
 
 
 class RoomPicker(Overlay):
@@ -97,46 +90,54 @@ class RoomPicker(Overlay):
         self.app.push(ConfirmFresh(self.app, self.app.active_room), on_close=lambda r: r and self.close({"clear_room": r}))
 
     def draw(self, g):
-        draw_scrim(g)
-        tw, th, gap, eh = g.vw(22), g.vh(17), g.vw(1.5), g.vh(10)
-        rows_h = th + gap + eh + (gap + eh if self.code_row else 0)
-        box = pygame.Rect(0, 0, 3 * tw + 2 * gap + g.vw(8), window_title_height(g, "x") + g.vh(3) + rows_h + g.vh(9))
-        box.center = (g.w // 2, g.h // 2)
-        y = draw_window(g, box, "Pick a Room") + g.vh(3)
-        x0 = box.centerx - (3 * tw + 2 * gap) // 2
-        for i, (rid, icon, label) in enumerate(ROOM_OPTIONS):
-            on = self.row == ROWS and self.col == i
-            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, th), on, label,
-                       f"Press {i + 1}" + (" or Enter" if on else ""), icon=icon)
-        y += th + gap
+        """Centered card grid inside the frame, spaced in the mock's ems:
+        glyph above name, the key beneath, one line of guidance."""
+        draw_scrim(g, 240)
+        g.rect(P.LINE, self.app._frame_rect(self.app._viewport_rect()), width=1, radius=g.em(0.6))
+        em = g.em
+        tw, th, gap = em(10.6), em(7.6), em(1.1)
+        code_h = em(4.6) if self.code_row else 0
+        head_h = g.line_height(em(1.15), "mono-bold")
+        foot_h = g.line_height(em(0.92), "mono")
+        total = head_h + em(1.5) + 2 * th + gap + (gap + code_h if self.code_row else 0) + em(1.5) + foot_h
+        y = (g.h - total) // 2
+        x0 = g.w // 2 - (3 * tw + 2 * gap) // 2
+        g.draw_text("Pick a room", em(1.15), g.w // 2, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
+        y += head_h + em(1.5)
         locked = self._locked_volume()
-        vol_label = f"{locked[0]}  {locked[1]}" if locked else f"{ICON_VOLUME_HIGH}  Volume"
-        extras = [(vol_label, "" if locked else "Press V", locked is not None),
-                  (f"{ICON_BROOM}  Clear", "Press C", False), (f"{ICON_TIME_TRAVEL}  Time Travel", "Press T", False)]
-        for i, (label, key, disabled) in enumerate(extras):
-            on = self.row == EXTRAS and self.col == i
-            self._tile(g, pygame.Rect(x0 + i * (tw + gap), y, tw, eh), on, label,
-                       "" if disabled else key + (" or Enter" if on else ""), disabled)
+        cards = [(ROWS, i, icon, label, str(i + 1), False) for i, (_, icon, label) in enumerate(ROOM_OPTIONS)]
+        cards += [(EXTRAS, 0, *(locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False))),
+                  (EXTRAS, 1, ICON_BROOM, "Clear", "C", False),
+                  (EXTRAS, 2, ICON_TIME_TRAVEL, "Time Travel", "T", False)]
+        for row, col, icon, label, key, disabled in cards:
+            r = pygame.Rect(x0 + col * (tw + gap), y + row * (th + gap), tw, th)
+            on = (self.row, self.col) == (row, col)
+            self._card(g, r, on)
+            fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
+            g.draw_text(icon, em(1.75), r.centerx, r.y + em(2.1), "nerd",
+                        fg if (on or disabled) else P.ACCENT, anchor="center")
+            g.draw_text(label, em(1.0), r.centerx, r.y + em(4.35), "mono-bold", fg, anchor="center")
+            if key:
+                g.draw_text(key, em(0.9), r.centerx, r.y + em(5.95), "mono",
+                            fg if on else P.DIM, anchor="center")
+        y += 2 * th + gap
         if self.code_row:
-            y += eh + gap
-            label = f"{ICON_ROBOT}  Close Code" if self.app._code_panel_active else f"{ICON_ROBOT}  Open Code"
-            self._tile(g, pygame.Rect(x0, y, 3 * tw + 2 * gap, eh), self.row == CODE, label,
-                       "Space" + (" or Enter" if self.row == CODE else ""))
-        g.draw_text("Enter picks   •   Hold Esc for grown-ups", g.vh(2.0), box.centerx, box.bottom - g.vh(5.5), "mono", P.MUTED, anchor="center")
-        g.draw_text("Arrows move  ← ↑ ↓ →", g.vh(2.0), box.centerx, box.bottom - g.vh(2.5), "mono", P.DIM, anchor="center")
+            y += gap
+            r = pygame.Rect(x0, y, 3 * tw + 2 * gap, code_h)
+            on = self.row == CODE
+            self._card(g, r, on)
+            label = "Close Code" if self.app._code_panel_active else "Open Code"
+            fg = P.ON_PRIMARY if on else P.TEXT
+            g.draw_text(f"{ICON_ROBOT}  {label}", em(1.0), r.centerx, r.centery - em(0.65), "mono-bold", fg, anchor="center")
+            g.draw_text("Space", em(0.9), r.centerx, r.centery + em(0.95), "mono", fg if on else P.DIM, anchor="center")
+            y += code_h
+        g.draw_text("Enter to pick   ·   Hold Esc for grown-ups", em(0.92), g.w // 2, y + em(1.5), "mono", P.DIM, anchor="midtop")
 
-    def _tile(self, g, r, on, label, sub, disabled=False, icon=""):
-        """icon (room tiles) draws large above the label; other tiles are one line."""
-        g.rect(P.PRIMARY if on else P.TILE, r)
-        if not on and not disabled:
-            g.rect(P.LINE, r, width=1)
-        fg = P.BG if on else (P.DIM if disabled else P.TEXT)
-        cy = r.centery + (g.vh(2.0) if icon else 0)
-        if icon:
-            g.draw_text(icon, g.vh(3.8), r.centerx, cy - g.vh(4.3), "nerd", fg, anchor="center")
-        g.draw_text(label.upper(), g.vh(2.4), r.centerx, cy - g.vh(1.6), "mono-bold", fg, anchor="center", track=TRACK)
-        if sub:
-            g.draw_text(sub, g.vh(1.9), r.centerx, cy + g.vh(1.6), "mono", fg if on else P.MUTED, anchor="center")
+    def _card(self, g, r, on):
+        if on:
+            g.rect(P.PRIMARY, r, radius=g.em(0.6))
+        else:
+            g.rect(P.HAIR, r, width=1, radius=g.em(0.6))
 
 
 class VolumeModal(Dialog):

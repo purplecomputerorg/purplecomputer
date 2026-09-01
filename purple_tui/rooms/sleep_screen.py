@@ -5,7 +5,8 @@ import os
 import time
 
 from .. import palette as P
-from ..constants import LIVE_AUDIO_MARKER, is_live_boot
+from ..constants import (ICON_BATTERY_MED, ICON_HOURGLASS, ICON_LAPTOP, ICON_PLUG, ICON_USB,
+                         ICON_VOLUME_OFF, LIVE_AUDIO_MARKER, is_live_boot)
 from ..keyboard import ControlAction
 from ..power_manager import LID_SHUTDOWN_DELAY, get_power_manager
 from ..ui import Overlay
@@ -74,18 +75,18 @@ class SleepScreen(FullScreen):
         lines = []
         if lid_close_time is not None:
             closed_min = int((time.time() - lid_close_time) / 60)
-            lines.append(f"💻 Lid closed{f' {closed_min} min' if closed_min >= 1 else ''}.")
+            lines.append(f"{ICON_LAPTOP} Lid closed{f' {closed_min} min' if closed_min >= 1 else ''}.")
         elif self.app._lid_was_closed_for > 0:
             closed_min = int(self.app._lid_was_closed_for / 60)
-            lines.append(f"💻 Lid open{f' (closed {closed_min} min)' if closed_min >= 1 else ''}.")
+            lines.append(f"{ICON_LAPTOP} Lid open{f' (closed {closed_min} min)' if closed_min >= 1 else ''}.")
         if is_live_boot():
-            lines.append("💾 USB. Need it to restart.")
+            lines.append(f"{ICON_USB} USB. Need it to restart.")
         if lid_close_time is not None:
             remaining = max(0, LID_SHUTDOWN_DELAY - (time.time() - lid_close_time))
-            lines.append(f"⏳ Shuts off in {_friendly_time(remaining)}.")
+            lines.append(f"{ICON_HOURGLASS} Shuts off in {_friendly_time(remaining)}.")
         else:
             remaining = max(0, pm.get_idle_shutdown_threshold() - pm.get_idle_seconds())
-            icon = "🔌 Plugged in." if pm.is_on_charger() is True else "🔋 Battery."
+            icon = f"{ICON_PLUG} Plugged in." if pm.is_on_charger() is True else f"{ICON_BATTERY_MED} Battery."
             lines.append(f"{icon} Shuts off in {_friendly_time(remaining)}.")
         self.status = "\n".join(lines)
 
@@ -161,7 +162,7 @@ class LiveBootSplash(FullScreen):
                "Purple is keyboard only, on purpose!\nKids explore by typing.\n\n"
                "You're running from USB. If the computer\nturns off, you'll need the USB to start again.\n\n"
                "To install Purple and keep it, hold the Esc\nkey to open the Parent Menu.")
-    _AUDIO_WARNING = ("🔇 Sound is not working on this computer.\nPlug in a USB audio adapter, or open the\n"
+    _AUDIO_WARNING = (f"{ICON_VOLUME_OFF} Sound is not working on this computer.\nPlug in a USB audio adapter, or open the\n"
                       "Parent Menu to see Support info.")
     hint = "Press any key to start"
 

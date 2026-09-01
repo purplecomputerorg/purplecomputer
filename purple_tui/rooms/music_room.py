@@ -11,7 +11,7 @@ import pygame
 from .. import palette as P
 from ..audio import play_safe
 from ..code_runner import MusicCodeRunner
-from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_MUSIC, ICON_ROBOT
+from ..constants import HOLD_OR_TAP_THRESHOLD, ICON_KEYBOARD, ICON_MUSIC, ICON_ROBOT
 from ..keyboard import CharacterAction, ControlAction, HoldOrTap, NavigationAction
 from ..loop_station import IDLE, LOOPING, RECORDING, LoopStation
 from ..mixer import mixer_generation, mixer_ready_for_play, warm_mixer
@@ -21,14 +21,14 @@ from ..music_constants import (
 )
 from ..palette import KEY_COLORS, text_color_for
 from ..panels import CodePanel, LoopPanel, SpaceHold
-from ..ui import TRACK, draw_keycap, draw_label
+from ..ui import draw_label
 
 MODE_MUSIC, MODE_LETTERS = "music", "letters"
 _KEY_TO_RC = {key: (r - 1, c) for r, row in enumerate(GRID_KEYS) if r >= 1 for c, key in enumerate(row)}
 _SPEAKABLE_KEYS = {k for k in ALL_KEYS if k.isalpha() or k.isdigit()}
 _KID_MATH_UNREMAP = {"÷": "/", "×": "*"}
 _KID_MATH_DISPLAY = {"/": "÷", "*": "×"}
-WAVEFRONT_COLOR = "#5a3875"
+WAVEFRONT_COLOR = "#7a5aa6"
 PITCH_TRANSITION_DURATION = 0.25
 LETTERS_SAME_KEY_DEBOUNCE_S = 0.40
 LETTERS_CROSS_KEY_DEBOUNCE_S = 0.20
@@ -568,9 +568,9 @@ class MusicRoom:
     def hold_progress(self):
         p = self.space.progress()
         if p is not None:
-            return p, "code"
+            return p, "Code"
         if self._enter_down_at is not None and self.enter_hold.is_pending:
-            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), "loop"
+            return min(1.0, (time.monotonic() - self._enter_down_at) / HOLD_OR_TAP_THRESHOLD), "Loop"
         return None
 
     def cursor_fraction(self, vp):
@@ -580,51 +580,51 @@ class MusicRoom:
     def draw(self, g, rect):
         if self._is_noscreen:
             return self._draw_noscreen(g, rect)
-        head_h, hint_h = g.vh(5.5), g.vh(4.5)
-        self._draw_header(g, pygame.Rect(rect.x, rect.y, rect.w, head_h))
-        grid = pygame.Rect(rect.x + g.vw(1.5), rect.y + head_h, rect.w - g.vw(3), rect.h - head_h - hint_h)
+        em = g.em
+        head_h, hint_h = em(4.3), em(3.9)
+        pad = em(1.6)
+        self._draw_header(g, pygame.Rect(rect.x + pad, rect.y, rect.w - 2 * pad, head_h))
+        grid = pygame.Rect(rect.x + pad, rect.y + head_h, rect.w - 2 * pad, rect.h - head_h - hint_h)
         self._draw_grid(g, grid)
         if self.app._panel is None:
-            px, cy = g.vh(1.9), rect.bottom - hint_h // 2
-            g.draw_text(self._hint_text(), px, rect.x + g.vw(1.5), cy, "mono", P.DIM, anchor="midleft")
+            cy = rect.bottom - em(1.4) - g.line_height(em(0.92), "mono") // 2
+            right_edge = rect.right - pad
             if self.app._code_panel_enabled:
-                g.draw_text(f"{ICON_ROBOT} Hold Space: write code", px, rect.right - g.vw(1.5), cy, "mono", P.DIM, anchor="midright")
+                note = g.draw_text(f"{ICON_ROBOT} Hold Space: write code", em(0.86), right_edge, cy, "mono", P.DIM, anchor="midright")
+                right_edge = note.left - em(2)
+            g.draw_text(self._hint_text(), em(0.92), (rect.x + right_edge) // 2, cy, "mono", P.DIM, anchor="center")
 
     def _hint_text(self) -> str:
         if self.app._littles_mode:
             return "Enter: instrument"
-        parts = ["Space: hide notes" if self.show_labels else "Space: show notes"]
-        if self.app._music_key_switching_enabled:
-            parts.append("Arrows: key")
-        parts.append("Enter: instrument")
+        parts = ["Space: hide notes" if self.show_labels else "Space: notes",
+                 "Tab: stop letters" if self.letters_mode else "Tab: say letters",
+                 "Enter: instrument"]
         if self.app._music_looping_enabled:
             parts.append("Hold Enter: loop")
         return "   ".join(parts)
 
     def _draw_header(self, g, r):
-        px = g.vh(1.9)
-        cy = r.centery
-        inst = f"{ICON_MUSIC} {INSTRUMENTS[self.instrument_index][1]}"
+        """One quiet plate naming the current layer, and the key on the right.
+        Arrows for the key live in the status strip, not here."""
+        px = g.em(1.0)
+        cy = r.y + g.em(1.9)
+        plate = f"{ICON_KEYBOARD} Saying Letters" if self.letters_mode else f"{ICON_MUSIC} {INSTRUMENTS[self.instrument_index][1]}"
         if self.app._littles_mode:
-            draw_label(g, inst, px, r.centerx, cy, P.TEXT, anchor="center")
+            draw_label(g, plate, px, r.centerx, cy, P.TEXT, anchor="center", on=True)
             return
-        key = f"← Key {FRIENDLY_KEY_NAMES[self.root_index]} →" if self.app._music_key_switching_enabled else f"Key {FRIENDLY_KEY_NAMES[DEFAULT_ROOT_INDEX]}"
-        draw_label(g, key, px, r.x + g.vw(1.5), cy)
-        gap = g.vw(1.5)
-        w_inst, w_say = g.measure(inst.upper(), px, "mono-bold", TRACK)[0] + px, g.measure("SAY LETTERS", px, "mono-bold", TRACK)[0] + px
-        x = r.centerx - (w_inst + gap + w_say) // 2
-        draw_label(g, inst, px, x + w_inst // 2, cy, anchor="center", on=not self.letters_mode)
-        draw_label(g, "Say Letters", px, x + w_inst + gap + w_say // 2, cy, anchor="center", on=self.letters_mode)
-        hint = "to stop saying letters" if self.letters_mode else "to say letters"
-        g.draw_text(hint, px, r.right - g.vw(1.5), cy, "mono", P.MUTED, anchor="midright")
-        draw_keycap(g, "Tab", px, r.right - g.vw(1.5) - g.measure(hint + " ", px, "mono")[0] - int(px * 0.5), cy, anchor="midright")
+        draw_label(g, plate, px, r.x, cy, on=True)
+        root = self.root_index if self.app._music_key_switching_enabled else DEFAULT_ROOT_INDEX
+        g.draw_text(f"Key of {FRIENDLY_KEY_NAMES[root]}", px, r.right, cy, "mono", P.DIM, anchor="midright")
 
     def _draw_grid(self, g, r):
-        gap_x, gap_y = g.vw(0.5), g.vh(0.9)
-        cw = (r.w - 9 * gap_x) / 10
-        ch = (r.h - 3 * gap_y) / 4
-        letter_px = int(min(ch * 0.36, cw * 0.4))
-        label_px = max(10, int(ch * 0.16))
+        size = min(r.w / 10.9, r.h / 4.3)
+        gap = size * 0.1
+        radius = round(size * 0.076)
+        x0 = r.centerx - (10 * size + 9 * gap) / 2
+        y0 = r.centery - (4 * size + 3 * gap) / 2
+        letter_px = g.em(1.05)
+        label_px = max(10, int(size * 0.15))
         for row_idx, row in enumerate(GRID_KEYS):
             melodic = row_idx >= 1
             for col_idx, key in enumerate(row):
@@ -635,10 +635,14 @@ class MusicRoom:
                     note, _ = pitch_for(row_idx - 1, col_idx, FRIENDLY_KEYS[root_idx], 0)
                     if at_front:
                         bg = WAVEFRONT_COLOR
-                tile = pygame.Rect(int(r.x + col_idx * (cw + gap_x)), int(r.y + row_idx * (ch + gap_y)), int(cw), int(ch))
-                g.rect(bg, tile)
-                fg = P.ACCENT if bg == P.TILE else text_color_for(bg)
-                g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery, "sans-bold", fg, anchor="center")
+                tile = pygame.Rect(int(x0 + col_idx * (size + gap)), int(y0 + row_idx * (size + gap)), int(size), int(size))
+                quiet = bg == P.TILE
+                g.rect(bg, tile, radius=radius)
+                if quiet:
+                    g.rect(P.TILE_LINE, tile, width=1, radius=radius)
+                fg = P.DIM if quiet else text_color_for(bg)
+                g.draw_text(_KID_MATH_DISPLAY.get(key, key), letter_px, tile.centerx, tile.centery,
+                            "mono" if quiet else "mono-bold", fg, anchor="center")
                 show = key in self._note_labels or (melodic and (self._transition is not None or self.show_labels))
                 label = PERCUSSION_NAMES.get(key, "") if key.isdigit() else (note or "")
                 if show and label:

@@ -10,17 +10,22 @@ import colorsys
 from .color_mixing import hex_to_rgb
 from .gfx import contrast_text
 
-# Theme (single, dark on purpose: the screen is a calm object, not a document)
-BG = "#1e1033"          # app ground
-SURFACE = "#261643"     # viewport
-TILE = "#2d1b4e"        # music tiles, panels
-LINE = "#5a3875"        # borders, dividers
-PRIMARY = "#9b7bc4"     # room title, active tab, arrows
-ACCENT = "#c4a0e8"      # prompt label
-TEXT = "#f1ebf9"
-MUTED = "#8a78a8"       # hints, status
-DIM = "#5f4f80"         # quiet hints
-CARET = "#e6f0b8"
+# Theme (single, dark on purpose: the screen is a calm object, not a document).
+# Values are the design mock's CSS variables, ported verbatim.
+BG = "#1d1234"          # app ground (--device)
+SURFACE = "#251845"     # stage (--stage)
+TILE = "#30244E"        # music keys, panels: white at 5% over SURFACE
+TILE_LINE = "#332651"   # the keys' hairline border: white at 6% over SURFACE
+FIELD = "#362A54"       # the Play input's fill: white at 8% over SURFACE
+HAIR = "#2c2148"        # subtle borders: cards, the Esc pill (--hair)
+LINE = "#7a5aa6"        # the stage border, the input border (--border)
+PRIMARY = "#a074d6"     # the selection plate (--sel)
+ON_PRIMARY = "#1a0f30"  # ink on the selection plate (--on-sel)
+ACCENT = "#c39cf0"      # prompt label, titles, values (--accent)
+TEXT = "#d8cbef"        # (--ink)
+MUTED = "#9585b6"       # hints, status (--ink-dim)
+DIM = "#6f5f92"         # quiet hints (--ink-faint)
+CARET = "#d7e79c"
 DANGER = "#c46b7b"
 GOOD = "#7bc48a"
 

@@ -17,9 +17,9 @@ import pygame
 from .. import diagnostics
 from .. import palette as P
 from ..gfx import FONT_DIR
-from ..constants import SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
+from ..constants import ICON_COMPUTER, SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar, draw_scrim, draw_window, window_title_height
+from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
 from .sleep_screen import FullScreen
 
 DEFAULT_COMPUTER_NAME = "My Purple Computer"
@@ -1289,41 +1289,56 @@ class ParentMenu(Overlay):
 
     # --- drawing ---
     def draw(self, g):
-        draw_scrim(g, 235)
+        """The saok look: the whole stage, one centered column, italic dim
+        section headers, values in the accent color."""
+        app = self.app
+        g.fill(P.BG)
+        frame = app._frame_rect(app._viewport_rect())
+        app._draw_title(frame, title=f"{ICON_COMPUTER} Parent Menu")
+        g.rect(P.SURFACE, frame, radius=g.em(0.6))
+        g.rect(P.LINE, frame, width=1, radius=g.em(0.6))
+        app._draw_status(frame, left="Grown-ups only", right=diagnostics.get_version_label() or "", tabs=False)
+        em = g.em
         live_h = g.vh(9) if is_live_boot() else 0
-        fixed = window_title_height(g, "x") + g.vh(1.5) + live_h + g.vh(12)
+        head_h, foot_h = em(3.0), em(3.4)
         n_rows = sum(1 for i in range(len(self.items)) if not self._is_section(i))
         n_secs = len(self.items) - n_rows
-        row_h = min(g.vh(4.6), int((g.h - g.vh(2) - fixed) / (n_rows + n_secs * 0.85)))
+        avail = frame.h - head_h - live_h - foot_h - em(1.4)
+        row_h = min(em(1.9), int(avail / (n_rows + n_secs * 0.85)))
         sec_h = int(row_h * 0.85)
         rows_h = n_rows * row_h + n_secs * sec_h
-        box = pygame.Rect(0, 0, g.vw(56), fixed + rows_h)
-        box.center = (g.w // 2, g.h // 2)
-        y = draw_window(g, box, "Parent Menu") + g.vh(1.5)
-        version = diagnostics.get_version_label()
-        if version:
-            g.draw_text(version, g.vh(1.8), box.right - g.vw(1.5), box.bottom - g.vh(1.2), "mono", P.DIM, anchor="bottomright")
+        col_w = em(26)
+        x0 = frame.centerx - col_w // 2
+        g.draw_text("Parent Menu", em(1.05), frame.centerx, frame.y + em(1.0) + head_h // 2,
+                    "mono-bold", P.ACCENT, anchor="center", track=0.1)
+        y = frame.y + em(1.0) + head_h + max(0, (avail - rows_h) // 2)
         if live_h:
-            g.draw_markup(_boot_mode_hint(), g.vh(1.9), box.x + g.vw(2), y, "sans", P.MUTED, box.w - g.vw(4), "center", P.SURFACE)
+            g.draw_markup(_boot_mode_hint(), g.vh(1.9), frame.x + g.vw(2), y, "sans", P.MUTED, frame.w - g.vw(4), "center", P.SURFACE)
             y += live_h
-        px = min(g.vh(2.4), int(row_h * 0.55))
+        px = min(em(0.98), int(row_h * 0.62))
         for i, (item_id, label) in enumerate(self.items):
             if self._is_section(i):
-                g.draw_text(label, g.vh(1.9), box.x + g.vw(3), y + sec_h - g.vh(1.4), "mono-italic", P.DIM, anchor="bottomleft")
+                g.draw_text(label, em(0.93), x0, y + sec_h - em(0.12), "mono-italic", P.DIM, anchor="bottomleft")
                 y += sec_h
                 continue
             if item_id in ("menu-support", "menu-volume") and self.app.audio_ok is False:
                 label = f"{label}   (audio not working)"
             on = i == self.selected
-            r = pygame.Rect(box.x + g.vw(2.5), y, box.w - g.vw(5), row_h - g.vh(0.6))
+            disabled = self._disabled(item_id)
+            r = pygame.Rect(x0 - em(0.6), y, col_w + em(1.2), row_h - em(0.13))
             if on:
-                g.rect(P.PRIMARY, r)
-            fg = P.BG if on else (P.DIM if self._disabled(item_id) else P.TEXT)
-            g.draw_text(label, px, r.x + g.vw(1.5), r.centery, "mono-bold" if on else "mono", fg, anchor="midleft")
+                g.rect(P.PRIMARY, r, radius=em(0.35))
+            fg = P.ON_PRIMARY if on else (P.DIM if disabled else P.TEXT)
+            name, sep, value = label.partition(": ")
+            drawn = g.draw_text(name + sep, px, x0, r.centery, "mono", fg, anchor="midleft")
+            if value:
+                g.draw_text(value, px, drawn.right, r.centery, "mono",
+                            P.ON_PRIMARY if on else (P.DIM if disabled else P.ACCENT), anchor="midleft")
             y += row_h
-        g.draw_text("▲ ▼   Enter   Esc", g.vh(2.0), box.centerx, y + g.vh(1.5), "mono", P.MUTED, anchor="midtop")
-        g.draw_markup("Purple is keyboard only, on purpose!\nKids explore by typing.", g.vh(1.9), box.x, y + g.vh(5),
-                      "mono", P.DIM, box.w, "center", P.SURFACE)
+        g.draw_text("▲ ▼   Enter   Esc", em(0.92), frame.centerx, frame.bottom - em(2.4), "mono", P.MUTED,
+                    anchor="center", track=0.08)
+        g.draw_text("Purple is keyboard only, on purpose. Kids explore by typing.",
+                    em(0.92), frame.centerx, frame.bottom - em(1.1), "mono", P.DIM, anchor="center")
 
 
 def write_computer_name(name: str):

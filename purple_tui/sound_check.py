@@ -52,6 +52,7 @@ PROBE_LADDER = (SOURCE_PCT, 12)  # the probe retries a clipped take at lower mic
 CLIP_TOLERANCE = 8  # samples at the rail before a take counts as clipped
 HEARD_SNR_DB = 10.0
 READY_POLL = 0.5  # seconds between looks for a sound card that is still enumerating at boot
+MAX_CAPTURE_SECONDS = 15  # hard cap if the chime never finishes and the mic keeps streaming
 # Measured loop gains: HP 15 (digital mic) +7 dB, too loud at 7 and right at
 # 4; Surface Laptop -11 dB, right at 7; HP Stream -34 dB and MacBook Air 2011
 # -35 dB, the Air plainly the louder of the two by ear. So the top end sorts
@@ -235,8 +236,8 @@ def _capture(sink: str, source: str, wav: Path) -> SoundCheck:
 
 def _stream(rec: subprocess.Popen, sink: str, wav: Path) -> Iterator[bytes]:
     """Mic audio in 25 ms chunks. The chime starts 0.7 s in whether or not the
-    mic delivers, capture ends 0.3 s after it finishes playing, 15 s hard cap."""
-    deadline = time.monotonic() + 15
+    mic delivers, capture ends 0.3 s after it finishes playing, hard cap after that."""
+    deadline = time.monotonic() + MAX_CAPTURE_SECONDS
     play_at, play, tail_end = time.monotonic() + 0.7, None, None
     try:
         while time.monotonic() < deadline and (tail_end is None or time.monotonic() < tail_end):

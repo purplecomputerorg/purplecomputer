@@ -676,10 +676,12 @@ class InstallProgressScreen(FullScreen):
 
     # --- install subprocess (thread; UI updates hop back to the loop) ---
     def _run_install_thread(self):
+        from ...settings import SETTINGS_FILE
         proc = subprocess.Popen(
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"], stderr=subprocess.PIPE, stdout=subprocess.DEVNULL,
             env={**os.environ, "PURPLE_PAYLOAD_DIR": "/cdrom/purple", "PURPLE_COMPUTER_NAME": self._computer_name,
-                 "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0"})
+                 "PURPLE_LIVE_AUDIO_OK": "1" if self.app.audio_ok is True else "0",
+                 "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE)})  # copied into the installed system
         buf = b""
 
         def emit(line: bytes):

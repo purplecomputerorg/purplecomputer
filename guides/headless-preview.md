@@ -126,3 +126,5 @@ just preview music key:a
 ## How It Works
 
 The preview script (`scripts/preview.py`) builds the app on SDL's dummy video driver through `purple_tui.canvas.harness.make_app()`, feeds key actions through the real dispatcher, draws one frame, and saves it with `pygame.image.save`. No display, no terminal, no SVG conversion. Set `PURPLE_WINDOW_SIZE=WxH` to preview another screen size.
+
+`PURPLE_UX=tui just preview ...` previews the Textual UI instead: `scripts/preview.py` hands off to `scripts/preview_tui.py`, the terminal-era driver kept verbatim from before the canvas (Textual's `run_test`, an SVG screenshot, `rsvg-convert` to PNG). It supports the room names plus `type:`, `key:`, `wait:`, `code_panel`, `parent_menu`, `clear`, `doodle`, `photo`, `time_travel` and `first_boot`; the other actions above are canvas only.

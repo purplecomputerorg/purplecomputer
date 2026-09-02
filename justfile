@@ -10,6 +10,7 @@ default:
 
 # Show environment variables for testing
 env:
+    @echo "PURPLE_UX=tui           Run the Textual UI (what release/1.x ships) instead of the canvas"
     @echo "PURPLE_NO_AUDIO=1       Force audio off (test no-sound UX)"
     @echo "PURPLE_NO_EVDEV=1       Skip evdev input (use the window's keyboard events)"
     @echo "PURPLE_DEV_MODE=1       Dev shortcuts, screenshots, debug keys"

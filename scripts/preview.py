@@ -30,12 +30,16 @@ Actions (processed left to right):
     wait:SECONDS     Let timers run for N seconds
 
 Output: path to the PNG. Set PURPLE_SCREENSHOT_DIR to change the folder and
-PURPLE_WINDOW_SIZE=WxH to preview another screen size.
+PURPLE_WINDOW_SIZE=WxH to preview another screen size. PURPLE_UX=tui previews
+the Textual UI instead (scripts/preview_tui.py, a subset of these actions).
 """
 
 import asyncio
 import os
 import sys
+
+if os.environ.get("PURPLE_UX") == "tui":  # the Textual UI has its own preview driver
+    os.execv(sys.executable, [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview_tui.py"), *sys.argv[1:]])
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from purple_tui.canvas.harness import make_app, press  # noqa: E402

@@ -4,6 +4,10 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# PURPLE_UX=tui runs the Textual UI (the one release/1.x ships) in Alacritty instead.
+if [ "${PURPLE_UX:-}" = "tui" ]; then
+    exec bash "$SCRIPT_DIR/run_local_tui.sh" "$@"
+fi
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TEST_HOME="$PROJECT_ROOT/.test_home"
 

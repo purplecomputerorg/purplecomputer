@@ -11,7 +11,6 @@ import time
 import pygame
 
 from .. import palette as P
-from ..constants import ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from .gfx import Gfx, rgb
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 
@@ -84,14 +83,6 @@ _COMMON_2CHAR = {'am', 'an', 'as', 'at', 'be', 'by', 'do', 'go', 'he', 'if', 'in
 MATH_OPERATORS = {'+', '-', '×', '÷'}
 MAX_RECALL_LEN = 40
 CANCELLED = object()  # a picker closed with Esc, distinct from choosing None
-
-
-def volume_badge(vol: int):
-    """(icon, bar, label) for a volume level; Play, the picker and toasts share it."""
-    steps = [(0, "Sound Off"), (15, "Whisper"), (35, "Quiet"), (60, "Medium"), (85, "Loud"), (100, "Full")]
-    label = next(lbl for lvl, lbl in steps if vol <= lvl)
-    filled = 0 if vol <= 0 else next(i for i, (lvl, _) in enumerate(steps) if vol <= lvl) * 2
-    return (ICON_VOLUME_OFF if vol == 0 else ICON_VOLUME_HIGH), "█" * filled + "░" * (10 - filled), label
 
 
 class TextField:

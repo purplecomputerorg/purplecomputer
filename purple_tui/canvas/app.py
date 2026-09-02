@@ -23,7 +23,7 @@ from ..constants import (
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_CHAT, ICON_COMPUTER, ICON_MENU, ICON_MUSIC,
     ICON_PALETTE, ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER,
     ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
-    UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
+    UI_READY_MARKER, VOLUME_DEFAULT, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
 )
 from .gfx import Gfx, rgb
@@ -34,7 +34,8 @@ from ..keyboard import (
 )
 from ..palette import ROW_LEGEND_COLORS
 from ..timeline import RoomTimeline
-from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label, volume_badge
+from ..audio import adjacent_volume, snap_volume, volume_badge
+from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
 ROOM_ICONS = {"play": ICON_CHAT, "music": ICON_MUSIC, "art": ICON_PALETTE}
@@ -123,7 +124,7 @@ class PurpleApp:
                                get_music_looping, get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
         saved_volume = get_volume_level()
-        self.volume_level = VOLUME_DEFAULT if saved_volume is None else saved_volume
+        self.volume_level = VOLUME_DEFAULT if saved_volume is None else snap_volume(saved_volume)
         self._volume_lock = get_volume_lock()
         saved = get_littles_mode()
         if saved:
@@ -705,17 +706,13 @@ class PurpleApp:
     def action_volume_down(self):
         if self._notify_volume_lock_blocked():
             return
-        idx = max(i for i, lvl in enumerate(VOLUME_LEVELS) if self.volume_level >= lvl)
-        if idx > 0:
-            self.volume_level = VOLUME_LEVELS[idx - 1]
+        self.volume_level = adjacent_volume(self.volume_level, up=False)
         self._apply_volume()
 
     def action_volume_up(self):
         if self._notify_volume_lock_blocked():
             return
-        idx = next((i for i, lvl in enumerate(VOLUME_LEVELS) if self.volume_level <= lvl), len(VOLUME_LEVELS) - 1)
-        if idx < len(VOLUME_LEVELS) - 1:
-            self.volume_level = VOLUME_LEVELS[idx + 1]
+        self.volume_level = adjacent_volume(self.volume_level, up=True)
         self._apply_volume()
 
     def _show_brightness_hint(self):

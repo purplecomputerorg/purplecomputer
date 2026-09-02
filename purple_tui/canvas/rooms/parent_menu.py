@@ -17,7 +17,8 @@ import pygame
 from ... import diagnostics
 from ... import palette as P
 from ..gfx import FONT_DIR
-from ...constants import ICON_COMPUTER, SUPPORT_EMAIL, VOLUME_LEVELS, is_debug, is_live_boot, is_usb_cached, is_usb_present
+from ...audio import adjacent_volume, volume_badge
+from ...constants import ICON_COMPUTER, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
 from .sleep_screen import FullScreen
@@ -306,9 +307,6 @@ class InstallConfirmScreen(Picker):
 # ---------------------------------------------------------------------------
 # Sound: volume + lock + test tone
 # ---------------------------------------------------------------------------
-_VOLUME_LEVEL_LABELS = {0: "Silent Mode", 15: "Whisper", 35: "Quiet", 60: "Medium", 85: "Loud", 100: "Full"}
-
-
 def _volume_menu_label(lock) -> str:
     if lock == 0:
         return "Sound: Silent Mode"
@@ -342,7 +340,7 @@ class ParentVolumeModal(Dialog):
             g.draw_text("◀", px, bx - g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midright")
             g.draw_text("▶", px, bx + bw + g.vw(1.2), y, "sans-bold", P.PRIMARY, anchor="midleft")
         draw_bar(g, bx, y - g.vh(0.7), bw, g.vh(1.4), level / 100, P.PRIMARY if on else P.MUTED)
-        g.draw_text(_VOLUME_LEVEL_LABELS.get(level, str(level)), px, rect.right, y, "sans-bold", P.MUTED, anchor="midright")
+        g.draw_text("Silent Mode" if level == 0 else volume_badge(level)[2], px, rect.right, y, "sans-bold", P.MUTED, anchor="midright")
         y += g.vh(7)
         on = self._focus == "lock"
         g.draw_text("Lock:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
@@ -371,7 +369,7 @@ class ParentVolumeModal(Dialog):
 
     def _adjust(self, up: bool):
         cur = self.app.volume_level
-        new = next((v for v in VOLUME_LEVELS if v > cur), cur) if up else next((v for v in reversed(VOLUME_LEVELS) if v < cur), cur)
+        new = adjacent_volume(cur, up)
         if new == cur:
             return
         self.app.volume_level = new

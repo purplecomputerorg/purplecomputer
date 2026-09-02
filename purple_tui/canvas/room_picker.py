@@ -8,7 +8,8 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from .ui import Dialog, Overlay, Picker, draw_scrim, volume_badge
+from ..audio import volume_badge
+from .ui import Dialog, Overlay, Picker, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
 NUMBER_KEY_ROOMS = {"1": "play", "2": "music", "3": "art"}

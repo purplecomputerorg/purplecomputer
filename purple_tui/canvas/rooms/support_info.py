@@ -1,5 +1,8 @@
-"""Support info: version, model, audio status, and scrollable device and
-audio reports a parent can read out to support."""
+"""Support info: version, model, audio status, scrollable device and audio
+reports a parent can read out to support, and a Sound check that plays the
+startup chime and shows what first boot would decide."""
+
+import threading
 
 from ... import diagnostics
 from ... import palette as P
@@ -56,10 +59,35 @@ class AudioInfoScreen(_ScrollablePage):
         return diagnostics.collect_audio_info(self.app.audio_ok)
 
 
+class SoundCheckScreen(_ScrollablePage):
+    title = "Sound check"
+
+    def _collect_text(self):
+        return "Playing the chime and listening through the microphone..."
+
+    def on_open(self):
+        if self.app._effective_volume() == 0:
+            self._show("Sound is off, so the chime can't play. Turn the volume up first.")
+            return
+        threading.Thread(target=self._run, daemon=True, name="sound-check-menu").start()
+
+    def _run(self):
+        from ... import sound_check
+        takes: list[str] = []
+        result = sound_check.run(ladder=sound_check.PROBE_LADDER, log=takes.append)
+        self.app._apply_volume_system()  # the check restored the sink to its pre-chime level; reassert ours
+        self.app.call_from_thread(self._show, sound_check.report(result, takes))
+
+    def _show(self, text: str):
+        self.lines = text.splitlines()
+        self.offset = 0
+        self.app.invalidate()
+
+
 class SupportInfoScreen(Picker):
     title = "Support info"
     hint = "▲ ▼ choose   Enter open   Esc back"
-    OPTIONS = [(DeviceInfoScreen, "Device info"), (AudioInfoScreen, "Audio info")]
+    OPTIONS = [(DeviceInfoScreen, "Device info"), (AudioInfoScreen, "Audio info"), (SoundCheckScreen, "Sound check")]
 
     def __init__(self, app):
         super().__init__(app)
@@ -72,4 +100,7 @@ class SupportInfoScreen(Picker):
         ])
 
     def _on_confirm(self, value):
-        self.app.push(value(self.app))
+        screen = value(self.app)
+        self.app.push(screen)
+        if hasattr(screen, "on_open"):
+            screen.on_open()

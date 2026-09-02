@@ -11,9 +11,6 @@ runs the canvas UI.
 import os
 
 if os.environ.get("PURPLE_UX") == "tui":
-    from purple_tui import mixer
-    from purple_tui.rooms import music_room
-    mixer.bind_frontend_copy(music_room)
     from purple_tui.purple_tui import main
 else:
     from purple_tui.canvas.app import main

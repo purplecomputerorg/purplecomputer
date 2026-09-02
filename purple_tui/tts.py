@@ -472,15 +472,15 @@ def _worker_synthesize(prepared_text: str, wav_path: str) -> bool | None:
 def _ensure_mixer() -> bool:
     """Return True iff the pygame mixer is safely available.
 
-    Delegates to the mixer backend's warm_mixer(), which runs the subprocess probe
+    Delegates to mixer.warm_mixer(), which runs the subprocess probe
     exactly once per session and caches the result. Never initializes
     pygame.mixer in-process directly — that call can hang forever in
     snd_pcm_open() on broken audio hardware while holding the GIL.
     """
     global pygame
-    from .mixer import backend
+    from .mixer import warm_mixer
     _dbg("ensure_mixer: calling warm_mixer")
-    ok = backend().warm_mixer()
+    ok = warm_mixer()
     _dbg(f"ensure_mixer: warm_mixer -> {ok}")
     if not ok:
         return False

@@ -55,21 +55,6 @@ def _suppress_alsa_output():
 # See guides/boot-hang-debugging.md.
 pygame = None  # populated by warm_mixer() once pygame is safe to import
 _MIXER_READY: bool | None = None  # None = untested, True/False = cached result
-# The Textual UI (frozen until the next major release) carries its own copy of
-# this module inside rooms.music_room; binding it here keeps the shared audio and
-# speech paths on the state that frontend actually mutates.
-_frontend_copy = None
-
-
-def bind_frontend_copy(module) -> None:
-    global _frontend_copy
-    _frontend_copy = module
-
-
-def backend():
-    return _frontend_copy or sys.modules[__name__]
-
-
 _PROBE_TIMED_OUT = False  # True = probe hung (hw is broken, don't retry)
 _KNOWN_SILENT = False  # True = output codec opens fine but is inaudible (don't retry)
 _IDLE_RELEASED = False  # True = mixer closed after a quiet period; re-init skips the probe

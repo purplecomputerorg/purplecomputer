@@ -14,6 +14,17 @@
 
 ---
 
+## Two UIs, keep them in sync (until Textual is gone)
+
+`main` carries both UIs. The shipping Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen: fixes only, and every one of those files must stay identical to what `release/1.x` expects, so `just release-pick` applies cleanly. Never refactor it to use the extracted modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
+
+- **Bug fixes and tweaks to behavior that ships today land in BOTH.** Prefer fixing a shared module: `constants.py` tunables (hold thresholds, volume steps), `audio.py`, `tts.py`, `settings.py`, `keyboard.py`, `play_eval.py`, `mixer.py`, `palette.py`. One edit serves both and cherry-picks cleanly.
+- **When the fix is in UI logic that exists twice, make two commits:** the TUI-only commit first, touching only original TUI paths (so `release-pick` is clean), then the canvas commit.
+- **The rule is NOT "everything twice".** Features that will only ever ship with the next major release are canvas-only, need no Textual counterpart, and wait on `main` (`release-status` marks them `~`). Anything that is more than a clear bug fix: ask the user whether it needs a TUI counterpart before assuming either way.
+- **DRY does not apply across the two UIs.** Duplicated logic between the frozen TUI and the canvas is deliberate; don't clean it up.
+
+---
+
 ## Git Commits
 
 Never run `git commit` directly. Always commit via `/checkpoint <msg>` (you supply the message) or `/wrap` (you draft a 1-2 sentence message from the diff). These come from the [`lanes`](https://github.com/tavinathanson/lanes) tool installed at `~/.claude/`.

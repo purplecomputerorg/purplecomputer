@@ -1,8 +1,12 @@
 # Canvas architecture
 
 Purple draws its own screen. Since the `ux-experiments` branch (August 2026)
-the UI is a pygame window rendered in software; the Textual terminal UI and
-Alacritty are gone. This guide is the map for anyone working on the screen.
+the default UI is a pygame window rendered in software, under
+`purple_tui/canvas/`. The Textual terminal UI (Alacritty, `purple_tui.py`,
+the top-level `rooms/`) is still on `main`, frozen, because it is what
+`release/1.x` ships: `PURPLE_UX=tui` runs it, and CLAUDE.md (Two UIs) says
+which fixes must land in both. This guide is the map for anyone working on
+the canvas screen.
 
 ## Why a canvas
 

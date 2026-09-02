@@ -53,6 +53,7 @@ git clone https://github.com/purplecomputerorg/purplecomputer.git
 cd purplecomputer
 just setup    # Creates venv, installs deps, downloads TTS voice, installs fonts
 just run      # Opens Purple in a window (SDL keyboard, no evdev needed)
+PURPLE_UX=tui just run   # The Textual UI the current release ships, in Alacritty
 ```
 
 Inside Purple Computer, try:
@@ -186,8 +187,9 @@ Purple Computer displays a **134×29 character viewport** (plus header and foote
 
 ```
 purplecomputer/
-├── purple_tui/           # The app: pygame canvas UI, rooms, engine modules
-│   ├── rooms/            # Play, Music, Art rooms (+ parent menu, sleep screen)
+├── purple_tui/           # The app: engine modules plus two UIs (see CLAUDE.md, Two UIs)
+│   ├── canvas/           # The pygame canvas UI (default): rooms, drawing, headless harness
+│   ├── rooms/            # The Textual UI's rooms (frozen: what release/1.x ships; PURPLE_UX=tui)
 │   ├── demo/             # Demo recording and playback system
 │   ├── content.py        # Content API for packs
 │   ├── keyboard.py       # Keyboard state machine

@@ -12,7 +12,6 @@ Keyboard input is received via handle_keyboard_action() from the main app,
 which reads directly from evdev. This gives us true key release detection.
 """
 
-import colorsys
 
 from textual.widgets import Static, Button
 from textual.containers import Container, Horizontal
@@ -31,28 +30,15 @@ from ..keyboard import (
     CharacterAction, NavigationAction, ControlAction, HoldOrTap,
     UNSHIFT_MAP,
 )
+# The sticker palette lives in purple_tui/palette.py; the names stay importable from here.
+from ..palette import (ASDF_ROW, GRAYSCALE, KEY_COLORS, QWERTY_ROW, ROW_LEGEND_COLORS, ZXCV_ROW,  # noqa: F401
+                       generate_row_gradient, get_key_color, get_legend_row_from_color, hsl_to_hex, text_color_for)
 
 
 # =============================================================================
 # CONSTANTS
 # =============================================================================
 
-# Grayscale values (selected by number row keys: 1=lightest, 0/-/= darkest)
-GRAYSCALE = {
-    "1": "#FFFFFF",  # Pure white
-    "2": "#E8E8E8",
-    "3": "#D0D0D0",
-    "4": "#B8B8B8",
-    "5": "#A0A0A0",
-    "6": "#888888",  # Middle gray
-    "7": "#707070",
-    "8": "#585858",
-    "9": "#404040",
-    "0": "#282828",
-    "-": "#101010",  # Near black
-    "=": "#000000",  # Pure black (equals, right of -)
-    "+": "#000000",  # Pure black (= remapped to + globally)
-}
 
 # Brush character for painting
 BRUSH_CHAR = "█"
@@ -90,23 +76,6 @@ BOX_CHARS = {
     (1, 1): "┘",    # bottom-right (light corner)
 }
 
-# Keyboard rows for colors (full rows including symbols)
-QWERTY_ROW = list("qwertyuiop[]")     # Red family (top letter row + brackets)
-ASDF_ROW = list("asdfghjkl;'")        # Yellow family (home row + semicolon + quote)
-ZXCV_ROW = list("zxcvbnm,./")         # Blue family (bottom row + comma + period + slash)
-
-# Color legend: 3 shades per keyboard row (light, medium, dark)
-# Ordered top-to-bottom to mirror keyboard layout (numbers at top, ZXCV at bottom)
-ROW_LEGEND_COLORS = [
-    # Gray (number row, grayscale): light → dark
-    ["#C0C0C0", "#808080", "#404040"],
-    # Red (QWERTY row): light → dark
-    ["#DF7070", "#BF4040", "#802020"],
-    # Yellow/gold (ASDF row): light → dark
-    ["#DFC070", "#BFA040", "#806820"],
-    # Blue (ZXCV row): light → dark
-    ["#7090DF", "#4060BF", "#203080"],
-]
 
 # Canvas surface backgrounds (inside viewport, matches theme surface)
 DEFAULT_BG_DARK = "#2a1845"
@@ -155,87 +124,6 @@ GUTTER_BG_LIGHT_B = "#D8C8E2"  # Darker purple B
 # =============================================================================
 # COLOR UTILITIES
 # =============================================================================
-
-def hsl_to_hex(h: float, s: float, l: float) -> str:
-    """Convert HSL to hex color string."""
-    r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
-    return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
-
-
-def generate_row_gradient(hue: float, keys: list[str]) -> dict[str, str]:
-    """Generate a light-to-dark gradient for a row of keys."""
-    result = {}
-    count = len(keys)
-    for i, key in enumerate(keys):
-        lightness = 0.80 - (i / max(count - 1, 1)) * 0.60
-        result[key] = hsl_to_hex(hue, 0.75, lightness)
-    return result
-
-
-# Build key-to-color mapping (primary colors by row)
-KEY_COLORS: dict[str, str] = {}
-KEY_COLORS.update(GRAYSCALE)                                 # Grayscale (number row)
-KEY_COLORS.update(generate_row_gradient(0, QWERTY_ROW))     # Red family (top letter row)
-KEY_COLORS.update(generate_row_gradient(50, ASDF_ROW))      # Yellow family (home row)
-KEY_COLORS.update(generate_row_gradient(220, ZXCV_ROW))     # Blue family (bottom row)
-
-# Display aliases for kid-math remaps in purple_tui._KID_MATH_REMAP: keys arrive
-# at paint handlers as the displayed glyph, not the source key.
-KEY_COLORS["÷"] = KEY_COLORS["/"]
-KEY_COLORS["×"] = KEY_COLORS.get("*", KEY_COLORS["/"])
-
-def _rel_luminance(hex_color: str) -> float:
-    h = hex_color.lstrip("#")
-    def ch(v: int) -> float:
-        s = v / 255
-        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
-    r, g, b = ch(int(h[0:2], 16)), ch(int(h[2:4], 16)), ch(int(h[4:6], 16))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-
-
-def text_color_for(bg_hex: str) -> str:
-    """Pick whichever of black/white has the higher WCAG contrast ratio."""
-    l = _rel_luminance(bg_hex)
-    return "#FFFFFF" if 1.05 / (l + 0.05) >= (l + 0.05) / 0.05 else "#000000"
-
-
-def get_key_color(char: str) -> str:
-    """Get the color for a key, or white if not mapped."""
-    return KEY_COLORS.get(char.lower(), "#AAAAAA")
-
-
-
-def get_legend_row_from_color(color: str) -> int:
-    """Get the legend row index (0-3) from a color based on its hue.
-
-    Returns:
-        0 = Gray (number row, low saturation)
-        1 = Red (QWERTY row, hue ~0°)
-        2 = Yellow (ASDF row, hue ~50°)
-        3 = Blue (ZXCV row, hue ~220°)
-    """
-    r, g, b = hex_to_rgb(color)
-    # Convert to HLS to check hue and saturation
-    h, l, s = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
-    hue_deg = h * 360
-
-    # Low saturation = grayscale (number row)
-    if s < 0.15:
-        return 0
-
-    # Determine row by hue angle
-    # Red: hue around 0° (or 360°), range roughly 330-30°
-    # Yellow: hue around 50°, range roughly 30-90°
-    # Blue: hue around 220°, range roughly 180-270°
-    if hue_deg < 30 or hue_deg > 330:
-        return 1  # Red
-    elif 30 <= hue_deg < 90:
-        return 2  # Yellow
-    elif 180 <= hue_deg < 270:
-        return 3  # Blue
-
-    return 0  # Default
-
 
 
 # =============================================================================

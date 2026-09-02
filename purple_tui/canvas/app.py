@@ -69,6 +69,8 @@ class PurpleApp:
         self.audio_ok = None
         self.volume_level = VOLUME_DEFAULT
         self._volume_before_mute = VOLUME_DEFAULT
+        self._volume_chosen = True  # False only until the first boot's sound check, or a person, settles the volume
+        self._sound_check_running = False
         self._volume_lock = None
         self._brightness_hint_showing = False
         self._toasts: list[Toast] = []
@@ -124,6 +126,7 @@ class PurpleApp:
                                get_music_looping, get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
         saved_volume = get_volume_level()
+        self._volume_chosen = saved_volume is not None
         self.volume_level = VOLUME_DEFAULT if saved_volume is None else snap_volume(saved_volume)
         self._volume_lock = get_volume_lock()
         saved = get_littles_mode()
@@ -176,6 +179,7 @@ class PurpleApp:
             self.audio_ok = False
         else:
             self._start_mixer_warmup()
+            self._start_sound_check()
         if not is_live_boot() and os.path.exists(LIVE_AUDIO_MARKER):
             self.timers.after(30.0, self._check_first_boot_audio)
         self._usb_timer = self.timers.every(1.0, self._tick_usb) if is_live_boot() else None
@@ -676,7 +680,36 @@ class PurpleApp:
 
     def _apply_volume_system(self):
         from ..audio import set_system_volume
-        set_system_volume(self._effective_volume())
+        if not self._sound_check_running:  # the chime owns the sink until its verdict lands, which reapplies
+            set_system_volume(self._effective_volume())
+
+    def _start_sound_check(self):
+        """First boot only: the startup chime doubles as a loudness check
+        (sound_check.py) and its verdict becomes the saved volume, so later boots
+        are quiet and a chosen volume is never touched. Silent Mode and a saved
+        mute skip it. Runs alongside the mixer warmup, not after it: it only
+        needs pactl, and waits for a sound card that enumerates late."""
+        if self._volume_chosen or self._effective_volume() == 0:
+            return
+        self._sound_check_running = True
+
+        def _work():
+            from .. import sound_check
+            try:
+                result = sound_check.run(wait=5.0)
+                boot_log.heartbeat(result.summary())
+                self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
+            except Exception:
+                self._sound_check_running = False  # a wedged flag would keep the sink frozen all session
+
+        import threading
+        threading.Thread(target=_work, daemon=True, name="sound-check").start()
+
+    def _apply_sound_check(self, level):
+        self._sound_check_running = False
+        if level is not None and not self._volume_chosen:
+            self.volume_level = level
+        self._apply_volume()  # saved either way: the first boot settles the volume and later boots don't chime
 
     def _apply_volume(self):
         from .. import tts
@@ -684,6 +717,7 @@ class PurpleApp:
         if self._volume_lock:
             self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
         set_volume_level(self.volume_level)
+        self._volume_chosen = True
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()

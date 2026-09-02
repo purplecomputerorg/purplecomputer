@@ -87,3 +87,43 @@ def test_mixer_recovery_reapplies_volume_and_preloads_speech(monkeypatch):
     calls.clear()
     PurpleApp._mixer_recovered(app, False)
     assert calls == [] and app.audio_ok is False
+
+
+def test_first_boot_chime_picks_the_starting_volume(monkeypatch):
+    import asyncio
+    from purple_tui import audio, sound_check
+    pushed = []
+    monkeypatch.setattr(audio, "set_system_volume", lambda level, wait=False: pushed.append(level))
+    loud = sound_check.SoundCheck(heard=True, tone_db=(-5.0,) * 3, snr_db=40, sink_pct=58, sink_db=-14.0, source_pct=20, source_db=-42.0)
+    ran = []
+    monkeypatch.setattr(sound_check, "run", lambda **kw: ran.append(kw) or loud)
+
+    async def go():
+        app = make_app()
+        assert app._volume_chosen is False  # nothing saved yet
+        pushed.clear()
+        app._start_sound_check()
+        assert app._sound_check_running is True
+        app._apply_volume_system()
+        assert pushed == []  # the chime owns the sink until the verdict
+        for _ in range(50):
+            await asyncio.sleep(0.02)
+            if not app._sound_check_running:
+                break
+        assert ran and app._volume_chosen is True
+        assert app.volume_level == sound_check.default_volume(loud)
+        assert settings.get_volume_level() == app.volume_level
+        assert pushed[-1] == app.volume_level
+    run(go())
+
+
+def test_no_chime_once_a_volume_is_saved(monkeypatch):
+    from purple_tui import sound_check
+    settings.set_volume_level(VOLUME_LEVELS[7])
+    monkeypatch.setattr(sound_check, "run", lambda **kw: (_ for _ in ()).throw(AssertionError("chimed")))
+    async def go():
+        app = make_app()
+        assert app._volume_chosen is True
+        app._start_sound_check()
+        assert app._sound_check_running is False
+    run(go())

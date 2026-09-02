@@ -17,7 +17,7 @@ import pygame
 from ... import diagnostics
 from ... import palette as P
 from ..gfx import FONT_DIR
-from ...audio import adjacent_volume, volume_badge
+from ...audio import adjacent_volume, lock_badge, volume_badge
 from ...constants import ICON_COMPUTER, SUPPORT_EMAIL, is_debug, is_live_boot, is_usb_cached, is_usb_present
 from ...keyboard import CharacterAction, ControlAction, NavigationAction
 from ..ui import CANCELLED, Dialog, Overlay, Picker, draw_bar
@@ -308,12 +308,12 @@ class InstallConfirmScreen(Picker):
 # Sound: volume + lock + test tone
 # ---------------------------------------------------------------------------
 def _volume_menu_label(lock) -> str:
-    if lock == 0:
-        return "Sound: Silent Mode"
-    return "Sound: Locked" if lock is not None else "Sound"
+    return "Sound" if lock is None else f"Sound: {lock_badge(lock)[2]}"
 
 
 class ParentVolumeModal(Dialog):
+    """With Limit on, the slider edits the ceiling and the kid's keys keep
+    working below it; a limit at 0 is Silent Mode."""
     title = "Volume"
     width_pct = 50
 
@@ -327,11 +327,15 @@ class ParentVolumeModal(Dialog):
         return f"{row}\nSpace plays sound    Esc done"
 
     def body_height(self, g):
-        return g.vh(14)
+        return g.vh(19)
+
+    def _slider_level(self) -> int:
+        lock = self.app._volume_lock
+        return self.app.volume_level if lock is None else lock
 
     def draw_body(self, g, rect):
         px = g.vh(2.4)
-        level = self.app.volume_level
+        level = self._slider_level()
         y = rect.y + g.vh(2)
         on = self._focus == "volume"
         g.draw_text("Volume:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
@@ -343,9 +347,11 @@ class ParentVolumeModal(Dialog):
         g.draw_text("Silent Mode" if level == 0 else volume_badge(level)[2], px, rect.right, y, "sans-bold", P.MUTED, anchor="midright")
         y += g.vh(7)
         on = self._focus == "lock"
-        g.draw_text("Lock:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
-        state = "On" if self.app._volume_lock is not None else "Off"
-        g.draw_text(("▶ " if on else "") + state, px, bx, y, "sans-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
+        g.draw_text("Limit:", px, rect.x, y, "sans-bold", P.TEXT if on else P.MUTED, anchor="midleft")
+        limited = self.app._volume_lock is not None
+        g.draw_text(("▶ " if on else "") + ("On" if limited else "Off"), px, bx, y, "sans-bold", P.PRIMARY if on else P.MUTED, anchor="midleft")
+        note = "The kid can't go louder than this. 0 is silent." if limited else "Turn on to cap how loud the kid can turn it up."
+        g.draw_text(note, g.vh(2), rect.x, y + g.vh(4.5), "sans", P.MUTED, anchor="midleft")
 
     async def handle(self, action):
         if isinstance(action, NavigationAction):
@@ -368,12 +374,13 @@ class ParentVolumeModal(Dialog):
                 self.close(None)
 
     def _adjust(self, up: bool):
-        cur = self.app.volume_level
+        cur = self._slider_level()
         new = adjacent_volume(cur, up)
         if new == cur:
             return
-        self.app.volume_level = new
-        if self.app._volume_lock is not None:
+        if self.app._volume_lock is None:
+            self.app.volume_level = new
+        else:
             self._write_lock(new)
         self.app._apply_volume()
 
@@ -387,7 +394,7 @@ class ParentVolumeModal(Dialog):
         self.app._volume_lock = level
 
     def _play_test_sound(self):
-        level = self.app.volume_level
+        level = self._slider_level()
         if level == 0:
             return
         from ...audio import set_system_volume

@@ -39,3 +39,31 @@ def test_saved_volume_from_an_older_step_table_snaps_to_a_current_step():
         assert app.volume_level in VOLUME_LEVELS
         assert abs(app.volume_level - 60) == min(abs(v - 60) for v in VOLUME_LEVELS)
     run(go())
+
+
+def test_parent_limit_caps_the_keys_and_reads_max():
+    settings.set_volume_level(VOLUME_LEVELS[8])
+    settings.set_volume_lock(VOLUME_LEVELS[6])
+    async def go():
+        app = make_app()
+        assert app._effective_volume() == VOLUME_LEVELS[6]
+        assert app.volume_disabled is False
+        app.action_volume_up()
+        assert app._effective_volume() == VOLUME_LEVELS[6]
+        assert _last_toast(app).endswith("Max 6")
+        app.action_volume_down()
+        assert app._effective_volume() == VOLUME_LEVELS[5]
+        assert _last_toast(app).endswith(" 5")
+    run(go())
+
+
+def test_silent_mode_blocks_the_keys():
+    settings.set_volume_lock(0)
+    async def go():
+        app = make_app()
+        assert app.volume_disabled is True
+        before = app.volume_level
+        app.action_volume_up()
+        assert app.volume_level == before
+        assert _last_toast(app).endswith("Silent Mode")
+    run(go())

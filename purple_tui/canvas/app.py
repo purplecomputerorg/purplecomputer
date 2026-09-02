@@ -34,7 +34,7 @@ from ..keyboard import (
 )
 from ..palette import ROW_LEGEND_COLORS
 from ..timeline import RoomTimeline
-from ..audio import adjacent_volume, snap_volume, volume_badge
+from ..audio import adjacent_volume, effective_volume, snap_volume, volume_badge
 from .ui import Overlay, Timers, Toast, draw_hold_bar, draw_keycap, draw_label
 
 ROOMS = (ROOM_PLAY, ROOM_MUSIC, ROOM_ART)
@@ -664,11 +664,15 @@ class PurpleApp:
 
     # ------------------------------------------------------------------ volume
     def _effective_volume(self) -> int:
-        return self._volume_lock if self._volume_lock is not None else self.volume_level
+        return effective_volume(self.volume_level, self._volume_lock)
 
     @property
-    def volume_locked(self) -> bool:
-        return self.audio_ok is False or self._volume_lock is not None
+    def volume_disabled(self) -> bool:
+        """Volume keys are dead: audio isn't working, or Silent Mode is on."""
+        return self.audio_ok is False or self._volume_lock == 0
+
+    def _volume_badge(self) -> tuple[str, str, str]:
+        return volume_badge(self._effective_volume(), self._volume_lock)
 
     def _apply_volume_system(self):
         from ..audio import set_system_volume
@@ -677,19 +681,22 @@ class PurpleApp:
     def _apply_volume(self):
         from .. import tts
         from ..settings import set_volume_level
+        if self._volume_lock:
+            self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
         set_volume_level(self.volume_level)
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()
-        icon, bars, label = volume_badge(vol)
+        icon, bars, label = self._volume_badge()
         self.clear_notifications()
         self.notify(f"{icon}  {bars}  {label}")
 
     def _notify_volume_lock_blocked(self) -> bool:
-        if self._volume_lock is not None:
-            icon, bars, _ = volume_badge(self._volume_lock)
+        """Silent Mode swallows the volume keys; flash its badge so the press isn't a mystery."""
+        if self._volume_lock == 0:
+            icon, bars, label = self._volume_badge()
             self.clear_notifications()
-            self.notify(f"{icon}  {bars}  {'Silent Mode' if self._volume_lock == 0 else 'Locked'}")
+            self.notify(f"{icon}  {bars}  {label}")
             return True
         return False
 
@@ -706,13 +713,13 @@ class PurpleApp:
     def action_volume_down(self):
         if self._notify_volume_lock_blocked():
             return
-        self.volume_level = adjacent_volume(self.volume_level, up=False)
+        self.volume_level = adjacent_volume(self._effective_volume(), up=False)
         self._apply_volume()
 
     def action_volume_up(self):
         if self._notify_volume_lock_blocked():
             return
-        self.volume_level = adjacent_volume(self.volume_level, up=True)
+        self.volume_level = adjacent_volume(self._effective_volume(), up=True)
         self._apply_volume()
 
     def _show_brightness_hint(self):

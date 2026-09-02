@@ -8,7 +8,6 @@ from ..constants import (
     ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
 )
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
-from ..audio import volume_badge
 from .ui import Dialog, Overlay, Picker, draw_scrim
 
 ROOM_OPTIONS = [("play", ICON_CHAT, "Play"), ("music", ICON_MUSIC, "Music"), ("art", ICON_PALETTE, "Art")]
@@ -23,12 +22,11 @@ class RoomPicker(Overlay):
         self.col = [o[0] for o in ROOM_OPTIONS].index(app.active_room)
         self.code_row = app.active_room in ("music", "art") and (app._code_panel_active or app._code_panel_enabled)
 
-    def _locked_volume(self):
-        lock = self.app._volume_lock
-        if lock == 0:
-            return ICON_VOLUME_OFF, "Silent Mode"
-        if lock is not None:
-            return ICON_VOLUME_HIGH, "Locked"
+    def _disabled_volume(self):
+        """Icon + label for the Volume slot when the keys are dead: Silent Mode or no audio."""
+        if self.app._volume_lock == 0:
+            icon, _, label = self.app._volume_badge()
+            return icon, label
         if self.app.audio_ok is False:
             return ICON_VOLUME_OFF, "No Sound"
         return None
@@ -84,7 +82,7 @@ class RoomPicker(Overlay):
         self.close({"close_code": True} if self.app._code_panel_active else {"open_code": True})
 
     def _open_volume(self):
-        if not self.app.volume_locked:
+        if not self.app.volume_disabled:
             self.app.push(VolumeModal(self.app))
 
     def _confirm_clear(self):
@@ -105,7 +103,7 @@ class RoomPicker(Overlay):
         x0 = g.w // 2 - (3 * tw + 2 * gap) // 2
         g.draw_text("Pick a room", em(1.15), g.w // 2, y, "mono-bold", P.TEXT, anchor="midtop", track=0.06)
         y += head_h + em(1.5)
-        locked = self._locked_volume()
+        locked = self._disabled_volume()
         cards = [(ROWS, i, icon, label, str(i + 1), False) for i, (_, icon, label) in enumerate(ROOM_OPTIONS)]
         cards += [(EXTRAS, 0, *(locked + ("", True) if locked else (ICON_VOLUME_HIGH, "Volume", "V", False))),
                   (EXTRAS, 1, ICON_BROOM, "Clear", "C", False),
@@ -150,7 +148,7 @@ class VolumeModal(Dialog):
         return g.vh(6)
 
     def draw_body(self, g, rect):
-        icon, bars, label = volume_badge(self.app.volume_level)
+        icon, bars, label = self.app._volume_badge()
         g.draw_text(f"{icon}  {bars}  {label}", g.vh(3), rect.centerx, rect.centery, "mono-bold", P.TEXT, anchor="center")
 
     async def handle(self, action):

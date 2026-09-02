@@ -47,11 +47,11 @@ TUI Process:
   │     - Handles double-tap (same key < 400ms)
   │     - Emits high-level actions
   │           ↓
-  │   PurpleApp (purple_tui/app.py)
+  │   PurpleApp (purple_tui/canvas/app.py)
   │     - Receives actions, updates UI
   │           ↓
   └── SDL window (display only)
-        - Painted by purple_tui/gfx.py
+        - Painted by purple_tui/canvas/gfx.py
         - Keyboard input ignored
 ```
 

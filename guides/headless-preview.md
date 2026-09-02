@@ -125,4 +125,4 @@ just preview music key:a
 
 ## How It Works
 
-The preview script (`scripts/preview.py`) builds the app on SDL's dummy video driver through `purple_tui.harness.make_app()`, feeds key actions through the real dispatcher, draws one frame, and saves it with `pygame.image.save`. No display, no terminal, no SVG conversion. Set `PURPLE_WINDOW_SIZE=WxH` to preview another screen size.
+The preview script (`scripts/preview.py`) builds the app on SDL's dummy video driver through `purple_tui.canvas.harness.make_app()`, feeds key actions through the real dispatcher, draws one frame, and saves it with `pygame.image.save`. No display, no terminal, no SVG conversion. Set `PURPLE_WINDOW_SIZE=WxH` to preview another screen size.

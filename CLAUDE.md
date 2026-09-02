@@ -112,7 +112,7 @@ Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPO
 
 ## Canvas UI
 
-The screen is a pygame window the app paints itself (`purple_tui/gfx.py`, `purple_tui/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere.
+The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere.
 
 ## Python Gotchas
 

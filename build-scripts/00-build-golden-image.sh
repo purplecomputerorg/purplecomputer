@@ -357,7 +357,7 @@ LEANINITRD
     fi
     log_info "Sound modules verified"
 
-    # UI fonts ship inside purple_tui/fonts; Noto Color Emoji comes from apt above.
+    # UI fonts ship inside purple_tui/canvas/fonts; Noto Color Emoji comes from apt above.
     # The parent-menu xterm resolves IBM Plex Mono from that bundled dir via
     # XDG_DATA_HOME (see rooms/parent_menu.py), so no system font install here.
 

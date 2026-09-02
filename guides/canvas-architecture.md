@@ -40,16 +40,16 @@ Design rules, in priority order:
 ## Layers
 
 ```
-purple_tui/gfx.py       Gfx: the surface, fonts, text and emoji caches, markup layout
-purple_tui/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
-purple_tui/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
-purple_tui/panels.py    CodePanel, LoopPanel, TimeTravelBar, SpaceHold
-purple_tui/rooms/       PlayRoom, MusicRoom, ArtRoom, parent flows, system screens
+purple_tui/canvas/gfx.py       Gfx: the surface, fonts, text and emoji caches, markup layout
+purple_tui/canvas/ui.py        Timers, TextField, Overlay/Dialog/Picker, Toast, draw_ring
+purple_tui/canvas/app.py       PurpleApp: asyncio loop, readers, dispatch, overlays, frame
+purple_tui/canvas/panels.py    CodePanel, LoopPanel, TimeTravelBar, SpaceHold
+purple_tui/canvas/rooms/     PlayRoom, MusicRoom, ArtRoom, parent flows, system screens
 purple_tui/play_eval.py The Play evaluator (engine; emits markup strings)
 purple_tui/mixer.py     Audio mixer lifecycle (engine)
 purple_tui/palette.py   Theme colors and the sticker palette
-purple_tui/harness.py   Headless app for previews and tests
-purple_tui/sdl_input.py Keyboard from the SDL window when evdev is absent (dev)
+purple_tui/canvas/harness.py   Headless app for previews and tests
+purple_tui/canvas/sdl_input.py Keyboard from the SDL window when evdev is absent (dev)
 ```
 
 Engine modules (`keyboard`, `input`, `content`, `color_mixing`, `fuzzy`,
@@ -67,7 +67,7 @@ emoji is rasterized once and blitted from a cache (`Gfx.text`, `Gfx.emoji`).
 
 Animations (hold rings, the Music key-change wave, note flashes) are timers
 that invalidate at their own rate and stop themselves. `Timers.intervals()`
-lists what is armed; `tests/test_performance.py` asserts nothing under one
+lists what is armed; `tests/canvas/test_performance.py` asserts nothing under one
 second ticks while idle in Play.
 
 Sizes come from `g.vh(percent)` and `g.vw(percent)` so a 1024x768 netbook and
@@ -96,7 +96,7 @@ coverage probe. ALL CAPS is applied here, so every caller inherits it.
 already speak: `[bold]`, `[dim]`, `[#hex]`, `[on #hex]`, `[/]`, `\[`.
 Whitespace-only spans with a background are drawn as square color swatches.
 Unknown tags stay literal, so kid input never breaks rendering
-(`tests/test_play_markup_safety.py`).
+(`tests/canvas/test_play_markup_safety.py`).
 
 ## Input
 
@@ -136,6 +136,6 @@ Enter.
 
 - `just run-dev` opens a window on a dev machine (SDL keyboard, no evdev).
 - `just preview art type:hello key:tab type:hi` renders a PNG headlessly.
-- `purple_tui.harness.make_app()` gives tests a headless app; `press` and
+- `purple_tui.canvas.harness.make_app()` gives tests a headless app; `press` and
   `type_text` drive it through the real dispatcher.
-- `tests/test_render_smoke.py` draws every screen at three sizes.
+- `tests/canvas/test_render_smoke.py` draws every screen at three sizes.

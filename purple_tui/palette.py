@@ -8,7 +8,33 @@ in the box. Play, Music and Art all read from here.
 import colorsys
 
 from .color_mixing import hex_to_rgb
-from .gfx import contrast_text
+
+NAMED_COLORS = {
+    "red": "#d94a4a", "green": "#5cb85c", "blue": "#4a7fd9", "yellow": "#e8d24a",
+    "white": "#ffffff", "black": "#000000", "cyan": "#4ac8d9", "magenta": "#d94ac8",
+}
+
+
+def rgb(color) -> tuple:
+    """'#rrggbb' or a tuple -> (r, g, b)."""
+    if isinstance(color, str):
+        c = NAMED_COLORS.get(color, color).lstrip("#")
+        return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+    return tuple(color[:3])
+
+
+def luminance(color) -> float:
+    def ch(v):
+        s = v / 255
+        return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
+    r, g, b = rgb(color)
+    return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+
+
+def contrast_text(bg) -> str:
+    """Black or white, whichever reads better on bg (WCAG)."""
+    lum = luminance(bg)
+    return "#FFFFFF" if 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.05 else "#000000"
 
 # Theme (single, dark on purpose: the screen is a calm object, not a document).
 # Values are the design mock's CSS variables, ported verbatim.

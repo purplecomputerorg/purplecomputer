@@ -141,7 +141,7 @@ if [ -d "packs/core-definitions" ]; then
 fi
 
 # Color emoji for the UI (the ISO installs fonts-noto-color-emoji; a dev box
-# needs the file where purple_tui/gfx.py looks for it). macOS uses its own.
+# needs the file where purple_tui/canvas/gfx.py looks for it). macOS uses its own.
 echo_step "Checking Noto Color Emoji..."
 if [ "$OS" = "linux" ]; then
     EMOJI_FONT="$HOME/.local/share/fonts/NotoColorEmoji.ttf"

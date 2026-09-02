@@ -326,3 +326,16 @@ def _run(sink: Optional[str], source: Optional[str], sink_pct: int, ladder: tupl
 
 if __name__ == "__main__":
     print(run(ladder=PROBE_LADDER, log=print).summary())
+
+
+def report(result: SoundCheck, takes: list[str]) -> str:
+    """What a parent reads after the chime: a plain verdict, then the readings support wants."""
+    from .audio import volume_badge
+    from .constants import VOLUME_DEFAULT
+    if result.note:
+        return f"Couldn't run the check: {result.note}."
+    heard = "heard" if result.heard else "did not hear"
+    level = default_volume(result) or VOLUME_DEFAULT
+    verdict = (f"The microphone {heard} the chime.\n"
+               f"Until someone picks a volume, this computer starts at volume {volume_badge(level)[2]}.")
+    return "\n".join([verdict, "", "Readings:", f"  {result.summary()}", *takes])

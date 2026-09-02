@@ -262,9 +262,10 @@ release-pick +shas:
 
 # Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
 # Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
-ship:
+# just ship --commit <hash> releases an earlier release/1.x commit whose build is still in the output directory.
+ship *args:
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
-    @cd {{release_dir}} && {{justfile_directory()}}/build-scripts/release-iso.sh
+    @cd {{release_dir}} && {{justfile_directory()}}/build-scripts/release-iso.sh {{args}}
 
 # Show which commit the public download is; with a hash, fail unless it matches (just release-check abc1234)
 release-check *commit:

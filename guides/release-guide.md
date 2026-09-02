@@ -25,7 +25,7 @@ just release-status          # what ships vs what waits (= on release/1.x, + mai
 just release-pick <sha>...   # cherry-pick onto release/1.x, run its tests, show status
 purple-build --release       # build the release worktree (includes the with-backup ISO)
 just flash-all               # flash customer USBs from that build (prefers with-backup)
-just ship                    # confirm, upload, tag
+just ship                    # confirm, upload, tag (just ship --commit <sha> for an earlier built commit)
 just release-check <sha>     # confirm the public download is that commit
 ```
 
@@ -36,6 +36,8 @@ When a pick needs hand-edits to fit the release branch (usually because it touch
 Build, then flash, then ship: flashing first means a stick can be validated on real hardware before the downloads update. `purple-build --release` is a local wrapper (machine config, not this repo) around `build-in-docker.sh` pointed at the release worktree; it sets `PURPLE_WITH_BACKUP_ISO=1` so shipping builds always carry the backup image copy.
 
 `just ship` prints the commit, the ISO it picked, and the commit count since the last release tag, then asks for confirmation before uploading anything. It refuses if the worktree is not on `release/1.x`, and the release script records the shipped commit in `latest.json`, tags it with the release version, and pushes `release/1.x` and the tag to GitHub on success (the download page links the shipped commit, and GitHub only knows commits that have been pushed). `just release-check <sha>` reads the live download back and fails unless it is that commit, so after telling someone which build they are getting you can prove the download matches. Releases before the commit was recorded fall back to the tag; `v2026.07.27-1107` and earlier have neither, so they report as unknown. It does not build: for a semver release, stamp the version at build time (`PURPLE_VERSION=v1.x purple-build --release`) and `just ship` adopts it; otherwise the version is the build's UTC timestamp, so the download page dates a release by when it was built, not when it was uploaded.
+
+`just ship --commit <sha>` releases an earlier commit on `release/1.x` instead of its head, for when picks landed after the build that was flashed and validated. The tag goes on that commit and the newer picks wait for the next build. The commit has to be on the branch already, since the branch is what gets pushed as the commit's home.
 
 The release script only uploads an ISO built from the checkout it runs in: every build bakes its source commit into the image (`/etc/purple-commit`, surfaced as a `.commit` sidecar next to the ISO), and `release-iso.sh` picks the newest ISO with that commit, ignoring newer builds of other commits (main builds share the output directory). A version stamped at build time via `PURPLE_VERSION` is the release version; `just release` picks it up on its own, so there is no version to repeat or get wrong at release time.
 

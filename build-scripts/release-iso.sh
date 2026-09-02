@@ -2,11 +2,13 @@
 # Release Purple Computer ISOs to Cloudflare R2
 #
 # Usage:
-#   ./release-iso.sh              # version from the build time (v2026.03.30-1430)
-#   ./release-iso.sh v1.0         # semver for major releases
+#   ./release-iso.sh                  # version from the build time (v2026.03.30-1430)
+#   ./release-iso.sh v1.0             # semver for major releases
+#   ./release-iso.sh --commit abc1234 # an earlier commit on the current branch
 #
 # Releases the commit checked out in the current directory (just ship runs
-# this inside the release worktree); the script and .env come from main.
+# this inside the release worktree), or with --commit an ancestor of it whose
+# build is still around; the script and .env come from main.
 #
 # Uploads standard + debug ISOs with checksums, updates the Cloudflare
 # redirect rules so /download.iso and /download-debug.iso point to the new
@@ -58,6 +60,17 @@ fi
 
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
+VERSION_ARG=""
+COMMIT_ARG=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --commit) COMMIT_ARG="${2:?--commit needs a hash}"; shift 2 ;;
+        --commit=*) COMMIT_ARG="${1#--commit=}"; shift ;;
+        -*) log_error "Unknown option: $1"; exit 1 ;;
+        *) VERSION_ARG="$1"; shift ;;
+    esac
+done
+
 # The source commit baked into an ISO: the .commit sidecar, or for older
 # builds the hash inside a build-* version stamp.
 iso_commit() {
@@ -70,8 +83,8 @@ iso_commit() {
     echo "$c"
 }
 
-# stdin: ISO paths; keeps the ones built from this checkout's commit.
-built_from_head() {
+# stdin: ISO paths; keeps the ones built from the release commit.
+built_from_commit() {
     local iso c
     while read -r iso; do
         c="$(iso_commit "$iso")"
@@ -80,19 +93,25 @@ built_from_head() {
     true
 }
 
-# Release the newest build of this checkout's commit; newer builds of other
+# Release the newest build of the release commit; newer builds of other
 # commits (usually main) are ignored. Public download stays the standard ISO;
 # with-backup (second golden image copy) is only for flashed-and-shipped USBs.
 # -fast dev builds never release.
-RELEASE_COMMIT=$(git rev-parse HEAD)
-HEAD_COMMIT=${RELEASE_COMMIT:0:7}
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | built_from_head | head -1)
-DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | built_from_head | head -1)
+RELEASE_COMMIT=$(git rev-parse --verify --quiet "${COMMIT_ARG:-HEAD}^{commit}") \
+    || { log_error "Not a commit: $COMMIT_ARG"; exit 1; }
+SHORT_COMMIT=${RELEASE_COMMIT:0:7}
+# The branch gets pushed as the shipped commit's home, so it has to contain it
+git merge-base --is-ancestor "$RELEASE_COMMIT" HEAD \
+    || { log_error "$SHORT_COMMIT is not on $BRANCH; only commits already on the shipping branch release"; exit 1; }
+BEHIND=$(git rev-list --count "$RELEASE_COMMIT..HEAD")
+STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | built_from_commit | head -1)
+DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | built_from_commit | head -1)
 
 if [ -z "$STANDARD_ISO" ] || [ -z "$DEBUG_ISO" ]; then
-    log_error "No standard + debug ISO built from $HEAD_COMMIT in $ISO_DIR"
+    log_error "No standard + debug ISO built from $SHORT_COMMIT in $ISO_DIR"
     echo "  Build this checkout first: purple-build --release"
+    echo "  Or release an earlier commit that is built: just ship --commit <hash>"
     exit 1
 fi
 
@@ -109,13 +128,13 @@ fi
 ISO_VERSION="$(tr -d '[:space:]' < "${STANDARD_ISO}.version" 2>/dev/null || true)"
 
 # Version: argument, else the ISO's build time in UTC, the clock its filename date uses
-VERSION="${1:-v$(date -u -r "$STANDARD_ISO" +%Y.%m.%d-%H%M)}"
+VERSION="${VERSION_ARG:-v$(date -u -r "$STANDARD_ISO" +%Y.%m.%d-%H%M)}"
 
 # A version stamped at build time is the release version; an argument may
 # confirm it but not contradict it.
 if [ -n "$ISO_VERSION" ] && [ "$ISO_VERSION" != "unknown" ] && [[ "$ISO_VERSION" != build-* ]]; then
-    if [ -n "${1:-}" ] && [ "$1" != "$ISO_VERSION" ]; then
-        log_error "This ISO is stamped $ISO_VERSION; it cannot be released as $1."
+    if [ -n "$VERSION_ARG" ] && [ "$VERSION_ARG" != "$ISO_VERSION" ]; then
+        log_error "This ISO is stamped $ISO_VERSION; it cannot be released as $VERSION_ARG."
         exit 1
     fi
     VERSION="$ISO_VERSION"
@@ -125,10 +144,14 @@ STANDARD_SIZE=$(du -h "$STANDARD_ISO" | cut -f1)
 DEBUG_SIZE=$(du -h "$DEBUG_ISO" | cut -f1)
 
 echo
-log_info "Release $VERSION: commit $HEAD_COMMIT ($BRANCH)"
+log_info "Release $VERSION: commit $SHORT_COMMIT ($BRANCH)"
+if [ "$BEHIND" -gt 0 ]; then
+    log_info "$BEHIND newer commits on $BRANCH stay unshipped:"
+    git log --format='  %h %<(72,trunc)%s' "$RELEASE_COMMIT..HEAD"
+fi
 log_info "ISO: $(basename "$STANDARD_STEM") standard + debug ($STANDARD_SIZE each)"
-LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
-[ -n "$LAST_TAG" ] && log_info "$(git rev-list --count "$LAST_TAG..HEAD") commits since $LAST_TAG"
+LAST_TAG=$(git describe --tags --abbrev=0 "$RELEASE_COMMIT" 2>/dev/null || true)
+[ -n "$LAST_TAG" ] && log_info "$(git rev-list --count "$LAST_TAG..$RELEASE_COMMIT") commits since $LAST_TAG"
 echo
 read -p "Upload to the downloads as $VERSION? [y/N] " -n 1 -r
 echo
@@ -215,10 +238,10 @@ log_info "Release $VERSION uploaded successfully!"
 echo
 
 # Tag the shipped commit; tags are the record mapping a shipped ISO to a commit
-if git tag "$VERSION" 2>/dev/null; then
-    log_info "Tagged $VERSION at ${RELEASE_COMMIT:0:7}"
+if git tag "$VERSION" "$RELEASE_COMMIT" 2>/dev/null; then
+    log_info "Tagged $VERSION at $SHORT_COMMIT"
 else
-    log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION"
+    log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION $SHORT_COMMIT"
 fi
 
 # The download page links the shipped commit on GitHub, so the branch has to be there

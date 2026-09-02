@@ -82,8 +82,13 @@ class _FakeApp:
     audio_ok = None
     _start_audio_hotplug = lambda self: None
     _start_audio_retry_poll = lambda self: None
+    _apply_volume_system = lambda self: None
+
+    def call_from_thread(self, fn, *args):
+        fn(*args)
 
     _start_mixer_warmup = PurpleApp._start_mixer_warmup
+    _mixer_recovered = PurpleApp._mixer_recovered
 
 
 def _run_warmup_and_wait(app):

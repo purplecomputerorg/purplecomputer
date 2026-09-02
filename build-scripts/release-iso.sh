@@ -2,12 +2,16 @@
 # Release Purple Computer ISOs to Cloudflare R2
 #
 # Usage:
-#   ./release-iso.sh              # date-time version (v2026.03.30-1430)
+#   ./release-iso.sh              # version from the build time (v2026.03.30-1430)
 #   ./release-iso.sh v1.0         # semver for major releases
 #
-# Uploads standard + debug ISOs with checksums, then updates
-# the Cloudflare redirect rules so /download.iso and /download-debug.iso
-# point to the new versioned paths (no re-upload needed).
+# Releases the commit checked out in the current directory (just ship runs
+# this inside the release worktree); the script and .env come from main.
+#
+# Uploads standard + debug ISOs with checksums, updates the Cloudflare
+# redirect rules so /download.iso and /download-debug.iso point to the new
+# versioned paths (no re-upload needed), then deletes every older release
+# except the one just replaced, which stays as a rollback.
 
 set -euo pipefail
 
@@ -54,35 +58,45 @@ fi
 
 R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 
-# Version: argument or date-time
-if [ -n "${1:-}" ]; then
-    VERSION="$1"
-else
-    VERSION="v$(date +%Y.%m.%d-%H%M)"
-fi
+# The source commit baked into an ISO: the .commit sidecar, or for older
+# builds the hash inside a build-* version stamp.
+iso_commit() {
+    local c v
+    c="$(tr -d '[:space:]' < "$1.commit" 2>/dev/null || true)"
+    v="$(tr -d '[:space:]' < "$1.version" 2>/dev/null || true)"
+    if [ -z "$c" ] || [ "$c" = "unknown" ]; then
+        [[ "$v" =~ ^build-([0-9a-f]+)- ]] && c="${BASH_REMATCH[1]}" || c=""
+    fi
+    echo "$c"
+}
 
-# Find ISOs (most recent by date)
-# Reject fast builds (minimal compression, not for release)
-# Public download stays the standard ISO; with-backup (second golden image
-# copy) is only for flashed-and-shipped USBs. -fast dev builds never release.
-STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | head -1)
-DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | head -1)
+# stdin: ISO paths; keeps the ones built from this checkout's commit.
+built_from_head() {
+    local iso c
+    while read -r iso; do
+        c="$(iso_commit "$iso")"
+        [ -n "$c" ] && [[ "$RELEASE_COMMIT" == "$c"* ]] && echo "$iso"
+    done
+    true
+}
 
-if [ -z "$STANDARD_ISO" ]; then
-    log_error "No standard ISO found in $ISO_DIR"
-    echo "  Run the build first: just build-iso"
+# Release the newest build of this checkout's commit; newer builds of other
+# commits (usually main) are ignored. Public download stays the standard ISO;
+# with-backup (second golden image copy) is only for flashed-and-shipped USBs.
+# -fast dev builds never release.
+RELEASE_COMMIT=$(git rev-parse HEAD)
+HEAD_COMMIT=${RELEASE_COMMIT:0:7}
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+STANDARD_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant standard | built_from_head | head -1)
+DEBUG_ISO=$(list_build_isos | { grep -v -- "-fast" || true; } | filter_variant debug | built_from_head | head -1)
+
+if [ -z "$STANDARD_ISO" ] || [ -z "$DEBUG_ISO" ]; then
+    log_error "No standard + debug ISO built from $HEAD_COMMIT in $ISO_DIR"
+    echo "  Build this checkout first: purple-build --release"
     exit 1
 fi
 
-if [ -z "$DEBUG_ISO" ]; then
-    log_error "No debug ISO found in $ISO_DIR"
-    echo "  Run the build first: just build-iso"
-    exit 1
-fi
-
-# The ISOs must be one build, and that build must match this checkout. The
-# .commit sidecar records the source commit baked into the image; older builds
-# without one fall back to the hash inside a build-* version stamp.
+# The two ISOs must be one build
 STANDARD_STEM="${STANDARD_ISO%.iso}"
 DEBUG_STEM="${DEBUG_ISO%.debug.iso}"
 if [ "$STANDARD_STEM" != "$DEBUG_STEM" ]; then
@@ -93,20 +107,9 @@ if [ "$STANDARD_STEM" != "$DEBUG_STEM" ]; then
 fi
 
 ISO_VERSION="$(tr -d '[:space:]' < "${STANDARD_ISO}.version" 2>/dev/null || true)"
-ISO_COMMIT="$(tr -d '[:space:]' < "${STANDARD_ISO}.commit" 2>/dev/null || true)"
-if [ -z "$ISO_COMMIT" ] || [ "$ISO_COMMIT" = "unknown" ]; then
-    [[ "$ISO_VERSION" =~ ^build-([0-9a-f]+)- ]] && ISO_COMMIT="${BASH_REMATCH[1]}" || ISO_COMMIT=""
-fi
-if [ -z "$ISO_COMMIT" ]; then
-    log_error "Cannot tell which commit built $STANDARD_ISO; rebuild it before releasing."
-    exit 1
-fi
-HEAD_COMMIT=$(git -C "$SCRIPT_DIR" rev-parse --short="${#ISO_COMMIT}" HEAD)
-if [ "$ISO_COMMIT" != "$HEAD_COMMIT" ]; then
-    log_error "This ISO was built from commit $ISO_COMMIT, but this checkout is at $HEAD_COMMIT."
-    echo "  Rebuild from this checkout, or release from the checkout that built it."
-    exit 1
-fi
+
+# Version: argument, else the ISO's build time in UTC, the clock its filename date uses
+VERSION="${1:-v$(date -u -r "$STANDARD_ISO" +%Y.%m.%d-%H%M)}"
 
 # A version stamped at build time is the release version; an argument may
 # confirm it but not contradict it.
@@ -122,17 +125,12 @@ STANDARD_SIZE=$(du -h "$STANDARD_ISO" | cut -f1)
 DEBUG_SIZE=$(du -h "$DEBUG_ISO" | cut -f1)
 
 echo
-echo "=========================================="
-echo "  Purple Computer ISO Release"
-echo "  Version: $VERSION"
-echo "=========================================="
+log_info "Release $VERSION: commit $HEAD_COMMIT ($BRANCH)"
+log_info "ISO: $(basename "$STANDARD_STEM") standard + debug ($STANDARD_SIZE each)"
+LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+[ -n "$LAST_TAG" ] && log_info "$(git rev-list --count "$LAST_TAG..HEAD") commits since $LAST_TAG"
 echo
-log_info "Standard ISO: $STANDARD_ISO ($STANDARD_SIZE)"
-log_info "Debug ISO:    $DEBUG_ISO ($DEBUG_SIZE)"
-echo
-
-# Confirm
-read -p "Upload to R2 bucket '$R2_BUCKET' as $VERSION? [y/N] " -n 1 -r
+read -p "Upload to the downloads as $VERSION? [y/N] " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Aborted."
@@ -163,14 +161,14 @@ s3_upload() {
 echo
 
 # Step 1: Generate checksums
-log_step "1/4: Generating checksums..."
+log_step "1/5: Generating checksums..."
 STANDARD_SHA256=$(sha256sum "$STANDARD_ISO" | cut -d' ' -f1)
 DEBUG_SHA256=$(sha256sum "$DEBUG_ISO" | cut -d' ' -f1)
 log_info "Standard: $STANDARD_SHA256"
 log_info "Debug:    $DEBUG_SHA256"
 
 # Step 2: Upload ISOs and checksums
-log_step "2/4: Uploading standard ISO..."
+log_step "2/5: Uploading standard ISO..."
 s3_upload "$STANDARD_ISO" "releases/${VERSION}/standard.iso" \
     "application/octet-stream" "attachment; filename=\"purple-computer-${VERSION}.iso\""
 
@@ -185,14 +183,16 @@ echo "$DEBUG_SHA256  debug.iso" | s3_upload - "releases/${VERSION}/debug.iso.sha
 # Step 3: Update Cloudflare redirect rules
 # /download.iso and /download-debug.iso redirect (302) to the versioned paths.
 # This replaces re-uploading the full ISOs to pointer paths.
-log_step "3/4: Updating download redirect rules..."
+log_step "3/5: Updating download redirect rules..."
 "$SCRIPT_DIR/setup-cloudflare-rules.sh" "$VERSION"
 
-# Step 4: Write latest.json
-log_step "4/4: Writing latest.json..."
+# Step 4: Write latest.json, remembering which release it replaces
+log_step "4/5: Writing latest.json..."
+PREVIOUS_VERSION=$(aws s3 cp "s3://${R2_BUCKET}/latest.json" - --endpoint-url "$R2_ENDPOINT" 2>/dev/null | jq -r '.version // empty' || true)
 LATEST_JSON=$(cat <<ENDJSON
 {
   "version": "${VERSION}",
+  "commit": "${RELEASE_COMMIT}",
   "released": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "standard": {
     "path": "releases/${VERSION}/standard.iso",
@@ -215,11 +215,24 @@ log_info "Release $VERSION uploaded successfully!"
 echo
 
 # Tag the shipped commit; tags are the record mapping a shipped ISO to a commit
-if git -C "$SCRIPT_DIR" tag "$VERSION" 2>/dev/null; then
-    log_info "Tagged $VERSION at $(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+if git tag "$VERSION" 2>/dev/null; then
+    log_info "Tagged $VERSION at ${RELEASE_COMMIT:0:7}"
 else
     log_error "Could not create tag $VERSION (already exists?). Resolve manually: git tag $VERSION"
 fi
+
+# The download page links the shipped commit on GitHub, so the branch has to be there
+if git push -q -u origin "$BRANCH" $(git tag -l "$VERSION"); then
+    log_info "Pushed $BRANCH and $VERSION to GitHub"
+else
+    log_error "Push failed; the release is fine but the download page's commit link will 404 until you run: git push -u origin $BRANCH $VERSION"
+fi
+
+# Step 5: keep the replaced release as a rollback, delete everything older
+log_step "5/5: Cleaning old releases..."
+"$SCRIPT_DIR/clean-old-releases.sh" --yes ${PREVIOUS_VERSION:+--keep "$PREVIOUS_VERSION"} \
+    || log_error "Cleanup failed; the release is fine. Run: just clean-releases"
+echo
 
 log_info "Download links:"
 log_info "  https://${R2_CUSTOM_DOMAIN}/download.iso"

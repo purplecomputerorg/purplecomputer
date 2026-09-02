@@ -65,6 +65,9 @@ def test_audio_pipeline_verification_block():
     src = _build_source()
     assert re.search(r"AUDIO_MISSING", src), "audio verification block not found"
     assert re.search(r'command -v pulseaudio', src), "pulseaudio command check missing"
+    assert re.search(r"\bpulseaudio-utils\b", src), "pulseaudio-utils not in apt install list"
+    assert re.search(r'command -v pactl >/dev/null" \|\| AUDIO_MISSING=', src), \
+        "pactl (the runtime volume backend) is not verified"
     assert re.search(r"stale-10-purple\.pa-dropin-present", src), \
         "verification does not guard against the duplicate-load drop-in regression"
     assert re.search(r"pulseaudio\.socket-still-enabled", src), \
@@ -133,6 +136,16 @@ def test_boot_timing_tool_ships():
         "purple-boot-timing not made executable"
     assert re.search(r"^\s*smartmontools \\$", src, re.M), \
         "smartmontools not in apt install list (SMART check silently skips)"
+
+
+def test_audio_probe_tool_ships():
+    """purple-audio-probe is the hands-on loudness diagnostic (mic loopback at
+    three steps, speech-model timing); it only helps if it is on the image."""
+    src = _build_source()
+    assert re.search(r'cp /purple-src/scripts/purple-audio-probe\.sh\b', src), \
+        "purple-audio-probe.sh not copied into the image"
+    assert re.search(r'chmod \+x "\$MOUNT_DIR/usr/local/bin/purple-audio-probe"', src), \
+        "purple-audio-probe not made executable"
 
 
 def _installed_grub_cfg_block() -> str:

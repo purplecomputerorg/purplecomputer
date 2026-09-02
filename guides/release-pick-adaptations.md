@@ -5,6 +5,18 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-08-28
+
+The audio chain, `ea6c0c7` through `717f6a1` (18 picks: PulseAudio volume, speech
+leveling and pacing, the TTS worker, the volume limit, the startup chime and
+the 1 to 10 scale). Three spots needed hands:
+
+- `6eef3e2` (volume through PulseAudio) → release `dfdc53e`
+  - `purple_tui/room_picker.py`: the import list. Main's side carried `ICON_TIME_TRAVEL` (Time Travel `a14d1e6` stays on main); release keeps `ICON_BROOM, ICON_CODE,` and drops the volume icons the pick removes.
+  - `docs/UX_LOG.md`: release's log with the chain's entries inserted at the top, the same rule at `e74b70d` → `e1a4b15`. Only chain commits touched the log on main over this span, so the entries are exactly the chain's.
+- `e5fa6e7` (speech leveling, clips regenerated) → release `ee4cce3`
+  - `packs/core-sounds/content/voice/`: six clips came up modify/delete because `fa4e203` (demo sounds, main-only) had added them and this pick regenerated them. Took the pick's versions; they are generated clips nothing on release plays. Later picks regenerate them again without conflict.
+
 ## 2026-08-13
 
 - `6c79598` (initrd prune v2) → release `5611960`

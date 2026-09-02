@@ -52,17 +52,18 @@ from .constants import (
     STICKY_SHIFT_GRACE, ESCAPE_HOLD_THRESHOLD,
     ICON_BATTERY_FULL, ICON_BATTERY_HIGH, ICON_BATTERY_MED,
     ICON_BATTERY_LOW, ICON_BATTERY_EMPTY, ICON_BATTERY_CHARGING,
-    ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
+    ICON_VOLUME_OFF,
     ICON_SHIFT,
     ICON_USB, ICON_SIGN_OUT, ICON_HARDDISK, ICON_ROBOT, ICON_TIME_TRAVEL, display_len,
     APP_BACKGROUND,
     is_usb_cached, is_usb_present,
-    VOLUME_LEVELS, VOLUME_DEFAULT,
+    VOLUME_DEFAULT,
     VIEWPORT_WIDTH, VIEWPORT_HEIGHT, WRAPPER_REFERENCE_ROWS,
     ROOM_PLAY, ROOM_MUSIC, ROOM_ART,
     is_live_boot, is_debug,
     UI_READY_MARKER,
 )
+from .audio import adjacent_volume, effective_volume, set_system_volume, volume_badge
 boot_log.heartbeat("constants imported; importing keyboard + input")
 from .keyboard import (
     create_keyboard_state, detect_keyboard_mode,
@@ -170,21 +171,6 @@ def _apply_room_subtitle(viewport, room: 'Room', code_panel_enabled: bool, activ
     if room == Room.MUSIC and music_looping_enabled:
         left = f"{ICON_MUSIC} Hold Enter: record a loop {ICON_MUSIC}"
     _set_viewport_hints(viewport, left=left, right=right, active_theme=active_theme)
-
-
-def _volume_badge(vol: int) -> tuple[str, str, str]:
-    """Map a 0-100 volume level to (icon, 10-cell bars, label)."""
-    if vol == 0:
-        return ICON_VOLUME_OFF, "░░░░░░░░░░", "Sound Off"
-    if vol <= 15:
-        return ICON_VOLUME_LOW, "██░░░░░░░░", "Whisper"
-    if vol <= 35:
-        return ICON_VOLUME_LOW, "████░░░░░░", "Quiet"
-    if vol <= 60:
-        return ICON_VOLUME_MED, "██████░░░░", "Medium"
-    if vol <= 85:
-        return ICON_VOLUME_HIGH, "████████░░", "Loud"
-    return ICON_VOLUME_HIGH, "██████████", "Full"
 
 
 class Room(Enum):
@@ -870,6 +856,8 @@ class PurpleApp(App):
         self.active_theme = "purple-dark"
         self.speech_enabled = False
         self.volume_level = VOLUME_DEFAULT  # 0-100
+        self._volume_chosen = True  # False only until the first boot's sound check, or a person, settles the volume
+        self._sound_check_running = False
         self._volume_before_mute = VOLUME_DEFAULT  # Remember level when muting
         self._brightness_hint_showing = False  # Prevent layering brightness toasts
         self._toast_reaper_timer = None
@@ -1033,7 +1021,9 @@ class PurpleApp(App):
                                get_volume_lock)
         from . import caps as caps_module
         caps_module.set_enabled(get_all_caps())
-        self.volume_level = get_volume_level()
+        saved_volume = get_volume_level()
+        self._volume_chosen = saved_volume is not None
+        self.volume_level = VOLUME_DEFAULT if saved_volume is None else saved_volume
         self._volume_lock = get_volume_lock()
         saved_littles = get_littles_mode()
         if saved_littles:
@@ -1227,6 +1217,7 @@ class PurpleApp(App):
             boot_log.heartbeat("mixer disabled (PURPLE_NO_AUDIO=1)")
         else:
             self._start_mixer_warmup()
+            self._start_sound_check()
 
         # First installed boot after audio worked in live: if no sound card
         # comes up, offer a one-time power off (warm-reboot codec wedge).
@@ -1265,7 +1256,7 @@ class PurpleApp(App):
             # checking..." forever). Assigned once here so every non-success
             # path above, including the known-silent break and any exception,
             # fails safe to "not working" and the parent gets the USB-speaker path.
-            self.audio_ok = ok
+            self._mixer_recovered(ok)
             # After the initial probe lands either way, start the hotplug listener
             # so USB speaker plug-in works without a restart. Started here (not at
             # app startup) so we don't race the warmup probe.
@@ -1301,12 +1292,47 @@ class PurpleApp(App):
             _dbg(f"audio hotplug event: {action}")
             from .rooms.music_room import reinit_mixer_after_hotplug
             ok = reinit_mixer_after_hotplug()
-            # Flip audio_ok on the main thread so the parent menu indicator
-            # updates without a Purple restart.
-            self.call_from_thread(setattr, self, "audio_ok", ok)
+            self._mixer_recovered(ok)
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
 
         audio_hotplug.start(_on_event)
+
+    def _start_sound_check(self) -> None:
+        """First boot only: the startup chime doubles as a loudness check
+        (sound_check.py) and its verdict becomes the saved volume, so later boots
+        are quiet and a chosen volume is never touched. Silent Mode and a saved
+        mute skip it. Runs alongside the mixer warmup, not after it: it only
+        needs pactl, and waits for a sound card that enumerates late."""
+        if self._volume_chosen or self._effective_volume() == 0:
+            return
+        self._sound_check_running = True
+
+        def _work():
+            from . import sound_check
+            try:
+                result = sound_check.run(wait=5.0)
+                boot_log.heartbeat(result.summary())
+                self.call_from_thread(self._apply_sound_check, sound_check.default_volume(result))
+            except Exception:
+                self._sound_check_running = False  # a wedged flag would keep the sink frozen all session
+
+        import threading
+        threading.Thread(target=_work, daemon=True, name="sound-check").start()
+
+    def _apply_sound_check(self, level: "int | None") -> None:
+        self._sound_check_running = False
+        if level is not None and not self._volume_chosen:
+            self.volume_level = level
+        self._apply_volume()  # saved either way: the first boot settles the volume and later boots don't chime
+
+    def _mixer_recovered(self, ok: bool) -> None:
+        """Worker-thread follow-up to a mixer reinit: a new or restarted sink
+        boots at its own level, and the parent menu indicator needs audio_ok."""
+        if ok:
+            self._apply_volume_system()
+            from . import tts
+            tts.preload()
+        self.call_from_thread(setattr, self, "audio_ok", ok)
 
     def _arm_audio_idle_timer(self) -> None:
         if self._audio_idle_timer is None and self.audio_ok is not False:
@@ -1370,7 +1396,7 @@ class PurpleApp(App):
                     pass
                 _dbg(f"audio retry poll: probing (next delay {delay * 2}s)")
                 if reinit_mixer_after_hotplug():
-                    self.call_from_thread(setattr, self, "audio_ok", True)
+                    self._mixer_recovered(True)
                     boot_log.heartbeat("audio retry poll: mixer came up")
                     return
                 delay *= 2
@@ -2736,27 +2762,14 @@ class PurpleApp(App):
         """Decrease volume"""
         if self._notify_volume_lock_blocked():
             return
-        # Find current position in VOLUME_LEVELS and go down
-        current_idx = 0
-        for i, level in enumerate(VOLUME_LEVELS):
-            if self.volume_level >= level:
-                current_idx = i
-        if current_idx > 0:
-            self.volume_level = VOLUME_LEVELS[current_idx - 1]
+        self.volume_level = adjacent_volume(self._effective_volume(), up=False)
         self._apply_volume()  # Always show feedback, even at min
 
     def action_volume_up(self) -> None:
         """Increase volume"""
         if self._notify_volume_lock_blocked():
             return
-        # Find current position in VOLUME_LEVELS and go up
-        current_idx = len(VOLUME_LEVELS) - 1
-        for i, level in enumerate(VOLUME_LEVELS):
-            if self.volume_level <= level:
-                current_idx = i
-                break
-        if current_idx < len(VOLUME_LEVELS) - 1:
-            self.volume_level = VOLUME_LEVELS[current_idx + 1]
+        self.volume_level = adjacent_volume(self._effective_volume(), up=True)
         self._apply_volume()  # Always show feedback, even at max
 
     def _show_brightness_hint(self) -> None:
@@ -3009,32 +3022,24 @@ class PurpleApp(App):
         return None
 
     def _effective_volume(self) -> int:
-        """Volume actually applied to playback: the lock level if a parent lock is set (0 = silent), else the kid's level."""
-        if self._volume_lock is not None:
-            return self._volume_lock
-        return self.volume_level
+        return effective_volume(self.volume_level, self._volume_lock)
 
     @property
-    def volume_locked(self) -> bool:
-        """Volume controls should be hidden/disabled: audio isn't working, or a parent lock is on."""
-        return self.audio_ok is False or self._volume_lock is not None
+    def volume_disabled(self) -> bool:
+        """Volume controls should be hidden/disabled: audio isn't working, or Silent Mode is on."""
+        return self.audio_ok is False or self._volume_lock == 0
+
+    def _volume_badge(self) -> tuple[str, str, str]:
+        return volume_badge(self._effective_volume(), self._volume_lock)
+
+    def _flash_badge(self, badge: tuple[str, str, str]) -> None:
+        icon, bars, label = badge
+        self.clear_notifications()
+        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
 
     def _apply_volume_system(self) -> None:
-        """Set system volume via ALSA to match the effective volume (non-blocking).
-
-        Maps app volume (0-100) onto 0-SYSTEM_VOLUME_MAX to avoid pushing
-        the analog amplifier into its noisy range on real hardware.
-        """
-        try:
-            import subprocess
-            from .constants import SYSTEM_VOLUME_MAX
-            system_vol = round(self._effective_volume() * SYSTEM_VOLUME_MAX / 100)
-            subprocess.Popen(
-                ["amixer", "sset", "Master", f"{system_vol}%"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-        except Exception:
-            pass
+        if not self._sound_check_running:  # the chime owns the sink until its verdict lands, which reapplies
+            set_system_volume(self._effective_volume())
 
     def _invalidate_sound_caches(self) -> None:
         """Clear cached Sound objects after a mixer reinit (they become invalid)."""
@@ -3046,10 +3051,13 @@ class PurpleApp(App):
             pass
 
     def _apply_volume(self) -> None:
-        """Apply volume level to TTS, system mixer, and update UI."""
+        """Save the volume level and apply it to TTS, the system mixer, and the UI."""
         from . import tts
         from .settings import set_volume_level
+        if self._volume_lock:
+            self.volume_level = self._effective_volume()  # every writer converges under a limit; Silent Mode keeps the kid's level
         set_volume_level(self.volume_level)
+        self._volume_chosen = True
         vol = self._effective_volume()
         tts.set_muted(vol == 0)
         self._apply_volume_system()
@@ -3061,22 +3069,12 @@ class PurpleApp(App):
         except NoMatches:
             pass
 
-        icon, bars, label = _volume_badge(vol)
-        self.clear_notifications()
-        self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        self._flash_badge(self._volume_badge())
 
     def _notify_volume_lock_blocked(self) -> bool:
-        """If a parent lock blocks volume changes, flash the current locked badge.
-
-        Returns True iff the press should be swallowed (a lock is on), so the
-        volume key handlers can early-return without changing the level. A lock
-        at 0 is the unified "Silent" state.
-        """
-        if self._volume_lock is not None:
-            icon, bars, _ = _volume_badge(self._volume_lock)
-            label = "Silent Mode" if self._volume_lock == 0 else "Locked"
-            self.clear_notifications()
-            self.notify(f"{icon}  {bars}  {label}", timeout=1.5)
+        """Silent Mode swallows the volume keys; flash its badge so the press isn't a mystery."""
+        if self._volume_lock == 0:
+            self._flash_badge(self._volume_badge())
             return True
         return False
 

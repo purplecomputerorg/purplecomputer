@@ -76,18 +76,22 @@ STICKY_SHIFT_GRACE = 8.0     # How long sticky shift stays active (seconds)
 ESCAPE_HOLD_THRESHOLD = 1.0  # How long to hold Escape for parent mode (seconds)
 HOLD_OR_TAP_THRESHOLD = 0.8  # Space/Enter hold threshold for code panel / loop mode (seconds)
 
-# Volume levels (0-100, perceptually spaced: more steps at low end)
-VOLUME_LEVELS = [0, 15, 35, 60, 85, 100]
-VOLUME_DEFAULT = 60
-SYSTEM_VOLUME_MAX = 85  # Cap system mixer to avoid analog amp hiss on real hardware
+# Volume 1 to 10 (0 is Sound Off), about 5.4 dB apart under pactl's cubic
+# map from -49 dB (15%) to 0 dB (100%). Laptops differ by 30 dB or more, so
+# the scale is wide enough that a loud one has a whisper at the bottom and a
+# quiet one its loud at the top; the first-boot chime picks the starting
+# step. Icons run parallel to the steps. docs/PLAN-audio-volume.md.
+VOLUME_LEVELS = [0, 15, 19, 23, 28, 35, 43, 53, 66, 81, 100]
+VOLUME_DEFAULT = 53  # volume 7: where a first boot starts when the chime can't measure
 
 # Nerd Font icons (https://www.nerdfonts.com/cheat-sheet)
 # These require JetBrainsMono Nerd Font. Unicode emoji (🐱 🎉) use Noto Color Emoji.
 # Volume icons (nf-md-volume variants)
 ICON_VOLUME_OFF = "󰖁"       # nf-md-volume_off (muted)
-ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low (15-35%)
-ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium (60%)
-ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high (85-100%)
+ICON_VOLUME_LOW = "󰕿"       # nf-md-volume_low
+ICON_VOLUME_MED = "󰖀"       # nf-md-volume_medium
+ICON_VOLUME_HIGH = "󰕾"      # nf-md-volume_high
+VOLUME_ICONS = [ICON_VOLUME_OFF] + [ICON_VOLUME_LOW] * 3 + [ICON_VOLUME_MED] * 4 + [ICON_VOLUME_HIGH] * 3
 ICON_VOLUME_DOWN = "󰝞"      # nf-md-volume_minus
 ICON_VOLUME_UP = "󰝝"        # nf-md-volume_plus
 ICON_ERASER = "󰇾"           # nf-md-eraser

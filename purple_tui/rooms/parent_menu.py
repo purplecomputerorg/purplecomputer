@@ -28,6 +28,7 @@ import re
 
 from ..keyboard import NavigationAction, ControlAction, CharacterAction
 from ..constants import is_debug, is_live_boot, is_usb_cached, is_usb_present, SUPPORT_EMAIL
+from ..audio import adjacent_volume, lock_badge, set_system_volume, volume_badge
 from .. import diagnostics
 
 
@@ -509,28 +510,11 @@ class SecretMenuScreen(PickerModal):
         self.dismiss(value)
 
 
-_VOLUME_LEVEL_LABELS = {
-    0:   "Silent Mode",
-    15:  "Whisper",
-    35:  "Quiet",
-    60:  "Medium",
-    85:  "Loud",
-    100: "Full",
-}
 
 
 class ParentVolumeModal(PurpleModal):
-    """Parent volume modal: adjust + lock at current level + test sound.
-
-    Visual style mirrors DisplaySettingsScreen (label / bar / value rows).
-
-    Controls (the hint line tells the parent which keys do what right now):
-      ▲ ▼      switch between the Volume and Lock rows
-      ← →      Volume row: change the level (level 0 reads "Silent Mode")
-      Enter    Lock row: turn the lock on or off at the current level
-      Space    play a test sound at the current level
-      Esc      close
-    """
+    """Parent volume modal. With Limit on, the slider edits the ceiling and the
+    kid's keys keep working below it; a limit at 0 is Silent Mode."""
 
     CSS = """
     #modal-dialog {
@@ -586,24 +570,28 @@ class ParentVolumeModal(PurpleModal):
                 yield Static("", id="vol-volume-bar", classes="vol-bar")
                 yield Static("", id="vol-volume-value", classes="vol-value")
             with Horizontal(classes="vol-row"):
-                yield Static("Lock:", classes="vol-label")
+                yield Static("Limit:", classes="vol-label")
                 yield Static("", id="vol-lock-bar", classes="vol-bar")
                 yield Static("", id="vol-lock-value", classes="vol-value")
+            yield Static("", id="vol-limit-note", classes="vol-hint")
             yield Static("", id="vol-hint-row", classes="vol-hint")
             yield Static("Space plays sound    Esc done", classes="vol-hint")
 
     def on_mount(self) -> None:
         self._refresh()
 
+    def _slider_level(self) -> int:
+        """With Limit on the slider edits the ceiling, otherwise the kid's level."""
+        lock = self.app._volume_lock
+        return self.app.volume_level if lock is None else lock
+
     def _refresh(self) -> None:
-        level = self.app.volume_level
-        segments = 10
-        filled = round(level / 100 * segments)
-        bar = "█" * filled + "░" * (segments - filled)
+        level = self._slider_level()
+        _, bar, label = volume_badge(level)
         vol_focused = self._focus == self._FOCUS_VOLUME
         bar_text = f"[bold cyan]← {bar} →[/]" if vol_focused else f"  {bar}  "
         self.query_one("#vol-volume-bar", Static).update(bar_text)
-        self.query_one("#vol-volume-value", Static).update(_VOLUME_LEVEL_LABELS.get(level, str(level)))
+        self.query_one("#vol-volume-value", Static).update("Silent Mode" if level == 0 else label)
 
         locked = self.app._volume_lock is not None
         state = "On" if locked else "Off"
@@ -611,6 +599,9 @@ class ParentVolumeModal(PurpleModal):
         lock_text = f"[bold cyan]▶ {state}[/]" if lock_focused else f"  {state}"
         self.query_one("#vol-lock-bar", Static).update("")
         self.query_one("#vol-lock-value", Static).update(lock_text)
+        self.query_one("#vol-limit-note", Static).update(
+            "The kid can't go louder than this. 0 is silent." if locked
+            else "Turn on to cap how loud the kid can turn it up.")
 
         hint = "← → change    ▲ ▼ switch" if vol_focused else "Enter on/off    ▲ ▼ switch"
         self.query_one("#vol-hint-row", Static).update(hint)
@@ -642,19 +633,14 @@ class ParentVolumeModal(PurpleModal):
                 return
 
     def _adjust_slider(self, up: bool) -> None:
-        from ..constants import VOLUME_LEVELS
-        cur = self.app.volume_level
-        if up:
-            new_level = next((v for v in VOLUME_LEVELS if v > cur), cur)
-        else:
-            new_level = next((v for v in reversed(VOLUME_LEVELS) if v < cur), cur)
-        if new_level == cur:
-            self._refresh()
-            return
-        self.app.volume_level = new_level
-        if self.app._volume_lock is not None:
-            self._write_lock(new_level)
-        self.app._apply_volume()
+        cur = self._slider_level()
+        new_level = adjacent_volume(cur, up)
+        if new_level != cur:
+            if self.app._volume_lock is None:
+                self.app.volume_level = new_level
+            else:
+                self._write_lock(new_level)
+            self.app._apply_volume()
         self._refresh()
 
     def _toggle_lock(self) -> None:
@@ -669,24 +655,12 @@ class ParentVolumeModal(PurpleModal):
         self.app._volume_lock = level
 
     def _play_test_sound(self) -> None:
-        """Play the glockenspiel test tone at the slider's current level.
-
-        Forces amixer to the slider level (ignoring any active lock) so the
-        parent can preview what the kid will hear before committing.
-        """
-        level = self.app.volume_level
+        """Play the glockenspiel test tone at the slider level (the ceiling while
+        Limit is on), so the parent hears the loudest the kid will get."""
+        level = self._slider_level()
         if level == 0:
             return
-        try:
-            from ..constants import SYSTEM_VOLUME_MAX
-            system_vol = round(level * SYSTEM_VOLUME_MAX / 100)
-            subprocess.run(
-                ["amixer", "sset", "Master", f"{system_vol}%"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                check=False, timeout=2,
-            )
-        except Exception:
-            pass
+        set_system_volume(level, wait=True)
         try:
             from ..audio import play_safe
             from .music_room import warm_mixer
@@ -890,11 +864,7 @@ class MusicKeySwitchingScreen(PickerModal):
 
 def _volume_menu_label(lock) -> str:
     """One-line state hint for the consolidated Sound entry in the parent menu."""
-    if lock == 0:
-        return "Sound: Silent Mode"
-    if lock is not None:
-        return "Sound: Locked"
-    return "Sound"
+    return "Sound" if lock is None else f"Sound: {lock_badge(lock)[2]}"
 
 
 def _flush_terminal_input() -> None:
@@ -1595,6 +1565,7 @@ class InstallProgressScreen(PurpleModal):
         avoid Python 3.13 pipe-hang bugs. UI updates go via call_from_thread().
         """
         _SENTINEL = Path('/run/purple-install-complete')
+        from ..settings import SETTINGS_FILE
         proc = subprocess.Popen(
             ["sudo", "-E", "bash", "/cdrom/purple/install.sh"],
             stderr=subprocess.PIPE,
@@ -1607,6 +1578,7 @@ class InstallProgressScreen(PurpleModal):
                 # minutes ago, silent now" apart from never-had-sound.
                 "PURPLE_LIVE_AUDIO_OK":
                     "1" if getattr(self.app, "audio_ok", None) is True else "0",
+                "PURPLE_LIVE_SETTINGS": str(SETTINGS_FILE),  # copied into the installed system
             },
         )
         buf = b""

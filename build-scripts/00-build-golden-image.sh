@@ -196,7 +196,7 @@ SOURCES
     chroot "$MOUNT_DIR" apt-get install -y \
         python3-pip \
         libsdl2-2.0-0 libsdl2-mixer-2.0-0 libsdl2-image-2.0-0 libsdl2-ttf-2.0-0 \
-        alsa-utils pulseaudio \
+        alsa-utils pulseaudio pulseaudio-utils \
         xinit x11-xserver-utils \
         xserver-xorg-core \
         xserver-xorg-input-libinput \
@@ -699,6 +699,9 @@ JOURNAL
     chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-dump"
     cp /purple-src/config/systemd/purple-audio-dump.service "$MOUNT_DIR/etc/systemd/system/"
     chroot "$MOUNT_DIR" systemctl enable purple-audio-dump.service
+    # Hands-on loudness probe, run by a person from the parent-menu terminal.
+    cp /purple-src/scripts/purple-audio-probe.sh "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
+    chmod +x "$MOUNT_DIR/usr/local/bin/purple-audio-probe"
 
     # PulseAudio: enable per-user socket activation so Pulse comes up when the
     # purple user's logind session starts (purple-x11.service uses PAMName=login).
@@ -730,6 +733,9 @@ JOURNAL
     log_info "Verifying audio pipeline is configured..."
     AUDIO_MISSING=""
     chroot "$MOUNT_DIR" bash -c "command -v pulseaudio >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio"
+    # pactl is the runtime volume backend (purple_tui/audio.py); without it
+    # volume silently falls back to amixer's linear-raw scale.
+    chroot "$MOUNT_DIR" bash -c "command -v pactl >/dev/null" || AUDIO_MISSING="$AUDIO_MISSING pulseaudio-utils"
     # Guard against the duplicate-load footgun ever coming back.
     if [ -f "$MOUNT_DIR/etc/pulse/default.pa.d/10-purple.pa" ]; then
         AUDIO_MISSING="$AUDIO_MISSING stale-10-purple.pa-dropin-present"
@@ -752,7 +758,7 @@ JOURNAL
         echo "ERROR: audio pipeline incomplete in golden image:$AUDIO_MISSING"
         exit 1
     fi
-    log_info "  pulseaudio installed; autospawn-only (no systemd enable); stock default.pa handles switch-on-connect; UCM present"
+    log_info "  pulseaudio + pactl installed; autospawn-only (no systemd enable); stock default.pa handles switch-on-connect; UCM present"
 
     # keyd: kernel keymap daemon. See config/keyd/default.conf for rationale.
     mkdir -p "$MOUNT_DIR/etc/keyd"

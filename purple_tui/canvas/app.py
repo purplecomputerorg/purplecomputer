@@ -23,7 +23,7 @@ from ..constants import (
     ICON_BATTERY_HIGH, ICON_BATTERY_LOW, ICON_BATTERY_MED, ICON_CHAT, ICON_COMPUTER, ICON_MENU, ICON_MUSIC,
     ICON_PALETTE, ICON_USB, ICON_VOLUME_OFF, LIVE_AUDIO_MARKER,
     ROOM_ART, ROOM_MUSIC, ROOM_PLAY, STICKY_SHIFT_GRACE,
-    SYSTEM_VOLUME_MAX, UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
+    UI_READY_MARKER, VOLUME_DEFAULT, VOLUME_LEVELS, is_debug, is_live_boot,
     is_usb_cached, is_usb_present,
 )
 from .gfx import Gfx, rgb
@@ -122,7 +122,8 @@ class PurpleApp:
         from ..settings import (get_all_caps, get_code_panel, get_littles_mode, get_music_key_switching,
                                get_music_looping, get_volume_level, get_volume_lock)
         self.g.all_caps = get_all_caps()
-        self.volume_level = get_volume_level()
+        saved_volume = get_volume_level()
+        self.volume_level = VOLUME_DEFAULT if saved_volume is None else saved_volume
         self._volume_lock = get_volume_lock()
         saved = get_littles_mode()
         if saved:
@@ -669,12 +670,8 @@ class PurpleApp:
         return self.audio_ok is False or self._volume_lock is not None
 
     def _apply_volume_system(self):
-        try:
-            import subprocess
-            vol = round(self._effective_volume() * SYSTEM_VOLUME_MAX / 100)
-            subprocess.Popen(["amixer", "sset", "Master", f"{vol}%"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
+        from ..audio import set_system_volume
+        set_system_volume(self._effective_volume())
 
     def _apply_volume(self):
         from .. import tts

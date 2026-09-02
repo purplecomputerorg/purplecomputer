@@ -392,12 +392,8 @@ class ParentVolumeModal(Dialog):
         level = self.app.volume_level
         if level == 0:
             return
-        try:
-            from ...constants import SYSTEM_VOLUME_MAX
-            subprocess.run(["amixer", "sset", "Master", f"{round(level * SYSTEM_VOLUME_MAX / 100)}%"],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, timeout=2)
-        except Exception:
-            pass
+        from ...audio import set_system_volume
+        set_system_volume(level, wait=True)
         try:
             from ...audio import play_safe
             from ...mixer import warm_mixer

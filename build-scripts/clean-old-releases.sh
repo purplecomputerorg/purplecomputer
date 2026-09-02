@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Delete old releases from Cloudflare R2, keeping only the current version.
+# Delete old releases from Cloudflare R2, keeping the current version.
 #
 # Usage:
-#   ./clean-old-releases.sh           # interactive: lists old releases, asks before deleting
-#   ./clean-old-releases.sh --dry-run # just show what would be deleted
+#   ./clean-old-releases.sh                  # interactive: lists old releases, asks before deleting
+#   ./clean-old-releases.sh --dry-run        # just show what would be deleted
+#   ./clean-old-releases.sh --keep v1.0 --yes # also keep v1.0; delete without asking (release-iso.sh)
 
 set -euo pipefail
 
@@ -20,9 +21,17 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 DRY_RUN=false
-if [ "${1:-}" = "--dry-run" ]; then
-    DRY_RUN=true
-fi
+ASSUME_YES=false
+KEEP=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true ;;
+        --yes) ASSUME_YES=true ;;
+        --keep) KEEP+=("$2"); shift ;;
+        *) log_error "Unknown option: $1"; exit 1 ;;
+    esac
+    shift
+done
 
 # Load .env
 ENV_FILE="$SCRIPT_DIR/.env"
@@ -77,16 +86,15 @@ if [ -z "$ALL_VERSIONS" ]; then
     exit 0
 fi
 
-# Find old versions (everything except current)
+# Find old versions (everything except current and --keep)
+KEEP+=("$CURRENT_VERSION")
 OLD_VERSIONS=()
 while IFS= read -r version; do
-    if [ "$version" != "$CURRENT_VERSION" ]; then
-        OLD_VERSIONS+=("$version")
-    fi
+    [[ " ${KEEP[*]} " == *" $version "* ]] || OLD_VERSIONS+=("$version")
 done <<< "$ALL_VERSIONS"
 
 if [ ${#OLD_VERSIONS[@]} -eq 0 ]; then
-    log_info "No old releases to clean up. Only the current version ($CURRENT_VERSION) exists."
+    log_info "No old releases to clean up."
     exit 0
 fi
 
@@ -98,7 +106,9 @@ for version in "${OLD_VERSIONS[@]}"; do
     echo -e "  ${RED}DELETE${NC}  releases/$version/"
 done
 echo
-echo -e "  ${GREEN}KEEP${NC}    releases/$CURRENT_VERSION/ (current)"
+for version in "${KEEP[@]}"; do
+    echo -e "  ${GREEN}KEEP${NC}    releases/$version/"
+done
 echo
 echo "  ${#OLD_VERSIONS[@]} old release(s) will be removed."
 echo
@@ -108,12 +118,13 @@ if [ "$DRY_RUN" = true ]; then
     exit 0
 fi
 
-# Confirm
-read -p "Are you sure you want to delete these releases? [y/N] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
+if [ "$ASSUME_YES" = false ]; then
+    read -p "Are you sure you want to delete these releases? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
 fi
 
 echo
@@ -128,4 +139,4 @@ for version in "${OLD_VERSIONS[@]}"; do
 done
 
 echo
-log_info "Done! Deleted ${#OLD_VERSIONS[@]} old release(s). Current version ($CURRENT_VERSION) preserved."
+log_info "Deleted ${#OLD_VERSIONS[@]} old release(s); kept ${KEEP[*]}."

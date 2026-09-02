@@ -8,7 +8,7 @@ Stored in ~/.config/purple/settings.json alongside display.json.
 import json
 from pathlib import Path
 
-from .constants import VOLUME_DEFAULT
+from .audio import snap_volume
 
 SETTINGS_FILE = Path.home() / ".config" / "purple" / "settings.json"
 
@@ -18,8 +18,8 @@ _defaults = {
     "music_looping": True,       # Whether music room loop recording can be triggered (enter hold)
     "music_key_switching": True, # Whether music room key switching (arrows) is enabled
     "all_caps": False,           # Whether all rendered text is uppercased at render time
-    "volume_level": VOLUME_DEFAULT, # Last volume the kid set (0-100), restored on restart
-    "volume_lock": None,         # Parent lock: None = unlocked, 0-100 = pin playback at that level (0 = silent); volume keys disabled while set
+    "volume_level": None,        # Last volume anyone set (0-100), restored on restart; None until then
+    "volume_lock": None,         # Parent ceiling: None = no limit, 0-100 = loudest the kid can pick (0 = Silent Mode, keys disabled)
     "parent_pin": None,          # Optional 4-digit PIN gating the parent menu; None = no PIN
     "kid_letters": False,        # Use the recorded kid-voice clips for A-Z letter names (gated behind the secret menu)
     "secret_unlocked": False,    # Family secret menu revealed via the Ctrl+codeword gesture
@@ -41,6 +41,10 @@ def load_settings() -> dict:
                     settings[key] = data[key]
             if data.get("silent_mode") and settings["volume_lock"] is None:
                 settings["volume_lock"] = 0
+            if settings["volume_level"] is not None:
+                settings["volume_level"] = snap_volume(settings["volume_level"])
+            if settings["volume_lock"] is not None:
+                settings["volume_lock"] = snap_volume(settings["volume_lock"])
     except Exception:
         pass
     return settings
@@ -113,8 +117,8 @@ def set_all_caps(enabled: bool) -> None:
     save_settings(settings)
 
 
-def get_volume_level() -> int:
-    """Last volume level the kid set (0-100)."""
+def get_volume_level() -> int | None:
+    """Last volume level anyone set (0-100), or None if the volume has never been touched."""
     return load_settings()["volume_level"]
 
 
@@ -125,7 +129,7 @@ def set_volume_level(level: int) -> None:
 
 
 def get_volume_lock() -> int | None:
-    """Locked playback volume (0-100), or None if not locked. 0 means Silent."""
+    """Parent ceiling on playback volume (0-100), or None if unlimited. 0 means Silent."""
     return load_settings()["volume_lock"]
 
 

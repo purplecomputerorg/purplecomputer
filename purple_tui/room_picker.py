@@ -15,7 +15,7 @@ from textual.message import Message
 
 from .constants import (
     ICON_CHAT, ICON_MUSIC, ICON_PALETTE, ICON_VOLUME_HIGH, ICON_VOLUME_OFF,
-    ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_BROOM, ICON_CODE, ICON_TIME_TRAVEL,
+    ICON_BROOM, ICON_CODE, ICON_TIME_TRAVEL,
 )
 from .keyboard import NavigationAction, ControlAction, CharacterAction
 from .hints import arrow_keys_text
@@ -236,8 +236,8 @@ class RoomPickerScreen(PurpleModal):
                     yield RoomOption(opt_id, icon, label, i + 1, id=f"opt-{opt_id}")
 
             with Horizontal(id="picker-extras"):
-                if getattr(self.app, "volume_locked", False):
-                    icon, label = self._locked_volume_badge()
+                if getattr(self.app, "volume_disabled", False):
+                    icon, label = self._disabled_volume_badge()
                     yield ExtraOption(icon, label, "", disabled=True, id="opt-volume")
                 else:
                     yield ExtraOption(ICON_VOLUME_HIGH, "Volume", "V", id="opt-volume")
@@ -402,24 +402,16 @@ class RoomPickerScreen(PurpleModal):
 
         self.app.push_screen(ConfirmFreshScreen(self._current_room), on_confirm)
 
-    def _locked_volume_badge(self) -> tuple[str, str]:
-        """Pick the icon + label for the Volume slot when it's locked."""
-        lock = getattr(self.app, "_volume_lock", None)
-        if lock == 0:
-            return ICON_VOLUME_OFF, "Silent Mode"
-        if lock is not None:
-            if lock <= 35:
-                icon = ICON_VOLUME_LOW
-            elif lock <= 60:
-                icon = ICON_VOLUME_MED
-            else:
-                icon = ICON_VOLUME_HIGH
-            return icon, "Locked"
+    def _disabled_volume_badge(self) -> tuple[str, str]:
+        """Icon + label for the Volume slot when the keys are dead: Silent Mode or no audio."""
+        if getattr(self.app, "_volume_lock", None) == 0:
+            icon, _, label = self.app._volume_badge()
+            return icon, label
         return ICON_VOLUME_OFF, "No Sound"
 
     def _open_volume(self) -> None:
-        """Open the kid's volume modal (skip when audio is off or a parent lock is on)."""
-        if getattr(self.app, "volume_locked", False):
+        """Open the kid's volume modal (skip when audio is off or Silent Mode is on)."""
+        if getattr(self.app, "volume_disabled", False):
             return
         self.app.push_screen(VolumeModal())
 
@@ -462,35 +454,7 @@ class VolumeModal(PurpleModal):
         self._update_display()
 
     def _update_display(self) -> None:
-        level = self.app.volume_level
-        from .constants import (
-            ICON_VOLUME_OFF, ICON_VOLUME_LOW, ICON_VOLUME_MED, ICON_VOLUME_HIGH,
-        )
-        if level == 0:
-            icon = ICON_VOLUME_OFF
-            label = "Sound Off"
-            bars = "░░░░░░░░░░"
-        elif level <= 15:
-            icon = ICON_VOLUME_LOW
-            label = "Whisper"
-            bars = "██░░░░░░░░"
-        elif level <= 35:
-            icon = ICON_VOLUME_LOW
-            label = "Quiet"
-            bars = "████░░░░░░"
-        elif level <= 60:
-            icon = ICON_VOLUME_MED
-            label = "Medium"
-            bars = "██████░░░░"
-        elif level <= 85:
-            icon = ICON_VOLUME_HIGH
-            label = "Loud"
-            bars = "████████░░"
-        else:
-            icon = ICON_VOLUME_HIGH
-            label = "Full"
-            bars = "██████████"
-
+        icon, bars, label = self.app._volume_badge()
         try:
             display = self.query_one("#volume-display", Static)
             display.update(f"{icon}  {bars}  {label}")

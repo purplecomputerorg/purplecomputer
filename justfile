@@ -259,13 +259,15 @@ release-pick +shas:
     cd {{release_dir}} && just test
     @echo && ./build-scripts/release-status.sh
 
-# Publish the already-built release: summary, confirm, upload, tag. Build first with
-# purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
+# Publish the already-built release: picks the ISO built from release/1.x HEAD, confirms, uploads, tags, cleans old releases.
+# Build first with purple-build --release (semver: PURPLE_VERSION=v1.x purple-build --release), flash USBs with just flash-all.
 ship:
-    @./build-scripts/release-status.sh && echo
     @cd {{release_dir}} && [ "$(git rev-parse --abbrev-ref HEAD)" = "release/1.x" ] || { echo "{{release_dir}} is not on release/1.x"; exit 1; }
-    @printf "Release the above to the downloads? [y/N] " && read -r r && { [ "$r" = y ] || [ "$r" = Y ]; }
-    @cd {{release_dir}} && ./build-scripts/release-iso.sh
+    @cd {{release_dir}} && {{justfile_directory()}}/build-scripts/release-iso.sh
+
+# Show which commit the public download is; with a hash, fail unless it matches (just release-check abc1234)
+release-check *commit:
+    @./build-scripts/release-check.sh {{commit}}
 
 # Upload the card PDFs to Cloudflare R2 (the files host)
 upload-pdfs:
@@ -277,7 +279,8 @@ upload-pdfs:
 print-card *args:
     @{{venv}}/bin/python cards/add_bleed.py {{args}}
 
-# Delete old releases from Cloudflare R2, keeping only the current version
+# Delete old releases from Cloudflare R2, keeping the current version (just ship runs this, also keeping the one it replaced).
+# E.g., just clean-releases --dry-run, just clean-releases --keep v1.0
 clean-releases *args:
     ./build-scripts/clean-old-releases.sh {{args}}
 

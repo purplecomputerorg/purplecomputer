@@ -34,7 +34,11 @@ Cherry-pick decisions (fix vs feature) are the user's to confirm: propose picks,
 
 ## No Claude Memories
 
-Do not save anything to Claude's persistent memory system. All notes, TODOs, and project state go in the repo (e.g. `docs/TODO.md`).
+Do not save anything to Claude's persistent memory system. Durable notes and project state go in the repo under `docs/`. Tasks, bugs, and ideas go in Linear (see below), not a markdown backlog.
+
+## Linear (task source of truth)
+
+Tasks, bugs, and ideas for the Purple repos live in Linear (team `Purple Computer`, prefix `PUR`), not markdown backlogs. Check Linear yourself for a relevant issue before asking. When you finish or materially change tracked work, update or close the matching issue automatically; no need to ask first. Don't open and immediately close an issue for work you just did, but do close an existing open issue when its work lands. Without access, reference any `PUR-` id the user gives you; plan docs under `docs/` stay the technical reasoning of record, without restating issue status.
 
 ## Sensitive Files (DO NOT READ)
 
@@ -52,7 +56,7 @@ Purple Computer runs on kids' laptops. Never make changes that could cause issue
 
 **Instrumentation can ship in the standard (+debug) ISO only if it's non-visual, non-expensive, and non-interfering.** Otherwise it's debug-only (gated on `/opt/purple/debug`).
 
-- **Non-visual** = file descriptors only. Never write to stdout/stderr from hot paths: they land in the xinitrc log, fine for diagnostics, wrong for per-keystroke chatter. Use `boot_log`, `_power_log`, or `tts._dbg`.
+- **Non-visual** = file descriptors only. Never write to stdout/stderr: under the canvas UI they land in the xinitrc log (fine for diagnostics, wrong for per-keystroke chatter); under the Textual UI, Textual owns stderr and any stray write corrupts the screen (`stderr_guard.hide_native_stderr()` points fd 2 at `/tmp/purple-stderr.log` for C-level noise). Use `boot_log`, `_power_log`, or `tts._dbg`.
 - **Non-expensive** = cheap appends, no subprocess spawns at runtime, no fsync/flush cascades.
 - **Non-interfering** = no EVIOCGRAB, no terminal mode changes, no signal handlers that paint.
 
@@ -96,23 +100,31 @@ just preview play parent_menu                  # Parent menu modal
 just preview play room_picker                  # Room picker modal
 ```
 
-Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). See `guides/headless-preview.md` for full reference.
+Output: PNG at `/tmp/screenshots/` (override with `PURPLE_SCREENSHOT_DIR`). `PURPLE_UX=tui just preview ...` previews the Textual UI. See `guides/headless-preview.md` for full reference.
 
-**Visual/layout tests:** `app.run_test()` verifies widget sizes and positions headlessly. See `tests/test_code_panel_layout.py`.
+**Visual/layout tests:** canvas tests drive a headless app from `purple_tui.canvas.harness` (`tests/canvas/`); Textual tests use `app.run_test()` (e.g. `tests/test_code_panel_layout.py`).
 
 **AI UX testing:** `just ux` launches a Claude agent that explores the app as a simulated kid, presses keys, and reports bugs to `docs/AI_UX_BUGS.md`. Config in `scripts/ai_ux_config.py`. See `guides/ai-ux-testing.md`.
 
 ---
 
-## Terminal Layout Constants
-
-Single source of truth: `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`). Font size calc in `scripts/calc_font_size.py` imports from there.
-
----
-
-## Canvas UI
+## Canvas UI (default)
 
 The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`, `purple_tui/canvas/app.py`). Read `guides/canvas-architecture.md` before touching drawing or input. Rules that matter most: sizes come from `g.vh()`/`g.vw()`, every state change calls `app.invalidate()`, nothing animates on an idle screen, and text goes through `Gfx.text`/`Gfx.draw_markup` so ALL CAPS and emoji fallbacks apply everywhere.
+
+## Textual UI (`PURPLE_UX=tui`, frozen)
+
+`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only, and every file stays identical to `release/1.x` expectations (see Two UIs above). Notes kept for those fixes:
+
+- **Layout constants:** `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
+- **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purple_tui/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.
+- **Background colors:** `widget.styles.background` on `Static` doesn't repaint; use a `Widget` with `render_line()` returning `Strip([Segment(...)])`.
+- **Flicker-free reflows (MusicGrid):** set `_layout_ready = False` before a height change, render from `_cached_layout` meanwhile, `on_resize` debounces 50ms then flips it back.
+- **Code panel:** `_code_panel_active` (app-level, persists across rooms) vs `ReplPanel.is_open` (per-room). Space-hold pins canvas height; viewport grows by 4 on open. Textual's `_on_key()` suppresses events; all keyboard logic goes through `handle_keyboard_action()`.
+
+## Keyboard Input (evdev + keyd, both UIs)
+
+Input is read from evdev (`/dev/input/event*`), never from the terminal or the window. `keyd` (`config/keyd/default.conf`, built in `00-build-golden-image.sh`) remaps grave/tilde to Escape and RightAlt to F2 at the kernel level; do NOT add application-level remaps. `purple_tui/input.py` feeds `KeyboardStateMachine` (`purple_tui/keyboard.py`), which both UIs dispatch from. `HoldOrTap` distinguishes taps from holds; always check `on_other_key()` to flush a buffered space before the next character. Full rationale: `guides/keyboard-architecture.md`.
 
 ## Python Gotchas
 
@@ -135,7 +147,7 @@ Installation is triggered through the live boot, not a GRUB menu entry. The inst
 2. Parent menu → Install option → user confirms
 3. `install.sh` runs (called from `parent_menu.py`)
 4. Success screen: "Press ENTER to restart"
-5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs)
+5. The app shows "All done" and on Enter `execv`s into `/run/purple-reboot-mount/purple-reboot` (static binary on tmpfs; the Textual UI exits first and passes `--wait`)
 
 **Shutdown architecture:** All shutdown paths use `sudo systemctl poweroff --force` (sudo required even though purple user exists, because non-sudo systemctl lacks permission on live USB). Two-stage watchdog: stage 1 (5s) retries systemctl, stage 2 (8s) uses sysrq `echo o > /proc/sysrq-trigger`. Logged to `/tmp/purple-power.log`.
 

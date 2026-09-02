@@ -147,7 +147,7 @@ echo
 log_info "Release $VERSION: commit $SHORT_COMMIT ($BRANCH)"
 if [ "$BEHIND" -gt 0 ]; then
     log_info "$BEHIND newer commits on $BRANCH stay unshipped:"
-    git log --format='  %h %<(72,trunc)%s' "$RELEASE_COMMIT..HEAD"
+    git --no-pager log --format='  %h %<(72,trunc)%s' "$RELEASE_COMMIT..HEAD"
 fi
 log_info "ISO: $(basename "$STANDARD_STEM") standard + debug ($STANDARD_SIZE each)"
 LAST_TAG=$(git describe --tags --abbrev=0 "$RELEASE_COMMIT" 2>/dev/null || true)

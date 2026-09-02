@@ -38,7 +38,11 @@ Cherry-pick decisions (fix vs feature) are the user's to confirm: propose picks,
 
 ## No Claude Memories
 
-Do not save anything to Claude's persistent memory system. All notes, TODOs, and project state go in the repo (e.g. `docs/TODO.md`).
+Do not save anything to Claude's persistent memory system. Durable notes and project state go in the repo under `docs/`. Tasks, bugs, and ideas go in Linear (see below), not a markdown backlog.
+
+## Linear (task source of truth)
+
+Tasks, bugs, and ideas for the Purple repos live in Linear (team `Purple Computer`, prefix `PUR`), not markdown backlogs. Check Linear yourself for a relevant issue before asking. When you finish or materially change tracked work, update or close the matching issue automatically; no need to ask first. Don't open and immediately close an issue for work you just did, but do close an existing open issue when its work lands.
 
 ## Sensitive Files (DO NOT READ)
 

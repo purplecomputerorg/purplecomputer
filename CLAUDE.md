@@ -16,7 +16,7 @@
 
 ## Two UIs, keep them in sync (until Textual is gone)
 
-`main` carries both UIs. The shipping Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen: fixes only, and every one of those files must stay identical to what `release/1.x` expects, so `just release-pick` applies cleanly. Never refactor it to use the extracted modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
+`main` carries both UIs. The shipping Textual UX (`purple_tui/purple_tui.py`, the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`, `config/alacritty/`, and their tests at the top of `tests/`) is frozen: fixes only, and it must never diverge from `release/1.x` unpicked. A change to those files is fine when it is picked onto `release/1.x` too (as the mixer consolidation was); a change that stays on main only would make every later `release-pick` conflict. The TUI never imports canvas modules. The canvas UX lives under `purple_tui/canvas/` with its tests in `tests/canvas/`; it is the default, `PURPLE_UX=tui` runs the Textual UI.
 
 - **Bug fixes and tweaks to behavior that ships today land in BOTH.** Prefer fixing a shared module: `constants.py` tunables (hold thresholds, volume steps), `audio.py`, `tts.py`, `settings.py`, `keyboard.py`, `play_eval.py`, `mixer.py`, `palette.py`. One edit serves both and cherry-picks cleanly.
 - **When the fix is in UI logic that exists twice, make two commits:** the TUI-only commit first, touching only original TUI paths (so `release-pick` is clean), then the canvas commit.
@@ -125,7 +125,7 @@ The screen is a pygame window the app paints itself (`purple_tui/canvas/gfx.py`,
 
 ## Textual UI (`PURPLE_UX=tui`, frozen)
 
-`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only, and every file stays identical to `release/1.x` expectations (see Two UIs above). Notes kept for those fixes:
+`purple_tui/purple_tui.py` plus the top-level `purple_tui/rooms/`, `modal.py`, `repl_panel.py`, `loop_panel.py`, `time_travel.py`; runs in Alacritty (`config/alacritty/`). Fixes only, picked onto `release/1.x` (see Two UIs above). Notes kept for those fixes:
 
 - **Layout constants:** `purple_tui/constants.py` (`VIEWPORT_WIDTH=134`, `VIEWPORT_HEIGHT=29`, `REQUIRED_TERMINAL_ROWS=37`); `scripts/calc_font_size.py` imports from there.
 - **CSS scoping:** `CSS` is scoped to the defining class; use `DEFAULT_CSS` for inheritable styles. All modals inherit `PurpleModal` (`purple_tui/modal.py`) with the standard `#modal-dialog`, `#modal-title`, `#modal-hint` IDs.

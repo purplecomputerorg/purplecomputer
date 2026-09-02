@@ -84,6 +84,8 @@ class _FakeApp:
     _start_audio_retry_poll = lambda self: None
 
     _start_mixer_warmup = PurpleApp._start_mixer_warmup
+    _mixer_recovered = PurpleApp._mixer_recovered
+    _apply_volume_system = lambda self: None
     call_from_thread = lambda self, fn, *a: fn(*a)
     invalidate = lambda self: None
 

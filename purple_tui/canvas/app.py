@@ -886,11 +886,20 @@ class PurpleApp:
                         boot_log.heartbeat("mixer warmup failed")
             except Exception as e:
                 boot_log.heartbeat(f"mixer warmup error: {e!r}")
-            self.audio_ok = ok
-            self.call_from_thread(self.invalidate)
+            self._mixer_recovered(ok)
             self._start_audio_hotplug()
             self._start_audio_retry_poll()
         threading.Thread(target=_warm, daemon=True, name="mixer-warmup").start()
+
+    def _mixer_recovered(self, ok: bool):
+        """Worker-thread follow-up to a mixer warm-up or reinit: a new or restarted
+        sink boots at its own level, and the voice can load once sound is ready."""
+        if ok:
+            self._apply_volume_system()
+            from .. import tts
+            tts.preload()
+        self.call_from_thread(setattr, self, "audio_ok", ok)
+        self.call_from_thread(self.invalidate)
 
     def _check_first_boot_audio(self):
         from .rooms.sleep_screen import FirstBootPowerCycleScreen, first_boot_power_cycle_needed
@@ -916,8 +925,7 @@ class PurpleApp:
             from ..tts import _dbg
             _dbg(f"audio hotplug event: {action}")
             ok = reinit_mixer_after_hotplug()
-            self.call_from_thread(setattr, self, "audio_ok", ok)
-            self.call_from_thread(self.invalidate)
+            self._mixer_recovered(ok)
             boot_log.heartbeat(f"audio hotplug reinit -> ok={ok}")
         audio_hotplug.start(_on_event)
 
@@ -959,7 +967,7 @@ class PurpleApp:
                     pass
                 _dbg(f"audio retry poll: probing (next delay {delay * 2}s)")
                 if reinit_mixer_after_hotplug():
-                    self.call_from_thread(setattr, self, "audio_ok", True)
+                    self._mixer_recovered(True)
                     boot_log.heartbeat("audio retry poll: mixer came up")
                     return
                 delay *= 2

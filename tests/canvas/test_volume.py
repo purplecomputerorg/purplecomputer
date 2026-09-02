@@ -67,3 +67,23 @@ def test_silent_mode_blocks_the_keys():
         assert app.volume_level == before
         assert _last_toast(app).endswith("Silent Mode")
     run(go())
+
+
+def test_mixer_recovery_reapplies_volume_and_preloads_speech(monkeypatch):
+    from purple_tui import tts
+    from purple_tui.canvas.app import PurpleApp
+    calls = []
+    monkeypatch.setattr(tts, "preload", lambda: calls.append("preload"))
+
+    class _App:
+        audio_ok = None
+        _apply_volume_system = lambda self: calls.append("volume")
+        call_from_thread = lambda self, fn, *a: fn(*a)
+        invalidate = lambda self: None
+
+    app = _App()
+    PurpleApp._mixer_recovered(app, True)
+    assert calls == ["volume", "preload"] and app.audio_ok is True
+    calls.clear()
+    PurpleApp._mixer_recovered(app, False)
+    assert calls == [] and app.audio_ok is False

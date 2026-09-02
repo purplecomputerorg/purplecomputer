@@ -5,6 +5,21 @@ These are places where the release branch intentionally differs from the origina
 commit, usually because the pick depends on a feature that stays on main.
 If a later pick conflicts weirdly in one of these spots, look here first.
 
+## 2026-09-02
+
+The two-UI consolidation, four picks that move code out of Textual files into shared modules the canvas already used (`08850dc3` mixer, `b812e028` Play evaluator, `fe451910` sticker palette, `c5766086` sound check report). Each shared module was new to release, so every pick needed its file added by hand (`git checkout <sha> -- <file>`), and two needed more:
+
+- `08850dc3` (one mixer) → release `b935b3c`
+  - `purple_tui/mixer.py`: added from the pick (modify/delete: release never had the file).
+  - `purple_tui/audio.py`, `purple_tui/tts.py`: the three lazy imports resolve to `from .mixer import ...`. Main's side of the hunk was replacing a binding hook release never carried, so the text differs but the result is the same as main.
+  - `purple_tui/__main__.py`: kept release's. The pick only removed the hook binding, which release never had.
+- `b812e028` (Play evaluator) → release `6ee87cc`
+  - `purple_tui/play_eval.py`: added from the pick.
+- `fe451910` (sticker palette) → release `c1f01cc`
+  - `purple_tui/palette.py`: added from the pick.
+  - `purple_tui/rooms/art_room.py`: the removed palette block sat next to `BOX_CHARS_PEN_DOWN`, which main has (pen toggle, stays on main) and release does not. Resolved to neither: palette block gone, pen-down block still absent.
+- `c5766086` (sound check report) → release `b153a96`: clean.
+
 ## 2026-08-28
 
 The audio chain, `ea6c0c7` through `717f6a1` (18 picks: PulseAudio volume, speech

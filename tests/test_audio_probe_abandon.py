@@ -9,7 +9,7 @@ Popen + wait(timeout) + abandon, so it returns at the deadline regardless.
 import subprocess
 import time
 
-from purple_tui.rooms import music_room
+from purple_tui import mixer as music_room
 from purple_tui.purple_tui import PurpleApp
 
 

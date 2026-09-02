@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 from purple_tui import audio
 from purple_tui.purple_tui import PurpleApp, Room
-from purple_tui.rooms import music_room
+from purple_tui import mixer as music_room
 from purple_tui.rooms.music_room import MusicGrid
 
 

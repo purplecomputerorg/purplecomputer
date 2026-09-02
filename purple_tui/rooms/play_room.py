@@ -6,6 +6,7 @@ import pygame
 from .. import palette as P
 from ..constants import ICON_SPARK, ICON_VOLUME_HIGH, ICON_VOLUME_OFF
 from ..content import get_content
+from ..gfx import is_emoji, strip_markup
 from ..keyboard import CharacterAction, ControlAction, NavigationAction
 from ..palette import get_key_color
 from ..play_eval import SimpleEvaluator, pair_speakables, parse_speech_trigger
@@ -283,7 +284,8 @@ class PlayRoom:
         sub = self.field.autocomplete_markup or \
             f"[dim]{self.field.recall_text() or 'Type a word, then press Enter'}[/]"
         sub_h = g.line_height(em(0.92), "mono")
-        sub_x = self.field.text_x(g, x, line_px, label_px=em(1.2))
+        gap = em(1.15)  # 0.55em from the arrow to the field, 0.6em of field padding
+        sub_x = self.field.text_x(g, x, line_px, label_px=em(1.2), gap=gap)
         g.draw_markup(sub, em(0.92), sub_x, bottom - sub_h, "mono", P.MUTED, rect.right - pad - sub_x, dim_to=P.SURFACE)
         bottom -= sub_h + em(0.4)
         box = pygame.Rect(sub_x - em(0.6), bottom - em(2.0), 0, em(2.0))
@@ -291,7 +293,7 @@ class PlayRoom:
         g.rect(P.FIELD, box, radius=em(0.42))
         g.rect(P.LINE, box, width=1, radius=em(0.42))
         line_h = g.line_height(line_px, "mono")
-        self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2))
+        self.field.draw(g, x, box.centery - line_h // 2, box.right - x, line_px, label_px=em(1.2), gap=gap)
         top_limit = rect.y + em(1)
         y = box.y - em(1)
         g.surface.set_clip(pygame.Rect(rect.x, rect.y, rect.w, y - rect.y + em(0.5)))
@@ -305,12 +307,17 @@ class PlayRoom:
         g.surface.set_clip(None)
 
     def _answer_px(self, g, e) -> int:
-        return g.em(2.2)
+        """Only a small all-emoji answer earns the big size; text stays a
+        step above the ask line so it reads as the computer's voice."""
+        plain = strip_markup(e.markup).replace(" ", "")
+        if is_emoji(plain) and len(plain) <= 12:
+            return g.em(2.0)
+        return g.em(1.3)
 
     def _entry_height(self, g, e, width) -> int:
         if e.kind == "ask":
             return g.line_height(g.em(1.05), "mono")
-        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width)[1]
+        return g.markup_size(e.markup, self._answer_px(g, e), max_width=width - g.em(0.1))[1]
 
     def _draw_entry(self, g, e, x, y, width):
         if e.kind == "ask":
@@ -322,4 +329,4 @@ class PlayRoom:
         icon = SPEECH_ICONS.get(e.speech, "")
         if icon:
             ax = g.draw_text(icon, g.em(1.05), ax, y, "mono-bold", P.TEXT).right + g.em(0.5)
-        g.draw_markup(e.markup, self._answer_px(g, e), ax, y, "sans-bold", P.TEXT, width - (ax - x), dim_to=P.SURFACE)
+        g.draw_markup(e.markup, self._answer_px(g, e), ax, y, "mono-bold", P.TEXT, width - (ax - x), dim_to=P.SURFACE)

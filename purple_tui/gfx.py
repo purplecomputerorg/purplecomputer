@@ -459,11 +459,16 @@ class Gfx:
         pygame.image.save(self.surface, path)
 
 
+# One emoji (with its modifiers/ZWJ joins), so long runs can wrap per emoji.
+_EMOJI_ONE_RE = re.compile(_EMOJI_RE.pattern.rstrip("+"))
+
+
 def _units(text: str):
-    """Grapheme-ish units for character wrapping: emoji runs stay whole."""
+    """Grapheme-ish units for character wrapping: each emoji is one unit."""
     for chunk, emoji in split_runs(text):
         if emoji:
-            yield chunk, True
+            for m in _EMOJI_ONE_RE.finditer(chunk):
+                yield m.group(0), True
         else:
             for ch in chunk:
                 yield ch, False

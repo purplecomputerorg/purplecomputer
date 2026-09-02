@@ -214,16 +214,19 @@ class TextField:
         return "   ".join(parts) + "   [dim]⇥ Tab[/]"
 
     # --- drawing ---
-    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask", label_px: int | None = None) -> int:
+    def text_x(self, g: Gfx, x: int, px: int, label: str = "Ask", label_px: int | None = None,
+               gap: int | None = None) -> int:
         """Where typed text starts, so hints under the field can line up with it."""
-        return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + px // 2
+        return x + g.measure(f"{label} →", label_px or px, "mono-heavy")[0] + (gap if gap is not None else px // 2)
 
-    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask", label_px: int | None = None) -> pygame.Rect:
+    def draw(self, g: Gfx, x: int, y: int, width: int, px: int, label: str = "Ask", label_px: int | None = None,
+             gap: int | None = None) -> pygame.Rect:
         """'Label →  text▌' in the mono face; returns the rect used.
-        label_px lets the label sit a step larger than the typed text."""
+        label_px lets the label sit a step larger than the typed text; gap
+        sets the space between label and text (a boxed field needs more)."""
         mid = y + g.line_height(px, "mono") // 2
         g.draw_text(f"{label} →", label_px or px, x, mid, "mono-heavy", P.ACCENT, anchor="midleft")
-        tx = self.text_x(g, x, px, label, label_px)
+        tx = self.text_x(g, x, px, label, label_px, gap)
         shown, start = self._visible_slice(g, px, width - (tx - x) - px)
         before = shown[:self.cursor - start]
         g.draw_text(shown, px, tx, y, "mono", P.TEXT)

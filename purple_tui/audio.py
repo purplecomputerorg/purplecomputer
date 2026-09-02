@@ -34,8 +34,8 @@ def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
     variant) rather than the full hotplug re-probe, because a stale
     connection only needs quit+init, not a fresh subprocess probe.
     """
-    from .mixer import should_attempt_play
-    if not should_attempt_play():
+    from .mixer import backend
+    if not backend().should_attempt_play():
         return None
     global _last_play
     _last_play = time.monotonic()
@@ -45,8 +45,7 @@ def play_safe(sound: Any, *args: Any, **kwargs: Any) -> Optional[Any]:
         from .tts import _dbg
         _dbg(f"play_safe: play raised {type(e).__name__}: {e}, reiniting")
     try:
-        from .mixer import reinit_mixer
-        reinit_mixer()
+        backend().reinit_mixer()
     except Exception:
         return None
     try:

@@ -72,7 +72,15 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 
 ### content/<instrument>/<pitch>.wav
 
-Sixty-seven files named by `music_constants.pitch_filename` (`C#4` becomes `cs4`), the same pitch set as `packs/core-sounds/content/marimba/`. Studio writes WAV, which `music_room._find_sound` already accepts as a fallback to `.ogg`, so no browser OGG encoder is needed. Every file is one source note resampled to the target pitch, like a one-shot sampler. Proposed loader change: add user-pack instrument directories to `INSTRUMENTS`.
+Sixty-seven files named by `music_constants.pitch_filename` (`C#4` becomes `cs4`), the same pitch set as `packs/core-sounds/content/marimba/`, rendered at 44100 Hz mono 16-bit like `generate_sounds.write_sound` before its ffmpeg step. Studio writes WAV, which `music_room._find_sound` already accepts as a fallback to `.ogg`, so no browser OGG encoder is needed. Each file comes from Studio's TypeScript port of the four generators in `purple_tui/synth.py` and `scripts/generate_sounds.py`, with the parent's slider values substituted for the constants. Proposed loader change: add user-pack instrument directories to `INSTRUMENTS`.
+
+### content/instruments/<name>.json
+
+```json
+{ "name": "kitchen-marimba", "base": "marimba", "params": { "duration": 0.55, "wood": 0.9, "tube": 0.4 } }
+```
+
+The base generator and every slider value. Each key is one number that already exists in the Python generator (partial amplitudes and decays, tube body, reed detune and rolloff, string damping and body resonance, bell partials). This is what would let Purple, or a future `generate_sounds.py`, re-render the instrument itself instead of trusting the shipped WAVs. Proposed; nothing reads it today.
 
 ### content/theme.json
 

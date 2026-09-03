@@ -1,12 +1,12 @@
 import type { Clip } from "./audio";
 import type { Picture } from "./photo";
-import { ROW_HUES } from "./purple/art";
-import { DEFAULT_BG_DARK, APP_BG_DARK } from "./purple/art";
+import { APP_BG_DARK, DEFAULT_BG_DARK, ROW_HUES } from "./purple/art";
+import type { BaseName, Params } from "./purple/synth";
 
 export interface WordEntry { word: string; emoji: string }
 export interface SynonymEntry { alias: string; word: string }
 export interface Phrase { text: string; clip: Clip }
-export interface Instrument { name: string; source: Clip; sourceFreq: number }
+export interface Instrument { name: string; base: BaseName; params: Params }
 export interface Theme { background: string; surface: string; hues: { qwerty: number; asdf: number; zxcv: number } }
 
 export interface Draft {
@@ -17,7 +17,7 @@ export interface Draft {
   words: WordEntry[];
   synonyms: SynonymEntry[];
   ranked: string[];
-  instrument: Instrument | null;
+  instruments: Instrument[];
   theme: Theme | null;
 }
 
@@ -31,7 +31,7 @@ export const draft: Draft = {
   words: [],
   synonyms: [],
   ranked: [],
-  instrument: null,
+  instruments: [],
   theme: null,
 };
 
@@ -51,7 +51,7 @@ export function pieces(): Piece[] {
     { label: "words", count: draft.words.length },
     { label: "synonyms", count: draft.synonyms.length },
     { label: "autocomplete picks", count: draft.ranked.length },
-    { label: "instrument", count: draft.instrument ? 1 : 0 },
+    { label: "instruments", count: draft.instruments.length },
     { label: "colors", count: draft.theme ? 1 : 0 },
   ].filter((p) => p.count > 0);
 }

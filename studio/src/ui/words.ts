@@ -1,9 +1,12 @@
 import { CORE_EMOJI, CORE_SYNONYMS, isCoreRanked, isCoreWord } from "../purple/core";
 import { changed, draft } from "../state";
 import { clear, h } from "./dom";
+import { playFrame, type PlayLine } from "./facsimile";
+import type { View } from "./view";
 
 const clean = (s: string) => s.trim().toLowerCase();
 const knownWords = () => new Set([...Object.keys(CORE_EMOJI), ...draft.words.map((w) => w.word)]);
+const emojiFor = (word: string) => draft.words.find((w) => w.word === word)?.emoji ?? CORE_EMOJI[word] ?? "";
 
 // One editable list shape for words, synonyms, and rankings: an add row above a table with remove links.
 function listCard<T>(opts: {
@@ -15,16 +18,19 @@ function listCard<T>(opts: {
   add: () => string | null;
   addLabel: string;
 }): HTMLElement {
-  const body = h("tbody");
+  const table = h("table");
   const status = h("div", { class: "status" });
   const render = () => {
-    clear(body);
+    clear(table);
+    if (!opts.items().length) return;
+    const body = h("tbody");
     for (const item of opts.items()) {
       const note = opts.note?.(item);
       body.append(
         h("tr", { class: note ? "warn" : "" }, ...opts.row(item).map((c) => h("td", {}, c)), h("td", { class: "dim small" }, note ?? ""), h("td", {}, h("button", { class: "linkbtn dim", onclick: () => { opts.items().splice(opts.items().indexOf(item), 1); changed(); render(); } }, "Remove"))),
       );
     }
+    table.append(h("thead", {}, h("tr", {}, ...opts.headers.map((t) => h("th", {}, t)), h("th"), h("th"))), body);
   };
   const submit = () => {
     const err = opts.add();
@@ -38,17 +44,11 @@ function listCard<T>(opts: {
   };
   opts.inputs.forEach((i) => (i.onkeydown = (e) => e.key === "Enter" && submit()));
   render();
-  return h(
-    "div",
-    { class: "card" },
-    h("div", { class: "row" }, ...opts.inputs, h("button", { class: "btn secondary small", onclick: submit }, opts.addLabel)),
-    status,
-    body.children.length || opts.items().length ? h("table", {}, h("thead", {}, h("tr", {}, ...opts.headers.map((t) => h("th", {}, t)), h("th"), h("th"))), body) : null,
-  );
+  return h("div", { class: "card" }, h("div", { class: "row" }, ...opts.inputs, h("button", { class: "btn secondary small", onclick: submit }, opts.addLabel)), status, table);
 }
 
-export function wordsView(): HTMLElement {
-  const wordIn = h("input", { type: "text", class: "inline", placeholder: "word", style: "width:180px" });
+export function wordsView(): View {
+  const wordIn = h("input", { type: "text", class: "inline", placeholder: "word", style: "width:170px" });
   const emojiIn = h("input", { type: "text", class: "emoji-input", placeholder: "🐙" });
   const words = listCard({
     headers: ["Word", "Emoji"],
@@ -68,12 +68,12 @@ export function wordsView(): HTMLElement {
     },
   });
 
-  const aliasIn = h("input", { type: "text", class: "inline", placeholder: "kitty", style: "width:160px" });
-  const targetIn = h("input", { type: "text", class: "inline", placeholder: "cat", style: "width:160px" });
+  const aliasIn = h("input", { type: "text", class: "inline", placeholder: "kitty", style: "width:150px" });
+  const targetIn = h("input", { type: "text", class: "inline", placeholder: "cat", style: "width:150px" });
   const synonyms = listCard({
     headers: ["When a kid types", "Show"],
     items: () => draft.synonyms,
-    row: (s) => [s.alias, `${s.word} ${draft.words.find((w) => w.word === s.word)?.emoji ?? CORE_EMOJI[s.word] ?? ""}`],
+    row: (s) => [s.alias, `${s.word} ${emojiFor(s.word)}`],
     note: (s) => (s.alias in CORE_SYNONYMS ? `Purple already sends this to ${CORE_SYNONYMS[s.alias]}` : null),
     inputs: [aliasIn, targetIn],
     addLabel: "Add synonym",
@@ -88,7 +88,7 @@ export function wordsView(): HTMLElement {
     },
   });
 
-  const rankIn = h("input", { type: "text", class: "inline", placeholder: "octopus", style: "width:200px" });
+  const rankIn = h("input", { type: "text", class: "inline", placeholder: "octopus", style: "width:190px" });
   const ranked = listCard({
     headers: ["First to appear"],
     items: () => draft.ranked,
@@ -105,20 +105,32 @@ export function wordsView(): HTMLElement {
     },
   });
 
-  return h(
-    "section",
-    {},
-    h("h2", {}, "Your own words and emoji"),
-    h("p", { class: "lead" }, "In Play, a kid types a word and Purple answers with an emoji. Add the words your family uses: a pet's name, a favorite animal, a word only you say."),
-    h("h3", {}, "Words"),
-    h("p", { class: "dim small" }, `Purple knows ${Object.keys(CORE_EMOJI).length} words already. A word you add that Purple has replaces its emoji; a new word joins the list.`),
-    words,
-    h("h3", {}, "Synonyms"),
-    h("p", { class: "dim small" }, "Another spelling or nickname that should show the same emoji."),
-    synonyms,
-    h("h3", {}, "What autocompletes first"),
-    h("p", { class: "dim small" }, "As a kid types, Purple suggests words. The words here come ahead of everything Purple has not already ranked. Purple's own top words, like cat and dog, stay where they are."),
-    ranked,
-    h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "all of it. This is the one part of the pack an installed Purple reads exactly as written."),
-  );
+  const lines = (): PlayLine[] => {
+    const out: PlayLine[] = draft.words.slice(-3).map((w) => ({ ask: w.word, answer: w.emoji }));
+    for (const s of draft.synonyms.slice(-2)) out.push({ ask: s.alias, answer: emojiFor(s.word) });
+    return out.length ? out : [{ ask: "cat", answer: CORE_EMOJI.cat }];
+  };
+
+  return {
+    title: "Words",
+    path: "content/emoji.json  ·  synonyms.json  ·  rankings.txt",
+    tag: "real",
+    editor: h(
+      "section",
+      {},
+      h("p", { class: "lead" }, "In Play, a kid types a word and Purple answers with an emoji. Add the words your family uses: a pet's name, a favorite animal, a word only you say."),
+      h("h3", {}, "Words"),
+      h("p", { class: "dim small" }, `Purple knows ${Object.keys(CORE_EMOJI).length} words already. A word you add that Purple has replaces its emoji; a new word joins the list.`),
+      words,
+      h("h3", {}, "Synonyms"),
+      h("p", { class: "dim small" }, "Another spelling or nickname that should show the same emoji."),
+      synonyms,
+      h("h3", {}, "What autocompletes first"),
+      h("p", { class: "dim small" }, "As a kid types, Purple suggests words. The words here come ahead of everything Purple has not already ranked. Purple's own top words, like cat and dog, stay where they are."),
+      ranked,
+      h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "all of it. This is the one part of the pack an installed Purple reads exactly as written."),
+    ),
+    stage: () => playFrame(lines()),
+    caption: draft.words.length ? "Play, answering your words." : "Play, answering a word Purple already knows. Add yours to see them here.",
+  };
 }

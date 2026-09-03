@@ -14,6 +14,18 @@ export function voiceClipFilename(text: string): string {
 
 export const INSTRUMENTS = ["marimba", "ukulele", "accordion", "glockenspiel"] as const;
 
+// The Music room grid: three letter rows of ten keys, plus the percussion number row.
+export const GRID_ROWS = ["qwertyuiop", "asdfghjkl;", "zxcvbnm,./"].map((r) => [...r]);
+export const PERCUSSION_ROW = [..."1234567890"];
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+const ROW_OCTAVE_BASE = [4, 3, 2];
+
+// music_constants.pitch_for with the default root (C) and no octave shift.
+export function pitchFor(row: number, col: number, root = 0, octaveShift = 0): { note: string; octave: number } {
+  const semis = root + 12 * (ROW_OCTAVE_BASE[row] + octaveShift) + MAJOR_SCALE[col % 7] + 12 * Math.floor(col / 7);
+  return { note: CHROMATIC[semis % 12], octave: Math.floor(semis / 12) };
+}
+
 // music_constants.pitch_filename: "C#4" -> "cs4"
 export function pitchFilename(note: string, octave: number): string {
   return note.toLowerCase().replace("#", "s") + octave;

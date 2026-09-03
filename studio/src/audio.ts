@@ -52,46 +52,6 @@ export function normalize({ samples, rate }: Clip, target = 0.9): Clip {
   return { samples: p > 0 ? samples.map((s) => (s / p) * target) : samples, rate };
 }
 
-// Autocorrelation on the loudest stretch of the clip; good enough for one sung or plucked note.
-export function detectPitch({ samples, rate }: Clip, min = 60, max = 2000): number | null {
-  const win = Math.min(samples.length, Math.floor(rate * 0.1));
-  if (win < rate * 0.02) return null;
-  let bestStart = 0;
-  let bestEnergy = -1;
-  for (let i = 0; i + win <= samples.length; i += Math.floor(win / 2)) {
-    let e = 0;
-    for (let j = i; j < i + win; j++) e += samples[j] * samples[j];
-    if (e > bestEnergy) [bestEnergy, bestStart] = [e, i];
-  }
-  const seg = samples.subarray(bestStart, bestStart + win);
-  const minLag = Math.floor(rate / max);
-  const maxLag = Math.min(Math.floor(rate / min), win - 1);
-  const power = seg.reduce((n, s) => n + s * s, 0) / win;
-  if (power === 0) return null;
-  // Correlation per overlapping sample, so short lags get no free advantage.
-  const corr = (lag: number) => {
-    let c = 0;
-    for (let i = 0; i + lag < win; i++) c += seg[i] * seg[i + lag];
-    return c / (win - lag) / power;
-  };
-  let bestLag = -1;
-  let bestCorr = 0;
-  let dipped = false;
-  for (let lag = 1; lag <= maxLag; lag++) {
-    const c = corr(lag);
-    dipped ||= c < 0;
-    if (dipped && lag >= minLag && c > bestCorr) [bestCorr, bestLag] = [c, lag];
-  }
-  if (bestLag < 0 || bestCorr < 0.5) return null;
-  // Halve the lag while a strong peak exists there, so a subharmonic never wins.
-  while (bestLag / 2 >= minLag) {
-    const half = Math.round(bestLag / 2);
-    if (corr(half) < bestCorr * 0.9) break;
-    bestLag = half;
-  }
-  return rate / bestLag;
-}
-
 // Browser-only helpers below.
 
 export async function decodeToClip(blob: Blob, rate = CLIP_SAMPLE_RATE): Promise<Clip> {

@@ -1,29 +1,29 @@
 import { pictureFromFile } from "../photo";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../purple/art";
-import { changed, draft } from "../state";
-import { clear, h } from "./dom";
+import { changed, draft, DEFAULT_THEME } from "../state";
+import { h } from "./dom";
 import { artFrame } from "./facsimile";
+import type { View } from "./view";
 
-export function photosView(): HTMLElement {
-  const list = h("div");
+function dropZone(): HTMLElement {
   const status = h("div", { class: "status" });
-
   const add = async (files: FileList | File[]) => {
+    let last: string | null = null;
     for (const file of files) {
       if (!file.type.startsWith("image/")) continue;
       status.textContent = `Painting ${file.name}…`;
       try {
-        draft.pictures.push(await pictureFromFile(file));
+        const pic = await pictureFromFile(file);
+        draft.pictures = draft.pictures.filter((p) => p.name !== pic.name);
+        draft.pictures.push(pic);
+        last = pic.name;
       } catch {
         status.textContent = `${file.name} could not be opened as a photo.`;
-        continue;
       }
-      status.textContent = "";
-      changed();
     }
-    render();
+    changed();
+    if (last) location.hash = `#photos/${encodeURIComponent(last)}`;
   };
-
   const input = h("input", { type: "file", accept: "image/*", multiple: true, onchange: () => input.files && add(input.files) });
   const drop = h(
     "label",
@@ -34,43 +34,51 @@ export function photosView(): HTMLElement {
       ondrop: (e: DragEvent) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer && add(e.dataTransfer.files); },
     },
     h("div", {}, "Drop a photo here, or click to choose one."),
-    h("div", { class: "small" }, "Photos stay on this computer."),
+    h("div", { class: "small" }, "It stays on this computer."),
     input,
   );
+  return h("div", {}, drop, status);
+}
 
-  function render() {
-    clear(list);
-    for (const pic of draft.pictures) {
-      const remove = () => {
-        draft.pictures = draft.pictures.filter((p) => p !== pic);
-        changed();
-        render();
-      };
-      list.append(
-        h(
-          "div",
-          { class: "card" },
-          h("div", { class: "pair" }, h("img", { class: "photo", src: pic.sourceUrl, alt: "" }), artFrame(pic.cells)),
-          h(
-            "div",
-            { class: "row between", style: "margin-top:16px" },
-            h("span", { class: "dim small" }, h("span", { class: "mono" }, `content/pictures/${pic.name}.json`), ` · ${pic.cells[0].length} by ${pic.cells.length} cells`),
-            h("button", { class: "linkbtn dim", onclick: remove }, "Remove"),
-          ),
-        ),
-      );
-    }
+const note = () => h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "nothing yet. The Art room can only show a picture that was built into Purple itself. The pack carries your photo as a paint list in the layout the loader would read once it learns to look there.");
+
+export function photosView(item: string | null): View {
+  const pic = item ? draft.pictures.find((p) => p.name === item) : null;
+  const theme = draft.theme ?? DEFAULT_THEME;
+  if (!pic) {
+    return {
+      title: "Photos",
+      path: "content/pictures/<name>.json",
+      tag: "proposed",
+      editor: h(
+        "section",
+        {},
+        h("p", { class: "lead" }, `A photo becomes a painting in the Art room: one block of color per cell, ${CANVAS_WIDTH} across and ${CANVAS_HEIGHT} down. Your kid draws on top of it, or over it.`),
+        dropZone(),
+        note(),
+      ),
+      stage: () => artFrame(draft.pictures[0]?.cells ?? null, theme),
+      caption: draft.pictures.length ? `The Art room with ${draft.pictures[0].name}.` : "The Art room, empty. Drop a photo to see it painted here.",
+    };
   }
-  render();
-
-  return h(
-    "section",
-    {},
-    h("h2", {}, "Your own photos"),
-    h("p", { class: "lead" }, `A photo becomes a painting in the Art room: one block of color per cell, ${CANVAS_WIDTH} across and ${CANVAS_HEIGHT} down. Your kid draws on top of it, or over it.`),
-    drop,
-    status,
-    list,
-    h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "nothing yet. The Art room can only show a picture that was built into Purple itself. The pack carries your photo as a paint list in the layout the loader would read once it learns to look there."),
-  );
+  const remove = () => {
+    draft.pictures = draft.pictures.filter((p) => p !== pic);
+    changed();
+    location.hash = "#photos";
+  };
+  return {
+    title: pic.name,
+    path: `content/pictures/${pic.name}.json  ·  ${pic.name}.png`,
+    tag: "proposed",
+    editor: h(
+      "section",
+      {},
+      h("div", { class: "card" }, h("div", { class: "row", style: "gap:24px" }, h("img", { class: "photo", src: pic.sourceUrl, alt: "" }), h("div", {}, h("p", {}, `${pic.cells[0].length} by ${pic.cells.length} cells, centered on the canvas. ${pic.ops.length} paint strokes.`), h("p", { class: "dim small" }, "Every cell is one keypress's worth of paint, so a kid can erase or draw over any part of it."), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this photo")))),
+      h("h3", {}, "Add another"),
+      dropZone(),
+      note(),
+    ),
+    stage: () => artFrame(pic.cells, theme),
+    caption: `The Art room with ${pic.name} painted at real size.`,
+  };
 }

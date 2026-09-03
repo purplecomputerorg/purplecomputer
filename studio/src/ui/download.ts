@@ -1,8 +1,10 @@
 import { buildPack, manifest, packFilename } from "../pack";
-import { changed, draft, packId, pieces } from "../state";
+import { DEFAULT_THEME, changed, draft, packId, pieces } from "../state";
 import { clear, field, h } from "./dom";
+import { artFrame } from "./facsimile";
+import type { View } from "./view";
 
-export function downloadView(): HTMLElement {
+export function downloadView(): View {
   const nameIn = h("input", { type: "text", placeholder: "The Nathansons", value: draft.familyName });
   const summary = h("ul", { class: "summary" });
   const idLine = h("p", { class: "dim small" });
@@ -38,16 +40,22 @@ export function downloadView(): HTMLElement {
     button.disabled = false;
   };
 
-  return h(
-    "section",
-    {},
-    h("h2", {}, "Your pack"),
-    h("p", { class: "lead" }, "One file holds everything you made here. It never leaves this computer unless you move it."),
-    h("div", { class: "card" }, field("Your family's name, for the pack's label", nameIn), idLine, summary),
-    h("div", { class: "row", style: "margin-top:24px" }, button),
-    status,
-    h("div", { class: "note" },
-      h("strong", {}, "What an installed Purple reads from this pack today: "), "the words, synonyms, and autocomplete picks. ",
-      "Photos, recordings, an instrument, and colors ride along in the same file in the layout described in ", h("a", { href: "#format" }, "the pack format"), ", waiting for Purple to learn to read them. Nothing in the pack can run as a program."),
-  );
+  return {
+    title: "Your pack",
+    path: `${packFilename()}  ·  manifest.json + content/`,
+    tag: "real",
+    editor: h(
+      "section",
+      {},
+      h("p", { class: "lead" }, "One file holds everything you made here. It never leaves this computer unless you move it."),
+      h("div", { class: "card" }, field("Your family's name, for the pack's label", nameIn), idLine, summary),
+      h("div", { class: "row", style: "margin-top:22px" }, button),
+      status,
+      h("div", { class: "note" },
+        h("strong", {}, "What an installed Purple reads from this pack today: "), "the words, synonyms, and autocomplete picks. ",
+        "Photos, recordings, instruments, and colors ride along in the same file in the layout described in ", h("a", { href: "#format" }, "what is in the pack"), ", waiting for Purple to learn to read them. Nothing in the pack can run as a program."),
+    ),
+    stage: () => artFrame(draft.pictures[0]?.cells ?? null, draft.theme ?? DEFAULT_THEME),
+    caption: "The Art room as this pack would leave it.",
+  };
 }

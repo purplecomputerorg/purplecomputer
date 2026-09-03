@@ -1,7 +1,8 @@
-import { clipToBuffer, encodeWav, renderClip } from "./audio";
+import { encodeWav } from "./audio";
 import { previewPng } from "./photo";
 import { generateRowGradient, ASDF_ROW, QWERTY_ROW, ZXCV_ROW } from "./purple/art";
-import { CLIP_SAMPLE_RATE, SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
+import { SAMPLE_PITCHES, voiceClipFilename } from "./purple/sounds";
+import { SYNTH_RATE, renderNote } from "./purple/synth";
 import { draft, packId, type Draft } from "./state";
 import { gzip, tar, type TarEntry } from "./tar";
 
@@ -41,6 +42,8 @@ export function themeJson(d: Draft = draft) {
   };
 }
 
+const yieldToUi = () => new Promise((r) => setTimeout(r, 0));
+
 export async function buildEntries(d: Draft = draft, onProgress?: (msg: string) => void): Promise<TarEntry[]> {
   const entries: TarEntry[] = [json("manifest.json", manifest(d)), ...emojiEntries(d)];
 
@@ -53,13 +56,13 @@ export async function buildEntries(d: Draft = draft, onProgress?: (msg: string) 
     entries.push({ path: `content/pictures/${pic.name}.png`, data: await previewPng(pic.cells) });
   }
 
-  if (d.instrument) {
-    const { name, source, sourceFreq } = d.instrument;
-    const buffer = clipToBuffer(source);
+  for (const inst of d.instruments) {
+    entries.push(json(`content/instruments/${inst.name}.json`, { name: inst.name, base: inst.base, params: inst.params }));
     for (const pitch of SAMPLE_PITCHES) {
-      onProgress?.(`Tuning ${name}: ${pitch.note}${pitch.octave}`);
-      const clip = await renderClip(buffer, CLIP_SAMPLE_RATE, pitch.freq / sourceFreq);
-      entries.push({ path: `content/${name}/${pitch.file}.wav`, data: encodeWav(clip) });
+      onProgress?.(`Rendering ${inst.name}: ${pitch.note}${pitch.octave}`);
+      await yieldToUi();
+      const samples = renderNote(inst.base, inst.params, pitch.freq);
+      entries.push({ path: `content/${inst.name}/${pitch.file}.wav`, data: encodeWav({ samples, rate: SYNTH_RATE }) });
     }
   }
 

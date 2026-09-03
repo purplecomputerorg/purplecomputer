@@ -2,6 +2,7 @@ import { ASDF_ROW, QWERTY_ROW, ZXCV_ROW, generateRowGradient } from "../purple/a
 import { DEFAULT_THEME, changed, draft } from "../state";
 import { clear, h } from "./dom";
 import { artFrame } from "./facsimile";
+import type { View } from "./view";
 
 const ROWS = [
   ["qwerty", "Top letter row", QWERTY_ROW],
@@ -9,14 +10,11 @@ const ROWS = [
   ["zxcv", "Bottom row", ZXCV_ROW],
 ] as const;
 
-export function colorsView(): HTMLElement {
-  const preview = h("div");
+export function colorsView(): View {
   const controls = h("div", { class: "card" });
 
   function render() {
     const theme = draft.theme ?? DEFAULT_THEME;
-    clear(preview);
-    preview.append(artFrame(null, theme));
     clear(controls);
     const set = (patch: () => void) => {
       draft.theme ??= structuredClone(DEFAULT_THEME);
@@ -35,17 +33,22 @@ export function colorsView(): HTMLElement {
         h("input", { type: "range", min: 0, max: 359, value: theme.hues[key], oninput: (e: Event) => set(() => (draft.theme!.hues[key] = Number((e.target as HTMLInputElement).value))) }),
       );
     }
-    if (draft.theme) controls.append(h("p", { style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: () => { draft.theme = null; changed(); render(); } }, "Back to Purple's colors")));
+    if (draft.theme) controls.append(h("p", { style: "margin-top:18px" }, h("button", { class: "linkbtn dim", onclick: () => { draft.theme = null; changed(); render(); } }, "Back to Purple's colors")));
   }
   render();
 
-  return h(
-    "section",
-    {},
-    h("h2", {}, "Your own colors"),
-    h("p", { class: "lead" }, "The purple behind everything, and the colors each keyboard row paints with. The number row stays gray so the stickers on the keys still match."),
-    preview,
-    controls,
-    h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "nothing. These colors are written into Purple's code, not read from a file. The pack carries your choices as a small theme file so there is something concrete to point a future change at. The keyboard stickers that come with a Purple Key match Purple's own rows, not these."),
-  );
+  return {
+    title: "Colors",
+    path: "content/theme.json",
+    tag: "proposed",
+    editor: h(
+      "section",
+      {},
+      h("p", { class: "lead" }, "The purple behind everything, and the colors each keyboard row paints with. The number row stays gray so the stickers on the keys still match."),
+      controls,
+      h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), "nothing. These colors are written into Purple's code, not read from a file. The pack carries your choices as a small theme file so there is something concrete to point a future change at. The keyboard stickers that come with a Purple Key match Purple's own rows, not these."),
+    ),
+    stage: () => artFrame(draft.pictures[0]?.cells ?? null, draft.theme ?? DEFAULT_THEME),
+    caption: "The Art room in your colors.",
+  };
 }

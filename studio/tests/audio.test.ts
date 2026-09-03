@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectPitch, encodeWav, tidy } from "../src/audio";
+import { encodeWav, tidy } from "../src/audio";
 import { CLIP_SAMPLE_RATE } from "../src/purple/sounds";
 
 const sine = (freq: number, seconds: number, rate = CLIP_SAMPLE_RATE) =>
@@ -31,16 +31,5 @@ describe("tidy", () => {
 
   it("returns an empty clip for silence", () => {
     expect(tidy({ samples: new Float32Array(1000), rate: CLIP_SAMPLE_RATE }).samples.length).toBe(0);
-  });
-});
-
-describe("detectPitch", () => {
-  it.each([110, 261.63, 440, 880])("finds %s Hz", (freq) => {
-    const detected = detectPitch({ samples: sine(freq, 0.5), rate: CLIP_SAMPLE_RATE })!;
-    expect(Math.abs(detected / freq - 1)).toBeLessThan(0.02);
-  });
-
-  it("gives up on noise-free silence", () => {
-    expect(detectPitch({ samples: new Float32Array(CLIP_SAMPLE_RATE), rate: CLIP_SAMPLE_RATE })).toBeNull();
   });
 });

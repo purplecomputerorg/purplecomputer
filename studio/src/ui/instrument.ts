@@ -1,69 +1,153 @@
-import { clipToBuffer, detectPitch, play, renderClip, type Clip } from "../audio";
-import { INSTRUMENTS, SAMPLE_PITCHES, noteFrequency, noteFromFrequency } from "../purple/sounds";
-import { changed, draft, slug } from "../state";
-import { clear, field, h } from "./dom";
-import { clipRow, recordControl } from "./record";
+import { play } from "../audio";
+import { KEY_COLORS } from "../purple/art";
+import { GRID_ROWS, INSTRUMENTS, PERCUSSION_ROW, SAMPLE_PITCHES, noteFrequency, pitchFor } from "../purple/sounds";
+import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName } from "../purple/synth";
+import { changed, draft, slug, type Instrument } from "../state";
+import { field, h } from "./dom";
+import { musicFrame } from "./facsimile";
+import type { View } from "./view";
 
-const OCTAVES = [2, 3, 4, 5];
-const NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+const NOTE_CACHE = new Map<string, Float32Array>();
 
-export function instrumentView(): HTMLElement {
-  const nameIn = h("input", { type: "text", placeholder: "Kitchen pots", value: draft.instrument?.name ?? "" });
-  const detail = h("div");
-  const status = h("div", { class: "status" });
-
-  const pitchSelect = h("select", { style: "width:auto" }, ...OCTAVES.flatMap((o) => NOTES.map((n) => h("option", { value: `${n}${o}` }, `${n}${o}`))));
-
-  function render() {
-    clear(detail);
-    const inst = draft.instrument;
-    if (!inst) return;
-    const { note, octave, cents } = noteFromFrequency(inst.sourceFreq);
-    pitchSelect.value = `${note}${octave}`;
-    pitchSelect.onchange = () => {
-      const m = pitchSelect.value.match(/^([A-G]#?)(\d)$/)!;
-      inst.sourceFreq = noteFrequency(m[1], Number(m[2]));
-      changed();
-      render();
-    };
-    const tryNote = async (file: string) => {
-      const p = SAMPLE_PITCHES.find((s) => s.file === file)!;
-      play(await renderClip(clipToBuffer(inst.source), inst.source.rate, p.freq / inst.sourceFreq));
-    };
-    detail.append(
-      clipRow(inst.source, `content/${inst.name}/…`, () => { draft.instrument = null; changed(); render(); }),
-      h("p", { class: "dim small", style: "margin-top:16px" }, `This sounds like ${note}${octave}${cents ? ` (${cents > 0 ? "+" : ""}${cents} cents)` : ""}. If that is wrong, pick the note you played:`),
-      h("div", { class: "row" }, pitchSelect, h("span", { class: "dim small" }, "Hear it as"), ...["c3", "g4", "c5", "e6"].map((f) => h("button", { class: "btn secondary small", onclick: () => tryNote(f) }, f.toUpperCase().replace("S", "#")))),
-    );
+function playKey(inst: Instrument, key: string): void {
+  const row = GRID_ROWS.findIndex((r) => r.includes(key));
+  if (row < 0) return;
+  const { note, octave } = pitchFor(row, GRID_ROWS[row].indexOf(key));
+  const id = `${inst.base}|${JSON.stringify(inst.params)}|${note}${octave}`;
+  let samples = NOTE_CACHE.get(id);
+  if (!samples) {
+    if (NOTE_CACHE.size > 200) NOTE_CACHE.clear();
+    samples = renderNote(inst.base, inst.params, noteFrequency(note, octave));
+    NOTE_CACHE.set(id, samples);
   }
+  play({ samples, rate: SYNTH_RATE });
+}
 
-  const onClip = (clip: Clip) => {
-    const name = slug(nameIn.value) || "my-instrument";
-    if ((INSTRUMENTS as readonly string[]).includes(name)) {
-      status.textContent = `Purple already has a ${name}. Give yours a different name.`;
+function chooser(): View {
+  const nameIn = h("input", { type: "text", placeholder: "Kitchen marimba" });
+  const status = h("div", { class: "status" });
+  const start = (base: BaseName) => {
+    const name = slug(nameIn.value) || `my-${base}`;
+    if ((INSTRUMENTS as readonly string[]).includes(name) || draft.instruments.some((i) => i.name === name)) {
+      status.textContent = `There is already a ${name}. Pick another name.`;
       return;
     }
-    const freq = detectPitch(clip);
-    status.textContent = freq ? "" : "Studio could not tell which note that was. Pick it below.";
-    draft.instrument = { name, source: clip, sourceFreq: freq ?? noteFrequency("C", 4) };
+    draft.instruments.push({ name, base, params: defaults(base) });
     changed();
-    render();
+    location.hash = `#instruments/${encodeURIComponent(name)}`;
   };
-  nameIn.oninput = () => {
-    if (draft.instrument) {
-      draft.instrument.name = slug(nameIn.value) || "my-instrument";
-      changed();
-      render();
-    }
+  return {
+    title: "Instruments",
+    path: "content/<name>/c1.wav … d7.wav",
+    tag: "proposed",
+    editor: h(
+      "section",
+      {},
+      h("p", { class: "lead" }, "Purple's four instruments are made from math: a few equations for a bar, a string, a reed, a bell. Start from one and move its numbers."),
+      h("div", { class: "card" }, field("What to call it", nameIn), status, h("div", { class: "bases" }, ...BASE_NAMES.map((b) =>
+        h("button", { class: "base", onclick: () => start(b) }, h("b", {}, `Start from ${BASES[b].label}`), h("span", {}, BASES[b].blurb))))),
+      draft.instruments.length ? h("p", { class: "dim small" }, "Yours so far: ", ...draft.instruments.flatMap((i, n) => [n ? ", " : "", h("a", { href: `#instruments/${encodeURIComponent(i.name)}` }, i.name)])) : null,
+      h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), `it plays each instrument from a folder of pre-rendered notes, ${SAMPLE_PITCHES.length} files each, made by the same math offline. Studio renders your version into that exact folder layout, and saves the numbers you chose next to it, so Purple could one day re-render them itself. Nothing on Purple reads either yet.`),
+    ),
+    stage: () => musicFrame({ instrument: "Marimba" }),
+    stageTitle: "What your kid hears",
+    caption: "The Music room. Letter rows play notes, the number row plays percussion. Enter cycles instruments.",
   };
-  render();
+}
 
-  return h(
-    "section",
-    {},
-    h("h2", {}, "Your own instrument"),
-    h("p", { class: "lead" }, "Play one clear note on anything: a glass, a pot, a guitar string, your voice. Studio tunes that one note into every key on the Music room grid."),
-    h("div", { class: "card" }, field("What is it called", nameIn), recordControl(onClip), status, detail),
-    h("div", { class: "note" }, h("strong", {}, "What Purple does with this today: "), `Purple plays its four instruments from folders of pre-made sound files, one per note, ${SAMPLE_PITCHES.length} files each. This pack writes yours in the same layout and naming. There is no synthesizer in Purple to change how an existing instrument sounds, so Studio does not offer that.`),
-  );
+function editor(inst: Instrument): View {
+  let lastKey = "q";
+  let replayTimer = 0;
+  const base = BASES[inst.base];
+
+  const nameIn = h("input", { type: "text", value: inst.name });
+  nameIn.onchange = () => {
+    const name = slug(nameIn.value) || inst.name;
+    if (draft.instruments.some((i) => i !== inst && i.name === name) || (INSTRUMENTS as readonly string[]).includes(name)) {
+      nameIn.value = inst.name;
+      return;
+    }
+    inst.name = name;
+    changed();
+    location.hash = `#instruments/${encodeURIComponent(name)}`;
+  };
+
+  const sliders = h("div", { class: "sliders" });
+  const groups = [...new Set(base.params.map((s) => s.group))];
+  for (const g of groups) {
+    sliders.append(h("h3", {}, g));
+    for (const spec of base.params.filter((s) => s.group === g)) {
+      const val = h("span", { class: "val" }, fmt(inst.params[spec.key], spec.unit));
+      const range = h("input", { type: "range", min: spec.min, max: spec.max, step: spec.step, value: inst.params[spec.key] });
+      range.oninput = () => {
+        inst.params[spec.key] = Number(range.value);
+        val.textContent = fmt(inst.params[spec.key], spec.unit);
+        changed();
+        clearTimeout(replayTimer);
+        replayTimer = window.setTimeout(() => playKey(inst, lastKey), 140);
+      };
+      sliders.append(h("div", { class: "slider" }, h("span", { class: "lbl" }, spec.label), range, val));
+    }
+  }
+
+  const grid = h("div", { class: "grid" });
+  const keyButtons = new Map<string, HTMLButtonElement>();
+  const press = (k: string) => {
+    keyButtons.get(lastKey)?.classList.remove("on");
+    lastKey = k;
+    keyButtons.get(k)?.classList.add("on");
+    playKey(inst, k);
+    changed();
+  };
+  grid.append(h("div", { class: "r" }, ...PERCUSSION_ROW.map((k) => h("button", { class: "k perc", disabled: true, title: "Percussion is shared by every instrument" }, k))));
+  for (const row of GRID_ROWS) {
+    grid.append(h("div", { class: "r" }, ...row.map((k) => {
+      const b = h("button", { class: "k", style: `border-bottom-color:${KEY_COLORS[k]}`, onclick: () => press(k) }, k === "/" ? "÷" : k);
+      keyButtons.set(k, b);
+      return b;
+    })));
+  }
+  keyButtons.get(lastKey)?.classList.add("on");
+
+  const onKey = (e: KeyboardEvent) => {
+    if ((e.target as HTMLElement).tagName === "INPUT" && (e.target as HTMLInputElement).type === "text") return;
+    if (keyButtons.has(e.key) && !e.repeat) press(e.key);
+  };
+  document.addEventListener("keydown", onKey);
+
+  const reset = () => {
+    Object.assign(inst.params, defaults(inst.base));
+    changed();
+    location.hash = `#instruments/${encodeURIComponent(inst.name)}`;
+  };
+  const remove = () => {
+    draft.instruments = draft.instruments.filter((i) => i !== inst);
+    NOTE_CACHE.clear();
+    changed();
+    location.hash = "#instruments";
+  };
+
+  return {
+    title: inst.name,
+    path: `content/${inst.name}/c1.wav … d7.wav  ·  content/instruments/${inst.name}.json`,
+    tag: "proposed",
+    editor: h(
+      "section",
+      {},
+      h("div", { class: "card" }, h("div", { class: "row between" }, h("div", { style: "flex:1;min-width:200px" }, field("Name", nameIn)), h("span", { class: "dim small" }, `Started from ${base.label}. ${base.blurb}`))),
+      h("div", { class: "card" }, h("p", { class: "dim small" }, "Click a key, or type on your keyboard. Sliding a control replays the last key."), grid),
+      h("div", { class: "card" }, sliders, h("div", { class: "row between", style: "margin-top:20px" }, h("button", { class: "linkbtn dim", onclick: reset }, `Back to ${base.label}'s numbers`), h("button", { class: "linkbtn dim", onclick: remove }, "Remove this instrument"))),
+    ),
+    stage: () => musicFrame({ instrument: inst.name, activeKey: lastKey }),
+    stageTitle: "What your kid hears",
+    caption: `The Music room with ${inst.name} chosen. Each key plays one of the ${SAMPLE_PITCHES.length} rendered notes.`,
+    cleanup: () => { document.removeEventListener("keydown", onKey); clearTimeout(replayTimer); },
+  };
+}
+
+const fmt = (v: number, unit?: string) => `${Number.isInteger(v) ? v : v.toFixed(v < 1 ? 3 : 2).replace(/\.?0+$/, "")}${unit ? " " + unit : ""}`;
+
+export function instrumentsView(item: string | null): View {
+  const inst = item ? draft.instruments.find((i) => i.name === item) : null;
+  return inst ? editor(inst) : chooser();
 }

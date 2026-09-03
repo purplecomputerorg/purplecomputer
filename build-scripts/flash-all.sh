@@ -232,8 +232,6 @@ sudo -v
 ( while true; do sudo -n -v 2>/dev/null || exit; sleep 60; done ) &
 SUDO_KEEPALIVE_PID=$!
 
-log_info "Pausing udev exec queue..."
-sudo udevadm control --stop-exec-queue 2>/dev/null || true
 cleanup() {
     kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true
     sudo udevadm control --start-exec-queue 2>/dev/null || true
@@ -244,32 +242,55 @@ LOG_DIR="$(mktemp -d -t purple-flash-all.XXXXXX)"
 log_info "Per-drive logs: $LOG_DIR"
 echo
 
-# Cross-job coordination lives in files under STATE_DIR: flashed.$i markers
-# gate the udev queue restart, slot dirs bound settle/re-verify concurrency,
-# and result.$i carries each job's outcome back as "status|dev|tries|log".
+# Cross-job coordination lives in files under STATE_DIR: the udev-gate lock
+# pauses udev while any drive is being written, slot dirs bound settle and
+# re-verify concurrency, and result.$i carries each job's outcome back as
+# "status|dev|tries|log|slot".
 STATE_DIR="$LOG_DIR/state"
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/safe-slots"
 SETTLE_MAX=$(boot_settle_max_jobs)
 
+# udev's exec queue must be paused while any drive is written and verified
+# (see flash-to-usb.sh), and running for an eject. Writers hold the gate
+# shared and pause the queue; an ejector takes it exclusively, so it waits
+# only for drives mid-write (a retry included) rather than for the whole
+# batch, then restarts the queue. Both calls are idempotent.
+gate_writing() {
+    exec 9>"$STATE_DIR/udev-gate"
+    flock -s 9
+    sudo udevadm control --stop-exec-queue 2>/dev/null || true
+}
+gate_ejecting() {
+    exec 9>"$STATE_DIR/udev-gate"
+    flock -x 9
+    sudo udevadm control --start-exec-queue 2>/dev/null || true
+}
+gate_release() { exec 9>&-; }
+
 # Comma-joined ship-ready slots. Labels can't contain | (save_port_label strips it).
 safe_slot_list() { paste -sd'|' "$STATE_DIR/safe-slots" | sed 's/|/, /g'; }
 
 # Record a drive's outcome and announce, by physical slot, that its stick can
-# come out of the hub. Good sticks join the running ship-ready list.
+# come out of the hub. Good sticks join the running ship-ready list. The
+# append and the announcement share one lock so parallel finishers can't
+# interleave their lines or print a count that disagrees with the list.
 finish_drive() {
     local i="$1" status="$2" dev="$3" tries="$4" log="$5" slot safe
     slot="$(slot_name "$i")"
     echo "$status|$dev|$tries|$log|$slot" > "$STATE_DIR/result.$i"
     [[ "$CORRUPT_MODE" == true ]] && return 0
-    if [[ "$status" == ok ]]; then
-        echo "$slot" >> "$STATE_DIR/safe-slots"
-        echo -e "${GREEN}${BOLD}✓ TAKE OUT ${slot}${NC}${GREEN}: done, safe to ship.${NC}"
-    else
-        echo -e "${RED}${BOLD}✗ TAKE OUT ${slot}${NC}${RED}: FAILED, set it aside, do NOT ship it.${NC}"
-    fi
-    safe="$(safe_slot_list)"
-    echo -e "  ${BOLD}Ship-ready so far ($(wc -l < "$STATE_DIR/safe-slots")/${#ENTRIES[@]}):${NC} ${safe:-none}"
+    {
+        flock 7
+        if [[ "$status" == ok ]]; then
+            echo "$slot" >> "$STATE_DIR/safe-slots"
+            echo -e "${GREEN}${BOLD}✓ TAKE OUT ${slot}${NC}${GREEN}: done, safe to ship.${NC}"
+        else
+            echo -e "${RED}${BOLD}✗ TAKE OUT ${slot}${NC}${RED}: FAILED, set it aside, do NOT ship it.${NC}"
+        fi
+        safe="$(safe_slot_list)"
+        echo -e "  ${BOLD}Ship-ready so far ($(wc -l < "$STATE_DIR/safe-slots")/${#ENTRIES[@]}):${NC} ${safe:-none}"
+    } 7>"$STATE_DIR/announce.lock"
 }
 
 # One drive's whole journey, run as its own background job so a slow or
@@ -289,11 +310,11 @@ run_drive() {
         (( tries > 1 )) && suffix=".try${tries}"
         log="$LOG_DIR/$(basename "$dev")${suffix}.log"
         echo -e "${BOLD}→ $dev${SCENS[$i]:+ [${SCENS[$i]}]}: flashing (tail -f $log)${NC}"
-        if VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
-            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1; then
-            ok=true
-            break
-        fi
+        gate_writing
+        VERIFIED_ISO_SHA256="${SHA_BY_ISO[$iso]}" \
+            "$FLASH_SCRIPT" --yes --no-udev-gate --device "$dev" "$iso" >"$log" 2>&1 9>&- && ok=true
+        gate_release
+        [[ "$ok" == true ]] && break
         (( tries < max_attempts )) || break
         if [[ -z "$port" ]]; then
             log_error "No hub port recorded for $dev ($serial); cannot power-cycle it. Re-seat it by hand and re-run."
@@ -308,9 +329,6 @@ run_drive() {
         [[ "$newdev" != "$dev" ]] && log_info "$serial came back as $newdev (was $dev)."
         dev="$newdev"
     done
-
-    # The parent restarts the udev exec queue once every drive has one of these.
-    : > "$STATE_DIR/flashed.$i"
 
     if [[ "$ok" != true ]]; then
         echo -e "${RED}✗${NC} $dev — FAILED (see $log)"
@@ -352,13 +370,14 @@ run_drive() {
         fi
     fi
 
-    # Ejecting needs udev back (udevadm settle), so wait for the parent to
-    # lift the queue after the last drive finishes writing. Corrupt mode skips
-    # the eject so the identify phase can watch for unplugs; safe because every
-    # write is synced and verified, and these sticks get reflashed anyway.
+    # Ejecting needs udev back (udevadm settle), so it waits for whichever
+    # drives are still being written. Corrupt mode skips the eject so the
+    # identify phase can watch for unplugs; safe because every write is synced
+    # and verified, and these sticks get reflashed anyway.
     if [[ "$CORRUPT_MODE" != true ]]; then
-        while [[ ! -e "$STATE_DIR/udev-lifted" ]]; do sleep 1; done
+        gate_ejecting
         eject_drive "$dev" || true
+        gate_release
     fi
     finish_drive "$i" ok "$dev" "$tries" "$log"
 }
@@ -373,26 +392,11 @@ echo
 log_info "All ${#ENTRIES[@]} drive pipeline(s) started; each flashes, settles (up to $SETTLE_MAX at a time so QEMU guests fit in RAM), re-verifies, and ejects on its own. Takes a while, walk away."
 echo
 
-# Restart the udev exec queue as soon as every drive is done writing (marker
-# present, or its job died without leaving one), so early finishers can eject
-# while stragglers are still settling.
-while true; do
-    PENDING=false
-    for i in "${!ENTRIES[@]}"; do
-        [[ -e "$STATE_DIR/flashed.$i" ]] && continue
-        [[ "$(count_running "${PIDS[$i]}")" == 0 ]] && continue
-        PENDING=true
-        break
-    done
-    [[ "$PENDING" == false ]] && break
-    sleep 2
-done
-sudo udevadm control --start-exec-queue 2>/dev/null || true
-: > "$STATE_DIR/udev-lifted"
-
 for pid in "${PIDS[@]}"; do
     wait "$pid" || true
 done
+# Corrupt mode never ejects, so nothing restarted the queue for it.
+sudo udevadm control --start-exec-queue 2>/dev/null || true
 
 # Fold each job's outcome back into per-drive state. ST_OK[i] is the only
 # source of truth for whether a drive is good: every stage below iterates
@@ -628,9 +632,37 @@ done
 SAFE_LIST="$(safe_slot_list)"
 echo -e "${BOLD}The other $(( ${#DEVS[@]} - ${#FAILED[@]} )) drive(s) are verified and fine to ship${SAFE_LIST:+: ${SAFE_LIST}}.${NC}"
 
-# Blink each failed drive's hub socket so it can be found by eye. Failed
-# sticks only: a blink is a power cycle, which is fine on a drive whose
-# contents are already worthless. 'just blink' does this standalone.
+# Block until the drive holding serial $1 leaves the bus (0) or the user
+# presses Enter (1).
+wait_for_unplug() {
+    while [[ -n "$(dev_of_serial "$1")" ]]; do
+        read -r -t 1 && return 1
+    done
+    echo
+}
+
+# Blink a failed drive's hub socket so it can be found by eye, then watch the
+# bus to confirm the stick that comes out is that one. Failed sticks only: a
+# blink is a power cycle, which is fine on a drive whose contents are already
+# worthless. Good sticks are already powered off, so pulling one by mistake
+# shows as nothing happening. 'just blink' does the blink standalone.
+confirm_pulled() {
+    local i="$1" serial="${ST_SER[$1]}" slot
+    slot="$(slot_name "$i")"
+    while true; do
+        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $slot... press Enter once you've spotted it: "
+        if ! dev_for_serial "$serial" 20 >/dev/null; then
+            log_warn "$serial did not come back after blinking, so I can't watch for its unplug. Pull the stick that was blinking."
+            return 0
+        fi
+        echo -n "Now pull $slot out. If nothing happens, you pulled a good stick: put it back and press Enter to blink again: "
+        if wait_for_unplug "$serial"; then
+            echo -e "${GREEN}✓ That was ${BOLD}$slot${NC}${GREEN} ($serial), the failed stick. Set it aside.${NC}"
+            return 0
+        fi
+    done
+}
+
 if [[ -t 0 ]]; then
     for i in "${!ENTRIES[@]}"; do
         [[ "${ST_OK[$i]}" == true ]] && continue
@@ -638,9 +670,8 @@ if [[ -t 0 ]]; then
         echo
         read -r -p "Blink the socket holding ${ST_SER[$i]}? [Y/n] " ans
         [[ "$ans" == [nN]* ]] && continue
-        blink_port_until_enter "${ST_PORT[$i]}" "Blinking $(slot_name "$i")... press Enter once you've spotted it: "
-        newdev="$(dev_for_serial "${ST_SER[$i]}" 20 || true)"
-        [[ -n "$newdev" && "$newdev" != "${ST_DEV[$i]}" ]] && log_info "It came back as $newdev; use that for check-drive."
+        confirm_pulled "$i"
     done
 fi
-exit 1
+# A batch that shipped anything is a success; the failed drives are reported above.
+(( SUCCEEDED > 0 ))

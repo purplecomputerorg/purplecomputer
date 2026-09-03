@@ -1,0 +1,623 @@
+{
+ "generated_by": "scripts/export_studio.py; do not edit",
+ "art": {
+  "viewport": [
+   134,
+   29
+  ],
+  "canvas": [
+   132,
+   25
+  ],
+  "cell_aspect": 2,
+  "key_colors": {
+   "1": "#FFFFFF",
+   "2": "#E8E8E8",
+   "3": "#D0D0D0",
+   "4": "#B8B8B8",
+   "5": "#A0A0A0",
+   "6": "#888888",
+   "7": "#707070",
+   "8": "#585858",
+   "9": "#404040",
+   "0": "#282828",
+   "-": "#101010",
+   "=": "#000000",
+   "+": "#000000",
+   "q": "#F2A5A5",
+   "w": "#EE8D8D",
+   "e": "#EB7575",
+   "r": "#E75C5C",
+   "t": "#E44444",
+   "y": "#E02C2C",
+   "u": "#D21E1E",
+   "i": "#BA1A1A",
+   "o": "#A21717",
+   "p": "#891313",
+   "[": "#711010",
+   "]": "#590C0C",
+   "a": "#F2E5A5",
+   "s": "#EEDD8A",
+   "d": "#EAD670",
+   "f": "#E6CE55",
+   "g": "#E2C63A",
+   "h": "#DFBF1F",
+   "j": "#C4A81C",
+   "k": "#A99118",
+   "l": "#8E7A14",
+   ";": "#746310",
+   "'": "#594C0C",
+   "z": "#A5BFF2",
+   "x": "#88A9EE",
+   "c": "#6A94E9",
+   "v": "#4C7FE5",
+   "b": "#2E6AE1",
+   "n": "#1D59D0",
+   "m": "#194CB2",
+   ",": "#153F94",
+   ".": "#103277",
+   "/": "#0C2659"
+  },
+  "app_bg": "#1e1033",
+  "bg_dark": "#2a1845",
+  "bg_light": "#e8daf0",
+  "gutter": [
+   "#2F1D4C",
+   "#382358"
+  ],
+  "fit": {
+   "4032x3024": [
+    67,
+    25
+   ],
+   "3024x4032": [
+    38,
+    25
+   ],
+   "1000x1000": [
+    50,
+    25
+   ],
+   "1920x1080": [
+    89,
+    25
+   ],
+   "100x2000": [
+    2,
+    25
+   ],
+   "2000x100": [
+    132,
+    3
+   ],
+   "1x1": [
+    50,
+    25
+   ],
+   "132x50": [
+    132,
+    25
+   ],
+   "264x50": [
+    132,
+    12
+   ],
+   "50x25": [
+    100,
+    25
+   ]
+  }
+ },
+ "music": {
+  "grid_rows": [
+   [
+    "q",
+    "w",
+    "e",
+    "r",
+    "t",
+    "y",
+    "u",
+    "i",
+    "o",
+    "p"
+   ],
+   [
+    "a",
+    "s",
+    "d",
+    "f",
+    "g",
+    "h",
+    "j",
+    "k",
+    "l",
+    ";"
+   ],
+   [
+    "z",
+    "x",
+    "c",
+    "v",
+    "b",
+    "n",
+    "m",
+    ",",
+    ".",
+    "/"
+   ]
+  ],
+  "percussion_row": [
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "0"
+  ],
+  "instruments": [
+   "marimba",
+   "ukulele",
+   "accordion",
+   "glockenspiel"
+  ],
+  "pitches": [
+   {
+    "file": "c1",
+    "note": "C",
+    "octave": 1
+   },
+   {
+    "file": "d1",
+    "note": "D",
+    "octave": 1
+   },
+   {
+    "file": "e1",
+    "note": "E",
+    "octave": 1
+   },
+   {
+    "file": "f1",
+    "note": "F",
+    "octave": 1
+   },
+   {
+    "file": "fs1",
+    "note": "F#",
+    "octave": 1
+   },
+   {
+    "file": "g1",
+    "note": "G",
+    "octave": 1
+   },
+   {
+    "file": "a1",
+    "note": "A",
+    "octave": 1
+   },
+   {
+    "file": "as1",
+    "note": "A#",
+    "octave": 1
+   },
+   {
+    "file": "b1",
+    "note": "B",
+    "octave": 1
+   },
+   {
+    "file": "c2",
+    "note": "C",
+    "octave": 2
+   },
+   {
+    "file": "cs2",
+    "note": "C#",
+    "octave": 2
+   },
+   {
+    "file": "d2",
+    "note": "D",
+    "octave": 2
+   },
+   {
+    "file": "ds2",
+    "note": "D#",
+    "octave": 2
+   },
+   {
+    "file": "e2",
+    "note": "E",
+    "octave": 2
+   },
+   {
+    "file": "f2",
+    "note": "F",
+    "octave": 2
+   },
+   {
+    "file": "fs2",
+    "note": "F#",
+    "octave": 2
+   },
+   {
+    "file": "g2",
+    "note": "G",
+    "octave": 2
+   },
+   {
+    "file": "a2",
+    "note": "A",
+    "octave": 2
+   },
+   {
+    "file": "as2",
+    "note": "A#",
+    "octave": 2
+   },
+   {
+    "file": "b2",
+    "note": "B",
+    "octave": 2
+   },
+   {
+    "file": "c3",
+    "note": "C",
+    "octave": 3
+   },
+   {
+    "file": "cs3",
+    "note": "C#",
+    "octave": 3
+   },
+   {
+    "file": "d3",
+    "note": "D",
+    "octave": 3
+   },
+   {
+    "file": "ds3",
+    "note": "D#",
+    "octave": 3
+   },
+   {
+    "file": "e3",
+    "note": "E",
+    "octave": 3
+   },
+   {
+    "file": "f3",
+    "note": "F",
+    "octave": 3
+   },
+   {
+    "file": "fs3",
+    "note": "F#",
+    "octave": 3
+   },
+   {
+    "file": "g3",
+    "note": "G",
+    "octave": 3
+   },
+   {
+    "file": "a3",
+    "note": "A",
+    "octave": 3
+   },
+   {
+    "file": "as3",
+    "note": "A#",
+    "octave": 3
+   },
+   {
+    "file": "b3",
+    "note": "B",
+    "octave": 3
+   },
+   {
+    "file": "c4",
+    "note": "C",
+    "octave": 4
+   },
+   {
+    "file": "cs4",
+    "note": "C#",
+    "octave": 4
+   },
+   {
+    "file": "d4",
+    "note": "D",
+    "octave": 4
+   },
+   {
+    "file": "ds4",
+    "note": "D#",
+    "octave": 4
+   },
+   {
+    "file": "e4",
+    "note": "E",
+    "octave": 4
+   },
+   {
+    "file": "f4",
+    "note": "F",
+    "octave": 4
+   },
+   {
+    "file": "fs4",
+    "note": "F#",
+    "octave": 4
+   },
+   {
+    "file": "g4",
+    "note": "G",
+    "octave": 4
+   },
+   {
+    "file": "a4",
+    "note": "A",
+    "octave": 4
+   },
+   {
+    "file": "as4",
+    "note": "A#",
+    "octave": 4
+   },
+   {
+    "file": "b4",
+    "note": "B",
+    "octave": 4
+   },
+   {
+    "file": "c5",
+    "note": "C",
+    "octave": 5
+   },
+   {
+    "file": "cs5",
+    "note": "C#",
+    "octave": 5
+   },
+   {
+    "file": "d5",
+    "note": "D",
+    "octave": 5
+   },
+   {
+    "file": "ds5",
+    "note": "D#",
+    "octave": 5
+   },
+   {
+    "file": "e5",
+    "note": "E",
+    "octave": 5
+   },
+   {
+    "file": "f5",
+    "note": "F",
+    "octave": 5
+   },
+   {
+    "file": "fs5",
+    "note": "F#",
+    "octave": 5
+   },
+   {
+    "file": "g5",
+    "note": "G",
+    "octave": 5
+   },
+   {
+    "file": "a5",
+    "note": "A",
+    "octave": 5
+   },
+   {
+    "file": "as5",
+    "note": "A#",
+    "octave": 5
+   },
+   {
+    "file": "b5",
+    "note": "B",
+    "octave": 5
+   },
+   {
+    "file": "c6",
+    "note": "C",
+    "octave": 6
+   },
+   {
+    "file": "cs6",
+    "note": "C#",
+    "octave": 6
+   },
+   {
+    "file": "d6",
+    "note": "D",
+    "octave": 6
+   },
+   {
+    "file": "ds6",
+    "note": "D#",
+    "octave": 6
+   },
+   {
+    "file": "e6",
+    "note": "E",
+    "octave": 6
+   },
+   {
+    "file": "f6",
+    "note": "F",
+    "octave": 6
+   },
+   {
+    "file": "fs6",
+    "note": "F#",
+    "octave": 6
+   },
+   {
+    "file": "g6",
+    "note": "G",
+    "octave": 6
+   },
+   {
+    "file": "a6",
+    "note": "A",
+    "octave": 6
+   },
+   {
+    "file": "as6",
+    "note": "A#",
+    "octave": 6
+   },
+   {
+    "file": "b6",
+    "note": "B",
+    "octave": 6
+   },
+   {
+    "file": "c7",
+    "note": "C",
+    "octave": 7
+   },
+   {
+    "file": "d7",
+    "note": "D",
+    "octave": 7
+   }
+  ],
+  "grid_pitches": {
+   "0,0": "C4",
+   "0,1": "D4",
+   "0,2": "E4",
+   "0,3": "F4",
+   "0,4": "G4",
+   "0,5": "A4",
+   "0,6": "B4",
+   "0,7": "C5",
+   "0,8": "D5",
+   "0,9": "E5",
+   "1,0": "C3",
+   "1,1": "D3",
+   "1,2": "E3",
+   "1,3": "F3",
+   "1,4": "G3",
+   "1,5": "A3",
+   "1,6": "B3",
+   "1,7": "C4",
+   "1,8": "D4",
+   "1,9": "E4",
+   "2,0": "C2",
+   "2,1": "D2",
+   "2,2": "E2",
+   "2,3": "F2",
+   "2,4": "G2",
+   "2,5": "A2",
+   "2,6": "B2",
+   "2,7": "C3",
+   "2,8": "D3",
+   "2,9": "E3"
+  }
+ },
+ "voice": {
+  "letter_keys": [
+   "0",
+   "1",
+   "2",
+   "3",
+   "4",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "a",
+   "b",
+   "c",
+   "d",
+   "e",
+   "f",
+   "g",
+   "h",
+   "i",
+   "j",
+   "k",
+   "l",
+   "m",
+   "n",
+   "o",
+   "p",
+   "q",
+   "r",
+   "s",
+   "t",
+   "u",
+   "v",
+   "w",
+   "x",
+   "y",
+   "z"
+  ],
+  "sample_rate": 22050,
+  "channels": 1,
+  "clip_filenames": {
+   "  Hello There ": "hello_there.wav",
+   "It's Purple Computer": "it's_purple_computer.wav",
+   "hi": "hi.wav",
+   "5 times 5 ducks equals 25 ducks": "5_times_5_ducks_equals_25_ducks.wav"
+  }
+ },
+ "synth": {
+  "sample_rate": 44100,
+  "defaults": {
+   "marimba": {
+    "duration": 0.55,
+    "attack_ms": 8,
+    "bar_decay": 5.5,
+    "wood": 0.5,
+    "sparkle": 0.08,
+    "tube": 0.25,
+    "tube_decay": 6.0,
+    "mallet": 0.25
+   },
+   "ukulele": {
+    "duration": 0.9,
+    "damping": 0.996,
+    "warmth": 0.4,
+    "softness": 3,
+    "pluck_pos": 0.25,
+    "body_freq": 420.0,
+    "body_q": 3.0,
+    "body_mix": 0.35
+   },
+   "accordion": {
+    "duration": 0.55,
+    "attack_ms": 80,
+    "detune": 2.0,
+    "harmonics": 10,
+    "rolloff": 1000.0,
+    "trem_rate": 5.0,
+    "trem_depth": 0.015
+   },
+   "glockenspiel": {
+    "duration": 1.5,
+    "ring": 1.0,
+    "fundamental": 0.6,
+    "bell": 0.9,
+    "shimmer": 1.0,
+    "ping": 0.35
+   }
+  }
+ }
+}

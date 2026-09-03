@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildEntries, manifest } from "../src/pack";
+import { SAMPLE_PITCHES } from "../src/purple/sounds";
 import { defaults } from "../src/purple/synth";
 import type { Draft } from "../src/state";
 
@@ -13,11 +14,11 @@ describe("pack assembly", () => {
     expect(manifest(base).id).toBe("our-family-pack");
   });
 
-  it("renders an instrument into the 67-file layout plus its numbers", async () => {
+  it("renders an instrument into one file per reachable pitch plus its numbers", async () => {
     const d: Draft = { ...base, instruments: [{ name: "kitchen", base: "marimba", params: { ...defaults("marimba"), duration: 0.2 } }] };
     const entries = await buildEntries(d);
     const paths = entries.map((e) => e.path);
-    expect(paths.filter((p) => p.startsWith("content/kitchen/") && p.endsWith(".wav")).length).toBe(67);
+    expect(paths.filter((p) => p.startsWith("content/kitchen/") && p.endsWith(".wav")).length).toBe(SAMPLE_PITCHES.length);
     expect(paths).toContain("content/kitchen/cs4.wav");
     expect(paths).toContain("content/instruments/kitchen.json");
     const wav = entries.find((e) => e.path === "content/kitchen/a4.wav")!.data;

@@ -1,36 +1,36 @@
 import { describe, expect, it } from "vitest";
-import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote } from "../src/purple/synth";
+import golden from "./golden.json";
+import exported from "../src/purple/export.json";
+import { BASES, BASE_NAMES, SYNTH_RATE, defaults, renderNote, type BaseName, type Params } from "../src/purple/synth";
 
-describe("synth port", () => {
-  it.each(BASE_NAMES)("%s renders a normalized note of the right length", (base) => {
-    const q = defaults(base);
-    const out = renderNote(base, q, 880);
-    expect(out.length).toBe(Math.floor(SYNTH_RATE * q.duration));
-    let peak = 0;
-    for (const s of out) peak = Math.max(peak, Math.abs(s));
-    // finalize_samples: peak_level 0.7 (0.4 for the accordion); above 500 Hz no loudness boost applies.
-    const expected = base === "accordion" ? 0.4 : 0.7;
-    expect(Math.abs(peak - expected)).toBeLessThan(0.01);
-    expect(out[out.length - 1]).toBeCloseTo(0, 2);
+// golden.json is rendered by purple_tui/synth.py (scripts/export_studio.py). One LSB of slack covers
+// the last-bit differences between libm and V8 before int() truncation; nothing else may differ.
+const toInt16 = (out: Float32Array) => Array.from(out, (s) => Math.round(s * 32767));
+
+describe("synth port against Python renders", () => {
+  it.each(golden.map((g) => [`${g.base} ${g.freq} Hz ${JSON.stringify(g.params)}`, g] as const))("%s", (_, g) => {
+    const out = toInt16(renderNote(g.base as BaseName, g.params as Params, g.freq));
+    expect(out.length).toBe(g.length);
+    let worst = 0;
+    g.head.forEach((v, i) => (worst = Math.max(worst, Math.abs(out[i] - v))));
+    g.strided.forEach((v, i) => (worst = Math.max(worst, Math.abs(out[i * g.stride] - v))));
+    expect(worst).toBeLessThanOrEqual(1);
   });
 
-  it("low notes normalize hotter, like loudness_compensated_peak", () => {
-    const out = renderNote("marimba", defaults("marimba"), 100);
-    let peak = 0;
-    for (const s of out) peak = Math.max(peak, Math.abs(s));
-    expect(peak).toBeGreaterThan(0.85);
-  });
-
-  it("is deterministic per note", () => {
-    const a = renderNote("ukulele", defaults("ukulele"), 220);
-    const b = renderNote("ukulele", defaults("ukulele"), 220);
-    expect(a).toEqual(b);
-  });
-
-  it("every slider default sits inside its range", () => {
-    for (const base of BASE_NAMES) for (const s of BASES[base].params) {
-      expect(s.default).toBeGreaterThanOrEqual(s.min);
-      expect(s.default).toBeLessThanOrEqual(s.max);
+  it("slider keys are exactly the Python parameter names", () => {
+    for (const base of BASE_NAMES) {
+      expect(BASES[base].params.map((s) => s.key).sort()).toEqual(Object.keys(exported.synth.defaults[base]).sort());
+      for (const s of BASES[base].params) {
+        const d = defaults(base)[s.key];
+        expect(d, `${base}.${s.key}`).toBeGreaterThanOrEqual(s.min);
+        expect(d, `${base}.${s.key}`).toBeLessThanOrEqual(s.max);
+      }
     }
+  });
+
+  it("is deterministic and sized by duration", () => {
+    const a = renderNote("ukulele", defaults("ukulele"), 220);
+    expect(a).toEqual(renderNote("ukulele", defaults("ukulele"), 220));
+    expect(a.length).toBe(Math.trunc(SYNTH_RATE * defaults("ukulele").duration));
   });
 });

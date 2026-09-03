@@ -72,7 +72,7 @@ Filename is `text.strip().lower().replace(" ", "_") + ".wav"`, the rule in `tts.
 
 ### content/<instrument>/<pitch>.wav
 
-Sixty-seven files named by `music_constants.pitch_filename` (`C#4` becomes `cs4`), the same pitch set as `packs/core-sounds/content/marimba/`, rendered at 44100 Hz mono 16-bit like `generate_sounds.write_sound` before its ffmpeg step. Studio writes WAV, which `music_room._find_sound` already accepts as a fallback to `.ogg`, so no browser OGG encoder is needed. Each file comes from Studio's TypeScript port of the four generators in `purple_tui/synth.py` and `scripts/generate_sounds.py`, with the parent's slider values substituted for the constants. Proposed loader change: add user-pack instrument directories to `INSTRUMENTS`.
+One file per pitch the Music grid can reach (66 today, from `generate_sounds.reachable_pitches`), named by `music_constants.pitch_filename` (`C#4` becomes `cs4`), rendered at 44100 Hz mono 16-bit like `generate_sounds.write_sound` before its ffmpeg step. Studio writes WAV, which `music_room._find_sound` already accepts as a fallback to `.ogg`, so no browser OGG encoder is needed. Each file comes from Studio's TypeScript port of the four generators in `purple_tui/synth.py`, with the parent's slider values passed as the keyword parameters those generators now take. `studio/tests/golden.json`, rendered by the Python, holds the port to within one sample. Proposed loader change: add user-pack instrument directories to `INSTRUMENTS`.
 
 ### content/instruments/<name>.json
 

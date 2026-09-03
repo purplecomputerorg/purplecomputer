@@ -1,26 +1,22 @@
-// Ported from purple_tui/rooms/art_room.py, purple_tui/art_config.py, and tools/photo_to_art.py.
-// Keep numerically identical to the Python: tests/art.test.ts checks against fixtures exported from it.
+// Art room facts come from export.json (written by scripts/export_studio.py from purple_tui itself).
+// Only the two functions Studio needs live, fit_to_canvas and generate_row_gradient, are ported,
+// and tests/art.test.ts checks both against the export.
+import exported from "./export.json";
 
-export const VIEWPORT_WIDTH = 134;
-export const VIEWPORT_HEIGHT = 29;
-const GUTTER = 1;
-const ART_HEADER_ROWS = 1;
-const ART_HINT_BAR_ROWS = 1;
+const art = exported.art;
 
-export const CANVAS_WIDTH = VIEWPORT_WIDTH - 2 * GUTTER;
-export const CANVAS_HEIGHT = VIEWPORT_HEIGHT - ART_HEADER_ROWS - ART_HINT_BAR_ROWS - 2 * GUTTER;
-export const CELL_ASPECT = 2;
+export const VIEWPORT_WIDTH = art.viewport[0];
+export const VIEWPORT_HEIGHT = art.viewport[1];
+export const CANVAS_WIDTH = art.canvas[0];
+export const CANVAS_HEIGHT = art.canvas[1];
+export const CELL_ASPECT = art.cell_aspect;
 
-export const DEFAULT_BG_DARK = "#2a1845";
-export const DEFAULT_BG_LIGHT = "#e8daf0";
-export const APP_BG_DARK = "#1e1033";
-export const GUTTER_BG_DARK = ["#2F1D4C", "#382358"] as const;
-export const TEXT_MUTED_DARK = "#8a78a8";
+export const APP_BG_DARK = art.app_bg;
+export const DEFAULT_BG_DARK = art.bg_dark;
+export const DEFAULT_BG_LIGHT = art.bg_light;
+export const GUTTER_BG_DARK = art.gutter as [string, string];
+export const KEY_COLORS: Record<string, string> = art.key_colors;
 
-export const GRAYSCALE: Record<string, string> = {
-  "1": "#FFFFFF", "2": "#E8E8E8", "3": "#D0D0D0", "4": "#B8B8B8", "5": "#A0A0A0", "6": "#888888",
-  "7": "#707070", "8": "#585858", "9": "#404040", "0": "#282828", "-": "#101010", "=": "#000000", "+": "#000000",
-};
 export const QWERTY_ROW = [..."qwertyuiop[]"];
 export const ASDF_ROW = [..."asdfghjkl;'"];
 export const ZXCV_ROW = [..."zxcvbnm,./"];
@@ -52,17 +48,6 @@ export function generateRowGradient(hue: number, keys: string[]): Record<string,
   });
   return out;
 }
-
-export function keyColors(hues = ROW_HUES): Record<string, string> {
-  return {
-    ...GRAYSCALE,
-    ...generateRowGradient(hues.qwerty, QWERTY_ROW),
-    ...generateRowGradient(hues.asdf, ASDF_ROW),
-    ...generateRowGradient(hues.zxcv, ZXCV_ROW),
-  };
-}
-
-export const KEY_COLORS = keyColors();
 
 export function fitToCanvas(width: number, height: number): [cols: number, rows: number] {
   const scale = Math.min(CANVAS_WIDTH / width, (CANVAS_HEIGHT * CELL_ASPECT) / height);

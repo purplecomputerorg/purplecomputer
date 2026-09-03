@@ -374,3 +374,7 @@ studio:
 studio-test:
     cd studio && npm install --no-audit --no-fund
     cd studio && npx tsc --noEmit && npx vitest run
+
+# Regenerate the facts Studio imports from Purple (constants and reference synth renders)
+studio-fixtures:
+    {{venv}}/bin/python scripts/export_studio.py

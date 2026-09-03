@@ -1,90 +1,80 @@
-// Port of purple_tui/synth.py and the instrument generators in scripts/generate_sounds.py.
-// Every slider maps to a number that already exists in that Python; the defaults are its defaults.
-// The only knowing difference: noise uses a small seeded PRNG instead of Python's Mersenne Twister.
+// Port of purple_tui/synth.py. Parameter names and defaults come from export.json; the arithmetic
+// is kept in the same order as the Python so tests/synth.test.ts can hold it to within one sample
+// of the golden renders in tests/golden.json.
+import exported from "./export.json";
 
-export const SYNTH_RATE = 44100;
+export const SYNTH_RATE: number = exported.synth.sample_rate;
 export type BaseName = "marimba" | "ukulele" | "accordion" | "glockenspiel";
 export type Params = Record<string, number>;
 
-export interface ParamSpec {
-  key: string;
-  label: string;
-  group: string;
-  min: number;
-  max: number;
-  step: number;
-  default: number;
-  unit?: string;
-}
-
+export interface ParamSpec { key: string; label: string; group: string; min: number; max: number; step: number; unit?: string }
 export interface Base { label: string; blurb: string; params: ParamSpec[] }
 
-const p = (key: string, label: string, group: string, min: number, max: number, step: number, def: number, unit?: string): ParamSpec =>
-  ({ key, label, group, min, max, step, default: def, unit });
+const p = (key: string, label: string, group: string, min: number, max: number, step: number, unit?: string): ParamSpec =>
+  ({ key, label, group, min, max, step, unit });
 
+// Slider ranges and labels are Studio's; the keys must match synth.DEFAULTS in Python (tested).
 export const BASES: Record<BaseName, Base> = {
   marimba: {
     label: "Marimba",
     blurb: "A wooden bar over a tube. The 4x partial is the woody knock.",
     params: [
-      p("duration", "Length", "Shape", 0.2, 1.5, 0.05, 0.55, "s"),
-      p("attack", "Attack", "Shape", 1, 40, 1, 8, "ms"),
-      p("barDecay", "Bar decay", "Shape", 1, 15, 0.5, 5.5),
-      p("wood", "Woodiness", "Tone", 0, 1.2, 0.05, 0.5),
-      p("sparkle", "Sparkle", "Tone", 0, 0.3, 0.01, 0.08),
-      p("tube", "Tube body", "Tone", 0, 0.6, 0.05, 0.25),
-      p("tubeDecay", "Tube decay", "Tone", 2, 12, 0.5, 6),
-      p("mallet", "Mallet knock", "Tone", 0, 0.6, 0.05, 0.25),
+      p("duration", "Length", "Shape", 0.2, 1.5, 0.05, "s"),
+      p("attack_ms", "Attack", "Shape", 1, 40, 1, "ms"),
+      p("bar_decay", "Bar decay", "Shape", 1, 15, 0.5),
+      p("wood", "Woodiness", "Tone", 0, 1.2, 0.05),
+      p("sparkle", "Sparkle", "Tone", 0, 0.3, 0.01),
+      p("tube", "Tube body", "Tone", 0, 0.6, 0.05),
+      p("tube_decay", "Tube decay", "Tone", 2, 12, 0.5),
+      p("mallet", "Mallet knock", "Tone", 0, 0.6, 0.05),
     ],
   },
   ukulele: {
     label: "Ukulele",
     blurb: "A plucked nylon string, modeled as a loop of sound that slowly loses its highs.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 2, 0.05, 0.9, "s"),
-      p("damping", "Sustain", "Shape", 0.98, 0.999, 0.0005, 0.996),
-      p("warmth", "Warmth", "Tone", 0.1, 1, 0.05, 0.4),
-      p("softness", "Soft pluck", "Tone", 0, 6, 1, 3),
-      p("pluckPos", "Pluck spot", "Tone", 0.1, 0.5, 0.05, 0.25),
-      p("bodyFreq", "Body size", "Body", 150, 800, 10, 420, "Hz"),
-      p("bodyQ", "Body ring", "Body", 1, 10, 0.5, 3),
-      p("bodyMix", "Body amount", "Body", 0, 1, 0.05, 0.35),
+      p("duration", "Length", "Shape", 0.3, 2, 0.05, "s"),
+      p("damping", "Sustain", "Shape", 0.98, 0.999, 0.0005),
+      p("warmth", "Warmth", "Tone", 0.1, 1, 0.05),
+      p("softness", "Soft pluck", "Tone", 0, 6, 1),
+      p("pluck_pos", "Pluck spot", "Tone", 0.1, 0.5, 0.05),
+      p("body_freq", "Body size", "Body", 150, 800, 10, "Hz"),
+      p("body_q", "Body ring", "Body", 1, 10, 0.5),
+      p("body_mix", "Body amount", "Body", 0, 1, 0.05),
     ],
   },
   accordion: {
     label: "Accordion",
     blurb: "Two reeds a few cents apart, breathing with a slow tremolo.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 2, 0.05, 0.55, "s"),
-      p("attack", "Attack", "Shape", 10, 300, 5, 80, "ms"),
-      p("detune", "Reed detune", "Tone", 0, 20, 0.5, 2, "cents"),
-      p("harmonics", "Reediness", "Tone", 1, 20, 1, 10),
-      p("rolloff", "Brightness", "Tone", 300, 4000, 50, 1000, "Hz"),
-      p("tremRate", "Breath speed", "Breath", 2, 10, 0.5, 5, "Hz"),
-      p("tremDepth", "Breath depth", "Breath", 0, 0.2, 0.005, 0.015),
+      p("duration", "Length", "Shape", 0.3, 2, 0.05, "s"),
+      p("attack_ms", "Attack", "Shape", 10, 300, 5, "ms"),
+      p("detune", "Reed detune", "Tone", 0, 20, 0.5, "cents"),
+      p("harmonics", "Reediness", "Tone", 1, 20, 1),
+      p("rolloff", "Brightness", "Tone", 300, 4000, 50, "Hz"),
+      p("trem_rate", "Breath speed", "Breath", 2, 10, 0.5, "Hz"),
+      p("trem_depth", "Breath depth", "Breath", 0, 0.2, 0.005),
     ],
   },
   glockenspiel: {
     label: "Glockenspiel",
     blurb: "A small metal bar. The bell lives in the 2.8x partial, louder than the fundamental.",
     params: [
-      p("duration", "Length", "Shape", 0.3, 3, 0.05, 1.5, "s"),
-      p("ring", "Ring", "Shape", 0.3, 3, 0.05, 1),
-      p("fundamental", "Fundamental", "Tone", 0, 1, 0.05, 0.6),
-      p("bell", "Bell", "Tone", 0, 1.2, 0.05, 0.9),
-      p("shimmer", "Shimmer", "Tone", 0, 2, 0.05, 1),
-      p("ping", "Mallet ping", "Tone", 0, 0.6, 0.05, 0.35),
+      p("duration", "Length", "Shape", 0.3, 3, 0.05, "s"),
+      p("ring", "Ring", "Shape", 0.3, 3, 0.05),
+      p("fundamental", "Fundamental", "Tone", 0, 1, 0.05),
+      p("bell", "Bell", "Tone", 0, 1.2, 0.05),
+      p("shimmer", "Shimmer", "Tone", 0, 2, 0.05),
+      p("ping", "Mallet ping", "Tone", 0, 0.6, 0.05),
     ],
   },
 };
 
 export const BASE_NAMES = Object.keys(BASES) as BaseName[];
+export const defaults = (base: BaseName): Params => ({ ...(exported.synth.defaults as Record<BaseName, Params>)[base] });
 
-export const defaults = (base: BaseName): Params =>
-  Object.fromEntries(BASES[base].params.map((s) => [s.key, s.default]));
-
-// Mulberry32: deterministic per note like random.seed(int(freq * 1000)) in the Python.
-function rng(seed: number) {
+// synth.noise: mulberry32, same stream as the Python for the same seed.
+function noise(seed: number) {
   let a = Math.trunc(seed) >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -102,33 +92,34 @@ function loudnessCompensatedPeak(freq: number, base: number): number {
 
 const lowFreqPartialBoost = (freq: number) => (freq >= 250 ? 1 : Math.min(2.5, 250 / Math.max(freq, 80)));
 
-function finalize(samples: Float32Array, peakLevel: number, freq: number): Float32Array {
+// finalize_samples, returning the int16 values scaled back to [-1, 1] for playback.
+function finalize(samples: Float64Array, peakLevel: number, freq: number): Float32Array {
   const level = loudnessCompensatedPeak(freq, peakLevel);
   let peak = 0;
   for (const s of samples) peak = Math.max(peak, Math.abs(s));
-  const scale = (peak || 1) ? level / (peak || 1) : 0;
-  return samples.map((s) => Math.trunc((s * scale) * 32767) / 32767);
+  peak ||= 1;
+  return Float32Array.from(samples, (s) => Math.trunc(((s / peak) * level) * 32767) / 32767);
 }
 
-function cosineFade(samples: Float32Array, duration: number, fadeOut: number) {
-  const start = duration - fadeOut;
+function cosineFade(samples: Float64Array, duration: number, fade: number) {
+  const start = duration - fade;
   for (let i = 0; i < samples.length; i++) {
     const t = i / SYNTH_RATE;
-    if (t > start) samples[i] *= 0.5 * (1 + Math.cos((Math.PI * (t - start)) / fadeOut));
+    if (t > start) samples[i] *= 0.5 * (1 + Math.cos((Math.PI * (t - start)) / fade));
   }
 }
 
 function marimba(q: Params, freq: number): Float32Array {
-  const n = Math.floor(SYNTH_RATE * q.duration);
-  const out = new Float32Array(n);
+  const n = Math.trunc(SYNTH_RATE * q.duration);
+  const out = new Float64Array(n);
   const boost = lowFreqPartialBoost(freq);
   const partials: [number, number, number][] = [
-    [1, 1, q.barDecay],
-    [4, q.wood * boost, q.barDecay * 2],
-    [9.2, q.sparkle * boost, q.barDecay * 3.27],
+    [1, 1, q.bar_decay],
+    [4, q.wood * boost, q.bar_decay * 2],
+    [9.2, q.sparkle * boost, (q.bar_decay * 18) / 5.5],
   ];
-  const noise = rng(freq * 1000);
-  const attackS = q.attack / 1000;
+  const attackS = q.attack_ms / 1000;
+  const mallet = noise(freq * 1000);
   for (let i = 0; i < n; i++) {
     const t = i / SYNTH_RATE;
     let s = 0;
@@ -136,9 +127,9 @@ function marimba(q: Params, freq: number): Float32Array {
       const f = freq * ratio;
       if (f < SYNTH_RATE / 2) s += amp * Math.exp(-t * decay) * Math.sin(2 * Math.PI * f * t);
     }
-    const tubeEnv = (1 - Math.exp(-t * 30)) * Math.exp(-t * q.tubeDecay);
+    const tubeEnv = (1 - Math.exp(-t * 30)) * Math.exp(-t * q.tube_decay);
     s += q.tube * tubeEnv * Math.sin(2 * Math.PI * freq * t);
-    if (t < 0.01) s += noise() * q.mallet * Math.exp(-t * 400);
+    if (t < 0.01) s += mallet() * q.mallet * Math.exp(-t * 400);
     out[i] = s * Math.min(1, t / attackS);
   }
   cosineFade(out, q.duration, Math.min(0.18, q.duration / 3));
@@ -146,12 +137,12 @@ function marimba(q: Params, freq: number): Float32Array {
 }
 
 function accordion(q: Params, freq: number): Float32Array {
-  const n = Math.floor(SYNTH_RATE * q.duration);
-  const out = new Float32Array(n);
+  const n = Math.trunc(SYNTH_RATE * q.duration);
+  const out = new Float64Array(n);
   const nyquist = SYNTH_RATE / 2;
   const freqs = [freq, freq * 2 ** (q.detune / 1200)];
-  const maxN = Math.min(q.harmonics, Math.floor(nyquist / Math.max(freq, 1)));
-  const attackS = q.attack / 1000;
+  const maxN = Math.min(Math.trunc(q.harmonics), Math.trunc(nyquist / Math.max(freq, 1)));
+  const attackS = q.attack_ms / 1000;
   for (let i = 0; i < n; i++) {
     const t = i / SYNTH_RATE;
     let s = 0;
@@ -163,39 +154,41 @@ function accordion(q: Params, freq: number): Float32Array {
         s += amp * Math.sin(2 * Math.PI * fk * t);
       }
     }
-    out[i] = s * Math.min(1, t / attackS) * (1 + q.tremDepth * Math.sin(2 * Math.PI * q.tremRate * t));
+    const trem = 1 + q.trem_depth * Math.sin(2 * Math.PI * q.trem_rate * t);
+    out[i] = s * Math.min(1, t / attackS) * trem;
   }
   cosineFade(out, q.duration, Math.min(0.12, q.duration / 3));
   return finalize(out, 0.4, freq);
 }
 
 function ukulele(q: Params, freq: number): Float32Array {
-  const n = Math.floor(SYNTH_RATE * q.duration);
+  const n = Math.trunc(SYNTH_RATE * q.duration);
   const period = SYNTH_RATE / freq;
-  const N = Math.floor(period);
+  const N = Math.trunc(period);
   const frac = period - N;
-  const ap = (1 - frac) / (1 + frac);
-  const noise = rng(freq * 1000);
-  const line = Float64Array.from({ length: N }, () => noise());
-  for (let pass = 0; pass < q.softness; pass++) for (let j = 1; j < N; j++) line[j] = 0.5 * line[j] + 0.5 * line[j - 1];
-  const pluck = Math.floor(N * q.pluckPos);
-  if (pluck > 0) for (let j = N - 1; j >= pluck; j--) line[j] -= 0.5 * line[j - pluck];
+  const allpass = (1 - frac) / (1 + frac);
+  const pluckNoise = noise(freq * 1000);
+  const line = Float64Array.from({ length: N }, () => pluckNoise());
+  for (let pass = 0; pass < Math.trunc(q.softness); pass++) for (let j = 1; j < N; j++) line[j] = 0.5 * line[j] + 0.5 * line[j - 1];
+  const pluck = Math.trunc(N * q.pluck_pos);
+  if (pluck > 0) for (let j = pluck; j < N; j++) line[j] = line[j] - 0.5 * line[j - pluck];
 
-  const out = new Float32Array(n);
+  const out = new Float64Array(n);
   let pos = 0, apIn = 0, apOut = 0, prev = 0;
+  const warmth = q.warmth;
   for (let i = 0; i < n; i++) {
     const cur = line[pos];
-    const filtered = q.warmth * cur + (1 - q.warmth) * prev;
+    const filtered = warmth * cur + (1 - warmth) * prev;
     prev = filtered;
-    const a = ap * filtered + apIn - ap * apOut;
+    const a = allpass * filtered + apIn - allpass * apOut;
     apIn = filtered;
     apOut = a;
     line[pos] = a * q.damping;
     pos = (pos + 1) % N;
     out[i] = cur;
   }
-  const w0 = (2 * Math.PI * q.bodyFreq) / SYNTH_RATE;
-  const alpha = Math.sin(w0) / (2 * q.bodyQ);
+  const w0 = (2 * Math.PI * q.body_freq) / SYNTH_RATE;
+  const alpha = Math.sin(w0) / (2 * q.body_q);
   const a0 = 1 + alpha;
   const b0 = alpha / a0, b2 = -alpha / a0, a1 = (-2 * Math.cos(w0)) / a0, a2 = (1 - alpha) / a0;
   let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
@@ -203,22 +196,23 @@ function ukulele(q: Params, freq: number): Float32Array {
     const x0 = out[i];
     const y0 = b0 * x0 + b2 * x2 - a1 * y1 - a2 * y2;
     x2 = x1; x1 = x0; y2 = y1; y1 = y0;
-    out[i] = x0 + q.bodyMix * y0;
+    out[i] = x0 + q.body_mix * y0;
   }
   cosineFade(out, q.duration, Math.min(0.15, q.duration / 3));
   return finalize(out, 0.7, freq);
 }
 
 function glockenspiel(q: Params, freq: number): Float32Array {
-  const n = Math.floor(SYNTH_RATE * q.duration);
-  const out = new Float32Array(n);
+  const n = Math.trunc(SYNTH_RATE * q.duration);
+  const out = new Float64Array(n);
   const boost = lowFreqPartialBoost(freq);
+  const ring = q.ring;
   const partials: [number, number, number][] = [
-    [1, q.fundamental, 1.4 / q.ring],
-    [2.8, q.bell * boost, 2.8 / q.ring],
-    [5.42, 0.45 * q.shimmer * boost, 4.2 / q.ring],
-    [8.6, 0.22 * q.shimmer * boost, 6.5 / q.ring],
-    [11.7, 0.12 * q.shimmer * boost, 9 / q.ring],
+    [1, q.fundamental, 1.4 / ring],
+    [2.8, q.bell * boost, 2.8 / ring],
+    [5.42, 0.45 * q.shimmer * boost, 4.2 / ring],
+    [8.6, 0.22 * q.shimmer * boost, 6.5 / ring],
+    [11.7, 0.12 * q.shimmer * boost, 9 / ring],
   ];
   for (let i = 0; i < n; i++) {
     const t = i / SYNTH_RATE;

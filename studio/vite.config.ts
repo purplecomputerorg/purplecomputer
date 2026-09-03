@@ -1,4 +1,5 @@
-import { defineConfig } from "vitest/config";
+/// <reference types="vitest/config" />
+import { defineConfig } from "vite";
 
 // Core pack data is imported straight from ../packs so Studio and Purple share one source of truth.
 export default defineConfig({

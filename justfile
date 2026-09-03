@@ -367,10 +367,10 @@ pystdin:
 
 # Purple Studio (parent-facing web app, studio/): dev server
 studio:
-    cd studio && [ -d node_modules ] || npm install
+    cd studio && npm install --no-audit --no-fund
     cd studio && npm run dev
 
 # Purple Studio: type-check and unit tests
 studio-test:
-    cd studio && [ -d node_modules ] || npm install
+    cd studio && npm install --no-audit --no-fund
     cd studio && npx tsc --noEmit && npx vitest run

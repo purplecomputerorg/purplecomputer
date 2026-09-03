@@ -107,3 +107,7 @@ pytest-of-*/
 .ai_ux_last_args.json
 .ai_ux_hunt/
 .flash-denylist.conf
+
+# Purple Studio (studio/, web)
+studio/node_modules/
+studio/dist/

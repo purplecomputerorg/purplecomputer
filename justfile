@@ -364,3 +364,13 @@ python *args:
 # Run Python from stdin (e.g., echo 'print("hi")' | just pystdin)
 pystdin:
     @{{venv}}/bin/python -
+
+# Purple Studio (parent-facing web app, studio/): dev server
+studio:
+    cd studio && [ -d node_modules ] || npm install
+    cd studio && npm run dev
+
+# Purple Studio: type-check and unit tests
+studio-test:
+    cd studio && [ -d node_modules ] || npm install
+    cd studio && npx tsc --noEmit && npx vitest run

@@ -144,6 +144,29 @@ else
     done
 fi
 
+# Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
+# node: a power-cycled drive can come back under a different letter, and
+# retrying the old letter could write to whatever landed there instead.
+# ST_PORT/ST_PORTNAME are captured now, while every drive is still enumerated:
+# a drive that fails or gets ejected loses its /sys/block entry, and with it
+# any way to find which hub socket it sits in.
+ST_DEV=(); ST_SER=(); ST_PORT=(); ST_PORTNAME=()
+for i in "${!ENTRIES[@]}"; do
+    IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
+    ST_DEV+=("$dev"); ST_SER+=("$ser")
+    ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
+    ST_PORTNAME+=("$(usb_port_name "$dev" 2>/dev/null || true)")
+done
+
+# Physical socket label for drive index $1 ("top row 3"), from the launch-time
+# port capture so it works even after the drive drops off the bus.
+slot_name() {
+    local port="${ST_PORTNAME[$1]}" label
+    [[ -n "$port" ]] || { echo "unknown socket (${ST_DEV[$1]})"; return; }
+    label="$(port_label "$port")"
+    echo "${label:-socket $port}"
+}
+
 echo
 if [[ "$CORRUPT_MODE" == true ]]; then
     echo -e "${BOLD}${YELLOW}Will flash ${#ENTRIES[@]} corrupt-test scenario(s), one per drive, in parallel:${NC}"
@@ -175,10 +198,13 @@ else
         echo -e "  ${GREEN}Current release build: commit ${ISO_SRC_COMMIT} matches release/1.x.${NC}"
     fi
 fi
+SLOTS=()
 for i in "${!ENTRIES[@]}"; do
     IFS='|' read -r dev size model serial <<< "${ENTRIES[$i]}"
-    printf "  %-10s %-8s %-22s %-16s %s\n" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
+    SLOTS+=("$(slot_name "$i")")
+    printf "  %-16s %-10s %-8s %-22s %-16s %s\n" "${SLOTS[$i]}" "$dev" "$size" "$model" "$serial" "${SCENS[$i]:+-> ${SCENS[$i]}}"
 done
+echo -e "  ${BOLD}Slots:${NC} $(printf '%s\n' "${SLOTS[@]}" | sort -V | paste -sd, | sed 's/,/, /g')"
 echo -e "  ${RED}${BOLD}ALL DATA ON THESE DRIVES WILL BE DESTROYED${NC}"
 echo
 
@@ -218,20 +244,6 @@ LOG_DIR="$(mktemp -d -t purple-flash-all.XXXXXX)"
 log_info "Per-drive logs: $LOG_DIR"
 echo
 
-# Per-drive state, indexed alongside ENTRIES. Tracked by serial, not device
-# node: a power-cycled drive can come back under a different letter, and
-# retrying the old letter could write to whatever landed there instead.
-# ST_PORT/ST_PORTNAME are captured now, while every drive is still enumerated:
-# a drive that fails or gets ejected loses its /sys/block entry, and with it
-# any way to find which hub socket it sits in.
-ST_DEV=(); ST_SER=(); ST_PORT=(); ST_PORTNAME=()
-for i in "${!ENTRIES[@]}"; do
-    IFS='|' read -r dev _ _ ser <<< "${ENTRIES[$i]}"
-    ST_DEV+=("$dev"); ST_SER+=("$ser")
-    ST_PORT+=("$(usb_port_control "$dev" 2>/dev/null || true)")
-    ST_PORTNAME+=("$(usb_port_name "$dev" 2>/dev/null || true)")
-done
-
 # Cross-job coordination lives in files under STATE_DIR: flashed.$i markers
 # gate the udev queue restart, slot dirs bound settle/re-verify concurrency,
 # and result.$i carries each job's outcome back as "status|dev|tries|log".
@@ -239,15 +251,6 @@ STATE_DIR="$LOG_DIR/state"
 mkdir -p "$STATE_DIR"
 : > "$STATE_DIR/safe-slots"
 SETTLE_MAX=$(boot_settle_max_jobs)
-
-# Physical socket label for drive index $1 ("top row 3"), from the launch-time
-# port capture so it works even after the drive drops off the bus.
-slot_name() {
-    local port="${ST_PORTNAME[$1]}" label
-    [[ -n "$port" ]] || { echo "unknown socket (${ST_DEV[$1]})"; return; }
-    label="$(port_label "$port")"
-    echo "${label:-socket $port}"
-}
 
 # Comma-joined ship-ready slots. Labels can't contain | (save_port_label strips it).
 safe_slot_list() { paste -sd'|' "$STATE_DIR/safe-slots" | sed 's/|/, /g'; }
